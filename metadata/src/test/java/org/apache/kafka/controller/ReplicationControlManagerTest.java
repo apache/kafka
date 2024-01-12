@@ -17,14 +17,16 @@
 
 package org.apache.kafka.controller;
 
-import org.apache.kafka.clients.ApiVersions;
+import org.apache.kafka.common.DirectoryId;
 import org.apache.kafka.common.ElectionType;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.config.ConfigResource;
+import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.errors.InvalidReplicaAssignmentException;
 import org.apache.kafka.common.errors.PolicyViolationException;
 import org.apache.kafka.common.errors.StaleBrokerEpochException;
+import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.AlterPartitionRequestData;
 import org.apache.kafka.common.message.AlterPartitionRequestData.BrokerState;
 import org.apache.kafka.common.message.AlterPartitionRequestData.PartitionData;
@@ -36,6 +38,8 @@ import org.apache.kafka.common.message.AlterPartitionReassignmentsRequestData.Re
 import org.apache.kafka.common.message.AlterPartitionReassignmentsResponseData;
 import org.apache.kafka.common.message.AlterPartitionReassignmentsResponseData.ReassignablePartitionResponse;
 import org.apache.kafka.common.message.AlterPartitionReassignmentsResponseData.ReassignableTopicResponse;
+import org.apache.kafka.common.message.AssignReplicasToDirsRequestData;
+import org.apache.kafka.common.message.AssignReplicasToDirsResponseData;
 import org.apache.kafka.common.message.BrokerHeartbeatRequestData;
 import org.apache.kafka.common.message.CreatePartitionsRequestData.CreatePartitionsAssignment;
 import org.apache.kafka.common.message.CreatePartitionsRequestData.CreatePartitionsTopic;
@@ -64,6 +68,7 @@ import org.apache.kafka.common.metadata.RemoveTopicRecord;
 import org.apache.kafka.common.metadata.TopicRecord;
 import org.apache.kafka.common.metadata.PartitionRecord;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.AlterPartitionRequest;
 import org.apache.kafka.common.requests.ApiError;
@@ -74,6 +79,7 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.common.utils.annotation.ApiKeyVersionsSource;
 import org.apache.kafka.controller.BrokerHeartbeatManager.BrokerHeartbeatState;
 import org.apache.kafka.controller.ReplicationControlManager.KRaftClusterDescriber;
+import org.apache.kafka.metadata.AssignmentsHelper;
 import org.apache.kafka.metadata.BrokerHeartbeatReply;
 import org.apache.kafka.metadata.BrokerRegistration;
 import org.apache.kafka.metadata.BrokerRegistrationInControlledShutdownChange;
@@ -86,6 +92,7 @@ import org.apache.kafka.metadata.placement.StripedReplicaPlacer;
 import org.apache.kafka.metadata.placement.UsableBroker;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.common.MetadataVersion;
+import org.apache.kafka.server.common.TopicIdPartition;
 import org.apache.kafka.server.policy.CreateTopicPolicy;
 import org.apache.kafka.server.util.MockRandom;
 import org.apache.kafka.timeline.SnapshotRegistry;
@@ -98,6 +105,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.Arrays;
+import java.util.Comparator;
 import java.util.TreeSet;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.ArrayList;
@@ -128,6 +136,7 @@ import static org.apache.kafka.common.protocol.Errors.INVALID_TOPIC_EXCEPTION;
 import static org.apache.kafka.common.protocol.Errors.NEW_LEADER_ELECTED;
 import static org.apache.kafka.common.protocol.Errors.NONE;
 import static org.apache.kafka.common.protocol.Errors.NOT_CONTROLLER;
+import static org.apache.kafka.common.protocol.Errors.NOT_LEADER_OR_FOLLOWER;
 import static org.apache.kafka.common.protocol.Errors.NO_REASSIGNMENT_IN_PROGRESS;
 import static org.apache.kafka.common.protocol.Errors.OPERATION_NOT_ATTEMPTED;
 import static org.apache.kafka.common.protocol.Errors.POLICY_VIOLATION;
@@ -159,6 +168,7 @@ public class ReplicationControlManagerTest {
             private Optional<CreateTopicPolicy> createTopicPolicy = Optional.empty();
             private MetadataVersion metadataVersion = MetadataVersion.latest();
             private MockTime mockTime = new MockTime();
+            private boolean isElrEnabled = false;
 
             Builder setCreateTopicPolicy(CreateTopicPolicy createTopicPolicy) {
                 this.createTopicPolicy = Optional.of(createTopicPolicy);
@@ -170,6 +180,11 @@ public class ReplicationControlManagerTest {
                 return this;
             }
 
+            Builder setIsElrEnabled(Boolean isElrEnabled) {
+                this.isElrEnabled = isElrEnabled;
+                return this;
+            }
+
             Builder setMockTime(MockTime mockTime) {
                 this.mockTime = mockTime;
                 return this;
@@ -178,7 +193,15 @@ public class ReplicationControlManagerTest {
             ReplicationControlTestContext build() {
                 return new ReplicationControlTestContext(metadataVersion,
                     createTopicPolicy,
-                    mockTime);
+                    mockTime,
+                    isElrEnabled);
+            }
+
+            ReplicationControlTestContext build(MetadataVersion metadataVersion) {
+                return new ReplicationControlTestContext(metadataVersion,
+                    createTopicPolicy,
+                    mockTime,
+                    isElrEnabled);
             }
         }
 
@@ -202,13 +225,14 @@ public class ReplicationControlManagerTest {
         private ReplicationControlTestContext(
             MetadataVersion metadataVersion,
             Optional<CreateTopicPolicy> createTopicPolicy,
-            MockTime time
+            MockTime time,
+            Boolean isElrEnabled
         ) {
             this.time = time;
             this.featureControl = new FeatureControlManager.Builder().
                 setSnapshotRegistry(snapshotRegistry).
-                setQuorumFeatures(new QuorumFeatures(0, new ApiVersions(),
-                    QuorumFeatures.defaultFeatureMap(),
+                setQuorumFeatures(new QuorumFeatures(0,
+                    QuorumFeatures.defaultFeatureMap(true),
                     Collections.singletonList(0))).
                 setMetadataVersion(metadataVersion).
                 build();
@@ -229,6 +253,7 @@ public class ReplicationControlManagerTest {
                 setClusterControl(clusterControl).
                 setCreateTopicPolicy(createTopicPolicy).
                 setFeatureControl(featureControl).
+                setEligibleLeaderReplicasEnabled(isElrEnabled).
                 build();
             clusterControl.activate();
         }
@@ -327,15 +352,33 @@ public class ReplicationControlManagerTest {
         }
 
         void registerBrokers(Integer... brokerIds) throws Exception {
-            for (int brokerId : brokerIds) {
+            Object[] brokersAndDirs = new Object[brokerIds.length * 2];
+            for (int i = 0; i < brokerIds.length; i++) {
+                brokersAndDirs[i * 2] = brokerIds[i];
+                brokersAndDirs[i * 2 + 1] = Collections.singletonList(
+                    Uuid.fromString("TESTBROKER" + Integer.toString(100000 + brokerIds[i]).substring(1) + "DIRAAAA")
+                );
+            }
+            registerBrokersWithDirs(brokersAndDirs);
+        }
+
+        @SuppressWarnings("unchecked")
+        void registerBrokersWithDirs(Object... brokerIdsAndDirs) throws Exception {
+            if (brokerIdsAndDirs.length % 2 != 0) {
+                throw new IllegalArgumentException("uneven number of arguments");
+            }
+            for (int i = 0; i < brokerIdsAndDirs.length / 2; i++) {
+                int brokerId = (int) brokerIdsAndDirs[i * 2];
+                List<Uuid> logDirs = (List<Uuid>) brokerIdsAndDirs[i * 2 + 1];
                 RegisterBrokerRecord brokerRecord = new RegisterBrokerRecord().
-                    setBrokerEpoch(defaultBrokerEpoch(brokerId)).setBrokerId(brokerId).setRack(null);
+                    setBrokerEpoch(defaultBrokerEpoch(brokerId)).setBrokerId(brokerId).
+                        setRack(null).setLogDirs(logDirs);
                 brokerRecord.endPoints().add(new RegisterBrokerRecord.BrokerEndpoint().
                     setSecurityProtocol(SecurityProtocol.PLAINTEXT.id).
                     setPort((short) 9092 + brokerId).
                     setName("PLAINTEXT").
                     setHost("localhost"));
-                replay(Collections.singletonList(new ApiMessageAndVersion(brokerRecord, (short) 0)));
+                replay(Collections.singletonList(new ApiMessageAndVersion(brokerRecord, (short) 3)));
             }
         }
 
@@ -453,6 +496,15 @@ public class ReplicationControlManagerTest {
                 getPartition(topicIdPartition.topicId(), topicIdPartition.partitionId());
             return (partition.leader < 0) ? OptionalInt.empty() : OptionalInt.of(partition.leader);
         }
+
+        ControllerResult<AssignReplicasToDirsResponseData> assignReplicasToDirs(int brokerId, Map<TopicIdPartition, Uuid> assignment) throws Exception {
+            ControllerResult<AssignReplicasToDirsResponseData> result = replicationControl.handleAssignReplicasToDirs(
+                    AssignmentsHelper.buildRequestData(brokerId, defaultBrokerEpoch(brokerId), assignment));
+            assertNotNull(result.response());
+            assertEquals(NONE.code(), result.response().errorCode());
+            replay(result.records());
+            return result;
+        }
     }
 
     private static class MockCreateTopicPolicy implements CreateTopicPolicy {
@@ -532,6 +584,11 @@ public class ReplicationControlManagerTest {
         assertEquals(expectedResponse3, result3.response());
         ctx.replay(result3.records());
         assertEquals(new PartitionRegistration.Builder().setReplicas(new int[] {1, 2, 0}).
+            setDirectories(new Uuid[] {
+                    Uuid.fromString("TESTBROKER00001DIRAAAA"),
+                    Uuid.fromString("TESTBROKER00002DIRAAAA"),
+                    Uuid.fromString("TESTBROKER00000DIRAAAA")
+            }).
             setIsr(new int[] {1, 2, 0}).setLeader(1).setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).setLeaderEpoch(0).setPartitionEpoch(0).build(),
             replicationControl.getPartition(
                 ((TopicRecord) result3.records().get(0).message()).topicId(), 0));
@@ -594,6 +651,11 @@ public class ReplicationControlManagerTest {
         // cannot be in the ISR because it is in controlled shutdown.
         assertEquals(
             new PartitionRegistration.Builder().setReplicas(new int[]{1, 0, 2}).
+                setDirectories(new Uuid[] {
+                        Uuid.fromString("TESTBROKER00001DIRAAAA"),
+                        Uuid.fromString("TESTBROKER00000DIRAAAA"),
+                        Uuid.fromString("TESTBROKER00002DIRAAAA")
+                }).
                 setIsr(new int[]{0}).
                 setLeader(0).
                 setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).
@@ -880,6 +942,121 @@ public class ReplicationControlManagerTest {
         assertConsistentAlterPartitionResponse(replicationControl, topicIdPartition, expandIsrResponse);
     }
 
+    @Test
+    public void testEligibleLeaderReplicas_ShrinkAndExpandIsr() throws Exception {
+        ReplicationControlTestContext ctx = new ReplicationControlTestContext.Builder().setIsElrEnabled(true).build();
+        ReplicationControlManager replicationControl = ctx.replicationControl;
+        ctx.registerBrokers(0, 1, 2);
+        ctx.unfenceBrokers(0, 1, 2);
+        CreatableTopicResult createTopicResult = ctx.createTestTopic("foo",
+            new int[][] {new int[] {0, 1, 2}});
+
+        TopicIdPartition topicIdPartition = new TopicIdPartition(createTopicResult.topicId(), 0);
+        assertEquals(OptionalInt.of(0), ctx.currentLeader(topicIdPartition));
+        long brokerEpoch = ctx.currentBrokerEpoch(0);
+        ctx.alterTopicConfig("foo", TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, "2");
+
+        // Change ISR to {0}.
+        PartitionData shrinkIsrRequest = newAlterPartition(
+            replicationControl, topicIdPartition, isrWithDefaultEpoch(0), LeaderRecoveryState.RECOVERED);
+
+        ControllerResult<AlterPartitionResponseData> shrinkIsrResult = sendAlterPartition(
+            replicationControl, 0, brokerEpoch, topicIdPartition.topicId(), shrinkIsrRequest);
+        AlterPartitionResponseData.PartitionData shrinkIsrResponse = assertAlterPartitionResponse(
+            shrinkIsrResult, topicIdPartition, NONE);
+        assertConsistentAlterPartitionResponse(replicationControl, topicIdPartition, shrinkIsrResponse);
+        PartitionRegistration partition = replicationControl.getPartition(topicIdPartition.topicId(), topicIdPartition.partitionId());
+        assertArrayEquals(new int[]{1, 2}, partition.elr, partition.toString());
+        assertArrayEquals(new int[]{}, partition.lastKnownElr, partition.toString());
+
+        PartitionData expandIsrRequest = newAlterPartition(
+            replicationControl, topicIdPartition, isrWithDefaultEpoch(0, 1), LeaderRecoveryState.RECOVERED);
+        ControllerResult<AlterPartitionResponseData> expandIsrResult = sendAlterPartition(
+            replicationControl, 0, brokerEpoch, topicIdPartition.topicId(), expandIsrRequest);
+        AlterPartitionResponseData.PartitionData expandIsrResponse = assertAlterPartitionResponse(
+            expandIsrResult, topicIdPartition, NONE);
+        assertConsistentAlterPartitionResponse(replicationControl, topicIdPartition, expandIsrResponse);
+        partition = replicationControl.getPartition(topicIdPartition.topicId(), topicIdPartition.partitionId());
+        assertArrayEquals(new int[]{}, partition.elr, partition.toString());
+        assertArrayEquals(new int[]{}, partition.lastKnownElr, partition.toString());
+    }
+
+    @Test
+    public void testEligibleLeaderReplicas_BrokerFence() throws Exception {
+        ReplicationControlTestContext ctx = new ReplicationControlTestContext.Builder().setIsElrEnabled(true).build();
+        ReplicationControlManager replicationControl = ctx.replicationControl;
+        ctx.registerBrokers(0, 1, 2, 3);
+        ctx.unfenceBrokers(0, 1, 2, 3);
+        CreatableTopicResult createTopicResult = ctx.createTestTopic("foo",
+            new int[][] {new int[] {0, 1, 2, 3}});
+
+        TopicIdPartition topicIdPartition = new TopicIdPartition(createTopicResult.topicId(), 0);
+        assertEquals(OptionalInt.of(0), ctx.currentLeader(topicIdPartition));
+        ctx.alterTopicConfig("foo", TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, "3");
+
+        ctx.fenceBrokers(Utils.mkSet(2, 3));
+
+        PartitionRegistration partition = replicationControl.getPartition(topicIdPartition.topicId(), topicIdPartition.partitionId());
+        assertArrayEquals(new int[]{3}, partition.elr, partition.toString());
+        assertArrayEquals(new int[]{}, partition.lastKnownElr, partition.toString());
+
+        ctx.fenceBrokers(Utils.mkSet(1, 2, 3));
+
+        partition = replicationControl.getPartition(topicIdPartition.topicId(), topicIdPartition.partitionId());
+        assertArrayEquals(new int[]{1, 3}, partition.elr, partition.toString());
+        assertArrayEquals(new int[]{}, partition.lastKnownElr, partition.toString());
+
+        ctx.unfenceBrokers(0, 1, 2, 3);
+        partition = replicationControl.getPartition(topicIdPartition.topicId(), topicIdPartition.partitionId());
+        assertArrayEquals(new int[]{1, 3}, partition.elr, partition.toString());
+        assertArrayEquals(new int[]{}, partition.lastKnownElr, partition.toString());
+    }
+
+    @Test
+    public void testEligibleLeaderReplicas_EffectiveMinIsr() throws Exception {
+        ReplicationControlTestContext ctx = new ReplicationControlTestContext.Builder().setIsElrEnabled(true).build();
+        ReplicationControlManager replicationControl = ctx.replicationControl;
+        ctx.registerBrokers(0, 1, 2);
+        ctx.unfenceBrokers(0, 1, 2);
+        CreatableTopicResult createTopicResult = ctx.createTestTopic("foo",
+                new int[][]{new int[]{0, 1, 2}});
+
+        TopicIdPartition topicIdPartition = new TopicIdPartition(createTopicResult.topicId(), 0);
+        assertEquals(OptionalInt.of(0), ctx.currentLeader(topicIdPartition));
+        ctx.alterTopicConfig("foo", TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, "5");
+        assertEquals(3, replicationControl.getTopicEffectiveMinIsr("foo"));
+    }
+
+    @Test
+    public void testEligibleLeaderReplicas_CleanElection() throws Exception {
+        ReplicationControlTestContext ctx = new ReplicationControlTestContext.Builder()
+            .setIsElrEnabled(true)
+            .build();
+        ReplicationControlManager replicationControl = ctx.replicationControl;
+        ctx.registerBrokers(0, 1, 2, 3);
+        ctx.unfenceBrokers(0, 1, 2, 3);
+        CreatableTopicResult createTopicResult = ctx.createTestTopic("foo",
+                new int[][] {new int[] {0, 1, 2, 3}});
+
+        TopicIdPartition topicIdPartition = new TopicIdPartition(createTopicResult.topicId(), 0);
+        assertEquals(OptionalInt.of(0), ctx.currentLeader(topicIdPartition));
+        ctx.alterTopicConfig("foo", TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, "3");
+
+        ctx.fenceBrokers(Utils.mkSet(1, 2, 3));
+
+        PartitionRegistration partition = replicationControl.getPartition(topicIdPartition.topicId(), topicIdPartition.partitionId());
+        assertArrayEquals(new int[]{2, 3}, partition.elr, partition.toString());
+        assertArrayEquals(new int[]{}, partition.lastKnownElr, partition.toString());
+
+        ctx.unfenceBrokers(2);
+        ctx.fenceBrokers(Utils.mkSet(0, 1));
+        partition = replicationControl.getPartition(topicIdPartition.topicId(), topicIdPartition.partitionId());
+        assertArrayEquals(new int[]{0, 3}, partition.elr, partition.toString());
+        assertArrayEquals(new int[]{2}, partition.isr, partition.toString());
+        assertEquals(2, partition.leader, partition.toString());
+        assertArrayEquals(new int[]{}, partition.lastKnownElr, partition.toString());
+    }
+
     @ParameterizedTest
     @ApiKeyVersionsSource(apiKey = ApiKeys.ALTER_PARTITION)
     public void testAlterPartitionHandleUnknownTopicIdOrName(short version) throws Exception {
@@ -1020,7 +1197,7 @@ public class ReplicationControlManagerTest {
         long brokerEpoch,
         Uuid topicId,
         AlterPartitionRequestData.PartitionData partitionData
-    ) throws Exception {
+    ) {
         AlterPartitionRequestData request = new AlterPartitionRequestData()
             .setBrokerId(brokerId)
             .setBrokerEpoch(brokerEpoch);
@@ -1206,8 +1383,11 @@ public class ReplicationControlManagerTest {
             setNumPartitions(2).setReplicationFactor((short) 2));
         request.topics().add(new CreatableTopic().setName("foo2").
             setNumPartitions(2).setReplicationFactor((short) 2));
-        ctx.registerBrokers(0, 1);
-        ctx.unfenceBrokers(0, 1);
+        ctx.registerBrokersWithDirs(
+                0, Collections.emptyList(),
+                1, asList(Uuid.fromString("QMzamNQVQ7GnJK9DwQHG7Q"), Uuid.fromString("loDxEBLETdedNnQGOKKENw")),
+                3, Collections.singletonList(Uuid.fromString("dxCDSgNjQvS4WuyqEKoCwA")));
+        ctx.unfenceBrokers(0, 1, 3);
         ControllerRequestContext requestContext = anonymousContextFor(ApiKeys.CREATE_TOPICS);
         ControllerResult<CreateTopicsResponseData> createTopicResult = replicationControl.
             createTopics(requestContext, request, new HashSet<>(Arrays.asList("foo", "bar", "quux", "foo2")));
@@ -1244,7 +1424,7 @@ public class ReplicationControlManagerTest {
         List<CreatePartitionsTopic> topics2 = new ArrayList<>();
         topics2.add(new CreatePartitionsTopic().
             setName("foo").setCount(6).setAssignments(asList(
-                new CreatePartitionsAssignment().setBrokerIds(asList(1, 0)))));
+                new CreatePartitionsAssignment().setBrokerIds(asList(1, 3)))));
         topics2.add(new CreatePartitionsTopic().
             setName("bar").setCount(5).setAssignments(asList(
             new CreatePartitionsAssignment().setBrokerIds(asList(1)))));
@@ -1277,6 +1457,9 @@ public class ReplicationControlManagerTest {
                     "no such broker is registered.")),
             createPartitionsResult2.response());
         ctx.replay(createPartitionsResult2.records());
+        assertArrayEquals(
+                new Uuid[] {DirectoryId.UNASSIGNED, Uuid.fromString("dxCDSgNjQvS4WuyqEKoCwA")},
+                replicationControl.getPartition(replicationControl.getTopicId("foo"), 5).directories);
     }
 
     @Test
@@ -1292,7 +1475,6 @@ public class ReplicationControlManagerTest {
             anonymousContextFor(ApiKeys.CREATE_TOPICS);
         ControllerResult<CreateTopicsResponseData> createResult =
             replicationControl.createTopics(createTopicsRequestContext, request, Collections.singleton("foo"));
-        CreateTopicsResponseData expectedResponse = new CreateTopicsResponseData();
         CreatableTopicResult createdTopic = createResult.response().topics().find("foo");
         assertEquals(NONE.code(), createdTopic.errorCode());
         ctx.replay(createResult.records());
@@ -1383,6 +1565,11 @@ public class ReplicationControlManagerTest {
         // cannot be in the ISR because it is in controlled shutdown.
         assertEquals(
             new PartitionRegistration.Builder().setReplicas(new int[]{0, 1, 2}).
+                setDirectories(new Uuid[] {
+                    Uuid.fromString("TESTBROKER00000DIRAAAA"),
+                    Uuid.fromString("TESTBROKER00001DIRAAAA"),
+                    Uuid.fromString("TESTBROKER00002DIRAAAA")
+                }).
                 setIsr(new int[]{0}).
                 setLeader(0).
                 setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).
@@ -1436,7 +1623,10 @@ public class ReplicationControlManagerTest {
     @ParameterizedTest
     @ApiKeyVersionsSource(apiKey = ApiKeys.ALTER_PARTITION)
     public void testReassignPartitions(short version) throws Exception {
-        ReplicationControlTestContext ctx = new ReplicationControlTestContext.Builder().build();
+        MetadataVersion metadataVersion = MetadataVersion.latest();
+        ReplicationControlTestContext ctx = new ReplicationControlTestContext.Builder()
+                .setMetadataVersion(metadataVersion)
+                .build();
         ReplicationControlManager replication = ctx.replicationControl;
         ctx.registerBrokers(0, 1, 2, 3);
         ctx.unfenceBrokers(0, 1, 2, 3);
@@ -1502,9 +1692,14 @@ public class ReplicationControlManagerTest {
             new PartitionChangeRecord().setTopicId(fooId).
                 setPartitionId(1).
                 setReplicas(asList(2, 1, 3)).
+                setDirectories(asList(
+                        Uuid.fromString("TESTBROKER00002DIRAAAA"),
+                        Uuid.fromString("TESTBROKER00001DIRAAAA"),
+                        Uuid.fromString("TESTBROKER00003DIRAAAA")
+                )).
                 setLeader(3).
                 setRemovingReplicas(Collections.emptyList()).
-                setAddingReplicas(Collections.emptyList()), (short) 0)),
+                setAddingReplicas(Collections.emptyList()), MetadataVersion.latest().partitionChangeRecordVersion())),
             new AlterPartitionReassignmentsResponseData().setErrorMessage(null).setResponses(asList(
                 new ReassignableTopicResponse().setName("foo").setPartitions(asList(
                     new ReassignablePartitionResponse().setPartitionIndex(0).
@@ -1569,6 +1764,12 @@ public class ReplicationControlManagerTest {
         assertEquals(
             new PartitionRegistration.Builder().
                 setReplicas(new int[] {1, 2, 3, 4}).
+                setDirectories(new Uuid[] {
+                        Uuid.fromString("TESTBROKER00001DIRAAAA"),
+                        Uuid.fromString("TESTBROKER00002DIRAAAA"),
+                        Uuid.fromString("TESTBROKER00003DIRAAAA"),
+                        Uuid.fromString("TESTBROKER00004DIRAAAA")
+                }).
                 setIsr(new int[] {1, 2, 4}).
                 setLeader(1).
                 setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).
@@ -1711,6 +1912,12 @@ public class ReplicationControlManagerTest {
         assertEquals(
             new PartitionRegistration.Builder().
                 setReplicas(new int[] {1, 2, 3, 4}).
+                setDirectories(new Uuid[] {
+                        Uuid.fromString("TESTBROKER00001DIRAAAA"),
+                        Uuid.fromString("TESTBROKER00002DIRAAAA"),
+                        Uuid.fromString("TESTBROKER00003DIRAAAA"),
+                        Uuid.fromString("TESTBROKER00004DIRAAAA")
+                }).
                 setIsr(new int[] {1, 2, 3, 4}).
                 setLeader(1).
                 setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).
@@ -1753,7 +1960,10 @@ public class ReplicationControlManagerTest {
 
     @Test
     public void testCancelReassignPartitions() throws Exception {
-        ReplicationControlTestContext ctx = new ReplicationControlTestContext.Builder().build();
+        MetadataVersion metadataVersion = MetadataVersion.latest();
+        ReplicationControlTestContext ctx = new ReplicationControlTestContext.Builder()
+                .setMetadataVersion(metadataVersion)
+                .build();
         ReplicationControlManager replication = ctx.replicationControl;
         ctx.registerBrokers(0, 1, 2, 3, 4);
         ctx.unfenceBrokers(0, 1, 2, 3, 4);
@@ -1767,6 +1977,12 @@ public class ReplicationControlManagerTest {
         replication.handleBrokerFenced(3, fenceRecords);
         ctx.replay(fenceRecords);
         assertEquals(new PartitionRegistration.Builder().setReplicas(new int[] {1, 2, 3, 4}).setIsr(new int[] {1, 2, 4}).
+            setDirectories(new Uuid[] {
+                    Uuid.fromString("TESTBROKER00001DIRAAAA"),
+                    Uuid.fromString("TESTBROKER00002DIRAAAA"),
+                    Uuid.fromString("TESTBROKER00003DIRAAAA"),
+                    Uuid.fromString("TESTBROKER00004DIRAAAA")
+            }).
             setLeader(1).setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).setLeaderEpoch(0).setPartitionEpoch(1).build(), replication.getPartition(fooId, 0));
         ControllerResult<AlterPartitionReassignmentsResponseData> alterResult =
             replication.alterPartitionReassignments(
@@ -1804,10 +2020,28 @@ public class ReplicationControlManagerTest {
             alterResult.response());
         ctx.replay(alterResult.records());
         assertEquals(new PartitionRegistration.Builder().setReplicas(new int[] {1, 2, 3}).setIsr(new int[] {1, 2}).
+            setDirectories(new Uuid[] {
+                    Uuid.fromString("TESTBROKER00001DIRAAAA"),
+                    Uuid.fromString("TESTBROKER00002DIRAAAA"),
+                    Uuid.fromString("TESTBROKER00003DIRAAAA")
+            }).
             setLeader(1).setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).setLeaderEpoch(1).setPartitionEpoch(2).build(), replication.getPartition(fooId, 0));
         assertEquals(new PartitionRegistration.Builder().setReplicas(new int[] {1, 2, 3, 0}).setIsr(new int[] {0, 1, 2}).
+            setDirectories(new Uuid[] {
+                    Uuid.fromString("TESTBROKER00001DIRAAAA"),
+                    Uuid.fromString("TESTBROKER00002DIRAAAA"),
+                    Uuid.fromString("TESTBROKER00003DIRAAAA"),
+                    Uuid.fromString("TESTBROKER00000DIRAAAA")
+            }).
             setLeader(0).setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).setLeaderEpoch(0).setPartitionEpoch(2).build(), replication.getPartition(fooId, 1));
         assertEquals(new PartitionRegistration.Builder().setReplicas(new int[] {1, 2, 3, 4, 0}).setIsr(new int[] {4, 2}).
+            setDirectories(new Uuid[] {
+                    Uuid.fromString("TESTBROKER00001DIRAAAA"),
+                    Uuid.fromString("TESTBROKER00002DIRAAAA"),
+                    Uuid.fromString("TESTBROKER00003DIRAAAA"),
+                    Uuid.fromString("TESTBROKER00004DIRAAAA"),
+                    Uuid.fromString("TESTBROKER00000DIRAAAA")
+            }).
             setAddingReplicas(new int[] {0, 1}).setLeader(4).setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).setLeaderEpoch(0).setPartitionEpoch(2).build(), replication.getPartition(barId, 0));
         ListPartitionReassignmentsResponseData currentReassigning =
             new ListPartitionReassignmentsResponseData().setErrorMessage(null).
@@ -1854,8 +2088,13 @@ public class ReplicationControlManagerTest {
                     setPartitionId(0).
                     setLeader(4).
                     setReplicas(asList(2, 3, 4)).
+                    setDirectories(asList(
+                            Uuid.fromString("TESTBROKER00002DIRAAAA"),
+                            Uuid.fromString("TESTBROKER00003DIRAAAA"),
+                            Uuid.fromString("TESTBROKER00004DIRAAAA")
+                    )).
                     setRemovingReplicas(null).
-                    setAddingReplicas(Collections.emptyList()), (short) 0)),
+                    setAddingReplicas(Collections.emptyList()), MetadataVersion.latest().partitionChangeRecordVersion())),
             new AlterPartitionReassignmentsResponseData().setErrorMessage(null).setResponses(asList(
                 new ReassignableTopicResponse().setName("foo").setPartitions(asList(
                     new ReassignablePartitionResponse().setPartitionIndex(0).
@@ -1867,6 +2106,11 @@ public class ReplicationControlManagerTest {
         ctx.replay(cancelResult.records());
         assertEquals(NONE_REASSIGNING, replication.listPartitionReassignments(null, Long.MAX_VALUE));
         assertEquals(new PartitionRegistration.Builder().setReplicas(new int[] {2, 3, 4}).setIsr(new int[] {4, 2}).
+            setDirectories(new Uuid[] {
+                    Uuid.fromString("TESTBROKER00002DIRAAAA"),
+                    Uuid.fromString("TESTBROKER00003DIRAAAA"),
+                    Uuid.fromString("TESTBROKER00004DIRAAAA")
+            }).
             setLeader(4).setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).setLeaderEpoch(1).setPartitionEpoch(3).build(), replication.getPartition(barId, 0));
     }
 
@@ -1888,6 +2132,11 @@ public class ReplicationControlManagerTest {
             INVALID_REPLICA_ASSIGNMENT.code());
         ctx.createPartitions(2, "foo", new int[][] {new int[] {2, 4, 5}}, NONE.code());
         assertEquals(new PartitionRegistration.Builder().setReplicas(new int[] {2, 4, 5}).
+                setDirectories(new Uuid[] {
+                        Uuid.fromString("TESTBROKER00002DIRAAAA"),
+                        Uuid.fromString("TESTBROKER00004DIRAAAA"),
+                        Uuid.fromString("TESTBROKER00005DIRAAAA")
+                }).
                 setIsr(new int[] {2}).setLeader(2).setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).setLeaderEpoch(0).setPartitionEpoch(0).build(),
             ctx.replicationControl.getPartition(fooId, 1));
     }
@@ -1908,8 +2157,8 @@ public class ReplicationControlManagerTest {
 
     @ParameterizedTest
     @ValueSource(booleans = {true, false})
-    public void testElectUncleanLeaders(boolean electAllPartitions) throws Exception {
-        ReplicationControlTestContext ctx = new ReplicationControlTestContext.Builder().build();
+    public void testElectUncleanLeaders_WithoutElr(boolean electAllPartitions) throws Exception {
+        ReplicationControlTestContext ctx = new ReplicationControlTestContext.Builder().build(MetadataVersion.IBP_3_6_IV1);
         ReplicationControlManager replication = ctx.replicationControl;
         ctx.registerBrokers(0, 1, 2, 3, 4);
         ctx.unfenceBrokers(0, 1, 2, 3, 4);
@@ -2186,13 +2435,13 @@ public class ReplicationControlManagerTest {
                         setPartitionId(0).
                         setTopicId(fooId).
                         setLeader(1),
-                    (short) 0),
+                    MetadataVersion.latest().partitionChangeRecordVersion()),
                 new ApiMessageAndVersion(
                     new PartitionChangeRecord().
                         setPartitionId(2).
                         setTopicId(fooId).
                         setLeader(0),
-                    (short) 0)),
+                    MetadataVersion.latest().partitionChangeRecordVersion())),
             election2Result.records());
     }
 
@@ -2235,7 +2484,7 @@ public class ReplicationControlManagerTest {
             .setPartitionId(0)
             .setTopicId(fooId)
             .setLeader(1);
-        assertEquals(asList(new ApiMessageAndVersion(expectedChangeRecord, (short) 0)), balanceResult.records());
+        assertEquals(asList(new ApiMessageAndVersion(expectedChangeRecord, MetadataVersion.latest().partitionChangeRecordVersion())), balanceResult.records());
         assertTrue(replication.arePartitionLeadersImbalanced());
         assertFalse(balanceResult.response());
 
@@ -2267,7 +2516,7 @@ public class ReplicationControlManagerTest {
             .setPartitionId(2)
             .setTopicId(fooId)
             .setLeader(0);
-        assertEquals(asList(new ApiMessageAndVersion(expectedChangeRecord, (short) 0)), balanceResult.records());
+        assertEquals(asList(new ApiMessageAndVersion(expectedChangeRecord, MetadataVersion.latest().partitionChangeRecordVersion())), balanceResult.records());
         assertFalse(replication.arePartitionLeadersImbalanced());
         assertFalse(balanceResult.response());
     }
@@ -2326,7 +2575,13 @@ public class ReplicationControlManagerTest {
     public void testKRaftClusterDescriber() throws Exception {
         ReplicationControlTestContext ctx = new ReplicationControlTestContext.Builder().build();
         ReplicationControlManager replication = ctx.replicationControl;
-        ctx.registerBrokers(0, 1, 2, 3, 4);
+        ctx.registerBrokersWithDirs(
+                0, Collections.emptyList(),
+                1, Collections.emptyList(),
+                2, asList(Uuid.fromString("ozwqsVMFSNiYQUPSJA3j0w")),
+                3, asList(Uuid.fromString("SSDgCZ4BTyec5QojGT65qg"), Uuid.fromString("K8KwMrviRcOUvgI8FPOJWg")),
+                4, Collections.emptyList()
+        );
         ctx.unfenceBrokers(2, 3, 4);
         ctx.createTestTopic("foo", new int[][]{
             new int[]{1, 2, 3}, new int[]{2, 3, 4}, new int[]{0, 2, 1}}).topicId();
@@ -2341,6 +2596,9 @@ public class ReplicationControlManagerTest {
             new UsableBroker(2, Optional.empty(), false),
             new UsableBroker(3, Optional.empty(), false),
             new UsableBroker(4, Optional.empty(), false))), brokers);
+        assertEquals(DirectoryId.MIGRATING, describer.defaultDir(1));
+        assertEquals(Uuid.fromString("ozwqsVMFSNiYQUPSJA3j0w"), describer.defaultDir(2));
+        assertEquals(DirectoryId.UNASSIGNED, describer.defaultDir(3));
     }
 
     @ParameterizedTest
@@ -2592,5 +2850,153 @@ public class ReplicationControlManagerTest {
                                 setName("foo").
                                 setTopicId(Uuid.fromString("8auUWq8zQqe_99H_m2LAmw")))).
                         getMessage());
+    }
+
+    @Test
+    void testHandleAssignReplicasToDirsFailsOnOlderMv() throws Exception {
+        ReplicationControlTestContext ctx = new ReplicationControlTestContext.Builder().
+            setMetadataVersion(MetadataVersion.IBP_3_7_IV1).
+            build();
+        assertThrows(UnsupportedVersionException.class,
+            () -> ctx.replicationControl.handleAssignReplicasToDirs(new AssignReplicasToDirsRequestData()));
+    }
+
+    @Test
+    void testHandleAssignReplicasToDirs() throws Exception {
+        ReplicationControlTestContext ctx = new ReplicationControlTestContext.Builder().build();
+        Uuid dir1b1 = Uuid.fromString("hO2YI5bgRUmByNPHiHxjNQ");
+        Uuid dir2b1 = Uuid.fromString("R3Gb1HLoTzuKMgAkH5Vtpw");
+        Uuid dir1b2 = Uuid.fromString("TBGa8UayQi6KguqF5nC0sw");
+        ctx.registerBrokersWithDirs(1, asList(dir1b1, dir2b1), 2, singletonList(dir1b2));
+        ctx.unfenceBrokers(1, 2);
+        Uuid topicA = ctx.createTestTopic("a", new int[][]{new int[]{1, 2}, new int[]{1, 2}}).topicId();
+        Uuid topicB = ctx.createTestTopic("b", new int[][]{new int[]{1, 2}, new int[]{1, 2}}).topicId();
+        Uuid topicC = ctx.createTestTopic("c", new int[][]{new int[]{2}}).topicId();
+
+        ControllerResult<AssignReplicasToDirsResponseData> controllerResult = ctx.assignReplicasToDirs(1, new HashMap<TopicIdPartition, Uuid>() {{
+                put(new TopicIdPartition(topicA, 0), dir1b1);
+                put(new TopicIdPartition(topicA, 1), dir2b1);
+                put(new TopicIdPartition(topicB, 0), dir1b1);
+                put(new TopicIdPartition(topicB, 1), DirectoryId.LOST);
+                put(new TopicIdPartition(Uuid.fromString("nLU9hKNXSZuMe5PO2A4dVQ"), 1), dir2b1); // expect UNKNOWN_TOPIC_ID
+                put(new TopicIdPartition(topicA, 137), dir1b1); // expect UNKNOWN_TOPIC_OR_PARTITION
+                put(new TopicIdPartition(topicC, 0), dir1b1); // expect NOT_LEADER_OR_FOLLOWER
+            }});
+
+        assertEquals(AssignmentsHelper.normalize(AssignmentsHelper.buildResponseData((short) 0, 0, new HashMap<Uuid, Map<TopicIdPartition, Errors>>() {{
+                put(dir1b1, new HashMap<TopicIdPartition, Errors>() {{
+                        put(new TopicIdPartition(topicA, 0), NONE);
+                        put(new TopicIdPartition(topicA, 137), UNKNOWN_TOPIC_OR_PARTITION);
+                        put(new TopicIdPartition(topicB, 0), NONE);
+                        put(new TopicIdPartition(topicC, 0), NOT_LEADER_OR_FOLLOWER);
+                    }});
+                put(dir2b1, new HashMap<TopicIdPartition, Errors>() {{
+                        put(new TopicIdPartition(topicA, 1), NONE);
+                        put(new TopicIdPartition(Uuid.fromString("nLU9hKNXSZuMe5PO2A4dVQ"), 1), UNKNOWN_TOPIC_ID);
+                    }});
+                put(DirectoryId.LOST, new HashMap<TopicIdPartition, Errors>() {{
+                        put(new TopicIdPartition(topicB, 1), NONE);
+                    }});
+            }})), AssignmentsHelper.normalize(controllerResult.response()));
+        short recordVersion = ctx.featureControl.metadataVersion().partitionChangeRecordVersion();
+        assertEquals(sortPartitionChangeRecords(asList(
+                new ApiMessageAndVersion(
+                        new PartitionChangeRecord().setTopicId(topicA).setPartitionId(0)
+                                .setDirectories(asList(dir1b1, dir1b2)), recordVersion),
+                new ApiMessageAndVersion(
+                        new PartitionChangeRecord().setTopicId(topicA).setPartitionId(1).
+                                setDirectories(asList(dir2b1, dir1b2)), recordVersion),
+                new ApiMessageAndVersion(
+                        new PartitionChangeRecord().setTopicId(topicB).setPartitionId(0).
+                                setDirectories(asList(dir1b1, dir1b2)), recordVersion),
+                new ApiMessageAndVersion(
+                        new PartitionChangeRecord().setTopicId(topicB).setPartitionId(1).
+                                setDirectories(asList(DirectoryId.LOST, dir1b2)), recordVersion),
+
+                // In addition to the directory assignment changes we expect an additional record,
+                // which elects a new leader for bar-1 which has been assigned to an offline directory.
+                new ApiMessageAndVersion(
+                        new PartitionChangeRecord().setTopicId(topicB).setPartitionId(1).
+                                setIsr(singletonList(2)).setLeader(2), recordVersion)
+        )), sortPartitionChangeRecords(controllerResult.records()));
+
+        ctx.replay(controllerResult.records());
+        assertEquals(new HashSet<TopicIdPartition>() {{
+                add(new TopicIdPartition(topicA, 0));
+                add(new TopicIdPartition(topicA, 1));
+                add(new TopicIdPartition(topicB, 0));
+            }}, RecordTestUtils.iteratorToSet(ctx.replicationControl.brokersToIsrs().iterator(1, true)));
+        assertEquals(new HashSet<TopicIdPartition>() {{
+                add(new TopicIdPartition(topicB, 1));
+                add(new TopicIdPartition(topicC, 0));
+            }},
+            RecordTestUtils.iteratorToSet(ctx.replicationControl.brokersToIsrs().iterator(2, true)));
+    }
+
+    @Test
+    void testHandleDirectoriesOffline() throws Exception {
+        ReplicationControlTestContext ctx = new ReplicationControlTestContext.Builder().build();
+        int b1 = 101, b2 = 102;
+        Uuid dir1b1 = Uuid.fromString("suitdzfTTdqoWcy8VqmkUg");
+        Uuid dir2b1 = Uuid.fromString("yh3acnzGSeurSTj8aIhOjw");
+        Uuid dir1b2 = Uuid.fromString("OmpmJ8RjQliQlEFht56DwQ");
+        Uuid dir2b2 = Uuid.fromString("w05baLpsT5Oz0LvKTKXoDw");
+        ctx.registerBrokersWithDirs(b1, asList(dir1b1, dir2b1), b2, asList(dir1b2, dir2b2));
+        ctx.unfenceBrokers(b1, b2);
+        Uuid topicA = ctx.createTestTopic("a", new int[][]{new int[]{b1, b2}, new int[]{b1, b2}}).topicId();
+        Uuid topicB = ctx.createTestTopic("b", new int[][]{new int[]{b1, b2}, new int[]{b1, b2}}).topicId();
+        ctx.assignReplicasToDirs(b1, new HashMap<TopicIdPartition, Uuid>() {{
+                put(new TopicIdPartition(topicA, 0), dir1b1);
+                put(new TopicIdPartition(topicA, 1), dir2b1);
+                put(new TopicIdPartition(topicB, 0), dir1b1);
+                put(new TopicIdPartition(topicB, 1), dir2b1);
+            }});
+        ctx.assignReplicasToDirs(b2, new HashMap<TopicIdPartition, Uuid>() {{
+                put(new TopicIdPartition(topicA, 0), dir1b2);
+                put(new TopicIdPartition(topicA, 1), dir2b2);
+                put(new TopicIdPartition(topicB, 0), dir1b2);
+                put(new TopicIdPartition(topicB, 1), dir2b2);
+            }});
+        List<ApiMessageAndVersion> records = new ArrayList<>();
+        ctx.replicationControl.handleDirectoriesOffline(b1, defaultBrokerEpoch(b1), asList(
+                dir1b1,
+                dir1b2 // should not cause update to dir1b2 as it's not registered to b1
+        ), records);
+        assertEquals(
+            singletonList(new ApiMessageAndVersion(new BrokerRegistrationChangeRecord()
+                    .setBrokerId(b1).setBrokerEpoch(defaultBrokerEpoch(b1))
+                    .setLogDirs(singletonList(dir2b1)), (short) 2)),
+            filter(records, BrokerRegistrationChangeRecord.class)
+        );
+        short partitionChangeRecordVersion = ctx.featureControl.metadataVersion().partitionChangeRecordVersion();
+        assertEquals(
+            sortPartitionChangeRecords(asList(
+                new ApiMessageAndVersion(new PartitionChangeRecord().setTopicId(topicA).setPartitionId(0)
+                        .setLeader(b2).setIsr(singletonList(b2)), partitionChangeRecordVersion),
+                new ApiMessageAndVersion(new PartitionChangeRecord().setTopicId(topicB).setPartitionId(0)
+                        .setLeader(b2).setIsr(singletonList(b2)), partitionChangeRecordVersion)
+            )),
+            sortPartitionChangeRecords(filter(records, PartitionChangeRecord.class))
+        );
+        assertEquals(3, records.size());
+        ctx.replay(records);
+        assertEquals(Collections.singletonList(dir2b1), ctx.clusterControl.registration(b1).directories());
+    }
+
+    /**
+     * Sorts {@link PartitionChangeRecord} by topic ID and partition ID,
+     * so that the order of the records is deterministic, and can be compared.
+     */
+    private static List<ApiMessageAndVersion> sortPartitionChangeRecords(List<ApiMessageAndVersion> records) {
+        records = new ArrayList<>(records);
+        records.sort(Comparator.comparing((ApiMessageAndVersion record) -> {
+            PartitionChangeRecord partitionChangeRecord = (PartitionChangeRecord) record.message();
+            return partitionChangeRecord.topicId() + "-" + partitionChangeRecord.partitionId();
+        }));
+        return records;
+    }
+
+    private static List<ApiMessageAndVersion> filter(List<ApiMessageAndVersion> records, Class<? extends ApiMessage> clazz) {
+        return records.stream().filter(r -> clazz.equals(r.message().getClass())).collect(Collectors.toList());
     }
 }

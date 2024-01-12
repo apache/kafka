@@ -57,6 +57,7 @@ import org.apache.kafka.streams.state.TimestampedWindowStore;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.test.MockApiProcessorSupplier;
 import org.apache.kafka.test.MockClientSupplier;
+import org.apache.kafka.test.MockStandbyUpdateListener;
 import org.apache.kafka.test.MockStateRestoreListener;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
@@ -420,7 +421,8 @@ public class StreamThreadStateStoreProviderTest {
                 logContext,
                 clientSupplier.adminClient,
                 clientSupplier.restoreConsumer,
-                new MockStateRestoreListener()),
+                new MockStateRestoreListener(),
+                new MockStandbyUpdateListener()),
             topology.storeToChangelogTopic(),
             partitions,
             false);
@@ -460,7 +462,10 @@ public class StreamThreadStateStoreProviderTest {
             new MockTime(),
             stateManager,
             recordCollector,
-            context, logContext);
+            context,
+            logContext,
+            false
+        );
     }
 
     private void mockThread(final boolean initialized) {

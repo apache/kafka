@@ -80,7 +80,7 @@ public class RetryUtil {
 
         final long end = time.milliseconds() + timeoutMs;
         int attempt = 0;
-        Throwable lastError = null;
+        Throwable lastError;
         do {
             attempt++;
             try {

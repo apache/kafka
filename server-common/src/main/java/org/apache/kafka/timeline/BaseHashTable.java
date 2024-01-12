@@ -22,14 +22,14 @@ import java.util.List;
 
 /**
  * A hash table which uses separate chaining.
- *
+ * <br>
  * In order to optimize memory consumption a bit, the common case where there is
  * one element per slot is handled by simply placing the element in the slot,
  * and the case where there are multiple elements is handled by creating an
- * array and putting that in the slot.  Java is storing type info in memory
+ * array and putting that in the slot. Java is storing type info in memory
  * about every object whether we want it or not, so let's get some benefit
  * out of it.
- *
+ * <br>
  * Arrays and null values cannot be inserted.
  */
 @SuppressWarnings("unchecked")
@@ -58,7 +58,7 @@ class BaseHashTable<T> {
 
     /**
      * Calculate the capacity we should provision, given the expected size.
-     *
+     * <br>
      * Our capacity must always be a power of 2, and never less than 2 or more
      * than MAX_CAPACITY.  We use 64-bit numbers here to avoid overflow
      * concerns.
@@ -180,7 +180,7 @@ class BaseHashTable<T> {
     /**
      * Expand the hash table to a new size.  Existing elements will be copied to new slots.
      */
-    final private void rehash(int newSize) {
+    private void rehash(int newSize) {
         Object[] prevElements = elements;
         elements = new Object[newSize];
         List<Object> ready = new ArrayList<>();
@@ -224,15 +224,15 @@ class BaseHashTable<T> {
      */
     static <T> void unpackSlot(List<T> out, Object[] elements, int slot) {
         Object value = elements[slot];
-        if (value == null) {
-            return;
-        } else if (value instanceof Object[]) {
-            Object[] array = (Object[]) value;
-            for (Object object : array) {
-                out.add((T) object);
+        if (value != null) {
+            if (value instanceof Object[]) {
+                Object[] array = (Object[]) value;
+                for (Object object : array) {
+                    out.add((T) object);
+                }
+            } else {
+                out.add((T) value);
             }
-        } else {
-            out.add((T) value);
         }
     }
 

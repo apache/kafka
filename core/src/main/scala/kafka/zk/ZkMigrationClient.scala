@@ -18,7 +18,7 @@ package kafka.zk
 
 import kafka.utils.{Logging, PasswordEncoder}
 import kafka.zk.ZkMigrationClient.wrapZkException
-import kafka.zk.migration.{ZkAclMigrationClient, ZkConfigMigrationClient, ZkTopicMigrationClient}
+import kafka.zk.migration.{ZkAclMigrationClient, ZkConfigMigrationClient, ZkDelegationTokenMigrationClient, ZkTopicMigrationClient}
 import kafka.zookeeper._
 import org.apache.kafka.clients.admin.ScramMechanism
 import org.apache.kafka.common.acl.AccessControlEntry
@@ -28,6 +28,7 @@ import org.apache.kafka.common.metadata._
 import org.apache.kafka.common.resource.ResourcePattern
 import org.apache.kafka.common.security.scram.ScramCredential
 import org.apache.kafka.common.{TopicIdPartition, Uuid}
+import org.apache.kafka.metadata.DelegationTokenData
 import org.apache.kafka.metadata.PartitionRegistration
 import org.apache.kafka.metadata.migration.ConfigMigrationClient.ClientQuotaVisitor
 import org.apache.kafka.metadata.migration.TopicMigrationClient.{TopicVisitor, TopicVisitorInterest}
@@ -53,7 +54,8 @@ object ZkMigrationClient {
     val topicClient = new ZkTopicMigrationClient(zkClient)
     val configClient = new ZkConfigMigrationClient(zkClient, zkConfigEncoder)
     val aclClient = new ZkAclMigrationClient(zkClient)
-    new ZkMigrationClient(zkClient, topicClient, configClient, aclClient)
+    val delegationTokenClient = new ZkDelegationTokenMigrationClient(zkClient)
+    new ZkMigrationClient(zkClient, topicClient, configClient, aclClient, delegationTokenClient)
   }
 
   /**
@@ -96,7 +98,8 @@ class ZkMigrationClient(
   zkClient: KafkaZkClient,
   topicClient: TopicMigrationClient,
   configClient: ConfigMigrationClient,
-  aclClient: AclMigrationClient
+  aclClient: AclMigrationClient,
+  delegationTokenClient: DelegationTokenMigrationClient
 ) extends MigrationClient with Logging {
 
   override def getOrCreateMigrationRecoveryState(
@@ -197,7 +200,9 @@ class ZkMigrationClient(
     brokerIdConsumer: Consumer[Integer]
   ): Unit = wrapZkException {
     configClient.iterateBrokerConfigs((broker, props) => {
-      brokerIdConsumer.accept(Integer.valueOf(broker))
+      if (broker.nonEmpty) {
+        brokerIdConsumer.accept(Integer.valueOf(broker))
+      }
       val batch = new util.ArrayList[ApiMessageAndVersion]()
       props.forEach((key, value) => {
         batch.add(new ApiMessageAndVersion(new ConfigRecord()
@@ -258,7 +263,7 @@ class ZkMigrationClient(
         recordConsumer.accept(List(new ApiMessageAndVersion(new ProducerIdsRecord()
           .setBrokerEpoch(-1)
           .setBrokerId(producerIdBlock.assignedBrokerId)
-          .setNextProducerId(producerIdBlock.firstProducerId()), 0.toShort)).asJava)
+          .setNextProducerId(producerIdBlock.nextBlockFirstId()), 0.toShort)).asJava)
       case None => // Nothing to migrate
     }
   }
@@ -289,6 +294,25 @@ class ZkMigrationClient(
     })
   }
 
+  def migrateDelegationTokens(
+    recordConsumer: Consumer[util.List[ApiMessageAndVersion]]
+  ): Unit = wrapZkException {
+    val batch = new util.ArrayList[ApiMessageAndVersion]()
+    val tokens = zkClient.getChildren(DelegationTokensZNode.path)
+    for (tokenId <- tokens) {
+      zkClient.getDelegationTokenInfo(tokenId) match {
+        case Some(tokenInformation) => {
+          val newDelegationTokenData = new DelegationTokenData(tokenInformation)
+          batch.add(new ApiMessageAndVersion(newDelegationTokenData.toRecord(), 0.toShort))
+        }
+        case None =>
+      }
+    }
+    if (!batch.isEmpty) {
+      recordConsumer.accept(batch)
+    }
+  }
+
   override def readAllMetadata(
     batchConsumer: Consumer[util.List[ApiMessageAndVersion]],
     brokerIdConsumer: Consumer[Integer]
@@ -298,6 +322,7 @@ class ZkMigrationClient(
     migrateClientQuotas(batchConsumer)
     migrateProducerId(batchConsumer)
     migrateAcls(batchConsumer)
+    migrateDelegationTokens(batchConsumer)
   }
 
   override def readBrokerIds(): util.Set[Integer] = wrapZkException {
@@ -326,4 +351,6 @@ class ZkMigrationClient(
   override def configClient(): ConfigMigrationClient = configClient
 
   override def aclClient(): AclMigrationClient = aclClient
+
+  override def delegationTokenClient(): DelegationTokenMigrationClient = delegationTokenClient
 }

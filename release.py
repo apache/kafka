@@ -332,8 +332,8 @@ def command_release_announcement_email():
         validate_release_num(previous_release_version_num)
     if release_version_num < previous_release_version_num :
         fail("Current release version number can't be less than previous release version number")
-    number_of_contributors = int(subprocess.check_output('git shortlog -sn --group=author --group=trailer:co-authored-by --no-merges %s..%s | uniq | wc -l' % (previous_release_version_num, release_version_num) , shell=True).decode('utf-8'))
-    contributors = subprocess.check_output("git shortlog -sn --group=author --group=trailer:co-authored-by --no-merges %s..%s | cut -f2 | sort --ignore-case | uniq" % (previous_release_version_num, release_version_num), shell=True).decode('utf-8')
+    number_of_contributors = int(subprocess.check_output('git shortlog -sn --group=author --group=trailer:co-authored-by --group=trailer:Reviewers --no-merges %s..%s | uniq | wc -l' % (previous_release_version_num, release_version_num) , shell=True).decode('utf-8'))
+    contributors = subprocess.check_output("git shortlog -sn --group=author --group=trailer:co-authored-by --group=trailer:Reviewers  --no-merges %s..%s | cut -f2 | sort --ignore-case | uniq" % (previous_release_version_num, release_version_num), shell=True).decode('utf-8')
     release_announcement_data = {
         'number_of_contributors': number_of_contributors,
         'contributors': ', '.join(str(x) for x in filter(None, contributors.split('\n'))),
@@ -491,6 +491,35 @@ Some of these may be used from these previous settings loaded from %s:
 Do you have all of of these setup? (y/n): """ % (PREFS_FILE, json.dumps(prefs, indent=2))):
     fail("Please try again once you have all the prerequisites ready.")
 
+apache_id = sanitize_input("Please enter your apache-id: ")
+
+print("Begin to check if you have met all the pre-requisites for the release process")
+
+try:
+    test_maven = cmd_output("mvn -v")
+    if "Apache Maven" in test_maven:
+        print("Pre-requisite met: You have maven cli in place")
+    else:
+        fail("Pre-requisite not met: You need to install maven CLI")
+except Exception as e:
+    fail(f"Pre-requisite not met: Unable to check if maven cli is installed. Error: {e}")
+
+try:
+    test_sftp = subprocess.run(f"sftp {apache_id}@home.apache.org".split())
+    if test_sftp.returncode != 0:
+        fail("Pre-requisite not met: Cannot establish sftp connection. Please check your apache-id and ssh keys.")
+    print("Pre-requisite met: sftp connection is successful")
+except Exception as e:
+    fail(f"Pre-requisite not met: Unable to check if sftp connection is successful. Error: {e}")
+
+try:
+    test_svn = cmd_output("svn --version")
+    if "svn" in test_svn:
+        print("Pre-requisite met: You have svn cli in place")
+    else:
+        fail("Pre-requisite not met: You need to install svn cli")
+except Exception as e:
+    fail(f"Pre-requisite not met: Unable to check if svn cli is installed. Error: {e}")
 
 starting_branch = cmd_output('git rev-parse --abbrev-ref HEAD')
 
@@ -722,12 +751,17 @@ Release notes for the %(release_version)s release:
 https://home.apache.org/~%(apache_id)s/kafka-%(rc_tag)s/RELEASE_NOTES.html
 
 *** Please download, test and vote by <VOTING DEADLINE, e.g. Monday, March 28, 9am PT>
+<THE RELEASE POLICY (https://www.apache.org/legal/release-policy.html#release-approval) REQUIRES VOTES TO BE OPEN FOR MINIMUM OF 3 DAYS THEREFORE VOTING DEADLINE SHOULD BE AT LEAST 72 HOURS FROM THE TIME THIS EMAIL IS SENT.>
 
 Kafka's KEYS file containing PGP keys we use to sign the release:
 https://kafka.apache.org/KEYS
 
 * Release artifacts to be voted upon (source and binary):
 https://home.apache.org/~%(apache_id)s/kafka-%(rc_tag)s/
+
+<USE docker/README.md FOR STEPS TO CREATE RELEASE CANDIDATE DOCKER IMAGE>
+* Docker release artifact to be voted upon:
+apache/kafka:%(rc_tag)s
 
 * Maven artifacts to be voted upon:
 https://repository.apache.org/content/groups/staging/org/apache/kafka/
@@ -747,6 +781,10 @@ https://kafka.apache.org/%(docs_version)s/protocol.html
 * Successful Jenkins builds for the %(dev_branch)s branch:
 Unit/integration tests: https://ci-builds.apache.org/job/Kafka/job/kafka/job/%(dev_branch)s/<BUILD NUMBER>/
 System tests: https://jenkins.confluent.io/job/system-test-kafka/job/%(dev_branch)s/<BUILD_NUMBER>/
+
+<USE docker/README.md FOR STEPS TO RUN DOCKER BUILD TEST GITHUB ACTIONS>
+* Successful Docker Image Github Actions Pipeline for %(dev_branch)s branch:
+Docker Build Test Pipeline: https://github.com/apache/kafka/actions/runs/<RUN_NUMBER>
 
 /**************************************
 

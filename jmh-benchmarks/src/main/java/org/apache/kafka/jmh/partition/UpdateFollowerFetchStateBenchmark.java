@@ -70,12 +70,12 @@ import scala.compat.java8.OptionConverters;
 @BenchmarkMode(Mode.AverageTime)
 @OutputTimeUnit(TimeUnit.NANOSECONDS)
 public class UpdateFollowerFetchStateBenchmark {
-    private TopicPartition topicPartition = new TopicPartition(UUID.randomUUID().toString(), 0);
-    private Option<Uuid> topicId = OptionConverters.toScala(Optional.of(Uuid.randomUuid()));
-    private File logDir = new File(System.getProperty("java.io.tmpdir"), topicPartition.toString());
-    private KafkaScheduler scheduler = new KafkaScheduler(1, true, "scheduler");
-    private BrokerTopicStats brokerTopicStats = new BrokerTopicStats();
-    private LogDirFailureChannel logDirFailureChannel = Mockito.mock(LogDirFailureChannel.class);
+    private final TopicPartition topicPartition = new TopicPartition(UUID.randomUUID().toString(), 0);
+    private final Option<Uuid> topicId = OptionConverters.toScala(Optional.of(Uuid.randomUuid()));
+    private final File logDir = new File(System.getProperty("java.io.tmpdir"), topicPartition.toString());
+    private final KafkaScheduler scheduler = new KafkaScheduler(1, true, "scheduler");
+    private final BrokerTopicStats brokerTopicStats = new BrokerTopicStats(Optional.empty());
+    private final LogDirFailureChannel logDirFailureChannel = Mockito.mock(LogDirFailureChannel.class);
     private long nextOffset = 0;
     private LogManager logManager;
     private Partition partition;
@@ -128,7 +128,7 @@ public class UpdateFollowerFetchStateBenchmark {
                 MetadataVersion.latest(), 0, () -> -1, Time.SYSTEM,
                 alterPartitionListener, delayedOperations,
                 Mockito.mock(MetadataCache.class), logManager, alterPartitionManager);
-        partition.makeLeader(partitionState, offsetCheckpoints, topicId);
+        partition.makeLeader(partitionState, offsetCheckpoints, topicId, Option.empty());
         replica1 = partition.getReplica(1).get();
         replica2 = partition.getReplica(2).get();
     }
@@ -147,7 +147,7 @@ public class UpdateFollowerFetchStateBenchmark {
 
     @TearDown(Level.Trial)
     public void tearDown() throws InterruptedException {
-        logManager.shutdown();
+        logManager.shutdown(-1L);
         scheduler.shutdown();
     }
 

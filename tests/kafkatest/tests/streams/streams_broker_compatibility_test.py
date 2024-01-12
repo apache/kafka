@@ -23,7 +23,7 @@ from kafkatest.services.verifiable_consumer import VerifiableConsumer
 from kafkatest.services.zookeeper import ZookeeperService
 from kafkatest.version import LATEST_0_11_0, LATEST_0_10_2, LATEST_0_10_1, LATEST_0_10_0, LATEST_1_0, LATEST_1_1, \
     LATEST_2_0, LATEST_2_1, LATEST_2_2, LATEST_2_3, LATEST_2_4, LATEST_2_5, LATEST_2_6, LATEST_2_7, LATEST_2_8, \
-    LATEST_3_0, LATEST_3_1, LATEST_3_2, LATEST_3_3, KafkaVersion
+    LATEST_3_0, LATEST_3_1, LATEST_3_2, LATEST_3_3, LATEST_3_4, LATEST_3_5, KafkaVersion
 
 
 class StreamsBrokerCompatibility(Test):
@@ -64,6 +64,8 @@ class StreamsBrokerCompatibility(Test):
 
 
     @cluster(num_nodes=4)
+    @parametrize(broker_version=str(LATEST_3_5))
+    @parametrize(broker_version=str(LATEST_3_4))
     @parametrize(broker_version=str(LATEST_3_3))
     @parametrize(broker_version=str(LATEST_3_2))
     @parametrize(broker_version=str(LATEST_3_1))
@@ -97,6 +99,8 @@ class StreamsBrokerCompatibility(Test):
         self.kafka.stop()
 
     @cluster(num_nodes=4)
+    @parametrize(broker_version=str(LATEST_3_5))
+    @parametrize(broker_version=str(LATEST_3_4))
     @parametrize(broker_version=str(LATEST_3_3))
     @parametrize(broker_version=str(LATEST_3_2))
     @parametrize(broker_version=str(LATEST_3_1))
@@ -130,6 +134,8 @@ class StreamsBrokerCompatibility(Test):
         self.kafka.stop()
 
     @cluster(num_nodes=4)
+    @parametrize(broker_version=str(LATEST_3_5))
+    @parametrize(broker_version=str(LATEST_3_4))
     @parametrize(broker_version=str(LATEST_3_3))
     @parametrize(broker_version=str(LATEST_3_2))
     @parametrize(broker_version=str(LATEST_3_1))
@@ -192,7 +198,7 @@ class StreamsBrokerCompatibility(Test):
                 processor.start()
                 log.wait_until('Shutting down because the Kafka cluster seems to be on a too old version. Setting processing\.guarantee="exactly_once_v2"/"exactly_once_beta" requires broker version 2\.5 or higher\.',
                                timeout_sec=60,
-                               err_msg="Never saw 'Shutting down because the Kafka cluster seems to be on a too old version. Setting `processing.guarantee=\"exactly_once_v2\"/\"exaclty_once_beta\"` requires broker version 2.5 or higher.' log message " + str(processor.node.account))
+                               err_msg="Never saw 'Shutting down because the Kafka cluster seems to be on a too old version. Setting `processing.guarantee=\"exactly_once_v2\"/\"exactly_once_beta\"` requires broker version 2.5 or higher.' log message " + str(processor.node.account))
                 monitor.wait_until('FATAL: An unexpected exception org.apache.kafka.common.errors.UnsupportedVersionException',
                                    timeout_sec=60,
                                    err_msg="Never saw 'FATAL: An unexpected exception org.apache.kafka.common.errors.UnsupportedVersionException' error message " + str(processor.node.account))

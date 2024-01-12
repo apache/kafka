@@ -327,8 +327,8 @@ public class MemoryRecordsBuilderTest {
             if (args.compressionType == CompressionType.NONE) {
                 assertEquals(1.0, builder.compressionRatio(), 0.00001);
             } else {
-                int recordHeaad = magic == MAGIC_VALUE_V0 ? LegacyRecord.RECORD_OVERHEAD_V0 : LegacyRecord.RECORD_OVERHEAD_V1;
-                int compressedSize = built.sizeInBytes() - Records.LOG_OVERHEAD - recordHeaad;
+                int recordHead = magic == MAGIC_VALUE_V0 ? LegacyRecord.RECORD_OVERHEAD_V0 : LegacyRecord.RECORD_OVERHEAD_V1;
+                int compressedSize = built.sizeInBytes() - Records.LOG_OVERHEAD - recordHead;
                 double computedCompressionRate = (double) compressedSize / uncompressedSize;
                 assertEquals(computedCompressionRate, builder.compressionRatio(), 0.00001);
             }
@@ -801,7 +801,7 @@ public class MemoryRecordsBuilderTest {
         }
     }
 
-    private void verifyRecordsProcessingStats(CompressionType compressionType, RecordConversionStats processingStats,
+    private void verifyRecordsProcessingStats(CompressionType compressionType, RecordValidationStats processingStats,
                                               int numRecords, int numRecordsConverted, long finalBytes,
                                               long preConvertedBytes) {
         assertNotNull(processingStats, "Records processing info is null");

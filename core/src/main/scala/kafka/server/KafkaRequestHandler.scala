@@ -21,11 +21,12 @@ import kafka.network._
 import kafka.utils._
 import kafka.server.KafkaRequestHandler.{threadCurrentRequest, threadRequestChannel}
 
-import java.util.concurrent.{CountDownLatch, TimeUnit}
+import java.util.concurrent.{ConcurrentHashMap, CountDownLatch, TimeUnit}
 import java.util.concurrent.atomic.AtomicInteger
-import com.yammer.metrics.core.Meter
+import com.yammer.metrics.core.{Gauge, Meter}
 import org.apache.kafka.common.internals.FatalExitError
 import org.apache.kafka.common.utils.{KafkaThread, Time}
+import org.apache.kafka.server.log.remote.storage.RemoteStorageMetrics
 import org.apache.kafka.server.metrics.KafkaMetricsGroup
 
 import java.util.Collections
@@ -34,6 +35,7 @@ import scala.jdk.CollectionConverters._
 
 trait ApiRequestHandler {
   def handle(request: RequestChannel.Request, requestLocal: RequestLocal): Unit
+  def tryCompleteActions(): Unit = {}
 }
 
 object KafkaRequestHandler {
@@ -46,29 +48,37 @@ object KafkaRequestHandler {
   def setBypassThreadCheck(bypassCheck: Boolean): Unit = {
     bypassThreadCheck = bypassCheck
   }
-  
-  def currentRequestOnThread(): RequestChannel.Request = {
-    threadCurrentRequest.get()
-  }
 
   /**
-   * Wrap callback to schedule it on a request thread.
-   * NOTE: this function must be called on a request thread.
-   * @param fun Callback function to execute
-   * @return Wrapped callback that would execute `fun` on a request thread
+   * Creates a wrapped callback to be executed synchronously on the calling request thread or asynchronously
+   * on an arbitrary request thread.
+   * NOTE: this function must be originally called from a request thread.
+   * @param asyncCompletionCallback A callback method that we intend to call from the current thread or in another
+   *                                thread after an asynchronous action completes. The RequestLocal passed in must
+   *                                belong to the request handler thread that is executing the callback.
+   * @param requestLocal The RequestLocal for the current request handler thread in case we need to execute the callback
+   *                     function synchronously from the calling thread.
+   * @return Wrapped callback will either immediately execute `asyncCompletionCallback` or schedule it on an arbitrary request thread
+   *         depending on where it is called
    */
-  def wrap[T](fun: T => Unit): T => Unit = {
+  def wrapAsyncCallback[T](asyncCompletionCallback: (RequestLocal, T) => Unit, requestLocal: RequestLocal): T => Unit = {
     val requestChannel = threadRequestChannel.get()
     val currentRequest = threadCurrentRequest.get()
     if (requestChannel == null || currentRequest == null) {
       if (!bypassThreadCheck)
         throw new IllegalStateException("Attempted to reschedule to request handler thread from non-request handler thread.")
-      T => fun(T)
+      T => asyncCompletionCallback(requestLocal, T)
     } else {
       T => {
-        // The requestChannel and request are captured in this lambda, so when it's executed on the callback thread
-        // we can re-schedule the original callback on a request thread and update the metrics accordingly.
-        requestChannel.sendCallbackRequest(RequestChannel.CallbackRequest(() => fun(T), currentRequest))
+        if (threadCurrentRequest.get() == currentRequest) {
+          // If the callback is actually executed on the same request thread, we can directly execute
+          // it without re-scheduling it.
+          asyncCompletionCallback(requestLocal, T)
+        } else {
+          // The requestChannel and request are captured in this lambda, so when it's executed on the callback thread
+          // we can re-schedule the original callback on a request thread and update the metrics accordingly.
+          requestChannel.sendCallbackRequest(RequestChannel.CallbackRequest(newRequestLocal => asyncCompletionCallback(newRequestLocal, T), currentRequest))
+        }
       }
     }
   }
@@ -77,14 +87,17 @@ object KafkaRequestHandler {
 /**
  * A thread that answers kafka requests.
  */
-class KafkaRequestHandler(id: Int,
-                          brokerId: Int,
-                          val aggregateIdleMeter: Meter,
-                          val totalHandlerThreads: AtomicInteger,
-                          val requestChannel: RequestChannel,
-                          apis: ApiRequestHandler,
-                          time: Time) extends Runnable with Logging {
-  this.logIdent = s"[Kafka Request Handler $id on Broker $brokerId], "
+class KafkaRequestHandler(
+  id: Int,
+  brokerId: Int,
+  val aggregateIdleMeter: Meter,
+  val totalHandlerThreads: AtomicInteger,
+  val requestChannel: RequestChannel,
+  apis: ApiRequestHandler,
+  time: Time,
+  nodeName: String = "broker"
+) extends Runnable with Logging {
+  this.logIdent = s"[Kafka Request Handler $id on ${nodeName.capitalize} $brokerId], "
   private val shutdownComplete = new CountDownLatch(1)
   private val requestLocal = RequestLocal.withThreadConfinedCaching
   @volatile private var stopped = false
@@ -110,9 +123,9 @@ class KafkaRequestHandler(id: Int,
           return
 
         case callback: RequestChannel.CallbackRequest =>
+          val originalRequest = callback.originalRequest
           try {
-            val originalRequest = callback.originalRequest
-            
+
             // If we've already executed a callback for this request, reset the times and subtract the callback time from the 
             // new dequeue time. This will allow calculation of multiple callback times.
             // Otherwise, set dequeue time to now.
@@ -125,15 +138,17 @@ class KafkaRequestHandler(id: Int,
             }
             
             threadCurrentRequest.set(originalRequest)
-            callback.fun()
-            if (originalRequest.callbackRequestCompleteTimeNanos.isEmpty)
-              originalRequest.callbackRequestCompleteTimeNanos = Some(time.nanoseconds())
+            callback.fun(requestLocal)
           } catch {
             case e: FatalExitError =>
               completeShutdown()
               Exit.exit(e.statusCode)
             case e: Throwable => error("Exception when handling request", e)
           } finally {
+            // When handling requests, we try to complete actions after, so we should try to do so here as well.
+            apis.tryCompleteActions()
+            if (originalRequest.callbackRequestCompleteTimeNanos.isEmpty)
+              originalRequest.callbackRequestCompleteTimeNanos = Some(time.nanoseconds())
             threadCurrentRequest.remove()
           }
 
@@ -165,6 +180,7 @@ class KafkaRequestHandler(id: Int,
 
   private def completeShutdown(): Unit = {
     requestLocal.close()
+    threadRequestChannel.remove()
     shutdownComplete.countDown()
   }
 
@@ -178,13 +194,16 @@ class KafkaRequestHandler(id: Int,
 
 }
 
-class KafkaRequestHandlerPool(val brokerId: Int,
-                              val requestChannel: RequestChannel,
-                              val apis: ApiRequestHandler,
-                              time: Time,
-                              numThreads: Int,
-                              requestHandlerAvgIdleMetricName: String,
-                              logAndThreadNamePrefix : String) extends Logging {
+class KafkaRequestHandlerPool(
+  val brokerId: Int,
+  val requestChannel: RequestChannel,
+  val apis: ApiRequestHandler,
+  time: Time,
+  numThreads: Int,
+  requestHandlerAvgIdleMetricName: String,
+  logAndThreadNamePrefix : String,
+  nodeName: String = "broker"
+) extends Logging {
   private val metricsGroup = new KafkaMetricsGroup(this.getClass)
 
   private val threadPoolSize: AtomicInteger = new AtomicInteger(numThreads)
@@ -198,7 +217,7 @@ class KafkaRequestHandlerPool(val brokerId: Int,
   }
 
   def createHandler(id: Int): Unit = synchronized {
-    runnables += new KafkaRequestHandler(id, brokerId, aggregateIdleMeter, threadPoolSize, requestChannel, apis, time)
+    runnables += new KafkaRequestHandler(id, brokerId, aggregateIdleMeter, threadPoolSize, requestChannel, apis, time, nodeName)
     KafkaThread.daemon(logAndThreadNamePrefix + "-kafka-request-handler-" + id, runnables(id)).start()
   }
 
@@ -227,7 +246,7 @@ class KafkaRequestHandlerPool(val brokerId: Int,
   }
 }
 
-class BrokerTopicMetrics(name: Option[String]) {
+class BrokerTopicMetrics(name: Option[String], configOpt: java.util.Optional[KafkaConfig]) {
   private val metricsGroup = new KafkaMetricsGroup(this.getClass)
 
   val tags: java.util.Map[String, String] = name match {
@@ -264,8 +283,31 @@ class BrokerTopicMetrics(name: Option[String]) {
       meter()
   }
 
+  case class GaugeWrapper(metricType: String, brokerTopicAggregatedMetric: BrokerTopicAggregatedMetric) {
+    @volatile private var gaugeObject: Gauge[Long] = _
+    final private val gaugeLock = new Object
+
+    def gauge(): Gauge[Long] = gaugeLock synchronized {
+      if (gaugeObject == null) {
+        gaugeObject = metricsGroup.newGauge(metricType, () => brokerTopicAggregatedMetric.value(), tags)
+      }
+      return gaugeObject
+    }
+
+    def close(): Unit = gaugeLock synchronized {
+      if (gaugeObject != null) {
+        metricsGroup.removeMetric(metricType, tags)
+        brokerTopicAggregatedMetric.close()
+        gaugeObject = null
+      }
+    }
+
+    gauge()
+  }
+
   // an internal map for "lazy initialization" of certain metrics
   private val metricTypeMap = new Pool[String, MeterWrapper]()
+  private val metricGaugeTypeMap = new Pool[String, GaugeWrapper]()
   metricTypeMap.putAll(Map(
     BrokerTopicStats.MessagesInPerSec -> MeterWrapper(BrokerTopicStats.MessagesInPerSec, "messages"),
     BrokerTopicStats.BytesInPerSec -> MeterWrapper(BrokerTopicStats.BytesInPerSec, "bytes"),
@@ -277,17 +319,12 @@ class BrokerTopicMetrics(name: Option[String]) {
     BrokerTopicStats.TotalFetchRequestsPerSec -> MeterWrapper(BrokerTopicStats.TotalFetchRequestsPerSec, "requests"),
     BrokerTopicStats.FetchMessageConversionsPerSec -> MeterWrapper(BrokerTopicStats.FetchMessageConversionsPerSec, "requests"),
     BrokerTopicStats.ProduceMessageConversionsPerSec -> MeterWrapper(BrokerTopicStats.ProduceMessageConversionsPerSec, "requests"),
-    BrokerTopicStats.RemoteBytesOutPerSec -> MeterWrapper(BrokerTopicStats.RemoteBytesOutPerSec, "bytes"),
-    BrokerTopicStats.RemoteBytesInPerSec -> MeterWrapper(BrokerTopicStats.RemoteBytesInPerSec, "bytes"),
-    BrokerTopicStats.RemoteReadRequestsPerSec -> MeterWrapper(BrokerTopicStats.RemoteReadRequestsPerSec, "requests"),
-    BrokerTopicStats.RemoteWriteRequestsPerSec -> MeterWrapper(BrokerTopicStats.RemoteWriteRequestsPerSec, "requests"),
-    BrokerTopicStats.FailedRemoteReadRequestsPerSec -> MeterWrapper(BrokerTopicStats.FailedRemoteReadRequestsPerSec, "requests"),
-    BrokerTopicStats.FailedRemoteWriteRequestsPerSec -> MeterWrapper(BrokerTopicStats.FailedRemoteWriteRequestsPerSec, "requests"),
     BrokerTopicStats.NoKeyCompactedTopicRecordsPerSec -> MeterWrapper(BrokerTopicStats.NoKeyCompactedTopicRecordsPerSec, "requests"),
     BrokerTopicStats.InvalidMagicNumberRecordsPerSec -> MeterWrapper(BrokerTopicStats.InvalidMagicNumberRecordsPerSec, "requests"),
     BrokerTopicStats.InvalidMessageCrcRecordsPerSec -> MeterWrapper(BrokerTopicStats.InvalidMessageCrcRecordsPerSec, "requests"),
     BrokerTopicStats.InvalidOffsetOrSequenceRecordsPerSec -> MeterWrapper(BrokerTopicStats.InvalidOffsetOrSequenceRecordsPerSec, "requests")
   ).asJava)
+
   if (name.isEmpty) {
     metricTypeMap.put(BrokerTopicStats.ReplicationBytesInPerSec, MeterWrapper(BrokerTopicStats.ReplicationBytesInPerSec, "bytes"))
     metricTypeMap.put(BrokerTopicStats.ReplicationBytesOutPerSec, MeterWrapper(BrokerTopicStats.ReplicationBytesOutPerSec, "bytes"))
@@ -295,8 +332,35 @@ class BrokerTopicMetrics(name: Option[String]) {
     metricTypeMap.put(BrokerTopicStats.ReassignmentBytesOutPerSec, MeterWrapper(BrokerTopicStats.ReassignmentBytesOutPerSec, "bytes"))
   }
 
+  configOpt.ifPresent(config =>
+    if (config.remoteLogManagerConfig.enableRemoteStorageSystem()) {
+      metricTypeMap.putAll(Map(
+        RemoteStorageMetrics.REMOTE_COPY_BYTES_PER_SEC_METRIC.getName -> MeterWrapper(RemoteStorageMetrics.REMOTE_COPY_BYTES_PER_SEC_METRIC.getName, "bytes"),
+        RemoteStorageMetrics.REMOTE_FETCH_BYTES_PER_SEC_METRIC.getName -> MeterWrapper(RemoteStorageMetrics.REMOTE_FETCH_BYTES_PER_SEC_METRIC.getName, "bytes"),
+        RemoteStorageMetrics.REMOTE_FETCH_REQUESTS_PER_SEC_METRIC.getName -> MeterWrapper(RemoteStorageMetrics.REMOTE_FETCH_REQUESTS_PER_SEC_METRIC.getName, "requests"),
+        RemoteStorageMetrics.REMOTE_COPY_REQUESTS_PER_SEC_METRIC.getName -> MeterWrapper(RemoteStorageMetrics.REMOTE_COPY_REQUESTS_PER_SEC_METRIC.getName, "requests"),
+        RemoteStorageMetrics.REMOTE_DELETE_REQUESTS_PER_SEC_METRIC.getName -> MeterWrapper(RemoteStorageMetrics.REMOTE_DELETE_REQUESTS_PER_SEC_METRIC.getName, "requests"),
+        RemoteStorageMetrics.BUILD_REMOTE_LOG_AUX_STATE_REQUESTS_PER_SEC_METRIC.getName -> MeterWrapper(RemoteStorageMetrics.BUILD_REMOTE_LOG_AUX_STATE_REQUESTS_PER_SEC_METRIC.getName, "requests"),
+        RemoteStorageMetrics.FAILED_REMOTE_FETCH_PER_SEC_METRIC.getName -> MeterWrapper(RemoteStorageMetrics.FAILED_REMOTE_FETCH_PER_SEC_METRIC.getName, "requests"),
+        RemoteStorageMetrics.FAILED_REMOTE_COPY_PER_SEC_METRIC.getName -> MeterWrapper(RemoteStorageMetrics.FAILED_REMOTE_COPY_PER_SEC_METRIC.getName, "requests"),
+        RemoteStorageMetrics.FAILED_REMOTE_DELETE_PER_SEC_METRIC.getName -> MeterWrapper(RemoteStorageMetrics.FAILED_REMOTE_DELETE_PER_SEC_METRIC.getName, "requests"),
+        RemoteStorageMetrics.FAILED_BUILD_REMOTE_LOG_AUX_STATE_PER_SEC_METRIC.getName -> MeterWrapper(RemoteStorageMetrics.FAILED_BUILD_REMOTE_LOG_AUX_STATE_PER_SEC_METRIC.getName, "requests")
+      ).asJava)
+      metricGaugeTypeMap.putAll(Map(
+        RemoteStorageMetrics.REMOTE_COPY_LAG_BYTES_METRIC.getName -> GaugeWrapper(RemoteStorageMetrics.REMOTE_COPY_LAG_BYTES_METRIC.getName, new BrokerTopicAggregatedMetric),
+        RemoteStorageMetrics.REMOTE_COPY_LAG_SEGMENTS_METRIC.getName -> GaugeWrapper(RemoteStorageMetrics.REMOTE_COPY_LAG_SEGMENTS_METRIC.getName, new BrokerTopicAggregatedMetric),
+        RemoteStorageMetrics.REMOTE_DELETE_LAG_BYTES_METRIC.getName -> GaugeWrapper(RemoteStorageMetrics.REMOTE_DELETE_LAG_BYTES_METRIC.getName, new BrokerTopicAggregatedMetric),
+        RemoteStorageMetrics.REMOTE_DELETE_LAG_SEGMENTS_METRIC.getName -> GaugeWrapper(RemoteStorageMetrics.REMOTE_DELETE_LAG_SEGMENTS_METRIC.getName, new BrokerTopicAggregatedMetric),
+        RemoteStorageMetrics.REMOTE_LOG_METADATA_COUNT_METRIC.getName -> GaugeWrapper(RemoteStorageMetrics.REMOTE_LOG_METADATA_COUNT_METRIC.getName, new BrokerTopicAggregatedMetric),
+        RemoteStorageMetrics.REMOTE_LOG_SIZE_COMPUTATION_TIME_METRIC.getName -> GaugeWrapper(RemoteStorageMetrics.REMOTE_LOG_SIZE_COMPUTATION_TIME_METRIC.getName, new BrokerTopicAggregatedMetric),
+        RemoteStorageMetrics.REMOTE_LOG_SIZE_BYTES_METRIC.getName -> GaugeWrapper(RemoteStorageMetrics.REMOTE_LOG_SIZE_BYTES_METRIC.getName, new BrokerTopicAggregatedMetric)
+      ).asJava)
+    })
+
   // used for testing only
   def metricMap: Map[String, MeterWrapper] = metricTypeMap.toMap
+
+  def metricGaugeMap: Map[String, GaugeWrapper] = metricGaugeTypeMap.toMap
 
   def messagesInRate: Meter = metricTypeMap.get(BrokerTopicStats.MessagesInPerSec).meter()
 
@@ -342,25 +406,143 @@ class BrokerTopicMetrics(name: Option[String]) {
 
   def invalidOffsetOrSequenceRecordsPerSec: Meter = metricTypeMap.get(BrokerTopicStats.InvalidOffsetOrSequenceRecordsPerSec).meter()
 
-  def remoteBytesOutRate: Meter = metricTypeMap.get(BrokerTopicStats.RemoteBytesOutPerSec).meter()
+  def recordRemoteCopyLagBytes(partition: Int, bytesLag: Long): Unit = {
+    val brokerTopicAggregatedMetric = metricGaugeTypeMap.get(RemoteStorageMetrics.REMOTE_COPY_LAG_BYTES_METRIC.getName).brokerTopicAggregatedMetric
+    brokerTopicAggregatedMetric.setPartitionMetricValue(partition, bytesLag)
+  }
 
-  def remoteBytesInRate: Meter = metricTypeMap.get(BrokerTopicStats.RemoteBytesInPerSec).meter()
+  def removeRemoteCopyLagBytes(partition: Int): Unit = {
+    val brokerTopicAggregatedMetric = metricGaugeTypeMap.get(RemoteStorageMetrics.REMOTE_COPY_LAG_BYTES_METRIC.getName).brokerTopicAggregatedMetric
+    brokerTopicAggregatedMetric.removePartition(partition)
+  }
 
-  def remoteReadRequestRate: Meter = metricTypeMap.get(BrokerTopicStats.RemoteReadRequestsPerSec).meter()
+  // Visible for testing
+  def remoteCopyLagBytes: Long = metricGaugeTypeMap.get(RemoteStorageMetrics.REMOTE_COPY_LAG_BYTES_METRIC.getName).brokerTopicAggregatedMetric.value()
 
-  def remoteWriteRequestRate: Meter = metricTypeMap.get(BrokerTopicStats.RemoteWriteRequestsPerSec).meter()
+  def recordRemoteCopyLagSegments(partition: Int, segmentsLag: Long): Unit = {
+    val brokerTopicAggregatedMetric = metricGaugeTypeMap.get(RemoteStorageMetrics.REMOTE_COPY_LAG_SEGMENTS_METRIC.getName).brokerTopicAggregatedMetric
+    brokerTopicAggregatedMetric.setPartitionMetricValue(partition, segmentsLag)
+  }
 
-  def failedRemoteReadRequestRate: Meter = metricTypeMap.get(BrokerTopicStats.FailedRemoteReadRequestsPerSec).meter()
+  def removeRemoteCopyLagSegments(partition: Int): Unit = {
+    val brokerTopicAggregatedMetric = metricGaugeTypeMap.get(RemoteStorageMetrics.REMOTE_COPY_LAG_SEGMENTS_METRIC.getName).brokerTopicAggregatedMetric
+    brokerTopicAggregatedMetric.removePartition(partition)
+  }
 
-  def failedRemoteWriteRequestRate: Meter = metricTypeMap.get(BrokerTopicStats.FailedRemoteWriteRequestsPerSec).meter()
+  // Visible for testing
+  def remoteCopyLagSegments: Long = metricGaugeTypeMap.get(RemoteStorageMetrics.REMOTE_COPY_LAG_SEGMENTS_METRIC.getName).brokerTopicAggregatedMetric.value()
+
+  def recordRemoteLogMetadataCount(partition: Int, count: Long): Unit = {
+    val brokerTopicAggregatedMetric = metricGaugeTypeMap.get(RemoteStorageMetrics.REMOTE_LOG_METADATA_COUNT_METRIC.getName).brokerTopicAggregatedMetric
+    brokerTopicAggregatedMetric.setPartitionMetricValue(partition, count)
+  }
+
+  def removeRemoteLogMetadataCount(partition: Int): Unit = {
+    val brokerTopicAggregatedMetric = metricGaugeTypeMap.get(RemoteStorageMetrics.REMOTE_LOG_METADATA_COUNT_METRIC.getName).brokerTopicAggregatedMetric
+    brokerTopicAggregatedMetric.removePartition(partition)
+  }
+
+  def remoteLogMetadataCount: Long = metricGaugeTypeMap.get(RemoteStorageMetrics.REMOTE_LOG_METADATA_COUNT_METRIC.getName).brokerTopicAggregatedMetric.value()
+
+  def recordRemoteLogSizeBytes(partition: Int, size: Long): Unit = {
+    val brokerTopicAggregatedMetric = metricGaugeTypeMap.get(RemoteStorageMetrics.REMOTE_LOG_SIZE_BYTES_METRIC.getName).brokerTopicAggregatedMetric
+    brokerTopicAggregatedMetric.setPartitionMetricValue(partition, size)
+  }
+
+  def removeRemoteLogSizeBytes(partition: Int): Unit = {
+    val brokerTopicAggregatedMetric = metricGaugeTypeMap.get(RemoteStorageMetrics.REMOTE_LOG_SIZE_BYTES_METRIC.getName).brokerTopicAggregatedMetric
+    brokerTopicAggregatedMetric.removePartition(partition)
+  }
+
+  def remoteLogSizeBytes: Long = metricGaugeTypeMap.get(RemoteStorageMetrics.REMOTE_LOG_SIZE_BYTES_METRIC.getName).brokerTopicAggregatedMetric.value()
+
+  def recordRemoteLogSizeComputationTime(partition: Int, timeSpent: Long): Unit = {
+    val brokerTopicAggregatedMetric = metricGaugeTypeMap.get(RemoteStorageMetrics.REMOTE_LOG_SIZE_COMPUTATION_TIME_METRIC.getName).brokerTopicAggregatedMetric
+    brokerTopicAggregatedMetric.setPartitionMetricValue(partition, timeSpent)
+  }
+
+  def removeRemoteLogSizeComputationTime(partition: Int): Unit = {
+    val brokerTopicAggregatedMetric = metricGaugeTypeMap.get(RemoteStorageMetrics.REMOTE_LOG_SIZE_COMPUTATION_TIME_METRIC.getName).brokerTopicAggregatedMetric
+    brokerTopicAggregatedMetric.removePartition(partition)
+  }
+
+  def remoteLogSizeComputationTime: Long = metricGaugeTypeMap.get(RemoteStorageMetrics.REMOTE_LOG_SIZE_COMPUTATION_TIME_METRIC.getName).brokerTopicAggregatedMetric.value()
+
+  def recordRemoteDeleteLagBytes(partition: Int, segmentsLag: Long): Unit = {
+    val brokerTopicAggregatedMetric = metricGaugeTypeMap.get(RemoteStorageMetrics.REMOTE_DELETE_LAG_BYTES_METRIC.getName).brokerTopicAggregatedMetric
+    brokerTopicAggregatedMetric.setPartitionMetricValue(partition, segmentsLag)
+  }
+
+  def removeRemoteDeleteLagBytes(partition: Int): Unit = {
+    val brokerTopicAggregatedMetric = metricGaugeTypeMap.get(RemoteStorageMetrics.REMOTE_DELETE_LAG_BYTES_METRIC.getName).brokerTopicAggregatedMetric
+    brokerTopicAggregatedMetric.removePartition(partition)
+  }
+
+  // Visible for testing
+  def remoteDeleteLagBytes: Long = metricGaugeTypeMap.get(RemoteStorageMetrics.REMOTE_DELETE_LAG_BYTES_METRIC.getName).brokerTopicAggregatedMetric.value()
+
+  def recordRemoteDeleteLagSegments(partition: Int, segmentsLag: Long): Unit = {
+    val brokerTopicAggregatedMetric = metricGaugeTypeMap.get(RemoteStorageMetrics.REMOTE_DELETE_LAG_SEGMENTS_METRIC.getName).brokerTopicAggregatedMetric
+    brokerTopicAggregatedMetric.setPartitionMetricValue(partition, segmentsLag)
+  }
+
+  def removeRemoteDeleteLagSegments(partition: Int): Unit = {
+    val brokerTopicAggregatedMetric = metricGaugeTypeMap.get(RemoteStorageMetrics.REMOTE_DELETE_LAG_SEGMENTS_METRIC.getName).brokerTopicAggregatedMetric
+    brokerTopicAggregatedMetric.removePartition(partition)
+  }
+
+  // Visible for testing
+  def remoteDeleteLagSegments: Long = metricGaugeTypeMap.get(RemoteStorageMetrics.REMOTE_DELETE_LAG_SEGMENTS_METRIC.getName).brokerTopicAggregatedMetric.value()
+
+  def remoteCopyBytesRate: Meter = metricTypeMap.get(RemoteStorageMetrics.REMOTE_COPY_BYTES_PER_SEC_METRIC.getName).meter()
+
+  def remoteFetchBytesRate: Meter = metricTypeMap.get(RemoteStorageMetrics.REMOTE_FETCH_BYTES_PER_SEC_METRIC.getName).meter()
+
+  def remoteFetchRequestRate: Meter = metricTypeMap.get(RemoteStorageMetrics.REMOTE_FETCH_REQUESTS_PER_SEC_METRIC.getName).meter()
+
+  def remoteCopyRequestRate: Meter = metricTypeMap.get(RemoteStorageMetrics.REMOTE_COPY_REQUESTS_PER_SEC_METRIC.getName).meter()
+
+  def remoteDeleteRequestRate: Meter = metricTypeMap.get(RemoteStorageMetrics.REMOTE_DELETE_REQUESTS_PER_SEC_METRIC.getName).meter()
+
+  def buildRemoteLogAuxStateRequestRate: Meter = metricTypeMap.get(RemoteStorageMetrics.BUILD_REMOTE_LOG_AUX_STATE_REQUESTS_PER_SEC_METRIC.getName).meter()
+
+  def failedRemoteFetchRequestRate: Meter = metricTypeMap.get(RemoteStorageMetrics.FAILED_REMOTE_FETCH_PER_SEC_METRIC.getName).meter()
+
+  def failedRemoteCopyRequestRate: Meter = metricTypeMap.get(RemoteStorageMetrics.FAILED_REMOTE_COPY_PER_SEC_METRIC.getName).meter()
+
+  def failedRemoteDeleteRequestRate: Meter = metricTypeMap.get(RemoteStorageMetrics.FAILED_REMOTE_DELETE_PER_SEC_METRIC.getName).meter()
+
+  def failedBuildRemoteLogAuxStateRate: Meter = metricTypeMap.get(RemoteStorageMetrics.FAILED_BUILD_REMOTE_LOG_AUX_STATE_PER_SEC_METRIC.getName).meter()
 
   def closeMetric(metricType: String): Unit = {
     val meter = metricTypeMap.get(metricType)
     if (meter != null)
       meter.close()
+    val gauge = metricGaugeTypeMap.get(metricType)
+    if (gauge != null)
+      gauge.close()
   }
 
-  def close(): Unit = metricTypeMap.values.foreach(_.close())
+  def close(): Unit = {
+    metricTypeMap.values.foreach(_.close())
+    metricGaugeTypeMap.values.foreach(_.close())
+  }
+}
+
+class BrokerTopicAggregatedMetric() {
+  private val partitionMetricValues = new ConcurrentHashMap[Int, Long]()
+
+  def setPartitionMetricValue(partition: Int, partitionValue: Long): Unit = {
+    partitionMetricValues.put(partition, partitionValue)
+  }
+
+  def removePartition(partition: Int): Option[Long] = {
+    Option.apply(partitionMetricValues.remove(partition))
+  }
+
+  def value(): Long = partitionMetricValues.values().stream().mapToLong(v => v).sum()
+
+  def close(): Unit = partitionMetricValues.clear()
 }
 
 object BrokerTopicStats {
@@ -378,27 +560,18 @@ object BrokerTopicStats {
   val ProduceMessageConversionsPerSec = "ProduceMessageConversionsPerSec"
   val ReassignmentBytesInPerSec = "ReassignmentBytesInPerSec"
   val ReassignmentBytesOutPerSec = "ReassignmentBytesOutPerSec"
-  val RemoteBytesOutPerSec = "RemoteBytesOutPerSec"
-  val RemoteBytesInPerSec = "RemoteBytesInPerSec"
-  val RemoteReadRequestsPerSec = "RemoteReadRequestsPerSec"
-  val RemoteWriteRequestsPerSec = "RemoteWriteRequestsPerSec"
-  val FailedRemoteReadRequestsPerSec = "RemoteReadErrorsPerSec"
-  val FailedRemoteWriteRequestsPerSec = "RemoteWriteErrorsPerSec"
-
   // These following topics are for LogValidator for better debugging on failed records
   val NoKeyCompactedTopicRecordsPerSec = "NoKeyCompactedTopicRecordsPerSec"
   val InvalidMagicNumberRecordsPerSec = "InvalidMagicNumberRecordsPerSec"
   val InvalidMessageCrcRecordsPerSec = "InvalidMessageCrcRecordsPerSec"
   val InvalidOffsetOrSequenceRecordsPerSec = "InvalidOffsetOrSequenceRecordsPerSec"
-
-  private val valueFactory = (k: String) => new BrokerTopicMetrics(Some(k))
 }
 
-class BrokerTopicStats extends Logging {
-  import BrokerTopicStats._
+class BrokerTopicStats(configOpt: java.util.Optional[KafkaConfig] = java.util.Optional.empty()) extends Logging {
 
+  private val valueFactory = (k: String) => new BrokerTopicMetrics(Some(k), configOpt)
   private val stats = new Pool[String, BrokerTopicMetrics](Some(valueFactory))
-  val allTopicsStats = new BrokerTopicMetrics(None)
+  val allTopicsStats = new BrokerTopicMetrics(None, configOpt)
 
   def topicStats(topic: String): BrokerTopicMetrics =
     stats.getAndMaybePut(topic)
@@ -439,12 +612,24 @@ class BrokerTopicStats extends Logging {
       topicMetrics.closeMetric(BrokerTopicStats.ProduceMessageConversionsPerSec)
       topicMetrics.closeMetric(BrokerTopicStats.ReplicationBytesOutPerSec)
       topicMetrics.closeMetric(BrokerTopicStats.ReassignmentBytesOutPerSec)
-      topicMetrics.closeMetric(BrokerTopicStats.RemoteBytesOutPerSec)
-      topicMetrics.closeMetric(BrokerTopicStats.RemoteBytesInPerSec)
-      topicMetrics.closeMetric(BrokerTopicStats.RemoteReadRequestsPerSec)
-      topicMetrics.closeMetric(BrokerTopicStats.RemoteWriteRequestsPerSec)
-      topicMetrics.closeMetric(BrokerTopicStats.FailedRemoteReadRequestsPerSec)
-      topicMetrics.closeMetric(BrokerTopicStats.FailedRemoteWriteRequestsPerSec)
+      topicMetrics.closeMetric(RemoteStorageMetrics.REMOTE_COPY_BYTES_PER_SEC_METRIC.getName)
+      topicMetrics.closeMetric(RemoteStorageMetrics.REMOTE_FETCH_BYTES_PER_SEC_METRIC.getName)
+      topicMetrics.closeMetric(RemoteStorageMetrics.REMOTE_FETCH_REQUESTS_PER_SEC_METRIC.getName)
+      topicMetrics.closeMetric(RemoteStorageMetrics.REMOTE_COPY_REQUESTS_PER_SEC_METRIC.getName)
+      topicMetrics.closeMetric(RemoteStorageMetrics.REMOTE_DELETE_REQUESTS_PER_SEC_METRIC.getName)
+      topicMetrics.closeMetric(RemoteStorageMetrics.BUILD_REMOTE_LOG_AUX_STATE_REQUESTS_PER_SEC_METRIC.getName)
+      topicMetrics.closeMetric(RemoteStorageMetrics.FAILED_REMOTE_FETCH_PER_SEC_METRIC.getName)
+      topicMetrics.closeMetric(RemoteStorageMetrics.FAILED_REMOTE_COPY_PER_SEC_METRIC.getName)
+      topicMetrics.closeMetric(RemoteStorageMetrics.REMOTE_COPY_LAG_BYTES_METRIC.getName)
+      topicMetrics.closeMetric(RemoteStorageMetrics.REMOTE_LOG_METADATA_COUNT_METRIC.getName)
+      topicMetrics.closeMetric(RemoteStorageMetrics.REMOTE_LOG_SIZE_COMPUTATION_TIME_METRIC.getName)
+      topicMetrics.closeMetric(RemoteStorageMetrics.REMOTE_LOG_SIZE_BYTES_METRIC.getName)
+      topicMetrics.closeMetric(RemoteStorageMetrics.FAILED_REMOTE_DELETE_PER_SEC_METRIC.getName)
+      topicMetrics.closeMetric(RemoteStorageMetrics.FAILED_BUILD_REMOTE_LOG_AUX_STATE_PER_SEC_METRIC.getName)
+      topicMetrics.closeMetric(RemoteStorageMetrics.REMOTE_COPY_LAG_BYTES_METRIC.getName)
+      topicMetrics.closeMetric(RemoteStorageMetrics.REMOTE_COPY_LAG_SEGMENTS_METRIC.getName)
+      topicMetrics.closeMetric(RemoteStorageMetrics.REMOTE_DELETE_LAG_BYTES_METRIC.getName)
+      topicMetrics.closeMetric(RemoteStorageMetrics.REMOTE_DELETE_LAG_SEGMENTS_METRIC.getName)
     }
   }
 

@@ -18,17 +18,18 @@ import time
 
 from ducktape.utils.util import wait_until
 from ducktape.mark import parametrize
+from ducktape.mark.resource import cluster
 from ducktape.errors import TimeoutError
 
 from kafkatest.services.console_consumer import ConsoleConsumer
 from kafkatest.services.kafka import KafkaService
-from kafkatest.services.kafka.config_property import CLUSTER_ID
+from kafkatest.services.kafka.config_property import CLUSTER_ID, LOG_DIRS
 from kafkatest.services.kafka.quorum import isolated_kraft, ServiceQuorumInfo, zk
 from kafkatest.services.verifiable_producer import VerifiableProducer
 from kafkatest.services.zookeeper import ZookeeperService
 from kafkatest.tests.produce_consume_validate import ProduceConsumeValidateTest
 from kafkatest.utils import is_int
-from kafkatest.version import DEV_BRANCH, V_3_4_0
+from kafkatest.version import DEV_BRANCH, LATEST_3_4
 
 
 class TestMigration(ProduceConsumeValidateTest):
@@ -57,7 +58,8 @@ class TestMigration(ProduceConsumeValidateTest):
                                   allow_zk_with_kraft=True,
                                   isolated_kafka=self.kafka,
                                   server_prop_overrides=[["zookeeper.connect", self.zk.connect_setting()],
-                                                         ["zookeeper.metadata.migration.enable", "true"]],
+                                                         ["zookeeper.metadata.migration.enable", "true"],
+                                                         [LOG_DIRS, KafkaService.DATA_LOG_DIR_1]],
                                   quorum_info_provider=remote_quorum)
         controller.start()
 
@@ -84,6 +86,7 @@ class TestMigration(ProduceConsumeValidateTest):
                 controller.stop_node(node)
                 controller.start_node(node)
 
+    @cluster(num_nodes=7)
     @parametrize(roll_controller = True)
     @parametrize(roll_controller = False)
     def test_online_migration(self, roll_controller):
@@ -95,7 +98,10 @@ class TestMigration(ProduceConsumeValidateTest):
                                   version=DEV_BRANCH,
                                   quorum_info_provider=zk_quorum,
                                   allow_zk_with_kraft=True,
-                                  server_prop_overrides=[["zookeeper.metadata.migration.enable", "false"]])
+                                  server_prop_overrides=[
+                                      ["zookeeper.metadata.migration.enable", "false"],
+                                      [LOG_DIRS, KafkaService.DATA_LOG_DIR_1]
+                                  ])
         self.kafka.security_protocol = "PLAINTEXT"
         self.kafka.interbroker_security_protocol = "PLAINTEXT"
         self.zk.start()
@@ -127,6 +133,7 @@ class TestMigration(ProduceConsumeValidateTest):
         self.run_produce_consume_validate(core_test_action=partial(self.do_migration, roll_controller = roll_controller))
         self.kafka.stop()
 
+    @cluster(num_nodes=7)
     @parametrize(metadata_quorum=isolated_kraft)
     def test_pre_migration_mode_3_4(self, metadata_quorum):
         """
@@ -140,15 +147,18 @@ class TestMigration(ProduceConsumeValidateTest):
         This test ensures that even if we enable migrations after the upgrade to 3.5, that no migration
         is able to take place.
         """
-        self.zk = ZookeeperService(self.test_context, num_nodes=1, version=V_3_4_0)
+        self.zk = ZookeeperService(self.test_context, num_nodes=1, version=LATEST_3_4)
         self.zk.start()
 
         self.kafka = KafkaService(self.test_context,
                                   num_nodes=3,
                                   zk=self.zk,
                                   allow_zk_with_kraft=True,
-                                  version=V_3_4_0,
-                                  server_prop_overrides=[["zookeeper.metadata.migration.enable", "false"]],
+                                  version=LATEST_3_4,
+                                  server_prop_overrides=[
+                                      ["zookeeper.metadata.migration.enable", "false"],
+                                      [LOG_DIRS, KafkaService.DATA_LOG_DIR_1]
+                                  ],
                                   topics={self.topic: {"partitions": self.partitions,
                                                        "replication-factor": self.replication_factor,
                                                        'configs': {"min.insync.replicas": 2}}})
@@ -196,27 +206,32 @@ class TestMigration(ProduceConsumeValidateTest):
 
         assert saw_expected_error, "Did not see expected ERROR log in the controller logs"
 
+    @cluster(num_nodes=5)
     def test_upgrade_after_3_4_migration(self):
         """
         Perform a migration on version 3.4.0. Then do a rolling upgrade to 3.5+ and ensure we see
         the correct migration state in the log.
         """
         zk_quorum = partial(ServiceQuorumInfo, zk)
-        self.zk = ZookeeperService(self.test_context, num_nodes=1, version=V_3_4_0)
+        self.zk = ZookeeperService(self.test_context, num_nodes=1, version=LATEST_3_4)
         self.kafka = KafkaService(self.test_context,
                                   num_nodes=3,
                                   zk=self.zk,
-                                  version=V_3_4_0,
+                                  version=LATEST_3_4,
                                   quorum_info_provider=zk_quorum,
                                   allow_zk_with_kraft=True,
-                                  server_prop_overrides=[["zookeeper.metadata.migration.enable", "true"]])
+                                  server_prop_overrides=[
+                                      ["zookeeper.metadata.migration.enable", "true"],
+                                      [LOG_DIRS, KafkaService.DATA_LOG_DIR_1]
+                                  ])
 
         remote_quorum = partial(ServiceQuorumInfo, isolated_kraft)
-        controller = KafkaService(self.test_context, num_nodes=1, zk=self.zk, version=V_3_4_0,
+        controller = KafkaService(self.test_context, num_nodes=1, zk=self.zk, version=LATEST_3_4,
                                   allow_zk_with_kraft=True,
                                   isolated_kafka=self.kafka,
                                   server_prop_overrides=[["zookeeper.connect", self.zk.connect_setting()],
-                                                         ["zookeeper.metadata.migration.enable", "true"]],
+                                                         ["zookeeper.metadata.migration.enable", "true"],
+                                                         [LOG_DIRS, KafkaService.DATA_LOG_DIR_1]],
                                   quorum_info_provider=remote_quorum)
 
         self.kafka.security_protocol = "PLAINTEXT"
@@ -259,7 +274,7 @@ class TestMigration(ProduceConsumeValidateTest):
                 try:
                     # Shouldn't have to wait too long to see this log message after startup
                     monitor.wait_until(
-                        "Staying in the ZK migration",
+                        "Staying in ZK migration",
                         timeout_sec=10.0, backoff_sec=.25,
                         err_msg=""
                     )
@@ -271,6 +286,7 @@ class TestMigration(ProduceConsumeValidateTest):
         assert saw_expected_log, "Did not see expected INFO log after upgrading from a 3.4 migration"
         self.kafka.stop()
 
+    @cluster(num_nodes=5)
     def test_reconcile_kraft_to_zk(self):
         """
         Perform a migration and delete a topic directly from ZK. Ensure that the topic is added back
@@ -284,14 +300,17 @@ class TestMigration(ProduceConsumeValidateTest):
                                   version=DEV_BRANCH,
                                   quorum_info_provider=zk_quorum,
                                   allow_zk_with_kraft=True,
-                                  server_prop_overrides=[["zookeeper.metadata.migration.enable", "false"]])
+                                  server_prop_overrides=[
+                                      ["zookeeper.metadata.migration.enable", "false"],
+                                      [LOG_DIRS, KafkaService.DATA_LOG_DIR_1]])
 
         remote_quorum = partial(ServiceQuorumInfo, isolated_kraft)
         controller = KafkaService(self.test_context, num_nodes=1, zk=self.zk, version=DEV_BRANCH,
                                   allow_zk_with_kraft=True,
                                   isolated_kafka=self.kafka,
                                   server_prop_overrides=[["zookeeper.connect", self.zk.connect_setting()],
-                                                         ["zookeeper.metadata.migration.enable", "true"]],
+                                                         ["zookeeper.metadata.migration.enable", "true"],
+                                                         [LOG_DIRS, KafkaService.DATA_LOG_DIR_1]],
                                   quorum_info_provider=remote_quorum)
 
         self.kafka.security_protocol = "PLAINTEXT"

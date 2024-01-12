@@ -16,18 +16,17 @@
  */
 package org.apache.kafka.connect.util;
 
+import org.apache.kafka.connect.errors.ConnectException;
+import org.junit.Before;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.mockito.Mock;
+import org.mockito.junit.MockitoJUnitRunner;
+
 import java.time.Duration;
 import java.util.Collections;
 import java.util.Map;
 import java.util.function.Function;
-
-import org.apache.kafka.connect.errors.ConnectException;
-import org.junit.Rule;
-import org.mockito.Mock;
-import org.junit.Before;
-import org.junit.Test;
-import org.mockito.junit.MockitoJUnit;
-import org.mockito.junit.MockitoRule;
 
 import static org.apache.kafka.connect.util.SharedTopicAdmin.DEFAULT_CLOSE_DURATION;
 import static org.junit.Assert.assertSame;
@@ -38,12 +37,10 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+@RunWith(MockitoJUnitRunner.StrictStubs.class)
 public class SharedTopicAdminTest {
 
     private static final Map<String, Object> EMPTY_CONFIG = Collections.emptyMap();
-
-    @Rule
-    public MockitoRule rule = MockitoJUnit.rule();
 
     @Mock private TopicAdmin mockTopicAdmin;
     @Mock private Function<Map<String, Object>, TopicAdmin> factory;

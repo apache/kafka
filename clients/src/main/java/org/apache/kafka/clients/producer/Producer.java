@@ -22,6 +22,7 @@ import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.ProducerFencedException;
 
 import java.io.Closeable;
@@ -94,6 +95,11 @@ public interface Producer<K, V> extends Closeable {
      * See {@link KafkaProducer#metrics()}
      */
     Map<MetricName, ? extends Metric> metrics();
+
+    /**
+     * See {@link KafkaProducer#clientInstanceId(Duration)}}
+     */
+    Uuid clientInstanceId(Duration timeout);
 
     /**
      * See {@link KafkaProducer#close()}

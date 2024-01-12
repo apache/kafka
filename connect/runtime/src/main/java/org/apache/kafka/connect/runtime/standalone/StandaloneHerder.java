@@ -17,6 +17,7 @@
 package org.apache.kafka.connect.runtime.standalone;
 
 import org.apache.kafka.common.utils.ThreadUtils;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.connect.connector.policy.ConnectorClientConfigOverridePolicy;
 import org.apache.kafka.connect.errors.AlreadyExistsException;
 import org.apache.kafka.connect.errors.ConnectException;
@@ -82,7 +83,9 @@ public class StandaloneHerder extends AbstractHerder {
                 kafkaClusterId,
                 new MemoryStatusBackingStore(),
                 new MemoryConfigBackingStore(worker.configTransformer()),
-             connectorClientConfigOverridePolicy);
+                connectorClientConfigOverridePolicy,
+                Time.SYSTEM
+        );
     }
 
     // visible for testing
@@ -91,8 +94,9 @@ public class StandaloneHerder extends AbstractHerder {
                      String kafkaClusterId,
                      StatusBackingStore statusBackingStore,
                      MemoryConfigBackingStore configBackingStore,
-                     ConnectorClientConfigOverridePolicy connectorClientConfigOverridePolicy) {
-        super(worker, workerId, kafkaClusterId, statusBackingStore, configBackingStore, connectorClientConfigOverridePolicy);
+                     ConnectorClientConfigOverridePolicy connectorClientConfigOverridePolicy,
+                     Time time) {
+        super(worker, workerId, kafkaClusterId, statusBackingStore, configBackingStore, connectorClientConfigOverridePolicy, time);
         this.configState = ClusterConfigState.EMPTY;
         this.requestExecutorService = Executors.newSingleThreadScheduledExecutor();
         configBackingStore.setUpdateListener(new ConfigUpdateListener());
@@ -179,6 +183,12 @@ public class StandaloneHerder extends AbstractHerder {
                                                 final Map<String, String> config,
                                                 boolean allowReplace,
                                                 final Callback<Created<ConnectorInfo>> callback) {
+        putConnectorConfig(connName, config, null, allowReplace, callback);
+    }
+
+    @Override
+    public void putConnectorConfig(final String connName, final Map<String, String> config, final TargetState targetState,
+                                   final boolean allowReplace, final Callback<Created<ConnectorInfo>> callback) {
         try {
             validateConnectorConfig(config, (error, configInfos) -> {
                 if (error != null) {
@@ -187,7 +197,7 @@ public class StandaloneHerder extends AbstractHerder {
                 }
 
                 requestExecutorService.submit(
-                    () -> putConnectorConfig(connName, config, allowReplace, callback, configInfos)
+                    () -> putConnectorConfig(connName, config, targetState, allowReplace, callback, configInfos)
                 );
             });
         } catch (Throwable t) {
@@ -197,6 +207,7 @@ public class StandaloneHerder extends AbstractHerder {
 
     private synchronized void putConnectorConfig(String connName,
                                                  final Map<String, String> config,
+                                                 TargetState targetState,
                                                  boolean allowReplace,
                                                  final Callback<Created<ConnectorInfo>> callback,
                                                  ConfigInfos configInfos) {
@@ -217,7 +228,7 @@ public class StandaloneHerder extends AbstractHerder {
                 created = true;
             }
 
-            configBackingStore.putConnectorConfig(connName, config);
+            configBackingStore.putConnectorConfig(connName, config, targetState);
 
             startConnector(connName, (error, result) -> {
                 if (error != null) {
@@ -404,6 +415,12 @@ public class StandaloneHerder extends AbstractHerder {
         return true;
     }
 
+    @Override
+    public void setClusterLoggerLevel(String namespace, String level) {
+        // In standalone mode, this single worker is the entire cluster
+        setWorkerLoggerLevel(namespace, level);
+    }
+
     private void startConnector(String connName, Callback<TargetState> onStart) {
         Map<String, String> connConfigs = configState.connectorConfig(connName);
         TargetState targetState = configState.targetState(connName);
@@ -544,6 +561,11 @@ public class StandaloneHerder extends AbstractHerder {
         public void onRestartRequest(RestartRequest restartRequest) {
             // no-op
         }
+
+        @Override
+        public void onLoggingLevelUpdate(String namespace, String level) {
+            // no-op
+        }
     }
 
     static class StandaloneHerderRequest implements HerderRequest {
@@ -579,7 +601,7 @@ public class StandaloneHerder extends AbstractHerder {
     public void tasksConfig(String connName, Callback<Map<ConnectorTaskId, Map<String, String>>> callback) {
         Map<ConnectorTaskId, Map<String, String>> tasksConfig = buildTasksConfig(connName);
         if (tasksConfig.isEmpty()) {
-            callback.onCompletion(new NotFoundException("Connector " + connName + " not found"), tasksConfig);
+            callback.onCompletion(new NotFoundException("Connector " + connName + " not found"), null);
             return;
         }
         callback.onCompletion(null, tasksConfig);

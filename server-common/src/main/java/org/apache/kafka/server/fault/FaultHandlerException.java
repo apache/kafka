@@ -22,6 +22,8 @@ package org.apache.kafka.server.fault;
  * An exception thrown by a fault handler.
  */
 public class FaultHandlerException extends RuntimeException {
+
+    @SuppressWarnings("this-escape")
     public FaultHandlerException(String failureMessage, Throwable cause) {
         super(failureMessage, cause);
         // If a cause exception was provided, set our the stack trace its stack trace. This is

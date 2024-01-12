@@ -33,6 +33,8 @@ import org.apache.kafka.image.ClientQuotaImage;
 import org.apache.kafka.image.ClientQuotasImage;
 import org.apache.kafka.image.ConfigurationsDelta;
 import org.apache.kafka.image.ConfigurationsImage;
+import org.apache.kafka.image.DelegationTokenDelta;
+import org.apache.kafka.image.DelegationTokenImage;
 import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.image.ProducerIdsDelta;
@@ -41,6 +43,7 @@ import org.apache.kafka.image.ScramImage;
 import org.apache.kafka.image.TopicImage;
 import org.apache.kafka.image.TopicsDelta;
 import org.apache.kafka.image.TopicsImage;
+import org.apache.kafka.metadata.DelegationTokenData;
 import org.apache.kafka.metadata.PartitionRegistration;
 import org.apache.kafka.metadata.ScramCredentialData;
 import org.apache.kafka.metadata.authorizer.StandardAcl;
@@ -66,6 +69,7 @@ public class KRaftMigrationZkWriter {
     private static final String CREATE_TOPIC = "CreateTopic";
     private static final String UPDATE_TOPIC = "UpdateTopic";
     private static final String DELETE_TOPIC = "DeleteTopic";
+    private static final String DELETE_PENDING_TOPIC_DELETION = "DeletePendingTopicDeletion";
     private static final String UPDATE_PARTITION = "UpdatePartition";
     private static final String DELETE_PARTITION = "DeletePartition";
     private static final String UPDATE_BROKER_CONFIG = "UpdateBrokerConfig";
@@ -91,6 +95,7 @@ public class KRaftMigrationZkWriter {
         handleClientQuotasSnapshot(image.clientQuotas(), image.scram(), operationConsumer);
         handleProducerIdSnapshot(image.producerIds(), operationConsumer);
         handleAclsSnapshot(image.acls(), operationConsumer);
+        handleDelegationTokenSnapshot(image.delegationTokens(), operationConsumer);
     }
 
     public boolean handleDelta(
@@ -120,6 +125,10 @@ public class KRaftMigrationZkWriter {
             handleAclsDelta(image.acls(), delta.aclsDelta(), operationConsumer);
             updated = true;
         }
+        if (delta.delegationTokenDelta() != null) {
+            handleDelegationTokenDelta(image.delegationTokens(), delta.delegationTokenDelta(), operationConsumer);
+            updated = true;
+        }
         return updated;
     }
 
@@ -137,6 +146,15 @@ public class KRaftMigrationZkWriter {
         Map<String, Set<Integer>> extraneousPartitionsInZk = new HashMap<>();
         Map<Uuid, Map<Integer, PartitionRegistration>> changedPartitions = new HashMap<>();
         Map<Uuid, Map<Integer, PartitionRegistration>> newPartitions = new HashMap<>();
+
+        Set<String> pendingTopicDeletions = migrationClient.topicClient().readPendingTopicDeletions();
+        if (!pendingTopicDeletions.isEmpty()) {
+            operationConsumer.accept(
+                DELETE_PENDING_TOPIC_DELETION,
+                "Delete pending topic deletions",
+                migrationState -> migrationClient.topicClient().clearPendingTopicDeletions(pendingTopicDeletions, migrationState)
+            );
+        }
 
         migrationClient.topicClient().iterateTopics(
             EnumSet.of(
@@ -631,6 +649,36 @@ public class KRaftMigrationZkWriter {
             String name = "Writing " + accessControlEntries.size() + " for resource " + resourcePattern;
             operationConsumer.accept(UPDATE_ACL, name, migrationState ->
                 migrationClient.aclClient().writeResourceAcls(resourcePattern, accessControlEntries, migrationState));
+        });
+    }
+
+    void handleDelegationTokenDelta(DelegationTokenImage image, DelegationTokenDelta delta, KRaftMigrationOperationConsumer operationConsumer) {
+        Set<String> updatedTokens = delta.changes().keySet();
+        updatedTokens.forEach(tokenId -> {
+            DelegationTokenData tokenData = image.tokens().get(tokenId);
+            if (tokenData == null) {
+                operationConsumer.accept("DeleteDelegationToken", "Delete DelegationToken for " + tokenId, migrationState ->
+                    migrationClient.delegationTokenClient().deleteDelegationToken(tokenId, migrationState));
+            } else {
+                operationConsumer.accept("UpdateDelegationToken", "Update DelegationToken for " + tokenId, migrationState ->
+                    migrationClient.delegationTokenClient().writeDelegationToken(tokenId, tokenData.tokenInformation(), migrationState));
+            }
+        });
+    }
+
+    void handleDelegationTokenSnapshot(DelegationTokenImage image, KRaftMigrationOperationConsumer operationConsumer) {
+        image.tokens().keySet().forEach(tokenId -> {
+            DelegationTokenData tokenData = image.tokens().get(tokenId);
+            operationConsumer.accept("UpdateDelegationToken", "Update DelegationToken for " + tokenId, migrationState ->
+                migrationClient.delegationTokenClient().writeDelegationToken(tokenId, tokenData.tokenInformation(), migrationState));
+        });
+
+        List<String> tokens = migrationClient.delegationTokenClient().getDelegationTokens();
+        tokens.forEach(tokenId -> {
+            if (!image.tokens().containsKey(tokenId)) {
+                operationConsumer.accept("DeleteDelegationToken", "Delete DelegationToken for " + tokenId, migrationState ->
+                    migrationClient.delegationTokenClient().deleteDelegationToken(tokenId, migrationState));
+            }
         });
     }
 }

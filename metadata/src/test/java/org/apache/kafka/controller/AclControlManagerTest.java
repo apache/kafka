@@ -212,7 +212,7 @@ public class AclControlManagerTest {
         for (StandardAclWithId acl : TEST_ACLS) {
             AccessControlEntryRecord record = acl.toRecord();
             assertTrue(loadedAcls.add(new ApiMessageAndVersion(record, (short) 0)));
-            manager.replay(acl.toRecord(), Optional.empty());
+            manager.replay(acl.toRecord());
         }
 
         // Verify that the ACLs stored in the AclControlManager match the ones we expect.
@@ -241,9 +241,9 @@ public class AclControlManagerTest {
         AclControlManager manager = new AclControlManager.Builder().build();
         MockClusterMetadataAuthorizer authorizer = new MockClusterMetadataAuthorizer();
         authorizer.loadSnapshot(manager.idToAcl());
-        manager.replay(StandardAclWithIdTest.TEST_ACLS.get(0).toRecord(), Optional.empty());
+        manager.replay(StandardAclWithIdTest.TEST_ACLS.get(0).toRecord());
         manager.replay(new RemoveAccessControlEntryRecord().
-            setId(TEST_ACLS.get(0).id()), Optional.empty());
+            setId(TEST_ACLS.get(0).id()));
         assertTrue(manager.idToAcl().isEmpty());
     }
 

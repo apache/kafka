@@ -41,7 +41,6 @@ public final class AclsDelta {
     private final AclsImage image;
     private final Map<Uuid, Optional<StandardAcl>> changes = new LinkedHashMap<>();
     private final Set<StandardAcl> deleted = new HashSet<>();
-    private boolean isSnapshotDelta = false;
 
     public AclsDelta(AclsImage image) {
         this.image = image;
@@ -67,15 +66,15 @@ public final class AclsDelta {
     }
 
     void finishSnapshot() {
-        this.isSnapshotDelta = true;
+        for (Entry<Uuid, StandardAcl> entry : image.acls().entrySet()) {
+            if (!changes.containsKey(entry.getKey())) {
+                changes.put(entry.getKey(), Optional.empty());
+            }
+        }
     }
 
     public void handleMetadataVersionChange(MetadataVersion newVersion) {
         // no-op
-    }
-
-    public boolean isSnapshotDelta() {
-        return isSnapshotDelta;
     }
 
     public void replay(AccessControlEntryRecord record) {
@@ -105,14 +104,12 @@ public final class AclsDelta {
 
     public AclsImage apply() {
         Map<Uuid, StandardAcl> newAcls = new HashMap<>();
-        if (!isSnapshotDelta) {
-            for (Entry<Uuid, StandardAcl> entry : image.acls().entrySet()) {
-                Optional<StandardAcl> change = changes.get(entry.getKey());
-                if (change == null) {
-                    newAcls.put(entry.getKey(), entry.getValue());
-                } else if (change.isPresent()) {
-                    newAcls.put(entry.getKey(), change.get());
-                }
+        for (Entry<Uuid, StandardAcl> entry : image.acls().entrySet()) {
+            Optional<StandardAcl> change = changes.get(entry.getKey());
+            if (change == null) {
+                newAcls.put(entry.getKey(), entry.getValue());
+            } else if (change.isPresent()) {
+                newAcls.put(entry.getKey(), change.get());
             }
         }
         for (Entry<Uuid, Optional<StandardAcl>> entry : changes.entrySet()) {
@@ -127,7 +124,7 @@ public final class AclsDelta {
 
     @Override
     public String toString() {
-        return "AclsDelta(isSnapshotDelta=" + isSnapshotDelta +
+        return "AclsDelta(" +
             ", changes=" + changes.entrySet().stream().
                 map(e -> "" + e.getKey() + "=" + e.getValue()).
                 collect(Collectors.joining(", ")) + ")";

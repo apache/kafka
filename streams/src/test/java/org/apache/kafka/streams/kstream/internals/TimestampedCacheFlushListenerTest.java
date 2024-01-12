@@ -20,28 +20,26 @@ import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.mockito.junit.MockitoJUnitRunner;
 
-import static org.easymock.EasyMock.expect;
-import static org.easymock.EasyMock.expectLastCall;
-import static org.easymock.EasyMock.mock;
-import static org.easymock.EasyMock.replay;
-import static org.easymock.EasyMock.verify;
+import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 
+@RunWith(MockitoJUnitRunner.StrictStubs.class)
 public class TimestampedCacheFlushListenerTest {
 
     @Test
     public void shouldForwardValueTimestampIfNewValueExists() {
+        @SuppressWarnings("unchecked")
         final InternalProcessorContext<String, Change<String>> context = mock(InternalProcessorContext.class);
-        expect(context.currentNode()).andReturn(null).anyTimes();
-        context.setCurrentNode(null);
-        context.setCurrentNode(null);
-        context.forward(
+        doNothing().when(context).forward(
             new Record<>(
                 "key",
                 new Change<>("newValue", "oldValue"),
                 42L));
-        expectLastCall();
-        replay(context);
 
         new TimestampedCacheFlushListener<>(context).apply(
             new Record<>(
@@ -51,22 +49,18 @@ public class TimestampedCacheFlushListenerTest {
                     ValueAndTimestamp.make("oldValue", 21L)),
                 73L));
 
-        verify(context);
+        verify(context, times(2)).setCurrentNode(null);
     }
 
     @Test
     public void shouldForwardParameterTimestampIfNewValueIsNull() {
+        @SuppressWarnings("unchecked")
         final InternalProcessorContext<String, Change<String>> context = mock(InternalProcessorContext.class);
-        expect(context.currentNode()).andReturn(null).anyTimes();
-        context.setCurrentNode(null);
-        context.setCurrentNode(null);
-        context.forward(
+        doNothing().when(context).forward(
             new Record<>(
                 "key",
                 new Change<>(null, "oldValue"),
                 73L));
-        expectLastCall();
-        replay(context);
 
         new TimestampedCacheFlushListener<>(context).apply(
             new Record<>(
@@ -74,6 +68,6 @@ public class TimestampedCacheFlushListenerTest {
                 new Change<>(null, ValueAndTimestamp.make("oldValue", 21L)),
                 73L));
 
-        verify(context);
+        verify(context, times(2)).setCurrentNode(null);
     }
 }

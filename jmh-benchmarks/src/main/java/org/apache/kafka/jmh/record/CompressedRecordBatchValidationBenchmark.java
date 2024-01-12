@@ -53,7 +53,7 @@ public class CompressedRecordBatchValidationBenchmark extends BaseRecordBatchBen
         MemoryRecords records = MemoryRecords.readableRecords(singleBatchBuffer.duplicate());
         new LogValidator(records, new TopicPartition("a", 0),
             Time.SYSTEM, compressionType, compressionType, false,  messageVersion,
-            TimestampType.CREATE_TIME, Long.MAX_VALUE, 0, AppendOrigin.CLIENT,
+            TimestampType.CREATE_TIME, Long.MAX_VALUE, Long.MAX_VALUE, 0, AppendOrigin.CLIENT,
             MetadataVersion.latest()
         ).validateMessagesAndAssignOffsetsCompressed(PrimitiveRef.ofLong(startingOffset),
             validatorMetricsRecorder, requestLocal.bufferSupplier());

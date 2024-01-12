@@ -117,26 +117,26 @@ public class ReflectionScanner extends PluginScanner {
             plugins = reflections.getSubTypesOf((Class<T>) type.superClass());
         } catch (ReflectionsException e) {
             log.debug("Reflections scanner could not find any {} in {} for URLs: {}",
-                    type, source.location(), source.urls(), e);
+                    type, source, source.urls(), e);
             return Collections.emptySortedSet();
         }
 
         SortedSet<PluginDesc<T>> result = new TreeSet<>();
         for (Class<? extends T> pluginKlass : plugins) {
             if (!PluginUtils.isConcrete(pluginKlass)) {
-                log.debug("Skipping {} in {} as it is not concrete implementation", pluginKlass, source.location());
+                log.debug("Skipping {} in {} as it is not concrete implementation", pluginKlass, source);
                 continue;
             }
             if (pluginKlass.getClassLoader() != source.loader()) {
                 log.debug("{} from other classloader {} is visible from {}, excluding to prevent isolated loading",
-                        pluginKlass, pluginKlass.getClassLoader(), source.location());
+                        pluginKlass, pluginKlass.getClassLoader(), source);
                 continue;
             }
             try (LoaderSwap loaderSwap = withClassLoader(source.loader())) {
                 result.add(pluginDesc(pluginKlass, versionFor(pluginKlass), type, source));
             } catch (ReflectiveOperationException | LinkageError e) {
                 log.error("Failed to discover {} in {}: Unable to instantiate {}{}",
-                        type.simpleName(), source.location(), pluginKlass.getSimpleName(),
+                        type.simpleName(), source, pluginKlass.getSimpleName(),
                         reflectiveErrorDescription(e), e);
             }
         }

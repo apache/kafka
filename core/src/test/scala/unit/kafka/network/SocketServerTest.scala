@@ -81,7 +81,6 @@ class SocketServerTest {
   private val apiVersionManager = new SimpleApiVersionManager(ListenerType.BROKER, true, false,
     () => new Features(MetadataVersion.latest(), Collections.emptyMap[String, java.lang.Short], 0, true))
   val server = new SocketServer(config, metrics, Time.SYSTEM, credentialProvider, apiVersionManager)
-  server.enableRequestProcessing(Map.empty).get(1, TimeUnit.MINUTES)
   val sockets = new ArrayBuffer[Socket]
 
   private val kafkaLogger = org.apache.log4j.LogManager.getLogger("kafka")
@@ -94,6 +93,7 @@ class SocketServerTest {
 
   @BeforeEach
   def setUp(): Unit = {
+    server.enableRequestProcessing(Map.empty).get(1, TimeUnit.MINUTES)
     // Run the tests with TRACE logging to exercise request logging path
     logLevelToRestore = kafkaLogger.getLevel
     kafkaLogger.setLevel(Level.TRACE)
@@ -107,6 +107,7 @@ class SocketServerTest {
     sockets.foreach(_.close())
     sockets.clear()
     kafkaLogger.setLevel(logLevelToRestore)
+    TestUtils.clearYammerMetrics()
   }
 
   def sendRequest(socket: Socket, request: Array[Byte], id: Option[Short] = None, flush: Boolean = true): Unit = {
@@ -223,7 +224,7 @@ class SocketServerTest {
     server.metrics.close()
   }
 
-  private def producerRequestBytes(ack: Short = 0): Array[Byte] = {
+  private def producerRequestBytes(apiVersion: Short = ApiKeys.PRODUCE.latestVersion, ack: Short = 0): Array[Byte] = {
     val correlationId = -1
     val clientId = ""
     val ackTimeoutMs = 10000
@@ -233,7 +234,7 @@ class SocketServerTest {
       .setAcks(ack)
       .setTimeoutMs(ackTimeoutMs)
       .setTransactionalId(null))
-      .build()
+      .build(apiVersion)
     val emptyHeader = new RequestHeader(ApiKeys.PRODUCE, emptyRequest.version, clientId, correlationId)
     Utils.toArray(emptyRequest.serializeWithHeader(emptyHeader))
   }
@@ -304,6 +305,52 @@ class SocketServerTest {
       ClientInformation.UNKNOWN_NAME_OR_VERSION,
       ClientInformation.UNKNOWN_NAME_OR_VERSION
     )
+  }
+
+  @Test
+  def testRequestPerSecAndDeprecatedRequestsPerSecMetrics(): Unit = {
+    val clientName = "apache-kafka-java"
+    val clientVersion = AppInfoParser.getVersion
+
+    def deprecatedRequestsPerSec(requestVersion: Short): Option[Long] =
+      TestUtils.meterCountOpt(s"${RequestMetrics.DeprecatedRequestsPerSec},request=Produce,version=$requestVersion," +
+        s"clientSoftwareName=$clientName,clientSoftwareVersion=$clientVersion")
+
+    def requestsPerSec(requestVersion: Short): Option[Long] =
+      TestUtils.meterCountOpt(s"${RequestMetrics.RequestsPerSec},request=Produce,version=$requestVersion")
+
+    val plainSocket = connect()
+    val address = plainSocket.getLocalAddress
+    val clientId = "clientId"
+
+    sendRequest(plainSocket, apiVersionRequestBytes(clientId, ApiKeys.API_VERSIONS.latestVersion))
+    var receivedReq = receiveRequest(server.dataPlaneRequestChannel)
+    server.dataPlaneRequestChannel.sendNoOpResponse(receivedReq)
+
+    var requestVersion = ApiKeys.PRODUCE.latestVersion
+    sendRequest(plainSocket, producerRequestBytes(requestVersion))
+    receivedReq = receiveRequest(server.dataPlaneRequestChannel)
+
+    assertEquals(clientName, receivedReq.context.clientInformation.softwareName)
+    assertEquals(clientVersion, receivedReq.context.clientInformation.softwareVersion)
+
+    server.dataPlaneRequestChannel.sendNoOpResponse(receivedReq)
+    TestUtils.waitUntilTrue(() => requestsPerSec(requestVersion).isDefined, "RequestsPerSec metric could not be found")
+    assertTrue(requestsPerSec(requestVersion).getOrElse(0L) > 0, "RequestsPerSec should be higher than 0")
+    assertEquals(None, deprecatedRequestsPerSec(requestVersion))
+
+    requestVersion = 3
+    sendRequest(plainSocket, producerRequestBytes(requestVersion))
+    receivedReq = receiveRequest(server.dataPlaneRequestChannel)
+    server.dataPlaneRequestChannel.sendNoOpResponse(receivedReq)
+    TestUtils.waitUntilTrue(() => deprecatedRequestsPerSec(requestVersion).isDefined, "DeprecatedRequestsPerSec metric could not be found")
+    assertTrue(deprecatedRequestsPerSec(requestVersion).getOrElse(0L) > 0, "DeprecatedRequestsPerSec should be higher than 0")
+
+    plainSocket.setSoLinger(true, 0)
+    plainSocket.close()
+
+    TestUtils.waitUntilTrue(() => server.connectionCount(address) == 0, msg = "Connection not closed")
+
   }
 
   @Test
@@ -889,7 +936,7 @@ class SocketServerTest {
       // except the Acceptor overriding a method to inject the exception
       override protected def createDataPlaneAcceptor(endPoint: EndPoint, isPrivilegedListener: Boolean, requestChannel: RequestChannel): DataPlaneAcceptor = {
 
-        new DataPlaneAcceptor(this, endPoint, config, nodeId, connectionQuotas, time, false, requestChannel, serverMetrics, credentialProvider, new LogContext(), MemoryPool.NONE, apiVersionManager) {
+        new DataPlaneAcceptor(this, endPoint, this.config, nodeId, connectionQuotas, time, false, requestChannel, serverMetrics, this.credentialProvider, new LogContext(), MemoryPool.NONE, this.apiVersionManager) {
           override protected def configureAcceptedSocketChannel(socketChannel: SocketChannel): Unit = {
             assertEquals(1, connectionQuotas.get(socketChannel.socket.getInetAddress))
             throw new IOException("test injected IOException")
@@ -2149,7 +2196,7 @@ class SocketServerTest {
   ) {
 
     override def createDataPlaneAcceptor(endPoint: EndPoint, isPrivilegedListener: Boolean, requestChannel: RequestChannel) : DataPlaneAcceptor = {
-      new TestableAcceptor(this, endPoint, config, 0, connectionQuotas, time, isPrivilegedListener, requestChannel, metrics, credentialProvider, new LogContext, MemoryPool.NONE, apiVersionManager, connectionQueueSize)
+      new TestableAcceptor(this, endPoint, this.config, 0, connectionQuotas, time, isPrivilegedListener, requestChannel, this.metrics, this.credentialProvider, new LogContext, MemoryPool.NONE, this.apiVersionManager, connectionQueueSize)
     }
 
     def testableSelector: TestableSelector =

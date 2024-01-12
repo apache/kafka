@@ -26,7 +26,6 @@ import kafka.test.ClusterInstance;
 import kafka.testkit.KafkaClusterTestKit;
 import kafka.testkit.TestKitNodes;
 import kafka.zk.EmbeddedZookeeper;
-import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.utils.Utils;
@@ -65,12 +64,14 @@ import java.util.stream.Stream;
  */
 public class RaftClusterInvocationContext implements TestTemplateInvocationContext {
 
+    private final String baseDisplayName;
     private final ClusterConfig clusterConfig;
     private final AtomicReference<KafkaClusterTestKit> clusterReference;
     private final AtomicReference<EmbeddedZookeeper> zkReference;
     private final boolean isCombined;
 
-    public RaftClusterInvocationContext(ClusterConfig clusterConfig, boolean isCombined) {
+    public RaftClusterInvocationContext(String baseDisplayName, ClusterConfig clusterConfig, boolean isCombined) {
+        this.baseDisplayName = baseDisplayName;
         this.clusterConfig = clusterConfig;
         this.clusterReference = new AtomicReference<>();
         this.zkReference = new AtomicReference<>();
@@ -82,7 +83,7 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
         String clusterDesc = clusterConfig.nameTags().entrySet().stream()
             .map(Object::toString)
             .collect(Collectors.joining(", "));
-        return String.format("[%d] Type=Raft-%s, %s", invocationIndex, isCombined ? "Combined" : "Isolated", clusterDesc);
+        return String.format("%s [%d] Type=Raft-%s, %s", baseDisplayName, invocationIndex, isCombined ? "Combined" : "Isolated", clusterDesc);
     }
 
     @Override
@@ -143,7 +144,12 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
 
         @Override
         public String bootstrapServers() {
-            return clusterReference.get().clientProperties().getProperty(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG);
+            return clusterReference.get().bootstrapServers();
+        }
+
+        @Override
+        public String bootstrapControllers() {
+            return clusterReference.get().bootstrapControllers();
         }
 
         @Override
@@ -237,7 +243,8 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
 
         @Override
         public Admin createAdminClient(Properties configOverrides) {
-            Admin admin = Admin.create(clusterReference.get().clientProperties(configOverrides));
+            Admin admin = Admin.create(clusterReference.get().
+                newClientPropertiesBuilder(configOverrides).build());
             admins.add(admin);
             return admin;
         }

@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.tools;
 
-import joptsimple.OptionParser;
 import joptsimple.OptionSpec;
 import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.ClientRequest;
@@ -62,7 +61,6 @@ import org.slf4j.LoggerFactory;
 
 import java.net.SocketTimeoutException;
 import java.text.SimpleDateFormat;
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.Date;
 import java.util.HashMap;
@@ -312,33 +310,19 @@ public class ReplicaVerificationTool {
             }
             CommandLineUtils.checkRequiredArgs(parser, options, brokerListOpt);
             CommandLineUtils.checkInvalidArgs(parser, options, topicsIncludeOpt, topicWhiteListOpt);
+
         }
 
         String brokerHostsAndPorts() {
             String brokerList = options.valueOf(brokerListOpt);
-            validateBrokerList(parser, brokerList);
+
+            try {
+                ToolsUtils.validateBootstrapServer(brokerList);
+            } catch (IllegalArgumentException e) {
+                CommandLineUtils.printUsageAndExit(parser, e.getMessage());
+            }
+
             return brokerList;
-        }
-
-        void validateBrokerList(OptionParser parser, String brokerList) {
-            if (parser == null || brokerList == null) {
-                throw new RuntimeException("No option parser or broker list found");
-            }
-            if (brokerList.isEmpty()) {
-                CommandLineUtils.printUsageAndExit(parser, "Empty broker list option");
-            }
-
-            String[] hostPorts;
-            if (brokerList.contains(",")) hostPorts = brokerList.split(",");
-            else hostPorts = new String[]{brokerList};
-
-            String[] validHostPort = Arrays.stream(hostPorts)
-                .filter(hostPortData -> Utils.getPort(hostPortData) != null)
-                .toArray(String[]::new);
-
-            if (validHostPort.length == 0 || validHostPort.length != hostPorts.length) {
-                CommandLineUtils.printUsageAndExit(parser, "Invalid broker list option");
-            }
         }
 
         TopicFilter.IncludeList topicsIncludeFilter() {

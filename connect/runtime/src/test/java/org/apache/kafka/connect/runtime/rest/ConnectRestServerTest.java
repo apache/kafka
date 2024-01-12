@@ -34,10 +34,14 @@ import org.apache.kafka.common.utils.LogCaptureAppender;
 import org.apache.kafka.connect.rest.ConnectRestExtension;
 import org.apache.kafka.connect.runtime.Herder;
 import org.apache.kafka.connect.runtime.isolation.Plugins;
+import org.apache.kafka.connect.runtime.rest.entities.LoggerLevel;
 import org.junit.After;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.mockito.Mock;
+import org.mockito.junit.MockitoJUnitRunner;
 import org.slf4j.LoggerFactory;
 
 import javax.ws.rs.core.MediaType;
@@ -54,18 +58,18 @@ import java.util.Map;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotEquals;
-import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doReturn;
-import static org.mockito.Mockito.mock;
 
+@RunWith(MockitoJUnitRunner.StrictStubs.class)
 public class ConnectRestServerTest {
 
-    private Herder herder;
-    private Plugins plugins;
+    @Mock private RestClient restClient;
+    @Mock private Herder herder;
+    @Mock private Plugins plugins;
     private ConnectRestServer server;
     private CloseableHttpClient httpClient;
     private Collection<CloseableHttpResponse> responses = new ArrayList<>();
@@ -74,8 +78,6 @@ public class ConnectRestServerTest {
 
     @Before
     public void setUp() {
-        herder = mock(Herder.class);
-        plugins = mock(Plugins.class);
         httpClient = HttpClients.createMinimal();
     }
 
@@ -114,7 +116,7 @@ public class ConnectRestServerTest {
         Map<String, String> configMap = new HashMap<>(baseServerProps());
         configMap.put(RestServerConfig.LISTENERS_CONFIG, "http://localhost:8080,https://localhost:8443");
 
-        server = new ConnectRestServer(null, null, configMap);
+        server = new ConnectRestServer(null, restClient, configMap);
         Assert.assertEquals("http://localhost:8080/", server.advertisedUrl().toString());
         server.stop();
 
@@ -123,7 +125,7 @@ public class ConnectRestServerTest {
         configMap.put(RestServerConfig.LISTENERS_CONFIG, "http://localhost:8080,https://localhost:8443");
         configMap.put(RestServerConfig.REST_ADVERTISED_LISTENER_CONFIG, "https");
 
-        server = new ConnectRestServer(null, null, configMap);
+        server = new ConnectRestServer(null, restClient, configMap);
         Assert.assertEquals("https://localhost:8443/", server.advertisedUrl().toString());
         server.stop();
 
@@ -131,7 +133,7 @@ public class ConnectRestServerTest {
         configMap = new HashMap<>(baseServerProps());
         configMap.put(RestServerConfig.LISTENERS_CONFIG, "https://localhost:8443");
 
-        server = new ConnectRestServer(null, null, configMap);
+        server = new ConnectRestServer(null, restClient, configMap);
         Assert.assertEquals("https://localhost:8443/", server.advertisedUrl().toString());
         server.stop();
 
@@ -142,7 +144,7 @@ public class ConnectRestServerTest {
         configMap.put(RestServerConfig.REST_ADVERTISED_HOST_NAME_CONFIG, "somehost");
         configMap.put(RestServerConfig.REST_ADVERTISED_PORT_CONFIG, "10000");
 
-        server = new ConnectRestServer(null, null, configMap);
+        server = new ConnectRestServer(null, restClient, configMap);
         Assert.assertEquals("http://somehost:10000/", server.advertisedUrl().toString());
         server.stop();
 
@@ -151,7 +153,7 @@ public class ConnectRestServerTest {
         configMap.put(RestServerConfig.LISTENERS_CONFIG, "https://encrypted-localhost:42069,http://plaintext-localhost:4761");
         configMap.put(RestServerConfig.REST_ADVERTISED_LISTENER_CONFIG, "http");
 
-        server = new ConnectRestServer(null, null, configMap);
+        server = new ConnectRestServer(null, restClient, configMap);
         Assert.assertEquals("http://plaintext-localhost:4761/", server.advertisedUrl().toString());
         server.stop();
     }
@@ -164,7 +166,7 @@ public class ConnectRestServerTest {
         doReturn(plugins).when(herder).plugins();
         expectEmptyRestExtensions();
 
-        server = new ConnectRestServer(null, null, configMap);
+        server = new ConnectRestServer(null, restClient, configMap);
         server.initializeServer();
         server.initializeResources(herder);
 
@@ -191,7 +193,7 @@ public class ConnectRestServerTest {
         expectEmptyRestExtensions();
         doReturn(Arrays.asList("a", "b")).when(herder).connectors();
 
-        server = new ConnectRestServer(null, null, configMap);
+        server = new ConnectRestServer(null, restClient, configMap);
         server.initializeServer();
         server.initializeResources(herder);
         URI serverUrl = server.advertisedUrl();
@@ -234,7 +236,7 @@ public class ConnectRestServerTest {
         expectEmptyRestExtensions();
         doReturn(Arrays.asList("a", "b")).when(herder).connectors();
 
-        server = new ConnectRestServer(null, null, configMap);
+        server = new ConnectRestServer(null, restClient, configMap);
         server.initializeServer();
         server.initializeResources(herder);
         HttpRequest request = new HttpGet("/connectors");
@@ -244,17 +246,20 @@ public class ConnectRestServerTest {
     }
 
     @Test
-    public void testLoggersEndpointWithDefaults() throws IOException {
+    public void testLoggerEndpointWithDefaults() throws IOException {
         Map<String, String> configMap = new HashMap<>(baseServerProps());
+
+        final String logger = "a.b.c.s.W";
+        final String loggingLevel = "INFO";
+        final long lastModified = 789052637671L;
 
         doReturn(KAFKA_CLUSTER_ID).when(herder).kafkaClusterId();
         doReturn(plugins).when(herder).plugins();
         expectEmptyRestExtensions();
+        doReturn(Collections.emptyList()).when(herder).setWorkerLoggerLevel(logger, loggingLevel);
+        doReturn(Collections.singletonMap(logger, new LoggerLevel(loggingLevel, lastModified))).when(herder).allLoggerLevels();
 
-        // create some loggers in the process
-        LoggerFactory.getLogger("a.b.c.s.W");
-
-        server = new ConnectRestServer(null, null, configMap);
+        server = new ConnectRestServer(null, restClient, configMap);
         server.initializeServer();
         server.initializeResources(herder);
 
@@ -262,14 +267,16 @@ public class ConnectRestServerTest {
 
         URI serverUrl = server.advertisedUrl();
 
-        executePut(serverUrl, "/admin/loggers/a.b.c.s.W", "{\"level\": \"INFO\"}");
+        executePut(serverUrl, "/admin/loggers/" + logger, "{\"level\": \"" + loggingLevel + "\"}");
 
         String responseStr = executeGet(serverUrl, "/admin/loggers");
-        Map<String, Map<String, ?>> loggers = mapper.readValue(responseStr, new TypeReference<Map<String, Map<String, ?>>>() {
-        });
-        assertNotNull("expected non null response for /admin/loggers" + prettyPrint(loggers), loggers);
-        assertTrue("expect at least 1 logger. instead found " + prettyPrint(loggers), loggers.size() >= 1);
-        assertEquals("expected to find logger a.b.c.s.W set to INFO level", loggers.get("a.b.c.s.W").get("level"), "INFO");
+
+        Map<String, Object> expectedLogger = new HashMap<>();
+        expectedLogger.put("level", loggingLevel);
+        expectedLogger.put("last_modified", lastModified);
+        Map<String, Map<String, Object>> expectedLoggers = Collections.singletonMap(logger, expectedLogger);
+        Map<String, Map<String, Object>> actualLoggers = mapper.readValue(responseStr, new TypeReference<Map<String, Map<String, Object>>>() { });
+        assertEquals(expectedLoggers, actualLoggers);
     }
 
     @Test
@@ -287,7 +294,7 @@ public class ConnectRestServerTest {
         LoggerFactory.getLogger("a.b.c.p.Y");
         LoggerFactory.getLogger("a.b.c.p.Z");
 
-        server = new ConnectRestServer(null, null, configMap);
+        server = new ConnectRestServer(null, restClient, configMap);
         server.initializeServer();
         server.initializeResources(herder);
 
@@ -309,7 +316,7 @@ public class ConnectRestServerTest {
         doReturn(plugins).when(herder).plugins();
         expectEmptyRestExtensions();
 
-        server = new ConnectRestServer(null, null, configMap);
+        server = new ConnectRestServer(null, restClient, configMap);
         server.initializeServer();
         server.initializeResources(herder);
 
@@ -328,7 +335,7 @@ public class ConnectRestServerTest {
         doReturn(plugins).when(herder).plugins();
         expectEmptyRestExtensions();
 
-        server = new ConnectRestServer(null, null, configMap);
+        server = new ConnectRestServer(null, restClient, configMap);
         server.initializeServer();
         server.initializeResources(herder);
 
@@ -374,7 +381,7 @@ public class ConnectRestServerTest {
         expectEmptyRestExtensions();
         doReturn(Arrays.asList("a", "b")).when(herder).connectors();
 
-        server = new ConnectRestServer(null, null, configMap);
+        server = new ConnectRestServer(null, restClient, configMap);
         server.initializeServer();
         server.initializeResources(herder);
         HttpRequest request = new HttpGet("/connectors");

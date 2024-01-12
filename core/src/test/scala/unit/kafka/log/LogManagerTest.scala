@@ -26,7 +26,8 @@ import org.apache.directory.api.util.FileUtils
 import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.errors.OffsetOutOfRangeException
 import org.apache.kafka.common.utils.Utils
-import org.apache.kafka.common.{KafkaException, TopicPartition}
+import org.apache.kafka.common.{DirectoryId, KafkaException, TopicPartition, Uuid}
+import org.apache.kafka.metadata.properties.{MetaProperties, MetaPropertiesEnsemble, MetaPropertiesVersion, PropertiesUtils}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.mockito.ArgumentMatchers.any
@@ -36,10 +37,11 @@ import org.mockito.Mockito.{doAnswer, doNothing, mock, never, spy, times, verify
 import java.io._
 import java.nio.file.Files
 import java.util.concurrent.{ConcurrentHashMap, ConcurrentMap, Future}
-import java.util.{Collections, Properties}
+import java.util.{Collections, Optional, OptionalLong, Properties}
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.apache.kafka.server.util.MockTime
 import org.apache.kafka.storage.internals.log.{FetchDataInfo, FetchIsolation, LogConfig, LogDirFailureChannel, ProducerStateManagerConfig, RemoteIndexCache}
+import org.apache.kafka.storage.internals.checkpoint.CleanShutdownFileHandler
 
 import scala.collection.{Map, mutable}
 import scala.collection.mutable.ArrayBuffer
@@ -50,12 +52,11 @@ class LogManagerTest {
 
   val time = new MockTime()
   val maxRollInterval = 100
-  val maxLogAgeMs = 10 * 60 * 1000
+  val maxLogAgeMs: Int = 10 * 60 * 1000
   val logProps = new Properties()
   logProps.put(TopicConfig.SEGMENT_BYTES_CONFIG, 1024: java.lang.Integer)
   logProps.put(TopicConfig.SEGMENT_INDEX_BYTES_CONFIG, 4096: java.lang.Integer)
   logProps.put(TopicConfig.RETENTION_MS_CONFIG, maxLogAgeMs: java.lang.Integer)
-  logProps.put(TopicConfig.MESSAGE_TIMESTAMP_DIFFERENCE_MAX_MS_CONFIG, Long.MaxValue.toString)
   val logConfig = new LogConfig(logProps)
   var logDir: File = _
   var logManager: LogManager = _
@@ -89,6 +90,54 @@ class LogManagerTest {
 
     val logFile = new File(logDir, name + "-0")
     assertTrue(logFile.exists)
+    log.appendAsLeader(TestUtils.singletonRecords("test".getBytes()), leaderEpoch = 0)
+  }
+
+  /**
+   * Test that getOrCreateLog on a non-existent log creates a new log in given logDirectory using directory id and that we can append to the new log.
+   */
+  @Test
+  def testCreateLogOnTargetedLogDirectory(): Unit = {
+    val targetedLogDirectoryId = DirectoryId.random()
+
+    val dirs: Seq[File] = Seq.fill(5)(TestUtils.tempDir())
+    writeMetaProperties(dirs.head)
+    writeMetaProperties(dirs(1), Optional.of(targetedLogDirectoryId))
+    writeMetaProperties(dirs(3), Optional.of(DirectoryId.random()))
+    writeMetaProperties(dirs(4))
+
+    logManager = createLogManager(dirs)
+
+    val log = logManager.getOrCreateLog(new TopicPartition(name, 0), topicId = None, targetLogDirectoryId = Some(targetedLogDirectoryId))
+    assertEquals(5, logManager.liveLogDirs.size)
+
+    val logFile = new File(dirs(1), name + "-0")
+    assertTrue(logFile.exists)
+    assertEquals(dirs(1).getAbsolutePath, logFile.getParent)
+    log.appendAsLeader(TestUtils.singletonRecords("test".getBytes()), leaderEpoch = 0)
+  }
+
+  /**
+   * Test that getOrCreateLog on a non-existent log creates a new log in the next selected logDirectory if the given directory id is DirectoryId.UNASSIGNED.
+   */
+  @Test
+  def testCreateLogWithTargetedLogDirectorySetAsUnassigned(): Unit = {
+    val log = logManager.getOrCreateLog(new TopicPartition(name, 0), topicId = None, targetLogDirectoryId = Some(DirectoryId.UNASSIGNED))
+    assertEquals(1, logManager.liveLogDirs.size)
+    val logFile = new File(logDir, name + "-0")
+    assertTrue(logFile.exists)
+    assertFalse(logManager.directoryId(logFile.getParent).equals(DirectoryId.UNASSIGNED))
+    log.appendAsLeader(TestUtils.singletonRecords("test".getBytes()), leaderEpoch = 0)
+  }
+
+  @Test
+  def testCreateLogWithTargetedLogDirectorySetAsUnknownWithoutAnyOfflineDirectories(): Unit = {
+
+    val log = logManager.getOrCreateLog(new TopicPartition(name, 0), topicId = None, targetLogDirectoryId = Some(DirectoryId.LOST))
+    assertEquals(1, logManager.liveLogDirs.size)
+    val logFile = new File(logDir, name + "-0")
+    assertTrue(logFile.exists)
+    assertFalse(logManager.directoryId(logFile.getParent).equals(DirectoryId.random()))
     log.appendAsLeader(TestUtils.singletonRecords("test".getBytes()), leaderEpoch = 0)
   }
 
@@ -128,13 +177,95 @@ class LogManagerTest {
       // This should cause log1.close() to fail during LogManger shutdown sequence.
       FileUtils.deleteDirectory(logFile1)
 
-      logManagerForTest.get.shutdown()
+      logManagerForTest.get.shutdown(3)
 
-      assertFalse(Files.exists(new File(logDir1, LogLoader.CleanShutdownFile).toPath))
-      assertTrue(Files.exists(new File(logDir2, LogLoader.CleanShutdownFile).toPath))
+      assertFalse(Files.exists(new File(logDir1, CleanShutdownFileHandler.CLEAN_SHUTDOWN_FILE_NAME).toPath))
+      assertTrue(Files.exists(new File(logDir2, CleanShutdownFileHandler.CLEAN_SHUTDOWN_FILE_NAME).toPath))
+      assertEquals(OptionalLong.empty(), logManagerForTest.get.readBrokerEpochFromCleanShutdownFiles())
     } finally {
       logManagerForTest.foreach(manager => manager.liveLogDirs.foreach(Utils.delete))
     }
+  }
+
+  @Test
+  def testCleanShutdownFileWithBrokerEpoch(): Unit = {
+    val logDir1 = TestUtils.tempDir()
+    val logDir2 = TestUtils.tempDir()
+    var logManagerForTest: Option[LogManager] = Option.empty
+    try {
+      logManagerForTest = Some(createLogManager(Seq(logDir1, logDir2)))
+
+      assertEquals(2, logManagerForTest.get.liveLogDirs.size)
+      logManagerForTest.get.startup(Set.empty)
+      logManagerForTest.get.getOrCreateLog(new TopicPartition(name, 0), topicId = None)
+      logManagerForTest.get.getOrCreateLog(new TopicPartition(name, 1), topicId = None)
+
+      val logFile1 = new File(logDir1, name + "-0")
+      assertTrue(logFile1.exists)
+      val logFile2 = new File(logDir2, name + "-1")
+      assertTrue(logFile2.exists)
+
+      logManagerForTest.get.shutdown(3)
+
+      assertTrue(Files.exists(new File(logDir1, CleanShutdownFileHandler.CLEAN_SHUTDOWN_FILE_NAME).toPath))
+      assertTrue(Files.exists(new File(logDir2, CleanShutdownFileHandler.CLEAN_SHUTDOWN_FILE_NAME).toPath))
+      assertEquals(OptionalLong.of(3L), logManagerForTest.get.readBrokerEpochFromCleanShutdownFiles())
+    } finally {
+      logManagerForTest.foreach(manager => manager.liveLogDirs.foreach(Utils.delete))
+    }
+  }
+
+  /*
+   * Test that LogManager.shutdown() doesn't create clean shutdown file for a log directory that has not completed
+   * recovery.
+   */
+  @Test
+  def testCleanShutdownFileWhenShutdownCalledBeforeStartupComplete(): Unit = {
+    // 1. create two logs under logDir
+    val topicPartition0 = new TopicPartition(name, 0)
+    val topicPartition1 = new TopicPartition(name, 1)
+    val log0 = logManager.getOrCreateLog(topicPartition0, topicId = None)
+    val log1 = logManager.getOrCreateLog(topicPartition1, topicId = None)
+    val logFile0 = new File(logDir, name + "-0")
+    val logFile1 = new File(logDir, name + "-1")
+    assertTrue(logFile0.exists)
+    assertTrue(logFile1.exists)
+
+    log0.appendAsLeader(TestUtils.singletonRecords("test1".getBytes()), leaderEpoch = 0)
+    log0.takeProducerSnapshot()
+
+    log1.appendAsLeader(TestUtils.singletonRecords("test1".getBytes()), leaderEpoch = 0)
+    log1.takeProducerSnapshot()
+
+    // 2. simulate unclean shutdown by deleting clean shutdown marker file
+    logManager.shutdown()
+    assertTrue(Files.deleteIfExists(new File(logDir, CleanShutdownFileHandler.CLEAN_SHUTDOWN_FILE_NAME).toPath))
+
+    // 3. create a new LogManager and start it in a different thread
+    @volatile var loadLogCalled = 0
+    logManager = spy(createLogManager())
+    doAnswer { invocation =>
+      // intercept LogManager.loadLog to sleep 5 seconds so that there is enough time to call LogManager.shutdown
+      // before LogManager.startup completes.
+      Thread.sleep(5000)
+      invocation.callRealMethod().asInstanceOf[UnifiedLog]
+      loadLogCalled = loadLogCalled + 1
+    }.when(logManager).loadLog(any[File], any[Boolean], any[Map[TopicPartition, Long]], any[Map[TopicPartition, Long]],
+      any[LogConfig], any[Map[String, LogConfig]], any[ConcurrentMap[String, Int]])
+
+    val t = new Thread() {
+      override def run(): Unit = { logManager.startup(Set.empty) }
+    }
+    t.start()
+
+    // 4. shutdown LogManager after the first log is loaded but before the second log is loaded
+    TestUtils.waitUntilTrue(() => loadLogCalled == 1,
+      "Timed out waiting for only the first log to be loaded")
+    logManager.shutdown()
+    logManager = null
+
+    // 5. verify that CleanShutdownFile is not created under logDir
+    assertFalse(Files.exists(new File(logDir, CleanShutdownFileHandler.CLEAN_SHUTDOWN_FILE_NAME).toPath))
   }
 
   /**
@@ -223,15 +354,15 @@ class LogManagerTest {
     assertTrue(log.numberOfSegments > 1, "There should be more than one segment now.")
     log.updateHighWatermark(log.logEndOffset)
 
-    log.logSegments.foreach(_.log.file.setLastModified(time.milliseconds))
+    log.logSegments.forEach(_.log.file.setLastModified(time.milliseconds))
 
     time.sleep(maxLogAgeMs + 1)
     assertEquals(1, log.numberOfSegments, "Now there should only be only one segment in the index.")
     time.sleep(log.config.fileDeleteDelayMs + 1)
 
-    log.logSegments.foreach(s => {
-      s.lazyOffsetIndex.get
-      s.lazyTimeIndex.get
+    log.logSegments.forEach(s => {
+      s.offsetIndex()
+      s.timeIndex()
     })
 
     // there should be a log file, two indexes, one producer snapshot, and the leader epoch checkpoint
@@ -268,7 +399,7 @@ class LogManagerTest {
     for (_ <- 0 until numMessages) {
       val set = TestUtils.singletonRecords("test".getBytes())
       val info = log.appendAsLeader(set, leaderEpoch = 0)
-      offset = info.firstOffset.get.messageOffset
+      offset = info.firstOffset
     }
 
     log.updateHighWatermark(log.logEndOffset)
@@ -322,7 +453,7 @@ class LogManagerTest {
     val numSegments = log.numberOfSegments
     assertTrue(log.numberOfSegments > 1, "There should be more than one segment now.")
 
-    log.logSegments.foreach(_.log.file.setLastModified(time.milliseconds))
+    log.logSegments.forEach(_.log.file.setLastModified(time.milliseconds))
 
     time.sleep(maxLogAgeMs + 1)
     assertEquals(numSegments, log.numberOfSegments, "number of segments shouldn't have changed")
@@ -459,12 +590,12 @@ class LogManagerTest {
 
     val removedLog = logManager.asyncDelete(new TopicPartition(name, 0)).get
     val removedSegment = removedLog.activeSegment
-    val indexFilesAfterDelete = Seq(removedSegment.lazyOffsetIndex.file, removedSegment.lazyTimeIndex.file,
+    val indexFilesAfterDelete = Seq(removedSegment.offsetIndexFile, removedSegment.timeIndexFile,
       removedSegment.txnIndex.file)
 
     assertEquals(new File(removedLog.dir, logName), removedSegment.log.file)
-    assertEquals(new File(removedLog.dir, indexName), removedSegment.lazyOffsetIndex.file)
-    assertEquals(new File(removedLog.dir, timeIndexName), removedSegment.lazyTimeIndex.file)
+    assertEquals(new File(removedLog.dir, indexName), removedSegment.offsetIndexFile)
+    assertEquals(new File(removedLog.dir, timeIndexName), removedSegment.timeIndexFile)
     assertEquals(new File(removedLog.dir, txnIndexName), removedSegment.txnIndex.file)
 
     // Try to detect the case where a new index type was added and we forgot to update the pointer
@@ -631,7 +762,7 @@ class LogManagerTest {
     val newProperties = new Properties()
     newProperties.put(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_DELETE)
 
-    spyLogManager.updateTopicConfig(topic, newProperties)
+    spyLogManager.updateTopicConfig(topic, newProperties, isRemoteLogStorageSystemEnabled = false)
 
     assertTrue(log0.config.delete)
     assertTrue(log1.config.delete)
@@ -691,7 +822,7 @@ class LogManagerTest {
     val capturedPath: ArgumentCaptor[String] = ArgumentCaptor.forClass(classOf[String])
 
     val expectedCallTimes = expectedParams.values.sum
-    verify(spyLogManager, times(expectedCallTimes)).decNumRemainingLogs(any[ConcurrentMap[String, Int]], capturedPath.capture());
+    verify(spyLogManager, times(expectedCallTimes)).decNumRemainingLogs(any[ConcurrentMap[String, Int]], capturedPath.capture())
 
     val paths = capturedPath.getAllValues
     expectedParams.foreach {
@@ -724,7 +855,7 @@ class LogManagerTest {
 
     // Since we'll update numRemainingSegments from totalSegments to 0 for each thread, so we need to add 1 here
     val expectedCallTimes = expectedParams.values.map( num => num + 1 ).sum
-    verify(mockMap, times(expectedCallTimes)).put(capturedThreadName.capture(), capturedNumRemainingSegments.capture());
+    verify(mockMap, times(expectedCallTimes)).put(capturedThreadName.capture(), capturedNumRemainingSegments.capture())
 
     // expected the end value is 0
     logSegmentMetrics.foreach { gauge => assertEquals(0, gauge.value()) }
@@ -747,7 +878,7 @@ class LogManagerTest {
   }
 
   private def verifyLogRecoverMetricsRemoved(spyLogManager: LogManager): Unit = {
-    val spyLogManagerClassName = spyLogManager.getClass().getSimpleName
+    val spyLogManagerClassName = spyLogManager.getClass.getSimpleName
     // get all `remainingLogsToRecover` metrics
     def logMetrics: mutable.Set[MetricName] = KafkaYammerMetrics.defaultRegistry.allMetrics.keySet.asScala
       .filter { metric => metric.getType == s"$spyLogManagerClassName" && metric.getName == "remainingLogsToRecover" }
@@ -957,5 +1088,36 @@ class LogManagerTest {
     assertFalse(LogManager.waitForAllToComplete(Seq(failure, failure), _ => failureCount += 1))
     assertEquals(8, invokedCount)
     assertEquals(4, failureCount)
+  }
+
+  @Test
+  def testLoadDirectoryIds(): Unit = {
+    val dirs: Seq[File] = Seq.fill(5)(TestUtils.tempDir())
+    writeMetaProperties(dirs.head)
+    writeMetaProperties(dirs(1), Optional.of(Uuid.fromString("ZwkGXjB0TvSF6mjVh6gO7Q")))
+    // no meta.properties on dirs(2)
+    writeMetaProperties(dirs(3), Optional.of(Uuid.fromString("kQfNPJ2FTHq_6Qlyyv6Jqg")))
+    writeMetaProperties(dirs(4))
+
+    logManager = createLogManager(dirs)
+
+    assertFalse(logManager.directoryId(dirs.head.getAbsolutePath).isDefined)
+    assertTrue(logManager.directoryId(dirs(1).getAbsolutePath).isDefined)
+    assertEquals(Some(Uuid.fromString("ZwkGXjB0TvSF6mjVh6gO7Q")), logManager.directoryId(dirs(1).getAbsolutePath))
+    assertEquals(None, logManager.directoryId(dirs(2).getAbsolutePath))
+    assertEquals(Some(Uuid.fromString("kQfNPJ2FTHq_6Qlyyv6Jqg")), logManager.directoryId(dirs(3).getAbsolutePath))
+    assertTrue(logManager.directoryId(dirs(3).getAbsolutePath).isDefined)
+    assertEquals(2, logManager.directoryIdsSet.size)
+  }
+
+  def writeMetaProperties(dir: File, directoryId: Optional[Uuid] = Optional.empty()): Unit = {
+    val metaProps = new MetaProperties.Builder().
+      setVersion(MetaPropertiesVersion.V0).
+      setClusterId("IVT1Seu3QjacxS7oBTKhDQ").
+      setNodeId(1).
+      setDirectoryId(directoryId).
+      build()
+    PropertiesUtils.writePropertiesFile(metaProps.toProperties,
+      new File(dir, MetaPropertiesEnsemble.META_PROPERTIES_NAME).getAbsolutePath, false)
   }
 }

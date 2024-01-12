@@ -17,7 +17,6 @@
 package kafka.coordinator.transaction
 
 import kafka.coordinator.transaction.ProducerIdManager.RetryBackoffMs
-import kafka.server.BrokerToControllerChannelManager
 import kafka.utils.TestUtils
 import kafka.zk.{KafkaZkClient, ProducerIdBlockZNode}
 import org.apache.kafka.common.KafkaException
@@ -26,6 +25,7 @@ import org.apache.kafka.common.message.AllocateProducerIdsResponseData
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.AllocateProducerIdsResponse
 import org.apache.kafka.common.utils.{MockTime, Time}
+import org.apache.kafka.server.NodeToControllerChannelManager
 import org.apache.kafka.server.common.ProducerIdsBlock
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
@@ -42,7 +42,7 @@ import scala.util.{Failure, Success}
 
 class ProducerIdManagerTest {
 
-  var brokerToController: BrokerToControllerChannelManager = mock(classOf[BrokerToControllerChannelManager])
+  var brokerToController: NodeToControllerChannelManager = mock(classOf[NodeToControllerChannelManager])
   val zkClient: KafkaZkClient = mock(classOf[KafkaZkClient])
 
   // Mutable test implementation that lets us easily set the idStart and error
@@ -195,6 +195,7 @@ class ProducerIdManagerTest {
     verifyNewBlockAndProducerId(manager, new ProducerIdsBlock(0, 0, 1), 0)
 
     manager.error = error
+    time.sleep(RetryBackoffMs)
     verifyFailure(manager)
 
     manager.error = Errors.NONE

@@ -18,10 +18,10 @@
 package kafka.server
 
 import java.net.{InetAddress, UnknownHostException}
-import java.util.Properties
+import java.util.{Collections, Properties}
 import DynamicConfig.Broker._
 import kafka.controller.KafkaController
-import kafka.log.LogManager
+import kafka.log.UnifiedLog
 import kafka.network.ConnectionQuotas
 import kafka.security.CredentialProvider
 import kafka.server.Constants._
@@ -33,6 +33,8 @@ import org.apache.kafka.common.config.internals.QuotaConfigs
 import org.apache.kafka.common.metrics.Quota
 import org.apache.kafka.common.metrics.Quota._
 import org.apache.kafka.common.utils.Sanitizer
+import org.apache.kafka.server.ClientMetricsManager
+import org.apache.kafka.server.config.ConfigEntityName
 import org.apache.kafka.storage.internals.log.{LogConfig, ThrottledReplicaListValidator}
 import org.apache.kafka.storage.internals.log.LogConfig.MessageFormatVersion
 
@@ -52,17 +54,46 @@ trait ConfigHandler {
   * The TopicConfigHandler will process topic config changes from ZooKeeper or the metadata log.
   * The callback provides the topic name and the full properties set.
   */
-class TopicConfigHandler(private val logManager: LogManager, kafkaConfig: KafkaConfig,
-                         val quotas: QuotaManagers, kafkaController: Option[KafkaController]) extends ConfigHandler with Logging  {
+class TopicConfigHandler(private val replicaManager: ReplicaManager,
+                         kafkaConfig: KafkaConfig,
+                         val quotas: QuotaManagers,
+                         kafkaController: Option[KafkaController]) extends ConfigHandler with Logging  {
 
-  def processConfigChanges(topic: String, topicConfig: Properties): Unit = {
+  private def updateLogConfig(topic: String,
+                              topicConfig: Properties): Unit = {
+    val logManager = replicaManager.logManager
     // Validate the configurations.
     val configNamesToExclude = excludedConfigs(topic, topicConfig)
     val props = new Properties()
     topicConfig.asScala.forKeyValue { (key, value) =>
       if (!configNamesToExclude.contains(key)) props.put(key, value)
     }
-    logManager.updateTopicConfig(topic, props)
+
+    val logs = logManager.logsByTopic(topic)
+    val wasRemoteLogEnabledBeforeUpdate = logs.exists(_.remoteLogEnabled())
+
+    logManager.updateTopicConfig(topic, props, kafkaConfig.isRemoteLogStorageSystemEnabled)
+    maybeBootstrapRemoteLogComponents(topic, logs, wasRemoteLogEnabledBeforeUpdate)
+  }
+
+  private[server] def maybeBootstrapRemoteLogComponents(topic: String,
+                                                        logs: Seq[UnifiedLog],
+                                                        wasRemoteLogEnabledBeforeUpdate: Boolean): Unit = {
+    val isRemoteLogEnabled = logs.exists(_.remoteLogEnabled())
+    // Topic configs gets updated incrementally. This check is added to prevent redundant updates.
+    if (!wasRemoteLogEnabledBeforeUpdate && isRemoteLogEnabled) {
+      val (leaderPartitions, followerPartitions) =
+        logs.flatMap(log => replicaManager.onlinePartition(log.topicPartition)).partition(_.isLeader)
+      val topicIds = Collections.singletonMap(topic, replicaManager.metadataCache.getTopicId(topic))
+      replicaManager.remoteLogManager.foreach(rlm =>
+        rlm.onLeadershipChange(leaderPartitions.toSet.asJava, followerPartitions.toSet.asJava, topicIds))
+    } else if (wasRemoteLogEnabledBeforeUpdate && !isRemoteLogEnabled) {
+      warn(s"Disabling remote log on the topic: $topic is not supported.")
+    }
+  }
+
+  def processConfigChanges(topic: String, topicConfig: Properties): Unit = {
+    updateLogConfig(topic, topicConfig)
 
     def updateThrottledList(prop: String, quotaManager: ReplicationQuotaManager): Unit = {
       if (topicConfig.containsKey(prop) && topicConfig.getProperty(prop).nonEmpty) {
@@ -177,7 +208,7 @@ class UserConfigHandler(private val quotaManagers: QuotaManagers, val credential
     val sanitizedUser = entities(0)
     val sanitizedClientId = if (entities.length == 3) Some(entities(2)) else None
     updateQuotaConfig(Some(sanitizedUser), sanitizedClientId, config)
-    if (sanitizedClientId.isEmpty && sanitizedUser != ConfigEntityName.Default)
+    if (sanitizedClientId.isEmpty && sanitizedUser != ConfigEntityName.DEFAULT)
       credentialProvider.updateCredentials(Sanitizer.desanitize(sanitizedUser), config)
   }
 }
@@ -187,7 +218,7 @@ class IpConfigHandler(private val connectionQuotas: ConnectionQuotas) extends Co
   def processConfigChanges(ip: String, config: Properties): Unit = {
     val ipConnectionRateQuota = Option(config.getProperty(QuotaConfigs.IP_CONNECTION_RATE_OVERRIDE_CONFIG)).map(_.toInt)
     val updatedIp = {
-      if (ip != ConfigEntityName.Default) {
+      if (ip != ConfigEntityName.DEFAULT) {
         try {
           Some(InetAddress.getByName(ip))
         } catch {
@@ -215,7 +246,7 @@ class BrokerConfigHandler(private val brokerConfig: KafkaConfig,
       else
         DefaultReplicationThrottledRate
     }
-    if (brokerId == ConfigEntityName.Default)
+    if (brokerId == ConfigEntityName.DEFAULT)
       brokerConfig.dynamicConfig.updateDefaultConfig(properties)
     else if (brokerConfig.brokerId == brokerId.trim.toInt) {
       brokerConfig.dynamicConfig.updateBrokerConfig(brokerConfig.brokerId, properties)
@@ -223,5 +254,14 @@ class BrokerConfigHandler(private val brokerConfig: KafkaConfig,
       quotaManagers.follower.updateQuota(upperBound(getOrDefault(FollowerReplicationThrottledRateProp).toDouble))
       quotaManagers.alterLogDirs.updateQuota(upperBound(getOrDefault(ReplicaAlterLogDirsIoMaxBytesPerSecondProp).toDouble))
     }
+  }
+}
+
+/**
+ * The ClientMetricsConfigHandler will process individual client metrics subscription changes.
+ */
+class ClientMetricsConfigHandler(private val clientMetricsManager: ClientMetricsManager) extends ConfigHandler with Logging {
+  def processConfigChanges(subscriptionGroupId: String, properties: Properties): Unit = {
+    clientMetricsManager.updateSubscription(subscriptionGroupId, properties)
   }
 }

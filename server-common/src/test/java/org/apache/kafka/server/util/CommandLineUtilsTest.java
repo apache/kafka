@@ -23,6 +23,7 @@ import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
 import java.util.List;
+import java.util.Optional;
 import java.util.Properties;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -223,5 +224,46 @@ public class CommandLineUtilsTest {
         assertEquals("400", props.get("iokey"));
         assertEquals("existing-string-3", props.get("sondkey"));
         assertEquals("500", props.get("iondkey"));
+    }
+
+    static private Properties createTestProps() {
+        Properties props = new Properties();
+        props.setProperty("bootstrap.servers", "this");
+        props.setProperty("bootstrap.controllers", "that");
+        return props;
+    }
+
+    @Test
+    public void testInitializeBootstrapPropertiesWithNoBootstraps() {
+        assertEquals("You must specify either --bootstrap-controller or --bootstrap-server.",
+            assertThrows(CommandLineUtils.InitializeBootstrapException.class,
+                () -> CommandLineUtils.initializeBootstrapProperties(createTestProps(),
+                    Optional.empty(), Optional.empty())).getMessage());
+    }
+
+    @Test
+    public void testInitializeBootstrapPropertiesWithBrokerBootstrap() {
+        Properties props = createTestProps();
+        CommandLineUtils.initializeBootstrapProperties(props,
+            Optional.of("127.0.0.2:9094"), Optional.empty());
+        assertEquals("127.0.0.2:9094", props.getProperty("bootstrap.servers"));
+        assertNull(props.getProperty("bootstrap.controllers"));
+    }
+
+    @Test
+    public void testInitializeBootstrapPropertiesWithControllerBootstrap() {
+        Properties props = createTestProps();
+        CommandLineUtils.initializeBootstrapProperties(props,
+            Optional.empty(), Optional.of("127.0.0.2:9094"));
+        assertNull(props.getProperty("bootstrap.servers"));
+        assertEquals("127.0.0.2:9094", props.getProperty("bootstrap.controllers"));
+    }
+
+    @Test
+    public void testInitializeBootstrapPropertiesWithBothBootstraps() {
+        assertEquals("You cannot specify both --bootstrap-controller and --bootstrap-server.",
+            assertThrows(CommandLineUtils.InitializeBootstrapException.class,
+                () -> CommandLineUtils.initializeBootstrapProperties(createTestProps(),
+                    Optional.of("127.0.0.2:9094"), Optional.of("127.0.0.3:9095"))).getMessage());
     }
 }

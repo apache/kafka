@@ -246,12 +246,11 @@ class LeaderEpochIntegrationTest extends QuorumTestHarness with Logging {
       val tp = new TopicPartition(topic, 0)
       val leo = broker.getLogManager.getLog(tp).get.logEndOffset
       result = result && leo > 0 && brokers.forall { broker =>
-        broker.getLogManager.getLog(tp).get.logSegments.iterator.forall { segment =>
+        broker.getLogManager.getLog(tp).get.logSegments.stream.allMatch { segment =>
           if (segment.read(minOffset, Integer.MAX_VALUE) == null) {
             false
           } else {
-            segment.read(minOffset, Integer.MAX_VALUE)
-              .records.batches().iterator().asScala.forall(
+            segment.read(minOffset, Integer.MAX_VALUE).records.batches().iterator().asScala.forall(
               expectedLeaderEpoch == _.partitionLeaderEpoch()
             )
           }

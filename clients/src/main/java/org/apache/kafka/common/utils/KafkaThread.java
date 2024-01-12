@@ -34,11 +34,13 @@ public class KafkaThread extends Thread {
         return new KafkaThread(name, runnable, false);
     }
 
+    @SuppressWarnings("this-escape")
     public KafkaThread(final String name, boolean daemon) {
         super(name);
         configureThread(name, daemon);
     }
 
+    @SuppressWarnings("this-escape")
     public KafkaThread(final String name, Runnable runnable, boolean daemon) {
         super(runnable, name);
         configureThread(name, daemon);

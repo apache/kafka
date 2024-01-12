@@ -65,6 +65,7 @@ public class MemoryRecordsBuilder implements AutoCloseable {
     private final int partitionLeaderEpoch;
     private final int writeLimit;
     private final int batchHeaderSizeInBytes;
+    private final long deleteHorizonMs;
 
     // Use a conservative estimate of the compression ratio. The producer overrides this using statistics
     // from previous batches before appending any records.
@@ -80,7 +81,6 @@ public class MemoryRecordsBuilder implements AutoCloseable {
     private int numRecords = 0;
     private float actualCompressionRatio = 1;
     private long maxTimestamp = RecordBatch.NO_TIMESTAMP;
-    private long deleteHorizonMs;
     private long offsetOfMaxTimestamp = -1;
     private Long lastOffset = null;
     private Long baseTimestamp = null;
@@ -224,7 +224,7 @@ public class MemoryRecordsBuilder implements AutoCloseable {
         return isTransactional;
     }
 
-    public boolean hasDeleteHorizonMs() {
+    public final boolean hasDeleteHorizonMs() {
         return magic >= RecordBatch.MAGIC_VALUE_V2 && deleteHorizonMs >= 0L;
     }
 
@@ -438,7 +438,7 @@ public class MemoryRecordsBuilder implements AutoCloseable {
                 throw new IllegalArgumentException("Control records can only be appended to control batches");
 
             if (lastOffset != null && offset <= lastOffset)
-                throw new IllegalArgumentException(String.format("Illegal offset %s following previous offset %s " +
+                throw new IllegalArgumentException(String.format("Illegal offset %d following previous offset %d " +
                         "(Offsets must increase monotonically).", offset, lastOffset));
 
             if (timestamp < 0 && timestamp != RecordBatch.NO_TIMESTAMP)

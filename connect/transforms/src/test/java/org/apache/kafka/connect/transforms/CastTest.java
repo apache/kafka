@@ -23,6 +23,7 @@ import java.util.List;
 import java.util.concurrent.TimeUnit;
 
 import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.connect.data.Decimal;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.Schema.Type;
@@ -571,6 +572,14 @@ public class CastTest {
         assertEquals(true, ((Map<String, Object>) transformed.value()).get("float64"));
         assertEquals((byte) 1, ((Map<String, Object>) transformed.value()).get("boolean"));
         assertEquals(42, ((Map<String, Object>) transformed.value()).get("string"));
+    }
+
+    @Test
+    public void testCastVersionRetrievedFromAppInfoParser() {
+        assertEquals(AppInfoParser.getVersion(), xformKey.version());
+        assertEquals(AppInfoParser.getVersion(), xformValue.version());
+
+        assertEquals(xformKey.version(), xformValue.version());
     }
 
 }

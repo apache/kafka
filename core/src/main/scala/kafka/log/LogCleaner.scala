@@ -34,7 +34,7 @@ import org.apache.kafka.common.record._
 import org.apache.kafka.common.utils.{BufferSupplier, Time}
 import org.apache.kafka.server.metrics.KafkaMetricsGroup
 import org.apache.kafka.server.util.ShutdownableThread
-import org.apache.kafka.storage.internals.log.{AbortedTxn, CleanerConfig, LastRecord, LogDirFailureChannel, OffsetMap, SkimpyOffsetMap, TransactionIndex}
+import org.apache.kafka.storage.internals.log.{AbortedTxn, CleanerConfig, LastRecord, LogDirFailureChannel, LogSegment, LogSegmentOffsetOverflowException, OffsetMap, SkimpyOffsetMap, TransactionIndex}
 
 import scala.jdk.CollectionConverters._
 import scala.collection.mutable.ListBuffer
@@ -342,7 +342,7 @@ class LogCleaner(initialConfig: CleanerConfig,
    */
   private[log] class CleanerThread(threadId: Int)
     extends ShutdownableThread(s"kafka-log-cleaner-thread-$threadId", false) with Logging {
-    protected override def loggerName = classOf[LogCleaner].getName
+    protected override def loggerName: String = classOf[LogCleaner].getName
 
     this.logIdent = logPrefix
 
@@ -498,7 +498,7 @@ class LogCleaner(initialConfig: CleanerConfig,
 }
 
 object LogCleaner {
-  val ReconfigurableConfigs = Set(
+  val ReconfigurableConfigs: Set[String] = Set(
     KafkaConfig.LogCleanerThreadsProp,
     KafkaConfig.LogCleanerDedupeBufferSizeProp,
     KafkaConfig.LogCleanerDedupeBufferLoadFactorProp,
@@ -554,7 +554,7 @@ private[log] class Cleaner(val id: Int,
                            time: Time,
                            checkDone: TopicPartition => Unit) extends Logging {
 
-  protected override def loggerName = classOf[LogCleaner].getName
+  protected override def loggerName: String = classOf[LogCleaner].getName
 
   this.logIdent = s"Cleaner $id: "
 
@@ -696,7 +696,7 @@ private[log] class Cleaner(val id: Int,
 
       // update the modification date to retain the last modified date of the original files
       val modified = segments.last.lastModified
-      cleaned.lastModified = modified
+      cleaned.setLastModified(modified)
 
       // swap in new segment
       info(s"Swapping in cleaned segment $cleaned for segment(s) $segments in log $log")
@@ -747,7 +747,7 @@ private[log] class Cleaner(val id: Int,
         val canDiscardBatch = shouldDiscardBatch(batch, transactionMetadata)
 
         if (batch.isControlBatch)
-          discardBatchRecords = canDiscardBatch && batch.deleteHorizonMs().isPresent && batch.deleteHorizonMs().getAsLong <= currentTime
+          discardBatchRecords = canDiscardBatch && batch.deleteHorizonMs().isPresent && batch.deleteHorizonMs().getAsLong <= this.currentTime
         else
           discardBatchRecords = canDiscardBatch
 
@@ -784,7 +784,7 @@ private[log] class Cleaner(val id: Int,
         else if (batch.isControlBatch)
           true
         else
-          Cleaner.this.shouldRetainRecord(map, retainLegacyDeletesAndTxnMarkers, batch, record, stats, currentTime = currentTime)
+          Cleaner.this.shouldRetainRecord(map, retainLegacyDeletesAndTxnMarkers, batch, record, stats, currentTime = this.currentTime)
       }
     }
 
@@ -812,10 +812,7 @@ private[log] class Cleaner(val id: Int,
         val retained = MemoryRecords.readableRecords(outputBuffer)
         // it's OK not to hold the Log's lock in this case, because this segment is only accessed by other threads
         // after `Log.replaceSegments` (which acquires the lock) is called
-        dest.append(largestOffset = result.maxOffset,
-          largestTimestamp = result.maxTimestamp,
-          shallowOffsetOfMaxTimestamp = result.shallowOffsetOfMaxTimestamp,
-          records = retained)
+        dest.append(result.maxOffset, result.maxTimestamp, result.shallowOffsetOfMaxTimestamp, retained)
         throttler.maybeThrottle(outputBuffer.limit())
       }
 
@@ -1219,10 +1216,10 @@ private case class LogToClean(topicPartition: TopicPartition,
                               firstDirtyOffset: Long,
                               uncleanableOffset: Long,
                               needCompactionNow: Boolean = false) extends Ordered[LogToClean] {
-  val cleanBytes = log.logSegments(-1, firstDirtyOffset).map(_.size.toLong).sum
+  val cleanBytes: Long = log.logSegments(-1, firstDirtyOffset).map(_.size.toLong).sum
   val (firstUncleanableOffset, cleanableBytes) = LogCleanerManager.calculateCleanableBytes(log, firstDirtyOffset, uncleanableOffset)
-  val totalBytes = cleanBytes + cleanableBytes
-  val cleanableRatio = cleanableBytes / totalBytes.toDouble
+  val totalBytes: Long = cleanBytes + cleanableBytes
+  val cleanableRatio: Double = cleanableBytes / totalBytes.toDouble
   override def compare(that: LogToClean): Int = math.signum(this.cleanableRatio - that.cleanableRatio).toInt
 }
 

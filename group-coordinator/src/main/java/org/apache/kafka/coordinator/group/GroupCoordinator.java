@@ -17,6 +17,7 @@
 package org.apache.kafka.coordinator.group;
 
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.message.ConsumerGroupDescribeResponseData;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatRequestData;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatResponseData;
 import org.apache.kafka.common.message.DeleteGroupsResponseData;
@@ -25,12 +26,12 @@ import org.apache.kafka.common.message.HeartbeatRequestData;
 import org.apache.kafka.common.message.HeartbeatResponseData;
 import org.apache.kafka.common.message.JoinGroupRequestData;
 import org.apache.kafka.common.message.JoinGroupResponseData;
-import org.apache.kafka.common.message.OffsetCommitRequestData;
-import org.apache.kafka.common.message.OffsetCommitResponseData;
 import org.apache.kafka.common.message.LeaveGroupRequestData;
 import org.apache.kafka.common.message.LeaveGroupResponseData;
 import org.apache.kafka.common.message.ListGroupsRequestData;
 import org.apache.kafka.common.message.ListGroupsResponseData;
+import org.apache.kafka.common.message.OffsetCommitRequestData;
+import org.apache.kafka.common.message.OffsetCommitResponseData;
 import org.apache.kafka.common.message.OffsetDeleteRequestData;
 import org.apache.kafka.common.message.OffsetDeleteResponseData;
 import org.apache.kafka.common.message.OffsetFetchRequestData;
@@ -45,6 +46,7 @@ import org.apache.kafka.common.utils.BufferSupplier;
 import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
 
+import java.time.Duration;
 import java.util.List;
 import java.util.OptionalInt;
 import java.util.Properties;
@@ -62,7 +64,8 @@ public interface GroupCoordinator {
      * @param context           The request context.
      * @param request           The ConsumerGroupHeartbeatResponse data.
      *
-     * @return A future yielding the response or an exception.
+     * @return  A future yielding the response.
+     *          The error code(s) of the response are set to indicate the error(s) occurred during the execution.
      */
     CompletableFuture<ConsumerGroupHeartbeatResponseData> consumerGroupHeartbeat(
         RequestContext context,
@@ -70,13 +73,14 @@ public interface GroupCoordinator {
     );
 
     /**
-     * Join a Generic Group.
+     * Join a Classic Group.
      *
      * @param context           The request context.
      * @param request           The JoinGroupRequest data.
      * @param bufferSupplier    The buffer supplier tight to the request thread.
      *
-     * @return A future yielding the response or an exception.
+     * @return  A future yielding the response.
+     *          The error code(s) of the response are set to indicate the error(s) occurred during the execution.
      */
     CompletableFuture<JoinGroupResponseData> joinGroup(
         RequestContext context,
@@ -85,13 +89,14 @@ public interface GroupCoordinator {
     );
 
     /**
-     * Sync a Generic Group.
+     * Sync a Classic Group.
      *
      * @param context           The coordinator request context.
      * @param request           The SyncGroupRequest data.
      * @param bufferSupplier    The buffer supplier tight to the request thread.
      *
-     * @return A future yielding the response or an exception.
+     * @return  A future yielding the response.
+     *          The error code(s) of the response are set to indicate the error(s) occurred during the execution.
      */
     CompletableFuture<SyncGroupResponseData> syncGroup(
         RequestContext context,
@@ -100,12 +105,13 @@ public interface GroupCoordinator {
     );
 
     /**
-     * Heartbeat to a Generic Group.
+     * Heartbeat to a Classic Group.
      *
      * @param context           The coordinator request context.
      * @param request           The HeartbeatRequest data.
      *
-     * @return A future yielding the response or an exception.
+     * @return  A future yielding the response.
+     *          The error code(s) of the response are set to indicate the error(s) occurred during the execution.
      */
     CompletableFuture<HeartbeatResponseData> heartbeat(
         RequestContext context,
@@ -113,12 +119,13 @@ public interface GroupCoordinator {
     );
 
     /**
-     * Leave a Generic Group.
+     * Leave a Classic Group.
      *
      * @param context           The coordinator request context.
      * @param request           The LeaveGroupRequest data.
      *
-     * @return A future yielding the response or an exception.
+     * @return  A future yielding the response.
+     *          The error code(s) of the response are set to indicate the error(s) occurred during the execution.
      */
     CompletableFuture<LeaveGroupResponseData> leaveGroup(
         RequestContext context,
@@ -131,7 +138,8 @@ public interface GroupCoordinator {
      * @param context           The coordinator request context.
      * @param request           The ListGroupRequest data.
      *
-     * @return A future yielding the response or an exception.
+     * @return  A future yielding the response.
+     *          The error code(s) of the response are set to indicate the error(s) occurred during the execution.
      */
     CompletableFuture<ListGroupsResponseData> listGroups(
         RequestContext context,
@@ -144,9 +152,23 @@ public interface GroupCoordinator {
      * @param context           The coordinator request context.
      * @param groupIds          The group ids.
      *
-     * @return A future yielding the results or an exception.
+     * @return  A future yielding the results.
+     *          The error codes of the results are set to indicate the errors occurred during the execution.
      */
     CompletableFuture<List<DescribeGroupsResponseData.DescribedGroup>> describeGroups(
+        RequestContext context,
+        List<String> groupIds
+    );
+
+    /**
+     * Describe consumer groups.
+     *
+     * @param context           The coordinator request context.
+     * @param groupIds          The group ids.
+     *
+     * @return A future yielding the results or an exception.
+     */
+    CompletableFuture<List<ConsumerGroupDescribeResponseData.DescribedGroup>> consumerGroupDescribe(
         RequestContext context,
         List<String> groupIds
     );
@@ -158,7 +180,8 @@ public interface GroupCoordinator {
      * @param groupIds          The group ids.
      * @param bufferSupplier    The buffer supplier tight to the request thread.
      *
-     * @return A future yielding the results or an exception.
+     * @return  A future yielding the results.
+     *          The error codes of the results are set to indicate the errors occurred during the execution.
      */
     CompletableFuture<DeleteGroupsResponseData.DeletableGroupResultCollection> deleteGroups(
         RequestContext context,
@@ -170,15 +193,14 @@ public interface GroupCoordinator {
      * Fetch offsets for a given Group.
      *
      * @param context           The request context.
-     * @param groupId           The group id.
-     * @param topics            The topics to fetch the offsets for.
+     * @param request           The OffsetFetchRequestGroup request.
      *
-     * @return A future yielding the results or an exception.
+     * @return  A future yielding the results.
+     *          The error codes of the results are set to indicate the errors occurred during the execution.
      */
-    CompletableFuture<List<OffsetFetchResponseData.OffsetFetchResponseTopics>> fetchOffsets(
+    CompletableFuture<OffsetFetchResponseData.OffsetFetchResponseGroup> fetchOffsets(
         RequestContext context,
-        String groupId,
-        List<OffsetFetchRequestData.OffsetFetchRequestTopics> topics,
+        OffsetFetchRequestData.OffsetFetchRequestGroup request,
         boolean requireStable
     );
 
@@ -186,13 +208,14 @@ public interface GroupCoordinator {
      * Fetch all offsets for a given Group.
      *
      * @param context           The request context.
-     * @param groupId           The group id.
+     * @param request           The OffsetFetchRequestGroup request.
      *
-     * @return A future yielding the results or an exception.
+     * @return  A future yielding the results.
+     *          The error codes of the results are set to indicate the errors occurred during the execution.
      */
-    CompletableFuture<List<OffsetFetchResponseData.OffsetFetchResponseTopics>> fetchAllOffsets(
+    CompletableFuture<OffsetFetchResponseData.OffsetFetchResponseGroup> fetchAllOffsets(
         RequestContext context,
-        String groupId,
+        OffsetFetchRequestData.OffsetFetchRequestGroup request,
         boolean requireStable
     );
 
@@ -203,7 +226,8 @@ public interface GroupCoordinator {
      * @param request           The OffsetCommitRequest data.
      * @param bufferSupplier    The buffer supplier tight to the request thread.
      *
-     * @return A future yielding the response or an exception.
+     * @return  A future yielding the response.
+     *          The error code(s) of the response are set to indicate the error(s) occurred during the execution.
      */
     CompletableFuture<OffsetCommitResponseData> commitOffsets(
         RequestContext context,
@@ -218,7 +242,8 @@ public interface GroupCoordinator {
      * @param request           The TnxOffsetCommitRequest data.
      * @param bufferSupplier    The buffer supplier tight to the request thread.
      *
-     * @return A future yielding the response or an exception.
+     * @return  A future yielding the response.
+     *          The error code(s) of the response are set to indicate the error(s) occurred during the execution.
      */
     CompletableFuture<TxnOffsetCommitResponseData> commitTransactionalOffsets(
         RequestContext context,
@@ -233,12 +258,36 @@ public interface GroupCoordinator {
      * @param request           The OffsetDeleteRequest data.
      * @param bufferSupplier    The buffer supplier tight to the request thread.
      *
-     * @return A future yielding the response or an exception.
+     * @return  A future yielding the response.
+     *          The error code(s) of the response are set to indicate the error(s) occurred during the execution.
      */
     CompletableFuture<OffsetDeleteResponseData> deleteOffsets(
         RequestContext context,
         OffsetDeleteRequestData request,
         BufferSupplier bufferSupplier
+    );
+
+    /**
+     * Complete a transaction. This is called when the WriteTxnMarkers API is called
+     * by the Transaction Coordinator in order to write the markers to the
+     * __consumer_offsets partitions.
+     *
+     * @param tp                The topic-partition.
+     * @param producerId        The producer id.
+     * @param producerEpoch     The producer epoch.
+     * @param coordinatorEpoch  The epoch of the transaction coordinator.
+     * @param result            The transaction result.
+     * @param timeout           The operation timeout.
+     *
+     * @return A future yielding the result.
+     */
+    CompletableFuture<Void> completeTransaction(
+        TopicPartition tp,
+        long producerId,
+        short producerEpoch,
+        int coordinatorEpoch,
+        TransactionResult result,
+        Duration timeout
     );
 
     /**

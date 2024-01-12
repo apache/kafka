@@ -26,6 +26,8 @@ import org.apache.kafka.streams.state.internals.metrics.RocksDBMetricsRecorder;
 import org.apache.kafka.test.TestUtils;
 import org.junit.Before;
 import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.mockito.junit.MockitoJUnitRunner;
 
 import java.io.File;
 import java.util.HashSet;
@@ -34,15 +36,15 @@ import java.util.Set;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.streams.StreamsConfig.METRICS_RECORDING_LEVEL_CONFIG;
-import static org.easymock.EasyMock.expect;
-import static org.easymock.EasyMock.mock;
-import static org.easymock.EasyMock.replay;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.not;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
+@RunWith(MockitoJUnitRunner.StrictStubs.class)
 public class TimestampedSegmentTest {
 
     private final RocksDBMetricsRecorder metricsRecorder =
@@ -63,9 +65,8 @@ public class TimestampedSegmentTest {
         final File directory = new File(directoryPath);
 
         final ProcessorContext mockContext = mock(ProcessorContext.class);
-        expect(mockContext.appConfigs()).andReturn(mkMap(mkEntry(METRICS_RECORDING_LEVEL_CONFIG, "INFO")));
-        expect(mockContext.stateDir()).andReturn(directory);
-        replay(mockContext);
+        when(mockContext.appConfigs()).thenReturn(mkMap(mkEntry(METRICS_RECORDING_LEVEL_CONFIG, "INFO")));
+        when(mockContext.stateDir()).thenReturn(directory);
 
         segment.openDB(mockContext.appConfigs(), mockContext.stateDir());
 

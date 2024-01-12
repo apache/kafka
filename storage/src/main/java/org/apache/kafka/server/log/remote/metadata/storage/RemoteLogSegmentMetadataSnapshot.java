@@ -20,6 +20,7 @@ import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.server.log.remote.storage.RemoteLogMetadata;
 import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentMetadata;
+import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentMetadata.CustomMetadata;
 import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentState;
 
 import java.util.Collections;
@@ -27,6 +28,7 @@ import java.util.Map;
 import java.util.NavigableMap;
 import java.util.Objects;
 import java.util.TreeMap;
+import java.util.Optional;
 
 /**
  * This class represents the entry containing the metadata about a remote log segment. This is similar to
@@ -69,6 +71,11 @@ public class RemoteLogSegmentMetadataSnapshot extends RemoteLogMetadata {
     private final int segmentSizeInBytes;
 
     /**
+     * Custom metadata.
+     */
+    private final Optional<CustomMetadata> customMetadata;
+
+    /**
      * It indicates the state in which the action is executed on this segment.
      */
     private final RemoteLogSegmentState state;
@@ -79,13 +86,14 @@ public class RemoteLogSegmentMetadataSnapshot extends RemoteLogMetadata {
      * {@code segmentLeaderEpochs} can not be empty. If all the records in this segment belong to the same leader epoch
      * then it should have an entry with epoch mapping to start-offset of this segment.
      *
-     * @param segmentId                  Universally unique remote log segment id.
+     * @param segmentId           Universally unique remote log segment id.
      * @param startOffset         Start offset of this segment (inclusive).
      * @param endOffset           End offset of this segment (inclusive).
      * @param maxTimestampMs      Maximum timestamp in milliseconds in this segment.
      * @param brokerId            Broker id from which this event is generated.
      * @param eventTimestampMs    Epoch time in milliseconds at which the remote log segment is copied to the remote tier storage.
      * @param segmentSizeInBytes  Size of this segment in bytes.
+     * @param customMetadata      Custom metadata.
      * @param state               State of the respective segment of remoteLogSegmentId.
      * @param segmentLeaderEpochs leader epochs occurred within this segment.
      */
@@ -96,6 +104,7 @@ public class RemoteLogSegmentMetadataSnapshot extends RemoteLogMetadata {
                                             int brokerId,
                                             long eventTimestampMs,
                                             int segmentSizeInBytes,
+                                            Optional<CustomMetadata> customMetadata,
                                             RemoteLogSegmentState state,
                                             Map<Integer, Long> segmentLeaderEpochs) {
         super(brokerId, eventTimestampMs);
@@ -106,6 +115,7 @@ public class RemoteLogSegmentMetadataSnapshot extends RemoteLogMetadata {
         this.endOffset = endOffset;
         this.maxTimestampMs = maxTimestampMs;
         this.segmentSizeInBytes = segmentSizeInBytes;
+        this.customMetadata = Objects.requireNonNull(customMetadata, "customMetadata can not be null");
 
         if (segmentLeaderEpochs == null || segmentLeaderEpochs.isEmpty()) {
             throw new IllegalArgumentException("segmentLeaderEpochs can not be null or empty");
@@ -117,7 +127,8 @@ public class RemoteLogSegmentMetadataSnapshot extends RemoteLogMetadata {
     public static RemoteLogSegmentMetadataSnapshot create(RemoteLogSegmentMetadata metadata) {
         return new RemoteLogSegmentMetadataSnapshot(metadata.remoteLogSegmentId().id(), metadata.startOffset(), metadata.endOffset(),
                                                     metadata.maxTimestampMs(), metadata.brokerId(), metadata.eventTimestampMs(),
-                                                    metadata.segmentSizeInBytes(), metadata.state(), metadata.segmentLeaderEpochs());
+                                                    metadata.segmentSizeInBytes(), metadata.customMetadata(), metadata.state(), metadata.segmentLeaderEpochs()
+        );
     }
 
     /**
@@ -163,6 +174,13 @@ public class RemoteLogSegmentMetadataSnapshot extends RemoteLogMetadata {
     }
 
     /**
+     * @return Custom metadata.
+     */
+    public Optional<CustomMetadata> customMetadata() {
+        return customMetadata;
+    }
+
+    /**
      * Returns the current state of this remote log segment. It can be any of the below
      * <ul>
      *     {@link RemoteLogSegmentState#COPY_SEGMENT_STARTED}
@@ -185,13 +203,19 @@ public class RemoteLogSegmentMetadataSnapshot extends RemoteLogMetadata {
         if (this == o) return true;
         if (!(o instanceof RemoteLogSegmentMetadataSnapshot)) return false;
         RemoteLogSegmentMetadataSnapshot that = (RemoteLogSegmentMetadataSnapshot) o;
-        return startOffset == that.startOffset && endOffset == that.endOffset && maxTimestampMs == that.maxTimestampMs && segmentSizeInBytes == that.segmentSizeInBytes && Objects.equals(
-                segmentId, that.segmentId) && Objects.equals(segmentLeaderEpochs, that.segmentLeaderEpochs) && state == that.state;
+        return startOffset == that.startOffset
+                && endOffset == that.endOffset
+                && maxTimestampMs == that.maxTimestampMs
+                && segmentSizeInBytes == that.segmentSizeInBytes
+                && Objects.equals(customMetadata, that.customMetadata)
+                && Objects.equals(segmentId, that.segmentId)
+                && Objects.equals(segmentLeaderEpochs, that.segmentLeaderEpochs)
+                && state == that.state;
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(segmentId, startOffset, endOffset, maxTimestampMs, segmentLeaderEpochs, segmentSizeInBytes, state);
+        return Objects.hash(segmentId, startOffset, endOffset, maxTimestampMs, segmentLeaderEpochs, segmentSizeInBytes, customMetadata, state);
     }
 
     @Override
@@ -203,6 +227,7 @@ public class RemoteLogSegmentMetadataSnapshot extends RemoteLogMetadata {
                 ", maxTimestampMs=" + maxTimestampMs +
                 ", segmentLeaderEpochs=" + segmentLeaderEpochs +
                 ", segmentSizeInBytes=" + segmentSizeInBytes +
+                ", customMetadata=" + customMetadata +
                 ", state=" + state +
                 '}';
     }

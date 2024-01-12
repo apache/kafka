@@ -25,10 +25,8 @@ import kafka.server.SharedServer;
 import kafka.server.KafkaConfig;
 import kafka.server.KafkaConfig$;
 import kafka.server.KafkaRaftServer;
-import kafka.server.MetaProperties;
-import kafka.tools.StorageTool;
-import kafka.utils.Logging;
 import org.apache.kafka.clients.CommonClientConfigs;
+import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.network.ListenerName;
@@ -36,10 +34,11 @@ import org.apache.kafka.common.utils.ThreadUtils;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.controller.Controller;
-import org.apache.kafka.metadata.bootstrap.BootstrapMetadata;
+import org.apache.kafka.metadata.bootstrap.BootstrapDirectory;
+import org.apache.kafka.metadata.properties.MetaProperties;
+import org.apache.kafka.metadata.properties.MetaPropertiesEnsemble;
 import org.apache.kafka.raft.RaftConfig;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
-import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.server.fault.FaultHandler;
 import org.apache.kafka.server.fault.MockFaultHandler;
 import org.apache.kafka.test.TestUtils;
@@ -47,12 +46,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.event.Level;
 import scala.Option;
-import scala.collection.JavaConverters;
 
-import java.io.ByteArrayOutputStream;
 import java.io.File;
-import java.io.IOException;
-import java.io.PrintStream;
 import java.net.InetSocketAddress;
 import java.nio.file.Files;
 import java.nio.file.Paths;
@@ -64,6 +59,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.Optional;
 import java.util.Properties;
 import java.util.TreeMap;
 import java.util.concurrent.CompletableFuture;
@@ -72,8 +68,10 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
-import java.util.function.Consumer;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
+
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 
 @SuppressWarnings("deprecation") // Needed for Scala 2.12 compatibility
@@ -169,10 +167,14 @@ public class KafkaClusterTestKit implements AutoCloseable {
                 props.put(KafkaConfig$.MODULE$.MetadataLogDirProp(),
                         node.metadataDirectory());
             }
-            // Set the log.dirs according to the broker node setting (if there is a broker node)
             if (brokerNode != null) {
+                // Set the log.dirs according to the broker node setting (if there is a broker node)
                 props.put(KafkaConfig$.MODULE$.LogDirsProp(),
                         String.join(",", brokerNode.logDataDirectories()));
+            } else {
+                // Set log.dirs equal to the metadata directory if there is just a controller.
+                props.put(KafkaConfig$.MODULE$.LogDirsProp(),
+                    controllerNode.metadataDirectory());
             }
             props.put(KafkaConfig$.MODULE$.ListenerSecurityProtocolMapProp(),
                     "EXTERNAL:PLAINTEXT,CONTROLLER:PLAINTEXT");
@@ -196,6 +198,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
             if (brokerNode != null) {
                 props.putAll(brokerNode.propertyOverrides());
             }
+            props.putIfAbsent(KafkaConfig$.MODULE$.UnstableMetadataVersionsEnableProp(), "true");
             return new KafkaConfig(props, false, Option.empty());
         }
 
@@ -215,16 +218,13 @@ public class KafkaClusterTestKit implements AutoCloseable {
             File baseDirectory = null;
 
             try {
-                baseDirectory = TestUtils.tempDirectory();
-                nodes = nodes.copyWithAbsolutePaths(baseDirectory.getAbsolutePath());
+                baseDirectory = new File(nodes.baseDirectory());
                 executorService = Executors.newFixedThreadPool(numOfExecutorThreads,
                     ThreadUtils.createThreadFactory("kafka-cluster-test-kit-executor-%d", false));
                 for (ControllerNode node : nodes.controllerNodes().values()) {
                     setupNodeDirectories(baseDirectory, node.metadataDirectory(), Collections.emptyList());
-                    BootstrapMetadata bootstrapMetadata = BootstrapMetadata.
-                        fromVersion(nodes.bootstrapMetadataVersion(), "testkit");
                     SharedServer sharedServer = new SharedServer(createNodeConfig(node),
-                            MetaProperties.apply(nodes.clusterId().toString(), node.id()),
+                            node.initialMetaPropertiesEnsemble(),
                             Time.SYSTEM,
                             new Metrics(),
                             connectFutureManager.future,
@@ -234,7 +234,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
                         controller = new ControllerServer(
                                 sharedServer,
                                 KafkaRaftServer.configSchema(),
-                                bootstrapMetadata);
+                                nodes.bootstrapMetadata());
                     } catch (Throwable e) {
                         log.error("Error creating controller {}", node.id(), e);
                         Utils.swallow(log, Level.WARN, "sharedServer.stopForController error", () -> sharedServer.stopForController());
@@ -254,16 +254,14 @@ public class KafkaClusterTestKit implements AutoCloseable {
                 for (BrokerNode node : nodes.brokerNodes().values()) {
                     SharedServer sharedServer = jointServers.computeIfAbsent(node.id(),
                         id -> new SharedServer(createNodeConfig(node),
-                            MetaProperties.apply(nodes.clusterId().toString(), id),
+                            node.initialMetaPropertiesEnsemble(),
                             Time.SYSTEM,
                             new Metrics(),
                             connectFutureManager.future,
                             faultHandlerFactory));
                     BrokerServer broker = null;
                     try {
-                        broker = new BrokerServer(
-                                sharedServer,
-                                JavaConverters.asScalaBuffer(Collections.<String>emptyList()).toSeq());
+                        broker = new BrokerServer(sharedServer);
                     } catch (Throwable e) {
                         log.error("Error creating broker {}", node.id(), e);
                         Utils.swallow(log, Level.WARN, "sharedServer.stopForBroker error", () -> sharedServer.stopForBroker());
@@ -358,19 +356,17 @@ public class KafkaClusterTestKit implements AutoCloseable {
     public void format() throws Exception {
         List<Future<?>> futures = new ArrayList<>();
         try {
-            for (Entry<Integer, ControllerServer> entry : controllers.entrySet()) {
-                int nodeId = entry.getKey();
-                ControllerServer controller = entry.getValue();
-                formatNodeAndLog(nodes.controllerProperties(nodeId), controller.config().metadataLogDir(),
-                    controller, futures::add);
+            for (ControllerServer controller : controllers.values()) {
+                futures.add(executorService.submit(() -> {
+                    formatNode(controller.sharedServer().metaPropsEnsemble(), true);
+                }));
             }
             for (Entry<Integer, BrokerServer> entry : brokers.entrySet()) {
-                int nodeId = entry.getKey();
-                if (!controllers.containsKey(nodeId)) {
-                    BrokerServer broker = entry.getValue();
-                    formatNodeAndLog(nodes.brokerProperties(nodeId), broker.config().metadataLogDir(),
-                            broker, futures::add);
-                }
+                BrokerServer broker = entry.getValue();
+                futures.add(executorService.submit(() -> {
+                    formatNode(broker.sharedServer().metaPropsEnsemble(),
+                        !nodes().brokerNodes().get(entry.getKey()).combined());
+                }));
             }
             for (Future<?> future: futures) {
                 future.get();
@@ -383,25 +379,30 @@ public class KafkaClusterTestKit implements AutoCloseable {
         }
     }
 
-    private void formatNodeAndLog(MetaProperties properties, String metadataLogDir, Logging loggingMixin,
-                                  Consumer<Future<?>> futureConsumer) {
-        futureConsumer.accept(executorService.submit(() -> {
-            try (ByteArrayOutputStream stream = new ByteArrayOutputStream()) {
-                try (PrintStream out = new PrintStream(stream)) {
-                    StorageTool.formatCommand(out,
-                            JavaConverters.asScalaBuffer(Collections.singletonList(metadataLogDir)).toSeq(),
-                            properties,
-                            MetadataVersion.MINIMUM_BOOTSTRAP_VERSION,
-                            false);
-                } finally {
-                    for (String line : stream.toString().split(String.format("%n"))) {
-                        loggingMixin.info(() -> line);
-                    }
+    private void formatNode(
+        MetaPropertiesEnsemble ensemble,
+        boolean writeMetadataDirectory
+    ) {
+        try {
+            MetaPropertiesEnsemble.Copier copier =
+                new MetaPropertiesEnsemble.Copier(MetaPropertiesEnsemble.EMPTY);
+            for (Entry<String, MetaProperties> entry : ensemble.logDirProps().entrySet()) {
+                String logDir = entry.getKey();
+                if (writeMetadataDirectory || (!ensemble.metadataLogDir().equals(Optional.of(logDir)))) {
+                    log.trace("Adding {} to the list of directories to format.", logDir);
+                    copier.setLogDirProps(logDir, entry.getValue());
                 }
-            } catch (IOException e) {
-                throw new RuntimeException(e);
             }
-        }));
+            copier.setPreWriteHandler((logDir, isNew, metaProperties) -> {
+                log.info("Formatting {}.", logDir);
+                Files.createDirectories(Paths.get(logDir));
+                BootstrapDirectory bootstrapDirectory = new BootstrapDirectory(logDir, Optional.empty());
+                bootstrapDirectory.writeBinaryFile(nodes.bootstrapMetadata());
+            });
+            copier.writeLogDirChanges();
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to format node " + ensemble.nodeId(), e);
+        }
     }
 
     public void startup() throws ExecutionException, InterruptedException {
@@ -443,55 +444,113 @@ public class KafkaClusterTestKit implements AutoCloseable {
             "Failed to wait for publisher to publish the metadata update to each broker.");
     }
 
-    public Properties controllerClientProperties() throws ExecutionException, InterruptedException {
-        Properties properties = new Properties();
-        if (!controllers.isEmpty()) {
-            Collection<Node> controllerNodes = RaftConfig.voterConnectionsToNodes(
-                controllerQuorumVotersFutureManager.future.get());
-
-            StringBuilder bld = new StringBuilder();
-            String prefix = "";
-            for (Node node : controllerNodes) {
-                bld.append(prefix).append(node.id()).append('@');
-                bld.append(node.host()).append(":").append(node.port());
-                prefix = ",";
-            }
-            properties.setProperty(RaftConfig.QUORUM_VOTERS_CONFIG, bld.toString());
-            properties.setProperty(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG,
-                controllerNodes.stream().map(n -> n.host() + ":" + n.port()).
-                    collect(Collectors.joining(",")));
+    public String quorumVotersConfig() throws ExecutionException, InterruptedException {
+        Collection<Node> controllerNodes = RaftConfig.voterConnectionsToNodes(
+            controllerQuorumVotersFutureManager.future.get());
+        StringBuilder bld = new StringBuilder();
+        String prefix = "";
+        for (Node node : controllerNodes) {
+            bld.append(prefix).append(node.id()).append('@');
+            bld.append(node.host()).append(":").append(node.port());
+            prefix = ",";
         }
-        return properties;
+        return bld.toString();
+    }
+
+    public class ClientPropertiesBuilder {
+        private Properties properties;
+        private boolean usingBootstrapControllers = false;
+
+        public ClientPropertiesBuilder() {
+            this.properties = new Properties();
+        }
+
+        public ClientPropertiesBuilder(Properties properties) {
+            this.properties = properties;
+        }
+
+        public ClientPropertiesBuilder setUsingBootstrapControllers(boolean usingBootstrapControllers) {
+            this.usingBootstrapControllers = usingBootstrapControllers;
+            return this;
+        }
+
+        public Properties build() {
+            if (usingBootstrapControllers) {
+                properties.setProperty(AdminClientConfig.BOOTSTRAP_CONTROLLERS_CONFIG, bootstrapControllers());
+                properties.remove(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG);
+            } else {
+                properties.setProperty(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers());
+                properties.remove(AdminClientConfig.BOOTSTRAP_CONTROLLERS_CONFIG);
+            }
+            return properties;
+        }
+    }
+
+    public ClientPropertiesBuilder newClientPropertiesBuilder(Properties properties) {
+        return new ClientPropertiesBuilder(properties);
+    }
+
+    public ClientPropertiesBuilder newClientPropertiesBuilder() {
+        return new ClientPropertiesBuilder();
     }
 
     public Properties clientProperties() {
-        return clientProperties(new Properties());
+        return new ClientPropertiesBuilder().build();
     }
 
-    public Properties clientProperties(Properties configOverrides) {
-        if (!brokers.isEmpty()) {
-            StringBuilder bld = new StringBuilder();
-            String prefix = "";
-            for (Entry<Integer, BrokerServer> entry : brokers.entrySet()) {
-                int brokerId = entry.getKey();
-                BrokerServer broker = entry.getValue();
-                ListenerName listenerName = nodes.externalListenerName();
-                int port = broker.boundPort(listenerName);
-                if (port <= 0) {
-                    throw new RuntimeException("Broker " + brokerId + " does not yet " +
+    public String bootstrapServers() {
+        StringBuilder bld = new StringBuilder();
+        String prefix = "";
+        for (Entry<Integer, BrokerServer> entry : brokers.entrySet()) {
+            int brokerId = entry.getKey();
+            BrokerServer broker = entry.getValue();
+            ListenerName listenerName = nodes.externalListenerName();
+            int port = broker.boundPort(listenerName);
+            if (port <= 0) {
+                throw new RuntimeException("Broker " + brokerId + " does not yet " +
+                    "have a bound port for " + listenerName + ".  Did you start " +
+                    "the cluster yet?");
+            }
+            bld.append(prefix).append("localhost:").append(port);
+            prefix = ",";
+        }
+        return bld.toString();
+    }
+
+    public String bootstrapControllers() {
+        StringBuilder bld = new StringBuilder();
+        String prefix = "";
+        for (Entry<Integer, ControllerServer> entry : controllers.entrySet()) {
+            int id = entry.getKey();
+            ControllerServer controller = entry.getValue();
+            ListenerName listenerName = nodes.controllerListenerName();
+            int port = controller.socketServer().boundPort(listenerName);
+            if (port <= 0) {
+                throw new RuntimeException("Controller " + id + " does not yet " +
                         "have a bound port for " + listenerName + ".  Did you start " +
                         "the cluster yet?");
-                }
-                bld.append(prefix).append("localhost:").append(port);
-                prefix = ",";
             }
-            configOverrides.putIfAbsent(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, bld.toString());
+            bld.append(prefix).append("localhost:").append(port);
+            prefix = ",";
         }
-        return configOverrides;
+        return bld.toString();
     }
 
     public Map<Integer, ControllerServer> controllers() {
         return controllers;
+    }
+
+    public Controller waitForActiveController() throws InterruptedException {
+        AtomicReference<Controller> active = new AtomicReference<>(null);
+        TestUtils.retryOnExceptionWithTimeout(60_000, () -> {
+            for (ControllerServer controllerServer : controllers.values()) {
+                if (controllerServer.controller().isActive()) {
+                    active.set(controllerServer.controller());
+                }
+            }
+            assertNotNull(active.get(), "No active controller found");
+        });
+        return active.get();
     }
 
     public Map<Integer, BrokerServer> brokers() {

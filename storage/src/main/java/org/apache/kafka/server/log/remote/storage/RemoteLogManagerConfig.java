@@ -42,7 +42,8 @@ public final class RemoteLogManagerConfig {
      */
     public static final String REMOTE_STORAGE_MANAGER_CONFIG_PREFIX_PROP = "remote.log.storage.manager.impl.prefix";
     public static final String REMOTE_STORAGE_MANAGER_CONFIG_PREFIX_DOC = "Prefix used for properties to be passed to RemoteStorageManager " +
-            "implementation. For example this value can be `rsm.s3.`.";
+            "implementation. For example this value can be `rsm.config.`.";
+    public static final String DEFAULT_REMOTE_STORAGE_MANAGER_CONFIG_PREFIX = "rsm.config.";
 
     /**
      * Prefix used for properties to be passed to {@link RemoteLogMetadataManager} implementation. Remote log subsystem collects all the properties having
@@ -50,36 +51,44 @@ public final class RemoteLogManagerConfig {
      */
     public static final String REMOTE_LOG_METADATA_MANAGER_CONFIG_PREFIX_PROP = "remote.log.metadata.manager.impl.prefix";
     public static final String REMOTE_LOG_METADATA_MANAGER_CONFIG_PREFIX_DOC = "Prefix used for properties to be passed to RemoteLogMetadataManager " +
-            "implementation. For example this value can be `rlmm.s3.`.";
+            "implementation. For example this value can be `rlmm.config.`.";
+    public static final String DEFAULT_REMOTE_LOG_METADATA_MANAGER_CONFIG_PREFIX = "rlmm.config.";
+
 
     public static final String REMOTE_LOG_STORAGE_SYSTEM_ENABLE_PROP = "remote.log.storage.system.enable";
-    public static final String REMOTE_LOG_STORAGE_SYSTEM_ENABLE_DOC = "Whether to enable tier storage functionality in a broker or not. Valid values " +
-            "are `true` or `false` and the default value is false. When it is true broker starts all the services required for tiered storage functionality.";
+    public static final String REMOTE_LOG_STORAGE_SYSTEM_ENABLE_DOC = "Whether to enable tiered storage functionality in a broker or not. Valid values " +
+            "are `true` or `false` and the default value is false. When it is true broker starts all the services required for the tiered storage functionality.";
     public static final boolean DEFAULT_REMOTE_LOG_STORAGE_SYSTEM_ENABLE = false;
 
     public static final String REMOTE_STORAGE_MANAGER_CLASS_NAME_PROP = "remote.log.storage.manager.class.name";
-    public static final String REMOTE_STORAGE_MANAGER_CLASS_NAME_DOC = "Fully qualified class name of `RemoteLogStorageManager` implementation.";
+    public static final String REMOTE_STORAGE_MANAGER_CLASS_NAME_DOC = "Fully qualified class name of `RemoteStorageManager` implementation.";
 
     public static final String REMOTE_STORAGE_MANAGER_CLASS_PATH_PROP = "remote.log.storage.manager.class.path";
-    public static final String REMOTE_STORAGE_MANAGER_CLASS_PATH_DOC = "Class path of the `RemoteLogStorageManager` implementation." +
-            "If specified, the RemoteLogStorageManager implementation and its dependent libraries will be loaded by a dedicated" +
-            "classloader which searches this class path before the Kafka broker class path. The syntax of this parameter is same" +
-            "with the standard Java class path string.";
+    public static final String REMOTE_STORAGE_MANAGER_CLASS_PATH_DOC = "Class path of the `RemoteStorageManager` implementation. " +
+            "If specified, the RemoteStorageManager implementation and its dependent libraries will be loaded by a dedicated " +
+            "classloader which searches this class path before the Kafka broker class path. The syntax of this parameter is same " +
+            "as the standard Java class path string.";
 
     public static final String REMOTE_LOG_METADATA_MANAGER_CLASS_NAME_PROP = "remote.log.metadata.manager.class.name";
     public static final String REMOTE_LOG_METADATA_MANAGER_CLASS_NAME_DOC = "Fully qualified class name of `RemoteLogMetadataManager` implementation.";
-    //todo add the default topic based RLMM class name.
-    public static final String DEFAULT_REMOTE_LOG_METADATA_MANAGER_CLASS_NAME = "";
+    public static final String DEFAULT_REMOTE_LOG_METADATA_MANAGER_CLASS_NAME = "org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManager";
 
     public static final String REMOTE_LOG_METADATA_MANAGER_CLASS_PATH_PROP = "remote.log.metadata.manager.class.path";
-    public static final String REMOTE_LOG_METADATA_MANAGER_CLASS_PATH_DOC = "Class path of the `RemoteLogMetadataManager` implementation." +
-            "If specified, the RemoteLogMetadataManager implementation and its dependent libraries will be loaded by a dedicated" +
-            "classloader which searches this class path before the Kafka broker class path. The syntax of this parameter is same" +
-            "with the standard Java class path string.";
+    public static final String REMOTE_LOG_METADATA_MANAGER_CLASS_PATH_DOC = "Class path of the `RemoteLogMetadataManager` implementation. " +
+            "If specified, the RemoteLogMetadataManager implementation and its dependent libraries will be loaded by a dedicated " +
+            "classloader which searches this class path before the Kafka broker class path. The syntax of this parameter is same " +
+            "as the standard Java class path string.";
 
     public static final String REMOTE_LOG_METADATA_MANAGER_LISTENER_NAME_PROP = "remote.log.metadata.manager.listener.name";
     public static final String REMOTE_LOG_METADATA_MANAGER_LISTENER_NAME_DOC = "Listener name of the local broker to which it should get connected if " +
             "needed by RemoteLogMetadataManager implementation.";
+
+    public static final String REMOTE_LOG_METADATA_CUSTOM_METADATA_MAX_BYTES_PROP = "remote.log.metadata.custom.metadata.max.bytes";
+    public static final String REMOTE_LOG_METADATA_CUSTOM_METADATA_MAX_BYTES_DOC = "The maximum size of custom metadata in bytes that the broker " +
+            "should accept from a remote storage plugin. If custom  metadata exceeds this limit, the updated segment metadata " +
+            "will not be stored, the copied data will be attempted to delete, " +
+            "and the remote copying task for this topic-partition will stop with an error.";
+    public static final int DEFAULT_REMOTE_LOG_METADATA_CUSTOM_METADATA_MAX_BYTES = 128;
 
     public static final String REMOTE_LOG_INDEX_FILE_CACHE_TOTAL_SIZE_BYTES_PROP = "remote.log.index.file.cache.total.size.bytes";
     public static final String REMOTE_LOG_INDEX_FILE_CACHE_TOTAL_SIZE_BYTES_DOC = "The total size of the space allocated to store index files fetched " +
@@ -97,7 +106,7 @@ public final class RemoteLogManagerConfig {
     public static final long DEFAULT_REMOTE_LOG_MANAGER_TASK_INTERVAL_MS = 30 * 1000L;
 
     public static final String REMOTE_LOG_MANAGER_TASK_RETRY_BACK_OFF_MS_PROP = "remote.log.manager.task.retry.backoff.ms";
-    public static final String REMOTE_LOG_MANAGER_TASK_RETRY_BACK_OFF_MS_DOC = "The initial amount of wait in milli seconds before the request is retried again.";
+    public static final String REMOTE_LOG_MANAGER_TASK_RETRY_BACK_OFF_MS_DOC = "The initial amount of wait in milliseconds before the request is retried again.";
     public static final long DEFAULT_REMOTE_LOG_MANAGER_TASK_RETRY_BACK_OFF_MS = 500L;
 
     public static final String REMOTE_LOG_MANAGER_TASK_RETRY_BACK_OFF_MAX_MS_PROP = "remote.log.manager.task.retry.backoff.max.ms";
@@ -122,66 +131,85 @@ public final class RemoteLogManagerConfig {
             "is full, fetch requests are served with an error.";
     public static final int DEFAULT_REMOTE_LOG_READER_MAX_PENDING_TASKS = 100;
 
+    public static final String LOG_LOCAL_RETENTION_MS_PROP = "log.local.retention.ms";
+    public static final String LOG_LOCAL_RETENTION_MS_DOC = "The number of milliseconds to keep the local log segments before it gets eligible for deletion. " +
+            "Default value is -2, it represents `log.retention.ms` value is to be used. The effective value should always be less than or equal " +
+            "to `log.retention.ms` value.";
+    public static final Long DEFAULT_LOG_LOCAL_RETENTION_MS = -2L;
+
+    public static final String LOG_LOCAL_RETENTION_BYTES_PROP = "log.local.retention.bytes";
+    public static final String LOG_LOCAL_RETENTION_BYTES_DOC = "The maximum size of local log segments that can grow for a partition before it gets eligible for deletion. " +
+            "Default value is -2, it represents `log.retention.bytes` value to be used. The effective value should always be " +
+            "less than or equal to `log.retention.bytes` value.";
+    public static final Long DEFAULT_LOG_LOCAL_RETENTION_BYTES = -2L;
+
     public static final ConfigDef CONFIG_DEF = new ConfigDef();
 
     static {
-        CONFIG_DEF.defineInternal(REMOTE_LOG_STORAGE_SYSTEM_ENABLE_PROP,
+        CONFIG_DEF.define(REMOTE_LOG_STORAGE_SYSTEM_ENABLE_PROP,
                                   BOOLEAN,
                                   DEFAULT_REMOTE_LOG_STORAGE_SYSTEM_ENABLE,
                                   null,
                                   MEDIUM,
                                   REMOTE_LOG_STORAGE_SYSTEM_ENABLE_DOC)
-                  .defineInternal(REMOTE_STORAGE_MANAGER_CONFIG_PREFIX_PROP,
+                  .define(REMOTE_STORAGE_MANAGER_CONFIG_PREFIX_PROP,
                                   STRING,
-                                  null,
+                                  DEFAULT_REMOTE_STORAGE_MANAGER_CONFIG_PREFIX,
                                   new ConfigDef.NonEmptyString(),
                                   MEDIUM,
                                   REMOTE_STORAGE_MANAGER_CONFIG_PREFIX_DOC)
-                  .defineInternal(REMOTE_LOG_METADATA_MANAGER_CONFIG_PREFIX_PROP,
+                  .define(REMOTE_LOG_METADATA_MANAGER_CONFIG_PREFIX_PROP,
                                   STRING,
-                                  null,
+                                  DEFAULT_REMOTE_LOG_METADATA_MANAGER_CONFIG_PREFIX,
                                   new ConfigDef.NonEmptyString(),
                                   MEDIUM,
                                   REMOTE_LOG_METADATA_MANAGER_CONFIG_PREFIX_DOC)
-                  .defineInternal(REMOTE_STORAGE_MANAGER_CLASS_NAME_PROP, STRING,
+                  .define(REMOTE_STORAGE_MANAGER_CLASS_NAME_PROP, STRING,
                                   null,
                                   new ConfigDef.NonEmptyString(),
                                   MEDIUM,
                                   REMOTE_STORAGE_MANAGER_CLASS_NAME_DOC)
-                  .defineInternal(REMOTE_STORAGE_MANAGER_CLASS_PATH_PROP, STRING,
+                  .define(REMOTE_STORAGE_MANAGER_CLASS_PATH_PROP, STRING,
                                   null,
-                                  new ConfigDef.NonEmptyString(),
+                                  null,
                                   MEDIUM,
                                   REMOTE_STORAGE_MANAGER_CLASS_PATH_DOC)
-                  .defineInternal(REMOTE_LOG_METADATA_MANAGER_CLASS_NAME_PROP,
-                                  STRING, null,
+                  .define(REMOTE_LOG_METADATA_MANAGER_CLASS_NAME_PROP,
+                                  STRING,
+                                  DEFAULT_REMOTE_LOG_METADATA_MANAGER_CLASS_NAME,
                                   new ConfigDef.NonEmptyString(),
                                   MEDIUM,
                                   REMOTE_LOG_METADATA_MANAGER_CLASS_NAME_DOC)
-                  .defineInternal(REMOTE_LOG_METADATA_MANAGER_CLASS_PATH_PROP,
+                  .define(REMOTE_LOG_METADATA_MANAGER_CLASS_PATH_PROP,
                                   STRING,
                                   null,
-                                  new ConfigDef.NonEmptyString(),
+                                  null,
                                   MEDIUM,
                                   REMOTE_LOG_METADATA_MANAGER_CLASS_PATH_DOC)
-                  .defineInternal(REMOTE_LOG_METADATA_MANAGER_LISTENER_NAME_PROP, STRING,
+                  .define(REMOTE_LOG_METADATA_MANAGER_LISTENER_NAME_PROP, STRING,
                                   null,
                                   new ConfigDef.NonEmptyString(),
                                   MEDIUM,
                                   REMOTE_LOG_METADATA_MANAGER_LISTENER_NAME_DOC)
-                  .defineInternal(REMOTE_LOG_INDEX_FILE_CACHE_TOTAL_SIZE_BYTES_PROP,
+                  .define(REMOTE_LOG_METADATA_CUSTOM_METADATA_MAX_BYTES_PROP,
+                                  INT,
+                                  DEFAULT_REMOTE_LOG_METADATA_CUSTOM_METADATA_MAX_BYTES,
+                                  atLeast(0),
+                                  LOW,
+                                  REMOTE_LOG_METADATA_CUSTOM_METADATA_MAX_BYTES_DOC)
+                  .define(REMOTE_LOG_INDEX_FILE_CACHE_TOTAL_SIZE_BYTES_PROP,
                                   LONG,
                                   DEFAULT_REMOTE_LOG_INDEX_FILE_CACHE_TOTAL_SIZE_BYTES,
                                   atLeast(1),
                                   LOW,
                                   REMOTE_LOG_INDEX_FILE_CACHE_TOTAL_SIZE_BYTES_DOC)
-                  .defineInternal(REMOTE_LOG_MANAGER_THREAD_POOL_SIZE_PROP,
+                  .define(REMOTE_LOG_MANAGER_THREAD_POOL_SIZE_PROP,
                                   INT,
                                   DEFAULT_REMOTE_LOG_MANAGER_THREAD_POOL_SIZE,
                                   atLeast(1),
                                   MEDIUM,
                                   REMOTE_LOG_MANAGER_THREAD_POOL_SIZE_DOC)
-                  .defineInternal(REMOTE_LOG_MANAGER_TASK_INTERVAL_MS_PROP,
+                  .define(REMOTE_LOG_MANAGER_TASK_INTERVAL_MS_PROP,
                                   LONG,
                                   DEFAULT_REMOTE_LOG_MANAGER_TASK_INTERVAL_MS,
                                   atLeast(1),
@@ -204,18 +232,30 @@ public final class RemoteLogManagerConfig {
                                   between(0, 0.5),
                                   LOW,
                                   REMOTE_LOG_MANAGER_TASK_RETRY_JITTER_DOC)
-                  .defineInternal(REMOTE_LOG_READER_THREADS_PROP,
+                  .define(REMOTE_LOG_READER_THREADS_PROP,
                                   INT,
                                   DEFAULT_REMOTE_LOG_READER_THREADS,
                                   atLeast(1),
                                   MEDIUM,
                                   REMOTE_LOG_READER_THREADS_DOC)
-                  .defineInternal(REMOTE_LOG_READER_MAX_PENDING_TASKS_PROP,
+                  .define(REMOTE_LOG_READER_MAX_PENDING_TASKS_PROP,
                                   INT,
                                   DEFAULT_REMOTE_LOG_READER_MAX_PENDING_TASKS,
                                   atLeast(1),
                                   MEDIUM,
-                                  REMOTE_LOG_READER_MAX_PENDING_TASKS_DOC);
+                                  REMOTE_LOG_READER_MAX_PENDING_TASKS_DOC)
+                  .define(LOG_LOCAL_RETENTION_MS_PROP,
+                                  LONG,
+                                  DEFAULT_LOG_LOCAL_RETENTION_MS,
+                                  atLeast(DEFAULT_LOG_LOCAL_RETENTION_MS),
+                                  MEDIUM,
+                                  LOG_LOCAL_RETENTION_MS_DOC)
+                  .define(LOG_LOCAL_RETENTION_BYTES_PROP,
+                                  LONG,
+                                  DEFAULT_LOG_LOCAL_RETENTION_BYTES,
+                                  atLeast(DEFAULT_LOG_LOCAL_RETENTION_BYTES),
+                                  MEDIUM,
+                                  LOG_LOCAL_RETENTION_BYTES_DOC);
     }
 
     private final boolean enableRemoteStorageSystem;
@@ -236,6 +276,7 @@ public final class RemoteLogManagerConfig {
     private final String remoteLogMetadataManagerPrefix;
     private final HashMap<String, Object> remoteLogMetadataManagerProps;
     private final String remoteLogMetadataManagerListenerName;
+    private final int remoteLogMetadataCustomMetadataMaxBytes;
 
     public RemoteLogManagerConfig(AbstractConfig config) {
         this(config.getBoolean(REMOTE_LOG_STORAGE_SYSTEM_ENABLE_PROP),
@@ -252,6 +293,7 @@ public final class RemoteLogManagerConfig {
              config.getDouble(REMOTE_LOG_MANAGER_TASK_RETRY_JITTER_PROP),
              config.getInt(REMOTE_LOG_READER_THREADS_PROP),
              config.getInt(REMOTE_LOG_READER_MAX_PENDING_TASKS_PROP),
+             config.getInt(REMOTE_LOG_METADATA_CUSTOM_METADATA_MAX_BYTES_PROP),
              config.getString(REMOTE_STORAGE_MANAGER_CONFIG_PREFIX_PROP),
              config.getString(REMOTE_STORAGE_MANAGER_CONFIG_PREFIX_PROP) != null
                  ? config.originalsWithPrefix(config.getString(REMOTE_STORAGE_MANAGER_CONFIG_PREFIX_PROP))
@@ -277,6 +319,7 @@ public final class RemoteLogManagerConfig {
                                   double remoteLogManagerTaskRetryJitter,
                                   int remoteLogReaderThreads,
                                   int remoteLogReaderMaxPendingTasks,
+                                  int remoteLogMetadataCustomMetadataMaxBytes,
                                   String remoteStorageManagerPrefix,
                                   Map<String, Object> remoteStorageManagerProps, /* properties having keys stripped out with remoteStorageManagerPrefix */
                                   String remoteLogMetadataManagerPrefix,
@@ -300,6 +343,7 @@ public final class RemoteLogManagerConfig {
         this.remoteLogMetadataManagerPrefix = remoteLogMetadataManagerPrefix;
         this.remoteLogMetadataManagerProps = new HashMap<>(remoteLogMetadataManagerProps);
         this.remoteLogMetadataManagerListenerName = remoteLogMetadataManagerListenerName;
+        this.remoteLogMetadataCustomMetadataMaxBytes = remoteLogMetadataCustomMetadataMaxBytes;
     }
 
     public boolean enableRemoteStorageSystem() {
@@ -358,6 +402,10 @@ public final class RemoteLogManagerConfig {
         return remoteLogMetadataManagerListenerName;
     }
 
+    public int remoteLogMetadataCustomMetadataMaxBytes() {
+        return remoteLogMetadataCustomMetadataMaxBytes;
+    }
+
     public String remoteStorageManagerPrefix() {
         return remoteStorageManagerPrefix;
     }
@@ -388,6 +436,7 @@ public final class RemoteLogManagerConfig {
                 && remoteLogManagerTaskRetryJitter == that.remoteLogManagerTaskRetryJitter
                 && remoteLogReaderThreads == that.remoteLogReaderThreads
                 && remoteLogReaderMaxPendingTasks == that.remoteLogReaderMaxPendingTasks
+                && remoteLogMetadataCustomMetadataMaxBytes == that.remoteLogMetadataCustomMetadataMaxBytes
                 && Objects.equals(remoteStorageManagerClassName, that.remoteStorageManagerClassName)
                 && Objects.equals(remoteStorageManagerClassPath, that.remoteStorageManagerClassPath)
                 && Objects.equals(remoteLogMetadataManagerClassName, that.remoteLogMetadataManagerClassName)
@@ -403,9 +452,13 @@ public final class RemoteLogManagerConfig {
     public int hashCode() {
         return Objects.hash(enableRemoteStorageSystem, remoteStorageManagerClassName, remoteStorageManagerClassPath,
                             remoteLogMetadataManagerClassName, remoteLogMetadataManagerClassPath, remoteLogMetadataManagerListenerName,
-                            remoteLogIndexFileCacheTotalSizeBytes, remoteLogManagerThreadPoolSize, remoteLogManagerTaskIntervalMs,
+                            remoteLogMetadataCustomMetadataMaxBytes, remoteLogIndexFileCacheTotalSizeBytes, remoteLogManagerThreadPoolSize, remoteLogManagerTaskIntervalMs,
                             remoteLogManagerTaskRetryBackoffMs, remoteLogManagerTaskRetryBackoffMaxMs, remoteLogManagerTaskRetryJitter,
                             remoteLogReaderThreads, remoteLogReaderMaxPendingTasks, remoteStorageManagerProps, remoteLogMetadataManagerProps,
                             remoteStorageManagerPrefix, remoteLogMetadataManagerPrefix);
+    }
+
+    public static void main(String[] args) {
+        System.out.println(CONFIG_DEF.toHtml(4, config -> "remote_log_manager_" + config));
     }
 }

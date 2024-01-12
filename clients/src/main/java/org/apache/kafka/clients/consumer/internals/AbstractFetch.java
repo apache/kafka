@@ -16,22 +16,21 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
+import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.FetchSessionHandler;
-import org.apache.kafka.clients.consumer.ConsumerConfig;
-import org.apache.kafka.clients.consumer.ConsumerRecord;
-import org.apache.kafka.clients.consumer.OffsetOutOfRangeException;
+import org.apache.kafka.clients.KafkaClient;
+import org.apache.kafka.clients.Metadata;
+import org.apache.kafka.clients.NetworkClientUtils;
 import org.apache.kafka.common.Cluster;
-import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
-import org.apache.kafka.common.errors.RecordTooLargeException;
-import org.apache.kafka.common.errors.TopicAuthorizationException;
+import org.apache.kafka.common.errors.AuthenticationException;
+import org.apache.kafka.common.internals.IdempotentCloser;
 import org.apache.kafka.common.message.FetchResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.requests.FetchRequest;
 import org.apache.kafka.common.requests.FetchResponse;
 import org.apache.kafka.common.utils.BufferSupplier;
@@ -43,64 +42,77 @@ import org.slf4j.Logger;
 import org.slf4j.helpers.MessageFormatter;
 
 import java.io.Closeable;
-import java.util.ArrayDeque;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Collections;
+import java.time.Duration;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.Iterator;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.Queue;
 import java.util.Set;
-import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.function.Predicate;
+import java.util.stream.Collectors;
+
+import static org.apache.kafka.clients.consumer.internals.FetchUtils.requestMetadataUpdate;
 
 /**
  * {@code AbstractFetch} represents the basic state and logic for record fetching processing.
- * @param <K> Type for the message key
- * @param <V> Type for the message value
  */
-public abstract class AbstractFetch<K, V> implements Closeable {
+public abstract class AbstractFetch implements Closeable {
 
     private final Logger log;
+    private final IdempotentCloser idempotentCloser = new IdempotentCloser();
     protected final LogContext logContext;
-    protected final ConsumerNetworkClient client;
     protected final ConsumerMetadata metadata;
     protected final SubscriptionState subscriptions;
-    protected final FetchConfig<K, V> fetchConfig;
+    protected final FetchConfig fetchConfig;
     protected final Time time;
     protected final FetchMetricsManager metricsManager;
+    protected final FetchBuffer fetchBuffer;
+    protected final BufferSupplier decompressionBufferSupplier;
+    protected final Set<Integer> nodesWithPendingFetchRequests;
 
-    private final BufferSupplier decompressionBufferSupplier;
-    private final ConcurrentLinkedQueue<CompletedFetch<K, V>> completedFetches;
     private final Map<Integer, FetchSessionHandler> sessionHandlers;
-    private final Set<Integer> nodesWithPendingFetchRequests;
 
-    private CompletedFetch<K, V> nextInLineFetch;
+    private final ApiVersions apiVersions;
 
     public AbstractFetch(final LogContext logContext,
-                         final ConsumerNetworkClient client,
                          final ConsumerMetadata metadata,
                          final SubscriptionState subscriptions,
-                         final FetchConfig<K, V> fetchConfig,
+                         final FetchConfig fetchConfig,
+                         final FetchBuffer fetchBuffer,
                          final FetchMetricsManager metricsManager,
-                         final Time time) {
+                         final Time time,
+                         final ApiVersions apiVersions) {
         this.log = logContext.logger(AbstractFetch.class);
         this.logContext = logContext;
-        this.client = client;
         this.metadata = metadata;
         this.subscriptions = subscriptions;
         this.fetchConfig = fetchConfig;
+        this.fetchBuffer = fetchBuffer;
         this.decompressionBufferSupplier = BufferSupplier.create();
-        this.completedFetches = new ConcurrentLinkedQueue<>();
         this.sessionHandlers = new HashMap<>();
         this.nodesWithPendingFetchRequests = new HashSet<>();
         this.metricsManager = metricsManager;
         this.time = time;
+        this.apiVersions = apiVersions;
     }
+
+    /**
+     * Check if the node is disconnected and unavailable for immediate reconnection (i.e. if it is in
+     * reconnect backoff window following the disconnect).
+     *
+     * @param node {@link Node} to check for availability
+     * @see NetworkClientUtils#isUnavailable(KafkaClient, Node, Time)
+     */
+    protected abstract boolean isUnavailable(Node node);
+
+    /**
+     * Checks for an authentication error on a given node and throws the exception if it exists.
+     *
+     * @param node {@link Node} to check for a previous {@link AuthenticationException}; if found it is thrown
+     * @see NetworkClientUtils#maybeThrowAuthFailure(KafkaClient, Node)
+     */
+    protected abstract void maybeThrowAuthFailure(Node node);
 
     /**
      * Return whether we have any completed fetches pending return to the user. This method is thread-safe. Has
@@ -109,7 +121,7 @@ public abstract class AbstractFetch<K, V> implements Closeable {
      * @return true if there are completed fetches, false otherwise
      */
     boolean hasCompletedFetches() {
-        return !completedFetches.isEmpty();
+        return !fetchBuffer.isEmpty();
     }
 
     /**
@@ -117,19 +129,19 @@ public abstract class AbstractFetch<K, V> implements Closeable {
      * @return true if there are completed fetches that can be returned, false otherwise
      */
     public boolean hasAvailableFetches() {
-        return completedFetches.stream().anyMatch(fetch -> subscriptions.isFetchable(fetch.partition));
+        return fetchBuffer.hasCompletedFetches(fetch -> subscriptions.isFetchable(fetch.partition));
     }
 
     /**
-     * Implements the core logic for a successful fetch request/response.
+     * Implements the core logic for a successful fetch response.
      *
      * @param fetchTarget {@link Node} from which the fetch data was requested
      * @param data {@link FetchSessionHandler.FetchRequestData} that represents the session data
      * @param resp {@link ClientResponse} from which the {@link FetchResponse} will be retrieved
      */
-    protected void handleFetchResponse(final Node fetchTarget,
-                                       final FetchSessionHandler.FetchRequestData data,
-                                       final ClientResponse resp) {
+    protected void handleFetchSuccess(final Node fetchTarget,
+                                      final FetchSessionHandler.FetchRequestData data,
+                                      final ClientResponse resp) {
         try {
             final FetchResponse response = (FetchResponse) resp.responseBody();
             final FetchSessionHandler handler = sessionHandler(fetchTarget.id());
@@ -144,7 +156,7 @@ public abstract class AbstractFetch<K, V> implements Closeable {
 
             if (!handler.handleResponse(response, requestVersion)) {
                 if (response.error() == Errors.FETCH_SESSION_TOPIC_ID_ERROR) {
-                    metadata.requestUpdate();
+                    metadata.requestUpdate(false);
                 }
 
                 return;
@@ -154,6 +166,7 @@ public abstract class AbstractFetch<K, V> implements Closeable {
             final Set<TopicPartition> partitions = new HashSet<>(responseData.keySet());
             final FetchMetricsAggregator metricAggregator = new FetchMetricsAggregator(metricsManager, partitions);
 
+            Map<TopicPartition, Metadata.LeaderIdAndEpoch> partitionsWithUpdatedLeaderInfo = new HashMap<>();
             for (Map.Entry<TopicPartition, FetchResponseData.PartitionData> entry : responseData.entrySet()) {
                 TopicPartition partition = entry.getKey();
                 FetchRequest.PartitionData requestData = data.sessionPartitions().get(partition);
@@ -181,44 +194,89 @@ public abstract class AbstractFetch<K, V> implements Closeable {
                 log.debug("Fetch {} at offset {} for partition {} returned fetch data {}",
                         fetchConfig.isolationLevel, fetchOffset, partition, partitionData);
 
-                CompletedFetch<K, V> completedFetch = new CompletedFetch<>(
+                Errors partitionError = Errors.forCode(partitionData.errorCode());
+                if (partitionError == Errors.NOT_LEADER_OR_FOLLOWER || partitionError == Errors.FENCED_LEADER_EPOCH) {
+                    log.debug("For {}, received error {}, with leaderIdAndEpoch {}", partition, partitionError, partitionData.currentLeader());
+                    if (partitionData.currentLeader().leaderId() != -1 && partitionData.currentLeader().leaderEpoch() != -1) {
+                        partitionsWithUpdatedLeaderInfo.put(partition, new Metadata.LeaderIdAndEpoch(
+                            Optional.of(partitionData.currentLeader().leaderId()), Optional.of(partitionData.currentLeader().leaderEpoch())));
+                    }
+                }
+
+                CompletedFetch completedFetch = new CompletedFetch(
                         logContext,
                         subscriptions,
-                        fetchConfig,
                         decompressionBufferSupplier,
                         partition,
                         partitionData,
                         metricAggregator,
                         fetchOffset,
                         requestVersion);
-                completedFetches.add(completedFetch);
+                fetchBuffer.add(completedFetch);
+            }
+
+            if (!partitionsWithUpdatedLeaderInfo.isEmpty()) {
+                List<Node> leaderNodes = response.data().nodeEndpoints().stream()
+                    .map(e -> new Node(e.nodeId(), e.host(), e.port(), e.rack()))
+                    .filter(e -> !e.equals(Node.noNode()))
+                    .collect(Collectors.toList());
+                Set<TopicPartition> updatedPartitions = metadata.updatePartitionLeadership(partitionsWithUpdatedLeaderInfo, leaderNodes);
+                updatedPartitions.forEach(
+                    tp -> {
+                        log.debug("For {}, as the leader was updated, position will be validated.", tp);
+                        subscriptions.maybeValidatePositionForCurrentLeader(apiVersions, tp, metadata.currentLeader(tp));
+                    }
+                );
             }
 
             metricsManager.recordLatency(resp.requestLatencyMs());
         } finally {
-            log.debug("Removing pending request for node {}", fetchTarget);
-            nodesWithPendingFetchRequests.remove(fetchTarget.id());
+            removePendingFetchRequest(fetchTarget, data.metadata().sessionId());
         }
     }
 
     /**
-     * Implements the core logic for a failed fetch request/response.
+     * Implements the core logic for a failed fetch response.
      *
      * @param fetchTarget {@link Node} from which the fetch data was requested
-     * @param e {@link RuntimeException} representing the error that resulted in the failure
+     * @param data        {@link FetchSessionHandler.FetchRequestData} from request
+     * @param t           {@link Throwable} representing the error that resulted in the failure
      */
-    protected void handleFetchResponse(final Node fetchTarget, final RuntimeException e) {
+    protected void handleFetchFailure(final Node fetchTarget,
+                                      final FetchSessionHandler.FetchRequestData data,
+                                      final Throwable t) {
         try {
             final FetchSessionHandler handler = sessionHandler(fetchTarget.id());
 
             if (handler != null) {
-                handler.handleError(e);
+                handler.handleError(t);
                 handler.sessionTopicPartitions().forEach(subscriptions::clearPreferredReadReplica);
             }
         } finally {
-            log.debug("Removing pending request for node {}", fetchTarget);
-            nodesWithPendingFetchRequests.remove(fetchTarget.id());
+            removePendingFetchRequest(fetchTarget, data.metadata().sessionId());
         }
+    }
+
+    protected void handleCloseFetchSessionSuccess(final Node fetchTarget,
+                                                  final FetchSessionHandler.FetchRequestData data,
+                                                  final ClientResponse ignored) {
+        int sessionId = data.metadata().sessionId();
+        removePendingFetchRequest(fetchTarget, sessionId);
+        log.debug("Successfully sent a close message for fetch session: {} to node: {}", sessionId, fetchTarget);
+    }
+
+    public void handleCloseFetchSessionFailure(final Node fetchTarget,
+                                               final FetchSessionHandler.FetchRequestData data,
+                                               final Throwable t) {
+        int sessionId = data.metadata().sessionId();
+        removePendingFetchRequest(fetchTarget, sessionId);
+        log.debug("Unable to send a close message for fetch session: {} to node: {}. " +
+                "This may result in unnecessary fetch sessions at the broker.", sessionId, fetchTarget, t);
+    }
+
+    private void removePendingFetchRequest(Node fetchTarget, int sessionId) {
+        log.debug("Removing pending request for fetch session: {} for node: {}", sessionId, fetchTarget);
+        nodesWithPendingFetchRequests.remove(fetchTarget.id());
     }
 
     /**
@@ -256,138 +314,23 @@ public abstract class AbstractFetch<K, V> implements Closeable {
     }
 
     /**
-     * Return the fetched records, empty the record buffer and update the consumed position.
+     * Return the list of <em>fetchable</em> partitions, which are the set of partitions to which we are subscribed,
+     * but <em>excluding</em> any partitions for which we still have buffered data. The idea is that since the user
+     * has yet to process the data for the partition that has already been fetched, we should not go send for more data
+     * until the previously-fetched data has been processed.
      *
-     * </p>
-     *
-     * NOTE: returning an {@link Fetch#isEmpty empty} fetch guarantees the consumed position is not updated.
-     *
-     * @return A {@link Fetch} for the requested partitions
-     * @throws OffsetOutOfRangeException If there is OffsetOutOfRange error in fetchResponse and
-     *         the defaultResetPolicy is NONE
-     * @throws TopicAuthorizationException If there is TopicAuthorization error in fetchResponse.
+     * @return {@link Set} of {@link TopicPartition topic partitions} for which we should fetch data
      */
-    public Fetch<K, V> collectFetch() {
-        Fetch<K, V> fetch = Fetch.empty();
-        Queue<CompletedFetch<K, V>> pausedCompletedFetches = new ArrayDeque<>();
-        int recordsRemaining = fetchConfig.maxPollRecords;
+    private Set<TopicPartition> fetchablePartitions() {
+        // This is the set of partitions we have in our buffer
+        Set<TopicPartition> buffered = fetchBuffer.bufferedPartitions();
 
-        try {
-            while (recordsRemaining > 0) {
-                if (nextInLineFetch == null || nextInLineFetch.isConsumed) {
-                    CompletedFetch<K, V> records = completedFetches.peek();
-                    if (records == null) break;
+        // This is the test that returns true if the partition is *not* buffered
+        Predicate<TopicPartition> isNotBuffered = tp -> !buffered.contains(tp);
 
-                    if (!records.initialized) {
-                        try {
-                            nextInLineFetch = initializeCompletedFetch(records);
-                        } catch (Exception e) {
-                            // Remove a completedFetch upon a parse with exception if (1) it contains no records, and
-                            // (2) there are no fetched records with actual content preceding this exception.
-                            // The first condition ensures that the completedFetches is not stuck with the same completedFetch
-                            // in cases such as the TopicAuthorizationException, and the second condition ensures that no
-                            // potential data loss due to an exception in a following record.
-                            if (fetch.isEmpty() && FetchResponse.recordsOrFail(records.partitionData).sizeInBytes() == 0) {
-                                completedFetches.poll();
-                            }
-                            throw e;
-                        }
-                    } else {
-                        nextInLineFetch = records;
-                    }
-                    completedFetches.poll();
-                } else if (subscriptions.isPaused(nextInLineFetch.partition)) {
-                    // when the partition is paused we add the records back to the completedFetches queue instead of draining
-                    // them so that they can be returned on a subsequent poll if the partition is resumed at that time
-                    log.debug("Skipping fetching records for assigned partition {} because it is paused", nextInLineFetch.partition);
-                    pausedCompletedFetches.add(nextInLineFetch);
-                    nextInLineFetch = null;
-                } else {
-                    Fetch<K, V> nextFetch = fetchRecords(recordsRemaining);
-                    recordsRemaining -= nextFetch.numRecords();
-                    fetch.add(nextFetch);
-                }
-            }
-        } catch (KafkaException e) {
-            if (fetch.isEmpty())
-                throw e;
-        } finally {
-            // add any polled completed fetches for paused partitions back to the completed fetches queue to be
-            // re-evaluated in the next poll
-            completedFetches.addAll(pausedCompletedFetches);
-        }
-
-        return fetch;
-    }
-
-    private Fetch<K, V> fetchRecords(final int maxRecords) {
-        if (!subscriptions.isAssigned(nextInLineFetch.partition)) {
-            // this can happen when a rebalance happened before fetched records are returned to the consumer's poll call
-            log.debug("Not returning fetched records for partition {} since it is no longer assigned",
-                    nextInLineFetch.partition);
-        } else if (!subscriptions.isFetchable(nextInLineFetch.partition)) {
-            // this can happen when a partition is paused before fetched records are returned to the consumer's
-            // poll call or if the offset is being reset
-            log.debug("Not returning fetched records for assigned partition {} since it is no longer fetchable",
-                    nextInLineFetch.partition);
-        } else {
-            SubscriptionState.FetchPosition position = subscriptions.position(nextInLineFetch.partition);
-            if (position == null) {
-                throw new IllegalStateException("Missing position for fetchable partition " + nextInLineFetch.partition);
-            }
-
-            if (nextInLineFetch.nextFetchOffset == position.offset) {
-                List<ConsumerRecord<K, V>> partRecords = nextInLineFetch.fetchRecords(maxRecords);
-
-                log.trace("Returning {} fetched records at offset {} for assigned partition {}",
-                        partRecords.size(), position, nextInLineFetch.partition);
-
-                boolean positionAdvanced = false;
-
-                if (nextInLineFetch.nextFetchOffset > position.offset) {
-                    SubscriptionState.FetchPosition nextPosition = new SubscriptionState.FetchPosition(
-                            nextInLineFetch.nextFetchOffset,
-                            nextInLineFetch.lastEpoch,
-                            position.currentLeader);
-                    log.trace("Updating fetch position from {} to {} for partition {} and returning {} records from `poll()`",
-                            position, nextPosition, nextInLineFetch.partition, partRecords.size());
-                    subscriptions.position(nextInLineFetch.partition, nextPosition);
-                    positionAdvanced = true;
-                }
-
-                Long partitionLag = subscriptions.partitionLag(nextInLineFetch.partition, fetchConfig.isolationLevel);
-                if (partitionLag != null)
-                    metricsManager.recordPartitionLag(nextInLineFetch.partition, partitionLag);
-
-                Long lead = subscriptions.partitionLead(nextInLineFetch.partition);
-                if (lead != null) {
-                    metricsManager.recordPartitionLead(nextInLineFetch.partition, lead);
-                }
-
-                return Fetch.forPartition(nextInLineFetch.partition, partRecords, positionAdvanced);
-            } else {
-                // these records aren't next in line based on the last consumed position, ignore them
-                // they must be from an obsolete request
-                log.debug("Ignoring fetched records for {} at offset {} since the current position is {}",
-                        nextInLineFetch.partition, nextInLineFetch.nextFetchOffset, position);
-            }
-        }
-
-        log.trace("Draining fetched records for partition {}", nextInLineFetch.partition);
-        nextInLineFetch.drain();
-
-        return Fetch.empty();
-    }
-
-    private List<TopicPartition> fetchablePartitions() {
-        Set<TopicPartition> exclude = new HashSet<>();
-        if (nextInLineFetch != null && !nextInLineFetch.isConsumed) {
-            exclude.add(nextInLineFetch.partition);
-        }
-        for (CompletedFetch<K, V> completedFetch : completedFetches) {
-            exclude.add(completedFetch.partition);
-        }
-        return subscriptions.fetchablePartitions(tp -> !exclude.contains(tp));
+        // Return all partitions that are in an otherwise fetchable state *and* for which we don't already have some
+        // messages sitting in our buffer.
+        return new HashSet<>(subscriptions.fetchablePartitions(isNotBuffered));
     }
 
     /**
@@ -405,7 +348,7 @@ public abstract class AbstractFetch<K, V> implements Closeable {
      * @param partition {@link TopicPartition} for which we want to fetch data
      * @param leaderReplica {@link Node} for the leader of the given partition
      * @param currentTimeMs Current time in milliseconds; used to determine if we're within the optional lease window
-     * @return Replic {@link Node node} from which to request the data
+     * @return Replica {@link Node node} from which to request the data
      * @see SubscriptionState#preferredReadReplica
      * @see SubscriptionState#updatePreferredReadReplica
      */
@@ -421,12 +364,39 @@ public abstract class AbstractFetch<K, V> implements Closeable {
                         " using the leader instead.", nodeId, partition);
                 // Note that this condition may happen due to stale metadata, so we clear preferred replica and
                 // refresh metadata.
-                requestMetadataUpdate(partition);
+                requestMetadataUpdate(metadata, subscriptions, partition);
                 return leaderReplica;
             }
         } else {
             return leaderReplica;
         }
+    }
+
+    protected Map<Node, FetchSessionHandler.FetchRequestData> prepareCloseFetchSessionRequests() {
+        final Cluster cluster = metadata.fetch();
+        Map<Node, FetchSessionHandler.Builder> fetchable = new HashMap<>();
+
+        try {
+            sessionHandlers.forEach((fetchTargetNodeId, sessionHandler) -> {
+                // set the session handler to notify close. This will set the next metadata request to send close message.
+                sessionHandler.notifyClose();
+
+                // FetchTargetNode may not be available as it may have disconnected the connection. In such cases, we will
+                // skip sending the close request.
+                final Node fetchTarget = cluster.nodeById(fetchTargetNodeId);
+
+                if (fetchTarget == null || isUnavailable(fetchTarget)) {
+                    log.debug("Skip sending close session request to broker {} since it is not reachable", fetchTarget);
+                    return;
+                }
+
+                fetchable.put(fetchTarget, sessionHandler.newBuilder());
+            });
+        } finally {
+            sessionHandlers.clear();
+        }
+
+        return fetchable.entrySet().stream().collect(Collectors.toMap(Map.Entry::getKey, e -> e.getValue().build()));
     }
 
     /**
@@ -437,7 +407,7 @@ public abstract class AbstractFetch<K, V> implements Closeable {
         // Update metrics in case there was an assignment change
         metricsManager.maybeUpdateAssignment(subscriptions);
 
-        Map<Node, FetchSessionHandler.Builder> fetchable = new LinkedHashMap<>();
+        Map<Node, FetchSessionHandler.Builder> fetchable = new HashMap<>();
         long currentTimeMs = time.milliseconds();
         Map<String, Uuid> topicIds = metadata.topicIds();
 
@@ -451,15 +421,15 @@ public abstract class AbstractFetch<K, V> implements Closeable {
 
             if (!leaderOpt.isPresent()) {
                 log.debug("Requesting metadata update for partition {} since the position {} is missing the current leader node", partition, position);
-                metadata.requestUpdate();
+                metadata.requestUpdate(false);
                 continue;
             }
 
             // Use the preferred read replica if set, otherwise the partition's leader
             Node node = selectReadReplica(partition, leaderOpt.get(), currentTimeMs);
 
-            if (client.isUnavailable(node)) {
-                client.maybeThrowAuthFailure(node);
+            if (isUnavailable(node)) {
+                maybeThrowAuthFailure(node);
 
                 // If we try to send during the reconnect backoff window, then the request is just
                 // going to be failed anyway before being sent, so skip sending the request for now
@@ -486,306 +456,47 @@ public abstract class AbstractFetch<K, V> implements Closeable {
             }
         }
 
-        Map<Node, FetchSessionHandler.FetchRequestData> reqs = new LinkedHashMap<>();
-        for (Map.Entry<Node, FetchSessionHandler.Builder> entry : fetchable.entrySet()) {
-            reqs.put(entry.getKey(), entry.getValue().build());
-        }
-        return reqs;
+        return fetchable.entrySet().stream().collect(Collectors.toMap(Map.Entry::getKey, e -> e.getValue().build()));
     }
 
-    /**
-     * Initialize a CompletedFetch object.
-     */
-    private CompletedFetch<K, V> initializeCompletedFetch(final CompletedFetch<K, V> completedFetch) {
-        final TopicPartition tp = completedFetch.partition;
-        final Errors error = Errors.forCode(completedFetch.partitionData.errorCode());
-        boolean recordMetrics = true;
-
-        try {
-            if (!subscriptions.hasValidPosition(tp)) {
-                // this can happen when a rebalance happened while fetch is still in-flight
-                log.debug("Ignoring fetched records for partition {} since it no longer has valid position", tp);
-                return null;
-            } else if (error == Errors.NONE) {
-                final CompletedFetch<K, V> ret = handleInitializeCompletedFetchSuccess(completedFetch);
-                recordMetrics = ret == null;
-                return ret;
-            } else {
-                handleInitializeCompletedFetchErrors(completedFetch, error);
-                return null;
-            }
-        } finally {
-            if (recordMetrics) {
-                completedFetch.recordAggregatedMetrics(0, 0);
-            }
-
-            if (error != Errors.NONE)
-                // we move the partition to the end if there was an error. This way, it's more likely that partitions for
-                // the same topic can remain together (allowing for more efficient serialization).
-                subscriptions.movePartitionToEnd(tp);
-        }
-    }
-
-    private CompletedFetch<K, V> handleInitializeCompletedFetchSuccess(final CompletedFetch<K, V> completedFetch) {
-        final TopicPartition tp = completedFetch.partition;
-        final long fetchOffset = completedFetch.nextFetchOffset;
-
-        // we are interested in this fetch only if the beginning offset matches the
-        // current consumed position
-        SubscriptionState.FetchPosition position = subscriptions.position(tp);
-        if (position == null || position.offset != fetchOffset) {
-            log.debug("Discarding stale fetch response for partition {} since its offset {} does not match " +
-                    "the expected offset {}", tp, fetchOffset, position);
-            return null;
-        }
-
-        final FetchResponseData.PartitionData partition = completedFetch.partitionData;
-        log.trace("Preparing to read {} bytes of data for partition {} with offset {}",
-                FetchResponse.recordsSize(partition), tp, position);
-        Iterator<? extends RecordBatch> batches = FetchResponse.recordsOrFail(partition).batches().iterator();
-
-        if (!batches.hasNext() && FetchResponse.recordsSize(partition) > 0) {
-            if (completedFetch.requestVersion < 3) {
-                // Implement the pre KIP-74 behavior of throwing a RecordTooLargeException.
-                Map<TopicPartition, Long> recordTooLargePartitions = Collections.singletonMap(tp, fetchOffset);
-                throw new RecordTooLargeException("There are some messages at [Partition=Offset]: " +
-                        recordTooLargePartitions + " whose size is larger than the fetch size " + fetchConfig.fetchSize +
-                        " and hence cannot be returned. Please considering upgrading your broker to 0.10.1.0 or " +
-                        "newer to avoid this issue. Alternately, increase the fetch size on the client (using " +
-                        ConsumerConfig.MAX_PARTITION_FETCH_BYTES_CONFIG + ")",
-                        recordTooLargePartitions);
-            } else {
-                // This should not happen with brokers that support FetchRequest/Response V3 or higher (i.e. KIP-74)
-                throw new KafkaException("Failed to make progress reading messages at " + tp + "=" +
-                        fetchOffset + ". Received a non-empty fetch response from the server, but no " +
-                        "complete records were found.");
-            }
-        }
-
-        if (partition.highWatermark() >= 0) {
-            log.trace("Updating high watermark for partition {} to {}", tp, partition.highWatermark());
-            subscriptions.updateHighWatermark(tp, partition.highWatermark());
-        }
-
-        if (partition.logStartOffset() >= 0) {
-            log.trace("Updating log start offset for partition {} to {}", tp, partition.logStartOffset());
-            subscriptions.updateLogStartOffset(tp, partition.logStartOffset());
-        }
-
-        if (partition.lastStableOffset() >= 0) {
-            log.trace("Updating last stable offset for partition {} to {}", tp, partition.lastStableOffset());
-            subscriptions.updateLastStableOffset(tp, partition.lastStableOffset());
-        }
-
-        if (FetchResponse.isPreferredReplica(partition)) {
-            subscriptions.updatePreferredReadReplica(completedFetch.partition, partition.preferredReadReplica(), () -> {
-                long expireTimeMs = time.milliseconds() + metadata.metadataExpireMs();
-                log.debug("Updating preferred read replica for partition {} to {}, set to expire at {}",
-                        tp, partition.preferredReadReplica(), expireTimeMs);
-                return expireTimeMs;
-            });
-        }
-
-        completedFetch.initialized = true;
-        return completedFetch;
-    }
-
-    private void handleInitializeCompletedFetchErrors(final CompletedFetch<K, V> completedFetch,
-                                                      final Errors error) {
-        final TopicPartition tp = completedFetch.partition;
-        final long fetchOffset = completedFetch.nextFetchOffset;
-
-        if (error == Errors.NOT_LEADER_OR_FOLLOWER ||
-                error == Errors.REPLICA_NOT_AVAILABLE ||
-                error == Errors.KAFKA_STORAGE_ERROR ||
-                error == Errors.FENCED_LEADER_EPOCH ||
-                error == Errors.OFFSET_NOT_AVAILABLE) {
-            log.debug("Error in fetch for partition {}: {}", tp, error.exceptionName());
-            requestMetadataUpdate(tp);
-        } else if (error == Errors.UNKNOWN_TOPIC_OR_PARTITION) {
-            log.warn("Received unknown topic or partition error in fetch for partition {}", tp);
-            requestMetadataUpdate(tp);
-        } else if (error == Errors.UNKNOWN_TOPIC_ID) {
-            log.warn("Received unknown topic ID error in fetch for partition {}", tp);
-            requestMetadataUpdate(tp);
-        } else if (error == Errors.INCONSISTENT_TOPIC_ID) {
-            log.warn("Received inconsistent topic ID error in fetch for partition {}", tp);
-            requestMetadataUpdate(tp);
-        } else if (error == Errors.OFFSET_OUT_OF_RANGE) {
-            Optional<Integer> clearedReplicaId = subscriptions.clearPreferredReadReplica(tp);
-
-            if (!clearedReplicaId.isPresent()) {
-                // If there's no preferred replica to clear, we're fetching from the leader so handle this error normally
-                SubscriptionState.FetchPosition position = subscriptions.position(tp);
-
-                if (position == null || fetchOffset != position.offset) {
-                    log.debug("Discarding stale fetch response for partition {} since the fetched offset {} " +
-                            "does not match the current offset {}", tp, fetchOffset, position);
-                } else {
-                    handleOffsetOutOfRange(position, tp);
-                }
-            } else {
-                log.debug("Unset the preferred read replica {} for partition {} since we got {} when fetching {}",
-                        clearedReplicaId.get(), tp, error, fetchOffset);
-            }
-        } else if (error == Errors.TOPIC_AUTHORIZATION_FAILED) {
-            //we log the actual partition and not just the topic to help with ACL propagation issues in large clusters
-            log.warn("Not authorized to read from partition {}.", tp);
-            throw new TopicAuthorizationException(Collections.singleton(tp.topic()));
-        } else if (error == Errors.UNKNOWN_LEADER_EPOCH) {
-            log.debug("Received unknown leader epoch error in fetch for partition {}", tp);
-        } else if (error == Errors.UNKNOWN_SERVER_ERROR) {
-            log.warn("Unknown server error while fetching offset {} for topic-partition {}",
-                    fetchOffset, tp);
-        } else if (error == Errors.CORRUPT_MESSAGE) {
-            throw new KafkaException("Encountered corrupt message when fetching offset "
-                    + fetchOffset
-                    + " for topic-partition "
-                    + tp);
-        } else {
-            throw new IllegalStateException("Unexpected error code "
-                    + error.code()
-                    + " while fetching at offset "
-                    + fetchOffset
-                    + " from topic-partition " + tp);
-        }
-    }
-
-    private void handleOffsetOutOfRange(final SubscriptionState.FetchPosition fetchPosition,
-                                        final TopicPartition topicPartition) {
-        String errorMessage = "Fetch position " + fetchPosition + " is out of range for partition " + topicPartition;
-
-        if (subscriptions.hasDefaultOffsetResetPolicy()) {
-            log.info("{}, resetting offset", errorMessage);
-            subscriptions.requestOffsetReset(topicPartition);
-        } else {
-            log.info("{}, raising error to the application since no reset policy is configured", errorMessage);
-            throw new OffsetOutOfRangeException(errorMessage,
-                    Collections.singletonMap(topicPartition, fetchPosition.offset));
-        }
-    }
-
-    /**
-     * Clear the buffered data which are not a part of newly assigned partitions. Any previously
-     * {@link CompletedFetch fetched data} is dropped if it is for a partition that is no longer in
-     * {@code assignedPartitions}.
-     *
-     * @param assignedPartitions Newly-assigned {@link TopicPartition}
-     */
-    public void clearBufferedDataForUnassignedPartitions(final Collection<TopicPartition> assignedPartitions) {
-        final Iterator<CompletedFetch<K, V>> completedFetchesItr = completedFetches.iterator();
-
-        while (completedFetchesItr.hasNext()) {
-            final CompletedFetch<K, V> completedFetch = completedFetchesItr.next();
-            final TopicPartition tp = completedFetch.partition;
-
-            if (!assignedPartitions.contains(tp)) {
-                log.debug("Removing {} from buffered data as it is no longer an assigned partition", tp);
-                completedFetch.drain();
-                completedFetchesItr.remove();
-            }
-        }
-
-        if (nextInLineFetch != null && !assignedPartitions.contains(nextInLineFetch.partition)) {
-            nextInLineFetch.drain();
-            nextInLineFetch = null;
-        }
-    }
-
-    /**
-     * Clear the buffered data which are not a part of newly assigned topics
-     *
-     * @param assignedTopics  newly assigned topics
-     */
-    public void clearBufferedDataForUnassignedTopics(Collection<String> assignedTopics) {
-        final Set<TopicPartition> currentTopicPartitions = new HashSet<>();
-
-        for (TopicPartition tp : subscriptions.assignedPartitions()) {
-            if (assignedTopics.contains(tp.topic())) {
-                currentTopicPartitions.add(tp);
-            }
-        }
-
-        clearBufferedDataForUnassignedPartitions(currentTopicPartitions);
-    }
-
+    // Visible for testing
     protected FetchSessionHandler sessionHandler(int node) {
         return sessionHandlers.get(node);
     }
 
+    /**
+     * This method is called by {@link #close(Timer)} which is guarded by the {@link IdempotentCloser}) such as to only
+     * be executed once the first time that any of the {@link #close()} methods are called. Subclasses can override
+     * this method without the need for extra synchronization at the instance level.
+     *
+     * @param timer Timer to enforce time limit
+     */
     // Visible for testing
-    void maybeCloseFetchSessions(final Timer timer) {
-        final Cluster cluster = metadata.fetch();
-        final List<RequestFuture<ClientResponse>> requestFutures = new ArrayList<>();
-
-        sessionHandlers.forEach((fetchTargetNodeId, sessionHandler) -> {
-            // set the session handler to notify close. This will set the next metadata request to send close message.
-            sessionHandler.notifyClose();
-
-            final int sessionId = sessionHandler.sessionId();
-            // FetchTargetNode may not be available as it may have disconnected the connection. In such cases, we will
-            // skip sending the close request.
-            final Node fetchTarget = cluster.nodeById(fetchTargetNodeId);
-            if (fetchTarget == null || client.isUnavailable(fetchTarget)) {
-                log.debug("Skip sending close session request to broker {} since it is not reachable", fetchTarget);
-                return;
-            }
-
-            final FetchRequest.Builder request = createFetchRequest(fetchTarget, sessionHandler.newBuilder().build());
-            final RequestFuture<ClientResponse> responseFuture = client.send(fetchTarget, request);
-
-            responseFuture.addListener(new RequestFutureListener<ClientResponse>() {
-                @Override
-                public void onSuccess(ClientResponse value) {
-                    log.debug("Successfully sent a close message for fetch session: {} to node: {}", sessionId, fetchTarget);
-                }
-
-                @Override
-                public void onFailure(RuntimeException e) {
-                    log.debug("Unable to a close message for fetch session: {} to node: {}. " +
-                            "This may result in unnecessary fetch sessions at the broker.", sessionId, fetchTarget, e);
-                }
-            });
-
-            requestFutures.add(responseFuture);
-        });
-
-        // Poll to ensure that request has been written to the socket. Wait until either the timer has expired or until
-        // all requests have received a response.
-        while (timer.notExpired() && !requestFutures.stream().allMatch(RequestFuture::isDone)) {
-            client.poll(timer, null, true);
-        }
-
-        if (!requestFutures.stream().allMatch(RequestFuture::isDone)) {
-            // we ran out of time before completing all futures. It is ok since we don't want to block the shutdown
-            // here.
-            log.debug("All requests couldn't be sent in the specific timeout period {}ms. " +
-                    "This may result in unnecessary fetch sessions at the broker. Consider increasing the timeout passed for " +
-                    "KafkaConsumer.close(Duration timeout)", timer.timeoutMs());
-        }
+    protected void closeInternal(Timer timer) {
+        // we do not need to re-enable wake-ups since we are closing already
+        Utils.closeQuietly(fetchBuffer, "fetchBuffer");
+        Utils.closeQuietly(decompressionBufferSupplier, "decompressionBufferSupplier");
     }
 
     public void close(final Timer timer) {
-        // we do not need to re-enable wakeups since we are closing already
-        client.disableWakeups();
-
-        if (nextInLineFetch != null) {
-            nextInLineFetch.drain();
-            nextInLineFetch = null;
-        }
-
-        maybeCloseFetchSessions(timer);
-        Utils.closeQuietly(decompressionBufferSupplier, "decompressionBufferSupplier");
-        sessionHandlers.clear();
+        idempotentCloser.close(() -> closeInternal(timer));
     }
 
     @Override
     public void close() {
-        close(time.timer(0));
+        close(time.timer(Duration.ZERO));
     }
 
-    private void requestMetadataUpdate(final TopicPartition topicPartition) {
-        metadata.requestUpdate();
-        subscriptions.clearPreferredReadReplica(topicPartition);
+    /**
+     * Defines the contract for handling fetch responses from brokers.
+     * @param <T> Type of response, usually either {@link ClientResponse} or {@link Throwable}
+     */
+    @FunctionalInterface
+    protected interface ResponseHandler<T> {
+
+        /**
+         * Handle the response from the given {@link Node target}
+         */
+        void handle(Node target, FetchSessionHandler.FetchRequestData data, T response);
     }
 }

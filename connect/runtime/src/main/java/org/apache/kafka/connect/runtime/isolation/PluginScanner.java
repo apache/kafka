@@ -72,7 +72,7 @@ public abstract class PluginScanner {
     }
 
     private PluginScanResult scanUrlsAndAddPlugins(PluginSource source) {
-        log.info("Loading plugin from: {}", source.location());
+        log.info("Loading plugin from: {}", source);
         if (log.isDebugEnabled()) {
             log.debug("Loading plugin urls: {}", Arrays.toString(source.urls()));
         }
@@ -136,13 +136,13 @@ public abstract class PluginScanner {
                     pluginImpl = handleLinkageError(type, source, iterator::next);
                 } catch (ServiceConfigurationError t) {
                     log.error("Failed to discover {} in {}{}",
-                            type.simpleName(), source.location(), reflectiveErrorDescription(t.getCause()), t);
+                            type.simpleName(), source, reflectiveErrorDescription(t.getCause()), t);
                     continue;
                 }
                 Class<? extends T> pluginKlass = (Class<? extends T>) pluginImpl.getClass();
                 if (pluginKlass.getClassLoader() != source.loader()) {
                     log.debug("{} from other classloader {} is visible from {}, excluding to prevent isolated loading",
-                            type.simpleName(), pluginKlass.getClassLoader(), source.location());
+                            type.simpleName(), pluginKlass.getClassLoader(), source);
                     continue;
                 }
                 result.add(pluginDesc(pluginKlass, versionFor(pluginImpl), type, source));
@@ -181,14 +181,14 @@ public abstract class PluginScanner {
                         || !Objects.equals(lastError.getClass(), t.getClass())
                         || !Objects.equals(lastError.getMessage(), t.getMessage())) {
                     log.error("Failed to discover {} in {}{}",
-                            type.simpleName(), source.location(), reflectiveErrorDescription(t.getCause()), t);
+                            type.simpleName(), source, reflectiveErrorDescription(t.getCause()), t);
                 }
                 lastError = t;
             }
         }
         log.error("Received excessive ServiceLoader errors: assuming the runtime ServiceLoader implementation cannot " +
                         "skip faulty implementations. Use a different JRE, or resolve LinkageErrors for plugins in {}",
-                source.location(), lastError);
+                source, lastError);
         throw lastError;
     }
 

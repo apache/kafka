@@ -26,6 +26,7 @@ import org.apache.kafka.common.config.ConfigDef.ConfigKey;
 import org.apache.kafka.common.config.ConfigDef.Type;
 import org.apache.kafka.common.config.ConfigTransformer;
 import org.apache.kafka.common.config.ConfigValue;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.connector.Connector;
 import org.apache.kafka.connect.connector.policy.ConnectorClientConfigOverridePolicy;
@@ -43,6 +44,7 @@ import org.apache.kafka.connect.runtime.rest.entities.ConnectorInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorOffsets;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorStateInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorType;
+import org.apache.kafka.connect.runtime.rest.entities.LoggerLevel;
 import org.apache.kafka.connect.runtime.rest.entities.Message;
 import org.apache.kafka.connect.runtime.rest.errors.BadRequestException;
 import org.apache.kafka.connect.sink.SinkConnector;
@@ -56,6 +58,9 @@ import org.apache.kafka.connect.transforms.Transformation;
 import org.apache.kafka.connect.transforms.predicates.Predicate;
 import org.apache.kafka.connect.util.Callback;
 import org.apache.kafka.connect.util.ConnectorTaskId;
+import org.apache.log4j.Level;
+import org.apache.kafka.connect.util.Stage;
+import org.apache.kafka.connect.util.TemporaryStage;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -72,6 +77,7 @@ import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -79,6 +85,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.function.Function;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -120,6 +127,8 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
     private final ConnectorClientConfigOverridePolicy connectorClientConfigOverridePolicy;
     protected volatile boolean running = false;
     private final ExecutorService connectorExecutor;
+    private final Time time;
+    protected final Loggers loggers;
 
     private final ConcurrentMap<String, Connector> tempConnectors = new ConcurrentHashMap<>();
 
@@ -128,7 +137,8 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
                           String kafkaClusterId,
                           StatusBackingStore statusBackingStore,
                           ConfigBackingStore configBackingStore,
-                          ConnectorClientConfigOverridePolicy connectorClientConfigOverridePolicy) {
+                          ConnectorClientConfigOverridePolicy connectorClientConfigOverridePolicy,
+                          Time time) {
         this.worker = worker;
         this.worker.herder = this;
         this.workerId = workerId;
@@ -137,6 +147,8 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
         this.configBackingStore = configBackingStore;
         this.connectorClientConfigOverridePolicy = connectorClientConfigOverridePolicy;
         this.connectorExecutor = Executors.newCachedThreadPool();
+        this.time = time;
+        this.loggers = new Loggers(time);
     }
 
     @Override
@@ -311,7 +323,7 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
 
         Map<ConnectorTaskId, Map<String, String>> configs = new HashMap<>();
         for (ConnectorTaskId cti : configState.tasks(connector)) {
-            configs.put(cti, configState.taskConfig(cti));
+            configs.put(cti, configState.rawTaskConfig(cti));
         }
 
         return configs;
@@ -371,7 +383,9 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
     }
 
     protected Map<String, ConfigValue> validateSinkConnectorConfig(SinkConnector connector, ConfigDef configDef, Map<String, String> config) {
-        return configDef.validateAll(config);
+        Map<String, ConfigValue> result = configDef.validateAll(config);
+        SinkConnectorConfig.validate(config, result);
+        return result;
     }
 
     protected Map<String, ConfigValue> validateSourceConnectorConfig(SourceConnector connector, ConfigDef configDef, Map<String, String> config) {
@@ -385,9 +399,17 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
 
     @Override
     public void validateConnectorConfig(Map<String, String> connectorProps, Callback<ConfigInfos> callback, boolean doLog) {
+        Stage waitingForThread = new Stage(
+                "waiting for a new thread to become available for connector validation",
+                time.milliseconds()
+        );
+        callback.recordStage(waitingForThread);
         connectorExecutor.submit(() -> {
+            waitingForThread.complete(time.milliseconds());
             try {
-                ConfigInfos result = validateConnectorConfig(connectorProps, doLog);
+                Function<String, TemporaryStage> reportStage = description ->
+                        new TemporaryStage(description, callback, time);
+                ConfigInfos result = validateConnectorConfig(connectorProps, reportStage, doLog);
                 callback.onCompletion(null, result);
             } catch (Throwable t) {
                 callback.onCompletion(t, null);
@@ -459,9 +481,17 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
             || SinkConnectorConfig.hasDlqTopicConfig(connProps);
     }
 
-    ConfigInfos validateConnectorConfig(Map<String, String> connectorProps, boolean doLog) {
+    ConfigInfos validateConnectorConfig(
+            Map<String, String> connectorProps,
+            Function<String, TemporaryStage> reportStage,
+            boolean doLog
+    ) {
+        String stageDescription;
         if (worker.configTransformer() != null) {
-            connectorProps = worker.configTransformer().transform(connectorProps);
+            stageDescription = "resolving transformed configuration properties for the connector";
+            try (TemporaryStage stage = reportStage.apply(stageDescription)) {
+                connectorProps = worker.configTransformer().transform(connectorProps);
+            }
         }
         String connType = connectorProps.get(ConnectorConfig.CONNECTOR_CLASS_CONFIG);
         if (connType == null)
@@ -476,12 +506,17 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
             if (connector instanceof SourceConnector) {
                 connectorType = org.apache.kafka.connect.health.ConnectorType.SOURCE;
                 enrichedConfigDef = ConnectorConfig.enrich(plugins(), SourceConnectorConfig.configDef(), connectorProps, false);
-                validatedConnectorConfig = validateSourceConnectorConfig((SourceConnector) connector, enrichedConfigDef, connectorProps);
+                stageDescription = "validating source connector-specific properties for the connector";
+                try (TemporaryStage stage = reportStage.apply(stageDescription)) {
+                    validatedConnectorConfig = validateSourceConnectorConfig((SourceConnector) connector, enrichedConfigDef, connectorProps);
+                }
             } else {
-                SinkConnectorConfig.validate(connectorProps);
                 connectorType = org.apache.kafka.connect.health.ConnectorType.SINK;
                 enrichedConfigDef = ConnectorConfig.enrich(plugins(), SinkConnectorConfig.configDef(), connectorProps, false);
-                validatedConnectorConfig = validateSinkConnectorConfig((SinkConnector) connector, enrichedConfigDef, connectorProps);
+                stageDescription = "validating sink connector-specific properties for the connector";
+                try (TemporaryStage stage = reportStage.apply(stageDescription)) {
+                    validatedConnectorConfig = validateSinkConnectorConfig((SinkConnector) connector, enrichedConfigDef, connectorProps);
+                }
             }
 
             connectorProps.entrySet().stream()
@@ -497,7 +532,11 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
             Set<String> allGroups = new LinkedHashSet<>(enrichedConfigDef.groups());
 
             // do custom connector-specific validation
-            ConfigDef configDef = connector.config();
+            ConfigDef configDef;
+            stageDescription = "retrieving the configuration definition from the connector";
+            try (TemporaryStage stage = reportStage.apply(stageDescription)) {
+                configDef = connector.config();
+            }
             if (null == configDef) {
                 throw new BadRequestException(
                         String.format(
@@ -506,7 +545,12 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
                         )
                 );
             }
-            Config config = connector.validate(connectorProps);
+
+            Config config;
+            stageDescription = "performing multi-property validation for the connector";
+            try (TemporaryStage stage = reportStage.apply(stageDescription)) {
+                config = connector.validate(connectorProps);
+            }
             if (null == config) {
                 throw new BadRequestException(
                         String.format(
@@ -527,37 +571,46 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
             ConfigInfos adminConfigInfos = null;
 
             if (connectorUsesProducer(connectorType, connectorProps)) {
-                producerConfigInfos = validateClientOverrides(
-                    connName,
-                    ConnectorConfig.CONNECTOR_CLIENT_PRODUCER_OVERRIDES_PREFIX,
-                    connectorConfig,
-                    ProducerConfig.configDef(),
-                    connector.getClass(),
-                    connectorType,
-                    ConnectorClientConfigRequest.ClientType.PRODUCER,
-                    connectorClientConfigOverridePolicy);
+                stageDescription = "validating producer config overrides for the connector";
+                try (TemporaryStage stage = reportStage.apply(stageDescription)) {
+                    producerConfigInfos = validateClientOverrides(
+                            connName,
+                            ConnectorConfig.CONNECTOR_CLIENT_PRODUCER_OVERRIDES_PREFIX,
+                            connectorConfig,
+                            ProducerConfig.configDef(),
+                            connector.getClass(),
+                            connectorType,
+                            ConnectorClientConfigRequest.ClientType.PRODUCER,
+                            connectorClientConfigOverridePolicy);
+                }
             }
             if (connectorUsesAdmin(connectorType, connectorProps)) {
-                adminConfigInfos = validateClientOverrides(
-                    connName,
-                    ConnectorConfig.CONNECTOR_CLIENT_ADMIN_OVERRIDES_PREFIX,
-                    connectorConfig,
-                    AdminClientConfig.configDef(),
-                    connector.getClass(),
-                    connectorType,
-                    ConnectorClientConfigRequest.ClientType.ADMIN,
-                    connectorClientConfigOverridePolicy);
+                stageDescription = "validating admin config overrides for the connector";
+                try (TemporaryStage stage = reportStage.apply(stageDescription)) {
+                    adminConfigInfos = validateClientOverrides(
+                            connName,
+                            ConnectorConfig.CONNECTOR_CLIENT_ADMIN_OVERRIDES_PREFIX,
+                            connectorConfig,
+                            AdminClientConfig.configDef(),
+                            connector.getClass(),
+                            connectorType,
+                            ConnectorClientConfigRequest.ClientType.ADMIN,
+                            connectorClientConfigOverridePolicy);
+                }
             }
             if (connectorUsesConsumer(connectorType, connectorProps)) {
-                consumerConfigInfos = validateClientOverrides(
-                    connName,
-                    ConnectorConfig.CONNECTOR_CLIENT_CONSUMER_OVERRIDES_PREFIX,
-                    connectorConfig,
-                    ConsumerConfig.configDef(),
-                    connector.getClass(),
-                    connectorType,
-                    ConnectorClientConfigRequest.ClientType.CONSUMER,
-                    connectorClientConfigOverridePolicy);
+                stageDescription = "validating consumer config overrides for the connector";
+                try (TemporaryStage stage = reportStage.apply(stageDescription)) {
+                    consumerConfigInfos = validateClientOverrides(
+                            connName,
+                            ConnectorConfig.CONNECTOR_CLIENT_CONSUMER_OVERRIDES_PREFIX,
+                            connectorConfig,
+                            ConsumerConfig.configDef(),
+                            connector.getClass(),
+                            connectorType,
+                            ConnectorClientConfigRequest.ClientType.CONSUMER,
+                            connectorClientConfigOverridePolicy);
+                }
             }
             return mergeConfigInfos(connType, configInfos, producerConfigInfos, consumerConfigInfos, adminConfigInfos);
         }
@@ -916,4 +969,27 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
      * @param cb callback to invoke upon completion
      */
     protected abstract void modifyConnectorOffsets(String connName, Map<Map<String, ?>, Map<String, ?>> offsets, Callback<Message> cb);
+
+    @Override
+    public LoggerLevel loggerLevel(String logger) {
+        return loggers.level(logger);
+    }
+
+    @Override
+    public Map<String, LoggerLevel> allLoggerLevels() {
+        return loggers.allLevels();
+    }
+
+    @Override
+    public List<String> setWorkerLoggerLevel(String namespace, String desiredLevelStr) {
+        Level level = Level.toLevel(desiredLevelStr.toUpperCase(Locale.ROOT), null);
+
+        if (level == null) {
+            log.warn("Ignoring request to set invalid level '{}' for namespace {}", desiredLevelStr, namespace);
+            return Collections.emptyList();
+        }
+
+        return loggers.setLevel(namespace, level);
+    }
+
 }

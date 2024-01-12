@@ -107,6 +107,25 @@ public interface EventQueue extends AutoCloseable {
         }
     }
 
+    class LatestDeadlineFunction implements Function<OptionalLong, OptionalLong> {
+        private final long newDeadlineNs;
+
+        public LatestDeadlineFunction(long newDeadlineNs) {
+            this.newDeadlineNs = newDeadlineNs;
+        }
+
+        @Override
+        public OptionalLong apply(OptionalLong prevDeadlineNs) {
+            if (!prevDeadlineNs.isPresent()) {
+                return OptionalLong.of(newDeadlineNs);
+            } else if (prevDeadlineNs.getAsLong() > newDeadlineNs) {
+                return prevDeadlineNs;
+            } else {
+                return OptionalLong.of(newDeadlineNs);
+            }
+        }
+    }
+
     class VoidEvent implements Event {
         public final static VoidEvent INSTANCE = new VoidEvent();
 
@@ -210,7 +229,7 @@ public interface EventQueue extends AutoCloseable {
 
     /**
      * Asynchronously shut down the event queue.
-     *
+     * <br>
      * No new events will be accepted, and the queue thread will exit after running the existing events.
      * Deferred events will receive TimeoutExceptions.
      *

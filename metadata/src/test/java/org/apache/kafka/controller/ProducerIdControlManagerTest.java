@@ -18,7 +18,6 @@
 package org.apache.kafka.controller;
 
 import java.util.Collections;
-import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.common.errors.StaleBrokerEpochException;
 import org.apache.kafka.common.errors.UnknownServerException;
 import org.apache.kafka.common.metadata.ProducerIdsRecord;
@@ -26,7 +25,6 @@ import org.apache.kafka.common.metadata.RegisterBrokerRecord;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
-import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.server.common.ProducerIdsBlock;
 import org.apache.kafka.timeline.SnapshotRegistry;
 import org.junit.jupiter.api.BeforeEach;
@@ -49,10 +47,9 @@ public class ProducerIdControlManagerTest {
         snapshotRegistry = new SnapshotRegistry(new LogContext());
         featureControl = new FeatureControlManager.Builder().
             setSnapshotRegistry(snapshotRegistry).
-            setQuorumFeatures(new QuorumFeatures(0, new ApiVersions(),
-                QuorumFeatures.defaultFeatureMap(),
+            setQuorumFeatures(new QuorumFeatures(0,
+                QuorumFeatures.defaultFeatureMap(true),
                 Collections.singletonList(0))).
-            setMetadataVersion(MetadataVersion.latest()).
             build();
         clusterControl = new ClusterControlManager.Builder().
             setTime(time).
@@ -123,8 +120,6 @@ public class ProducerIdControlManagerTest {
 
     @Test
     public void testUnknownBrokerOrEpoch() {
-        ControllerResult<ProducerIdsBlock> result;
-
         assertThrows(StaleBrokerEpochException.class, () ->
             producerIdControlManager.generateNextProducerId(99, 0));
 

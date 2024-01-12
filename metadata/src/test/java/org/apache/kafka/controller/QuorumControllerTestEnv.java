@@ -17,7 +17,6 @@
 
 package org.apache.kafka.controller;
 
-import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.metadata.bootstrap.BootstrapMetadata;
 import org.apache.kafka.metalog.LocalLogManagerTestEnv;
 import org.apache.kafka.raft.LeaderAndEpoch;
@@ -98,14 +97,13 @@ public class QuorumControllerTestEnv implements AutoCloseable {
         int numControllers = logEnv.logManagers().size();
         this.controllers = new ArrayList<>(numControllers);
         try {
-            ApiVersions apiVersions = new ApiVersions();
             List<Integer> nodeIds = IntStream.range(0, numControllers).boxed().collect(Collectors.toList());
             for (int nodeId = 0; nodeId < numControllers; nodeId++) {
                 QuorumController.Builder builder = new QuorumController.Builder(nodeId, logEnv.clusterId());
                 builder.setRaftClient(logEnv.logManagers().get(nodeId));
                 builder.setBootstrapMetadata(bootstrapMetadata);
                 builder.setLeaderImbalanceCheckIntervalNs(leaderImbalanceCheckIntervalNs);
-                builder.setQuorumFeatures(new QuorumFeatures(nodeId, apiVersions, QuorumFeatures.defaultFeatureMap(), nodeIds));
+                builder.setQuorumFeatures(new QuorumFeatures(nodeId, QuorumFeatures.defaultFeatureMap(true), nodeIds));
                 sessionTimeoutMillis.ifPresent(timeout -> {
                     builder.setSessionTimeoutNs(NANOSECONDS.convert(timeout, TimeUnit.MILLISECONDS));
                 });
@@ -125,6 +123,10 @@ public class QuorumControllerTestEnv implements AutoCloseable {
     }
 
     QuorumController activeController() throws InterruptedException {
+        return activeController(false);
+    }
+
+    QuorumController activeController(boolean waitForActivation) throws InterruptedException {
         AtomicReference<QuorumController> value = new AtomicReference<>(null);
         TestUtils.retryOnExceptionWithTimeout(20000, 3, () -> {
             LeaderAndEpoch leader = logEnv.leaderAndEpoch();
@@ -140,6 +142,18 @@ public class QuorumControllerTestEnv implements AutoCloseable {
                 throw new RuntimeException(String.format("Expected to see %s as leader", leader));
             }
         });
+
+        if (waitForActivation) {
+            try {
+                // ControllerActivation happens after curClaimEpoch is set, so we need to put something on
+                // the end of the queue and wait for it to complete before returning the active controller.
+                value.get()
+                    .appendReadEvent("wait for activation", OptionalLong.empty(), () -> null)
+                    .get(20000, TimeUnit.MILLISECONDS);
+            } catch (Throwable t) {
+                throw new RuntimeException("Failed while waiting for controller activation", t);
+            }
+        }
 
         return value.get();
     }

@@ -17,24 +17,27 @@
 package kafka.admin
 
 import joptsimple.OptionException
-import kafka.utils.TestUtils
+import kafka.utils.{TestInfoUtils, TestUtils}
 import org.apache.kafka.common.errors.{GroupIdNotFoundException, GroupNotEmptyException}
 import org.apache.kafka.common.protocol.Errors
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.Test
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.ValueSource
 
 class DeleteConsumerGroupsTest extends ConsumerGroupCommandTest {
 
-  @Test
-  def testDeleteWithTopicOption(): Unit = {
-    TestUtils.createOffsetsTopic(zkClient, servers)
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testDeleteWithTopicOption(quorum: String): Unit = {
+    createOffsetsTopic()
     val cgcArgs = Array("--bootstrap-server", bootstrapServers(), "--delete", "--group", group, "--topic")
     assertThrows(classOf[OptionException], () => getConsumerGroupService(cgcArgs))
   }
 
-  @Test
-  def testDeleteCmdNonExistingGroup(): Unit = {
-    TestUtils.createOffsetsTopic(zkClient, servers)
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testDeleteCmdNonExistingGroup(quorum: String): Unit = {
+    createOffsetsTopic()
     val missingGroup = "missing.group"
 
     val cgcArgs = Array("--bootstrap-server", bootstrapServers(), "--delete", "--group", missingGroup)
@@ -45,9 +48,10 @@ class DeleteConsumerGroupsTest extends ConsumerGroupCommandTest {
       s"The expected error (${Errors.GROUP_ID_NOT_FOUND}) was not detected while deleting consumer group")
   }
 
-  @Test
-  def testDeleteNonExistingGroup(): Unit = {
-    TestUtils.createOffsetsTopic(zkClient, servers)
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testDeleteNonExistingGroup(quorum: String): Unit = {
+    createOffsetsTopic()
     val missingGroup = "missing.group"
 
     // note the group to be deleted is a different (non-existing) group
@@ -59,9 +63,10 @@ class DeleteConsumerGroupsTest extends ConsumerGroupCommandTest {
       s"The expected error (${Errors.GROUP_ID_NOT_FOUND}) was not detected while deleting consumer group")
   }
 
-  @Test
-  def testDeleteCmdNonEmptyGroup(): Unit = {
-    TestUtils.createOffsetsTopic(zkClient, servers)
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testDeleteCmdNonEmptyGroup(quorum: String): Unit = {
+    createOffsetsTopic()
 
     // run one consumer in the group
     addConsumerGroupExecutor(numConsumers = 1)
@@ -77,9 +82,10 @@ class DeleteConsumerGroupsTest extends ConsumerGroupCommandTest {
       s"The expected error (${Errors.NON_EMPTY_GROUP}) was not detected while deleting consumer group. Output was: (${output})")
   }
 
-  @Test
-  def testDeleteNonEmptyGroup(): Unit = {
-    TestUtils.createOffsetsTopic(zkClient, servers)
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testDeleteNonEmptyGroup(quorum: String): Unit = {
+    createOffsetsTopic()
 
     // run one consumer in the group
     addConsumerGroupExecutor(numConsumers = 1)
@@ -97,9 +103,10 @@ class DeleteConsumerGroupsTest extends ConsumerGroupCommandTest {
       s"The expected error (${Errors.NON_EMPTY_GROUP}) was not detected while deleting consumer group. Result was:(${result})")
   }
 
-  @Test
-  def testDeleteCmdEmptyGroup(): Unit = {
-    TestUtils.createOffsetsTopic(zkClient, servers)
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testDeleteCmdEmptyGroup(quorum: String): Unit = {
+    createOffsetsTopic()
 
     // run one consumer in the group
     val executor = addConsumerGroupExecutor(numConsumers = 1)
@@ -121,9 +128,10 @@ class DeleteConsumerGroupsTest extends ConsumerGroupCommandTest {
       s"The consumer group could not be deleted as expected")
   }
 
-  @Test
-  def testDeleteCmdAllGroups(): Unit = {
-    TestUtils.createOffsetsTopic(zkClient, servers)
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testDeleteCmdAllGroups(quorum: String): Unit = {
+    createOffsetsTopic()
 
     // Create 3 groups with 1 consumer per each
     val groups =
@@ -158,9 +166,10 @@ class DeleteConsumerGroupsTest extends ConsumerGroupCommandTest {
     )
   }
 
-  @Test
-  def testDeleteEmptyGroup(): Unit = {
-    TestUtils.createOffsetsTopic(zkClient, servers)
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testDeleteEmptyGroup(quorum: String): Unit = {
+    createOffsetsTopic()
 
     // run one consumer in the group
     val executor = addConsumerGroupExecutor(numConsumers = 1)
@@ -182,9 +191,10 @@ class DeleteConsumerGroupsTest extends ConsumerGroupCommandTest {
       s"The consumer group could not be deleted as expected")
   }
 
-  @Test
-  def testDeleteCmdWithMixOfSuccessAndError(): Unit = {
-    TestUtils.createOffsetsTopic(zkClient, servers)
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testDeleteCmdWithMixOfSuccessAndError(quorum: String): Unit = {
+    createOffsetsTopic()
     val missingGroup = "missing.group"
 
     // run one consumer in the group
@@ -208,9 +218,10 @@ class DeleteConsumerGroupsTest extends ConsumerGroupCommandTest {
         output.contains(s"These consumer groups were deleted successfully: '$group'"), s"The consumer group deletion did not work as expected")
   }
 
-  @Test
-  def testDeleteWithMixOfSuccessAndError(): Unit = {
-    TestUtils.createOffsetsTopic(zkClient, servers)
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testDeleteWithMixOfSuccessAndError(quorum: String): Unit = {
+    createOffsetsTopic()
     val missingGroup = "missing.group"
 
     // run one consumer in the group
@@ -238,8 +249,9 @@ class DeleteConsumerGroupsTest extends ConsumerGroupCommandTest {
   }
 
 
-  @Test
-  def testDeleteWithUnrecognizedNewConsumerOption(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testDeleteWithUnrecognizedNewConsumerOption(quorum: String): Unit = {
     val cgcArgs = Array("--new-consumer", "--bootstrap-server", bootstrapServers(), "--delete", "--group", group)
     assertThrows(classOf[OptionException], () => getConsumerGroupService(cgcArgs))
   }

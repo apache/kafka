@@ -16,7 +16,8 @@
  */
 package kafka.zk.migration
 
-import kafka.server.{ConfigType, KafkaConfig, ZkAdminManager}
+import kafka.utils.CoreUtils
+import kafka.server.{KafkaConfig, ZkAdminManager}
 import kafka.zk.{AdminZkClient, ZkMigrationClient}
 import org.apache.kafka.clients.admin.ScramMechanism
 import org.apache.kafka.common.config.internals.QuotaConfigs
@@ -27,14 +28,17 @@ import org.apache.kafka.common.metadata.ClientQuotaRecord.EntityData
 import org.apache.kafka.common.metadata.ConfigRecord
 import org.apache.kafka.common.metadata.UserScramCredentialRecord
 import org.apache.kafka.common.quota.ClientQuotaEntity
+import org.apache.kafka.common.security.token.delegation.{DelegationToken, TokenInformation}
 import org.apache.kafka.common.security.scram.ScramCredential
 import org.apache.kafka.common.security.scram.internals.ScramCredentialUtils
+import org.apache.kafka.common.utils.SecurityUtils
 import org.apache.kafka.image.{ClientQuotasDelta, ClientQuotasImage}
 import org.apache.kafka.image.{MetadataDelta, MetadataImage, MetadataProvenance}
 import org.apache.kafka.metadata.RecordTestUtils
 import org.apache.kafka.metadata.migration.KRaftMigrationZkWriter
 import org.apache.kafka.metadata.migration.ZkMigrationLeadershipState
 import org.apache.kafka.server.common.ApiMessageAndVersion
+import org.apache.kafka.server.config.ConfigType
 import org.apache.kafka.server.util.MockRandom
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.junit.jupiter.api.Test
@@ -60,12 +64,17 @@ class ZkConfigMigrationClientTest extends ZkMigrationTestHarness {
     val props = new Properties()
     props.put(KafkaConfig.DefaultReplicationFactorProp, "1") // normal config
     props.put(KafkaConfig.SslKeystorePasswordProp, encoder.encode(new Password(SECRET))) // sensitive config
-    zkClient.setOrCreateEntityConfigs(ConfigType.Broker, "1", props)
+    zkClient.setOrCreateEntityConfigs(ConfigType.BROKER, "1", props)
+
+    val defaultProps = new Properties()
+    defaultProps.put(KafkaConfig.DefaultReplicationFactorProp, "3") // normal config
+    zkClient.setOrCreateEntityConfigs(ConfigType.BROKER, "<default>", defaultProps)
 
     migrationClient.migrateBrokerConfigs(batch => batches.add(batch), brokerId => brokers.add(brokerId))
     assertEquals(1, brokers.size())
-    assertEquals(1, batches.size())
+    assertEquals(2, batches.size())
     assertEquals(2, batches.get(0).size)
+    assertEquals(1, batches.get(1).size)
 
     batches.get(0).forEach(record => {
       val message = record.message().asInstanceOf[ConfigRecord]
@@ -81,6 +90,12 @@ class ZkConfigMigrationClientTest extends ZkMigrationTestHarness {
       }
     })
 
+    val record = batches.get(1).get(0).message().asInstanceOf[ConfigRecord]
+    assertEquals(ConfigResource.Type.BROKER.id(), record.resourceType())
+    assertEquals("", record.resourceName())
+    assertEquals(KafkaConfig.DefaultReplicationFactorProp, record.name())
+    assertEquals("3", record.value())
+
     // Update the sensitive config value from the config client and check that the value
     // persisted in Zookeeper is encrypted.
     val newProps = new util.HashMap[String, String]()
@@ -88,7 +103,7 @@ class ZkConfigMigrationClientTest extends ZkMigrationTestHarness {
     newProps.put(KafkaConfig.SslKeystorePasswordProp, NEW_SECRET) // sensitive config
     migrationState = migrationClient.configClient().writeConfigs(
       new ConfigResource(ConfigResource.Type.BROKER, "1"), newProps, migrationState)
-    val actualPropsInZk = zkClient.getEntityConfigs(ConfigType.Broker, "1")
+    val actualPropsInZk = zkClient.getEntityConfigs(ConfigType.BROKER, "1")
     assertEquals(2, actualPropsInZk.size())
     actualPropsInZk.forEach { case (key, value) =>
       if (key == KafkaConfig.SslKeystorePasswordProp) {
@@ -100,24 +115,24 @@ class ZkConfigMigrationClientTest extends ZkMigrationTestHarness {
 
     migrationState = migrationClient.configClient().deleteConfigs(
       new ConfigResource(ConfigResource.Type.BROKER, "1"), migrationState)
-    assertEquals(0, zkClient.getEntityConfigs(ConfigType.Broker, "1").size())
+    assertEquals(0, zkClient.getEntityConfigs(ConfigType.BROKER, "1").size())
   }
 
   @Test
   def testMigrateClientQuotas(): Unit = {
     val props = new Properties()
     props.put(QuotaConfigs.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG, "100000")
-    adminZkClient.changeConfigs(ConfigType.User, "<default>", props)
-    adminZkClient.changeConfigs(ConfigType.User, "user1", props)
-    adminZkClient.changeConfigs(ConfigType.User, "user1/clients/clientA", props)
-    adminZkClient.changeConfigs(ConfigType.User, "<default>/clients/<default>", props)
-    adminZkClient.changeConfigs(ConfigType.User, "<default>/clients/clientA", props)
-    adminZkClient.changeConfigs(ConfigType.Client, "<default>", props)
-    adminZkClient.changeConfigs(ConfigType.Client, "clientB", props)
+    adminZkClient.changeConfigs(ConfigType.USER, "<default>", props)
+    adminZkClient.changeConfigs(ConfigType.USER, "user1", props)
+    adminZkClient.changeConfigs(ConfigType.USER, "user1/clients/clientA", props)
+    adminZkClient.changeConfigs(ConfigType.USER, "<default>/clients/<default>", props)
+    adminZkClient.changeConfigs(ConfigType.USER, "<default>/clients/clientA", props)
+    adminZkClient.changeConfigs(ConfigType.CLIENT, "<default>", props)
+    adminZkClient.changeConfigs(ConfigType.CLIENT, "clientB", props)
     props.remove(QuotaConfigs.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG)
     props.put(QuotaConfigs.IP_CONNECTION_RATE_OVERRIDE_CONFIG, "10")
-    adminZkClient.changeConfigs(ConfigType.Ip, "1.1.1.1", props)
-    adminZkClient.changeConfigs(ConfigType.Ip, "<default>", props)
+    adminZkClient.changeConfigs(ConfigType.IP, "1.1.1.1", props)
+    adminZkClient.changeConfigs(ConfigType.IP, "<default>", props)
 
     val batches = new java.util.ArrayList[java.util.List[ApiMessageAndVersion]]()
     migrationClient.migrateClientQuotas(batch => batches.add(batch))
@@ -142,38 +157,38 @@ class ZkConfigMigrationClientTest extends ZkMigrationTestHarness {
   def testWriteExistingClientQuotas(): Unit = {
     val props = new Properties()
     props.put(QuotaConfigs.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG, "100000")
-    adminZkClient.changeConfigs(ConfigType.User, "user1", props)
-    adminZkClient.changeConfigs(ConfigType.User, "user1/clients/clientA", props)
+    adminZkClient.changeConfigs(ConfigType.USER, "user1", props)
+    adminZkClient.changeConfigs(ConfigType.USER, "user1/clients/clientA", props)
 
     assertEquals(0, migrationState.migrationZkVersion())
     migrationState = writeClientQuotaAndVerify(migrationClient, adminZkClient, migrationState,
       Map(ClientQuotaEntity.USER -> "user1"),
       Map(QuotaConfigs.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG -> 20000.0),
-      ConfigType.User, "user1")
+      ConfigType.USER, "user1")
     assertEquals(1, migrationState.migrationZkVersion())
 
     migrationState = writeClientQuotaAndVerify(migrationClient, adminZkClient, migrationState,
       Map(ClientQuotaEntity.USER -> "user1"),
       Map(QuotaConfigs.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG -> 10000.0),
-      ConfigType.User, "user1")
+      ConfigType.USER, "user1")
     assertEquals(2, migrationState.migrationZkVersion())
 
     migrationState = writeClientQuotaAndVerify(migrationClient, adminZkClient, migrationState,
       Map(ClientQuotaEntity.USER -> "user1"),
       Map.empty,
-      ConfigType.User, "user1")
+      ConfigType.USER, "user1")
     assertEquals(3, migrationState.migrationZkVersion())
 
     migrationState = writeClientQuotaAndVerify(migrationClient, adminZkClient, migrationState,
       Map(ClientQuotaEntity.USER -> "user1"),
       Map(QuotaConfigs.CONSUMER_BYTE_RATE_OVERRIDE_CONFIG -> 100.0),
-      ConfigType.User, "user1")
+      ConfigType.USER, "user1")
     assertEquals(4, migrationState.migrationZkVersion())
 
     migrationState = writeClientQuotaAndVerify(migrationClient, adminZkClient, migrationState,
       Map(ClientQuotaEntity.USER -> ""),
       Map(QuotaConfigs.CONSUMER_BYTE_RATE_OVERRIDE_CONFIG -> 200.0),
-      ConfigType.User, "<default>")
+      ConfigType.USER, "<default>")
     assertEquals(5, migrationState.migrationZkVersion())
   }
 
@@ -204,14 +219,14 @@ class ZkConfigMigrationClientTest extends ZkMigrationTestHarness {
     migrationState = writeClientQuotaAndVerify(migrationClient, adminZkClient, migrationState,
       Map(ClientQuotaEntity.USER -> "user2"),
       Map(QuotaConfigs.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG -> 20000.0, QuotaConfigs.CONSUMER_BYTE_RATE_OVERRIDE_CONFIG -> 100.0),
-      ConfigType.User, "user2")
+      ConfigType.USER, "user2")
 
     assertEquals(1, migrationState.migrationZkVersion())
 
     migrationState = writeClientQuotaAndVerify(migrationClient, adminZkClient, migrationState,
       Map(ClientQuotaEntity.USER -> "user2", ClientQuotaEntity.CLIENT_ID -> "clientA"),
       Map(QuotaConfigs.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG -> 10000.0, QuotaConfigs.CONSUMER_BYTE_RATE_OVERRIDE_CONFIG -> 200.0),
-      ConfigType.User, "user2/clients/clientA")
+      ConfigType.USER, "user2/clients/clientA")
 
     assertEquals(2, migrationState.migrationZkVersion())
   }
@@ -222,7 +237,7 @@ class ZkConfigMigrationClientTest extends ZkMigrationTestHarness {
       java.util.Collections.singletonMap(TopicConfig.SEGMENT_MS_CONFIG, "100000"), migrationState)
     assertEquals(1, migrationState.migrationZkVersion())
 
-    val newProps = zkClient.getEntityConfigs(ConfigType.Topic, "test")
+    val newProps = zkClient.getEntityConfigs(ConfigType.TOPIC, "test")
     assertEquals(1, newProps.size())
     assertEquals("100000", newProps.getProperty(TopicConfig.SEGMENT_MS_CONFIG))
   }
@@ -232,13 +247,13 @@ class ZkConfigMigrationClientTest extends ZkMigrationTestHarness {
     val props = new Properties()
     props.put(TopicConfig.FLUSH_MS_CONFIG, "60000")
     props.put(TopicConfig.RETENTION_MS_CONFIG, "300000")
-    zkClient.setOrCreateEntityConfigs(ConfigType.Topic, "test", props)
+    zkClient.setOrCreateEntityConfigs(ConfigType.TOPIC, "test", props)
 
     migrationState = migrationClient.configClient().writeConfigs(new ConfigResource(ConfigResource.Type.TOPIC, "test"),
       java.util.Collections.singletonMap(TopicConfig.SEGMENT_MS_CONFIG, "100000"), migrationState)
     assertEquals(1, migrationState.migrationZkVersion())
 
-    val newProps = zkClient.getEntityConfigs(ConfigType.Topic, "test")
+    val newProps = zkClient.getEntityConfigs(ConfigType.TOPIC, "test")
     assertEquals(1, newProps.size())
     assertEquals("100000", newProps.getProperty(TopicConfig.SEGMENT_MS_CONFIG))
   }
@@ -255,7 +270,7 @@ class ZkConfigMigrationClientTest extends ZkMigrationTestHarness {
 
     val props = new Properties()
     props.put("SCRAM-SHA-256", ScramCredentialUtils.credentialToString(scramCredential))
-    adminZkClient.changeConfigs(ConfigType.User, "alice", props)
+    adminZkClient.changeConfigs(ConfigType.USER, "alice", props)
 
     val brokers = new java.util.ArrayList[Integer]()
     val batches = new java.util.ArrayList[java.util.List[ApiMessageAndVersion]]()
@@ -272,7 +287,7 @@ class ZkConfigMigrationClientTest extends ZkMigrationTestHarness {
 
     val props = new Properties()
     props.put(QuotaConfigs.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG, "100000")
-    adminZkClient.changeConfigs(ConfigType.User, "user1", props)
+    adminZkClient.changeConfigs(ConfigType.USER, "user1", props)
 
     // Create SCRAM records in Zookeeper.
     val aliceScramCredential = new ScramCredential(
@@ -283,7 +298,7 @@ class ZkConfigMigrationClientTest extends ZkMigrationTestHarness {
 
     val alicePropsInit = new Properties()
     alicePropsInit.put("SCRAM-SHA-256", ScramCredentialUtils.credentialToString(aliceScramCredential))
-    adminZkClient.changeConfigs(ConfigType.User, "alice", alicePropsInit)
+    adminZkClient.changeConfigs(ConfigType.USER, "alice", alicePropsInit)
 
     val delta = new MetadataDelta(MetadataImage.EMPTY)
 
@@ -316,14 +331,36 @@ class ZkConfigMigrationClientTest extends ZkMigrationTestHarness {
       migrationState = operation.apply(migrationState)
     })
 
-    val user1Props = zkClient.getEntityConfigs(ConfigType.User, "user1")
+    val user1Props = zkClient.getEntityConfigs(ConfigType.USER, "user1")
     assertEquals(0, user1Props.size())
-    val user2Props = zkClient.getEntityConfigs(ConfigType.User, "user2")
+    val user2Props = zkClient.getEntityConfigs(ConfigType.USER, "user2")
     assertEquals(1, user2Props.size())
 
-    val georgeProps = zkClient.getEntityConfigs(ConfigType.User, "george")
+    val georgeProps = zkClient.getEntityConfigs(ConfigType.USER, "george")
     assertEquals(1, georgeProps.size())
-    val aliceProps = zkClient.getEntityConfigs(ConfigType.User, "alice")
+    val aliceProps = zkClient.getEntityConfigs(ConfigType.USER, "alice")
     assertEquals(0, aliceProps.size())
+  }
+
+  @Test
+  def testDelegationTokens(): Unit = {
+    val uuid = CoreUtils.generateUuidAsBase64()
+    val owner = SecurityUtils.parseKafkaPrincipal("User:alice")
+
+    val tokenInfo = new TokenInformation(uuid, owner, owner, List(owner).asJava, 0, 100, 1000)
+
+    val hmac: Array[Byte] = Array(1.toByte, 2.toByte, 3.toByte, 4.toByte)
+    val token = new DelegationToken(tokenInfo, hmac)
+
+    zkClient.createDelegationTokenPaths()
+    zkClient.setOrCreateDelegationToken(token)
+
+    val brokers = new java.util.ArrayList[Integer]()
+    val batches = new java.util.ArrayList[java.util.List[ApiMessageAndVersion]]()
+
+    migrationClient.readAllMetadata(batch => batches.add(batch), brokerId => brokers.add(brokerId))
+    assertEquals(0, brokers.size())
+    assertEquals(1, batches.size())
+    assertEquals(1, batches.get(0).size)
   }
 }

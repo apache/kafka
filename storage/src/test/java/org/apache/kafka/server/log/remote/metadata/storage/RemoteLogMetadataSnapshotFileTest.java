@@ -17,6 +17,7 @@
 package org.apache.kafka.server.log.remote.metadata.storage;
 
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentMetadata.CustomMetadata;
 import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentState;
 import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.Assertions;
@@ -61,10 +62,13 @@ public class RemoteLogMetadataSnapshotFileTest {
         long startOffset = 0;
         for (int i = 0; i < 100; i++) {
             long endOffset = startOffset + 100L;
+            CustomMetadata customMetadata = new CustomMetadata(new byte[]{(byte) i});
             remoteLogSegmentMetadatas.add(
                     new RemoteLogSegmentMetadataSnapshot(Uuid.randomUuid(), startOffset, endOffset,
                                                          System.currentTimeMillis(), 1, 100, 1024,
-                                                         RemoteLogSegmentState.COPY_SEGMENT_FINISHED, Collections.singletonMap(i, startOffset)));
+                                                         Optional.of(customMetadata),
+                                                         RemoteLogSegmentState.COPY_SEGMENT_FINISHED, Collections.singletonMap(i, startOffset)
+                    ));
             startOffset = endOffset + 1;
         }
 

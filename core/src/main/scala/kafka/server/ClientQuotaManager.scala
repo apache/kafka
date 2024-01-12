@@ -30,6 +30,7 @@ import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.metrics.stats.{Avg, CumulativeSum, Rate}
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.utils.{Sanitizer, Time}
+import org.apache.kafka.server.config.ConfigEntityName
 import org.apache.kafka.server.quota.{ClientQuotaCallback, ClientQuotaEntity, ClientQuotaType}
 import org.apache.kafka.server.util.ShutdownableThread
 
@@ -92,13 +93,13 @@ object ClientQuotaManager {
 
   case object DefaultUserEntity extends BaseUserEntity {
     override def entityType: ClientQuotaEntity.ConfigEntityType = ClientQuotaEntity.ConfigEntityType.DEFAULT_USER
-    override def name: String = ConfigEntityName.Default
+    override def name: String = ConfigEntityName.DEFAULT
     override def toString: String = "default user"
   }
 
   case object DefaultClientIdEntity extends ClientQuotaEntity.ConfigEntity {
     override def entityType: ClientQuotaEntity.ConfigEntityType = ClientQuotaEntity.ConfigEntityType.DEFAULT_CLIENT_ID
-    override def name: String = ConfigEntityName.Default
+    override def name: String = ConfigEntityName.DEFAULT
     override def toString: String = "default client-id"
   }
 
@@ -109,7 +110,7 @@ object ClientQuotaManager {
 
     def sanitizedUser: String = userEntity.map {
       case entity: UserEntity => entity.sanitizedUser
-      case DefaultUserEntity => ConfigEntityName.Default
+      case DefaultUserEntity => ConfigEntityName.DEFAULT
     }.getOrElse("")
 
     def clientId: String = clientIdEntity.map(_.name).getOrElse("")
@@ -124,32 +125,6 @@ object ClientQuotaManager {
   object DefaultTags {
     val User = "user"
     val ClientId = "client-id"
-  }
-
-  /**
-   * This calculates the amount of time needed to bring the metric within quota
-   * assuming that no new metrics are recorded.
-   *
-   * Basically, if O is the observed rate and T is the target rate over a window of W, to bring O down to T,
-   * we need to add a delay of X to W such that O * W / (W + X) = T.
-   * Solving for X, we get X = (O - T)/T * W.
-   */
-  def throttleTime(e: QuotaViolationException, timeMs: Long): Long = {
-    val difference = e.value - e.bound
-    // Use the precise window used by the rate calculation
-    val throttleTimeMs = difference / e.bound * windowSize(e.metric, timeMs)
-    Math.round(throttleTimeMs)
-  }
-
-  private def windowSize(metric: KafkaMetric, timeMs: Long): Long =
-    measurableAsRate(metric.metricName, metric.measurable).windowSize(metric.config, timeMs)
-
-  // Casting to Rate because we only use Rate in Quota computation
-  private def measurableAsRate(name: MetricName, measurable: Measurable): Rate = {
-    measurable match {
-      case r: Rate => r
-      case _ => throw new IllegalArgumentException(s"Metric $name is not a Rate metric, value $measurable")
-    }
   }
 }
 
@@ -461,11 +436,11 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
     lock.writeLock().lock()
     try {
       val userEntity = sanitizedUser.map {
-        case ConfigEntityName.Default => DefaultUserEntity
+        case ConfigEntityName.DEFAULT => DefaultUserEntity
         case user => UserEntity(user)
       }
       val clientIdEntity = sanitizedClientId.map {
-        case ConfigEntityName.Default => DefaultClientIdEntity
+        case ConfigEntityName.DEFAULT => DefaultClientIdEntity
         case _ => ClientIdEntity(clientId.getOrElse(throw new IllegalStateException("Client-id not provided")))
       }
       val quotaEntity = KafkaQuotaEntity(userEntity, clientIdEntity)

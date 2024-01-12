@@ -18,12 +18,14 @@
 package org.apache.kafka.controller;
 
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.CreateTopicsResponseData.CreatableTopicResult;
@@ -92,8 +94,11 @@ public class QuorumControllerIntegrationTestUtils {
                     .setBrokerId(brokerId)
                     .setRack(null)
                     .setClusterId(controller.clusterId())
-                    .setFeatures(brokerFeatures(MetadataVersion.IBP_3_0_IV1, MetadataVersion.IBP_3_6_IV0))
+                    .setFeatures(brokerFeatures(MetadataVersion.IBP_3_0_IV1, MetadataVersion.latest()))
                     .setIncarnationId(Uuid.fromString("kxAT73dKQsitIedpiPtwB" + brokerId))
+                    .setLogDirs(Collections.singletonList(
+                        Uuid.fromString("TESTBROKER" + Integer.toString(100000 + brokerId).substring(1) + "DIRAAAA")
+                    ))
                     .setListeners(new ListenerCollection(
                         Arrays.asList(
                             new Listener()
@@ -126,7 +131,7 @@ public class QuorumControllerIntegrationTestUtils {
      * @param brokers       The broker IDs to send heartbeats for.
      * @param brokerEpochs  A map from broker ID to broker epoch.
      */
-    static void sendBrokerHeartbeat(
+    static void sendBrokerHeartbeatToUnfenceBrokers(
         QuorumController controller,
         List<Integer> brokers,
         Map<Integer, Long> brokerEpochs
@@ -211,6 +216,6 @@ public class QuorumControllerIntegrationTestUtils {
             controller.renounce();
             future.complete(null);
         });
-        future.get();
+        future.get(30, TimeUnit.SECONDS);
     }
 }

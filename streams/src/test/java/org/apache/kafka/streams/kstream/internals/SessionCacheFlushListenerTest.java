@@ -20,27 +20,25 @@ import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.mockito.junit.MockitoJUnitRunner;
 
-import static org.easymock.EasyMock.expect;
-import static org.easymock.EasyMock.expectLastCall;
-import static org.easymock.EasyMock.mock;
-import static org.easymock.EasyMock.replay;
-import static org.easymock.EasyMock.verify;
+import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 
+@RunWith(MockitoJUnitRunner.StrictStubs.class)
 public class SessionCacheFlushListenerTest {
     @Test
     public void shouldForwardKeyNewValueOldValueAndTimestamp() {
+        @SuppressWarnings("unchecked")
         final InternalProcessorContext<Windowed<String>, Change<String>> context = mock(InternalProcessorContext.class);
-        expect(context.currentNode()).andReturn(null).anyTimes();
-        context.setCurrentNode(null);
-        context.setCurrentNode(null);
-        context.forward(
+        doNothing().when(context).forward(
             new Record<>(
                 new Windowed<>("key", new SessionWindow(21L, 73L)),
                 new Change<>("newValue", "oldValue"),
                 73L));
-        expectLastCall();
-        replay(context);
 
         new SessionCacheFlushListener<>(context).apply(
             new Record<>(
@@ -48,6 +46,6 @@ public class SessionCacheFlushListenerTest {
                 new Change<>("newValue", "oldValue"),
                 42L));
 
-        verify(context);
+        verify(context, times(2)).setCurrentNode(null);
     }
 }
