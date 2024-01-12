@@ -152,17 +152,17 @@ public class StartAndStopLatch {
         if (!startLatch.await(end - start, TimeUnit.MILLISECONDS)) {
             throw new TimeoutException(detailMessage +
                     "Timed out while awaiting " + expectedStarts
-                            + " starts for " + name +
+                            + " start(s) for " + name +
                             "; there are currently " + startLatch.getCount()
-                            + "left"
+                            + " left"
             );
         }
         if (!stopLatch.await(end - clock.milliseconds(), TimeUnit.MILLISECONDS)) {
             throw new TimeoutException(detailMessage +
                     "Timed out while awaiting " + expectedStops
-                            + " stops for " + name +
-                            "; there are currently " + startLatch.getCount()
-                            + "left"
+                            + " stop(s) for " + name +
+                            "; there are currently " + stopLatch.getCount()
+                            + " left"
             );
         }
 
