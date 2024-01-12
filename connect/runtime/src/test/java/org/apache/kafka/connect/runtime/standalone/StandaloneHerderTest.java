@@ -1018,32 +1018,36 @@ public class StandaloneHerderTest {
         assertEquals(createdInfo(SourceSink.SOURCE), connectorInfo.result());
 
         // Prepare for task config update
-        Map<String, String> updatedTaskConfig1 = taskConfig(SourceSink.SOURCE);
-        updatedTaskConfig1.put("dummy-task-property", "1");
         when(worker.connectorNames()).thenReturn(Collections.singleton(CONNECTOR_NAME));
-        when(worker.connectorTaskConfigs(CONNECTOR_NAME, new SourceConnectorConfig(plugins, config, true)))
-                .thenReturn(Collections.singletonList(updatedTaskConfig1));
         expectStop();
-        when(worker.startSourceTask(eq(new ConnectorTaskId(CONNECTOR_NAME, 0)), any(), any(), any(), eq(herder), eq(TargetState.STARTED))).thenReturn(true);
 
         // Prepare for connector and task config update
         Map<String, String> newConfig = connectorConfig(SourceSink.SOURCE);
         newConfig.put("dummy-connector-property", "yes");
-        Map<String, String> updatedTaskConfig2 = taskConfig(SourceSink.SOURCE);
-        updatedTaskConfig2.put("dummy-task-property", "2");
         final ArgumentCaptor<Callback<TargetState>> onStart = ArgumentCaptor.forClass(Callback.class);
         doAnswer(invocation -> {
             onStart.getValue().onCompletion(null, TargetState.STARTED);
             return true;
         }).when(worker).startConnector(eq(CONNECTOR_NAME), eq(newConfig), any(HerderConnectorContext.class),
                 eq(herder), eq(TargetState.STARTED), onStart.capture());
-        when(worker.connectorTaskConfigs(CONNECTOR_NAME, new SourceConnectorConfig(plugins, newConfig, true)))
-                .thenReturn(Collections.singletonList(updatedTaskConfig2));
+
+        // Common invocations
+        when(worker.startSourceTask(eq(new ConnectorTaskId(CONNECTOR_NAME, 0)), any(), any(), any(), eq(herder), eq(TargetState.STARTED))).thenReturn(true);
+        Map<String, String> updatedTaskConfig1 = taskConfig(SourceSink.SOURCE);
+        updatedTaskConfig1.put("dummy-task-property", "1");
+        Map<String, String> updatedTaskConfig2 = taskConfig(SourceSink.SOURCE);
+        updatedTaskConfig2.put("dummy-task-property", "2");
+        when(worker.connectorTaskConfigs(eq(CONNECTOR_NAME), any()))
+                .thenReturn(
+                        Collections.singletonList(updatedTaskConfig1),
+                        Collections.singletonList(updatedTaskConfig2));
 
         // Set new config on the connector and tasks
         FutureCallback<Herder.Created<ConnectorInfo>> reconfigureCallback = new FutureCallback<>();
         expectConfigValidation(connectorMock, false, newConfig);
         herder.putConnectorConfig(CONNECTOR_NAME, newConfig, true, reconfigureCallback);
+
+        Thread.sleep(10);
 
         // Reconfigure the tasks
         herder.requestTaskReconfiguration(CONNECTOR_NAME);
