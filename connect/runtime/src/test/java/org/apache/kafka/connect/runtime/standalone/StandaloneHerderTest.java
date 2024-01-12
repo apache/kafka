@@ -1017,30 +1017,43 @@ public class StandaloneHerderTest {
         Herder.Created<ConnectorInfo> connectorInfo = createCallback.get(1000L, TimeUnit.MILLISECONDS);
         assertEquals(createdInfo(SourceSink.SOURCE), connectorInfo.result());
 
-        // Updated task with new config
-        Map<String, String> updatedTaskConfig = taskConfig(SourceSink.SOURCE);
-        updatedTaskConfig.put("dummy-task-property", "yes");
-        when(worker.connectorTaskConfigs(CONNECTOR_NAME, new SourceConnectorConfig(plugins, config, true)))
-                .thenReturn(Collections.singletonList(updatedTaskConfig));
-
-        // Expect that tasks will be stopped and started again
+        // Prepare for task config update
+        Map<String, String> updatedTaskConfig1 = taskConfig(SourceSink.SOURCE);
+        updatedTaskConfig1.put("dummy-task-property", "1");
         when(worker.connectorNames()).thenReturn(Collections.singleton(CONNECTOR_NAME));
-        doNothing().when(worker).stopAndAwaitTasks(singletonList(new ConnectorTaskId(CONNECTOR_NAME, 0)));
-        when(worker.startSourceTask(eq(new ConnectorTaskId(CONNECTOR_NAME, 0)), any(), eq(connectorConfig(SourceSink.SOURCE)), eq(updatedTaskConfig), eq(herder), eq(TargetState.STARTED))).thenReturn(true);
+        when(worker.connectorTaskConfigs(CONNECTOR_NAME, new SourceConnectorConfig(plugins, config, true)))
+                .thenReturn(Collections.singletonList(updatedTaskConfig1));
+        expectStop();
+        when(worker.startSourceTask(eq(new ConnectorTaskId(CONNECTOR_NAME, 0)), any(), any(), any(), eq(herder), eq(TargetState.STARTED))).thenReturn(true);
 
-        // Set new connector config
+        // Prepare for connector and task config update
         Map<String, String> newConfig = connectorConfig(SourceSink.SOURCE);
-        newConfig.put("dummy-task-property", "yes");
-        herder.putConnectorConfig(CONNECTOR_NAME, newConfig, true, createCallback);
+        newConfig.put("dummy-connector-property", "yes");
+        Map<String, String> updatedTaskConfig2 = taskConfig(SourceSink.SOURCE);
+        updatedTaskConfig2.put("dummy-task-property", "2");
+        final ArgumentCaptor<Callback<TargetState>> onStart = ArgumentCaptor.forClass(Callback.class);
+        doAnswer(invocation -> {
+            onStart.getValue().onCompletion(null, TargetState.STARTED);
+            return true;
+        }).when(worker).startConnector(eq(CONNECTOR_NAME), eq(newConfig), any(HerderConnectorContext.class),
+                eq(herder), eq(TargetState.STARTED), onStart.capture());
+        when(worker.connectorTaskConfigs(CONNECTOR_NAME, new SourceConnectorConfig(plugins, newConfig, true)))
+                .thenReturn(Collections.singletonList(updatedTaskConfig2));
+
+        // Set new config on the connector and tasks
+        FutureCallback<Herder.Created<ConnectorInfo>> reconfigureCallback = new FutureCallback<>();
+        expectConfigValidation(connectorMock, false, newConfig);
+        herder.putConnectorConfig(CONNECTOR_NAME, newConfig, true, reconfigureCallback);
 
         // Reconfigure the tasks
         herder.requestTaskReconfiguration(CONNECTOR_NAME);
 
         // Wait on connector update
-        Herder.Created<ConnectorInfo> updatedConnectorInfo = createCallback.get(1000L, TimeUnit.MILLISECONDS);
-        assertEquals(createdInfo(SourceSink.SOURCE), updatedConnectorInfo.result());
+        Herder.Created<ConnectorInfo> updatedConnectorInfo = reconfigureCallback.get(1000L, TimeUnit.MILLISECONDS);
+        ConnectorInfo expectedConnectorInfo = new ConnectorInfo(CONNECTOR_NAME, newConfig, Arrays.asList(new ConnectorTaskId(CONNECTOR_NAME, 0)), ConnectorType.SOURCE);
+        assertEquals(expectedConnectorInfo, updatedConnectorInfo.result());
 
-        verify(statusBackingStore).put(new TaskStatus(new ConnectorTaskId(CONNECTOR_NAME, 0), TaskStatus.State.DESTROYED, WORKER_ID, 0));
+        verify(statusBackingStore, times(2)).put(new TaskStatus(new ConnectorTaskId(CONNECTOR_NAME, 0), TaskStatus.State.DESTROYED, WORKER_ID, 0));
     }
 
     private void expectAdd(SourceSink sourceSink) {
