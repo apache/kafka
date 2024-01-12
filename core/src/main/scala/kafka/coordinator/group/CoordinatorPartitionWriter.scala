@@ -17,7 +17,7 @@
 package kafka.coordinator.group
 
 import kafka.cluster.PartitionListener
-import kafka.server.{ActionQueue, ReplicaManager}
+import kafka.server.{ActionQueue, ReplicaManager, RequestLocal}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.RecordTooLargeException
 import org.apache.kafka.common.protocol.Errors
@@ -27,9 +27,10 @@ import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.requests.TransactionResult
 import org.apache.kafka.common.utils.{BufferSupplier, Time}
 import org.apache.kafka.coordinator.group.runtime.PartitionWriter
-import org.apache.kafka.storage.internals.log.AppendOrigin
+import org.apache.kafka.storage.internals.log.VerificationGuard
 
 import java.util
+import java.util.concurrent.CompletableFuture
 import scala.collection.Map
 
 /**
@@ -81,10 +82,7 @@ class CoordinatorPartitionWriter[T](
   }
 
   /**
-   * Register a PartitionWriter.Listener.
-   *
-   * @param tp       The partition to register the listener to.
-   * @param listener The listener.
+   * {@inheritDoc}
    */
   override def registerListener(
     tp: TopicPartition,
@@ -94,10 +92,7 @@ class CoordinatorPartitionWriter[T](
   }
 
   /**
-   * Deregister a PartitionWriter.Listener.
-   *
-   * @param tp       The partition to deregister the listener from.
-   * @param listener The listener.
+   * {@inheritDoc}
    */
   override def deregisterListener(
     tp: TopicPartition,
@@ -107,20 +102,13 @@ class CoordinatorPartitionWriter[T](
   }
 
   /**
-   * Write records to the partitions. Records are written in one batch so
-   * atomicity is guaranteed.
-   *
-   * @param tp            The partition to write records to.
-   * @param producerId    The producer id.
-   * @param producerEpoch The producer epoch.
-   * @param records       The list of records. The records are written in a single batch.
-   * @return The log end offset right after the written records.
-   * @throws KafkaException Any KafkaException caught during the write operation.
+   * {@inheritDoc}
    */
   override def append(
     tp: TopicPartition,
     producerId: Long,
     producerEpoch: Short,
+    verificationGuard: VerificationGuard,
     records: util.List[T]
   ): Long = {
     if (records.isEmpty) throw new IllegalStateException("records must be non-empty.")
@@ -161,7 +149,7 @@ class CoordinatorPartitionWriter[T](
               s"in append to partition $tp which exceeds the maximum configured size of $maxBatchSize.")
           }
 
-          internalAppend(tp, recordsBuilder.build())
+          internalAppend(tp, recordsBuilder.build(), verificationGuard)
         } finally {
           bufferSupplier.release(buffer)
         }
@@ -172,15 +160,7 @@ class CoordinatorPartitionWriter[T](
   }
 
   /**
-   * Write the transaction end marker.
-   *
-   * @param tp                The partition to write records to.
-   * @param producerId        The producer id.
-   * @param producerEpoch     The producer epoch.
-   * @param coordinatorEpoch  The epoch of the transaction coordinator.
-   * @param result            The transaction result.
-   * @return The log end offset right after the written records.
-   * @throws KafkaException Any KafkaException caught during the write operation.
+   * {@inheritDoc}
    */
   override def appendEndTransactionMarker(
     tp: TopicPartition,
@@ -201,18 +181,48 @@ class CoordinatorPartitionWriter[T](
     ))
   }
 
+  /**
+   * {@inheritDoc}
+   */
+  override def maybeStartTransactionVerification(
+    tp: TopicPartition,
+    transactionalId: String,
+    producerId: Long,
+    producerEpoch: Short
+  ): CompletableFuture[VerificationGuard] = {
+    val future = new CompletableFuture[VerificationGuard]()
+    replicaManager.maybeStartTransactionVerificationForPartition(
+      topicPartition = tp,
+      transactionalId = transactionalId,
+      producerId = producerId,
+      producerEpoch = producerEpoch,
+      baseSequence = RecordBatch.NO_SEQUENCE,
+      requestLocal = RequestLocal.NoCaching,
+      callback = (error, _, verificationGuard) => {
+        if (error != Errors.NONE) {
+          future.completeExceptionally(error.exception)
+        } else {
+          future.complete(verificationGuard)
+        }
+      }
+    )
+    future
+  }
+
   private def internalAppend(
     tp: TopicPartition,
-    memoryRecords: MemoryRecords
+    memoryRecords: MemoryRecords,
+    verificationGuard: VerificationGuard = VerificationGuard.SENTINEL
   ): Long = {
     var appendResults: Map[TopicPartition, PartitionResponse] = Map.empty
-    replicaManager.appendRecords(
+    replicaManager.appendForGroup(
       timeout = 0L,
       requiredAcks = 1,
-      internalTopicsAllowed = true,
-      origin = AppendOrigin.COORDINATOR,
       entriesPerPartition = Map(tp -> memoryRecords),
       responseCallback = results => appendResults = results,
+      requestLocal = RequestLocal.NoCaching,
+      verificationGuards = Map(tp -> verificationGuard),
+      delayedProduceLock = None,
       // We can directly complete the purgatories here because we don't hold
       // any conflicting locks.
       actionQueue = directActionQueue

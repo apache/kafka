@@ -66,10 +66,10 @@ import org.apache.kafka.connect.runtime.distributed.DistributedConfig;
 import org.apache.kafka.connect.runtime.isolation.PluginClassLoader;
 import org.apache.kafka.connect.runtime.isolation.Plugins;
 import org.apache.kafka.connect.runtime.isolation.Plugins.ClassLoaderUsage;
+import org.apache.kafka.connect.runtime.rest.RestServer;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorOffsets;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorStateInfo;
 import org.apache.kafka.connect.runtime.rest.entities.Message;
-import org.apache.kafka.connect.runtime.rest.resources.ConnectResource;
 import org.apache.kafka.connect.runtime.standalone.StandaloneConfig;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.apache.kafka.connect.sink.SinkTask;
@@ -2421,7 +2421,7 @@ public class WorkerTest {
         // Expect the call to Admin::deleteConsumerGroups to have a timeout value equal to the overall timeout value of DEFAULT_REST_REQUEST_TIMEOUT_MS
         // minus the delay introduced in the call to Admin::listConsumerGroupOffsets (2000 ms) and the delay introduced in the call to
         // SinkConnector::alterOffsets (3000 ms)
-        assertEquals((int) ConnectResource.DEFAULT_REST_REQUEST_TIMEOUT_MS - 2000L - 3000L,
+        assertEquals((int) RestServer.DEFAULT_REST_REQUEST_TIMEOUT_MS - 2000L - 3000L,
                 deleteConsumerGroupsOptionsArgumentCaptor.getValue().timeoutMs().intValue());
         verify(admin, timeout(1000)).close();
         verifyKafkaClusterId();
@@ -2473,7 +2473,7 @@ public class WorkerTest {
 
         when(plugins.withClassLoader(any(ClassLoader.class), any(Runnable.class))).thenAnswer(AdditionalAnswers.returnsSecondArg());
         when(sourceConnector.alterOffsets(eq(connectorProps), anyMap())).thenAnswer(invocation -> {
-            time.sleep(ConnectResource.DEFAULT_REST_REQUEST_TIMEOUT_MS + 1000);
+            time.sleep(RestServer.DEFAULT_REST_REQUEST_TIMEOUT_MS + 1000);
             return true;
         });
         ConnectorOffsetBackingStore offsetStore = mock(ConnectorOffsetBackingStore.class);
@@ -2511,7 +2511,7 @@ public class WorkerTest {
         when(plugins.withClassLoader(any(ClassLoader.class), any(Runnable.class))).thenAnswer(AdditionalAnswers.returnsSecondArg());
 
         when(sinkConnector.alterOffsets(eq(connectorProps), anyMap())).thenAnswer(invocation -> {
-            time.sleep(ConnectResource.DEFAULT_REST_REQUEST_TIMEOUT_MS + 1000);
+            time.sleep(RestServer.DEFAULT_REST_REQUEST_TIMEOUT_MS + 1000);
             return true;
         });
 

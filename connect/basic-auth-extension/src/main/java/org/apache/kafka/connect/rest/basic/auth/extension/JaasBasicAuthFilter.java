@@ -34,7 +34,6 @@ import org.apache.kafka.connect.errors.ConnectException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 
@@ -42,7 +41,6 @@ import javax.security.auth.callback.Callback;
 import javax.security.auth.callback.CallbackHandler;
 import javax.security.auth.callback.NameCallback;
 import javax.security.auth.callback.PasswordCallback;
-import javax.security.auth.callback.UnsupportedCallbackException;
 import javax.security.auth.login.LoginContext;
 import javax.security.auth.login.LoginException;
 import javax.ws.rs.Priorities;
@@ -87,7 +85,7 @@ public class JaasBasicAuthFilter implements ContainerRequestFilter {
     }
 
     @Override
-    public void filter(ContainerRequestContext requestContext) throws IOException {
+    public void filter(ContainerRequestContext requestContext) {
         if (isInternalRequest(requestContext)) {
             log.trace("Skipping authentication for internal request");
             return;
@@ -119,8 +117,8 @@ public class JaasBasicAuthFilter implements ContainerRequestFilter {
 
     public static class BasicAuthCallBackHandler implements CallbackHandler {
 
-        private String username;
-        private String password;
+        private final String username;
+        private final String password;
 
         public BasicAuthCallBackHandler(BasicAuthCredentials credentials) {
             username = credentials.username();
@@ -128,7 +126,7 @@ public class JaasBasicAuthFilter implements ContainerRequestFilter {
         }
 
         @Override
-        public void handle(Callback[] callbacks) throws UnsupportedCallbackException {
+        public void handle(Callback[] callbacks) {
             List<Callback> unsupportedCallbacks = new ArrayList<>();
             for (Callback callback : callbacks) {
                 if (callback instanceof NameCallback) {
