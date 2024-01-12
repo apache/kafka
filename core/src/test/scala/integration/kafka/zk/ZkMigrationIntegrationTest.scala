@@ -26,7 +26,7 @@ import kafka.testkit.{KafkaClusterTestKit, TestKitNodes}
 import kafka.utils.{PasswordEncoder, TestUtils}
 import org.apache.kafka.clients.ClientResponse
 import org.apache.kafka.clients.admin._
-import org.apache.kafka.common.{ElectionType, TopicPartition, Uuid}
+import org.apache.kafka.common.{TopicPartition, Uuid}
 import org.apache.kafka.common.acl.AclOperation.{DESCRIBE, READ, WRITE}
 import org.apache.kafka.common.acl.AclPermissionType.ALLOW
 import org.apache.kafka.common.acl.{AccessControlEntry, AclBinding}
@@ -739,8 +739,6 @@ class ZkMigrationIntegrationTest {
       // Reassign replicas to brokers 1, 2, 3 and wait for reassignment to complete
       admin.alterPartitionReassignments(Collections.singletonMap(topicPartition,
         Optional.of(new NewPartitionReassignment(Seq(1, 2, 3).map(int2Integer).asJava)))).all().get()
-
-      admin.electLeaders(ElectionType.PREFERRED, Collections.singleton(topicPartition)).all.get()
 
       TestUtils.waitUntilTrue(() => {
         val listPartitionReassignmentsResult = admin.listPartitionReassignments().reassignments().get()
