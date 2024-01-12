@@ -2097,6 +2097,10 @@ public class OffsetMetadataManagerTest {
 
         context.commitOffset(10L, "group", "foo", 1, 111L, 1, context.time.milliseconds());
         context.commitOffset(10L, "group", "bar", 0, 201L, 1, context.time.milliseconds());
+        // Note that bar-1 does not exist in the initial commits. The API does not return it at all until
+        // the transaction is committed.
+        context.commitOffset(10L, "group", "bar", 1, 211L, 1, context.time.milliseconds());
+
 
         // Fetching offsets with "require stable" (Long.MAX_VALUE) should return the committed offset for
         // foo-0 and the UNSTABLE_OFFSET_COMMIT error for foo-1 and bar-0.
@@ -2138,7 +2142,8 @@ public class OffsetMetadataManagerTest {
             new OffsetFetchResponseData.OffsetFetchResponseTopics()
                 .setName("bar")
                 .setPartitions(Arrays.asList(
-                    mkOffsetPartitionResponse(0, 201L, 1, "metadata")
+                    mkOffsetPartitionResponse(0, 201L, 1, "metadata"),
+                    mkOffsetPartitionResponse(1, 211L, 1, "metadata")
                 )),
             new OffsetFetchResponseData.OffsetFetchResponseTopics()
                 .setName("foo")
