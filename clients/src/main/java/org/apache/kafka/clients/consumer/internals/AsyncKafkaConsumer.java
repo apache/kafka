@@ -1662,13 +1662,16 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     }
 
     @Override
-    public void subscribe(SubscriptionPattern pattern, ConsumerRebalanceListener callback) {
+    public void subscribe(SubscriptionPattern pattern, ConsumerRebalanceListener listener) {
+        if (listener == null)
+            throw new IllegalArgumentException("RebalanceListener cannot be null");
 
+        subscribeInternal(pattern, Optional.of(listener));
     }
 
     @Override
     public void subscribe(SubscriptionPattern pattern) {
-
+        subscribeInternal(pattern, Optional.empty());
     }
 
     @Override
@@ -1744,6 +1747,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                     "null" : "empty"));
             throwIfNoAssignorsConfigured();
             log.info("Subscribed to pattern: '{}'", pattern);
+            subscriptions.subscribe(pattern, listener);
         } finally {
             release();
         }
