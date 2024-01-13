@@ -1738,7 +1738,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         }
     }
 
-    private void subscribeInternal(SubscriptionPattern pattern, Optional<ConsumerRebalanceListener> listener){
+    private void subscribeInternal(SubscriptionPattern pattern, Optional<ConsumerRebalanceListener> listener) {
         acquireAndEnsureOpen();
         try {
             maybeThrowInvalidGroupIdException();
