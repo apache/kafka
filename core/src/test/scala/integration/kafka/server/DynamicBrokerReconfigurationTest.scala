@@ -59,6 +59,7 @@ import org.apache.kafka.common.requests.MetadataRequest
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.security.scram.ScramCredential
 import org.apache.kafka.common.serialization.{StringDeserializer, StringSerializer}
+import org.apache.kafka.server.config.ConfigType
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.apache.kafka.server.record.BrokerCompressionType
 import org.apache.kafka.server.util.ShutdownableThread
@@ -156,8 +157,8 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
 
     createAdminClient(SecurityProtocol.SSL, SecureInternal)
 
-    TestUtils.createTopicWithAdmin(adminClients.head, topic, servers, numPartitions, replicationFactor = numServers)
-    TestUtils.createTopicWithAdmin(adminClients.head, Topic.GROUP_METADATA_TOPIC_NAME, servers,
+    TestUtils.createTopicWithAdmin(adminClients.head, topic, servers, controllerServers, numPartitions, replicationFactor = numServers)
+    TestUtils.createTopicWithAdmin(adminClients.head, Topic.GROUP_METADATA_TOPIC_NAME, servers, controllerServers,
       numPartitions = servers.head.config.offsetsTopicPartitions,
       replicationFactor = numServers,
       topicConfig = servers.head.groupCoordinator.groupMetadataTopicConfigs)
@@ -356,7 +357,7 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
   @ValueSource(strings = Array("zk", "kraft"))
   def testKeyStoreAlter(quorum: String): Unit = {
     val topic2 = "testtopic2"
-    TestUtils.createTopicWithAdmin(adminClients.head, topic2, servers, numPartitions, replicationFactor = numServers)
+    TestUtils.createTopicWithAdmin(adminClients.head, topic2, servers, controllerServers, numPartitions, replicationFactor = numServers)
 
     // Start a producer and consumer that work with the current broker keystore.
     // This should continue working while changes are made
@@ -578,7 +579,7 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
     val topic2 = "testtopic2"
     val topicProps = new Properties
     topicProps.put(KafkaConfig.MinInSyncReplicasProp, "2")
-    TestUtils.createTopicWithAdmin(adminClients.head, topic2, servers, numPartitions = 1, replicationFactor = numServers, topicConfig = topicProps)
+    TestUtils.createTopicWithAdmin(adminClients.head, topic2, servers, controllerServers, numPartitions = 1, replicationFactor = numServers, topicConfig = topicProps)
 
     def getLogOrThrow(tp: TopicPartition): UnifiedLog = {
       var (logOpt, found) = TestUtils.computeUntilTrue {
@@ -1110,7 +1111,7 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
     // and update ZK. When each server is started, it should decode using password.encoder.old.secret and update
     // ZK with newly encoded values using password.encoder.secret.
     servers.foreach { server =>
-      val props = adminZkClient.fetchEntityConfig(ConfigType.Broker, server.config.brokerId.toString)
+      val props = adminZkClient.fetchEntityConfig(ConfigType.BROKER, server.config.brokerId.toString)
       val propsEncodedWithOldSecret = props.clone().asInstanceOf[Properties]
       val config = server.config
       val oldSecret = "old-dynamic-config-secret"
@@ -1125,12 +1126,12 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
       }
       val brokerId = server.config.brokerId
       adminZkClient.changeBrokerConfig(Seq(brokerId), propsEncodedWithOldSecret)
-      val updatedProps = adminZkClient.fetchEntityConfig(ConfigType.Broker, brokerId.toString)
+      val updatedProps = adminZkClient.fetchEntityConfig(ConfigType.BROKER, brokerId.toString)
       passwordConfigs.foreach { case (name, value) => assertNotEquals(props.get(value), updatedProps.get(name)) }
 
       server.startup()
       TestUtils.retry(10000) {
-        val newProps = adminZkClient.fetchEntityConfig(ConfigType.Broker, brokerId.toString)
+        val newProps = adminZkClient.fetchEntityConfig(ConfigType.BROKER, brokerId.toString)
         passwordConfigs.foreach { case (name, value) =>
           assertEquals(passwordDecoder.decode(value), passwordDecoder.decode(newProps.getProperty(name))) }
       }
@@ -1386,7 +1387,7 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
   }
 
   private def fetchBrokerConfigsFromZooKeeper(server: KafkaBroker): Properties = {
-    val props = adminZkClient.fetchEntityConfig(ConfigType.Broker, server.config.brokerId.toString)
+    val props = adminZkClient.fetchEntityConfig(ConfigType.BROKER, server.config.brokerId.toString)
     server.config.dynamicConfig.fromPersistentProps(props, perBrokerConfig = true)
   }
 
@@ -1595,7 +1596,7 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
     sslStoreProps.put(KafkaConfig.PasswordEncoderSecretProp, kafkaConfig.passwordEncoderSecret.map(_.value).orNull)
     zkClient.makeSurePersistentPathExists(ConfigEntityChangeNotificationZNode.path)
 
-    val entityType = ConfigType.Broker
+    val entityType = ConfigType.BROKER
     val entityName = kafkaConfig.brokerId.toString
 
     val passwordConfigs = sslStoreProps.asScala.keySet.filter(DynamicBrokerConfig.isPasswordConfig)

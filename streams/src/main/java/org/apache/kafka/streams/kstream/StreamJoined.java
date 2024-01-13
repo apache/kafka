@@ -18,6 +18,7 @@
 package org.apache.kafka.streams.kstream;
 
 import org.apache.kafka.common.serialization.Serde;
+import org.apache.kafka.streams.state.DslStoreSuppliers;
 import org.apache.kafka.streams.state.WindowBytesStoreSupplier;
 
 import java.util.HashMap;
@@ -42,10 +43,14 @@ public class StreamJoined<K, V1, V2> implements NamedOperation<StreamJoined<K, V
     protected final boolean loggingEnabled;
     protected final Map<String, String> topicConfig;
 
+    // not final because it is potentially overridden by TopologyConfig
+    protected DslStoreSuppliers dslStoreSuppliers;
+
     protected StreamJoined(final StreamJoined<K, V1, V2> streamJoined) {
         this(streamJoined.keySerde,
             streamJoined.valueSerde,
             streamJoined.otherValueSerde,
+            streamJoined.dslStoreSuppliers,
             streamJoined.thisStoreSupplier,
             streamJoined.otherStoreSupplier,
             streamJoined.name,
@@ -57,6 +62,7 @@ public class StreamJoined<K, V1, V2> implements NamedOperation<StreamJoined<K, V
     private StreamJoined(final Serde<K> keySerde,
                          final Serde<V1> valueSerde,
                          final Serde<V2> otherValueSerde,
+                         final DslStoreSuppliers dslStoreSuppliers,
                          final WindowBytesStoreSupplier thisStoreSupplier,
                          final WindowBytesStoreSupplier otherStoreSupplier,
                          final String name,
@@ -66,6 +72,7 @@ public class StreamJoined<K, V1, V2> implements NamedOperation<StreamJoined<K, V
         this.keySerde = keySerde;
         this.valueSerde = valueSerde;
         this.otherValueSerde = otherValueSerde;
+        this.dslStoreSuppliers = dslStoreSuppliers;
         this.thisStoreSupplier = thisStoreSupplier;
         this.otherStoreSupplier = otherStoreSupplier;
         this.name = name;
@@ -92,12 +99,39 @@ public class StreamJoined<K, V1, V2> implements NamedOperation<StreamJoined<K, V
             null,
             null,
             null,
+            null,
             storeSupplier,
             otherStoreSupplier,
             null,
             null,
             true,
             new HashMap<>()
+        );
+    }
+
+    /**
+     * Creates a StreamJoined instance with the given {@link DslStoreSuppliers}. The store plugin
+     * will be used to get all the state stores in this operation that do not otherwise have an
+     * explicitly configured {@link org.apache.kafka.streams.state.DslStoreSuppliers}.
+     *
+     * @param storeSuppliers  the store plugin that will be used for state stores
+     * @param <K>             the key type
+     * @param <V1>            this value type
+     * @param <V2>            other value type
+     * @return                {@link StreamJoined} instance
+     */
+    public static <K, V1, V2> StreamJoined<K, V1, V2> with(final DslStoreSuppliers storeSuppliers) {
+        return new StreamJoined<>(
+                null,
+                null,
+                null,
+                storeSuppliers,
+                null,
+                null,
+                null,
+                null,
+                true,
+                new HashMap<>()
         );
     }
 
@@ -120,6 +154,7 @@ public class StreamJoined<K, V1, V2> implements NamedOperation<StreamJoined<K, V
      */
     public static <K, V1, V2> StreamJoined<K, V1, V2> as(final String storeName) {
         return new StreamJoined<>(
+            null,
             null,
             null,
             null,
@@ -156,6 +191,7 @@ public class StreamJoined<K, V1, V2> implements NamedOperation<StreamJoined<K, V
             null,
             null,
             null,
+            null,
             true,
             new HashMap<>()
         );
@@ -172,6 +208,7 @@ public class StreamJoined<K, V1, V2> implements NamedOperation<StreamJoined<K, V
             keySerde,
             valueSerde,
             otherValueSerde,
+            dslStoreSuppliers,
             thisStoreSupplier,
             otherStoreSupplier,
             name,
@@ -196,6 +233,7 @@ public class StreamJoined<K, V1, V2> implements NamedOperation<StreamJoined<K, V
             keySerde,
             valueSerde,
             otherValueSerde,
+            dslStoreSuppliers,
             thisStoreSupplier,
             otherStoreSupplier,
             name,
@@ -215,6 +253,7 @@ public class StreamJoined<K, V1, V2> implements NamedOperation<StreamJoined<K, V
             keySerde,
             valueSerde,
             otherValueSerde,
+            dslStoreSuppliers,
             thisStoreSupplier,
             otherStoreSupplier,
             name,
@@ -234,6 +273,7 @@ public class StreamJoined<K, V1, V2> implements NamedOperation<StreamJoined<K, V
             keySerde,
             valueSerde,
             otherValueSerde,
+            dslStoreSuppliers,
             thisStoreSupplier,
             otherStoreSupplier,
             name,
@@ -253,12 +293,34 @@ public class StreamJoined<K, V1, V2> implements NamedOperation<StreamJoined<K, V
             keySerde,
             valueSerde,
             otherValueSerde,
+            dslStoreSuppliers,
             thisStoreSupplier,
             otherStoreSupplier,
             name,
             storeName,
             loggingEnabled,
             topicConfig
+        );
+    }
+
+    /**
+     * Configure with the provided {@link DslStoreSuppliers} for store suppliers that are not provided.
+     *
+     * @param dslStoreSuppliers the default store suppliers to use for this StreamJoined
+     * @return                  a new {@link StreamJoined} configured with dslStoreSuppliers
+     */
+    public StreamJoined<K, V1, V2> withDslStoreSuppliers(final DslStoreSuppliers dslStoreSuppliers) {
+        return new StreamJoined<>(
+                keySerde,
+                valueSerde,
+                otherValueSerde,
+                dslStoreSuppliers,
+                thisStoreSupplier,
+                otherStoreSupplier,
+                name,
+                storeName,
+                loggingEnabled,
+                topicConfig
         );
     }
 
@@ -275,6 +337,7 @@ public class StreamJoined<K, V1, V2> implements NamedOperation<StreamJoined<K, V
             keySerde,
             valueSerde,
             otherValueSerde,
+            dslStoreSuppliers,
             thisStoreSupplier,
             otherStoreSupplier,
             name,
@@ -297,6 +360,7 @@ public class StreamJoined<K, V1, V2> implements NamedOperation<StreamJoined<K, V
             keySerde,
             valueSerde,
             otherValueSerde,
+            dslStoreSuppliers,
             thisStoreSupplier,
             otherStoreSupplier,
             name,
@@ -319,6 +383,7 @@ public class StreamJoined<K, V1, V2> implements NamedOperation<StreamJoined<K, V
             keySerde,
             valueSerde,
             otherValueSerde,
+            dslStoreSuppliers,
             thisStoreSupplier,
             otherStoreSupplier,
             name,
@@ -337,6 +402,7 @@ public class StreamJoined<K, V1, V2> implements NamedOperation<StreamJoined<K, V
             keySerde,
             valueSerde,
             otherValueSerde,
+            dslStoreSuppliers,
             thisStoreSupplier,
             otherStoreSupplier,
             name,

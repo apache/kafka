@@ -80,7 +80,7 @@ public class TopicConfig {
             "You can not disable this config once it is enabled. It will be provided in future versions.";
 
     public static final String LOCAL_LOG_RETENTION_MS_CONFIG = "local.retention.ms";
-    public static final String LOCAL_LOG_RETENTION_MS_DOC = "The number of milli seconds to keep the local log segment before it gets deleted. " +
+    public static final String LOCAL_LOG_RETENTION_MS_DOC = "The number of milliseconds to keep the local log segment before it gets deleted. " +
             "Default value is -2, it represents `retention.ms` value is to be used. The effective value should always be less than or equal " +
             "to `retention.ms` value.";
 

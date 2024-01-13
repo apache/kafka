@@ -33,6 +33,8 @@ import org.apache.kafka.common.config.internals.QuotaConfigs
 import org.apache.kafka.common.metrics.Quota
 import org.apache.kafka.common.metrics.Quota._
 import org.apache.kafka.common.utils.Sanitizer
+import org.apache.kafka.server.ClientMetricsManager
+import org.apache.kafka.server.config.ConfigEntityName
 import org.apache.kafka.storage.internals.log.{LogConfig, ThrottledReplicaListValidator}
 import org.apache.kafka.storage.internals.log.LogConfig.MessageFormatVersion
 
@@ -206,7 +208,7 @@ class UserConfigHandler(private val quotaManagers: QuotaManagers, val credential
     val sanitizedUser = entities(0)
     val sanitizedClientId = if (entities.length == 3) Some(entities(2)) else None
     updateQuotaConfig(Some(sanitizedUser), sanitizedClientId, config)
-    if (sanitizedClientId.isEmpty && sanitizedUser != ConfigEntityName.Default)
+    if (sanitizedClientId.isEmpty && sanitizedUser != ConfigEntityName.DEFAULT)
       credentialProvider.updateCredentials(Sanitizer.desanitize(sanitizedUser), config)
   }
 }
@@ -216,7 +218,7 @@ class IpConfigHandler(private val connectionQuotas: ConnectionQuotas) extends Co
   def processConfigChanges(ip: String, config: Properties): Unit = {
     val ipConnectionRateQuota = Option(config.getProperty(QuotaConfigs.IP_CONNECTION_RATE_OVERRIDE_CONFIG)).map(_.toInt)
     val updatedIp = {
-      if (ip != ConfigEntityName.Default) {
+      if (ip != ConfigEntityName.DEFAULT) {
         try {
           Some(InetAddress.getByName(ip))
         } catch {
@@ -244,7 +246,7 @@ class BrokerConfigHandler(private val brokerConfig: KafkaConfig,
       else
         DefaultReplicationThrottledRate
     }
-    if (brokerId == ConfigEntityName.Default)
+    if (brokerId == ConfigEntityName.DEFAULT)
       brokerConfig.dynamicConfig.updateDefaultConfig(properties)
     else if (brokerConfig.brokerId == brokerId.trim.toInt) {
       brokerConfig.dynamicConfig.updateBrokerConfig(brokerConfig.brokerId, properties)
@@ -252,5 +254,14 @@ class BrokerConfigHandler(private val brokerConfig: KafkaConfig,
       quotaManagers.follower.updateQuota(upperBound(getOrDefault(FollowerReplicationThrottledRateProp).toDouble))
       quotaManagers.alterLogDirs.updateQuota(upperBound(getOrDefault(ReplicaAlterLogDirsIoMaxBytesPerSecondProp).toDouble))
     }
+  }
+}
+
+/**
+ * The ClientMetricsConfigHandler will process individual client metrics subscription changes.
+ */
+class ClientMetricsConfigHandler(private val clientMetricsManager: ClientMetricsManager) extends ConfigHandler with Logging {
+  def processConfigChanges(subscriptionGroupId: String, properties: Properties): Unit = {
+    clientMetricsManager.updateSubscription(subscriptionGroupId, properties)
   }
 }

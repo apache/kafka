@@ -310,6 +310,23 @@ streamsSettings.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 1);</code></pre>
             <td colspan="2">Default serializer/deserializer for the inner class of windowed values, implementing the <code class="docutils literal"><span class="pre">Serde</span></code> interface.</td>
             <td>null</td>
           </tr>
+          <tr class="row-even"><td>default.dsl.store</td>
+            <td>Low</td>
+            <td colspan="2">
+              [DEPRECATED] The default state store type used by DSL operators. Deprecated in
+              favor of <code>dsl.store.suppliers.class</code>
+              </td>
+            <td><code>ROCKS_DB</code></td>
+          </tr>
+          <tr class="row-odd"><td>dsl.store.suppliers.class</td>
+            <td>Low</td>
+            <td colspan="2">
+              Defines a default state store implementation to be used by any stateful DSL operator
+              that has not explicitly configured the store implementation type. Must implement
+              the <code>org.apache.kafka.streams.state.DslStoreSuppliers</code> interface.
+            </td>
+            <td><code>BuiltInDslStoreSuppliers.RocksDBDslStoreSuppliers</code></td>
+          </tr>
           <tr class="row-even"><td>max.task.idle.ms</td>
             <td>Medium</td>
             <td colspan="2">
@@ -713,6 +730,7 @@ streamsConfiguration.put(StreamsConfig.DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_CONFIG,
             <ul class="simple">
               <li><code class="docutils literal"><span class="pre">none</span></code>. This is the default value which means rack aware task assignment will be disabled.</li>
               <li><code class="docutils literal"><span class="pre">min_traffic</span></code>. This settings means that the rack aware task assigner will compute an assignment which tries to minimize cross rack traffic.</li>
+              <li><code class="docutils literal"><span class="pre">balance_subtopology</span></code>. This settings means that the rack aware task assigner will compute an assignment which will try to balance tasks from same subtopology to different clients and minimize cross rack traffic on top of that.</li>
             </ul>
             <p>
               This config can be used together with <a class="reference internal" href="#rack-aware-assignment-non-overlap-cost">rack.aware.assignment.non_overlap_cost</a> and

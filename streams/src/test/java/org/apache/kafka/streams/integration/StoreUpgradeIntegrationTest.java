@@ -85,13 +85,13 @@ public class StoreUpgradeIntegrationTest {
 
     @Before
     public void createTopics() throws Exception {
-        inputStream = "input-stream-" + safeUniqueTestName(getClass(), testName);
+        inputStream = "input-stream-" + safeUniqueTestName(testName);
         CLUSTER.createTopic(inputStream);
     }
 
     private Properties props() {
         final Properties streamsConfiguration = new Properties();
-        final String safeTestName = safeUniqueTestName(getClass(), testName);
+        final String safeTestName = safeUniqueTestName(testName);
         streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, "app-" + safeTestName);
         streamsConfiguration.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
         streamsConfiguration.put(StreamsConfig.STATESTORE_CACHE_MAX_BYTES_CONFIG, 0);

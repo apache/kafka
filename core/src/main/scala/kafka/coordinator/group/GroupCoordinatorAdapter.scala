@@ -20,7 +20,7 @@ import kafka.common.OffsetAndMetadata
 import kafka.server.{KafkaConfig, ReplicaManager, RequestLocal}
 import kafka.utils.Implicits.MapExtensionMethods
 import org.apache.kafka.common.{TopicIdPartition, TopicPartition, Uuid}
-import org.apache.kafka.common.message.{ConsumerGroupHeartbeatRequestData, ConsumerGroupHeartbeatResponseData, DeleteGroupsResponseData, DescribeGroupsResponseData, HeartbeatRequestData, HeartbeatResponseData, JoinGroupRequestData, JoinGroupResponseData, LeaveGroupRequestData, LeaveGroupResponseData, ListGroupsRequestData, ListGroupsResponseData, OffsetCommitRequestData, OffsetCommitResponseData, OffsetDeleteRequestData, OffsetDeleteResponseData, OffsetFetchRequestData, OffsetFetchResponseData, SyncGroupRequestData, SyncGroupResponseData, TxnOffsetCommitRequestData, TxnOffsetCommitResponseData}
+import org.apache.kafka.common.message.{ConsumerGroupDescribeResponseData, ConsumerGroupHeartbeatRequestData, ConsumerGroupHeartbeatResponseData, DeleteGroupsResponseData, DescribeGroupsResponseData, HeartbeatRequestData, HeartbeatResponseData, JoinGroupRequestData, JoinGroupResponseData, LeaveGroupRequestData, LeaveGroupResponseData, ListGroupsRequestData, ListGroupsResponseData, OffsetCommitRequestData, OffsetCommitResponseData, OffsetDeleteRequestData, OffsetDeleteResponseData, OffsetFetchRequestData, OffsetFetchResponseData, SyncGroupRequestData, SyncGroupResponseData, TxnOffsetCommitRequestData, TxnOffsetCommitResponseData}
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.record.RecordBatch
@@ -29,6 +29,7 @@ import org.apache.kafka.common.utils.{BufferSupplier, Time}
 import org.apache.kafka.image.{MetadataDelta, MetadataImage}
 import org.apache.kafka.server.util.FutureUtils
 
+import java.time.Duration
 import java.util
 import java.util.{Optional, OptionalInt, Properties}
 import java.util.concurrent.CompletableFuture
@@ -546,6 +547,19 @@ private[group] class GroupCoordinatorAdapter(
     future
   }
 
+  override def completeTransaction(
+    tp: TopicPartition,
+    producerId: Long,
+    producerEpoch: Short,
+    coordinatorEpoch: Int,
+    result: TransactionResult,
+    timeout: Duration
+  ): CompletableFuture[Void] = {
+    FutureUtils.failedFuture(new IllegalStateException(
+      s"The old group coordinator does not support `completeTransaction` API."
+    ))
+  }
+
   override def partitionFor(groupId: String): Int = {
     coordinator.partitionFor(groupId)
   }
@@ -600,5 +614,14 @@ private[group] class GroupCoordinatorAdapter(
 
   override def shutdown(): Unit = {
     coordinator.shutdown()
+  }
+
+  override def consumerGroupDescribe(
+    context: RequestContext,
+    groupIds: util.List[String]
+  ): CompletableFuture[util.List[ConsumerGroupDescribeResponseData.DescribedGroup]] = {
+    FutureUtils.failedFuture(Errors.UNSUPPORTED_VERSION.exception(
+      s"The old group coordinator does not support ${ApiKeys.CONSUMER_GROUP_DESCRIBE.name} API."
+    ))
   }
 }

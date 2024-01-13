@@ -58,9 +58,31 @@ class SecurityTest(EndToEndTest):
         return True
 
     @cluster(num_nodes=6)
-    @matrix(security_protocol=['PLAINTEXT'], interbroker_security_protocol=['SSL'], metadata_quorum=quorum.all_non_upgrade)
-    @matrix(security_protocol=['SSL'], interbroker_security_protocol=['PLAINTEXT'], metadata_quorum=quorum.all_non_upgrade)
-    def test_client_ssl_endpoint_validation_failure(self, security_protocol, interbroker_security_protocol, metadata_quorum=quorum.zk):
+    @matrix(
+        security_protocol=['PLAINTEXT'],
+        interbroker_security_protocol=['SSL'],
+        metadata_quorum=[quorum.zk],
+        use_new_coordinator=[False]
+    )
+    @matrix(
+        security_protocol=['PLAINTEXT'],
+        interbroker_security_protocol=['SSL'],
+        metadata_quorum=[quorum.isolated_kraft],
+        use_new_coordinator=[True, False]
+    )
+    @matrix(
+        security_protocol=['SSL'],
+        interbroker_security_protocol=['PLAINTEXT'],
+        metadata_quorum=[quorum.zk],
+        use_new_coordinator=[False]
+    )
+    @matrix(
+        security_protocol=['SSL'],
+        interbroker_security_protocol=['PLAINTEXT'],
+        metadata_quorum=[quorum.isolated_kraft],
+        use_new_coordinator=[True, False]
+    )
+    def test_client_ssl_endpoint_validation_failure(self, security_protocol, interbroker_security_protocol, metadata_quorum=quorum.zk, use_new_coordinator=False):
         """
         Test that invalid hostname in certificate results in connection failures.
         When security_protocol=SSL, client SSL handshakes are expected to fail due to hostname verification failure.
@@ -132,8 +154,15 @@ class SecurityTest(EndToEndTest):
         self.consumer.start()
 
     @cluster(num_nodes=2)
-    @matrix(metadata_quorum=[quorum.zk, quorum.isolated_kraft])
-    def test_quorum_ssl_endpoint_validation_failure(self, metadata_quorum=quorum.zk):
+    @matrix(
+        metadata_quorum=[quorum.zk],
+        use_new_coordinator=[False]
+    )
+    @matrix(
+        metadata_quorum=[quorum.isolated_kraft],
+        use_new_coordinator=[True, False]
+    )
+    def test_quorum_ssl_endpoint_validation_failure(self, metadata_quorum=quorum.zk, use_new_coordinator=False):
         """
         Test that invalid hostname in ZooKeeper or KRaft Controller results in broker inability to start.
         """

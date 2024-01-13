@@ -24,9 +24,8 @@ import java.util.OptionalInt
 import java.util.concurrent.CompletableFuture
 import kafka.log.LogManager
 import kafka.log.UnifiedLog
-import kafka.raft.KafkaRaftManager.RaftIoThread
 import kafka.server.KafkaRaftServer.ControllerRole
-import kafka.server.{KafkaConfig, MetaProperties}
+import kafka.server.KafkaConfig
 import kafka.utils.CoreUtils
 import kafka.utils.FileLock
 import kafka.utils.Logging
@@ -42,52 +41,15 @@ import org.apache.kafka.common.security.JaasContext
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.utils.{LogContext, Time}
 import org.apache.kafka.raft.RaftConfig.{AddressSpec, InetAddressSpec, NON_ROUTABLE_ADDRESS, UnknownAddressSpec}
-import org.apache.kafka.raft.{FileBasedStateStore, KafkaNetworkChannel, KafkaRaftClient, LeaderAndEpoch, RaftClient, RaftConfig, RaftRequest, ReplicatedLog}
+import org.apache.kafka.raft.{FileBasedStateStore, KafkaNetworkChannel, KafkaRaftClient, KafkaRaftClientDriver, LeaderAndEpoch, RaftClient, RaftConfig, ReplicatedLog}
 import org.apache.kafka.server.common.serialization.RecordSerde
-import org.apache.kafka.server.util.{KafkaScheduler, ShutdownableThread}
+import org.apache.kafka.server.util.KafkaScheduler
 import org.apache.kafka.server.fault.FaultHandler
 import org.apache.kafka.server.util.timer.SystemTimer
 
 import scala.jdk.CollectionConverters._
 
 object KafkaRaftManager {
-  class RaftIoThread(
-    client: KafkaRaftClient[_],
-    threadNamePrefix: String,
-    fatalFaultHandler: FaultHandler
-  ) extends ShutdownableThread(threadNamePrefix + "-io-thread", false) with Logging {
-
-    this.logIdent = logPrefix
-
-    override def doWork(): Unit = {
-      try {
-        client.poll()
-      } catch {
-        case t: Throwable =>
-          throw fatalFaultHandler.handleFault("Unexpected error in raft IO thread", t)
-      }
-    }
-
-    override def initiateShutdown(): Boolean = {
-      if (super.initiateShutdown()) {
-        client.shutdown(5000).whenComplete { (_, exception) =>
-          if (exception != null) {
-            error("Graceful shutdown of RaftClient failed", exception)
-          } else {
-            info("Completed graceful shutdown of RaftClient")
-          }
-        }
-        true
-      } else {
-        false
-      }
-    }
-
-    override def isRunning: Boolean = {
-      client.isRunning && !isThreadFailed
-    }
-  }
-
   private def createLogDirectory(logDir: File, logDirName: String): File = {
     val logDirPath = logDir.getAbsolutePath
     val dir = new File(logDirPath, logDirName)
@@ -128,7 +90,7 @@ trait RaftManager[T] {
 }
 
 class KafkaRaftManager[T](
-  metaProperties: MetaProperties,
+  clusterId: String,
   config: KafkaConfig,
   recordSerde: RecordSerde[T],
   topicPartition: TopicPartition,
@@ -172,7 +134,7 @@ class KafkaRaftManager[T](
   private val expirationTimer = new SystemTimer("raft-expiration-executor")
   private val expirationService = new TimingWheelExpirationService(expirationTimer)
   override val client: KafkaRaftClient[T] = buildRaftClient()
-  private val raftIoThread = new RaftIoThread(client, threadNamePrefix, fatalFaultHandler)
+  private val clientDriver = new KafkaRaftClientDriver[T](client, threadNamePrefix, fatalFaultHandler, logContext)
 
   def startup(): Unit = {
     // Update the voter endpoints (if valid) with what's in RaftConfig
@@ -190,14 +152,13 @@ class KafkaRaftManager[T](
       }
     }
     netChannel.start()
-    raftIoThread.start()
+    clientDriver.start()
   }
 
   def shutdown(): Unit = {
     CoreUtils.swallow(expirationService.shutdown(), this)
     CoreUtils.swallow(expirationTimer.close(), this)
-    CoreUtils.swallow(raftIoThread.shutdown(), this)
-    CoreUtils.swallow(client.close(), this)
+    CoreUtils.swallow(clientDriver.shutdown(), this)
     CoreUtils.swallow(scheduler.shutdown(), this)
     CoreUtils.swallow(netChannel.close(), this)
     CoreUtils.swallow(replicatedLog.close(), this)
@@ -215,17 +176,7 @@ class KafkaRaftManager[T](
     request: ApiMessage,
     createdTimeMs: Long
   ): CompletableFuture[ApiMessage] = {
-    val inboundRequest = new RaftRequest.Inbound(
-      header.correlationId,
-      request,
-      createdTimeMs
-    )
-
-    client.handle(inboundRequest)
-
-    inboundRequest.completion.thenApply { response =>
-      response.data
-    }
+    clientDriver.handleRequest(header, request, createdTimeMs)
   }
 
   private def buildRaftClient(): KafkaRaftClient[T] = {
@@ -241,7 +192,7 @@ class KafkaRaftManager[T](
       metrics,
       expirationService,
       logContext,
-      metaProperties.clusterId,
+      clusterId,
       nodeId,
       raftConfig
     )

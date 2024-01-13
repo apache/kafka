@@ -20,10 +20,6 @@
   "name": "PushTelemetryRequest",
   "validVersions": "0",
   "flexibleVersions": "0+",
-  // The Telemetry APIs are added as part of KIP-714 and are still under
-  // development. Hence, the APIs are not exposed by default unless explicitly
-  // enabled.
-  "latestVersionUnstable": true,
   "fields": [
     {
       "name": "ClientInstanceId", "type": "uuid", "versions": "0+",

@@ -17,7 +17,9 @@
 package org.apache.kafka.connect.integration;
 
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.connect.runtime.rest.entities.CreateConnectorRequest;
 import org.apache.kafka.connect.runtime.rest.entities.LoggerLevel;
+import org.apache.kafka.connect.storage.StringConverter;
 import org.apache.kafka.connect.util.clusters.EmbeddedConnectStandalone;
 import org.apache.kafka.test.IntegrationTest;
 import org.junit.After;
@@ -26,12 +28,21 @@ import org.junit.Test;
 import org.junit.experimental.categories.Category;
 
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import static org.apache.kafka.connect.integration.MonitorableSourceConnector.TOPIC_CONFIG;
+import static org.apache.kafka.connect.runtime.ConnectorConfig.CONNECTOR_CLASS_CONFIG;
+import static org.apache.kafka.connect.runtime.ConnectorConfig.KEY_CONVERTER_CLASS_CONFIG;
+import static org.apache.kafka.connect.runtime.ConnectorConfig.TASKS_MAX_CONFIG;
+import static org.apache.kafka.connect.runtime.ConnectorConfig.VALUE_CONVERTER_CLASS_CONFIG;
+import static org.apache.kafka.connect.runtime.TopicCreationConfig.DEFAULT_TOPIC_CREATION_PREFIX;
+import static org.apache.kafka.connect.runtime.TopicCreationConfig.PARTITIONS_CONFIG;
+import static org.apache.kafka.connect.runtime.TopicCreationConfig.REPLICATION_FACTOR_CONFIG;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
@@ -40,6 +51,10 @@ import static org.junit.Assert.assertTrue;
 
 @Category(IntegrationTest.class)
 public class StandaloneWorkerIntegrationTest {
+
+    private static final String CONNECTOR_NAME = "test-connector";
+    private static final int NUM_TASKS = 4;
+    private static final String TOPIC_NAME = "test-topic";
 
     private EmbeddedConnectStandalone connect;
 
@@ -202,4 +217,42 @@ public class StandaloneWorkerIntegrationTest {
         return entry.getValue().level();
     }
 
+    @Test
+    public void testCreateConnectorWithStoppedInitialState() throws Exception {
+        CreateConnectorRequest createConnectorRequest = new CreateConnectorRequest(
+            CONNECTOR_NAME,
+            defaultSourceConnectorProps(TOPIC_NAME),
+            CreateConnectorRequest.InitialState.STOPPED
+        );
+        connect.configureConnector(createConnectorRequest);
+
+        // Verify that the connector's status is STOPPED and also that no tasks were spawned for the connector
+        connect.assertions().assertConnectorIsStopped(
+            CONNECTOR_NAME,
+            "Connector was not created in a stopped state"
+        );
+        assertEquals(Collections.emptyList(), connect.connectorInfo(CONNECTOR_NAME).tasks());
+        assertEquals(Collections.emptyList(), connect.taskConfigs(CONNECTOR_NAME));
+
+        // Verify that a connector created in the STOPPED state can be resumed successfully
+        connect.resumeConnector(CONNECTOR_NAME);
+        connect.assertions().assertConnectorAndExactlyNumTasksAreRunning(
+            CONNECTOR_NAME,
+            NUM_TASKS,
+            "Connector or tasks did not start running healthily in time"
+        );
+    }
+
+    private Map<String, String> defaultSourceConnectorProps(String topic) {
+        // setup props for the source connector
+        Map<String, String> props = new HashMap<>();
+        props.put(CONNECTOR_CLASS_CONFIG, MonitorableSourceConnector.class.getSimpleName());
+        props.put(TASKS_MAX_CONFIG, String.valueOf(NUM_TASKS));
+        props.put(TOPIC_CONFIG, topic);
+        props.put(KEY_CONVERTER_CLASS_CONFIG, StringConverter.class.getName());
+        props.put(VALUE_CONVERTER_CLASS_CONFIG, StringConverter.class.getName());
+        props.put(DEFAULT_TOPIC_CREATION_PREFIX + REPLICATION_FACTOR_CONFIG, String.valueOf(1));
+        props.put(DEFAULT_TOPIC_CREATION_PREFIX + PARTITIONS_CONFIG, String.valueOf(1));
+        return props;
+    }
 }
