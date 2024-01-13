@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.storage.internals.log;
 
+import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 
 import java.util.List;
@@ -30,6 +31,6 @@ public class LogRoll implements SegmentDeletionReason {
 
     @Override
     public void logReason(List<LogSegment> toDelete) {
-        logger.info("Deleting segments as part of log roll: {}", LocalLog.mkString(toDelete.iterator(), ", "));
+        logger.info("Deleting segments as part of log roll: {}", Utils.join(toDelete, ", "));
     }
 }

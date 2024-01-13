@@ -50,7 +50,7 @@ import java.util
 import java.util.concurrent.{ConcurrentHashMap, ConcurrentMap, ScheduledFuture}
 import java.util.function.Supplier
 import java.util.stream.Collectors
-import java.util.{Collections, Optional, OptionalInt, OptionalLong}
+import java.util.{Collections, Optional, OptionalInt, OptionalLong, stream}
 import scala.annotation.nowarn
 import scala.collection.mutable.ListBuffer
 import scala.collection.{Seq, mutable}
@@ -2264,18 +2264,19 @@ object UnifiedLog extends Logging {
                                            parentDir: String,
                                            topicPartition: TopicPartition): Unit = {
     val snapshotsToDelete = segments.stream().flatMap { segment =>
-      val snapshotOptional = producerStateManager.removeAndMarkSnapshotForDeletion(segment.baseOffset)
-      if (snapshotOptional.isPresent) util.stream.Stream.of[SnapshotFile](snapshotOptional.get) else util.stream.Stream.empty[SnapshotFile]
+      producerStateManager.removeAndMarkSnapshotForDeletion(segment.baseOffset)
+        .map[stream.Stream[SnapshotFile]](util.stream.Stream.of[SnapshotFile])
+        .orElseGet(() => util.stream.Stream.empty[SnapshotFile])
     }.collect(Collectors.toList[SnapshotFile])
 
     def deleteProducerSnapshots(): Unit = {
       LocalLog.maybeHandleIOException(logDirFailureChannel, parentDir,
         () => s"Error while deleting producer state snapshots for $topicPartition in dir $parentDir",
-        () => {
+        () =>
           snapshotsToDelete.forEach { snapshot =>
             snapshot.deleteIfExists()
           }
-        })
+        )
     }
 
     if (asyncDelete)

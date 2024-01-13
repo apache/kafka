@@ -45,7 +45,6 @@ import java.util.List;
 import java.util.Optional;
 import java.util.OptionalLong;
 import java.util.Set;
-import java.util.StringJoiner;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
 import java.util.function.Function;
@@ -865,7 +864,7 @@ public class LocalLog {
      * @param logger               The logger to log messages
      * @throws IOException if the file can't be renamed and still exists
      */
-    public static void deleteSegmentFiles(Iterable<LogSegment> segmentsToDelete,
+    public static void deleteSegmentFiles(Collection<LogSegment> segmentsToDelete,
                                           boolean asyncDelete,
                                           File dir,
                                           TopicPartition topicPartition,
@@ -879,7 +878,7 @@ public class LocalLog {
         }
 
         Runnable deleteSegments = () -> {
-            logger.info("Deleting segment files {}", mkString(segmentsToDelete.iterator(), ", "));
+            logger.info("Deleting segment files {}", Utils.join(segmentsToDelete, ", "));
             String parentDir = dir.getParent();
             maybeHandleIOException(logDirFailureChannel, parentDir,
                     () -> "Error while deleting segments for " + topicPartition + " in dir " + parentDir,
@@ -1085,14 +1084,6 @@ public class LocalLog {
 
             throw ex;
         }
-    }
-
-    public static String mkString(Iterator<LogSegment> segments, String delimiter) {
-        StringJoiner joiner = new StringJoiner(delimiter);
-        while (segments.hasNext()) {
-            joiner.add(segments.next().toString());
-        }
-        return joiner.toString();
     }
 
     /**

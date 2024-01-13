@@ -25,7 +25,7 @@ import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.server.util.Scheduler
 import org.apache.kafka.snapshot.Snapshots
 import org.apache.kafka.storage.internals.epoch.LeaderEpochFileCache
-import org.apache.kafka.storage.internals.log.{CorruptIndexException, LoadedLogOffsets, LocalLog, LogConfig, LogDirFailureChannel, LogFileUtils, LogOffsetMetadata, LogSegment, LogSegmentOffsetOverflowException, LogSegments, ProducerStateManager}
+import org.apache.kafka.storage.internals.log.{CorruptIndexException, LoadedLogOffsets, LogConfig, LogDirFailureChannel, LogFileUtils, LogOffsetMetadata, LogSegment, LogSegmentOffsetOverflowException, LogSegments, ProducerStateManager}
 
 import java.io.{File, IOException}
 import java.nio.file.{Files, NoSuchFileException}
@@ -497,7 +497,7 @@ class LogLoader(
       // remain valid and deterministic. We should also pass only the materialized view of the
       // iterator to the logic that deletes the segments.
       val toDelete = new util.ArrayList[LogSegment](segmentsToDelete)
-      info(s"Deleting segments as part of log recovery: ${LocalLog.mkString(toDelete.iterator(), ",")}")
+      info(s"Deleting segments as part of log recovery: ${Utils.join(toDelete, ",")}")
       toDelete.forEach { segment =>
         segments.remove(segment.baseOffset)
       }
