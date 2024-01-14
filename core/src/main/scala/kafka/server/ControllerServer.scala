@@ -368,6 +368,13 @@ class ControllerServer(
         ),
         "controller"))
 
+      // Register this instance for dynamic config changes to the KafkaConfig. This must be called
+      // after the authorizer and quotaManagers are initialized, since it references those objects.
+      // It must be called before DynamicClientQuotaPublisher is installed, since otherwise we may
+      // miss the initial update which establishes the dynamic configurations that are in effect on
+      // startup.
+      config.dynamicConfig.addReconfigurables(this)
+
       // Set up the client quotas publisher. This will enable controller mutation quotas and any
       // other quotas which are applicable.
       metadataPublishers.add(new DynamicClientQuotaPublisher(
@@ -383,7 +390,6 @@ class ControllerServer(
         "controller",
         credentialProvider
       ))
-
 
       // Set up the DelegationToken publisher.
       // We need a tokenManager for the Publisher
@@ -450,9 +456,6 @@ class ControllerServer(
       FutureUtils.waitWithLogging(logger.underlying, logIdent,
         "all of the SocketServer Acceptors to be started",
         socketServerFuture, startupDeadline, time)
-
-      // register this instance for dynamic config changes to the KafkaConfig
-      config.dynamicConfig.addReconfigurables(this)
     } catch {
       case e: Throwable =>
         maybeChangeStatus(STARTING, STARTED)
