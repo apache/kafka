@@ -67,6 +67,7 @@ import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -126,19 +127,6 @@ public class TopicCommandIntegrationTest extends kafka.integration.KafkaServerTe
                 Arrays.asList("--bootstrap-server", bootstrapServer).stream()
         ).toArray(String[]::new);
         return new TopicCommand.TopicCommandOptions(finalOptions);
-    }
-
-    private void createAndWaitTopic(TopicCommand.TopicCommandOptions opts) throws Exception {
-        topicService.createTopic(opts);
-        waitForTopicCreated(opts.topic().get());
-    }
-
-    private void waitForTopicCreated(String topicName) {
-        waitForTopicCreated(topicName, defaultTimeout);
-    }
-
-    private void waitForTopicCreated(String topicName, long timeout) {
-        TestUtils.waitForPartitionMetadata(brokers(), topicName, 0, timeout);
     }
 
     @BeforeEach
@@ -520,7 +508,7 @@ public class TopicCommandIntegrationTest extends kafka.integration.KafkaServerTe
         kafka.utils.TestUtils.waitUntilTrue(
             () -> brokers().forall(p -> p.metadataCache().getTopicPartitions(testTopicName).size() == alteredNumPartitions),
             () -> "Timeout waiting for new assignment propagating to broker",
-            org.apache.kafka.test.TestUtils.DEFAULT_MAX_WAIT_MS, 500L);
+            org.apache.kafka.test.TestUtils.DEFAULT_MAX_WAIT_MS, 100L);
 
         assignment = adminClient.describeTopics(Collections.singletonList(testTopicName))
             .allTopicNames().get().get(testTopicName).partitions().stream()
@@ -825,6 +813,8 @@ public class TopicCommandIntegrationTest extends kafka.integration.KafkaServerTe
             () -> "Reassignment didn't add the second node",
             org.apache.kafka.test.TestUtils.DEFAULT_MAX_WAIT_MS, 100L);
 
+        ensureConsistentKRaftMetadata();
+
         // describe the topic and test if it's under-replicated
         String simpleDescribeOutput = captureDescribeTopicStandardOut(buildTopicCommandOptionsWithBootstrap("--describe", "--topic", testTopicName));
         String[] simpleDescribeOutputRows = simpleDescribeOutput.split(System.lineSeparator());
@@ -837,19 +827,22 @@ public class TopicCommandIntegrationTest extends kafka.integration.KafkaServerTe
         assertEquals("", underReplicatedOutput,
             String.format("--under-replicated-partitions shouldn't return anything: '%s'", underReplicatedOutput));
 
-        // Verify reassignment is still ongoing.
-        PartitionReassignment reassignments = null;
-        int retryCount = 0;
         int maxRetries = 20;
-        while (reassignments == null && retryCount < maxRetries) {
-            reassignments = adminClient.listPartitionReassignments(Collections.singleton(tp)).reassignments().get().get(tp);
-            if (reassignments != null) {
-                break;
+        long pause = 100L;
+        long waitTimeMs = maxRetries * pause;
+        AtomicReference<PartitionReassignment> reassignmentsRef = new AtomicReference<>();
+
+        TestUtils.waitUntilTrue(() -> {
+            try {
+                PartitionReassignment tempReassignments = adminClient.listPartitionReassignments(Collections.singleton(tp)).reassignments().get().get(tp);
+                reassignmentsRef.set(tempReassignments);
+            } catch (InterruptedException | ExecutionException e) {
+                throw new RuntimeException("Error while fetching reassignments", e);
             }
-            retryCount++;
-            Thread.sleep(100L);
-        }
-        assertFalse(reassignments.addingReplicas().isEmpty());
+            return reassignmentsRef.get() != null;
+        }, () -> "Reassignments did not become non-null within the specified time", waitTimeMs, pause);
+
+        assertFalse(reassignmentsRef.get().addingReplicas().isEmpty());
 
         ToolsTestUtils.removeReplicationThrottleForPartitions(adminClient, brokerIds, Collections.singleton(tp));
         TestUtils.waitForAllReassignmentsToComplete(adminClient, 100L);
