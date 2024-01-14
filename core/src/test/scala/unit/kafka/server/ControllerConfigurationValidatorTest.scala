@@ -158,8 +158,8 @@ class ControllerConfigurationValidatorTest {
   @Test
   def testValidGroupConfig(): Unit = {
     val config = new TreeMap[String, String]()
-    config.put(GroupConfig.CONSUMER_SESSION_TIMEOUT_CONFIG, "50000")
-    config.put(GroupConfig.CONSUMER_HEARTBEAT_INTERVAL_CONFIG, "5000")
+    config.put(GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG, "50000")
+    config.put(GroupConfig.CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG, "5000")
     validator.validate(new ConfigResource(GROUP, "group"), config)
   }
 
@@ -174,8 +174,8 @@ class ControllerConfigurationValidatorTest {
   @Test
   def testNullGroupConfigValue(): Unit = {
     val config = new TreeMap[String, String]()
-    config.put(GroupConfig.CONSUMER_SESSION_TIMEOUT_CONFIG, "50000")
-    config.put(GroupConfig.CONSUMER_HEARTBEAT_INTERVAL_CONFIG, null)
+    config.put(GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG, "50000")
+    config.put(GroupConfig.CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG, null)
     assertEquals("Null value not supported for group configs: consumer.heartbeat.interval.ms",
       assertThrows(classOf[InvalidConfigurationException], () => validator.validate(
         new ConfigResource(GROUP, "group"), config)).getMessage)
@@ -184,7 +184,7 @@ class ControllerConfigurationValidatorTest {
   @Test
   def testInvalidGroupConfig(): Unit = {
     val config = new TreeMap[String, String]()
-    config.put(GroupConfig.CONSUMER_SESSION_TIMEOUT_CONFIG, "50000")
+    config.put(GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG, "50000")
     config.put("foobar", "abc")
     assertEquals("Unknown group config name: foobar",
       assertThrows(classOf[InvalidConfigurationException], () => validator.validate(

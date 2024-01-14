@@ -529,10 +529,10 @@ object KafkaConfig {
   val GroupCoordinatorNumThreadsProp = "group.coordinator.threads"
 
   /** Consumer group configs */
-  val ConsumerGroupSessionTimeoutMsProp = GroupConfigPrefix + GroupConfig.CONSUMER_SESSION_TIMEOUT_CONFIG
+  val ConsumerGroupSessionTimeoutMsProp = GroupConfigPrefix + GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG
   val ConsumerGroupMinSessionTimeoutMsProp = "group.consumer.min.session.timeout.ms"
   val ConsumerGroupMaxSessionTimeoutMsProp = "group.consumer.max.session.timeout.ms"
-  val ConsumerGroupHeartbeatIntervalMsProp = GroupConfigPrefix + GroupConfig.CONSUMER_HEARTBEAT_INTERVAL_CONFIG
+  val ConsumerGroupHeartbeatIntervalMsProp = GroupConfigPrefix + GroupConfig.CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG
   val ConsumerGroupMinHeartbeatIntervalMsProp = "group.consumer.min.heartbeat.interval.ms"
   val ConsumerGroupMaxHeartbeatIntervalMsProp ="group.consumer.max.heartbeat.interval.ms"
   val ConsumerGroupMaxSizeProp = "group.consumer.max.size"
@@ -2571,8 +2571,8 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
 
   def extractGroupConfigMap: java.util.Map[String, Object] = {
     val groupProps = new java.util.HashMap[String, Object]()
-    groupProps.put(GroupConfig.CONSUMER_SESSION_TIMEOUT_CONFIG, consumerGroupSessionTimeoutMs)
-    groupProps.put(GroupConfig.CONSUMER_HEARTBEAT_INTERVAL_CONFIG, consumerGroupHeartbeatIntervalMs)
+    groupProps.put(GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG, consumerGroupSessionTimeoutMs)
+    groupProps.put(GroupConfig.CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG, consumerGroupHeartbeatIntervalMs)
     groupProps
   }
 

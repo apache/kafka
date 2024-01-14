@@ -17,8 +17,8 @@
 
 package org.apache.kafka.coordinator.group;
 
-import static org.apache.kafka.coordinator.group.GroupConfig.CONSUMER_HEARTBEAT_INTERVAL_CONFIG;
-import static org.apache.kafka.coordinator.group.GroupConfig.CONSUMER_SESSION_TIMEOUT_CONFIG;
+import static org.apache.kafka.coordinator.group.GroupConfig.CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG;
+import static org.apache.kafka.coordinator.group.GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG;
 import static org.apache.kafka.coordinator.group.GroupConfig.DEFAULT_CONSUMER_GROUP_HEARTBEAT_INTERVAL_MS;
 import static org.apache.kafka.coordinator.group.GroupConfig.DEFAULT_CONSUMER_GROUP_SESSION_TIMEOUT_MS;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -27,8 +27,6 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import org.apache.kafka.common.errors.InvalidRequestException;
-import org.apache.kafka.coordinator.group.GroupConfig;
-import org.apache.kafka.coordinator.group.GroupConfigManager;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -70,21 +68,21 @@ public class GroupConfigManagerTest {
     public void testUpdateGroupConfig() {
         String groupId = "foo";
         Properties props = new Properties();
-        props.put(CONSUMER_SESSION_TIMEOUT_CONFIG, "20");
+        props.put(CONSUMER_SESSION_TIMEOUT_MS_CONFIG, "20");
         configManager.updateGroupConfig(groupId, props);
 
         Optional<GroupConfig> configOptional = configManager.getGroupConfig(groupId);
         assertTrue(configOptional.isPresent());
 
         GroupConfig config = configOptional.get();
-        assertEquals(20, config.getInt(CONSUMER_SESSION_TIMEOUT_CONFIG));
-        assertEquals(DEFAULT_CONSUMER_GROUP_HEARTBEAT_INTERVAL_MS, config.getInt(CONSUMER_HEARTBEAT_INTERVAL_CONFIG));
+        assertEquals(20, config.getInt(CONSUMER_SESSION_TIMEOUT_MS_CONFIG));
+        assertEquals(DEFAULT_CONSUMER_GROUP_HEARTBEAT_INTERVAL_MS, config.getInt(CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG));
     }
 
     private GroupConfigManager createConfigManager() {
         Map<String, String> defaultConfig = new HashMap<>();
-        defaultConfig.put(CONSUMER_SESSION_TIMEOUT_CONFIG, String.valueOf(DEFAULT_CONSUMER_GROUP_SESSION_TIMEOUT_MS));
-        defaultConfig.put(CONSUMER_HEARTBEAT_INTERVAL_CONFIG,
+        defaultConfig.put(CONSUMER_SESSION_TIMEOUT_MS_CONFIG, String.valueOf(DEFAULT_CONSUMER_GROUP_SESSION_TIMEOUT_MS));
+        defaultConfig.put(CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG,
             String.valueOf(DEFAULT_CONSUMER_GROUP_HEARTBEAT_INTERVAL_MS));
         return new GroupConfigManager(defaultConfig);
     }

@@ -36,14 +36,14 @@ import java.util.Properties;
  */
 public class GroupConfig extends AbstractConfig {
 
-    public static final String CONSUMER_SESSION_TIMEOUT_CONFIG = "consumer.session.timeout.ms";
+    public static final String CONSUMER_SESSION_TIMEOUT_MS_CONFIG = "consumer.session.timeout.ms";
 
-    public static final String CONSUMER_SESSION_TIMEOUT_DOC
+    public static final String CONSUMER_SESSION_TIMEOUT_MS_DOC
         = "The timeout to detect client failures when using the consumer group protocol.";
 
-    public static final String CONSUMER_HEARTBEAT_INTERVAL_CONFIG = "consumer.heartbeat.interval.ms";
+    public static final String CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG = "consumer.heartbeat.interval.ms";
 
-    public static final String CONSUMER_HEARTBEAT_INTERVAL_DOC
+    public static final String CONSUMER_HEARTBEAT_INTERVAL_MS_DOC
         = "The heartbeat interval given to the members of a consumer group.";
 
     public static final int DEFAULT_CONSUMER_GROUP_SESSION_TIMEOUT_MS = 45 * 1000;
@@ -54,10 +54,10 @@ public class GroupConfig extends AbstractConfig {
 
     static {
         CONFIG
-            .define(CONSUMER_SESSION_TIMEOUT_CONFIG, INT, DEFAULT_CONSUMER_GROUP_SESSION_TIMEOUT_MS, atLeast(1),
-                MEDIUM, CONSUMER_SESSION_TIMEOUT_DOC)
-            .define(CONSUMER_HEARTBEAT_INTERVAL_CONFIG, INT, DEFAULT_CONSUMER_GROUP_HEARTBEAT_INTERVAL_MS, atLeast(1),
-                MEDIUM, CONSUMER_HEARTBEAT_INTERVAL_DOC);
+            .define(CONSUMER_SESSION_TIMEOUT_MS_CONFIG, INT, DEFAULT_CONSUMER_GROUP_SESSION_TIMEOUT_MS, atLeast(1),
+                MEDIUM, CONSUMER_SESSION_TIMEOUT_MS_DOC)
+            .define(CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG, INT, DEFAULT_CONSUMER_GROUP_HEARTBEAT_INTERVAL_MS, atLeast(1),
+                MEDIUM, CONSUMER_HEARTBEAT_INTERVAL_MS_DOC);
     }
 
     public final int sessionTimeoutMs;
@@ -67,8 +67,8 @@ public class GroupConfig extends AbstractConfig {
     public GroupConfig(Map<?, ?> props) {
         super(CONFIG, props, false);
 
-        this.sessionTimeoutMs = getInt(CONSUMER_SESSION_TIMEOUT_CONFIG);
-        this.heartbeatIntervalMs = getInt(CONSUMER_HEARTBEAT_INTERVAL_CONFIG);
+        this.sessionTimeoutMs = getInt(CONSUMER_SESSION_TIMEOUT_MS_CONFIG);
+        this.heartbeatIntervalMs = getInt(CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG);
     }
 
     public static List<String> configNames() {

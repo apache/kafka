@@ -473,42 +473,36 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
   }
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testDynamicGroupConfigChange(quorum: String): Unit = {
     val newSessionTimeoutMs = 50000
     val consumerGroupId = "group-foo"
-    if (isKRaftTest()) {
-      val admin = createAdminClient()
-      try {
-        val resource = new ConfigResource(ConfigResource.Type.GROUP, consumerGroupId)
-        val op = new AlterConfigOp(new ConfigEntry(GroupConfig.CONSUMER_SESSION_TIMEOUT_CONFIG, newSessionTimeoutMs.toString),
-          SET)
-        admin.incrementalAlterConfigs(Map(resource -> List(op).asJavaCollection).asJava).all.get
-      } finally {
-        admin.close()
-      }
-    } else {
-      val newProps = new Properties()
-      newProps.put(GroupConfig.CONSUMER_SESSION_TIMEOUT_CONFIG, newSessionTimeoutMs.toString)
-      adminZkClient.changeGroupConfig(consumerGroupId, newProps)
+    val admin = createAdminClient()
+    try {
+      val resource = new ConfigResource(ConfigResource.Type.GROUP, consumerGroupId)
+      val op = new AlterConfigOp(new ConfigEntry(GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG, newSessionTimeoutMs.toString),
+        SET)
+      admin.incrementalAlterConfigs(Map(resource -> List(op).asJavaCollection).asJava).all.get
+    } finally {
+      admin.close()
     }
 
     TestUtils.retry(10000) {
-      val configOpt = brokers.head.groupConfigManager.getGroupConfig(consumerGroupId)
+      val configOpt = brokerServers.head.groupConfigManager.getGroupConfig(consumerGroupId)
       assertTrue(configOpt.isPresent)
     }
 
-    val groupConfig = brokers.head.groupConfigManager.getGroupConfig(consumerGroupId).get()
+    val groupConfig = brokerServers.head.groupConfigManager.getGroupConfig(consumerGroupId).get()
     assertEquals(newSessionTimeoutMs, groupConfig.sessionTimeoutMs)
   }
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testIncrementalAlterDefaultGroupConfig(quorum: String): Unit = {
     val admin = createAdminClient()
     try {
       val resource = new ConfigResource(ConfigResource.Type.GROUP, "")
-      val op = new AlterConfigOp(new ConfigEntry(GroupConfig.CONSUMER_SESSION_TIMEOUT_CONFIG, "200000"), SET)
+      val op = new AlterConfigOp(new ConfigEntry(GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG, "200000"), SET)
       val future = admin.incrementalAlterConfigs(Map(resource -> List(op).asJavaCollection).asJava).all
       TestUtils.assertFutureExceptionTypeEquals(future, classOf[InvalidRequestException])
     } finally {
@@ -650,7 +644,7 @@ class DynamicConfigChangeUnitTest {
   def testGroupHandlerInvalidGroupId(): Unit = {
     val configHandler = new GroupConfigHandler(new GroupConfigManager(new util.HashMap[String, String]))
     val props: Properties = new Properties()
-    props.put(GroupConfig.CONSUMER_SESSION_TIMEOUT_CONFIG, "45000")
+    props.put(GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG, "45000")
 
     assertThrows(classOf[InvalidRequestException], () => configHandler.processConfigChanges("", props))
   }

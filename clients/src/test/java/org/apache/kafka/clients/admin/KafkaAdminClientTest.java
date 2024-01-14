@@ -52,6 +52,7 @@ import org.apache.kafka.common.errors.ClusterAuthorizationException;
 import org.apache.kafka.common.errors.FencedInstanceIdException;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
 import org.apache.kafka.common.errors.GroupSubscribedToTopicException;
+import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.common.errors.InvalidRequestException;
 import org.apache.kafka.common.errors.InvalidTopicException;
 import org.apache.kafka.common.errors.LogDirNotFoundException;
@@ -4113,17 +4114,17 @@ public class KafkaAdminClientTest {
                     .setErrorMessage("Config value append is not allowed for config"));
 
             responseData.responses().add(new AlterConfigsResourceResponse()
-                    .setResourceName("")
+                    .setResourceName("group1")
                     .setResourceType(ConfigResource.Type.GROUP.id())
-                    .setErrorCode(Errors.INVALID_REQUEST.code())
-                    .setErrorMessage("Default group resources are not allowed."));
+                    .setErrorCode(Errors.INVALID_CONFIG.code())
+                    .setErrorMessage("Unknown group config name: group.initial.rebalance.delay.ms"));
 
             env.kafkaClient().prepareResponse(new IncrementalAlterConfigsResponse(responseData));
 
             ConfigResource brokerResource = new ConfigResource(ConfigResource.Type.BROKER, "");
             ConfigResource topicResource = new ConfigResource(ConfigResource.Type.TOPIC, "topic1");
             ConfigResource metricResource = new ConfigResource(ConfigResource.Type.CLIENT_METRICS, "metric1");
-            ConfigResource groupResource = new ConfigResource(ConfigResource.Type.GROUP, "");
+            ConfigResource groupResource = new ConfigResource(ConfigResource.Type.GROUP, "group1");
 
             AlterConfigOp alterConfigOp1 = new AlterConfigOp(
                     new ConfigEntry("log.segment.bytes", "1073741"),
@@ -4138,7 +4139,7 @@ public class KafkaAdminClientTest {
                     AlterConfigOp.OpType.APPEND);
 
             AlterConfigOp alterConfigOp4 = new AlterConfigOp(
-                    new ConfigEntry("consumer.session.timeout.ms", "1000"),
+                    new ConfigEntry("group.initial.rebalance.delay.ms", "1000"),
                     AlterConfigOp.OpType.SET);
 
             final Map<ConfigResource, Collection<AlterConfigOp>> configs = new HashMap<>();
@@ -4151,7 +4152,7 @@ public class KafkaAdminClientTest {
             TestUtils.assertFutureError(result.values().get(brokerResource), ClusterAuthorizationException.class);
             TestUtils.assertFutureError(result.values().get(topicResource), InvalidRequestException.class);
             TestUtils.assertFutureError(result.values().get(metricResource), InvalidRequestException.class);
-            TestUtils.assertFutureError(result.values().get(groupResource), InvalidRequestException.class);
+            TestUtils.assertFutureError(result.values().get(groupResource), InvalidConfigurationException.class);
 
             // Test a call where there are no errors.
             responseData =  new IncrementalAlterConfigsResponseData();
@@ -4166,12 +4167,11 @@ public class KafkaAdminClientTest {
                     .setErrorCode(Errors.NONE.code())
                     .setErrorMessage(ApiError.NONE.message()));
             responseData.responses().add(new AlterConfigsResourceResponse()
-                    .setResourceName("group")
+                    .setResourceName("group1")
                     .setResourceType(ConfigResource.Type.GROUP.id())
                     .setErrorCode(Errors.NONE.code())
                     .setErrorMessage(ApiError.NONE.message()));
 
-            groupResource = new ConfigResource(ConfigResource.Type.GROUP, "group");
             final Map<ConfigResource, Collection<AlterConfigOp>> successConfig = new HashMap<>();
             successConfig.put(brokerResource, singletonList(alterConfigOp1));
             successConfig.put(metricResource, singletonList(alterConfigOp3));

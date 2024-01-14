@@ -30,7 +30,7 @@ import org.apache.kafka.common.metrics.{Metrics, MetricsReporter}
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.security.token.delegation.internals.DelegationTokenCache
 import org.apache.kafka.common.utils.Time
-import org.apache.kafka.coordinator.group.{GroupConfigManager, GroupCoordinator}
+import org.apache.kafka.coordinator.group.GroupCoordinator
 import org.apache.kafka.metadata.BrokerState
 import org.apache.kafka.server.NodeToControllerChannelManager
 import org.apache.kafka.server.authorizer.Authorizer
@@ -97,7 +97,6 @@ trait KafkaBroker extends Logging {
   def credentialProvider: CredentialProvider
   def clientToControllerChannelManager: NodeToControllerChannelManager
   def tokenCache: DelegationTokenCache
-  def groupConfigManager: GroupConfigManager
 
   private val metricsGroup = new KafkaMetricsGroup(this.getClass) {
     // For backwards compatibility, we need to keep older metrics tied

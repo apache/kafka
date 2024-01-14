@@ -46,7 +46,7 @@ import org.apache.kafka.common.security.token.delegation.internals.DelegationTok
 import org.apache.kafka.common.security.{JaasContext, JaasUtils}
 import org.apache.kafka.common.utils.{AppInfoParser, LogContext, Time, Utils}
 import org.apache.kafka.common.{Endpoint, KafkaException, Node, TopicPartition}
-import org.apache.kafka.coordinator.group.{GroupConfigManager, GroupCoordinator}
+import org.apache.kafka.coordinator.group.GroupCoordinator
 import org.apache.kafka.image.loader.metrics.MetadataLoaderMetrics
 import org.apache.kafka.metadata.properties.MetaPropertiesEnsemble.VerificationFlag
 import org.apache.kafka.metadata.properties.MetaPropertiesEnsemble.VerificationFlag.REQUIRE_V0
@@ -202,10 +202,6 @@ class KafkaServer(
   private var raftManager: KafkaRaftManager[ApiMessageAndVersion] = _
 
   @volatile var brokerEpochManager: ZkBrokerEpochManager = _
-
-  var _groupConfigManager: GroupConfigManager = _
-
-  override def groupConfigManager: GroupConfigManager = _groupConfigManager
 
   def brokerEpochSupplier(): Long = Option(brokerEpochManager).map(_.get()).getOrElse(-1)
 
@@ -497,8 +493,6 @@ class KafkaServer(
         )
         groupCoordinator.startup(() => zkClient.getTopicPartitionCount(Topic.GROUP_METADATA_TOPIC_NAME).getOrElse(config.offsetsTopicPartitions))
 
-        _groupConfigManager = new GroupConfigManager(config.extractGroupConfigMap)
-
         /* create producer ids manager */
         val producerIdManager = if (config.interBrokerProtocolVersion.isAllocateProducerIdsSupported) {
           ProducerIdManager.rpc(
@@ -608,9 +602,7 @@ class KafkaServer(
                                                            ConfigType.CLIENT -> new ClientIdConfigHandler(quotaManagers),
                                                            ConfigType.USER -> new UserConfigHandler(quotaManagers, credentialProvider),
                                                            ConfigType.BROKER -> new BrokerConfigHandler(config, quotaManagers),
-                                                           ConfigType.IP -> new IpConfigHandler(socketServer.connectionQuotas),
-                                                           ConfigType.GROUP -> new GroupConfigHandler(_groupConfigManager))
-
+                                                           ConfigType.IP -> new IpConfigHandler(socketServer.connectionQuotas))
         // Create the config manager. start listening to notifications
         dynamicConfigManager = new ZkConfigManager(zkClient, dynamicConfigHandlers)
         dynamicConfigManager.startup()
@@ -1044,8 +1036,6 @@ class KafkaServer(
 
         if (raftManager != null)
           CoreUtils.swallow(raftManager.shutdown(), this)
-        if (groupConfigManager != null)
-          CoreUtils.swallow(groupConfigManager.close(), this)
 
         if (lifecycleManager != null) {
           lifecycleManager.close()

@@ -47,7 +47,6 @@ import org.apache.kafka.common.requests.CreateTopicsRequest._
 import org.apache.kafka.common.requests.{AlterConfigsRequest, ApiError}
 import org.apache.kafka.common.security.scram.internals.{ScramCredentialUtils, ScramFormatter}
 import org.apache.kafka.common.utils.Sanitizer
-import org.apache.kafka.coordinator.group.GroupConfig
 import org.apache.kafka.server.common.AdminOperationException
 import org.apache.kafka.server.config.{ConfigEntityName, ConfigType}
 import org.apache.kafka.storage.internals.log.LogConfig
@@ -479,23 +478,6 @@ class ZkAdminManager(val config: KafkaConfig,
 
     resource -> ApiError.NONE
   }
-
-  private def alterGroupConfigs(resource: ConfigResource, validateOnly: Boolean,
-                                configProps: Properties, configEntriesMap: Map[String, String]): (ConfigResource, ApiError) = {
-    val groupId = resource.name;
-    if (groupId.isEmpty) {
-      throw new InvalidRequestException("Default group resources are not allowed.")
-    }
-    GroupConfig.validate(configProps)
-    validateConfigPolicy(resource, configEntriesMap)
-    if (!validateOnly) {
-      info(s"Updating group $groupId with new configuration: ${toLoggableProps(resource, configProps).mkString(",")}" )
-      adminZkClient.changeGroupConfig(groupId, configProps)
-    }
-
-    resource -> ApiError.NONE
-  }
-
   private def getBrokerId(resource: ConfigResource) = {
     if (resource.name == null || resource.name.isEmpty)
       None
@@ -540,16 +522,6 @@ class ZkAdminManager(val config: KafkaConfig,
             val configProps = this.config.dynamicConfig.fromPersistentProps(persistentProps, perBrokerConfig)
             prepareIncrementalConfigs(alterConfigOps, configProps, KafkaConfig.configKeys)
             alterBrokerConfigs(resource, validateOnly, configProps, configEntriesMap)
-
-          case ConfigResource.Type.GROUP =>
-            if (resource.name.isEmpty) {
-              throw new InvalidRequestException("Default group resources are not allowed.")
-            }
-            val configProps = adminZkClient.fetchEntityConfig(ConfigType.GROUP, resource.name)
-            prepareIncrementalConfigs(alterConfigOps, configProps, KafkaConfig.configKeys)
-            alterGroupConfigs(resource, validateOnly, configProps, configEntriesMap)
-
-
           case resourceType =>
             throw new InvalidRequestException(s"AlterConfigs is only supported for topics and brokers, but resource type is $resourceType")
         }

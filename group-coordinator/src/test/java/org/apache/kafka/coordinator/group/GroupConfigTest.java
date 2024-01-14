@@ -22,7 +22,6 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
-import org.apache.kafka.coordinator.group.GroupConfig;
 import org.junit.jupiter.api.Test;
 
 import java.util.HashMap;
@@ -34,9 +33,9 @@ public class GroupConfigTest {
     @Test
     public void testFromPropsInvalid() {
         GroupConfig.configNames().forEach(name -> {
-            if (GroupConfig.CONSUMER_SESSION_TIMEOUT_CONFIG.equals(name)) {
+            if (GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG.equals(name)) {
                 assertPropertyInvalid(name, "not_a_number", "-0.1", "1.2");
-            } else if (GroupConfig.CONSUMER_HEARTBEAT_INTERVAL_CONFIG.equals(name)) {
+            } else if (GroupConfig.CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG.equals(name)) {
                 assertPropertyInvalid(name, "not_a_number", "-0.1", "1.2");
             } else {
                 assertPropertyInvalid(name, "not_a_number", "-1");
@@ -63,29 +62,29 @@ public class GroupConfigTest {
 
     private void doTestInvalidProps(int sessionTimeoutMs, int heartbeatIntervalMs) {
         Properties props = new Properties();
-        props.put(GroupConfig.CONSUMER_SESSION_TIMEOUT_CONFIG, String.valueOf(sessionTimeoutMs));
-        props.put(GroupConfig.CONSUMER_HEARTBEAT_INTERVAL_CONFIG, String.valueOf(heartbeatIntervalMs));
+        props.put(GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG, String.valueOf(sessionTimeoutMs));
+        props.put(GroupConfig.CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG, String.valueOf(heartbeatIntervalMs));
         assertThrows(ConfigException.class, () -> GroupConfig.validate(props));
     }
 
     @Test
     public void testFromPropsWithDefaultValue() {
         Map<String, String> defaultValue = new HashMap<>();
-        defaultValue.put(GroupConfig.CONSUMER_SESSION_TIMEOUT_CONFIG, "10");
-        defaultValue.put(GroupConfig.CONSUMER_HEARTBEAT_INTERVAL_CONFIG, "10");
+        defaultValue.put(GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG, "10");
+        defaultValue.put(GroupConfig.CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG, "10");
 
         Properties props = new Properties();
-        props.put(GroupConfig.CONSUMER_SESSION_TIMEOUT_CONFIG, "20");
+        props.put(GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG, "20");
         GroupConfig config = GroupConfig.fromProps(defaultValue, props);
 
-        assertEquals(10, config.getInt(GroupConfig.CONSUMER_HEARTBEAT_INTERVAL_CONFIG));
-        assertEquals(20, config.getInt(GroupConfig.CONSUMER_SESSION_TIMEOUT_CONFIG));
+        assertEquals(10, config.getInt(GroupConfig.CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG));
+        assertEquals(20, config.getInt(GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG));
     }
 
     @Test
     public void testInvalidConfigName() {
         Properties props = new Properties();
-        props.put(GroupConfig.CONSUMER_SESSION_TIMEOUT_CONFIG, "10");
+        props.put(GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG, "10");
         props.put("invalid.config.name", "10");
         assertThrows(InvalidConfigurationException.class, () -> GroupConfig.validate(props));
     }

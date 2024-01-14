@@ -268,7 +268,7 @@ class ClientMetricsConfigHandler(private val clientMetricsManager: ClientMetrics
 }
 
 /**
- * The GroupConfigHandler will process individual group config changes in ZK.
+ * The GroupConfigHandler will process individual group config changes.
  */
 class GroupConfigHandler(private val groupConfigManager: GroupConfigManager) extends ConfigHandler with Logging {
   override def processConfigChanges(groupId: String, properties: Properties): Unit = {
