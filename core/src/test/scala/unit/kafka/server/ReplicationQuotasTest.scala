@@ -56,8 +56,6 @@ import scala.jdk.CollectionConverters._
   * Anything over 100MB/s tends to fail as this is the non-throttled replication rate
   */
 class ReplicationQuotasTest extends QuorumTestHarness {
-  def percentError(percent: Int, value: Long): Long = Math.round(value * percent / 100.0)
-
   val msg100KB = new Array[Byte](100000)
   val listenerName: ListenerName = ListenerName.forSecurityProtocol(PLAINTEXT)
   var brokers: Seq[KafkaBroker] = _
@@ -116,9 +114,9 @@ class ReplicationQuotasTest extends QuorumTestHarness {
     if (!leaderThrottle) throttle = throttle * 3
 
     TestUtils.resource(createAdminClient(brokers, listenerName)) { admin =>
-      if (isKRaftTest())
+      if (isKRaftTest()) {
         (106 to 107).foreach(registerBroker)
-
+      }
       admin.createTopics(List(new NewTopic(topic, assignment.map(a => a._1.asInstanceOf[Integer] ->
         a._2.map(_.asInstanceOf[Integer]).toList.asJava).asJava)).asJava).all().get()
       //Set the throttle limit on all 8 brokers, but only assign throttled replicas to the six leaders, or two followers
@@ -232,9 +230,9 @@ class ReplicationQuotasTest extends QuorumTestHarness {
     val throttle: Long = msg.length * msgCount / expectedDuration
 
     TestUtils.resource(createAdminClient(brokers, listenerName)) { admin =>
-      if (isKRaftTest())
+      if (isKRaftTest()) {
         registerBroker(101)
-
+      }
       admin.createTopics(
         List(new NewTopic(topic, Collections.singletonMap(0, List(100, 101).map(_.asInstanceOf[Integer]).asJava))).asJava
       ).all().get()
