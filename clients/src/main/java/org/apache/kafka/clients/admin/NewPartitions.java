@@ -30,9 +30,9 @@ import java.util.Map;
 @InterfaceStability.Evolving
 public class NewPartitions {
 
-    private int totalCount;
+    private final int totalCount;
 
-    private List<List<Integer>> newAssignments;
+    private final List<List<Integer>> newAssignments;
 
     private NewPartitions(int totalCount, List<List<Integer>> newAssignments) {
         this.totalCount = totalCount;

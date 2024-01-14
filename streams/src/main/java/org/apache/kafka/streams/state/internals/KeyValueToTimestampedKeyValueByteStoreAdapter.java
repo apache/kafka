@@ -209,7 +209,7 @@ public class KeyValueToTimestampedKeyValueByteStoreAdapter implements KeyValueSt
 
     private static class KeyValueToTimestampedKeyValueAdapterIterator implements ManagedKeyValueIterator<Bytes, byte[]> {
 
-        private RocksDbIterator rocksDbIterator;
+        private final RocksDbIterator rocksDbIterator;
 
         public KeyValueToTimestampedKeyValueAdapterIterator(final RocksDbIterator rocksDbIterator) {
             this.rocksDbIterator = rocksDbIterator;

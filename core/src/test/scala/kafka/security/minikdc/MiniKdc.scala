@@ -275,6 +275,12 @@ class MiniKdc(config: Properties, workDir: File) extends Logging {
       if (kdc != null) {
         System.clearProperty(MiniKdc.JavaSecurityKrb5Conf)
         System.clearProperty(MiniKdc.SunSecurityKrb5Debug)
+
+        // Close kdc acceptors and wait for them to terminate, ensuring that sockets are closed before returning.
+        for (transport <- kdc.getTransports) {
+          val acceptor = transport.getAcceptor
+          if (acceptor != null) acceptor.dispose(true)
+        }
         kdc.stop()
         try ds.shutdown()
         catch {

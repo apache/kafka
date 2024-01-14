@@ -82,5 +82,11 @@ public class PendingUpdateAction {
         return action;
     }
 
-
+    @Override
+    public String toString() {
+        return "PendingUpdateAction{" +
+            "inputPartitions=" + inputPartitions +
+            ", action=" + action +
+            '}';
+    }
 }

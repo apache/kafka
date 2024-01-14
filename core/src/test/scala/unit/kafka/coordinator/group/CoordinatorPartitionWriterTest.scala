@@ -16,7 +16,7 @@
  */
 package kafka.coordinator.group
 
-import kafka.server.ReplicaManager
+import kafka.server.{ReplicaManager, RequestLocal}
 import kafka.utils.TestUtils
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.config.TopicConfig
@@ -27,7 +27,8 @@ import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.requests.TransactionResult
 import org.apache.kafka.common.utils.{MockTime, Time}
 import org.apache.kafka.coordinator.group.runtime.PartitionWriter
-import org.apache.kafka.storage.internals.log.{AppendOrigin, LogConfig}
+import org.apache.kafka.storage.internals.log.{LogConfig, VerificationGuard}
+import org.apache.kafka.test.TestUtils.assertFutureThrows
 import org.junit.jupiter.api.Assertions.{assertEquals, assertThrows, assertTrue}
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
@@ -104,17 +105,14 @@ class CoordinatorPartitionWriterTest {
     val callbackCapture: ArgumentCaptor[Map[TopicPartition, PartitionResponse] => Unit] =
       ArgumentCaptor.forClass(classOf[Map[TopicPartition, PartitionResponse] => Unit])
 
-    when(replicaManager.appendRecords(
+    when(replicaManager.appendForGroup(
       ArgumentMatchers.eq(0L),
       ArgumentMatchers.eq(1.toShort),
-      ArgumentMatchers.eq(true),
-      ArgumentMatchers.eq(AppendOrigin.COORDINATOR),
       recordsCapture.capture(),
       callbackCapture.capture(),
       ArgumentMatchers.any(),
       ArgumentMatchers.any(),
-      ArgumentMatchers.any(),
-      ArgumentMatchers.any(),
+      ArgumentMatchers.eq(Map(tp -> VerificationGuard.SENTINEL)),
       ArgumentMatchers.any()
     )).thenAnswer( _ => {
       callbackCapture.getValue.apply(Map(
@@ -140,6 +138,7 @@ class CoordinatorPartitionWriterTest {
       tp,
       RecordBatch.NO_PRODUCER_ID,
       RecordBatch.NO_PRODUCER_EPOCH,
+      VerificationGuard.SENTINEL,
       records.asJava
     ))
 
@@ -168,6 +167,7 @@ class CoordinatorPartitionWriterTest {
       CompressionType.NONE,
       time
     )
+    val verificationGuard = new VerificationGuard()
 
     when(replicaManager.getLogConfig(tp)).thenReturn(Some(LogConfig.fromProps(
       Collections.emptyMap(),
@@ -179,17 +179,14 @@ class CoordinatorPartitionWriterTest {
     val callbackCapture: ArgumentCaptor[Map[TopicPartition, PartitionResponse] => Unit] =
       ArgumentCaptor.forClass(classOf[Map[TopicPartition, PartitionResponse] => Unit])
 
-    when(replicaManager.appendRecords(
+    when(replicaManager.appendForGroup(
       ArgumentMatchers.eq(0L),
       ArgumentMatchers.eq(1.toShort),
-      ArgumentMatchers.eq(true),
-      ArgumentMatchers.eq(AppendOrigin.COORDINATOR),
       recordsCapture.capture(),
       callbackCapture.capture(),
       ArgumentMatchers.any(),
       ArgumentMatchers.any(),
-      ArgumentMatchers.any(),
-      ArgumentMatchers.any(),
+      ArgumentMatchers.eq(Map(tp -> verificationGuard)),
       ArgumentMatchers.any()
     )).thenAnswer(_ => {
       callbackCapture.getValue.apply(Map(
@@ -215,6 +212,7 @@ class CoordinatorPartitionWriterTest {
       tp,
       100L,
       50.toShort,
+      verificationGuard,
       records.asJava
     ))
 
@@ -260,17 +258,14 @@ class CoordinatorPartitionWriterTest {
     val callbackCapture: ArgumentCaptor[Map[TopicPartition, PartitionResponse] => Unit] =
       ArgumentCaptor.forClass(classOf[Map[TopicPartition, PartitionResponse] => Unit])
 
-    when(replicaManager.appendRecords(
+    when(replicaManager.appendForGroup(
       ArgumentMatchers.eq(0L),
       ArgumentMatchers.eq(1.toShort),
-      ArgumentMatchers.eq(true),
-      ArgumentMatchers.eq(AppendOrigin.COORDINATOR),
       recordsCapture.capture(),
       callbackCapture.capture(),
       ArgumentMatchers.any(),
       ArgumentMatchers.any(),
-      ArgumentMatchers.any(),
-      ArgumentMatchers.any(),
+      ArgumentMatchers.eq(Map(tp -> VerificationGuard.SENTINEL)),
       ArgumentMatchers.any()
     )).thenAnswer(_ => {
       callbackCapture.getValue.apply(Map(
@@ -311,6 +306,58 @@ class CoordinatorPartitionWriterTest {
     assertEquals(List(controlRecordType), receivedRecords)
   }
 
+  @ParameterizedTest
+  @EnumSource(value = classOf[Errors], names = Array("NONE", "NOT_ENOUGH_REPLICAS"))
+  def testMaybeStartTransactionVerification(error: Errors): Unit = {
+    val tp = new TopicPartition("foo", 0)
+    val replicaManager = mock(classOf[ReplicaManager])
+    val time = new MockTime()
+    val partitionRecordWriter = new CoordinatorPartitionWriter(
+      replicaManager,
+      new StringKeyValueSerializer(),
+      CompressionType.NONE,
+      time
+    )
+
+    val verificationGuard = if (error == Errors.NONE) {
+      new VerificationGuard()
+    } else {
+      VerificationGuard.SENTINEL
+    }
+
+    val callbackCapture: ArgumentCaptor[(Errors, RequestLocal, VerificationGuard) => Unit] =
+      ArgumentCaptor.forClass(classOf[(Errors, RequestLocal, VerificationGuard) => Unit])
+
+    when(replicaManager.maybeStartTransactionVerificationForPartition(
+      ArgumentMatchers.eq(tp),
+      ArgumentMatchers.eq("transactional-id"),
+      ArgumentMatchers.eq(10L),
+      ArgumentMatchers.eq(5.toShort),
+      ArgumentMatchers.eq(RecordBatch.NO_SEQUENCE),
+      ArgumentMatchers.eq(RequestLocal.NoCaching),
+      callbackCapture.capture()
+    )).thenAnswer(_ => {
+      callbackCapture.getValue.apply(
+        error,
+        RequestLocal.NoCaching,
+        verificationGuard
+      )
+    })
+
+    val future = partitionRecordWriter.maybeStartTransactionVerification(
+      tp,
+      "transactional-id",
+      10L,
+      5.toShort
+    )
+
+    if (error == Errors.NONE) {
+      assertEquals(verificationGuard, future.get)
+    } else {
+      assertFutureThrows(future, error.exception.getClass)
+    }
+  }
+
   @Test
   def testWriteRecordsWithFailure(): Unit = {
     val tp = new TopicPartition("foo", 0)
@@ -333,17 +380,14 @@ class CoordinatorPartitionWriterTest {
     val callbackCapture: ArgumentCaptor[Map[TopicPartition, PartitionResponse] => Unit] =
       ArgumentCaptor.forClass(classOf[Map[TopicPartition, PartitionResponse] => Unit])
 
-    when(replicaManager.appendRecords(
+    when(replicaManager.appendForGroup(
       ArgumentMatchers.eq(0L),
       ArgumentMatchers.eq(1.toShort),
-      ArgumentMatchers.eq(true),
-      ArgumentMatchers.eq(AppendOrigin.COORDINATOR),
       recordsCapture.capture(),
       callbackCapture.capture(),
       ArgumentMatchers.any(),
       ArgumentMatchers.any(),
-      ArgumentMatchers.any(),
-      ArgumentMatchers.any(),
+      ArgumentMatchers.eq(Map(tp -> VerificationGuard.SENTINEL)),
       ArgumentMatchers.any()
     )).thenAnswer(_ => {
       callbackCapture.getValue.apply(Map(
@@ -361,8 +405,9 @@ class CoordinatorPartitionWriterTest {
       tp,
       RecordBatch.NO_PRODUCER_ID,
       RecordBatch.NO_PRODUCER_EPOCH,
-      records.asJava)
-    )
+      VerificationGuard.SENTINEL,
+      records.asJava
+    ))
   }
 
   @Test
@@ -394,8 +439,9 @@ class CoordinatorPartitionWriterTest {
       tp,
       RecordBatch.NO_PRODUCER_ID,
       RecordBatch.NO_PRODUCER_EPOCH,
-      records.asJava)
-    )
+      VerificationGuard.SENTINEL,
+      records.asJava
+    ))
   }
 
   @Test
@@ -418,8 +464,9 @@ class CoordinatorPartitionWriterTest {
       tp,
       RecordBatch.NO_PRODUCER_ID,
       RecordBatch.NO_PRODUCER_EPOCH,
-      List.empty.asJava)
-    )
+      VerificationGuard.SENTINEL,
+      List.empty.asJava
+    ))
   }
 
   @Test
@@ -445,7 +492,8 @@ class CoordinatorPartitionWriterTest {
       tp,
       RecordBatch.NO_PRODUCER_ID,
       RecordBatch.NO_PRODUCER_EPOCH,
-      records.asJava)
-    )
+      VerificationGuard.SENTINEL,
+      records.asJava
+    ))
   }
 }
