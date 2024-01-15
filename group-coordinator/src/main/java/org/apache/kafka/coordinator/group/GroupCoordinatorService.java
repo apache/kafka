@@ -82,8 +82,8 @@ import java.util.OptionalInt;
 import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BiFunction;
 import java.util.function.IntSupplier;
 import java.util.stream.Collectors;
@@ -495,39 +495,39 @@ public class GroupCoordinatorService implements GroupCoordinator {
             );
         }
 
-        final CompletableFuture<ListGroupsResponseData> future = new CompletableFuture<>();
-        final List<ListGroupsResponseData.ListedGroup> results = new ArrayList<>();
         final Set<TopicPartition> existingPartitionSet = runtime.partitions();
-        final AtomicInteger cnt = new AtomicInteger(existingPartitionSet.size());
 
         if (existingPartitionSet.isEmpty()) {
             return CompletableFuture.completedFuture(new ListGroupsResponseData());
         }
 
+        final List<CompletableFuture<List<ListGroupsResponseData.ListedGroup>>> futures =
+            new ArrayList<>();
+
         for (TopicPartition tp : existingPartitionSet) {
-            runtime.scheduleReadOperation(
+            futures.add(runtime.scheduleReadOperation(
                 "list-groups",
                 tp,
                 (coordinator, lastCommittedOffset) -> coordinator.listGroups(request.statesFilter(), lastCommittedOffset)
-            ).handle((groups, exception) -> {
-                if (exception == null) {
-                    synchronized (results) {
-                        results.addAll(groups);
-                    }
+            ).exceptionally(exception -> {
+                exception = Errors.maybeUnwrapException(exception);
+                if (exception instanceof NotCoordinatorException) {
+                    return Collections.emptyList();
                 } else {
-                    exception = Errors.maybeUnwrapException(exception);
-
-                    if (!(exception instanceof NotCoordinatorException)) {
-                        future.complete(new ListGroupsResponseData().setErrorCode(Errors.forException(exception).code()));
-                    }
+                    throw new CompletionException(exception);
                 }
-                if (cnt.decrementAndGet() == 0) {
-                    future.complete(new ListGroupsResponseData().setGroups(results));
-                }
-                return null;
-            });
+            }));
         }
-        return future;
+
+        return FutureUtils
+            .combineFutures(futures, ArrayList::new, List::addAll)
+            .thenApply(groups -> new ListGroupsResponseData().setGroups(groups))
+            .exceptionally(exception -> handleOperationException(
+                "ListGroups",
+                request,
+                exception,
+                (error, __) -> new ListGroupsResponseData().setErrorCode(error.code())
+            ));
     }
 
     /**
