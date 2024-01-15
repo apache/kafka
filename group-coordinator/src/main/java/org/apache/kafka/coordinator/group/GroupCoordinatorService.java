@@ -20,16 +20,7 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.errors.CoordinatorLoadInProgressException;
-import org.apache.kafka.common.errors.InvalidFetchSizeException;
-import org.apache.kafka.common.errors.KafkaStorageException;
 import org.apache.kafka.common.errors.NotCoordinatorException;
-import org.apache.kafka.common.errors.NotEnoughReplicasException;
-import org.apache.kafka.common.errors.NotLeaderOrFollowerException;
-import org.apache.kafka.common.errors.RecordBatchTooLargeException;
-import org.apache.kafka.common.errors.RecordTooLargeException;
-import org.apache.kafka.common.errors.UnknownMemberIdException;
-import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
-import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.internals.Topic;
 import org.apache.kafka.common.message.ConsumerGroupDescribeResponseData;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatRequestData;
@@ -55,6 +46,7 @@ import org.apache.kafka.common.message.SyncGroupResponseData;
 import org.apache.kafka.common.message.TxnOffsetCommitRequestData;
 import org.apache.kafka.common.message.TxnOffsetCommitResponseData;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.requests.ApiError;
 import org.apache.kafka.common.requests.DescribeGroupsRequest;
 import org.apache.kafka.common.requests.DeleteGroupsRequest;
 import org.apache.kafka.common.requests.ConsumerGroupDescribeRequest;
@@ -94,6 +86,7 @@ import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.BiFunction;
 import java.util.function.IntSupplier;
 import java.util.stream.Collectors;
 
@@ -302,31 +295,14 @@ public class GroupCoordinatorService implements GroupCoordinator {
             topicPartitionFor(request.groupId()),
             Duration.ofMillis(config.offsetCommitTimeoutMs),
             coordinator -> coordinator.consumerGroupHeartbeat(context, request)
-        ).exceptionally(exception -> {
-            if (exception instanceof UnknownTopicOrPartitionException ||
-                exception instanceof NotEnoughReplicasException ||
-                exception instanceof TimeoutException) {
-                return new ConsumerGroupHeartbeatResponseData()
-                    .setErrorCode(Errors.COORDINATOR_NOT_AVAILABLE.code());
-            }
-
-            if (exception instanceof NotLeaderOrFollowerException ||
-                exception instanceof KafkaStorageException) {
-                return new ConsumerGroupHeartbeatResponseData()
-                    .setErrorCode(Errors.NOT_COORDINATOR.code());
-            }
-
-            if (exception instanceof RecordTooLargeException ||
-                exception instanceof RecordBatchTooLargeException ||
-                exception instanceof InvalidFetchSizeException) {
-                return new ConsumerGroupHeartbeatResponseData()
-                    .setErrorCode(Errors.UNKNOWN_SERVER_ERROR.code());
-            }
-
-            return new ConsumerGroupHeartbeatResponseData()
-                .setErrorCode(Errors.forException(exception).code())
-                .setErrorMessage(exception.getMessage());
-        });
+        ).exceptionally(exception -> handleWriteOperationException(
+            "ConsumerGroupHeartbeat",
+            request,
+            exception,
+            (error, message) -> new ConsumerGroupHeartbeatResponseData()
+                .setErrorCode(error.code())
+                .setErrorMessage(message)
+        ));
     }
 
     /**
@@ -360,14 +336,13 @@ public class GroupCoordinatorService implements GroupCoordinator {
             Duration.ofMillis(config.offsetCommitTimeoutMs),
             coordinator -> coordinator.classicGroupJoin(context, request, responseFuture)
         ).exceptionally(exception -> {
-            if (!(exception instanceof KafkaException)) {
-                log.error("JoinGroup request {} hit an unexpected exception: {}",
-                    request, exception.getMessage());
-            }
-            
             if (!responseFuture.isDone()) {
-                responseFuture.complete(new JoinGroupResponseData()
-                    .setErrorCode(Errors.forException(exception).code()));
+                responseFuture.complete(handleWriteOperationException(
+                    "JoinGroup",
+                    request,
+                    exception,
+                    (error, __) -> new JoinGroupResponseData().setErrorCode(error.code())
+                ));
             }
             return null;
         });
@@ -404,14 +379,13 @@ public class GroupCoordinatorService implements GroupCoordinator {
             Duration.ofMillis(config.offsetCommitTimeoutMs),
             coordinator -> coordinator.classicGroupSync(context, request, responseFuture)
         ).exceptionally(exception -> {
-            if (!(exception instanceof KafkaException)) {
-                log.error("SyncGroup request {} hit an unexpected exception: {}",
-                    request, exception.getMessage());
-            }
-
             if (!responseFuture.isDone()) {
-                responseFuture.complete(new SyncGroupResponseData()
-                    .setErrorCode(Errors.forException(exception).code()));
+                responseFuture.complete(handleWriteOperationException(
+                    "SyncGroup",
+                    request,
+                    exception,
+                    (error, __) -> new SyncGroupResponseData().setErrorCode(error.code())
+                ));
             }
             return null;
         });
@@ -445,6 +419,8 @@ public class GroupCoordinatorService implements GroupCoordinator {
             topicPartitionFor(request.groupId()),
             (coordinator, __) -> coordinator.classicGroupHeartbeat(context, request)
         ).exceptionally(exception -> {
+            exception = Errors.maybeUnwrapException(exception);
+
             if (!(exception instanceof KafkaException)) {
                 log.error("Heartbeat request {} hit an unexpected exception: {}",
                     request, exception.getMessage());
@@ -486,28 +462,27 @@ public class GroupCoordinatorService implements GroupCoordinator {
             topicPartitionFor(request.groupId()),
             Duration.ofMillis(config.offsetCommitTimeoutMs),
             coordinator -> coordinator.classicGroupLeave(context, request)
-        ).exceptionally(exception -> {
-            if (!(exception instanceof KafkaException)) {
-                log.error("LeaveGroup request {} hit an unexpected exception: {}",
-                    request, exception.getMessage());
+        ).exceptionally(exception -> handleWriteOperationException(
+            "LeaveGroup",
+            request,
+            exception,
+            (error, __) -> {
+                if (error == Errors.UNKNOWN_MEMBER_ID) {
+                    // Group was not found.
+                    List<LeaveGroupResponseData.MemberResponse> memberResponses = request.members().stream()
+                         .map(member -> new LeaveGroupResponseData.MemberResponse()
+                             .setMemberId(member.memberId())
+                             .setGroupInstanceId(member.groupInstanceId())
+                             .setErrorCode(Errors.UNKNOWN_MEMBER_ID.code()))
+                         .collect(Collectors.toList());
+                    return new LeaveGroupResponseData()
+                        .setMembers(memberResponses);
+                } else {
+                    return new LeaveGroupResponseData()
+                        .setErrorCode(error.code());
+                }
             }
-
-            if (exception instanceof UnknownMemberIdException) {
-                // Group was not found.
-                List<LeaveGroupResponseData.MemberResponse> memberResponses = request.members().stream()
-                    .map(member -> new LeaveGroupResponseData.MemberResponse()
-                        .setMemberId(member.memberId())
-                        .setGroupInstanceId(member.groupInstanceId())
-                        .setErrorCode(Errors.UNKNOWN_MEMBER_ID.code()))
-                    .collect(Collectors.toList());
-
-                return new LeaveGroupResponseData()
-                    .setMembers(memberResponses);
-            }
-
-            return new LeaveGroupResponseData()
-                .setErrorCode(Errors.forException(exception).code());
-        });
+        ));
     }
 
     /**
@@ -544,6 +519,8 @@ public class GroupCoordinatorService implements GroupCoordinator {
                         results.addAll(groups);
                     }
                 } else {
+                    exception = Errors.maybeUnwrapException(exception);
+
                     if (!(exception instanceof NotCoordinatorException)) {
                         future.complete(new ListGroupsResponseData().setErrorCode(Errors.forException(exception).code()));
                     }
@@ -596,6 +573,8 @@ public class GroupCoordinatorService implements GroupCoordinator {
                     topicPartition,
                     (coordinator, lastCommittedOffset) -> coordinator.consumerGroupDescribe(groupIds, lastCommittedOffset)
                 ).exceptionally(exception -> {
+                    exception = Errors.maybeUnwrapException(exception);
+
                     if (!(exception instanceof KafkaException)) {
                         log.error("ConsumerGroupDescribe request {} hit an unexpected exception: {}.",
                             groupList, exception.getMessage());
@@ -659,6 +638,8 @@ public class GroupCoordinatorService implements GroupCoordinator {
                     topicPartition,
                     (coordinator, lastCommittedOffset) -> coordinator.describeGroups(context, groupList, lastCommittedOffset)
                 ).exceptionally(exception -> {
+                    exception = Errors.maybeUnwrapException(exception);
+
                     if (!(exception instanceof KafkaException)) {
                         log.error("DescribeGroups request {} hit an unexpected exception: {}",
                             groupList, exception.getMessage());
@@ -723,9 +704,12 @@ public class GroupCoordinatorService implements GroupCoordinator {
                     topicPartition,
                     Duration.ofMillis(config.offsetCommitTimeoutMs),
                     coordinator -> coordinator.deleteGroups(context, groupList)
-                ).exceptionally(exception ->
-                    DeleteGroupsRequest.getErrorResultCollection(groupList, normalizeException(exception))
-                );
+                ).exceptionally(exception -> handleWriteOperationException(
+                    "DeleteGroups",
+                    groupList,
+                    exception,
+                    (error, __) -> DeleteGroupsRequest.getErrorResultCollection(groupList, error)
+                ));
 
             futures.add(future);
         });
@@ -875,9 +859,12 @@ public class GroupCoordinatorService implements GroupCoordinator {
             topicPartitionFor(request.groupId()),
             Duration.ofMillis(config.offsetCommitTimeoutMs),
             coordinator -> coordinator.commitOffset(context, request)
-        ).exceptionally(exception ->
-            OffsetCommitRequest.getErrorResponse(request, normalizeException(exception))
-        );
+        ).exceptionally(exception -> handleWriteOperationException(
+            "OffsetCommitRequest",
+            request,
+            exception,
+            (error, __) -> OffsetCommitRequest.getErrorResponse(request, error)
+        ));
     }
 
     /**
@@ -911,9 +898,12 @@ public class GroupCoordinatorService implements GroupCoordinator {
             request.producerEpoch(),
             Duration.ofMillis(config.offsetCommitTimeoutMs),
             coordinator -> coordinator.commitTransactionalOffset(context, request)
-        ).exceptionally(exception ->
-            TxnOffsetCommitRequest.getErrorResponse(request, normalizeException(exception))
-        );
+        ).exceptionally(exception -> handleWriteOperationException(
+            "TxnOffsetCommitRequest",
+            request,
+            exception,
+            (error, __) -> TxnOffsetCommitRequest.getErrorResponse(request, error)
+        ));
     }
 
     /**
@@ -942,10 +932,12 @@ public class GroupCoordinatorService implements GroupCoordinator {
             topicPartitionFor(request.groupId()),
             Duration.ofMillis(config.offsetCommitTimeoutMs),
             coordinator -> coordinator.deleteOffsets(context, request)
-        ).exceptionally(exception ->
-            new OffsetDeleteResponseData()
-                .setErrorCode(normalizeException(exception).code())
-        );
+        ).exceptionally(exception -> handleWriteOperationException(
+            "OffsetDeleteRequest",
+            request,
+            exception,
+            (error, __) -> new OffsetDeleteResponseData().setErrorCode(error.code())
+        ));
     }
 
     /**
@@ -1098,30 +1090,36 @@ public class GroupCoordinatorService implements GroupCoordinator {
         return groupId != null && !groupId.isEmpty();
     }
 
-    /**
-     * Handles the exception in the scheduleWriteOperation.
-     * @return The Errors instance associated with the given exception.
-     */
-    private static Errors normalizeException(Throwable exception) {
-        exception = Errors.maybeUnwrapException(exception);
+    private <REQ, RSP> RSP handleWriteOperationException(
+        String requestName,
+        REQ request,
+        Throwable exception,
+        BiFunction<Errors, String, RSP> responseBuilder
+    ) {
+        ApiError apiError = ApiError.fromThrowable(exception);
 
-        if (exception instanceof UnknownTopicOrPartitionException ||
-            exception instanceof NotEnoughReplicasException ||
-            exception instanceof TimeoutException) {
-            return Errors.COORDINATOR_NOT_AVAILABLE;
+        switch (apiError.error()) {
+            case UNKNOWN_SERVER_ERROR:
+                log.error("{} request {} hit an unexpected exception: {}.",
+                    requestName, request, exception.getMessage(), exception);
+                return responseBuilder.apply(Errors.UNKNOWN_SERVER_ERROR, null);
+
+            case UNKNOWN_TOPIC_OR_PARTITION:
+            case NOT_ENOUGH_REPLICAS:
+            case REQUEST_TIMED_OUT:
+                return responseBuilder.apply(Errors.COORDINATOR_NOT_AVAILABLE, null);
+
+            case NOT_LEADER_OR_FOLLOWER:
+            case KAFKA_STORAGE_ERROR:
+                return responseBuilder.apply(Errors.NOT_COORDINATOR, null);
+
+            case MESSAGE_TOO_LARGE:
+            case RECORD_LIST_TOO_LARGE:
+            case INVALID_FETCH_SIZE:
+                return responseBuilder.apply(Errors.UNKNOWN_SERVER_ERROR, null);
+
+            default:
+                return responseBuilder.apply(apiError.error(), apiError.message());
         }
-
-        if (exception instanceof NotLeaderOrFollowerException ||
-            exception instanceof KafkaStorageException) {
-            return Errors.NOT_COORDINATOR;
-        }
-
-        if (exception instanceof RecordTooLargeException ||
-            exception instanceof RecordBatchTooLargeException ||
-            exception instanceof InvalidFetchSizeException) {
-            return Errors.UNKNOWN_SERVER_ERROR;
-        }
-
-        return Errors.forException(exception);
     }
 }
