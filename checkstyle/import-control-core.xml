@@ -91,10 +91,6 @@
     <allow pkg="org.apache.kafka" />
   </subpackage>
 
-  <subpackage name="docker">
-    <allow pkg="org.apache.kafka.tools" class="StorageTool" />
-  </subpackage>
-
   <subpackage name="test">
     <allow pkg="org.apache.kafka.controller"/>
     <allow pkg="org.apache.kafka.metadata"/>

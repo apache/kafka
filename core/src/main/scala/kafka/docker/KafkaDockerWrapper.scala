@@ -24,8 +24,6 @@ import net.sourceforge.argparse4j.inf.Namespace
 import java.nio.charset.StandardCharsets
 import java.nio.file.{Files, Path, Paths, StandardCopyOption, StandardOpenOption}
 
-import org.apache.kafka.tools.StorageTool
-
 object KafkaDockerWrapper {
   def main(args: Array[String]): Unit = {
     val namespace = parseArguments(args)
@@ -45,7 +43,9 @@ object KafkaDockerWrapper {
         }
 
         val formatCmd = formatStorageCmd(finalConfigsPath, envVars)
-        StorageTool.main(formatCmd)
+        val toolClass = Class.forName("org.apache.kafka.tools.StorageTool")
+        val toolMethod = toolClass.getDeclaredMethod("main", classOf[Array[String]])
+        toolMethod.invoke(null, formatCmd)
       case _ =>
         throw new RuntimeException(s"Unknown operation $command. " +
           s"Please provide a valid operation: 'setup'.")
