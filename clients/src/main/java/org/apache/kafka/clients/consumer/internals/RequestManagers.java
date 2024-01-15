@@ -181,7 +181,8 @@ public class RequestManagers implements Closeable {
                             metadata,
                             logContext,
                             clientTelemetryReporter,
-                            backgroundEventHandler);
+                            backgroundEventHandler,
+                            time);
                     membershipManager.registerStateListener(commit);
                     heartbeatRequestManager = new HeartbeatRequestManager(
                             logContext,

@@ -88,6 +88,7 @@ import scala.collection.JavaConverters;
 
 import java.io.ByteArrayInputStream;
 import java.io.File;
+import java.io.InputStream;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -2271,6 +2272,11 @@ public class RemoteLogManagerTest {
                 return Optional.of(segmentMetadata);
             }
 
+            public Optional<RemoteLogSegmentMetadata> findNextSegmentMetadata(RemoteLogSegmentMetadata segmentMetadata,
+                                                                              Option<LeaderEpochFileCache> leaderEpochFileCacheOption) {
+                return Optional.empty();
+            }
+
             int lookupPositionForOffset(RemoteLogSegmentMetadata remoteLogSegmentMetadata, long offset) {
                 return 1;
             }
@@ -2364,6 +2370,82 @@ public class RemoteLogManagerTest {
                 verify(firstBatch, never()).writeTo(any(ByteBuffer.class));
                 assertEquals(MemoryRecords.EMPTY, fetchDataInfo.records);
             }
+        }
+    }
+
+    @Test
+    public void testReadForFirstBatchInLogCompaction() throws RemoteStorageException, IOException {
+        FileInputStream fileInputStream = mock(FileInputStream.class);
+        RemoteLogInputStream remoteLogInputStream = mock(RemoteLogInputStream.class);
+        ClassLoaderAwareRemoteStorageManager rsmManager = mock(ClassLoaderAwareRemoteStorageManager.class);
+        RemoteLogSegmentMetadata segmentMetadata = mock(RemoteLogSegmentMetadata.class);
+        LeaderEpochFileCache cache = mock(LeaderEpochFileCache.class);
+        when(cache.epochForOffset(anyLong())).thenReturn(OptionalInt.of(1));
+        when(mockLog.leaderEpochCache()).thenReturn(Option.apply(cache));
+
+        int fetchOffset = 0;
+        int fetchMaxBytes = 10;
+        int recordBatchSizeInBytes = fetchMaxBytes + 1;
+        RecordBatch firstBatch = mock(RecordBatch.class);
+        ArgumentCaptor<ByteBuffer> capture = ArgumentCaptor.forClass(ByteBuffer.class);
+
+        FetchRequest.PartitionData partitionData = new FetchRequest.PartitionData(
+                Uuid.randomUuid(), fetchOffset, 0, fetchMaxBytes, Optional.empty()
+        );
+
+        when(rsmManager.fetchLogSegment(any(), anyInt())).thenReturn(fileInputStream);
+        when(segmentMetadata.topicIdPartition()).thenReturn(new TopicIdPartition(Uuid.randomUuid(), tp));
+        // Fetching first time  FirstBatch return null because of log compaction.
+        // Fetching second time  FirstBatch return data.
+        when(remoteLogInputStream.nextBatch()).thenReturn(null, firstBatch);
+        // Return last offset greater than the requested offset.
+        when(firstBatch.lastOffset()).thenReturn(2L);
+        when(firstBatch.sizeInBytes()).thenReturn(recordBatchSizeInBytes);
+        doNothing().when(firstBatch).writeTo(capture.capture());
+        RemoteStorageFetchInfo fetchInfo = new RemoteStorageFetchInfo(
+                0, true, tp, partitionData, FetchIsolation.HIGH_WATERMARK, false
+        );
+
+
+        try (RemoteLogManager remoteLogManager = new RemoteLogManager(
+                remoteLogManagerConfig,
+                brokerId,
+                logDir,
+                clusterId,
+                time,
+                tp -> Optional.of(mockLog),
+                (topicPartition, offset) -> {
+                },
+                brokerTopicStats) {
+            public RemoteStorageManager createRemoteStorageManager() {
+                return rsmManager;
+            }
+
+            public RemoteLogMetadataManager createRemoteLogMetadataManager() {
+                return remoteLogMetadataManager;
+            }
+
+            public Optional<RemoteLogSegmentMetadata> fetchRemoteLogSegmentMetadata(TopicPartition topicPartition,
+                                                                                    int epochForOffset, long offset) {
+                return Optional.of(segmentMetadata);
+            }
+            public RemoteLogInputStream getRemoteLogInputStream(InputStream in) {
+                return remoteLogInputStream;
+            }
+
+            int lookupPositionForOffset(RemoteLogSegmentMetadata remoteLogSegmentMetadata, long offset) {
+                return 1;
+            }
+        }) {
+            FetchDataInfo fetchDataInfo = remoteLogManager.read(fetchInfo);
+            // Common assertions
+            assertEquals(fetchOffset, fetchDataInfo.fetchOffsetMetadata.messageOffset);
+            assertFalse(fetchDataInfo.firstEntryIncomplete);
+            // FetchIsolation is HIGH_WATERMARK
+            assertEquals(Optional.empty(), fetchDataInfo.abortedTransactions);
+            // Verify that the byte buffer has capacity equal to the size of the first batch
+            assertEquals(recordBatchSizeInBytes, capture.getValue().capacity());
+
         }
     }
 

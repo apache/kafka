@@ -20,7 +20,6 @@ import java.io.File
 import java.util.concurrent.CompletableFuture
 import kafka.log.UnifiedLog
 import kafka.metrics.KafkaMetricsReporter
-import kafka.server.KafkaRaftServer.{BrokerRole, ControllerRole}
 import kafka.utils.{CoreUtils, Logging, Mx4jLoader, VerifiableProperties}
 import org.apache.kafka.common.config.{ConfigDef, ConfigResource}
 import org.apache.kafka.common.internals.Topic
@@ -31,6 +30,7 @@ import org.apache.kafka.metadata.bootstrap.{BootstrapDirectory, BootstrapMetadat
 import org.apache.kafka.metadata.properties.MetaPropertiesEnsemble.VerificationFlag.{REQUIRE_AT_LEAST_ONE_VALID, REQUIRE_METADATA_LOG_DIR}
 import org.apache.kafka.metadata.properties.{MetaProperties, MetaPropertiesEnsemble}
 import org.apache.kafka.raft.RaftConfig
+import org.apache.kafka.server.ProcessRole
 import org.apache.kafka.server.config.ServerTopicConfigSynonyms
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.apache.kafka.storage.internals.log.LogConfig
@@ -77,13 +77,13 @@ class KafkaRaftServer(
     new StandardFaultHandlerFactory(),
   )
 
-  private val broker: Option[BrokerServer] = if (config.processRoles.contains(BrokerRole)) {
+  private val broker: Option[BrokerServer] = if (config.processRoles.contains(ProcessRole.BrokerRole)) {
     Some(new BrokerServer(sharedServer))
   } else {
     None
   }
 
-  private val controller: Option[ControllerServer] = if (config.processRoles.contains(ControllerRole)) {
+  private val controller: Option[ControllerServer] = if (config.processRoles.contains(ProcessRole.ControllerRole)) {
     Some(new ControllerServer(
       sharedServer,
       KafkaRaftServer.configSchema,
@@ -120,14 +120,6 @@ object KafkaRaftServer {
   val MetadataTopic = Topic.CLUSTER_METADATA_TOPIC_NAME
   val MetadataPartition = Topic.CLUSTER_METADATA_TOPIC_PARTITION
   val MetadataTopicId = Uuid.METADATA_TOPIC_ID
-
-  sealed trait ProcessRole
-  case object BrokerRole extends ProcessRole {
-    override def toString: String = "broker"
-  }
-  case object ControllerRole extends ProcessRole {
-    override def toString: String = "controller"
-  }
 
   /**
    * Initialize the configured log directories, including both [[KafkaConfig.MetadataLogDirProp]]

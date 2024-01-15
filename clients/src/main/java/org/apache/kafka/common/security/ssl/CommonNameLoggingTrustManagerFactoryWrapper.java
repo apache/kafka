@@ -56,7 +56,7 @@ class CommonNameLoggingTrustManagerFactoryWrapper {
 
     private static final Logger log = LoggerFactory.getLogger(CommonNameLoggingTrustManagerFactoryWrapper.class);
 
-    private TrustManagerFactory origTmf;
+    private final TrustManagerFactory origTmf;
 
     /**
      * Create a wrapped trust manager factory
@@ -270,7 +270,7 @@ class CommonNameLoggingTrustManagerFactoryWrapper {
 
     static class NeverExpiringX509Certificate extends X509Certificate {
 
-        private X509Certificate origCertificate;
+        private final X509Certificate origCertificate;
 
         public NeverExpiringX509Certificate(X509Certificate origCertificate) {
             this.origCertificate = origCertificate;
