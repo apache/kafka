@@ -2798,6 +2798,7 @@ class ReplicaManager(val config: KafkaConfig,
   def applyDelta(delta: TopicsDelta, newImage: MetadataImage): Unit = {
     // Before taking the lock, compute the local changes
     val localChanges = delta.localChanges(config.nodeId)
+    val metadataVersion = newImage.features().metadataVersion()
 
     replicaStateChangeLock.synchronized {
       // Handle deleted partitions. We need to do this first because we might subsequently
@@ -2845,7 +2846,12 @@ class ReplicaManager(val config: KafkaConfig,
         remoteLogManager.foreach(rlm => rlm.onLeadershipChange(leaderChangedPartitions.asJava, followerChangedPartitions.asJava, localChanges.topicIds()))
       }
 
-      localChanges.directoryIds.forEach(maybeUpdateTopicAssignment)
+      if (metadataVersion.isDirectoryAssignmentSupported()) {
+        println("We are here");
+        localChanges.directoryIds.forEach(maybeUpdateTopicAssignment)
+      } else {
+        println("Not updating directoryIds");
+      }
     }
   }
 
