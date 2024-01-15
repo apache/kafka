@@ -85,7 +85,7 @@ public class SubscriptionState {
     /* the pattern user has requested */
     private Pattern subscribedPattern;
 
-    /* we should rename this to something more specific. */
+    /* we should rename this to something more specific */
     private SubscriptionPattern subscriptionPattern;
 
     /* the list of topics the user has requested */
