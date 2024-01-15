@@ -263,7 +263,6 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     ensureNoRebalance(consumer, listener)
   }
 
-  // TODO: enable this test for the consumer group protocol when support for committing offsets on close is implemented.
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
   @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
   def testAutoCommitOnClose(quorum: String, groupProtocol: String): Unit = {
@@ -1337,9 +1336,8 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     MockProducerInterceptor.resetCounters()
   }
 
-  // TODO: enable this test for the consumer group protocol when KAFKA-16133 is fixed
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersClassicGroupProtocolOnly"))
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
   def testAutoCommitIntercept(quorum: String, groupProtocol: String): Unit = {
     val topic2 = "topic2"
     createTopic(topic2, 2, brokerCount)
