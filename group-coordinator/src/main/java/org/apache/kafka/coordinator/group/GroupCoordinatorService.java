@@ -578,7 +578,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
             futures.add(future);
         });
 
-        return FutureUtils.combineFutures(futures, List::addAll);
+        return FutureUtils.combineFutures(futures, ArrayList::new, List::addAll);
     }
 
     /**
@@ -631,7 +631,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
             futures.add(future);
         });
 
-        return FutureUtils.combineFutures(futures, List::addAll);
+        return FutureUtils.combineFutures(futures, ArrayList::new, List::addAll);
     }
 
     /**
@@ -686,18 +686,10 @@ public class GroupCoordinatorService implements GroupCoordinator {
             futures.add(future);
         });
 
-        final CompletableFuture<Void> allFutures = CompletableFuture.allOf(futures.toArray(new CompletableFuture[0]));
-        return allFutures.thenApply(__ -> {
-            final DeleteGroupsResponseData.DeletableGroupResultCollection res = new DeleteGroupsResponseData.DeletableGroupResultCollection();
-            futures.forEach(future ->
-                // We don't use res.addAll(future.join()) because DeletableGroupResultCollection is an ImplicitLinkedHashMultiCollection,
-                // which has requirements for adding elements (see ImplicitLinkedHashCollection.java#add).
-                future.join().forEach(result ->
-                    res.add(result.duplicate())
-                )
-            );
-            return res;
-        });
+        return FutureUtils.combineFutures(futures, DeleteGroupsResponseData.DeletableGroupResultCollection::new,
+            // We don't use res.addAll(future.join()) because DeletableGroupResultCollection is an ImplicitLinkedHashMultiCollection,
+            // which has requirements for adding elements (see ImplicitLinkedHashCollection.java#add).
+            (accumulator, newResults) -> newResults.forEach(result -> accumulator.add(result.duplicate())));
     }
 
     /**
