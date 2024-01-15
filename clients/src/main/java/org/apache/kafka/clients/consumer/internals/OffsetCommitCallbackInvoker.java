@@ -44,7 +44,7 @@ public class OffsetCommitCallbackInvoker {
     public void submitCommitInterceptors(final Map<TopicPartition, OffsetAndMetadata> offsets) {
         if (!interceptors.isEmpty()) {
             callbackQueue.add(new OffsetCommitCallbackTask(
-                (o, e) -> interceptors.onCommit(o),
+                (innerOffsets, exception) -> interceptors.onCommit(innerOffsets),
                 offsets,
                 null
             ));
@@ -53,8 +53,8 @@ public class OffsetCommitCallbackInvoker {
 
     public void submitUserCallback(final OffsetCommitCallback callback,
                                    final Map<TopicPartition, OffsetAndMetadata> offsets,
-                                   final Exception e) {
-        callbackQueue.add(new OffsetCommitCallbackTask(callback, offsets, e));
+                                   final Exception exception) {
+        callbackQueue.add(new OffsetCommitCallbackTask(callback, offsets, exception));
     }
 
     /**
@@ -83,9 +83,9 @@ public class OffsetCommitCallbackInvoker {
 
         public OffsetCommitCallbackTask(final OffsetCommitCallback callback,
                                         final Map<TopicPartition, OffsetAndMetadata> offsets,
-                                        final Exception e) {
+                                        final Exception exception) {
             this.offsets = offsets;
-            this.exception = e;
+            this.exception = exception;
             this.callback = callback;
         }
     }
