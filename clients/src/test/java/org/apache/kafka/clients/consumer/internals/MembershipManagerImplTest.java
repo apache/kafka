@@ -32,6 +32,7 @@ import org.apache.kafka.common.requests.ConsumerGroupHeartbeatRequest;
 import org.apache.kafka.common.requests.ConsumerGroupHeartbeatResponse;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.common.utils.Time;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -89,6 +90,7 @@ public class MembershipManagerImplTest {
     private ConsumerTestBuilder testBuilder;
     private BlockingQueue<BackgroundEvent> backgroundEventQueue;
     private BackgroundEventHandler backgroundEventHandler;
+    private Time time;
 
     @BeforeEach
     public void setup() {
@@ -98,6 +100,7 @@ public class MembershipManagerImplTest {
         commitRequestManager = testBuilder.commitRequestManager.orElseThrow(IllegalStateException::new);
         backgroundEventQueue = testBuilder.backgroundEventQueue;
         backgroundEventHandler = testBuilder.backgroundEventHandler;
+        time = testBuilder.time;
     }
 
     @AfterEach
@@ -111,7 +114,7 @@ public class MembershipManagerImplTest {
         MembershipManagerImpl manager = spy(new MembershipManagerImpl(
                 GROUP_ID, Optional.empty(), REBALANCE_TIMEOUT, Optional.empty(),
                 subscriptionState, commitRequestManager, metadata, logContext, Optional.empty(),
-                backgroundEventHandler));
+                backgroundEventHandler, time));
         manager.transitionToJoining();
         return manager;
     }
@@ -120,7 +123,7 @@ public class MembershipManagerImplTest {
         MembershipManagerImpl manager = spy(new MembershipManagerImpl(
                 GROUP_ID, Optional.ofNullable(groupInstanceId), REBALANCE_TIMEOUT, Optional.empty(),
                 subscriptionState, commitRequestManager, metadata, logContext, Optional.empty(),
-                backgroundEventHandler));
+                backgroundEventHandler, time));
         manager.transitionToJoining();
         return manager;
     }
@@ -130,7 +133,7 @@ public class MembershipManagerImplTest {
         MembershipManagerImpl manager = new MembershipManagerImpl(
                 GROUP_ID, Optional.ofNullable(groupInstanceId), REBALANCE_TIMEOUT,
                 Optional.ofNullable(serverAssignor), subscriptionState, commitRequestManager,
-                metadata, logContext, Optional.empty(), backgroundEventHandler);
+                metadata, logContext, Optional.empty(), backgroundEventHandler, time);
         manager.transitionToJoining();
         return manager;
     }
@@ -156,7 +159,7 @@ public class MembershipManagerImplTest {
         MembershipManagerImpl manager = new MembershipManagerImpl(
                 GROUP_ID, Optional.empty(), REBALANCE_TIMEOUT, Optional.empty(),
                 subscriptionState, commitRequestManager, metadata, logContext, Optional.empty(),
-                backgroundEventHandler);
+                backgroundEventHandler, time);
         manager.transitionToJoining();
         verify(metadata).addClusterUpdateListener(manager);
         clearInvocations(metadata);
@@ -235,7 +238,7 @@ public class MembershipManagerImplTest {
         MembershipManagerImpl membershipManager = new MembershipManagerImpl(
                 GROUP_ID, Optional.empty(), REBALANCE_TIMEOUT, Optional.empty(),
                 subscriptionState, commitRequestManager, metadata, logContext, Optional.empty(),
-                backgroundEventHandler);
+                backgroundEventHandler, time);
         assertEquals(MemberState.UNSUBSCRIBED, membershipManager.state());
         membershipManager.transitionToJoining();
 

@@ -1553,9 +1553,8 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     assertEquals(7, consumer.committed(Set(tp2).asJava).get(tp2).offset)
   }
 
-  // TODO: enable this test for the consumer group protocol when auto-commit support is implemented.
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersClassicGroupProtocolOnly"))
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
   def testAutoCommitOnRebalance(quorum: String, groupProtocol: String): Unit = {
     val topic2 = "topic2"
     createTopic(topic2, 2, brokerCount)
