@@ -1337,7 +1337,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     MockProducerInterceptor.resetCounters()
   }
 
-  // TODO: enable this test for the consumer group protocol when consumer interceptors are supported
+  // TODO: enable this test for the consumer group protocol when KAFKA-16133 is fixed
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
   @MethodSource(Array("getTestQuorumAndGroupProtocolParametersClassicGroupProtocolOnly"))
   def testAutoCommitIntercept(quorum: String, groupProtocol: String): Unit = {
