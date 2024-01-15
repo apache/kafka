@@ -16,10 +16,8 @@
  */
 package org.apache.kafka.coordinator.group;
 
-import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.TopicConfig;
-import org.apache.kafka.common.errors.CoordinatorLoadInProgressException;
 import org.apache.kafka.common.errors.NotCoordinatorException;
 import org.apache.kafka.common.internals.Topic;
 import org.apache.kafka.common.message.ConsumerGroupDescribeResponseData;
@@ -295,7 +293,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
             topicPartitionFor(request.groupId()),
             Duration.ofMillis(config.offsetCommitTimeoutMs),
             coordinator -> coordinator.consumerGroupHeartbeat(context, request)
-        ).exceptionally(exception -> handleWriteOperationException(
+        ).exceptionally(exception -> handleOperationException(
             "ConsumerGroupHeartbeat",
             request,
             exception,
@@ -337,7 +335,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
             coordinator -> coordinator.classicGroupJoin(context, request, responseFuture)
         ).exceptionally(exception -> {
             if (!responseFuture.isDone()) {
-                responseFuture.complete(handleWriteOperationException(
+                responseFuture.complete(handleOperationException(
                     "JoinGroup",
                     request,
                     exception,
@@ -380,7 +378,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
             coordinator -> coordinator.classicGroupSync(context, request, responseFuture)
         ).exceptionally(exception -> {
             if (!responseFuture.isDone()) {
-                responseFuture.complete(handleWriteOperationException(
+                responseFuture.complete(handleOperationException(
                     "SyncGroup",
                     request,
                     exception,
@@ -418,23 +416,21 @@ public class GroupCoordinatorService implements GroupCoordinator {
         return runtime.scheduleReadOperation("classic-group-heartbeat",
             topicPartitionFor(request.groupId()),
             (coordinator, __) -> coordinator.classicGroupHeartbeat(context, request)
-        ).exceptionally(exception -> {
-            exception = Errors.maybeUnwrapException(exception);
-
-            if (!(exception instanceof KafkaException)) {
-                log.error("Heartbeat request {} hit an unexpected exception: {}",
-                    request, exception.getMessage());
+        ).exceptionally(exception -> handleOperationException(
+            "Heartbeat",
+            request,
+            exception,
+            (error, __) -> {
+                if (error == Errors.COORDINATOR_LOAD_IN_PROGRESS) {
+                    // The group is still loading, so blindly respond
+                    return new HeartbeatResponseData()
+                        .setErrorCode(Errors.NONE.code());
+                } else {
+                    return new HeartbeatResponseData()
+                        .setErrorCode(error.code());
+                }
             }
-
-            if (exception instanceof CoordinatorLoadInProgressException) {
-                // The group is still loading, so blindly respond
-                return new HeartbeatResponseData()
-                    .setErrorCode(Errors.NONE.code());
-            }
-
-            return new HeartbeatResponseData()
-                .setErrorCode(Errors.forException(exception).code());
-        });
+        ));
     }
 
     /**
@@ -462,7 +458,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
             topicPartitionFor(request.groupId()),
             Duration.ofMillis(config.offsetCommitTimeoutMs),
             coordinator -> coordinator.classicGroupLeave(context, request)
-        ).exceptionally(exception -> handleWriteOperationException(
+        ).exceptionally(exception -> handleOperationException(
             "LeaveGroup",
             request,
             exception,
@@ -572,19 +568,12 @@ public class GroupCoordinatorService implements GroupCoordinator {
                     "consumer-group-describe",
                     topicPartition,
                     (coordinator, lastCommittedOffset) -> coordinator.consumerGroupDescribe(groupIds, lastCommittedOffset)
-                ).exceptionally(exception -> {
-                    exception = Errors.maybeUnwrapException(exception);
-
-                    if (!(exception instanceof KafkaException)) {
-                        log.error("ConsumerGroupDescribe request {} hit an unexpected exception: {}.",
-                            groupList, exception.getMessage());
-                    }
-
-                    return ConsumerGroupDescribeRequest.getErrorDescribedGroupList(
-                        groupList,
-                        Errors.forException(exception)
-                    );
-                });
+                ).exceptionally(exception -> handleOperationException(
+                    "ConsumerGroupDescribe",
+                    groupList,
+                    exception,
+                    (error, __) -> ConsumerGroupDescribeRequest.getErrorDescribedGroupList(groupList, error)
+                ));
 
             futures.add(future);
         });
@@ -637,19 +626,12 @@ public class GroupCoordinatorService implements GroupCoordinator {
                     "describe-groups",
                     topicPartition,
                     (coordinator, lastCommittedOffset) -> coordinator.describeGroups(context, groupList, lastCommittedOffset)
-                ).exceptionally(exception -> {
-                    exception = Errors.maybeUnwrapException(exception);
-
-                    if (!(exception instanceof KafkaException)) {
-                        log.error("DescribeGroups request {} hit an unexpected exception: {}",
-                            groupList, exception.getMessage());
-                    }
-
-                    return DescribeGroupsRequest.getErrorDescribedGroupList(
-                        groupList,
-                        Errors.forException(exception)
-                    );
-                });
+                ).exceptionally(exception -> handleOperationException(
+                    "DescribeGroups",
+                    groupList,
+                    exception,
+                    (error, __) -> DescribeGroupsRequest.getErrorDescribedGroupList(groupList, error)
+                ));
 
             futures.add(future);
         });
@@ -704,7 +686,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
                     topicPartition,
                     Duration.ofMillis(config.offsetCommitTimeoutMs),
                     coordinator -> coordinator.deleteGroups(context, groupList)
-                ).exceptionally(exception -> handleWriteOperationException(
+                ).exceptionally(exception -> handleOperationException(
                     "DeleteGroups",
                     groupList,
                     exception,
@@ -859,7 +841,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
             topicPartitionFor(request.groupId()),
             Duration.ofMillis(config.offsetCommitTimeoutMs),
             coordinator -> coordinator.commitOffset(context, request)
-        ).exceptionally(exception -> handleWriteOperationException(
+        ).exceptionally(exception -> handleOperationException(
             "OffsetCommitRequest",
             request,
             exception,
@@ -898,7 +880,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
             request.producerEpoch(),
             Duration.ofMillis(config.offsetCommitTimeoutMs),
             coordinator -> coordinator.commitTransactionalOffset(context, request)
-        ).exceptionally(exception -> handleWriteOperationException(
+        ).exceptionally(exception -> handleOperationException(
             "TxnOffsetCommitRequest",
             request,
             exception,
@@ -932,7 +914,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
             topicPartitionFor(request.groupId()),
             Duration.ofMillis(config.offsetCommitTimeoutMs),
             coordinator -> coordinator.deleteOffsets(context, request)
-        ).exceptionally(exception -> handleWriteOperationException(
+        ).exceptionally(exception -> handleOperationException(
             "OffsetDeleteRequest",
             request,
             exception,
@@ -1090,7 +1072,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
         return groupId != null && !groupId.isEmpty();
     }
 
-    private <REQ, RSP> RSP handleWriteOperationException(
+    private <REQ, RSP> RSP handleOperationException(
         String requestName,
         REQ request,
         Throwable exception,
