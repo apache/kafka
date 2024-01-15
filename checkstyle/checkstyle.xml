@@ -3,20 +3,20 @@
     "-//Puppy Crawl//DTD Check Configuration 1.3//EN"
      "http://www.puppycrawl.com/dtds/configuration_1_3.dtd">
 <!--
-// Licensed to the Apache Software Foundation (ASF) under one or more
-// contributor license agreements.  See the NOTICE file distributed with
-// this work for additional information regarding copyright ownership.
-// The ASF licenses this file to You under the Apache License, Version 2.0
-// (the "License"); you may not use this file except in compliance with
-// the License.  You may obtain a copy of the License at
-//
-//    http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+ Licensed to the Apache Software Foundation (ASF) under one or more
+ contributor license agreements.  See the NOTICE file distributed with
+ this work for additional information regarding copyright ownership.
+ The ASF licenses this file to You under the Apache License, Version 2.0
+ (the "License"); you may not use this file except in compliance with
+ the License.  You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+ Unless required by applicable law or agreed to in writing, software
+ distributed under the License is distributed on an "AS IS" BASIS,
+ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ See the License for the specific language governing permissions and
+ limitations under the License.
 -->
 <module name="Checker">
   <property name="localeLanguage" value="en"/>
@@ -25,7 +25,7 @@
 
   <!-- header -->
   <module name="Header">
-    <property name="headerFile" value="${headerFile}" />
+    <property name="headerFile" value="${config_loc}/java.header" />
   </module>
 
   <module name="TreeWalker">
@@ -79,7 +79,7 @@
 
     <!-- dependencies -->
     <module name="ImportControl">
-      <property name="file" value="${importControlFile}"/>
+      <property name="file" value="${config_loc}/${importControlFile}"/>
     </module>
 
     <!-- whitespace -->
@@ -112,7 +112,9 @@
     </module>
 
     <!-- code quality -->
-    <module name="MethodLength"/>
+    <module name="MethodLength">
+      <property name="max" value="170" />
+    </module>
     <module name="ParameterNumber">
       <!-- default is 8 -->
       <property name="max" value="13"/>
@@ -143,9 +145,15 @@
       <!-- default is 200 -->
       <property name="max" value="500"/>
     </module>
+
+    <!-- Allows the use of the @SuppressWarnings annotation in the code -->
+    <module name="SuppressWarningsHolder"/>
   </module>
 
   <module name="SuppressionFilter">
-    <property name="file" value="${suppressionsFile}"/>
+    <property name="file" value="${config_loc}/suppressions.xml"/>
   </module>
+
+  <!-- Allows the use of the @SuppressWarnings annotation in the code -->
+  <module name="SuppressWarningsFilter"/>
 </module>

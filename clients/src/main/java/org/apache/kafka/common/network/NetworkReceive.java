@@ -30,8 +30,8 @@ import java.nio.channels.ScatteringByteChannel;
  */
 public class NetworkReceive implements Receive {
 
-    public final static String UNKNOWN_SOURCE = "";
-    public final static int UNLIMITED = -1;
+    public static final String UNKNOWN_SOURCE = "";
+    public static final int UNLIMITED = -1;
     private static final Logger log = LoggerFactory.getLogger(NetworkReceive.class);
     private static final ByteBuffer EMPTY_BUFFER = ByteBuffer.allocate(0);
 
@@ -44,27 +44,16 @@ public class NetworkReceive implements Receive {
 
 
     public NetworkReceive(String source, ByteBuffer buffer) {
-        this.source = source;
+        this(UNLIMITED, source);
         this.buffer = buffer;
-        this.size = null;
-        this.maxSize = UNLIMITED;
-        this.memoryPool = MemoryPool.NONE;
     }
 
     public NetworkReceive(String source) {
-        this.source = source;
-        this.size = ByteBuffer.allocate(4);
-        this.buffer = null;
-        this.maxSize = UNLIMITED;
-        this.memoryPool = MemoryPool.NONE;
+        this(UNLIMITED, source);
     }
 
     public NetworkReceive(int maxSize, String source) {
-        this.source = source;
-        this.size = ByteBuffer.allocate(4);
-        this.buffer = null;
-        this.maxSize = maxSize;
-        this.memoryPool = MemoryPool.NONE;
+        this(maxSize, source, MemoryPool.NONE);
     }
 
     public NetworkReceive(int maxSize, String source, MemoryPool memoryPool) {

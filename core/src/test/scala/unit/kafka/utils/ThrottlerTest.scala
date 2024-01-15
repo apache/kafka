@@ -17,6 +17,7 @@
 
 package kafka.utils
 
+import org.apache.kafka.server.util.MockTime
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.Assertions.{assertTrue, assertEquals}
 
@@ -57,5 +58,51 @@ class ThrottlerTest {
     val elapsedTimeMs = t3 - t1
     val actualCountPerSec = 4 * desiredCountPerInterval * 1000 / elapsedTimeMs
     assertTrue(actualCountPerSec <= desiredCountPerSec)
+  }
+
+  @Test
+  def testUpdateThrottleDesiredRate(): Unit = {
+    val throttleCheckIntervalMs = 100
+    val desiredCountPerSec = 1000.0
+    val desiredCountPerInterval = desiredCountPerSec * throttleCheckIntervalMs / 1000.0
+    val updatedDesiredCountPerSec = 1500.0;
+    val updatedDesiredCountPerInterval = updatedDesiredCountPerSec * throttleCheckIntervalMs / 1000.0
+
+    val mockTime = new MockTime()
+    val throttler = new Throttler(desiredRatePerSec = desiredCountPerSec,
+      checkIntervalMs = throttleCheckIntervalMs,
+      time = mockTime)
+
+    // Observe desiredCountPerInterval at t1
+    val t1 = mockTime.milliseconds()
+    throttler.maybeThrottle(desiredCountPerInterval)
+    assertEquals(t1, mockTime.milliseconds())
+
+    // Observe desiredCountPerInterval at t1 + throttleCheckIntervalMs + 1,
+    mockTime.sleep(throttleCheckIntervalMs + 1)
+    throttler.maybeThrottle(desiredCountPerInterval)
+    val t2 = mockTime.milliseconds()
+    assertTrue(t2 >= t1 + 2 * throttleCheckIntervalMs)
+
+    val elapsedTimeMs = t2 - t1
+    val actualCountPerSec = 2 * desiredCountPerInterval * 1000 / elapsedTimeMs
+    assertTrue(actualCountPerSec <= desiredCountPerSec)
+
+    // Update ThrottleDesiredRate
+    throttler.updateDesiredRatePerSec(updatedDesiredCountPerSec);
+
+    // Observe updatedDesiredCountPerInterval at t2
+    throttler.maybeThrottle(updatedDesiredCountPerInterval)
+    assertEquals(t2, mockTime.milliseconds())
+
+    // Observe updatedDesiredCountPerInterval at t2 + throttleCheckIntervalMs + 1
+    mockTime.sleep(throttleCheckIntervalMs + 1)
+    throttler.maybeThrottle(updatedDesiredCountPerInterval)
+    val t3 = mockTime.milliseconds()
+    assertTrue(t3 >= t2 + 2 * throttleCheckIntervalMs)
+
+    val updatedElapsedTimeMs = t3 - t2
+    val updatedActualCountPerSec = 2 * updatedDesiredCountPerInterval * 1000 / updatedElapsedTimeMs
+    assertTrue(updatedActualCountPerSec <= updatedDesiredCountPerSec)
   }
 }

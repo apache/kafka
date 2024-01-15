@@ -16,26 +16,30 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
-import org.apache.kafka.clients.producer.internals.DefaultPartitioner;
-import org.apache.kafka.common.Cluster;
+import org.apache.kafka.clients.producer.internals.BuiltInPartitioner;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 
 public class DefaultStreamPartitioner<K, V> implements StreamPartitioner<K, V> {
 
-    private final Cluster cluster;
     private final Serializer<K> keySerializer;
-    private final DefaultPartitioner defaultPartitioner;
 
-    public DefaultStreamPartitioner(final Serializer<K> keySerializer, final Cluster cluster) {
-        this.cluster = cluster;
+    public DefaultStreamPartitioner(final Serializer<K> keySerializer) {
         this.keySerializer = keySerializer;
-        this.defaultPartitioner = new DefaultPartitioner();
     }
 
     @Override
+    @Deprecated
     public Integer partition(final String topic, final K key, final V value, final int numPartitions) {
         final byte[] keyBytes = keySerializer.serialize(topic, key);
-        return defaultPartitioner.partition(topic, key, keyBytes, value, null, cluster, numPartitions);
+
+        // if the key bytes are not available, we just return null to let the producer to decide
+        // which partition to send internally; otherwise stick with the same built-in partitioner
+        // util functions that producer used to make sure its behavior is consistent with the producer
+        if (keyBytes == null) {
+            return null;
+        } else {
+            return BuiltInPartitioner.partitionForKey(keyBytes, numPartitions);
+        }
     }
 }

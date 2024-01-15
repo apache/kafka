@@ -16,8 +16,10 @@
  */
 package org.apache.kafka.streams.integration;
 
+import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
+import org.apache.kafka.clients.consumer.internals.LegacyKafkaConsumer;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
@@ -37,6 +39,7 @@ import org.junit.Rule;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
 import org.junit.rules.TestName;
+import org.junit.rules.Timeout;
 
 import java.io.IOException;
 import java.lang.reflect.Field;
@@ -56,6 +59,8 @@ import static org.hamcrest.Matchers.sameInstance;
 
 @Category(IntegrationTest.class)
 public class TaskAssignorIntegrationTest {
+    @Rule
+    public Timeout globalTimeout = Timeout.seconds(600);
 
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(1);
 
@@ -87,7 +92,7 @@ public class TaskAssignorIntegrationTest {
         // ensure these configurations wind up where they belong, and any number of future code changes
         // could break this change.
 
-        final String testId = safeUniqueTestName(getClass(), testName);
+        final String testId = safeUniqueTestName(testName);
         final String appId = "appId_" + testId;
         final String inputTopic = "input" + testId;
 
@@ -128,9 +133,14 @@ public class TaskAssignorIntegrationTest {
 
             final Field mainConsumer = StreamThread.class.getDeclaredField("mainConsumer");
             mainConsumer.setAccessible(true);
-            final KafkaConsumer<?, ?> consumer = (KafkaConsumer<?, ?>) mainConsumer.get(streamThread);
+            final KafkaConsumer<?, ?> parentConsumer = (KafkaConsumer<?, ?>) mainConsumer.get(streamThread);
 
-            final Field assignors = KafkaConsumer.class.getDeclaredField("assignors");
+            final Field delegate = KafkaConsumer.class.getDeclaredField("delegate");
+            delegate.setAccessible(true);
+            final Consumer<?, ?> consumer = (Consumer<?, ?>)  delegate.get(parentConsumer);
+            assertThat(consumer, instanceOf(LegacyKafkaConsumer.class));
+
+            final Field assignors = LegacyKafkaConsumer.class.getDeclaredField("assignors");
             assignors.setAccessible(true);
             final List<ConsumerPartitionAssignor> consumerPartitionAssignors = (List<ConsumerPartitionAssignor>) assignors.get(consumer);
             final StreamsPartitionAssignor streamsPartitionAssignor = (StreamsPartitionAssignor) consumerPartitionAssignors.get(0);

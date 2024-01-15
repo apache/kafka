@@ -16,10 +16,9 @@
  */
 package org.apache.kafka.streams.integration.utils;
 
+import kafka.cluster.EndPoint;
 import kafka.server.KafkaConfig;
-import kafka.server.KafkaConfig$;
 import kafka.server.KafkaServer;
-import kafka.utils.MockTime;
 import kafka.utils.TestUtils;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.Admin;
@@ -28,8 +27,8 @@ import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.common.config.SslConfigs;
 import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
-import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.server.util.MockTime;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -64,7 +63,7 @@ public class KafkaEmbedded {
      *               broker should listen to.  Note that you cannot change the `log.dirs` setting
      *               currently.
      */
-    @SuppressWarnings("WeakerAccess")
+    @SuppressWarnings({"WeakerAccess", "this-escape"})
     public KafkaEmbedded(final Properties config, final MockTime time) throws IOException {
         tmpFolder = org.apache.kafka.test.TestUtils.tempDirectory();
         logDir = org.apache.kafka.test.TestUtils.tempDirectory(tmpFolder.toPath(), "log");
@@ -86,17 +85,15 @@ public class KafkaEmbedded {
      */
     private Properties effectiveConfigFrom(final Properties initialConfig) {
         final Properties effectiveConfig = new Properties();
-        effectiveConfig.put(KafkaConfig$.MODULE$.BrokerIdProp(), 0);
-        effectiveConfig.put(KafkaConfig$.MODULE$.HostNameProp(), "localhost");
-        effectiveConfig.put(KafkaConfig$.MODULE$.PortProp(), "9092");
-        effectiveConfig.put(KafkaConfig$.MODULE$.NumPartitionsProp(), 1);
-        effectiveConfig.put(KafkaConfig$.MODULE$.AutoCreateTopicsEnableProp(), true);
-        effectiveConfig.put(KafkaConfig$.MODULE$.MessageMaxBytesProp(), 1000000);
-        effectiveConfig.put(KafkaConfig$.MODULE$.ControlledShutdownEnableProp(), true);
-        effectiveConfig.put(KafkaConfig$.MODULE$.ZkSessionTimeoutMsProp(), 10000);
+        effectiveConfig.put(KafkaConfig.BrokerIdProp(), 0);
+        effectiveConfig.put(KafkaConfig.NumPartitionsProp(), 1);
+        effectiveConfig.put(KafkaConfig.AutoCreateTopicsEnableProp(), true);
+        effectiveConfig.put(KafkaConfig.MessageMaxBytesProp(), 1000000);
+        effectiveConfig.put(KafkaConfig.ControlledShutdownEnableProp(), true);
+        effectiveConfig.put(KafkaConfig.ZkSessionTimeoutMsProp(), 10000);
 
         effectiveConfig.putAll(initialConfig);
-        effectiveConfig.setProperty(KafkaConfig$.MODULE$.LogDirProp(), logDir.getAbsolutePath());
+        effectiveConfig.setProperty(KafkaConfig.LogDirProp(), logDir.getAbsolutePath());
         return effectiveConfig;
     }
 
@@ -107,9 +104,8 @@ public class KafkaEmbedded {
      */
     @SuppressWarnings("WeakerAccess")
     public String brokerList() {
-        final Object listenerConfig = effectiveConfig.get(KafkaConfig$.MODULE$.InterBrokerListenerNameProp());
-        return kafka.config().hostName() + ":" + kafka.boundPort(
-            new ListenerName(listenerConfig != null ? listenerConfig.toString() : "PLAINTEXT"));
+        final EndPoint endPoint = kafka.advertisedListeners().head();
+        return endPoint.host() + ":" + endPoint.port();
     }
 
 
@@ -189,7 +185,7 @@ public class KafkaEmbedded {
     public Admin createAdminClient() {
         final Properties adminClientConfig = new Properties();
         adminClientConfig.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList());
-        final Object listeners = effectiveConfig.get(KafkaConfig$.MODULE$.ListenersProp());
+        final Object listeners = effectiveConfig.get(KafkaConfig.ListenersProp());
         if (listeners != null && listeners.toString().contains("SSL")) {
             adminClientConfig.put(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG, effectiveConfig.get(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG));
             adminClientConfig.put(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG, ((Password) effectiveConfig.get(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG)).value());

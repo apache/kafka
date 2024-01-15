@@ -27,6 +27,7 @@ import org.apache.kafka.common.record.TimestampType;
 import org.junit.jupiter.api.Test;
 
 import java.time.Instant;
+import java.util.Optional;
 
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -152,8 +153,8 @@ public class TestRecordTest {
     @Test
     public void testConsumerRecord() {
         final String topicName = "topic";
-        final ConsumerRecord<String, Integer> consumerRecord =
-            new ConsumerRecord<>(topicName, 1, 0, recordMs, TimestampType.CREATE_TIME, 0L, 0, 0, key, value, headers);
+        final ConsumerRecord<String, Integer> consumerRecord = new ConsumerRecord<>(topicName, 1, 0, recordMs,
+            TimestampType.CREATE_TIME, 0, 0, key, value, headers, Optional.empty());
         final TestRecord<String, Integer> testRecord = new TestRecord<>(consumerRecord);
         final TestRecord<String, Integer> expectedRecord = new TestRecord<>(key, value, headers, recordTime);
         assertEquals(expectedRecord, testRecord);

@@ -64,13 +64,7 @@ public class WordCountDemoTest {
 
     @AfterEach
     public void tearDown() {
-        try {
-            testDriver.close();
-        } catch (final RuntimeException e) {
-            // https://issues.apache.org/jira/browse/KAFKA-6647 causes exception when executed in Windows, ignoring it
-            // Logged stacktrace cannot be avoided
-            System.out.println("Ignoring exception, test failing in Windows due this exception:" + e.getLocalizedMessage());
-        }
+        testDriver.close();
     }
 
 

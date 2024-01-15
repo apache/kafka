@@ -14,7 +14,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.connect.runtime;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
@@ -34,8 +33,9 @@ public class InternalSinkRecord extends SinkRecord {
 
     public InternalSinkRecord(ConsumerRecord<byte[], byte[]> originalRecord, SinkRecord record) {
         super(record.topic(), record.kafkaPartition(), record.keySchema(), record.key(),
-            record.valueSchema(), record.value(), record.kafkaOffset(), record.timestamp(),
-            record.timestampType(), record.headers());
+                record.valueSchema(), record.value(), record.kafkaOffset(), record.timestamp(),
+                record.timestampType(), record.headers(), originalRecord.topic(), originalRecord.partition(),
+                originalRecord.offset());
         this.originalRecord = originalRecord;
     }
 
@@ -43,7 +43,8 @@ public class InternalSinkRecord extends SinkRecord {
                                  int partition, Schema keySchema, Object key, Schema valueSchema,
                                  Object value, long kafkaOffset, Long timestamp,
                                  TimestampType timestampType, Iterable<Header> headers) {
-        super(topic, partition, keySchema, key, valueSchema, value, kafkaOffset, timestamp, timestampType, headers);
+        super(topic, partition, keySchema, key, valueSchema, value, kafkaOffset, timestamp, timestampType, headers,
+                originalRecord.topic(), originalRecord.partition(), originalRecord.offset());
         this.originalRecord = originalRecord;
     }
 
@@ -52,7 +53,7 @@ public class InternalSinkRecord extends SinkRecord {
                                 Schema valueSchema, Object value, Long timestamp,
                                 Iterable<Header> headers) {
         return new InternalSinkRecord(originalRecord, topic, kafkaPartition, keySchema, key,
-            valueSchema, value, kafkaOffset(), timestamp, timestampType(), headers());
+                valueSchema, value, kafkaOffset(), timestamp, timestampType(), headers);
     }
 
     @Override
@@ -63,11 +64,6 @@ public class InternalSinkRecord extends SinkRecord {
     @Override
     public int hashCode() {
         return super.hashCode();
-    }
-
-    @Override
-    public String toString() {
-        return super.toString();
     }
 
     /**

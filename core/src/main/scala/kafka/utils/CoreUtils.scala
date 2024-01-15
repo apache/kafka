@@ -19,7 +19,6 @@ package kafka.utils
 
 import java.io._
 import java.nio._
-import java.nio.channels._
 import java.util.concurrent.locks.{Lock, ReadWriteLock}
 import java.lang.management._
 import java.util.{Base64, Properties, UUID}
@@ -29,12 +28,15 @@ import javax.management._
 import scala.collection._
 import scala.collection.{Seq, mutable}
 import kafka.cluster.EndPoint
+import org.apache.commons.validator.routines.InetAddressValidator
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.utils.Utils
 import org.slf4j.event.Level
 
+import java.util
 import scala.annotation.nowarn
+import scala.jdk.CollectionConverters._
 
 /**
  * General helper functions!
@@ -50,11 +52,7 @@ import scala.annotation.nowarn
 object CoreUtils {
   private val logger = Logger(getClass)
 
-  /**
-   * Return the smallest element in `iterable` if it is not empty. Otherwise return `ifEmpty`.
-   */
-  def min[A, B >: A](iterable: Iterable[A], ifEmpty: A)(implicit cmp: Ordering[B]): A =
-    if (iterable.isEmpty) ifEmpty else iterable.min(cmp)
+  private val inetAddressValidator = InetAddressValidator.getInstance()
 
   /**
     * Do the given action and log any exceptions thrown without rethrowing them.
@@ -63,16 +61,17 @@ object CoreUtils {
     * @param logging The logging instance to use for logging the thrown exception.
     * @param logLevel The log level to use for logging.
     */
+  @noinline // inlining this method is not typically useful and it triggers spurious spotbugs warnings
   def swallow(action: => Unit, logging: Logging, logLevel: Level = Level.WARN): Unit = {
     try {
       action
     } catch {
       case e: Throwable => logLevel match {
-        case Level.ERROR => logger.error(e.getMessage, e)
-        case Level.WARN => logger.warn(e.getMessage, e)
-        case Level.INFO => logger.info(e.getMessage, e)
-        case Level.DEBUG => logger.debug(e.getMessage, e)
-        case Level.TRACE => logger.trace(e.getMessage, e)
+        case Level.ERROR => logging.error(e.getMessage, e)
+        case Level.WARN => logging.warn(e.getMessage, e)
+        case Level.INFO => logging.info(e.getMessage, e)
+        case Level.DEBUG => logging.debug(e.getMessage, e)
+        case Level.TRACE => logging.trace(e.getMessage, e)
       }
     }
   }
@@ -82,30 +81,6 @@ object CoreUtils {
    * @param files sequence of files to be deleted
    */
   def delete(files: Seq[String]): Unit = files.foreach(f => Utils.delete(new File(f)))
-
-  /**
-   * Invokes every function in `all` even if one or more functions throws an exception.
-   *
-   * If any of the functions throws an exception, the first one will be rethrown at the end with subsequent exceptions
-   * added as suppressed exceptions.
-   */
-  // Note that this is a generalised version of `Utils.closeAll`. We could potentially make it more general by
-  // changing the signature to `def tryAll[R](all: Seq[() => R]): Seq[R]`
-  def tryAll(all: Seq[() => Unit]): Unit = {
-    var exception: Throwable = null
-    all.foreach { element =>
-      try element.apply()
-      catch {
-        case e: Throwable =>
-          if (exception != null)
-            exception.addSuppressed(e)
-          else
-            exception = e
-      }
-    }
-    if (exception != null)
-      throw exception
-  }
 
   /**
    * Register the given mbean with the platform mbean server,
@@ -119,7 +94,7 @@ object CoreUtils {
    */
   def registerMBean(mbean: Object, name: String): Boolean = {
     try {
-      val mbs = ManagementFactory.getPlatformMBeanServer()
+      val mbs = ManagementFactory.getPlatformMBeanServer
       mbs synchronized {
         val objName = new ObjectName(name)
         if (mbs.isRegistered(objName))
@@ -131,30 +106,6 @@ object CoreUtils {
       case e: Exception =>
         logger.error(s"Failed to register Mbean $name", e)
         false
-    }
-  }
-
-  /**
-   * Unregister the mbean with the given name, if there is one registered
-   * @param name The mbean name to unregister
-   */
-  def unregisterMBean(name: String): Unit = {
-    val mbs = ManagementFactory.getPlatformMBeanServer()
-    mbs synchronized {
-      val objName = new ObjectName(name)
-      if (mbs.isRegistered(objName))
-        mbs.unregisterMBean(objName)
-    }
-  }
-
-  /**
-   * Read some bytes into the provided buffer, and return the number of bytes read. If the
-   * channel has been closed or we get -1 on the read for any reason, throw an EOFException
-   */
-  def read(channel: ReadableByteChannel, buffer: ByteBuffer): Int = {
-    channel.read(buffer) match {
-      case -1 => throw new EOFException("Received -1 when reading from channel, socket has likely been closed.")
-      case n => n
     }
   }
 
@@ -190,36 +141,9 @@ object CoreUtils {
    * Create an instance of the class with the given class name
    */
   def createObject[T <: AnyRef](className: String, args: AnyRef*): T = {
-    val klass = Class.forName(className, true, Utils.getContextOrKafkaClassLoader()).asInstanceOf[Class[T]]
+    val klass = Class.forName(className, true, Utils.getContextOrKafkaClassLoader).asInstanceOf[Class[T]]
     val constructor = klass.getConstructor(args.map(_.getClass): _*)
     constructor.newInstance(args: _*)
-  }
-
-  /**
-   * Create a circular (looping) iterator over a collection.
-   * @param coll An iterable over the underlying collection.
-   * @return A circular iterator over the collection.
-   */
-  def circularIterator[T](coll: Iterable[T]) =
-    for (_ <- Iterator.continually(1); t <- coll) yield t
-
-  /**
-   * Replace the given string suffix with the new suffix. If the string doesn't end with the given suffix throw an exception.
-   */
-  def replaceSuffix(s: String, oldSuffix: String, newSuffix: String): String = {
-    if(!s.endsWith(oldSuffix))
-      throw new IllegalArgumentException("Expected string to end with '%s' but string is '%s'".format(oldSuffix, s))
-    s.substring(0, s.length - oldSuffix.length) + newSuffix
-  }
-
-  /**
-   * Read a big-endian integer from a byte array
-   */
-  def readInt(bytes: Array[Byte], offset: Int): Int = {
-    ((bytes(offset) & 0xFF) << 24) |
-    ((bytes(offset + 1) & 0xFF) << 16) |
-    ((bytes(offset + 2) & 0xFF) << 8) |
-    (bytes(offset + 3) & 0xFF)
   }
 
   /**
@@ -249,19 +173,65 @@ object CoreUtils {
   }
 
   def listenerListToEndPoints(listeners: String, securityProtocolMap: Map[ListenerName, SecurityProtocol]): Seq[EndPoint] = {
-    listenerListToEndPoints(listeners, securityProtocolMap, true)
+    listenerListToEndPoints(listeners, securityProtocolMap, requireDistinctPorts = true)
+  }
+
+  def checkDuplicateListenerPorts(endpoints: Seq[EndPoint], listeners: String): Unit = {
+    val distinctPorts = endpoints.map(_.port).distinct
+    require(distinctPorts.size == endpoints.map(_.port).size, s"Each listener must have a different port, listeners: $listeners")
   }
 
   def listenerListToEndPoints(listeners: String, securityProtocolMap: Map[ListenerName, SecurityProtocol], requireDistinctPorts: Boolean): Seq[EndPoint] = {
-    def validate(endPoints: Seq[EndPoint]): Unit = {
-      // filter port 0 for unit tests
-      val portsExcludingZero = endPoints.map(_.port).filter(_ != 0)
-      val distinctListenerNames = endPoints.map(_.listenerName).distinct
+    def validateOneIsIpv4AndOtherIpv6(first: String, second: String): Boolean =
+      (inetAddressValidator.isValidInet4Address(first) && inetAddressValidator.isValidInet6Address(second)) ||
+        (inetAddressValidator.isValidInet6Address(first) && inetAddressValidator.isValidInet4Address(second))
 
+    def validate(endPoints: Seq[EndPoint]): Unit = {
+      val distinctListenerNames = endPoints.map(_.listenerName).distinct
       require(distinctListenerNames.size == endPoints.size, s"Each listener must have a different name, listeners: $listeners")
-      if (requireDistinctPorts) {
-        val distinctPorts = portsExcludingZero.distinct
-        require(distinctPorts.size == portsExcludingZero.size, s"Each listener must have a different port, listeners: $listeners")
+
+      val (duplicatePorts, _) = endPoints.filter {
+        // filter port 0 for unit tests
+        ep => ep.port != 0
+      }.groupBy(_.port).partition {
+        case (_, endpoints) => endpoints.size > 1
+      }
+
+      // Exception case, let's allow duplicate ports if one host is on IPv4 and the other one is on IPv6
+      val duplicatePortsPartitionedByValidIps = duplicatePorts.map {
+        case (port, eps) =>
+          (port, eps.partition(ep =>
+            ep.host != null && inetAddressValidator.isValid(ep.host)
+          ))
+      }
+
+      // Iterate through every grouping of duplicates by port to see if they are valid
+      duplicatePortsPartitionedByValidIps.foreach {
+        case (port, (duplicatesWithIpHosts, duplicatesWithoutIpHosts)) =>
+          if (requireDistinctPorts)
+            checkDuplicateListenerPorts(duplicatesWithoutIpHosts, listeners)
+
+          duplicatesWithIpHosts match {
+            case eps if eps.isEmpty =>
+            case Seq(ep1, ep2) =>
+              if (requireDistinctPorts) {
+                val errorMessage = "If you have two listeners on " +
+                  s"the same port then one needs to be IPv4 and the other IPv6, listeners: $listeners, port: $port"
+                require(validateOneIsIpv4AndOtherIpv6(ep1.host, ep2.host), errorMessage)
+
+                // If we reach this point it means that even though duplicatesWithIpHosts in isolation can be valid, if
+                // there happens to be ANOTHER listener on this port without an IP host (such as a null host) then its
+                // not valid.
+                if (duplicatesWithoutIpHosts.nonEmpty)
+                  throw new IllegalArgumentException(errorMessage)
+              }
+            case _ =>
+              // Having more than 2 duplicate endpoints doesn't make sense since we only have 2 IP stacks (one is IPv4
+              // and the other is IPv6)
+              if (requireDistinctPorts)
+                throw new IllegalArgumentException("Each listener must have a different port unless exactly one listener has " +
+                  s"an IPv4 address and the other IPv6 address, listeners: $listeners, port: $port")
+          }
       }
     }
 
@@ -324,4 +294,7 @@ object CoreUtils {
     elements.groupMapReduce(key)(f)(reduce)
   }
 
+  def replicaToBrokerAssignmentAsScala(map: util.Map[Integer, util.List[Integer]]): Map[Int, Seq[Int]] = {
+    map.asScala.map(e => (e._1.asInstanceOf[Int], e._2.asScala.map(_.asInstanceOf[Int])))
+  }
 }

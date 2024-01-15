@@ -68,6 +68,11 @@ public class OffsetsForLeaderEpochResponse extends AbstractResponse {
         return data.throttleTimeMs();
     }
 
+    @Override
+    public void maybeSetThrottleTimeMs(int throttleTimeMs) {
+        data.setThrottleTimeMs(throttleTimeMs);
+    }
+
     public static OffsetsForLeaderEpochResponse parse(ByteBuffer buffer, short version) {
         return new OffsetsForLeaderEpochResponse(new OffsetForLeaderEpochResponseData(new ByteBufferAccessor(buffer), version));
     }

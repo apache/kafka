@@ -22,17 +22,17 @@ import scala.collection.Seq
 
 import kafka.utils.TestUtils
 import TestUtils._
-import kafka.zk.ZooKeeperTestHarness
+import kafka.server.QuorumTestHarness
 import java.io.File
 
 import kafka.server.checkpoints.OffsetCheckpointFile
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.serialization.{IntegerSerializer, StringSerializer}
-import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo}
 import org.junit.jupiter.api.Assertions._
 
-class LogRecoveryTest extends ZooKeeperTestHarness {
+class LogRecoveryTest extends QuorumTestHarness {
 
   val replicaLagTimeMaxMs = 5000L
   val replicaLagMaxMessages = 10L
@@ -44,20 +44,20 @@ class LogRecoveryTest extends ZooKeeperTestHarness {
   overridingProps.put(KafkaConfig.ReplicaFetchWaitMaxMsProp, replicaFetchWaitMaxMs.toString)
   overridingProps.put(KafkaConfig.ReplicaFetchMinBytesProp, replicaFetchMinBytes.toString)
 
-  var configs: Seq[KafkaConfig] = null
+  var configs: Seq[KafkaConfig] = _
   val topic = "new-topic"
   val partitionId = 0
   val topicPartition = new TopicPartition(topic, partitionId)
 
-  var server1: KafkaServer = null
-  var server2: KafkaServer = null
+  var server1: KafkaServer = _
+  var server2: KafkaServer = _
 
   def configProps1 = configs.head
   def configProps2 = configs.last
 
   val message = "hello"
 
-  var producer: KafkaProducer[Integer, String] = null
+  var producer: KafkaProducer[Integer, String] = _
   def hwFile1 = new OffsetCheckpointFile(new File(configProps1.logDirs.head, ReplicaManager.HighWatermarkFilename))
   def hwFile2 = new OffsetCheckpointFile(new File(configProps2.logDirs.head, ReplicaManager.HighWatermarkFilename))
   var servers = Seq.empty[KafkaServer]
@@ -67,16 +67,16 @@ class LogRecoveryTest extends ZooKeeperTestHarness {
   def updateProducer() = {
     if (producer != null)
       producer.close()
-    producer = TestUtils.createProducer(
-      TestUtils.getBrokerListStrFromServers(servers),
+    producer = createProducer(
+      plaintextBootstrapServers(servers),
       keySerializer = new IntegerSerializer,
       valueSerializer = new StringSerializer
     )
   }
 
   @BeforeEach
-  override def setUp(): Unit = {
-    super.setUp()
+  override def setUp(testInfo: TestInfo): Unit = {
+    super.setUp(testInfo)
 
     configs = TestUtils.createBrokerConfigs(2, zkConnect, enableControlledShutdown = false).map(KafkaConfig.fromProps(_, overridingProps))
 

@@ -431,6 +431,16 @@ public class FileRecordsTest {
     }
 
     @Test
+    public void testFormatConversionWithNoMessages() {
+        TopicPartition tp = new TopicPartition("topic-1", 0);
+        LazyDownConversionRecords lazyRecords = new LazyDownConversionRecords(tp, MemoryRecords.EMPTY, RecordBatch.MAGIC_VALUE_V0,
+            0, Time.SYSTEM);
+        assertEquals(0, lazyRecords.sizeInBytes());
+        Iterator<ConvertedRecords<?>> it = lazyRecords.iterator(16 * 1024L);
+        assertFalse(it.hasNext(), "No messages should be returned");
+    }
+
+    @Test
     public void testSearchForTimestamp() throws IOException {
         for (RecordVersion version : RecordVersion.values()) {
             testSearchForTimestamp(version);
@@ -526,19 +536,19 @@ public class FileRecordsTest {
     public void testBytesLengthOfWriteTo() throws IOException {
 
         int size = fileRecords.sizeInBytes();
-        long firstWritten = size / 3;
+        int firstWritten = size / 3;
 
         TransferableChannel channel = Mockito.mock(TransferableChannel.class);
 
         // Firstly we wrote some of the data
-        fileRecords.writeTo(channel, 0, (int) firstWritten);
-        verify(channel).transferFrom(any(), anyLong(), eq(firstWritten));
+        fileRecords.writeTo(channel, 0, firstWritten);
+        verify(channel).transferFrom(any(), anyLong(), eq((long) firstWritten));
 
         // Ensure (length > size - firstWritten)
-        int secondWrittenLength = size - (int) firstWritten + 1;
+        int secondWrittenLength = size - firstWritten + 1;
         fileRecords.writeTo(channel, firstWritten, secondWrittenLength);
         // But we still only write (size - firstWritten), which is not fulfilled in the old version
-        verify(channel).transferFrom(any(), anyLong(), eq(size - firstWritten));
+        verify(channel).transferFrom(any(), anyLong(), eq((long) size - firstWritten));
     }
 
     private void doTestConversion(CompressionType compressionType, byte toMagic) throws IOException {

@@ -23,6 +23,7 @@ import org.apache.kafka.common.config.SslConfigs;
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs;
 import org.apache.kafka.common.network.Mode;
 import org.apache.kafka.common.security.auth.SslEngineFactory;
+import org.apache.kafka.common.utils.ConfigUtils;
 import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -167,7 +168,10 @@ public class SslFactory implements Reconfigurable, Closeable {
                             "which a keystore was configured.");
                 }
 
-                CertificateEntries.ensureCompatible(newSslEngineFactory.keystore(), sslEngineFactory.keystore());
+                boolean allowDnChanges = ConfigUtils.getBoolean(nextConfigs, BrokerSecurityConfigs.SSL_ALLOW_DN_CHANGES_CONFIG, BrokerSecurityConfigs.DEFAULT_SSL_ALLOW_DN_CHANGES_VALUE);
+                boolean allowSanChanges = ConfigUtils.getBoolean(nextConfigs, BrokerSecurityConfigs.SSL_ALLOW_SAN_CHANGES_CONFIG, BrokerSecurityConfigs.DEFAULT_SSL_ALLOW_SAN_CHANGES_VALUE);
+
+                CertificateEntries.ensureCompatible(newSslEngineFactory.keystore(), sslEngineFactory.keystore(), allowDnChanges, allowSanChanges);
             }
             if (sslEngineFactory.truststore() == null && newSslEngineFactory.truststore() != null) {
                 throw new ConfigException("Cannot add SSL truststore to an existing listener for which no " +
@@ -302,21 +306,53 @@ public class SslFactory implements Reconfigurable, Closeable {
             return entries;
         }
 
-        static void ensureCompatible(KeyStore newKeystore, KeyStore oldKeystore) throws GeneralSecurityException {
+        static void ensureCompatible(KeyStore newKeystore, KeyStore oldKeystore, boolean allowDnChanges, boolean allowSanChanges) throws GeneralSecurityException {
             List<CertificateEntries> newEntries = CertificateEntries.create(newKeystore);
             List<CertificateEntries> oldEntries = CertificateEntries.create(oldKeystore);
+
+            if (!allowDnChanges) {
+                ensureCompatibleDNs(newEntries, oldEntries);
+            }
+
+            if (!allowSanChanges) {
+                ensureCompatibleSANs(newEntries, oldEntries);
+            }
+        }
+
+        private static void ensureCompatibleDNs(List<CertificateEntries> newEntries, List<CertificateEntries> oldEntries) {
             if (newEntries.size() != oldEntries.size()) {
                 throw new ConfigException(String.format("Keystore entries do not match, existing store contains %d entries, new store contains %d entries",
                     oldEntries.size(), newEntries.size()));
             }
+
             for (int i = 0; i < newEntries.size(); i++) {
                 CertificateEntries newEntry = newEntries.get(i);
                 CertificateEntries oldEntry = oldEntries.get(i);
-                if (!Objects.equals(newEntry.subjectPrincipal, oldEntry.subjectPrincipal)) {
+                Principal newPrincipal = newEntry.subjectPrincipal;
+                Principal oldPrincipal = oldEntry.subjectPrincipal;
+
+                // Compare principal objects to compare canonical names (e.g. to ignore leading/trailing whitespaces).
+                // Canonical names may differ if the tags of a field changes from one with a printable string representation
+                // to one without or vice-versa due to optional conversion to hex representation based on the tag. So we
+                // also compare Principal.getName which compares the RFC2253 name. If either matches, allow dynamic update.
+                if (!Objects.equals(newPrincipal, oldPrincipal) && !newPrincipal.getName().equalsIgnoreCase(oldPrincipal.getName())) {
                     throw new ConfigException(String.format("Keystore DistinguishedName does not match: " +
                         " existing={alias=%s, DN=%s}, new={alias=%s, DN=%s}",
                         oldEntry.alias, oldEntry.subjectPrincipal, newEntry.alias, newEntry.subjectPrincipal));
                 }
+            }
+        }
+
+        private static void ensureCompatibleSANs(List<CertificateEntries> newEntries, List<CertificateEntries> oldEntries) {
+            if (newEntries.size() != oldEntries.size()) {
+                throw new ConfigException(String.format("Keystore entries do not match, existing store contains %d entries, new store contains %d entries",
+                    oldEntries.size(), newEntries.size()));
+            }
+
+            for (int i = 0; i < newEntries.size(); i++) {
+                CertificateEntries newEntry = newEntries.get(i);
+                CertificateEntries oldEntry = oldEntries.get(i);
+
                 if (!newEntry.subjectAltNames.containsAll(oldEntry.subjectAltNames)) {
                     throw new ConfigException(String.format("Keystore SubjectAltNames do not match: " +
                             " existing={alias=%s, SAN=%s}, new={alias=%s, SAN=%s}",
@@ -413,12 +449,12 @@ public class SslFactory implements Reconfigurable, Closeable {
             while (true) {
                 switch (handshakeStatus) {
                     case NEED_WRAP:
-                        if (netBuffer.position() != 0) // Wait for peer to consume previously wrapped data
-                            return;
                         handshakeResult = sslEngine.wrap(EMPTY_BUF, netBuffer);
                         switch (handshakeResult.getStatus()) {
                             case OK: break;
                             case BUFFER_OVERFLOW:
+                                if (netBuffer.position() != 0) // Wait for peer to consume previously wrapped data
+                                    return;
                                 netBuffer.compact();
                                 netBuffer = Utils.ensureCapacity(netBuffer, sslEngine.getSession().getPacketBufferSize());
                                 netBuffer.flip();
@@ -430,24 +466,8 @@ public class SslFactory implements Reconfigurable, Closeable {
                         }
                         return;
                     case NEED_UNWRAP:
-                        if (peerValidator.netBuffer.position() == 0) // no data to unwrap, return to process peer
-                            return;
-                        peerValidator.netBuffer.flip(); // unwrap the data from peer
-                        handshakeResult = sslEngine.unwrap(peerValidator.netBuffer, appBuffer);
-                        peerValidator.netBuffer.compact();
-                        handshakeStatus = handshakeResult.getHandshakeStatus();
-                        switch (handshakeResult.getStatus()) {
-                            case OK: break;
-                            case BUFFER_OVERFLOW:
-                                appBuffer = Utils.ensureCapacity(appBuffer, sslEngine.getSession().getApplicationBufferSize());
-                                break;
-                            case BUFFER_UNDERFLOW:
-                                netBuffer = Utils.ensureCapacity(netBuffer, sslEngine.getSession().getPacketBufferSize());
-                                break;
-                            case CLOSED:
-                            default:
-                                throw new SSLException("Unexpected handshake status: " + handshakeResult.getStatus());
-                        }
+                        handshakeStatus = unwrap(peerValidator, true);
+                        if (handshakeStatus == null) return;
                         break;
                     case NEED_TASK:
                         sslEngine.getDelegatedTask().run();
@@ -457,12 +477,42 @@ public class SslFactory implements Reconfigurable, Closeable {
                         return;
                     case NOT_HANDSHAKING:
                         if (handshakeResult.getHandshakeStatus() != SSLEngineResult.HandshakeStatus.FINISHED)
-                            throw new SSLException("Did not finish handshake");
+                            throw new SSLException("Did not finish handshake, handshake status: " + handshakeResult.getHandshakeStatus());
+                        else if (peerValidator.netBuffer.position() != 0) {
+                            unwrap(peerValidator, false);
+                        }
                         return;
                     default:
-                        throw new IllegalStateException("Unexpected handshake status " + handshakeStatus);
+                        throw new IllegalStateException("Unexpected handshake status: " + handshakeStatus);
                 }
             }
+        }
+
+        private SSLEngineResult.HandshakeStatus unwrap(SslEngineValidator peerValidator, boolean updateHandshakeResult) throws SSLException {
+            // Unwrap regardless of whether there is data in the buffer to ensure that
+            // handshake status is updated if required.
+            peerValidator.netBuffer.flip(); // unwrap the data from peer
+            SSLEngineResult sslEngineResult = sslEngine.unwrap(peerValidator.netBuffer, appBuffer);
+            if (updateHandshakeResult) {
+                handshakeResult = sslEngineResult;
+            }
+            peerValidator.netBuffer.compact();
+            SSLEngineResult.HandshakeStatus handshakeStatus = sslEngineResult.getHandshakeStatus();
+            switch (sslEngineResult.getStatus()) {
+                case OK: break;
+                case BUFFER_OVERFLOW:
+                    appBuffer = Utils.ensureCapacity(appBuffer, sslEngine.getSession().getApplicationBufferSize());
+                    break;
+                case BUFFER_UNDERFLOW:
+                    netBuffer = Utils.ensureCapacity(netBuffer, sslEngine.getSession().getPacketBufferSize());
+                    // BUFFER_UNDERFLOW typically indicates that we need more data from peer,
+                    // so return to process peer.
+                    return null;
+                case CLOSED:
+                default:
+                    throw new SSLException("Unexpected handshake status: " + sslEngineResult.getStatus());
+            }
+            return handshakeStatus;
         }
 
         boolean complete() {

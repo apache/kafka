@@ -20,9 +20,11 @@ import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.kstream.Windowed;
-import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
-import org.apache.kafka.streams.processor.StateStoreContext;
+import org.apache.kafka.streams.query.PositionBound;
+import org.apache.kafka.streams.query.Query;
+import org.apache.kafka.streams.query.QueryConfig;
+import org.apache.kafka.streams.query.QueryResult;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.TimestampedBytesStore;
 import org.apache.kafka.streams.state.TimestampedWindowStore;
@@ -80,10 +82,29 @@ public class TimestampedWindowStoreBuilder<K, V>
         if (!enableCaching) {
             return inner;
         }
+
+        final boolean isTimeOrdered = isTimeOrderedStore(inner);
+        if (isTimeOrdered) {
+            return new TimeOrderedCachingWindowStore(
+                inner,
+                storeSupplier.windowSize(),
+                storeSupplier.segmentIntervalMs());
+        }
+
         return new CachingWindowStore(
             inner,
             storeSupplier.windowSize(),
             storeSupplier.segmentIntervalMs());
+    }
+
+    private boolean isTimeOrderedStore(final StateStore stateStore) {
+        if (stateStore instanceof RocksDBTimeOrderedWindowStore) {
+            return true;
+        }
+        if (stateStore instanceof WrappedStateStore) {
+            return isTimeOrderedStore(((WrappedStateStore) stateStore).wrapped());
+        }
+        return false;
     }
 
     private WindowStore<Bytes, byte[]> maybeWrapLogging(final WindowStore<Bytes, byte[]> inner) {
@@ -99,71 +120,49 @@ public class TimestampedWindowStoreBuilder<K, V>
 
 
     private final static class InMemoryTimestampedWindowStoreMarker
+        extends WrappedStateStore<WindowStore<Bytes, byte[]>, Bytes, byte[]>
         implements WindowStore<Bytes, byte[]>, TimestampedBytesStore {
 
-        private final WindowStore<Bytes, byte[]> wrapped;
-
         private InMemoryTimestampedWindowStoreMarker(final WindowStore<Bytes, byte[]> wrapped) {
+            super(wrapped);
             if (wrapped.persistent()) {
                 throw new IllegalArgumentException("Provided store must not be a persistent store, but it is.");
             }
-            this.wrapped = wrapped;
-        }
-
-        @Deprecated
-        @Override
-        public void init(final ProcessorContext context,
-                         final StateStore root) {
-            wrapped.init(context, root);
-        }
-
-        @Override
-        public void init(final StateStoreContext context, final StateStore root) {
-            wrapped.init(context, root);
-        }
-
-        @Deprecated
-        @Override
-        public void put(final Bytes key,
-                        final byte[] value) {
-            wrapped.put(key, value);
         }
 
         @Override
         public void put(final Bytes key,
                         final byte[] value,
                         final long windowStartTimestamp) {
-            wrapped.put(key, value, windowStartTimestamp);
+            wrapped().put(key, value, windowStartTimestamp);
         }
 
         @Override
         public byte[] fetch(final Bytes key,
                             final long time) {
-            return wrapped.fetch(key, time);
+            return wrapped().fetch(key, time);
         }
 
-        @SuppressWarnings("deprecation")
         @Override
         public WindowStoreIterator<byte[]> fetch(final Bytes key,
                                                  final long timeFrom,
                                                  final long timeTo) {
-            return wrapped.fetch(key, timeFrom, timeTo);
+            return wrapped().fetch(key, timeFrom, timeTo);
         }
 
         @Override
         public WindowStoreIterator<byte[]> backwardFetch(final Bytes key,
                                                          final long timeFrom,
                                                          final long timeTo) {
-            return wrapped.backwardFetch(key, timeFrom, timeTo);
+            return wrapped().backwardFetch(key, timeFrom, timeTo);
         }
 
-        @SuppressWarnings("deprecation")
         @Override
         public KeyValueIterator<Windowed<Bytes>, byte[]> fetch(final Bytes keyFrom,
                                                                final Bytes keyTo,
                                                                final long timeFrom,
                                                                final long timeTo) {
-            return wrapped.fetch(keyFrom, keyTo, timeFrom, timeTo);
+            return wrapped().fetch(keyFrom, keyTo, timeFrom, timeTo);
         }
 
         @Override
@@ -171,50 +170,43 @@ public class TimestampedWindowStoreBuilder<K, V>
                                                                        final Bytes keyTo,
                                                                        final long timeFrom,
                                                                        final long timeTo) {
-            return wrapped.backwardFetch(keyFrom, keyTo, timeFrom, timeTo);
+            return wrapped().backwardFetch(keyFrom, keyTo, timeFrom, timeTo);
         }
 
-        @SuppressWarnings("deprecation")
         @Override
         public KeyValueIterator<Windowed<Bytes>, byte[]> fetchAll(final long timeFrom,
                                                                   final long timeTo) {
-            return wrapped.fetchAll(timeFrom, timeTo);
+            return wrapped().fetchAll(timeFrom, timeTo);
         }
 
         @Override
         public KeyValueIterator<Windowed<Bytes>, byte[]> backwardFetchAll(final long timeFrom,
                                                                           final long timeTo) {
-            return wrapped.backwardFetchAll(timeFrom, timeTo);
+            return wrapped().backwardFetchAll(timeFrom, timeTo);
         }
 
         @Override
         public KeyValueIterator<Windowed<Bytes>, byte[]> all() {
-            return wrapped.all();
+            return wrapped().all();
         }
 
         @Override
         public KeyValueIterator<Windowed<Bytes>, byte[]> backwardAll() {
-            return wrapped.backwardAll();
+            return wrapped().backwardAll();
         }
 
         @Override
-        public void flush() {
-            wrapped.flush();
-        }
+        public <R> QueryResult<R> query(final Query<R> query,
+            final PositionBound positionBound,
+            final QueryConfig config) {
 
-        @Override
-        public void close() {
-            wrapped.close();
-        }
-
-        @Override
-        public boolean isOpen() {
-            return wrapped.isOpen();
-        }
-
-        @Override
-        public String name() {
-            return wrapped.name();
+            final long start = config.isCollectExecutionInfo() ? System.nanoTime() : -1L;
+            final QueryResult<R> result = wrapped().query(query, positionBound, config);
+            if (config.isCollectExecutionInfo()) {
+                final long end = System.nanoTime();
+                result.addExecutionInfo("Handled in " + getClass() + " in " + (end - start) + "ns");
+            }
+            return result;
         }
 
         @Override

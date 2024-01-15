@@ -26,14 +26,14 @@ import static org.apache.kafka.connect.runtime.distributed.IncrementalCooperativ
 /**
  * An enumeration of the modes available to the worker to signal which Connect protocols are
  * enabled at any time.
- *
+ * <p>
  * {@code EAGER} signifies that this worker only supports prompt release of assigned connectors
  * and tasks in every rebalance. Corresponds to Connect protocol V0.
- *
+ * <p>
  * {@code COMPATIBLE} signifies that this worker supports both eager and incremental cooperative
  * Connect protocols and will use the version that is elected by the Kafka broker coordinator
  * during rebalance.
- *
+ * <p>
  * {@code SESSIONED} signifies that this worker supports all of the above protocols in addition to
  * a protocol that uses incremental cooperative rebalancing for worker assignment and uses session
  * keys distributed via the config topic to verify internal REST requests

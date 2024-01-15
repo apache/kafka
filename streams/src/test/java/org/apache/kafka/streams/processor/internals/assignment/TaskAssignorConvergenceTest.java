@@ -16,8 +16,30 @@
  */
 package org.apache.kafka.streams.processor.internals.assignment;
 
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Optional;
+import org.apache.kafka.common.Cluster;
+import org.apache.kafka.common.Node;
+import org.apache.kafka.common.PartitionInfo;
+import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.TopicPartitionInfo;
+import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.internals.InternalTopicManager;
+import org.apache.kafka.streams.processor.internals.TopologyMetadata.Subtopology;
 import org.apache.kafka.streams.processor.internals.assignment.AssignorConfiguration.AssignmentConfigs;
+import org.apache.kafka.test.MockClientSupplier;
+import org.apache.kafka.test.MockInternalTopicManager;
+import org.junit.Before;
+import org.junit.BeforeClass;
 import org.junit.Test;
 
 import java.util.Map;
@@ -28,15 +50,42 @@ import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.UUID;
 import java.util.function.Supplier;
+import org.junit.runner.RunWith;
+import org.junit.runners.Parameterized;
+import org.junit.runners.Parameterized.Parameter;
 
+import static java.util.Arrays.asList;
+import static org.apache.kafka.common.utils.Utils.mkEntry;
+import static org.apache.kafka.common.utils.Utils.mkMap;
+import static org.apache.kafka.common.utils.Utils.mkSet;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.CHANGELOG_TOPIC_PREFIX;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.EMPTY_RACK_AWARE_ASSIGNMENT_TAGS;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.RACK_PREFIX;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.TOPIC_PREFIX;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.appendClientStates;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.assertBalancedActiveAssignment;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.assertBalancedStatefulAssignment;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.assertValidAssignment;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.configProps;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.getRandomNodes;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.getRandomReplica;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.uuidForInt;
 import static org.junit.Assert.fail;
+import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.spy;
 
+@RunWith(Parameterized.class)
 public class TaskAssignorConvergenceTest {
+    private static Random random;
+    private static final Time TIME = new MockTime();
+
+    @BeforeClass
+    public static void beforeClass() {
+        final long seed = System.currentTimeMillis();
+        System.out.println("Seed is " + seed);
+        random = new Random(seed);
+    }
+
     private static final class Harness {
         private final Set<TaskId> statelessTasks;
         private final Map<TaskId, Long> statefulTaskEndOffsetSums;
@@ -44,75 +93,162 @@ public class TaskAssignorConvergenceTest {
         private final Map<UUID, ClientState> droppedClientStates;
         private final StringBuilder history = new StringBuilder();
 
+        public final Map<TaskId, Set<TopicPartition>> partitionsForTask;
+        public final Map<TaskId, Set<TopicPartition>> changelogPartitionsForTask;
+        public final Map<Subtopology, Set<TaskId>> tasksForTopicGroup;
+        public final Cluster fullMetadata;
+        public final Map<UUID, Map<String, Optional<String>>> racksForProcessConsumer;
+        public final InternalTopicManager internalTopicManager;
+
+
+
         private static Harness initializeCluster(final int numStatelessTasks,
                                                  final int numStatefulTasks,
-                                                 final int numNodes,
-                                                 final Supplier<Integer> partitionCountSupplier) {
+                                                 final int numClients,
+                                                 final Supplier<Integer> partitionCountSupplier,
+                                                 final int numNodes) {
             int subtopology = 0;
             final Set<TaskId> statelessTasks = new TreeSet<>();
             int remainingStatelessTasks = numStatelessTasks;
+            final List<Node> nodes = getRandomNodes(numNodes);
+            int nodeIndex = 0;
+            final Set<PartitionInfo> partitionInfoSet = new HashSet<>();
+            final Map<TaskId, Set<TopicPartition>> partitionsForTask = new HashMap<>();
+            final Map<TaskId, Set<TopicPartition>> changelogPartitionsForTask = new HashMap<>();
+            final Map<Subtopology, Set<TaskId>> tasksForTopicGroup = new HashMap<>();
+
             while (remainingStatelessTasks > 0) {
                 final int partitions = Math.min(remainingStatelessTasks, partitionCountSupplier.get());
                 for (int i = 0; i < partitions; i++) {
-                    statelessTasks.add(new TaskId(subtopology, i));
+                    final TaskId taskId = new TaskId(subtopology, i);
+                    statelessTasks.add(taskId);
                     remainingStatelessTasks--;
+
+                    final Node[] replica = getRandomReplica(nodes, nodeIndex, i);
+                    partitionInfoSet.add(new PartitionInfo(TOPIC_PREFIX + "_" + subtopology, i, replica[0], replica, replica));
+                    nodeIndex++;
+
+                    partitionsForTask.put(taskId, mkSet(new TopicPartition(TOPIC_PREFIX + "_" + subtopology, i)));
+                    tasksForTopicGroup.computeIfAbsent(new Subtopology(subtopology, null), k -> new HashSet<>()).add(taskId);
                 }
                 subtopology++;
             }
 
             final Map<TaskId, Long> statefulTaskEndOffsetSums = new TreeMap<>();
+            final Map<String, List<TopicPartitionInfo>> topicPartitionInfo = new HashMap<>();
+            final Set<String> changelogNames = new HashSet<>();
             int remainingStatefulTasks = numStatefulTasks;
             while (remainingStatefulTasks > 0) {
+                final String changelogTopicName = CHANGELOG_TOPIC_PREFIX + "_" + subtopology;
+                changelogNames.add(changelogTopicName);
                 final int partitions = Math.min(remainingStatefulTasks, partitionCountSupplier.get());
                 for (int i = 0; i < partitions; i++) {
-                    statefulTaskEndOffsetSums.put(new TaskId(subtopology, i), 150000L);
+                    final TaskId taskId = new TaskId(subtopology, i);
+                    statefulTaskEndOffsetSums.put(taskId, 150000L);
                     remainingStatefulTasks--;
+
+                    Node[] replica = getRandomReplica(nodes, nodeIndex, i);
+                    partitionInfoSet.add(new PartitionInfo(TOPIC_PREFIX + "_" + subtopology, i, replica[0], replica, replica));
+                    nodeIndex++;
+
+                    partitionsForTask.put(taskId, mkSet(new TopicPartition(TOPIC_PREFIX + "_" + subtopology, i)));
+                    changelogPartitionsForTask.put(taskId, mkSet(new TopicPartition(changelogTopicName, i)));
+                    tasksForTopicGroup.computeIfAbsent(new Subtopology(subtopology, null), k -> new HashSet<>()).add(taskId);
+
+                    final int changelogNodeIndex = random.nextInt(nodes.size());
+                    replica = getRandomReplica(nodes, changelogNodeIndex, i);
+                    final TopicPartitionInfo info = new TopicPartitionInfo(i, replica[0], Arrays.asList(replica[0], replica[1]), Collections.emptyList());
+                    topicPartitionInfo.computeIfAbsent(changelogTopicName, tp -> new ArrayList<>()).add(info);
                 }
                 subtopology++;
             }
 
+            final MockTime time = new MockTime();
+            final StreamsConfig streamsConfig = new StreamsConfig(configProps(StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_MIN_TRAFFIC));
+            final MockClientSupplier mockClientSupplier = new MockClientSupplier();
+            final MockInternalTopicManager mockInternalTopicManager = new MockInternalTopicManager(
+                time,
+                streamsConfig,
+                mockClientSupplier.restoreConsumer,
+                false
+            );
+            final InternalTopicManager spyTopicManager = spy(mockInternalTopicManager);
+            doReturn(topicPartitionInfo).when(spyTopicManager).getTopicPartitionInfo(changelogNames);
+
+            final Cluster cluster = new Cluster(
+                "cluster",
+                new HashSet<>(nodes),
+                partitionInfoSet,
+                Collections.emptySet(),
+                Collections.emptySet()
+            );
+
             final Map<UUID, ClientState> clientStates = new TreeMap<>();
-            for (int i = 0; i < numNodes; i++) {
+            final Map<UUID, Map<String, Optional<String>>> racksForProcessConsumer = new HashMap<>();
+            for (int i = 0; i < numClients; i++) {
                 final UUID uuid = uuidForInt(i);
                 clientStates.put(uuid, emptyInstance(uuid, statefulTaskEndOffsetSums));
+                final String rack = RACK_PREFIX + random.nextInt(nodes.size());
+                racksForProcessConsumer.put(uuid, mkMap(mkEntry("consumer", Optional.of(rack))));
             }
 
-            return new Harness(statelessTasks, statefulTaskEndOffsetSums, clientStates);
+            return new Harness(statelessTasks, statefulTaskEndOffsetSums, clientStates, cluster, partitionsForTask, changelogPartitionsForTask, tasksForTopicGroup, racksForProcessConsumer, spyTopicManager);
         }
 
         private Harness(final Set<TaskId> statelessTasks,
                         final Map<TaskId, Long> statefulTaskEndOffsetSums,
-                        final Map<UUID, ClientState> clientStates) {
+                        final Map<UUID, ClientState> clientStates,
+                        final Cluster fullMetadata,
+                        final Map<TaskId, Set<TopicPartition>> partitionsForTask,
+                        final Map<TaskId, Set<TopicPartition>> changelogPartitionsForTask,
+                        final Map<Subtopology, Set<TaskId>> tasksForTopicGroup,
+                        final Map<UUID, Map<String, Optional<String>>> racksForProcessConsumer,
+                        final InternalTopicManager internalTopicManager) {
             this.statelessTasks = statelessTasks;
             this.statefulTaskEndOffsetSums = statefulTaskEndOffsetSums;
             this.clientStates = clientStates;
+            this.fullMetadata = fullMetadata;
+            this.partitionsForTask = partitionsForTask;
+            this.changelogPartitionsForTask = changelogPartitionsForTask;
+            this.tasksForTopicGroup = tasksForTopicGroup;
+            this.racksForProcessConsumer = racksForProcessConsumer;
+            this.internalTopicManager = internalTopicManager;
+
             droppedClientStates = new TreeMap<>();
             history.append('\n');
             history.append("Cluster and application initial state: \n");
             history.append("Stateless tasks: ").append(statelessTasks).append('\n');
             history.append("Stateful tasks:  ").append(statefulTaskEndOffsetSums.keySet()).append('\n');
+            history.append("Full metadata:  ").append(fullMetadata).append('\n');
+            history.append("Partitions for tasks:  ").append(partitionsForTask).append('\n');
+            history.append("Changelog partitions for tasks:  ").append(changelogPartitionsForTask).append('\n');
+            history.append("Tasks for subtopology:  ").append(tasksForTopicGroup).append('\n');
+            history.append("Racks for process consumer:  ").append(racksForProcessConsumer).append('\n');
             formatClientStates(true);
             history.append("History of the cluster: \n");
         }
 
-        private void addNode() {
+        private void addClient() {
             final UUID uuid = uuidForInt(clientStates.size() + droppedClientStates.size());
             history.append("Adding new node ").append(uuid).append('\n');
             clientStates.put(uuid, emptyInstance(uuid, statefulTaskEndOffsetSums));
+            final int nodeSize = fullMetadata.nodes().size();
+            final String rack = RACK_PREFIX + random.nextInt(nodeSize);
+            racksForProcessConsumer.computeIfAbsent(uuid, k -> new HashMap<>()).put("consumer", Optional.of(rack));
         }
 
         private static ClientState emptyInstance(final UUID uuid, final Map<TaskId, Long> allTaskEndOffsetSums) {
-            final ClientState clientState = new ClientState(1);
+            final ClientState clientState = new ClientState(uuid, 1);
             clientState.computeTaskLags(uuid, allTaskEndOffsetSums);
             return clientState;
         }
 
-        private void addOrResurrectNodesRandomly(final Random prng, final int limit) {
+        private void addOrResurrectClientsRandomly(final Random prng, final int limit) {
             final int numberToAdd = prng.nextInt(limit);
             for (int i = 0; i < numberToAdd; i++) {
                 final boolean addNew = prng.nextBoolean();
                 if (addNew || droppedClientStates.isEmpty()) {
-                    addNode();
+                    addClient();
                 } else {
                     final UUID uuid = selectRandomElement(prng, droppedClientStates);
                     history.append("Resurrecting node ").append(uuid).append('\n');
@@ -122,20 +258,20 @@ public class TaskAssignorConvergenceTest {
             }
         }
 
-        private void dropNode() {
+        private void dropClient() {
             if (clientStates.isEmpty()) {
                 throw new NoSuchElementException("There are no nodes to drop");
             } else {
                 final UUID toDrop = clientStates.keySet().iterator().next();
-                dropNode(toDrop);
+                dropClient(toDrop);
             }
         }
 
-        private void dropRandomNodes(final int numNode, final Random prng) {
+        private void dropRandomClients(final int numNode, final Random prng) {
             int dropped = 0;
             while (!clientStates.isEmpty() && dropped < numNode) {
                 final UUID toDrop = selectRandomElement(prng, clientStates);
-                dropNode(toDrop);
+                dropClient(toDrop);
                 dropped++;
             }
             history.append("Stateless tasks: ").append(statelessTasks).append('\n');
@@ -143,7 +279,7 @@ public class TaskAssignorConvergenceTest {
             formatClientStates(true);
         }
 
-        private void dropNode(final UUID toDrop) {
+        private void dropClient(final UUID toDrop) {
             final ClientState clientState = clientStates.remove(toDrop);
             history.append("Dropping node ").append(toDrop).append(": ").append(clientState).append('\n');
             droppedClientStates.put(toDrop, clientState);
@@ -170,7 +306,7 @@ public class TaskAssignorConvergenceTest {
             final Map<UUID, ClientState> newClientStates = new TreeMap<>();
             for (final Map.Entry<UUID, ClientState> entry : clientStates.entrySet()) {
                 final UUID uuid = entry.getKey();
-                final ClientState newClientState = new ClientState(1);
+                final ClientState newClientState = new ClientState(uuid, 1);
                 final ClientState clientState = entry.getValue();
                 final Map<TaskId, Long> taskOffsetSums = new TreeMap<>();
                 for (final TaskId taskId : clientState.activeTasks()) {
@@ -226,18 +362,49 @@ public class TaskAssignorConvergenceTest {
         }
     }
 
+    private int skewThreshold = 1;
+
+    @Parameter
+    public String rackAwareStrategy;
+
+    @Before
+    public void setUp() {
+        if (rackAwareStrategy.equals(StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_BALANCE_SUBTOPOLOGY)) {
+            // We take ceiling of [task_in_subtopology / total_task * original_task_assigned_to_client] as the capacity from
+            // stage 1 client to stage 2 client which can result in the skew to be at most 2
+            // For example, suppose there are 2 subtopologies s1 and s2. s1 has 2 tasks [t1, t2], s2 has 1 task t3. There are 2 clients c1 and c2 with
+            // originally 2 tasks and 1 task. Then the capacity from stage 1 c1 to stage 2 c1 is ceil(2 * 2.0 / 3 * 2) = 2 which can result in both
+            // t1 and t2 assigned to c1. So the max skew for stateful or stateless assignment could be 2 + 2 = 4.
+            // Details in https://cwiki.apache.org/confluence/display/KAFKA/KIP-925%3A+Rack+aware+task+assignment+in+Kafka+Streams
+            skewThreshold = 4;
+        }
+    }
+
+    @Parameterized.Parameters(name = "rackAwareStrategy={0}")
+    public static Collection<Object[]> getParamStoreType() {
+        return asList(new Object[][] {
+            {StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_NONE},
+            {StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_MIN_TRAFFIC},
+            {StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_BALANCE_SUBTOPOLOGY},
+        });
+    }
+
     @Test
     public void staticAssignmentShouldConvergeWithTheFirstAssignment() {
         final AssignmentConfigs configs = new AssignmentConfigs(100L,
                                                                 2,
                                                                 0,
-                                                                60_000L);
+                                                                60_000L,
+                                                                EMPTY_RACK_AWARE_ASSIGNMENT_TAGS,
+                                                                null,
+                                                                null,
+                                                                rackAwareStrategy);
 
-        final Harness harness = Harness.initializeCluster(1, 1, 1, () -> 1);
+        final Harness harness = Harness.initializeCluster(1, 1, 1, () -> 1, 1);
 
         testForConvergence(harness, configs, 1);
         verifyValidAssignment(0, harness);
-        verifyBalancedAssignment(harness);
+        verifyBalancedAssignment(harness, skewThreshold);
     }
 
     @Test
@@ -246,20 +413,29 @@ public class TaskAssignorConvergenceTest {
         final int numStatefulTasks = 11;
         final int maxWarmupReplicas = 2;
         final int numStandbyReplicas = 0;
+        final int numNodes = 10;
 
         final AssignmentConfigs configs = new AssignmentConfigs(100L,
                                                                 maxWarmupReplicas,
                                                                 numStandbyReplicas,
-                                                                60_000L);
+                                                                60_000L,
+                                                                EMPTY_RACK_AWARE_ASSIGNMENT_TAGS,
+                                                                null,
+                                                                null,
+                                                                rackAwareStrategy);
 
-        final Harness harness = Harness.initializeCluster(numStatelessTasks, numStatefulTasks, 1, () -> 5);
+        final Harness harness = Harness.initializeCluster(numStatelessTasks, numStatefulTasks, 1, () -> 5, numNodes);
         testForConvergence(harness, configs, 1);
-        harness.addNode();
+        harness.addClient();
         // we expect convergence to involve moving each task at most once, and we can move "maxWarmupReplicas" number
         // of tasks at once, hence the iteration limit
         testForConvergence(harness, configs, numStatefulTasks / maxWarmupReplicas + 1);
         verifyValidAssignment(numStandbyReplicas, harness);
-        verifyBalancedAssignment(harness);
+
+        // min-cost rack aware assignor doesn't balance subtopolgy
+        if (!rackAwareStrategy.equals(StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_MIN_TRAFFIC)) {
+            verifyBalancedAssignment(harness, skewThreshold);
+        }
     }
 
     @Test
@@ -268,21 +444,30 @@ public class TaskAssignorConvergenceTest {
         final int numStatefulTasks = 13;
         final int maxWarmupReplicas = 2;
         final int numStandbyReplicas = 0;
+        final int numNodes = 10;
 
         final AssignmentConfigs configs = new AssignmentConfigs(100L,
                                                                 maxWarmupReplicas,
                                                                 numStandbyReplicas,
-                                                                60_000L);
+                                                                60_000L,
+                                                                EMPTY_RACK_AWARE_ASSIGNMENT_TAGS,
+                                                                null,
+                                                                null,
+                                                                rackAwareStrategy);
 
-        final Harness harness = Harness.initializeCluster(numStatelessTasks, numStatefulTasks, 7, () -> 5);
+        final Harness harness = Harness.initializeCluster(numStatelessTasks, numStatefulTasks, 7, () -> 5, numNodes);
         testForConvergence(harness, configs, 1);
-        harness.dropNode();
+        harness.dropClient();
         // This time, we allow one extra iteration because the
         // first stateful task needs to get shuffled back to the first node
         testForConvergence(harness, configs, numStatefulTasks / maxWarmupReplicas + 2);
 
         verifyValidAssignment(numStandbyReplicas, harness);
-        verifyBalancedAssignment(harness);
+
+        // min-cost rack aware assignor doesn't balance subtopolgy
+        if (!rackAwareStrategy.equals(StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_MIN_TRAFFIC)) {
+            verifyBalancedAssignment(harness, skewThreshold);
+        }
     }
 
     @Test
@@ -295,7 +480,7 @@ public class TaskAssignorConvergenceTest {
         } while (System.currentTimeMillis() < deadline);
     }
 
-    private static void runRandomizedScenario(final long seed) {
+    private void runRandomizedScenario(final long seed) {
         Harness harness = null;
         try {
             final Random prng = new Random(seed);
@@ -307,32 +492,42 @@ public class TaskAssignorConvergenceTest {
             final int maxWarmupReplicas = prng.nextInt(numStatefulTasks) + 1;
             // This one is rand(limit+1) because we _want_ to test zero and the upper bound is exclusive
             final int numStandbyReplicas = prng.nextInt(initialClusterSize + 1);
+            final int numNodes = numStatefulTasks + numStatelessTasks;
 
             final int numberOfEvents = prng.nextInt(10) + 1;
 
             final AssignmentConfigs configs = new AssignmentConfigs(100L,
                                                                     maxWarmupReplicas,
                                                                     numStandbyReplicas,
-                                                                    60_000L);
+                                                                    60_000L,
+                                                                    EMPTY_RACK_AWARE_ASSIGNMENT_TAGS,
+                                                                    null,
+                                                                    null,
+                                                                    rackAwareStrategy);
 
             harness = Harness.initializeCluster(
                 numStatelessTasks,
                 numStatefulTasks,
                 initialClusterSize,
-                () -> prng.nextInt(10) + 1
+                () -> prng.nextInt(10) + 1,
+                numNodes
             );
             testForConvergence(harness, configs, 1);
             verifyValidAssignment(numStandbyReplicas, harness);
-            verifyBalancedAssignment(harness);
+
+            // min-cost rack aware assignor doesn't balance subtopolgy
+            if (!rackAwareStrategy.equals(StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_MIN_TRAFFIC)) {
+                verifyBalancedAssignment(harness, skewThreshold);
+            }
 
             for (int i = 0; i < numberOfEvents; i++) {
                 final int event = prng.nextInt(2);
                 switch (event) {
                     case 0:
-                        harness.dropRandomNodes(prng.nextInt(initialClusterSize), prng);
+                        harness.dropRandomClients(prng.nextInt(initialClusterSize), prng);
                         break;
                     case 1:
-                        harness.addOrResurrectNodesRandomly(prng, initialClusterSize);
+                        harness.addOrResurrectClientsRandomly(prng, initialClusterSize);
                         break;
                     default:
                         throw new IllegalStateException("Unexpected event: " + event);
@@ -340,7 +535,10 @@ public class TaskAssignorConvergenceTest {
                 if (!harness.clientStates.isEmpty()) {
                     testForConvergence(harness, configs, 2 * (numStatefulTasks + numStatefulTasks * numStandbyReplicas));
                     verifyValidAssignment(numStandbyReplicas, harness);
-                    verifyBalancedAssignment(harness);
+                    // min-cost rack aware assignor doesn't balance subtopolgy
+                    if (!rackAwareStrategy.equals(StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_MIN_TRAFFIC)) {
+                        verifyBalancedAssignment(harness, skewThreshold);
+                    }
                 }
             }
         } catch (final AssertionError t) {
@@ -361,14 +559,14 @@ public class TaskAssignorConvergenceTest {
         }
     }
 
-    private static void verifyBalancedAssignment(final Harness harness) {
+    private static void verifyBalancedAssignment(final Harness harness, final int skewThreshold) {
         final Set<TaskId> allStatefulTasks = harness.statefulTaskEndOffsetSums.keySet();
         final Map<UUID, ClientState> clientStates = harness.clientStates;
         final StringBuilder failureContext = harness.history;
 
         assertBalancedActiveAssignment(clientStates, failureContext);
         assertBalancedStatefulAssignment(allStatefulTasks, clientStates, failureContext);
-        final AssignmentTestUtils.TaskSkewReport taskSkewReport = AssignmentTestUtils.analyzeTaskAssignmentBalance(harness.clientStates);
+        final AssignmentTestUtils.TaskSkewReport taskSkewReport = AssignmentTestUtils.analyzeTaskAssignmentBalance(harness.clientStates, skewThreshold);
         if (taskSkewReport.totalSkewedTasks() > 0) {
             fail(
                 new StringBuilder().append("Expected a balanced task assignment, but was: ")
@@ -400,6 +598,16 @@ public class TaskAssignorConvergenceTest {
 
         boolean rebalancePending = true;
         int iteration = 0;
+        final RackAwareTaskAssignor rackAwareTaskAssignor = new RackAwareTaskAssignor(
+            harness.fullMetadata,
+            harness.partitionsForTask,
+            harness.changelogPartitionsForTask,
+            harness.tasksForTopicGroup,
+            harness.racksForProcessConsumer,
+            harness.internalTopicManager,
+            configs,
+            TIME
+        );
         while (rebalancePending && iteration < iterationLimit) {
             iteration++;
             harness.prepareForNextRebalance();
@@ -408,6 +616,7 @@ public class TaskAssignorConvergenceTest {
                 harness.clientStates,
                 allTasks,
                 harness.statefulTaskEndOffsetSums.keySet(),
+                rackAwareTaskAssignor,
                 configs
             );
             harness.recordAfter(iteration, rebalancePending);

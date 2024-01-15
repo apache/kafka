@@ -21,12 +21,11 @@
   "validVersions": "0",
   "flexibleVersions": "0+",
   "fields": [
-      { "name": "Topics", "type": "[]TopicRequest", "versions": "0+", "fields": [
-        { "name": "Name", "type": "string", "versions": "0+", "entityType": "topicName",
-          "about": "The topic name." },
-        { "name": "PartitionIndexes", "type": "[]int32", "versions": "0+",
-          "about": "The indexes of the partitions to list producers for." }
-       ]}
-    ]}
+    { "name": "Topics", "type": "[]TopicRequest", "versions": "0+", "fields": [
+      { "name": "Name", "type": "string", "versions": "0+", "entityType": "topicName",
+        "about": "The topic name." },
+      { "name": "PartitionIndexes", "type": "[]int32", "versions": "0+",
+        "about": "The indexes of the partitions to list producers for." }
+     ]}
   ]
 }

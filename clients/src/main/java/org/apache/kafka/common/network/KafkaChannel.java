@@ -536,8 +536,8 @@ public class KafkaChannel implements AutoCloseable {
          * Re-authentication is disabled if there is no session expiration time, in
          * which case the SASL handshake network receive will be processed normally,
          * which results in a failure result being sent to the client. Also, no need to
-         * check if we are muted since since we are processing a received packet when we
-         * invoke this.
+         * check if we are muted since we are processing a received packet when we invoke
+         * this.
          */
         if (authenticator.serverSessionExpirationTimeNanos() == null)
             return false;

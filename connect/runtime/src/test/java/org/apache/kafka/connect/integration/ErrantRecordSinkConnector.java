@@ -53,7 +53,7 @@ public class ErrantRecordSinkConnector extends MonitorableSinkConnector {
                 TopicPartition tp = cachedTopicPartitions
                     .computeIfAbsent(rec.topic(), v -> new HashMap<>())
                     .computeIfAbsent(rec.kafkaPartition(), v -> new TopicPartition(rec.topic(), rec.kafkaPartition()));
-                committedOffsets.put(tp, committedOffsets.getOrDefault(tp, 0L) + 1);
+                committedOffsets.put(tp, committedOffsets.getOrDefault(tp, 0) + 1);
                 reporter.report(rec, new Throwable());
             }
         }

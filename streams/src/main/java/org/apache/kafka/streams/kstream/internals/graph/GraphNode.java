@@ -18,6 +18,8 @@
 package org.apache.kafka.streams.kstream.internals.graph;
 
 
+import java.util.LinkedList;
+import java.util.Optional;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 
 import java.util.Arrays;
@@ -28,12 +30,18 @@ public abstract class GraphNode {
 
     private final Collection<GraphNode> childNodes = new LinkedHashSet<>();
     private final Collection<GraphNode> parentNodes = new LinkedHashSet<>();
+
+    private final Collection<Label> labels = new LinkedList<>();
     private final String nodeName;
     private boolean keyChangingOperation;
     private boolean valueChangingOperation;
     private boolean mergeNode;
     private Integer buildPriority;
     private boolean hasWrittenToTopology = false;
+    // whether the output of this node is versioned. if empty, the output of this node is not
+    // explicitly materialized (as either a versioned or an unversioned store) and therefore
+    // whether the output is to be considered versioned or not depends on its parent(s)
+    private Optional<Boolean> outputVersioned = Optional.empty();
 
     public GraphNode(final String nodeName) {
         this.nodeName = nodeName;
@@ -127,6 +135,14 @@ public abstract class GraphNode {
         this.hasWrittenToTopology = hasWrittenToTopology;
     }
 
+    public Optional<Boolean> isOutputVersioned() {
+        return outputVersioned;
+    }
+
+    public void setOutputVersioned(final boolean outputVersioned) {
+        this.outputVersioned = Optional.of(outputVersioned);
+    }
+
     @Override
     public String toString() {
         final String[] parentNames = parentNodeNames();
@@ -138,5 +154,17 @@ public abstract class GraphNode {
                ", valueChangingOperation=" + valueChangingOperation +
                ", mergeNode=" + mergeNode +
                ", parentNodes=" + Arrays.toString(parentNames) + '}';
+    }
+
+    public void addLabel(final Label label) {
+        labels.add(label);
+    }
+
+    public Collection<Label> labels() {
+        return labels;
+    }
+
+    public enum Label {
+        NULL_KEY_RELAXED_JOIN
     }
 }

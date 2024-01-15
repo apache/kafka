@@ -16,14 +16,20 @@
  */
 package org.apache.kafka.common.requests;
 
+import org.apache.kafka.clients.admin.FeatureUpdate;
 import org.apache.kafka.common.errors.UnknownServerException;
+import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.UpdateFeaturesRequestData;
 import org.apache.kafka.common.protocol.Errors;
 import org.junit.jupiter.api.Test;
 
+import java.nio.ByteBuffer;
+import java.util.ArrayList;
 import java.util.Collections;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class UpdateFeaturesRequestTest {
 
@@ -51,6 +57,90 @@ public class UpdateFeaturesRequestTest {
         assertEquals(Errors.UNKNOWN_SERVER_ERROR, response.topLevelError().error());
         assertEquals(0, response.data().results().size());
         assertEquals(Collections.singletonMap(Errors.UNKNOWN_SERVER_ERROR, 1), response.errorCounts());
+    }
+
+    @Test
+    public void testUpdateFeaturesV0() {
+        UpdateFeaturesRequestData.FeatureUpdateKeyCollection features =
+                new UpdateFeaturesRequestData.FeatureUpdateKeyCollection();
+
+        features.add(new UpdateFeaturesRequestData.FeatureUpdateKey()
+            .setFeature("foo")
+            .setMaxVersionLevel((short) 1)
+            .setAllowDowngrade(true)
+        );
+
+        features.add(new UpdateFeaturesRequestData.FeatureUpdateKey()
+            .setFeature("bar")
+            .setMaxVersionLevel((short) 3)
+        );
+
+        UpdateFeaturesRequest request = new UpdateFeaturesRequest(
+            new UpdateFeaturesRequestData().setFeatureUpdates(features),
+            UpdateFeaturesRequestData.LOWEST_SUPPORTED_VERSION
+        );
+        ByteBuffer buffer = request.serialize();
+        request = UpdateFeaturesRequest.parse(buffer, UpdateFeaturesRequestData.LOWEST_SUPPORTED_VERSION);
+
+        List<UpdateFeaturesRequest.FeatureUpdateItem> updates = new ArrayList<>(request.featureUpdates());
+        assertEquals(updates.size(), 2);
+        assertEquals(updates.get(0).upgradeType(), FeatureUpdate.UpgradeType.SAFE_DOWNGRADE);
+        assertEquals(updates.get(1).upgradeType(), FeatureUpdate.UpgradeType.UPGRADE);
+    }
+
+    @Test
+    public void testUpdateFeaturesV1() {
+        UpdateFeaturesRequestData.FeatureUpdateKeyCollection features =
+            new UpdateFeaturesRequestData.FeatureUpdateKeyCollection();
+
+        features.add(new UpdateFeaturesRequestData.FeatureUpdateKey()
+            .setFeature("foo")
+            .setMaxVersionLevel((short) 1)
+            .setUpgradeType(FeatureUpdate.UpgradeType.SAFE_DOWNGRADE.code())
+        );
+
+        features.add(new UpdateFeaturesRequestData.FeatureUpdateKey()
+            .setFeature("bar")
+            .setMaxVersionLevel((short) 3)
+        );
+
+        UpdateFeaturesRequest request = new UpdateFeaturesRequest(
+            new UpdateFeaturesRequestData().setFeatureUpdates(features),
+            UpdateFeaturesRequestData.HIGHEST_SUPPORTED_VERSION
+        );
+
+        ByteBuffer buffer = request.serialize();
+        request = UpdateFeaturesRequest.parse(buffer, UpdateFeaturesRequestData.HIGHEST_SUPPORTED_VERSION);
+
+        List<UpdateFeaturesRequest.FeatureUpdateItem> updates = new ArrayList<>(request.featureUpdates());
+        assertEquals(updates.size(), 2);
+        assertEquals(updates.get(0).upgradeType(), FeatureUpdate.UpgradeType.SAFE_DOWNGRADE);
+        assertEquals(updates.get(1).upgradeType(), FeatureUpdate.UpgradeType.UPGRADE);
+
+    }
+
+    @Test
+    public void testUpdateFeaturesV1OldBoolean() {
+        UpdateFeaturesRequestData.FeatureUpdateKeyCollection features =
+            new UpdateFeaturesRequestData.FeatureUpdateKeyCollection();
+
+        features.add(new UpdateFeaturesRequestData.FeatureUpdateKey()
+            .setFeature("foo")
+            .setMaxVersionLevel((short) 1)
+            .setAllowDowngrade(true)
+        );
+
+        features.add(new UpdateFeaturesRequestData.FeatureUpdateKey()
+            .setFeature("bar")
+            .setMaxVersionLevel((short) 3)
+        );
+
+        UpdateFeaturesRequest request = new UpdateFeaturesRequest(
+            new UpdateFeaturesRequestData().setFeatureUpdates(features),
+            UpdateFeaturesRequestData.HIGHEST_SUPPORTED_VERSION
+        );
+        assertThrows(UnsupportedVersionException.class, request::serialize,
+            "This should fail since allowDowngrade is not supported in v1 of this RPC");
     }
 
 }

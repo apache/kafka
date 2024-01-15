@@ -41,6 +41,12 @@ LOG_RETENTION_CHECK_INTERVAL_MS = "log.retention.check.interval.ms"
 LOG_RETENTION_MS = "log.retention.ms"
 LOG_CLEANER_ENABLE = "log.cleaner.enable"
 
+METADATA_LOG_DIR = "metadata.log.dir"
+METADATA_LOG_SEGMENT_BYTES = "metadata.log.segment.bytes"
+METADATA_LOG_RETENTION_BYTES = "metadata.max.retention.bytes"
+METADATA_LOG_SEGMENT_MS = "metadata.log.segment.ms"
+METADATA_LOG_BYTES_BETWEEN_SNAPSHOTS = "metadata.log.max.record.bytes.between.snapshots"
+
 AUTO_CREATE_TOPICS_ENABLE = "auto.create.topics.enable"
 
 ZOOKEEPER_CONNECT = "zookeeper.connect"
@@ -63,6 +69,7 @@ DELEGATION_TOKEN_EXPIRY_TIME_MS="delegation.token.expiry.time.ms"
 DELEGATION_TOKEN_SECRET_KEY="delegation.token.secret.key"
 SASL_ENABLED_MECHANISMS="sasl.enabled.mechanisms"
 
+NEW_GROUP_COORDINATOR_ENABLE="group.coordinator.new.enable"
 
 """
 From KafkaConfig.scala
@@ -193,6 +200,9 @@ From KafkaConfig.scala
   val SSLEndpointIdentificationAlgorithmProp = SSLConfigs.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG
   val SSLSecureRandomImplementationProp = SSLConfigs.SSL_SECURE_RANDOM_IMPLEMENTATION_CONFIG
   val SSLClientAuthProp = SSLConfigs.SSL_CLIENT_AUTH_CONFIG
+
+  /** New group coordinator configs */
+  val NewGroupCoordinatorEnableProp = "group.coordinator.new.enable"
 """
 
 

@@ -25,6 +25,7 @@ import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -128,9 +129,9 @@ public class SupportedVersionRangeTest {
     @Test
     public void testEquals() {
         SupportedVersionRange tested = new SupportedVersionRange((short) 1, (short) 1);
-        assertTrue(tested.equals(tested));
-        assertFalse(tested.equals(new SupportedVersionRange((short) 1, (short) 2)));
-        assertFalse(tested.equals(null));
+        assertEquals(tested, tested);
+        assertNotEquals(tested, new SupportedVersionRange((short) 1, (short) 2));
+        assertNotEquals(null, tested);
     }
 
     @Test
@@ -138,5 +139,16 @@ public class SupportedVersionRangeTest {
         SupportedVersionRange versionRange = new SupportedVersionRange((short) 1, (short) 2);
         assertEquals(1, versionRange.min());
         assertEquals(2, versionRange.max());
+    }
+
+    @Test
+    public void testIsIncompatibleWith() {
+        assertFalse(new SupportedVersionRange((short) 1, (short) 1).isIncompatibleWith((short) 1));
+        assertFalse(new SupportedVersionRange((short) 1, (short) 4).isIncompatibleWith((short) 2));
+        assertFalse(new SupportedVersionRange((short) 1, (short) 4).isIncompatibleWith((short) 1));
+        assertFalse(new SupportedVersionRange((short) 1, (short) 4).isIncompatibleWith((short) 4));
+
+        assertTrue(new SupportedVersionRange((short) 2, (short) 3).isIncompatibleWith((short) 1));
+        assertTrue(new SupportedVersionRange((short) 2, (short) 3).isIncompatibleWith((short) 4));
     }
 }

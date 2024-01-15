@@ -16,29 +16,27 @@
   */
 package kafka.server
 
-import java.util.Properties
-
+import java.util.{OptionalInt, Properties}
 import scala.collection.Seq
-
-import kafka.zk.ZooKeeperTestHarness
 import kafka.utils.TestUtils
-import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
+import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.metadata.properties.{MetaProperties, MetaPropertiesEnsemble, PropertiesUtils}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo}
 import org.junit.jupiter.api.Assertions._
-import java.io.File
 
+import java.io.File
 import org.apache.zookeeper.KeeperException.NodeExistsException
 
-class ServerGenerateBrokerIdTest extends ZooKeeperTestHarness {
-  var props1: Properties = null
-  var config1: KafkaConfig = null
-  var props2: Properties = null
-  var config2: KafkaConfig = null
-  val brokerMetaPropsFile = "meta.properties"
+class ServerGenerateBrokerIdTest extends QuorumTestHarness {
+  var props1: Properties = _
+  var config1: KafkaConfig = _
+  var props2: Properties = _
+  var config2: KafkaConfig = _
   var servers: Seq[KafkaServer] = Seq()
 
   @BeforeEach
-  override def setUp(): Unit = {
-    super.setUp()
+  override def setUp(testInfo: TestInfo): Unit = {
+    super.setUp(testInfo)
     props1 = TestUtils.createBrokerConfig(-1, zkConnect)
     config1 = KafkaConfig.fromProps(props1)
     props2 = TestUtils.createBrokerConfig(0, zkConnect)
@@ -156,36 +154,36 @@ class ServerGenerateBrokerIdTest extends ZooKeeperTestHarness {
     assertThrows(classOf[NodeExistsException], () => serverB.startup())
     servers = Seq(serverA)
 
-    // verify no broker metadata was written
-    serverB.config.logDirs.foreach { logDir =>
-      val brokerMetaFile = new File(logDir + File.separator + brokerMetaPropsFile)
-      assertFalse(brokerMetaFile.exists())
-    }
-
     // adjust the broker config and start again
     propsB.setProperty(KafkaConfig.BrokerIdProp, "2")
-    val newConfigB = KafkaConfig.fromProps(propsB)
-    val newServerB = TestUtils.createServer(newConfigB, threadNamePrefix = Option(this.getClass.getName))
-    servers = Seq(serverA, newServerB)
+    val serverB2 = new KafkaServer(KafkaConfig.fromProps(propsB),
+      threadNamePrefix = Option(this.getClass.getName))
+    val startupException = assertThrows(classOf[RuntimeException], () => serverB2.startup())
+    assertTrue(startupException.getMessage.startsWith("Stored node id 1 doesn't match previous node id 2"),
+      "Unexpected exception message " + startupException.getMessage())
+    serverB2.config.logDirs.foreach(logDir => Utils.delete(new File(logDir)))
+    propsB.setProperty(KafkaConfig.BrokerIdProp, "3")
+    val serverB3 = new KafkaServer(KafkaConfig.fromProps(propsB),
+      threadNamePrefix = Option(this.getClass.getName))
+    serverB3.startup()
+    servers = Seq(serverA, serverB3)
 
     serverA.shutdown()
-    newServerB.shutdown()
+    serverB3.shutdown()
 
     // verify correct broker metadata was written
     assertTrue(verifyBrokerMetadata(serverA.config.logDirs, 1))
-    assertTrue(verifyBrokerMetadata(newServerB.config.logDirs, 2))
+    assertTrue(verifyBrokerMetadata(serverB3.config.logDirs, 3))
     TestUtils.assertNoNonDaemonThreads(this.getClass.getName)
   }
 
   def verifyBrokerMetadata(logDirs: Seq[String], brokerId: Int): Boolean = {
     for (logDir <- logDirs) {
-      val brokerMetadataOpt = new BrokerMetadataCheckpoint(
-        new File(logDir + File.separator + brokerMetaPropsFile)).read()
-      brokerMetadataOpt match {
-        case Some(properties) =>
-          val brokerMetadata = new RawMetaProperties(properties)
-          if (brokerMetadata.brokerId.exists(_ != brokerId)) return false
-        case _ => return false
+      val properties = PropertiesUtils.readPropertiesFile(
+        new File(logDir, MetaPropertiesEnsemble.META_PROPERTIES_NAME).getAbsolutePath)
+      val metaProps = new MetaProperties.Builder(properties).build()
+      if (!metaProps.nodeId().equals(OptionalInt.of(brokerId))) {
+        return false
       }
     }
     true

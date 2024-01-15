@@ -17,6 +17,7 @@
 package org.apache.kafka.raft.internals;
 
 import org.apache.kafka.common.memory.MemoryPool;
+import org.apache.kafka.common.message.LeaderChangeMessage;
 import org.apache.kafka.common.protocol.ObjectSerializationCache;
 import org.apache.kafka.common.protocol.Writable;
 import org.apache.kafka.common.record.AbstractRecords;
@@ -26,12 +27,16 @@ import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.utils.ByteUtils;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.raft.errors.UnexpectedBaseOffsetException;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.Mockito;
 
 import java.nio.ByteBuffer;
 import java.util.Collections;
 import java.util.List;
+import java.util.OptionalLong;
 import java.util.concurrent.CountDownLatch;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -40,6 +45,7 @@ import static java.util.Arrays.asList;
 import static java.util.Collections.singletonList;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class BatchAccumulatorTest {
@@ -63,6 +69,135 @@ class BatchAccumulatorTest {
             CompressionType.NONE,
             serde
         );
+    }
+
+    @Test
+    public void testLeaderChangeMessageWritten() {
+        int leaderEpoch = 17;
+        long baseOffset = 0;
+        int lingerMs = 50;
+        int maxBatchSize = 512;
+
+        ByteBuffer buffer = ByteBuffer.allocate(256);
+        Mockito.when(memoryPool.tryAllocate(256))
+            .thenReturn(buffer);
+
+        BatchAccumulator<String> acc = buildAccumulator(
+            leaderEpoch,
+            baseOffset,
+            lingerMs,
+            maxBatchSize
+        );
+
+        acc.appendLeaderChangeMessage(new LeaderChangeMessage(), time.milliseconds());
+        assertTrue(acc.needsDrain(time.milliseconds()));
+
+        List<BatchAccumulator.CompletedBatch<String>> batches = acc.drain();
+        assertEquals(1, batches.size());
+
+        BatchAccumulator.CompletedBatch<String> batch = batches.get(0);
+        batch.release();
+        Mockito.verify(memoryPool).release(buffer);
+    }
+
+    @Test
+    public void testForceDrain() {
+        asList(APPEND, APPEND_ATOMIC).forEach(appender -> {
+            int leaderEpoch = 17;
+            long baseOffset = 157;
+            int lingerMs = 50;
+            int maxBatchSize = 512;
+
+            Mockito.when(memoryPool.tryAllocate(maxBatchSize))
+                .thenReturn(ByteBuffer.allocate(maxBatchSize));
+
+            BatchAccumulator<String> acc = buildAccumulator(
+                leaderEpoch,
+                baseOffset,
+                lingerMs,
+                maxBatchSize
+            );
+
+            List<String> records = asList("a", "b", "c", "d", "e", "f", "g", "h", "i");
+
+            // Append records 
+            assertEquals(baseOffset, appender.call(acc, leaderEpoch, records.subList(0, 1)));
+            assertEquals(baseOffset + 2, appender.call(acc, leaderEpoch, records.subList(1, 3)));
+            assertEquals(baseOffset + 5, appender.call(acc, leaderEpoch, records.subList(3, 6)));
+            assertEquals(baseOffset + 7, appender.call(acc, leaderEpoch, records.subList(6, 8)));
+            assertEquals(baseOffset + 8, appender.call(acc, leaderEpoch, records.subList(8, 9)));
+
+            assertFalse(acc.needsDrain(time.milliseconds()));
+            acc.forceDrain();
+            assertTrue(acc.needsDrain(time.milliseconds()));
+            assertEquals(0, acc.timeUntilDrain(time.milliseconds()));
+           
+            // Drain completed batches
+            List<BatchAccumulator.CompletedBatch<String>> batches = acc.drain();
+
+            assertEquals(1, batches.size());
+            assertFalse(acc.needsDrain(time.milliseconds()));
+            assertEquals(Long.MAX_VALUE - time.milliseconds(), acc.timeUntilDrain(time.milliseconds()));
+
+            BatchAccumulator.CompletedBatch<String> batch = batches.get(0);
+            assertEquals(records, batch.records.get());
+            assertEquals(baseOffset, batch.baseOffset);
+            assertEquals(time.milliseconds(), batch.appendTimestamp());
+        });
+    }
+
+    @Test
+    public void testForceDrainBeforeAppendLeaderChangeMessage() {
+        asList(APPEND, APPEND_ATOMIC).forEach(appender -> {
+            int leaderEpoch = 17;
+            long baseOffset = 157;
+            int lingerMs = 50;
+            int maxBatchSize = 512;
+
+            Mockito.when(memoryPool.tryAllocate(maxBatchSize))
+                .thenReturn(ByteBuffer.allocate(maxBatchSize));
+            Mockito.when(memoryPool.tryAllocate(256))
+                .thenReturn(ByteBuffer.allocate(256));
+
+            BatchAccumulator<String> acc = buildAccumulator(
+                leaderEpoch,
+                baseOffset,
+                lingerMs,
+                maxBatchSize
+            );
+
+            List<String> records = asList("a", "b", "c", "d", "e", "f", "g", "h", "i");
+
+            // Append records 
+            assertEquals(baseOffset, appender.call(acc, leaderEpoch, records.subList(0, 1)));
+            assertEquals(baseOffset + 2, appender.call(acc, leaderEpoch, records.subList(1, 3)));
+            assertEquals(baseOffset + 5, appender.call(acc, leaderEpoch, records.subList(3, 6)));
+            assertEquals(baseOffset + 7, appender.call(acc, leaderEpoch, records.subList(6, 8)));
+            assertEquals(baseOffset + 8, appender.call(acc, leaderEpoch, records.subList(8, 9)));
+
+            assertFalse(acc.needsDrain(time.milliseconds()));
+           
+            // Append a leader change message
+            acc.appendLeaderChangeMessage(new LeaderChangeMessage(), time.milliseconds());
+
+            assertTrue(acc.needsDrain(time.milliseconds()));
+
+            // Test that drain status is FINISHED
+            assertEquals(0, acc.timeUntilDrain(time.milliseconds()));
+
+            // Drain completed batches
+            List<BatchAccumulator.CompletedBatch<String>> batches = acc.drain();
+
+            // Should have 2 batches, one consisting of `records` and one `leaderChangeMessage`
+            assertEquals(2, batches.size());
+            assertFalse(acc.needsDrain(time.milliseconds()));
+            assertEquals(Long.MAX_VALUE - time.milliseconds(), acc.timeUntilDrain(time.milliseconds()));
+
+            BatchAccumulator.CompletedBatch<String> batch = batches.get(0);
+            assertEquals(records, batch.records.get());
+            assertEquals(baseOffset, batch.baseOffset);
+            assertEquals(time.milliseconds(), batch.appendTimestamp());
+        });
     }
 
     @Test
@@ -102,7 +237,7 @@ class BatchAccumulatorTest {
         );
 
         time.sleep(15);
-        assertEquals(baseOffset, acc.append(leaderEpoch, singletonList("a")));
+        assertEquals(baseOffset, acc.append(leaderEpoch, singletonList("a"), OptionalLong.empty(), false));
         assertEquals(lingerMs, acc.timeUntilDrain(time.milliseconds()));
         assertFalse(acc.isEmpty());
 
@@ -134,7 +269,7 @@ class BatchAccumulatorTest {
             maxBatchSize
         );
 
-        assertEquals(baseOffset, acc.append(leaderEpoch, singletonList("a")));
+        assertEquals(baseOffset, acc.append(leaderEpoch, singletonList("a"), OptionalLong.empty(), false));
         time.sleep(lingerMs);
 
         List<BatchAccumulator.CompletedBatch<String>> batches = acc.drain();
@@ -163,7 +298,7 @@ class BatchAccumulatorTest {
             maxBatchSize
         );
 
-        assertEquals(baseOffset, acc.append(leaderEpoch, singletonList("a")));
+        assertEquals(baseOffset, acc.append(leaderEpoch, singletonList("a"), OptionalLong.empty(), false));
         acc.close();
         Mockito.verify(memoryPool).release(buffer);
     }
@@ -193,6 +328,7 @@ class BatchAccumulatorTest {
             assertEquals(baseOffset + 7, appender.call(acc, leaderEpoch, records.subList(6, 8)));
             assertEquals(baseOffset + 8, appender.call(acc, leaderEpoch, records.subList(8, 9)));
 
+            long expectedAppendTimestamp = time.milliseconds();
             time.sleep(lingerMs);
             assertTrue(acc.needsDrain(time.milliseconds()));
 
@@ -202,8 +338,9 @@ class BatchAccumulatorTest {
             assertEquals(Long.MAX_VALUE - time.milliseconds(), acc.timeUntilDrain(time.milliseconds()));
 
             BatchAccumulator.CompletedBatch<String> batch = batches.get(0);
-            assertEquals(records, batch.records);
+            assertEquals(records, batch.records.get());
             assertEquals(baseOffset, batch.baseOffset);
+            assertEquals(expectedAppendTimestamp, batch.appendTimestamp());
         });
     }
 
@@ -264,7 +401,7 @@ class BatchAccumulatorTest {
             .generate(() -> record)
             .limit(numberOfRecords)
             .collect(Collectors.toList());
-        assertEquals(baseOffset + numberOfRecords - 1, acc.append(leaderEpoch, records));
+        assertEquals(baseOffset + numberOfRecords - 1, acc.append(leaderEpoch, records, OptionalLong.empty(), false));
 
         time.sleep(lingerMs);
         assertTrue(acc.needsDrain(time.milliseconds()));
@@ -319,7 +456,7 @@ class BatchAccumulatorTest {
         // Do the first append outside the thread to start the linger timer
         Mockito.when(memoryPool.tryAllocate(maxBatchSize))
             .thenReturn(ByteBuffer.allocate(maxBatchSize));
-        acc.append(leaderEpoch, singletonList("a"));
+        acc.append(leaderEpoch, singletonList("a"), OptionalLong.empty(), false);
 
         // Let the serde block to simulate a slow append
         Mockito.doAnswer(invocation -> {
@@ -334,7 +471,7 @@ class BatchAccumulatorTest {
             Mockito.any(Writable.class)
         );
 
-        Thread appendThread = new Thread(() -> acc.append(leaderEpoch, singletonList("b")));
+        Thread appendThread = new Thread(() -> acc.append(leaderEpoch, singletonList("b"), OptionalLong.empty(), false));
         appendThread.start();
 
         // Attempt to drain while the append thread is holding the lock
@@ -377,14 +514,50 @@ class BatchAccumulatorTest {
     static final Appender APPEND_ATOMIC = new Appender() {
         @Override
         public Long call(BatchAccumulator<String> acc, int epoch, List<String> records) {
-            return acc.appendAtomic(epoch, records);
+            return acc.append(epoch, records, OptionalLong.empty(), true);
         }
     };
 
     static final Appender APPEND = new Appender() {
         @Override
         public Long call(BatchAccumulator<String> acc, int epoch, List<String> records) {
-            return acc.append(epoch, records);
+            return acc.append(epoch, records, OptionalLong.empty(), false);
         }
     };
+
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void testAppendWithRequiredBaseOffset(boolean correctOffset) {
+        int leaderEpoch = 17;
+        long baseOffset = 157;
+        int lingerMs = 50;
+        int maxBatchSize = 512;
+
+        ByteBuffer buffer = ByteBuffer.allocate(maxBatchSize);
+        Mockito.when(memoryPool.tryAllocate(maxBatchSize))
+                .thenReturn(buffer);
+
+        BatchAccumulator<String> acc = buildAccumulator(
+                leaderEpoch,
+                baseOffset,
+                lingerMs,
+                maxBatchSize
+        );
+
+        if (correctOffset) {
+            assertEquals(baseOffset, acc.append(leaderEpoch,
+                    singletonList("a"),
+                    OptionalLong.of(baseOffset),
+                    true));
+        } else {
+            assertEquals("Wanted base offset 156, but the next offset was 157",
+                assertThrows(UnexpectedBaseOffsetException.class, () -> {
+                    acc.append(leaderEpoch,
+                        singletonList("a"),
+                        OptionalLong.of(baseOffset - 1),
+                        true);
+                }).getMessage());
+        }
+        acc.close();
+    }
 }

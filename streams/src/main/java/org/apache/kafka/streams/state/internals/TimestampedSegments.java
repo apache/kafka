@@ -54,6 +54,15 @@ class TimestampedSegments extends AbstractSegments<TimestampedSegment> {
     }
 
     @Override
+    public TimestampedSegment getOrCreateSegmentIfLive(final long segmentId,
+                                                    final ProcessorContext context,
+                                                    final long streamTime) {
+        final TimestampedSegment segment = super.getOrCreateSegmentIfLive(segmentId, context, streamTime);
+        cleanupExpiredSegments(streamTime);
+        return segment;
+    }
+
+    @Override
     public void openExisting(final ProcessorContext context, final long streamTime) {
         metricsRecorder.init(ProcessorContextUtils.getMetricsImpl(context), context.taskId());
         super.openExisting(context, streamTime);

@@ -29,7 +29,9 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.util.Collections;
 import java.util.Locale;
+import java.util.ServiceLoader;
 import java.util.Set;
+import java.util.stream.StreamSupport;
 
 import static java.util.Arrays.asList;
 import static org.apache.kafka.test.TestUtils.toSet;
@@ -80,7 +82,7 @@ public class DirectoryConfigProviderTest {
     }
 
     @Test
-    public void testGetAllKeysAtPath() throws IOException {
+    public void testGetAllKeysAtPath() {
         ConfigData configData = provider.get(dir.getAbsolutePath());
         assertEquals(toSet(asList(foo.getName(), bar.getName())), configData.data().keySet());
         assertEquals("FOO", configData.data().get(foo.getName()));
@@ -144,6 +146,12 @@ public class DirectoryConfigProviderTest {
         ConfigData configData = provider.get(null, Collections.singleton("foo"));
         assertTrue(configData.data().isEmpty());
         assertNull(configData.ttl());
+    }
+
+    @Test
+    public void testServiceLoaderDiscovery() {
+        ServiceLoader<ConfigProvider> serviceLoader = ServiceLoader.load(ConfigProvider.class);
+        assertTrue(StreamSupport.stream(serviceLoader.spliterator(), false).anyMatch(configProvider -> configProvider instanceof DirectoryConfigProvider));
     }
 }
 

@@ -19,19 +19,18 @@ package kafka.network
 
 import java.net.InetAddress
 import java.nio.ByteBuffer
-
 import com.fasterxml.jackson.databind.node.{BooleanNode, DoubleNode, JsonNodeFactory, LongNode, ObjectNode, TextNode}
 import kafka.network
 import kafka.network.RequestConvertToJson.requestHeaderNode
 import org.apache.kafka.common.memory.MemoryPool
 import org.apache.kafka.common.message._
 import org.apache.kafka.common.network.{ClientInformation, ListenerName, NetworkSend}
-import org.junit.jupiter.api.Test
-import org.apache.kafka.common.protocol.{ApiKeys, ByteBufferAccessor, ObjectSerializationCache}
+import org.apache.kafka.common.protocol.{ApiKeys, Errors, MessageUtil}
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
-import org.easymock.EasyMock.createNiceMock
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Test
+import org.mockito.Mockito.mock
 
 import scala.collection.mutable.ArrayBuffer
 
@@ -42,7 +41,6 @@ class RequestConvertToJsonTest {
     val unhandledKeys = ArrayBuffer[String]()
     ApiKeys.values().foreach { key => {
       val version: Short = key.latestVersion()
-      val cache = new ObjectSerializationCache
       val message = key match {
         case ApiKeys.DESCRIBE_ACLS =>
           ApiMessageType.fromApiKey(key.id).newRequest().asInstanceOf[DescribeAclsRequestData]
@@ -50,12 +48,9 @@ class RequestConvertToJsonTest {
         case _ =>
           ApiMessageType.fromApiKey(key.id).newRequest()
       }
-      val messageSize = message.size(cache, version)
-      val bytes = new ByteBufferAccessor(ByteBuffer.allocate(messageSize))
-      message.write(bytes, cache, version)
-      bytes.flip()
 
-      val req = AbstractRequest.parseRequest(key, version, bytes.buffer).request
+      val bytes = MessageUtil.toByteBuffer(message, version)
+      val req = AbstractRequest.parseRequest(key, version, bytes).request
       try {
         RequestConvertToJson.request(req)
       } catch {
@@ -66,17 +61,40 @@ class RequestConvertToJsonTest {
   }
 
   @Test
+  def testAllApiVersionsResponseHandled(): Unit = {
+
+    ApiKeys.values().foreach { key => {
+      val unhandledVersions = ArrayBuffer[java.lang.Short]()
+      key.allVersions().forEach { version => {
+        val message = key match {
+          // Specify top-level error handling for verifying compatibility across versions
+          case ApiKeys.DESCRIBE_LOG_DIRS =>
+            ApiMessageType.fromApiKey(key.id).newResponse().asInstanceOf[DescribeLogDirsResponseData]
+              .setErrorCode(Errors.CLUSTER_AUTHORIZATION_FAILED.code())
+          case _ =>
+            ApiMessageType.fromApiKey(key.id).newResponse()
+        }
+
+        val bytes = MessageUtil.toByteBuffer(message, version)
+        val response = AbstractResponse.parseResponse(key, bytes, version)
+        try {
+          RequestConvertToJson.response(response, version)
+        } catch {
+          case _ : IllegalStateException => unhandledVersions += version
+        }}
+      }
+      assertEquals(ArrayBuffer.empty, unhandledVersions, s"API: ${key.toString} - Unhandled request versions")
+    }}
+  }
+
+  @Test
   def testAllResponseTypesHandled(): Unit = {
     val unhandledKeys = ArrayBuffer[String]()
     ApiKeys.values().foreach { key => {
       val version: Short = key.latestVersion()
-      val cache = new ObjectSerializationCache
       val message = ApiMessageType.fromApiKey(key.id).newResponse()
-      val messageSize = message.size(cache, version)
-      val bytes = new ByteBufferAccessor(ByteBuffer.allocate(messageSize))
-      message.write(bytes, cache, version)
-      bytes.flip()
-      val res = AbstractResponse.parseResponse(key, bytes.buffer, version)
+      val bytes = MessageUtil.toByteBuffer(message, version)
+      val res = AbstractResponse.parseResponse(key, bytes, version)
       try {
         RequestConvertToJson.response(res, version)
       } catch {
@@ -88,7 +106,7 @@ class RequestConvertToJsonTest {
 
   @Test
   def testRequestHeaderNode(): Unit = {
-    val alterIsrRequest = new AlterIsrRequest(new AlterIsrRequestData(), 0)
+    val alterIsrRequest = new AlterPartitionRequest(new AlterPartitionRequestData(), 0)
     val req = request(alterIsrRequest)
     val header = req.header
 
@@ -97,7 +115,7 @@ class RequestConvertToJsonTest {
 
     val actualNode = RequestConvertToJson.requestHeaderNode(header)
 
-    assertEquals(expectedNode, actualNode);
+    assertEquals(expectedNode, actualNode)
   }
 
   @Test
@@ -115,7 +133,7 @@ class RequestConvertToJsonTest {
 
   @Test
   def testRequestDesc(): Unit = {
-    val alterIsrRequest = new AlterIsrRequest(new AlterIsrRequestData(), 0)
+    val alterIsrRequest = new AlterPartitionRequest(new AlterPartitionRequestData(), 0)
     val req = request(alterIsrRequest)
 
     val expectedNode = new ObjectNode(JsonNodeFactory.instance)
@@ -130,7 +148,7 @@ class RequestConvertToJsonTest {
 
   @Test
   def testRequestDescMetrics(): Unit = {
-    val alterIsrRequest = new AlterIsrRequest(new AlterIsrRequestData(), 0)
+    val alterIsrRequest = new AlterPartitionRequest(new AlterPartitionRequestData(), 0)
     val req = request(alterIsrRequest)
     val send = new NetworkSend(req.context.connectionId, alterIsrRequest.toSend(req.header))
     val headerLog = RequestConvertToJson.requestHeaderNode(req.header)
@@ -171,15 +189,14 @@ class RequestConvertToJsonTest {
   }
 
   def request(req: AbstractRequest): RequestChannel.Request = {
-    val buffer = RequestTestUtils.serializeRequestWithHeader(new RequestHeader(req.apiKey, req.version, "client-id", 1),
-      req)
+    val buffer = req.serializeWithHeader(new RequestHeader(req.apiKey, req.version, "client-id", 1))
     val requestContext = newRequestContext(buffer)
     new network.RequestChannel.Request(processor = 1,
       requestContext,
       startTimeNanos = 0,
-      createNiceMock(classOf[MemoryPool]),
+      mock(classOf[MemoryPool]),
       buffer,
-      createNiceMock(classOf[RequestChannel.Metrics])
+      mock(classOf[RequestChannel.Metrics])
     )
   }
 

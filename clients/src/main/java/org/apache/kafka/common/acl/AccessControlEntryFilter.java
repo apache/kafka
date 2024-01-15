@@ -103,7 +103,7 @@ public class AccessControlEntryFilter {
      * Returns true if this filter matches the given AccessControlEntry.
      */
     public boolean matches(AccessControlEntry other) {
-        if ((principal() != null) && (!data.principal().equals(other.principal())))
+        if ((principal() != null) && (!principal().equals(other.principal())))
             return false;
         if ((host() != null) && (!host().equals(other.host())))
             return false;

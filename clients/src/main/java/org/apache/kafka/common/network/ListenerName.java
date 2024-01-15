@@ -16,7 +16,9 @@
  */
 package org.apache.kafka.common.network;
 
+import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
+import org.apache.kafka.common.utils.Utils;
 
 import java.util.Locale;
 import java.util.Objects;
@@ -36,6 +38,9 @@ public final class ListenerName {
      * Create an instance with the provided value converted to uppercase.
      */
     public static ListenerName normalised(String value) {
+        if (Utils.isBlank(value)) {
+            throw new ConfigException("The provided listener name is null or empty string");
+        }
         return new ListenerName(value.toUpperCase(Locale.ROOT));
     }
 

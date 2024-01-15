@@ -30,16 +30,16 @@ import java.util.Objects;
 
 public class ConnectSchema implements Schema {
     /**
-     * Maps Schema.Types to a list of Java classes that can be used to represent them.
+     * Maps {@link Schema.Type}s to a list of Java classes that can be used to represent them.
      */
-    private static final Map<Type, List<Class>> SCHEMA_TYPE_CLASSES = new EnumMap<>(Type.class);
+    private static final Map<Type, List<Class<?>>> SCHEMA_TYPE_CLASSES = new EnumMap<>(Type.class);
     /**
      * Maps known logical types to a list of Java classes that can be used to represent them.
      */
-    private static final Map<String, List<Class>> LOGICAL_TYPE_CLASSES = new HashMap<>();
+    private static final Map<String, List<Class<?>>> LOGICAL_TYPE_CLASSES = new HashMap<>();
 
     /**
-     * Maps the Java classes to the corresponding Schema.Type.
+     * Maps the Java classes to the corresponding {@link Schema.Type}.
      */
     private static final Map<Class<?>, Type> JAVA_CLASS_SCHEMA_TYPES = new HashMap<>();
 
@@ -60,7 +60,7 @@ public class ConnectSchema implements Schema {
         SCHEMA_TYPE_CLASSES.put(Type.MAP, Collections.singletonList(Map.class));
         SCHEMA_TYPE_CLASSES.put(Type.STRUCT, Collections.singletonList(Struct.class));
 
-        for (Map.Entry<Type, List<Class>> schemaClasses : SCHEMA_TYPE_CLASSES.entrySet()) {
+        for (Map.Entry<Type, List<Class<?>>> schemaClasses : SCHEMA_TYPE_CLASSES.entrySet()) {
             for (Class<?> schemaClass : schemaClasses.getValue())
                 JAVA_CLASS_SCHEMA_TYPES.put(schemaClass, schemaClasses.getKey());
         }
@@ -205,7 +205,7 @@ public class ConnectSchema implements Schema {
 
     /**
      * Validate that the value can be used with the schema, i.e. that its type matches the schema type and nullability
-     * requirements. Throws a DataException if the value is invalid.
+     * requirements. Throws a {@link DataException} if the value is invalid.
      * @param schema Schema to test
      * @param value value to test
      */
@@ -221,13 +221,7 @@ public class ConnectSchema implements Schema {
             return;
         }
 
-        List<Class> expectedClasses = expectedClassesFor(schema);
-
-        if (expectedClasses == null)
-            throw new DataException("Invalid Java object for schema type " + schema.type()
-                    + ": " + value.getClass()
-                    + " for field: \"" + name + "\"");
-
+        List<Class<?>> expectedClasses = expectedClassesFor(schema);
         boolean foundMatch = false;
         for (Class<?> expectedClass : expectedClasses) {
             if (expectedClass.isInstance(value)) {
@@ -236,10 +230,17 @@ public class ConnectSchema implements Schema {
             }
         }
 
-        if (!foundMatch)
-            throw new DataException("Invalid Java object for schema type " + schema.type()
-                    + ": " + value.getClass()
-                    + " for field: \"" + name + "\"");
+        if (!foundMatch) {
+            StringBuilder exceptionMessage = new StringBuilder("Invalid Java object for schema");
+            if (schema.name() != null) {
+                exceptionMessage.append(" \"").append(schema.name()).append("\"");
+            }
+            exceptionMessage.append(" with type ").append(schema.type()).append(": ").append(value.getClass());
+            if (name != null) {
+                exceptionMessage.append(" for field: \"").append(name).append("\"");
+            }
+            throw new DataException(exceptionMessage.toString());
+        }
 
         switch (schema.type()) {
             case STRUCT:
@@ -263,16 +264,16 @@ public class ConnectSchema implements Schema {
         }
     }
 
-    private static List<Class> expectedClassesFor(Schema schema) {
-        List<Class> expectedClasses = LOGICAL_TYPE_CLASSES.get(schema.name());
+    private static List<Class<?>> expectedClassesFor(Schema schema) {
+        List<Class<?>> expectedClasses = LOGICAL_TYPE_CLASSES.get(schema.name());
         if (expectedClasses == null)
-            expectedClasses = SCHEMA_TYPE_CLASSES.get(schema.type());
+            expectedClasses = SCHEMA_TYPE_CLASSES.getOrDefault(schema.type(), Collections.emptyList());
         return expectedClasses;
     }
 
     /**
      * Validate that the value can be used for this schema, i.e. that its type matches the schema type and optional
-     * requirements. Throws a DataException if the value is invalid.
+     * requirements. Throws a {@link DataException} if the value is invalid.
      * @param value the value to validate
      */
     public void validateValue(Object value) {
@@ -323,7 +324,7 @@ public class ConnectSchema implements Schema {
     /**
      * Get the {@link Schema.Type} associated with the given class.
      *
-     * @param klass the Class to
+     * @param klass the Class whose associated schema type is to be returned
      * @return the corresponding type, or null if there is no matching type
      */
     public static Type schemaType(Class<?> klass) {

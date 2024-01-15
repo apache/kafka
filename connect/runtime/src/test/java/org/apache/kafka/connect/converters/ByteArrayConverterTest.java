@@ -17,6 +17,7 @@
 
 package org.apache.kafka.connect.converters;
 
+import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaAndValue;
 import org.apache.kafka.connect.errors.DataException;
@@ -24,20 +25,18 @@ import org.junit.Before;
 import org.junit.Test;
 
 import java.nio.charset.StandardCharsets;
-import java.util.Arrays;
 import java.util.Collections;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
-import static org.junit.Assert.assertTrue;
 
 public class ByteArrayConverterTest {
     private static final String TOPIC = "topic";
     private static final byte[] SAMPLE_BYTES = "sample string".getBytes(StandardCharsets.UTF_8);
 
-    private ByteArrayConverter converter = new ByteArrayConverter();
+    private final ByteArrayConverter converter = new ByteArrayConverter();
 
     @Before
     public void setUp() {
@@ -81,7 +80,7 @@ public class ByteArrayConverterTest {
     public void testToConnect() {
         SchemaAndValue data = converter.toConnectData(TOPIC, SAMPLE_BYTES);
         assertEquals(Schema.OPTIONAL_BYTES_SCHEMA, data.schema());
-        assertTrue(Arrays.equals(SAMPLE_BYTES, (byte[]) data.value()));
+        assertArrayEquals(SAMPLE_BYTES, (byte[]) data.value());
     }
 
     @Test
@@ -89,5 +88,10 @@ public class ByteArrayConverterTest {
         SchemaAndValue data = converter.toConnectData(TOPIC, null);
         assertEquals(Schema.OPTIONAL_BYTES_SCHEMA, data.schema());
         assertNull(data.value());
+    }
+
+    @Test
+    public void testVersionRetrievedFromAppInfoParser() {
+        assertEquals(AppInfoParser.getVersion(), converter.version());
     }
 }

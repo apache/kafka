@@ -27,11 +27,17 @@
   // Version 4 is the first flexible version.
   //
   // Version 5 adds Topic ID and Type to the TopicStates, as described in KIP-516.
-  "validVersions": "0-5",
+  //
+  // Version 6 adds LeaderRecoveryState as described in KIP-704.
+  //
+  // Version 7 adds KRaft Controller ID field as part of KIP-866
+  "validVersions": "0-7",
   "flexibleVersions": "4+",
   "fields": [
     { "name": "ControllerId", "type": "int32", "versions": "0+", "entityType": "brokerId",
       "about": "The current controller ID." },
+    { "name": "isKRaftController", "type": "bool", "versions": "7+", "default": "false",
+      "about": "If KRaft controller id is used during migration. See KIP-866" },
     { "name": "ControllerEpoch", "type": "int32", "versions": "0+",
       "about": "The current controller epoch." },
     { "name": "BrokerEpoch", "type": "int64", "versions": "2+", "ignorable": true, "default": "-1",
@@ -76,8 +82,8 @@
         "about": "The leader epoch." },
       { "name": "Isr", "type": "[]int32", "versions": "0+", "entityType": "brokerId",
         "about": "The in-sync replica IDs." },
-      { "name": "ZkVersion", "type": "int32", "versions": "0+",
-        "about": "The ZooKeeper version." },
+      { "name": "PartitionEpoch", "type": "int32", "versions": "0+",
+        "about": "The current epoch for the partition. The epoch is a monotonically increasing value which is incremented after every partition change. (Since the LeaderAndIsr request is only used by the legacy controller, this corresponds to the zkVersion)" },
       { "name": "Replicas", "type": "[]int32", "versions": "0+", "entityType": "brokerId",
         "about": "The replica IDs." },
       { "name": "AddingReplicas", "type": "[]int32", "versions": "3+", "ignorable": true, "entityType": "brokerId",
@@ -85,7 +91,9 @@
       { "name": "RemovingReplicas", "type": "[]int32", "versions": "3+", "ignorable": true, "entityType": "brokerId",
         "about": "The replica IDs that we are removing this partition from, or null if no replicas are being removed." },
       { "name": "IsNew", "type": "bool", "versions": "1+", "default": "false", "ignorable": true,
-        "about": "Whether the replica should have existed on the broker or not." }
+        "about": "Whether the replica should have existed on the broker or not." },
+      { "name": "LeaderRecoveryState", "type": "int8", "versions": "6+", "default": "0",
+        "about": "1 if the partition is recovering from an unclean leader election; 0 otherwise." }
     ]}
   ]
 }

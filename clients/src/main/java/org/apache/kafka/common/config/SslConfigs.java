@@ -69,7 +69,7 @@ public class SslConfigs {
 
     public static final String SSL_KEYSTORE_TYPE_CONFIG = "ssl.keystore.type";
     public static final String SSL_KEYSTORE_TYPE_DOC = "The file format of the key store file. "
-            + "This is optional for client.";
+            + "This is optional for client. The values currently supported by the default `ssl.engine.factory.class` are [JKS, PKCS12, PEM].";
     public static final String DEFAULT_SSL_KEYSTORE_TYPE = "JKS";
 
     public static final String SSL_KEYSTORE_KEY_CONFIG = "ssl.keystore.key";
@@ -92,18 +92,18 @@ public class SslConfigs {
     public static final String SSL_KEYSTORE_PASSWORD_CONFIG = "ssl.keystore.password";
     public static final String SSL_KEYSTORE_PASSWORD_DOC = "The store password for the key store file. "
         + "This is optional for client and only needed if 'ssl.keystore.location' is configured. "
-        + " Key store password is not supported for PEM format.";
+        + "Key store password is not supported for PEM format.";
 
     public static final String SSL_KEY_PASSWORD_CONFIG = "ssl.key.password";
-    public static final String SSL_KEY_PASSWORD_DOC = "The password of the private key in the key store file or"
-        + "the PEM key specified in `ssl.keystore.key'. This is required for clients only if two-way authentication is configured.";
+    public static final String SSL_KEY_PASSWORD_DOC = "The password of the private key in the key store file or "
+        + "the PEM key specified in 'ssl.keystore.key'.";
 
     public static final String SSL_TRUSTSTORE_TYPE_CONFIG = "ssl.truststore.type";
-    public static final String SSL_TRUSTSTORE_TYPE_DOC = "The file format of the trust store file.";
+    public static final String SSL_TRUSTSTORE_TYPE_DOC = "The file format of the trust store file. The values currently supported by the default `ssl.engine.factory.class` are [JKS, PKCS12, PEM].";
     public static final String DEFAULT_SSL_TRUSTSTORE_TYPE = "JKS";
 
     public static final String SSL_TRUSTSTORE_LOCATION_CONFIG = "ssl.truststore.location";
-    public static final String SSL_TRUSTSTORE_LOCATION_DOC = "The location of the trust store file. ";
+    public static final String SSL_TRUSTSTORE_LOCATION_DOC = "The location of the trust store file.";
 
     public static final String SSL_TRUSTSTORE_PASSWORD_CONFIG = "ssl.truststore.password";
     public static final String SSL_TRUSTSTORE_PASSWORD_DOC = "The password for the trust store file. "
@@ -128,7 +128,12 @@ public class SslConfigs {
     public static final String SSL_SECURE_RANDOM_IMPLEMENTATION_DOC = "The SecureRandom PRNG implementation to use for SSL cryptography operations. ";
 
     public static final String SSL_ENGINE_FACTORY_CLASS_CONFIG = "ssl.engine.factory.class";
-    public static final String SSL_ENGINE_FACTORY_CLASS_DOC = "The class of type org.apache.kafka.common.security.auth.SslEngineFactory to provide SSLEngine objects. Default value is org.apache.kafka.common.security.ssl.DefaultSslEngineFactory";
+    public static final String SSL_ENGINE_FACTORY_CLASS_DOC = "The class of type org.apache.kafka.common.security.auth.SslEngineFactory to provide SSLEngine objects. "
+        + "Default value is org.apache.kafka.common.security.ssl.DefaultSslEngineFactory. "
+        + "Alternatively, setting this to org.apache.kafka.common.security.ssl.CommonNameLoggingSslEngineFactory will log the common name of expired SSL certificates used by clients to authenticate at any of the brokers with log level "
+        + LogLevelConfig.INFO_LOG_LEVEL + ". "
+        + "Note that this will cause a tiny delay during establishment of new connections from mTLS clients to brokers due to the extra code for examining the certificate chain provided by the client. "
+        + "Note further that the implementation uses a custom truststore based on the standard Java truststore and thus might be considered a security risk due to not being as mature as the standard one.";
 
     public static void addClientSslSupport(ConfigDef config) {
         config.define(SslConfigs.SSL_PROTOCOL_CONFIG, ConfigDef.Type.STRING, SslConfigs.DEFAULT_SSL_PROTOCOL, ConfigDef.Importance.MEDIUM, SslConfigs.SSL_PROTOCOL_DOC)

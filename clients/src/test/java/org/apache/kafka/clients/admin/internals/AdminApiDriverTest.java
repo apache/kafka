@@ -16,17 +16,22 @@
  */
 package org.apache.kafka.clients.admin.internals;
 
+import java.util.concurrent.ConcurrentHashMap;
+
+import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.internals.AdminApiDriver.RequestSpec;
 import org.apache.kafka.clients.admin.internals.AdminApiHandler.ApiResult;
-import org.apache.kafka.clients.admin.internals.AdminApiHandler.Keys;
 import org.apache.kafka.clients.admin.internals.AdminApiLookupStrategy.LookupResult;
+import org.apache.kafka.common.KafkaFuture;
+import org.apache.kafka.common.Node;
 import org.apache.kafka.common.errors.DisconnectException;
 import org.apache.kafka.common.errors.UnknownServerException;
-import org.apache.kafka.common.internals.KafkaFutureImpl;
+import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.MetadataResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.requests.AbstractResponse;
+import org.apache.kafka.common.requests.FindCoordinatorRequest.NoBatchedFindCoordinatorsException;
 import org.apache.kafka.common.requests.MetadataRequest;
 import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.common.utils.LogContext;
@@ -36,12 +41,15 @@ import org.junit.jupiter.api.Test;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
+import java.util.stream.Collectors;
 
 import static java.util.Collections.emptyMap;
 import static org.apache.kafka.common.utils.Utils.mkSet;
@@ -54,14 +62,14 @@ import static org.junit.jupiter.api.Assertions.fail;
 class AdminApiDriverTest {
     private static final int API_TIMEOUT_MS = 30000;
     private static final int RETRY_BACKOFF_MS = 100;
+    private static final int RETRY_BACKOFF_MAX_MS = 1000;
 
     @Test
     public void testCoalescedLookup() {
-        MockRequestScope scope = new MockRequestScope(OptionalInt.empty());
-        TestContext ctx = new TestContext(dynamicMapped(map(
-            "foo", scope,
-            "bar", scope
-        )));
+        TestContext ctx = TestContext.dynamicMapped(map(
+            "foo", "c1",
+            "bar", "c1"
+        ));
 
         Map<Set<String>, LookupResult<String>> lookupRequests = map(
             mkSet("foo", "bar"), mapped("foo", 1, "bar", 2)
@@ -81,10 +89,10 @@ class AdminApiDriverTest {
 
     @Test
     public void testCoalescedFulfillment() {
-        TestContext ctx = new TestContext(dynamicMapped(map(
-            "foo", new MockRequestScope(OptionalInt.empty()),
-            "bar", new MockRequestScope(OptionalInt.of(1))
-        )));
+        TestContext ctx = TestContext.dynamicMapped(map(
+            "foo", "c1",
+            "bar", "c2"
+        ));
 
         Map<Set<String>, LookupResult<String>> lookupRequests = map(
             mkSet("foo"), mapped("foo", 1),
@@ -104,33 +112,40 @@ class AdminApiDriverTest {
 
     @Test
     public void testKeyLookupFailure() {
-        TestContext ctx = new TestContext(dynamicMapped(map(
-            "foo", new MockRequestScope(OptionalInt.empty()),
-            "bar", new MockRequestScope(OptionalInt.of(1))
-        )));
+        // Ensure that both generic failures and unhandled UnsupportedVersionExceptions (which could be specifically
+        // handled in both the lookup and the fulfillment stages) result in the expected lookup failures.
+        Exception[] keyLookupExceptions = new Exception[] {
+            new UnknownServerException(), new UnsupportedVersionException("")
+        };
+        for (Exception keyLookupException : keyLookupExceptions) {
+            TestContext ctx = TestContext.dynamicMapped(map(
+                "foo", "c1",
+                "bar", "c2"
+            ));
 
-        Map<Set<String>, LookupResult<String>> lookupRequests = map(
-            mkSet("foo"), failedLookup("foo", new UnknownServerException()),
-            mkSet("bar"), mapped("bar", 1)
-        );
+            Map<Set<String>, LookupResult<String>> lookupRequests = map(
+                mkSet("foo"), failedLookup("foo", keyLookupException),
+                mkSet("bar"), mapped("bar", 1)
+            );
 
-        ctx.poll(lookupRequests, emptyMap());
+            ctx.poll(lookupRequests, emptyMap());
 
-        Map<Set<String>, ApiResult<String, Long>> fulfillmentResults = map(
-            mkSet("bar"), completed("bar", 30L)
-        );
+            Map<Set<String>, ApiResult<String, Long>> fulfillmentResults = map(
+                mkSet("bar"), completed("bar", 30L)
+            );
 
-        ctx.poll(emptyMap(), fulfillmentResults);
+            ctx.poll(emptyMap(), fulfillmentResults);
 
-        ctx.poll(emptyMap(), emptyMap());
+            ctx.poll(emptyMap(), emptyMap());
+        }
     }
 
     @Test
     public void testKeyLookupRetry() {
-        TestContext ctx = new TestContext(dynamicMapped(map(
-            "foo", new MockRequestScope(OptionalInt.empty()),
-            "bar", new MockRequestScope(OptionalInt.of(1))
-        )));
+        TestContext ctx = TestContext.dynamicMapped(map(
+            "foo", "c1",
+            "bar", "c2"
+        ));
 
         Map<Set<String>, LookupResult<String>> lookupRequests = map(
             mkSet("foo"), emptyLookup(),
@@ -160,11 +175,11 @@ class AdminApiDriverTest {
 
     @Test
     public void testStaticMapping() {
-        TestContext ctx = new TestContext(Keys.staticMapped(map(
+        TestContext ctx = TestContext.staticMapped(map(
             "foo", 0,
             "bar", 1,
             "baz", 1
-        )));
+        ));
 
         Map<Set<String>, ApiResult<String, Long>> fulfillmentResults = map(
             mkSet("foo"), completed("foo", 15L),
@@ -178,11 +193,11 @@ class AdminApiDriverTest {
 
     @Test
     public void testFulfillmentFailure() {
-        TestContext ctx = new TestContext(Keys.staticMapped(map(
+        TestContext ctx = TestContext.staticMapped(map(
             "foo", 0,
             "bar", 1,
             "baz", 1
-        )));
+        ));
 
         Map<Set<String>, ApiResult<String, Long>> fulfillmentResults = map(
             mkSet("foo"), failed("foo", new UnknownServerException()),
@@ -196,11 +211,11 @@ class AdminApiDriverTest {
 
     @Test
     public void testFulfillmentRetry() {
-        TestContext ctx = new TestContext(Keys.staticMapped(map(
+        TestContext ctx = TestContext.staticMapped(map(
             "foo", 0,
             "bar", 1,
             "baz", 1
-        )));
+        ));
 
         Map<Set<String>, ApiResult<String, Long>> fulfillmentResults = map(
             mkSet("foo"), completed("foo", 15L),
@@ -220,10 +235,10 @@ class AdminApiDriverTest {
 
     @Test
     public void testFulfillmentUnmapping() {
-        TestContext ctx = new TestContext(dynamicMapped(map(
-            "foo", new MockRequestScope(OptionalInt.empty()),
-            "bar", new MockRequestScope(OptionalInt.of(1))
-        )));
+        TestContext ctx = TestContext.dynamicMapped(map(
+            "foo", "c1",
+            "bar", "c2"
+        ));
 
         Map<Set<String>, LookupResult<String>> lookupRequests = map(
             mkSet("foo"), mapped("foo", 0),
@@ -255,12 +270,64 @@ class AdminApiDriverTest {
     }
 
     @Test
+    public void testFulfillmentFailureUnsupportedVersion() {
+        TestContext ctx = TestContext.staticMapped(map(
+            "foo", 0,
+            "bar", 1,
+            "baz", 1
+        ));
+
+        Map<Set<String>, ApiResult<String, Long>> fulfillmentResults = map(
+            mkSet("foo"), failed("foo", new UnsupportedVersionException("")),
+            mkSet("bar", "baz"), completed("bar", 30L, "baz", 45L)
+        );
+
+        ctx.poll(emptyMap(), fulfillmentResults);
+        ctx.poll(emptyMap(), emptyMap());
+    }
+
+    @Test
+    public void testFulfillmentRetriableUnsupportedVersion() {
+        TestContext ctx = TestContext.staticMapped(map(
+            "foo", 0,
+            "bar", 1,
+            "baz", 2
+        ));
+
+        ctx.handler.addRetriableUnsupportedVersionKey("foo");
+        // The mapped ApiResults are only used in the onResponse/handleResponse path - anything that needs
+        // to be handled in the onFailure path needs to be manually set up later.
+        ctx.handler.expectRequest(mkSet("foo"), failed("foo", new UnsupportedVersionException("")));
+        ctx.handler.expectRequest(mkSet("bar"), failed("bar", new UnsupportedVersionException("")));
+        ctx.handler.expectRequest(mkSet("baz"), completed("baz", 45L));
+        // Setting up specific fulfillment stage executions requires polling the driver in order to obtain
+        // the request specs needed for the onResponse/onFailure callbacks.
+        List<RequestSpec<String>> requestSpecs = ctx.driver.poll();
+
+        requestSpecs.forEach(requestSpec -> {
+            if (requestSpec.keys.contains("foo") || requestSpec.keys.contains("bar")) {
+                ctx.driver.onFailure(ctx.time.milliseconds(), requestSpec, new UnsupportedVersionException(""));
+            } else {
+                ctx.driver.onResponse(
+                    ctx.time.milliseconds(),
+                    requestSpec,
+                    new MetadataResponse(new MetadataResponseData(), ApiKeys.METADATA.latestVersion()),
+                    Node.noNode());
+            }
+        });
+        // Verify retry for "foo" but not for "bar" or "baz"
+        ctx.poll(emptyMap(), map(
+            mkSet("foo"), failed("foo", new UnsupportedVersionException(""))
+        ));
+        ctx.poll(emptyMap(), emptyMap());
+    }
+
+    @Test
     public void testRecoalescedLookup() {
-        MockRequestScope scope = new MockRequestScope(OptionalInt.empty());
-        TestContext ctx = new TestContext(dynamicMapped(map(
-            "foo", scope,
-            "bar", scope
-        )));
+        TestContext ctx = TestContext.dynamicMapped(map(
+            "foo", "c1",
+            "bar", "c1"
+        ));
 
         Map<Set<String>, LookupResult<String>> lookupRequests = map(
             mkSet("foo", "bar"), mapped("foo", 1, "bar", 2)
@@ -292,9 +359,9 @@ class AdminApiDriverTest {
 
     @Test
     public void testRetryLookupAfterDisconnect() {
-        TestContext ctx = new TestContext(dynamicMapped(map(
-            "foo", new MockRequestScope(OptionalInt.empty())
-        )));
+        TestContext ctx = TestContext.dynamicMapped(map(
+            "foo", "c1"
+        ));
 
         int initialLeaderId = 1;
 
@@ -303,7 +370,7 @@ class AdminApiDriverTest {
         );
 
         ctx.poll(initialLookup, emptyMap());
-        assertMappedKey(ctx.driver, "foo", initialLeaderId);
+        assertMappedKey(ctx, "foo", initialLeaderId);
 
         ctx.handler.expectRequest(mkSet("foo"), completed("foo", 15L));
 
@@ -314,7 +381,7 @@ class AdminApiDriverTest {
         assertEquals(OptionalInt.of(initialLeaderId), requestSpec.scope.destinationBrokerId());
 
         ctx.driver.onFailure(ctx.time.milliseconds(), requestSpec, new DisconnectException());
-        assertUnmappedKey(ctx.driver, "foo");
+        assertUnmappedKey(ctx, "foo");
 
         int retryLeaderId = 2;
 
@@ -323,25 +390,61 @@ class AdminApiDriverTest {
         assertEquals(1, retryLookupSpecs.size());
 
         RequestSpec<String> retryLookupSpec = retryLookupSpecs.get(0);
-        assertEquals(ctx.time.milliseconds() + RETRY_BACKOFF_MS, retryLookupSpec.nextAllowedTryMs);
+        assertEquals(ctx.time.milliseconds(), retryLookupSpec.nextAllowedTryMs);
         assertEquals(1, retryLookupSpec.tries);
     }
 
     @Test
+    public void testRetryLookupAndDisableBatchAfterNoBatchedFindCoordinatorsException() {
+        MockTime time = new MockTime();
+        LogContext lc = new LogContext();
+        Set<String> groupIds = new HashSet<>(Arrays.asList("g1", "g2"));
+        DeleteConsumerGroupsHandler handler = new DeleteConsumerGroupsHandler(lc);
+        AdminApiFuture<CoordinatorKey, Void> future = AdminApiFuture.forKeys(
+                groupIds.stream().map(g -> CoordinatorKey.byGroupId(g)).collect(Collectors.toSet()));
+
+        AdminApiDriver<CoordinatorKey, Void> driver = new AdminApiDriver<>(
+            handler,
+            future,
+            time.milliseconds() + API_TIMEOUT_MS,
+            RETRY_BACKOFF_MS,
+            RETRY_BACKOFF_MAX_MS,
+            new LogContext()
+        );
+
+        assertTrue(((CoordinatorStrategy) handler.lookupStrategy()).batch);
+        List<RequestSpec<CoordinatorKey>> requestSpecs = driver.poll();
+        // Expect CoordinatorStrategy to try resolving all coordinators in a single request
+        assertEquals(1, requestSpecs.size());
+
+        RequestSpec<CoordinatorKey> requestSpec = requestSpecs.get(0);
+        driver.onFailure(time.milliseconds(), requestSpec, new NoBatchedFindCoordinatorsException("message"));
+        assertFalse(((CoordinatorStrategy) handler.lookupStrategy()).batch);
+
+        // Batching is now disabled, so we now have a request per groupId
+        List<RequestSpec<CoordinatorKey>> retryLookupSpecs = driver.poll();
+        assertEquals(groupIds.size(), retryLookupSpecs.size());
+        // These new requests are treated a new requests and not retries
+        for (RequestSpec<CoordinatorKey> retryLookupSpec : retryLookupSpecs) {
+            assertEquals(0, retryLookupSpec.nextAllowedTryMs);
+            assertEquals(0, retryLookupSpec.tries);
+        }
+    }
+
+    @Test
     public void testCoalescedStaticAndDynamicFulfillment() {
-        Map<String, MockRequestScope> dynamicLookupScopes = map(
-            "foo", new MockRequestScope(OptionalInt.empty())
+        Map<String, String> dynamicMapping = map(
+            "foo", "c1"
         );
 
         Map<String, Integer> staticMapping = map(
             "bar", 1
         );
 
-        TestContext ctx = new TestContext(new Keys<>(
+        TestContext ctx = new TestContext(
             staticMapping,
-            dynamicLookupScopes.keySet(),
-            new MockLookupStrategy<>(dynamicLookupScopes)
-        ));
+            dynamicMapping
+        );
 
         // Initially we expect a lookup for the dynamic key and a
         // fulfillment request for the static key
@@ -400,9 +503,9 @@ class AdminApiDriverTest {
 
     @Test
     public void testLookupRetryBookkeeping() {
-        TestContext ctx = new TestContext(dynamicMapped(map(
-            "foo", new MockRequestScope(OptionalInt.empty())
-        )));
+        TestContext ctx = TestContext.dynamicMapped(map(
+            "foo", "c1"
+        ));
 
         LookupResult<String> emptyLookup = emptyLookup();
         ctx.lookupStrategy().expectLookup(mkSet("foo"), emptyLookup);
@@ -420,12 +523,12 @@ class AdminApiDriverTest {
 
         RequestSpec<String> retrySpec = retrySpecs.get(0);
         assertEquals(1, retrySpec.tries);
-        assertEquals(ctx.time.milliseconds() + RETRY_BACKOFF_MS, retrySpec.nextAllowedTryMs);
+        assertEquals(ctx.time.milliseconds(), retrySpec.nextAllowedTryMs);
     }
 
     @Test
     public void testFulfillmentRetryBookkeeping() {
-        TestContext ctx = new TestContext(Keys.staticMapped(map("foo", 0)));
+        TestContext ctx = TestContext.staticMapped(map("foo", 0));
 
         ApiResult<String, Long> emptyFulfillment = emptyFulfillment();
         ctx.handler.expectRequest(mkSet("foo"), emptyFulfillment);
@@ -436,52 +539,53 @@ class AdminApiDriverTest {
         RequestSpec<String> requestSpec = requestSpecs.get(0);
         assertEquals(0, requestSpec.tries);
         assertEquals(0L, requestSpec.nextAllowedTryMs);
-        ctx.assertResponse(requestSpec, emptyFulfillment);
+        ctx.assertResponse(requestSpec, emptyFulfillment, Node.noNode());
 
         List<RequestSpec<String>> retrySpecs = ctx.driver.poll();
         assertEquals(1, retrySpecs.size());
 
         RequestSpec<String> retrySpec = retrySpecs.get(0);
         assertEquals(1, retrySpec.tries);
-        assertEquals(ctx.time.milliseconds() + RETRY_BACKOFF_MS, retrySpec.nextAllowedTryMs);
+        assertEquals(ctx.time.milliseconds(), retrySpec.nextAllowedTryMs,
+                (long) (RETRY_BACKOFF_MS * CommonClientConfigs.RETRY_BACKOFF_JITTER));
     }
 
     private static void assertMappedKey(
-        AdminApiDriver<String, Long> driver,
+        TestContext context,
         String key,
         Integer expectedBrokerId
     )  {
-        OptionalInt brokerIdOpt = driver.keyToBrokerId(key);
+        OptionalInt brokerIdOpt = context.driver.keyToBrokerId(key);
         assertEquals(OptionalInt.of(expectedBrokerId), brokerIdOpt);
     }
 
     private static void assertUnmappedKey(
-        AdminApiDriver<String, Long> driver,
+        TestContext context,
         String key
     ) {
-        OptionalInt brokerIdOpt = driver.keyToBrokerId(key);
+        OptionalInt brokerIdOpt = context.driver.keyToBrokerId(key);
         assertEquals(OptionalInt.empty(), brokerIdOpt);
-        KafkaFutureImpl<Long> future = driver.futures().get(key);
+        KafkaFuture<Long> future = context.future.all().get(key);
         assertFalse(future.isDone());
     }
 
     private static void assertFailedKey(
-        AdminApiDriver<String, Long> driver,
+        TestContext context,
         String key,
         Throwable expectedException
     ) {
-        KafkaFutureImpl<Long> future = driver.futures().get(key);
+        KafkaFuture<Long> future = context.future.all().get(key);
         assertTrue(future.isCompletedExceptionally());
         Throwable exception = assertThrows(ExecutionException.class, future::get);
         assertEquals(expectedException, exception.getCause());
     }
 
     private static void assertCompletedKey(
-        AdminApiDriver<String, Long> driver,
+        TestContext context,
         String key,
         Long expected
     ) {
-        KafkaFutureImpl<Long> future = driver.futures().get(key);
+        KafkaFuture<Long> future = context.future.all().get(key);
         assertTrue(future.isDone());
         try {
             assertEquals(expected, future.get());
@@ -492,40 +596,85 @@ class AdminApiDriverTest {
 
     private static class MockRequestScope implements ApiRequestScope {
         private final OptionalInt destinationBrokerId;
+        private final String id;
 
-        private MockRequestScope(OptionalInt destinationBrokerId) {
+        private MockRequestScope(
+            OptionalInt destinationBrokerId,
+            String id
+        ) {
             this.destinationBrokerId = destinationBrokerId;
+            this.id = id;
         }
 
         @Override
         public OptionalInt destinationBrokerId() {
             return destinationBrokerId;
         }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (o == null || getClass() != o.getClass()) return false;
+            MockRequestScope that = (MockRequestScope) o;
+            return Objects.equals(destinationBrokerId, that.destinationBrokerId) &&
+                Objects.equals(id, that.id);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(destinationBrokerId, id);
+        }
     }
 
     private static class TestContext {
         private final MockTime time = new MockTime();
-        private final Keys<String> keys;
         private final MockAdminApiHandler<String, Long> handler;
         private final AdminApiDriver<String, Long> driver;
+        private final AdminApiFuture.SimpleAdminApiFuture<String, Long> future;
 
-        public TestContext(Keys<String> keys) {
-            this.keys = keys;
-            this.handler = new MockAdminApiHandler<>(keys);
+        public TestContext(
+            Map<String, Integer> staticKeys,
+            Map<String, String> dynamicKeys
+        ) {
+            Map<String, MockRequestScope> lookupScopes = new HashMap<>();
+            staticKeys.forEach((key, brokerId) -> {
+                MockRequestScope scope = new MockRequestScope(OptionalInt.of(brokerId), null);
+                lookupScopes.put(key, scope);
+            });
+
+            dynamicKeys.forEach((key, context) -> {
+                MockRequestScope scope = new MockRequestScope(OptionalInt.empty(), context);
+                lookupScopes.put(key, scope);
+            });
+
+            MockLookupStrategy<String> lookupStrategy = new MockLookupStrategy<>(lookupScopes);
+            this.handler = new MockAdminApiHandler<>(lookupStrategy);
+            this.future = AdminApiFuture.forKeys(lookupStrategy.lookupScopes.keySet());
+
             this.driver = new AdminApiDriver<>(
                 handler,
+                future,
                 time.milliseconds() + API_TIMEOUT_MS,
                 RETRY_BACKOFF_MS,
+                RETRY_BACKOFF_MAX_MS,
                 new LogContext()
             );
 
-            keys.staticKeys.forEach((key, brokerId) -> {
-                assertMappedKey(driver, key, brokerId);
+            staticKeys.forEach((key, brokerId) -> {
+                assertMappedKey(this, key, brokerId);
             });
 
-            keys.dynamicKeys.forEach(key -> {
-                assertUnmappedKey(driver, key);
+            dynamicKeys.keySet().forEach(key -> {
+                assertUnmappedKey(this, key);
             });
+        }
+
+        public static TestContext staticMapped(Map<String, Integer> staticKeys) {
+            return new TestContext(staticKeys, Collections.emptyMap());
+        }
+
+        public static TestContext dynamicMapped(Map<String, String> dynamicKeys) {
+            return new TestContext(Collections.emptyMap(), dynamicKeys);
         }
 
         private void assertLookupResponse(
@@ -533,58 +682,56 @@ class AdminApiDriverTest {
             LookupResult<String> result
         ) {
             requestSpec.keys.forEach(key -> {
-                assertUnmappedKey(driver, key);
+                assertUnmappedKey(this, key);
             });
 
             // The response is just a placeholder. The result is all we are interested in
             MetadataResponse response = new MetadataResponse(new MetadataResponseData(),
                 ApiKeys.METADATA.latestVersion());
-            driver.onResponse(time.milliseconds(), requestSpec, response);
+            driver.onResponse(time.milliseconds(), requestSpec, response, Node.noNode());
 
             result.mappedKeys.forEach((key, brokerId) -> {
-                assertMappedKey(driver, key, brokerId);
+                assertMappedKey(this, key, brokerId);
             });
 
             result.failedKeys.forEach((key, exception) -> {
-                assertFailedKey(driver, key, exception);
+                assertFailedKey(this, key, exception);
             });
         }
 
         private void assertResponse(
             RequestSpec<String> requestSpec,
-            ApiResult<String, Long> result
+            ApiResult<String, Long> result,
+            Node node
         ) {
             int brokerId = requestSpec.scope.destinationBrokerId().orElseThrow(() ->
                 new AssertionError("Fulfillment requests must specify a target brokerId"));
 
             requestSpec.keys.forEach(key -> {
-                assertMappedKey(driver, key, brokerId);
+                assertMappedKey(this, key, brokerId);
             });
 
             // The response is just a placeholder. The result is all we are interested in
             MetadataResponse response = new MetadataResponse(new MetadataResponseData(),
                 ApiKeys.METADATA.latestVersion());
 
-            driver.onResponse(time.milliseconds(), requestSpec, response);
+            driver.onResponse(time.milliseconds(), requestSpec, response, node);
 
             result.unmappedKeys.forEach(key -> {
-                assertUnmappedKey(driver, key);
+                assertUnmappedKey(this, key);
             });
 
             result.failedKeys.forEach((key, exception) -> {
-                assertFailedKey(driver, key, exception);
+                assertFailedKey(this, key, exception);
             });
 
             result.completedKeys.forEach((key, value) -> {
-                assertCompletedKey(driver, key, value);
+                assertCompletedKey(this, key, value);
             });
         }
 
         private MockLookupStrategy<String> lookupStrategy() {
-            if (keys.dynamicKeys.isEmpty()) {
-                throw new IllegalStateException("Unexpected lookup when no dynamic mapping is defined");
-            }
-            return (MockLookupStrategy<String>) keys.lookupStrategy;
+            return handler.lookupStrategy;
         }
 
         public void poll(
@@ -611,7 +758,7 @@ class AdminApiDriverTest {
                     assertLookupResponse(requestSpec, result);
                 } else if (expectedRequests.containsKey(keys)) {
                     ApiResult<String, Long> result = expectedRequests.get(keys);
-                    assertResponse(requestSpec, result);
+                    assertResponse(requestSpec, result, Node.noNode());
                 } else {
                     fail("Unexpected request for keys " + keys);
                 }
@@ -655,12 +802,14 @@ class AdminApiDriverTest {
         }
     }
 
-    private static class MockAdminApiHandler<K, V> implements AdminApiHandler<K, V> {
-        private final Keys<K> keyMappings;
+    private static class MockAdminApiHandler<K, V> extends AdminApiHandler.Batched<K, V> {
         private final Map<Set<K>, ApiResult<K, V>> expectedRequests = new HashMap<>();
+        private final MockLookupStrategy<K> lookupStrategy;
+        private final Map<K, Boolean> retriableUnsupportedVersionKeys;
 
-        private MockAdminApiHandler(Keys<K> keyMappings) {
-            this.keyMappings = keyMappings;
+        private MockAdminApiHandler(MockLookupStrategy<K> lookupStrategy) {
+            this.lookupStrategy = lookupStrategy;
+            this.retriableUnsupportedVersionKeys = new ConcurrentHashMap<>();
         }
 
         @Override
@@ -669,8 +818,8 @@ class AdminApiDriverTest {
         }
 
         @Override
-        public Keys<K> initializeKeys() {
-            return keyMappings;
+        public AdminApiLookupStrategy<K> lookupStrategy() {
+            return lookupStrategy;
         }
 
         public void expectRequest(Set<K> keys, ApiResult<K, V> result) {
@@ -678,21 +827,37 @@ class AdminApiDriverTest {
         }
 
         @Override
-        public AbstractRequest.Builder<?> buildRequest(Integer brokerId, Set<K> keys) {
+        public AbstractRequest.Builder<?> buildBatchedRequest(int brokerId, Set<K> keys) {
             // The request is just a placeholder in these tests
             assertTrue(expectedRequests.containsKey(keys), "Unexpected fulfillment request for keys " + keys);
             return new MetadataRequest.Builder(Collections.emptyList(), false);
         }
 
         @Override
-        public ApiResult<K, V> handleResponse(Integer brokerId, Set<K> keys, AbstractResponse response) {
+        public ApiResult<K, V> handleResponse(Node broker, Set<K> keys, AbstractResponse response) {
             return Optional.ofNullable(expectedRequests.get(keys)).orElseThrow(() ->
                 new AssertionError("Unexpected fulfillment request for keys " + keys)
             );
         }
 
+        @Override
+        public Map<K, Throwable> handleUnsupportedVersionException(
+            int brokerId,
+            UnsupportedVersionException exception,
+            Set<K> keys
+        ) {
+            return keys
+                .stream()
+                .filter(k -> !retriableUnsupportedVersionKeys.containsKey(k))
+                .collect(Collectors.toMap(k -> k, k -> exception));
+        }
+
         public void reset() {
             expectedRequests.clear();
+        }
+
+        public void addRetriableUnsupportedVersionKey(K key) {
+            retriableUnsupportedVersionKeys.put(key, Boolean.TRUE);
         }
     }
 
@@ -713,11 +878,6 @@ class AdminApiDriverTest {
         map.put(k2, v2);
         map.put(k3, v3);
         return map;
-    }
-
-    private static Keys<String> dynamicMapped(Map<String, MockRequestScope> lookupScopes) {
-        MockLookupStrategy<String> strategy = new MockLookupStrategy<>(lookupScopes);
-        return Keys.dynamicMapped(lookupScopes.keySet(), strategy);
     }
 
     private static ApiResult<String, Long> completed(String key, Long value) {

@@ -23,9 +23,11 @@ import org.apache.kafka.common.TopicPartition
 
 import scala.collection.{Seq, mutable}
 
-class MockPartitionStateMachine(controllerContext: ControllerContext,
-                                uncleanLeaderElectionEnabled: Boolean)
-  extends PartitionStateMachine(controllerContext) {
+class MockPartitionStateMachine(
+  controllerContext: ControllerContext,
+  uncleanLeaderElectionEnabled: Boolean,
+  isLeaderRecoverySupported: Boolean
+) extends PartitionStateMachine(controllerContext) {
 
   var stateChangesByTargetState = mutable.Map.empty[PartitionState, Int].withDefaultValue(0)
 
@@ -101,7 +103,11 @@ class MockPartitionStateMachine(controllerContext: ControllerContext,
         val partitionsWithUncleanLeaderElectionState = validLeaderAndIsrs.map { case (partition, leaderAndIsr) =>
           (partition, Some(leaderAndIsr), isUnclean || uncleanLeaderElectionEnabled)
         }
-        leaderForOffline(controllerContext, partitionsWithUncleanLeaderElectionState)
+        leaderForOffline(
+          controllerContext,
+          isLeaderRecoverySupported,
+          partitionsWithUncleanLeaderElectionState
+        )
       case ReassignPartitionLeaderElectionStrategy =>
         leaderForReassign(controllerContext, validLeaderAndIsrs)
       case PreferredReplicaPartitionLeaderElectionStrategy =>

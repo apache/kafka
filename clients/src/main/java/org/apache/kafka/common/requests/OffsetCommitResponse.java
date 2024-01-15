@@ -27,7 +27,9 @@ import org.apache.kafka.common.protocol.Errors;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.function.Function;
 
 /**
  * Possible error codes:
@@ -44,6 +46,10 @@ import java.util.Map;
  *   - {@link Errors#INVALID_COMMIT_OFFSET_SIZE}
  *   - {@link Errors#TOPIC_AUTHORIZATION_FAILED}
  *   - {@link Errors#GROUP_AUTHORIZATION_FAILED}
+ *   - {@link Errors#INVALID_PRODUCER_ID_MAPPING}
+ *   - {@link Errors#INVALID_TXN_STATE}
+ *   - {@link Errors#GROUP_ID_NOT_FOUND}
+ *   - {@link Errors#STALE_MEMBER_EPOCH}
  */
 public class OffsetCommitResponse extends AbstractResponse {
 
@@ -108,7 +114,90 @@ public class OffsetCommitResponse extends AbstractResponse {
     }
 
     @Override
+    public void maybeSetThrottleTimeMs(int throttleTimeMs) {
+        data.setThrottleTimeMs(throttleTimeMs);
+    }
+
+    @Override
     public boolean shouldClientThrottle(short version) {
         return version >= 4;
+    }
+
+    public static class Builder {
+        OffsetCommitResponseData data = new OffsetCommitResponseData();
+        HashMap<String, OffsetCommitResponseTopic> byTopicName = new HashMap<>();
+
+        private OffsetCommitResponseTopic getOrCreateTopic(
+            String topicName
+        ) {
+            OffsetCommitResponseTopic topic = byTopicName.get(topicName);
+            if (topic == null) {
+                topic = new OffsetCommitResponseTopic().setName(topicName);
+                data.topics().add(topic);
+                byTopicName.put(topicName, topic);
+            }
+            return topic;
+        }
+
+        public Builder addPartition(
+            String topicName,
+            int partitionIndex,
+            Errors error
+        ) {
+            final OffsetCommitResponseTopic topicResponse = getOrCreateTopic(topicName);
+
+            topicResponse.partitions().add(new OffsetCommitResponsePartition()
+                .setPartitionIndex(partitionIndex)
+                .setErrorCode(error.code()));
+
+            return this;
+        }
+
+        public <P> Builder addPartitions(
+            String topicName,
+            List<P> partitions,
+            Function<P, Integer> partitionIndex,
+            Errors error
+        ) {
+            final OffsetCommitResponseTopic topicResponse = getOrCreateTopic(topicName);
+
+            partitions.forEach(partition -> {
+                topicResponse.partitions().add(new OffsetCommitResponsePartition()
+                    .setPartitionIndex(partitionIndex.apply(partition))
+                    .setErrorCode(error.code()));
+            });
+
+            return this;
+        }
+
+        public Builder merge(
+            OffsetCommitResponseData newData
+        ) {
+            if (data.topics().isEmpty()) {
+                // If the current data is empty, we can discard it and use the new data.
+                data = newData;
+            } else {
+                // Otherwise, we have to merge them together.
+                newData.topics().forEach(newTopic -> {
+                    OffsetCommitResponseTopic existingTopic = byTopicName.get(newTopic.name());
+                    if (existingTopic == null) {
+                        // If no topic exists, we can directly copy the new topic data.
+                        data.topics().add(newTopic);
+                        byTopicName.put(newTopic.name(), newTopic);
+                    } else {
+                        // Otherwise, we add the partitions to the existing one. Note we
+                        // expect non-overlapping partitions here as we don't verify
+                        // if the partition is already in the list before adding it.
+                        existingTopic.partitions().addAll(newTopic.partitions());
+                    }
+                });
+            }
+
+            return this;
+        }
+
+        public OffsetCommitResponse build() {
+            return new OffsetCommitResponse(data);
+        }
     }
 }

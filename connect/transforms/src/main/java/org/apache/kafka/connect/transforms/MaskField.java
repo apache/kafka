@@ -16,7 +16,10 @@
  */
 package org.apache.kafka.connect.transforms;
 
+import java.util.ArrayList;
 import org.apache.kafka.common.config.ConfigDef;
+import org.apache.kafka.common.utils.AppInfoParser;
+import org.apache.kafka.connect.components.Versioned;
 import org.apache.kafka.connect.connector.ConnectRecord;
 import org.apache.kafka.connect.data.Field;
 import org.apache.kafka.connect.data.Schema;
@@ -28,7 +31,6 @@ import org.apache.kafka.connect.transforms.util.SimpleConfig;
 
 import java.math.BigDecimal;
 import java.math.BigInteger;
-import java.util.Collections;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -40,7 +42,7 @@ import java.util.function.Function;
 import static org.apache.kafka.connect.transforms.util.Requirements.requireMap;
 import static org.apache.kafka.connect.transforms.util.Requirements.requireStruct;
 
-public abstract class MaskField<R extends ConnectRecord<R>> implements Transformation<R> {
+public abstract class MaskField<R extends ConnectRecord<R>> implements Transformation<R>, Versioned {
 
     public static final String OVERVIEW_DOC =
             "Mask specified fields with a valid null value for the field type (i.e. 0, false, empty string, and so on)."
@@ -89,6 +91,11 @@ public abstract class MaskField<R extends ConnectRecord<R>> implements Transform
 
     private Set<String> maskedFields;
     private String replacement;
+
+    @Override
+    public String version() {
+        return AppInfoParser.getVersion();
+    }
 
     @Override
     public void configure(Map<String, ?> props) {
@@ -148,9 +155,9 @@ public abstract class MaskField<R extends ConnectRecord<R>> implements Transform
         Object maskedValue = PRIMITIVE_VALUE_MAPPING.get(value.getClass());
         if (maskedValue == null) {
             if (value instanceof List)
-                maskedValue = Collections.emptyList();
+                maskedValue = new ArrayList<>();
             else if (value instanceof Map)
-                maskedValue = Collections.emptyMap();
+                maskedValue = new HashMap<>();
             else
                 throw new DataException("Cannot mask value of type: " + value.getClass());
         }

@@ -20,23 +20,37 @@ import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.connect.runtime.isolation.Plugins;
+import org.apache.kafka.connect.source.SourceTask;
 
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.stream.Collectors;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
+import static org.apache.kafka.connect.runtime.SourceConnectorConfig.ExactlyOnceSupportLevel.REQUESTED;
+import static org.apache.kafka.connect.runtime.SourceConnectorConfig.ExactlyOnceSupportLevel.REQUIRED;
 import static org.apache.kafka.connect.runtime.TopicCreationConfig.DEFAULT_TOPIC_CREATION_GROUP;
 import static org.apache.kafka.connect.runtime.TopicCreationConfig.DEFAULT_TOPIC_CREATION_PREFIX;
 import static org.apache.kafka.connect.runtime.TopicCreationConfig.EXCLUDE_REGEX_CONFIG;
 import static org.apache.kafka.connect.runtime.TopicCreationConfig.INCLUDE_REGEX_CONFIG;
 import static org.apache.kafka.connect.runtime.TopicCreationConfig.PARTITIONS_CONFIG;
 import static org.apache.kafka.connect.runtime.TopicCreationConfig.REPLICATION_FACTOR_CONFIG;
+import static org.apache.kafka.connect.source.SourceTask.TransactionBoundary;
+import static org.apache.kafka.connect.source.SourceTask.TransactionBoundary.CONNECTOR;
+import static org.apache.kafka.connect.source.SourceTask.TransactionBoundary.DEFAULT;
+import static org.apache.kafka.connect.source.SourceTask.TransactionBoundary.INTERVAL;
+import static org.apache.kafka.connect.source.SourceTask.TransactionBoundary.POLL;
+import static org.apache.kafka.common.utils.Utils.enumOptions;
 
 public class SourceConnectorConfig extends ConnectorConfig {
+
+    private static final Logger log = LoggerFactory.getLogger(SourceConnectorConfig.class);
 
     protected static final String TOPIC_CREATION_GROUP = "Topic Creation";
 
@@ -47,34 +61,145 @@ public class SourceConnectorConfig extends ConnectorConfig {
             + "created by source connectors";
     private static final String TOPIC_CREATION_GROUPS_DISPLAY = "Topic Creation Groups";
 
+    protected static final String EXACTLY_ONCE_SUPPORT_GROUP = "Exactly Once Support";
+
+    public enum ExactlyOnceSupportLevel {
+        REQUESTED,
+        REQUIRED;
+
+        public static ExactlyOnceSupportLevel fromProperty(String property) {
+            return valueOf(property.toUpperCase(Locale.ROOT).trim());
+        }
+
+        @Override
+        public String toString() {
+            return name().toLowerCase(Locale.ROOT);
+        }
+    }
+
+    public static final String EXACTLY_ONCE_SUPPORT_CONFIG = "exactly.once.support";
+    private static final String EXACTLY_ONCE_SUPPORT_DOC = "Permitted values are " + String.join(", ", enumOptions(ExactlyOnceSupportLevel.class)) + ". "
+            + "If set to \"" + REQUIRED + "\", forces a preflight check for the connector to ensure that it can provide exactly-once semantics "
+            + "with the given configuration. Some connectors may be capable of providing exactly-once semantics but not signal to "
+            + "Connect that they support this; in that case, documentation for the connector should be consulted carefully before "
+            + "creating it, and the value for this property should be set to \"" + REQUESTED + "\". "
+            + "Additionally, if the value is set to \"" + REQUIRED + "\" but the worker that performs preflight validation does not have "
+            + "exactly-once support enabled for source connectors, requests to create or validate the connector will fail.";
+    private static final String EXACTLY_ONCE_SUPPORT_DISPLAY = "Exactly once support";
+
+    public static final String TRANSACTION_BOUNDARY_CONFIG = SourceTask.TRANSACTION_BOUNDARY_CONFIG;
+    private static final String TRANSACTION_BOUNDARY_DOC = "Permitted values are: " + String.join(", ", enumOptions(TransactionBoundary.class)) + ". "
+            + "If set to '" + POLL + "', a new producer transaction will be started and committed for every batch of records that each task from "
+            + "this connector provides to Connect. If set to '" + CONNECTOR + "', relies on connector-defined transaction boundaries; note that "
+            + "not all connectors are capable of defining their own transaction boundaries, and in that case, attempts to instantiate a connector with "
+            + "this value will fail. Finally, if set to '" + INTERVAL + "', commits transactions only after a user-defined time interval has passed.";
+    private static final String TRANSACTION_BOUNDARY_DISPLAY = "Transaction Boundary";
+
+    public static final String TRANSACTION_BOUNDARY_INTERVAL_CONFIG = "transaction.boundary.interval.ms";
+    private static final String TRANSACTION_BOUNDARY_INTERVAL_DOC = "If '" + TRANSACTION_BOUNDARY_CONFIG + "' is set to '" + INTERVAL
+            + "', determines the interval for producer transaction commits by connector tasks. If unset, defaults to the value of the worker-level "
+            + "'" + WorkerConfig.OFFSET_COMMIT_INTERVAL_MS_CONFIG + "' property. It has no effect if a different "
+            + TRANSACTION_BOUNDARY_CONFIG + " is specified.";
+    private static final String TRANSACTION_BOUNDARY_INTERVAL_DISPLAY = "Transaction boundary interval";
+
+    protected static final String OFFSETS_TOPIC_GROUP = "offsets.topic";
+
+    public static final String OFFSETS_TOPIC_CONFIG = "offsets.storage.topic";
+    private static final String OFFSETS_TOPIC_DOC = "The name of a separate offsets topic to use for this connector. "
+            + "If empty or not specified, the worker’s global offsets topic name will be used. "
+            + "If specified, the offsets topic will be created if it does not already exist on the Kafka cluster targeted by this connector "
+            + "(which may be different from the one used for the worker's global offsets topic if the bootstrap.servers property of the connector's producer "
+            + "has been overridden from the worker's). Only applicable in distributed mode; in standalone mode, setting this property will have no effect.";
+    private static final String OFFSETS_TOPIC_DISPLAY = "Offsets topic";
+
     private static class EnrichedSourceConnectorConfig extends ConnectorConfig {
         EnrichedSourceConnectorConfig(Plugins plugins, ConfigDef configDef, Map<String, String> props) {
             super(plugins, configDef, props);
         }
 
-        @Override
-        public Object get(String key) {
-            return super.get(key);
-        }
     }
 
-    private static ConfigDef config = SourceConnectorConfig.configDef();
+    private final TransactionBoundary transactionBoundary;
+    private final Long transactionBoundaryInterval;
     private final EnrichedSourceConnectorConfig enrichedSourceConfig;
+    private final String offsetsTopic;
 
     public static ConfigDef configDef() {
+        ConfigDef.Validator atLeastZero = ConfigDef.Range.atLeast(0);
         int orderInGroup = 0;
         return new ConfigDef(ConnectorConfig.configDef())
-                .define(TOPIC_CREATION_GROUPS_CONFIG, ConfigDef.Type.LIST, Collections.emptyList(),
-                        ConfigDef.CompositeValidator.of(new ConfigDef.NonNullValidator(), ConfigDef.LambdaValidator.with(
+                .define(
+                        TOPIC_CREATION_GROUPS_CONFIG,
+                        ConfigDef.Type.LIST,
+                        Collections.emptyList(),
+                        ConfigDef.CompositeValidator.of(
+                                new ConfigDef.NonNullValidator(),
+                                ConfigDef.LambdaValidator.with(
+                                    (name, value) -> {
+                                        List<?> groupAliases = (List<?>) value;
+                                        if (groupAliases.size() > new HashSet<>(groupAliases).size()) {
+                                            throw new ConfigException(name, value, "Duplicate alias provided.");
+                                        }
+                                    },
+                                    () -> "unique topic creation groups")),
+                        ConfigDef.Importance.LOW,
+                        TOPIC_CREATION_GROUPS_DOC,
+                        TOPIC_CREATION_GROUP,
+                        ++orderInGroup,
+                        ConfigDef.Width.LONG,
+                        TOPIC_CREATION_GROUPS_DISPLAY)
+                .define(
+                        EXACTLY_ONCE_SUPPORT_CONFIG,
+                        ConfigDef.Type.STRING,
+                        REQUESTED.toString(),
+                        ConfigDef.CaseInsensitiveValidString.in(enumOptions(ExactlyOnceSupportLevel.class)),
+                        ConfigDef.Importance.MEDIUM,
+                        EXACTLY_ONCE_SUPPORT_DOC,
+                        EXACTLY_ONCE_SUPPORT_GROUP,
+                        ++orderInGroup,
+                        ConfigDef.Width.SHORT,
+                        EXACTLY_ONCE_SUPPORT_DISPLAY)
+                .define(
+                        TRANSACTION_BOUNDARY_CONFIG,
+                        ConfigDef.Type.STRING,
+                        DEFAULT.toString(),
+                        ConfigDef.CaseInsensitiveValidString.in(enumOptions(TransactionBoundary.class)),
+                        ConfigDef.Importance.MEDIUM,
+                        TRANSACTION_BOUNDARY_DOC,
+                        EXACTLY_ONCE_SUPPORT_GROUP,
+                        ++orderInGroup,
+                        ConfigDef.Width.SHORT,
+                        TRANSACTION_BOUNDARY_DISPLAY)
+                .define(
+                        TRANSACTION_BOUNDARY_INTERVAL_CONFIG,
+                        ConfigDef.Type.LONG,
+                        null,
+                        ConfigDef.LambdaValidator.with(
                             (name, value) -> {
-                                List<?> groupAliases = (List<?>) value;
-                                if (groupAliases.size() > new HashSet<>(groupAliases).size()) {
-                                    throw new ConfigException(name, value, "Duplicate alias provided.");
+                                if (value == null) {
+                                    return;
                                 }
+                                atLeastZero.ensureValid(name, value);
                             },
-                            () -> "unique topic creation groups")),
-                        ConfigDef.Importance.LOW, TOPIC_CREATION_GROUPS_DOC, TOPIC_CREATION_GROUP,
-                        ++orderInGroup, ConfigDef.Width.LONG, TOPIC_CREATION_GROUPS_DISPLAY);
+                            atLeastZero::toString
+                        ),
+                        ConfigDef.Importance.LOW,
+                        TRANSACTION_BOUNDARY_INTERVAL_DOC,
+                        EXACTLY_ONCE_SUPPORT_GROUP,
+                        ++orderInGroup,
+                        ConfigDef.Width.SHORT,
+                        TRANSACTION_BOUNDARY_INTERVAL_DISPLAY)
+                .define(
+                        OFFSETS_TOPIC_CONFIG,
+                        ConfigDef.Type.STRING,
+                        null,
+                        new ConfigDef.NonEmptyString(),
+                        ConfigDef.Importance.LOW,
+                        OFFSETS_TOPIC_DOC,
+                        OFFSETS_TOPIC_GROUP,
+                        orderInGroup = 1,
+                        ConfigDef.Width.LONG,
+                        OFFSETS_TOPIC_DISPLAY);
     }
 
     public static ConfigDef embedDefaultGroup(ConfigDef baseConfigDef) {
@@ -98,6 +223,13 @@ public class SourceConnectorConfig extends ConnectorConfig {
             topicCreationGroups.addAll((List<?>) aliases);
         }
 
+        //Remove "topic.creation.groups" config if its present and the value is "default"
+        if (topicCreationGroups.contains(DEFAULT_TOPIC_CREATION_GROUP)) {
+            log.warn("'{}' topic creation group always exists and does not need to be listed explicitly",
+                DEFAULT_TOPIC_CREATION_GROUP);
+            topicCreationGroups.removeAll(Collections.singleton(DEFAULT_TOPIC_CREATION_GROUP));
+        }
+
         ConfigDef newDef = new ConfigDef(baseConfigDef);
         String defaultGroupPrefix = TOPIC_CREATION_PREFIX + DEFAULT_TOPIC_CREATION_GROUP + ".";
         short defaultGroupReplicationFactor = defaultGroupConfig.getShort(defaultGroupPrefix + REPLICATION_FACTOR_CONFIG);
@@ -115,10 +247,11 @@ public class SourceConnectorConfig extends ConnectorConfig {
         return newDef;
     }
 
+    @SuppressWarnings("this-escape")
     public SourceConnectorConfig(Plugins plugins, Map<String, String> props, boolean createTopics) {
-        super(plugins, config, props);
+        super(plugins, configDef(), props);
         if (createTopics && props.entrySet().stream().anyMatch(e -> e.getKey().startsWith(TOPIC_CREATION_PREFIX))) {
-            ConfigDef defaultConfigDef = embedDefaultGroup(config);
+            ConfigDef defaultConfigDef = embedDefaultGroup(configDef());
             // This config is only used to set default values for partitions and replication
             // factor from the default group and otherwise it remains unused
             AbstractConfig defaultGroup = new AbstractConfig(defaultConfigDef, props, false);
@@ -135,11 +268,30 @@ public class SourceConnectorConfig extends ConnectorConfig {
         } else {
             enrichedSourceConfig = null;
         }
+        transactionBoundary = TransactionBoundary.fromProperty(getString(TRANSACTION_BOUNDARY_CONFIG));
+        transactionBoundaryInterval = getLong(TRANSACTION_BOUNDARY_INTERVAL_CONFIG);
+        offsetsTopic = getString(OFFSETS_TOPIC_CONFIG);
+    }
+
+    public static boolean usesTopicCreation(Map<String, String> props) {
+        return props.entrySet().stream().anyMatch(e -> e.getKey().startsWith(TOPIC_CREATION_PREFIX));
     }
 
     @Override
     public Object get(String key) {
         return enrichedSourceConfig != null ? enrichedSourceConfig.get(key) : super.get(key);
+    }
+
+    public TransactionBoundary transactionBoundary() {
+        return transactionBoundary;
+    }
+
+    public Long transactionBoundaryInterval() {
+        return transactionBoundaryInterval;
+    }
+
+    public String offsetsTopic() {
+        return offsetsTopic;
     }
 
     /**
@@ -181,6 +333,6 @@ public class SourceConnectorConfig extends ConnectorConfig {
     }
 
     public static void main(String[] args) {
-        System.out.println(config.toHtml(4, config -> "sourceconnectorconfigs_" + config));
+        System.out.println(configDef().toHtml(4, config -> "sourceconnectorconfigs_" + config));
     }
 }

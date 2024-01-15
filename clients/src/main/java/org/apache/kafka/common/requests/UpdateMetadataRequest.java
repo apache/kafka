@@ -47,14 +47,28 @@ public class UpdateMetadataRequest extends AbstractControlRequest {
         private final List<UpdateMetadataPartitionState> partitionStates;
         private final List<UpdateMetadataBroker> liveBrokers;
         private final Map<String, Uuid> topicIds;
+        private final Type updateType;
 
         public Builder(short version, int controllerId, int controllerEpoch, long brokerEpoch,
                        List<UpdateMetadataPartitionState> partitionStates, List<UpdateMetadataBroker> liveBrokers,
                        Map<String, Uuid> topicIds) {
-            super(ApiKeys.UPDATE_METADATA, version, controllerId, controllerEpoch, brokerEpoch);
+            this(version, controllerId, controllerEpoch, brokerEpoch, partitionStates,
+                liveBrokers, topicIds, false, Type.UNKNOWN);
+        }
+
+        public Builder(short version, int controllerId, int controllerEpoch, long brokerEpoch,
+                       List<UpdateMetadataPartitionState> partitionStates, List<UpdateMetadataBroker> liveBrokers,
+                       Map<String, Uuid> topicIds, boolean kraftController, Type updateType) {
+            super(ApiKeys.UPDATE_METADATA, version, controllerId, controllerEpoch, brokerEpoch, kraftController);
             this.partitionStates = partitionStates;
             this.liveBrokers = liveBrokers;
             this.topicIds = topicIds;
+
+            if (version >= 8) {
+                this.updateType = updateType;
+            } else {
+                this.updateType = Type.UNKNOWN;
+            }
         }
 
         @Override
@@ -81,10 +95,15 @@ public class UpdateMetadataRequest extends AbstractControlRequest {
             }
 
             UpdateMetadataRequestData data = new UpdateMetadataRequestData()
-                    .setControllerId(controllerId)
-                    .setControllerEpoch(controllerEpoch)
-                    .setBrokerEpoch(brokerEpoch)
-                    .setLiveBrokers(liveBrokers);
+                .setControllerId(controllerId)
+                .setControllerEpoch(controllerEpoch)
+                .setBrokerEpoch(brokerEpoch)
+                .setLiveBrokers(liveBrokers);
+
+            if (version >= 8) {
+                data.setIsKRaftController(kraftController);
+                data.setType(updateType.toByte());
+            }
 
             if (version >= 5) {
                 Map<String, UpdateMetadataTopicState> topicStatesMap = groupByTopic(topicIds, partitionStates);
@@ -118,6 +137,8 @@ public class UpdateMetadataRequest extends AbstractControlRequest {
             bld.append("(type: UpdateMetadataRequest=").
                 append(", controllerId=").append(controllerId).
                 append(", controllerEpoch=").append(controllerEpoch).
+                append(", kraftController=").append(kraftController).
+                append(", type=").append(updateType).
                 append(", brokerEpoch=").append(brokerEpoch).
                 append(", partitionStates=").append(partitionStates).
                 append(", liveBrokers=").append(Utils.join(liveBrokers, ", ")).
@@ -178,6 +199,15 @@ public class UpdateMetadataRequest extends AbstractControlRequest {
     @Override
     public int controllerId() {
         return data.controllerId();
+    }
+
+    @Override
+    public boolean isKRaftController() {
+        return data.isKRaftController();
+    }
+
+    public Type updateType() {
+        return Type.fromByte(data.type());
     }
 
     @Override

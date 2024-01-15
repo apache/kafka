@@ -17,6 +17,7 @@
 package org.apache.kafka.connect.transforms;
 
 import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.connect.data.Decimal;
 import org.apache.kafka.connect.data.Field;
 import org.apache.kafka.connect.data.Schema;
@@ -249,5 +250,26 @@ public class MaskFieldTest {
     @Test
     public void testEmptyStringReplacementValue() {
         assertThrows(ConfigException.class, () -> checkReplacementSchemaless("short", ""), "String must be non-empty");
+    }
+
+    @Test
+    public void testNullListAndMapReplacementsAreMutable() {
+        final List<String> maskFields = Arrays.asList("array", "map");
+        final Struct updatedValue = (Struct) transform(maskFields, null).apply(record(SCHEMA, VALUES_WITH_SCHEMA)).value();
+        @SuppressWarnings("unchecked") List<Integer> actualList = (List<Integer>) updatedValue.get("array");
+        assertEquals(Collections.emptyList(), actualList);
+        actualList.add(0);
+        assertEquals(Collections.singletonList(0), actualList);
+
+        @SuppressWarnings("unchecked") Map<String, String> actualMap = (Map<String, String>) updatedValue.get("map");
+        assertEquals(Collections.emptyMap(), actualMap);
+        actualMap.put("k", "v");
+        assertEquals(Collections.singletonMap("k", "v"), actualMap);
+    }
+
+    @Test
+    public void testMaskFieldReturnsVersionFromAppInfoParser() {
+        final MaskField<SinkRecord> xform = new MaskField.Value<>();
+        assertEquals(AppInfoParser.getVersion(), xform.version());
     }
 }

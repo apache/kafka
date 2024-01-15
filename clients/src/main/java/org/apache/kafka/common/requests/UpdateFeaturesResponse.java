@@ -64,6 +64,11 @@ public class UpdateFeaturesResponse extends AbstractResponse {
     }
 
     @Override
+    public void maybeSetThrottleTimeMs(int throttleTimeMs) {
+        data.setThrottleTimeMs(throttleTimeMs);
+    }
+
+    @Override
     public String toString() {
         return data.toString();
     }

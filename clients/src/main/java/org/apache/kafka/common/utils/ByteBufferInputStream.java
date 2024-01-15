@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.utils;
 
+import java.io.IOException;
 import java.io.InputStream;
 import java.nio.ByteBuffer;
 
@@ -47,5 +48,10 @@ public final class ByteBufferInputStream extends InputStream {
         len = Math.min(len, buffer.remaining());
         buffer.get(bytes, off, len);
         return len;
+    }
+
+    @Override
+    public int available() throws IOException {
+        return buffer.remaining();
     }
 }

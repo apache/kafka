@@ -26,11 +26,34 @@ public class PrimitiveRef {
         return new IntRef(value);
     }
 
+    public static LongRef ofLong(long value) {
+        return new LongRef(value);
+    }
+
     public static class IntRef {
         public int value;
 
         IntRef(int value) {
             this.value = value;
+        }
+
+        @Override
+        public String toString() {
+            return "IntRef(" + value + ")";
+        }
+
+    }
+
+    public static class LongRef {
+        public long value;
+
+        LongRef(long value) {
+            this.value = value;
+        }
+
+        @Override
+        public String toString() {
+            return "LongRef(" + value + ")";
         }
     }
 }

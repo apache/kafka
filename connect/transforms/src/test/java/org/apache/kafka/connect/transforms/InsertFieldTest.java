@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.connect.transforms;
 
+import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaBuilder;
 import org.apache.kafka.connect.data.Struct;
@@ -36,8 +37,8 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class InsertFieldTest {
-    private InsertField<SourceRecord> xformKey = new InsertField.Key<>();
-    private InsertField<SourceRecord> xformValue = new InsertField.Value<>();
+    private final InsertField<SourceRecord> xformKey = new InsertField.Key<>();
+    private final InsertField<SourceRecord> xformValue = new InsertField.Value<>();
 
     @AfterEach
     public void teardown() {
@@ -199,5 +200,13 @@ public class InsertFieldTest {
         final SourceRecord transformedRecord = xformKey.apply(record);
 
         assertSame(record, transformedRecord);
+    }
+
+    @Test
+    public void testInsertFieldVersionRetrievedFromAppInfoParser() {
+        assertEquals(AppInfoParser.getVersion(), xformKey.version());
+        assertEquals(AppInfoParser.getVersion(), xformValue.version());
+
+        assertEquals(xformKey.version(), xformValue.version());
     }
 }

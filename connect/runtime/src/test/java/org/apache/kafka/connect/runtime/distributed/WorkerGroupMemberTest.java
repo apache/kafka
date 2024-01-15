@@ -18,6 +18,7 @@ package org.apache.kafka.connect.runtime.distributed;
 
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.common.MetricName;
+import org.apache.kafka.common.metrics.JmxReporter;
 import org.apache.kafka.common.metrics.MetricsReporter;
 import org.apache.kafka.common.metrics.stats.Avg;
 import org.apache.kafka.common.utils.LogContext;
@@ -25,16 +26,10 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.connect.runtime.MockConnectMetrics;
 import org.apache.kafka.connect.runtime.WorkerConfig;
 import org.apache.kafka.connect.storage.ConfigBackingStore;
-import org.apache.kafka.connect.storage.StatusBackingStore;
-import org.apache.kafka.connect.util.ConnectUtils;
-import org.easymock.EasyMock;
 import org.junit.Test;
 import org.junit.runner.RunWith;
-import org.powermock.api.easymock.PowerMock;
-import org.powermock.api.easymock.annotation.Mock;
-import org.powermock.core.classloader.annotations.PowerMockIgnore;
-import org.powermock.core.classloader.annotations.PrepareForTest;
-import org.powermock.modules.junit4.PowerMockRunner;
+import org.mockito.Mock;
+import org.mockito.junit.MockitoJUnitRunner;
 
 import javax.management.MBeanServer;
 import javax.management.ObjectName;
@@ -45,15 +40,15 @@ import java.util.Map;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
+import static org.mockito.Mockito.atLeastOnce;
+import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.verify;
 
-@RunWith(PowerMockRunner.class)
-@PrepareForTest({ConnectUtils.class})
-@PowerMockIgnore({"javax.management.*", "javax.crypto.*"})
+@RunWith(MockitoJUnitRunner.StrictStubs.class)
 public class WorkerGroupMemberTest {
     @Mock
     private ConfigBackingStore configBackingStore;
-    @Mock
-    private StatusBackingStore statusBackingStore;
 
     @Test
     public void testMetrics() throws Exception {
@@ -67,26 +62,29 @@ public class WorkerGroupMemberTest {
         workerProps.put("config.storage.topic", "topic-1");
         workerProps.put("status.storage.topic", "topic-1");
         workerProps.put(CommonClientConfigs.METRIC_REPORTER_CLASSES_CONFIG, MockConnectMetrics.MockMetricsReporter.class.getName());
-        DistributedConfig config = new DistributedConfig(workerProps);
-
+        DistributedConfig config = spy(new DistributedConfig(workerProps));
+        doReturn("cluster-1").when(config).kafkaClusterId();
 
         LogContext logContext = new LogContext("[Worker clientId=client-1 + groupId= group-1]");
+        member = new WorkerGroupMember(config, "", configBackingStore, null, Time.SYSTEM, "client-1", logContext);
 
-        expectClusterId();
-
-        member = new WorkerGroupMember(config, "", configBackingStore,
-        null, Time.SYSTEM, "client-1", logContext);
-
-        boolean entered = false;
+        verify(config, atLeastOnce()).kafkaClusterId();
+        boolean foundMockReporter = false;
+        boolean foundJmxReporter = false;
+        assertEquals(2, member.metrics().reporters().size());
         for (MetricsReporter reporter : member.metrics().reporters()) {
             if (reporter instanceof MockConnectMetrics.MockMetricsReporter) {
-                entered = true;
+                foundMockReporter = true;
                 MockConnectMetrics.MockMetricsReporter mockMetricsReporter = (MockConnectMetrics.MockMetricsReporter) reporter;
                 assertEquals("cluster-1", mockMetricsReporter.getMetricsContext().contextLabels().get(WorkerConfig.CONNECT_KAFKA_CLUSTER_ID));
                 assertEquals("group-1", mockMetricsReporter.getMetricsContext().contextLabels().get(WorkerConfig.CONNECT_GROUP_ID));
             }
+            if (reporter instanceof JmxReporter) {
+                foundJmxReporter = true;
+            }
         }
-        assertTrue("Failed to verify MetricsReporter", entered);
+        assertTrue("Failed to find MockMetricsReporter", foundMockReporter);
+        assertTrue("Failed to find JmxReporter", foundJmxReporter);
 
         MetricName name = member.metrics().metricName("test.avg", "grp1");
         member.metrics().addMetric(name, new Avg());
@@ -94,10 +92,27 @@ public class WorkerGroupMemberTest {
         //verify metric exists with correct prefix
         assertNotNull(server.getObjectInstance(new ObjectName("kafka.connect:type=grp1,client-id=client-1")));
     }
-    private void expectClusterId() {
-        PowerMock.mockStaticPartial(ConnectUtils.class, "lookupKafkaClusterId");
-        EasyMock.expect(ConnectUtils.lookupKafkaClusterId(EasyMock.anyObject())).andReturn("cluster-1").anyTimes();
-        PowerMock.replay(ConnectUtils.class);
+
+    @Test
+    public void testDisableJmxReporter() {
+        WorkerGroupMember member;
+        Map<String, String> workerProps = new HashMap<>();
+        workerProps.put("key.converter", "org.apache.kafka.connect.json.JsonConverter");
+        workerProps.put("value.converter", "org.apache.kafka.connect.json.JsonConverter");
+        workerProps.put("group.id", "group-1");
+        workerProps.put("offset.storage.topic", "topic-1");
+        workerProps.put("config.storage.topic", "topic-1");
+        workerProps.put("status.storage.topic", "topic-1");
+        workerProps.put("auto.include.jmx.reporter", "false");
+        DistributedConfig config = spy(new DistributedConfig(workerProps));
+        doReturn("cluster-1").when(config).kafkaClusterId();
+
+        LogContext logContext = new LogContext("[Worker clientId=client-1 + groupId= group-1]");
+        member = new WorkerGroupMember(config, "", configBackingStore, null, Time.SYSTEM, "client-1", logContext);
+
+        verify(config, atLeastOnce()).kafkaClusterId();
+        assertTrue(member.metrics().reporters().isEmpty());
+        member.stop();
     }
 
 }

@@ -16,6 +16,9 @@
  */
 package org.apache.kafka.connect.errors;
 
+/**
+ * Indicates an error while building a schema via {@link org.apache.kafka.connect.data.SchemaBuilder}
+ */
 public class SchemaBuilderException extends DataException {
     public SchemaBuilderException(String s) {
         super(s);

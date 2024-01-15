@@ -19,10 +19,11 @@ package kafka.server.metadata
 
 import java.util.Properties
 
-import kafka.server.ConfigType
+import kafka.server.{ConfigEntityName, ConfigType}
 import kafka.zk.{AdminZkClient, KafkaZkClient}
 import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.config.ConfigResource.Type
+import org.apache.kafka.common.errors.InvalidRequestException
 
 
 object ZkConfigRepository {
@@ -35,8 +36,16 @@ class ZkConfigRepository(adminZkClient: AdminZkClient) extends ConfigRepository 
     val configTypeForZk = configResource.`type` match {
       case Type.TOPIC => ConfigType.Topic
       case Type.BROKER => ConfigType.Broker
+      case Type.CLIENT_METRICS => throw new InvalidRequestException("Config type client-metrics is only supported on KRaft clusters")
       case tpe => throw new IllegalArgumentException(s"Unsupported config type: $tpe")
     }
-    adminZkClient.fetchEntityConfig(configTypeForZk, configResource.name)
+    // ZK stores cluster configs under "<default>".
+    val effectiveName = if (configResource.`type`.equals(Type.BROKER) &&
+        configResource.name.isEmpty) {
+      ConfigEntityName.Default
+    } else {
+      configResource.name
+    }
+    adminZkClient.fetchEntityConfig(configTypeForZk, effectiveName)
   }
 }

@@ -59,11 +59,6 @@ public class TaggedFields extends DocumentedType {
         this.fields = fields;
     }
 
-    @Override
-    public boolean isNullable() {
-        return false;
-    }
-
     @SuppressWarnings("unchecked")
     @Override
     public void write(ByteBuffer buffer, Object o) {
@@ -100,6 +95,11 @@ public class TaggedFields extends DocumentedType {
             }
             prevTag = tag;
             int size = ByteUtils.readUnsignedVarint(buffer);
+            if (size < 0)
+                throw new SchemaException("field size " + size + " cannot be negative");
+            if (size > buffer.remaining())
+                throw new SchemaException("Error reading field of size " + size + ", only " + buffer.remaining() + " bytes available");
+
             Field field = fields.get(tag);
             if (field == null) {
                 byte[] bytes = new byte[size];
@@ -165,7 +165,7 @@ public class TaggedFields extends DocumentedType {
             }
             return objects;
         } catch (ClassCastException e) {
-            throw new SchemaException("Not a NavigableMap.");
+            throw new SchemaException("Not a NavigableMap. Found class " + item.getClass().getSimpleName());
         }
     }
 
@@ -177,5 +177,12 @@ public class TaggedFields extends DocumentedType {
     @Override
     public String documentation() {
         return "Represents a series of tagged fields.";
+    }
+
+    /**
+     * The number of tagged fields
+     */
+    public int numFields() {
+        return this.fields.size();
     }
 }

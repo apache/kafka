@@ -17,7 +17,7 @@
 package org.apache.kafka.connect.connector;
 
 /**
- * ConnectorContext allows Connectors to proactively interact with the Kafka Connect runtime.
+ * ConnectorContext allows {@link Connector}s to proactively interact with the Kafka Connect runtime.
  */
 public interface ConnectorContext {
     /**

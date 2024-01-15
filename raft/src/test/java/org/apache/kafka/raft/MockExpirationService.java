@@ -28,6 +28,7 @@ public class MockExpirationService implements ExpirationService, MockTime.Listen
     private final MockTime time;
     private final PriorityQueue<ExpirationFuture<?>> queue = new PriorityQueue<>();
 
+    @SuppressWarnings("this-escape")
     public MockExpirationService(MockTime time) {
         this.time = time;
         time.addListener(this);

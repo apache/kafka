@@ -53,11 +53,7 @@ public class UnoptimizableRepartitionNode<K, V> extends BaseRepartitionNode<K, V
     public void writeToTopology(final InternalTopologyBuilder topologyBuilder) {
         topologyBuilder.addInternalTopic(repartitionTopic, internalTopicProperties);
 
-        topologyBuilder.addProcessor(
-            processorParameters.processorName(),
-            processorParameters.processorSupplier(),
-            parentNodeNames()
-        );
+        processorParameters.addProcessorTo(topologyBuilder, parentNodeNames());
 
         topologyBuilder.addSink(
             sinkName,

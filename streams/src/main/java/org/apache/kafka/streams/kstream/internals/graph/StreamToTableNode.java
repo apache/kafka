@@ -20,11 +20,10 @@ package org.apache.kafka.streams.kstream.internals.graph;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.kstream.internals.KTableSource;
 import org.apache.kafka.streams.kstream.internals.MaterializedInternal;
-import org.apache.kafka.streams.kstream.internals.TimestampedKeyValueStoreMaterializer;
+import org.apache.kafka.streams.kstream.internals.KeyValueStoreMaterializer;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
+import org.apache.kafka.streams.processor.internals.StoreFactory;
 import org.apache.kafka.streams.state.KeyValueStore;
-import org.apache.kafka.streams.state.StoreBuilder;
-import org.apache.kafka.streams.state.TimestampedKeyValueStore;
 
 /**
  * Represents a KTable convert From KStream
@@ -53,15 +52,16 @@ public class StreamToTableNode<K, V> extends GraphNode {
     @SuppressWarnings("unchecked")
     @Override
     public void writeToTopology(final InternalTopologyBuilder topologyBuilder) {
-        final StoreBuilder<TimestampedKeyValueStore<K, V>> storeBuilder =
-            new TimestampedKeyValueStoreMaterializer<>((MaterializedInternal<K, V, KeyValueStore<Bytes, byte[]>>) materializedInternal).materialize();
+        final StoreFactory storeFactory =
+            new KeyValueStoreMaterializer<>((MaterializedInternal<K, V, KeyValueStore<Bytes, byte[]>>) materializedInternal);
 
         final String processorName = processorParameters.processorName();
-        final KTableSource<K, V> ktableSource = processorParameters.kTableSourceSupplier();
+        final KTableSource<K, V> tableSource =  processorParameters.processorSupplier() instanceof KTableSource ?
+                (KTableSource<K, V>) processorParameters.processorSupplier() : null;
         topologyBuilder.addProcessor(processorName, processorParameters.processorSupplier(), parentNodeNames());
 
-        if (storeBuilder != null && ktableSource.materialized()) {
-            topologyBuilder.addStateStore(storeBuilder, processorName);
+        if (storeFactory != null && tableSource.materialized()) {
+            topologyBuilder.addStateStore(storeFactory, processorName);
         }
     }
 }

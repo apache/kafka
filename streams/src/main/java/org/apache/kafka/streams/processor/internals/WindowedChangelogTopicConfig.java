@@ -35,15 +35,17 @@ public class WindowedChangelogTopicConfig extends InternalTopicConfig {
         WINDOWED_STORE_CHANGELOG_TOPIC_DEFAULT_OVERRIDES = Collections.unmodifiableMap(tempTopicDefaultOverrides);
     }
 
-    private Long retentionMs;
+    private final long retentionMs;
 
-    WindowedChangelogTopicConfig(final String name, final Map<String, String> topicConfigs) {
+    WindowedChangelogTopicConfig(final String name, final Map<String, String> topicConfigs, final long retentionMs) {
         super(name, topicConfigs);
+        this.retentionMs = retentionMs;
     }
 
     /**
-     * Get the configured properties for this topic. If retentionMs is set then
-     * we add additionalRetentionMs to work out the desired retention when cleanup.policy=compact,delete
+     * Get the configured properties for this topic. If no retentionMs override is provided from
+     * the topic configs, then we add additionalRetentionMs to work out the desired retention
+     * when cleanup.policy=compact,delete
      *
      * @param additionalRetentionMs - added to retention to allow for clock drift etc
      * @return Properties to be used when creating the topic
@@ -57,7 +59,7 @@ public class WindowedChangelogTopicConfig extends InternalTopicConfig {
 
         topicConfig.putAll(topicConfigs);
 
-        if (retentionMs != null) {
+        if (!topicConfigs.containsKey(TopicConfig.RETENTION_MS_CONFIG)) {
             long retentionValue;
             try {
                 retentionValue = Math.addExact(retentionMs, additionalRetentionMs);
@@ -68,12 +70,6 @@ public class WindowedChangelogTopicConfig extends InternalTopicConfig {
         }
 
         return topicConfig;
-    }
-
-    void setRetentionMs(final long retentionMs) {
-        if (!topicConfigs.containsKey(TopicConfig.RETENTION_MS_CONFIG)) {
-            this.retentionMs = retentionMs;
-        }
     }
 
     @Override

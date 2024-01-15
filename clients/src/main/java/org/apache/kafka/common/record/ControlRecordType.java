@@ -43,9 +43,11 @@ import java.nio.ByteBuffer;
 public enum ControlRecordType {
     ABORT((short) 0),
     COMMIT((short) 1),
+
     // Raft quorum related control messages.
-    QUORUM_REASSIGNMENT((short) 2),
-    LEADER_CHANGE((short) 3),
+    LEADER_CHANGE((short) 2),
+    SNAPSHOT_HEADER((short) 3),
+    SNAPSHOT_FOOTER((short) 4),
 
     // UNKNOWN is used to indicate a control type which the client is not aware of and should be ignored
     UNKNOWN((short) -1);
@@ -58,10 +60,14 @@ public enum ControlRecordType {
             new Field("version", Type.INT16),
             new Field("type", Type.INT16));
 
-    final short type;
+    private final short type;
 
     ControlRecordType(short type) {
         this.type = type;
+    }
+
+    public short type() {
+        return type;
     }
 
     public Struct recordKey() {
@@ -97,9 +103,12 @@ public enum ControlRecordType {
             case 1:
                 return COMMIT;
             case 2:
-                return QUORUM_REASSIGNMENT;
-            case 3:
                 return LEADER_CHANGE;
+            case 3:
+                return SNAPSHOT_HEADER;
+            case 4:
+                return SNAPSHOT_FOOTER;
+
             default:
                 return UNKNOWN;
         }

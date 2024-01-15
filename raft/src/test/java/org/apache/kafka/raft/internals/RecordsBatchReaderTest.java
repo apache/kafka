@@ -16,13 +16,17 @@
  */
 package org.apache.kafka.raft.internals;
 
-import org.apache.kafka.common.utils.BufferSupplier;
+import org.apache.kafka.common.message.LeaderChangeMessage;
 import org.apache.kafka.common.record.CompressionType;
+import org.apache.kafka.common.record.ControlRecordType;
 import org.apache.kafka.common.record.FileRecords;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.Records;
-import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.common.utils.BufferSupplier;
 import org.apache.kafka.raft.BatchReader;
+import org.apache.kafka.raft.ControlRecord;
+import org.apache.kafka.raft.internals.RecordsIteratorTest.TestBatch;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.mockito.Mockito;
@@ -34,7 +38,6 @@ import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.Set;
 
-import static java.util.Arrays.asList;
 import static org.apache.kafka.test.TestUtils.tempFile;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -44,36 +47,26 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class RecordsBatchReaderTest {
     private static final int MAX_BATCH_BYTES = 128;
 
-    private final MockTime time = new MockTime();
     private final StringSerde serde = new StringSerde();
 
     @ParameterizedTest
     @EnumSource(CompressionType.class)
     public void testReadFromMemoryRecords(CompressionType compressionType) {
-        long baseOffset = 57;
+        long seed = 57;
+        List<TestBatch<String>> batches = RecordsIteratorTest.createBatches(seed);
+        long baseOffset = batches.get(0).baseOffset;
+        MemoryRecords memRecords = RecordsIteratorTest.buildRecords(compressionType, batches);
 
-        List<BatchReader.Batch<String>> batches = asList(
-            new BatchReader.Batch<>(baseOffset, 1, asList("a", "b", "c")),
-            new BatchReader.Batch<>(baseOffset + 3, 2, asList("d", "e")),
-            new BatchReader.Batch<>(baseOffset + 5, 2, asList("f"))
-        );
-
-        MemoryRecords memRecords = buildRecords(compressionType, batches);
         testBatchReader(baseOffset, memRecords, batches);
     }
 
     @ParameterizedTest
     @EnumSource(CompressionType.class)
     public void testReadFromFileRecords(CompressionType compressionType) throws Exception {
-        long baseOffset = 57;
-
-        List<BatchReader.Batch<String>> batches = asList(
-            new BatchReader.Batch<>(baseOffset, 1, asList("a", "b", "c")),
-            new BatchReader.Batch<>(baseOffset + 3, 2, asList("d", "e")),
-            new BatchReader.Batch<>(baseOffset + 5, 2, asList("f"))
-        );
-
-        MemoryRecords memRecords = buildRecords(compressionType, batches);
+        long seed = 57;
+        List<TestBatch<String>> batches = RecordsIteratorTest.createBatches(seed);
+        long baseOffset = batches.get(0).baseOffset;
+        MemoryRecords memRecords = RecordsIteratorTest.buildRecords(compressionType, batches);
 
         FileRecords fileRecords = FileRecords.open(tempFile());
         fileRecords.append(memRecords);
@@ -81,39 +74,32 @@ class RecordsBatchReaderTest {
         testBatchReader(baseOffset, fileRecords, batches);
     }
 
-    private MemoryRecords buildRecords(
-        CompressionType compressionType,
-        List<BatchReader.Batch<String>> batches
-    ) {
-        ByteBuffer buffer = ByteBuffer.allocate(1024);
+    @Test
+    public void testLeaderChangeControlBatch() {
+        // Confirm that the RecordsBatchReader is able to iterate over control batches
+        MemoryRecords records = RecordsIteratorTest.buildControlRecords(ControlRecordType.LEADER_CHANGE);
+        ControlRecord expectedRecord = new ControlRecord(ControlRecordType.LEADER_CHANGE, new LeaderChangeMessage());
 
-        for (BatchReader.Batch<String> batch : batches) {
-            BatchBuilder<String> builder = new BatchBuilder<>(
-                buffer,
+        try (RecordsBatchReader<String> reader = RecordsBatchReader.of(
+                0,
+                records,
                 serde,
-                compressionType,
-                batch.baseOffset(),
-                time.milliseconds(),
-                false,
-                batch.epoch(),
-                MAX_BATCH_BYTES
-            );
-
-            for (String record : batch.records()) {
-                builder.appendRecord(record, null);
-            }
-
-            builder.build();
+                BufferSupplier.NO_CACHING,
+                MAX_BATCH_BYTES,
+                ignore -> { },
+                true
+            )
+        ) {
+            assertTrue(reader.hasNext());
+            assertEquals(Collections.singletonList(expectedRecord), reader.next().controlRecords());
+            assertFalse(reader.hasNext());
         }
-
-        buffer.flip();
-        return MemoryRecords.readableRecords(buffer);
     }
 
     private void testBatchReader(
         long baseOffset,
         Records records,
-        List<BatchReader.Batch<String>> expectedBatches
+        List<TestBatch<String>> expectedBatches
     ) {
         BufferSupplier bufferSupplier = Mockito.mock(BufferSupplier.class);
         Set<ByteBuffer> allocatedBuffers = Collections.newSetFromMap(new IdentityHashMap<>());
@@ -134,25 +120,28 @@ class RecordsBatchReaderTest {
         @SuppressWarnings("unchecked")
         CloseListener<BatchReader<String>> closeListener = Mockito.mock(CloseListener.class);
 
-        RecordsBatchReader<String> reader = new RecordsBatchReader<>(
+        RecordsBatchReader<String> reader = RecordsBatchReader.of(
             baseOffset,
             records,
             serde,
             bufferSupplier,
-            closeListener
+            MAX_BATCH_BYTES,
+            closeListener,
+            true
         );
+        try {
+            for (TestBatch<String> batch : expectedBatches) {
+                assertTrue(reader.hasNext());
+                assertEquals(batch, TestBatch.from(reader.next()));
+            }
 
-        for (BatchReader.Batch<String> batch : expectedBatches) {
-            assertTrue(reader.hasNext());
-            assertEquals(batch, reader.next());
+            assertFalse(reader.hasNext());
+            assertThrows(NoSuchElementException.class, reader::next);
+        } finally {
+            reader.close();
         }
 
-        assertFalse(reader.hasNext());
-        assertThrows(NoSuchElementException.class, reader::next);
-
-        reader.close();
         Mockito.verify(closeListener).onClose(reader);
         assertEquals(Collections.emptySet(), allocatedBuffers);
     }
-
 }

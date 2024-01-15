@@ -18,16 +18,14 @@
 package kafka.server
 
 import java.util.Properties
-
-import kafka.log.LogConfig._
 import kafka.server.KafkaConfig.fromProps
 import kafka.server.QuotaType._
 import kafka.utils.TestUtils._
 import kafka.utils.CoreUtils._
 import kafka.utils.TestUtils
-import kafka.zk.ZooKeeperTestHarness
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.storage.internals.log.LogConfig
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, Test}
 
@@ -42,13 +40,13 @@ import scala.jdk.CollectionConverters._
   *
   * Anything over 100MB/s tends to fail as this is the non-throttled replication rate
   */
-class ReplicationQuotasTest extends ZooKeeperTestHarness {
+class ReplicationQuotasTest extends QuorumTestHarness {
   def percentError(percent: Int, value: Long): Long = Math.round(value * percent / 100.0)
 
   val msg100KB = new Array[Byte](100000)
-  var brokers: Seq[KafkaServer] = null
+  var brokers: Seq[KafkaServer] = _
   val topic = "topic1"
-  var producer: KafkaProducer[Array[Byte], Array[Byte]] = null
+  var producer: KafkaProducer[Array[Byte], Array[Byte]] = _
 
   @AfterEach
   override def tearDown(): Unit = {
@@ -109,12 +107,12 @@ class ReplicationQuotasTest extends ZooKeeperTestHarness {
 
     //Either throttle the six leaders or the two followers
     if (leaderThrottle)
-      adminZkClient.changeTopicConfig(topic, propsWith(LeaderReplicationThrottledReplicasProp, "0:100,1:101,2:102,3:103,4:104,5:105" ))
+      adminZkClient.changeTopicConfig(topic, propsWith(LogConfig.LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG, "0:100,1:101,2:102,3:103,4:104,5:105" ))
     else
-      adminZkClient.changeTopicConfig(topic, propsWith(FollowerReplicationThrottledReplicasProp, "0:106,1:106,2:106,3:107,4:107,5:107"))
+      adminZkClient.changeTopicConfig(topic, propsWith(LogConfig.FOLLOWER_REPLICATION_THROTTLED_REPLICAS_CONFIG, "0:106,1:106,2:106,3:107,4:107,5:107"))
 
     //Add data equally to each partition
-    producer = createProducer(getBrokerListStrFromServers(brokers), acks = 1)
+    producer = createProducer(plaintextBootstrapServers(brokers), acks = 1)
     (0 until msgCount).foreach { _ =>
       (0 to 7).foreach { partition =>
         producer.send(new ProducerRecord(topic, partition, null, msg))
@@ -189,7 +187,7 @@ class ReplicationQuotasTest extends ZooKeeperTestHarness {
 
     //Set the throttle to only limit leader
     adminZkClient.changeBrokerConfig(Seq(100), propsWith(DynamicConfig.Broker.LeaderReplicationThrottledRateProp, throttle.toString))
-    adminZkClient.changeTopicConfig(topic, propsWith(LeaderReplicationThrottledReplicasProp, "0:100"))
+    adminZkClient.changeTopicConfig(topic, propsWith(LogConfig.LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG, "0:100"))
 
     //Add data
     addData(msgCount, msg)
@@ -210,7 +208,7 @@ class ReplicationQuotasTest extends ZooKeeperTestHarness {
   }
 
   def addData(msgCount: Int, msg: Array[Byte]): Unit = {
-    producer = createProducer(getBrokerListStrFromServers(brokers), acks = 0)
+    producer = createProducer(plaintextBootstrapServers(brokers), acks = 0)
     (0 until msgCount).map(_ => producer.send(new ProducerRecord(topic, msg))).foreach(_.get)
     waitForOffsetsToMatch(msgCount, 0, 100)
   }

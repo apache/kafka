@@ -31,7 +31,7 @@ import static org.apache.kafka.streams.processor.internals.ProcessorContextUtils
  * Simple wrapper around a {@link SessionStore} to support writing
  * updates to a changelog
  */
-class ChangeLoggingSessionBytesStore
+public class ChangeLoggingSessionBytesStore
     extends WrappedStateStore<SessionStore<Bytes, byte[]>, byte[], byte[]>
     implements SessionStore<Bytes, byte[]> {
 
@@ -44,14 +44,14 @@ class ChangeLoggingSessionBytesStore
     @Deprecated
     @Override
     public void init(final ProcessorContext context, final StateStore root) {
-        super.init(context, root);
         this.context = asInternalProcessorContext(context);
+        super.init(context, root);
     }
 
     @Override
     public void init(final StateStoreContext context, final StateStore root) {
-        super.init(context, root);
         this.context = asInternalProcessorContext(context);
+        super.init(context, root);
     }
 
     @Override
@@ -81,18 +81,24 @@ class ChangeLoggingSessionBytesStore
     @Override
     public void remove(final Windowed<Bytes> sessionKey) {
         wrapped().remove(sessionKey);
-        context.logChange(name(), SessionKeySchema.toBinary(sessionKey), null, context.timestamp());
+        context.logChange(name(), SessionKeySchema.toBinary(sessionKey), null, context.timestamp(), wrapped().getPosition());
     }
 
     @Override
     public void put(final Windowed<Bytes> sessionKey, final byte[] aggregate) {
         wrapped().put(sessionKey, aggregate);
-        context.logChange(name(), SessionKeySchema.toBinary(sessionKey), aggregate, context.timestamp());
+        context.logChange(name(), SessionKeySchema.toBinary(sessionKey), aggregate, context.timestamp(), wrapped().getPosition());
     }
 
     @Override
-    public byte[] fetchSession(final Bytes key, final long startTime, final long endTime) {
-        return wrapped().fetchSession(key, startTime, endTime);
+    public byte[] fetchSession(final Bytes key, final long earliestSessionEndTime, final long latestSessionStartTime) {
+        return wrapped().fetchSession(key, earliestSessionEndTime, latestSessionStartTime);
+    }
+
+    @Override
+    public KeyValueIterator<Windowed<Bytes>, byte[]> findSessions(final long earliestSessionEndTime,
+                                                                  final long latestSessionEndTime) {
+        return wrapped().findSessions(earliestSessionEndTime, latestSessionEndTime);
     }
 
     @Override
@@ -106,12 +112,12 @@ class ChangeLoggingSessionBytesStore
     }
 
     @Override
-    public KeyValueIterator<Windowed<Bytes>, byte[]> backwardFetch(final Bytes from, final Bytes to) {
-        return wrapped().backwardFetch(from, to);
+    public KeyValueIterator<Windowed<Bytes>, byte[]> backwardFetch(final Bytes keyFrom, final Bytes keyTo) {
+        return wrapped().backwardFetch(keyFrom, keyTo);
     }
 
     @Override
-    public KeyValueIterator<Windowed<Bytes>, byte[]> fetch(final Bytes from, final Bytes to) {
-        return wrapped().fetch(from, to);
+    public KeyValueIterator<Windowed<Bytes>, byte[]> fetch(final Bytes keyFrom, final Bytes keyTo) {
+        return wrapped().fetch(keyFrom, keyTo);
     }
 }

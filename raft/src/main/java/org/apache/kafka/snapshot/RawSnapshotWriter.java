@@ -21,13 +21,10 @@ import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.UnalignedMemoryRecords;
 import org.apache.kafka.raft.OffsetAndEpoch;
 
-import java.io.Closeable;
-import java.io.IOException;
-
 /**
  * Interface for writing snapshot as a sequence of records.
  */
-public interface RawSnapshotWriter extends Closeable {
+public interface RawSnapshotWriter extends AutoCloseable {
     /**
      * Returns the end offset and epoch for the snapshot.
      */
@@ -35,10 +32,8 @@ public interface RawSnapshotWriter extends Closeable {
 
     /**
      * Returns the number of bytes for the snapshot.
-     *
-     * @throws IOException for any IO error while reading the size
      */
-    long sizeInBytes() throws IOException;
+    long sizeInBytes();
 
     /**
      * Fully appends the memory record set to the snapshot.
@@ -47,9 +42,8 @@ public interface RawSnapshotWriter extends Closeable {
      * snapshot.
      *
      * @param records the region to append
-     * @throws IOException for any IO error during append
      */
-    void append(MemoryRecords records) throws IOException;
+    void append(MemoryRecords records);
 
     /**
      * Fully appends the memory record set to the snapshot, the difference with {@link RawSnapshotWriter#append(MemoryRecords)}
@@ -59,9 +53,8 @@ public interface RawSnapshotWriter extends Closeable {
      * snapshot.
      *
      * @param records the region to append
-     * @throws IOException for any IO error during append
      */
-    void append(UnalignedMemoryRecords records) throws IOException;
+    void append(UnalignedMemoryRecords records);
 
     /**
      * Returns true if the snapshot has been frozen, otherwise false is returned.
@@ -72,17 +65,13 @@ public interface RawSnapshotWriter extends Closeable {
 
     /**
      * Freezes the snapshot and marking it as immutable.
-     *
-     * @throws IOException for any IO error during freezing
      */
-    void freeze() throws IOException;
+    void freeze();
 
     /**
      * Closes the snapshot writer.
      *
      * If close is called without first calling freeze the snapshot is aborted.
-     *
-     * @throws IOException for any IO error during close
      */
-    void close() throws IOException;
+    void close();
 }

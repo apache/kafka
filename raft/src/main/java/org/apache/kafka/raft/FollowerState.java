@@ -16,11 +16,12 @@
  */
 package org.apache.kafka.raft;
 
+import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
 import org.apache.kafka.snapshot.RawSnapshotWriter;
+import org.slf4j.Logger;
 
-import java.io.IOException;
 import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.OptionalLong;
@@ -39,13 +40,16 @@ public class FollowerState implements EpochState {
      */
     private Optional<RawSnapshotWriter> fetchingSnapshot;
 
+    private final Logger log;
+
     public FollowerState(
         Time time,
         int epoch,
         int leaderId,
         Set<Integer> voters,
         Optional<LogOffsetMetadata> highWatermark,
-        int fetchTimeoutMs
+        int fetchTimeoutMs,
+        LogContext logContext
     ) {
         this.fetchTimeoutMs = fetchTimeoutMs;
         this.epoch = epoch;
@@ -54,6 +58,7 @@ public class FollowerState implements EpochState {
         this.fetchTimer = time.timer(fetchTimeoutMs);
         this.highWatermark = highWatermark;
         this.fetchingSnapshot = Optional.empty();
+        this.log = logContext.logger(FollowerState.class);
     }
 
     @Override
@@ -100,26 +105,41 @@ public class FollowerState implements EpochState {
         fetchTimer.reset(timeoutMs);
     }
 
-    public boolean updateHighWatermark(OptionalLong highWatermark) {
-        if (!highWatermark.isPresent() && this.highWatermark.isPresent())
-            throw new IllegalArgumentException("Attempt to overwrite current high watermark " + this.highWatermark +
-                " with unknown value");
-
-        if (this.highWatermark.isPresent()) {
-            long previousHighWatermark = this.highWatermark.get().offset;
-            long updatedHighWatermark = highWatermark.getAsLong();
-
-            if (updatedHighWatermark < 0)
-                throw new IllegalArgumentException("Illegal negative high watermark update");
-            if (previousHighWatermark > updatedHighWatermark)
-                throw new IllegalArgumentException("Non-monotonic update of high watermark attempted");
-            if (previousHighWatermark == updatedHighWatermark)
-                return false;
+    public boolean updateHighWatermark(OptionalLong newHighWatermark) {
+        if (!newHighWatermark.isPresent() && highWatermark.isPresent()) {
+            throw new IllegalArgumentException(
+                String.format("Attempt to overwrite current high watermark %s with unknown value", highWatermark)
+            );
         }
 
-        this.highWatermark = highWatermark.isPresent() ?
-            Optional.of(new LogOffsetMetadata(highWatermark.getAsLong())) :
+        if (highWatermark.isPresent()) {
+            long previousHighWatermark = highWatermark.get().offset;
+            long updatedHighWatermark = newHighWatermark.getAsLong();
+
+            if (updatedHighWatermark < 0) {
+                throw new IllegalArgumentException(
+                    String.format("Illegal negative (%d) high watermark update", updatedHighWatermark)
+                );
+            } else if (previousHighWatermark > updatedHighWatermark) {
+                throw new IllegalArgumentException(
+                    String.format(
+                        "Non-monotonic update of high watermark from %d to %d",
+                        previousHighWatermark,
+                        updatedHighWatermark
+                    )
+                );
+            } else if (previousHighWatermark == updatedHighWatermark) {
+                return false;
+            }
+        }
+
+        Optional<LogOffsetMetadata> oldHighWatermark = highWatermark;
+        highWatermark = newHighWatermark.isPresent() ?
+            Optional.of(new LogOffsetMetadata(newHighWatermark.getAsLong())) :
             Optional.empty();
+
+        logHighWatermarkUpdate(oldHighWatermark, highWatermark);
+
         return true;
     }
 
@@ -132,11 +152,16 @@ public class FollowerState implements EpochState {
         return fetchingSnapshot;
     }
 
-    public void setFetchingSnapshot(Optional<RawSnapshotWriter> fetchingSnapshot) throws IOException {
-        if (fetchingSnapshot.isPresent()) {
-            fetchingSnapshot.get().close();
-        }
-        this.fetchingSnapshot = fetchingSnapshot;
+    public void setFetchingSnapshot(Optional<RawSnapshotWriter> newSnapshot) {
+        fetchingSnapshot.ifPresent(RawSnapshotWriter::close);
+        fetchingSnapshot = newSnapshot;
+    }
+
+    @Override
+    public boolean canGrantVote(int candidateId, boolean isLogUpToDate) {
+        log.debug("Rejecting vote request from candidate {} since we already have a leader {} in epoch {}",
+                candidateId, leaderId(), epoch);
+        return false;
     }
 
     @Override
@@ -146,13 +171,35 @@ public class FollowerState implements EpochState {
             ", epoch=" + epoch +
             ", leaderId=" + leaderId +
             ", voters=" + voters +
+            ", highWatermark=" + highWatermark +
+            ", fetchingSnapshot=" + fetchingSnapshot +
             ')';
     }
 
     @Override
-    public void close() throws IOException {
-        if (fetchingSnapshot.isPresent()) {
-            fetchingSnapshot.get().close();
+    public void close() {
+        fetchingSnapshot.ifPresent(RawSnapshotWriter::close);
+    }
+
+    private void logHighWatermarkUpdate(
+        Optional<LogOffsetMetadata> oldHighWatermark,
+        Optional<LogOffsetMetadata> newHighWatermark
+    ) {
+        if (!oldHighWatermark.equals(newHighWatermark)) {
+            if (oldHighWatermark.isPresent()) {
+                log.trace(
+                    "High watermark set to {} from {} for epoch {}",
+                    newHighWatermark,
+                    oldHighWatermark.get(),
+                    epoch
+                );
+            } else {
+                log.info(
+                    "High watermark set to {} for the first time for epoch {}",
+                    newHighWatermark,
+                    epoch
+                );
+            }
         }
     }
 }

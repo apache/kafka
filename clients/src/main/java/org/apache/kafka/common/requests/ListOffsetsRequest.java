@@ -40,6 +40,12 @@ import org.apache.kafka.common.protocol.Errors;
 public class ListOffsetsRequest extends AbstractRequest {
     public static final long EARLIEST_TIMESTAMP = -2L;
     public static final long LATEST_TIMESTAMP = -1L;
+    public static final long MAX_TIMESTAMP = -3L;
+
+    /**
+     * It is used to represent the earliest message stored in the local log which is also called the local-log-start-offset
+     */
+    public static final long EARLIEST_LOCAL_TIMESTAMP = -4L;
 
     public static final int CONSUMER_REPLICA_ID = -1;
     public static final int DEBUGGING_REPLICA_ID = -2;
@@ -54,9 +60,11 @@ public class ListOffsetsRequest extends AbstractRequest {
             return new Builder((short) 0, allowedVersion, replicaId, IsolationLevel.READ_UNCOMMITTED);
         }
 
-        public static Builder forConsumer(boolean requireTimestamp, IsolationLevel isolationLevel) {
+        public static Builder forConsumer(boolean requireTimestamp, IsolationLevel isolationLevel, boolean requireMaxTimestamp) {
             short minVersion = 0;
-            if (isolationLevel == IsolationLevel.READ_COMMITTED)
+            if (requireMaxTimestamp)
+                minVersion = 7;
+            else if (isolationLevel == IsolationLevel.READ_COMMITTED)
                 minVersion = 2;
             else if (requireTimestamp)
                 minVersion = 1;

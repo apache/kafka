@@ -213,7 +213,6 @@ public class PushHttpMetricsReporter implements MetricsReporter {
                 }
             } catch (Throwable t) {
                 log.error("Error reporting metrics", t);
-                throw new KafkaException("Failed to report current metrics", t);
             } finally {
                 if (connection != null) {
                     connection.disconnect();

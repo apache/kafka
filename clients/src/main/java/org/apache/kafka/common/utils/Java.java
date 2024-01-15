@@ -44,6 +44,10 @@ public final class Java {
         return System.getProperty("java.vendor").contains("IBM");
     }
 
+    public static boolean isIbmJdkSemeru() {
+        return isIbmJdk() && System.getProperty("java.runtime.name", "").contains("Semeru");
+    }
+
     // Package private for testing
     static class Version {
         public final int majorVersion;

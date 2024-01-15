@@ -154,7 +154,7 @@ public class ProtocolSerializationTest {
                 if (!f.def.type.isNullable())
                     fail("Should not allow serialization of null value.");
             } catch (SchemaException e) {
-                assertFalse(f.def.type.isNullable(), f.toString() + " should not be nullable");
+                assertFalse(f.def.type.isNullable(), f + " should not be nullable");
             } finally {
                 this.struct.set(f, o);
             }
@@ -218,6 +218,28 @@ public class ProtocolSerializationTest {
         } catch (SchemaException e) {
             // Expected exception
         }
+    }
+
+    @Test
+    public void testReadTaggedFieldsSizeTooLarge() {
+        int tag = 1;
+        Type type = TaggedFields.of(tag, new Field("field", Type.NULLABLE_STRING));
+        int size = 10;
+        ByteBuffer buffer = ByteBuffer.allocate(size);
+        int numTaggedFields = 1;
+        // write the number of tagged fields
+        ByteUtils.writeUnsignedVarint(numTaggedFields, buffer);
+        // write the tag of the first tagged fields
+        ByteUtils.writeUnsignedVarint(tag, buffer);
+        // write the size of tagged fields for this tag, using a large number for testing
+        ByteUtils.writeUnsignedVarint(Integer.MAX_VALUE, buffer);
+        int expectedRemaining = buffer.remaining();
+        buffer.rewind();
+
+        // should throw SchemaException while reading the buffer, instead of OOM
+        Throwable e = assertThrows(SchemaException.class, () -> type.read(buffer));
+        assertEquals("Error reading field of size " + Integer.MAX_VALUE + ", only " + expectedRemaining + " bytes available",
+            e.getMessage());
     }
 
     @Test
@@ -433,5 +455,22 @@ public class ProtocolSerializationTest {
         buffer.flip();
         SchemaException e = assertThrows(SchemaException.class, () -> newSchema.read(buffer));
         assertTrue(e.getMessage().contains("Missing value for field 'field2' which has no default value"));
+    }
+
+    @Test
+    public void testReadBytesBeyondItsSize() {
+        Type[] types = new Type[]{
+            Type.BYTES,
+            Type.COMPACT_BYTES,
+            Type.NULLABLE_BYTES,
+            Type.COMPACT_NULLABLE_BYTES
+        };
+        for (Type type : types) {
+            ByteBuffer buffer = ByteBuffer.allocate(20);
+            type.write(buffer, ByteBuffer.allocate(4));
+            buffer.rewind();
+            ByteBuffer bytes = (ByteBuffer) type.read(buffer);
+            assertThrows(IllegalArgumentException.class, () -> bytes.limit(bytes.limit() + 1));
+        }
     }
 }

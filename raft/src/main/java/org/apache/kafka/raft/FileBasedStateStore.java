@@ -20,6 +20,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.fasterxml.jackson.databind.node.ShortNode;
+import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.raft.generated.QuorumStateData;
 import org.apache.kafka.raft.generated.QuorumStateData.Voter;
@@ -29,6 +30,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
+import java.io.UncheckedIOException;
 import java.io.EOFException;
 import java.io.File;
 import java.io.FileOutputStream;
@@ -62,13 +64,14 @@ public class FileBasedStateStore implements QuorumStateStore {
     private final File stateFile;
 
     static final String DATA_VERSION = "data_version";
+    static final short HIGHEST_SUPPORTED_VERSION = 0;
 
     public FileBasedStateStore(final File stateFile) {
         this.stateFile = stateFile;
     }
 
-    private QuorumStateData readStateFromFile(File file) throws IOException {
-        try (final BufferedReader reader = Files.newBufferedReader(file.toPath())) {
+    private QuorumStateData readStateFromFile(File file) {
+        try (final BufferedReader reader = Files.newBufferedReader(file.toPath(), StandardCharsets.UTF_8)) {
             final String line = reader.readLine();
             if (line == null) {
                 throw new EOFException("File ended prematurely.");
@@ -89,8 +92,15 @@ public class FileBasedStateStore implements QuorumStateStore {
                     " does not have " + DATA_VERSION + " field");
             }
 
+            if (dataVersionNode.asInt() != 0) {
+                throw new UnsupportedVersionException("Unknown data version of " + dataVersionNode.toString());
+            }
+
             final short dataVersion = dataVersionNode.shortValue();
             return QuorumStateDataJsonConverter.read(dataObject, dataVersion);
+        } catch (IOException e) {
+            throw new UncheckedIOException(
+                String.format("Error while reading the Quorum status from the file %s", file), e);
         }
     }
 
@@ -98,7 +108,7 @@ public class FileBasedStateStore implements QuorumStateStore {
      * Reads the election state from local file.
      */
     @Override
-    public ElectionState readElectionState() throws IOException {
+    public ElectionState readElectionState() {
         if (!stateFile.exists()) {
             return null;
         }
@@ -115,7 +125,7 @@ public class FileBasedStateStore implements QuorumStateStore {
     }
 
     @Override
-    public void writeElectionState(ElectionState latest) throws IOException {
+    public void writeElectionState(ElectionState latest) {
         QuorumStateData data = new QuorumStateData()
             .setLeaderEpoch(latest.epoch)
             .setVotedId(latest.hasVoted() ? latest.votedId() : NOT_VOTED)
@@ -129,42 +139,59 @@ public class FileBasedStateStore implements QuorumStateStore {
             voterId -> new Voter().setVoterId(voterId)).collect(Collectors.toList());
     }
 
-    private void writeElectionStateToFile(final File stateFile, QuorumStateData state) throws IOException  {
+    private void writeElectionStateToFile(final File stateFile, QuorumStateData state) {
         final File temp = new File(stateFile.getAbsolutePath() + ".tmp");
-        Files.deleteIfExists(temp.toPath());
+        deleteFileIfExists(temp);
 
         log.trace("Writing tmp quorum state {}", temp.getAbsolutePath());
 
-        try (final FileOutputStream fileOutputStream = new FileOutputStream(temp);
-             final BufferedWriter writer = new BufferedWriter(
-                 new OutputStreamWriter(fileOutputStream, StandardCharsets.UTF_8))) {
-            short version = state.highestSupportedVersion();
-
-            ObjectNode jsonState = (ObjectNode) QuorumStateDataJsonConverter.write(state, version);
-            jsonState.set(DATA_VERSION, new ShortNode(version));
-            writer.write(jsonState.toString());
-            writer.flush();
-            fileOutputStream.getFD().sync();
+        try {
+            try (final FileOutputStream fileOutputStream = new FileOutputStream(temp);
+                 final BufferedWriter writer = new BufferedWriter(
+                     new OutputStreamWriter(fileOutputStream, StandardCharsets.UTF_8)
+                 )
+            ) {
+                ObjectNode jsonState = (ObjectNode) QuorumStateDataJsonConverter.write(state, HIGHEST_SUPPORTED_VERSION);
+                jsonState.set(DATA_VERSION, new ShortNode(HIGHEST_SUPPORTED_VERSION));
+                writer.write(jsonState.toString());
+                writer.flush();
+                fileOutputStream.getFD().sync();
+            }
             Utils.atomicMoveWithFallback(temp.toPath(), stateFile.toPath());
+        } catch (IOException e) {
+            throw new UncheckedIOException(
+                String.format(
+                    "Error while writing the Quorum status from the file %s",
+                    stateFile.getAbsolutePath()
+                ),
+                e
+            );
         } finally {
             // cleanup the temp file when the write finishes (either success or fail).
-            Files.deleteIfExists(temp.toPath());
+            deleteFileIfExists(temp);
         }
     }
 
     /**
      * Clear state store by deleting the local quorum state file
-     *
-     * @throws IOException if there is any IO exception during delete
      */
     @Override
-    public void clear() throws IOException {
-        Files.deleteIfExists(stateFile.toPath());
-        Files.deleteIfExists(new File(stateFile.getAbsolutePath() + ".tmp").toPath());
+    public void clear() {
+        deleteFileIfExists(stateFile);
+        deleteFileIfExists(new File(stateFile.getAbsolutePath() + ".tmp"));
     }
 
     @Override
     public String toString() {
         return "Quorum state filepath: " + stateFile.getAbsolutePath();
+    }
+
+    private void deleteFileIfExists(File file) {
+        try {
+            Files.deleteIfExists(file.toPath());
+        } catch (IOException e) {
+            throw new UncheckedIOException(
+                String.format("Error while deleting file %s", file.getAbsoluteFile()), e);
+        }
     }
 }
