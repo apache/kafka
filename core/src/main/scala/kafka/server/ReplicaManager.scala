@@ -2847,10 +2847,8 @@ class ReplicaManager(val config: KafkaConfig,
       }
 
       if (metadataVersion.isDirectoryAssignmentSupported()) {
-        println("We are here");
+        // We only want to update the directoryIds if DirectoryAssignment is supported!
         localChanges.directoryIds.forEach(maybeUpdateTopicAssignment)
-      } else {
-        println("Not updating directoryIds");
       }
     }
   }
