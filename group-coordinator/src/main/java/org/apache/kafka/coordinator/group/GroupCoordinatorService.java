@@ -578,12 +578,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
             futures.add(future);
         });
 
-        final CompletableFuture<Void> allFutures = CompletableFuture.allOf(futures.toArray(new CompletableFuture[0]));
-        return allFutures.thenApply(v -> {
-            final List<ConsumerGroupDescribeResponseData.DescribedGroup> res = new ArrayList<>();
-            futures.forEach(future -> res.addAll(future.join()));
-            return res;
-        });
+        return FutureUtils.combineFutures(futures, List::addAll);
     }
 
     /**
@@ -636,12 +631,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
             futures.add(future);
         });
 
-        final CompletableFuture<Void> allFutures = CompletableFuture.allOf(futures.toArray(new CompletableFuture[0]));
-        return allFutures.thenApply(v -> {
-            final List<DescribeGroupsResponseData.DescribedGroup> res = new ArrayList<>();
-            futures.forEach(future -> res.addAll(future.join()));
-            return res;
-        });
+        return FutureUtils.combineFutures(futures, List::addAll);
     }
 
     /**
