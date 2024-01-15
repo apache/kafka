@@ -1340,7 +1340,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
 
   // TODO: enable this test for the consumer group protocol when consumer interceptors are supported
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersClassicGroupProtocolOnly"))
   def testAutoCommitIntercept(quorum: String, groupProtocol: String): Unit = {
     val topic2 = "topic2"
     createTopic(topic2, 2, brokerCount)
