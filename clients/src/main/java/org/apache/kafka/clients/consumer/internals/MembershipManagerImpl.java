@@ -833,7 +833,7 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
         // the current reconciliation is in process. Note this is using the rebalance timeout as
         // it is the limit enforced by the broker to complete the reconciliation process.
         commitResult = commitRequestManager.maybeAutoCommitAllConsumedNow(
-            Optional.of((long) rebalanceTimeoutMs),
+            Optional.of(getExpirationTimeForTimeout(rebalanceTimeoutMs)),
             true);
 
         // Execute commit -> onPartitionsRevoked -> onPartitionsAssigned.
@@ -852,6 +852,14 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
         });
 
         return true;
+    }
+
+    long getExpirationTimeForTimeout(final long timeoutMs) {
+        long expiration = System.currentTimeMillis() + timeoutMs;
+        if (expiration < 0) {
+            return Long.MAX_VALUE;
+        }
+        return expiration;
     }
 
     /**
