@@ -299,7 +299,7 @@ public class HeartbeatRequestManager implements RequestManager {
             heartbeatRequestState.updateHeartbeatIntervalMs(response.data().heartbeatIntervalMs());
             heartbeatRequestState.onSuccessfulAttempt(currentTimeMs);
             heartbeatRequestState.resetTimer();
-            membershipManager.onHeartbeatResponseReceived(response.data());
+            membershipManager.onHeartbeatResponseReceived(response.data(), currentTimeMs);
             maybeSendGroupMetadataUpdateEvent();
             return;
         }

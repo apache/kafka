@@ -72,8 +72,9 @@ public interface MembershipManager {
      * Update member info and transition member state based on a successful heartbeat response.
      *
      * @param response Heartbeat response to extract member info and errors from.
+     * @param currentTimeMs The time the response was received
      */
-    void onHeartbeatResponseReceived(ConsumerGroupHeartbeatResponseData response);
+    void onHeartbeatResponseReceived(ConsumerGroupHeartbeatResponseData response, long currentTimeMs);
 
     /**
      * Update state when a heartbeat is sent out. This will transition out of the states that end

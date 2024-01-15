@@ -275,6 +275,8 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
      */
     private final BackgroundEventHandler backgroundEventHandler;
 
+    private long lastNewAssignmentReceived;
+
     public MembershipManagerImpl(String groupId,
                                  Optional<String> groupInstanceId,
                                  int rebalanceTimeoutMs,
@@ -301,6 +303,7 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
         this.clientTelemetryReporter = clientTelemetryReporter;
         this.rebalanceTimeoutMs = rebalanceTimeoutMs;
         this.backgroundEventHandler = backgroundEventHandler;
+        this.lastNewAssignmentReceived = 0;
     }
 
     /**
@@ -359,7 +362,7 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
      * {@inheritDoc}
      */
     @Override
-    public void onHeartbeatResponseReceived(ConsumerGroupHeartbeatResponseData response) {
+    public void onHeartbeatResponseReceived(ConsumerGroupHeartbeatResponseData response, long currentTimeMs) {
         if (response.errorCode() != Errors.NONE.code()) {
             String errorMessage = String.format(
                     "Unexpected error in Heartbeat response. Expected no error, but received: %s",
@@ -390,7 +393,7 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
                     assignment, state);
                 return;
             }
-            processAssignmentReceived(assignment);
+            processAssignmentReceived(assignment, currentTimeMs);
 
         } else if (allPendingAssignmentsReconciled()) {
             transitionTo(MemberState.STABLE);
@@ -404,8 +407,9 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
      * metadata is discovered.
      *
      * @param assignment Assignment received from the broker.
+     * @param currentTimeMs The time the assignment was received from the broker
      */
-    private void processAssignmentReceived(ConsumerGroupHeartbeatResponseData.Assignment assignment) {
+    private void processAssignmentReceived(ConsumerGroupHeartbeatResponseData.Assignment assignment, long currentTimeMs) {
         replaceUnresolvedAssignmentWithNewAssignment(assignment);
         if (!assignmentUnresolved.equals(currentAssignment)) {
             // Transition the member to RECONCILING when receiving a new target
@@ -414,6 +418,7 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
             transitionTo(MemberState.RECONCILING);
             assignmentReadyToReconcile.clear();
             resolveMetadataForUnresolvedAssignment();
+            lastNewAssignmentReceived = currentTimeMs;
             reconcile();
         } else {
             // Same assignment received, nothing to reconcile.
@@ -833,7 +838,7 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
         // the current reconciliation is in process. Note this is using the rebalance timeout as
         // it is the limit enforced by the broker to complete the reconciliation process.
         commitResult = commitRequestManager.maybeAutoCommitAllConsumedNow(
-            Optional.of((long) rebalanceTimeoutMs),
+            Optional.of(lastNewAssignmentReceived + rebalanceTimeoutMs),
             true);
 
         // Execute commit -> onPartitionsRevoked -> onPartitionsAssigned.
