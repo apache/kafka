@@ -1236,6 +1236,8 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         closeTimer.update();
         if (applicationEventHandler != null)
             closeQuietly(() -> applicationEventHandler.close(Duration.ofMillis(closeTimer.remainingMs())), "Failed shutting down network thread", firstException);
+        swallow(log, Level.ERROR, "Failed invoking asynchronous commit callback.", this::maybeInvokeCommitCallbacks,
+            firstException);
         closeTimer.update();
         closeQuietly(interceptors, "consumer interceptors", firstException);
         closeQuietly(kafkaConsumerMetrics, "kafka consumer metrics", firstException);
@@ -1259,7 +1261,6 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
      * 1. autocommit offsets
      * 2. revoke all partitions
      * 3. if partition revocation completes successfully, send leave group
-     * 4. invoke all async commit callbacks if there is any
      */
     void prepareShutdown(final Timer timer, final AtomicReference<Throwable> firstException) {
         if (!groupMetadata.isPresent())
@@ -1272,8 +1273,6 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                 applicationEventHandler.addAndGet(new LeaveOnCloseApplicationEvent(), timer);
             },
             "Failed to send leaveGroup heartbeat with a timeout(ms)=" + timer.timeoutMs(), firstException);
-        swallow(log, Level.ERROR, "Failed invoking asynchronous commit callback.", this::maybeInvokeCommitCallbacks,
-            firstException);
     }
 
     // Visible for testing
