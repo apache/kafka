@@ -38,6 +38,7 @@ import org.apache.kafka.common.requests.ConsumerGroupHeartbeatRequest;
 import org.apache.kafka.common.telemetry.internals.ClientTelemetryProvider;
 import org.apache.kafka.common.telemetry.internals.ClientTelemetryReporter;
 import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 
@@ -275,6 +276,8 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
      */
     private final BackgroundEventHandler backgroundEventHandler;
 
+    private final Time time;
+
     public MembershipManagerImpl(String groupId,
                                  Optional<String> groupInstanceId,
                                  int rebalanceTimeoutMs,
@@ -284,7 +287,8 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
                                  ConsumerMetadata metadata,
                                  LogContext logContext,
                                  Optional<ClientTelemetryReporter> clientTelemetryReporter,
-                                 BackgroundEventHandler backgroundEventHandler) {
+                                 BackgroundEventHandler backgroundEventHandler,
+                                 Time time) {
         this.groupId = groupId;
         this.state = MemberState.UNSUBSCRIBED;
         this.serverAssignor = serverAssignor;
@@ -301,6 +305,7 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
         this.clientTelemetryReporter = clientTelemetryReporter;
         this.rebalanceTimeoutMs = rebalanceTimeoutMs;
         this.backgroundEventHandler = backgroundEventHandler;
+        this.time = time;
     }
 
     /**
@@ -855,7 +860,7 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
     }
 
     long getExpirationTimeForTimeout(final long timeoutMs) {
-        long expiration = System.currentTimeMillis() + timeoutMs;
+        long expiration = time.milliseconds() + timeoutMs;
         if (expiration < 0) {
             return Long.MAX_VALUE;
         }
