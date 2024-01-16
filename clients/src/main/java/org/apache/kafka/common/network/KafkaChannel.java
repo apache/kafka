@@ -370,7 +370,7 @@ public class KafkaChannel implements AutoCloseable {
     }
 
     /**
-     * Returns the port to which this channel's socket is connected or `null` if the socket has never been connected.
+     * Returns the port to which this channel's socket is connected or 0 if the socket has never been connected.
      *
      * If the socket was connected prior to being closed, then this method will continue to return the
      * connected port number after the socket is closed.
