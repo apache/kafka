@@ -82,7 +82,6 @@
     <allow pkg="kafka.log" />
     <allow pkg="kafka.cluster" />
     <allow pkg="kafka.server" />
-    <allow pkg="org.apache.kafka.server" />
     <allow pkg="org.mockito" />
     <allow pkg="org.apache.kafka.test" />
   </subpackage>

@@ -30,9 +30,8 @@ import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.metrics.stats.{Avg, CumulativeSum, Rate}
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.utils.{Sanitizer, Time}
-import org.apache.kafka.server.config.ConfigEntityName
+import org.apache.kafka.server.config.{ConfigEntityName, ClientQuotaManagerConfig}
 import org.apache.kafka.server.quota.{ClientQuotaCallback, ClientQuotaEntity, ClientQuotaType}
-import org.apache.kafka.server.config.ClientQuotaManagerConfig
 import org.apache.kafka.server.util.ShutdownableThread
 
 import scala.jdk.CollectionConverters._
