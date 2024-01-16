@@ -33,6 +33,8 @@ import java.util.OptionalInt;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import static org.apache.kafka.common.protocol.Errors.UNKNOWN_TOPIC_ID;
+
 /**
  * ConsumerGroupMember contains all the information related to a member
  * within a consumer group. This class is immutable and is fully backed
@@ -552,15 +554,19 @@ public class ConsumerGroupMember {
      *
      * @return The ConsumerGroupMember mapped as ConsumerGroupDescribeResponseData.Member.
      */
-    public ConsumerGroupDescribeResponseData.Member asConsumerGroupDescribeMember(Assignment targetAssignment) {
+    public ConsumerGroupDescribeResponseData.Member asConsumerGroupDescribeMember(
+        Assignment targetAssignment,
+        Map<String, TopicMetadata> subscriptionMetadata
+    ) {
         return new ConsumerGroupDescribeResponseData.Member()
             .setMemberEpoch(memberEpoch)
             .setMemberId(memberId)
             .setAssignment(new ConsumerGroupDescribeResponseData.Assignment()
-                .setTopicPartitions(topicPartitionsFromMap(assignedPartitions)))
+                .setTopicPartitions(topicPartitionsFromMap(assignedPartitions, subscriptionMetadata)))
             .setTargetAssignment(new ConsumerGroupDescribeResponseData.Assignment()
                 .setTopicPartitions(topicPartitionsFromMap(
-                    targetAssignment != null ? targetAssignment.partitions() : Collections.emptyMap()
+                    targetAssignment != null ? targetAssignment.partitions() : Collections.emptyMap(),
+                    subscriptionMetadata
                 )))
             .setClientHost(clientHost)
             .setClientId(clientId)
@@ -571,13 +577,27 @@ public class ConsumerGroupMember {
     }
 
     private static List<ConsumerGroupDescribeResponseData.TopicPartitions> topicPartitionsFromMap(
-        Map<Uuid, Set<Integer>> partitions
+        Map<Uuid, Set<Integer>> partitions,
+        Map<String, TopicMetadata> subscriptionMetadata
     ) {
         return partitions.entrySet().stream().map(
             item -> new ConsumerGroupDescribeResponseData.TopicPartitions()
                 .setTopicId(item.getKey())
+                .setTopicName(lookupTopicNameById(item.getKey(), subscriptionMetadata))
                 .setPartitions(new ArrayList<>(item.getValue()))
         ).collect(Collectors.toList());
+    }
+
+    private static String lookupTopicNameById(
+        Uuid topicId,
+        Map<String, TopicMetadata> subscriptionMetadata
+    ) {
+        for (TopicMetadata topicMetadata : subscriptionMetadata.values()) {
+            if (topicId.equals(topicMetadata.id())) {
+                return topicMetadata.name();
+            }
+        }
+        throw UNKNOWN_TOPIC_ID.exception("The subscription metadata does not contain " + topicId);
     }
 
     @Override

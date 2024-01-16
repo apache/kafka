@@ -17,6 +17,7 @@
 package org.apache.kafka.coordinator.group.consumer;
 
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.errors.UnknownTopicIdException;
 import org.apache.kafka.common.message.ConsumerGroupDescribeResponseData;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupCurrentMemberAssignmentValue;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupMemberMetadataValue;
@@ -38,6 +39,7 @@ import java.util.stream.Collectors;
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkAssignment;
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkTopicAssignment;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class ConsumerGroupMemberTest {
 
@@ -318,6 +320,7 @@ public class ConsumerGroupMemberTest {
         Uuid topicId1 = Uuid.randomUuid();
         Uuid topicId2 = Uuid.randomUuid();
         Uuid topicId3 = Uuid.randomUuid();
+        Uuid topicId4 = Uuid.randomUuid();
         List<Integer> assignedPartitions = Arrays.asList(0, 1, 2);
         int epoch = 10;
         ConsumerGroupCurrentMemberAssignmentValue record = new ConsumerGroupCurrentMemberAssignmentValue()
@@ -341,7 +344,7 @@ public class ConsumerGroupMemberTest {
         List<String> subscribedTopicNames = Arrays.asList("topic1", "topic2");
         String subscribedTopicRegex = "topic.*";
         Map<Uuid, Set<Integer>> assignmentMap = new HashMap<>();
-        assignmentMap.put(Uuid.randomUuid(), new HashSet<>());
+        assignmentMap.put(topicId4, new HashSet<>(assignedPartitions));
         Assignment targetAssignment = new Assignment(assignmentMap);
         ConsumerGroupMember member = new ConsumerGroupMember.Builder(memberId)
             .updateWith(record)
@@ -353,7 +356,10 @@ public class ConsumerGroupMemberTest {
             .setSubscribedTopicRegex(subscribedTopicRegex)
             .build();
 
-        ConsumerGroupDescribeResponseData.Member actual = member.asConsumerGroupDescribeMember(targetAssignment);
+        Map<String, TopicMetadata> subscriptionMetadata = new HashMap<>();
+        subscriptionMetadata.put("topic1", new TopicMetadata(topicId1, "topic1", 1, new HashMap<>()));
+        subscriptionMetadata.put("topic4", new TopicMetadata(topicId4, "topic4", 1, new HashMap<>()));
+        ConsumerGroupDescribeResponseData.Member actual = member.asConsumerGroupDescribeMember(targetAssignment, subscriptionMetadata);
         ConsumerGroupDescribeResponseData.Member expected = new ConsumerGroupDescribeResponseData.Member()
             .setMemberId(memberId)
             .setMemberEpoch(epoch)
@@ -365,13 +371,18 @@ public class ConsumerGroupMemberTest {
             .setSubscribedTopicRegex(subscribedTopicRegex)
             .setAssignment(
                 new ConsumerGroupDescribeResponseData.Assignment()
-                    .setTopicPartitions(Collections.singletonList(new ConsumerGroupDescribeResponseData.TopicPartitions().setTopicId(topicId1).setPartitions(assignedPartitions)))
+                    .setTopicPartitions(Collections.singletonList(new ConsumerGroupDescribeResponseData.TopicPartitions()
+                        .setTopicId(topicId1)
+                        .setTopicName("topic1")
+                        .setPartitions(assignedPartitions)
+                    ))
             )
             .setTargetAssignment(
                 new ConsumerGroupDescribeResponseData.Assignment()
                     .setTopicPartitions(targetAssignment.partitions().entrySet().stream().map(
                         item -> new ConsumerGroupDescribeResponseData.TopicPartitions()
                             .setTopicId(item.getKey())
+                            .setTopicName("topic4")
                             .setPartitions(new ArrayList<>(item.getValue()))
                     ).collect(Collectors.toList()))
             );
@@ -384,8 +395,23 @@ public class ConsumerGroupMemberTest {
         ConsumerGroupMember member = new ConsumerGroupMember.Builder(Uuid.randomUuid().toString())
             .build();
 
-        ConsumerGroupDescribeResponseData.Member consumerGroupDescribeMember = member.asConsumerGroupDescribeMember(null);
+        ConsumerGroupDescribeResponseData.Member consumerGroupDescribeMember = member.asConsumerGroupDescribeMember(null, new HashMap<>());
 
         assertEquals(new ConsumerGroupDescribeResponseData.Assignment(), consumerGroupDescribeMember.targetAssignment());
+    }
+
+    @Test
+    public void testAsConsumerGroupDescribeWithTopicNameNotFound() {
+        ConsumerGroupCurrentMemberAssignmentValue record = new ConsumerGroupCurrentMemberAssignmentValue()
+            .setAssignedPartitions(Collections.singletonList(new ConsumerGroupCurrentMemberAssignmentValue.TopicPartitions()
+                .setTopicId(Uuid.randomUuid())
+                .setPartitions(Arrays.asList(0, 1, 2))));
+        ConsumerGroupMember member = new ConsumerGroupMember.Builder(Uuid.randomUuid().toString())
+            .updateWith(record)
+            .build();
+
+        Map<String, TopicMetadata> subscriptionMetadata = new HashMap<>();
+        subscriptionMetadata.put("foo", new TopicMetadata(Uuid.randomUuid(), "foo", 1, new HashMap<>()));
+        assertThrows(UnknownTopicIdException.class, () -> member.asConsumerGroupDescribeMember(null, subscriptionMetadata));
     }
 }

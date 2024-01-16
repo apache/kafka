@@ -962,7 +962,10 @@ public class ConsumerGroup implements Group {
             .setAssignmentEpoch(targetAssignmentEpoch.get(committedOffset));
         members.entrySet(committedOffset).forEach(
             entry -> describedGroup.members().add(
-                entry.getValue().asConsumerGroupDescribeMember(targetAssignment.get(entry.getValue().memberId(), committedOffset))
+                entry.getValue().asConsumerGroupDescribeMember(
+                    targetAssignment.get(entry.getValue().memberId(), committedOffset),
+                    subscriptionMetadata()
+                )
             )
         );
         return describedGroup;

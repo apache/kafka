@@ -9690,7 +9690,7 @@ public class GroupMetadataManagerTest {
                 .setGroupEpoch(epoch)
                 .setGroupId(consumerGroupIds.get(1))
                 .setMembers(Arrays.asList(
-                    memberBuilder.build().asConsumerGroupDescribeMember(new Assignment(Collections.emptyMap()))
+                    memberBuilder.build().asConsumerGroupDescribeMember(new Assignment(Collections.emptyMap()), new HashMap<>())
                 ))
                 .setGroupState("assigning")
                 .setAssignorName("assignorName")
@@ -9739,9 +9739,15 @@ public class GroupMetadataManagerTest {
         context.replay(RecordHelpers.newGroupEpochRecord(consumerGroupId, epoch + 1));
 
         Map<Uuid, Set<Integer>> assignmentMap = new HashMap<>();
-        assignmentMap.put(Uuid.randomUuid(), Collections.emptySet());
+        Uuid topicId = Uuid.randomUuid();
+        assignmentMap.put(topicId, Collections.emptySet());
+
+        Map<String, TopicMetadata> subscriptionMetadata = new HashMap<>();
+        subscriptionMetadata.put(topicName, new TopicMetadata(topicId, topicName, 1, new HashMap<>()));
+
         ConsumerGroupMember.Builder memberBuilder2 = new ConsumerGroupMember.Builder(memberId2);
         context.replay(RecordHelpers.newMemberSubscriptionRecord(consumerGroupId, memberBuilder2.build()));
+        context.replay(RecordHelpers.newGroupSubscriptionMetadataRecord(consumerGroupId, subscriptionMetadata));
         context.replay(RecordHelpers.newTargetAssignmentRecord(consumerGroupId, memberId2, assignmentMap));
         context.replay(RecordHelpers.newCurrentAssignmentRecord(consumerGroupId, memberBuilder2.build()));
         context.replay(RecordHelpers.newGroupEpochRecord(consumerGroupId, epoch + 2));
@@ -9762,8 +9768,8 @@ public class GroupMetadataManagerTest {
         describedGroup = new ConsumerGroupDescribeResponseData.DescribedGroup()
             .setGroupId(consumerGroupId)
             .setMembers(Arrays.asList(
-                memberBuilder1.build().asConsumerGroupDescribeMember(new Assignment(Collections.emptyMap())),
-                memberBuilder2.build().asConsumerGroupDescribeMember(new Assignment(assignmentMap))
+                memberBuilder1.build().asConsumerGroupDescribeMember(new Assignment(Collections.emptyMap()), subscriptionMetadata),
+                memberBuilder2.build().asConsumerGroupDescribeMember(new Assignment(assignmentMap), subscriptionMetadata)
             ))
             .setGroupState("assigning")
             .setAssignorName("range")
