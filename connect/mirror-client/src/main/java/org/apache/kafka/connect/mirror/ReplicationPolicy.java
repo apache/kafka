@@ -25,6 +25,8 @@ import org.apache.kafka.common.annotation.InterfaceStability;
 @InterfaceStability.Evolving
 public interface ReplicationPolicy {
 
+    String DEFAULT_HEARTBEATS_TOPIC_NAME = "heartbeats";
+
     /**
      * Returns the remote topic name for the given topic and source cluster alias.
      */
@@ -62,7 +64,7 @@ public interface ReplicationPolicy {
      * Returns the name of heartbeats topic.
      */
     default String heartbeatsTopic() {
-        return "heartbeats";
+        return DEFAULT_HEARTBEATS_TOPIC_NAME;
     }
 
     /**
