@@ -396,17 +396,17 @@ public enum Errors {
 
     private static final Logger log = LoggerFactory.getLogger(Errors.class);
 
-    private static Map<Class<?>, Errors> classToError = new HashMap<>();
-    private static Map<Short, Errors> codeToError = new HashMap<>();
+    private static final Map<Class<?>, Errors> CLASS_TO_ERROR = new HashMap<>();
+    private static final Map<Short, Errors> CODE_TO_ERROR = new HashMap<>();
 
     static {
         for (Errors error : Errors.values()) {
-            if (codeToError.put(error.code(), error) != null)
+            if (CODE_TO_ERROR.put(error.code(), error) != null)
                 throw new ExceptionInInitializerError("Code " + error.code() + " for error " +
                         error + " has already been used");
 
             if (error.exception != null)
-                classToError.put(error.exception.getClass(), error);
+                CLASS_TO_ERROR.put(error.exception.getClass(), error);
         }
     }
 
@@ -479,7 +479,7 @@ public enum Errors {
      * Throw the exception if there is one
      */
     public static Errors forCode(short code) {
-        Errors error = codeToError.get(code);
+        Errors error = CODE_TO_ERROR.get(code);
         if (error != null) {
             return error;
         } else {
@@ -496,7 +496,7 @@ public enum Errors {
         Throwable cause = maybeUnwrapException(t);
         Class<?> clazz = cause.getClass();
         while (clazz != null) {
-            Errors error = classToError.get(clazz);
+            Errors error = CLASS_TO_ERROR.get(clazz);
             if (error != null)
                 return error;
             clazz = clazz.getSuperclass();

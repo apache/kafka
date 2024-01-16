@@ -76,15 +76,15 @@ import scala.compat.java8.OptionConverters;
 @BenchmarkMode(Mode.AverageTime)
 @OutputTimeUnit(TimeUnit.NANOSECONDS)
 public class PartitionMakeFollowerBenchmark {
-    private LogManager logManager;
-    private File logDir = new File(System.getProperty("java.io.tmpdir"), UUID.randomUUID().toString());
-    private KafkaScheduler scheduler = new KafkaScheduler(1, true, "scheduler");
-    private Partition partition;
-    private List<Integer> replicas = Arrays.asList(0, 1, 2);
-    private OffsetCheckpoints offsetCheckpoints = Mockito.mock(OffsetCheckpoints.class);
-    private DelayedOperations delayedOperations  = Mockito.mock(DelayedOperations.class);
-    private ExecutorService executorService = Executors.newSingleThreadExecutor();
+    private final File logDir = new File(System.getProperty("java.io.tmpdir"), UUID.randomUUID().toString());
+    private final KafkaScheduler scheduler = new KafkaScheduler(1, true, "scheduler");
+    private final List<Integer> replicas = Arrays.asList(0, 1, 2);
+    private final OffsetCheckpoints offsetCheckpoints = Mockito.mock(OffsetCheckpoints.class);
+    private final DelayedOperations delayedOperations  = Mockito.mock(DelayedOperations.class);
+    private final ExecutorService executorService = Executors.newSingleThreadExecutor();
     private Option<Uuid> topicId;
+    private Partition partition;
+    private LogManager logManager;
 
     @Setup(Level.Trial)
     public void setup() throws IOException {

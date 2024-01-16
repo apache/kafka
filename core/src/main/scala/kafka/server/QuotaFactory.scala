@@ -22,6 +22,7 @@ import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.server.quota.ClientQuotaCallback
 import org.apache.kafka.common.utils.Time
+import org.apache.kafka.server.config.ReplicationQuotaManagerConfig
 import org.apache.kafka.server.quota.ClientQuotaType
 
 object QuotaType  {
@@ -103,16 +104,16 @@ object QuotaFactory extends Logging {
   }
 
   def replicationConfig(cfg: KafkaConfig): ReplicationQuotaManagerConfig = {
-    ReplicationQuotaManagerConfig(
-      numQuotaSamples = cfg.numReplicationQuotaSamples,
-      quotaWindowSizeSeconds = cfg.replicationQuotaWindowSizeSeconds
+    new ReplicationQuotaManagerConfig(
+      cfg.numReplicationQuotaSamples,
+      cfg.replicationQuotaWindowSizeSeconds
     )
   }
 
   def alterLogDirsReplicationConfig(cfg: KafkaConfig): ReplicationQuotaManagerConfig = {
-    ReplicationQuotaManagerConfig(
-      numQuotaSamples = cfg.numAlterLogDirsReplicationQuotaSamples,
-      quotaWindowSizeSeconds = cfg.alterLogDirsReplicationQuotaWindowSizeSeconds
+    new ReplicationQuotaManagerConfig(
+      cfg.numAlterLogDirsReplicationQuotaSamples,
+      cfg.alterLogDirsReplicationQuotaWindowSizeSeconds
     )
   }
 

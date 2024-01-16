@@ -18,12 +18,11 @@
 package kafka.server.metadata
 
 import java.util.Properties
-import kafka.server.ConfigEntityName
 import kafka.zk.{AdminZkClient, KafkaZkClient}
 import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.config.ConfigResource.Type
 import org.apache.kafka.common.errors.InvalidRequestException
-import org.apache.kafka.server.config.ConfigType
+import org.apache.kafka.server.config.{ConfigEntityName, ConfigType}
 
 
 object ZkConfigRepository {
@@ -42,7 +41,7 @@ class ZkConfigRepository(adminZkClient: AdminZkClient) extends ConfigRepository 
     // ZK stores cluster configs under "<default>".
     val effectiveName = if (configResource.`type`.equals(Type.BROKER) &&
         configResource.name.isEmpty) {
-      ConfigEntityName.Default
+      ConfigEntityName.DEFAULT
     } else {
       configResource.name
     }

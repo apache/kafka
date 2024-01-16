@@ -42,6 +42,7 @@ import org.apache.kafka.common.record._
 import org.apache.kafka.common.requests.OffsetFetchResponse
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.coordinator.group.OffsetConfig
 import org.apache.kafka.coordinator.group.generated.{GroupMetadataValue, OffsetCommitValue}
 import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.server.common.MetadataVersion._
@@ -79,16 +80,16 @@ class GroupMetadataManagerTest {
 
   private val offsetConfig = {
     val config = KafkaConfig.fromProps(TestUtils.createBrokerConfig(nodeId = 0, zkConnect = ""))
-    OffsetConfig(maxMetadataSize = config.offsetMetadataMaxSize,
-      loadBufferSize = config.offsetsLoadBufferSize,
-      offsetsRetentionMs = config.offsetsRetentionMinutes * 60 * 1000L,
-      offsetsRetentionCheckIntervalMs = config.offsetsRetentionCheckIntervalMs,
-      offsetsTopicNumPartitions = config.offsetsTopicPartitions,
-      offsetsTopicSegmentBytes = config.offsetsTopicSegmentBytes,
-      offsetsTopicReplicationFactor = config.offsetsTopicReplicationFactor,
-      offsetsTopicCompressionType = config.offsetsTopicCompressionType,
-      offsetCommitTimeoutMs = config.offsetCommitTimeoutMs,
-      offsetCommitRequiredAcks = config.offsetCommitRequiredAcks)
+    new OffsetConfig(config.offsetMetadataMaxSize,
+      config.offsetsLoadBufferSize,
+      config.offsetsRetentionMinutes * 60 * 1000L,
+      config.offsetsRetentionCheckIntervalMs,
+      config.offsetsTopicPartitions,
+      config.offsetsTopicSegmentBytes,
+      config.offsetsTopicReplicationFactor,
+      config.offsetsTopicCompressionType,
+      config.offsetCommitTimeoutMs,
+      config.offsetCommitRequiredAcks)
   }
 
   @BeforeEach
@@ -775,7 +776,7 @@ class GroupMetadataManagerTest {
     )
 
     // create a GroupMetadata record larger then offsets.load.buffer.size (here at least 16 bytes larger)
-    val assignmentSize = OffsetConfig.DefaultLoadBufferSize + 16
+    val assignmentSize = OffsetConfig.DEFAULT_LOAD_BUFFER_SIZE + 16
     val memberId = "98098230493"
 
     val offsetCommitRecords = createCommittedOffsetRecords(committedOffsets)
@@ -1181,6 +1182,7 @@ class GroupMetadataManagerTest {
       any(),
       any[Option[ReentrantLock]],
       any(),
+      any(),
       any())
     verify(replicaManager).getMagic(any())
   }
@@ -1214,6 +1216,7 @@ class GroupMetadataManagerTest {
       any(),
       any(),
       any[Option[ReentrantLock]],
+      any(),
       any(),
       any())
     verify(replicaManager).getMagic(any())
@@ -1288,6 +1291,7 @@ class GroupMetadataManagerTest {
       any(),
       any[Option[ReentrantLock]],
       any(),
+      any(),
       any())
     // Will update sensor after commit
     assertEquals(1, TestUtils.totalMetricValue(metrics, "offset-commit-count"))
@@ -1328,7 +1332,8 @@ class GroupMetadataManagerTest {
       capturedResponseCallback.capture(),
       any[Option[ReentrantLock]],
       any(),
-      ArgumentMatchers.eq(Map(offsetTopicPartition -> verificationGuard)))
+      ArgumentMatchers.eq(Map(offsetTopicPartition -> verificationGuard)),
+      any())
     verify(replicaManager).getMagic(any())
     capturedResponseCallback.getValue.apply(Map(groupTopicPartition ->
       new PartitionResponse(Errors.NONE, 0L, RecordBatch.NO_TIMESTAMP, 0L)))
@@ -1386,7 +1391,8 @@ class GroupMetadataManagerTest {
       any(),
       any[Option[ReentrantLock]],
       any(),
-      ArgumentMatchers.eq(Map(offsetTopicPartition -> verificationGuard)))
+      ArgumentMatchers.eq(Map(offsetTopicPartition -> verificationGuard)),
+      any())
     verify(replicaManager).getMagic(any())
   }
 
@@ -1434,7 +1440,8 @@ class GroupMetadataManagerTest {
       any(),
       any[Option[ReentrantLock]],
       any(),
-      ArgumentMatchers.eq(Map(offsetTopicPartition -> verificationGuard)))
+      ArgumentMatchers.eq(Map(offsetTopicPartition -> verificationGuard)),
+      any())
     verify(replicaManager).getMagic(any())
   }
 
@@ -1585,6 +1592,7 @@ class GroupMetadataManagerTest {
       any(),
       any[Option[ReentrantLock]],
       any(),
+      any(),
       any())
     verify(replicaManager).getMagic(any())
     assertEquals(1, TestUtils.totalMetricValue(metrics, "offset-commit-count"))
@@ -1689,6 +1697,7 @@ class GroupMetadataManagerTest {
       any(),
       any(),
       any[Option[ReentrantLock]],
+      any(),
       any(),
       any())
     verify(replicaManager, times(2)).getMagic(any())
@@ -2797,6 +2806,7 @@ class GroupMetadataManagerTest {
       capturedArgument.capture(),
       any[Option[ReentrantLock]],
       any(),
+      any(),
       any())
     capturedArgument
   }
@@ -2809,6 +2819,7 @@ class GroupMetadataManagerTest {
       capturedRecords.capture(),
       capturedCallback.capture(),
       any[Option[ReentrantLock]],
+      any(),
       any(),
       any()
     )).thenAnswer(_ => {

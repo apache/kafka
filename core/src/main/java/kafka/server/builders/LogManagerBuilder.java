@@ -35,6 +35,7 @@ import java.util.List;
 
 
 public class LogManagerBuilder {
+    private static final int PRODUCER_ID_EXPIRATION_CHECK_INTERVAL_MS = 600000;
     private List<File> logDirs = null;
     private List<File> initialOfflineDirs = Collections.emptyList();
     private ConfigRepository configRepository = null;
@@ -172,7 +173,7 @@ public class LogManagerBuilder {
                               retentionCheckMs,
                               maxTransactionTimeoutMs,
                               producerStateManagerConfig,
-                              producerIdExpirationCheckIntervalMs,
+                              PRODUCER_ID_EXPIRATION_CHECK_INTERVAL_MS,
                               interBrokerProtocolVersion,
                               scheduler,
                               brokerTopicStats,

@@ -21,10 +21,11 @@ import java.util
 import java.util.concurrent.{CompletableFuture, Executors, LinkedBlockingQueue, TimeUnit}
 import java.util.{Optional, Properties}
 import kafka.api.LeaderAndIsr
+import kafka.server.QuotaFactory.QuotaManagers
 import kafka.server.metadata.KRaftMetadataCache
 import kafka.server.metadata.MockConfigRepository
 import kafka.utils.TestUtils.waitUntilTrue
-import kafka.utils.TestUtils
+import kafka.utils.{CoreUtils, Logging, TestUtils}
 import org.apache.kafka.common.metadata.RegisterBrokerRecord
 import org.apache.kafka.common.metadata.{PartitionChangeRecord, PartitionRecord, TopicRecord}
 import org.apache.kafka.common.metrics.Metrics
@@ -50,12 +51,15 @@ import scala.collection.{immutable, mutable}
 import scala.jdk.CollectionConverters._
 import scala.util.Random
 
-class ReplicaManagerConcurrencyTest {
+class ReplicaManagerConcurrencyTest extends Logging {
 
   private val time = new MockTime()
   private val metrics = new Metrics()
   private val executor = Executors.newScheduledThreadPool(8)
   private val tasks = mutable.Buffer.empty[ShutdownableThread]
+  private var channel: ControllerChannel = _
+  private var quotaManagers: QuotaManagers = _
+  private var replicaManager: ReplicaManager = _
 
   private def submit(task: ShutdownableThread): Unit = {
     tasks += task
@@ -64,10 +68,14 @@ class ReplicaManagerConcurrencyTest {
 
   @AfterEach
   def cleanup(): Unit = {
-    tasks.foreach(_.shutdown())
-    executor.shutdownNow()
-    executor.awaitTermination(5, TimeUnit.SECONDS)
-    metrics.close()
+    CoreUtils.swallow(tasks.foreach(_.shutdown()), this)
+    CoreUtils.swallow(executor.shutdownNow(), this)
+    CoreUtils.swallow(executor.awaitTermination(5, TimeUnit.SECONDS), this)
+    CoreUtils.swallow(channel.shutdown(), this)
+    CoreUtils.swallow(replicaManager.shutdown(checkpointHW = false), this)
+    CoreUtils.swallow(quotaManagers.shutdown(), this)
+    CoreUtils.swallow(metrics.close(), this)
+    CoreUtils.swallow(time.scheduler.shutdown(), this)
   }
 
   @Test
@@ -75,8 +83,8 @@ class ReplicaManagerConcurrencyTest {
     val localId = 0
     val remoteId = 1
     val metadataCache = MetadataCache.kRaftMetadataCache(localId)
-    val channel = new ControllerChannel
-    val replicaManager = buildReplicaManager(localId, channel, metadataCache)
+    channel = new ControllerChannel
+    replicaManager = buildReplicaManager(localId, channel, metadataCache)
 
     // Start with the remote replica out of the ISR
     val initialPartitionRegistration = registration(
@@ -173,13 +181,15 @@ class ReplicaManagerConcurrencyTest {
       time = time
     )
 
+    quotaManagers = QuotaFactory.instantiate(config, metrics, time, "")
+
     new ReplicaManager(
       metrics = metrics,
       config = config,
       time = time,
       scheduler = time.scheduler,
       logManager = logManager,
-      quotaManagers = QuotaFactory.instantiate(config, metrics, time, ""),
+      quotaManagers = quotaManagers,
       metadataCache = metadataCache,
       logDirFailureChannel = new LogDirFailureChannel(config.logDirs.size),
       alterPartitionManager = new MockAlterPartitionManager(channel)

@@ -215,7 +215,8 @@ object AbstractCoordinatorConcurrencyTest {
                                 responseCallback: Map[TopicPartition, PartitionResponse] => Unit,
                                 delayedProduceLock: Option[Lock] = None,
                                 requestLocal: RequestLocal = RequestLocal.NoCaching,
-                                verificationGuards: Map[TopicPartition, VerificationGuard] = Map.empty): Unit = {
+                                verificationGuards: Map[TopicPartition, VerificationGuard] = Map.empty,
+                                actionQueue: ActionQueue = null): Unit = {
       appendRecords(timeout, requiredAcks, true, AppendOrigin.COORDINATOR, entriesPerPartition, responseCallback,
         delayedProduceLock, requestLocal = requestLocal)
     }

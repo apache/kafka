@@ -21,6 +21,7 @@ import java.util.Properties
 
 import kafka.server.Defaults
 import kafka.utils.TestUtils
+import kafka.utils.TestInfoUtils
 import org.apache.kafka.clients.consumer.Consumer
 import org.apache.kafka.clients.consumer.ConsumerConfig
 import org.apache.kafka.clients.consumer.KafkaConsumer
@@ -32,8 +33,10 @@ import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.serialization.ByteArrayDeserializer
 import org.apache.kafka.common.serialization.ByteArraySerializer
 import org.apache.kafka.common.utils.Utils
-import org.junit.jupiter.api.Test
+
 import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.ValueSource
 
 class DeleteOffsetsConsumerGroupCommandIntegrationTest extends ConsumerGroupCommandTest {
 
@@ -46,8 +49,9 @@ class DeleteOffsetsConsumerGroupCommandIntegrationTest extends ConsumerGroupComm
     )
   }
 
-  @Test
-  def testDeleteOffsetsNonExistingGroup(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testDeleteOffsetsNonExistingGroup(quorum: String): Unit = {
     val group = "missing.group"
     val topic = "foo:1"
     val service = getConsumerGroupService(getArgs(group, topic))
@@ -56,43 +60,51 @@ class DeleteOffsetsConsumerGroupCommandIntegrationTest extends ConsumerGroupComm
     assertEquals(Errors.GROUP_ID_NOT_FOUND, error)
   }
 
-  @Test
-  def testDeleteOffsetsOfStableConsumerGroupWithTopicPartition(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testDeleteOffsetsOfStableConsumerGroupWithTopicPartition(quorum: String): Unit = {
     testWithStableConsumerGroup(topic, 0, 0, Errors.GROUP_SUBSCRIBED_TO_TOPIC)
   }
 
-  @Test
-  def testDeleteOffsetsOfStableConsumerGroupWithTopicOnly(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testDeleteOffsetsOfStableConsumerGroupWithTopicOnly(quorum: String): Unit = {
     testWithStableConsumerGroup(topic, -1, 0, Errors.GROUP_SUBSCRIBED_TO_TOPIC)
   }
 
-  @Test
-  def testDeleteOffsetsOfStableConsumerGroupWithUnknownTopicPartition(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testDeleteOffsetsOfStableConsumerGroupWithUnknownTopicPartition(quorum: String): Unit = {
     testWithStableConsumerGroup("foobar", 0, 0, Errors.UNKNOWN_TOPIC_OR_PARTITION)
   }
 
-  @Test
-  def testDeleteOffsetsOfStableConsumerGroupWithUnknownTopicOnly(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testDeleteOffsetsOfStableConsumerGroupWithUnknownTopicOnly(quorum: String): Unit = {
     testWithStableConsumerGroup("foobar", -1, -1, Errors.UNKNOWN_TOPIC_OR_PARTITION)
   }
 
-  @Test
-  def testDeleteOffsetsOfEmptyConsumerGroupWithTopicPartition(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testDeleteOffsetsOfEmptyConsumerGroupWithTopicPartition(quorum: String): Unit = {
     testWithEmptyConsumerGroup(topic, 0, 0, Errors.NONE)
   }
 
-  @Test
-  def testDeleteOffsetsOfEmptyConsumerGroupWithTopicOnly(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testDeleteOffsetsOfEmptyConsumerGroupWithTopicOnly(quorum: String): Unit = {
     testWithEmptyConsumerGroup(topic, -1, 0, Errors.NONE)
   }
 
-  @Test
-  def testDeleteOffsetsOfEmptyConsumerGroupWithUnknownTopicPartition(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testDeleteOffsetsOfEmptyConsumerGroupWithUnknownTopicPartition(quorum: String): Unit = {
     testWithEmptyConsumerGroup("foobar", 0, 0, Errors.UNKNOWN_TOPIC_OR_PARTITION)
   }
 
-  @Test
-  def testDeleteOffsetsOfEmptyConsumerGroupWithUnknownTopicOnly(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testDeleteOffsetsOfEmptyConsumerGroupWithUnknownTopicOnly(quorum: String): Unit = {
     testWithEmptyConsumerGroup("foobar", -1, -1, Errors.UNKNOWN_TOPIC_OR_PARTITION)
   }
 

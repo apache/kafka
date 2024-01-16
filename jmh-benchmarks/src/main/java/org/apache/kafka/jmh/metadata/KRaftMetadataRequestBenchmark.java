@@ -94,31 +94,30 @@ import java.util.stream.IntStream;
 @OutputTimeUnit(TimeUnit.NANOSECONDS)
 
 public class KRaftMetadataRequestBenchmark {
+    private final RequestChannel requestChannel = Mockito.mock(RequestChannel.class, Mockito.withSettings().stubOnly());
+    private final RequestChannel.Metrics requestChannelMetrics = Mockito.mock(RequestChannel.Metrics.class);
+    private final ReplicaManager replicaManager = Mockito.mock(ReplicaManager.class);
+    private final GroupCoordinator groupCoordinator = Mockito.mock(GroupCoordinator.class);
+    private final TransactionCoordinator transactionCoordinator = Mockito.mock(TransactionCoordinator.class);
+    private final AutoTopicCreationManager autoTopicCreationManager = Mockito.mock(AutoTopicCreationManager.class);
+    private final Metrics metrics = new Metrics();
+    private final int brokerId = 1;
+    private final ForwardingManager forwardingManager = Mockito.mock(ForwardingManager.class);
+    private final KRaftMetadataCache metadataCache = MetadataCache.kRaftMetadataCache(brokerId);
+    private final ClientQuotaManager clientQuotaManager = Mockito.mock(ClientQuotaManager.class);
+    private final ClientRequestQuotaManager clientRequestQuotaManager = Mockito.mock(ClientRequestQuotaManager.class);
+    private final ControllerMutationQuotaManager controllerMutationQuotaManager = Mockito.mock(ControllerMutationQuotaManager.class);
+    private final ReplicationQuotaManager replicaQuotaManager = Mockito.mock(ReplicationQuotaManager.class);
+    private final QuotaFactory.QuotaManagers quotaManagers = new QuotaFactory.QuotaManagers(clientQuotaManager,
+            clientQuotaManager, clientRequestQuotaManager, controllerMutationQuotaManager, replicaQuotaManager,
+            replicaQuotaManager, replicaQuotaManager, Option.empty());
+    private final FetchManager fetchManager = Mockito.mock(FetchManager.class);
+    private final BrokerTopicStats brokerTopicStats = new BrokerTopicStats(Optional.empty());
+    private final KafkaPrincipal principal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "test-user");
     @Param({"500", "1000",  "5000"})
     private int topicCount;
     @Param({"10", "20", "50"})
     private int partitionCount;
-
-    private RequestChannel requestChannel = Mockito.mock(RequestChannel.class, Mockito.withSettings().stubOnly());
-    private RequestChannel.Metrics requestChannelMetrics = Mockito.mock(RequestChannel.Metrics.class);
-    private ReplicaManager replicaManager = Mockito.mock(ReplicaManager.class);
-    private GroupCoordinator groupCoordinator = Mockito.mock(GroupCoordinator.class);
-    private TransactionCoordinator transactionCoordinator = Mockito.mock(TransactionCoordinator.class);
-    private AutoTopicCreationManager autoTopicCreationManager = Mockito.mock(AutoTopicCreationManager.class);
-    private Metrics metrics = new Metrics();
-    private int brokerId = 1;
-    private ForwardingManager forwardingManager = Mockito.mock(ForwardingManager.class);
-    private KRaftMetadataCache metadataCache = MetadataCache.kRaftMetadataCache(brokerId);
-    private ClientQuotaManager clientQuotaManager = Mockito.mock(ClientQuotaManager.class);
-    private ClientRequestQuotaManager clientRequestQuotaManager = Mockito.mock(ClientRequestQuotaManager.class);
-    private ControllerMutationQuotaManager controllerMutationQuotaManager = Mockito.mock(ControllerMutationQuotaManager.class);
-    private ReplicationQuotaManager replicaQuotaManager = Mockito.mock(ReplicationQuotaManager.class);
-    private QuotaFactory.QuotaManagers quotaManagers = new QuotaFactory.QuotaManagers(clientQuotaManager,
-            clientQuotaManager, clientRequestQuotaManager, controllerMutationQuotaManager, replicaQuotaManager,
-            replicaQuotaManager, replicaQuotaManager, Option.empty());
-    private FetchManager fetchManager = Mockito.mock(FetchManager.class);
-    private BrokerTopicStats brokerTopicStats = new BrokerTopicStats(Optional.empty());
-    private KafkaPrincipal principal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "test-user");
     private KafkaApis kafkaApis;
     private RequestChannel.Request allTopicMetadataRequest;
 
