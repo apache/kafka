@@ -130,6 +130,7 @@ public final class TopicDelta {
      * @param brokerId the broker id
      * @return the list of partitions which the broker should remove, become leader, become/update leader, or become/update follower.
      */
+    @SuppressWarnings("checkstyle:cyclomaticComplexity")
     public LocalReplicaChanges localChanges(int brokerId) {
         Set<TopicPartition> deletes = new HashSet<>();
         Map<TopicPartition, LocalReplicaChanges.PartitionInfo> electedLeaders = new HashMap<>();
