@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.config.provider;
 
+import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.internals.AllowedPaths;
 import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.BeforeEach;
@@ -29,69 +30,82 @@ import java.nio.file.Paths;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 class AllowedPathsTest {
 
     private AllowedPaths allowedPaths;
-    private Path dir;
-    private Path myFile;
-    private Path dir2;
+    private String dir;
+    private String myFile;
+    private String dir2;
 
     @BeforeEach
     public void setup() throws IOException {
         File parent = TestUtils.tempDirectory();
-        dir = Files.createDirectory(Paths.get(parent.getAbsolutePath(), "dir"));
-        myFile = Files.createFile(Paths.get(dir.toString(), "myFile"));
-        dir2 = Files.createDirectory(Paths.get(parent.getAbsolutePath(), "dir2"));
+        dir = Files.createDirectory(Paths.get(parent.getAbsolutePath(), "dir")).toString();
+        myFile = Files.createFile(Paths.get(dir, "myFile")).toString();
+        dir2 = Files.createDirectory(Paths.get(parent.getAbsolutePath(), "dir2")).toString();
     }
 
     @Test
     public void testAllowedPath() {
-        allowedPaths = AllowedPaths.configureAllowedPaths(String.join(",", dir.toString(), dir2.toString()));
+        allowedPaths = new AllowedPaths(String.join(",", dir, dir2));
 
-        Path actual = allowedPaths.getIfPathIsAllowed(myFile);
-        assertEquals(myFile, actual);
+        Path actual = allowedPaths.parseUntrustedPath(myFile);
+        assertEquals(myFile, actual.toString());
     }
 
     @Test
     public void testNotAllowedPath() {
-        allowedPaths = AllowedPaths.configureAllowedPaths(dir.toString());
+        allowedPaths = new AllowedPaths(dir);
 
-        Path actual = allowedPaths.getIfPathIsAllowed(dir2);
+        Path actual = allowedPaths.parseUntrustedPath(dir2);
         assertNull(actual);
     }
 
     @Test
     public void testNullAllowedPaths() {
-        allowedPaths = AllowedPaths.configureAllowedPaths(null);
-        Path actual = allowedPaths.getIfPathIsAllowed(myFile);
-        assertEquals(myFile, actual);
+        allowedPaths = new AllowedPaths(null);
+        Path actual = allowedPaths.parseUntrustedPath(myFile);
+        assertEquals(myFile, actual.toString());
     }
 
     @Test
     public void testNoTraversal() {
-        allowedPaths = AllowedPaths.configureAllowedPaths(dir.toString());
+        allowedPaths = new AllowedPaths(dir);
 
-        Path traversedPath = Paths.get(dir.toString(), "..", "dir2");
-        Path actual = allowedPaths.getIfPathIsAllowed(traversedPath);
+        Path traversedPath = Paths.get(dir, "..", "dir2");
+        Path actual = allowedPaths.parseUntrustedPath(traversedPath.toString());
         assertNull(actual);
     }
 
     @Test
     public void testAllowedTraversal() {
-        allowedPaths = AllowedPaths.configureAllowedPaths(String.join(",", dir.toString(), dir2.toString()));
+        allowedPaths = new AllowedPaths(String.join(",", dir, dir2));
 
-        Path traversedPath = Paths.get(dir.toString(), "..", "dir2");
-        Path actual = allowedPaths.getIfPathIsAllowed(traversedPath);
+        Path traversedPath = Paths.get(dir, "..", "dir2");
+        Path actual = allowedPaths.parseUntrustedPath(traversedPath.toString());
         assertEquals(traversedPath.normalize(), actual);
     }
 
     @Test
     public void testNullAllowedPathsTraversal() {
-        allowedPaths = AllowedPaths.configureAllowedPaths("");
-        Path traversedPath = Paths.get(dir.toString(), "..", "dir2");
-        Path actual = allowedPaths.getIfPathIsAllowed(traversedPath);
+        allowedPaths = new AllowedPaths("");
+        Path traversedPath = Paths.get(dir, "..", "dir2");
+        Path actual = allowedPaths.parseUntrustedPath(traversedPath.toString());
         // we expect non-normalised path if allowed.paths is not specified to avoid backward compatibility
         assertEquals(traversedPath, actual);
+    }
+
+    @Test
+    public void testAllowedPathDoesNotExist() {
+        Exception e = assertThrows(ConfigException.class, () -> new AllowedPaths("/foo"));
+        assertEquals("Path /foo does not exist", e.getMessage());
+    }
+
+    @Test
+    public void testAllowedPathIsNotAbsolute() {
+        Exception e = assertThrows(ConfigException.class, () -> new AllowedPaths("foo bar "));
+        assertEquals("Path foo bar  is not absolute", e.getMessage());
     }
 }

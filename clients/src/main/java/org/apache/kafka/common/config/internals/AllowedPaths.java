@@ -26,35 +26,37 @@ import java.util.Arrays;
 import java.util.List;
 
 public class AllowedPaths {
-    private List<Path> allowedPaths;
-
-    private AllowedPaths(List<Path> allowedPaths) {
-        this.allowedPaths = allowedPaths;
-    }
+    private final List<Path> allowedPaths;
 
     /**
      * Constructs AllowedPaths with a list of Paths retrieved from {@code configValue}.
      * @param configValue {@code allowed.paths} config value which is a string containing comma separated list of paths
-     * @return AllowedPaths with a list of Paths or null list if the {@code configValue} is null or empty string.
+     * @throws ConfigException if any of the given paths is not absolute or does not exist.
      */
-    public static AllowedPaths configureAllowedPaths(String configValue) {
+    public AllowedPaths(String configValue) {
+        this.allowedPaths = getAllowedPaths(configValue);
+    }
+
+    private List<Path> getAllowedPaths(String configValue) {
         if (configValue != null && !configValue.isEmpty()) {
             List<Path> allowedPaths = new ArrayList<>();
 
             Arrays.stream(configValue.split(",")).forEach(b -> {
                 Path normalisedPath = Paths.get(b).normalize();
 
-                if (normalisedPath.isAbsolute() && Files.exists(normalisedPath)) {
-                    allowedPaths.add(normalisedPath);
+                if (!normalisedPath.isAbsolute()) {
+                    throw new ConfigException("Path " + normalisedPath + " is not absolute");
+                } else if (!Files.exists(normalisedPath)) {
+                    throw new ConfigException("Path " + normalisedPath + " does not exist");
                 } else {
-                    throw new ConfigException("Path " + normalisedPath + " is not valid. The path should be absolute and exist");
+                    allowedPaths.add(normalisedPath);
                 }
             });
 
-            return new AllowedPaths(allowedPaths);
+            return allowedPaths;
         }
 
-        return new AllowedPaths(null);
+        return null;
     }
 
     /**
@@ -63,17 +65,18 @@ public class AllowedPaths {
      * @param path the Path to check if allowed
      * @return Path that can be accessed or null if the given Path does not reside in the configured {@code allowed.paths}.
      */
-    public Path getIfPathIsAllowed(Path path) {
-        Path normalisedPath = path.normalize();
+    public Path parseUntrustedPath(String path) {
+        Path parsedPath = Paths.get(path);
 
         if (allowedPaths != null) {
-            long allowed = allowedPaths.stream().filter(allowedPath -> path.normalize().startsWith(allowedPath)).count();
+            Path normalisedPath = parsedPath.normalize();
+            long allowed = allowedPaths.stream().filter(allowedPath -> normalisedPath.startsWith(allowedPath)).count();
             if (allowed == 0) {
                 return null;
             }
             return normalisedPath;
         }
 
-        return path;
+        return parsedPath;
     }
 }

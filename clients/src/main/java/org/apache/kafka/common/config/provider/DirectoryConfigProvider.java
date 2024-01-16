@@ -26,7 +26,6 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.Predicate;
@@ -48,11 +47,11 @@ public class DirectoryConfigProvider implements ConfigProvider {
     public static final String ALLOWED_PATHS_CONFIG = "allowed.paths";
     public static final String ALLOWED_PATHS_DOC = "A comma separated list of paths that this config provider is " +
             "allowed to access. If not set, all paths are allowed.";
-    private AllowedPaths allowedPaths;
+    private volatile AllowedPaths allowedPaths;
 
     @Override
     public void configure(Map<String, ?> configs) {
-        allowedPaths = AllowedPaths.configureAllowedPaths((String) configs.getOrDefault(ALLOWED_PATHS_CONFIG, null));
+        allowedPaths = new AllowedPaths((String) configs.getOrDefault(ALLOWED_PATHS_CONFIG, null));
     }
 
     @Override
@@ -84,10 +83,14 @@ public class DirectoryConfigProvider implements ConfigProvider {
     }
 
     private ConfigData get(String path, Predicate<Path> fileFilter) {
+        if (allowedPaths == null) {
+            throw new IllegalStateException("The provider has not been configured yet.");
+        }
+
         Map<String, String> map = emptyMap();
 
         if (path != null && !path.isEmpty()) {
-            Path dir = allowedPaths.getIfPathIsAllowed(Paths.get(path));
+            Path dir = allowedPaths.parseUntrustedPath(path);
             if (dir == null) {
                 log.warn("The path {} is not allowed to be accessed", path);
                 return new ConfigData(map);

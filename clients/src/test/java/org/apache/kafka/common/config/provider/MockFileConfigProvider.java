@@ -43,6 +43,8 @@ public class MockFileConfigProvider extends FileConfigProvider {
         }
         this.id = id.toString();
         INSTANCES.put(id.toString(), this);
+
+        super.configure(configs);
     }
 
     @Override

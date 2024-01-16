@@ -22,6 +22,7 @@ import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 import java.io.File;
 import java.io.IOException;
@@ -43,11 +44,13 @@ import static org.apache.kafka.common.config.provider.DirectoryConfigProvider.AL
 import static org.apache.kafka.test.TestUtils.toSet;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class DirectoryConfigProviderTest {
 
     private DirectoryConfigProvider provider;
+    @TempDir
     private File parent;
     private String dir;
     private final String bar = "bar";
@@ -66,6 +69,7 @@ public class DirectoryConfigProviderTest {
     public void setup() throws IOException {
         provider = new DirectoryConfigProvider();
         provider.configure(Collections.emptyMap());
+
         parent = TestUtils.tempDirectory();
         
         dir = Files.createDirectory(Paths.get(parent.getAbsolutePath(), "dir")).toString();
@@ -210,6 +214,13 @@ public class DirectoryConfigProviderTest {
         ConfigData configData = provider.get(Paths.get(dir, "..", "siblingDir").toString());
         assertTrue(configData.data().isEmpty());
         assertNull(configData.ttl());
+    }
+
+    @Test
+    public void testNonConfiguredProvider() {
+        DirectoryConfigProvider provider2 = new DirectoryConfigProvider();
+        IllegalStateException ise = assertThrows(IllegalStateException.class, () -> provider2.get(Paths.get(dir).toString()));
+        assertEquals("The provider has not been configured yet.", ise.getMessage());
     }
 }
 

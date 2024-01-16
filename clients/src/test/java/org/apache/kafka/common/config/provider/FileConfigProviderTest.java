@@ -20,6 +20,7 @@ import org.apache.kafka.common.config.ConfigData;
 import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 import java.io.File;
 import java.io.IOException;
@@ -37,11 +38,13 @@ import java.util.stream.StreamSupport;
 import static org.apache.kafka.common.config.provider.DirectoryConfigProvider.ALLOWED_PATHS_CONFIG;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class FileConfigProviderTest {
 
     private FileConfigProvider configProvider;
+    @TempDir
     private File parent;
     private String dir;
     private String dirFile;
@@ -203,5 +206,12 @@ public class FileConfigProviderTest {
         ConfigData configData = configProvider.get(Paths.get(dirFile, "..", "..", "siblingDir", "siblingDirFile").toString());
         assertTrue(configData.data().isEmpty());
         assertNull(configData.ttl());
+    }
+
+    @Test
+    public void testNonConfiguredProvider() {
+        FileConfigProvider provider2 = new FileConfigProvider();
+        IllegalStateException ise = assertThrows(IllegalStateException.class, () -> provider2.get(Paths.get(dirFile).toString()));
+        assertEquals("The provider has not been configured yet.", ise.getMessage());
     }
 }

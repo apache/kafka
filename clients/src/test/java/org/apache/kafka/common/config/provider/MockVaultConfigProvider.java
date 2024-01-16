@@ -38,6 +38,7 @@ public class MockVaultConfigProvider extends FileConfigProvider {
     public void configure(Map<String, ?> configs) {
         this.vaultConfigs = configs;
         configured = true;
+        super.configure(configs);
     }
 
     public boolean configured() {
