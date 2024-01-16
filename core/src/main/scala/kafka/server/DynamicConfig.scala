@@ -25,7 +25,6 @@ import org.apache.kafka.common.config.ConfigDef.Range._
 import org.apache.kafka.common.config.ConfigDef.Type._
 import org.apache.kafka.server.config.{ConfigEntityName, ReplicationQuotaManagerConfig}
 import org.apache.kafka.storage.internals.log.LogConfig
-import org.apache.kafka.server.config.ReplicationQuotaManagerConfig
 
 import java.util
 import scala.jdk.CollectionConverters._

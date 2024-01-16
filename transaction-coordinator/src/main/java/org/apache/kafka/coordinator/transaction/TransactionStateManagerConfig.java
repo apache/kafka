@@ -27,5 +27,4 @@ public class TransactionStateManagerConfig {
 
     public static final String METRICS_GROUP = "transaction-coordinator-metrics";
     public static final String LOAD_TIME_SENSOR = "TransactionsPartitionLoadTime";
-
 }
