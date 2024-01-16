@@ -28,6 +28,7 @@ import org.apache.kafka.common.errors.GroupAuthorizationException;
 import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
+import org.apache.kafka.common.errors.UnstableOffsetCommitException;
 import org.apache.kafka.common.message.OffsetCommitRequestData;
 import org.apache.kafka.common.message.OffsetCommitResponseData;
 import org.apache.kafka.common.protocol.Errors;
@@ -482,6 +483,12 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
             return resp;
         }
 
+        /**
+         * Handle OffsetCommitResponse. This will complete the request future successfully if no
+         * errors are found in the response. If the response contains errors, this will:
+         *   - handle expected errors and fail the future with specific exceptions depending on the error
+         *   - fail the future with a non-recoverable KafkaException for all unexpected errors (even if retriable)
+         */
         public void onResponse(final ClientResponse response) {
             long currentTimeMs = response.receivedTimeMs();
             OffsetCommitResponse commitResponse = (OffsetCommitResponse) response.responseBody();
@@ -497,11 +504,22 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
                         continue;
                     }
 
-                    if (error == Errors.COORDINATOR_NOT_AVAILABLE ||
+                    if (error == Errors.GROUP_AUTHORIZATION_FAILED) {
+                        future.completeExceptionally(GroupAuthorizationException.forGroupId(groupId));
+                        return;
+                    } else if (error == Errors.COORDINATOR_NOT_AVAILABLE ||
                         error == Errors.NOT_COORDINATOR ||
                         error == Errors.REQUEST_TIMED_OUT) {
                         coordinatorRequestManager.markCoordinatorUnknown(error.message(), currentTimeMs);
                         maybeRetry(currentTimeMs, error.exception());
+                        return;
+                    } else if (error == Errors.FENCED_INSTANCE_ID) {
+                        log.info("OffsetCommit failed due to group instance id {} fenced: {}", groupInstanceId, error.message());
+                        future.completeExceptionally(new CommitFailedException());
+                        return;
+                    } else if (error == Errors.OFFSET_METADATA_TOO_LARGE ||
+                        error == Errors.INVALID_COMMIT_OFFSET_SIZE) {
+                        future.completeExceptionally(error.exception());
                         return;
                     } else if (error == Errors.COORDINATOR_LOAD_IN_PROGRESS ||
                         error == Errors.UNKNOWN_TOPIC_OR_PARTITION) {
@@ -521,17 +539,14 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
                             return;
                         }
                         future.completeExceptionally(commitExceptionForStaleMemberEpoch());
+                        return;
                     } else if (error == Errors.TOPIC_AUTHORIZATION_FAILED) {
                         // Collect all unauthorized topics before failing
                         unauthorizedTopics.add(tp.topic());
                     } else {
-                        log.error("OffsetCommit failed on partition {} for offset {}: {}",
-                            tp, offset, error.message());
-                        if (error.exception() instanceof RetriableException) {
-                            maybeRetry(currentTimeMs, error.exception());
-                            return;
-                        }
-                        future.completeExceptionally(error.exception());
+                        // Fail with a non-retriable KafkaException for all unexpected errors
+                        // (even if they are retriable)
+                        future.completeExceptionally(new KafkaException("Unexpected error in commit: " + error.message()));
                         return;
                     }
                 }
@@ -731,8 +746,22 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
                         new ArrayList<>(this.requestedPartitions),
                         throwOnFetchStableOffsetUnsupported);
             }
-            return new NetworkClientDelegate.UnsentRequest(builder, coordinatorRequestManager.coordinator())
-                    .whenComplete((r, t) -> onResponse(r.receivedTimeMs(), (OffsetFetchResponse) r.responseBody()));
+            NetworkClientDelegate.UnsentRequest request =
+                new NetworkClientDelegate.UnsentRequest(builder, coordinatorRequestManager.coordinator());
+            return request.whenComplete((response, error) -> {
+                if (error == null) {
+                    onResponse(response.receivedTimeMs(), (OffsetFetchResponse) response.responseBody());
+                } else {
+                    log.debug("OffsetFetch completed with error for partitions {}", requestedPartitions, error);
+                    long currentTimeMs = request.handler().completionTimeMs();
+                    handleCoordinatorDisconnect(error, currentTimeMs);
+                    if (error instanceof RetriableException) {
+                        maybeRetry(currentTimeMs, error);
+                    } else {
+                        future.completeExceptionally(error);
+                    }
+                }
+            });
         }
 
         /**
@@ -755,7 +784,6 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
          */
         private void onFailure(final long currentTimeMs,
                                final Errors responseError) {
-            handleCoordinatorDisconnect(responseError.exception(), currentTimeMs);
             log.debug("Offset fetch failed: {}", responseError.message());
             if (responseError == COORDINATOR_LOAD_IN_PROGRESS) {
                 maybeRetry(currentTimeMs, responseError.exception());
@@ -781,6 +809,8 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
             } else if (responseError == Errors.GROUP_AUTHORIZATION_FAILED) {
                 future.completeExceptionally(GroupAuthorizationException.forGroupId(groupId));
             } else {
+                // Fail with a non-retriable KafkaException for all unexpected errors (even if
+                // they are retriable)
                 future.completeExceptionally(new KafkaException("Unexpected error in fetch offset response: " + responseError.message()));
             }
         }
@@ -834,9 +864,7 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
                     log.debug("Failed to fetch offset for partition {}: {}", tp, error.message());
 
                     if (error == Errors.UNKNOWN_TOPIC_OR_PARTITION) {
-                        future.completeExceptionally(new KafkaException("Topic or Partition " + tp + " does " +
-                                "not " +
-                                "exist"));
+                        future.completeExceptionally(new KafkaException("Topic or Partition " + tp + " does not exist"));
                         return;
                     } else if (error == Errors.TOPIC_AUTHORIZATION_FAILED) {
                         if (unauthorizedTopics == null) {
@@ -846,6 +874,8 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
                     } else if (error == Errors.UNSTABLE_OFFSET_COMMIT) {
                         unstableTxnOffsetTopicPartitions.add(tp);
                     } else {
+                        // Fail with a non-retriable KafkaException for all unexpected partition
+                        // errors (even if they are retriable)
                         future.completeExceptionally(new KafkaException("Unexpected error in fetch offset " +
                                 "response for partition " + tp + ": " + error.message()));
                         return;
@@ -869,7 +899,7 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
                         ", this could be either " +
                         "transactional offsets waiting for completion, or " +
                         "normal offsets waiting for replication after appending to local log", unstableTxnOffsetTopicPartitions);
-                maybeRetry(currentTimeMs, Errors.UNSTABLE_OFFSET_COMMIT.exception());
+                maybeRetry(currentTimeMs, new UnstableOffsetCommitException("There are unstable offsets for the requested topic partitions"));
             } else {
                 future.complete(offsets);
             }
