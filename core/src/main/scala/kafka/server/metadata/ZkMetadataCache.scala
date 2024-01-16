@@ -19,7 +19,7 @@ package kafka.server.metadata
 
 import java.util
 import java.util.{Collections, Optional}
-import java.util.concurrent.locks.{ReentrantLock, ReentrantReadWriteLock}
+import java.util.concurrent.locks.ReentrantLock
 import scala.collection.{Seq, Set, mutable}
 import scala.jdk.CollectionConverters._
 import kafka.cluster.{Broker, EndPoint}
@@ -122,7 +122,7 @@ class ZkMetadataCache(
   zkMigrationEnabled: Boolean = false)
   extends MetadataCache with ZkFinalizedFeatureCache with Logging {
 
-  private val partitionMetadataLock = new ReentrantReadWriteLock()
+  private val partitionMetadataLock = new ReentrantLock()
   //this is the cache state. every MetadataSnapshot instance is immutable, and updates (performed under a lock)
   //replace the value with a completely new one. this means reads (which are not under any lock) need to grab
   //the value of this var (into a val) ONCE and retain that read copy for the duration of their operation.
@@ -431,7 +431,7 @@ class ZkMetadataCache(
 
   // This method returns the deleted TopicPartitions received from UpdateMetadataRequest
   def updateMetadata(correlationId: Int, updateMetadataRequest: UpdateMetadataRequest): Seq[TopicPartition] = {
-    inWriteLock(partitionMetadataLock) {
+    inLock(partitionMetadataLock) {
       if (
         updateMetadataRequest.isKRaftController &&
         updateMetadataRequest.updateType() == AbstractControlRequest.Type.FULL
