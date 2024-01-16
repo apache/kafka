@@ -167,17 +167,9 @@ class KRaftMetadataCache(val brokerId: Int) extends MetadataCache with Logging w
       case None => (None, -1)
       case Some(topic) => {
         val result = new ListBuffer[DescribeTopicPartitionsResponsePartition]()
-        // The partition id can be random. Let's find the ones in the desired range.
-        val partitions : util.TreeSet[Int] = new util.TreeSet[Int]()
-        topic.partitions().keySet().forEach(partitionId => {
-          if (partitionId >= startIndex) {
-            partitions.add(partitionId)
-          }
-          if (partitions.size() > maxCount + 1) partitions.pollLast()
-        })
-        val nextPartitionId = if (partitions.size > maxCount) partitions.pollLast() else -1
-
-        partitions.forEach(partitionId => {
+        val partitions = topic.partitions().keySet()
+        val upperIndex = topic.partitions().size().min(startIndex + maxCount)
+        for (partitionId <- startIndex until upperIndex) {
           val partition = topic.partitions().get(partitionId)
           val filteredReplicas = maybeFilterAliveReplicas(image, partition.replicas,
             listenerName, false)
@@ -226,8 +218,8 @@ class KRaftMetadataCache(val brokerId: Int) extends MetadataCache with Logging w
                 .setEligibleLeaderReplicas(Replicas.toList(partition.elr))
                 .setLastKnownElr(Replicas.toList(partition.lastKnownElr)))
           }
-        })
-        (Some(result.toList), nextPartitionId)
+        }
+        (Some(result.toList), if (upperIndex < partitions.size()) upperIndex else -1)
       }
     }
   }
