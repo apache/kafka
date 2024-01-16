@@ -22,9 +22,9 @@ import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.clients.consumer.RetriableCommitFailedException;
+import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.errors.DisconnectException;
 import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.message.OffsetCommitRequestData;
@@ -60,7 +60,6 @@ import java.util.OptionalDouble;
 import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -75,7 +74,6 @@ import static org.apache.kafka.clients.consumer.internals.ConsumerTestBuilder.DE
 import static org.apache.kafka.test.TestUtils.assertFutureThrows;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
@@ -86,9 +84,9 @@ import static org.mockito.Mockito.when;
 
 public class CommitRequestManagerTest {
 
-    private long retryBackoffMs = 100;
-    private long retryBackoffMaxMs = 1000;
-    private Node mockedNode = new Node(1, "host1", 9092);
+    private final long retryBackoffMs = 100;
+    private final long retryBackoffMaxMs = 1000;
+    private final Node mockedNode = new Node(1, "host1", 9092);
     private SubscriptionState subscriptionState;
     private LogContext logContext;
     private MockTime time;
@@ -247,7 +245,7 @@ public class CommitRequestManagerTest {
     // that should be retried until it succeeds, fails, or timer expires).
     @ParameterizedTest
     @MethodSource("offsetCommitExceptionSupplier")
-    public void testSyncAutocommitRetriedAfterRetriableException(Errors error) {
+    public void testAutoCommitSyncRetriedAfterExpectedRetriableException(Errors error) {
         long commitInterval = retryBackoffMs * 2;
         CommitRequestManager commitRequestManger = create(true, commitInterval);
         TopicPartition tp = new TopicPartition("topic", 1);
@@ -265,7 +263,65 @@ public class CommitRequestManagerTest {
 
         // We expect that request should have been retried on this sync commit.
         assertExceptionHandling(commitRequestManger, error, true);
-        assertCoordinatorDisconnect(error);
+    }
+
+    @Test
+    public void testCommitSyncThrowsCommitFailedExceptionOnFencedInstanceId() {
+        testCommitSyncFailsWithCommitFailedExceptionOnError(Errors.FENCED_INSTANCE_ID);
+    }
+
+    @Test
+    public void testCommitSyncThrowsCommitFailedExceptionOnUnknownMemberId() {
+        testCommitSyncFailsWithCommitFailedExceptionOnError(Errors.UNKNOWN_MEMBER_ID);
+    }
+
+    private void testCommitSyncFailsWithCommitFailedExceptionOnError(Errors commitError) {
+        CommitRequestManager commitRequestManger = create(false, 100);
+        when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(mockedNode));
+
+        Map<TopicPartition, OffsetAndMetadata> offsets = Collections.singletonMap(
+            new TopicPartition("topic", 1),
+            new OffsetAndMetadata(0));
+
+        // Send sync offset commit request that fails with an error that is expected to propagate
+        // a CommitFailedException
+        Long expirationTimeMs = time.milliseconds() + retryBackoffMs;
+        CompletableFuture<Void> commitResult = commitRequestManger.addOffsetCommitRequest(offsets, Optional.of(expirationTimeMs), false);
+        completeOffsetCommitRequestWithError(commitRequestManger, commitError);
+        assertFutureThrows(commitResult, CommitFailedException.class);
+    }
+
+    @Test
+    public void testCommitSyncThrowsOffsetMetadataTooLargeException() {
+        // Error with metadata provided by the user should propagate the exception, so they can handle it.
+        testCommitSyncFailsWithErrorException(Errors.OFFSET_METADATA_TOO_LARGE);
+    }
+
+    @Test
+    public void testCommitSyncThrowsInvalidCommitOffsetSizeException() {
+        // Error with data provided by the user should propagate the exception, so they can handle it.
+        testCommitSyncFailsWithErrorException(Errors.INVALID_COMMIT_OFFSET_SIZE);
+    }
+
+    @Test
+    public void testCommitSyncThrowsGroupAuthorizationException() {
+        testCommitSyncFailsWithErrorException(Errors.GROUP_AUTHORIZATION_FAILED);
+    }
+
+    private void testCommitSyncFailsWithErrorException(Errors commitError) {
+        CommitRequestManager commitRequestManger = create(false, 100);
+        when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(mockedNode));
+
+        Map<TopicPartition, OffsetAndMetadata> offsets = Collections.singletonMap(
+            new TopicPartition("topic", 1),
+            new OffsetAndMetadata(0));
+
+        // Send sync offset commit request that fails with an error that is expected to propagate
+        // the error.exception()
+        Long expirationTimeMs = time.milliseconds() + retryBackoffMs;
+        CompletableFuture<Void> commitResult = commitRequestManger.addOffsetCommitRequest(offsets, Optional.of(expirationTimeMs), false);
+        completeOffsetCommitRequestWithError(commitRequestManger, commitError);
+        assertFutureThrows(commitResult, commitError.exception().getClass());
     }
 
     @Test
@@ -324,15 +380,15 @@ public class CommitRequestManagerTest {
      * the timer is reset and the request is retried on the next interval.
      */
     @Test
-    public void testOffsetAutoCommitOnIntervalFailsWithRetriableOnStaleMemberEpoch() {
-        CommitRequestManager commitRequestManger = create(true, 100);
+    public void testCommitAsyncFailsWithRetriableOnStaleMemberEpoch() {
+        CommitRequestManager commitRequestManger = create(false, 100);
         when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(mockedNode));
 
         Map<TopicPartition, OffsetAndMetadata> offsets = Collections.singletonMap(
             new TopicPartition("topic", 1),
             new OffsetAndMetadata(0));
 
-        // Async auto-commit that won't be retried.
+        // Async commit that won't be retried.
         CompletableFuture<Void> commitResult = commitRequestManger.addOffsetCommitRequest(
             offsets, Optional.empty(), true);
         completeOffsetCommitRequestWithError(commitRequestManger, Errors.STALE_MEMBER_EPOCH);
@@ -342,6 +398,31 @@ public class CommitRequestManagerTest {
         // Commit should fail with RetriableCommitFailedException.
         assertTrue(commitResult.isDone());
         assertFutureThrows(commitResult, RetriableCommitFailedException.class);
+    }
+
+    @Test
+    public void testCommitAsyncFailsWithRetriableOnCoordinatorDisconnected() {
+        CommitRequestManager commitRequestManager = create(false, 100);
+        when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(mockedNode));
+
+        Map<TopicPartition, OffsetAndMetadata> offsets = Collections.singletonMap(
+            new TopicPartition("topic", 1),
+            new OffsetAndMetadata(0));
+
+        // Async commit that won't be retried.
+        CompletableFuture<Void> commitResult = commitRequestManager.addOffsetCommitRequest(
+            offsets, Optional.empty(), true);
+
+        NetworkClientDelegate.PollResult res = commitRequestManager.poll(time.milliseconds());
+        assertEquals(1, res.unsentRequests.size());
+        NetworkClientDelegate.UnsentRequest req = res.unsentRequests.get(0);
+        ClientResponse response = mockOffsetCommitResponseDisconnected("topic", 1, (short) 1, req);
+        response.onComplete();
+
+        // Commit should mark the coordinator unknown and fail with RetriableCommitFailedException.
+        assertTrue(commitResult.isDone());
+        assertFutureThrows(commitResult, RetriableCommitFailedException.class);
+        assertCoordinatorDisconnect();
     }
 
     @Test
@@ -407,8 +488,35 @@ public class CommitRequestManagerTest {
             testNonRetriable(futures);
             assertEmptyPendingRequests(commitRequestManger);
         }
+    }
 
-        assertCoordinatorDisconnect(error);
+    @Test
+    public void testOffsetFetchMarksCoordinatorUnknownOnCoordinatorDisconnectedAndRetries() {
+        CommitRequestManager commitRequestManger = create(true, 100);
+        when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(mockedNode));
+
+        Set<TopicPartition> partitions = new HashSet<>();
+        partitions.add(new TopicPartition("t1", 0));
+
+        long expirationTimeMs = time.milliseconds() + defaultApiTimeoutMs;
+        CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> result = commitRequestManger.addOffsetFetchRequest(partitions, expirationTimeMs);
+
+        NetworkClientDelegate.PollResult res = commitRequestManger.poll(time.milliseconds());
+        assertEquals(1, res.unsentRequests.size());
+        NetworkClientDelegate.UnsentRequest request = res.unsentRequests.get(0);
+        ClientResponse response = buildOffsetFetchClientResponseDisconnected(request);
+        response.onComplete();
+
+        // Request not completed just yet, but should have marked the coordinator unknown
+        assertFalse(result.isDone());
+        assertCoordinatorDisconnect();
+
+        // Request should be retried after backoff expires
+        time.sleep(100);
+        when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(mockedNode));
+        res = commitRequestManger.poll(time.milliseconds());
+        assertEquals(1, res.unsentRequests.size());
+        assertEquals(1, commitRequestManger.pendingRequests.inflightOffsetFetches.size());
     }
 
     @ParameterizedTest
@@ -433,28 +541,59 @@ public class CommitRequestManagerTest {
 
         // We expect that the request should not have been retried on this async commit.
         assertExceptionHandling(commitRequestManger, error, false);
-        assertCoordinatorDisconnect(error);
     }
 
+    @Test
+    public void testCommitAsyncThrowsKafkaExceptionForUnexpectedRetriableError() {
+        testCommitAsyncThrowsKafkaException(Errors.CORRUPT_MESSAGE);
+    }
 
     @Test
-    public void testAsyncOffsetCommitThrowsRetriableCommitExceptionForUnhandledRetriable() {
+    public void testCommitAsyncThrowsKafkaExceptionForUnexpectedNonRetriableError() {
+        testCommitAsyncThrowsKafkaException(Errors.UNKNOWN_SERVER_ERROR);
+    }
+
+    private void testCommitAsyncThrowsKafkaException(Errors error) {
         CommitRequestManager commitRequestManger = create(true, 100);
         when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(mockedNode));
 
         Map<TopicPartition, OffsetAndMetadata> offsets = Collections.singletonMap(new TopicPartition("topic", 1),
             new OffsetAndMetadata(0));
 
-        // Send commit request without expiration (async commit) that fails with retriable
-        // network exception that has no specific handling. Should fail with
-        // RetriableCommitException.
+        // Send async commit that fails with unexpected error. Should fail with KafkaException.
         CompletableFuture<Void> commitResult = commitRequestManger.addOffsetCommitRequest(offsets, Optional.empty(), false);
-        completeOffsetCommitRequestWithError(commitRequestManger, Errors.NETWORK_EXCEPTION);
+        completeOffsetCommitRequestWithError(commitRequestManger, error);
         NetworkClientDelegate.PollResult res = commitRequestManger.poll(time.milliseconds());
         assertEquals(0, res.unsentRequests.size());
         assertTrue(commitResult.isDone());
         assertTrue(commitResult.isCompletedExceptionally());
-        assertFutureThrows(commitResult, RetriableCommitFailedException.class);
+        assertFutureThrows(commitResult, KafkaException.class);
+    }
+
+    @Test
+    public void testCommitSyncThrowsKafkaExceptionForUnexpectedRetriableError() {
+        testCommitSyncThrowsKafkaException(Errors.CORRUPT_MESSAGE);
+    }
+
+    @Test
+    public void testCommitSyncThrowsKafkaExceptionForUnexpectedNonRetriableError() {
+        testCommitSyncThrowsKafkaException(Errors.UNKNOWN_SERVER_ERROR);
+    }
+
+    private void testCommitSyncThrowsKafkaException(Errors error) {
+        CommitRequestManager commitRequestManger = create(false, 100);
+        when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(mockedNode));
+
+        Map<TopicPartition, OffsetAndMetadata> offsets = Collections.singletonMap(
+            new TopicPartition("topic", 1),
+            new OffsetAndMetadata(0));
+
+        // Send sync commit that fails with an unexpected error. Should fail with a KafkaException.
+        long expirationTimeMs = time.milliseconds() + retryBackoffMs;
+        CompletableFuture<Void> commitResult = commitRequestManger.addOffsetCommitRequest(offsets, Optional.of(expirationTimeMs), false);
+        completeOffsetCommitRequestWithError(commitRequestManger, error);
+        assertTrue(commitResult.isDone());
+        assertFutureThrows(commitResult, KafkaException.class);
     }
 
     @Test
@@ -486,8 +625,8 @@ public class CommitRequestManagerTest {
     }
 
     /**
-     * Sync commit requests that fail with a retriable error continue to be retry while there is
-     * time. When time expires, they should fail with a TimeoutException.
+     * Sync commit requests that fail with an expected retriable error should be retried
+     * while there is time. When time expires, they should fail with a TimeoutException.
      */
     @Test
     public void testOffsetCommitSyncFailedWithRetriableThrowsTimeoutWhenRetryTimeExpires() {
@@ -499,7 +638,7 @@ public class CommitRequestManagerTest {
             new OffsetAndMetadata(0));
 
         // Send offset commit request that fails with retriable error.
-        Long expirationTimeMs = time.milliseconds() + retryBackoffMs * 2;
+        long expirationTimeMs = time.milliseconds() + retryBackoffMs * 2;
         CompletableFuture<Void> commitResult = commitRequestManger.addOffsetCommitRequest(offsets, Optional.of(expirationTimeMs), false);
         completeOffsetCommitRequestWithError(commitRequestManger, Errors.COORDINATOR_NOT_AVAILABLE);
 
@@ -509,9 +648,7 @@ public class CommitRequestManagerTest {
         NetworkClientDelegate.PollResult res = commitRequestManger.poll(time.milliseconds());
         assertEquals(0, res.unsentRequests.size());
         assertTrue(commitResult.isDone());
-        assertTrue(commitResult.isCompletedExceptionally());
-        Throwable t = assertThrows(ExecutionException.class, () -> commitResult.get());
-        assertEquals(TimeoutException.class, t.getCause().getClass());
+        assertFutureThrows(commitResult, TimeoutException.class);
     }
 
     /**
@@ -538,10 +675,8 @@ public class CommitRequestManagerTest {
         // We expect that the request should not have been retried on this async commit.
         assertExceptionHandling(commitRequestManger, retriableError, false);
 
-        // Request should have been completed with a RetriableCommitException
-        Throwable t = assertThrows(ExecutionException.class, () -> commitResult.get());
-        assertEquals(RetriableCommitFailedException.class, t.getCause().getClass());
-        assertEquals(retriableError.exception().getClass(), t.getCause().getCause().getClass());
+        // Request should complete with a RetriableCommitException
+        assertFutureThrows(commitResult, RetriableCommitFailedException.class);
     }
 
 
@@ -564,10 +699,8 @@ public class CommitRequestManagerTest {
         assertRetryBackOff(commitRequestManger, retryBackoffMs);
     }
 
-    private void assertCoordinatorDisconnect(final Errors error) {
-        if (error.exception() instanceof DisconnectException) {
-            verify(coordinatorRequestManager).markCoordinatorUnknown(any(), any());
-        }
+    private void assertCoordinatorDisconnect() {
+        verify(coordinatorRequestManager).markCoordinatorUnknown(any(), anyLong());
     }
 
     private void assertExceptionHandling(CommitRequestManager commitRequestManger, Errors errors,
@@ -706,8 +839,7 @@ public class CommitRequestManagerTest {
         Map<TopicPartition, OffsetAndMetadata> offsets = Collections.singletonMap(new TopicPartition("topic", 1),
             new OffsetAndMetadata(0));
 
-        // Send commit request expected to be retried on STALE_MEMBER_EPOCH.
-        // errors while it does not expire).
+        // Send commit request expected to be retried on STALE_MEMBER_EPOCH error while it does not expire.
         long expirationTimeMs = time.milliseconds() + defaultApiTimeoutMs;
         commitRequestManager.addOffsetCommitRequest(offsets, Optional.of(expirationTimeMs), true);
 
@@ -780,7 +912,6 @@ public class CommitRequestManagerTest {
             Arguments.of(Errors.REQUEST_TIMED_OUT),
             Arguments.of(Errors.FENCED_INSTANCE_ID),
             Arguments.of(Errors.TOPIC_AUTHORIZATION_FAILED),
-            Arguments.of(Errors.NETWORK_EXCEPTION),
             Arguments.of(Errors.STALE_MEMBER_EPOCH),
             Arguments.of(Errors.UNKNOWN_MEMBER_ID));
     }
@@ -831,7 +962,8 @@ public class CommitRequestManagerTest {
         res.unsentRequests.get(0).handler().onComplete(buildOffsetFetchClientResponse(
                 res.unsentRequests.get(0),
                 topicPartitionData,
-                Errors.NONE));
+                Errors.NONE,
+                false));
         if (isRetriable)
             testRetriable(commitRequestManger, Collections.singletonList(future));
         else
@@ -957,7 +1089,12 @@ public class CommitRequestManagerTest {
                 Optional.of(1),
                 "metadata",
                 Errors.NONE)));
-        return buildOffsetFetchClientResponse(request, topicPartitionData, error);
+        return buildOffsetFetchClientResponse(request, topicPartitionData, error, false);
+    }
+
+    private ClientResponse buildOffsetFetchClientResponseDisconnected(
+        final NetworkClientDelegate.UnsentRequest request) {
+        return buildOffsetFetchClientResponse(request, Collections.emptyMap(), Errors.NONE, true);
     }
 
     private ClientResponse buildOffsetCommitClientResponse(final OffsetCommitResponse commitResponse) {
@@ -999,10 +1136,37 @@ public class CommitRequestManagerTest {
         );
     }
 
+    public ClientResponse mockOffsetCommitResponseDisconnected(String topic, int partition,
+                                                               short apiKeyVersion,
+                                                               NetworkClientDelegate.UnsentRequest unsentRequest) {
+        OffsetCommitResponseData responseData = new OffsetCommitResponseData()
+            .setTopics(Arrays.asList(
+                new OffsetCommitResponseData.OffsetCommitResponseTopic()
+                    .setName(topic)
+                    .setPartitions(Collections.singletonList(
+                        new OffsetCommitResponseData.OffsetCommitResponsePartition()
+                            .setErrorCode(Errors.NONE.code())
+                            .setPartitionIndex(partition)))));
+        OffsetCommitResponse response = mock(OffsetCommitResponse.class);
+        when(response.data()).thenReturn(responseData);
+        return new ClientResponse(
+            new RequestHeader(ApiKeys.OFFSET_COMMIT, apiKeyVersion, "", 1),
+            unsentRequest.handler(),
+            "-1",
+            time.milliseconds(),
+            time.milliseconds(),
+            true,
+            null,
+            null,
+            new OffsetCommitResponse(responseData)
+        );
+    }
+
     private ClientResponse buildOffsetFetchClientResponse(
             final NetworkClientDelegate.UnsentRequest request,
             final Map<TopicPartition, OffsetFetchResponse.PartitionData> topicPartitionData,
-            final Errors error) {
+            final Errors error,
+            final boolean disconnected) {
         AbstractRequest abstractRequest = request.requestBuilder().build();
         assertTrue(abstractRequest instanceof OffsetFetchRequest);
         OffsetFetchRequest offsetFetchRequest = (OffsetFetchRequest) abstractRequest;
@@ -1014,7 +1178,7 @@ public class CommitRequestManagerTest {
                 "-1",
                 time.milliseconds(),
                 time.milliseconds(),
-                false,
+                disconnected,
                 null,
                 null,
                 response
