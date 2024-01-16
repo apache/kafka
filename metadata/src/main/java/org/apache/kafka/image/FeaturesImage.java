@@ -46,6 +46,18 @@ public final class FeaturesImage {
         ZkMigrationState.NONE
     );
 
+    public static final FeaturesImage LATEST = new FeaturesImage(
+        Collections.emptyMap(),
+        MetadataVersion.latest(),
+        ZkMigrationState.NONE
+    );
+
+    public static final FeaturesImage LATEST_PRODUCTION = new FeaturesImage(
+        Collections.emptyMap(),
+        MetadataVersion.LATEST_PRODUCTION,
+        ZkMigrationState.NONE
+    );
+
     private final Map<String, Short> finalizedVersions;
 
     private final MetadataVersion metadataVersion;

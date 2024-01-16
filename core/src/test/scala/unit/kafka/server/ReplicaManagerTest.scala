@@ -6173,7 +6173,7 @@ class ReplicaManagerTest {
   private def imageFromTopics(topicsImage: TopicsImage): MetadataImage = {
     new MetadataImage(
       new MetadataProvenance(100L, 10, 1000L),
-      FeaturesImage.EMPTY,
+      FeaturesImage.LATEST,
       ClusterImageTest.IMAGE1,
       topicsImage,
       ConfigurationsImage.EMPTY,
