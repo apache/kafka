@@ -1123,7 +1123,7 @@ class LogManagerTest {
 
     val props = new Properties()
     props.putAll(logProps)
-    props.put(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, true)
+    props.put(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, "true")
     val logConfig = new LogConfig(props)
     logManager = TestUtils.createLogManager(
       defaultConfig = logConfig,
