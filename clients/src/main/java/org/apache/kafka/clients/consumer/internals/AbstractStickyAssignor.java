@@ -862,7 +862,7 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
 
             List<TopicPartition> unassignedPartitions = new ArrayList<>(totalPartitionsCount - sortedAssignedPartitions.size());
 
-            Collections.sort(sortedAssignedPartitions, Comparator.comparing(TopicPartition::topic).thenComparing(TopicPartition::partition));
+            sortedAssignedPartitions.sort(Comparator.comparing(TopicPartition::topic).thenComparing(TopicPartition::partition));
 
             boolean shouldAddDirectly = false;
             Iterator<TopicPartition> sortedAssignedPartitionsIter = sortedAssignedPartitions.iterator();
@@ -961,7 +961,7 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
                     currentPartitionConsumer.put(topicPartition, entry.getKey());
 
             List<String> sortedAllTopics = new ArrayList<>(topic2AllPotentialConsumers.keySet());
-            Collections.sort(sortedAllTopics, new TopicComparator(topic2AllPotentialConsumers));
+            sortedAllTopics.sort(new TopicComparator(topic2AllPotentialConsumers));
             sortedAllPartitions = getAllTopicPartitions(sortedAllTopics);
 
             sortedCurrentSubscriptions = new TreeSet<>(new SubscriptionComparator(currentAssignment));
@@ -1054,7 +1054,7 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
 
             List<TopicPartition> unassignedPartitions = new ArrayList<>();
 
-            Collections.sort(sortedAssignedPartitions, new PartitionComparator(topic2AllPotentialConsumers));
+            sortedAssignedPartitions.sort(new PartitionComparator(topic2AllPotentialConsumers));
 
             boolean shouldAddDirectly = false;
             Iterator<TopicPartition> sortedAssignedPartitionsIter = sortedAssignedPartitions.iterator();

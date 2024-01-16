@@ -305,7 +305,7 @@ public class HttpAccessTokenRetriever implements AccessTokenRetriever {
     static String formatErrorMessage(String errorResponseBody) {
         // See https://www.ietf.org/rfc/rfc6749.txt, section 5.2 for the format
         // of this error message.
-        if (errorResponseBody == null || errorResponseBody.trim().equals("")) {
+        if (errorResponseBody == null || errorResponseBody.trim().isEmpty()) {
             return "{}";
         }
         ObjectMapper mapper = new ObjectMapper();

@@ -161,7 +161,7 @@ public abstract class TimestampConverter<R extends ConnectRecord<R>> implements 
             public Date toRaw(Config config, Object orig) {
                 if (!(orig instanceof Long))
                     throw new DataException("Expected Unix timestamp to be a Long, but found " + orig.getClass());
-                Long unixTime = (Long) orig;
+                long unixTime = (Long) orig;
                 switch (config.unixPrecision) {
                     case UNIX_PRECISION_SECONDS:
                         return Timestamp.toLogical(Timestamp.SCHEMA, TimeUnit.SECONDS.toMillis(unixTime));
@@ -182,7 +182,7 @@ public abstract class TimestampConverter<R extends ConnectRecord<R>> implements 
 
             @Override
             public Long toType(Config config, Date orig) {
-                Long unixTimeMillis = Timestamp.fromLogical(Timestamp.SCHEMA, orig);
+                long unixTimeMillis = Timestamp.fromLogical(Timestamp.SCHEMA, orig);
                 switch (config.unixPrecision) {
                     case UNIX_PRECISION_SECONDS:
                         return TimeUnit.MILLISECONDS.toSeconds(unixTimeMillis);
@@ -280,10 +280,10 @@ public abstract class TimestampConverter<R extends ConnectRecord<R>> implements 
             this.format = format;
             this.unixPrecision = unixPrecision;
         }
-        String field;
-        String type;
-        SimpleDateFormat format;
-        String unixPrecision;
+        final String field;
+        final String type;
+        final SimpleDateFormat format;
+        final String unixPrecision;
     }
     private Config config;
     private Cache<Schema, Schema> schemaUpdateCache;

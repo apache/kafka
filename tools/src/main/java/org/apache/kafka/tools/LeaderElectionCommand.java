@@ -167,11 +167,11 @@ public class LeaderElectionCommand {
 
         if (!failed.isEmpty()) {
             AdminCommandFailedException rootException =
-                new AdminCommandFailedException(String.format("%s replica(s) could not be elected", failed.size()));
-            failed.entrySet().forEach(entry -> {
+                new AdminCommandFailedException(String.format("%d replica(s) could not be elected", failed.size()));
+            failed.forEach((key, value) -> {
                 System.out.println(String.format("Error completing leader election (%s) for partition: %s: %s",
-                    electionType, entry.getKey(), entry.getValue()));
-                rootException.addSuppressed(entry.getValue());
+                    electionType, key, value));
+                rootException.addSuppressed(value);
             });
             throw rootException;
         }
@@ -220,7 +220,7 @@ public class LeaderElectionCommand {
             .filter(i -> Collections.frequency(partitions, i) > 1)
             .collect(Collectors.toSet());
 
-        if (duplicatePartitions.size() > 0) {
+        if (!duplicatePartitions.isEmpty()) {
             throw new AdminOperationException(String.format(
                 "Replica election data contains duplicate partitions: %s", String.join(",", duplicatePartitions.toString()))
             );

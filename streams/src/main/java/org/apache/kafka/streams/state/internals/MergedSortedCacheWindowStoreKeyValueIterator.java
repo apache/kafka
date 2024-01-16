@@ -76,7 +76,9 @@ class MergedSortedCacheWindowStoreKeyValueIterator
     @Override
     Windowed<Bytes> deserializeCacheKey(final Bytes cacheKey) {
         final byte[] binaryKey = cacheFunction.key(cacheKey).get();
-        return storeKeyToWindowKey.toWindowKey(binaryKey, windowSize, serdes.keyDeserializer(), serdes.topic());
+        try (final Deserializer<Bytes> keyDeserializer = serdes.keyDeserializer()) {
+            return storeKeyToWindowKey.toWindowKey(binaryKey, windowSize, keyDeserializer, serdes.topic());
+        }
     }
 
     @Override

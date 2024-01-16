@@ -1488,7 +1488,7 @@ public class ConfigDef {
         }
 
         List<ConfigKey> configs = new ArrayList<>(configKeys.values());
-        Collections.sort(configs, (k1, k2) -> compare(k1, k2, groupOrd));
+        configs.sort((k1, k2) -> compare(k1, k2, groupOrd));
         return configs;
     }
 
@@ -1668,10 +1668,7 @@ public class ConfigDef {
     }
 
     private static void addConfigDetail(StringBuilder builder, String name, String value) {
-        builder.append("<tr>" +
-                "<th>" + name + ":</th>" +
-                "<td>" + value + "</td>" +
-                "</tr>\n");
+        builder.append("<tr>" + "<th>").append(name).append(":</th>").append("<td>").append(value).append("</td>").append("</tr>\n");
     }
 
 }

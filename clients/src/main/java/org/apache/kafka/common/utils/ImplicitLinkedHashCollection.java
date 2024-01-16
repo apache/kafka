@@ -689,8 +689,6 @@ public class ImplicitLinkedHashCollection<E extends ImplicitLinkedHashCollection
             array.add(e);
         }
         array.sort(comparator);
-        for (E e : array) {
-            add(e);
-        }
+        this.addAll(array);
     }
 }

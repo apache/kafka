@@ -462,7 +462,7 @@ public class ProcessorStateManager implements StateManager {
 
         if (!restoreRecords.isEmpty()) {
             // restore states from changelog records and update the snapshot offset as the batch end record's offset
-            final Long batchEndOffset = restoreRecords.get(restoreRecords.size() - 1).offset();
+            final long batchEndOffset = restoreRecords.get(restoreRecords.size() - 1).offset();
             final RecordBatchingStateRestoreCallback restoreCallback = adapt(storeMetadata.restoreCallback);
             final List<ConsumerRecord<byte[], byte[]>> convertedRecords = restoreRecords.stream()
                 .map(storeMetadata.recordConverter::convert)

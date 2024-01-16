@@ -244,7 +244,7 @@ public class ClientMetricsCommand {
                 .describedAs("push interval")
                 .ofType(java.lang.Integer.class);
 
-            nl = System.getProperty("line.separator");
+            nl = System.lineSeparator();
 
             String[] matchSelectors = new String[] {
                 "client_id", "client_instance_id", "client_software_name",

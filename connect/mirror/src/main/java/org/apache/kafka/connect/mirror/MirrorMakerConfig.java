@@ -151,9 +151,8 @@ public class MirrorMakerConfig extends AbstractConfig {
 
     // loads properties of the form cluster.x.y.z
     Map<String, String> clusterProps(String cluster) {
-        Map<String, String> props = new HashMap<>();
 
-        props.putAll(stringsWithPrefixStripped(cluster + "."));
+        Map<String, String> props = new HashMap<>(stringsWithPrefixStripped(cluster + "."));
 
         for (String k : MirrorClientConfig.CLIENT_CONFIG_DEF.names()) {
             String v = props.get(k);
@@ -230,9 +229,8 @@ public class MirrorMakerConfig extends AbstractConfig {
 
     // loads properties of the form cluster.x.y.z and source->target.x.y.z
     public Map<String, String> connectorBaseConfig(SourceAndTarget sourceAndTarget, Class<?> connectorClass) {
-        Map<String, String> props = new HashMap<>();
 
-        props.putAll(rawProperties);
+        Map<String, String> props = new HashMap<>(rawProperties);
         props.keySet().retainAll(allConfigNames());
         
         props.putAll(stringsWithPrefix(CONFIG_PROVIDERS_CONFIG));

@@ -67,8 +67,7 @@ public class TopicsSpec extends Message {
     }
 
     public TopicsSpec immutableCopy() {
-        HashMap<String, PartitionsSpec> mapCopy = new HashMap<>();
-        mapCopy.putAll(map);
+        Map<String, PartitionsSpec> mapCopy = new HashMap<>(map);
         return new TopicsSpec(Collections.unmodifiableMap(mapCopy));
     }
 
@@ -78,7 +77,7 @@ public class TopicsSpec extends Message {
      * @return      A map from topic names to PartitionsSpec objects.
      */
     public Map<String, PartitionsSpec> materialize() {
-        HashMap<String, PartitionsSpec> all = new HashMap<>();
+        Map<String, PartitionsSpec> all = new HashMap<>();
         for (Map.Entry<String, PartitionsSpec> entry : map.entrySet()) {
             String topicName = entry.getKey();
             PartitionsSpec partitions = entry.getValue();

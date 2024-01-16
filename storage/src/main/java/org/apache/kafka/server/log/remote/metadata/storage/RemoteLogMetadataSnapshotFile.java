@@ -23,7 +23,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.File;
-import java.io.FileInputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.Channels;
@@ -145,7 +144,7 @@ public class RemoteLogMetadataSnapshotFile {
             return Optional.empty();
         }
 
-        try (ReadableByteChannel channel = Channels.newChannel(new FileInputStream(metadataStoreFile))) {
+        try (ReadableByteChannel channel = Channels.newChannel(Files.newInputStream(metadataStoreFile.toPath()))) {
 
             // header: <version:short><metadata-partition:int><metadata-partition-offset:long>
             // Read header

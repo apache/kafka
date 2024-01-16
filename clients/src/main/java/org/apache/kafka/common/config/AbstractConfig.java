@@ -111,9 +111,7 @@ public class AbstractConfig {
         this.originals = resolveConfigVariables(configProviderProps, (Map<String, Object>) originals);
         this.values = definition.parse(this.originals);
         Map<String, Object> configUpdates = postProcessParsedConfig(Collections.unmodifiableMap(this.values));
-        for (Map.Entry<String, Object> update : configUpdates.entrySet()) {
-            this.values.put(update.getKey(), update.getValue());
-        }
+        this.values.putAll(configUpdates);
         definition.parse(this.values);
         this.definition = definition;
         if (doLog)
@@ -521,11 +519,10 @@ public class AbstractConfig {
     private Map<String, ?> resolveConfigVariables(Map<String, ?> configProviderProps, Map<String, Object> originals) {
         Map<String, String> providerConfigString;
         Map<String, ?> configProperties;
-        Map<String, Object> resolvedOriginals = new HashMap<>();
         // As variable configs are strings, parse the originals and obtain the potential variable configs.
         Map<String, String> indirectVariables = extractPotentialVariables(originals);
 
-        resolvedOriginals.putAll(originals);
+        Map<String, Object> resolvedOriginals = new HashMap<>(originals);
         if (configProviderProps == null || configProviderProps.isEmpty()) {
             providerConfigString = indirectVariables;
             configProperties = originals;

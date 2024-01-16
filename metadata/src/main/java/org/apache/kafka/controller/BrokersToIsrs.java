@@ -258,8 +258,7 @@ public class BrokersToIsrs {
         } else {
             int[] newPartitions = new int[partitions.length - 1];
             int j = 0;
-            for (int i = 0; i < partitions.length; i++) {
-                int partition = partitions[i];
+            for (int partition : partitions) {
                 if (partition != removedPartition) {
                     newPartitions[j++] = partition;
                 }

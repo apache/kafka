@@ -60,12 +60,13 @@ public class FutureUtils {
             timeout.setStackTrace(t.getStackTrace());
             throw timeout;
         } catch (Throwable t)  {
-            if (t instanceof ExecutionException) {
-                ExecutionException executionException = (ExecutionException) t;
-                t = executionException.getCause();
+            Throwable throwable = t;
+            if (throwable instanceof ExecutionException) {
+                ExecutionException executionException = (ExecutionException) throwable;
+                throwable = executionException.getCause();
             }
-            log.error("{}Received a fatal error while waiting for {}", prefix, action, t);
-            throw new RuntimeException("Received a fatal error while waiting for " + action, t);
+            log.error("{}Received a fatal error while waiting for {}", prefix, action, throwable);
+            throw new RuntimeException("Received a fatal error while waiting for " + action, throwable);
         }
     }
 

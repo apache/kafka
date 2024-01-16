@@ -80,8 +80,7 @@ public class ConnectMetrics {
                 .timeWindow(sampleWindowMs, TimeUnit.MILLISECONDS).recordLevel(
                         Sensor.RecordingLevel.forName(metricsRecordingLevel));
 
-        Map<String, Object> contextLabels = new HashMap<>();
-        contextLabels.putAll(config.originalsWithPrefix(CommonClientConfigs.METRICS_CONTEXT_PREFIX));
+        Map<String, Object> contextLabels = new HashMap<>(config.originalsWithPrefix(CommonClientConfigs.METRICS_CONTEXT_PREFIX));
         contextLabels.put(WorkerConfig.CONNECT_KAFKA_CLUSTER_ID, clusterId);
         Object groupId = config.originals().get(DistributedConfig.GROUP_ID_CONFIG);
         if (groupId != null) {

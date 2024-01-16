@@ -367,7 +367,7 @@ public class ClientMetricsManager implements Closeable {
         }
 
         if (request.data().metrics() != null && request.data().metrics().length > clientTelemetryMaxBytes) {
-            String msg = String.format("Telemetry request from [%s] is larger than the maximum allowed size [%s]",
+            String msg = String.format("Telemetry request from [%s] is larger than the maximum allowed size [%d]",
                 request.data().clientInstanceId(), clientTelemetryMaxBytes);
             throw new TelemetryTooLargeException(msg);
         }

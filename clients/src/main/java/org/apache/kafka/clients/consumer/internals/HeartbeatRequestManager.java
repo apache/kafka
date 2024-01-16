@@ -380,7 +380,7 @@ public class HeartbeatRequestManager implements RequestManager {
                 break;
 
             case FENCED_MEMBER_EPOCH:
-                message = String.format("GroupHeartbeatRequest failed for member %s because epoch %s is fenced.",
+                message = String.format("GroupHeartbeatRequest failed for member %s because epoch %d is fenced.",
                         membershipManager.memberId(), membershipManager.memberEpoch());
                 logInfo(message, response, currentTimeMs);
                 membershipManager.transitionToFenced();

@@ -110,8 +110,7 @@ public class MirrorClientConfig extends AbstractConfig {
     }
     
     private Map<String, Object> clientConfig(String prefix) {
-        Map<String, Object> props = new HashMap<>();
-        props.putAll(valuesWithPrefixOverride(prefix));
+        Map<String, Object> props = new HashMap<>(valuesWithPrefixOverride(prefix));
         props.keySet().retainAll(CLIENT_CONFIG_DEF.names());
         props.entrySet().removeIf(x -> x.getValue() == null);
         return props;
