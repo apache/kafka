@@ -23,10 +23,13 @@ import org.apache.kafka.clients.consumer.internals.events.ApplicationEventProces
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEventHandler;
 import org.apache.kafka.clients.consumer.internals.events.ErrorBackgroundEvent;
 import org.apache.kafka.clients.consumer.internals.events.GroupMetadataUpdateEvent;
+import org.apache.kafka.clients.consumer.internals.metrics.HeartbeatMetrics;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
 import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatRequestData;
+import org.apache.kafka.common.metrics.Measurable;
+import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.ConsumerGroupHeartbeatRequest;
 import org.apache.kafka.common.requests.ConsumerGroupHeartbeatResponse;
@@ -41,6 +44,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.SortedSet;
 import java.util.TreeSet;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 /**
@@ -79,6 +83,11 @@ public class HeartbeatRequestManager implements RequestManager {
     private final int maxPollIntervalMs;
 
     /**
+     * The last time in Ms the heartbeat was sent to the coordinator
+     */
+    private long lastHeartbeatSend = 0L;
+
+    /**
      * CoordinatorRequestManager manages the connection to the group coordinator
      */
     private final CoordinatorRequestManager coordinatorRequestManager;
@@ -108,6 +117,7 @@ public class HeartbeatRequestManager implements RequestManager {
      * sending heartbeat until the next poll.
      */
     private final Timer pollTimer;
+    private final HeartbeatMetrics heartbeatMetrics;
 
     private GroupMetadataUpdateEvent previousGroupMetadataUpdateEvent = null;
 
@@ -118,7 +128,8 @@ public class HeartbeatRequestManager implements RequestManager {
         final CoordinatorRequestManager coordinatorRequestManager,
         final SubscriptionState subscriptions,
         final MembershipManager membershipManager,
-        final BackgroundEventHandler backgroundEventHandler) {
+        final BackgroundEventHandler backgroundEventHandler,
+        final Metrics metrics) {
         this.coordinatorRequestManager = coordinatorRequestManager;
         this.logger = logContext.logger(getClass());
         this.membershipManager = membershipManager;
@@ -130,6 +141,8 @@ public class HeartbeatRequestManager implements RequestManager {
         this.heartbeatRequestState = new HeartbeatRequestState(logContext, time, 0, retryBackoffMs,
             retryBackoffMaxMs, maxPollIntervalMs);
         this.pollTimer = time.timer(maxPollIntervalMs);
+        this.heartbeatMetrics = new HeartbeatMetrics(metrics);
+        registerLastSentHeartbeatMetric(metrics);
     }
 
     // Visible for testing
@@ -141,7 +154,8 @@ public class HeartbeatRequestManager implements RequestManager {
         final MembershipManager membershipManager,
         final HeartbeatState heartbeatState,
         final HeartbeatRequestState heartbeatRequestState,
-        final BackgroundEventHandler backgroundEventHandler) {
+        final BackgroundEventHandler backgroundEventHandler,
+        final Metrics metrics) {
         this.logger = logContext.logger(this.getClass());
         this.maxPollIntervalMs = config.getInt(CommonClientConfigs.MAX_POLL_INTERVAL_MS_CONFIG);
         this.coordinatorRequestManager = coordinatorRequestManager;
@@ -150,6 +164,8 @@ public class HeartbeatRequestManager implements RequestManager {
         this.membershipManager = membershipManager;
         this.backgroundEventHandler = backgroundEventHandler;
         this.pollTimer = timer;
+        this.heartbeatMetrics = new HeartbeatMetrics(metrics);
+        registerLastSentHeartbeatMetric(metrics);
     }
 
     /**
@@ -245,6 +261,7 @@ public class HeartbeatRequestManager implements RequestManager {
         NetworkClientDelegate.UnsentRequest request = makeHeartbeatRequest(ignoreResponse);
         heartbeatRequestState.onSendAttempt(currentTimeMs);
         membershipManager.onHeartbeatRequestSent();
+        lastHeartbeatSend = currentTimeMs;
         return request;
     }
 
@@ -413,6 +430,20 @@ public class HeartbeatRequestManager implements RequestManager {
     private void handleFatalFailure(Throwable error) {
         backgroundEventHandler.add(new ErrorBackgroundEvent(error));
         membershipManager.transitionToFatal();
+    }
+
+    private void registerLastSentHeartbeatMetric(Metrics metrics) {
+        Measurable lastHeartbeat = (config, now) -> {
+            if (lastHeartbeatSend == 0L)
+                // if no heartbeat is ever triggered, just return -1.
+                return -1d;
+            else
+                return TimeUnit.SECONDS.convert(now - lastHeartbeatSend, TimeUnit.MILLISECONDS);
+        };
+        heartbeatMetrics.registerMeasurable(
+                "heartbeat-time-max",
+            "The max time taken to receive a response to a heartbeat request",
+                lastHeartbeat);
     }
 
     /**
