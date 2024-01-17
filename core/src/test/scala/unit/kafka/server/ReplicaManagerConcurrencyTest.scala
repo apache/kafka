@@ -162,7 +162,7 @@ class ReplicaManagerConcurrencyTest extends Logging {
       setClusterId(Uuid.randomUuid().toString).
       setNodeId(1).
       build()
-    TestUtils.formatDirectories(immutable.Seq(logDir.getAbsolutePath), metaProperties, MetadataVersion.latest(), None)
+    TestUtils.formatDirectories(immutable.Seq(logDir.getAbsolutePath), metaProperties, MetadataVersion.latestTesting(), None)
 
     val props = new Properties
     props.put(KafkaConfig.QuorumVotersProp, "100@localhost:12345")

@@ -152,7 +152,7 @@ object Defaults {
   val LeaderImbalancePerBrokerPercentage = 10
   val LeaderImbalanceCheckIntervalSeconds = 300
   val InterBrokerSecurityProtocol = SecurityProtocol.PLAINTEXT.toString
-  val InterBrokerProtocolVersion = MetadataVersion.latest.version
+  val InterBrokerProtocolVersion = MetadataVersion.latestProduction.version
 
   /** ********* Controlled shutdown configuration ***********/
   val ControlledShutdownMaxRetries = 3
