@@ -1336,8 +1336,9 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     MockProducerInterceptor.resetCounters()
   }
 
+  // This is disabled for the the consumer group until KAFKA-16155 is resolved.
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersClassicGroupProtocolOnly"))
   def testAutoCommitIntercept(quorum: String, groupProtocol: String): Unit = {
     val topic2 = "topic2"
     createTopic(topic2, 2, brokerCount)

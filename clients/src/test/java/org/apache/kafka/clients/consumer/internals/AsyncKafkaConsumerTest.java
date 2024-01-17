@@ -850,6 +850,22 @@ public class AsyncKafkaConsumerTest {
     }
 
     @Test
+    public void testInterceptorAutoCommitOnClose() {
+        Properties props = requiredConsumerPropertiesAndGroupId("test-id");
+        props.setProperty(ConsumerConfig.INTERCEPTOR_CLASSES_CONFIG, MockConsumerInterceptor.class.getName());
+        props.setProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "true");
+
+        consumer = newConsumer(props);
+        assertEquals(1, MockConsumerInterceptor.INIT_COUNT.get());
+        completeCommitApplicationEventSuccessfully();
+
+        consumer.close(Duration.ZERO);
+
+        assertEquals(1, MockConsumerInterceptor.ON_COMMIT_COUNT.get());
+        assertEquals(1, MockConsumerInterceptor.CLOSE_COUNT.get());
+    }
+
+    @Test
     public void testInterceptorCommitSync() {
         Properties props = requiredConsumerPropertiesAndGroupId("test-id");
         props.setProperty(ConsumerConfig.INTERCEPTOR_CLASSES_CONFIG, MockConsumerInterceptor.class.getName());

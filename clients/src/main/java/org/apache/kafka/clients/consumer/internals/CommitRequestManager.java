@@ -97,10 +97,17 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
             final OffsetCommitCallbackInvoker offsetCommitCallbackInvoker,
             final String groupId,
             final Optional<String> groupInstanceId) {
-        this(time, logContext, subscriptions, config, coordinatorRequestManager,
-                offsetCommitCallbackInvoker, groupId,
-                groupInstanceId, config.getLong(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG),
-                config.getLong(ConsumerConfig.RETRY_BACKOFF_MAX_MS_CONFIG), OptionalDouble.empty());
+        this(time,
+            logContext,
+            subscriptions,
+            config,
+            coordinatorRequestManager,
+            offsetCommitCallbackInvoker,
+            groupId,
+            groupInstanceId,
+            config.getLong(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG),
+            config.getLong(ConsumerConfig.RETRY_BACKOFF_MAX_MS_CONFIG),
+            OptionalDouble.empty());
     }
 
     // Visible for testing

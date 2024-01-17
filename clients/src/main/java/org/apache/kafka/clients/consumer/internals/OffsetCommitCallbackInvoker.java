@@ -33,6 +33,7 @@ import java.util.concurrent.LinkedBlockingQueue;
  */
 public class OffsetCommitCallbackInvoker {
     private final ConsumerInterceptors<?, ?> interceptors;
+    private boolean hasFencedException = false;
 
     OffsetCommitCallbackInvoker(ConsumerInterceptors<?, ?> interceptors) {
         this.interceptors = interceptors;
@@ -57,23 +58,22 @@ public class OffsetCommitCallbackInvoker {
         callbackQueue.add(new OffsetCommitCallbackTask(callback, offsets, exception));
     }
 
-    /**
-     * @return true if an offset commit was fenced.
-     */
-    public boolean executeCallbacks() {
-        boolean isFenced = false;
+    public void executeCallbacks() {
         while (!callbackQueue.isEmpty()) {
             OffsetCommitCallbackTask task = callbackQueue.poll();
             if (task != null) {
 
                 if (task.exception instanceof FencedInstanceIdException)
-                    isFenced = true;
+                    hasFencedException = true;
 
                 task.callback.onComplete(task.offsets, task.exception);
 
             }
         }
-        return isFenced;
+    }
+
+    public boolean hasFencedException() {
+        return hasFencedException;
     }
 
     private static class OffsetCommitCallbackTask {
