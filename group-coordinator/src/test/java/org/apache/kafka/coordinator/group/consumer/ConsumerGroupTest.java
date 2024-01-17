@@ -216,6 +216,36 @@ public class ConsumerGroupTest {
     }
 
     @Test
+    public void testUpdatingMemberUpdatesPartitionEpochWhenPartitionIsReassignedBeforeBeingRevoked() {
+        Uuid fooTopicId = Uuid.randomUuid();
+
+        ConsumerGroup consumerGroup = createConsumerGroup("foo");
+        ConsumerGroupMember member;
+
+        member = new ConsumerGroupMember.Builder("member")
+            .setMemberEpoch(10)
+            .setAssignedPartitions(Collections.emptyMap())
+            .setPartitionsPendingRevocation(mkAssignment(
+                mkTopicAssignment(fooTopicId, 1)))
+            .build();
+
+        consumerGroup.updateMember(member);
+
+        assertEquals(10, consumerGroup.currentPartitionEpoch(fooTopicId, 1));
+
+        member = new ConsumerGroupMember.Builder(member)
+            .setMemberEpoch(11)
+            .setAssignedPartitions(mkAssignment(
+                mkTopicAssignment(fooTopicId, 1)))
+            .setPartitionsPendingRevocation(Collections.emptyMap())
+            .build();
+
+        consumerGroup.updateMember(member);
+
+        assertEquals(11, consumerGroup.currentPartitionEpoch(fooTopicId, 1));
+    }
+
+    @Test
     public void testDeletingMemberRemovesPartitionEpoch() {
         Uuid fooTopicId = Uuid.randomUuid();
         Uuid barTopicId = Uuid.randomUuid();

@@ -861,19 +861,9 @@ public class ConsumerGroup implements Group {
         ConsumerGroupMember oldMember,
         ConsumerGroupMember newMember
     ) {
-        if (oldMember == null) {
-            addPartitionEpochs(newMember.assignedPartitions(), newMember.memberEpoch());
-            addPartitionEpochs(newMember.partitionsPendingRevocation(), newMember.memberEpoch());
-        } else {
-            if (!oldMember.assignedPartitions().equals(newMember.assignedPartitions())) {
-                removePartitionEpochs(oldMember.assignedPartitions());
-                addPartitionEpochs(newMember.assignedPartitions(), newMember.memberEpoch());
-            }
-            if (!oldMember.partitionsPendingRevocation().equals(newMember.partitionsPendingRevocation())) {
-                removePartitionEpochs(oldMember.partitionsPendingRevocation());
-                addPartitionEpochs(newMember.partitionsPendingRevocation(), newMember.memberEpoch());
-            }
-        }
+        maybeRemovePartitionEpoch(oldMember);
+        addPartitionEpochs(newMember.assignedPartitions(), newMember.memberEpoch());
+        addPartitionEpochs(newMember.partitionsPendingRevocation(), newMember.memberEpoch());
     }
 
     /**
