@@ -54,7 +54,7 @@ import static org.apache.kafka.streams.state.internals.ValueAndTimestampDeserial
  */
 
 @SuppressWarnings("unchecked")
-public class KeyValueToTimestampedKeyValueByteStoreAdapter implements KeyValueStore<Bytes, byte[]>, TimestampedBytesStore {
+public class KeyValueToTimestampedKeyValueByteStoreAdapter implements KeyValueStore<Bytes, byte[]> {
     final KeyValueStore<Bytes, byte[]> store;
 
     KeyValueToTimestampedKeyValueByteStoreAdapter(final KeyValueStore<Bytes, byte[]> store) {
