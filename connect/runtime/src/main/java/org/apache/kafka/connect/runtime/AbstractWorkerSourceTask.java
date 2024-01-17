@@ -465,13 +465,8 @@ public abstract class AbstractWorkerSourceTask extends WorkerTask {
     }
 
     protected List<SourceRecord> poll() throws InterruptedException {
-        try {
-            return task.poll();
-        } catch (RetriableException | org.apache.kafka.common.errors.RetriableException e) {
-            log.warn("{} failed to poll records from SourceTask. Will retry operation.", this, e);
-            // Do nothing. Let the framework poll whenever it's ready.
-            return null;
-        }
+        retryWithToleranceOperator.reset();
+        return retryWithToleranceOperator.execute(task::poll, Stage.TASK_POLL, this.getClass());
     }
 
     /**
