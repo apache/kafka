@@ -94,6 +94,7 @@ public class ConsumerTestBuilder implements Closeable {
     public final ApplicationEventProcessor applicationEventProcessor;
     public final BackgroundEventHandler backgroundEventHandler;
     public final ConsumerRebalanceListenerInvoker rebalanceListenerInvoker;
+    private final ConsumerCoordinatorMetrics consumerCoordinatorMetrics;
     final MockClient client;
     final Optional<GroupInformation> groupInfo;
 
@@ -144,6 +145,11 @@ public class ConsumerTestBuilder implements Closeable {
         this.metadata = spy(new ConsumerMetadata(config, subscriptions, logContext, new ClusterResourceListeners()));
         this.metricsManager = createFetchMetricsManager(metrics);
         this.pollTimer = time.timer(groupRebalanceConfig.rebalanceTimeoutMs);
+        this.consumerCoordinatorMetrics = spy(new ConsumerCoordinatorMetrics(
+                subscriptions,
+                metrics,
+                CONSUMER_METRIC_GROUP_PREFIX
+        ));
 
         this.client = new MockClient(time, metadata);
         MetadataResponse metadataResponse = RequestTestUtils.metadataUpdateWith(1, new HashMap<String, Integer>() {
@@ -190,7 +196,7 @@ public class ConsumerTestBuilder implements Closeable {
                     coordinator,
                     gi.groupId,
                     gi.groupInstanceId,
-                    null));
+                    consumerCoordinatorMetrics));
             MembershipManager mm = spy(
                     new MembershipManagerImpl(
                         gi.groupId,
@@ -265,11 +271,7 @@ public class ConsumerTestBuilder implements Closeable {
                 metadata
             )
         );
-        ConsumerCoordinatorMetrics consumerCoordinatorMetrics = new ConsumerCoordinatorMetrics(
-                subscriptions,
-                metrics,
-                CONSUMER_METRIC_GROUP_PREFIX
-        );
+
         this.rebalanceListenerInvoker = new ConsumerRebalanceListenerInvoker(
                 logContext,
                 subscriptions,

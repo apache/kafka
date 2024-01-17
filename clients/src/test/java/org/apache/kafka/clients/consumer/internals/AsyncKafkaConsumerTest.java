@@ -51,6 +51,7 @@ import org.apache.kafka.clients.consumer.internals.events.SubscriptionChangeAppl
 import org.apache.kafka.clients.consumer.internals.events.UnsubscribeApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.ValidatePositionsApplicationEvent;
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
@@ -140,6 +141,7 @@ public class AsyncKafkaConsumerTest {
     private final ApplicationEventHandler applicationEventHandler = mock(ApplicationEventHandler.class);
     private final ConsumerMetadata metadata = mock(ConsumerMetadata.class);
     private final LinkedBlockingQueue<BackgroundEvent> backgroundEventQueue = new LinkedBlockingQueue<>();
+    private final Metrics metrics = new Metrics();
 
     @AfterEach
     public void resetAll() {
@@ -203,7 +205,7 @@ public class AsyncKafkaConsumerTest {
             applicationEventHandler,
             backgroundEventQueue,
             rebalanceListenerInvoker,
-            new Metrics(),
+            metrics,
             subscriptions,
             metadata,
             retryBackoffMs,
@@ -313,6 +315,9 @@ public class AsyncKafkaConsumerTest {
 
         assertEquals(topicPartitionOffsets, consumer.committed(topicPartitionOffsets.keySet(), Duration.ofMillis(1000)));
         verify(applicationEventHandler).addAndGet(ArgumentMatchers.isA(FetchCommittedOffsetsApplicationEvent.class), any());
+        final Metric metric = consumer.metrics()
+            .get(consumer.metricsRegistry().metricName("committed-time-ns-total", "consumer-metrics"));
+        assertTrue((double) metric.metricValue() > 0);
     }
 
     @Test
