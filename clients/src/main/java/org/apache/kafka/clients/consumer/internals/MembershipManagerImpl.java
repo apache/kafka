@@ -1134,8 +1134,21 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
         // Make assignment effective on the client by updating the subscription state.
         updateSubscription(assignedPartitions, false);
 
+        // Pause partitions to ensure that fetch does not start until the callback completes.
+        assignedPartitions.forEach(tp -> subscriptions.pause(tp.topicPartition()));
+
         // Invoke user call back.
         CompletableFuture<Void> result = invokeOnPartitionsAssignedCallback(addedPartitions);
+
+        // Resume partitions only if the callback succeeded.
+        result.whenComplete((error, callbackResult) -> {
+            if (error == null) {
+                assignedPartitions.forEach(tp -> subscriptions.resume(tp.topicPartition()));
+            } else {
+                log.warn("Leaving assigned partitions {} paused after onPartitionsAssigned " +
+                    "callback failed.", addedPartitions, error);
+            }
+        });
 
         // Clear topic names cache, removing topics that are not assigned to the member anymore.
         Set<String> assignedTopics = assignedPartitions.stream().map(TopicIdPartition::topic).collect(Collectors.toSet());
