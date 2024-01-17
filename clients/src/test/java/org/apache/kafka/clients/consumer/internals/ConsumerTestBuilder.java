@@ -217,6 +217,7 @@ public class ConsumerTestBuilder implements Closeable {
                     retryBackoffMs,
                     DEFAULT_RETRY_BACKOFF_MAX_MS,
                     gi.heartbeatJitterMs));
+
             HeartbeatRequestManager heartbeat = spy(new HeartbeatRequestManager(
                     logContext,
                     pollTimer,
@@ -225,7 +226,8 @@ public class ConsumerTestBuilder implements Closeable {
                     mm,
                     heartbeatState,
                     heartbeatRequestState,
-                    backgroundEventHandler));
+                    backgroundEventHandler,
+                    metrics));
 
             this.coordinatorRequestManager = Optional.of(coordinator);
             this.commitRequestManager = Optional.of(commit);

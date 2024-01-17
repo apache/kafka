@@ -28,6 +28,8 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatRequestData;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatResponseData;
+import org.apache.kafka.common.metrics.KafkaMetric;
+import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.ConsumerGroupHeartbeatRequest;
@@ -62,6 +64,7 @@ import static org.apache.kafka.clients.consumer.internals.ConsumerTestBuilder.DE
 import static org.apache.kafka.clients.consumer.internals.ConsumerTestBuilder.DEFAULT_RETRY_BACKOFF_MAX_MS;
 import static org.apache.kafka.clients.consumer.internals.ConsumerTestBuilder.DEFAULT_RETRY_BACKOFF_MS;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -78,6 +81,7 @@ public class HeartbeatRequestManagerTest {
     private int heartbeatIntervalMs = DEFAULT_HEARTBEAT_INTERVAL_MS;
     private int maxPollIntervalMs = DEFAULT_MAX_POLL_INTERVAL_MS;
     private long retryBackoffMaxMs = DEFAULT_RETRY_BACKOFF_MAX_MS;
+    private String metricGrpPrefix = "test-consumer";
     private static final String DEFAULT_GROUP_ID = "groupId";
 
     private ConsumerTestBuilder testBuilder;
@@ -95,6 +99,7 @@ public class HeartbeatRequestManagerTest {
     private final int memberEpoch = 1;
     private BackgroundEventHandler backgroundEventHandler;
     private BlockingQueue<BackgroundEvent> backgroundEventQueue;
+    private Metrics metrics = new Metrics();
 
     @BeforeEach
     public void setUp() {
@@ -671,18 +676,15 @@ public class HeartbeatRequestManagerTest {
         return new ConsumerConfig(prop);
     }
 
-    private HeartbeatRequestManager createHeartbeatRequestManager() {
-        LogContext logContext = new LogContext();
-        pollTimer = time.timer(maxPollIntervalMs);
-        return new HeartbeatRequestManager(
-            logContext,
-            pollTimer,
-            config(),
-            coordinatorRequestManager,
-            membershipManager,
-            heartbeatState,
-            heartbeatRequestState,
-            backgroundEventHandler);
+    private void assertMetricsRecorded() {
+        assertNotNull(getMetric("heartbeat-response-time-max"));
+        assertNotNull(getMetric("heartbeat-rate"));
+        assertNotNull(getMetric("heartbeat-total"));
+        assertNotNull(getMetric("last-heartbeat-seconds-ago"));
+    }
+
+    private KafkaMetric getMetric(final String name) {
+        return metrics.metrics().get(metrics.metricName(name, "consumer-coordinator-metrics"));
     }
 
     private HeartbeatRequestManager createHeartbeatRequestManager(
@@ -701,6 +703,7 @@ public class HeartbeatRequestManagerTest {
                 membershipManager,
                 heartbeatState,
                 heartbeatRequestState,
-                backgroundEventHandler);
+                backgroundEventHandler,
+                metrics);
     }
 }
