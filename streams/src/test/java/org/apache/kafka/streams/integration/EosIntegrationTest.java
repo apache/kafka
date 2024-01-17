@@ -1119,6 +1119,7 @@ public class EosIntegrationTest {
         properties.put(StreamsConfig.STATESTORE_CACHE_MAX_BYTES_CONFIG, 0);
         properties.put(StreamsConfig.STATE_DIR_CONFIG, stateTmpDir + appDir);
         properties.put(StreamsConfig.APPLICATION_SERVER_CONFIG, dummyHostName + ":2142");
+        properties.put(InternalConfig.STATE_UPDATER_ENABLED, processingThreadsEnabled);
         properties.put(InternalConfig.PROCESSING_THREADS_ENABLED, processingThreadsEnabled);
 
         final Properties config = StreamsTestUtils.getStreamsConfig(
