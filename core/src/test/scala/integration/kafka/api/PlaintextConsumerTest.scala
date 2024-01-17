@@ -1597,7 +1597,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
   // fetching while the onPartitionsAssigned callback is executed. In the async consumer,
   // callbacks run in the App thread, while the fetching happens in the Background thread, so
   // partitions are paused until the onPartitionsAssigned completes, to ensure that no records
-  // are fetch in the Background thread in the meantime.
+  // are fetched in the Background thread in the meantime.
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
   @MethodSource(Array("getTestQuorumAndGroupProtocolParametersConsumerGroupProtocolOnly"))
   def testPartitionsPauseUntilAssignCallbackCompletes(quorum: String, groupProtocol: String): Unit = {
