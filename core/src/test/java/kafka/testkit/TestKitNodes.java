@@ -20,6 +20,7 @@ package kafka.testkit;
 import kafka.server.MetaProperties;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.network.ListenerName;
+import org.apache.kafka.metadata.bootstrap.BootstrapMetadata;
 import org.apache.kafka.server.common.MetadataVersion;
 
 import java.nio.file.Paths;
@@ -35,7 +36,8 @@ public class TestKitNodes {
     public static class Builder {
         private boolean combined = false;
         private Uuid clusterId = null;
-        private MetadataVersion bootstrapMetadataVersion = null;
+        private BootstrapMetadata bootstrapMetadata = BootstrapMetadata.
+            fromVersion(MetadataVersion.latest(), "testkit");
         private final NavigableMap<Integer, ControllerNode> controllerNodes = new TreeMap<>();
         private final NavigableMap<Integer, BrokerNode> brokerNodes = new TreeMap<>();
 
@@ -45,7 +47,12 @@ public class TestKitNodes {
         }
 
         public Builder setBootstrapMetadataVersion(MetadataVersion metadataVersion) {
-            this.bootstrapMetadataVersion = metadataVersion;
+            this.bootstrapMetadata = BootstrapMetadata.fromVersion(metadataVersion, "testkit");
+            return this;
+        }
+
+        public Builder setBootstrapMetadata(BootstrapMetadata bootstrapMetadata) {
+            this.bootstrapMetadata = bootstrapMetadata;
             return this;
         }
 
@@ -116,10 +123,7 @@ public class TestKitNodes {
             if (clusterId == null) {
                 clusterId = Uuid.randomUuid();
             }
-            if (bootstrapMetadataVersion == null) {
-                bootstrapMetadataVersion = MetadataVersion.latest();
-            }
-            return new TestKitNodes(clusterId, bootstrapMetadataVersion, controllerNodes, brokerNodes);
+            return new TestKitNodes(clusterId, bootstrapMetadata, controllerNodes, brokerNodes);
         }
 
         private int startBrokerId() {
@@ -135,7 +139,7 @@ public class TestKitNodes {
     }
 
     private final Uuid clusterId;
-    private final MetadataVersion bootstrapMetadataVersion;
+    private final BootstrapMetadata bootstrapMetadata;
     private final NavigableMap<Integer, ControllerNode> controllerNodes;
     private final NavigableMap<Integer, BrokerNode> brokerNodes;
 
@@ -144,11 +148,11 @@ public class TestKitNodes {
     }
 
     private TestKitNodes(Uuid clusterId,
-                         MetadataVersion bootstrapMetadataVersion,
+                         BootstrapMetadata bootstrapMetadata,
                          NavigableMap<Integer, ControllerNode> controllerNodes,
                          NavigableMap<Integer, BrokerNode> brokerNodes) {
         this.clusterId = clusterId;
-        this.bootstrapMetadataVersion = bootstrapMetadataVersion;
+        this.bootstrapMetadata = bootstrapMetadata;
         this.controllerNodes = controllerNodes;
         this.brokerNodes = brokerNodes;
     }
@@ -158,7 +162,7 @@ public class TestKitNodes {
     }
 
     public MetadataVersion bootstrapMetadataVersion() {
-        return bootstrapMetadataVersion;
+        return bootstrapMetadata.metadataVersion();
     }
 
     public Map<Integer, ControllerNode> controllerNodes() {
@@ -199,7 +203,7 @@ public class TestKitNodes {
                 node.incarnationId(), absolutize(baseDirectory, node.metadataDirectory()),
                 absolutize(baseDirectory, node.logDataDirectories()), node.propertyOverrides()));
         }
-        return new TestKitNodes(clusterId, bootstrapMetadataVersion, newControllerNodes, newBrokerNodes);
+        return new TestKitNodes(clusterId, bootstrapMetadata, newControllerNodes, newBrokerNodes);
     }
 
     private static List<String> absolutize(String base, Collection<String> directories) {
