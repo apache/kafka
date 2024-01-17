@@ -1134,6 +1134,8 @@ class LogManagerTest {
       remoteStorageSystemEnable = true
     )
 
+    val checkpointFile = new File(logDir, LogManager.LogStartOffsetCheckpointFile)
+    val checkpoint = new OffsetCheckpointFile(checkpointFile)
     val topicPartition = new TopicPartition("test", 0)
     val log = logManager.getOrCreateLog(topicPartition, topicId = None)
     var offset = 0L
@@ -1157,10 +1159,8 @@ class LogManagerTest {
     log.maybeIncrementLogStartOffset(logStartOffset, LogStartOffsetIncrementReason.SegmentDeletion)
     logManager.checkpointLogStartOffsets()
 
-    val checkpointFile = new File(logDir, LogManager.LogStartOffsetCheckpointFile)
-    val checkpoint = new OffsetCheckpointFile(checkpointFile)
     assertEquals(logStartOffset, log.logStartOffset)
-    assertEquals(logStartOffset, checkpoint.read().getOrElse(topicPartition, 0L))
+    assertEquals(logStartOffset, checkpoint.read().getOrElse(topicPartition, -1L))
   }
 
   @Test
@@ -1184,11 +1184,15 @@ class LogManagerTest {
     log.maybeIncrementLogStartOffset(logStartOffset, LogStartOffsetIncrementReason.SegmentDeletion)
     logManager.checkpointLogStartOffsets()
     assertEquals(5, log.logSegments.size())
-    assertEquals(logStartOffset, checkpoint.read().getOrElse(topicPartition, 0L))
+    assertEquals(logStartOffset, checkpoint.read().getOrElse(topicPartition, -1L))
 
     log.deleteOldSegments()
     assertEquals(2, log.logSegments.size())
     assertEquals(logStartOffset, log.logStartOffset)
+
+    // When you checkpoint log-start-offset after removing the segments, then there should not be any checkpoint
+    logManager.checkpointLogStartOffsets()
+    assertEquals(-1L, checkpoint.read().getOrElse(topicPartition, -1L))
   }
 
   def writeMetaProperties(dir: File, directoryId: Optional[Uuid] = Optional.empty()): Unit = {
