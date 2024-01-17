@@ -72,12 +72,12 @@ public class GroupCoordinatorRuntimeMetrics implements CoordinatorRuntimeMetrics
     /**
      * The partition load sensor.
      */
-    private Sensor partitionLoadSensor;
+    private final Sensor partitionLoadSensor;
 
     /**
      * The thread idle sensor.
      */
-    private Sensor threadIdleRatioSensor;
+    private final Sensor threadIdleRatioSensor;
 
     public GroupCoordinatorRuntimeMetrics(Metrics metrics) {
         this.metrics = Objects.requireNonNull(metrics);

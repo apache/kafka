@@ -30,6 +30,7 @@ import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.metrics.stats.{Avg, CumulativeSum, Rate}
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.utils.{Sanitizer, Time}
+import org.apache.kafka.server.config.ConfigEntityName
 import org.apache.kafka.server.quota.{ClientQuotaCallback, ClientQuotaEntity, ClientQuotaType}
 import org.apache.kafka.server.util.ShutdownableThread
 
@@ -92,13 +93,13 @@ object ClientQuotaManager {
 
   case object DefaultUserEntity extends BaseUserEntity {
     override def entityType: ClientQuotaEntity.ConfigEntityType = ClientQuotaEntity.ConfigEntityType.DEFAULT_USER
-    override def name: String = ConfigEntityName.Default
+    override def name: String = ConfigEntityName.DEFAULT
     override def toString: String = "default user"
   }
 
   case object DefaultClientIdEntity extends ClientQuotaEntity.ConfigEntity {
     override def entityType: ClientQuotaEntity.ConfigEntityType = ClientQuotaEntity.ConfigEntityType.DEFAULT_CLIENT_ID
-    override def name: String = ConfigEntityName.Default
+    override def name: String = ConfigEntityName.DEFAULT
     override def toString: String = "default client-id"
   }
 
@@ -109,7 +110,7 @@ object ClientQuotaManager {
 
     def sanitizedUser: String = userEntity.map {
       case entity: UserEntity => entity.sanitizedUser
-      case DefaultUserEntity => ConfigEntityName.Default
+      case DefaultUserEntity => ConfigEntityName.DEFAULT
     }.getOrElse("")
 
     def clientId: String = clientIdEntity.map(_.name).getOrElse("")
@@ -435,11 +436,11 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
     lock.writeLock().lock()
     try {
       val userEntity = sanitizedUser.map {
-        case ConfigEntityName.Default => DefaultUserEntity
+        case ConfigEntityName.DEFAULT => DefaultUserEntity
         case user => UserEntity(user)
       }
       val clientIdEntity = sanitizedClientId.map {
-        case ConfigEntityName.Default => DefaultClientIdEntity
+        case ConfigEntityName.DEFAULT => DefaultClientIdEntity
         case _ => ClientIdEntity(clientId.getOrElse(throw new IllegalStateException("Client-id not provided")))
       }
       val quotaEntity = KafkaQuotaEntity(userEntity, clientIdEntity)
