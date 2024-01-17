@@ -376,9 +376,9 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
             halt();
 
             log.info("Herder stopped");
-            herderMetrics.close();
         } catch (Throwable t) {
             log.error("Uncaught exception in herder work thread, exiting: ", t);
+            Utils.closeQuietly(this::stopServices, "herder services");
             Exit.exit(1);
         } finally {
             running = false;
@@ -764,6 +764,9 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
         tasksToRestart.addAll(tasksToStop);
     }
 
+    /**
+     * Perform an orderly shutdown when triggered via {@link #stop()}
+     */
     // public for testing
     public void halt() {
         synchronized (this) {
@@ -781,7 +784,6 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                 request.callback().onCompletion(new ConnectException("Worker is shutting down"), null);
                 request = requests.pollFirst();
             }
-
             stopServices();
         }
     }
@@ -791,8 +793,17 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
         try {
             super.stopServices();
         } finally {
-            this.uponShutdown.forEach(closeable -> Utils.closeQuietly(closeable, closeable != null ? closeable.toString() : "<unknown>"));
+            closeResources();
         }
+    }
+
+    /**
+     * Close resources managed by this herder but which are not explicitly started.
+     */
+    private void closeResources() {
+        Utils.closeQuietly(member::stop, "worker group member");
+        Utils.closeQuietly(herderMetrics::close, "herder metrics");
+        this.uponShutdown.forEach(closeable -> Utils.closeQuietly(closeable, closeable != null ? closeable.toString() : "<unknown>"));
     }
 
     // Timeout for herderExecutor to gracefully terminate is set to a value to accommodate
@@ -812,7 +823,6 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
         ThreadUtils.shutdownExecutorServiceQuietly(herderExecutor, herderExecutorTimeoutMs(), TimeUnit.MILLISECONDS);
         ThreadUtils.shutdownExecutorServiceQuietly(forwardRequestExecutor, FORWARD_REQUEST_SHUTDOWN_TIMEOUT_MS, TimeUnit.MILLISECONDS);
         ThreadUtils.shutdownExecutorServiceQuietly(startAndStopExecutor, START_AND_STOP_SHUTDOWN_TIMEOUT_MS, TimeUnit.MILLISECONDS);
-        stopServices();
         log.info("Herder stopped");
         running = false;
     }
