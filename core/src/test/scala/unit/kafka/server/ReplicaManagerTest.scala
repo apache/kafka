@@ -57,7 +57,9 @@ import org.apache.kafka.common.{DirectoryId, IsolationLevel, Node, TopicIdPartit
 import org.apache.kafka.image._
 import org.apache.kafka.metadata.LeaderConstants.NO_LEADER
 import org.apache.kafka.metadata.LeaderRecoveryState
+import org.apache.kafka.metadata.migration.ZkMigrationState
 import org.apache.kafka.server.common.{DirectoryEventHandler, OffsetAndEpoch}
+import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.server.common.MetadataVersion.IBP_2_6_IV0
 import org.apache.kafka.server.log.remote.storage.{NoOpRemoteLogMetadataManager, NoOpRemoteStorageManager, RemoteLogManagerConfig, RemoteLogSegmentMetadata, RemoteStorageException, RemoteStorageManager}
 import org.apache.kafka.server.metrics.{KafkaMetricsGroup, KafkaYammerMetrics}
@@ -6171,9 +6173,13 @@ class ReplicaManagerTest {
   }
 
   private def imageFromTopics(topicsImage: TopicsImage): MetadataImage = {
+    val featuresImageLatest = new FeaturesImage(
+      Collections.emptyMap(),
+      MetadataVersion.latest(),
+      ZkMigrationState.NONE)
     new MetadataImage(
       new MetadataProvenance(100L, 10, 1000L),
-      FeaturesImage.EMPTY,
+      featuresImageLatest,
       ClusterImageTest.IMAGE1,
       topicsImage,
       ConfigurationsImage.EMPTY,
