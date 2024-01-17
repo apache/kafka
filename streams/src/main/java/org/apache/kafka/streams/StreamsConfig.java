@@ -70,7 +70,6 @@ import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
 import static org.apache.kafka.common.config.ConfigDef.Range.between;
 import static org.apache.kafka.common.config.ConfigDef.ValidString.in;
 import static org.apache.kafka.common.config.ConfigDef.parseType;
-import static org.apache.kafka.streams.internals.UpgradeFromValues.UPGRADE_FROM_35;
 
 /**
  * Configuration for a {@link KafkaStreams} instance.
@@ -407,6 +406,12 @@ public class StreamsConfig extends AbstractConfig {
      */
     @SuppressWarnings("WeakerAccess")
     public static final String UPGRADE_FROM_34 = UpgradeFromValues.UPGRADE_FROM_34.toString();
+
+    /**
+     * Config value for parameter {@link #UPGRADE_FROM_CONFIG "upgrade.from"} for upgrading an application from version {@code 3.5.x}.
+     */
+    @SuppressWarnings("WeakerAccess")
+    public static final String UPGRADE_FROM_35 = UpgradeFromValues.UPGRADE_FROM_35.toString();
 
     /**
      * Config value for parameter {@link #PROCESSING_GUARANTEE_CONFIG "processing.guarantee"} for at-least-once processing guarantees.
