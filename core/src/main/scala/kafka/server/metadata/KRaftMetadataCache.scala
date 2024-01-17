@@ -186,7 +186,7 @@ class KRaftMetadataCache(val brokerId: Int) extends MetadataCache with Logging w
                   s"not found on leader ${partition.leader}")
                 Errors.LISTENER_NOT_FOUND
               }
-              result.addOne(new DescribeTopicPartitionsResponsePartition()
+              result.append(new DescribeTopicPartitionsResponsePartition()
                 .setErrorCode(error.code)
                 .setPartitionIndex(partitionId)
                 .setLeaderId(MetadataResponse.NO_LEADER_ID)
@@ -207,7 +207,7 @@ class KRaftMetadataCache(val brokerId: Int) extends MetadataCache with Logging w
                 Errors.NONE
               }
 
-              result.addOne(new DescribeTopicPartitionsResponsePartition()
+              result.append(new DescribeTopicPartitionsResponsePartition()
                 .setErrorCode(error.code)
                 .setPartitionIndex(partitionId)
                 .setLeaderId(leader.id())
