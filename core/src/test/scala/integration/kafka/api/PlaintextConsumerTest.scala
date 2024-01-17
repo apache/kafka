@@ -1602,29 +1602,33 @@ class PlaintextConsumerTest extends BaseConsumerTest {
   @MethodSource(Array("getTestQuorumAndGroupProtocolParametersConsumerGroupProtocolOnly"))
   def testPartitionsPauseUntilAssignCallbackCompletes(quorum: String, groupProtocol: String): Unit = {
     val topic1 = "topic1"
-    createTopic(topic1, 2, brokerCount)
-
-    this.consumerConfig.setProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "true")
+    val numPartitions = 2
+    createTopic(topic1, numPartitions, brokerCount)
     val consumer = createConsumer()
 
     val rebalanceListener = new ConsumerRebalanceListener {
       override def onPartitionsAssigned(partitions: util.Collection[TopicPartition]) = {
-        assertEquals(2, consumer.paused().size())
+        assertEquals(numPartitions, consumer.paused().size())
       }
-
       override def onPartitionsRevoked(partitions: util.Collection[TopicPartition]) = {}
     }
 
     consumer.subscribe(List(topic).asJava, rebalanceListener)
-
     awaitAssignment(consumer, Set(tp, tp2))
 
     val numRecords = 100
     val producer = createProducer()
     val startingTimestamp = System.currentTimeMillis()
+
+    // Consume from first partition to check it's not paused anymore
     sendRecords(producer, numRecords, tp, startingTimestamp = startingTimestamp)
     consumeAndVerifyRecords(consumer = consumer, numRecords = numRecords, startingOffset = 0,
-      startingTimestamp = startingTimestamp)
+      startingTimestamp = startingTimestamp, tp = tp)
+
+    // Consume from second partition to check it's not paused anymore
+    sendRecords(producer, numRecords, tp2, startingTimestamp = startingTimestamp)
+    consumeAndVerifyRecords(consumer = consumer, numRecords = numRecords, startingOffset = 0,
+      startingTimestamp = startingTimestamp, tp = tp2)
   }
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
