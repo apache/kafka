@@ -31,7 +31,15 @@ public enum ConsumerGroupState {
     COMPLETING_REBALANCE("CompletingRebalance"),
     STABLE("Stable"),
     DEAD("Dead"),
-    EMPTY("Empty");
+    EMPTY("Empty"),
+
+    // New consumer group states are temporary here. It will be removed when
+    // the KIP-848 is completed.
+    NEW_CONSUMER_GROUP_EMPTY("empty"),
+    NEW_CONSUMER_GROUP_ASSIGNING("assigning"),
+    NEW_CONSUMER_GROUP_RECONCILING("reconciling"),
+    NEW_CONSUMER_GROUP_STABLE("stable"),
+    NEW_CONSUMER_GROUP_DEAD("dead");
 
     private final static Map<String, ConsumerGroupState> NAME_TO_ENUM = Arrays.stream(values())
         .collect(Collectors.toMap(state -> state.name, Function.identity()));

@@ -95,9 +95,18 @@ class ListConsumerGroupTest extends ConsumerGroupCommandTest {
     result = ConsumerGroupCommand.consumerGroupStatesFromString("Dead,CompletingRebalance,")
     assertEquals(Set(ConsumerGroupState.DEAD, ConsumerGroupState.COMPLETING_REBALANCE), result)
 
+    result = ConsumerGroupCommand.consumerGroupStatesFromString("stable")
+    assertEquals(Set(ConsumerGroupState.NEW_CONSUMER_GROUP_STABLE), result)
+
+    result = ConsumerGroupCommand.consumerGroupStatesFromString("stable, assigning")
+    assertEquals(Set(ConsumerGroupState.NEW_CONSUMER_GROUP_STABLE, ConsumerGroupState.NEW_CONSUMER_GROUP_ASSIGNING), result)
+
+    result = ConsumerGroupCommand.consumerGroupStatesFromString("dead,reconciling,")
+    assertEquals(Set(ConsumerGroupState.NEW_CONSUMER_GROUP_DEAD, ConsumerGroupState.NEW_CONSUMER_GROUP_RECONCILING), result)
+
     assertThrows(classOf[IllegalArgumentException], () => ConsumerGroupCommand.consumerGroupStatesFromString("bad, wrong"))
 
-    assertThrows(classOf[IllegalArgumentException], () => ConsumerGroupCommand.consumerGroupStatesFromString("stable"))
+    assertThrows(classOf[IllegalArgumentException], () => ConsumerGroupCommand.consumerGroupStatesFromString("STABLE"))
 
     assertThrows(classOf[IllegalArgumentException], () => ConsumerGroupCommand.consumerGroupStatesFromString("  bad, Stable"))
 
