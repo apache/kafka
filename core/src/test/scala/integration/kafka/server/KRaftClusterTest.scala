@@ -28,6 +28,7 @@ import org.apache.kafka.common.config.{ConfigException, ConfigResource}
 import org.apache.kafka.common.config.ConfigResource.Type
 import org.apache.kafka.common.errors.{PolicyViolationException, UnsupportedVersionException}
 import org.apache.kafka.common.message.DescribeClusterRequestData
+import org.apache.kafka.common.metadata.{ConfigRecord, FeatureLevelRecord}
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.Errors._
@@ -38,8 +39,9 @@ import org.apache.kafka.common.{Cluster, Endpoint, Reconfigurable, TopicPartitio
 import org.apache.kafka.controller.{QuorumController, QuorumControllerIntegrationTestUtils}
 import org.apache.kafka.image.ClusterImage
 import org.apache.kafka.metadata.BrokerState
+import org.apache.kafka.metadata.bootstrap.BootstrapMetadata
 import org.apache.kafka.server.authorizer._
-import org.apache.kafka.server.common.MetadataVersion
+import org.apache.kafka.server.common.{ApiMessageAndVersion, MetadataVersion}
 import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig
 import org.apache.kafka.server.quota
 import org.apache.kafka.server.quota.{ClientQuotaCallback, ClientQuotaType}
@@ -1214,6 +1216,36 @@ class KRaftClusterTest {
         assertEquals(classOf[UnsupportedVersionException], exception.getCause.getClass)
       } finally {
         admin.close()
+      }
+    } finally {
+      cluster.close()
+    }
+  }
+
+  @Test
+  def testStartupWithNonDefaultKControllerDynamicConfiguration(): Unit = {
+    val bootstrapRecords = util.Arrays.asList(
+      new ApiMessageAndVersion(new FeatureLevelRecord().
+        setName(MetadataVersion.FEATURE_NAME).
+        setFeatureLevel(MetadataVersion.IBP_3_7_IV0.featureLevel), 0.toShort),
+      new ApiMessageAndVersion(new ConfigRecord().
+        setResourceType(ConfigResource.Type.BROKER.id).
+        setResourceName("").
+        setName("num.io.threads").
+        setValue("9"), 0.toShort))
+    val cluster = new KafkaClusterTestKit.Builder(
+      new TestKitNodes.Builder().
+        setBootstrapMetadata(BootstrapMetadata.fromRecords(bootstrapRecords, "testRecords")).
+        setNumBrokerNodes(1).
+        setNumControllerNodes(1).build()).
+      build()
+    try {
+      cluster.format()
+      cluster.startup()
+      val controller = cluster.controllers().values().iterator().next()
+      TestUtils.retry(60000) {
+        assertNotNull(controller.controllerApisHandlerPool)
+        assertEquals(9, controller.controllerApisHandlerPool.threadPoolSize.get())
       }
     } finally {
       cluster.close()
