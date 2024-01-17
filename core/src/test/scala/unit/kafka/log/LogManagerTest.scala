@@ -1146,7 +1146,7 @@ class LogManagerTest {
     }
     assertEquals(5, log.logSegments.size())
     log.updateHighWatermark(49)
-    // simulate calls to upload 3 segments to remote storage and remove them local-log.
+    // simulate calls to upload 3 segments to remote storage and remove them from local-log.
     log.updateHighestOffsetInRemoteStorage(30)
     log.maybeIncrementLocalLogStartOffset(31L, LogStartOffsetIncrementReason.SegmentDeletion)
     log.deleteOldSegments()
@@ -1161,6 +1161,34 @@ class LogManagerTest {
     val checkpoint = new OffsetCheckpointFile(checkpointFile)
     assertEquals(logStartOffset, log.logStartOffset)
     assertEquals(logStartOffset, checkpoint.read().getOrElse(topicPartition, 0L))
+  }
+
+  @Test
+  def testCheckpointLogStartOffsetForNormalTopic(): Unit = {
+    val checkpointFile = new File(logDir, LogManager.LogStartOffsetCheckpointFile)
+    val checkpoint = new OffsetCheckpointFile(checkpointFile)
+    val topicPartition = new TopicPartition("test", 0)
+    val log = logManager.getOrCreateLog(topicPartition, topicId = None)
+    var offset = 0L
+    for(_ <- 0 until 50) {
+      val set = TestUtils.singletonRecords("test".getBytes())
+      val info = log.appendAsLeader(set, leaderEpoch = 0)
+      offset = info.lastOffset
+      if (offset != 0 && offset % 10 == 0)
+        log.roll()
+    }
+    assertEquals(5, log.logSegments.size())
+    log.updateHighWatermark(49)
+
+    val logStartOffset = 31L
+    log.maybeIncrementLogStartOffset(logStartOffset, LogStartOffsetIncrementReason.SegmentDeletion)
+    logManager.checkpointLogStartOffsets()
+    assertEquals(5, log.logSegments.size())
+    assertEquals(logStartOffset, checkpoint.read().getOrElse(topicPartition, 0L))
+
+    log.deleteOldSegments()
+    assertEquals(2, log.logSegments.size())
+    assertEquals(logStartOffset, log.logStartOffset)
   }
 
   def writeMetaProperties(dir: File, directoryId: Optional[Uuid] = Optional.empty()): Unit = {
