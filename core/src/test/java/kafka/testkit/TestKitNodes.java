@@ -33,7 +33,8 @@ public class TestKitNodes {
     public static class Builder {
         private boolean combined = false;
         private Uuid clusterId = null;
-        private MetadataVersion bootstrapMetadataVersion = null;
+        private BootstrapMetadata bootstrapMetadata = BootstrapMetadata.
+            fromVersion(MetadataVersion.latest(), "testkit");
         private final NavigableMap<Integer, ControllerNode.Builder> controllerNodeBuilders = new TreeMap<>();
         private final NavigableMap<Integer, BrokerNode.Builder> brokerNodeBuilders = new TreeMap<>();
 
@@ -43,7 +44,12 @@ public class TestKitNodes {
         }
 
         public Builder setBootstrapMetadataVersion(MetadataVersion metadataVersion) {
-            this.bootstrapMetadataVersion = metadataVersion;
+            this.bootstrapMetadata = BootstrapMetadata.fromVersion(metadataVersion, "testkit");
+            return this;
+        }
+
+        public Builder setBootstrapMetadata(BootstrapMetadata bootstrapMetadata) {
+            this.bootstrapMetadata = bootstrapMetadata;
             return this;
         }
 
@@ -97,9 +103,6 @@ public class TestKitNodes {
                 if (clusterId == null) {
                     clusterId = Uuid.randomUuid();
                 }
-                if (bootstrapMetadataVersion == null) {
-                    bootstrapMetadataVersion = MetadataVersion.latest();
-                }
                 TreeMap<Integer, ControllerNode> controllerNodes = new TreeMap<>();
                 for (ControllerNode.Builder builder : controllerNodeBuilders.values()) {
                     ControllerNode node = builder.
@@ -118,7 +121,7 @@ public class TestKitNodes {
                 }
                 return new TestKitNodes(baseDirectory,
                     clusterId,
-                    bootstrapMetadataVersion,
+                    bootstrapMetadata,
                     controllerNodes,
                     brokerNodes);
             } catch (Exception e) {
@@ -145,20 +148,20 @@ public class TestKitNodes {
 
     private final String baseDirectory;
     private final Uuid clusterId;
-    private final MetadataVersion bootstrapMetadataVersion;
+    private final BootstrapMetadata bootstrapMetadata;
     private final NavigableMap<Integer, ControllerNode> controllerNodes;
     private final NavigableMap<Integer, BrokerNode> brokerNodes;
 
     private TestKitNodes(
         String baseDirectory,
         Uuid clusterId,
-        MetadataVersion bootstrapMetadataVersion,
+        BootstrapMetadata bootstrapMetadata,
         NavigableMap<Integer, ControllerNode> controllerNodes,
         NavigableMap<Integer, BrokerNode> brokerNodes
     ) {
         this.baseDirectory = baseDirectory;
         this.clusterId = clusterId;
-        this.bootstrapMetadataVersion = bootstrapMetadataVersion;
+        this.bootstrapMetadata = bootstrapMetadata;
         this.controllerNodes = controllerNodes;
         this.brokerNodes = brokerNodes;
     }
@@ -176,7 +179,7 @@ public class TestKitNodes {
     }
 
     public MetadataVersion bootstrapMetadataVersion() {
-        return bootstrapMetadataVersion;
+        return bootstrapMetadata.metadataVersion();
     }
 
     public Map<Integer, ControllerNode> controllerNodes() {
@@ -184,7 +187,7 @@ public class TestKitNodes {
     }
 
     public BootstrapMetadata bootstrapMetadata() {
-        return BootstrapMetadata.fromVersion(bootstrapMetadataVersion(), "testkit");
+        return bootstrapMetadata;
     }
 
     public NavigableMap<Integer, BrokerNode> brokerNodes() {
