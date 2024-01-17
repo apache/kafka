@@ -125,6 +125,8 @@ public final class AssignorConfiguration {
                 case UPGRADE_FROM_32:
                 case UPGRADE_FROM_33:
                 case UPGRADE_FROM_34:
+                case UPGRADE_FROM_35:
+                case UPGRADE_FROM_36:
                     // we need to add new version when new "upgrade.from" values become available
 
                     // This config is for explicitly sending FK response to a requested partition
@@ -183,6 +185,8 @@ public final class AssignorConfiguration {
                 case UPGRADE_FROM_32:
                 case UPGRADE_FROM_33:
                 case UPGRADE_FROM_34:
+                case UPGRADE_FROM_35:
+                case UPGRADE_FROM_36:
                     // we need to add new version when new "upgrade.from" values become available
 
                     // This config is for explicitly sending FK response to a requested partition

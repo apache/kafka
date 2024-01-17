@@ -55,7 +55,7 @@ import org.slf4j.LoggerFactory
 
 import java.util
 import java.util.concurrent.{CompletableFuture, ExecutionException, TimeUnit}
-import java.util.{Properties, UUID}
+import java.util.{Collections, Optional, Properties, UUID}
 import scala.collection.Seq
 import scala.jdk.CollectionConverters._
 
@@ -672,6 +672,86 @@ class ZkMigrationIntegrationTest {
 
       // Verify the changes seen in Zk.
       verifyTopicPartitionMetadata(topicName, existingPartitions ++ Seq(new TopicPartition(topicName, 2)), zkClient)
+    } finally {
+      shutdownInSequence(zkCluster, kraftCluster)
+    }
+  }
+
+  @ClusterTest(clusterType = Type.ZK, brokers = 4, metadataVersion = MetadataVersion.IBP_3_7_IV0, serverProperties = Array(
+    new ClusterConfigProperty(key = "inter.broker.listener.name", value = "EXTERNAL"),
+    new ClusterConfigProperty(key = "listeners", value = "PLAINTEXT://localhost:0,EXTERNAL://localhost:0"),
+    new ClusterConfigProperty(key = "advertised.listeners", value = "PLAINTEXT://localhost:0,EXTERNAL://localhost:0"),
+    new ClusterConfigProperty(key = "listener.security.protocol.map", value = "EXTERNAL:PLAINTEXT,PLAINTEXT:PLAINTEXT"),
+  ))
+  def testPartitionReassignmentInHybridMode(zkCluster: ClusterInstance): Unit = {
+    // Create a topic in ZK mode
+    val topicName = "test"
+    var admin = zkCluster.createAdminClient()
+    val zkClient = zkCluster.asInstanceOf[ZkClusterInstance].getUnderlying().zkClient
+
+    // Bootstrap the ZK cluster ID into KRaft
+    val clusterId = zkCluster.clusterId()
+    val kraftCluster = new KafkaClusterTestKit.Builder(
+      new TestKitNodes.Builder().
+        setBootstrapMetadataVersion(MetadataVersion.IBP_3_7_IV0).
+        setClusterId(Uuid.fromString(clusterId)).
+        setNumBrokerNodes(0).
+        setNumControllerNodes(1).build())
+      .setConfigProp(KafkaConfig.MigrationEnabledProp, "true")
+      .setConfigProp(KafkaConfig.ZkConnectProp, zkCluster.asInstanceOf[ZkClusterInstance].getUnderlying.zkConnect)
+      .build()
+    try {
+      kraftCluster.format()
+      kraftCluster.startup()
+      val readyFuture = kraftCluster.controllers().values().asScala.head.controller.waitForReadyBrokers(3)
+
+      // Enable migration configs and restart brokers
+      log.info("Restart brokers in migration mode")
+      zkCluster.config().serverProperties().put(KafkaConfig.MigrationEnabledProp, "true")
+      zkCluster.config().serverProperties().put(RaftConfig.QUORUM_VOTERS_CONFIG, kraftCluster.quorumVotersConfig())
+      zkCluster.config().serverProperties().put(KafkaConfig.ControllerListenerNamesProp, "CONTROLLER")
+      zkCluster.config().serverProperties().put(KafkaConfig.ListenerSecurityProtocolMapProp, "CONTROLLER:PLAINTEXT,EXTERNAL:PLAINTEXT,PLAINTEXT:PLAINTEXT")
+      zkCluster.rollingBrokerRestart()
+      zkCluster.waitForReadyBrokers()
+      readyFuture.get(30, TimeUnit.SECONDS)
+
+      // Wait for migration to begin
+      log.info("Waiting for ZK migration to begin")
+      TestUtils.waitUntilTrue(
+        () => zkClient.getControllerId.contains(3000),
+        "Timed out waiting for KRaft controller to take over",
+        30000)
+
+      // Create a topic with replicas on brokers 0, 1, 2
+      log.info("Create new topic with AdminClient")
+      admin = zkCluster.createAdminClient()
+      val newTopics = new util.ArrayList[NewTopic]()
+      val replicaAssignment = Collections.singletonMap(Integer.valueOf(0), Seq(0, 1, 2).map(int2Integer).asJava)
+      newTopics.add(new NewTopic(topicName, replicaAssignment))
+      val createTopicResult = admin.createTopics(newTopics)
+      createTopicResult.all().get(60, TimeUnit.SECONDS)
+
+      val topicPartition = new TopicPartition(topicName, 0)
+
+      // Verify the changes made to KRaft are seen in ZK
+      verifyTopicPartitionMetadata(topicName, Seq(topicPartition), zkClient)
+
+      // Reassign replicas to brokers 1, 2, 3 and wait for reassignment to complete
+      admin.alterPartitionReassignments(Collections.singletonMap(topicPartition,
+        Optional.of(new NewPartitionReassignment(Seq(1, 2, 3).map(int2Integer).asJava)))).all().get()
+
+      TestUtils.waitUntilTrue(() => {
+        val listPartitionReassignmentsResult = admin.listPartitionReassignments().reassignments().get()
+        listPartitionReassignmentsResult.isEmpty
+      }, "Timed out waiting for reassignments to complete.")
+
+      // Verify that the partition is removed from broker 0
+      TestUtils.waitUntilTrue(() => {
+        val brokers = zkCluster.asInstanceOf[ZkClusterInstance].getUnderlying.brokers
+        assertTrue(brokers.size == 4)
+        assertTrue(brokers.head.config.brokerId == 0)
+        brokers.head.replicaManager.onlinePartition(topicPartition).isEmpty
+      }, "Timed out waiting for removed replica reassignment to be marked offline")
     } finally {
       shutdownInSequence(zkCluster, kraftCluster)
     }

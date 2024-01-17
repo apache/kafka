@@ -48,9 +48,9 @@ import javax.security.auth.spi.LoginModule;
  */
 public class PropertyFileLoginModule implements LoginModule {
     private static final Logger log = LoggerFactory.getLogger(PropertyFileLoginModule.class);
-
-    private CallbackHandler callbackHandler;
+    private static final Map<String, Properties> CREDENTIAL_PROPERTIES_MAP = new ConcurrentHashMap<>();
     private static final String FILE_OPTIONS = "file";
+    private CallbackHandler callbackHandler;
     private String fileName;
     private boolean authenticated;
 

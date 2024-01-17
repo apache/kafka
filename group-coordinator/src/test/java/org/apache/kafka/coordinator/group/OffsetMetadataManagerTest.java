@@ -181,6 +181,12 @@ public class OffsetMetadataManagerTest {
             this.offsetMetadataManager = offsetMetadataManager;
         }
 
+        public void commit() {
+            long lastCommittedOffset = this.lastCommittedOffset;
+            this.lastCommittedOffset = lastWrittenOffset;
+            snapshotRegistry.deleteSnapshotsUpTo(lastCommittedOffset);
+        }
+
         public CoordinatorResult<OffsetCommitResponseData, Record> commitOffset(
             OffsetCommitRequestData request
         ) {
@@ -357,8 +363,14 @@ public class OffsetMetadataManagerTest {
             long offset,
             int leaderEpoch
         ) {
-            commitOffset(groupId, topic, partition, offset, leaderEpoch, time.milliseconds());
-
+            commitOffset(
+                groupId,
+                topic,
+                partition,
+                offset,
+                leaderEpoch,
+                time.milliseconds()
+            );
         }
 
         public void commitOffset(
@@ -369,7 +381,27 @@ public class OffsetMetadataManagerTest {
             int leaderEpoch,
             long commitTimestamp
         ) {
-            replay(RecordHelpers.newOffsetCommitRecord(
+            commitOffset(
+                RecordBatch.NO_PRODUCER_ID,
+                groupId,
+                topic,
+                partition,
+                offset,
+                leaderEpoch,
+                commitTimestamp
+            );
+        }
+
+        public void commitOffset(
+            long producerId,
+            String groupId,
+            String topic,
+            int partition,
+            long offset,
+            int leaderEpoch,
+            long commitTimestamp
+        ) {
+            replay(producerId, RecordHelpers.newOffsetCommitRecord(
                 groupId,
                 topic,
                 partition,
@@ -1857,6 +1889,91 @@ public class OffsetMetadataManagerTest {
     }
 
     @Test
+    public void testFetchOffsetsWithPendingTransactionalOffsets() {
+        OffsetMetadataManagerTestContext context = new OffsetMetadataManagerTestContext.Builder().build();
+
+        context.groupMetadataManager.getOrMaybeCreateConsumerGroup("group", true);
+
+        context.commitOffset("group", "foo", 0, 100L, 1);
+        context.commitOffset("group", "foo", 1, 110L, 1);
+        context.commitOffset("group", "bar", 0, 200L, 1);
+
+        context.commit();
+
+        assertEquals(3, context.lastWrittenOffset);
+        assertEquals(3, context.lastCommittedOffset);
+
+        context.commitOffset(10L, "group", "foo", 1, 111L, 1, context.time.milliseconds());
+        context.commitOffset(10L, "group", "bar", 0, 201L, 1, context.time.milliseconds());
+        // Note that bar-1 does not exist in the initial commits. UNSTABLE_OFFSET_COMMIT errors
+        // must be returned in this case too.
+        context.commitOffset(10L, "group", "bar", 1, 211L, 1, context.time.milliseconds());
+
+        // Always use the same request.
+        List<OffsetFetchRequestData.OffsetFetchRequestTopics> request = Arrays.asList(
+            new OffsetFetchRequestData.OffsetFetchRequestTopics()
+                .setName("foo")
+                .setPartitionIndexes(Arrays.asList(0, 1)),
+            new OffsetFetchRequestData.OffsetFetchRequestTopics()
+                .setName("bar")
+                .setPartitionIndexes(Arrays.asList(0, 1))
+        );
+
+        // Fetching offsets with "require stable" (Long.MAX_VALUE) should return the committed offset for
+        // foo-0 and the UNSTABLE_OFFSET_COMMIT error for foo-1, bar-0 and bar-1.
+        assertEquals(Arrays.asList(
+            new OffsetFetchResponseData.OffsetFetchResponseTopics()
+                .setName("foo")
+                .setPartitions(Arrays.asList(
+                    mkOffsetPartitionResponse(0, 100L, 1, "metadata"),
+                    mkOffsetPartitionResponse(1, Errors.UNSTABLE_OFFSET_COMMIT)
+                )),
+            new OffsetFetchResponseData.OffsetFetchResponseTopics()
+                .setName("bar")
+                .setPartitions(Arrays.asList(
+                    mkOffsetPartitionResponse(0, Errors.UNSTABLE_OFFSET_COMMIT),
+                    mkOffsetPartitionResponse(1, Errors.UNSTABLE_OFFSET_COMMIT)
+                ))
+        ), context.fetchOffsets("group", request, Long.MAX_VALUE));
+
+        // Fetching offsets without "require stable" (lastCommittedOffset) should return the committed
+        // offset for foo-0, foo-1 and bar-0 and the INVALID_OFFSET for bar-1.
+        assertEquals(Arrays.asList(
+            new OffsetFetchResponseData.OffsetFetchResponseTopics()
+                .setName("foo")
+                .setPartitions(Arrays.asList(
+                    mkOffsetPartitionResponse(0, 100L, 1, "metadata"),
+                    mkOffsetPartitionResponse(1, 110L, 1, "metadata")
+                )),
+            new OffsetFetchResponseData.OffsetFetchResponseTopics()
+                .setName("bar")
+                .setPartitions(Arrays.asList(
+                    mkOffsetPartitionResponse(0, 200L, 1, "metadata"),
+                    mkInvalidOffsetPartitionResponse(1)
+                ))
+        ), context.fetchOffsets("group", request, context.lastCommittedOffset));
+
+        // Commit the ongoing transaction.
+        context.replayEndTransactionMarker(10L, TransactionResult.COMMIT);
+
+        // Fetching offsets with "require stable" (Long.MAX_VALUE) should not return any errors now.
+        assertEquals(Arrays.asList(
+            new OffsetFetchResponseData.OffsetFetchResponseTopics()
+                .setName("foo")
+                .setPartitions(Arrays.asList(
+                    mkOffsetPartitionResponse(0, 100L, 1, "metadata"),
+                    mkOffsetPartitionResponse(1, 111L, 1, "metadata")
+                )),
+            new OffsetFetchResponseData.OffsetFetchResponseTopics()
+                .setName("bar")
+                .setPartitions(Arrays.asList(
+                    mkOffsetPartitionResponse(0, 201L, 1, "metadata"),
+                    mkOffsetPartitionResponse(1, 211L, 1, "metadata")
+                ))
+        ), context.fetchOffsets("group", request, Long.MAX_VALUE));
+    }
+
+    @Test
     public void testGenericGroupFetchAllOffsetsWithDeadGroup() {
         OffsetMetadataManagerTestContext context = new OffsetMetadataManagerTestContext.Builder().build();
 
@@ -1959,6 +2076,80 @@ public class OffsetMetadataManagerTest {
                 .setPartitions(Arrays.asList(
                     mkOffsetPartitionResponse(0, 100L, 1, "metadata"),
                     mkOffsetPartitionResponse(1, 111L, 2, "metadata")
+                ))
+        ), context.fetchAllOffsets("group", Long.MAX_VALUE));
+    }
+
+    @Test
+    public void testFetchAllOffsetsWithPendingTransactionalOffsets() {
+        OffsetMetadataManagerTestContext context = new OffsetMetadataManagerTestContext.Builder().build();
+
+        context.groupMetadataManager.getOrMaybeCreateConsumerGroup("group", true);
+
+        context.commitOffset("group", "foo", 0, 100L, 1);
+        context.commitOffset("group", "foo", 1, 110L, 1);
+        context.commitOffset("group", "bar", 0, 200L, 1);
+
+        context.commit();
+
+        assertEquals(3, context.lastWrittenOffset);
+        assertEquals(3, context.lastCommittedOffset);
+
+        context.commitOffset(10L, "group", "foo", 1, 111L, 1, context.time.milliseconds());
+        context.commitOffset(10L, "group", "bar", 0, 201L, 1, context.time.milliseconds());
+        // Note that bar-1 does not exist in the initial commits. The API does not return it at all until
+        // the transaction is committed.
+        context.commitOffset(10L, "group", "bar", 1, 211L, 1, context.time.milliseconds());
+
+
+        // Fetching offsets with "require stable" (Long.MAX_VALUE) should return the committed offset for
+        // foo-0 and the UNSTABLE_OFFSET_COMMIT error for foo-1 and bar-0.
+        assertEquals(Arrays.asList(
+            new OffsetFetchResponseData.OffsetFetchResponseTopics()
+                .setName("bar")
+                .setPartitions(Arrays.asList(
+                    mkOffsetPartitionResponse(0, Errors.UNSTABLE_OFFSET_COMMIT)
+                )),
+            new OffsetFetchResponseData.OffsetFetchResponseTopics()
+                .setName("foo")
+                .setPartitions(Arrays.asList(
+                    mkOffsetPartitionResponse(0, 100L, 1, "metadata"),
+                    mkOffsetPartitionResponse(1, Errors.UNSTABLE_OFFSET_COMMIT)
+                ))
+        ), context.fetchAllOffsets("group", Long.MAX_VALUE));
+
+        // Fetching offsets without "require stable" (lastCommittedOffset) should the committed
+        // offset for the foo-0, foo-1 and bar-0.
+        assertEquals(Arrays.asList(
+            new OffsetFetchResponseData.OffsetFetchResponseTopics()
+                .setName("bar")
+                .setPartitions(Arrays.asList(
+                    mkOffsetPartitionResponse(0, 200L, 1, "metadata")
+                )),
+            new OffsetFetchResponseData.OffsetFetchResponseTopics()
+                .setName("foo")
+                .setPartitions(Arrays.asList(
+                    mkOffsetPartitionResponse(0, 100L, 1, "metadata"),
+                    mkOffsetPartitionResponse(1, 110L, 1, "metadata")
+                ))
+        ), context.fetchAllOffsets("group", context.lastCommittedOffset));
+
+        // Commit the ongoing transaction.
+        context.replayEndTransactionMarker(10L, TransactionResult.COMMIT);
+
+        // Fetching offsets with "require stable" (Long.MAX_VALUE) should not return any errors now.
+        assertEquals(Arrays.asList(
+            new OffsetFetchResponseData.OffsetFetchResponseTopics()
+                .setName("bar")
+                .setPartitions(Arrays.asList(
+                    mkOffsetPartitionResponse(0, 201L, 1, "metadata"),
+                    mkOffsetPartitionResponse(1, 211L, 1, "metadata")
+                )),
+            new OffsetFetchResponseData.OffsetFetchResponseTopics()
+                .setName("foo")
+                .setPartitions(Arrays.asList(
+                    mkOffsetPartitionResponse(0, 100L, 1, "metadata"),
+                    mkOffsetPartitionResponse(1, 111L, 1, "metadata")
                 ))
         ), context.fetchAllOffsets("group", Long.MAX_VALUE));
     }
@@ -2305,6 +2496,15 @@ public class OffsetMetadataManagerTest {
     static private OffsetFetchResponseData.OffsetFetchResponsePartitions mkInvalidOffsetPartitionResponse(int partition) {
         return new OffsetFetchResponseData.OffsetFetchResponsePartitions()
             .setPartitionIndex(partition)
+            .setCommittedOffset(INVALID_OFFSET)
+            .setCommittedLeaderEpoch(-1)
+            .setMetadata("");
+    }
+
+    static private OffsetFetchResponseData.OffsetFetchResponsePartitions mkOffsetPartitionResponse(int partition, Errors error) {
+        return new OffsetFetchResponseData.OffsetFetchResponsePartitions()
+            .setPartitionIndex(partition)
+            .setErrorCode(error.code())
             .setCommittedOffset(INVALID_OFFSET)
             .setCommittedLeaderEpoch(-1)
             .setMetadata("");

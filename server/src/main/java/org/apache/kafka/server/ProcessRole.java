@@ -14,29 +14,21 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.connect.runtime.rest.resources;
 
-import org.apache.kafka.connect.runtime.Herder;
-import org.apache.kafka.connect.runtime.rest.RestClient;
-import org.apache.kafka.connect.runtime.rest.RestRequestTimeout;
+package org.apache.kafka.server;
 
-import javax.inject.Inject;
-import javax.ws.rs.Path;
+public enum ProcessRole {
+    BrokerRole("broker"),
+    ControllerRole("controller");
 
-@Path("/connectors")
-public class InternalConnectResource extends InternalClusterResource {
+    private final String roleName;
 
-    private final Herder herder;
-
-    @Inject
-    public InternalConnectResource(Herder herder, RestClient restClient, RestRequestTimeout requestTimeout) {
-        super(restClient, requestTimeout);
-        this.herder = herder;
+    ProcessRole(String roleName) {
+        this.roleName = roleName;
     }
 
     @Override
-    protected Herder herderForRequest() {
-        return herder;
+    public String toString() {
+        return roleName;
     }
-
 }

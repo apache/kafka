@@ -182,9 +182,9 @@ class ProducerFailureHandlingTest extends KafkaServerTestHarness {
   }
 
   /**
-    * Send with invalid partition id should return ExecutionException caused by TimeoutException
-    * when partition is higher than the upper bound of partitions.
-    */
+   * Send with invalid partition id should return ExecutionException caused by TimeoutException
+   * when partition is higher than the upper bound of partitions.
+   */
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testInvalidPartition(quorum: String): Unit = {

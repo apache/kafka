@@ -25,7 +25,6 @@ import kafka.cluster.EndPoint
 import kafka.log.{LogCleaner, LogManager}
 import kafka.network.{DataPlaneAcceptor, SocketServer}
 import kafka.server.DynamicBrokerConfig._
-import kafka.server.KafkaRaftServer.BrokerRole
 import kafka.utils.{CoreUtils, Logging, PasswordEncoder}
 import kafka.utils.Implicits._
 import kafka.zk.{AdminZkClient, KafkaZkClient}
@@ -36,6 +35,7 @@ import org.apache.kafka.common.config.types.Password
 import org.apache.kafka.common.network.{ListenerName, ListenerReconfigurable}
 import org.apache.kafka.common.security.authenticator.LoginManager
 import org.apache.kafka.common.utils.{ConfigUtils, Utils}
+import org.apache.kafka.server.ProcessRole
 import org.apache.kafka.server.config.{ConfigEntityName, ConfigType, ServerTopicConfigSynonyms}
 import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig
 import org.apache.kafka.server.metrics.ClientMetricsReceiverPlugin
@@ -287,7 +287,7 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
       case Some(authz: Reconfigurable) => addReconfigurable(authz)
       case _ =>
     }
-    if (!kafkaConfig.processRoles.contains(BrokerRole)) {
+    if (!kafkaConfig.processRoles.contains(ProcessRole.BrokerRole)) {
       // only add these if the controller isn't also running the broker role
       // because these would already be added via the broker in that case
       addReconfigurable(controller.kafkaYammerMetrics)

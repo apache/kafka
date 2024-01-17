@@ -22,7 +22,7 @@ import org.apache.kafka.common.utils.Time;
 
 public final class KafkaMetric implements Metric {
 
-    private MetricName metricName;
+    private final MetricName metricName;
     private final Object lock;
     private final Time time;
     private final MetricValueProvider<?> metricValueProvider;

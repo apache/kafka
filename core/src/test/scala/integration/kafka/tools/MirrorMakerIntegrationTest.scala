@@ -70,6 +70,7 @@ class MirrorMakerIntegrationTest extends KafkaServerTestHarness {
     val mirrorMakerConsumer = new ConsumerWrapper(consumer, None, includeOpt = Some("any"))
     mirrorMakerConsumer.offsets.put(new TopicPartition("test", 0), 0L)
     assertThrows(classOf[TimeoutException], () => mirrorMakerConsumer.commit())
+    mirrorMakerConsumer.close()
   }
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
@@ -86,6 +87,7 @@ class MirrorMakerIntegrationTest extends KafkaServerTestHarness {
     mirrorMakerConsumer.offsets.put(new TopicPartition("nonexistent-topic2", 0), 0L)
     MirrorMaker.commitOffsets(mirrorMakerConsumer)
     assertTrue(mirrorMakerConsumer.offsets.isEmpty, "Offsets for non-existent topics should be removed")
+    mirrorMakerConsumer.close()
   }
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)

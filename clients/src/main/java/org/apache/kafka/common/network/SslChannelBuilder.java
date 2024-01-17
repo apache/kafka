@@ -43,11 +43,11 @@ import java.util.function.Supplier;
 public class SslChannelBuilder implements ChannelBuilder, ListenerReconfigurable {
     private final ListenerName listenerName;
     private final boolean isInterBrokerListener;
+    private final Mode mode;
+    private final Logger log;
     private SslFactory sslFactory;
-    private Mode mode;
     private Map<String, ?> configs;
     private SslPrincipalMapper sslPrincipalMapper;
-    private final Logger log;
 
     /**
      * Constructs an SSL channel builder. ListenerName is provided only
