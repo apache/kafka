@@ -1501,6 +1501,20 @@ public final class Utils {
         return result;
     }
 
+    /**
+     * @param set Source set.
+     * @param toRemove Elements to remove.
+     * @return {@code set} copy without {@code toRemove} elements.
+     * @param <T> Element type.
+     */
+    @SuppressWarnings("unchecked")
+    public static <T> Set<T> minus(Set<T> set, T...toRemove) {
+        Set<T> res = new HashSet<>(set);
+        for (T t : toRemove)
+            res.remove(t);
+        return res;
+    }
+
     public static <K, V> Map<K, V> filterMap(final Map<K, V> map, final Predicate<Entry<K, V>> filterPredicate) {
         return map.entrySet().stream().filter(filterPredicate).collect(Collectors.toMap(Entry::getKey, Entry::getValue));
     }

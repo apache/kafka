@@ -17,7 +17,6 @@
 package org.apache.kafka.tools.consumergroup;
 
 import joptsimple.OptionSpec;
-import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.server.util.CommandDefaultOptions;
 import org.apache.kafka.server.util.CommandLineUtils;
 import org.slf4j.Logger;
@@ -27,6 +26,9 @@ import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+
+import static org.apache.kafka.common.utils.Utils.join;
+import static org.apache.kafka.common.utils.Utils.minus;
 
 public class ConsumerGroupCommandOptions extends CommandDefaultOptions {
     public static final Logger LOGGER = LoggerFactory.getLogger(ConsumerGroupCommandOptions.class);
@@ -195,11 +197,11 @@ public class ConsumerGroupCommandOptions extends CommandDefaultOptions {
         if (options.has(describeOpt)) {
             if (!options.has(groupOpt) && !options.has(allGroupsOpt))
                 CommandLineUtils.printUsageAndExit(parser,
-                    "Option $describeOpt takes one of these options: " + Utils.join(allGroupSelectionScopeOpts));
+                    "Option " + describeOpt + " takes one of these options: " + join(allGroupSelectionScopeOpts));
             List<OptionSpec<?>> mutuallyExclusiveOpts = Arrays.asList(membersOpt, offsetsOpt, stateOpt);
             if (mutuallyExclusiveOpts.stream().mapToInt(o -> options.has(o) ? 1 : 0).sum() > 1) {
                 CommandLineUtils.printUsageAndExit(parser,
-                    "Option " + describeOpt + " takes at most one of these options: " + Utils.join(mutuallyExclusiveOpts));
+                    "Option " + describeOpt + " takes at most one of these options: " + join(mutuallyExclusiveOpts));
             }
             if (options.has(stateOpt) && options.valueOf(stateOpt) != null)
                 CommandLineUtils.printUsageAndExit(parser,
@@ -212,7 +214,7 @@ public class ConsumerGroupCommandOptions extends CommandDefaultOptions {
         if (options.has(deleteOpt)) {
             if (!options.has(groupOpt) && !options.has(allGroupsOpt))
                 CommandLineUtils.printUsageAndExit(parser,
-                    "Option " + deleteOpt + " takes one of these options: " + Utils.join(allGroupSelectionScopeOpts));
+                    "Option " + deleteOpt + " takes one of these options: " + join(allGroupSelectionScopeOpts));
             if (options.has(topicOpt))
                 CommandLineUtils.printUsageAndExit(parser, "The consumer does not support topic-specific offset " +
                     "deletion from a consumer group.");
@@ -221,7 +223,7 @@ public class ConsumerGroupCommandOptions extends CommandDefaultOptions {
         if (options.has(deleteOffsetsOpt)) {
             if (!options.has(groupOpt) || !options.has(topicOpt))
                 CommandLineUtils.printUsageAndExit(parser,
-                    "Option " + deleteOffsetsOpt + " takes the following options: " + Utils.join(allDeleteOffsetsOpts));
+                    "Option " + deleteOffsetsOpt + " takes the following options: " + join(allDeleteOffsetsOpts));
         }
 
         if (options.has(resetOffsetsOpt)) {
@@ -237,7 +239,7 @@ public class ConsumerGroupCommandOptions extends CommandDefaultOptions {
 
             if (!options.has(groupOpt) && !options.has(allGroupsOpt))
                 CommandLineUtils.printUsageAndExit(parser,
-                    "Option " + resetOffsetsOpt + " takes one of these options: " + Utils.join(allGroupSelectionScopeOpts));
+                    "Option " + resetOffsetsOpt + " takes one of these options: " + join(allGroupSelectionScopeOpts));
             CommandLineUtils.checkInvalidArgs(parser, options, resetToOffsetOpt,   minus(allResetOffsetScenarioOpts, resetToOffsetOpt));
             CommandLineUtils.checkInvalidArgs(parser, options, resetToDatetimeOpt, minus(allResetOffsetScenarioOpts, resetToDatetimeOpt));
             CommandLineUtils.checkInvalidArgs(parser, options, resetByDurationOpt, minus(allResetOffsetScenarioOpts, resetByDurationOpt));
@@ -251,13 +253,5 @@ public class ConsumerGroupCommandOptions extends CommandDefaultOptions {
         CommandLineUtils.checkInvalidArgs(parser, options, groupOpt, minus(allGroupSelectionScopeOpts, groupOpt));
         CommandLineUtils.checkInvalidArgs(parser, options, groupOpt, minus(allConsumerGroupLevelOpts, describeOpt, deleteOpt, resetOffsetsOpt));
         CommandLineUtils.checkInvalidArgs(parser, options, topicOpt, minus(allConsumerGroupLevelOpts, deleteOpt, resetOffsetsOpt));
-    }
-
-    @SuppressWarnings("unchecked")
-    private static <T> Set<T> minus(Set<T> set, T...toRemove) {
-        Set<T> res = new HashSet<>(set);
-        for (T t : toRemove)
-            res.remove(t);
-        return res;
     }
 }
