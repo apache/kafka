@@ -49,7 +49,7 @@ import scala.jdk.CollectionConverters._
   */
 class EpochDrivenReplicationProtocolAcceptanceTest extends QuorumTestHarness with Logging {
   // Set this to IBP_0_11_0_IV1 to demonstrate the tests failing in the pre-KIP-101 case
-  override def metadataVersion = MetadataVersion.latest
+  override def metadataVersion = MetadataVersion.latestTesting
   val topic = "topic1"
   val msg = new Array[Byte](1000)
   val msgBigger = new Array[Byte](10000)
