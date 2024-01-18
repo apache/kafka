@@ -539,7 +539,7 @@ class DescribeTopicPartitionsRequestHandlerTest {
         int voterId = brokerId + 1;
         properties.put(KafkaConfig.QuorumVotersProp(), voterId + "@localhost:9093");
         properties.put(KafkaConfig.ControllerListenerNamesProp(), "SSL");
-        TestUtils.setIbpAndMessageFormatVersions(properties, MetadataVersion.latest());
+        TestUtils.setIbpAndMessageFormatVersions(properties, MetadataVersion.latestProduction());
         return new KafkaConfig(properties);
     }
 }
