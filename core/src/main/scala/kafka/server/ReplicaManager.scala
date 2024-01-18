@@ -535,18 +535,12 @@ class ReplicaManager(val config: KafkaConfig,
                   deletePartition && partition.isLeader && requestLeaderEpoch == LeaderAndIsr.EpochDuringDelete)
                 // Assume that everything will go right. It is overwritten in case of an error.
                 responseMap.put(topicPartition, Errors.NONE)
-              } else if (requestLeaderEpoch < currentLeaderEpoch) {
+              } else {
                 stateChangeLogger.warn(s"Ignoring StopReplica request (delete=$deletePartition) from " +
                   s"controller $controllerId with correlation id $correlationId " +
                   s"epoch $controllerEpoch for partition $topicPartition since its associated " +
                   s"leader epoch $requestLeaderEpoch is smaller than the current " +
                   s"leader epoch $currentLeaderEpoch")
-                responseMap.put(topicPartition, Errors.FENCED_LEADER_EPOCH)
-              } else {
-                stateChangeLogger.info(s"Ignoring StopReplica request (delete=$deletePartition) from " +
-                  s"controller $controllerId with correlation id $correlationId " +
-                  s"epoch $controllerEpoch for partition $topicPartition since its associated " +
-                  s"leader epoch $requestLeaderEpoch matches the current leader epoch")
                 responseMap.put(topicPartition, Errors.FENCED_LEADER_EPOCH)
               }
 
