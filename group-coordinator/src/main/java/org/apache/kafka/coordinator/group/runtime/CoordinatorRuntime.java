@@ -1630,10 +1630,12 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
                                             ctx.transitionTo(CoordinatorState.ACTIVE);
                                             if (summary != null) {
                                                 runtimeMetrics.recordPartitionLoadSensor(summary.startTimeMs(), summary.endTimeMs());
+                                                log.info("Finished loading of metadata from {} in {}ms with epoch {} where {}ms " +
+                                                    "was spent in the scheduler. Loaded {} records which total to {} bytes.",
+                                                    summary.endTimeMs() - summary.startTimeMs(), tp, partitionEpoch,
+                                                    summary.schedulerQueueTimeMs(), summary.numRecords(), summary.numBytes()
+                                                );
                                             }
-                                            log.info("Finished loading of metadata from {} with epoch {} and LoadSummary={}.",
-                                                tp, partitionEpoch, summary
-                                            );
                                         } catch (Throwable ex) {
                                             log.error("Failed to load metadata from {} with epoch {} due to {}.",
                                                 tp, partitionEpoch, ex.toString()

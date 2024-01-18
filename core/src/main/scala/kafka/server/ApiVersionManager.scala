@@ -91,7 +91,7 @@ class SimpleApiVersionManager(
     this(
       listenerType,
       ApiKeys.apisForListener(listenerType).asScala,
-      BrokerFeatures.defaultSupportedFeatures(),
+      BrokerFeatures.defaultSupportedFeatures(enableUnstableLastVersion),
       enableUnstableLastVersion,
       zkMigrationEnabled,
       featuresProvider
