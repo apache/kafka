@@ -775,8 +775,6 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
             worker.stopAndAwaitConnectors();
             worker.stopAndAwaitTasks();
 
-            member.stop();
-
             // Explicitly fail any outstanding requests so they actually get a response and get an
             // understandable reason for their failure.
             DistributedHerderRequest request = requests.pollFirst();
