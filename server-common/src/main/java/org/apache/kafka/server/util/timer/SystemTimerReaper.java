@@ -14,7 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.coordinator.group.util;
+package org.apache.kafka.server.util.timer;
 
 import org.apache.kafka.server.util.ShutdownableThread;
 import org.apache.kafka.server.util.timer.Timer;

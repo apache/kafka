@@ -59,6 +59,7 @@
   <allow pkg="org.apache.kafka.queue" />
   <allow pkg="org.apache.kafka.server.common" />
   <allow pkg="org.apache.kafka.server.metrics" />
+  <allow pkg="org.apache.kafka.server.util" />
   <allow pkg="com.yammer.metrics" />
 
   <!-- utilities for testing -->
