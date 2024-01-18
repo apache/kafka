@@ -75,6 +75,7 @@ import static org.apache.kafka.clients.consumer.ConsumerConfig.VALUE_DESERIALIZE
 import static org.apache.kafka.clients.consumer.internals.ConsumerTestBuilder.DEFAULT_GROUP_ID;
 import static org.apache.kafka.clients.consumer.internals.ConsumerTestBuilder.DEFAULT_GROUP_INSTANCE_ID;
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.CONSUMER_METRIC_GROUP_PREFIX;
+import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.COORDINATOR_METRICS_SUFFIX;
 import static org.apache.kafka.test.TestUtils.assertFutureThrows;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -92,16 +93,14 @@ public class CommitRequestManagerTest {
 
     private long retryBackoffMs = 100;
     private long retryBackoffMaxMs = 1000;
+    private String consumerMetricGroupPrefix = CONSUMER_METRIC_GROUP_PREFIX;
+    private String consumerMetricGroupName = consumerMetricGroupPrefix + COORDINATOR_METRICS_SUFFIX;
     private Node mockedNode = new Node(1, "host1", 9092);
     private SubscriptionState subscriptionState;
     private LogContext logContext;
     private MockTime time;
     private CoordinatorRequestManager coordinatorRequestManager;
     private Metrics metrics = new Metrics();
-    private ConsumerCoordinatorMetrics consumerCoordinatorMetrics = new ConsumerCoordinatorMetrics(
-            subscriptionState,
-            metrics,
-            CONSUMER_METRIC_GROUP_PREFIX);
     private Properties props;
 
     private final int defaultApiTimeoutMs = 60000;
@@ -971,7 +970,8 @@ public class CommitRequestManagerTest {
                 retryBackoffMs,
                 retryBackoffMaxMs,
                 OptionalDouble.of(0),
-                consumerCoordinatorMetrics));
+                consumerMetricGroupPrefix,
+                metrics));
     }
 
     private ClientResponse buildOffsetFetchClientResponse(
@@ -1051,6 +1051,6 @@ public class CommitRequestManagerTest {
     private KafkaMetric getMetric(String name) {
         return metrics.metrics().get(metrics.metricName(
             name,
-            CONSUMER_METRIC_GROUP_PREFIX + "-coordinator-metrics"));
+            consumerMetricGroupName));
     }
 }

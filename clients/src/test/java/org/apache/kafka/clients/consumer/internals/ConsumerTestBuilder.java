@@ -25,6 +25,7 @@ import org.apache.kafka.clients.consumer.internals.events.ApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEventProcessor;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEventHandler;
+import org.apache.kafka.clients.consumer.internals.metrics.RebalanceCallbackMetrics;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.requests.MetadataResponse;
@@ -47,7 +48,6 @@ import static org.apache.kafka.clients.consumer.ConsumerConfig.GROUP_ID_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.GROUP_INSTANCE_ID_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG;
-import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.CONSUMER_METRIC_GROUP_PREFIX;
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.createFetchMetricsManager;
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.createMetrics;
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.createSubscriptionState;
@@ -94,7 +94,6 @@ public class ConsumerTestBuilder implements Closeable {
     public final ApplicationEventProcessor applicationEventProcessor;
     public final BackgroundEventHandler backgroundEventHandler;
     public final ConsumerRebalanceListenerInvoker rebalanceListenerInvoker;
-    private final ConsumerCoordinatorMetrics consumerCoordinatorMetrics;
     final MockClient client;
     final Optional<GroupInformation> groupInfo;
 
@@ -145,11 +144,6 @@ public class ConsumerTestBuilder implements Closeable {
         this.metadata = spy(new ConsumerMetadata(config, subscriptions, logContext, new ClusterResourceListeners()));
         this.metricsManager = createFetchMetricsManager(metrics);
         this.pollTimer = time.timer(groupRebalanceConfig.rebalanceTimeoutMs);
-        this.consumerCoordinatorMetrics = spy(new ConsumerCoordinatorMetrics(
-                subscriptions,
-                metrics,
-                CONSUMER_METRIC_GROUP_PREFIX
-        ));
 
         this.client = new MockClient(time, metadata);
         MetadataResponse metadataResponse = RequestTestUtils.metadataUpdateWith(1, new HashMap<String, Integer>() {
@@ -196,7 +190,7 @@ public class ConsumerTestBuilder implements Closeable {
                     coordinator,
                     gi.groupId,
                     gi.groupInstanceId,
-                    consumerCoordinatorMetrics));
+                    metrics));
             MembershipManager mm = spy(
                     new MembershipManagerImpl(
                         gi.groupId,
@@ -276,7 +270,7 @@ public class ConsumerTestBuilder implements Closeable {
                 logContext,
                 subscriptions,
                 time,
-                consumerCoordinatorMetrics
+                new RebalanceCallbackMetrics(metrics)
         );
     }
 

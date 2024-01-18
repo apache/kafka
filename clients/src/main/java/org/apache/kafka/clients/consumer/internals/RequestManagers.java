@@ -21,6 +21,7 @@ import org.apache.kafka.clients.GroupRebalanceConfig;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEventHandler;
 import org.apache.kafka.common.internals.IdempotentCloser;
+import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.telemetry.internals.ClientTelemetryReporter;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
@@ -116,7 +117,7 @@ public class RequestManagers implements Closeable {
                                                      final FetchMetricsManager fetchMetricsManager,
                                                      final Supplier<NetworkClientDelegate> networkClientDelegateSupplier,
                                                      final Optional<ClientTelemetryReporter> clientTelemetryReporter,
-                                                     final ConsumerCoordinatorMetrics consumerCoordinatorMetrics) {
+                                                     final Metrics metrics) {
         return new CachedSupplier<RequestManagers>() {
             @Override
             protected RequestManagers create() {
@@ -168,7 +169,7 @@ public class RequestManagers implements Closeable {
                             coordinator,
                             groupRebalanceConfig.groupId,
                             groupRebalanceConfig.groupInstanceId,
-                            consumerCoordinatorMetrics);
+                            metrics);
                     membershipManager = new MembershipManagerImpl(
                             groupRebalanceConfig.groupId,
                             groupRebalanceConfig.groupInstanceId,

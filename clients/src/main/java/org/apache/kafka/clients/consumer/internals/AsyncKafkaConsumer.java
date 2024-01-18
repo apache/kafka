@@ -60,6 +60,7 @@ import org.apache.kafka.clients.consumer.internals.events.SubscriptionChangeAppl
 import org.apache.kafka.clients.consumer.internals.events.TopicMetadataApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.UnsubscribeApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.ValidatePositionsApplicationEvent;
+import org.apache.kafka.clients.consumer.internals.metrics.RebalanceCallbackMetrics;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.KafkaException;
@@ -357,11 +358,6 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
 
             // This FetchBuffer is shared between the application and network threads.
             this.fetchBuffer = new FetchBuffer(logContext);
-            ConsumerCoordinatorMetrics coordinatorMetrics = new ConsumerCoordinatorMetrics(
-                subscriptions,
-                metrics,
-                CONSUMER_METRIC_GROUP_PREFIX
-            );
             final Supplier<NetworkClientDelegate> networkClientDelegateSupplier = NetworkClientDelegate.supplier(time,
                     logContext,
                     metadata,
@@ -382,7 +378,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                     fetchMetricsManager,
                     networkClientDelegateSupplier,
                     clientTelemetryReporter,
-                    coordinatorMetrics);
+                    metrics);
             final Supplier<ApplicationEventProcessor> applicationEventProcessorSupplier = ApplicationEventProcessor.supplier(logContext,
                     metadata,
                     applicationEventQueue,
@@ -399,7 +395,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                     logContext,
                     subscriptions,
                     time,
-                    coordinatorMetrics
+                    new RebalanceCallbackMetrics(metrics)
             );
             this.backgroundEventProcessor = new BackgroundEventProcessor(
                     logContext,
@@ -530,11 +526,6 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             GroupRebalanceConfig.ProtocolType.CONSUMER
         );
 
-        ConsumerCoordinatorMetrics coordinatorMetrics = new ConsumerCoordinatorMetrics(
-                subscriptions,
-                metrics,
-                CONSUMER_METRIC_GROUP_PREFIX
-        );
         this.groupMetadata = initializeGroupMetadata(config, groupRebalanceConfig);
 
         BlockingQueue<ApplicationEvent> applicationEventQueue = new LinkedBlockingQueue<>();
@@ -547,7 +538,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             logContext,
             subscriptions,
             time,
-            coordinatorMetrics
+            new RebalanceCallbackMetrics(metrics)
         );
         ApiVersions apiVersions = new ApiVersions();
         Supplier<NetworkClientDelegate> networkClientDelegateSupplier = () -> new NetworkClientDelegate(
@@ -569,7 +560,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             fetchMetricsManager,
             networkClientDelegateSupplier,
             clientTelemetryReporter,
-            coordinatorMetrics);
+            metrics);
         Supplier<ApplicationEventProcessor> applicationEventProcessorSupplier = ApplicationEventProcessor.supplier(
                 logContext,
                 metadata,
