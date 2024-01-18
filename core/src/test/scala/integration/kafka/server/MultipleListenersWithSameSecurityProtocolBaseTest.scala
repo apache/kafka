@@ -41,10 +41,11 @@ import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 
 import java.util
+import scala.collection._
 import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
 import scala.collection.Seq
-import scala.jdk.CollectionConverters.CollectionHasAsScala
+import scala.jdk.CollectionConverters._
 
 object MultipleListenersWithSameSecurityProtocolBaseTest {
   val SecureInternal = "SECURE_INTERNAL"
