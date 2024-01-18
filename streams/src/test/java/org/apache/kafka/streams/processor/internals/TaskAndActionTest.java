@@ -19,6 +19,8 @@ package org.apache.kafka.streams.processor.internals;
 import org.apache.kafka.streams.processor.TaskId;
 import org.junit.jupiter.api.Test;
 
+import java.util.concurrent.CompletableFuture;
+
 import static org.apache.kafka.streams.processor.internals.TaskAndAction.Action.ADD;
 import static org.apache.kafka.streams.processor.internals.TaskAndAction.Action.REMOVE;
 import static org.apache.kafka.streams.processor.internals.TaskAndAction.createAddTask;
@@ -45,8 +47,9 @@ class TaskAndActionTest {
     @Test
     public void shouldCreateRemoveTaskAction() {
         final TaskId taskId = new TaskId(0, 0);
+        final CompletableFuture<Task> future = new CompletableFuture<>();
 
-        final TaskAndAction removeTask = createRemoveTask(taskId);
+        final TaskAndAction removeTask = createRemoveTask(taskId, future);
 
         assertEquals(REMOVE, removeTask.getAction());
         assertEquals(taskId, removeTask.getTaskId());
@@ -62,7 +65,18 @@ class TaskAndActionTest {
 
     @Test
     public void shouldThrowIfRemoveTaskActionIsCreatedWithNullTaskId() {
-        final Exception exception = assertThrows(NullPointerException.class, () -> createRemoveTask(null));
+        final Exception exception = assertThrows(
+            NullPointerException.class,
+            () -> createRemoveTask(null, new CompletableFuture<>())
+        );
         assertTrue(exception.getMessage().contains("Task ID of task to remove is null!"));
+    }
+
+    @Test
+    public void shouldThrowIfRemoveTaskActionIsCreatedWithNullFuture() {
+        final Exception exception = assertThrows(
+            NullPointerException.class,
+            () -> createRemoveTask(new TaskId(0, 0), null));
+        assertTrue(exception.getMessage().contains("Future of task to remove is null!"));
     }
 }

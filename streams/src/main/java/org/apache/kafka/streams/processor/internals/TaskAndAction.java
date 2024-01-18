@@ -19,6 +19,7 @@ package org.apache.kafka.streams.processor.internals;
 import org.apache.kafka.streams.processor.TaskId;
 
 import java.util.Objects;
+import java.util.concurrent.CompletableFuture;
 
 public class TaskAndAction {
 
@@ -30,11 +31,17 @@ public class TaskAndAction {
     private final Task task;
     private final TaskId taskId;
     private final Action action;
+    private final CompletableFuture<Task> future;
 
     private TaskAndAction(final Task task, final TaskId taskId, final Action action) {
+        this(task, taskId, action, null);
+    }
+
+    private TaskAndAction(final Task task, final TaskId taskId, final Action action, final CompletableFuture<Task> future) {
         this.task = task;
         this.taskId = taskId;
         this.action = action;
+        this.future = future;
     }
 
     public static TaskAndAction createAddTask(final Task task) {
@@ -42,9 +49,10 @@ public class TaskAndAction {
         return new TaskAndAction(task, null, Action.ADD);
     }
 
-    public static TaskAndAction createRemoveTask(final TaskId taskId) {
+    public static TaskAndAction createRemoveTask(final TaskId taskId, final CompletableFuture<Task> future) {
         Objects.requireNonNull(taskId, "Task ID of task to remove is null!");
-        return new TaskAndAction(null, taskId, Action.REMOVE);
+        Objects.requireNonNull(future, "Future of task to remove is null!");
+        return new TaskAndAction(null, taskId, Action.REMOVE, future);
     }
 
     public Task getTask() {
@@ -59,6 +67,13 @@ public class TaskAndAction {
             throw new IllegalStateException("Action type " + action + " cannot have a task ID!");
         }
         return taskId;
+    }
+
+    public CompletableFuture<Task> getFuture() {
+        if (action != Action.REMOVE) {
+            throw new IllegalStateException("Action type " + action + " cannot have a future!");
+        }
+        return future;
     }
 
     public Action getAction() {
