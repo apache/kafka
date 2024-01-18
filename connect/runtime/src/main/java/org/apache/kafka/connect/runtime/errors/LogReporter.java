@@ -54,7 +54,7 @@ public class LogReporter implements ErrorReporter {
      * @param context the processing context.
      */
     @Override
-    public Future<RecordMetadata> report(ProcessingContext context) {
+    public Future<RecordMetadata> report(ProcessingContext<?> context) {
         if (!connConfig.enableErrorLog()) {
             return COMPLETED;
         }
@@ -69,7 +69,7 @@ public class LogReporter implements ErrorReporter {
     }
 
     // Visible for testing
-    String message(ProcessingContext context) {
+    String message(ProcessingContext<?> context) {
         return String.format("Error encountered in task %s. %s", id,
                 context.toString(connConfig.includeRecordDetailsInErrorLog()));
     }

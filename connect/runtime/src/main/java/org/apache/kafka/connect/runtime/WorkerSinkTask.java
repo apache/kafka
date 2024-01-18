@@ -42,6 +42,7 @@ import org.apache.kafka.connect.header.Headers;
 import org.apache.kafka.connect.runtime.ConnectMetrics.MetricGroup;
 import org.apache.kafka.connect.runtime.errors.ErrorHandlingMetrics;
 import org.apache.kafka.connect.runtime.errors.ErrorReporter;
+import org.apache.kafka.connect.runtime.errors.ProcessingContext;
 import org.apache.kafka.connect.runtime.errors.RetryWithToleranceOperator;
 import org.apache.kafka.connect.runtime.errors.Stage;
 import org.apache.kafka.connect.runtime.errors.WorkerErrantRecordReporter;
@@ -313,7 +314,6 @@ class WorkerSinkTask extends WorkerTask {
     protected void initializeAndStart() {
         SinkConnectorConfig.validate(taskConfig);
         retryWithToleranceOperator.reporters(errorReportersSupplier.get());
-
         if (SinkConnectorConfig.hasTopicsConfig(taskConfig)) {
             List<String> topics = SinkConnectorConfig.parseTopicsList(taskConfig);
             consumer.subscribe(topics, new HandleRebalance());
@@ -508,9 +508,9 @@ class WorkerSinkTask extends WorkerTask {
             log.trace("{} Consuming and converting message in topic '{}' partition {} at offset {} and timestamp {}",
                     this, msg.topic(), msg.partition(), msg.offset(), msg.timestamp());
 
-            retryWithToleranceOperator.consumerRecord(msg);
+            ProcessingContext<ConsumerRecord<byte[], byte[]>> context = new ProcessingContext<>(msg);
 
-            SinkRecord transRecord = convertAndTransformRecord(msg);
+            SinkRecord transRecord = convertAndTransformRecord(context, msg);
 
             origOffsets.put(
                     new TopicPartition(msg.topic(), msg.partition()),
@@ -529,16 +529,16 @@ class WorkerSinkTask extends WorkerTask {
         sinkTaskMetricsGroup.recordConsumedOffsets(origOffsets);
     }
 
-    private SinkRecord convertAndTransformRecord(final ConsumerRecord<byte[], byte[]> msg) {
-        SchemaAndValue keyAndSchema = retryWithToleranceOperator.execute(() -> keyConverter.toConnectData(msg.topic(), msg.headers(), msg.key()),
+    private SinkRecord convertAndTransformRecord(ProcessingContext<ConsumerRecord<byte[], byte[]>> context, final ConsumerRecord<byte[], byte[]> msg) {
+        SchemaAndValue keyAndSchema = retryWithToleranceOperator.execute(context, () -> keyConverter.toConnectData(msg.topic(), msg.headers(), msg.key()),
                 Stage.KEY_CONVERTER, keyConverter.getClass());
 
-        SchemaAndValue valueAndSchema = retryWithToleranceOperator.execute(() -> valueConverter.toConnectData(msg.topic(), msg.headers(), msg.value()),
+        SchemaAndValue valueAndSchema = retryWithToleranceOperator.execute(context, () -> valueConverter.toConnectData(msg.topic(), msg.headers(), msg.value()),
                 Stage.VALUE_CONVERTER, valueConverter.getClass());
 
-        Headers headers = retryWithToleranceOperator.execute(() -> convertHeadersFor(msg), Stage.HEADER_CONVERTER, headerConverter.getClass());
+        Headers headers = retryWithToleranceOperator.execute(context, () -> convertHeadersFor(msg), Stage.HEADER_CONVERTER, headerConverter.getClass());
 
-        if (retryWithToleranceOperator.failed()) {
+        if (context.failed()) {
             return null;
         }
 
@@ -557,12 +557,12 @@ class WorkerSinkTask extends WorkerTask {
         }
 
         // Apply the transformations
-        SinkRecord transformedRecord = transformationChain.apply(origRecord);
+        SinkRecord transformedRecord = transformationChain.apply(context, origRecord);
         if (transformedRecord == null) {
             return null;
         }
         // Error reporting will need to correlate each sink record with the original consumer record
-        return new InternalSinkRecord(msg, transformedRecord);
+        return new InternalSinkRecord(context, transformedRecord);
     }
 
     private Headers convertHeadersFor(ConsumerRecord<byte[], byte[]> record) {
@@ -601,9 +601,8 @@ class WorkerSinkTask extends WorkerTask {
             task.put(new ArrayList<>(messageBatch));
             // if errors raised from the operator were swallowed by the task implementation, an
             // exception needs to be thrown to kill the task indicating the tolerance was exceeded
-            if (retryWithToleranceOperator.failed() && !retryWithToleranceOperator.withinToleranceLimits()) {
-                throw new ConnectException("Tolerance exceeded in error handler",
-                    retryWithToleranceOperator.error());
+            if (workerErrantRecordReporter != null) {
+                workerErrantRecordReporter.maybeThrowAsyncError();
             }
             recordBatch(messageBatch.size());
             sinkTaskMetricsGroup.recordPut(time.milliseconds() - start);
