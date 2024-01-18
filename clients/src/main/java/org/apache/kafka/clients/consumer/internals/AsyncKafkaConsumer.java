@@ -788,6 +788,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                                    final boolean isWakeupable,
                                    final Optional<Long> retryTimeoutMs) {
         maybeInvokeCommitCallbacks();
+        maybeThrowFencedInstanceException();
         maybeThrowInvalidGroupIdException();
 
         log.debug("Committing offsets: {}", offsets);
@@ -1641,6 +1642,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     @Override
     public boolean updateAssignmentMetadataIfNeeded(Timer timer) {
         maybeInvokeCommitCallbacks();
+        maybeThrowFencedInstanceException();
         backgroundEventProcessor.process();
 
         // Keeping this updateAssignmentMetadataIfNeeded wrapping up the updateFetchPositions as
@@ -1894,8 +1896,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         return kafkaConsumerMetrics;
     }
 
-    private void maybeInvokeCommitCallbacks() {
-        offsetCommitCallbackInvoker.executeCallbacks();
+    private void maybeThrowFencedInstanceException() {
         if (offsetCommitCallbackInvoker.hasFencedException()) {
             String groupInstanceId = "unknown";
             if (!groupMetadata.isPresent()) {
@@ -1907,6 +1908,10 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             }
             throw new FencedInstanceIdException("Get fenced exception for group.instance.id " + groupInstanceId);
         }
+    }
+
+    private void maybeInvokeCommitCallbacks() {
+        offsetCommitCallbackInvoker.executeCallbacks();
     }
 
     // Visible for testing
