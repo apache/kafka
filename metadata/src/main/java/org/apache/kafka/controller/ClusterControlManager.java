@@ -382,8 +382,6 @@ public class ClusterControlManager {
                             " is already registered with directory " + directory);
                 }
             }
-        } else {
-            System.out.println("Dropping direcotires for count " + request.logDirs().size());
         }
 
         ListenerInfo listenerInfo = ListenerInfo.fromBrokerRegistrationRequest(request.listeners());

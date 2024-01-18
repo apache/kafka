@@ -192,7 +192,6 @@ public class BrokerRegistration {
         this.isMigratingZkBroker = isMigratingZkBroker;
         directories = new ArrayList<>(directories);
         directories.sort(Uuid::compareTo);
-        System.out.println("BrokerRegistration: Got list size " + directories.size());
         this.directories = Collections.unmodifiableList(directories);
     }
 
@@ -320,7 +319,6 @@ public class BrokerRegistration {
         if (directories.isEmpty() || options.metadataVersion().isDirectoryAssignmentSupported()) {
             registrationRecord.setLogDirs(directories);
         } else {
-            System.out.println("BrokerRegistration: Dropping directories");
             options.handleLoss("the online log directories of one or more brokers");
         }
 
