@@ -1408,6 +1408,7 @@ public class ReplicationControlManager {
                     (short) 2));
             log.warn("Directories {} in broker {} marked offline, remaining directories: {}",
                     newOfflineDirs, brokerId, newOnlineDirs);
+            // XXX If the result of this is the broker has no online directories then fence.
         }
     }
 

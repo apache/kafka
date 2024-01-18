@@ -147,12 +147,17 @@ public class DirectoryId {
      * @return                 true if the directory is considered online, false otherwise
      */
     public static boolean isOnline(Uuid dir, List<Uuid> sortedOnlineDirs) {
+        System.out.println("DirectoryId.isOnline: Looking for dir " + dir);
         if (UNASSIGNED.equals(dir) || MIGRATING.equals(dir)) {
             return true;
         }
         if (LOST.equals(dir)) {
             return false;
         }
+//        if (sortedOnlineDirs.size() == 0) {
+//            return true;
+//        }
+        System.out.println("DirectoryId.isOnline: Is isnot " + Collections.binarySearch(sortedOnlineDirs, dir));
         return Collections.binarySearch(sortedOnlineDirs, dir) >= 0;
     }
 }
