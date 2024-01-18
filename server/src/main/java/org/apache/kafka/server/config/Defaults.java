@@ -135,7 +135,7 @@ public class Defaults {
     public static final int LEADER_IMBALANCE_PER_BROKER_PERCENTAGE = 10;
     public static final int LEADER_IMBALANCE_CHECK_INTERVAL_SECONDS = 300;
     public static final String INTER_BROKER_SECURITY_PROTOCOL = SecurityProtocol.PLAINTEXT.toString();
-    public static final String INTER_BROKER_PROTOCOL_VERSION = MetadataVersion.latest().version();
+    public static final String INTER_BROKER_PROTOCOL_VERSION = MetadataVersion.latestProduction().version();
 
     /** ********* Controlled shutdown configuration *********/
     public static final int CONTROLLED_SHUTDOWN_MAX_RETRIES = 3;

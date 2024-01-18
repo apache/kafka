@@ -44,7 +44,7 @@ import org.apache.kafka.server.ProcessRole
 import org.apache.kafka.server.authorizer.Authorizer
 import org.apache.kafka.server.common.{MetadataVersion, MetadataVersionValidator}
 import org.apache.kafka.server.common.MetadataVersion._
-import org.apache.kafka.server.config.{Defaults, ClientQuotaManagerConfig, ReplicationQuotaManagerConfig, ServerTopicConfigSynonyms}
+import org.apache.kafka.server.config.{Defaults, ServerTopicConfigSynonyms}
 import org.apache.kafka.storage.internals.log.{LogConfig, ProducerStateManagerConfig}
 import org.apache.kafka.storage.internals.log.LogConfig.MessageFormatVersion
 import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig

@@ -32,7 +32,6 @@ import org.apache.kafka.common.serialization.ByteArrayDeserializer
 import org.apache.kafka.common.serialization.ByteArraySerializer
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.server.config.Defaults
-import org.junit.jupiter.api.Test
 
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.params.ParameterizedTest
