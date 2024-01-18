@@ -6175,7 +6175,7 @@ class ReplicaManagerTest {
   private def imageFromTopics(topicsImage: TopicsImage): MetadataImage = {
     val featuresImageLatest = new FeaturesImage(
       Collections.emptyMap(),
-      MetadataVersion.latest(),
+      MetadataVersion.latestProduction(),
       ZkMigrationState.NONE)
     new MetadataImage(
       new MetadataProvenance(100L, 10, 1000L),
