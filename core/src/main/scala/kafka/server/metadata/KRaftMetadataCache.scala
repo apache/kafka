@@ -201,7 +201,7 @@ class KRaftMetadataCache(val brokerId: Int) extends MetadataCache with Logging w
                     .setLastKnownElr(Replicas.toList(partition.lastKnownElr)))
               }
             }
-            case _ =>
+            case _ => warn(s"The partition $partitionId does not exist for $topicName")
           }
         }
         (Some(result.toList), nextIndex)
