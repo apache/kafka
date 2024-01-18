@@ -20,7 +20,6 @@ package org.apache.kafka.coordinator.group;
 import org.apache.kafka.common.record.CompressionType;
 
 public class OffsetConfig {
-
     public static final int DEFAULT_MAX_METADATA_SIZE = 4096;
     public static final int DEFAULT_LOAD_BUFFER_SIZE = 5 * 1024 * 1024;
     public static final long DEFAULT_OFFSET_RETENTION_MS = 24 * 60 * 60 * 1000L;
