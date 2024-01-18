@@ -169,57 +169,42 @@ class KRaftMetadataCache(val brokerId: Int) extends MetadataCache with Logging w
         val result = new ListBuffer[DescribeTopicPartitionsResponsePartition]()
         val partitions = topic.partitions().keySet()
         val upperIndex = topic.partitions().size().min(startIndex + maxCount)
+        val nextIndex = if (upperIndex < partitions.size()) upperIndex else -1
         for (partitionId <- startIndex until upperIndex) {
-          val partition = topic.partitions().get(partitionId)
-          val filteredReplicas = maybeFilterAliveReplicas(image, partition.replicas,
-            listenerName, false)
-          val filteredIsr = maybeFilterAliveReplicas(image, partition.isr, listenerName, false)
-          val offlineReplicas = getOfflineReplicas(image, partition, listenerName)
-          val maybeLeader = getAliveEndpoint(image, partition.leader, listenerName)
-          maybeLeader match {
-            case None =>
-              val error = if (!image.cluster().brokers.containsKey(partition.leader)) {
-                debug(s"Error while fetching metadata for $topicName-$partitionId: leader not available")
-                Errors.LEADER_NOT_AVAILABLE
-              } else {
-                debug(s"Error while fetching metadata for $topicName-$partitionId: listener $listenerName " +
-                  s"not found on leader ${partition.leader}")
-                Errors.LISTENER_NOT_FOUND
+          topic.partitions().get(partitionId) match {
+            case partition : PartitionRegistration => {
+              val filteredReplicas = maybeFilterAliveReplicas(image, partition.replicas,
+                listenerName, false)
+              val filteredIsr = maybeFilterAliveReplicas(image, partition.isr, listenerName, false)
+              val offlineReplicas = getOfflineReplicas(image, partition, listenerName)
+              val maybeLeader = getAliveEndpoint(image, partition.leader, listenerName)
+              maybeLeader match {
+                case None =>
+                  result.append(new DescribeTopicPartitionsResponsePartition()
+                    .setPartitionIndex(partitionId)
+                    .setLeaderId(MetadataResponse.NO_LEADER_ID)
+                    .setLeaderEpoch(partition.leaderEpoch)
+                    .setReplicaNodes(filteredReplicas)
+                    .setIsrNodes(filteredIsr)
+                    .setOfflineReplicas(offlineReplicas)
+                    .setEligibleLeaderReplicas(Replicas.toList(partition.elr))
+                    .setLastKnownElr(Replicas.toList(partition.lastKnownElr)))
+                case Some(leader) =>
+                  result.append(new DescribeTopicPartitionsResponsePartition()
+                    .setPartitionIndex(partitionId)
+                    .setLeaderId(leader.id())
+                    .setLeaderEpoch(partition.leaderEpoch)
+                    .setReplicaNodes(filteredReplicas)
+                    .setIsrNodes(filteredIsr)
+                    .setOfflineReplicas(offlineReplicas)
+                    .setEligibleLeaderReplicas(Replicas.toList(partition.elr))
+                    .setLastKnownElr(Replicas.toList(partition.lastKnownElr)))
               }
-              result.append(new DescribeTopicPartitionsResponsePartition()
-                .setErrorCode(error.code)
-                .setPartitionIndex(partitionId)
-                .setLeaderId(MetadataResponse.NO_LEADER_ID)
-                .setLeaderEpoch(partition.leaderEpoch)
-                .setReplicaNodes(filteredReplicas)
-                .setIsrNodes(filteredIsr)
-                .setOfflineReplicas(offlineReplicas))
-            case Some(leader) =>
-              val error = if (filteredReplicas.size < partition.replicas.length) {
-                debug(s"Error while fetching metadata for $topicName-$partitionId: replica information not available for " +
-                  s"following brokers ${partition.replicas.filterNot(filteredReplicas.contains).mkString(",")}")
-                Errors.REPLICA_NOT_AVAILABLE
-              } else if (filteredIsr.size < partition.isr.length) {
-                debug(s"Error while fetching metadata for $topicName-$partitionId: in sync replica information not available for " +
-                  s"following brokers ${partition.isr.filterNot(filteredIsr.contains).mkString(",")}")
-                Errors.REPLICA_NOT_AVAILABLE
-              } else {
-                Errors.NONE
-              }
-
-              result.append(new DescribeTopicPartitionsResponsePartition()
-                .setErrorCode(error.code)
-                .setPartitionIndex(partitionId)
-                .setLeaderId(leader.id())
-                .setLeaderEpoch(partition.leaderEpoch)
-                .setReplicaNodes(filteredReplicas)
-                .setIsrNodes(filteredIsr)
-                .setOfflineReplicas(offlineReplicas)
-                .setEligibleLeaderReplicas(Replicas.toList(partition.elr))
-                .setLastKnownElr(Replicas.toList(partition.lastKnownElr)))
+            }
+            case _ =>
           }
         }
-        (Some(result.toList), if (upperIndex < partitions.size()) upperIndex else -1)
+        (Some(result.toList), nextIndex)
       }
     }
   }

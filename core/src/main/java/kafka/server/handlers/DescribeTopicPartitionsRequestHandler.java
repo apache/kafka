@@ -63,7 +63,7 @@ public class DescribeTopicPartitionsRequestHandler {
         DescribeTopicPartitionsRequestData.Cursor cursor = request.cursor();
         String cursorTopicName = cursor != null ? cursor.topicName() : "";
         if (fetchAllTopics) {
-            JavaConverters.asJava(metadataCache.getAllTopics()).forEach(topicName -> {
+            JavaConverters.asJavaCollection(metadataCache.getAllTopics()).forEach(topicName -> {
                 if (topicName.compareTo(cursorTopicName) >= 0) {
                     topics.add(topicName);
                 }
@@ -98,7 +98,7 @@ public class DescribeTopicPartitionsRequestHandler {
         });
 
         DescribeTopicPartitionsResponseData response = metadataCache.getTopicMetadataForDescribeTopicResponse(
-            JavaConverters.asScala(authorizedTopicsStream.iterator()),
+            JavaConverters.asScalaIterator(authorizedTopicsStream.iterator()),
             abstractRequest.context().listenerName,
             (String topicName) -> topicName.equals(cursorTopicName) ? cursor.partitionIndex() : 0,
             Math.min(config.maxRequestPartitionSizeLimit(), request.responsePartitionLimit()),
