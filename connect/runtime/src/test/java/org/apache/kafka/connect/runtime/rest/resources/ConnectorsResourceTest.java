@@ -428,7 +428,7 @@ public class ConnectorsResourceTest {
         expectAndCallbackNotLeaderException(cb).when(herder)
             .deleteConnectorConfig(eq(CONNECTOR_NAME), cb.capture());
         // Should forward request
-        when(restClient.httpRequest(LEADER_URL + "connectors/" + CONNECTOR_NAME + "?forward=false", "DELETE", NULL_HEADERS, null, null))
+        when(restClient.httpRequest(eq(LEADER_URL + "connectors/" + CONNECTOR_NAME + "?forward=false"), eq("DELETE"), isNull(), any(), any()))
                 .thenReturn(new RestClient.HttpResponse<>(204, new HashMap<>(), null));
         connectorsResource.destroyConnector(CONNECTOR_NAME, NULL_HEADERS, FORWARD);
     }

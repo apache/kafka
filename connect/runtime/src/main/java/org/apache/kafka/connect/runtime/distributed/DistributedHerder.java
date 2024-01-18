@@ -1268,7 +1268,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                         try {
                             String stageDescription = "Forwarding zombie fencing request to the leader at " + workerUrl;
                             try (TemporaryStage stage = new TemporaryStage(stageDescription, callback, time)) {
-                                restClient.httpRequest(fenceUrl, "PUT", null, null, null, sessionKey, requestSignatureAlgorithm);
+                                restClient.httpRequest(fenceUrl, "PUT", null, null, sessionKey, requestSignatureAlgorithm);
                             }
                             callback.onCompletion(null, null);
                         } catch (Throwable t) {
@@ -2224,7 +2224,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                     log.trace("Forwarding task configurations for connector {} to leader", connName);
                     String stageDescription = "Forwarding task configurations to the leader at " + leaderUrl;
                     try (TemporaryStage stage = new TemporaryStage(stageDescription, cb, time)) {
-                        restClient.httpRequest(reconfigUrl, "POST", null, rawTaskProps, null, sessionKey, requestSignatureAlgorithm);
+                        restClient.httpRequest(reconfigUrl, "POST", null, rawTaskProps, sessionKey, requestSignatureAlgorithm);
                     }
                     cb.onCompletion(null, null);
                 } catch (ConnectException e) {
