@@ -54,7 +54,8 @@ public class ClientMetricsInstanceMetadataTest {
             Collections.singletonMap(ClientMetricsConfigs.CLIENT_SOURCE_ADDRESS, Pattern.compile(
                 InetAddress.getLocalHost().getHostAddress()))));
         assertTrue(instanceMetadata.isMatch(
-            Collections.singletonMap(ClientMetricsConfigs.CLIENT_SOURCE_PORT, Pattern.compile("56078"))));
+            Collections.singletonMap(ClientMetricsConfigs.CLIENT_SOURCE_PORT, Pattern.compile(
+                String.valueOf(ClientMetricsTestUtils.CLIENT_PORT)))));
     }
 
     @Test
@@ -69,7 +70,7 @@ public class ClientMetricsInstanceMetadataTest {
         patternMap.put(ClientMetricsConfigs.CLIENT_SOFTWARE_NAME, Pattern.compile("apache-kafka-.*"));
         patternMap.put(ClientMetricsConfigs.CLIENT_SOFTWARE_VERSION, Pattern.compile("3.5.2"));
         patternMap.put(ClientMetricsConfigs.CLIENT_SOURCE_ADDRESS, Pattern.compile(InetAddress.getLocalHost().getHostAddress()));
-        patternMap.put(ClientMetricsConfigs.CLIENT_SOURCE_PORT, Pattern.compile("56078"));
+        patternMap.put(ClientMetricsConfigs.CLIENT_SOURCE_PORT, Pattern.compile(String.valueOf(ClientMetricsTestUtils.CLIENT_PORT)));
 
         assertTrue(instanceMetadata.isMatch(patternMap));
     }
