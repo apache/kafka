@@ -133,15 +133,15 @@ class BrokerMetadataPublisherTest {
       reassignedTopicImage
     ))
 
-    val expectedStrayPartitions = Set(
+    val expectedStrayReplicas = Set(
       deletedTopicPartition1,
       deletedTopicPartition2,
       recreatedTopicPartition,
       reassignedTopicPartition
     )
 
-    val strayPartitions = BrokerMetadataPublisher.findStrayPartitions(brokerId, image, logs).toSet
-    assertEquals(expectedStrayPartitions, strayPartitions)
+    val strayReplicas = LogManager.findStrayReplicas(brokerId, image, logs).toSet
+    assertEquals(expectedStrayReplicas, strayReplicas)
   }
 
   private def mockLog(
