@@ -17,6 +17,7 @@
   "apiKey": 52,
   "type": "response",
   "name": "VoteResponse",
+  // Version 1 adds the PreVote field
   "validVersions": "0-1",
   "flexibleVersions": "0+",
   "fields": [

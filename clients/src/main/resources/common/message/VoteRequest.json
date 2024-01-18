@@ -18,6 +18,7 @@
   "type": "request",
   "listeners": ["controller"],
   "name": "VoteRequest",
+  // Version 1 adds the PreVote field and renames CandidateEpoch and CandidateId to ReplicaEpoch and ReplicaId
   "validVersions": "0-1",
   "flexibleVersions": "0+",
   "fields": [
