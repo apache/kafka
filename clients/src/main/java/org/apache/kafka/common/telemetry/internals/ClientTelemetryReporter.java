@@ -362,6 +362,7 @@ public class ClientTelemetryReporter implements MetricsReporter {
                     throw new IllegalStateException("Unknown telemetry state: " + localState);
             }
 
+            log.trace("For telemetry state {}, returning the value {} ms; {}", localState, timeMs, msg);
             return timeMs;
         }
 
@@ -378,6 +379,7 @@ public class ClientTelemetryReporter implements MetricsReporter {
                 lock.readLock().unlock();
             }
 
+            log.debug("Creating telemetry request. Telemetry state: {}", localState);
             if (localState == ClientTelemetryState.SUBSCRIPTION_NEEDED) {
                 return createSubscriptionRequest(localSubscription);
             } else if (localState == ClientTelemetryState.PUSH_NEEDED || localState == ClientTelemetryState.TERMINATING_PUSH_NEEDED) {
