@@ -22,20 +22,29 @@ import java.util.{Collections, Objects, Properties}
 import java.util.concurrent.TimeUnit
 import kafka.api.SaslSetup
 import kafka.utils.JaasTestUtils.JaasSection
-import kafka.utils.{JaasTestUtils, TestUtils}
+import kafka.utils.{JaasTestUtils, TestInfoUtils, TestUtils}
 import kafka.utils.Implicits._
+import org.apache.kafka.clients.CommonClientConfigs
+import org.apache.kafka.clients.admin.{Admin, AdminClientConfig}
 import org.apache.kafka.clients.consumer.Consumer
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
 import org.apache.kafka.common.config.SslConfigs
+import org.apache.kafka.common.config.SslConfigs.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG
+import org.apache.kafka.common.config.types.Password
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.network.{ListenerName, Mode}
+import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.coordinator.group.OffsetConfig
 import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo}
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.ValueSource
 
+import java.util
 import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
 import scala.collection.Seq
+import scala.jdk.CollectionConverters.CollectionHasAsScala
 
 object MultipleListenersWithSameSecurityProtocolBaseTest {
   val SecureInternal = "SECURE_INTERNAL"
@@ -44,6 +53,7 @@ object MultipleListenersWithSameSecurityProtocolBaseTest {
   val External = "EXTERNAL"
   val GssApi = "GSSAPI"
   val Plain = "PLAIN"
+  val Controller = "CONTROLLER"
 }
 
 abstract class MultipleListenersWithSameSecurityProtocolBaseTest extends QuorumTestHarness with SaslSetup {
@@ -51,9 +61,10 @@ abstract class MultipleListenersWithSameSecurityProtocolBaseTest extends QuorumT
   import MultipleListenersWithSameSecurityProtocolBaseTest._
 
   private val trustStoreFile = TestUtils.tempFile("truststore", ".jks")
-  private val servers = new ArrayBuffer[KafkaServer]
+  private val servers = new ArrayBuffer[KafkaBroker]
   private val producers = mutable.Map[ClientMetadata, KafkaProducer[Array[Byte], Array[Byte]]]()
   private val consumers = mutable.Map[ClientMetadata, Consumer[Array[Byte], Array[Byte]]]()
+  private val adminClients = new ArrayBuffer[Admin]()
 
   protected val kafkaClientSaslMechanism = Plain
   protected val kafkaServerSaslMechanisms = Map(
@@ -72,7 +83,7 @@ abstract class MultipleListenersWithSameSecurityProtocolBaseTest extends QuorumT
 
     (0 until numServers).foreach { brokerId =>
 
-      val props = TestUtils.createBrokerConfig(brokerId, zkConnect, trustStoreFile = Some(trustStoreFile))
+      val props = TestUtils.createBrokerConfig(brokerId, zkConnectOrNull, trustStoreFile = Some(trustStoreFile))
       // Ensure that we can support multiple listeners per security protocol and multiple security protocols
       props.put(KafkaConfig.ListenersProp, s"$SecureInternal://localhost:0, $Internal://localhost:0, " +
         s"$SecureExternal://localhost:0, $External://localhost:0")
@@ -97,7 +108,11 @@ abstract class MultipleListenersWithSameSecurityProtocolBaseTest extends QuorumT
       }
       props.put(SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG, "invalid/file/path")
 
-      servers += TestUtils.createServer(KafkaConfig.fromProps(props))
+      if (isKRaftTest()) {
+        props.put(KafkaConfig.AdvertisedListenersProp, s"${props.get(KafkaConfig.ListenersProp)}")
+        props.put(KafkaConfig.ListenerSecurityProtocolMapProp, s"$Controller:PLAINTEXT, ${props.get(KafkaConfig.ListenerSecurityProtocolMapProp)}")
+      }
+      servers += createBroker(KafkaConfig.fromProps(props))
     }
 
     servers.map(_.config).foreach { config =>
@@ -107,10 +122,9 @@ abstract class MultipleListenersWithSameSecurityProtocolBaseTest extends QuorumT
         s"Unexpected ${KafkaConfig.InterBrokerListenerNameProp} for broker ${config.brokerId}")
     }
 
-    TestUtils.createTopic(zkClient, Topic.GROUP_METADATA_TOPIC_NAME, OffsetConfig.DEFAULT_OFFSETS_TOPIC_NUM_PARTITIONS,
-      replicationFactor = 2, servers, servers.head.groupCoordinator.groupMetadataTopicConfigs)
-
-    createScramCredentials(zkConnect, JaasTestUtils.KafkaScramUser, JaasTestUtils.KafkaScramPassword)
+    createTopic(Topic.GROUP_METADATA_TOPIC_NAME, 2, OffsetConfig.DEFAULT_OFFSETS_TOPIC_NUM_PARTITIONS,
+      Some(servers.head.groupCoordinator.groupMetadataTopicConfigs))
+    createScramCredentials()
 
     servers.head.config.listeners.foreach { endPoint =>
       val listenerName = endPoint.listenerName
@@ -124,7 +138,7 @@ abstract class MultipleListenersWithSameSecurityProtocolBaseTest extends QuorumT
       def addProducerConsumer(listenerName: ListenerName, mechanism: String, saslProps: Option[Properties]): Unit = {
 
         val topic = s"${listenerName.value}${producers.size}"
-        TestUtils.createTopic(zkClient, topic, 2, 2, servers)
+        createTopic(topic, 2, 2, Option.empty)
         val clientMetadata = ClientMetadata(listenerName, mechanism, topic)
 
         producers(clientMetadata) = TestUtils.createProducer(bootstrapServers, acks = -1,
@@ -144,10 +158,70 @@ abstract class MultipleListenersWithSameSecurityProtocolBaseTest extends QuorumT
     }
   }
 
+  private def createTopic(topic: String, replicas: Int, partitions: Int, config: Option[Properties]): Unit = {
+    val topicConf = if (config.isDefined) config.get else new Properties
+    if (isKRaftTest()) {
+      TestUtils.createTopicWithAdmin(createAdminClient(SecurityProtocol.PLAINTEXT, Internal),
+        topic,
+        servers, controllerServers,
+        partitions,
+        replicationFactor = replicas,
+        topicConfig = topicConf)
+    } else {
+      TestUtils.createTopic(zkClient, topic, partitions,
+        replicationFactor = replicas, servers, topicConf)
+    }
+  }
+
+  private def createScramCredentials(): Unit = {
+    if (isKRaftTest()) {
+      createScramCredentials(createAdminClient(SecurityProtocol.PLAINTEXT, Internal), JaasTestUtils.KafkaScramUser, JaasTestUtils.KafkaScramPassword)
+    } else {
+      createScramCredentials(zkConnectOrNull, JaasTestUtils.KafkaScramUser, JaasTestUtils.KafkaScramPassword)
+    }
+  }
+
+  // kraft mode topic create with admin client
+  private def securityProps(srcProps: Properties, propNames: util.Set[_], listenerPrefix: String = ""): Properties = {
+    val resultProps = new Properties
+    propNames.asScala.filter(srcProps.containsKey).foreach { propName =>
+      resultProps.setProperty(s"$listenerPrefix$propName", configValueAsString(srcProps.get(propName)))
+    }
+    resultProps
+  }
+
+  private def configValueAsString(value: Any): String = {
+    value match {
+      case password: Password => password.value
+      case list: util.List[_] => list.asScala.map(_.toString).mkString(",")
+      case _ => value.toString
+    }
+  }
+
+  private def clientProps(securityProtocol: SecurityProtocol, saslMechanism: Option[String] = None): Properties = {
+    val props = new Properties
+    props.put(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, securityProtocol.name)
+    props.put(SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG, "HTTPS")
+    if (securityProtocol == SecurityProtocol.SASL_PLAINTEXT || securityProtocol == SecurityProtocol.SASL_SSL)
+      props ++= kafkaClientSaslProperties(saslMechanism.getOrElse(kafkaClientSaslMechanism), dynamicJaasConfig = true)
+    securityProps(props, props.keySet)
+  }
+
+  private def createAdminClient(securityProtocol: SecurityProtocol, listenerName: String): Admin = {
+    val config = clientProps(securityProtocol)
+    val bootstrapServers = TestUtils.bootstrapServers(servers, new ListenerName(listenerName))
+    config.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers)
+    config.put(AdminClientConfig.METADATA_MAX_AGE_CONFIG, "10")
+    val adminClient = Admin.create(config)
+    adminClients += adminClient
+    adminClient
+  }
+
   @AfterEach
   override def tearDown(): Unit = {
     producers.values.foreach(_.close())
     consumers.values.foreach(_.close())
+    adminClients.foreach(_.close())
     TestUtils.shutdownServers(servers)
     super.tearDown()
     closeSasl()
@@ -157,8 +231,9 @@ abstract class MultipleListenersWithSameSecurityProtocolBaseTest extends QuorumT
     * Tests that we can produce and consume to/from all broker-defined listeners and security protocols. We produce
     * with acks=-1 to ensure that replication is also working.
     */
-  @Test
-  def testProduceConsume(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testProduceConsume(quorum: String): Unit = {
     producers.foreach { case (clientMetadata, producer) =>
       val producerRecords = (1 to 10).map(i => new ProducerRecord(clientMetadata.topic, s"key$i".getBytes,
         s"value$i".getBytes))
