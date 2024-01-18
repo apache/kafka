@@ -595,15 +595,6 @@ public final class Utils {
     }
 
     /**
-     * Create a string representation of a collection joined by ", ".
-     * @param collection The list of items
-     * @return The string representation.
-     */
-    public static <T> String join(Collection<T> collection) {
-        return join(collection, ", ");
-    }
-
-    /**
      * Create a string representation of a collection joined by the given separator
      * @param collection The list of items
      * @param separator The separator
@@ -1499,20 +1490,6 @@ public final class Utils {
         result.addAll(left);
         result.removeAll(right);
         return result;
-    }
-
-    /**
-     * @param set Source set.
-     * @param toRemove Elements to remove.
-     * @return {@code set} copy without {@code toRemove} elements.
-     * @param <T> Element type.
-     */
-    @SuppressWarnings("unchecked")
-    public static <T> Set<T> minus(Set<T> set, T...toRemove) {
-        Set<T> res = new HashSet<>(set);
-        for (T t : toRemove)
-            res.remove(t);
-        return res;
     }
 
     public static <K, V> Map<K, V> filterMap(final Map<K, V> map, final Predicate<Entry<K, V>> filterPredicate) {
