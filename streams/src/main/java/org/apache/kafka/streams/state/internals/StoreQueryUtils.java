@@ -146,7 +146,7 @@ public final class StoreQueryUtils {
                 "Handled in " + store.getClass() + " in " + (System.nanoTime() - start) + "ns"
             );
         }
-        result.setPosition(position);
+        result.setPosition(position.copy());
         return result;
     }
 

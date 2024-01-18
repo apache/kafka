@@ -201,7 +201,7 @@ public class CachingKeyValueStore
         if (result == null) {
             result = wrapped().query(query, PositionBound.unbounded(), config);
         }
-        result.setPosition(mergedPosition);
+        result.setPosition(mergedPosition.copy());
         return result;
     }
 
