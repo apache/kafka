@@ -1443,8 +1443,8 @@ public class RequestResponseTest {
                 .setTopics(singletonList(new VoteRequestData.TopicData()
                         .setPartitions(singletonList(new VoteRequestData.PartitionData()
                                 .setPartitionIndex(0)
-                                .setCandidateEpoch(1)
-                                .setCandidateId(2)
+                                .setReplicaEpoch(1)
+                                .setReplicaId(2)
                                 .setLastOffset(3L)
                                 .setLastOffsetEpoch(4)))
                         .setTopicName("topic1")));

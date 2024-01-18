@@ -394,7 +394,7 @@ public final class RaftClientTestContext {
             log.lastFetchedEpoch(), log.endOffset().offset);
 
         for (RaftRequest.Outbound request : voteRequests) {
-            VoteResponseData voteResponse = voteResponse(true, Optional.empty(), epoch);
+            VoteResponseData voteResponse = standardVoteResponse(true, Optional.empty(), epoch);
             deliverResponse(request.correlationId, request.destinationId(), voteResponse);
         }
 
@@ -530,8 +530,8 @@ public final class RaftClientTestContext {
                 VoteRequestData request = (VoteRequestData) raftMessage.data();
                 VoteRequestData.PartitionData partitionRequest = unwrap(request);
 
-                assertEquals(epoch, partitionRequest.candidateEpoch());
-                assertEquals(localIdOrThrow(), partitionRequest.candidateId());
+                assertEquals(epoch, partitionRequest.replicaEpoch());
+                assertEquals(localIdOrThrow(), partitionRequest.replicaId());
                 assertEquals(lastEpoch, partitionRequest.lastOffsetEpoch());
                 assertEquals(lastEpochOffset, partitionRequest.lastOffset());
                 voteRequests.add((RaftRequest.Outbound) raftMessage);
@@ -914,14 +914,15 @@ public final class RaftClientTestContext {
         );
     }
 
-    VoteResponseData voteResponse(boolean voteGranted, Optional<Integer> leaderId, int epoch) {
+    VoteResponseData standardVoteResponse(boolean voteGranted, Optional<Integer> leaderId, int epoch) {
         return VoteResponse.singletonResponse(
             Errors.NONE,
             metadataPartition,
             Errors.NONE,
             epoch,
             leaderId.orElse(-1),
-            voteGranted
+            voteGranted,
+            false
         );
     }
 
