@@ -36,26 +36,26 @@ public class RebalanceCallbackMetrics extends AbstractConsumerMetrics {
         super(Optional.ofNullable(grpMetricsPrefix));
         revokeCallbackSensor = metrics.sensor("partition-revoked-latency");
         revokeCallbackSensor.add(metrics.metricName("partition-revoked-latency-avg",
-            groupMetricsPrefix,
+            groupMetricsName,
             "The average time taken for a partition-revoked rebalance listener callback"), new Avg());
         revokeCallbackSensor.add(metrics.metricName("partition-revoked-latency-max",
-            groupMetricsPrefix,
+            groupMetricsName,
             "The max time taken for a partition-revoked rebalance listener callback"), new Max());
 
         assignCallbackSensor = metrics.sensor("partition-assigned-latency");
         assignCallbackSensor.add(metrics.metricName("partition-assigned-latency-avg",
-            groupMetricsPrefix,
+            groupMetricsName,
             "The average time taken for a partition-assigned rebalance listener callback"), new Avg());
         assignCallbackSensor.add(metrics.metricName("partition-assigned-latency-max",
-            groupMetricsPrefix,
+            groupMetricsName,
             "The max time taken for a partition-assigned rebalance listener callback"), new Max());
 
         loseCallbackSensor = metrics.sensor("partition-lost-latency");
         loseCallbackSensor.add(metrics.metricName("partition-lost-latency-avg",
-            groupMetricsPrefix,
+            groupMetricsName,
             "The average time taken for a partition-lost rebalance listener callback"), new Avg());
         loseCallbackSensor.add(metrics.metricName("partition-lost-latency-max",
-            groupMetricsPrefix,
+            groupMetricsName,
             "The max time taken for a partition-lost rebalance listener callback"), new Max());
     }
 }

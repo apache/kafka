@@ -22,8 +22,8 @@ import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.CONSUMER
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.COORDINATOR_METRICS_SUFFIX;
 
 public abstract class AbstractConsumerMetrics {
-    protected String groupMetricsPrefix = CONSUMER_METRIC_GROUP_PREFIX + COORDINATOR_METRICS_SUFFIX;
+    protected String groupMetricsName = CONSUMER_METRIC_GROUP_PREFIX + COORDINATOR_METRICS_SUFFIX;
     public AbstractConsumerMetrics(Optional<String> grpMetricsPrefix) {
-        grpMetricsPrefix.ifPresent(s -> this.groupMetricsPrefix = s + COORDINATOR_METRICS_SUFFIX);
+        grpMetricsPrefix.ifPresent(s -> this.groupMetricsName = s + COORDINATOR_METRICS_SUFFIX);
     }
 }
