@@ -563,8 +563,8 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             fetchMetricsManager,
             networkClientDelegateSupplier,
             clientTelemetryReporter,
-            offsetCommitCallbackInvoker,
-            metrics
+            metrics,
+            offsetCommitCallbackInvoker
         );
         Supplier<ApplicationEventProcessor> applicationEventProcessorSupplier = ApplicationEventProcessor.supplier(
                 logContext,
