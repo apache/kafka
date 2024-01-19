@@ -91,11 +91,14 @@ import java.util.concurrent.CompletionException;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
 import static org.apache.kafka.common.requests.JoinGroupRequest.UNKNOWN_MEMBER_ID;
 import static org.apache.kafka.coordinator.group.TestUtil.requestContext;
 import static org.apache.kafka.test.TestUtils.assertFutureThrows;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -2055,5 +2058,71 @@ public class GroupCoordinatorServiceTest {
         );
 
         assertFutureThrows(future, IllegalStateException.class);
+    }
+
+    @Test
+    public void testOnPartitionsDeleted() {
+        int partitionCount = 3;
+        CoordinatorRuntime<GroupCoordinatorShard, Record> runtime = mockRuntime();
+        GroupCoordinatorService service = new GroupCoordinatorService(
+            new LogContext(),
+            createConfig(),
+            runtime,
+            new GroupCoordinatorMetrics()
+        );
+
+        service.startup(() -> partitionCount);
+
+        when(runtime.partitions()).thenReturn(
+            IntStream
+                .range(0, partitionCount)
+                .mapToObj(i -> new TopicPartition("__consumer_offsets", i))
+                .collect(Collectors.toSet())
+        );
+
+        List<CompletableFuture<Void>> futures = IntStream
+            .range(0, partitionCount)
+            .mapToObj(__ -> new CompletableFuture<Void>())
+            .collect(Collectors.toList());
+
+        IntStream.range(0, partitionCount).forEach(i -> {
+            CompletableFuture<Void> future = futures.get(i);
+            when(runtime.scheduleWriteOperation(
+                ArgumentMatchers.eq("on-partition-deleted"),
+                ArgumentMatchers.eq(new TopicPartition("__consumer_offsets", i)),
+                ArgumentMatchers.eq(Duration.ofMillis(5000)),
+                ArgumentMatchers.any()
+            )).thenAnswer(__ -> future);
+        });
+
+        IntStream.range(0, partitionCount - 1).forEach(i -> {
+            futures.get(i).complete(null);
+        });
+
+        futures.get(partitionCount - 1).completeExceptionally(Errors.COORDINATOR_LOAD_IN_PROGRESS.exception());
+
+        // The exception is logged and swallowed.
+        assertDoesNotThrow(() ->
+            service.onPartitionsDeleted(
+                Collections.singletonList(new TopicPartition("foo", 0)),
+                BufferSupplier.NO_CACHING
+            )
+        );
+    }
+
+    @Test
+    public void testOnPartitionsDeletedWhenServiceIsNotStarted() {
+        CoordinatorRuntime<GroupCoordinatorShard, Record> runtime = mockRuntime();
+        GroupCoordinatorService service = new GroupCoordinatorService(
+            new LogContext(),
+            createConfig(),
+            runtime,
+            new GroupCoordinatorMetrics()
+        );
+
+        assertThrows(CoordinatorNotAvailableException.class, () -> service.onPartitionsDeleted(
+            Collections.singletonList(new TopicPartition("foo", 0)),
+            BufferSupplier.NO_CACHING
+        ));
     }
 }

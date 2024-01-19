@@ -92,6 +92,7 @@ import java.util.OptionalInt;
 import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.IntSupplier;
@@ -1001,8 +1002,26 @@ public class GroupCoordinatorService implements GroupCoordinator {
     public void onPartitionsDeleted(
         List<TopicPartition> topicPartitions,
         BufferSupplier bufferSupplier
-    ) {
+    ) throws ExecutionException, InterruptedException {
         throwIfNotActive();
+
+        final Set<TopicPartition> existingPartitionSet = runtime.partitions();
+        final List<CompletableFuture<Void>> futures = new ArrayList<>(existingPartitionSet.size());
+
+        existingPartitionSet.forEach(partition -> futures.add(
+            runtime.scheduleWriteOperation(
+                "on-partition-deleted",
+                partition,
+                Duration.ofMillis(config.offsetCommitTimeoutMs),
+                coordinator -> coordinator.onPartitionsDeleted(topicPartitions)
+            ).exceptionally(exception -> {
+                log.error("Could not delete offsets for deleted partitions {} in coordinator {} due to: {}.",
+                    partition, partition, exception.getMessage(), exception);
+                return null;
+            })
+        ));
+
+        CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).get();
     }
 
     /**
