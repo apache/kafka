@@ -35,7 +35,6 @@ import org.apache.kafka.streams.query.internals.InternalQueryResultUtil;
 import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
-import org.apache.kafka.streams.state.TimestampedBytesStore;
 
 import java.util.List;
 
@@ -54,7 +53,7 @@ import static org.apache.kafka.streams.state.internals.ValueAndTimestampDeserial
  */
 
 @SuppressWarnings("unchecked")
-public class KeyValueToTimestampedKeyValueByteStoreAdapter implements KeyValueStore<Bytes, byte[]>, TimestampedBytesStore {
+public class KeyValueToTimestampedKeyValueByteStoreAdapter implements KeyValueStore<Bytes, byte[]> {
     final KeyValueStore<Bytes, byte[]> store;
 
     KeyValueToTimestampedKeyValueByteStoreAdapter(final KeyValueStore<Bytes, byte[]> store) {
