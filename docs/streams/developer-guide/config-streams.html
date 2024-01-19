@@ -1153,11 +1153,6 @@ streamsSettings.put(StreamsConfig.topicPrefix("PARAMETER_NAME"), "topic-value");
       <p>Some parameters are not configurable by the user. If you supply a value that is different from the default value,
         your value is ignored. Below is a list of some of these parameters.</p>
       <table border="1" class="non-scrolling-table docutils">
-        <colgroup>
-          <col width="50%">
-          <col width="19%">
-          <col width="31%">
-        </colgroup>
         <thead valign="bottom">
         <tr class="row-odd">
           <th class="head">Parameter Name</th>
@@ -1186,11 +1181,6 @@ streamsSettings.put(StreamsConfig.topicPrefix("PARAMETER_NAME"), "topic-value");
       </table>
       <p>If EOS is enabled, other parameters are set with the following values.</p>
       <table border="1" class="non-scrolling-table docutils">
-        <colgroup>
-          <col width="50%">
-          <col width="19%">
-          <col width="31%">
-        </colgroup>
         <thead valign="bottom">
         <tr class="row-odd">
           <th class="head">Parameter Name</th>
@@ -1221,6 +1211,10 @@ streamsSettings.put(StreamsConfig.topicPrefix("PARAMETER_NAME"), "topic-value");
         <p>This value will be used to derive the client IDs of the following internal clients.</p>
 
         <table border="1" class="non-scrolling-table docutils">
+          <colgroup>
+            <col width="30%">
+            <col width="70%">
+          </colgroup>
           <thead valign="bottom">
           <tr class="row-odd">
             <th class="head">Client</th>
@@ -1242,12 +1236,14 @@ streamsSettings.put(StreamsConfig.topicPrefix("PARAMETER_NAME"), "topic-value");
           </tr>
           </tbody>
           <tr class="row-odd">
-            <td>Producer</td>
+            <td rowspan="2">Producer</td>
             <td>
-              <ul class="simple">
-                <li><strong>For Non-EOS and EOS v2: </strong><code class="docutils literal"><span class="pre">&lt;client.id&gt;-StreamThread-&lt;threadIdx&gt;-producer</span></code></li>
-                <li><strong>For EOS v1: </strong><code class="docutils literal"><span class="pre">&lt;client.id&gt;-StreamThread-&lt;threadIdx&gt;-&lt;taskId&gt;-producer</span></code></li>
-              </ul>
+              <strong>For Non-EOS and EOS v2: </strong><code class="docutils literal"><span class="pre">&lt;client.id&gt;-StreamThread-&lt;threadIdx&gt;-producer</span></code>
+            </td>
+          </tr>
+          <tr>
+            <td>
+              <strong>For EOS v1: </strong><code class="docutils literal"><span class="pre">&lt;client.id&gt;-StreamThread-&lt;threadIdx&gt;-&lt;taskId&gt;-producer</span></code>
             </td>
           </tr>
           <tr class="row-even">
