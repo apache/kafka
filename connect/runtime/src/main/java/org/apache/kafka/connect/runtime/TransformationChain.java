@@ -30,6 +30,7 @@ import java.util.StringJoiner;
 
 /**
  * Represents a chain of {@link Transformation}s to be applied to a {@link ConnectRecord} serially.
+ * @param <T> The type of record included in the {@link ProcessingContext} associated with each record
  * @param <R> The type of record (must be an implementation of {@link ConnectRecord})
  */
 public class TransformationChain<T, R extends ConnectRecord<R>> implements AutoCloseable {
