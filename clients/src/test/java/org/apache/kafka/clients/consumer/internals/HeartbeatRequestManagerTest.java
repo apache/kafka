@@ -81,13 +81,11 @@ public class HeartbeatRequestManagerTest {
     private int heartbeatIntervalMs = DEFAULT_HEARTBEAT_INTERVAL_MS;
     private int maxPollIntervalMs = DEFAULT_MAX_POLL_INTERVAL_MS;
     private long retryBackoffMaxMs = DEFAULT_RETRY_BACKOFF_MAX_MS;
-    private String metricGrpPrefix = "test-consumer";
     private static final String DEFAULT_GROUP_ID = "groupId";
 
     private ConsumerTestBuilder testBuilder;
     private Time time;
     private Timer pollTimer;
-    private ConsumerConfig config;
     private CoordinatorRequestManager coordinatorRequestManager;
     private SubscriptionState subscriptions;
     private Metadata metadata;
@@ -118,7 +116,6 @@ public class HeartbeatRequestManagerTest {
         subscriptions = testBuilder.subscriptions;
         membershipManager = testBuilder.membershipManager.orElseThrow(IllegalStateException::new);
         metadata = testBuilder.metadata;
-        config = testBuilder.config;
 
         when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(new Node(1, "localhost", 9999)));
     }
