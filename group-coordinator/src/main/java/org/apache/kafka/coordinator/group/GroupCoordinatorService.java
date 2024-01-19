@@ -1054,6 +1054,19 @@ public class GroupCoordinatorService implements GroupCoordinator {
         return groupId != null && !groupId.isEmpty();
     }
 
+    /**
+     * This is the handler commonly used by all the operations that requires to convert errors to
+     * coordinator errors. The handler also handles and log unexpected errors.
+     *
+     * @param requestName       The name of the request.
+     * @param request           The request itself for logging purposes.
+     * @param exception         The exception to handle.
+     * @param responseBuilder   A function which takes an Errors and a String and returns
+     *                          the response. The String can be null.
+     * @return The response.
+     * @param <REQ> The type of the request.
+     * @param <RSP> The type of the response.
+     */
     private <REQ, RSP> RSP handleOperationException(
         String requestName,
         REQ request,
