@@ -635,7 +635,7 @@ public class KRaftMigrationDriver implements MetadataPublisher {
         public void run() throws Exception {
             if (checkDriverState(MigrationDriverState.BECOME_CONTROLLER, this)) {
                 applyMigrationOperation("Claiming ZK controller leadership", zkMigrationClient::claimControllerLeadership);
-                if (migrationLeadershipState.zkControllerEpochZkVersion() == -1) {
+                if (migrationLeadershipState.zkControllerEpochZkVersion() == -2) {
                     log.info("Unable to claim leadership, will retry until we learn of a different KRaft leader");
                 } else {
                     if (!migrationLeadershipState.initialZkMigrationComplete()) {
