@@ -42,19 +42,19 @@ public class OffsetCommitCallbackInvoker {
     // Thread-safe queue to store user-defined callbacks and interceptors to be executed
     private final BlockingQueue<OffsetCommitCallbackTask> callbackQueue = new LinkedBlockingQueue<>();
 
-    public void submitCommitInterceptors(final Map<TopicPartition, OffsetAndMetadata> offsets) {
+    public void enqueueInterceptorInvocation(final Map<TopicPartition, OffsetAndMetadata> offsets) {
         if (!interceptors.isEmpty()) {
             callbackQueue.add(new OffsetCommitCallbackTask(
-                (innerOffsets, exception) -> interceptors.onCommit(innerOffsets),
+                (offsetsParam, exception) -> interceptors.onCommit(offsetsParam),
                 offsets,
                 null
             ));
         }
     }
 
-    public void submitUserCallback(final OffsetCommitCallback callback,
-                                   final Map<TopicPartition, OffsetAndMetadata> offsets,
-                                   final Exception exception) {
+    public void enqueueUserCallbackInvocation(final OffsetCommitCallback callback,
+                                              final Map<TopicPartition, OffsetAndMetadata> offsets,
+                                              final Exception exception) {
         callbackQueue.add(new OffsetCommitCallbackTask(callback, offsets, exception));
     }
 
@@ -67,7 +67,6 @@ public class OffsetCommitCallbackInvoker {
                     hasFencedException = true;
 
                 task.callback.onComplete(task.offsets, task.exception);
-
             }
         }
     }

@@ -283,7 +283,7 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
         return (response, throwable) -> {
             autoCommitState.ifPresent(autoCommitState -> autoCommitState.setInflightCommitStatus(false));
             if (throwable == null) {
-                offsetCommitCallbackInvoker.submitCommitInterceptors(allConsumedOffsets);
+                offsetCommitCallbackInvoker.enqueueInterceptorInvocation(allConsumedOffsets);
                 log.debug("Completed asynchronous auto-commit of offsets {}", allConsumedOffsets);
             } else if (throwable instanceof RetriableCommitFailedException) {
                 log.debug("Asynchronous auto-commit of offsets {} failed due to retriable error: {}",

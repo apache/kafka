@@ -58,8 +58,8 @@ public class OffsetCommitCallbackInvokerTest {
         OffsetCommitCallback callback1 = mock(OffsetCommitCallback.class);
         OffsetCommitCallback callback2 = mock(OffsetCommitCallback.class);
 
-        offsetCommitCallbackInvoker.submitUserCallback(callback1, offsets1, null);
-        offsetCommitCallbackInvoker.submitUserCallback(callback2, offsets2, null);
+        offsetCommitCallbackInvoker.enqueueUserCallbackInvocation(callback1, offsets1, null);
+        offsetCommitCallbackInvoker.enqueueUserCallbackInvocation(callback2, offsets2, null);
         verify(callback1, never()).onComplete(any(), any());
         verify(callback2, never()).onComplete(any(), any());
 
@@ -72,6 +72,42 @@ public class OffsetCommitCallbackInvokerTest {
         inOrder.verifyNoMoreInteractions();
     }
 
+    @Test
+    public void testNoOnCommitOnEmptyInterceptors() {
+        final TopicPartition t0 = new TopicPartition("t0", 2);
+        Map<TopicPartition, OffsetAndMetadata> offsets1 =
+            Collections.singletonMap(t0, new OffsetAndMetadata(10L));
+        Map<TopicPartition, OffsetAndMetadata> offsets2 =
+            Collections.singletonMap(t0, new OffsetAndMetadata(20L));
+        when(consumerInterceptors.isEmpty()).thenReturn(true);
+
+        offsetCommitCallbackInvoker.enqueueInterceptorInvocation(offsets1);
+        offsetCommitCallbackInvoker.enqueueInterceptorInvocation(offsets2);
+        offsetCommitCallbackInvoker.executeCallbacks();
+        verify(consumerInterceptors, never()).onCommit(any());
+    }
+
+    @Test
+    public void testOnlyInterceptors() {
+        final TopicPartition t0 = new TopicPartition("t0", 2);
+        Map<TopicPartition, OffsetAndMetadata> offsets1 =
+            Collections.singletonMap(t0, new OffsetAndMetadata(10L));
+        Map<TopicPartition, OffsetAndMetadata> offsets2 =
+            Collections.singletonMap(t0, new OffsetAndMetadata(20L));
+        when(consumerInterceptors.isEmpty()).thenReturn(false);
+
+        offsetCommitCallbackInvoker.enqueueInterceptorInvocation(offsets1);
+        offsetCommitCallbackInvoker.enqueueInterceptorInvocation(offsets2);
+        verify(consumerInterceptors, never()).onCommit(any());
+
+        offsetCommitCallbackInvoker.executeCallbacks();
+        InOrder inOrder = inOrder(consumerInterceptors);
+        inOrder.verify(consumerInterceptors).onCommit(offsets1);
+        inOrder.verify(consumerInterceptors).onCommit(offsets2);
+
+        offsetCommitCallbackInvoker.executeCallbacks();
+        inOrder.verifyNoMoreInteractions();
+    }
 
     @Test
     public void testMixedCallbacksInterceptorsInvoked() {
@@ -83,9 +119,9 @@ public class OffsetCommitCallbackInvokerTest {
         OffsetCommitCallback callback1 = mock(OffsetCommitCallback.class);
         when(consumerInterceptors.isEmpty()).thenReturn(false);
 
-        offsetCommitCallbackInvoker.submitCommitInterceptors(offsets1);
-        offsetCommitCallbackInvoker.submitCommitInterceptors(offsets2);
-        offsetCommitCallbackInvoker.submitUserCallback(callback1, offsets1, null);
+        offsetCommitCallbackInvoker.enqueueInterceptorInvocation(offsets1);
+        offsetCommitCallbackInvoker.enqueueInterceptorInvocation(offsets2);
+        offsetCommitCallbackInvoker.enqueueUserCallbackInvocation(callback1, offsets1, null);
         verify(callback1, never()).onComplete(any(), any());
         verify(consumerInterceptors, never()).onCommit(any());
 

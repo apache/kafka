@@ -766,7 +766,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             future.whenComplete((r, t) -> {
 
                 if (t == null) {
-                    offsetCommitCallbackInvoker.submitCommitInterceptors(offsets);
+                    offsetCommitCallbackInvoker.enqueueInterceptorInvocation(offsets);
                 }
 
                 if (callback == null) {
@@ -776,7 +776,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                     return;
                 }
 
-                offsetCommitCallbackInvoker.submitUserCallback(callback, offsets, (Exception) t);
+                offsetCommitCallbackInvoker.enqueueUserCallbackInvocation(callback, offsets, (Exception) t);
             });
         } finally {
             release();

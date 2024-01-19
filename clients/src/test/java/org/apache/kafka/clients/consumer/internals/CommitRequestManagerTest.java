@@ -385,7 +385,7 @@ public class CommitRequestManagerTest {
 
         // complete the unsent request to trigger interceptor
         futures.get(0).onComplete(buildOffsetCommitClientResponse(new OffsetCommitResponse(0, new HashMap<>())));
-        verify(offsetCommitCallbackInvoker).submitCommitInterceptors(
+        verify(offsetCommitCallbackInvoker).enqueueInterceptorInvocation(
             eq(Collections.singletonMap(t1p, new OffsetAndMetadata(100L)))
         );
     }
@@ -405,7 +405,7 @@ public class CommitRequestManagerTest {
         futures.get(0).onComplete(buildOffsetCommitClientResponse(
             new OffsetCommitResponse(0, Collections.singletonMap(t1p, Errors.NETWORK_EXCEPTION)))
         );
-        Mockito.verify(offsetCommitCallbackInvoker, never()).submitCommitInterceptors(any());
+        Mockito.verify(offsetCommitCallbackInvoker, never()).enqueueInterceptorInvocation(any());
     }
 
     @Test
