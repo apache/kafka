@@ -73,7 +73,7 @@ public class Defaults {
     public static final int EMPTY_NODE_ID = -1;
     public static final long SERVER_MAX_STARTUP_TIME_MS = Long.MAX_VALUE;
 
-    /************* Authorizer Configuration ***********/
+    /** ********* Authorizer Configuration *********/
     public static final String AUTHORIZER_CLASS_NAME = "";
 
     /** ********* Socket Server Configuration *********/
@@ -150,7 +150,7 @@ public class Defaults {
 
     /** ********* New group coordinator configs *********/
     public static final boolean NEW_GROUP_COORDINATOR_ENABLE = false;
-    public static final List<String> GROUP_COORDINATOR_REBALANCE_PROTOCOLS = Arrays.asList(Group.GroupType.CLASSIC.toString());
+    public static final List<String> GROUP_COORDINATOR_REBALANCE_PROTOCOLS = Collections.singletonList(Group.GroupType.CLASSIC.toString());
     public static final int GROUP_COORDINATOR_NUM_THREADS = 1;
 
     /** ********* Consumer group configs *********/
@@ -175,7 +175,7 @@ public class Defaults {
     public static final int OFFSET_COMMIT_TIMEOUT_MS = OffsetConfig.DEFAULT_OFFSET_COMMIT_TIMEOUT_MS;
     public static final short OFFSET_COMMIT_REQUIRED_ACKS = OffsetConfig.DEFAULT_OFFSET_COMMIT_REQUIRED_ACKS;
 
-    /** T********* ransaction management configuration *********/
+    /** ********* Transaction management configuration *********/
     public static final int TRANSACTIONAL_ID_EXPIRATION_MS = TransactionStateManagerConfig.DEFAULT_TRANSACTIONAL_ID_EXPIRATION_MS;
     public static final int TRANSACTIONS_MAX_TIMEOUT_MS = TransactionStateManagerConfig.DEFAULT_TRANSACTIONS_MAX_TIMEOUT_MS;
     public static final int TRANSACTIONS_TOPIC_MIN_ISR = TransactionLogConfig.DEFAULT_MIN_IN_SYNC_REPLICAS;
@@ -189,11 +189,11 @@ public class Defaults {
     public static final int PRODUCER_ID_EXPIRATION_MS = 86400000;
     public static final int PRODUCER_ID_EXPIRATION_CHECK_INTERVAL_MS = 600000;
 
-    /** F********* etch Configuration **********/
+    /** ********* Fetch Configuration *********/
     public static final int MAX_INCREMENTAL_FETCH_SESSION_CACHE_SLOTS = 1000;
     public static final int FETCH_MAX_BYTES = 55 * 1024 * 1024;
 
-    /** Q********* uota Configuration *********/
+    /** ********* Quota Configuration *********/
     public static final int NUM_QUOTA_SAMPLES = ClientQuotaManagerConfig.DEFAULT_NUM_QUOTA_SAMPLES;
     public static final int QUOTA_WINDOW_SIZE_SECONDS = ClientQuotaManagerConfig.DEFAULT_QUOTA_WINDOW_SIZE_SECONDS;
     public static final int NUM_REPLICATION_QUOTA_SAMPLES = ReplicationQuotaManagerConfig.DEFAULT_NUM_QUOTA_SAMPLES;
@@ -203,7 +203,7 @@ public class Defaults {
     public static final int NUM_CONTROLLER_QUOTA_SAMPLES = ClientQuotaManagerConfig.DEFAULT_NUM_QUOTA_SAMPLES;
     public static final int CONTROLLER_QUOTA_WINDOW_SIZE_SECONDS = ClientQuotaManagerConfig.DEFAULT_QUOTA_WINDOW_SIZE_SECONDS;
 
-    /** K********* afka Metrics Configuration *********/
+    /** ********* Kafka Metrics Configuration *********/
     public static final int METRIC_NUM_SAMPLES = 2;
     public static final int METRIC_SAMPLE_WINDOW_MS = 30000;
     public static final String METRIC_REPORTER_CLASSES = "";
@@ -215,7 +215,7 @@ public class Defaults {
     public static final int KAFKA_METRICS_POLLING_INTERVAL_SECONDS = 10;
 
 
-    /** ********* Kafka Client Telemetry Metrics Configuration ***********/
+    /** ********* Kafka Client Telemetry Metrics Configuration *********/
     public static final int CLIENT_TELEMETRY_MAX_BYTES = 1024 * 1024;
 
     /**  ********* SSL configuration *********/
@@ -233,7 +233,7 @@ public class Defaults {
 
     /**  ********* General Security Configuration *********/
     public static final long CONNECTIONS_MAX_REAUTH_MS = 0L;
-    public static final int SERVER_MAX_MAX_RECEIVE_SIZE = BrokerSecurityConfigs.DEFAULT_SASL_SERVER_MAX_RECEIVE_SIZE;
+    public static final int SERVER_MAX_RECEIVE_SIZE = BrokerSecurityConfigs.DEFAULT_SASL_SERVER_MAX_RECEIVE_SIZE;
     public static final Class<? extends KafkaPrincipalBuilder> PRINCIPAL_BUILDER = DefaultKafkaPrincipalBuilder.class;
 
     /**  ********* Sasl configuration *********/
