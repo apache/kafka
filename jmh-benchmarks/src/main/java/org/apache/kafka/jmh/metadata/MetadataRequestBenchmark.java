@@ -108,7 +108,7 @@ public class MetadataRequestBenchmark {
     private final Metrics metrics = new Metrics();
     private final int brokerId = 1;
     private final ZkMetadataCache metadataCache = MetadataCache.zkMetadataCache(brokerId,
-        MetadataVersion.latest(), BrokerFeatures.createEmpty(), null, false);
+        MetadataVersion.latestTesting(), BrokerFeatures.createEmpty(), null, false);
     private final ClientQuotaManager clientQuotaManager = Mockito.mock(ClientQuotaManager.class);
     private final ClientRequestQuotaManager clientRequestQuotaManager = Mockito.mock(ClientRequestQuotaManager.class);
     private final ControllerMutationQuotaManager controllerMutationQuotaManager = Mockito.mock(ControllerMutationQuotaManager.class);
@@ -203,7 +203,7 @@ public class MetadataRequestBenchmark {
                     ApiMessageType.ListenerType.ZK_BROKER,
                     false,
                     false,
-                    () -> Features.fromKRaftVersion(MetadataVersion.latest()))).
+                    () -> Features.fromKRaftVersion(MetadataVersion.latestTesting()))).
             build();
     }
 

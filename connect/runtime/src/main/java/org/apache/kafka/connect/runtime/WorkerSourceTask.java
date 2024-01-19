@@ -22,6 +22,7 @@ import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.runtime.errors.ErrorReporter;
+import org.apache.kafka.connect.runtime.errors.ProcessingContext;
 import org.apache.kafka.connect.storage.ClusterConfigState;
 import org.apache.kafka.connect.runtime.errors.RetryWithToleranceOperator;
 import org.apache.kafka.connect.runtime.errors.ErrorHandlingMetrics;
@@ -155,6 +156,7 @@ class WorkerSourceTask extends AbstractWorkerSourceTask {
 
     @Override
     protected void producerSendFailed(
+            ProcessingContext<SourceRecord> context,
             boolean synchronous,
             ProducerRecord<byte[], byte[]> producerRecord,
             SourceRecord preTransformRecord,
@@ -174,9 +176,9 @@ class WorkerSourceTask extends AbstractWorkerSourceTask {
             );
             // executeFailed here allows the use of existing logging infrastructure/configuration
             retryWithToleranceOperator.executeFailed(
+                    context,
                     Stage.KAFKA_PRODUCE,
                     WorkerSourceTask.class,
-                    preTransformRecord,
                     e
             );
             commitTaskRecord(preTransformRecord, null);

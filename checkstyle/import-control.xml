@@ -180,6 +180,10 @@
       <allow pkg="org.apache.kafka.clients.admin" />
       <!-- for testing -->
       <allow pkg="org.apache.kafka.common.errors" />
+      <!-- for testing -->
+      <allow pkg="io.opentelemetry.proto"/>
+      <!-- for testing -->
+      <allow pkg="org.apache.kafka.common.telemetry" />
     </subpackage>
 
     <subpackage name="serialization">

@@ -17,6 +17,7 @@
 package org.apache.kafka.connect.runtime;
 
 import org.apache.kafka.connect.connector.ConnectRecord;
+import org.apache.kafka.connect.runtime.errors.ProcessingContext;
 import org.apache.kafka.connect.runtime.errors.RetryWithToleranceOperator;
 import org.apache.kafka.connect.runtime.errors.Stage;
 import org.apache.kafka.connect.transforms.Transformation;
@@ -42,7 +43,7 @@ public class TransformationChain<R extends ConnectRecord<R>> implements AutoClos
         this.retryWithToleranceOperator = retryWithToleranceOperator;
     }
 
-    public R apply(R record) {
+    public R apply(ProcessingContext<?> context, R record) {
         if (transformationStages.isEmpty()) return record;
 
         for (final TransformationStage<R> transformationStage : transformationStages) {
@@ -51,7 +52,7 @@ public class TransformationChain<R extends ConnectRecord<R>> implements AutoClos
             log.trace("Applying transformation {} to {}",
                 transformationStage.transformClass().getName(), record);
             // execute the operation
-            record = retryWithToleranceOperator.execute(() -> transformationStage.apply(current), Stage.TRANSFORMATION, transformationStage.transformClass());
+            record = retryWithToleranceOperator.execute(context, () -> transformationStage.apply(current), Stage.TRANSFORMATION, transformationStage.transformClass());
 
             if (record == null) break;
         }

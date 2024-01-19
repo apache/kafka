@@ -174,7 +174,7 @@ class ConfigCommandIntegrationTest extends QuorumTestHarness with Logging {
     zkClient.createTopLevelPaths()
     val securityProtocol = SecurityProtocol.PLAINTEXT
     val endpoint = new EndPoint("localhost", 9092, ListenerName.forSecurityProtocol(securityProtocol), securityProtocol)
-    val brokerInfo = BrokerInfo(Broker(id, Seq(endpoint), rack = None), MetadataVersion.latest, jmxPort = 9192)
+    val brokerInfo = BrokerInfo(Broker(id, Seq(endpoint), rack = None), MetadataVersion.latestTesting, jmxPort = 9192)
     zkClient.registerBroker(brokerInfo)
   }
 }
