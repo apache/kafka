@@ -24,7 +24,7 @@ import org.apache.kafka.common.{ConsumerGroupState, GroupType}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.MethodSource
 
-import java.util.Optional
+import java.util.{Optional, Properties}
 
 class ListConsumerGroupTest extends ConsumerGroupCommandTest {
 
@@ -32,13 +32,17 @@ class ListConsumerGroupTest extends ConsumerGroupCommandTest {
   @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
   def testListConsumerGroupsWithoutFilters(quorum: String, groupProtocol: String): Unit = {
     val simpleGroup = "simple-group"
+    val customProps = new Properties()
+    customProps.put("group.protocol", groupProtocol)
+
     addSimpleGroupExecutor(group = simpleGroup)
-    addConsumerGroupExecutor(numConsumers = 1)
+    addConsumerGroupExecutor(numConsumers = 1, group = "protocol-group", customPropsOpt = Some(customProps))
+    addConsumerGroupExecutor(numConsumers = 2, group = "default-group")
 
     val cgcArgs = Array("--bootstrap-server", bootstrapServers(), "--list")
     val service = getConsumerGroupService(cgcArgs)
 
-    val expectedGroups = Set(group, simpleGroup)
+    val expectedGroups = Set("protocol-group", "default-group", simpleGroup)
     var foundGroups = Set.empty[String]
     TestUtils.waitUntilTrue(() => {
       foundGroups = service.listConsumerGroups().toSet
