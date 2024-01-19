@@ -884,14 +884,14 @@ public class OffsetMetadataManager {
     /**
      * Replays OffsetCommitKey/Value to update or delete the corresponding offsets.
      *
-     * @param offset     The offset of the record in the log.
-     * @param producerId The producer id of the batch containing the provided
-     *                   key and value.
-     * @param key        A OffsetCommitKey key.
-     * @param value      A OffsetCommitValue value.
+     * @param recordOffset  The offset of the record in the log.
+     * @param producerId    The producer id of the batch containing the provided
+     *                      key and value.
+     * @param key           A OffsetCommitKey key.
+     * @param value         A OffsetCommitValue value.
      */
     public void replay(
-        long offset,
+        long recordOffset,
         long producerId,
         OffsetCommitKey key,
         OffsetCommitValue value
@@ -920,7 +920,7 @@ public class OffsetMetadataManager {
                     groupId,
                     topic,
                     partition,
-                    OffsetAndMetadata.fromRecord(offset, value)
+                    OffsetAndMetadata.fromRecord(recordOffset, value)
                 );
                 if (previousValue == null) {
                     metrics.incrementNumOffsets();
@@ -936,7 +936,7 @@ public class OffsetMetadataManager {
                         groupId,
                         topic,
                         partition,
-                        OffsetAndMetadata.fromRecord(offset, value)
+                        OffsetAndMetadata.fromRecord(recordOffset, value)
                     );
                 openTransactionsByGroup
                     .computeIfAbsent(groupId, __ -> new TimelineHashSet<>(snapshotRegistry, 1))
