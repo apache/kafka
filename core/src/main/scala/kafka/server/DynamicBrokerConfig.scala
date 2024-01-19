@@ -25,7 +25,7 @@ import kafka.cluster.EndPoint
 import kafka.log.{LogCleaner, LogManager}
 import kafka.network.{DataPlaneAcceptor, SocketServer}
 import kafka.server.DynamicBrokerConfig._
-import kafka.utils.{CoreUtils, Logging, PasswordEncoder}
+import kafka.utils.{CoreUtils, Logging}
 import kafka.utils.Implicits._
 import kafka.zk.{AdminZkClient, KafkaZkClient}
 import org.apache.kafka.common.Reconfigurable
@@ -35,6 +35,7 @@ import org.apache.kafka.common.config.types.Password
 import org.apache.kafka.common.network.{ListenerName, ListenerReconfigurable}
 import org.apache.kafka.common.security.authenticator.LoginManager
 import org.apache.kafka.common.utils.{ConfigUtils, Utils}
+import org.apache.kafka.security.PasswordEncoder
 import org.apache.kafka.server.ProcessRole
 import org.apache.kafka.server.config.{ConfigEntityName, ConfigType, ServerTopicConfigSynonyms}
 import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig
@@ -44,6 +45,7 @@ import org.apache.kafka.storage.internals.log.{LogConfig, ProducerStateManagerCo
 
 import scala.annotation.nowarn
 import scala.collection._
+import scala.compat.java8.OptionConverters.RichOptionForJava8
 import scala.jdk.CollectionConverters._
 
 /**
@@ -381,7 +383,7 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
   private def maybeCreatePasswordEncoder(secret: Option[Password]): Option[PasswordEncoder] = {
    secret.map { secret =>
      PasswordEncoder.encrypting(secret,
-        kafkaConfig.passwordEncoderKeyFactoryAlgorithm,
+        kafkaConfig.passwordEncoderKeyFactoryAlgorithm.asJava,
         kafkaConfig.passwordEncoderCipherAlgorithm,
         kafkaConfig.passwordEncoderKeyLength,
         kafkaConfig.passwordEncoderIterations)

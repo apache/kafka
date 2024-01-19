@@ -59,6 +59,7 @@ import org.apache.kafka.common.requests.MetadataRequest
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.security.scram.ScramCredential
 import org.apache.kafka.common.serialization.{StringDeserializer, StringSerializer}
+import org.apache.kafka.security.PasswordEncoder
 import org.apache.kafka.server.config.ConfigType
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.apache.kafka.server.record.BrokerCompressionType
@@ -76,6 +77,7 @@ import scala.collection._
 import scala.collection.mutable.ArrayBuffer
 import scala.jdk.CollectionConverters._
 import scala.collection.Seq
+import scala.compat.java8.OptionConverters.RichOptionForJava8
 
 object DynamicBrokerReconfigurationTest {
   val Plain = "PLAIN"
@@ -1625,7 +1627,7 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
   private def createPasswordEncoder(config: KafkaConfig, secret: Option[Password]): PasswordEncoder = {
     val encoderSecret = secret.getOrElse(throw new IllegalStateException("Password encoder secret not configured"))
     PasswordEncoder.encrypting(encoderSecret,
-      config.passwordEncoderKeyFactoryAlgorithm,
+      config.passwordEncoderKeyFactoryAlgorithm.asJava,
       config.passwordEncoderCipherAlgorithm,
       config.passwordEncoderKeyLength,
       config.passwordEncoderIterations)
