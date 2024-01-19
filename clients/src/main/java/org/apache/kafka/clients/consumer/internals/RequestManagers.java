@@ -105,6 +105,7 @@ public class RequestManagers implements Closeable {
      * Creates a {@link Supplier} for deferred creation during invocation by
      * {@link ConsumerNetworkThread}.
      */
+    @SuppressWarnings({"checkstyle:ParameterNumber"})
     public static Supplier<RequestManagers> supplier(final Time time,
                                                      final LogContext logContext,
                                                      final BackgroundEventHandler backgroundEventHandler,
