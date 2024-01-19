@@ -363,7 +363,7 @@ public class ClientTelemetryReporter implements MetricsReporter {
                     throw new IllegalStateException("Unknown telemetry state: " + localState);
             }
 
-            log.debug("For telemetry state {}, returning the value {} ms; {}", localState, timeMs, msg);
+            log.trace("For telemetry state {}, returning the value {} ms; {}", localState, timeMs, msg);
             return timeMs;
         }
 
@@ -640,6 +640,7 @@ public class ClientTelemetryReporter implements MetricsReporter {
              signal to the broker that we need to have a client instance ID assigned.
             */
             Uuid clientInstanceId = (localSubscription != null) ? localSubscription.clientInstanceId() : Uuid.ZERO_UUID;
+            log.debug("Creating telemetry subscription request with client instance id {}", clientInstanceId);
 
             lock.writeLock().lock();
             try {
@@ -668,6 +669,7 @@ public class ClientTelemetryReporter implements MetricsReporter {
                 return Optional.empty();
             }
 
+            log.debug("Creating telemetry push request with client instance id {}", localSubscription.clientInstanceId());
             /*
              Don't send a push request if we don't have the collector initialized. Re-attempt
              the push on the next interval.
