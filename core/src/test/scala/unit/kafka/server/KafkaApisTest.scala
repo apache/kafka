@@ -6103,9 +6103,9 @@ class KafkaApisTest extends Logging {
     // and have a non KafkaPrincipal.ANONYMOUS principal. This test is done before the check
     // for forwarding because after forwarding the context will have a different context. 
     // We validate the context authenticated failure case in other integration tests.
-    val context = new RequestContext(header, "1", InetAddress.getLocalHost, new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "Alice"),
-      listenerName, SecurityProtocol.SSL, ClientInformation.EMPTY, fromPrivilegedListener,
-      Optional.of(kafkaPrincipalSerde))
+    val context = new RequestContext(header, "1", InetAddress.getLocalHost, Optional.empty(),
+      new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "Alice"), listenerName, SecurityProtocol.SSL,
+      ClientInformation.EMPTY, fromPrivilegedListener, Optional.of(kafkaPrincipalSerde))
     new RequestChannel.Request(processor = 1, context = context, startTimeNanos = 0, MemoryPool.NONE, buffer,
       requestMetrics, envelope = None)
   }
