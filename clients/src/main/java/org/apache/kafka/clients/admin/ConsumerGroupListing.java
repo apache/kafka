@@ -24,7 +24,7 @@ import org.apache.kafka.common.ConsumerGroupState;
 import org.apache.kafka.common.GroupType;
 
 /**
- * Represents a listing of a consumer group in the cluster.
+ * A listing of a consumer group in the cluster.
  */
 public class ConsumerGroupListing {
     private final String groupId;
@@ -35,14 +35,27 @@ public class ConsumerGroupListing {
     /**
      * Create an instance with the specified parameters.
      *
-     * @param groupId                   The group Id.
-     * @param isSimpleConsumerGroup     Indicates whether the consumer group is simple or not.
+     * @param groupId Group Id
+     * @param isSimpleConsumerGroup If consumer group is simple or not.
      */
     public ConsumerGroupListing(String groupId, boolean isSimpleConsumerGroup) {
         this.groupId = groupId;
         this.isSimpleConsumerGroup = isSimpleConsumerGroup;
         this.state = Optional.empty();
         this.groupType = Optional.empty();
+    }
+
+    /**
+     * Create an instance with the specified parameters.
+     *
+     * @param groupId Group Id
+     * @param isSimpleConsumerGroup If consumer group is simple or not.
+     * @param state The state of the consumer group
+     */
+    public ConsumerGroupListing(String groupId, boolean isSimpleConsumerGroup, Optional<ConsumerGroupState> state) {
+        this.groupId = groupId;
+        this.isSimpleConsumerGroup = isSimpleConsumerGroup;
+        this.state = Objects.requireNonNull(state);
     }
 
     /**
@@ -77,18 +90,14 @@ public class ConsumerGroupListing {
     }
 
     /**
-     * Check if the consumer group is a simple consumer group.
-     *
-     * @return True if it is a simple consumer group, false otherwise.
+     * If Consumer Group is simple or not.
      */
     public boolean isSimpleConsumerGroup() {
         return isSimpleConsumerGroup;
     }
 
     /**
-     * The consumer group's state.
-     *
-     * @return An Optional containing the state if available.
+     * Consumer Group state.
      */
     public Optional<ConsumerGroupState> state() {
         return state;
