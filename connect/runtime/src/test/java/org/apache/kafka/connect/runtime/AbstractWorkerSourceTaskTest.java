@@ -38,6 +38,7 @@ import org.apache.kafka.connect.header.ConnectHeaders;
 import org.apache.kafka.connect.integration.MonitorableSourceConnector;
 import org.apache.kafka.connect.runtime.errors.ErrorHandlingMetrics;
 import org.apache.kafka.connect.runtime.errors.ErrorReporter;
+import org.apache.kafka.connect.runtime.errors.ProcessingContext;
 import org.apache.kafka.connect.runtime.errors.RetryWithToleranceOperator;
 import org.apache.kafka.connect.runtime.errors.RetryWithToleranceOperatorTest;
 import org.apache.kafka.connect.runtime.isolation.Plugins;
@@ -668,9 +669,9 @@ public class AbstractWorkerSourceTaskTest {
         expectConvertHeadersAndKeyValue(emptyHeaders(), TOPIC);
         expectTaskGetTopic();
 
-        when(transformationChain.apply(eq(record1))).thenReturn(null);
-        when(transformationChain.apply(eq(record2))).thenReturn(null);
-        when(transformationChain.apply(eq(record3))).thenReturn(record3);
+        when(transformationChain.apply(any(), eq(record1))).thenReturn(null);
+        when(transformationChain.apply(any(), eq(record2))).thenReturn(null);
+        when(transformationChain.apply(any(), eq(record3))).thenReturn(record3);
 
         TopicPartitionInfo topicPartitionInfo = new TopicPartitionInfo(0, null, Collections.emptyList(), Collections.emptyList());
         TopicDescription topicDesc = new TopicDescription(TOPIC, false, Collections.singletonList(topicPartitionInfo));
@@ -689,9 +690,9 @@ public class AbstractWorkerSourceTaskTest {
 
         // Ensure that the first two records that were filtered out by the transformation chain
         // aren't re-processed when we retry the call to sendRecords()
-        verify(transformationChain, times(1)).apply(eq(record1));
-        verify(transformationChain, times(1)).apply(eq(record2));
-        verify(transformationChain, times(2)).apply(eq(record3));
+        verify(transformationChain, times(1)).apply(any(), eq(record1));
+        verify(transformationChain, times(1)).apply(any(), eq(record2));
+        verify(transformationChain, times(2)).apply(any(), eq(record3));
     }
 
     @Test
@@ -817,8 +818,8 @@ public class AbstractWorkerSourceTaskTest {
     }
 
     private void expectApplyTransformationChain() {
-        when(transformationChain.apply(any(SourceRecord.class)))
-                .thenAnswer(AdditionalAnswers.returnsFirstArg());
+        when(transformationChain.apply(any(), any(SourceRecord.class)))
+                .thenAnswer(AdditionalAnswers.returnsSecondArg());
     }
 
     private RecordHeaders emptyHeaders() {
@@ -874,7 +875,7 @@ public class AbstractWorkerSourceTaskTest {
             }
 
             @Override
-            protected void producerSendFailed(boolean synchronous, ProducerRecord<byte[], byte[]> producerRecord, SourceRecord preTransformRecord, Exception e) {
+            protected void producerSendFailed(ProcessingContext<SourceRecord> context, boolean synchronous, ProducerRecord<byte[], byte[]> producerRecord, SourceRecord preTransformRecord, Exception e) {
             }
 
             @Override

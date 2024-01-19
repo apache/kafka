@@ -98,7 +98,7 @@ class GroupMetadataManagerTest {
     metrics = new kMetrics()
     time = new MockTime
     replicaManager = mock(classOf[ReplicaManager])
-    groupMetadataManager = new GroupMetadataManager(0, MetadataVersion.latest, offsetConfig, replicaManager,
+    groupMetadataManager = new GroupMetadataManager(0, MetadataVersion.latestTesting, offsetConfig, replicaManager,
       time, metrics)
     groupMetadataManager.startup(() => numOffsetsPartitions, false)
     partition = mock(classOf[Partition])
@@ -113,7 +113,7 @@ class GroupMetadataManagerTest {
   def testLogInfoFromCleanupGroupMetadata(): Unit = {
     var expiredOffsets: Int = 0
     var infoCount = 0
-    val gmm = new GroupMetadataManager(0, MetadataVersion.latest, offsetConfig, replicaManager, time, metrics) {
+    val gmm = new GroupMetadataManager(0, MetadataVersion.latestTesting, offsetConfig, replicaManager, time, metrics) {
       override def cleanupGroupMetadata(groups: Iterable[GroupMetadata], requestLocal: RequestLocal,
                                         selector: GroupMetadata => Map[TopicPartition, OffsetAndMetadata]): Int = expiredOffsets
 
@@ -2749,7 +2749,7 @@ class GroupMetadataManagerTest {
     val offsetCommitRecord = TestUtils.records(Seq(
       new SimpleRecord(
         GroupMetadataManager.offsetCommitKey(groupId, topicPartition),
-        GroupMetadataManager.offsetCommitValue(OffsetAndMetadata(35L, "", time.milliseconds()), MetadataVersion.latest)
+        GroupMetadataManager.offsetCommitValue(OffsetAndMetadata(35L, "", time.milliseconds()), MetadataVersion.latestTesting)
       )
     )).records.asScala.head
     val (keyStringOpt, valueStringOpt) = GroupMetadataManager.formatRecordKeyAndValue(offsetCommitRecord)
@@ -2837,7 +2837,7 @@ class GroupMetadataManagerTest {
                                                protocol: String,
                                                memberId: String,
                                                assignmentBytes: Array[Byte] = Array.emptyByteArray,
-                                               metadataVersion: MetadataVersion = MetadataVersion.latest): SimpleRecord = {
+                                               metadataVersion: MetadataVersion = MetadataVersion.latestTesting): SimpleRecord = {
     val memberProtocols = List((protocol, Array.emptyByteArray))
     val member = new MemberMetadata(memberId, Some(groupInstanceId), "clientId", "clientHost", 30000, 10000, protocolType, memberProtocols)
     val group = GroupMetadata.loadGroup(groupId, Stable, generation, protocolType, protocol, memberId,
@@ -2850,7 +2850,7 @@ class GroupMetadataManagerTest {
   private def buildEmptyGroupRecord(generation: Int, protocolType: String): SimpleRecord = {
     val group = GroupMetadata.loadGroup(groupId, Empty, generation, protocolType, null, null, None, Seq.empty, time)
     val groupMetadataKey = GroupMetadataManager.groupMetadataKey(groupId)
-    val groupMetadataValue = GroupMetadataManager.groupMetadataValue(group, Map.empty, MetadataVersion.latest)
+    val groupMetadataValue = GroupMetadataManager.groupMetadataValue(group, Map.empty, MetadataVersion.latestTesting)
     new SimpleRecord(groupMetadataKey, groupMetadataValue)
   }
 
@@ -2894,7 +2894,7 @@ class GroupMetadataManagerTest {
 
   private def createCommittedOffsetRecords(committedOffsets: Map[TopicPartition, Long],
                                            groupId: String = groupId,
-                                           metadataVersion: MetadataVersion = MetadataVersion.latest,
+                                           metadataVersion: MetadataVersion = MetadataVersion.latestTesting,
                                            retentionTimeOpt: Option[Long] = None): Seq[SimpleRecord] = {
     committedOffsets.map { case (topicPartition, offset) =>
       val commitTimestamp = time.milliseconds()

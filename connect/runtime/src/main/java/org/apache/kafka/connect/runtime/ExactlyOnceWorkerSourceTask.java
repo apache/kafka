@@ -29,6 +29,7 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.runtime.errors.ErrorHandlingMetrics;
 import org.apache.kafka.connect.runtime.errors.ErrorReporter;
+import org.apache.kafka.connect.runtime.errors.ProcessingContext;
 import org.apache.kafka.connect.runtime.errors.RetryWithToleranceOperator;
 import org.apache.kafka.connect.source.SourceRecord;
 import org.apache.kafka.connect.source.SourceTask;
@@ -203,6 +204,7 @@ class ExactlyOnceWorkerSourceTask extends AbstractWorkerSourceTask {
 
     @Override
     protected void producerSendFailed(
+            ProcessingContext<SourceRecord> context,
             boolean synchronous,
             ProducerRecord<byte[], byte[]> producerRecord,
             SourceRecord preTransformRecord,

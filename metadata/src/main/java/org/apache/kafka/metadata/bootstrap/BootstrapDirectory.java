@@ -82,7 +82,7 @@ public class BootstrapDirectory {
 
     BootstrapMetadata readFromConfiguration() {
         if (!ibp.isPresent()) {
-            return BootstrapMetadata.fromVersion(MetadataVersion.latest(), "the default bootstrap");
+            return BootstrapMetadata.fromVersion(MetadataVersion.latestProduction(), "the default bootstrap");
         }
         MetadataVersion version = MetadataVersion.fromVersionString(ibp.get());
         if (version.isLessThan(MINIMUM_BOOTSTRAP_VERSION)) {

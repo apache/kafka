@@ -14,25 +14,16 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.connect.runtime.errors;
+package org.apache.kafka.clients.consumer.internals.metrics;
 
-import org.apache.kafka.clients.producer.RecordMetadata;
+import java.util.Optional;
 
-import java.util.concurrent.Future;
+import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.CONSUMER_METRIC_GROUP_PREFIX;
+import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.COORDINATOR_METRICS_SUFFIX;
 
-/**
- * Report an error using the information contained in the {@link ProcessingContext}.
- */
-public interface ErrorReporter extends AutoCloseable {
-
-    /**
-     * Report an error and return the producer future.
-     *
-     * @param context the processing context (cannot be null).
-     * @return future result from the producer sending a record to Kafka.
-     */
-    Future<RecordMetadata> report(ProcessingContext<?> context);
-
-    @Override
-    default void close() { }
+public abstract class AbstractConsumerMetrics {
+    protected String groupMetricsName = CONSUMER_METRIC_GROUP_PREFIX + COORDINATOR_METRICS_SUFFIX;
+    public AbstractConsumerMetrics(Optional<String> grpMetricsPrefix) {
+        grpMetricsPrefix.ifPresent(s -> this.groupMetricsName = s + COORDINATOR_METRICS_SUFFIX);
+    }
 }

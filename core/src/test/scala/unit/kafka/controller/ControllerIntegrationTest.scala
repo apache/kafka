@@ -51,7 +51,7 @@ import scala.util.{Failure, Success, Try}
 
 object ControllerIntegrationTest {
   def testAlterPartitionSource(): JStream[Arguments] = {
-    Seq(MetadataVersion.IBP_2_7_IV0, MetadataVersion.latest).asJava.stream.flatMap { metadataVersion =>
+    Seq(MetadataVersion.IBP_2_7_IV0, MetadataVersion.latestTesting).asJava.stream.flatMap { metadataVersion =>
       ApiKeys.ALTER_PARTITION.allVersions.stream.map { alterPartitionVersion =>
         Arguments.of(metadataVersion, alterPartitionVersion)
       }
@@ -1010,7 +1010,7 @@ class ControllerIntegrationTest extends QuorumTestHarness {
     // topic ids anymore. However, the already assigned topic ids are kept. This means
     // that using AlterPartition version 2 should still work assuming that it only
     // contains topic with topics ids.
-    servers = makeServers(1, interBrokerProtocolVersion = Some(MetadataVersion.latest))
+    servers = makeServers(1, interBrokerProtocolVersion = Some(MetadataVersion.latestTesting))
 
     val controllerId = TestUtils.waitUntilControllerElected(zkClient)
     val tp = new TopicPartition("t", 0)

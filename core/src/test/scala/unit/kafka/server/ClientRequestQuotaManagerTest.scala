@@ -18,12 +18,12 @@ package kafka.server
 
 import kafka.server.QuotaType.Request
 import org.apache.kafka.common.metrics.Quota
-
+import org.apache.kafka.server.config.ClientQuotaManagerConfig
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
 
 class ClientRequestQuotaManagerTest extends BaseClientQuotaManagerTest {
-  private val config = ClientQuotaManagerConfig()
+  private val config = new ClientQuotaManagerConfig()
 
   @Test
   def testRequestPercentageQuotaViolation(): Unit = {

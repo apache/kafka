@@ -95,7 +95,7 @@ class AbstractPartitionTest {
       .thenReturn(None)
   }
 
-  protected def interBrokerProtocolVersion: MetadataVersion = MetadataVersion.latest
+  protected def interBrokerProtocolVersion: MetadataVersion = MetadataVersion.latestTesting
 
   def createLogProperties(overrides: Map[String, String]): Properties = {
     val logProps = new Properties()

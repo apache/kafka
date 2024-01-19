@@ -38,6 +38,7 @@ import org.apache.kafka.connect.header.Header;
 import org.apache.kafka.connect.header.Headers;
 import org.apache.kafka.connect.runtime.errors.ErrorHandlingMetrics;
 import org.apache.kafka.connect.runtime.errors.ErrorReporter;
+import org.apache.kafka.connect.runtime.errors.ProcessingContext;
 import org.apache.kafka.connect.runtime.errors.RetryWithToleranceOperator;
 import org.apache.kafka.connect.runtime.errors.Stage;
 import org.apache.kafka.connect.runtime.errors.ToleranceType;
@@ -157,6 +158,7 @@ public abstract class AbstractWorkerSourceTask extends WorkerTask {
 
     /**
      * Invoked when a record given to {@link Producer#send(ProducerRecord, Callback)} has failed with a non-retriable error.
+     * @param context the context for this record
      * @param synchronous whether the error occurred during the invocation of {@link Producer#send(ProducerRecord, Callback)}.
      *                    If {@code false}, indicates that the error was reported asynchronously by the producer by a {@link Callback}
      * @param producerRecord the {@link ProducerRecord} that the producer failed to send; never null
@@ -165,6 +167,7 @@ public abstract class AbstractWorkerSourceTask extends WorkerTask {
      *          via {@link Callback} after the call to {@link Producer#send(ProducerRecord, Callback)} completed
      */
     protected abstract void producerSendFailed(
+            ProcessingContext<SourceRecord> context,
             boolean synchronous,
             ProducerRecord<byte[], byte[]> producerRecord,
             SourceRecord preTransformRecord,
@@ -397,10 +400,10 @@ public abstract class AbstractWorkerSourceTask extends WorkerTask {
         final SourceRecordWriteCounter counter =
                 toSend.size() > 0 ? new SourceRecordWriteCounter(toSend.size(), sourceTaskMetricsGroup) : null;
         for (final SourceRecord preTransformRecord : toSend) {
-            retryWithToleranceOperator.sourceRecord(preTransformRecord);
-            final SourceRecord record = transformationChain.apply(preTransformRecord);
-            final ProducerRecord<byte[], byte[]> producerRecord = convertTransformedRecord(record);
-            if (producerRecord == null || retryWithToleranceOperator.failed()) {
+            ProcessingContext<SourceRecord> context = new ProcessingContext<>(preTransformRecord);
+            final SourceRecord record = transformationChain.apply(context, preTransformRecord);
+            final ProducerRecord<byte[], byte[]> producerRecord = convertTransformedRecord(context, record);
+            if (producerRecord == null || context.failed()) {
                 counter.skipRecord();
                 recordDropped(preTransformRecord);
                 processed++;
@@ -422,7 +425,7 @@ public abstract class AbstractWorkerSourceTask extends WorkerTask {
                                 log.error("{} failed to send record to {}: ", AbstractWorkerSourceTask.this, topic, e);
                             }
                             log.trace("{} Failed record: {}", AbstractWorkerSourceTask.this, preTransformRecord);
-                            producerSendFailed(false, producerRecord, preTransformRecord, e);
+                            producerSendFailed(context, false, producerRecord, preTransformRecord, e);
                             if (retryWithToleranceOperator.getErrorToleranceType() == ToleranceType.ALL) {
                                 counter.skipRecord();
                                 submittedRecord.ifPresent(SubmittedRecords.SubmittedRecord::ack);
@@ -454,7 +457,7 @@ public abstract class AbstractWorkerSourceTask extends WorkerTask {
                 log.trace("{} Failed to send {} with unrecoverable exception: ", this, producerRecord, e);
                 throw e;
             } catch (KafkaException e) {
-                producerSendFailed(true, producerRecord, preTransformRecord, e);
+                producerSendFailed(context, true, producerRecord, preTransformRecord, e);
             }
             processed++;
             recordDispatched(preTransformRecord);
@@ -481,20 +484,20 @@ public abstract class AbstractWorkerSourceTask extends WorkerTask {
      * @return the producer record which can sent over to Kafka. A null is returned if the input is null or
      * if an error was encountered during any of the converter stages.
      */
-    protected ProducerRecord<byte[], byte[]> convertTransformedRecord(SourceRecord record) {
+    protected ProducerRecord<byte[], byte[]> convertTransformedRecord(ProcessingContext<SourceRecord> context, SourceRecord record) {
         if (record == null) {
             return null;
         }
 
-        RecordHeaders headers = retryWithToleranceOperator.execute(() -> convertHeaderFor(record), Stage.HEADER_CONVERTER, headerConverter.getClass());
+        RecordHeaders headers = retryWithToleranceOperator.execute(context, () -> convertHeaderFor(record), Stage.HEADER_CONVERTER, headerConverter.getClass());
 
-        byte[] key = retryWithToleranceOperator.execute(() -> keyConverter.fromConnectData(record.topic(), headers, record.keySchema(), record.key()),
+        byte[] key = retryWithToleranceOperator.execute(context, () -> keyConverter.fromConnectData(record.topic(), headers, record.keySchema(), record.key()),
                 Stage.KEY_CONVERTER, keyConverter.getClass());
 
-        byte[] value = retryWithToleranceOperator.execute(() -> valueConverter.fromConnectData(record.topic(), headers, record.valueSchema(), record.value()),
+        byte[] value = retryWithToleranceOperator.execute(context, () -> valueConverter.fromConnectData(record.topic(), headers, record.valueSchema(), record.value()),
                 Stage.VALUE_CONVERTER, valueConverter.getClass());
 
-        if (retryWithToleranceOperator.failed()) {
+        if (context.failed()) {
             return null;
         }
 
