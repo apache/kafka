@@ -141,7 +141,6 @@ public class AsyncKafkaConsumerTest {
     private final ApplicationEventHandler applicationEventHandler = mock(ApplicationEventHandler.class);
     private final ConsumerMetadata metadata = mock(ConsumerMetadata.class);
     private final LinkedBlockingQueue<BackgroundEvent> backgroundEventQueue = new LinkedBlockingQueue<>();
-    private final Metrics metrics = new Metrics();
 
     @AfterEach
     public void resetAll() {
@@ -205,7 +204,7 @@ public class AsyncKafkaConsumerTest {
             applicationEventHandler,
             backgroundEventQueue,
             rebalanceListenerInvoker,
-            metrics,
+            new Metrics(),
             subscriptions,
             metadata,
             retryBackoffMs,

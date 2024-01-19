@@ -393,7 +393,6 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
     }
 
     private Sensor addCommitSensor(Metrics metrics, String metricGrpPrefix) {
-        System.out.println("hello");
         String metricGrpName = metricGrpPrefix + COORDINATOR_METRICS_SUFFIX;
         Sensor sensor = metrics.sensor("commit-latency");
         sensor.add(metrics.metricName("commit-latency-avg",

@@ -79,7 +79,6 @@ import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.COORDINA
 import static org.apache.kafka.test.TestUtils.assertFutureThrows;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -747,17 +746,38 @@ public class CommitRequestManagerTest {
     public void testEnsureCommitSensorRecordsMetric() {
         CommitRequestManager commitRequestManager = create(true, 100);
         when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(mockedNode));
+
+        commitOffsetWithAssertedLatency(commitRequestManager, 100);
+        commitOffsetWithAssertedLatency(commitRequestManager, 101);
+
+        assertEquals(100.5, getMetric("commit-latency-avg").metricValue()); // 201 / 2
+        assertEquals(101.0, getMetric("commit-latency-max").metricValue()); // Math.max(101, 100)
+        assertEquals(0.066, (double) getMetric("commit-rate").metricValue(), 0.001);
+        assertEquals(2.0, getMetric("commit-total").metricValue());
+    }
+
+    private void commitOffsetWithAssertedLatency(CommitRequestManager commitRequestManager, long latencyMs) {
+        final String topic = "topic";
+        final int partition = 1;
         Map<TopicPartition, OffsetAndMetadata> offsets = Collections.singletonMap(
-            new TopicPartition("topic", 1),
-            new OffsetAndMetadata(0));
+                new TopicPartition(topic, partition),
+                new OffsetAndMetadata(0));
+
+        long commitCreationTimeMs = time.milliseconds();
         commitRequestManager.addOffsetCommitRequest(offsets, Optional.empty(), true);
+
         NetworkClientDelegate.PollResult res = commitRequestManager.poll(time.milliseconds());
         assertEquals(1, res.unsentRequests.size());
-        res.unsentRequests.get(0).future().complete(mockOffsetCommitResponse("topic", 1, (short) 1, Errors.NONE));
-        assertNotNull(getMetric("commit-latency-avg"));
-        assertNotNull(getMetric("commit-latency-max"));
-        assertNotNull(getMetric("commit-rate"));
-        assertNotNull(getMetric("commit-total"));
+
+        time.sleep(latencyMs);
+        long commitReceivedTimeMs = time.milliseconds();
+        res.unsentRequests.get(0).future().complete(mockOffsetCommitResponse(
+                topic,
+                partition,
+                (short) 1,
+                commitCreationTimeMs,
+                commitReceivedTimeMs,
+                Errors.NONE));
     }
 
     private void completeOffsetFetchRequestWithError(CommitRequestManager commitRequestManager,
@@ -1002,7 +1022,19 @@ public class CommitRequestManagerTest {
         );
     }
 
-    public ClientResponse mockOffsetCommitResponse(String topic, int partition, short apiKeyVersion, Errors error) {
+
+    public ClientResponse mockOffsetCommitResponse(String topic,
+                                                   int partition,
+                                                   short apiKeyVersion,
+                                                   Errors error) {
+        return mockOffsetCommitResponse(topic, partition, apiKeyVersion, time.milliseconds(), time.milliseconds(), error);
+    }
+    public ClientResponse mockOffsetCommitResponse(String topic,
+                                                   int partition,
+                                                   short apiKeyVersion,
+                                                   long createdTimeMs,
+                                                   long receivedTimeMs,
+                                                   Errors error) {
         OffsetCommitResponseData responseData = new OffsetCommitResponseData()
             .setTopics(Arrays.asList(
                 new OffsetCommitResponseData.OffsetCommitResponseTopic()
@@ -1015,14 +1047,14 @@ public class CommitRequestManagerTest {
         when(response.data()).thenReturn(responseData);
         return new ClientResponse(
             new RequestHeader(ApiKeys.OFFSET_COMMIT, apiKeyVersion, "", 1),
-            null,
-            "-1",
-            time.milliseconds(),
-            time.milliseconds(),
-            false,
-            null,
-            null,
-            new OffsetCommitResponse(responseData)
+                null,
+                "-1",
+                createdTimeMs,
+                receivedTimeMs,
+                false,
+                null,
+                null,
+                new OffsetCommitResponse(responseData)
         );
     }
 
