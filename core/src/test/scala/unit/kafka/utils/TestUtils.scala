@@ -560,6 +560,31 @@ object TestUtils extends Logging {
   }
 
   /**
+   * Create a topic
+   * If zkClient exists, create a topic in Zookeeper.
+   * Otherwise, create a topic using the Admin Client.
+   */
+  def createTopicWithAssignment(topic: String,
+                                partitionReplicaAssignment: collection.Map[Int, Seq[Int]],
+                                servers: Seq[KafkaBroker],
+                                zkClient: KafkaZkClient = null,
+                                controllers: Seq[ControllerServer] = Seq()): Unit = {
+    if (zkClient != null) {
+      createTopic(zkClient, topic, partitionReplicaAssignment, servers = servers)
+    } else {
+      resource(createAdminClient(servers, ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT))) { admin =>
+        TestUtils.createTopicWithAdmin(
+          admin = admin,
+          topic = topic,
+          replicaAssignment = partitionReplicaAssignment,
+          brokers = servers,
+          controllers = controllers
+        )
+      }
+    }
+  }
+
+  /**
    * Create a topic in ZooKeeper.
    * Wait until the leader is elected and the metadata is propagated to all brokers.
    * Return the leader for each partition.
