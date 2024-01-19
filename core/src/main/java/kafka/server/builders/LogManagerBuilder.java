@@ -48,7 +48,7 @@ public class LogManagerBuilder {
     private long retentionCheckMs = 1000L;
     private int maxTransactionTimeoutMs = 15 * 60 * 1000;
     private ProducerStateManagerConfig producerStateManagerConfig = new ProducerStateManagerConfig(60000, false);
-    private MetadataVersion interBrokerProtocolVersion = MetadataVersion.latest();
+    private MetadataVersion interBrokerProtocolVersion = MetadataVersion.latestProduction();
     private Scheduler scheduler = null;
     private BrokerTopicStats brokerTopicStats = null;
     private LogDirFailureChannel logDirFailureChannel = null;
