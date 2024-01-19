@@ -29,7 +29,7 @@ import org.apache.kafka.clients.admin._
 import org.apache.kafka.clients.consumer.OffsetAndMetadata
 import org.apache.kafka.clients.CommonClientConfigs
 import org.apache.kafka.common.utils.Utils
-import org.apache.kafka.common.{ConsumerGroupState, ConsumerGroupType, KafkaException, Node, TopicPartition}
+import org.apache.kafka.common.{ConsumerGroupState, GroupType, KafkaException, Node, TopicPartition}
 import org.apache.kafka.server.util.{CommandDefaultOptions, CommandLineUtils}
 
 import scala.jdk.CollectionConverters._
@@ -105,13 +105,13 @@ object ConsumerGroupCommand extends Logging {
     parsedStates
   }
 
-  def consumerGroupTypesFromString(input: String): Set[ConsumerGroupType] = {
-    val parsedStates = input.toLowerCase.split(',').map(s => ConsumerGroupType.parse(s.trim)).toSet
-    if (parsedStates.contains(ConsumerGroupType.UNKNOWN)) {
-      val validTypes = ConsumerGroupType.values().filter(_ != ConsumerGroupType.UNKNOWN)
+  def consumerGroupTypesFromString(input: String): Set[GroupType] = {
+    val parsedTypes = input.toLowerCase.split(',').map(s => GroupType.parse(s.trim)).toSet
+    if (parsedTypes.contains(GroupType.UNKNOWN)) {
+      val validTypes = GroupType.values().filter(_ != GroupType.UNKNOWN)
       throw new IllegalArgumentException(s"Invalid types list '$input'. Valid types are: ${validTypes.mkString(", ")}")
     }
-    parsedStates
+    parsedTypes
   }
 
   val MISSING_COLUMN_VALUE = "-"
@@ -213,7 +213,7 @@ object ConsumerGroupCommand extends Logging {
 
         listings.foreach { listing =>
           val groupId = listing.groupId
-          val groupType = listing.groupType().orElse(ConsumerGroupType.UNKNOWN).toString
+          val groupType = listing.groupType().orElse(GroupType.UNKNOWN).toString
           val state = listing.state().orElse(ConsumerGroupState.UNKNOWN).toString
           groupInfoMap.update(groupId, (state, groupType))
         }
@@ -234,10 +234,10 @@ object ConsumerGroupCommand extends Logging {
         consumerGroupStatesFromString(stateValue)
     }
 
-    private def getTypeValues(): Set[ConsumerGroupType] = {
+    private def getTypeValues(): Set[GroupType] = {
       val typeValue = opts.options.valueOf(opts.typeOpt)
       if (typeValue == null || typeValue.isEmpty)
-        Set[ConsumerGroupType]()
+        Set[GroupType]()
       else
         consumerGroupTypesFromString(typeValue)
     }
@@ -247,19 +247,19 @@ object ConsumerGroupCommand extends Logging {
       var header = "GROUP"
       var format = s"%-${maxGroupLen}s"
 
-      if (includeState) {
-        header += " STATE"
-        format += " %-20s"
-      }
       if (includeType) {
         header += " TYPE"
+        format += " %-20s"
+      }
+      if (includeState) {
+        header += " STATE"
         format += " %-20s"
       }
 
       println(format.format(ArraySeq.unsafeWrapArray(header.split(" ")): _*))
 
       groupsAndInfo.foreach { case (groupId, state, groupType) =>
-        val info = List(groupId) ++ (if (includeState) List(state) else List()) ++ (if (includeType) List(groupType) else List())
+        val info = List(groupId) ++ (if (includeType) List(groupType) else List()) ++ (if (includeState) List(state) else List())
         println(format.format(info: _*))
       }
     }
@@ -270,11 +270,11 @@ object ConsumerGroupCommand extends Logging {
       listings.map(_.groupId).toList
     }
 
-    def listConsumerGroupsWithFilters(states: Set[ConsumerGroupState], types: Set[ConsumerGroupType]): List[ConsumerGroupListing] = {
+    def listConsumerGroupsWithFilters(states: Set[ConsumerGroupState], types: Set[GroupType]): List[ConsumerGroupListing] = {
       val listConsumerGroupsOptions = withTimeoutMs(new ListConsumerGroupsOptions())
       listConsumerGroupsOptions
         .inStates(states.asJava)
-        .inTypes(types.asJava)
+        .withTypes(types.asJava)
       val result = adminClient.listConsumerGroups(listConsumerGroupsOptions)
       result.all.get.asScala.toList
     }

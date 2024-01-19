@@ -58,7 +58,7 @@ import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.ConsumerGroupState;
-import org.apache.kafka.common.ConsumerGroupType;
+import org.apache.kafka.common.GroupType;
 import org.apache.kafka.common.ElectionType;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.KafkaFuture;
@@ -91,6 +91,7 @@ import org.apache.kafka.common.errors.ThrottlingQuotaExceededException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.UnacceptableCredentialException;
 import org.apache.kafka.common.errors.UnknownServerException;
+import org.apache.kafka.common.errors.UnknownTopicIdException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.errors.UnsupportedEndpointTypeException;
 import org.apache.kafka.common.errors.UnsupportedSaslMechanismException;
@@ -2229,7 +2230,7 @@ public class KafkaAdminClient extends AdminClient {
 
                     String topicName = cluster.topicName(topicId);
                     if (topicName == null) {
-                        future.completeExceptionally(new InvalidTopicException("TopicId " + topicId + " not found."));
+                        future.completeExceptionally(new UnknownTopicIdException("TopicId " + topicId + " not found."));
                         continue;
                     }
                     Errors topicError = errors.get(topicId);
@@ -3382,9 +3383,9 @@ public class KafkaAdminClient extends AdminClient {
                                     .stream()
                                     .map(ConsumerGroupState::toString)
                                     .collect(Collectors.toList());
-                            List<String> groupTypes = options.groupTypes()
+                            List<String> groupTypes = options.types()
                                     .stream()
-                                    .map(ConsumerGroupType::toString)
+                                    .map(GroupType::toString)
                                     .collect(Collectors.toList());
                             return new ListGroupsRequest.Builder(new ListGroupsRequestData()
                                 .setStatesFilter(states)
@@ -3399,9 +3400,9 @@ public class KafkaAdminClient extends AdminClient {
                                 final Optional<ConsumerGroupState> state = group.groupState().equals("")
                                         ? Optional.empty()
                                         : Optional.of(ConsumerGroupState.parse(group.groupState()));
-                                final Optional<ConsumerGroupType> groupType = group.groupType().equals("")
+                                final Optional<GroupType> groupType = group.groupType().equals("")
                                         ? Optional.empty()
-                                        : Optional.of(ConsumerGroupType.parse(group.groupType()));
+                                        : Optional.of(GroupType.parse(group.groupType()));
                                 final ConsumerGroupListing groupListing = new ConsumerGroupListing(groupId, protocolType.isEmpty())
                                         .setState(state)
                                         .setType(groupType);

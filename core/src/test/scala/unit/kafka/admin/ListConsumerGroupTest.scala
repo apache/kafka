@@ -20,7 +20,7 @@ import joptsimple.OptionException
 import org.junit.jupiter.api.Assertions._
 import kafka.utils.{TestInfoUtils, TestUtils}
 import org.apache.kafka.clients.admin.ConsumerGroupListing
-import org.apache.kafka.common.{ConsumerGroupState, ConsumerGroupType}
+import org.apache.kafka.common.{ConsumerGroupState, GroupType}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.MethodSource
 
@@ -66,10 +66,10 @@ class ListConsumerGroupTest extends ConsumerGroupCommandTest {
     val expectedListing = Set(
       new ConsumerGroupListing(simpleGroup, true)
         .setState(Optional.of(ConsumerGroupState.EMPTY))
-        .setType(if (quorum.contains("kip848")) Optional.of(ConsumerGroupType.CLASSIC) else Optional.empty()),
+        .setType(Optional.of(GroupType.CLASSIC)),
       new ConsumerGroupListing(group, false)
         .setState(Optional.of(ConsumerGroupState.STABLE))
-        .setType(if (quorum.contains("kip848")) Optional.of(ConsumerGroupType.CLASSIC) else Optional.empty())
+        .setType(Optional.of(GroupType.CLASSIC))
     )
 
     var foundListing = Set.empty[ConsumerGroupListing]
@@ -102,10 +102,10 @@ class ListConsumerGroupTest extends ConsumerGroupCommandTest {
     val expectedListing = Set(
       new ConsumerGroupListing(simpleGroup, true)
         .setState(Optional.of(ConsumerGroupState.EMPTY))
-        .setType(if(quorum.contains("kip848")) Optional.of(ConsumerGroupType.CLASSIC) else Optional.empty()),
+        .setType(Optional.of(GroupType.CLASSIC)),
       new ConsumerGroupListing(group, false)
         .setState(Optional.of(ConsumerGroupState.STABLE))
-        .setType(if(quorum.contains("kip848")) Optional.of(ConsumerGroupType.CLASSIC) else Optional.empty())
+        .setType(Optional.of(GroupType.CLASSIC))
     )
 
     var foundListing = Set.empty[ConsumerGroupListing]
@@ -120,15 +120,15 @@ class ListConsumerGroupTest extends ConsumerGroupCommandTest {
     val expectedListing2 = Set(
       new ConsumerGroupListing(simpleGroup, true)
         .setState(Optional.of(ConsumerGroupState.EMPTY))
-        .setType(Optional.of(ConsumerGroupType.CLASSIC)),
+        .setType(Optional.of(GroupType.CLASSIC)),
       new ConsumerGroupListing(group, false)
         .setState(Optional.of(ConsumerGroupState.STABLE))
-        .setType(Optional.of(ConsumerGroupType.CLASSIC))
+        .setType(Optional.of(GroupType.CLASSIC))
     )
 
     foundListing = Set.empty[ConsumerGroupListing]
     TestUtils.waitUntilTrue(() => {
-      foundListing = service.listConsumerGroupsWithFilters(Set.empty, Set(ConsumerGroupType.CONSUMER)).toSet
+      foundListing = service.listConsumerGroupsWithFilters(Set.empty, Set(GroupType.CONSUMER)).toSet
       var expectedListing = Set.empty[ConsumerGroupListing]
       if (quorum.contains("kip848")) {
         expectedListing = expectedListing2
@@ -141,14 +141,14 @@ class ListConsumerGroupTest extends ConsumerGroupCommandTest {
 
     foundListing = Set.empty[ConsumerGroupListing]
     TestUtils.waitUntilTrue(() => {
-      foundListing = service.listConsumerGroupsWithFilters(Set.empty, Set(ConsumerGroupType.CLASSIC)).toSet
+      foundListing = service.listConsumerGroupsWithFilters(Set.empty, Set(GroupType.CLASSIC)).toSet
         expectedListing2 == foundListing
     }, s"Expected to show groups $expectedListing2, but found $foundListing")
 
     // Groups with Consumer type aren't available so empty group listing is returned.
     foundListing = Set.empty[ConsumerGroupListing]
     TestUtils.waitUntilTrue(() => {
-      foundListing = service.listConsumerGroupsWithFilters(Set.empty, Set(ConsumerGroupType.CONSUMER)).toSet
+      foundListing = service.listConsumerGroupsWithFilters(Set.empty, Set(GroupType.CONSUMER)).toSet
       expectedListingStable == foundListing
     }, s"Expected to show groups $expectedListingStable, but found $foundListing")
   }
@@ -185,14 +185,12 @@ class ListConsumerGroupTest extends ConsumerGroupCommandTest {
   @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
   def testConsumerGroupTypesFromString(quorum: String, groupProtocol: String): Unit = {
     var result = ConsumerGroupCommand.consumerGroupTypesFromString("consumer")
-    assertEquals(Set(ConsumerGroupType.CONSUMER), result)
+    assertEquals(Set(GroupType.CONSUMER), result)
 
     result = ConsumerGroupCommand.consumerGroupTypesFromString("consumer, classic")
-    assertEquals(Set(ConsumerGroupType.CONSUMER, ConsumerGroupType.CLASSIC), result)
+    assertEquals(Set(GroupType.CONSUMER, GroupType.CLASSIC), result)
 
     assertThrows(classOf[IllegalArgumentException], () => ConsumerGroupCommand.consumerGroupTypesFromString("bad, wrong"))
-
-    assertThrows(classOf[IllegalArgumentException], () => ConsumerGroupCommand.consumerGroupTypesFromString("Consumer"))
 
     assertThrows(classOf[IllegalArgumentException], () => ConsumerGroupCommand.consumerGroupTypesFromString("  bad, generic"))
 

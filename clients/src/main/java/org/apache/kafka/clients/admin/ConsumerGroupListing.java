@@ -21,7 +21,7 @@ import java.util.Objects;
 import java.util.Optional;
 
 import org.apache.kafka.common.ConsumerGroupState;
-import org.apache.kafka.common.ConsumerGroupType;
+import org.apache.kafka.common.GroupType;
 
 /**
  * Represents a listing of a consumer group in the cluster.
@@ -30,7 +30,7 @@ public class ConsumerGroupListing {
     private final String groupId;
     private final boolean isSimpleConsumerGroup;
     private Optional<ConsumerGroupState> state;
-    private Optional<ConsumerGroupType> groupType;
+    private Optional<GroupType> groupType;
 
     /**
      * Create an instance with the specified parameters.
@@ -62,7 +62,7 @@ public class ConsumerGroupListing {
      * @param groupType     The type of the consumer group.
      * @return This ConsumerGroupListing instance.
      */
-    public ConsumerGroupListing setType(Optional<ConsumerGroupType> groupType) {
+    public ConsumerGroupListing setType(Optional<GroupType> groupType) {
         this.groupType = Objects.requireNonNull(groupType);
         return this;
     }
@@ -99,7 +99,7 @@ public class ConsumerGroupListing {
      *
      * @return An Optional containing the type if available.
      */
-    public Optional<ConsumerGroupType> groupType() {
+    public Optional<GroupType> groupType() {
         return groupType;
     }
 
