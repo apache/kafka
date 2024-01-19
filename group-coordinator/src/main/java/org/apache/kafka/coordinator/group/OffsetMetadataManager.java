@@ -608,9 +608,9 @@ public class OffsetMetadataManager {
                         .setPartitionIndex(partition.partitionIndex())
                     );
 
-                    // A tombstone is written if an offset is present is the main storage or
+                    // A tombstone is written if an offset in present is the main storage or
                     // if a pending transactional offset exists.
-                    if (hadCommittedOffset(request.groupId(), topic.name(), partition.partitionIndex()) ||
+                    if (hasCommittedOffset(request.groupId(), topic.name(), partition.partitionIndex()) ||
                         hasPendingTransactionalOffsets(request.groupId(), topic.name(), partition.partitionIndex())) {
                         records.add(RecordHelpers.newOffsetCommitTombstoneRecord(
                             request.groupId(),
@@ -674,7 +674,7 @@ public class OffsetMetadataManager {
                     if (pendingGroupOffsets != null) {
                         pendingGroupOffsets.forEach((topic, offsetsByPartition) -> {
                             offsetsByPartition.keySet().forEach(partition -> {
-                                if (!hadCommittedOffset(groupId, topic, partition)) {
+                                if (!hasCommittedOffset(groupId, topic, partition)) {
                                     records.add(RecordHelpers.newOffsetCommitTombstoneRecord(groupId, topic, partition));
                                     numDeletedOffsets.getAndIncrement();
                                 }
@@ -718,7 +718,7 @@ public class OffsetMetadataManager {
      *
      * Package private for testing.
      */
-    boolean hadCommittedOffset(
+    boolean hasCommittedOffset(
         String groupId,
         String topic,
         int partition

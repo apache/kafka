@@ -556,7 +556,7 @@ public class OffsetMetadataManagerTest {
             String topic,
             int partition
         ) {
-            return offsetMetadataManager.hadCommittedOffset(groupId, topic, partition) ||
+            return offsetMetadataManager.hasCommittedOffset(groupId, topic, partition) ||
                 offsetMetadataManager.hasPendingTransactionalOffsets(groupId, topic, partition);
         }
     }
