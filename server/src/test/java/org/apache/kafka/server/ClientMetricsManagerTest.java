@@ -943,7 +943,8 @@ public class ClientMetricsManagerTest {
         clientMetricsManager.expirationTimer().advanceClock(300);
         assertTimeoutPreemptively(Duration.ofMillis(300), () -> {
             // Validate that cache eviction happens and client instance is removed from cache.
-            while (clientMetricsManager.expirationTimer().size() != 0 || clientMetricsManager.clientInstance(response.data().clientInstanceId()) != null) {
+            while (clientMetricsManager.expirationTimer().size() != 0 ||
+                clientMetricsManager.clientInstance(response.data().clientInstanceId()) != null) {
                 // Wait for cache eviction to happen.
             }
         });
