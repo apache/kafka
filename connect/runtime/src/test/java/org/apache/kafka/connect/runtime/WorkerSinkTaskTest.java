@@ -2164,7 +2164,7 @@ public class WorkerSinkTaskTest {
 
     private void expectTransformation(final int numMessages, final String topicPrefix) {
         final Capture<SinkRecord> recordCapture = EasyMock.newCapture();
-        EasyMock.expect(transformationChain.apply(EasyMock.capture(recordCapture)))
+        EasyMock.expect(transformationChain.apply(EasyMock.anyObject(), EasyMock.capture(recordCapture)))
                 .andAnswer(() -> {
                     SinkRecord origRecord = recordCapture.getValue();
                     return topicPrefix != null && !topicPrefix.isEmpty()

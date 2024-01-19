@@ -330,7 +330,7 @@ public class ConnectorsResource {
         FutureCallback<Void> cb = new FutureCallback<>();
         ConnectorTaskId taskId = new ConnectorTaskId(connector, task);
         herder.restartTask(taskId, cb);
-        requestHandler.completeOrForwardRequest(cb, "/connectors/" + connector + "/tasks/" + task + "/restart", "POST", headers, null, forward);
+        requestHandler.completeOrForwardRequest(cb, "/connectors/" + connector + "/tasks/" + task + "/restart", "POST", headers, null, new TypeReference<Void>() { }, forward);
     }
 
     @DELETE
@@ -341,7 +341,7 @@ public class ConnectorsResource {
                                  final @Parameter(hidden = true) @QueryParam("forward") Boolean forward) throws Throwable {
         FutureCallback<Herder.Created<ConnectorInfo>> cb = new FutureCallback<>();
         herder.deleteConnectorConfig(connector, cb);
-        requestHandler.completeOrForwardRequest(cb, "/connectors/" + connector, "DELETE", headers, null, forward);
+        requestHandler.completeOrForwardRequest(cb, "/connectors/" + connector, "DELETE", headers, null, new TypeReference<Herder.Created<ConnectorInfo>>() { }, forward);
     }
 
     @GET
