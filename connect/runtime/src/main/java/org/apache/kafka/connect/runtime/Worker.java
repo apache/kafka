@@ -158,7 +158,7 @@ public class Worker {
 
     private final ConcurrentMap<String, WorkerConnector> connectors = new ConcurrentHashMap<>();
     private final ConcurrentMap<ConnectorTaskId, WorkerTask<?, ?>> tasks = new ConcurrentHashMap<>();
-    private Optional<SourceTaskOffsetCommitter> sourceTaskOffsetCommitter;
+    private Optional<SourceTaskOffsetCommitter> sourceTaskOffsetCommitter = Optional.empty();
     private final WorkerConfigTransformer workerConfigTransformer;
     private final ConnectorClientConfigOverridePolicy connectorClientConfigOverridePolicy;
     private final Function<Map<String, Object>, Admin> adminFactory;
@@ -271,7 +271,9 @@ public class Worker {
         log.info("Worker stopped");
 
         workerMetricsGroup.close();
-        connectorStatusMetricsGroup.close();
+        if (connectorStatusMetricsGroup != null) {
+            connectorStatusMetricsGroup.close();
+        }
 
         workerConfigTransformer.close();
         ThreadUtils.shutdownExecutorServiceQuietly(executor, EXECUTOR_SHUTDOWN_TERMINATION_TIMEOUT_MS, TimeUnit.MILLISECONDS);
