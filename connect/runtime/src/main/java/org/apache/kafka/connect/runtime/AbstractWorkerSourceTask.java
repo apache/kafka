@@ -75,7 +75,7 @@ import static org.apache.kafka.connect.runtime.WorkerConfig.TOPIC_TRACKING_ENABL
  * WorkerTask that contains shared logic for running source tasks with either standard semantics
  * (i.e., either at-least-once or at-most-once) or exactly-once semantics.
  */
-public abstract class AbstractWorkerSourceTask extends WorkerTask {
+public abstract class AbstractWorkerSourceTask extends WorkerTask<SourceRecord, SourceRecord> {
     private static final Logger log = LoggerFactory.getLogger(AbstractWorkerSourceTask.class);
 
     private static final long SEND_FAILED_BACKOFF_MS = 100;
@@ -192,7 +192,6 @@ public abstract class AbstractWorkerSourceTask extends WorkerTask {
     private final Converter keyConverter;
     private final Converter valueConverter;
     private final HeaderConverter headerConverter;
-    private final TransformationChain<SourceRecord, SourceRecord> transformationChain;
     private final TopicAdmin admin;
     private final CloseableOffsetStorageReader offsetReader;
     private final SourceTaskMetricsGroup sourceTaskMetricsGroup;
@@ -200,8 +199,6 @@ public abstract class AbstractWorkerSourceTask extends WorkerTask {
     private final boolean topicTrackingEnabled;
     private final TopicCreation topicCreation;
     private final Executor closeExecutor;
-    protected final RetryWithToleranceOperator<SourceRecord> retryWithToleranceOperator;
-    private final Supplier<List<ErrorReporter<SourceRecord>>> errorReportersSupplier;
 
     // Visible for testing
     List<SourceRecord> toSend;
@@ -235,6 +232,7 @@ public abstract class AbstractWorkerSourceTask extends WorkerTask {
                                        Supplier<List<ErrorReporter<SourceRecord>>> errorReportersSupplier) {
 
         super(id, statusListener, initialState, loader, connectMetrics, errorMetrics,
+                retryWithToleranceOperator, transformationChain, errorReportersSupplier,
                 time, statusBackingStore);
 
         this.workerConfig = workerConfig;
@@ -242,7 +240,6 @@ public abstract class AbstractWorkerSourceTask extends WorkerTask {
         this.keyConverter = keyConverter;
         this.valueConverter = valueConverter;
         this.headerConverter = headerConverter;
-        this.transformationChain = transformationChain;
         this.producer = producer;
         this.admin = admin;
         this.offsetReader = offsetReader;
@@ -250,9 +247,6 @@ public abstract class AbstractWorkerSourceTask extends WorkerTask {
         this.offsetStore = Objects.requireNonNull(offsetStore, "offset store cannot be null for source tasks");
         this.closeExecutor = closeExecutor;
         this.sourceTaskContext = sourceTaskContext;
-        this.retryWithToleranceOperator = retryWithToleranceOperator;
-        this.errorReportersSupplier = errorReportersSupplier;
-
         this.stopRequestedLatch = new CountDownLatch(1);
         this.sourceTaskMetricsGroup = new SourceTaskMetricsGroup(id, connectMetrics);
         this.topicTrackingEnabled = workerConfig.getBoolean(TOPIC_TRACKING_ENABLE_CONFIG);
@@ -271,7 +265,6 @@ public abstract class AbstractWorkerSourceTask extends WorkerTask {
 
     @Override
     protected void initializeAndStart() {
-        retryWithToleranceOperator.reporters(errorReportersSupplier.get());
         prepareToInitializeTask();
         offsetStore.start();
         // If we try to start the task at all by invoking initialize, then count this as
@@ -289,7 +282,6 @@ public abstract class AbstractWorkerSourceTask extends WorkerTask {
     @Override
     public void cancel() {
         super.cancel();
-        retryWithToleranceOperator.triggerStop();
         // Preemptively close the offset reader in case the task is blocked on an offset read.
         offsetReader.close();
         // We proactively close the producer here as the main work thread for the task may
@@ -325,8 +317,6 @@ public abstract class AbstractWorkerSourceTask extends WorkerTask {
         if (admin != null) {
             Utils.closeQuietly(() -> admin.close(Duration.ofSeconds(30)), "source task admin");
         }
-        Utils.closeQuietly(transformationChain, "transformation chain");
-        Utils.closeQuietly(retryWithToleranceOperator, "retry operator");
         Utils.closeQuietly(offsetReader, "offset reader");
         Utils.closeQuietly(offsetStore::stop, "offset backing store");
         Utils.closeQuietly(headerConverter, "header converter");

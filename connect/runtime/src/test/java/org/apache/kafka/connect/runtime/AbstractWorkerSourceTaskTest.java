@@ -99,7 +99,6 @@ import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -693,28 +692,6 @@ public class AbstractWorkerSourceTaskTest {
         verify(transformationChain, times(1)).apply(any(), eq(record1));
         verify(transformationChain, times(1)).apply(any(), eq(record2));
         verify(transformationChain, times(2)).apply(any(), eq(record3));
-    }
-
-    @Test
-    public void testErrorReportersConfigured() {
-        RetryWithToleranceOperator<SourceRecord> retryWithToleranceOperator = mock(RetryWithToleranceOperator.class);
-        List<ErrorReporter<SourceRecord>> errorReporters = Collections.singletonList(mock(ErrorReporter.class));
-        createWorkerTask(keyConverter, valueConverter, headerConverter, retryWithToleranceOperator, () -> errorReporters);
-        workerTask.initializeAndStart();
-
-        ArgumentCaptor<List<ErrorReporter<SourceRecord>>> errorReportersCapture = ArgumentCaptor.forClass(List.class);
-        verify(retryWithToleranceOperator).reporters(errorReportersCapture.capture());
-        assertEquals(errorReporters, errorReportersCapture.getValue());
-    }
-
-    @Test
-    public void testErrorReporterConfigurationExceptionPropagation() {
-        createWorkerTask(keyConverter, valueConverter, headerConverter, RetryWithToleranceOperatorTest.noopOperator(),
-                () -> {
-                    throw new ConnectException("Failed to create error reporters");
-                }
-        );
-        assertThrows(ConnectException.class, () -> workerTask.initializeAndStart());
     }
 
     private void expectSendRecord(Headers headers) {

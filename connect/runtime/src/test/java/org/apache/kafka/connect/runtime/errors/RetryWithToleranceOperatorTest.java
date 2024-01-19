@@ -33,6 +33,7 @@ import org.apache.kafka.connect.runtime.isolation.PluginsTest.TestConverter;
 import org.apache.kafka.connect.runtime.isolation.PluginsTest.TestableWorkerConfig;
 import org.apache.kafka.connect.sink.SinkConnector;
 import org.apache.kafka.connect.sink.SinkTask;
+import org.apache.kafka.connect.source.SourceRecord;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -71,6 +72,7 @@ import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -422,5 +424,41 @@ public class RetryWithToleranceOperatorTest {
             f.complete(new RecordMetadata(new TopicPartition("t", 0), 0, 0, 0, 0, 0));
         });
         assertTrue(result.isDone());
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    public void testCloseErrorReporters() {
+        ErrorReporter<SourceRecord> reporterA = mock(ErrorReporter.class);
+        ErrorReporter<SourceRecord> reporterB = mock(ErrorReporter.class);
+
+        RetryWithToleranceOperator<SourceRecord> retryWithToleranceOperator = allOperator();
+
+        retryWithToleranceOperator.reporters(Arrays.asList(reporterA, reporterB));
+
+        // Even though the reporters throw exceptions, they should both still be closed.
+
+        retryWithToleranceOperator.close();
+        verify(reporterA).close();
+        verify(reporterB).close();
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    public void testCloseErrorReportersExceptionPropagation() {
+        ErrorReporter<SourceRecord> reporterA = mock(ErrorReporter.class);
+        ErrorReporter<SourceRecord> reporterB = mock(ErrorReporter.class);
+
+        RetryWithToleranceOperator<SourceRecord> retryWithToleranceOperator = allOperator();
+
+        retryWithToleranceOperator.reporters(Arrays.asList(reporterA, reporterB));
+
+        // Even though the reporters throw exceptions, they should both still be closed.
+        doThrow(new RuntimeException()).when(reporterA).close();
+        doThrow(new RuntimeException()).when(reporterB).close();
+
+        assertThrows(ConnectException.class, retryWithToleranceOperator::close);
+        verify(reporterA).close();
+        verify(reporterB).close();
     }
 }

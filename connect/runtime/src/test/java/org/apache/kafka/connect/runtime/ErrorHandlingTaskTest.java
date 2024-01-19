@@ -103,8 +103,6 @@ import static org.junit.Assert.assertEquals;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.any;
 import static org.mockito.Mockito.doReturn;
-import static org.mockito.Mockito.doThrow;
-import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -228,64 +226,6 @@ public class ErrorHandlingTaskTest {
         if (metrics != null) {
             metrics.stop();
         }
-    }
-
-    @Test
-    @SuppressWarnings("unchecked")
-    public void testSinkTasksCloseErrorReporters() throws Exception {
-        ErrorReporter<ConsumerRecord<byte[], byte[]>> reporter = mock(ErrorReporter.class);
-
-        RetryWithToleranceOperator<ConsumerRecord<byte[], byte[]>> retryWithToleranceOperator = operator();
-
-        createSinkTask(initialState, retryWithToleranceOperator, singletonList(reporter));
-        workerSinkTask.initialize(TASK_CONFIG);
-        workerSinkTask.initializeAndStart();
-        workerSinkTask.close();
-        // verify if invocation happened exactly 1 time
-        verifyInitializeSink();
-        verify(reporter).close();
-        verify(sinkTask).stop();
-        verify(consumer).close();
-        verify(headerConverter).close();
-    }
-
-    @Test
-    @SuppressWarnings("unchecked")
-    public void testSourceTasksCloseErrorReporters() throws IOException {
-        ErrorReporter<SourceRecord> reporter = mock(ErrorReporter.class);
-
-        RetryWithToleranceOperator<SourceRecord> retryWithToleranceOperator = operator();
-
-        createSourceTask(initialState, retryWithToleranceOperator, singletonList(reporter));
-
-        workerSourceTask.initialize(TASK_CONFIG);
-        workerSourceTask.initializeAndStart();
-        workerSourceTask.close();
-        verifyCloseSource();
-        verify(reporter).close();
-    }
-
-    @Test
-    @SuppressWarnings("unchecked")
-    public void testCloseErrorReportersExceptionPropagation() throws IOException {
-        ErrorReporter<SourceRecord> reporterA = mock(ErrorReporter.class);
-        ErrorReporter<SourceRecord> reporterB = mock(ErrorReporter.class);
-
-        RetryWithToleranceOperator<SourceRecord> retryWithToleranceOperator = operator();
-
-        createSourceTask(initialState, retryWithToleranceOperator, Arrays.asList(reporterA, reporterB));
-
-        // Even though the reporters throw exceptions, they should both still be closed.
-        doThrow(new RuntimeException()).when(reporterA).close();
-        doThrow(new RuntimeException()).when(reporterB).close();
-
-        workerSourceTask.initialize(TASK_CONFIG);
-        workerSourceTask.initializeAndStart();
-        workerSourceTask.close();
-
-        verify(reporterA).close();
-        verify(reporterB).close();
-        verifyCloseSource();
     }
 
     @Test
