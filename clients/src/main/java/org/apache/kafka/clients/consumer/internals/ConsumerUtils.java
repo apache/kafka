@@ -27,8 +27,8 @@ import org.apache.kafka.clients.consumer.ConsumerInterceptor;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.common.IsolationLevel;
-import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.metrics.KafkaMetricsContext;
@@ -40,9 +40,9 @@ import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.telemetry.internals.ClientTelemetrySender;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.Timer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.apache.kafka.common.utils.Timer;
 
 import java.util.Collections;
 import java.util.List;
@@ -65,6 +65,7 @@ public final class ConsumerUtils {
     public static final long DEFAULT_CLOSE_TIMEOUT_MS = 30 * 1000;
     public static final String CONSUMER_JMX_PREFIX = "kafka.consumer";
     public static final String CONSUMER_METRIC_GROUP_PREFIX = "consumer";
+    public static final String COORDINATOR_METRICS_SUFFIX = "-coordinator-metrics";
 
     /**
      * A fixed, large enough value will suffice for max.
