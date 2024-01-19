@@ -480,6 +480,7 @@ public class GroupMetadataManager {
             boolean stateCheck = statesFilter.isEmpty() || group.isInStates(caseInsensitiveFilterSet, committedOffset);
             boolean typeCheck = lowerCaseTypesFilter.isEmpty() ||
                 lowerCaseTypesFilter.contains(group.type().toString().toLowerCase());
+
             return stateCheck && typeCheck;
         };
 
