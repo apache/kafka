@@ -218,8 +218,7 @@ object ConsumerGroupCommand extends Logging {
           groupInfoMap.update(groupId, (state, groupType))
         }
 
-        val groupInfoList = groupInfoMap.toList.map { case (groupId, (state, groupType)) => (groupId, state, groupType) }
-        printGroupInfo(groupInfoList, includeState, includeType)
+        printGroupInfo(groupInfoMap, includeState, includeType)
 
       } else {
         listConsumerGroups().foreach(println(_))
@@ -242,8 +241,8 @@ object ConsumerGroupCommand extends Logging {
         consumerGroupTypesFromString(typeValue)
     }
 
-    private def printGroupInfo(groupsAndInfo: List[(String, String, String)], includeState: Boolean, includeType: Boolean): Unit = {
-      val maxGroupLen: Int = groupsAndInfo.foldLeft(15)((maxLen, group) => Math.max(maxLen, group._1.length))
+    private def printGroupInfo(groupsAndInfo: Map[String, (String, String)], includeState: Boolean, includeType: Boolean): Unit = {
+      val maxGroupLen: Int = groupsAndInfo.keys.foldLeft(15)((maxLen, groupId) => Math.max(maxLen, groupId.length))
       var header = "GROUP"
       var format = s"%-${maxGroupLen}s"
 
@@ -258,7 +257,7 @@ object ConsumerGroupCommand extends Logging {
 
       println(format.format(ArraySeq.unsafeWrapArray(header.split(" ")): _*))
 
-      groupsAndInfo.foreach { case (groupId, state, groupType) =>
+      groupsAndInfo.foreach { case (groupId, (state, groupType)) =>
         val info = List(groupId) ++ (if (includeType) List(groupType) else List()) ++ (if (includeState) List(state) else List())
         println(format.format(info: _*))
       }
