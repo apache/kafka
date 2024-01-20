@@ -61,6 +61,7 @@ import org.mockito.junit.MockitoJUnitRunner;
 import org.mockito.junit.MockitoRule;
 import org.mockito.quality.Strictness;
 import org.mockito.stubbing.Answer;
+import org.mockito.stubbing.OngoingStubbing;
 
 import java.time.Duration;
 import java.util.ArrayList;
@@ -83,7 +84,6 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.times;
@@ -150,7 +150,7 @@ public class WorkerSinkTaskMockitoTest {
     private KafkaConsumer<byte[], byte[]> consumer;
     @Mock
     private ErrorHandlingMetrics errorHandlingMetrics;
-    private ArgumentCaptor<ConsumerRebalanceListener> rebalanceListener = ArgumentCaptor.forClass(ConsumerRebalanceListener.class);
+    private ConsumerRebalanceListener rebalanceListener;
     @Rule
     public final MockitoRule rule = MockitoJUnit.rule().strictness(Strictness.STRICT_STUBS);
 
@@ -185,6 +185,7 @@ public class WorkerSinkTaskMockitoTest {
                 keyConverter, valueConverter, errorHandlingMetrics, headerConverter,
                 transformationChain, consumer, pluginLoader, time,
                 retryWithToleranceOperator, null, statusBackingStore, errorReportersSupplier);
+        rebalanceListener = workerTask.getRebalanceListener();
     }
 
     @After
@@ -203,8 +204,9 @@ public class WorkerSinkTaskMockitoTest {
         verifyInitializeTask();
 
         workerTask.iteration();
-        time.sleep(10000L);
         verifyPollInitialAssignment();
+
+        time.sleep(10000L);
         verify(consumer).pause(INITIAL_ASSIGNMENT);
 
         assertSinkMetricValue("partition-count", 2);
@@ -218,16 +220,8 @@ public class WorkerSinkTaskMockitoTest {
     public void testPause() {
         createTask(initialState);
 
-        when(consumer.assignment()).thenReturn(INITIAL_ASSIGNMENT);
-        INITIAL_ASSIGNMENT.forEach(tp -> when(consumer.position(tp)).thenReturn(FIRST_OFFSET));
         expectTaskGetTopic();
-
-        when(consumer.poll(any(Duration.class)))
-                // Initial assignment
-                .thenAnswer((Answer<ConsumerRecords<byte[], byte[]>>) invocation -> {
-                    rebalanceListener.getValue().onPartitionsAssigned(INITIAL_ASSIGNMENT);
-                    return ConsumerRecords.empty();
-                })
+        expectPollInitialAssignment()
                 .thenAnswer(expectConsumerPoll(1))
                 // Pause
                 .thenThrow(new WakeupException())
@@ -312,22 +306,11 @@ public class WorkerSinkTaskMockitoTest {
     public void testShutdown() throws Exception {
         createTask(initialState);
 
-        when(consumer.assignment()).thenReturn(INITIAL_ASSIGNMENT);
-        INITIAL_ASSIGNMENT.forEach(tp -> when(consumer.position(tp)).thenReturn(FIRST_OFFSET));
         expectTaskGetTopic();
-
-        when(consumer.poll(any(Duration.class)))
-                // first iteration
-                .thenAnswer((Answer<ConsumerRecords<byte[], byte[]>>) invocation -> {
-                    rebalanceListener.getValue().onPartitionsAssigned(INITIAL_ASSIGNMENT);
-                    return ConsumerRecords.empty();
-                })
+        expectPollInitialAssignment()
                 .thenAnswer(expectConsumerPoll(1));
 
         expectConversionAndTransformation(null, emptyHeaders());
-
-        // second iteration
-        when(sinkTask.preCommit(anyMap())).thenReturn(Collections.emptyMap());
 
         workerTask.initialize(TASK_CONFIG);
         workerTask.initializeAndStart();
@@ -336,6 +319,9 @@ public class WorkerSinkTaskMockitoTest {
         workerTask.iteration();
         verifyPollInitialAssignment();
         sinkTaskContext.getValue().requestCommit(); // Force an offset commit
+
+        // second iteration
+        when(sinkTask.preCommit(anyMap())).thenReturn(Collections.emptyMap());
 
         workerTask.iteration();
         verify(sinkTask, times(2)).put(anyList());
@@ -355,20 +341,13 @@ public class WorkerSinkTaskMockitoTest {
         RuntimeException exception = new RuntimeException("Revocation error");
         createTask(initialState);
 
-        when(consumer.assignment()).thenReturn(INITIAL_ASSIGNMENT);
-        INITIAL_ASSIGNMENT.forEach(tp -> when(consumer.position(tp)).thenReturn(FIRST_OFFSET));
-
-        when(consumer.poll(any(Duration.class)))
+        expectPollInitialAssignment()
                 .thenAnswer((Answer<ConsumerRecords<byte[], byte[]>>) invocation -> {
-                    rebalanceListener.getValue().onPartitionsAssigned(INITIAL_ASSIGNMENT);
-                    return ConsumerRecords.empty();
-                })
-                .thenAnswer((Answer<ConsumerRecords<byte[], byte[]>>) invocation -> {
-                    rebalanceListener.getValue().onPartitionsLost(INITIAL_ASSIGNMENT);
+                    rebalanceListener.onPartitionsLost(INITIAL_ASSIGNMENT);
                     return ConsumerRecords.empty();
                 });
 
-        expectRebalanceLossError(exception);
+        doThrow(exception).when(sinkTask).close(INITIAL_ASSIGNMENT);
 
         workerTask.initialize(TASK_CONFIG);
         workerTask.initializeAndStart();
@@ -376,6 +355,7 @@ public class WorkerSinkTaskMockitoTest {
 
         workerTask.iteration();
         verifyPollInitialAssignment();
+
         try {
             workerTask.iteration();
             fail("Poll should have raised the rebalance exception");
@@ -389,16 +369,9 @@ public class WorkerSinkTaskMockitoTest {
         RuntimeException exception = new RuntimeException("Revocation error");
         createTask(initialState);
 
-        when(consumer.assignment()).thenReturn(INITIAL_ASSIGNMENT);
-        INITIAL_ASSIGNMENT.forEach(tp -> when(consumer.position(tp)).thenReturn(FIRST_OFFSET));
-
-        when(consumer.poll(any(Duration.class)))
+        expectPollInitialAssignment()
                 .thenAnswer((Answer<ConsumerRecords<byte[], byte[]>>) invocation -> {
-                    rebalanceListener.getValue().onPartitionsAssigned(INITIAL_ASSIGNMENT);
-                    return ConsumerRecords.empty();
-                })
-                .thenAnswer((Answer<ConsumerRecords<byte[], byte[]>>) invocation -> {
-                    rebalanceListener.getValue().onPartitionsRevoked(INITIAL_ASSIGNMENT);
+                    rebalanceListener.onPartitionsRevoked(INITIAL_ASSIGNMENT);
                     return ConsumerRecords.empty();
                 });
 
@@ -423,17 +396,10 @@ public class WorkerSinkTaskMockitoTest {
         RuntimeException exception = new RuntimeException("Assignment error");
         createTask(initialState);
 
-        when(consumer.assignment()).thenReturn(INITIAL_ASSIGNMENT);
-        INITIAL_ASSIGNMENT.forEach(tp -> when(consumer.position(tp)).thenReturn(FIRST_OFFSET));
-
-        when(consumer.poll(any(Duration.class)))
+        expectPollInitialAssignment()
                 .thenAnswer((Answer<ConsumerRecords<byte[], byte[]>>) invocation -> {
-                    rebalanceListener.getValue().onPartitionsAssigned(INITIAL_ASSIGNMENT);
-                    return ConsumerRecords.empty();
-                })
-                .thenAnswer((Answer<ConsumerRecords<byte[], byte[]>>) invocation -> {
-                    rebalanceListener.getValue().onPartitionsRevoked(INITIAL_ASSIGNMENT);
-                    rebalanceListener.getValue().onPartitionsAssigned(INITIAL_ASSIGNMENT);
+                    rebalanceListener.onPartitionsRevoked(INITIAL_ASSIGNMENT);
+                    rebalanceListener.onPartitionsAssigned(INITIAL_ASSIGNMENT);
                     return ConsumerRecords.empty();
                 });
 
@@ -450,9 +416,9 @@ public class WorkerSinkTaskMockitoTest {
             fail("Poll should have raised the rebalance exception");
         } catch (RuntimeException e) {
             assertEquals(exception, e);
+        } finally {
+            verify(sinkTask).close(INITIAL_ASSIGNMENT);
         }
-
-        verify(sinkTask).close(INITIAL_ASSIGNMENT);
     }
 
     @Test
@@ -474,22 +440,22 @@ public class WorkerSinkTaskMockitoTest {
 
         when(consumer.poll(any(Duration.class)))
                 .thenAnswer((Answer<ConsumerRecords<byte[], byte[]>>) invocation -> {
-                    rebalanceListener.getValue().onPartitionsAssigned(INITIAL_ASSIGNMENT);
+                    rebalanceListener.onPartitionsAssigned(INITIAL_ASSIGNMENT);
                     return ConsumerRecords.empty();
                 })
                 .thenAnswer((Answer<ConsumerRecords<byte[], byte[]>>) invocation -> {
-                    rebalanceListener.getValue().onPartitionsRevoked(Collections.singleton(TOPIC_PARTITION));
-                    rebalanceListener.getValue().onPartitionsAssigned(Collections.emptySet());
+                    rebalanceListener.onPartitionsRevoked(Collections.singleton(TOPIC_PARTITION));
+                    rebalanceListener.onPartitionsAssigned(Collections.emptySet());
                     return ConsumerRecords.empty();
                 })
                 .thenAnswer((Answer<ConsumerRecords<byte[], byte[]>>) invocation -> {
-                    rebalanceListener.getValue().onPartitionsRevoked(Collections.emptySet());
-                    rebalanceListener.getValue().onPartitionsAssigned(Collections.singleton(TOPIC_PARTITION3));
+                    rebalanceListener.onPartitionsRevoked(Collections.emptySet());
+                    rebalanceListener.onPartitionsAssigned(Collections.singleton(TOPIC_PARTITION3));
                     return ConsumerRecords.empty();
                 })
                 .thenAnswer((Answer<ConsumerRecords<byte[], byte[]>>) invocation -> {
-                    rebalanceListener.getValue().onPartitionsLost(Collections.singleton(TOPIC_PARTITION3));
-                    rebalanceListener.getValue().onPartitionsAssigned(Collections.singleton(TOPIC_PARTITION));
+                    rebalanceListener.onPartitionsLost(Collections.singleton(TOPIC_PARTITION3));
+                    rebalanceListener.onPartitionsAssigned(Collections.singleton(TOPIC_PARTITION));
                     return ConsumerRecords.empty();
                 });
 
@@ -585,13 +551,9 @@ public class WorkerSinkTaskMockitoTest {
         assertEquals(30, metrics.currentMetricValueAsDouble(group1.metricGroup(), "put-batch-max-time-ms"), 0.001d);
     }
 
-    private void expectRebalanceLossError(RuntimeException e) {
-        doThrow(e).when(sinkTask).close(INITIAL_ASSIGNMENT);
-    }
-
     private void expectRebalanceRevocationError(RuntimeException e) {
-        doThrow(e).when(sinkTask).close(INITIAL_ASSIGNMENT);
         when(sinkTask.preCommit(anyMap())).thenReturn(Collections.emptyMap());
+        doThrow(e).when(sinkTask).close(INITIAL_ASSIGNMENT);
     }
 
     private void expectRebalanceAssignmentError(RuntimeException e) {
@@ -603,20 +565,21 @@ public class WorkerSinkTaskMockitoTest {
     }
 
     private void verifyInitializeTask() {
-        verify(consumer).subscribe(eq(asList(TOPIC)), rebalanceListener.capture());
+        verify(consumer).subscribe(asList(TOPIC), rebalanceListener);
         verify(sinkTask).initialize(sinkTaskContext.capture());
         verify(sinkTask).start(TASK_PROPS);
     }
 
-    private void expectPollInitialAssignment() {
+    private OngoingStubbing<ConsumerRecords<byte[], byte[]>> expectPollInitialAssignment() {
         when(consumer.assignment()).thenReturn(INITIAL_ASSIGNMENT);
-        when(consumer.poll(any(Duration.class))).thenAnswer(
+        INITIAL_ASSIGNMENT.forEach(tp -> when(consumer.position(tp)).thenReturn(FIRST_OFFSET));
+
+        return when(consumer.poll(any(Duration.class))).thenAnswer(
                 invocation -> {
-                    rebalanceListener.getValue().onPartitionsAssigned(INITIAL_ASSIGNMENT);
+                    rebalanceListener.onPartitionsAssigned(INITIAL_ASSIGNMENT);
                     return ConsumerRecords.empty();
                 }
         );
-        INITIAL_ASSIGNMENT.forEach(tp -> when(consumer.position(tp)).thenReturn(FIRST_OFFSET));
     }
 
     private void verifyPollInitialAssignment() {
