@@ -1,7 +1,7 @@
 package kafka.zk
 
 
-import kafka.utils.{PasswordEncoder, TestUtils}
+import kafka.utils.{Logging, PasswordEncoder, TestUtils}
 import org.apache.kafka.common.Uuid
 import org.apache.kafka.common.metadata.{FeatureLevelRecord, TopicRecord}
 import org.apache.kafka.common.utils.{Time, Utils}
@@ -16,33 +16,42 @@ import org.apache.kafka.raft.{LeaderAndEpoch, OffsetAndEpoch}
 import org.apache.kafka.server.common.{ApiMessageAndVersion, MetadataVersion}
 import org.apache.kafka.server.fault.FaultHandler
 import org.apache.zookeeper.client.ZKClientConfig
+import org.junit.jupiter.api.Assertions.{assertTrue, fail}
 import org.junit.jupiter.api.Test
 
 import java.util
-import java.util.concurrent.{CompletableFuture}
+import java.util.concurrent.{CompletableFuture, TimeUnit}
 import java.util.{Optional, OptionalInt}
 import scala.collection.mutable
 
-class ZkMigrationFailoverTest {
+class ZkMigrationFailoverTest extends Logging {
 
   class CapturingFaultHandler(nodeId: Int) extends FaultHandler {
     val faults = mutable.Buffer[Throwable]()
-
-    var waitingString = ""
     var future: CompletableFuture[Throwable] = CompletableFuture.completedFuture(new RuntimeException())
+    var waitingForMsg = ""
 
     override def handleFault(failureMessage: String, cause: Throwable): RuntimeException = {
-      System.err.println(cause)
+      error(s"Fault handled on node $nodeId", cause)
       faults.append(cause)
-      if (!future.isDone && failureMessage.contains(waitingString)) {
+      if (!future.isDone && cause.getMessage.contains(waitingForMsg)) {
         future.complete(cause)
       }
       new RuntimeException(cause)
     }
 
+    def checkAndClear(verifier: (Seq[Throwable]) => Unit): Unit = {
+      val faultsSoFar = faults.toSeq
+      try {
+        verifier.apply(faultsSoFar)
+      } catch {
+        case ae: AssertionError => fail(s"Assertion failed. Faults on $nodeId were: $faultsSoFar", ae)
+      }
+    }
+
     def waitForError(message: String): CompletableFuture[Throwable] = {
       future = new CompletableFuture[Throwable]()
-      waitingString = message
+      waitingForMsg = message
       future
     }
   }
@@ -90,6 +99,10 @@ class ZkMigrationFailoverTest {
 
   def readMigrationZNode(zkMigrationClient: ZkMigrationClient): ZkMigrationLeadershipState = {
     zkMigrationClient.getOrCreateMigrationRecoveryState(ZkMigrationLeadershipState.EMPTY)
+  }
+
+  def safeGet[T](future: CompletableFuture[T]): T = {
+    future.get(10, TimeUnit.SECONDS)
   }
 
   @Test
@@ -168,14 +181,15 @@ class ZkMigrationFailoverTest {
         case None => false
       }, "waiting for 3000 to claim ZK leadership")
 
-      // Now 3001 becomes leader, and loads migration recovery state from ZK. 3000 does not learn about this yet
+      // Now 3001 becomes leader, and loads migration recovery state from ZK.
+      // Since an image hasn't been published to it yet, it will stay in WAIT_FOR_CONTROLLER_QUORUM
       val newLeader2 = new LeaderAndEpoch(OptionalInt.of(3001), 3)
       driver2.onControllerChange(newLeader2)
       TestUtils.waitUntilTrue(
-        () => driver2.migrationState().get().equals(MigrationDriverState.WAIT_FOR_CONTROLLER_QUORUM),
-        "waiting for driver to enter WAIT_FOR_CONTROLLER_QUORUM state")
+        () => safeGet(driver2.migrationState()).equals(MigrationDriverState.WAIT_FOR_CONTROLLER_QUORUM),
+        "waiting for node 3001 to enter WAIT_FOR_CONTROLLER_QUORUM")
 
-      // While 3000 still thinks that its the leader, do a delta update
+      // Node 3000 still thinks that its the leader, do a delta update
       val delta2 = new MetadataDelta(image1)
       delta2.replay(new TopicRecord().setTopicId(Uuid.randomUuid()).setName("another-topic-to-sync"))
       val provenance2 = new MetadataProvenance(211, 11, 1)
@@ -208,25 +222,34 @@ class ZkMigrationFailoverTest {
         .build()
       driver2.onMetadataUpdate(delta3, image3, manifest3)
 
-      // Now wait for driver 2 to become leader in ZK
+      // Now wait for 3001 to become leader in ZK
       TestUtils.waitUntilTrue(() => zkClient.getControllerId match {
         case Some(nodeId) => nodeId == 3001
         case None => false
       }, "waiting for 3001 to claim ZK leadership")
 
-      // 3001 will try to SYNC_KRAFT_TO_ZK, but it will fail because of /migration check op
-      //faultHandler2.waitForError("Unhandled error in SyncKRaftMetadataEvent").get(10, TimeUnit.SECONDS)
+      // Now, 3001 will reload the /migration state and should not see any errors
+      faultHandler2.checkAndClear(faults => assertTrue(faults.isEmpty))
 
-      // 3000 finally processes new leader
+      // 3000 should not be able to make any more ZK updates now
+      driver1.onMetadataUpdate(delta3, image3, manifest3)
+      safeGet(faultHandler1.waitForError("Controller epoch zkVersion check fails"))
+
+      // 3000 finally processes new leader event
       driver1.onControllerChange(newLeader2)
 
-      // 3001 still has error, indefinitely
-      //faultHandler2.waitForError("Unhandled error in SyncKRaftMetadataEvent").get(10, TimeUnit.SECONDS)
+      // 3001 should still not have any errors
+      faultHandler2.checkAndClear(faults => assertTrue(faults.isEmpty))
 
+      // Wait until new leader has sync'd to ZK
       TestUtils.waitUntilTrue(
-        () => driver2.migrationState().get().equals(MigrationDriverState.DUAL_WRITE),
+        () => safeGet(driver2.migrationState()).equals(MigrationDriverState.DUAL_WRITE),
         "waiting for driver to enter DUAL_WRITE"
       )
+
+      // Ensure we still dont have errors on the new leader
+      faultHandler2.checkAndClear(faults => assertTrue(faults.isEmpty))
+
     } finally {
       driver1.close()
       driver2.close()

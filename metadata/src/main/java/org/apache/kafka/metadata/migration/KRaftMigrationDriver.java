@@ -647,8 +647,8 @@ public class KRaftMigrationDriver implements MetadataPublisher {
                         applyMigrationOperation("Re-reading migration state", state -> {
                             ZkMigrationLeadershipState reloadedState = zkMigrationClient.getOrCreateMigrationRecoveryState(ZkMigrationLeadershipState.EMPTY);
                             return KRaftMigrationDriver.this.migrationLeadershipState
-                                    .withMigrationZkVersion(reloadedState.migrationZkVersion())
-                                    .withKRaftMetadataOffsetAndEpoch(reloadedState.kraftMetadataOffset(), reloadedState.kraftMetadataEpoch());
+                                .withMigrationZkVersion(reloadedState.migrationZkVersion())
+                                .withKRaftMetadataOffsetAndEpoch(reloadedState.kraftMetadataOffset(), reloadedState.kraftMetadataEpoch());
                         });
                         transitionTo(MigrationDriverState.SYNC_KRAFT_TO_ZK);
                     }
