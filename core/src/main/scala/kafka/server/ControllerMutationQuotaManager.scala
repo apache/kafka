@@ -28,6 +28,7 @@ import org.apache.kafka.common.metrics.stats.TokenBucket
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.server.quota.ClientQuotaCallback
+import org.apache.kafka.server.config.ClientQuotaManagerConfig
 
 import scala.jdk.CollectionConverters._
 

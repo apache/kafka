@@ -120,7 +120,7 @@ public final class TaskManager {
     /**
      * True if the TaskManager is shut down.
      */
-    private AtomicBoolean shutdown = new AtomicBoolean(false);
+    private final AtomicBoolean shutdown = new AtomicBoolean(false);
 
     /**
      * The ID to use for the next worker.  Only accessed by the state change thread.

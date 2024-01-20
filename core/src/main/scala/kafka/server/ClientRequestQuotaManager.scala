@@ -23,6 +23,7 @@ import org.apache.kafka.common.MetricName
 import org.apache.kafka.common.metrics._
 import org.apache.kafka.common.metrics.stats.Rate
 import org.apache.kafka.common.utils.Time
+import org.apache.kafka.server.config.ClientQuotaManagerConfig
 import org.apache.kafka.server.quota.ClientQuotaCallback
 
 import scala.jdk.CollectionConverters._

@@ -17,19 +17,17 @@
 package kafka.server
 
 import java.net.InetAddress
-
 import kafka.network.RequestChannel.Session
 import kafka.server.QuotaType._
 import org.apache.kafka.common.metrics.Quota
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.utils.Sanitizer
-import org.apache.kafka.server.config.ConfigEntityName
-
+import org.apache.kafka.server.config.{ClientQuotaManagerConfig, ConfigEntityName}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
 
 class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
-  private val config = ClientQuotaManagerConfig()
+  private val config = new ClientQuotaManagerConfig()
 
   private def testQuotaParsing(config: ClientQuotaManagerConfig, client1: UserClient, client2: UserClient, randomClient: UserClient, defaultConfigClient: UserClient): Unit = {
     val clientQuotaManager = new ClientQuotaManager(config, metrics, Produce, time, "")
@@ -101,7 +99,7 @@ class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
     val client2 = UserClient("User2", "p2", Some("User2"), None)
     val randomClient = UserClient("RandomUser", "random-client-id", None, None)
     val defaultConfigClient = UserClient("", "", Some(ConfigEntityName.DEFAULT), None)
-    val config = ClientQuotaManagerConfig()
+    val config = new ClientQuotaManagerConfig()
     testQuotaParsing(config, client1, client2, randomClient, defaultConfigClient)
   }
 
@@ -115,7 +113,7 @@ class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
     val client2 = UserClient("User2", "p2", Some("User2"), Some("p2"))
     val randomClient = UserClient("RandomUser", "random-client-id", None, None)
     val defaultConfigClient = UserClient("", "", Some(ConfigEntityName.DEFAULT), Some(ConfigEntityName.DEFAULT))
-    val config = ClientQuotaManagerConfig()
+    val config = new ClientQuotaManagerConfig()
     testQuotaParsing(config, client1, client2, randomClient, defaultConfigClient)
   }
 
@@ -161,7 +159,7 @@ class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
   @Test
   def testGetMaxValueInQuotaWindowWithNonDefaultQuotaWindow(): Unit = {
     val numFullQuotaWindows = 3   // 3 seconds window (vs. 10 seconds default)
-    val nonDefaultConfig = ClientQuotaManagerConfig(numQuotaSamples = numFullQuotaWindows + 1)
+    val nonDefaultConfig = new ClientQuotaManagerConfig(numFullQuotaWindows + 1)
     val clientQuotaManager = new ClientQuotaManager(nonDefaultConfig, metrics, Fetch, time, "")
     val userSession = Session(new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "userA"), InetAddress.getLocalHost)
 
@@ -180,7 +178,7 @@ class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
   @Test
   def testSetAndRemoveDefaultUserQuota(): Unit = {
     // quotaTypesEnabled will be QuotaTypes.NoQuotas initially
-    val clientQuotaManager = new ClientQuotaManager(ClientQuotaManagerConfig(),
+    val clientQuotaManager = new ClientQuotaManager(new ClientQuotaManagerConfig(),
       metrics, Produce, time, "")
 
     try {
@@ -202,7 +200,7 @@ class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
   @Test
   def testSetAndRemoveUserQuota(): Unit = {
     // quotaTypesEnabled will be QuotaTypes.NoQuotas initially
-    val clientQuotaManager = new ClientQuotaManager(ClientQuotaManagerConfig(),
+    val clientQuotaManager = new ClientQuotaManager(new ClientQuotaManagerConfig(),
       metrics, Produce, time, "")
 
     try {
@@ -221,7 +219,7 @@ class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
   @Test
   def testSetAndRemoveUserClientQuota(): Unit = {
     // quotaTypesEnabled will be QuotaTypes.NoQuotas initially
-    val clientQuotaManager = new ClientQuotaManager(ClientQuotaManagerConfig(),
+    val clientQuotaManager = new ClientQuotaManager(new ClientQuotaManagerConfig(),
       metrics, Produce, time, "")
 
     try {
@@ -239,7 +237,7 @@ class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
 
   @Test
   def testQuotaConfigPrecedence(): Unit = {
-    val clientQuotaManager = new ClientQuotaManager(ClientQuotaManagerConfig(),
+    val clientQuotaManager = new ClientQuotaManager(new ClientQuotaManagerConfig(),
       metrics, Produce, time, "")
 
     try {

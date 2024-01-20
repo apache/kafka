@@ -1101,8 +1101,8 @@ public class ExactlyOnceWorkerSourceTaskTest {
     }
 
     private void expectApplyTransformationChain() {
-        when(transformationChain.apply(any()))
-                .thenAnswer(invocation -> invocation.getArgument(0));
+        when(transformationChain.apply(any(), any()))
+                .thenAnswer(invocation -> invocation.getArgument(1));
     }
 
     private void expectTaskGetTopic() {

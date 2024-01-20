@@ -50,6 +50,7 @@ import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.timeline.SnapshotRegistry;
 import org.apache.kafka.timeline.TimelineHashMap;
+import org.apache.kafka.timeline.TimelineHashSet;
 import org.slf4j.Logger;
 
 import java.util.ArrayList;
@@ -195,6 +196,11 @@ public class OffsetMetadataManager {
      */
     private final TimelineHashMap<Long, Offsets> pendingTransactionalOffsets;
 
+    /**
+     * The open transactions (producer ids) keyed by group.
+     */
+    private final TimelineHashMap<String, TimelineHashSet<Long>> openTransactionsByGroup;
+
     private class Offsets {
         /**
          * The offsets keyed by group id, topic name and partition id.
@@ -279,6 +285,7 @@ public class OffsetMetadataManager {
         this.metrics = metrics;
         this.offsets = new Offsets();
         this.pendingTransactionalOffsets = new TimelineHashMap<>(snapshotRegistry, 0);
+        this.openTransactionsByGroup = new TimelineHashMap<>(snapshotRegistry, 0);
     }
 
     /**
@@ -657,6 +664,28 @@ public class OffsetMetadataManager {
     }
 
     /**
+     * @return true iff there is at least one pending transactional offset for the given
+     * group, topic and partition.
+     */
+    private boolean hasPendingTransactionalOffsets(
+        String groupId,
+        String topic,
+        int partition
+    ) {
+        final TimelineHashSet<Long> openTransactions = openTransactionsByGroup.get(groupId);
+        if (openTransactions == null) return false;
+
+        for (Long producerId : openTransactions) {
+            Offsets offsets = pendingTransactionalOffsets.get(producerId);
+            if (offsets != null && offsets.get(groupId, topic, partition) != null) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
      * Fetch offsets for a given Group.
      *
      * @param request               The OffsetFetchRequestGroup request.
@@ -668,6 +697,8 @@ public class OffsetMetadataManager {
         OffsetFetchRequestData.OffsetFetchRequestGroup request,
         long lastCommittedOffset
     ) throws ApiException {
+        final boolean requireStable = lastCommittedOffset == Long.MAX_VALUE;
+
         boolean failAllPartitions = false;
         try {
             validateOffsetFetch(request, lastCommittedOffset);
@@ -691,7 +722,14 @@ public class OffsetMetadataManager {
                 final OffsetAndMetadata offsetAndMetadata = topicOffsets == null ?
                     null : topicOffsets.get(partitionIndex, lastCommittedOffset);
 
-                if (offsetAndMetadata == null) {
+                if (requireStable && hasPendingTransactionalOffsets(request.groupId(), topic.name(), partitionIndex)) {
+                    topicResponse.partitions().add(new OffsetFetchResponseData.OffsetFetchResponsePartitions()
+                        .setPartitionIndex(partitionIndex)
+                        .setErrorCode(Errors.UNSTABLE_OFFSET_COMMIT.code())
+                        .setCommittedOffset(INVALID_OFFSET)
+                        .setCommittedLeaderEpoch(-1)
+                        .setMetadata(""));
+                } else if (offsetAndMetadata == null) {
                     topicResponse.partitions().add(new OffsetFetchResponseData.OffsetFetchResponsePartitions()
                         .setPartitionIndex(partitionIndex)
                         .setCommittedOffset(INVALID_OFFSET)
@@ -724,6 +762,8 @@ public class OffsetMetadataManager {
         OffsetFetchRequestData.OffsetFetchRequestGroup request,
         long lastCommittedOffset
     ) throws ApiException {
+        final boolean requireStable = lastCommittedOffset == Long.MAX_VALUE;
+
         try {
             validateOffsetFetch(request, lastCommittedOffset);
         } catch (GroupIdNotFoundException ex) {
@@ -749,11 +789,20 @@ public class OffsetMetadataManager {
                     final int partition = partitionEntry.getKey();
                     final OffsetAndMetadata offsetAndMetadata = partitionEntry.getValue();
 
-                    topicResponse.partitions().add(new OffsetFetchResponseData.OffsetFetchResponsePartitions()
-                        .setPartitionIndex(partition)
-                        .setCommittedOffset(offsetAndMetadata.offset)
-                        .setCommittedLeaderEpoch(offsetAndMetadata.leaderEpoch.orElse(-1))
-                        .setMetadata(offsetAndMetadata.metadata));
+                    if (requireStable && hasPendingTransactionalOffsets(request.groupId(), topic, partition)) {
+                        topicResponse.partitions().add(new OffsetFetchResponseData.OffsetFetchResponsePartitions()
+                            .setPartitionIndex(partition)
+                            .setErrorCode(Errors.UNSTABLE_OFFSET_COMMIT.code())
+                            .setCommittedOffset(INVALID_OFFSET)
+                            .setCommittedLeaderEpoch(-1)
+                            .setMetadata(""));
+                    } else {
+                        topicResponse.partitions().add(new OffsetFetchResponseData.OffsetFetchResponsePartitions()
+                            .setPartitionIndex(partition)
+                            .setCommittedOffset(offsetAndMetadata.offset)
+                            .setCommittedLeaderEpoch(offsetAndMetadata.leaderEpoch.orElse(-1))
+                            .setMetadata(offsetAndMetadata.metadata));
+                    }
                 });
             });
         }
@@ -879,13 +928,17 @@ public class OffsetMetadataManager {
                 // Otherwise, the transaction offset is stored in the pending transactional
                 // offsets store. Pending offsets there are moved to the main store when
                 // the transaction is committed; or removed when the transaction is aborted.
-                Offsets pendingOffsets = pendingTransactionalOffsets.computeIfAbsent(producerId, __ -> new Offsets());
-                pendingOffsets.put(
-                    groupId,
-                    topic,
-                    partition,
-                    OffsetAndMetadata.fromRecord(value)
-                );
+                pendingTransactionalOffsets
+                    .computeIfAbsent(producerId, __ -> new Offsets())
+                    .put(
+                        groupId,
+                        topic,
+                        partition,
+                        OffsetAndMetadata.fromRecord(value)
+                    );
+                openTransactionsByGroup
+                    .computeIfAbsent(groupId, __ -> new TimelineHashSet<>(snapshotRegistry, 1))
+                    .add(producerId);
             }
         } else {
             if (offsets.remove(groupId, topic, partition) != null) {
@@ -907,9 +960,21 @@ public class OffsetMetadataManager {
     ) throws RuntimeException {
         Offsets pendingOffsets = pendingTransactionalOffsets.remove(producerId);
 
+        if (pendingOffsets == null) {
+            log.debug("Replayed end transaction marker with result {} for producer id {} but " +
+                "no pending offsets are present. Ignoring it.", result, producerId);
+            return;
+        }
+
+        pendingOffsets.offsetsByGroup.keySet().forEach(groupId -> {
+            TimelineHashSet<Long> openTransactions = openTransactionsByGroup.get(groupId);
+            if (openTransactions != null) {
+                openTransactions.remove(producerId);
+            }
+        });
+
         if (result == TransactionResult.COMMIT) {
             log.debug("Committed transactional offset commits for producer id {}.", producerId);
-            if (pendingOffsets == null) return;
 
             pendingOffsets.offsetsByGroup.forEach((groupId, topicOffsets) -> {
                 topicOffsets.forEach((topicName, partitionOffsets) -> {

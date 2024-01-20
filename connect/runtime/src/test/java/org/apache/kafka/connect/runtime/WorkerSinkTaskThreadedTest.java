@@ -29,6 +29,7 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaAndValue;
 import org.apache.kafka.connect.errors.ConnectException;
+import org.apache.kafka.connect.runtime.errors.ProcessingContext;
 import org.apache.kafka.connect.storage.ClusterConfigState;
 import org.apache.kafka.connect.runtime.errors.RetryWithToleranceOperatorTest;
 import org.apache.kafka.connect.runtime.errors.ErrorHandlingMetrics;
@@ -224,8 +225,10 @@ public class WorkerSinkTaskThreadedTest {
             for (SinkRecord rec : recs) {
                 SinkRecord referenceSinkRecord
                         = new SinkRecord(TOPIC, PARTITION, KEY_SCHEMA, KEY, VALUE_SCHEMA, VALUE, FIRST_OFFSET + offset, TIMESTAMP, TIMESTAMP_TYPE);
-                InternalSinkRecord referenceInternalSinkRecord =
-                        new InternalSinkRecord(new ConsumerRecord<>(TOPIC, PARTITION, FIRST_OFFSET + offset, null, null), referenceSinkRecord);
+                ConsumerRecord<byte[], byte[]> referenceConsumerRecord
+                        = new ConsumerRecord<>(TOPIC, PARTITION, FIRST_OFFSET + offset, null, null);
+                ProcessingContext<ConsumerRecord<byte[], byte[]>> context = new ProcessingContext<>(referenceConsumerRecord);
+                InternalSinkRecord referenceInternalSinkRecord = new InternalSinkRecord(context, referenceSinkRecord);
                 assertEquals(referenceInternalSinkRecord, rec);
                 offset++;
             }
@@ -589,7 +592,7 @@ public class WorkerSinkTaskThreadedTest {
         });
         when(keyConverter.toConnectData(TOPIC, emptyHeaders(), RAW_KEY)).thenReturn(new SchemaAndValue(KEY_SCHEMA, KEY));
         when(valueConverter.toConnectData(TOPIC, emptyHeaders(), RAW_VALUE)).thenReturn(new SchemaAndValue(VALUE_SCHEMA, VALUE));
-        when(transformationChain.apply(any(SinkRecord.class))).thenAnswer(AdditionalAnswers.returnsFirstArg());
+        when(transformationChain.apply(any(), any(SinkRecord.class))).thenAnswer(AdditionalAnswers.returnsSecondArg());
     }
 
     @SuppressWarnings("SameParameterValue")

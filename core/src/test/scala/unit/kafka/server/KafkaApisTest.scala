@@ -125,7 +125,7 @@ class KafkaApisTest extends Logging {
   private val metrics = new Metrics()
   private val brokerId = 1
   // KRaft tests should override this with a KRaftMetadataCache
-  private var metadataCache: MetadataCache = MetadataCache.zkMetadataCache(brokerId, MetadataVersion.latest())
+  private var metadataCache: MetadataCache = MetadataCache.zkMetadataCache(brokerId, MetadataVersion.latestTesting())
   private val brokerEpochManager: ZkBrokerEpochManager = new ZkBrokerEpochManager(metadataCache, controller, None)
   private val clientQuotaManager: ClientQuotaManager = mock(classOf[ClientQuotaManager])
   private val clientRequestQuotaManager: ClientRequestQuotaManager = mock(classOf[ClientRequestQuotaManager])
@@ -150,7 +150,7 @@ class KafkaApisTest extends Logging {
     metrics.close()
   }
 
-  def createKafkaApis(interBrokerProtocolVersion: MetadataVersion = MetadataVersion.latest,
+  def createKafkaApis(interBrokerProtocolVersion: MetadataVersion = MetadataVersion.latestTesting,
                       authorizer: Option[Authorizer] = None,
                       enableForwarding: Boolean = false,
                       configRepository: ConfigRepository = new MockConfigRepository(),
@@ -200,10 +200,10 @@ class KafkaApisTest extends Logging {
     val apiVersionManager = new SimpleApiVersionManager(
       listenerType,
       enabledApis,
-      BrokerFeatures.defaultSupportedFeatures(),
+      BrokerFeatures.defaultSupportedFeatures(true),
       true,
       false,
-      () => new Features(MetadataVersion.latest(), Collections.emptyMap[String, java.lang.Short], 0, raftSupport))
+      () => new Features(MetadataVersion.latestTesting(), Collections.emptyMap[String, java.lang.Short], 0, raftSupport))
 
     val clientMetricsManagerOpt = if (raftSupport) Some(clientMetricsManager) else None
 
@@ -6103,9 +6103,9 @@ class KafkaApisTest extends Logging {
     // and have a non KafkaPrincipal.ANONYMOUS principal. This test is done before the check
     // for forwarding because after forwarding the context will have a different context. 
     // We validate the context authenticated failure case in other integration tests.
-    val context = new RequestContext(header, "1", InetAddress.getLocalHost, new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "Alice"),
-      listenerName, SecurityProtocol.SSL, ClientInformation.EMPTY, fromPrivilegedListener,
-      Optional.of(kafkaPrincipalSerde))
+    val context = new RequestContext(header, "1", InetAddress.getLocalHost, Optional.empty(),
+      new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "Alice"), listenerName, SecurityProtocol.SSL,
+      ClientInformation.EMPTY, fromPrivilegedListener, Optional.of(kafkaPrincipalSerde))
     new RequestChannel.Request(processor = 1, context = context, startTimeNanos = 0, MemoryPool.NONE, buffer,
       requestMetrics, envelope = None)
   }

@@ -48,7 +48,7 @@ class FinalizedFeatureChangeListenerTest extends QuorumTestHarness {
     val supportedFeaturesMap = Map[String, SupportedVersionRange](
       "feature_1" -> new SupportedVersionRange(1, 4),
       "feature_2" -> new SupportedVersionRange(1, 3))
-    val brokerFeatures = BrokerFeatures.createDefault()
+    val brokerFeatures = BrokerFeatures.createDefault(true)
     brokerFeatures.setSupportedFeatures(Features.supportedFeatures(supportedFeaturesMap.asJava))
     brokerFeatures
   }
