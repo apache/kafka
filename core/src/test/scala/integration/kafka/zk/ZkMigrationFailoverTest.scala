@@ -19,7 +19,7 @@ import org.apache.zookeeper.client.ZKClientConfig
 import org.junit.jupiter.api.Test
 
 import java.util
-import java.util.concurrent.{CompletableFuture, TimeUnit}
+import java.util.concurrent.{CompletableFuture}
 import java.util.{Optional, OptionalInt}
 import scala.collection.mutable
 
@@ -171,6 +171,9 @@ class ZkMigrationFailoverTest {
       // Now 3001 becomes leader, and loads migration recovery state from ZK. 3000 does not learn about this yet
       val newLeader2 = new LeaderAndEpoch(OptionalInt.of(3001), 3)
       driver2.onControllerChange(newLeader2)
+      TestUtils.waitUntilTrue(
+        () => driver2.migrationState().get().equals(MigrationDriverState.WAIT_FOR_CONTROLLER_QUORUM),
+        "waiting for driver to enter WAIT_FOR_CONTROLLER_QUORUM state")
 
       // While 3000 still thinks that its the leader, do a delta update
       val delta2 = new MetadataDelta(image1)
@@ -187,12 +190,23 @@ class ZkMigrationFailoverTest {
       val migrationZkVersion = readMigrationZNode(zkMigrationClient).migrationZkVersion()
       driver1.onMetadataUpdate(delta2, image2, manifest2)
 
-      // Wait for /migration znode update from delta2
+      // Wait for /migration znode update from 3000 SYNC_KRAFT_TO_ZK
       TestUtils.waitUntilTrue(() => readMigrationZNode(zkMigrationClient).migrationZkVersion() > migrationZkVersion,
         "waiting for /migration znode to change")
 
       // Now unblock 3001 from claiming ZK. This will let it move to BECOME_CONTROLLER
-      driver2.onMetadataUpdate(delta1, image1, manifest1)
+      val delta3 = new MetadataDelta(image1)
+      delta3.replay(new TopicRecord().setTopicId(Uuid.randomUuid()).setName("another-topic-to-sync"))
+      val provenance3 = new MetadataProvenance(211, 11, 1)
+      val image3 = delta3.apply(provenance3)
+      val manifest3 = LogDeltaManifest.newBuilder()
+        .provenance(provenance3)
+        .leaderAndEpoch(newLeader2)
+        .numBatches(1)
+        .elapsedNs(100)
+        .numBytes(42)
+        .build()
+      driver2.onMetadataUpdate(delta3, image3, manifest3)
 
       // Now wait for driver 2 to become leader in ZK
       TestUtils.waitUntilTrue(() => zkClient.getControllerId match {
@@ -201,13 +215,18 @@ class ZkMigrationFailoverTest {
       }, "waiting for 3001 to claim ZK leadership")
 
       // 3001 will try to SYNC_KRAFT_TO_ZK, but it will fail because of /migration check op
-      faultHandler2.waitForError("Unhandled error in SyncKRaftMetadataEvent").get(10, TimeUnit.SECONDS)
+      //faultHandler2.waitForError("Unhandled error in SyncKRaftMetadataEvent").get(10, TimeUnit.SECONDS)
 
       // 3000 finally processes new leader
       driver1.onControllerChange(newLeader2)
 
       // 3001 still has error, indefinitely
-      faultHandler2.waitForError("Unhandled error in SyncKRaftMetadataEvent").get(10, TimeUnit.SECONDS)
+      //faultHandler2.waitForError("Unhandled error in SyncKRaftMetadataEvent").get(10, TimeUnit.SECONDS)
+
+      TestUtils.waitUntilTrue(
+        () => driver2.migrationState().get().equals(MigrationDriverState.DUAL_WRITE),
+        "waiting for driver to enter DUAL_WRITE"
+      )
     } finally {
       driver1.close()
       driver2.close()

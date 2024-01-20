@@ -637,10 +637,19 @@ public class KRaftMigrationDriver implements MetadataPublisher {
                 applyMigrationOperation("Claiming ZK controller leadership", zkMigrationClient::claimControllerLeadership);
                 if (migrationLeadershipState.zkControllerEpochZkVersion() == -2) {
                     log.info("Unable to claim leadership, will retry until we learn of a different KRaft leader");
+
                 } else {
                     if (!migrationLeadershipState.initialZkMigrationComplete()) {
                         transitionTo(MigrationDriverState.ZK_MIGRATION);
                     } else {
+                        // KAFKA-16171 after loading the migration state in KRaftLeaderEvent, the previous controller
+                        // could have modified the /migration ZNode. Re-read it here after claiming the controller ZNode
+                        applyMigrationOperation("Re-reading migration state", state -> {
+                            ZkMigrationLeadershipState reloadedState = zkMigrationClient.getOrCreateMigrationRecoveryState(ZkMigrationLeadershipState.EMPTY);
+                            return KRaftMigrationDriver.this.migrationLeadershipState
+                                    .withMigrationZkVersion(reloadedState.migrationZkVersion())
+                                    .withKRaftMetadataOffsetAndEpoch(reloadedState.kraftMetadataOffset(), reloadedState.kraftMetadataEpoch());
+                        });
                         transitionTo(MigrationDriverState.SYNC_KRAFT_TO_ZK);
                     }
                 }

@@ -110,7 +110,7 @@ public class ZkMigrationLeadershipState {
         return kraftMetadataOffset;
     }
 
-    public long kraftMetadataEpoch() {
+    public int kraftMetadataEpoch() {
         return kraftMetadataEpoch;
     }
 
