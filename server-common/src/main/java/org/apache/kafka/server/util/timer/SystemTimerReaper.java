@@ -17,8 +17,6 @@
 package org.apache.kafka.server.util.timer;
 
 import org.apache.kafka.server.util.ShutdownableThread;
-import org.apache.kafka.server.util.timer.Timer;
-import org.apache.kafka.server.util.timer.TimerTask;
 
 /**
  * SystemTimerReaper wraps a {@link Timer} and starts a reaper thread
