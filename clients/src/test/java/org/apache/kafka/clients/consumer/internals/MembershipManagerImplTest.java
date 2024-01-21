@@ -14,13 +14,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEventHandler;
 import org.apache.kafka.clients.consumer.internals.events.ConsumerRebalanceListenerCallbackCompletedEvent;
 import org.apache.kafka.clients.consumer.internals.events.ConsumerRebalanceListenerCallbackNeededEvent;
+import org.apache.kafka.clients.consumer.internals.metrics.RebalanceCallbackMetrics;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
@@ -1384,15 +1384,11 @@ public class MembershipManagerImplTest {
     }
 
     private ConsumerRebalanceListenerInvoker consumerRebalanceListenerInvoker() {
-        ConsumerCoordinatorMetrics coordinatorMetrics = new ConsumerCoordinatorMetrics(
-                subscriptionState,
-                new Metrics(),
-                "test-");
         return new ConsumerRebalanceListenerInvoker(
                 new LogContext(),
                 subscriptionState,
                 new MockTime(1),
-                coordinatorMetrics
+                new RebalanceCallbackMetrics(new Metrics())
         );
     }
 
