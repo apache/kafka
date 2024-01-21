@@ -491,7 +491,7 @@ public class RemoteIndexCache implements Closeable {
 
         private final OffsetIndex offsetIndex;
         private final TimeIndex timeIndex;
-        private final TransactionIndex txnIndex;
+        private TransactionIndex txnIndex;
 
         // This lock is used to synchronize cleanup methods and read methods. This ensures that cleanup (which changes the
         // underlying files of the index) isn't performed while a read is in-progress for the entry. This is required in
@@ -524,6 +524,18 @@ public class RemoteIndexCache implements Closeable {
 
         // Visible for testing
         public TransactionIndex txnIndex() {
+            if (txnIndex.isClosed()) {
+                // Reopen txn index if closed
+                final File txnIndexFile = txnIndex.file();
+                try {
+                    final String indexFileName = txnIndexFile.getName();
+                    final long offset = offsetFromRemoteIndexFileName(indexFileName);
+                    txnIndex = new TransactionIndex(offset, txnIndexFile);
+                    txnIndex.sanityCheck();
+                } catch (IOException e) {
+                    throw new KafkaException("Failed to reopen transaction index " + txnIndexFile, e);
+                }
+            }
             return txnIndex;
         }
 
