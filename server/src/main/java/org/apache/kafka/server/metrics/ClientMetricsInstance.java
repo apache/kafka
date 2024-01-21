@@ -94,7 +94,7 @@ public class ClientMetricsInstance {
     }
 
     // Visible for testing
-    public TimerTask expirationTimerTask() {
+    public synchronized TimerTask expirationTimerTask() {
         return expirationTimerTask;
     }
 

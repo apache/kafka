@@ -939,9 +939,9 @@ public class ClientMetricsManagerTest {
 
         assertNotNull(clientMetricsManager.clientInstance(response.data().clientInstanceId()));
         assertEquals(1, clientMetricsManager.expirationTimer().size());
-        // Advance the clock to trigger cache eviction, cache expiry should be 100 * 3 = 300 ms.
-        clientMetricsManager.expirationTimer().advanceClock(300);
-        assertTimeoutPreemptively(Duration.ofMillis(300), () -> {
+        // Cache expiry should occur after 100 * 3 = 300 ms, wait for at most 350 ms for the eviction
+        // to happen as eviction timer is scheduled in different thread.
+        assertTimeoutPreemptively(Duration.ofMillis(350), () -> {
             // Validate that cache eviction happens and client instance is removed from cache.
             while (clientMetricsManager.expirationTimer().size() != 0 ||
                 clientMetricsManager.clientInstance(response.data().clientInstanceId()) != null) {
@@ -971,9 +971,9 @@ public class ClientMetricsManagerTest {
         assertNotNull(clientMetricsManager.clientInstance(response1.data().clientInstanceId()));
         assertNotNull(clientMetricsManager.clientInstance(response2.data().clientInstanceId()));
         assertEquals(2, clientMetricsManager.expirationTimer().size());
-        // Advance the clock to trigger cache eviction, cache expiry should be 100 * 3 = 300 ms.
-        clientMetricsManager.expirationTimer().advanceClock(300);
-        assertTimeoutPreemptively(Duration.ofMillis(300), () -> {
+        // Cache expiry should occur after 100 * 3 = 300 ms, wait for at most 350 ms for the eviction
+        // to happen as eviction timer is scheduled in different thread.
+        assertTimeoutPreemptively(Duration.ofMillis(350), () -> {
             // Validate that cache eviction happens and client instance is removed from cache.
             while (clientMetricsManager.expirationTimer().size() != 0 ||
                 clientMetricsManager.clientInstance(response1.data().clientInstanceId()) != null ||
