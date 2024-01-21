@@ -61,6 +61,7 @@ import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.regex.Pattern;
 
 /**
@@ -82,6 +83,7 @@ public class ClientMetricsManager implements AutoCloseable {
     private final int clientTelemetryMaxBytes;
     private final Time time;
     private final int cacheExpiryMs;
+    private final AtomicLong lastCacheErrorLogMs;
 
     // The latest subscription version is used to determine if subscription has changed and needs
     // to re-evaluate the client instance subscription id as per changed subscriptions.
@@ -101,6 +103,7 @@ public class ClientMetricsManager implements AutoCloseable {
         this.clientTelemetryMaxBytes = clientTelemetryMaxBytes;
         this.time = time;
         this.cacheExpiryMs = cacheExpiryMs;
+        this.lastCacheErrorLogMs = new AtomicLong(0);
     }
 
     public Set<String> listClientMetricsResources() {
@@ -462,6 +465,8 @@ public class ClientMetricsManager implements AutoCloseable {
 
     private final class ExpirationTimerTask extends TimerTask {
 
+        private static final long CACHE_ERROR_LOG_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
+
         private final Uuid uuid;
 
         private ExpirationTimerTask(Uuid uuid, long delayMs) {
@@ -473,11 +478,18 @@ public class ClientMetricsManager implements AutoCloseable {
         public void run() {
             log.trace("Expiration timer task run for client instance id: {}, after delay ms: {}", uuid, delayMs);
             if (!clientInstanceCache.remove(uuid)) {
-                // This can only happen if the client instance is removed from the cache by the LRU
-                // eviction policy before the expiration timer task is executed. Log a warning as broker
-                // cache is not able to hold all the client instances.
-                log.warn("Client metrics instance cache cannot find the client instance id: {}. The cache"
-                    + " must be at capacity, size: {} ", uuid, clientInstanceCache.size());
+                /*
+                 This can only happen if the client instance is removed from the cache by the LRU
+                 eviction policy before the expiration timer task is executed. Log a warning as broker
+                 cache is not able to hold all the client instances. Log only once every CACHE_ERROR_LOG_INTERVAL_MS
+                 to avoid flooding the logs.
+                */
+                long lastErrorMs = lastCacheErrorLogMs.get();
+                if (time.milliseconds() - lastErrorMs > CACHE_ERROR_LOG_INTERVAL_MS &&
+                    lastCacheErrorLogMs.compareAndSet(lastErrorMs, time.milliseconds())) {
+                    log.warn("Client metrics instance cache cannot find the client instance id: {}. The cache"
+                        + " must be at capacity, size: {} ", uuid, clientInstanceCache.size());
+                }
             }
         }
     }
