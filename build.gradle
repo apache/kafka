@@ -1997,6 +1997,7 @@ project(':tools') {
     implementation project(':clients')
     implementation project(':storage')
     implementation project(':server-common')
+    implementation project(':server')
     implementation project(':connect:runtime')
     implementation project(':log4j-appender')
     implementation project(':tools:tools-api')
