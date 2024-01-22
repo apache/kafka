@@ -915,6 +915,7 @@ class KafkaConfigTest {
         case KafkaConfig.MetricSampleWindowMsProp => assertPropertyInvalid(baseProperties, name, "not_a_number", "-1", "0")
         case KafkaConfig.MetricReporterClassesProp => // ignore string
         case KafkaConfig.MetricRecordingLevelProp => // ignore string
+        case KafkaConfig.MetricsVerbosityProp => // ignore string
         case KafkaConfig.RackProp => // ignore string
         //SSL Configs
         case KafkaConfig.PrincipalBuilderClassProp =>
@@ -1178,6 +1179,7 @@ class KafkaConfigTest {
     assertEquals(7 * 24 * 60L * 60L * 1000L, config.delegationTokenMaxLifeMs)
     assertEquals(24 * 60L * 60L * 1000L, config.delegationTokenExpiryTimeMs)
     assertEquals(1 * 60L * 1000L * 60, config.delegationTokenExpiryCheckIntervalMs)
+    assertEquals("[]", config.metricsVerbosity)
 
     defaults.setProperty(KafkaConfig.DelegationTokenSecretKeyProp, "1234567890")
     val config1 = KafkaConfig.fromProps(defaults)

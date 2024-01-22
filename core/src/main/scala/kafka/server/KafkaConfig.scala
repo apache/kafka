@@ -228,7 +228,7 @@ object Defaults {
   val MetricReporterClasses = ""
   val MetricRecordingLevel = Sensor.RecordingLevel.INFO.toString
   val AutoIncludeJmxReporter = true
-
+  val MetricsVerbosity = "[]"
 
   /** ********* Kafka Yammer Metrics Reporter Configuration ***********/
   val KafkaMetricReporterClasses = ""
@@ -588,6 +588,7 @@ object KafkaConfig {
   val MetricNumSamplesProp: String = CommonClientConfigs.METRICS_NUM_SAMPLES_CONFIG
   val MetricReporterClassesProp: String = CommonClientConfigs.METRIC_REPORTER_CLASSES_CONFIG
   val MetricRecordingLevelProp: String = CommonClientConfigs.METRICS_RECORDING_LEVEL_CONFIG
+  val MetricsVerbosityProp = "metrics.verbosity"
   @deprecated
   val AutoIncludeJmxReporterProp: String = CommonClientConfigs.AUTO_INCLUDE_JMX_REPORTER_CONFIG
 
@@ -1092,7 +1093,10 @@ object KafkaConfig {
   val MetricReporterClassesDoc = CommonClientConfigs.METRIC_REPORTER_CLASSES_DOC
   val MetricRecordingLevelDoc = CommonClientConfigs.METRICS_RECORDING_LEVEL_DOC
   val AutoIncludeJmxReporterDoc = CommonClientConfigs.AUTO_INCLUDE_JMX_REPORTER_DOC
-
+  val MetricsVerbosityDoc = "Controls the verbosity of the related metrics. This configuration accepts a string with JSON array format, " +
+    "which contains the verbosity level(high, medium, or low), the affected metrics name(regex accepted), and the affected scope(in the form of " +
+    "regex filters). Example: \n[{\n    \"level\": \"high\",\n    \"name\": \"Bytes*\",\n    \"filters\" = [{topics: [\"car\", \"bus\", \"plane\"]}]\n}]\n" +
+    "In this example, the 'high' verbosity level will be added to all metric name starting 'Bytes' for topics car, bus and plane."
 
   /** ********* Kafka Yammer Metrics Reporter Configuration ***********/
   val KafkaMetricsReporterClassesDoc = "A list of classes to use as Yammer metrics custom reporters." +
@@ -1428,6 +1432,7 @@ object KafkaConfig {
       .define(MetricSampleWindowMsProp, LONG, Defaults.MetricSampleWindowMs, atLeast(1), LOW, MetricSampleWindowMsDoc)
       .define(MetricReporterClassesProp, LIST, Defaults.MetricReporterClasses, LOW, MetricReporterClassesDoc)
       .define(MetricRecordingLevelProp, STRING, Defaults.MetricRecordingLevel, LOW, MetricRecordingLevelDoc)
+      .define(MetricsVerbosityProp, STRING, Defaults.MetricsVerbosity, LOW, MetricsVerbosityDoc)
       .define(AutoIncludeJmxReporterProp, BOOLEAN, Defaults.AutoIncludeJmxReporter, LOW, AutoIncludeJmxReporterDoc)
 
       /** ********* Kafka Yammer Metrics Reporter Configuration for docs ***********/
@@ -2068,6 +2073,7 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
   val metricNumSamples = getInt(KafkaConfig.MetricNumSamplesProp)
   val metricSampleWindowMs = getLong(KafkaConfig.MetricSampleWindowMsProp)
   val metricRecordingLevel = getString(KafkaConfig.MetricRecordingLevelProp)
+  val metricsVerbosity = getString(KafkaConfig.MetricsVerbosityProp)
 
   /** ********* Kafka Client Telemetry Metrics Configuration ***********/
   val clientTelemetryMaxBytes: Int = getInt(KafkaConfig.ClientTelemetryMaxBytesProp)
