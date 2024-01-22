@@ -553,7 +553,8 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
                         maybeRetry(currentTimeMs, error.exception());
                         return;
                     } else if (error == Errors.FENCED_INSTANCE_ID) {
-                        log.info("OffsetCommit failed due to group instance id {} fenced: {}", groupInstanceId, error.message());
+                        log.error("OffsetCommit failed due to group instance id {} fenced: {}",
+                            groupInstanceId, error.message());
                         future.completeExceptionally(new CommitFailedException());
                         return;
                     } else if (error == Errors.OFFSET_METADATA_TOO_LARGE ||
@@ -841,8 +842,9 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
                     "of the group anymore (it probably left the group, got fenced" +
                     " or failed). The request cannot be retried and will fail.", responseError);
                 future.completeExceptionally(responseError.exception());
-            } else if (responseError == Errors.NOT_COORDINATOR) {
-                // re-discover the coordinator and retry
+            } else if (responseError == Errors.NOT_COORDINATOR
+                || responseError == Errors.COORDINATOR_NOT_AVAILABLE) {
+                // Re-discover the coordinator and retry
                 coordinatorRequestManager.markCoordinatorUnknown("error response " + responseError.name(), currentTimeMs);
                 maybeRetry(currentTimeMs, responseError.exception());
             } else if (responseError == Errors.GROUP_AUTHORIZATION_FAILED) {

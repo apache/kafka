@@ -498,6 +498,40 @@ public class CommitRequestManagerTest {
     }
 
     @Test
+    public void testOffsetFetchCoordinatorNotAvailable() {
+        testOffsetFetchMarksCoordinatorUnknownOnRetriableCoordinatorErrors(Errors.COORDINATOR_NOT_AVAILABLE);
+    }
+
+    @Test
+    public void testOffsetFetchNotCoordinator() {
+        testOffsetFetchMarksCoordinatorUnknownOnRetriableCoordinatorErrors(Errors.NOT_COORDINATOR);
+    }
+
+    private void testOffsetFetchMarksCoordinatorUnknownOnRetriableCoordinatorErrors(Errors error) {
+        CommitRequestManager commitRequestManager = create(false, 100);
+        when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(mockedNode));
+
+        Set<TopicPartition> partitions = new HashSet<>();
+        partitions.add(new TopicPartition("t1", 0));
+
+        long expirationTimeMs = time.milliseconds() + defaultApiTimeoutMs;
+        CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> result = commitRequestManager.addOffsetFetchRequest(partitions, expirationTimeMs);
+
+        completeOffsetFetchRequestWithError(commitRequestManager, partitions, error);
+
+        // Request not completed just yet, but should have marked the coordinator unknown
+        assertFalse(result.isDone());
+        assertCoordinatorDisconnect();
+
+        // Request should be retried with backoff.
+        NetworkClientDelegate.PollResult res = commitRequestManager.poll(time.milliseconds());
+        assertEquals(0, res.unsentRequests.size());
+        time.sleep(retryBackoffMs);
+        res = commitRequestManager.poll(time.milliseconds());
+        assertEquals(1, res.unsentRequests.size());
+    }
+
+    @Test
     public void testOffsetFetchMarksCoordinatorUnknownOnCoordinatorDisconnectedAndRetries() {
         CommitRequestManager commitRequestManger = create(true, 100);
         when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(mockedNode));
@@ -972,7 +1006,7 @@ public class CommitRequestManagerTest {
             Arguments.of(Errors.OFFSET_METADATA_TOO_LARGE, false),
             Arguments.of(Errors.INVALID_COMMIT_OFFSET_SIZE, false),
             Arguments.of(Errors.UNKNOWN_TOPIC_OR_PARTITION, false),
-            Arguments.of(Errors.COORDINATOR_NOT_AVAILABLE, false),
+            Arguments.of(Errors.COORDINATOR_NOT_AVAILABLE, true),
             Arguments.of(Errors.REQUEST_TIMED_OUT, false),
             Arguments.of(Errors.FENCED_INSTANCE_ID, false),
             Arguments.of(Errors.TOPIC_AUTHORIZATION_FAILED, false),
