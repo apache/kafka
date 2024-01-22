@@ -51,7 +51,7 @@ class AutoTopicCreationManagerTest {
   private val requestTimeout = 100
   private var config: KafkaConfig = _
   private val metadataCache = Mockito.mock(classOf[MetadataCache])
-  private val brokerToController = Mockito.mock(classOf[BrokerToControllerChannelManager])
+  private val brokerToController = Mockito.mock(classOf[NodeToControllerChannelManager])
   private val adminManager = Mockito.mock(classOf[ZkAdminManager])
   private val controller = Mockito.mock(classOf[KafkaController])
   private val groupCoordinator = Mockito.mock(classOf[GroupCoordinator])

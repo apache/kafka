@@ -21,6 +21,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentId;
 import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentMetadata;
+import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentMetadata.CustomMetadata;
 import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentMetadataUpdate;
 import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentState;
 import org.apache.kafka.test.TestUtils;
@@ -50,8 +51,10 @@ public class FileBasedRemoteLogMetadataCacheTest {
                                                                           0, 100, System.currentTimeMillis(), brokerId, System.currentTimeMillis(),
                                                                           1024 * 1024, Collections.singletonMap(0, 0L));
         cache.addCopyInProgressSegment(metadata1);
-        RemoteLogSegmentMetadataUpdate metadataUpdate1 = new RemoteLogSegmentMetadataUpdate(segmentId1, System.currentTimeMillis(),
-                                                                                           RemoteLogSegmentState.COPY_SEGMENT_FINISHED, brokerId);
+        RemoteLogSegmentMetadataUpdate metadataUpdate1 = new RemoteLogSegmentMetadataUpdate(
+                segmentId1, System.currentTimeMillis(),
+                Optional.of(new CustomMetadata(new byte[]{0, 1, 2, 3})),
+                RemoteLogSegmentState.COPY_SEGMENT_FINISHED, brokerId);
         cache.updateRemoteLogSegmentMetadata(metadataUpdate1);
         Optional<RemoteLogSegmentMetadata> receivedMetadata = cache.remoteLogSegmentMetadata(0, 0L);
         assertTrue(receivedMetadata.isPresent());
@@ -63,8 +66,10 @@ public class FileBasedRemoteLogMetadataCacheTest {
                                                                           0, 900, System.currentTimeMillis(), brokerId, System.currentTimeMillis(),
                                                                           1024 * 1024, Collections.singletonMap(0, 0L));
         cache.addCopyInProgressSegment(metadata2);
-        RemoteLogSegmentMetadataUpdate metadataUpdate2 = new RemoteLogSegmentMetadataUpdate(segmentId2, System.currentTimeMillis(),
-                                                                                           RemoteLogSegmentState.COPY_SEGMENT_FINISHED, brokerId);
+        RemoteLogSegmentMetadataUpdate metadataUpdate2 = new RemoteLogSegmentMetadataUpdate(
+                segmentId2, System.currentTimeMillis(),
+                Optional.of(new CustomMetadata(new byte[]{4, 5, 6, 7})),
+                RemoteLogSegmentState.COPY_SEGMENT_FINISHED, brokerId);
         cache.updateRemoteLogSegmentMetadata(metadataUpdate2);
 
         // Fetch segment for leader epoch:0 and start offset:0, it should be the newly added segment.

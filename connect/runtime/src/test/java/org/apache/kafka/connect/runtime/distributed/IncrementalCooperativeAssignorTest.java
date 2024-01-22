@@ -28,6 +28,8 @@ import org.apache.kafka.connect.storage.ClusterConfigState;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.junit.Before;
 import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.mockito.junit.MockitoJUnitRunner;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -55,6 +57,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+@RunWith(MockitoJUnitRunner.StrictStubs.class)
 public class IncrementalCooperativeAssignorTest {
 
     // Offset isn't used in most tests but is required for creating a config snapshot object,

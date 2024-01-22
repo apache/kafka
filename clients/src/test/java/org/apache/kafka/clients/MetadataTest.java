@@ -66,9 +66,10 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 public class MetadataTest {
 
     private long refreshBackoffMs = 100;
+    private long refreshBackoffMaxMs = 1000;
     private long metadataExpireMs = 1000;
-    private Metadata metadata = new Metadata(refreshBackoffMs, metadataExpireMs, new LogContext(),
-            new ClusterResourceListeners());
+    private Metadata metadata = new Metadata(refreshBackoffMs, refreshBackoffMaxMs,
+            metadataExpireMs, new LogContext(), new ClusterResourceListeners());
 
     private static MetadataResponse emptyMetadataResponse() {
         return RequestTestUtils.metadataResponse(
@@ -90,15 +91,16 @@ public class MetadataTest {
         // Metadata timeToNextUpdate is implicitly relying on the premise that the currentTimeMillis is always
         // larger than the metadataExpireMs or refreshBackoffMs.
         // It won't be a problem practically since all usages of Metadata calls first update() immediately after
-        // it's construction.
+        // its construction.
         if (metadataExpireMs > now || refreshBackoffMs > now) {
             throw new IllegalArgumentException(
                     "metadataExpireMs and refreshBackoffMs must be smaller than 'now'");
         }
 
         long largerOfBackoffAndExpire = Math.max(refreshBackoffMs, metadataExpireMs);
-        Metadata metadata = new Metadata(refreshBackoffMs, metadataExpireMs, new LogContext(),
-                new ClusterResourceListeners());
+        // This test intentionally disabled exponential backoff, which results in constant backoff delays
+        Metadata metadata = new Metadata(refreshBackoffMs, refreshBackoffMs,
+                metadataExpireMs, new LogContext(), new ClusterResourceListeners());
 
         assertEquals(0, metadata.timeToNextUpdate(now));
 
@@ -109,7 +111,7 @@ public class MetadataTest {
         assertEquals(largerOfBackoffAndExpire, metadata.timeToNextUpdate(now));
 
         // Metadata update requested explicitly
-        metadata.requestUpdate();
+        metadata.requestUpdate(true);
         // Update requested so metadataExpireMs should no longer take effect.
         assertEquals(refreshBackoffMs, metadata.timeToNextUpdate(now));
 
@@ -127,8 +129,8 @@ public class MetadataTest {
     public void testUpdateMetadataAllowedImmediatelyAfterBootstrap() {
         MockTime time = new MockTime();
 
-        Metadata metadata = new Metadata(refreshBackoffMs, metadataExpireMs, new LogContext(),
-                new ClusterResourceListeners());
+        Metadata metadata = new Metadata(refreshBackoffMs, refreshBackoffMaxMs,
+                metadataExpireMs, new LogContext(), new ClusterResourceListeners());
         metadata.bootstrap(Collections.singletonList(new InetSocketAddress("localhost", 9002)));
 
         assertEquals(0, metadata.timeToAllowUpdate(time.milliseconds()));
@@ -152,14 +154,16 @@ public class MetadataTest {
         metadata.failedUpdate(now);
 
         // Backing off. Remaining time until next try should be returned.
-        assertEquals(refreshBackoffMs, metadata.timeToNextUpdate(now));
+        long lowerBoundBackoffMs = (long) (refreshBackoffMs * (1 - CommonClientConfigs.RETRY_BACKOFF_JITTER));
+        long upperBoundBackoffMs = (long) (refreshBackoffMs * (1 + CommonClientConfigs.RETRY_BACKOFF_JITTER));
+        assertEquals(refreshBackoffMs, metadata.timeToNextUpdate(now), upperBoundBackoffMs - lowerBoundBackoffMs);
 
         // Even though metadata update requested explicitly, still respects backoff.
-        metadata.requestUpdate();
-        assertEquals(refreshBackoffMs, metadata.timeToNextUpdate(now));
+        metadata.requestUpdate(true);
+        assertEquals(refreshBackoffMs, metadata.timeToNextUpdate(now), upperBoundBackoffMs - lowerBoundBackoffMs);
 
         // refreshBackoffMs elapsed.
-        now += refreshBackoffMs;
+        now += refreshBackoffMs + upperBoundBackoffMs;
         // It should return 0 to let next try.
         assertEquals(0, metadata.timeToNextUpdate(now));
         assertEquals(0, metadata.timeToNextUpdate(now + 1));
@@ -277,11 +281,13 @@ public class MetadataTest {
         assertEquals(100, metadata.timeToNextUpdate(1000));
         metadata.failedUpdate(1100);
 
-        assertEquals(100, metadata.timeToNextUpdate(1100));
+        long lowerBoundBackoffMs = (long) (refreshBackoffMs * (1 - CommonClientConfigs.RETRY_BACKOFF_JITTER));
+        long upperBoundBackoffMs = (long) (refreshBackoffMs * (1 + CommonClientConfigs.RETRY_BACKOFF_JITTER));
+        assertEquals(100, metadata.timeToNextUpdate(1100), upperBoundBackoffMs - lowerBoundBackoffMs);
         assertEquals(100, metadata.lastSuccessfulUpdate());
 
         metadata.updateWithCurrentRequestVersion(emptyMetadataResponse(), false, time);
-        assertEquals(100, metadata.timeToNextUpdate(1000));
+        assertEquals(100, metadata.timeToNextUpdate(1000), upperBoundBackoffMs - lowerBoundBackoffMs);
     }
 
     @Test
@@ -289,7 +295,8 @@ public class MetadataTest {
         MockClusterResourceListener mockClusterListener = new MockClusterResourceListener();
         ClusterResourceListeners listeners = new ClusterResourceListeners();
         listeners.maybeAdd(mockClusterListener);
-        metadata = new Metadata(refreshBackoffMs, metadataExpireMs, new LogContext(), listeners);
+        metadata = new Metadata(refreshBackoffMs, refreshBackoffMaxMs,
+                metadataExpireMs, new LogContext(), listeners);
 
         String hostName = "www.example.com";
         metadata.bootstrap(Collections.singletonList(new InetSocketAddress(hostName, 9002)));
@@ -600,7 +607,7 @@ public class MetadataTest {
     public void testRequestVersion() {
         Time time = new MockTime();
 
-        metadata.requestUpdate();
+        metadata.requestUpdate(true);
         Metadata.MetadataRequestAndVersion versionAndBuilder = metadata.newMetadataRequestAndVersion(time.milliseconds());
         metadata.update(versionAndBuilder.requestVersion,
                 RequestTestUtils.metadataUpdateWith(1, Collections.singletonMap("topic", 1)), false, time.milliseconds());
@@ -629,7 +636,7 @@ public class MetadataTest {
     public void testPartialMetadataUpdate() {
         Time time = new MockTime();
 
-        metadata = new Metadata(refreshBackoffMs, metadataExpireMs, new LogContext(), new ClusterResourceListeners()) {
+        metadata = new Metadata(refreshBackoffMs, refreshBackoffMaxMs, metadataExpireMs, new LogContext(), new ClusterResourceListeners()) {
                 @Override
                 protected MetadataRequest.Builder newMetadataRequestBuilderForNewTopics() {
                     return newMetadataRequestBuilder();
@@ -639,7 +646,7 @@ public class MetadataTest {
         assertFalse(metadata.updateRequested());
 
         // Request a metadata update. This must force a full metadata update request.
-        metadata.requestUpdate();
+        metadata.requestUpdate(true);
         Metadata.MetadataRequestAndVersion versionAndBuilder = metadata.newMetadataRequestAndVersion(time.milliseconds());
         assertFalse(versionAndBuilder.isPartialUpdate);
         metadata.update(versionAndBuilder.requestVersion,
@@ -655,7 +662,7 @@ public class MetadataTest {
         assertFalse(metadata.updateRequested());
 
         // Request both types of metadata updates. This should always perform a full update.
-        metadata.requestUpdate();
+        metadata.requestUpdate(true);
         metadata.requestUpdateForNewTopics();
         versionAndBuilder = metadata.newMetadataRequestAndVersion(time.milliseconds());
         assertFalse(versionAndBuilder.isPartialUpdate);
@@ -904,7 +911,7 @@ public class MetadataTest {
         Map<String, Uuid> topicIds = new HashMap<>();
 
         final AtomicReference<Set<String>> retainTopics = new AtomicReference<>(new HashSet<>());
-        metadata = new Metadata(refreshBackoffMs, metadataExpireMs, new LogContext(), new ClusterResourceListeners()) {
+        metadata = new Metadata(refreshBackoffMs, refreshBackoffMaxMs, metadataExpireMs, new LogContext(), new ClusterResourceListeners()) {
                 @Override
                 protected boolean retainTopic(String topic, boolean isInternal, long nowMs) {
                     return retainTopics.get().contains(topic);
@@ -1009,7 +1016,7 @@ public class MetadataTest {
         Map<String, Uuid> topicIds = new HashMap<>();
 
         final AtomicReference<Set<String>> retainTopics = new AtomicReference<>(new HashSet<>());
-        metadata = new Metadata(refreshBackoffMs, metadataExpireMs, new LogContext(), new ClusterResourceListeners()) {
+        metadata = new Metadata(refreshBackoffMs, refreshBackoffMaxMs, metadataExpireMs, new LogContext(), new ClusterResourceListeners()) {
             @Override
             protected boolean retainTopic(String topic, boolean isInternal, long nowMs) {
                 return retainTopics.get().contains(topic);

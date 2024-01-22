@@ -38,6 +38,8 @@ import org.junit.After;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.mockito.junit.MockitoJUnitRunner;
 import org.slf4j.LoggerFactory;
 
 import javax.ws.rs.core.MediaType;
@@ -62,6 +64,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
 
+@RunWith(MockitoJUnitRunner.StrictStubs.class)
 public class ConnectRestServerTest {
 
     private Herder herder;

@@ -373,8 +373,8 @@ public class PauseResumeIntegrationTest {
 
     private void assertStreamsLocalStoreLagStaysConstant(final KafkaStreams streams) throws InterruptedException {
         waitForCondition(
-            () -> !streams.allLocalStorePartitionLags().isEmpty(),
-            "Lags for local store partitions were not found within the timeout!");
+            () -> streams.allLocalStorePartitionLags().containsKey("test-store"),
+            "Lags for test-store partitions were not found within the timeout!");
         waitUntilStreamsHasPolled(streams, 2);
         final long stateStoreLag1 = streams.allLocalStorePartitionLags().get("test-store").get(0).offsetLag();
         waitUntilStreamsHasPolled(streams, 2);

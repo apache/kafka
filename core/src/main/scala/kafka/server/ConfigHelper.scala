@@ -17,17 +17,22 @@
 
 package kafka.server
 
+import kafka.network.RequestChannel
+
 import java.util.{Collections, Properties}
 import kafka.server.metadata.ConfigRepository
 import kafka.utils.{Log4jController, Logging}
+import org.apache.kafka.common.acl.AclOperation.DESCRIBE_CONFIGS
 import org.apache.kafka.common.config.{AbstractConfig, ConfigDef, ConfigResource}
 import org.apache.kafka.common.errors.{ApiException, InvalidRequestException}
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.message.DescribeConfigsRequestData.DescribeConfigsResource
 import org.apache.kafka.common.message.DescribeConfigsResponseData
 import org.apache.kafka.common.protocol.Errors
-import org.apache.kafka.common.requests.{ApiError, DescribeConfigsResponse}
+import org.apache.kafka.common.requests.{ApiError, DescribeConfigsRequest, DescribeConfigsResponse}
 import org.apache.kafka.common.requests.DescribeConfigsResponse.ConfigSource
+import org.apache.kafka.common.resource.Resource.CLUSTER_NAME
+import org.apache.kafka.common.resource.ResourceType.{CLUSTER, TOPIC}
 import org.apache.kafka.server.config.ServerTopicConfigSynonyms
 import org.apache.kafka.storage.internals.log.LogConfig
 
@@ -39,6 +44,36 @@ class ConfigHelper(metadataCache: MetadataCache, config: KafkaConfig, configRepo
 
   def allConfigs(config: AbstractConfig) = {
     config.originals.asScala.filter(_._2 != null) ++ config.nonInternalValues.asScala
+  }
+
+  def handleDescribeConfigsRequest(
+    request: RequestChannel.Request,
+    authHelper: AuthHelper
+  ): DescribeConfigsResponseData = {
+    val describeConfigsRequest = request.body[DescribeConfigsRequest]
+    val (authorizedResources, unauthorizedResources) = describeConfigsRequest.data.resources.asScala.partition { resource =>
+      ConfigResource.Type.forId(resource.resourceType) match {
+        case ConfigResource.Type.BROKER | ConfigResource.Type.BROKER_LOGGER =>
+          authHelper.authorize(request.context, DESCRIBE_CONFIGS, CLUSTER, CLUSTER_NAME)
+        case ConfigResource.Type.TOPIC =>
+          authHelper.authorize(request.context, DESCRIBE_CONFIGS, TOPIC, resource.resourceName)
+        case rt => throw new InvalidRequestException(s"Unexpected resource type $rt for resource ${resource.resourceName}")
+      }
+    }
+    val authorizedConfigs = describeConfigs(authorizedResources.toList, describeConfigsRequest.data.includeSynonyms, describeConfigsRequest.data.includeDocumentation)
+    val unauthorizedConfigs = unauthorizedResources.map { resource =>
+      val error = ConfigResource.Type.forId(resource.resourceType) match {
+        case ConfigResource.Type.BROKER | ConfigResource.Type.BROKER_LOGGER => Errors.CLUSTER_AUTHORIZATION_FAILED
+        case ConfigResource.Type.TOPIC => Errors.TOPIC_AUTHORIZATION_FAILED
+        case rt => throw new InvalidRequestException(s"Unexpected resource type $rt for resource ${resource.resourceName}")
+      }
+      new DescribeConfigsResponseData.DescribeConfigsResult().setErrorCode(error.code)
+        .setErrorMessage(error.message)
+        .setConfigs(Collections.emptyList[DescribeConfigsResponseData.DescribeConfigsResourceResult])
+        .setResourceName(resource.resourceName)
+        .setResourceType(resource.resourceType)
+    }
+    new DescribeConfigsResponseData().setResults((authorizedConfigs ++ unauthorizedConfigs).asJava)
   }
 
   def describeConfigs(resourceToConfigNames: List[DescribeConfigsResource],

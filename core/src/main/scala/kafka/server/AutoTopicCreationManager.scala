@@ -53,7 +53,7 @@ object AutoTopicCreationManager {
     config: KafkaConfig,
     metadataCache: MetadataCache,
     threadNamePrefix: Option[String],
-    channelManager: Option[BrokerToControllerChannelManager],
+    channelManager: Option[NodeToControllerChannelManager],
     adminManager: Option[ZkAdminManager],
     controller: Option[KafkaController],
     groupCoordinator: GroupCoordinator,
@@ -66,7 +66,7 @@ object AutoTopicCreationManager {
 
 class DefaultAutoTopicCreationManager(
   config: KafkaConfig,
-  channelManager: Option[BrokerToControllerChannelManager],
+  channelManager: Option[NodeToControllerChannelManager],
   adminManager: Option[ZkAdminManager],
   controller: Option[KafkaController],
   groupCoordinator: GroupCoordinator,

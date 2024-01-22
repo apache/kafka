@@ -579,7 +579,7 @@ public class StandaloneHerder extends AbstractHerder {
     public void tasksConfig(String connName, Callback<Map<ConnectorTaskId, Map<String, String>>> callback) {
         Map<ConnectorTaskId, Map<String, String>> tasksConfig = buildTasksConfig(connName);
         if (tasksConfig.isEmpty()) {
-            callback.onCompletion(new NotFoundException("Connector " + connName + " not found"), tasksConfig);
+            callback.onCompletion(new NotFoundException("Connector " + connName + " not found"), null);
             return;
         }
         callback.onCompletion(null, tasksConfig);

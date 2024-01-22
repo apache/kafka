@@ -43,21 +43,6 @@
       "about": "null if it didn't change since the last heartbeat; the subscribed topic regex otherwise" },
     { "name": "ServerAssignor", "type": "string", "versions": "0+", "nullableVersions": "0+", "default": "null",
       "about": "null if not used or if it didn't change since the last heartbeat; the server side assignor to use otherwise." },
-    { "name": "ClientAssignors", "type": "[]Assignor", "versions": "0+", "nullableVersions": "0+", "default": "null",
-      "about": "null if not used or if it didn't change since the last heartbeat; the list of client-side assignors otherwise.", "fields": [
-      { "name": "Name", "type": "string", "versions": "0+",
-        "about": "The name of the assignor." },
-      { "name": "MinimumVersion", "type": "int16", "versions": "0+",
-        "about": "The minimum supported version for the metadata." },
-      { "name": "MaximumVersion", "type": "int16", "versions": "0+",
-        "about": "The maximum supported version for the metadata." },
-      { "name": "Reason", "type": "int8", "versions": "0+",
-        "about": "The reason of the metadata update." },
-      { "name": "MetadataVersion", "type": "int16", "versions": "0+",
-        "about": "The version of the metadata." },
-      { "name": "MetadataBytes", "type": "bytes", "versions": "0+",
-        "about": "The metadata." }
-    ]},
     { "name": "TopicPartitions", "type": "[]TopicPartitions", "versions": "0+", "nullableVersions": "0+", "default": "null",
       "about": "null if it didn't change since the last heartbeat; the partitions owned by the member.", "fields": [
       { "name": "TopicId", "type": "uuid", "versions": "0+",

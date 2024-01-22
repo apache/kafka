@@ -880,8 +880,8 @@ public class InternalTopicManagerTest {
         topicConfigMap.put(topic1, internalTopicConfig);
         topicConfigMap.put("internal-topic", internalTopicConfigII);
 
-        LogCaptureAppender.setClassLoggerToDebug(InternalTopicManager.class);
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(InternalTopicManager.class)) {
+            appender.setClassLoggerToDebug(InternalTopicManager.class);
             internalTopicManager.makeReady(topicConfigMap);
 
             assertThat(

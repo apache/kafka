@@ -54,11 +54,12 @@ public final class RangeQuery<K, V> implements Query<KeyValueIterator<K, V>> {
      * @param <V> The value type
      */
     public static <K, V> RangeQuery<K, V> withRange(final K lower, final K upper) {
-        return new RangeQuery<>(Optional.of(lower), Optional.of(upper));
+        return new RangeQuery<>(Optional.ofNullable(lower), Optional.ofNullable(upper));
     }
 
     /**
      * Interactive range query using an upper bound to filter the keys returned.
+     * If both <K,V> are null, RangQuery returns a full range scan.
      * @param upper The key that specifies the upper bound of the range
      * @param <K> The key type
      * @param <V> The value type

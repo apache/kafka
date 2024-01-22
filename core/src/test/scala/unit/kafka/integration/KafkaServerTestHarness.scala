@@ -258,10 +258,17 @@ abstract class KafkaServerTestHarness extends QuorumTestHarness {
   }
 
   def killBroker(index: Int): Unit = {
-    if(alive(index)) {
+    if (alive(index)) {
       _brokers(index).shutdown()
       _brokers(index).awaitShutdown()
       alive(index) = false
+    }
+  }
+
+  def startBroker(index: Int): Unit = {
+    if (!alive(index)) {
+      _brokers(index).startup()
+      alive(index) = true
     }
   }
 

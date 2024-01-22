@@ -18,25 +18,33 @@ package org.apache.kafka.connect.runtime.isolation;
 
 import java.net.URL;
 import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.Arrays;
 import java.util.Objects;
 
 public class PluginSource {
 
-    public static final Path CLASSPATH = Paths.get("classpath");
+    public enum Type {
+        CLASSPATH, MULTI_JAR, SINGLE_JAR, CLASS_HIERARCHY
+    }
+
     private final Path location;
+    private final Type type;
     private final ClassLoader loader;
     private final URL[] urls;
 
-    public PluginSource(Path location, ClassLoader loader, URL[] urls) {
+    public PluginSource(Path location, Type type, ClassLoader loader, URL[] urls) {
         this.location = location;
+        this.type = type;
         this.loader = loader;
         this.urls = urls;
     }
 
     public Path location() {
         return location;
+    }
+
+    public Type type() {
+        return type;
     }
 
     public ClassLoader loader() {
@@ -48,7 +56,7 @@ public class PluginSource {
     }
 
     public boolean isolated() {
-        return location != CLASSPATH;
+        return location != null;
     }
 
     @Override
@@ -64,5 +72,9 @@ public class PluginSource {
         int result = Objects.hash(location, loader);
         result = 31 * result + Arrays.hashCode(urls);
         return result;
+    }
+
+    public String toString() {
+        return location == null ? "classpath" : location.toString();
     }
 }

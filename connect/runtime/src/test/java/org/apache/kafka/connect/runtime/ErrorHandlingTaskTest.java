@@ -26,6 +26,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.connect.components.Versioned;
 import org.apache.kafka.connect.connector.ConnectRecord;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaBuilder;
@@ -553,7 +554,7 @@ public class ErrorHandlingTaskTest {
     }
 
     // Public to allow plugin discovery to complete without errors
-    public static class FaultyConverter extends JsonConverter {
+    public static class FaultyConverter extends JsonConverter implements Versioned {
         private static final Logger log = LoggerFactory.getLogger(FaultyConverter.class);
         private int invocations = 0;
 
@@ -570,10 +571,15 @@ public class ErrorHandlingTaskTest {
                 throw new RetriableException("Bad invocations " + invocations + " for mod 3");
             }
         }
+
+        @Override
+        public String version() {
+            return "1.0";
+        }
     }
 
     // Public to allow plugin discovery to complete without errors
-    public static class FaultyPassthrough<R extends ConnectRecord<R>> implements Transformation<R> {
+    public static class FaultyPassthrough<R extends ConnectRecord<R>> implements Transformation<R>, Versioned {
 
         private static final Logger log = LoggerFactory.getLogger(FaultyPassthrough.class);
 
@@ -597,6 +603,11 @@ public class ErrorHandlingTaskTest {
                 log.debug("Failing record: {} at invocations={}", record, invocations);
                 throw new RetriableException("Bad invocations " + invocations + " for mod " + mod);
             }
+        }
+
+        @Override
+        public String version() {
+            return "1.0";
         }
 
         @Override

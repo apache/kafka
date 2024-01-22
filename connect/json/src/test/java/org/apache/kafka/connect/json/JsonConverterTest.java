@@ -21,6 +21,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
+import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.data.Date;
 import org.apache.kafka.connect.data.Decimal;
@@ -967,6 +968,11 @@ public class JsonConverterTest {
         Schema schema = SchemaBuilder.string().optional().defaultValue("default").build();
         Schema structSchema = SchemaBuilder.struct().field("field1", schema).build();
         assertEquals(new Struct(structSchema), sav.value());
+    }
+
+    @Test
+    public void testVersionRetrievedFromAppInfoParser() {
+        assertEquals(AppInfoParser.getVersion(), converter.version());
     }
 
     private JsonNode parse(byte[] json) {

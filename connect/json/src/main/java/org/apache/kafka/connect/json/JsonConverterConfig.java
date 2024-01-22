@@ -87,6 +87,7 @@ public class JsonConverterConfig extends ConverterConfig {
     private final DecimalFormat decimalFormat;
     private final boolean replaceNullWithDefault;
 
+    @SuppressWarnings("this-escape")
     public JsonConverterConfig(Map<String, ?> props) {
         super(CONFIG, props);
         this.schemasEnabled = getBoolean(SCHEMAS_ENABLE_CONFIG);

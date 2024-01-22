@@ -214,7 +214,7 @@ class TopicDeletionManager(config: KafkaConfig,
    * Topic deletion can be retried if -
    * 1. Topic deletion is not already complete
    * 2. Topic deletion is currently not in progress for that topic
-   * 3. Topic is currently marked ineligible for deletion
+   * 3. Topic is currently not marked ineligible for deletion
    * @param topic Topic
    * @return Whether or not deletion can be retried for the topic
    */

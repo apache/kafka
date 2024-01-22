@@ -261,8 +261,10 @@ class SnapshottableHashTable<T extends SnapshottableHashTable.ElementWithStartEp
                         int tierSlot = slot >>> shift;
                         BaseHashTable.unpackSlot(temp, deltaTable.baseElements(), tierSlot);
                         for (T object : temp) {
-                            if (BaseHashTable.findSlot(object, topTier.length) == slot) {
-                                ready.add(object);
+                            if (object.startEpoch() <= snapshot.epoch()) {
+                                if (BaseHashTable.findSlot(object, topTier.length) == slot) {
+                                    ready.add(object);
+                                }
                             }
                         }
                         temp.clear();

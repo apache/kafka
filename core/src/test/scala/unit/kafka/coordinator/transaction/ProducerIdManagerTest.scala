@@ -17,7 +17,7 @@
 package kafka.coordinator.transaction
 
 import kafka.coordinator.transaction.ProducerIdManager.RetryBackoffMs
-import kafka.server.BrokerToControllerChannelManager
+import kafka.server.NodeToControllerChannelManager
 import kafka.utils.TestUtils
 import kafka.zk.{KafkaZkClient, ProducerIdBlockZNode}
 import org.apache.kafka.common.KafkaException
@@ -42,7 +42,7 @@ import scala.util.{Failure, Success}
 
 class ProducerIdManagerTest {
 
-  var brokerToController: BrokerToControllerChannelManager = mock(classOf[BrokerToControllerChannelManager])
+  var brokerToController: NodeToControllerChannelManager = mock(classOf[NodeToControllerChannelManager])
   val zkClient: KafkaZkClient = mock(classOf[KafkaZkClient])
 
   // Mutable test implementation that lets us easily set the idStart and error

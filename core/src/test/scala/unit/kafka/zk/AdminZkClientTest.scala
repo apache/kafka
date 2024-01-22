@@ -17,7 +17,7 @@
 package kafka.admin
 
 import java.util
-import java.util.Properties
+import java.util.{Optional, Properties}
 import kafka.controller.ReplicaAssignment
 import kafka.server.DynamicConfig.Broker._
 import kafka.server.KafkaConfig._
@@ -336,22 +336,22 @@ class AdminZkClientTest extends QuorumTestHarness with Logging with RackAwareTes
     val brokerList = 0 to 5
     val rackInfo = Map(0 -> "rack1", 1 -> "rack2", 2 -> "rack2", 3 -> "rack1", 5 -> "rack3")
     val brokerMetadatas = toBrokerMetadata(rackInfo, brokersWithoutRack = brokerList.filterNot(rackInfo.keySet))
-    TestUtils.createBrokersInZk(brokerMetadatas, zkClient)
+    TestUtils.createBrokersInZk(brokerMetadatas.asScala.toSeq, zkClient)
 
     val processedMetadatas1 = adminZkClient.getBrokerMetadatas(RackAwareMode.Disabled)
     assertEquals(brokerList, processedMetadatas1.map(_.id))
-    assertEquals(List.fill(brokerList.size)(None), processedMetadatas1.map(_.rack))
+    assertEquals(List.fill(brokerList.size)(Optional.empty()), processedMetadatas1.map(_.rack))
 
     val processedMetadatas2 = adminZkClient.getBrokerMetadatas(RackAwareMode.Safe)
     assertEquals(brokerList, processedMetadatas2.map(_.id))
-    assertEquals(List.fill(brokerList.size)(None), processedMetadatas2.map(_.rack))
+    assertEquals(List.fill(brokerList.size)(Optional.empty()), processedMetadatas2.map(_.rack))
 
     assertThrows(classOf[AdminOperationException], () => adminZkClient.getBrokerMetadatas(RackAwareMode.Enforced))
 
     val partialList = List(0, 1, 2, 3, 5)
     val processedMetadatas3 = adminZkClient.getBrokerMetadatas(RackAwareMode.Enforced, Some(partialList))
     assertEquals(partialList, processedMetadatas3.map(_.id))
-    assertEquals(partialList.map(rackInfo), processedMetadatas3.flatMap(_.rack))
+    assertEquals(partialList.map(rackInfo), processedMetadatas3.map(_.rack.get()))
 
     val numPartitions = 3
     adminZkClient.createTopic("foo", numPartitions, 2, rackAwareMode = RackAwareMode.Safe)

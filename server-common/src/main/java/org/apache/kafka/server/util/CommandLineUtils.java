@@ -19,6 +19,8 @@ package org.apache.kafka.server.util;
 import joptsimple.OptionParser;
 import joptsimple.OptionSet;
 import joptsimple.OptionSpec;
+import org.apache.kafka.clients.CommonClientConfigs;
+import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.common.utils.Exit;
 
@@ -192,6 +194,55 @@ public class CommandLineUtils {
             } else {
                 props.put(key, value.toString());
             }
+        }
+    }
+
+    static class InitializeBootstrapException extends RuntimeException {
+        private final static long serialVersionUID = 1L;
+
+        InitializeBootstrapException(String message) {
+            super(message);
+        }
+    }
+
+    public static void initializeBootstrapProperties(
+        Properties properties,
+        Optional<String> bootstrapServer,
+        Optional<String> bootstrapControllers
+    ) {
+        if (bootstrapServer.isPresent()) {
+            if (bootstrapControllers.isPresent()) {
+                throw new InitializeBootstrapException("You cannot specify both " +
+                        "--bootstrap-controller and --bootstrap-server.");
+            }
+            properties.setProperty(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG,
+                    bootstrapServer.get());
+            properties.remove(AdminClientConfig.BOOTSTRAP_CONTROLLERS_CONFIG);
+        } else if (bootstrapControllers.isPresent()) {
+            properties.remove(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG);
+            properties.setProperty(AdminClientConfig.BOOTSTRAP_CONTROLLERS_CONFIG,
+                    bootstrapControllers.get());
+        } else {
+            throw new InitializeBootstrapException("You must specify either --bootstrap-controller " +
+                    "or --bootstrap-server.");
+        }
+    }
+
+    public static void initializeBootstrapProperties(
+        OptionParser parser,
+        OptionSet options,
+        Properties properties,
+        OptionSpec<String> bootstrapServer,
+        OptionSpec<String> bootstrapControllers
+    ) {
+        try {
+            initializeBootstrapProperties(properties,
+                options.has(bootstrapServer) ?
+                    Optional.of(options.valueOf(bootstrapServer).toString()) : Optional.empty(),
+                options.has(bootstrapControllers) ?
+                        Optional.of(options.valueOf(bootstrapControllers).toString()) : Optional.empty());
+        } catch (InitializeBootstrapException e) {
+            printUsageAndExit(parser, e.getMessage());
         }
     }
 }

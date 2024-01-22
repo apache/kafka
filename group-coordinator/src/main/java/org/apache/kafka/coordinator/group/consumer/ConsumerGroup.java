@@ -16,10 +16,11 @@
  */
 package org.apache.kafka.coordinator.group.consumer;
 
+import org.apache.kafka.clients.consumer.internals.ConsumerProtocol;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.StaleMemberEpochException;
 import org.apache.kafka.common.errors.UnknownMemberIdException;
-import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.message.ListGroupsResponseData;
 import org.apache.kafka.coordinator.group.Group;
 import org.apache.kafka.image.ClusterImage;
 import org.apache.kafka.image.TopicImage;
@@ -181,6 +182,23 @@ public class ConsumerGroup implements Group {
     }
 
     /**
+     * @return The current state as a String with given committedOffset.
+     */
+    public String stateAsString(long committedOffset) {
+        return state.get(committedOffset).toString();
+    }
+
+    /**
+     * @return the group formatted as a list group response based on the committed offset.
+     */
+    public ListGroupsResponseData.ListedGroup asListedGroup(long committedOffset) {
+        return new ListGroupsResponseData.ListedGroup()
+            .setGroupId(groupId)
+            .setProtocolType(ConsumerProtocol.PROTOCOL_TYPE)
+            .setGroupState(state.get(committedOffset).toString());
+    }
+
+    /**
      * @return The group id.
      */
     @Override
@@ -193,6 +211,13 @@ public class ConsumerGroup implements Group {
      */
     public ConsumerGroupState state() {
         return state.get();
+    }
+
+    /**
+     * @return The current state based on committed offset.
+     */
+    public ConsumerGroupState state(long committedOffset) {
+        return state.get(committedOffset);
     }
 
     /**
@@ -538,8 +563,46 @@ public class ConsumerGroup implements Group {
         if (memberEpoch < 0 && members().isEmpty()) return;
 
         final ConsumerGroupMember member = getOrMaybeCreateMember(memberId, false);
-        if (memberEpoch != member.memberEpoch()) {
-            throw Errors.STALE_MEMBER_EPOCH.exception();
+        validateMemberEpoch(memberEpoch, member.memberEpoch());
+    }
+
+    /**
+     * Validates the OffsetFetch request.
+     *
+     * @param memberId              The member id for consumer groups.
+     * @param memberEpoch           The member epoch for consumer groups.
+     * @param lastCommittedOffset   The last committed offsets in the timeline.
+     */
+    @Override
+    public void validateOffsetFetch(
+        String memberId,
+        int memberEpoch,
+        long lastCommittedOffset
+    ) throws UnknownMemberIdException, StaleMemberEpochException {
+        // When the member id is null and the member epoch is -1, the request either comes
+        // from the admin client or from a client which does not provide them. In this case,
+        // the fetch request is accepted.
+        if (memberId == null && memberEpoch < 0) return;
+
+        final ConsumerGroupMember member = members.get(memberId, lastCommittedOffset);
+        if (member == null) {
+            throw new UnknownMemberIdException(String.format("Member %s is not a member of group %s.",
+                memberId, groupId));
+        }
+        validateMemberEpoch(memberEpoch, member.memberEpoch());
+    }
+
+    /**
+     * Throws a StaleMemberEpochException if the received member epoch does not match
+     * the expected member epoch.
+     */
+    private void validateMemberEpoch(
+        int receivedMemberEpoch,
+        int expectedMemberEpoch
+    ) throws StaleMemberEpochException {
+        if (receivedMemberEpoch != expectedMemberEpoch) {
+            throw new StaleMemberEpochException(String.format("The received member epoch %d does not match "
+                + "the expected member epoch %d.", receivedMemberEpoch, expectedMemberEpoch));
         }
     }
 

@@ -175,7 +175,7 @@ class KafkaController(val config: KafkaConfig,
   /* single-thread scheduler to clean expired tokens */
   private val tokenCleanScheduler = new KafkaScheduler(1, true, "delegation-token-cleaner")
 
-  metricsGroup.newGauge(ZkMigrationStateMetricName, () => ZkMigrationState.ZK)
+  metricsGroup.newGauge(ZkMigrationStateMetricName, () => ZkMigrationState.ZK.value().intValue())
   metricsGroup.newGauge(ActiveControllerCountMetricName, () => if (isActive) 1 else 0)
   metricsGroup.newGauge(OfflinePartitionsCountMetricName, () => offlinePartitionCount)
   metricsGroup.newGauge(PreferredReplicaImbalanceCountMetricName, () => preferredReplicaImbalanceCount)

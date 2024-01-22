@@ -25,7 +25,7 @@
 
   <!-- header -->
   <module name="Header">
-    <property name="headerFile" value="${headerFile}" />
+    <property name="headerFile" value="${config_loc}/java.header" />
   </module>
 
   <module name="TreeWalker">
@@ -79,7 +79,7 @@
 
     <!-- dependencies -->
     <module name="ImportControl">
-      <property name="file" value="${importControlFile}"/>
+      <property name="file" value="${config_loc}/${importControlFile}"/>
     </module>
 
     <!-- whitespace -->
@@ -149,7 +149,7 @@
   </module>
 
   <module name="SuppressionFilter">
-    <property name="file" value="${suppressionsFile}"/>
+    <property name="file" value="${config_loc}/suppressions.xml"/>
   </module>
 
   <!-- Allows the use of the @SuppressWarnings annotation in the code -->

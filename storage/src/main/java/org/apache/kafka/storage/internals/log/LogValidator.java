@@ -102,7 +102,8 @@ public class LogValidator {
     private final boolean compactedTopic;
     private final byte toMagic;
     private final TimestampType timestampType;
-    private final long timestampDiffMaxMs;
+    private final long timestampBeforeMaxMs;
+    private final long timestampAfterMaxMs;
     private final int partitionLeaderEpoch;
     private final AppendOrigin origin;
     private final MetadataVersion interBrokerProtocolVersion;
@@ -115,7 +116,8 @@ public class LogValidator {
                         boolean compactedTopic,
                         byte toMagic,
                         TimestampType timestampType,
-                        long timestampDiffMaxMs,
+                        long timestampBeforeMaxMs,
+                        long timestampAfterMaxMs,
                         int partitionLeaderEpoch,
                         AppendOrigin origin,
                         MetadataVersion interBrokerProtocolVersion) {
@@ -127,7 +129,8 @@ public class LogValidator {
         this.compactedTopic = compactedTopic;
         this.toMagic = toMagic;
         this.timestampType = timestampType;
-        this.timestampDiffMaxMs = timestampDiffMaxMs;
+        this.timestampBeforeMaxMs = timestampBeforeMaxMs;
+        this.timestampAfterMaxMs = timestampAfterMaxMs;
         this.partitionLeaderEpoch = partitionLeaderEpoch;
         this.origin = origin;
         this.interBrokerProtocolVersion = interBrokerProtocolVersion;
@@ -208,7 +211,7 @@ public class LogValidator {
             int batchIndex = 0;
             for (Record record : batch) {
                 Optional<ApiRecordError> recordError = validateRecord(batch, topicPartition,
-                    record, batchIndex, now, timestampType, timestampDiffMaxMs, compactedTopic,
+                    record, batchIndex, now, timestampType, timestampBeforeMaxMs, timestampAfterMaxMs, compactedTopic,
                     metricsRecorder);
                 recordError.ifPresent(e -> recordErrors.add(e));
                 // we fail the batch if any record fails, so we stop appending if any record fails
@@ -257,7 +260,7 @@ public class LogValidator {
             int batchIndex = 0;
             for (Record record : batch) {
                 Optional<ApiRecordError> recordError = validateRecord(batch, topicPartition, record,
-                    batchIndex, now, timestampType, timestampDiffMaxMs, compactedTopic, metricsRecorder);
+                    batchIndex, now, timestampType, timestampBeforeMaxMs, timestampAfterMaxMs, compactedTopic, metricsRecorder);
                 recordError.ifPresent(e -> recordErrors.add(e));
 
                 long offset = offsetCounter.value++;
@@ -368,7 +371,7 @@ public class LogValidator {
                         batchIndex, record);
                     if (!recordError.isPresent()) {
                         recordError = validateRecord(batch, topicPartition, record, batchIndex, now,
-                            timestampType, timestampDiffMaxMs, compactedTopic, metricsRecorder);
+                            timestampType, timestampBeforeMaxMs, timestampAfterMaxMs, compactedTopic, metricsRecorder);
                     }
 
                     if (!recordError.isPresent()
@@ -537,7 +540,8 @@ public class LogValidator {
                                                            int batchIndex,
                                                            long now,
                                                            TimestampType timestampType,
-                                                           long timestampDiffMaxMs,
+                                                           long timestampBeforeMaxMs,
+                                                           long timestampAfterMaxMs,
                                                            boolean compactedTopic,
                                                            MetricsRecorder metricsRecorder) {
         if (!record.hasMagic(batch.magic())) {
@@ -566,7 +570,7 @@ public class LogValidator {
         if (keyError.isPresent())
             return keyError;
         else
-            return validateTimestamp(batch, record, batchIndex, now, timestampType, timestampDiffMaxMs);
+            return validateTimestamp(batch, record, batchIndex, now, timestampType, timestampBeforeMaxMs, timestampAfterMaxMs);
     }
 
     private static Optional<ApiRecordError> validateKey(Record record,
@@ -588,20 +592,29 @@ public class LogValidator {
                                                               int batchIndex,
                                                               long now,
                                                               TimestampType timestampType,
-                                                              long timestampDiffMaxMs) {
-        if (timestampType == TimestampType.CREATE_TIME
-                && record.timestamp() != RecordBatch.NO_TIMESTAMP
-                && Math.abs(record.timestamp() - now) > timestampDiffMaxMs)
-            return Optional.of(new ApiRecordError(Errors.INVALID_TIMESTAMP, new RecordError(batchIndex,
-                "Timestamp " + record.timestamp() + " of message with offset " + record.offset()
-                + " is out of range. The timestamp should be within [" + (now - timestampDiffMaxMs)
-                + ", " + (now + timestampDiffMaxMs) + "]")));
-        else if (batch.timestampType() == TimestampType.LOG_APPEND_TIME)
+                                                              long timestampBeforeMaxMs,
+                                                              long timestampAfterMaxMs) {
+        if (timestampType == TimestampType.CREATE_TIME && record.timestamp() != RecordBatch.NO_TIMESTAMP) {
+            if (recordHasInvalidTimestamp(record, now, timestampBeforeMaxMs, timestampAfterMaxMs)) {
+                return Optional.of(new ApiRecordError(Errors.INVALID_TIMESTAMP, new RecordError(batchIndex,
+                    "Timestamp " + record.timestamp() + " of message with offset " + record.offset()
+                        + " is out of range. The timestamp should be within [" + (now - timestampBeforeMaxMs)
+                        + ", " + (now + timestampAfterMaxMs) + "]")));
+            }
+        } else if (batch.timestampType() == TimestampType.LOG_APPEND_TIME)
             return Optional.of(new ApiRecordError(Errors.INVALID_TIMESTAMP, new RecordError(batchIndex,
                 "Invalid timestamp type in message " + record + ". Producer should not set timestamp "
                 + "type to LogAppendTime.")));
-        else
-            return Optional.empty();
+        return Optional.empty();
+    }
+
+    private static boolean recordHasInvalidTimestamp(Record record,
+                                                     long now,
+                                                     long timestampBeforeMaxMs,
+                                                     long timestampAfterMaxMs) {
+        final long timestampDiff = now - record.timestamp();
+        return timestampDiff > timestampBeforeMaxMs ||
+                -1 * timestampDiff > timestampAfterMaxMs;
     }
 
     private static Optional<ApiRecordError> validateRecordCompression(CompressionType sourceCompression,

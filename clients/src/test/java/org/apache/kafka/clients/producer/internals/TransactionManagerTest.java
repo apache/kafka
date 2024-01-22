@@ -136,7 +136,7 @@ public class TransactionManagerTest {
 
     private final LogContext logContext = new LogContext();
     private final MockTime time = new MockTime();
-    private final ProducerMetadata metadata = new ProducerMetadata(0, Long.MAX_VALUE, Long.MAX_VALUE,
+    private final ProducerMetadata metadata = new ProducerMetadata(0, 0, Long.MAX_VALUE, Long.MAX_VALUE,
             logContext, new ClusterResourceListeners(), time);
     private final MockClient client = new MockClient(time, metadata);
     private final ApiVersions apiVersions = new ApiVersions();
@@ -176,7 +176,7 @@ public class TransactionManagerTest {
         String metricGrpName = "producer-metrics";
 
         this.brokerNode = new Node(0, "localhost", 2211);
-        this.accumulator = new RecordAccumulator(logContext, batchSize, CompressionType.NONE, 0, 0L,
+        this.accumulator = new RecordAccumulator(logContext, batchSize, CompressionType.NONE, 0, 0L, 0L,
                 deliveryTimeoutMs, metrics, metricGrpName, time, apiVersions, transactionManager,
                 new BufferPool(totalSize, batchSize, metrics, time, metricGrpName));
 
@@ -688,7 +688,7 @@ public class TransactionManagerTest {
         final int requestTimeout = 10000;
         final int deliveryTimeout = 15000;
 
-        RecordAccumulator accumulator = new RecordAccumulator(logContext, 16 * 1024, CompressionType.NONE, 0, 0L,
+        RecordAccumulator accumulator = new RecordAccumulator(logContext, 16 * 1024, CompressionType.NONE, 0, 0L, 0L,
                 deliveryTimeout, metrics, "", time, apiVersions, transactionManager,
                 new BufferPool(1024 * 1024, 16 * 1024, metrics, time, ""));
 

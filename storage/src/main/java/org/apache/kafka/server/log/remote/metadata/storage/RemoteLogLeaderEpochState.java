@@ -33,7 +33,7 @@ import java.util.concurrent.ConcurrentSkipListMap;
 
 /**
  * This class represents the in-memory state of segments associated with a leader epoch. This includes the mapping of offset to
- * segment ids and unreferenced segments which are not mapped to any offset but they exist in remote storage.
+ * segment ids and unreferenced segments which are not mapped to any offset, but they exist in remote storage.
  * <p>
  * This is used by {@link RemoteLogMetadataCache} to track the segments for each leader epoch.
  */

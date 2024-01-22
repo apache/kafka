@@ -133,6 +133,13 @@
         More details about the new config <code>StreamsConfig#TOPOLOGY_OPTIMIZATION</code> can be found in <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-295%3A+Add+Streams+Configuration+Allowing+for+Optional+Topology+Optimization">KIP-295</a>.
     </p>
 
+    <h3><a id="streams_api_changes_360" href="#streams_api_changes_360">Streams API changes in 3.6.0</a></h3>
+    <p>
+      Rack aware task assignment was introduced in <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-925%3A+Rack+aware+task+assignment+in+Kafka+Streams">KIP-925</a>.
+      Rack aware task assignment can be enabled for <code>StickyTaskAssignor</code> or <code>HighAvailabilityTaskAssignor</code> to compute task assignments which can minimize cross rack traffic under certain conditions.
+      For more information, including how it can be enabled and further configured, see the <a href="/{{version}}/documentation/streams/developer-guide/config-streams.html#rack-aware-assignment-strategy"><b>Kafka Streams Developer Guide</b></a>.
+    </p>
+
     <h3><a id="streams_api_changes_350" href="#streams_api_changes_350">Streams API changes in 3.5.0</a></h3>
     <p>      
       A new state store type, versioned key-value stores, was introduced in

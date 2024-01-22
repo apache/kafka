@@ -269,6 +269,38 @@ final public class KafkaRaftClientSnapshotTest {
     }
 
     @Test
+    public void testLeaderImmediatelySendsSnapshotId() throws Exception {
+        int localId = 0;
+        int otherNodeId = 1;
+        Set<Integer> voters = Utils.mkSet(localId, otherNodeId);
+        OffsetAndEpoch snapshotId = new OffsetAndEpoch(3, 4);
+
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
+            .withUnknownLeader(snapshotId.epoch())
+            .appendToLog(snapshotId.epoch(), Arrays.asList("a", "b", "c"))
+            .appendToLog(snapshotId.epoch(), Arrays.asList("d", "e", "f"))
+            .appendToLog(snapshotId.epoch(), Arrays.asList("g", "h", "i"))
+            .withEmptySnapshot(snapshotId)
+            .deleteBeforeSnapshot(snapshotId)
+            .build();
+
+        context.becomeLeader();
+        int epoch = context.currentEpoch();
+
+        // Send a fetch request for an end offset and epoch which has been snapshotted
+        context.deliverRequest(context.fetchRequest(epoch, otherNodeId, 6, 2, 500));
+        context.client.poll();
+
+        // Expect that the leader replies immediately with a snapshot id
+        FetchResponseData.PartitionData partitionResponse = context.assertSentFetchPartitionResponse();
+        assertEquals(Errors.NONE, Errors.forCode(partitionResponse.errorCode()));
+        assertEquals(epoch, partitionResponse.currentLeader().leaderEpoch());
+        assertEquals(localId, partitionResponse.currentLeader().leaderId());
+        assertEquals(snapshotId.epoch(), partitionResponse.snapshotId().epoch());
+        assertEquals(snapshotId.offset(), partitionResponse.snapshotId().endOffset());
+    }
+
+    @Test
     public void testFetchRequestOffsetLessThanLogStart() throws Exception {
         int localId = 0;
         int otherNodeId = localId + 1;

@@ -18,10 +18,8 @@
 package kafka.server.metadata
 
 import java.util
-import java.util.Collections
+import java.util.{Collections, Optional}
 import java.util.concurrent.locks.{ReentrantLock, ReentrantReadWriteLock}
-import kafka.admin.BrokerMetadata
-
 import scala.collection.{Seq, Set, mutable}
 import scala.jdk.CollectionConverters._
 import kafka.cluster.{Broker, EndPoint}
@@ -31,6 +29,7 @@ import kafka.server.{BrokerFeatures, CachedControllerId, KRaftCachedControllerId
 import kafka.utils.CoreUtils._
 import kafka.utils.Logging
 import kafka.utils.Implicits._
+import org.apache.kafka.admin.BrokerMetadata
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.message.UpdateMetadataRequestData.UpdateMetadataPartitionState
 import org.apache.kafka.common.{Cluster, Node, PartitionInfo, TopicPartition, Uuid}
@@ -254,7 +253,7 @@ class ZkMetadataCache(
   override def hasAliveBroker(brokerId: Int): Boolean = metadataSnapshot.aliveBrokers.contains(brokerId)
 
   override def getAliveBrokers(): Iterable[BrokerMetadata] = {
-    metadataSnapshot.aliveBrokers.values.map(b => new BrokerMetadata(b.id, b.rack))
+    metadataSnapshot.aliveBrokers.values.map(b => new BrokerMetadata(b.id, Optional.ofNullable(b.rack.orNull)))
   }
 
   override def getAliveBrokerNode(brokerId: Int, listenerName: ListenerName): Option[Node] = {

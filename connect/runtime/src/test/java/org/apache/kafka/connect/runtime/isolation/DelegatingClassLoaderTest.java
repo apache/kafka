@@ -19,6 +19,8 @@ package org.apache.kafka.connect.runtime.isolation;
 import org.apache.kafka.connect.sink.SinkConnector;
 import org.junit.Before;
 import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.mockito.junit.MockitoJUnitRunner;
 
 import java.net.MalformedURLException;
 import java.net.URL;
@@ -31,6 +33,7 @@ import static org.junit.Assert.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+@RunWith(MockitoJUnitRunner.StrictStubs.class)
 public class DelegatingClassLoaderTest {
 
     public PluginClassLoader parent;
@@ -61,7 +64,8 @@ public class DelegatingClassLoaderTest {
         SortedSet<PluginDesc<SinkConnector>> sinkConnectors = new TreeSet<>();
         // Lie to the DCL that this arbitrary class is a connector, since all real connector classes we have access to
         // are forced to be non-isolated by PluginUtils.shouldLoadInIsolation.
-        pluginDesc = new PluginDesc<>((Class<? extends SinkConnector>) ARBITRARY_CLASS, null, pluginLoader);
+        when(pluginLoader.location()).thenReturn("some-location");
+        pluginDesc = new PluginDesc<>((Class<? extends SinkConnector>) ARBITRARY_CLASS, null, PluginType.SINK, pluginLoader);
         assertTrue(PluginUtils.shouldLoadInIsolation(pluginDesc.className()));
         sinkConnectors.add(pluginDesc);
         scanResult = new PluginScanResult(

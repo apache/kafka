@@ -20,6 +20,8 @@ import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.connect.header.Header;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.mockito.junit.MockitoJUnitRunner;
 
 import java.util.Collections;
 
@@ -27,6 +29,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.Mockito.mock;
 
+@RunWith(MockitoJUnitRunner.StrictStubs.class)
 public class InternalSinkRecordTest {
 
     private static final String TOPIC = "test-topic";

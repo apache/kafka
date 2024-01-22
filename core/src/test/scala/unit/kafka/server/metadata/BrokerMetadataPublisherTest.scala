@@ -289,7 +289,8 @@ class BrokerMetadataPublisherTest {
       mock(classOf[DynamicConfigPublisher]),
       mock(classOf[DynamicClientQuotaPublisher]),
       mock(classOf[ScramPublisher]),
-      None,
+      mock(classOf[DelegationTokenPublisher]),
+      mock(classOf[AclPublisher]),
       faultHandler,
       faultHandler
     )
@@ -300,7 +301,13 @@ class BrokerMetadataPublisherTest {
       .build()
 
     metadataPublisher.onMetadataUpdate(delta, image,
-      new LogDeltaManifest(MetadataProvenance.EMPTY, LeaderAndEpoch.UNKNOWN, 1, 100, 42));
+      LogDeltaManifest.newBuilder()
+        .provenance(MetadataProvenance.EMPTY)
+        .leaderAndEpoch(LeaderAndEpoch.UNKNOWN)
+        .numBatches(1)
+        .elapsedNs(100)
+        .numBytes(42)
+        .build());
 
     verify(groupCoordinator).onNewMetadataImage(image, delta)
   }

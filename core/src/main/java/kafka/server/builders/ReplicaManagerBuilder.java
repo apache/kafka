@@ -54,7 +54,7 @@ public class ReplicaManagerBuilder {
     private MetadataCache metadataCache = null;
     private LogDirFailureChannel logDirFailureChannel = null;
     private AlterPartitionManager alterPartitionManager = null;
-    private BrokerTopicStats brokerTopicStats = new BrokerTopicStats();
+    private BrokerTopicStats brokerTopicStats = null;
     private AtomicBoolean isShuttingDown = new AtomicBoolean(false);
     private Optional<RemoteLogManager> remoteLogManager = Optional.empty();
     private Optional<KafkaZkClient> zkClient = Optional.empty();
@@ -179,6 +179,7 @@ public class ReplicaManagerBuilder {
         if (metadataCache == null) throw new RuntimeException("You must set metadataCache");
         if (logDirFailureChannel == null) throw new RuntimeException("You must set logDirFailureChannel");
         if (alterPartitionManager == null) throw new RuntimeException("You must set alterIsrManager");
+        if (brokerTopicStats == null) brokerTopicStats = new BrokerTopicStats(Optional.of(config));
         return new ReplicaManager(config,
                              metrics,
                              time,

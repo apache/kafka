@@ -19,6 +19,7 @@ package org.apache.kafka.connect.mirror;
 import org.apache.kafka.clients.admin.ConsumerGroupListing;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.connect.errors.ConnectException;
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
@@ -29,10 +30,16 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
+import static org.apache.kafka.connect.mirror.Checkpoint.CONSUMER_GROUP_ID_KEY;
+import static org.apache.kafka.connect.mirror.MirrorUtils.PARTITION_KEY;
+import static org.apache.kafka.connect.mirror.MirrorUtils.TOPIC_KEY;
 import static org.apache.kafka.connect.mirror.TestUtils.makeProps;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.spy;
@@ -41,6 +48,7 @@ import static org.mockito.Mockito.spy;
 public class MirrorCheckpointConnectorTest {
 
     private static final String CONSUMER_GROUP = "consumer-group-1";
+    private static final Map<String, ?> SOURCE_OFFSET = MirrorUtils.wrapOffset(0);
 
     @Test
     public void testMirrorCheckpointConnectorDisabled() {
@@ -181,6 +189,143 @@ public class MirrorCheckpointConnectorTest {
         verifiedSet.add("g1");
         verifiedSet.add("g2");
         assertEquals(groupFound, verifiedSet);
+    }
+
+    @Test
+    public void testAlterOffsetsIncorrectPartitionKey() {
+        MirrorCheckpointConnector connector = new MirrorCheckpointConnector();
+        assertThrows(ConnectException.class, () -> connector.alterOffsets(null, Collections.singletonMap(
+                Collections.singletonMap("unused_partition_key", "unused_partition_value"),
+                SOURCE_OFFSET
+        )));
+
+        // null partitions are invalid
+        assertThrows(ConnectException.class, () -> connector.alterOffsets(null, Collections.singletonMap(
+                null,
+                SOURCE_OFFSET
+        )));
+    }
+
+    @Test
+    public void testAlterOffsetsMissingPartitionKey() {
+        MirrorCheckpointConnector connector = new MirrorCheckpointConnector();
+
+        Function<Map<String, ?>, Boolean> alterOffsets = partition -> connector.alterOffsets(null, Collections.singletonMap(
+                partition,
+                SOURCE_OFFSET
+        ));
+
+        Map<String, ?> validPartition = sourcePartition("consumer-app-1", "t", 3);
+        // Sanity check to make sure our valid partition is actually valid
+        assertTrue(alterOffsets.apply(validPartition));
+
+        for (String key : Arrays.asList(CONSUMER_GROUP_ID_KEY, TOPIC_KEY, PARTITION_KEY)) {
+            Map<String, ?> invalidPartition = new HashMap<>(validPartition);
+            invalidPartition.remove(key);
+            assertThrows(ConnectException.class, () -> alterOffsets.apply(invalidPartition));
+        }
+    }
+
+    @Test
+    public void testAlterOffsetsInvalidPartitionPartition() {
+        MirrorCheckpointConnector connector = new MirrorCheckpointConnector();
+        Map<String, Object> partition = sourcePartition("consumer-app-2", "t", 3);
+        partition.put(PARTITION_KEY, "a string");
+        assertThrows(ConnectException.class, () -> connector.alterOffsets(null, Collections.singletonMap(
+                partition,
+                SOURCE_OFFSET
+        )));
+    }
+
+    @Test
+    public void testAlterOffsetsMultiplePartitions() {
+        MirrorCheckpointConnector connector = new MirrorCheckpointConnector();
+
+        Map<String, ?> partition1 = sourcePartition("consumer-app-3", "t1", 0);
+        Map<String, ?> partition2 = sourcePartition("consumer-app-4", "t1", 1);
+
+        Map<Map<String, ?>, Map<String, ?>> offsets = new HashMap<>();
+        offsets.put(partition1, SOURCE_OFFSET);
+        offsets.put(partition2, SOURCE_OFFSET);
+
+        assertTrue(connector.alterOffsets(null, offsets));
+    }
+
+    @Test
+    public void testAlterOffsetsIncorrectOffsetKey() {
+        MirrorCheckpointConnector connector = new MirrorCheckpointConnector();
+
+        Map<Map<String, ?>, Map<String, ?>> offsets = Collections.singletonMap(
+                sourcePartition("consumer-app-5", "t1", 2),
+                Collections.singletonMap("unused_offset_key", 0)
+        );
+        assertThrows(ConnectException.class, () -> connector.alterOffsets(null, offsets));
+    }
+
+    @Test
+    public void testAlterOffsetsOffsetValues() {
+        MirrorCheckpointConnector connector = new MirrorCheckpointConnector();
+
+        Function<Object, Boolean> alterOffsets = offset -> connector.alterOffsets(null, Collections.singletonMap(
+                sourcePartition("consumer-app-6", "t", 5),
+                Collections.singletonMap(MirrorUtils.OFFSET_KEY, offset)
+        ));
+
+        assertThrows(ConnectException.class, () -> alterOffsets.apply("nan"));
+        assertThrows(ConnectException.class, () -> alterOffsets.apply(null));
+        assertThrows(ConnectException.class, () -> alterOffsets.apply(new Object()));
+        assertThrows(ConnectException.class, () -> alterOffsets.apply(3.14));
+        assertThrows(ConnectException.class, () -> alterOffsets.apply(-420));
+        assertThrows(ConnectException.class, () -> alterOffsets.apply("-420"));
+        assertThrows(ConnectException.class, () -> alterOffsets.apply("10"));
+        assertThrows(ConnectException.class, () -> alterOffsets.apply(10));
+        assertThrows(ConnectException.class, () -> alterOffsets.apply(((long) Integer.MAX_VALUE) + 1));
+        assertTrue(() -> alterOffsets.apply(0));
+    }
+
+    @Test
+    public void testSuccessfulAlterOffsets() {
+        MirrorCheckpointConnector connector = new MirrorCheckpointConnector();
+
+        Map<Map<String, ?>, Map<String, ?>> offsets = Collections.singletonMap(
+                sourcePartition("consumer-app-7", "t2", 0),
+                SOURCE_OFFSET
+        );
+
+        // Expect no exception to be thrown when a valid offsets map is passed. An empty offsets map is treated as valid
+        // since it could indicate that the offsets were reset previously or that no offsets have been committed yet
+        // (for a reset operation)
+        assertTrue(connector.alterOffsets(null, offsets));
+        assertTrue(connector.alterOffsets(null, Collections.emptyMap()));
+    }
+
+    @Test
+    public void testAlterOffsetsTombstones() {
+        MirrorCheckpointConnector connector = new MirrorCheckpointConnector();
+
+        Function<Map<String, ?>, Boolean> alterOffsets = partition -> connector.alterOffsets(
+                null,
+                Collections.singletonMap(partition, null)
+        );
+
+        Map<String, Object> partition = sourcePartition("consumer-app-2", "t", 3);
+        assertTrue(() -> alterOffsets.apply(partition));
+        partition.put(PARTITION_KEY, "a string");
+        assertTrue(() -> alterOffsets.apply(partition));
+        partition.remove(PARTITION_KEY);
+        assertTrue(() -> alterOffsets.apply(partition));
+
+        assertTrue(() -> alterOffsets.apply(null));
+        assertTrue(() -> alterOffsets.apply(Collections.emptyMap()));
+        assertTrue(() -> alterOffsets.apply(Collections.singletonMap("unused_partition_key", "unused_partition_value")));
+    }
+
+    private static Map<String, Object> sourcePartition(String consumerGroupId, String topic, int partition) {
+        Map<String, Object> result = new HashMap<>();
+        result.put(CONSUMER_GROUP_ID_KEY, consumerGroupId);
+        result.put(TOPIC_KEY, topic);
+        result.put(PARTITION_KEY, partition);
+        return result;
     }
 
 }

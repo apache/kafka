@@ -135,6 +135,16 @@ public class ReadOnlyTask implements Task {
     }
 
     @Override
+    public void resumePollingForPartitionsWithAvailableSpace() {
+        throw new UnsupportedOperationException("This task is read-only");
+    }
+
+    @Override
+    public void updateLags() {
+        throw new UnsupportedOperationException("This task is read-only");
+    }
+
+    @Override
     public void addRecords(final TopicPartition partition, final Iterable<ConsumerRecord<byte[], byte[]>> records) {
         throw new UnsupportedOperationException("This task is read-only");
     }

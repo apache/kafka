@@ -48,6 +48,7 @@ public class TimelineLong implements Revertable {
     private final SnapshotRegistry snapshotRegistry;
     private long value;
 
+    @SuppressWarnings("this-escape")
     public TimelineLong(SnapshotRegistry snapshotRegistry) {
         this.snapshotRegistry = snapshotRegistry;
         this.value = INIT;

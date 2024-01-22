@@ -747,7 +747,7 @@ private[log] class Cleaner(val id: Int,
         val canDiscardBatch = shouldDiscardBatch(batch, transactionMetadata)
 
         if (batch.isControlBatch)
-          discardBatchRecords = canDiscardBatch && batch.deleteHorizonMs().isPresent && batch.deleteHorizonMs().getAsLong <= currentTime
+          discardBatchRecords = canDiscardBatch && batch.deleteHorizonMs().isPresent && batch.deleteHorizonMs().getAsLong <= this.currentTime
         else
           discardBatchRecords = canDiscardBatch
 
@@ -784,7 +784,7 @@ private[log] class Cleaner(val id: Int,
         else if (batch.isControlBatch)
           true
         else
-          Cleaner.this.shouldRetainRecord(map, retainLegacyDeletesAndTxnMarkers, batch, record, stats, currentTime = currentTime)
+          Cleaner.this.shouldRetainRecord(map, retainLegacyDeletesAndTxnMarkers, batch, record, stats, currentTime = this.currentTime)
       }
     }
 

@@ -301,7 +301,7 @@ public class ConnectorsResource implements ConnectResource {
 
     @GET
     @Path("/{connector}/tasks")
-    @Operation(summary = "List all tasks for the specified connector")
+    @Operation(summary = "List all tasks and their configurations for the specified connector")
     public List<TaskInfo> getTaskConfigs(final @PathParam("connector") String connector) throws Throwable {
         FutureCallback<List<TaskInfo>> cb = new FutureCallback<>();
         herder.taskConfigs(connector, cb);

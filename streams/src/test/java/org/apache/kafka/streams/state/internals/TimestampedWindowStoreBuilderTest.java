@@ -51,6 +51,7 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertThrows;
 
 @RunWith(Parameterized.class)
+@SuppressWarnings("this-escape")
 public class TimestampedWindowStoreBuilderTest {
     private static final String TIMESTAMP_STORE_NAME = "Timestamped Store";
     private static final String TIMEORDERED_STORE_NAME = "TimeOrdered Store";

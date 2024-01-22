@@ -63,7 +63,7 @@ public class TaskMetadataIntegrationTest {
     @Rule
     public Timeout globalTimeout = Timeout.seconds(600);
 
-    public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(1, new Properties(), 0L, 0L);
+    public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(1, new Properties(), Collections.emptyList(), 0L, 0L);
 
     @BeforeClass
     public static void startCluster() throws IOException {

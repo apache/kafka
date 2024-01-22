@@ -59,7 +59,7 @@ import java.util.function.Consumer;
  *
  * (1) A write operation, aka a request, can read the full and potentially **uncommitted** state from state
  * machine to handle the operation. A write operation typically generates a response and a list of
- * records. The records are applies to the state machine and persisted to the partition. The response
+ * records. The records are applied to the state machine and persisted to the partition. The response
  * is parked until the records are committed and delivered when they are.
  *
  * (2) A read operation, aka a request, can only read the committed state from the state machine to handle
@@ -698,10 +698,10 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
          */
         @Override
         public void complete(Throwable exception) {
-            CompletableFuture<T> appendFuture = result != null ? result.appendFuture() : null;
+            CompletableFuture<Void> appendFuture = result != null ? result.appendFuture() : null;
 
             if (exception == null) {
-                if (appendFuture != null) result.appendFuture().complete(result.response());
+                if (appendFuture != null) result.appendFuture().complete(null);
                 future.complete(result.response());
             } else {
                 if (appendFuture != null) result.appendFuture().completeExceptionally(exception);

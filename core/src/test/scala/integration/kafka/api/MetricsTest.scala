@@ -24,9 +24,12 @@ import org.apache.kafka.common.errors.{InvalidTopicException, UnknownTopicOrPart
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.security.authenticator.TestJaasConfig
+import org.apache.kafka.server.log.remote.storage.{NoOpRemoteLogMetadataManager, NoOpRemoteStorageManager, RemoteLogManagerConfig, RemoteStorageMetrics}
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
-import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo}
 import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.ValueSource
 
 import scala.annotation.nowarn
 import scala.jdk.CollectionConverters._
@@ -54,6 +57,12 @@ class MetricsTest extends IntegrationTestHarness with SaslSetup {
 
   @BeforeEach
   override def setUp(testInfo: TestInfo): Unit = {
+    if (testInfo.getDisplayName.contains("testMetrics") && testInfo.getDisplayName.endsWith("true")) {
+      // systemRemoteStorageEnabled is enabled
+      this.serverConfig.setProperty(RemoteLogManagerConfig.REMOTE_LOG_STORAGE_SYSTEM_ENABLE_PROP, "true")
+      this.serverConfig.setProperty(RemoteLogManagerConfig.REMOTE_STORAGE_MANAGER_CLASS_NAME_PROP, classOf[NoOpRemoteStorageManager].getName)
+      this.serverConfig.setProperty(RemoteLogManagerConfig.REMOTE_LOG_METADATA_MANAGER_CLASS_NAME_PROP, classOf[NoOpRemoteLogMetadataManager].getName)
+    }
     verifyNoRequestMetrics("Request metrics not removed in a previous test")
     startSasl(jaasSections(kafkaServerSaslMechanisms, Some(kafkaClientSaslMechanism), KafkaSasl, kafkaServerJaasEntryName))
     super.setUp(testInfo)
@@ -70,8 +79,9 @@ class MetricsTest extends IntegrationTestHarness with SaslSetup {
    * Verifies some of the metrics of producer, consumer as well as server.
    */
   @nowarn("cat=deprecation")
-  @Test
-  def testMetrics(): Unit = {
+  @ParameterizedTest(name = "testMetrics with systemRemoteStorageEnabled: {0}")
+  @ValueSource(booleans = Array(true, false))
+  def testMetrics(systemRemoteStorageEnabled: Boolean): Unit = {
     val topic = "topicWithOldMessageFormat"
     val props = new Properties
     props.setProperty(TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG, "0.9.0")
@@ -103,6 +113,7 @@ class MetricsTest extends IntegrationTestHarness with SaslSetup {
 
     generateAuthenticationFailure(tp)
     verifyBrokerAuthenticationMetrics(server)
+    verifyRemoteStorageMetrics(systemRemoteStorageEnabled)
   }
 
   private def sendRecords(producer: KafkaProducer[Array[Byte], Array[Byte]], numRecords: Int,
@@ -307,5 +318,18 @@ class MetricsTest extends IntegrationTestHarness with SaslSetup {
       n.getMBeanName.startsWith("kafka.network:type=RequestMetrics")
     }
     assertTrue(metrics.isEmpty, s"$errorMessage: ${metrics.keys}")
+  }
+
+  private def verifyRemoteStorageMetrics(shouldContainMetrics: Boolean): Unit = {
+    val metrics = RemoteStorageMetrics.allMetrics().asScala.filter(name =>
+      KafkaYammerMetrics.defaultRegistry.allMetrics.asScala.find(metric => {
+        metric._1.getMBeanName().equals(name.getMBeanName)
+      }).isDefined
+    ).toList
+    if (shouldContainMetrics) {
+      assertEquals(RemoteStorageMetrics.allMetrics().size(), metrics.size, s"Only $metrics appear in the metrics")
+    } else {
+      assertEquals(0, metrics.size, s"$metrics should not appear in the metrics")
+    }
   }
 }

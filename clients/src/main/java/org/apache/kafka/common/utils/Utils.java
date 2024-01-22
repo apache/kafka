@@ -1008,6 +1008,19 @@ public final class Utils {
     }
 
     /**
+     * Flushes dirty directories to guarantee crash consistency with swallowing {@link NoSuchFileException}
+     *
+     * @throws IOException if flushing the directory fails.
+     */
+    public static void flushDirIfExists(Path path) throws IOException {
+        try {
+            flushDir(path);
+        } catch (NoSuchFileException e) {
+            log.warn("Failed to flush directory {}", path);
+        }
+    }
+
+    /**
      * Closes all the provided closeables.
      * @throws IOException if any of the close methods throws an IOException.
      *         The first IOException is thrown with subsequent exceptions

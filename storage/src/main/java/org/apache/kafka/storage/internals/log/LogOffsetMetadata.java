@@ -80,7 +80,7 @@ public final class LogOffsetMetadata {
 
     @Override
     public String toString() {
-        return "(offset=" + messageOffset + "segment=[" + segmentBaseOffset + ":" + relativePositionInSegment + "])";
+        return "(offset=" + messageOffset + ", segment=[" + segmentBaseOffset + ":" + relativePositionInSegment + "])";
     }
 
     @Override

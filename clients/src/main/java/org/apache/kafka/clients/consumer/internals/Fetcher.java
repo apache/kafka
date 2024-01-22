@@ -19,14 +19,14 @@ package org.apache.kafka.clients.consumer.internals;
 import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.FetchSessionHandler;
 import org.apache.kafka.common.Node;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.requests.FetchRequest;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.common.utils.Timer;
-import org.slf4j.Logger;
 
+import java.util.Collection;
+import java.util.HashSet;
 import java.util.Map;
-import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * This class manages the fetching process with the brokers.
@@ -49,8 +49,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
  */
 public class Fetcher<K, V> extends AbstractFetch<K, V> {
 
-    private final Logger log;
-    private final AtomicBoolean isClosed = new AtomicBoolean(false);
+    private final FetchCollector<K, V> fetchCollector;
 
     public Fetcher(LogContext logContext,
                    ConsumerNetworkClient client,
@@ -60,7 +59,16 @@ public class Fetcher<K, V> extends AbstractFetch<K, V> {
                    FetchMetricsManager metricsManager,
                    Time time) {
         super(logContext, client, metadata, subscriptions, fetchConfig, metricsManager, time);
-        this.log = logContext.logger(Fetcher.class);
+        this.fetchCollector = new FetchCollector<>(logContext,
+                metadata,
+                subscriptions,
+                fetchConfig,
+                metricsManager,
+                time);
+    }
+
+    public void clearBufferedDataForUnassignedPartitions(Collection<TopicPartition> assignedPartitions) {
+        fetchBuffer.retainAll(new HashSet<>(assignedPartitions));
     }
 
     /**
@@ -98,16 +106,7 @@ public class Fetcher<K, V> extends AbstractFetch<K, V> {
         return fetchRequestMap.size();
     }
 
-    public void close(final Timer timer) {
-        if (!isClosed.compareAndSet(false, true)) {
-            log.info("Fetcher {} is already closed.", this);
-            return;
-        }
-
-        // Shared states (e.g. sessionHandlers) could be accessed by multiple threads (such as heartbeat thread), hence,
-        // it is necessary to acquire a lock on the fetcher instance before modifying the states.
-        synchronized (this) {
-            super.close(timer);
-        }
+    public Fetch<K, V> collectFetch() {
+        return fetchCollector.collectFetch(fetchBuffer);
     }
 }

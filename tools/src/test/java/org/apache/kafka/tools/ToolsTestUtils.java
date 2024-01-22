@@ -16,12 +16,16 @@
  */
 package org.apache.kafka.tools;
 
+import kafka.utils.TestInfoUtils;
 import org.apache.kafka.common.utils.Exit;
 
 import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
 
 public class ToolsTestUtils {
+    /** @see TestInfoUtils#TestWithParameterizedQuorumName()  */
+    public static final String TEST_WITH_PARAMETERIZED_QUORUM_NAME = "{displayName}.quorum={0}";
+
     public static String captureStandardOut(Runnable runnable) {
         return captureStandardStream(false, runnable);
     }

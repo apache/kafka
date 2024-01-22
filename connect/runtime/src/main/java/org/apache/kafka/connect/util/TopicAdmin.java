@@ -286,18 +286,28 @@ public class TopicAdmin implements AutoCloseable {
      * @param adminConfig the configuration for the {@link Admin}
      */
     public TopicAdmin(Map<String, Object> adminConfig) {
-        this(adminConfig.get(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG), Admin.create(adminConfig));
+        this(adminConfig, Admin.create(adminConfig));
     }
 
-    public TopicAdmin(Object bootstrapServers, Admin adminClient) {
-        this(bootstrapServers, adminClient, true);
+    public TopicAdmin(Map<String, Object> adminConfig, Admin adminClient) {
+        this(bootstrapServers(adminConfig), adminClient, true);
     }
 
     // visible for testing
-    TopicAdmin(Object bootstrapServers, Admin adminClient, boolean logCreation) {
+    TopicAdmin(Admin adminClient) {
+        this(null, adminClient, true);
+    }
+
+    // visible for testing
+    TopicAdmin(String bootstrapServers, Admin adminClient, boolean logCreation) {
         this.admin = adminClient;
-        this.bootstrapServers = bootstrapServers != null ? bootstrapServers.toString() : "<unknown>";
+        this.bootstrapServers = bootstrapServers != null ? bootstrapServers : "<unknown>";
         this.logCreation = logCreation;
+    }
+
+    private static String bootstrapServers(Map<String, Object> adminConfig) {
+        Object result = adminConfig.get(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG);
+        return result != null ? result.toString() : null;
     }
 
    /**
@@ -720,23 +730,23 @@ public class TopicAdmin implements AutoCloseable {
                 String topic = partition.topic();
                 if (cause instanceof AuthorizationException) {
                     String msg = String.format("Not authorized to get the end offsets for topic '%s' on brokers at %s", topic, bootstrapServers);
-                    throw new ConnectException(msg, e);
+                    throw new ConnectException(msg, cause);
                 } else if (cause instanceof UnsupportedVersionException) {
                     // Should theoretically never happen, because this method is the same as what the consumer uses and therefore
                     // should exist in the broker since before the admin client was added
                     String msg = String.format("API to get the get the end offsets for topic '%s' is unsupported on brokers at %s", topic, bootstrapServers);
-                    throw new UnsupportedVersionException(msg, e);
+                    throw new UnsupportedVersionException(msg, cause);
                 } else if (cause instanceof TimeoutException) {
                     String msg = String.format("Timed out while waiting to get end offsets for topic '%s' on brokers at %s", topic, bootstrapServers);
-                    throw new TimeoutException(msg, e);
+                    throw new TimeoutException(msg, cause);
                 } else if (cause instanceof LeaderNotAvailableException) {
                     String msg = String.format("Unable to get end offsets during leader election for topic '%s' on brokers at %s", topic, bootstrapServers);
-                    throw new LeaderNotAvailableException(msg, e);
+                    throw new LeaderNotAvailableException(msg, cause);
                 } else if (cause instanceof org.apache.kafka.common.errors.RetriableException) {
                     throw (org.apache.kafka.common.errors.RetriableException) cause;
                 } else {
                     String msg = String.format("Error while getting end offsets for topic '%s' on brokers at %s", topic, bootstrapServers);
-                    throw new ConnectException(msg, e);
+                    throw new ConnectException(msg, cause);
                 }
             } catch (InterruptedException e) {
                 Thread.interrupted();
@@ -774,7 +784,7 @@ public class TopicAdmin implements AutoCloseable {
             // Older brokers don't support this admin method, so rethrow it without wrapping it
             throw e;
         } catch (Exception e) {
-            throw new ConnectException("Failed to list offsets for topic partitions.", e);
+            throw ConnectUtils.maybeWrap(e, "Failed to list offsets for topic partitions");
         }
     }
 

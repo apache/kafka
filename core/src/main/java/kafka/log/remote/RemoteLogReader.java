@@ -43,8 +43,8 @@ public class RemoteLogReader implements Callable<Void> {
         this.rlm = rlm;
         this.brokerTopicStats = brokerTopicStats;
         this.callback = callback;
-        this.brokerTopicStats.topicStats(fetchInfo.topicPartition.topic()).remoteReadRequestRate().mark();
-        this.brokerTopicStats.allTopicsStats().remoteReadRequestRate().mark();
+        this.brokerTopicStats.topicStats(fetchInfo.topicPartition.topic()).remoteFetchRequestRate().mark();
+        this.brokerTopicStats.allTopicsStats().remoteFetchRequestRate().mark();
         logger = new LogContext() {
             @Override
             public String logPrefix() {
@@ -60,14 +60,14 @@ public class RemoteLogReader implements Callable<Void> {
             logger.debug("Reading records from remote storage for topic partition {}", fetchInfo.topicPartition);
 
             FetchDataInfo fetchDataInfo = rlm.read(fetchInfo);
-            brokerTopicStats.topicStats(fetchInfo.topicPartition.topic()).remoteBytesInRate().mark(fetchDataInfo.records.sizeInBytes());
-            brokerTopicStats.allTopicsStats().remoteBytesInRate().mark(fetchDataInfo.records.sizeInBytes());
+            brokerTopicStats.topicStats(fetchInfo.topicPartition.topic()).remoteFetchBytesRate().mark(fetchDataInfo.records.sizeInBytes());
+            brokerTopicStats.allTopicsStats().remoteFetchBytesRate().mark(fetchDataInfo.records.sizeInBytes());
             result = new RemoteLogReadResult(Optional.of(fetchDataInfo), Optional.empty());
         } catch (OffsetOutOfRangeException e) {
             result = new RemoteLogReadResult(Optional.empty(), Optional.of(e));
         } catch (Exception e) {
-            brokerTopicStats.topicStats(fetchInfo.topicPartition.topic()).failedRemoteReadRequestRate().mark();
-            brokerTopicStats.allTopicsStats().failedRemoteReadRequestRate().mark();
+            brokerTopicStats.topicStats(fetchInfo.topicPartition.topic()).failedRemoteFetchRequestRate().mark();
+            brokerTopicStats.allTopicsStats().failedRemoteFetchRequestRate().mark();
             logger.error("Error occurred while reading the remote data for {}", fetchInfo.topicPartition, e);
             result = new RemoteLogReadResult(Optional.empty(), Optional.of(e));
         }

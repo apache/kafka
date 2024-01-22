@@ -20,7 +20,7 @@ package kafka.metrics
 import java.lang.management.ManagementFactory
 import java.util.Properties
 import javax.management.ObjectName
-import com.yammer.metrics.core.MetricPredicate
+import com.yammer.metrics.core.{Gauge, MetricPredicate}
 import org.junit.jupiter.api.Assertions._
 import kafka.integration.KafkaServerTestHarness
 import kafka.server._
@@ -32,6 +32,7 @@ import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.metrics.JmxReporter
 import org.apache.kafka.common.utils.Time
+import org.apache.kafka.metadata.migration.ZkMigrationState
 import org.apache.kafka.server.metrics.KafkaMetricsGroup
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.junit.jupiter.api.Timeout
@@ -227,6 +228,11 @@ class MetricsTest extends KafkaServerTestHarness with Logging {
     assertEquals(metrics.keySet.asScala.count(_.getMBeanName == "kafka.controller:type=KafkaController,name=ReplicasIneligibleToDeleteCount"), 1)
     assertEquals(metrics.keySet.asScala.count(_.getMBeanName == "kafka.controller:type=KafkaController,name=ActiveBrokerCount"), 1)
     assertEquals(metrics.keySet.asScala.count(_.getMBeanName == "kafka.controller:type=KafkaController,name=FencedBrokerCount"), 1)
+    assertEquals(metrics.keySet.asScala.count(_.getMBeanName == "kafka.controller:type=KafkaController,name=ZkMigrationState"), 1)
+
+    val zkStateMetricName = metrics.keySet.asScala.filter(_.getMBeanName == "kafka.controller:type=KafkaController,name=ZkMigrationState").head
+    val zkStateGauge = metrics.get(zkStateMetricName).asInstanceOf[Gauge[Int]]
+    assertEquals(ZkMigrationState.ZK.value().intValue(), zkStateGauge.value())
   }
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
@@ -244,10 +250,15 @@ class MetricsTest extends KafkaServerTestHarness with Logging {
       "kafka.controller:type=KafkaController,name=MetadataErrorCount",
       "kafka.controller:type=KafkaController,name=OfflinePartitionsCount",
       "kafka.controller:type=KafkaController,name=PreferredReplicaImbalanceCount",
+      "kafka.controller:type=KafkaController,name=ZkMigrationState",
     ).foreach(expected => {
       assertEquals(1, metrics.keySet.asScala.count(_.getMBeanName.equals(expected)),
         s"Unable to find ${expected}")
     })
+
+    val zkStateMetricName = metrics.keySet.asScala.filter(_.getMBeanName == "kafka.controller:type=KafkaController,name=ZkMigrationState").head
+    val zkStateGauge = metrics.get(zkStateMetricName).asInstanceOf[Gauge[Int]]
+    assertEquals(ZkMigrationState.NONE.value().intValue(), zkStateGauge.value())
   }
 
   /**

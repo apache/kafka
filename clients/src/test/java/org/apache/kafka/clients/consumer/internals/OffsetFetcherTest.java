@@ -1254,8 +1254,7 @@ public class OffsetFetcherTest {
                 maxPollRecords,
                 true, // check crc
                 CommonClientConfigs.DEFAULT_CLIENT_RACK,
-                new ByteArrayDeserializer(),
-                new ByteArrayDeserializer(),
+                new Deserializers<>(new ByteArrayDeserializer(), new ByteArrayDeserializer()),
                 isolationLevel);
         Fetcher<byte[], byte[]> fetcher = new Fetcher<>(
                 logContext,
@@ -1728,7 +1727,7 @@ public class OffsetFetcherTest {
                                    LogContext logContext) {
         time = new MockTime(1);
         subscriptions = subscriptionState;
-        metadata = new ConsumerMetadata(0, metadataExpireMs, false, false,
+        metadata = new ConsumerMetadata(0, 0, metadataExpireMs, false, false,
                 subscriptions, logContext, new ClusterResourceListeners());
         client = new MockClient(time, metadata);
         metrics = new Metrics(metricConfig, time);

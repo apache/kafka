@@ -70,6 +70,7 @@ public class PartitionGroup {
     private int totalBuffered;
     private boolean allBuffered;
     private final Map<TopicPartition, Long> idlePartitionDeadlines = new HashMap<>();
+    private final Map<TopicPartition, Long> fetchedLags = new HashMap<>();
 
     static class RecordInfo {
         RecordQueue queue;
@@ -140,20 +141,22 @@ public class PartitionGroup {
                 idlePartitionDeadlines.remove(partition);
                 queued.add(partition);
             } else {
-                final OptionalLong fetchedLag = lagProvider.apply(partition);
+                final Long fetchedLag = fetchedLags.getOrDefault(partition, -1L);
 
-                if (!fetchedLag.isPresent()) {
+                logger.trace("Fetched lag for {} is {}", partition, fetchedLag);
+
+                if (fetchedLag == -1L) {
                     // must wait to fetch metadata for the partition
                     idlePartitionDeadlines.remove(partition);
                     logger.trace("Waiting to fetch data for {}", partition);
                     return false;
-                } else if (fetchedLag.getAsLong() > 0L) {
+                } else if (fetchedLag > 0L) {
                     // must wait to poll the data we know to be on the broker
                     idlePartitionDeadlines.remove(partition);
                     logger.trace(
                             "Lag for {} is currently {}, but no data is buffered locally. Waiting to buffer some records.",
                             partition,
-                            fetchedLag.getAsLong()
+                            fetchedLag
                     );
                     return false;
                 } else {
@@ -359,6 +362,7 @@ public class PartitionGroup {
         return totalBuffered;
     }
 
+    // for testing only
     boolean allPartitionsBufferedLocally() {
         return allBuffered;
     }
@@ -370,6 +374,7 @@ public class PartitionGroup {
         nonEmptyQueuesByTime.clear();
         totalBuffered = 0;
         streamTime = RecordQueue.UNKNOWN;
+        fetchedLags.clear();
     }
 
     void close() {
@@ -377,4 +382,19 @@ public class PartitionGroup {
             queue.close();
         }
     }
+
+    void updateLags() {
+        if (maxTaskIdleMs != StreamsConfig.MAX_TASK_IDLE_MS_DISABLED) {
+            for (final TopicPartition tp : partitionQueues.keySet()) {
+                final OptionalLong l = lagProvider.apply(tp);
+                if (l.isPresent()) {
+                    fetchedLags.put(tp, l.getAsLong());
+                    logger.trace("Updated lag for {} to {}", tp, l.getAsLong());
+                } else {
+                    fetchedLags.remove(tp);
+                }
+            }
+        }
+    }
+
 }

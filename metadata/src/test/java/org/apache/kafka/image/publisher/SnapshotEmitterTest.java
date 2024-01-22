@@ -150,7 +150,7 @@ public class SnapshotEmitterTest {
         assertEquals(0L, emitter.metrics().latestSnapshotGeneratedBytes());
         emitter.maybeEmit(MetadataImageTest.IMAGE1);
         assertEquals(0L, emitter.metrics().latestSnapshotGeneratedAgeMs());
-        assertEquals(1400L, emitter.metrics().latestSnapshotGeneratedBytes());
+        assertEquals(1600L, emitter.metrics().latestSnapshotGeneratedBytes());
         FakeSnapshotWriter writer = mockRaftClient.writers.get(
                 MetadataImageTest.IMAGE1.provenance().snapshotId());
         assertNotNull(writer);

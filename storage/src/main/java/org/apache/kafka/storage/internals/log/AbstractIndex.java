@@ -72,6 +72,7 @@ public abstract class AbstractIndex implements Closeable {
      * @param baseOffset the base offset of the segment that this index is corresponding to.
      * @param maxIndexSize The maximum index size in bytes.
      */
+    @SuppressWarnings("this-escape")
     public AbstractIndex(File file, long baseOffset, int maxIndexSize, boolean writable) throws IOException {
         Objects.requireNonNull(file);
         this.file = file;

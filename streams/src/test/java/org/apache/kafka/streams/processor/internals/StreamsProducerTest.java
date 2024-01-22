@@ -208,6 +208,34 @@ public class StreamsProducerTest {
     // functional tests
 
     @Test
+    public void shouldResetTransactionInFlightOnClose() {
+        // given:
+        eosBetaStreamsProducer.send(
+            new ProducerRecord<>("topic", new byte[1]), (metadata, error) -> { });
+        assertThat(eosBetaStreamsProducer.transactionInFlight(), is(true));
+
+        // when:
+        eosBetaStreamsProducer.close();
+
+        // then:
+        assertThat(eosBetaStreamsProducer.transactionInFlight(), is(false));
+    }
+
+    @Test
+    public void shouldResetTransactionInFlightOnReset() {
+        // given:
+        eosBetaStreamsProducer.send(
+            new ProducerRecord<>("topic", new byte[1]), (metadata, error) -> { });
+        assertThat(eosBetaStreamsProducer.transactionInFlight(), is(true));
+
+        // when:
+        eosBetaStreamsProducer.resetProducer();
+
+        // then:
+        assertThat(eosBetaStreamsProducer.transactionInFlight(), is(false));
+    }
+
+    @Test
     public void shouldCreateProducer() {
         assertThat(mockClientSupplier.producers.size(), is(1));
         assertThat(eosAlphaMockClientSupplier.producers.size(), is(1));

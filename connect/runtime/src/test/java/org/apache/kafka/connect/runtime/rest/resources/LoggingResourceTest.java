@@ -22,6 +22,8 @@ import org.apache.log4j.Hierarchy;
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.mockito.junit.MockitoJUnitRunner;
 
 import java.util.Arrays;
 import java.util.Collections;
@@ -38,6 +40,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 @SuppressWarnings("unchecked")
+@RunWith(MockitoJUnitRunner.StrictStubs.class)
 public class LoggingResourceTest {
 
     @Test
@@ -71,7 +74,6 @@ public class LoggingResourceTest {
         Logger b = hierarchy.getLogger("b");
         b.setLevel(Level.INFO);
         when(loggingResource.currentLoggers()).thenReturn(loggers(a, b));
-        when(loggingResource.rootLogger()).thenReturn(root);
         when(loggingResource.getLogger(any())).thenCallRealMethod();
         Map<String, String> level = (Map<String, String>) loggingResource.getLogger("a").getEntity();
         assertEquals(1, level.size());
@@ -90,7 +92,6 @@ public class LoggingResourceTest {
         Logger b = hierarchy.getLogger("b");
         b.setLevel(Level.INFO);
         when(loggingResource.currentLoggers()).thenReturn(loggers(a, b));
-        when(loggingResource.rootLogger()).thenReturn(root);
         when(loggingResource.getLogger(any())).thenCallRealMethod();
         assertThrows(NotFoundException.class, () -> loggingResource.getLogger("c"));
     }
@@ -113,7 +114,6 @@ public class LoggingResourceTest {
         w.setLevel(Level.INFO);
         when(loggingResource.currentLoggers()).thenReturn(loggers(x, y, z, w));
         when(loggingResource.lookupLogger("a.b.c.p")).thenReturn(p);
-        when(loggingResource.rootLogger()).thenReturn(root);
         when(loggingResource.setLevel(any(), any())).thenCallRealMethod();
         List<String> modified = (List<String>) loggingResource.setLevel("a.b.c.p", Collections.singletonMap("level", "DEBUG")).getEntity();
         assertEquals(4, modified.size());
@@ -141,7 +141,6 @@ public class LoggingResourceTest {
         z.setLevel(Level.INFO);
         w.setLevel(Level.INFO);
         when(loggingResource.currentLoggers()).thenReturn(loggers(x, y, z, w));
-        when(loggingResource.lookupLogger("a.b.c.p")).thenReturn(p);
         when(loggingResource.rootLogger()).thenReturn(root);
         when(loggingResource.setLevel(any(), any())).thenCallRealMethod();
         List<String> modified = (List<String>) loggingResource.setLevel("root", Collections.singletonMap("level", "DEBUG")).getEntity();
@@ -166,8 +165,6 @@ public class LoggingResourceTest {
         a.setLevel(null);
         Logger b = hierarchy.getLogger("b");
         b.setLevel(Level.INFO);
-        when(loggingResource.currentLoggers()).thenReturn(loggers(a, b));
-        when(loggingResource.rootLogger()).thenReturn(root);
         when(loggingResource.setLevel(any(), any())).thenCallRealMethod();
         assertThrows(BadRequestException.class, () -> loggingResource.setLevel("@root", Collections.emptyMap()));
     }
@@ -183,8 +180,6 @@ public class LoggingResourceTest {
         a.setLevel(null);
         Logger b = hierarchy.getLogger("b");
         b.setLevel(Level.INFO);
-        when(loggingResource.currentLoggers()).thenReturn(loggers(a, b));
-        when(loggingResource.rootLogger()).thenReturn(root);
         when(loggingResource.setLevel(any(), any())).thenCallRealMethod();
         assertThrows(NotFoundException.class, () -> loggingResource.setLevel("@root", Collections.singletonMap("level", "HIGH")));
     }

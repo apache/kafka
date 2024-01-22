@@ -41,6 +41,7 @@ import kafka.server.checkpoints.OffsetCheckpointFile
 import kafka.server.metadata.{ConfigRepository, MockConfigRepository}
 import kafka.utils.Implicits._
 import kafka.zk._
+import org.apache.kafka.admin.BrokerMetadata
 import org.apache.kafka.clients.{ClientResponse, CommonClientConfigs}
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType
 import org.apache.kafka.clients.admin._
@@ -280,6 +281,10 @@ object TestUtils extends Logging {
     Await.result(future, FiniteDuration(5, TimeUnit.MINUTES))
   }
 
+  def createDummyBrokerConfig(): Properties = {
+    createBrokerConfig(0, "")
+  }
+
   /**
     * Create a test config for the provided parameters.
     *
@@ -364,7 +369,6 @@ object TestUtils extends Logging {
     props.put(KafkaConfig.LogDeleteDelayMsProp, "1000")
     props.put(KafkaConfig.ControlledShutdownRetryBackoffMsProp, "100")
     props.put(KafkaConfig.LogCleanerDedupeBufferSizeProp, "2097152")
-    props.put(KafkaConfig.LogMessageTimestampDifferenceMaxMsProp, Long.MaxValue.toString)
     props.put(KafkaConfig.OffsetsTopicReplicationFactorProp, "1")
     if (!props.containsKey(KafkaConfig.OffsetsTopicPartitionsProp))
       props.put(KafkaConfig.OffsetsTopicPartitionsProp, "5")
@@ -893,14 +897,14 @@ object TestUtils extends Logging {
   }
 
   def createBrokersInZk(zkClient: KafkaZkClient, ids: Seq[Int]): Seq[Broker] =
-    createBrokersInZk(ids.map(kafka.admin.BrokerMetadata(_, None)), zkClient)
+    createBrokersInZk(ids.map(new BrokerMetadata(_, Optional.empty())), zkClient)
 
-  def createBrokersInZk(brokerMetadatas: Seq[kafka.admin.BrokerMetadata], zkClient: KafkaZkClient): Seq[Broker] = {
+  def createBrokersInZk(brokerMetadatas: Seq[BrokerMetadata], zkClient: KafkaZkClient): Seq[Broker] = {
     zkClient.makeSurePersistentPathExists(BrokerIdsZNode.path)
     val brokers = brokerMetadatas.map { b =>
       val protocol = SecurityProtocol.PLAINTEXT
       val listenerName = ListenerName.forSecurityProtocol(protocol)
-      Broker(b.id, Seq(EndPoint("localhost", 6667, listenerName, protocol)), b.rack)
+      Broker(b.id, Seq(EndPoint("localhost", 6667, listenerName, protocol)), if (b.rack.isPresent) Some(b.rack.get()) else None)
     }
     brokers.foreach(b => zkClient.registerBroker(BrokerInfo(Broker(b.id, b.endPoints, rack = b.rack),
       MetadataVersion.latest, jmxPort = -1)))

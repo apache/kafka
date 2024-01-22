@@ -17,6 +17,7 @@
 
 package org.apache.kafka.connect.runtime.isolation;
 
+import org.junit.BeforeClass;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
@@ -34,6 +35,7 @@ import java.util.Set;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.assertFalse;
 
 @RunWith(Parameterized.class)
 public class PluginScannerTest {
@@ -67,10 +69,16 @@ public class PluginScannerTest {
         }
     }
 
+    @BeforeClass
+    public static void setUp() {
+        // Work around a circular-dependency in TestPlugins.
+        TestPlugins.pluginPath();
+    }
+
     @Test
     public void testScanningEmptyPluginPath() {
         PluginScanResult result = scan(
-                Collections.emptyList()
+                Collections.emptySet()
         );
         assertTrue(result.isEmpty());
     }
@@ -91,7 +99,7 @@ public class PluginScannerTest {
         pluginDir.newFile("invalid.jar");
 
         PluginScanResult result = scan(
-                Collections.singletonList(pluginDir.getRoot().toPath().toAbsolutePath())
+                Collections.singleton(pluginDir.getRoot().toPath().toAbsolutePath())
         );
         assertTrue(result.isEmpty());
     }
@@ -102,7 +110,7 @@ public class PluginScannerTest {
         pluginDir.newFile("my-plugin/invalid.jar");
 
         PluginScanResult result = scan(
-                Collections.singletonList(pluginDir.getRoot().toPath().toAbsolutePath())
+                Collections.singleton(pluginDir.getRoot().toPath().toAbsolutePath())
         );
         assertTrue(result.isEmpty());
     }
@@ -110,7 +118,7 @@ public class PluginScannerTest {
     @Test
     public void testScanningNoPlugins() {
         PluginScanResult result = scan(
-                Collections.singletonList(pluginDir.getRoot().toPath().toAbsolutePath())
+                Collections.singleton(pluginDir.getRoot().toPath().toAbsolutePath())
         );
         assertTrue(result.isEmpty());
     }
@@ -120,7 +128,7 @@ public class PluginScannerTest {
         pluginDir.newFolder("my-plugin");
 
         PluginScanResult result = scan(
-                Collections.singletonList(pluginDir.getRoot().toPath().toAbsolutePath())
+                Collections.singleton(pluginDir.getRoot().toPath().toAbsolutePath())
         );
         assertTrue(result.isEmpty());
     }
@@ -137,7 +145,7 @@ public class PluginScannerTest {
         }
 
         PluginScanResult result = scan(
-                Collections.singletonList(pluginDir.getRoot().toPath().toAbsolutePath())
+                Collections.singleton(pluginDir.getRoot().toPath().toAbsolutePath())
         );
         Set<String> classes = new HashSet<>();
         result.forEach(pluginDesc -> classes.add(pluginDesc.className()));
@@ -145,7 +153,22 @@ public class PluginScannerTest {
         assertEquals(expectedClasses, classes);
     }
 
-    private PluginScanResult scan(List<Path> pluginLocations) {
+    @Test
+    public void testNonVersionedPluginHasUndefinedVersion() {
+        PluginScanResult unversionedPluginsResult = scan(TestPlugins.pluginPath(TestPlugins.TestPlugin.SAMPLING_HEADER_CONVERTER));
+        assertFalse(unversionedPluginsResult.isEmpty());
+        unversionedPluginsResult.forEach(pluginDesc -> assertEquals(PluginDesc.UNDEFINED_VERSION, pluginDesc.version()));
+    }
+
+    @Test
+    public void testVersionedPluginsHasVersion() {
+        PluginScanResult versionedPluginResult = scan(TestPlugins.pluginPath(TestPlugins.TestPlugin.READ_VERSION_FROM_RESOURCE_V1));
+        assertFalse(versionedPluginResult.isEmpty());
+        versionedPluginResult.forEach(pluginDesc -> assertEquals("1.0.0", pluginDesc.version()));
+
+    }
+
+    private PluginScanResult scan(Set<Path> pluginLocations) {
         ClassLoaderFactory factory = new ClassLoaderFactory();
         Set<PluginSource> pluginSources = PluginUtils.pluginSources(pluginLocations, PluginScannerTest.class.getClassLoader(), factory);
         return scanner.discoverPlugins(pluginSources);

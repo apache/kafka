@@ -34,7 +34,9 @@ import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.utils.Utils
 import org.slf4j.event.Level
 
+import java.util
 import scala.annotation.nowarn
+import scala.jdk.CollectionConverters._
 
 /**
  * General helper functions!
@@ -315,4 +317,7 @@ object CoreUtils {
     elements.groupMapReduce(key)(f)(reduce)
   }
 
+  def replicaToBrokerAssignmentAsScala(map: util.Map[Integer, util.List[Integer]]): Map[Int, Seq[Int]] = {
+    map.asScala.map(e => (e._1.asInstanceOf[Int], e._2.asScala.map(_.asInstanceOf[Int])))
+  }
 }

@@ -429,7 +429,10 @@ public class ConnectorConfig extends AbstractConfig {
                 final ConfigDef.Validator typeValidator = ConfigDef.LambdaValidator.with(
                     (String name, Object value) -> {
                         validateProps(prefix);
-                        getConfigDefFromConfigProvidingClass(typeConfig, (Class<?>) value);
+                        // The value will be null if the class couldn't be found; no point in performing follow-up validation
+                        if (value != null) {
+                            getConfigDefFromConfigProvidingClass(typeConfig, (Class<?>) value);
+                        }
                     },
                     () -> "valid configs for " + alias + " " + aliasKind.toLowerCase(Locale.ENGLISH));
                 newDef.define(typeConfig, Type.CLASS, ConfigDef.NO_DEFAULT_VALUE, typeValidator, Importance.HIGH,

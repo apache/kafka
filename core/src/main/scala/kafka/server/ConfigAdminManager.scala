@@ -16,24 +16,23 @@
   */
 package kafka.server
 
+import kafka.server.logger.RuntimeLoggerManager
+
 import java.util
 import java.util.Properties
-
 import kafka.server.metadata.ConfigRepository
-import kafka.utils.Log4jController
 import kafka.utils._
 import org.apache.kafka.clients.admin.{AlterConfigOp, ConfigEntry}
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType
 import org.apache.kafka.common.config.ConfigDef.ConfigKey
 import org.apache.kafka.common.config.ConfigResource.Type.{BROKER, BROKER_LOGGER, TOPIC}
-import org.apache.kafka.common.config.{ConfigDef, ConfigResource, LogLevelConfig}
-import org.apache.kafka.common.errors.{ApiException, ClusterAuthorizationException, InvalidConfigurationException, InvalidRequestException}
+import org.apache.kafka.common.config.{ConfigDef, ConfigResource}
+import org.apache.kafka.common.errors.{ApiException, InvalidConfigurationException, InvalidRequestException}
 import org.apache.kafka.common.message.{AlterConfigsRequestData, AlterConfigsResponseData, IncrementalAlterConfigsRequestData, IncrementalAlterConfigsResponseData}
 import org.apache.kafka.common.message.AlterConfigsRequestData.{AlterConfigsResource => LAlterConfigsResource}
 import org.apache.kafka.common.message.AlterConfigsResponseData.{AlterConfigsResourceResponse => LAlterConfigsResourceResponse}
-import org.apache.kafka.common.message.IncrementalAlterConfigsRequestData.{AlterConfigsResource => IAlterConfigsResource, AlterableConfig => IAlterableConfig}
+import org.apache.kafka.common.message.IncrementalAlterConfigsRequestData.{AlterConfigsResource => IAlterConfigsResource}
 import org.apache.kafka.common.message.IncrementalAlterConfigsResponseData.{AlterConfigsResourceResponse => IAlterConfigsResourceResponse}
-import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.protocol.Errors.{INVALID_REQUEST, UNKNOWN_SERVER_ERROR}
 import org.apache.kafka.common.requests.ApiError
 import org.apache.kafka.common.resource.{Resource, ResourceType}
@@ -87,6 +86,8 @@ class ConfigAdminManager(nodeId: Int,
 
   this.logIdent = "[ConfigAdminManager[nodeId=" + nodeId + "]: "
 
+  val runtimeLoggerManager = new RuntimeLoggerManager(nodeId, logger.underlying)
+
   /**
    * Preprocess an incremental configuration operation on the broker. This step handles
    * setting log4j levels, as well as filtering out some invalid resource requests that
@@ -135,14 +136,10 @@ class ConfigAdminManager(nodeId: Int,
           }
           resourceType match {
             case BROKER_LOGGER =>
-              if (!authorize(ResourceType.CLUSTER, Resource.CLUSTER_NAME)) {
-                throw new ClusterAuthorizationException(Errors.CLUSTER_AUTHORIZATION_FAILED.message())
-              }
-              validateResourceNameIsCurrentNodeId(resource.resourceName())
-              validateLogLevelConfigs(resource.configs())
-              if (!request.validateOnly()) {
-                alterLogLevelConfigs(resource.configs())
-              }
+              runtimeLoggerManager.applyChangesForResource(
+                  authorize(ResourceType.CLUSTER, Resource.CLUSTER_NAME),
+                  request.validateOnly(),
+                  resource)
               results.put(resource, ApiError.NONE)
             case BROKER =>
               // The resource name must be either blank (if setting a cluster config) or
@@ -288,56 +285,6 @@ class ConfigAdminManager(nodeId: Int,
     }
     if (id != nodeId) {
       throw new InvalidRequestException(s"Unexpected broker id, expected ${nodeId}, but received ${name}")
-    }
-  }
-
-  def validateLogLevelConfigs(ops: util.Collection[IAlterableConfig]): Unit = {
-    def validateLoggerNameExists(loggerName: String): Unit = {
-      if (!Log4jController.loggerExists(loggerName)) {
-        throw new InvalidConfigurationException(s"Logger $loggerName does not exist!")
-      }
-    }
-    ops.forEach { op =>
-      val loggerName = op.name
-      OpType.forId(op.configOperation()) match {
-        case OpType.SET =>
-          validateLoggerNameExists(loggerName)
-          val logLevel = op.value()
-          if (!LogLevelConfig.VALID_LOG_LEVELS.contains(logLevel)) {
-            val validLevelsStr = LogLevelConfig.VALID_LOG_LEVELS.asScala.mkString(", ")
-            throw new InvalidConfigurationException(
-              s"Cannot set the log level of $loggerName to $logLevel as it is not a supported log level. " +
-                s"Valid log levels are $validLevelsStr"
-            )
-          }
-        case OpType.DELETE =>
-          validateLoggerNameExists(loggerName)
-          if (loggerName == Log4jController.ROOT_LOGGER)
-            throw new InvalidRequestException(s"Removing the log level of the ${Log4jController.ROOT_LOGGER} logger is not allowed")
-        case OpType.APPEND => throw new InvalidRequestException(s"${OpType.APPEND} " +
-          s"operation is not allowed for the ${BROKER_LOGGER} resource")
-        case OpType.SUBTRACT => throw new InvalidRequestException(s"${OpType.SUBTRACT} " +
-          s"operation is not allowed for the ${BROKER_LOGGER} resource")
-        case _ => throw new InvalidRequestException(s"Unknown operation type ${op.configOperation()} " +
-          s"is not allowed for the ${BROKER_LOGGER} resource")
-      }
-    }
-  }
-
-  def alterLogLevelConfigs(ops: util.Collection[IAlterableConfig]): Unit = {
-    ops.forEach { op =>
-      val loggerName = op.name()
-      val logLevel = op.value()
-      OpType.forId(op.configOperation()) match {
-        case OpType.SET =>
-          info(s"Updating the log level of $loggerName to $logLevel")
-          Log4jController.logLevel(loggerName, logLevel)
-        case OpType.DELETE =>
-          info(s"Unset the log level of $loggerName")
-          Log4jController.unsetLogLevel(loggerName)
-        case _ => throw new IllegalArgumentException(
-          s"Invalid log4j configOperation: ${op.configOperation()}")
-      }
     }
   }
 }

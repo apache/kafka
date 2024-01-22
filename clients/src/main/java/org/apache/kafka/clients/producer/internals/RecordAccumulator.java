@@ -31,8 +31,10 @@ import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import org.apache.kafka.clients.ApiVersions;
+import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.producer.Callback;
 import org.apache.kafka.clients.producer.RecordMetadata;
+import org.apache.kafka.common.utils.ExponentialBackoff;
 import org.apache.kafka.common.utils.ProducerIdAndEpoch;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
@@ -72,7 +74,7 @@ public class RecordAccumulator {
     private final int batchSize;
     private final CompressionType compression;
     private final int lingerMs;
-    private final long retryBackoffMs;
+    private final ExponentialBackoff retryBackoff;
     private final int deliveryTimeoutMs;
     private final long partitionAvailabilityTimeoutMs;  // latency threshold for marking partition temporary unavailable
     private final boolean enableAdaptivePartitioning;
@@ -99,6 +101,7 @@ public class RecordAccumulator {
      *        latency for potentially better throughput due to more batching (and hence fewer, larger requests).
      * @param retryBackoffMs An artificial delay time to retry the produce request upon receiving an error. This avoids
      *        exhausting all retries in a short period of time.
+     * @param retryBackoffMaxMs The upper bound of the retry backoff time.
      * @param deliveryTimeoutMs An upper bound on the time to report success or failure on record delivery
      * @param partitionerConfig Partitioner config
      * @param metrics The metrics
@@ -114,6 +117,7 @@ public class RecordAccumulator {
                              CompressionType compression,
                              int lingerMs,
                              long retryBackoffMs,
+                             long retryBackoffMaxMs,
                              int deliveryTimeoutMs,
                              PartitionerConfig partitionerConfig,
                              Metrics metrics,
@@ -130,7 +134,10 @@ public class RecordAccumulator {
         this.batchSize = batchSize;
         this.compression = compression;
         this.lingerMs = lingerMs;
-        this.retryBackoffMs = retryBackoffMs;
+        this.retryBackoff = new ExponentialBackoff(retryBackoffMs,
+                CommonClientConfigs.RETRY_BACKOFF_EXP_BASE,
+                retryBackoffMaxMs,
+                CommonClientConfigs.RETRY_BACKOFF_JITTER);
         this.deliveryTimeoutMs = deliveryTimeoutMs;
         this.enableAdaptivePartitioning = partitionerConfig.enableAdaptivePartitioning;
         this.partitionAvailabilityTimeoutMs = partitionerConfig.partitionAvailabilityTimeoutMs;
@@ -155,6 +162,7 @@ public class RecordAccumulator {
      *        latency for potentially better throughput due to more batching (and hence fewer, larger requests).
      * @param retryBackoffMs An artificial delay time to retry the produce request upon receiving an error. This avoids
      *        exhausting all retries in a short period of time.
+     * @param retryBackoffMaxMs The upper bound of the retry backoff time.
      * @param deliveryTimeoutMs An upper bound on the time to report success or failure on record delivery
      * @param metrics The metrics
      * @param metricGrpName The metric group name
@@ -169,6 +177,7 @@ public class RecordAccumulator {
                              CompressionType compression,
                              int lingerMs,
                              long retryBackoffMs,
+                             long retryBackoffMaxMs,
                              int deliveryTimeoutMs,
                              Metrics metrics,
                              String metricGrpName,
@@ -181,6 +190,7 @@ public class RecordAccumulator {
             compression,
             lingerMs,
             retryBackoffMs,
+            retryBackoffMaxMs,
             deliveryTimeoutMs,
             new PartitionerConfig(),
             metrics,
@@ -598,22 +608,22 @@ public class RecordAccumulator {
     /**
      * Add the leader to the ready nodes if the batch is ready
      *
-     * @param nowMs The current time
      * @param exhausted 'true' is the buffer pool is exhausted
      * @param part The partition
      * @param leader The leader for the partition
      * @param waitedTimeMs How long batch waited
      * @param backingOff Is backing off
+     * @param backoffAttempts Number of attempts for calculating backoff delay
      * @param full Is batch full
      * @param nextReadyCheckDelayMs The delay for next check
      * @param readyNodes The set of ready nodes (to be filled in)
      * @return The delay for next check
      */
-    private long batchReady(long nowMs, boolean exhausted, TopicPartition part, Node leader,
-                            long waitedTimeMs, boolean backingOff, boolean full,
-                            long nextReadyCheckDelayMs, Set<Node> readyNodes) {
+    private long batchReady(boolean exhausted, TopicPartition part, Node leader,
+                            long waitedTimeMs, boolean backingOff, int backoffAttempts,
+                            boolean full, long nextReadyCheckDelayMs, Set<Node> readyNodes) {
         if (!readyNodes.contains(leader) && !isMuted(part)) {
-            long timeToWaitMs = backingOff ? retryBackoffMs : lingerMs;
+            long timeToWaitMs = backingOff ? retryBackoff.backoff(backoffAttempts > 0 ? backoffAttempts - 1 : 0) : lingerMs;
             boolean expired = waitedTimeMs >= timeToWaitMs;
             boolean transactionCompleting = transactionManager != null && transactionManager.isCompleting();
             boolean sendable = full
@@ -683,6 +693,7 @@ public class RecordAccumulator {
 
             final long waitedTimeMs;
             final boolean backingOff;
+            final int backoffAttempts;
             final int dequeSize;
             final boolean full;
 
@@ -701,7 +712,8 @@ public class RecordAccumulator {
                 }
 
                 waitedTimeMs = batch.waitedTimeMs(nowMs);
-                backingOff = batch.attempts() > 0 && waitedTimeMs < retryBackoffMs;
+                backingOff = shouldBackoff(batch, waitedTimeMs);
+                backoffAttempts = batch.attempts();
                 dequeSize = deque.size();
                 full = dequeSize > 1 || batch.isFull();
             }
@@ -727,8 +739,8 @@ public class RecordAccumulator {
                     }
                 }
 
-                nextReadyCheckDelayMs = batchReady(nowMs, exhausted, part, leader, waitedTimeMs, backingOff,
-                    full, nextReadyCheckDelayMs, readyNodes);
+                nextReadyCheckDelayMs = batchReady(exhausted, part, leader, waitedTimeMs, backingOff,
+                    backoffAttempts, full, nextReadyCheckDelayMs, readyNodes);
             }
         }
 
@@ -786,6 +798,10 @@ public class RecordAccumulator {
             }
         }
         return false;
+    }
+
+    private boolean shouldBackoff(final ProducerBatch batch, final long waitedTimeMs) {
+        return batch.attempts() > 0 && waitedTimeMs < retryBackoff.backoff(batch.attempts() - 1);
     }
 
     private boolean shouldStopDrainBatchesForPartition(ProducerBatch first, TopicPartition tp) {
@@ -854,9 +870,8 @@ public class RecordAccumulator {
                     continue;
 
                 // first != null
-                boolean backoff = first.attempts() > 0 && first.waitedTimeMs(now) < retryBackoffMs;
                 // Only drain the batch if it is not during backoff period.
-                if (backoff)
+                if (shouldBackoff(first, first.waitedTimeMs(now)))
                     continue;
 
                 if (size + first.estimatedSizeInBytes() > maxSize && !ready.isEmpty()) {

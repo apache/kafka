@@ -16,6 +16,9 @@
  */
 package org.apache.kafka.streams.integration;
 
+import java.util.stream.Stream;
+import kafka.server.KafkaConfig;
+import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
@@ -36,6 +39,7 @@ import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.processor.StateRestoreListener;
+import org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils;
 import org.apache.kafka.streams.processor.internals.assignment.AssignorConfiguration.AssignmentListener;
 import org.apache.kafka.streams.processor.internals.assignment.HighAvailabilityTaskAssignor;
 import org.apache.kafka.streams.state.KeyValueStore;
@@ -45,7 +49,6 @@ import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Tag;
-import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.Timeout;
 
@@ -61,7 +64,11 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Function;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
+import static java.util.Arrays.asList;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkObjectProperties;
@@ -74,7 +81,24 @@ import static org.hamcrest.Matchers.is;
 @Timeout(600)
 @Tag("integration")
 public class HighAvailabilityTaskAssignorIntegrationTest {
-    public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(1);
+    public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(3,
+        new Properties(),
+        asList(
+            new Properties() {{
+                    setProperty(KafkaConfig.RackProp(), AssignmentTestUtils.RACK_0);
+                }},
+            new Properties() {{
+                    setProperty(KafkaConfig.RackProp(), AssignmentTestUtils.RACK_1);
+                }},
+            new Properties() {{
+                    setProperty(KafkaConfig.RackProp(), AssignmentTestUtils.RACK_2);
+                }}
+        )
+    );
+
+    public static Stream<Arguments> data() {
+        return Stream.of(Arguments.of(true), Arguments.of(false));
+    }
 
     @BeforeAll
     public static void startCluster() throws IOException {
@@ -86,22 +110,25 @@ public class HighAvailabilityTaskAssignorIntegrationTest {
         CLUSTER.stop();
     }
 
-    @Test
-    public void shouldScaleOutWithWarmupTasksAndInMemoryStores(final TestInfo testInfo) throws InterruptedException {
+    @ParameterizedTest
+    @MethodSource("data")
+    public void shouldScaleOutWithWarmupTasksAndInMemoryStores(final boolean enableRackAwareAssignor, final TestInfo testInfo) throws InterruptedException {
         // NB: this test takes at least a minute to run, because it needs a probing rebalance, and the minimum
         // value is one minute
-        shouldScaleOutWithWarmupTasks(storeName -> Materialized.as(Stores.inMemoryKeyValueStore(storeName)), testInfo);
+        shouldScaleOutWithWarmupTasks(storeName -> Materialized.as(Stores.inMemoryKeyValueStore(storeName)), testInfo, enableRackAwareAssignor);
     }
 
-    @Test
-    public void shouldScaleOutWithWarmupTasksAndPersistentStores(final TestInfo testInfo) throws InterruptedException {
+    @ParameterizedTest
+    @MethodSource("data")
+    public void shouldScaleOutWithWarmupTasksAndPersistentStores(final boolean enableRackAwareAssignor, final TestInfo testInfo) throws InterruptedException {
         // NB: this test takes at least a minute to run, because it needs a probing rebalance, and the minimum
         // value is one minute
-        shouldScaleOutWithWarmupTasks(storeName -> Materialized.as(Stores.persistentKeyValueStore(storeName)), testInfo);
+        shouldScaleOutWithWarmupTasks(storeName -> Materialized.as(Stores.persistentKeyValueStore(storeName)), testInfo, enableRackAwareAssignor);
     }
 
     private void shouldScaleOutWithWarmupTasks(final Function<String, Materialized<Object, Object, KeyValueStore<Bytes, byte[]>>> materializedFunction,
-                                               final TestInfo testInfo) throws InterruptedException {
+                                               final TestInfo testInfo,
+                                               final boolean enableRackAwareAssignor) throws InterruptedException {
         final String testId = safeUniqueTestName(getClass(), testInfo);
         final String appId = "appId_" + System.currentTimeMillis() + "_" + testId;
         final String inputTopic = "input" + testId;
@@ -117,7 +144,7 @@ public class HighAvailabilityTaskAssignorIntegrationTest {
             new TopicPartition(storeChangelog, 1)
         );
 
-        IntegrationTestUtils.cleanStateBeforeTest(CLUSTER, 2, inputTopic, storeChangelog);
+        IntegrationTestUtils.cleanStateBeforeTest(CLUSTER, 2, 2, inputTopic, storeChangelog);
 
         final ReentrantLock assignmentLock = new ReentrantLock();
         final AtomicInteger assignmentsCompleted = new AtomicInteger(0);
@@ -143,8 +170,8 @@ public class HighAvailabilityTaskAssignorIntegrationTest {
 
         produceTestData(inputTopic, numberOfRecords);
 
-        try (final KafkaStreams kafkaStreams0 = new KafkaStreams(topology, streamsProperties(appId, assignmentListener));
-             final KafkaStreams kafkaStreams1 = new KafkaStreams(topology, streamsProperties(appId, assignmentListener));
+        try (final KafkaStreams kafkaStreams0 = new KafkaStreams(topology, streamsProperties(appId, assignmentListener, enableRackAwareAssignor, AssignmentTestUtils.RACK_0));
+             final KafkaStreams kafkaStreams1 = new KafkaStreams(topology, streamsProperties(appId, assignmentListener, enableRackAwareAssignor, AssignmentTestUtils.RACK_1));
              final Consumer<String, String> consumer = new KafkaConsumer<>(getConsumerProperties())) {
             kafkaStreams0.start();
 
@@ -284,7 +311,10 @@ public class HighAvailabilityTaskAssignorIntegrationTest {
     }
 
     private static Properties streamsProperties(final String appId,
-                                                final AssignmentListener configuredAssignmentListener) {
+                                                final AssignmentListener configuredAssignmentListener,
+                                                final boolean enableRackAwareAssignor,
+                                                final String rack) {
+        final String rackAwareStrategy = enableRackAwareAssignor ? StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_MIN_TRAFFIC : StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_NONE;
         return mkObjectProperties(
             mkMap(
                 mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers()),
@@ -300,7 +330,9 @@ public class HighAvailabilityTaskAssignorIntegrationTest {
                 // Increasing the number of threads to ensure that a rebalance happens each time a consumer sends a rejoin (KAFKA-10455)
                 mkEntry(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 40),
                 mkEntry(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.StringSerde.class.getName()),
-                mkEntry(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.StringSerde.class.getName())
+                mkEntry(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.StringSerde.class.getName()),
+                mkEntry(CommonClientConfigs.CLIENT_RACK_CONFIG, rack),
+                mkEntry(StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_CONFIG, rackAwareStrategy)
             )
         );
     }

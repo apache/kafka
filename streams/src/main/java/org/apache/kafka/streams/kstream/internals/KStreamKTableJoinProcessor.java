@@ -36,6 +36,7 @@ import org.slf4j.LoggerFactory;
 import java.time.Duration;
 import java.util.Optional;
 
+import static java.util.Objects.requireNonNull;
 import static org.apache.kafka.streams.processor.internals.ProcessorContextUtils.asInternalProcessorContext;
 import static org.apache.kafka.streams.processor.internals.metrics.TaskMetrics.droppedRecordsSensor;
 import static org.apache.kafka.streams.state.ValueAndTimestamp.getValueOrNull;
@@ -49,27 +50,25 @@ class KStreamKTableJoinProcessor<K1, K2, V1, V2, VOut> extends ContextualProcess
     private final boolean leftJoin;
     private Sensor droppedRecordsSensor;
     private final Optional<Duration> gracePeriod;
-    private final Optional<TimeOrderedKeyValueBuffer<K1, V1, V1>> buffer;
+    private TimeOrderedKeyValueBuffer<K1, V1, V1> buffer;
     protected long observedStreamTime = ConsumerRecord.NO_TIMESTAMP;
     private InternalProcessorContext internalProcessorContext;
     private final boolean useBuffer;
+    private final String storeName;
 
     KStreamKTableJoinProcessor(final KTableValueGetter<K2, V2> valueGetter,
                                final KeyValueMapper<? super K1, ? super V1, ? extends K2> keyMapper,
                                final ValueJoinerWithKey<? super K1, ? super V1, ? super V2, ? extends VOut> joiner,
                                final boolean leftJoin,
                                final Optional<Duration> gracePeriod,
-                               final Optional<TimeOrderedKeyValueBuffer<K1, V1, V1>> buffer) {
+                               final Optional<String> storeName) {
         this.valueGetter = valueGetter;
         this.keyMapper = keyMapper;
         this.joiner = joiner;
         this.leftJoin = leftJoin;
-        this.useBuffer = buffer.isPresent();
-        if (gracePeriod.isPresent() ^ buffer.isPresent()) {
-            throw new IllegalArgumentException("Grace Period requires a buffer");
-        }
+        this.useBuffer = gracePeriod.isPresent();
         this.gracePeriod = gracePeriod;
-        this.buffer = buffer;
+        this.storeName = storeName.orElse("");
     }
 
     @Override
@@ -83,9 +82,8 @@ class KStreamKTableJoinProcessor<K1, K2, V1, V2, VOut> extends ContextualProcess
             if (!valueGetter.isVersioned() && gracePeriod.isPresent()) {
                 throw new IllegalArgumentException("KTable must be versioned to use a grace period in a stream table join.");
             }
-
-            buffer.get().setSerdesIfNull(new SerdeGetter(context));
-            buffer.get().init((org.apache.kafka.streams.processor.StateStoreContext) context(), null);
+            buffer = requireNonNull(context.getStateStore(storeName));
+            buffer.setSerdesIfNull(new SerdeGetter(context));
         }
     }
 
@@ -100,10 +98,10 @@ class KStreamKTableJoinProcessor<K1, K2, V1, V2, VOut> extends ContextualProcess
         if (!useBuffer) {
             doJoin(record);
         } else {
-            if (!buffer.get().put(observedStreamTime, record, internalProcessorContext.recordContext())) {
+            if (!buffer.put(observedStreamTime, record, internalProcessorContext.recordContext())) {
                 doJoin(record);
             } else {
-                buffer.get().evictWhile(() -> true, this::emit);
+                buffer.evictWhile(() -> true, this::emit);
             }
         }
     }

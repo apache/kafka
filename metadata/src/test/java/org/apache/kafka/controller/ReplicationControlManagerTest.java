@@ -17,7 +17,6 @@
 
 package org.apache.kafka.controller;
 
-import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.common.ElectionType;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
@@ -86,6 +85,7 @@ import org.apache.kafka.metadata.placement.StripedReplicaPlacer;
 import org.apache.kafka.metadata.placement.UsableBroker;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.common.MetadataVersion;
+import org.apache.kafka.server.common.TopicIdPartition;
 import org.apache.kafka.server.policy.CreateTopicPolicy;
 import org.apache.kafka.server.util.MockRandom;
 import org.apache.kafka.timeline.SnapshotRegistry;
@@ -207,7 +207,7 @@ public class ReplicationControlManagerTest {
             this.time = time;
             this.featureControl = new FeatureControlManager.Builder().
                 setSnapshotRegistry(snapshotRegistry).
-                setQuorumFeatures(new QuorumFeatures(0, new ApiVersions(),
+                setQuorumFeatures(new QuorumFeatures(0,
                     QuorumFeatures.defaultFeatureMap(),
                     Collections.singletonList(0))).
                 setMetadataVersion(metadataVersion).

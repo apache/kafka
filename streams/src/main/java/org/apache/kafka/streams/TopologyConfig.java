@@ -125,6 +125,7 @@ public class TopologyConfig extends AbstractConfig {
         this(null, globalAppConfigs, new Properties());
     }
 
+    @SuppressWarnings("this-escape")
     public TopologyConfig(final String topologyName, final StreamsConfig globalAppConfigs, final Properties topologyOverrides) {
         super(CONFIG, topologyOverrides, false);
 

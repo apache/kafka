@@ -67,4 +67,11 @@ public class TimestampOffset implements IndexEntry {
         result = 31 * result + Long.hashCode(offset);
         return result;
     }
+
+    @Override
+    public String toString() {
+        return String.format("TimestampOffset(offset = %d, timestamp = %d)",
+            offset,
+            timestamp);
+    }
 }

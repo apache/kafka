@@ -530,4 +530,10 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
         <Bug pattern="DMI_RANDOM_USED_ONLY_ONCE"/>
     </Match>
 
+    <Match>
+        <!-- Suppress a warning about await not being in a loop - we expect the loop to be outside the method. -->
+        <Class name="org.apache.kafka.streams.processor.internals.tasks.DefaultTaskManager"/>
+        <Bug pattern="WA_AWAIT_NOT_IN_LOOP"/>
+    </Match>
+
 </FindBugsFilter>

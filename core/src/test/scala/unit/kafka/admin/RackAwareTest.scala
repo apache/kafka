@@ -16,8 +16,14 @@
  */
 package kafka.admin
 
+import org.apache.kafka.admin.BrokerMetadata
+
 import scala.collection.{Map, Seq, mutable}
 import org.junit.jupiter.api.Assertions._
+
+import java.util
+import java.util.Optional
+import scala.jdk.CollectionConverters._
 
 trait RackAwareTest {
 
@@ -73,12 +79,15 @@ trait RackAwareTest {
     ReplicaDistributions(partitionRackMap, leaderCount, partitionCount)
   }
 
-  def toBrokerMetadata(rackMap: Map[Int, String], brokersWithoutRack: Seq[Int] = Seq.empty): Seq[BrokerMetadata] =
-    rackMap.toSeq.map { case (brokerId, rack) =>
-      BrokerMetadata(brokerId, Some(rack))
+  def toBrokerMetadata(rackMap: Map[Int, String], brokersWithoutRack: Seq[Int] = Seq.empty): util.Collection[BrokerMetadata] = {
+    val res = rackMap.toSeq.map { case (brokerId, rack) =>
+      new BrokerMetadata(brokerId, Optional.of(rack))
     } ++ brokersWithoutRack.map { brokerId =>
-      BrokerMetadata(brokerId, None)
+      new BrokerMetadata(brokerId, Optional.empty())
     }.sortBy(_.id)
+
+    res.asJavaCollection
+  }
 
 }
 

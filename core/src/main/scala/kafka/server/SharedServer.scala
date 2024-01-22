@@ -309,6 +309,7 @@ class SharedServer(
         case e: Throwable => {
           error("Got exception while starting SharedServer", e)
           stop()
+          throw e
         }
       }
     }

@@ -85,6 +85,7 @@ public class StreamsBuilder {
      *
      * @param topologyConfigs    the streams configs that apply at the topology level. Please refer to {@link TopologyConfig} for more detail
      */
+    @SuppressWarnings("this-escape")
     public StreamsBuilder(final TopologyConfig topologyConfigs) {
         topology = getNewTopology(topologyConfigs);
         internalTopologyBuilder = topology.internalTopologyBuilder;

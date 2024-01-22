@@ -73,7 +73,10 @@ public class FetchConfigTest {
         p.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
         p.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
         ConsumerConfig config = new ConsumerConfig(p);
-        new FetchConfig<>(config, keyDeserializer, valueDeserializer, IsolationLevel.READ_UNCOMMITTED);
+        new FetchConfig<>(
+                config,
+                new Deserializers<>(keyDeserializer, valueDeserializer),
+                IsolationLevel.READ_UNCOMMITTED);
     }
 
     private void newFetchConfigFromValues(Deserializer<String> keyDeserializer,
@@ -85,8 +88,7 @@ public class FetchConfigTest {
                 ConsumerConfig.DEFAULT_MAX_POLL_RECORDS,
                 true,
                 ConsumerConfig.DEFAULT_CLIENT_RACK,
-                keyDeserializer,
-                valueDeserializer,
+                new Deserializers<>(keyDeserializer, valueDeserializer),
                 IsolationLevel.READ_UNCOMMITTED);
     }
 }

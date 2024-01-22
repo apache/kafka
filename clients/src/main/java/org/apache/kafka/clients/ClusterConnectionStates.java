@@ -356,8 +356,7 @@ final class ClusterConnectionStates {
     }
 
     /**
-     * Increment the failure counter, update the node reconnect backoff exponentially,
-     * and record the current timestamp.
+     * Increment the failure counter, update the node reconnect backoff exponentially.
      * The delay is reconnect.backoff.ms * 2**(failures - 1) * (+/- 20% random jitter)
      * Up to a (pre-jitter) maximum of reconnect.backoff.max.ms
      *
@@ -371,7 +370,7 @@ final class ClusterConnectionStates {
     /**
      * Increment the failure counter and update the node connection setup timeout exponentially.
      * The delay is socket.connection.setup.timeout.ms * 2**(failures) * (+/- 20% random jitter)
-     * Up to a (pre-jitter) maximum of reconnect.backoff.max.ms
+     * Up to a (pre-jitter) maximum of socket.connection.setup.timeout.max.ms
      *
      * @param nodeState The node state object to update
      */
@@ -480,13 +479,13 @@ final class ClusterConnectionStates {
         private final String host;
         private final HostResolver hostResolver;
 
-        private NodeConnectionState(ConnectionState state, long lastConnectAttempt, long reconnectBackoffMs,
+        private NodeConnectionState(ConnectionState state, long lastConnectAttemptMs, long reconnectBackoffMs,
                 long connectionSetupTimeoutMs, String host, HostResolver hostResolver) {
             this.state = state;
             this.addresses = Collections.emptyList();
             this.addressIndex = -1;
             this.authenticationException = null;
-            this.lastConnectAttemptMs = lastConnectAttempt;
+            this.lastConnectAttemptMs = lastConnectAttemptMs;
             this.failedAttempts = 0;
             this.reconnectBackoffMs = reconnectBackoffMs;
             this.connectionSetupTimeoutMs = connectionSetupTimeoutMs;
@@ -535,7 +534,12 @@ final class ClusterConnectionStates {
         }
 
         public String toString() {
-            return "NodeState(" + state + ", " + lastConnectAttemptMs + ", " + failedAttempts + ", " + throttleUntilTimeMs + ")";
+            return "NodeConnectionState(" +
+                "state=" + state + ", " +
+                "lastConnectAttemptMs=" + lastConnectAttemptMs + ", " +
+                "failedAttempts=" + failedAttempts + ", " +
+                "failedConnectAttempts=" + failedConnectAttempts + ", " +
+                "throttleUntilTimeMs=" + throttleUntilTimeMs + ")";
         }
     }
 }

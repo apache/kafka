@@ -48,6 +48,7 @@ public class TimelineInteger implements Revertable {
     private final SnapshotRegistry snapshotRegistry;
     private int value;
 
+    @SuppressWarnings("this-escape")
     public TimelineInteger(SnapshotRegistry snapshotRegistry) {
         this.snapshotRegistry = snapshotRegistry;
         this.value = INIT;

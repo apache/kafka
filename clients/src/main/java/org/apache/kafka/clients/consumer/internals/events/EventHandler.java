@@ -16,8 +16,12 @@
  */
 package org.apache.kafka.clients.consumer.internals.events;
 
+import org.apache.kafka.common.utils.Timer;
+
 import java.io.Closeable;
 import java.util.Optional;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 
 /**
  * This class interfaces with the KafkaConsumer and the background thread. It allows the caller to enqueue events via
@@ -43,4 +47,19 @@ public interface EventHandler extends Closeable {
      * @return          true upon successful add.
      */
     boolean add(ApplicationEvent event);
+
+    /**
+     * Add a {@link CompletableApplicationEvent} to the handler. The method blocks waiting for the result, and will
+     * return the result value upon successful completion; otherwise throws an error.
+     *
+     * <p/>
+     *
+     * See {@link CompletableApplicationEvent#get(Timer)} and {@link Future#get(long, TimeUnit)} for more details.
+     *
+     * @param event A {@link CompletableApplicationEvent} created by the polling thread.
+     * @param timer Timer for which to wait for the event to complete
+     * @return      Value that is the result of the event
+     * @param <T>   Type of return value of the event
+     */
+    <T> T addAndGet(final CompletableApplicationEvent<T> event, final Timer timer);
 }
