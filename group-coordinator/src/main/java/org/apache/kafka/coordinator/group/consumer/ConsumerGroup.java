@@ -861,19 +861,9 @@ public class ConsumerGroup implements Group {
         ConsumerGroupMember oldMember,
         ConsumerGroupMember newMember
     ) {
-        if (oldMember == null) {
-            addPartitionEpochs(newMember.assignedPartitions(), newMember.memberEpoch());
-            addPartitionEpochs(newMember.partitionsPendingRevocation(), newMember.memberEpoch());
-        } else {
-            if (!oldMember.assignedPartitions().equals(newMember.assignedPartitions())) {
-                removePartitionEpochs(oldMember.assignedPartitions());
-                addPartitionEpochs(newMember.assignedPartitions(), newMember.memberEpoch());
-            }
-            if (!oldMember.partitionsPendingRevocation().equals(newMember.partitionsPendingRevocation())) {
-                removePartitionEpochs(oldMember.partitionsPendingRevocation());
-                addPartitionEpochs(newMember.partitionsPendingRevocation(), newMember.memberEpoch());
-            }
-        }
+        maybeRemovePartitionEpoch(oldMember);
+        addPartitionEpochs(newMember.assignedPartitions(), newMember.memberEpoch());
+        addPartitionEpochs(newMember.partitionsPendingRevocation(), newMember.memberEpoch());
     }
 
     /**
@@ -885,8 +875,8 @@ public class ConsumerGroup implements Group {
         ConsumerGroupMember oldMember
     ) {
         if (oldMember != null) {
-            removePartitionEpochs(oldMember.assignedPartitions());
-            removePartitionEpochs(oldMember.partitionsPendingRevocation());
+            removePartitionEpochs(oldMember.assignedPartitions(), oldMember.memberEpoch());
+            removePartitionEpochs(oldMember.partitionsPendingRevocation(), oldMember.memberEpoch());
         }
     }
 
@@ -894,21 +884,34 @@ public class ConsumerGroup implements Group {
      * Removes the partition epochs based on the provided assignment.
      *
      * @param assignment    The assignment.
+     * @param expectedEpoch The expected epoch.
+     * @throws IllegalStateException if the epoch does not match the expected one.
+     * package-private for testing.
      */
-    private void removePartitionEpochs(
-        Map<Uuid, Set<Integer>> assignment
+    void removePartitionEpochs(
+        Map<Uuid, Set<Integer>> assignment,
+        int expectedEpoch
     ) {
         assignment.forEach((topicId, assignedPartitions) -> {
             currentPartitionEpoch.compute(topicId, (__, partitionsOrNull) -> {
                 if (partitionsOrNull != null) {
-                    assignedPartitions.forEach(partitionsOrNull::remove);
+                    assignedPartitions.forEach(partitionId -> {
+                        Integer prevValue = partitionsOrNull.remove(partitionId);
+                        if (prevValue != expectedEpoch) {
+                            throw new IllegalStateException(
+                                String.format("Cannot remove the epoch %d from %s-%s because the partition is " +
+                                    "still owned at a different epoch %d", expectedEpoch, topicId, partitionId, prevValue));
+                        }
+                    });
                     if (partitionsOrNull.isEmpty()) {
                         return null;
                     } else {
                         return partitionsOrNull;
                     }
                 } else {
-                    return null;
+                    throw new IllegalStateException(
+                        String.format("Cannot remove the epoch %d from %s because it does not have any epoch",
+                            expectedEpoch, topicId));
                 }
             });
         });
@@ -919,8 +922,10 @@ public class ConsumerGroup implements Group {
      *
      * @param assignment    The assignment.
      * @param epoch         The new epoch.
+     * @throws IllegalStateException if the partition already has an epoch assigned.
+     * package-private for testing.
      */
-    private void addPartitionEpochs(
+    void addPartitionEpochs(
         Map<Uuid, Set<Integer>> assignment,
         int epoch
     ) {
@@ -930,7 +935,12 @@ public class ConsumerGroup implements Group {
                     partitionsOrNull = new TimelineHashMap<>(snapshotRegistry, assignedPartitions.size());
                 }
                 for (Integer partitionId : assignedPartitions) {
-                    partitionsOrNull.put(partitionId, epoch);
+                    Integer prevValue = partitionsOrNull.put(partitionId, epoch);
+                    if (prevValue != null) {
+                        throw new IllegalStateException(
+                            String.format("Cannot set the epoch of %s-%s to %d because the partition is " +
+                                "still owned at epoch %d", topicId, partitionId, epoch, prevValue));
+                    }
                 }
                 return partitionsOrNull;
             });

@@ -25,17 +25,24 @@ import java.util.Objects;
 public class DslKeyValueParams {
 
     private final String name;
+    private final boolean isTimestamped;
 
     /**
-     * @param name the name of the store (cannot be {@code null})
+     * @param name          the name of the store (cannot be {@code null})
+     * @param isTimestamped whether the returned stores should be timestamped, see ({@link TimestampedKeyValueStore}
      */
-    public DslKeyValueParams(final String name) {
+    public DslKeyValueParams(final String name, final boolean isTimestamped) {
         Objects.requireNonNull(name);
         this.name = name;
+        this.isTimestamped = isTimestamped;
     }
 
     public String name() {
         return name;
+    }
+
+    public boolean isTimestamped() {
+        return isTimestamped;
     }
 
     @Override
@@ -47,18 +54,20 @@ public class DslKeyValueParams {
             return false;
         }
         final DslKeyValueParams that = (DslKeyValueParams) o;
-        return Objects.equals(name, that.name);
+        return isTimestamped == that.isTimestamped
+                && Objects.equals(name, that.name);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(name);
+        return Objects.hash(name, isTimestamped);
     }
 
     @Override
     public String toString() {
         return "DslKeyValueParams{" +
                 "name='" + name + '\'' +
+                "isTimestamped=" + isTimestamped +
                 '}';
     }
 }

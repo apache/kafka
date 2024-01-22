@@ -95,11 +95,12 @@ public class OuterStreamJoinStoreFactory<K, V1, V2> extends AbstractConfigurable
         final TimestampedKeyAndJoinSideSerde<K> timestampedKeyAndJoinSideSerde = new TimestampedKeyAndJoinSideSerde<>(streamJoined.keySerde());
         final LeftOrRightValueSerde<V1, V2> leftOrRightValueSerde = new LeftOrRightValueSerde<>(streamJoined.valueSerde(), streamJoined.otherValueSerde());
 
+        final DslKeyValueParams dslKeyValueParams = new DslKeyValueParams(name, false);
         final KeyValueBytesStoreSupplier supplier;
 
         if (passedInDslStoreSuppliers != null) {
             // case 1: dslStoreSuppliers was explicitly passed in
-            supplier = passedInDslStoreSuppliers.keyValueStore(new DslKeyValueParams(name));
+            supplier = passedInDslStoreSuppliers.keyValueStore(dslKeyValueParams);
         } else if (streamJoined.thisStoreSupplier() != null) {
             // case 2: thisStoreSupplier was explicitly passed in, we match
             // the type for that one
@@ -110,12 +111,12 @@ public class OuterStreamJoinStoreFactory<K, V1, V2> extends AbstractConfigurable
             } else {
                 // couldn't determine the type of bytes store for thisStoreSupplier,
                 // fallback to the default
-                supplier = dslStoreSuppliers().keyValueStore(new DslKeyValueParams(name));
+                supplier = dslStoreSuppliers().keyValueStore(dslKeyValueParams);
             }
         } else {
             // case 3: nothing was explicitly passed in, fallback to default which
             // was configured via either the TopologyConfig or StreamsConfig globally
-            supplier = dslStoreSuppliers().keyValueStore(new DslKeyValueParams(name));
+            supplier = dslStoreSuppliers().keyValueStore(dslKeyValueParams);
         }
 
         final StoreBuilder<KeyValueStore<TimestampedKeyAndJoinSide<K>, LeftOrRightValue<V1, V2>>>

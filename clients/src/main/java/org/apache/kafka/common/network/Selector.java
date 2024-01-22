@@ -94,7 +94,7 @@ public class Selector implements Selectable, AutoCloseable {
         NOTIFY_ONLY(true),         // discard any outstanding receives, notify disconnect
         DISCARD_NO_NOTIFY(false);  // discard any outstanding receives, no disconnect notification
 
-        boolean notifyDisconnect;
+        final boolean notifyDisconnect;
 
         CloseMode(boolean notifyDisconnect) {
             this.notifyDisconnect = notifyDisconnect;

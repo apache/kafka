@@ -989,6 +989,7 @@ class ReplicaManager(val config: KafkaConfig,
    * @param requestLocal                  container for the stateful instances scoped to this request -- this must correspond to the
    *                                      thread calling this method
    * @param verificationGuards            the mapping from topic partition to verification guards if transaction verification is used
+   * @param actionQueue                   the action queue to use
    */
   def appendForGroup(
     timeout: Long,
@@ -997,7 +998,8 @@ class ReplicaManager(val config: KafkaConfig,
     responseCallback: Map[TopicPartition, PartitionResponse] => Unit,
     delayedProduceLock: Option[Lock],
     requestLocal: RequestLocal,
-    verificationGuards: Map[TopicPartition, VerificationGuard]
+    verificationGuards: Map[TopicPartition, VerificationGuard],
+    actionQueue: ActionQueue = this.defaultActionQueue
   ): Unit = {
     if (!isValidRequiredAcks(requiredAcks)) {
       sendInvalidRequiredAcksResponse(entriesPerPartition, responseCallback)
@@ -1025,7 +1027,7 @@ class ReplicaManager(val config: KafkaConfig,
     val allResults = localProduceResults
     val produceStatus = buildProducePartitionStatus(allResults)
 
-    addCompletePurgatoryAction(defaultActionQueue, allResults)
+    addCompletePurgatoryAction(actionQueue, allResults)
 
     maybeAddDelayedProduce(
       requiredAcks,
@@ -2058,7 +2060,7 @@ class ReplicaManager(val config: KafkaConfig,
                   s" match the topic ID for partition $topicPartition received: " +
                   s"${requestTopicId.get}.")
                 responseMap.put(topicPartition, Errors.INCONSISTENT_TOPIC_ID)
-              } else if (requestLeaderEpoch > currentLeaderEpoch) {
+              } else if (requestLeaderEpoch > currentLeaderEpoch || (requestLeaderEpoch == currentLeaderEpoch && leaderAndIsrRequest.isKRaftController)) {
                 // If the leader epoch is valid record the epoch of the controller that made the leadership decision.
                 // This is useful while updating the isr to maintain the decision maker controller's epoch in the zookeeper path
                 if (partitionState.replicas.contains(localBrokerId)) {
@@ -2796,6 +2798,7 @@ class ReplicaManager(val config: KafkaConfig,
   def applyDelta(delta: TopicsDelta, newImage: MetadataImage): Unit = {
     // Before taking the lock, compute the local changes
     val localChanges = delta.localChanges(config.nodeId)
+    val metadataVersion = newImage.features().metadataVersion()
 
     replicaStateChangeLock.synchronized {
       // Handle deleted partitions. We need to do this first because we might subsequently
@@ -2843,7 +2846,10 @@ class ReplicaManager(val config: KafkaConfig,
         remoteLogManager.foreach(rlm => rlm.onLeadershipChange(leaderChangedPartitions.asJava, followerChangedPartitions.asJava, localChanges.topicIds()))
       }
 
-      localChanges.directoryIds.forEach(maybeUpdateTopicAssignment)
+      if (metadataVersion.isDirectoryAssignmentSupported()) {
+        // We only want to update the directoryIds if DirectoryAssignment is supported!
+        localChanges.directoryIds.forEach(maybeUpdateTopicAssignment)
+      }
     }
   }
 

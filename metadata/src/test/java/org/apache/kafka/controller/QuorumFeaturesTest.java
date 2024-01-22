@@ -63,7 +63,7 @@ public class QuorumFeaturesTest {
         Map<String, VersionRange> expectedFeatures = new HashMap<>(1);
         expectedFeatures.put(MetadataVersion.FEATURE_NAME, VersionRange.of(
             MetadataVersion.MINIMUM_KRAFT_VERSION.featureLevel(),
-            MetadataVersion.latest().featureLevel()));
+            MetadataVersion.latestTesting().featureLevel()));
         assertEquals(expectedFeatures, QuorumFeatures.defaultFeatureMap(true));
     }
 

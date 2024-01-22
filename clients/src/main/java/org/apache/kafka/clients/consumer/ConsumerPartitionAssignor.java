@@ -172,8 +172,8 @@ public interface ConsumerPartitionAssignor {
     }
 
     final class Assignment {
-        private List<TopicPartition> partitions;
-        private ByteBuffer userData;
+        private final List<TopicPartition> partitions;
+        private final ByteBuffer userData;
 
         public Assignment(List<TopicPartition> partitions, ByteBuffer userData) {
             this.partitions = partitions;

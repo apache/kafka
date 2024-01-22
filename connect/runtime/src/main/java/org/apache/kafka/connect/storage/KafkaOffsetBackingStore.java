@@ -99,7 +99,8 @@ public class KafkaOffsetBackingStore extends KafkaTopicBasedBackingStore impleme
                         topicAdmin,
                         consumedCallback,
                         Time.SYSTEM,
-                        topicInitializer(topic, newTopicDescription(topic, config), config, Time.SYSTEM)
+                        topicInitializer(topic, newTopicDescription(topic, config), config, Time.SYSTEM),
+                        ignored -> true
                 );
             }
         };
@@ -131,7 +132,8 @@ public class KafkaOffsetBackingStore extends KafkaTopicBasedBackingStore impleme
                         topicAdmin,
                         consumedCallback,
                         Time.SYSTEM,
-                        topicInitializer(topic, newTopicDescription(topic, config), config, Time.SYSTEM)
+                        topicInitializer(topic, newTopicDescription(topic, config), config, Time.SYSTEM),
+                        ignored -> true
                 );
             }
         };

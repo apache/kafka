@@ -603,7 +603,7 @@ public class WorkerSourceTaskTest {
         workerTask.toSend = Arrays.asList(record1, record2);
         assertThrows(ConnectException.class, () -> workerTask.sendRecords());
 
-        verify(transformationChain, times(2)).apply(any(SourceRecord.class));
+        verify(transformationChain, times(2)).apply(any(), any(SourceRecord.class));
         verify(keyConverter, times(2)).fromConnectData(anyString(), any(Headers.class), eq(KEY_SCHEMA), eq(KEY));
         verify(valueConverter, times(2)).fromConnectData(anyString(), any(Headers.class), eq(RECORD_SCHEMA), eq(RECORD));
     }
@@ -835,8 +835,8 @@ public class WorkerSourceTaskTest {
     }
 
     private void expectApplyTransformationChain() {
-        when(transformationChain.apply(any(SourceRecord.class)))
-                .thenAnswer(AdditionalAnswers.returnsFirstArg());
+        when(transformationChain.apply(any(), any(SourceRecord.class)))
+                .thenAnswer(AdditionalAnswers.returnsSecondArg());
     }
 
     private void expectTaskGetTopic() {

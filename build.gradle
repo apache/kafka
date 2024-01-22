@@ -208,7 +208,6 @@ if (repo != null) {
         'licenses/*',
         '**/generated/**',
         'clients/src/test/resources/serializedData/*',
-        'docker/resources/utility/go.sum',
         'docker/test/fixtures/secrets/*',
         'docker/examples/fixtures/secrets/*'
     ])
@@ -303,7 +302,7 @@ subprojects {
             from components.java
           } else {
             apply plugin: 'com.github.johnrengelman.shadow'
-            project.shadow.component(mavenJava)
+            artifact shadowJar
           }
 
           afterEvaluate {
@@ -850,6 +849,9 @@ project(':server') {
   dependencies {
     implementation project(':clients')
     implementation project(':server-common')
+    implementation project(':group-coordinator')
+    implementation project(':transaction-coordinator')
+    implementation project(':raft')
     implementation libs.metrics
 
     implementation libs.slf4jApi
@@ -927,6 +929,7 @@ project(':core') {
 
     implementation project(':server-common')
     implementation project(':group-coordinator')
+    implementation project(':transaction-coordinator')
     implementation project(':metadata')
     implementation project(':storage:storage-api')
     implementation project(':tools:tools-api')
@@ -1314,6 +1317,7 @@ project(':group-coordinator') {
     implementation project(':server-common')
     implementation project(':clients')
     implementation project(':metadata')
+    implementation project(':storage')
     implementation libs.slf4jApi
     implementation libs.metrics
 
@@ -1361,6 +1365,27 @@ project(':group-coordinator') {
 
   compileJava.dependsOn 'processMessages'
   srcJar.dependsOn 'processMessages'
+}
+
+project(':transaction-coordinator') {
+  archivesBaseName = "kafka-transaction-coordinator"
+
+  sourceSets {
+    main {
+      java {
+        srcDirs = ["src/generated/java", "src/main/java"]
+      }
+    }
+    test {
+      java {
+        srcDirs = ["src/generated/java", "src/test/java"]
+      }
+    }
+  }
+
+  javadoc {
+    enabled = false
+  }
 }
 
 project(':examples') {
@@ -1582,6 +1607,7 @@ project(':raft') {
     implementation libs.jacksonDatabind
 
     testImplementation project(':server-common')
+    testImplementation project(':server-common').sourceSets.test.output
     testImplementation project(':clients')
     testImplementation project(':clients').sourceSets.test.output
     testImplementation libs.junitJupiter

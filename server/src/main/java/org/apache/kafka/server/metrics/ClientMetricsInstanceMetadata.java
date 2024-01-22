@@ -45,13 +45,7 @@ public class ClientMetricsInstanceMetadata {
             requestContext.clientInformation.softwareVersion() : null);
         attributesMap.put(ClientMetricsConfigs.CLIENT_SOURCE_ADDRESS, requestContext.clientAddress != null ?
             requestContext.clientAddress.getHostAddress() : null);
-        // KIP-714 mentions client source port should be the client connection's source port from the
-        // broker's point of view. But the broker does not have this information rather the port could be
-        // the broker's port where the client connection is established. We might want to consider removing
-        // the client source port from the KIP or use broker port if that can be helpful.
-        // TODO: fix port
-        attributesMap.put(ClientMetricsConfigs.CLIENT_SOURCE_PORT, requestContext.clientAddress != null ?
-            requestContext.clientAddress.getHostAddress() : null);
+        attributesMap.put(ClientMetricsConfigs.CLIENT_SOURCE_PORT, requestContext.clientPort.map(String::valueOf).orElse(null));
     }
 
     public boolean isMatch(Map<String, Pattern> patterns) {
