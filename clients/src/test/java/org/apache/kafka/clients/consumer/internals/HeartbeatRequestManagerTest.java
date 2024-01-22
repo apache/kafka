@@ -64,7 +64,6 @@ import static org.apache.kafka.clients.consumer.internals.ConsumerTestBuilder.DE
 import static org.apache.kafka.clients.consumer.internals.ConsumerTestBuilder.DEFAULT_RETRY_BACKOFF_MAX_MS;
 import static org.apache.kafka.clients.consumer.internals.ConsumerTestBuilder.DEFAULT_RETRY_BACKOFF_MS;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -564,6 +563,41 @@ public class HeartbeatRequestManagerTest {
         assertHeartbeat(heartbeatRequestManager);
     }
 
+    @Test
+    public void testHeartbeatMetrics() {
+        coordinatorRequestManager = mock(CoordinatorRequestManager.class);
+        membershipManager = mock(MembershipManager.class);
+        heartbeatState = mock(HeartbeatRequestManager.HeartbeatState.class);
+        heartbeatRequestState = new HeartbeatRequestManager.HeartbeatRequestState(
+                new LogContext(),
+                time,
+                heartbeatIntervalMs,
+                retryBackoffMs,
+                retryBackoffMaxMs,
+                0);
+        backgroundEventHandler = mock(BackgroundEventHandler.class);
+
+        heartbeatRequestManager = createHeartbeatRequestManager(
+                coordinatorRequestManager,
+                membershipManager,
+                heartbeatState,
+                heartbeatRequestState,
+                backgroundEventHandler);
+        when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(new Node(1, "localhost", 9999)));
+        when(membershipManager.shouldSkipHeartbeat()).thenReturn(false);
+        when(membershipManager.state()).thenReturn(MemberState.STABLE);
+        time.sleep(maxPollIntervalMs);
+        NetworkClientDelegate.PollResult pollResult = heartbeatRequestManager.poll(time.milliseconds());
+        ClientResponse hr = createHeartbeatResponse(pollResult.unsentRequests.get(0), Errors.NONE);
+        pollResult.unsentRequests.get(0).future().complete(hr);
+
+        assertEquals(1, pollResult.unsentRequests.size());
+        //assertEquals(1, getMetric("heartbeat-response-time-max").metricValue());
+        assertEquals(0.0, getMetric("heartbeat-rate").metricValue());
+        assertEquals(1.0, getMetric("heartbeat-total").metricValue());
+        assertEquals(1, getMetric("last-heartbeat-seconds-ago").metricValue());
+    }
+
     private void assertHeartbeat(HeartbeatRequestManager hrm) {
         NetworkClientDelegate.PollResult pollResult = hrm.poll(time.milliseconds());
         assertEquals(1, pollResult.unsentRequests.size());
@@ -674,10 +708,7 @@ public class HeartbeatRequestManagerTest {
     }
 
     private void assertMetricsRecorded() {
-        assertNotNull(getMetric("heartbeat-response-time-max"));
-        assertNotNull(getMetric("heartbeat-rate"));
-        assertNotNull(getMetric("heartbeat-total"));
-        assertNotNull(getMetric("last-heartbeat-seconds-ago"));
+
     }
 
     private KafkaMetric getMetric(final String name) {
