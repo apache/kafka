@@ -14,7 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.tools.consumergroup;
+package org.apache.kafka.tools.consumer.group;
 
 import kafka.utils.TestUtils;
 import org.apache.kafka.clients.consumer.Consumer;
@@ -30,7 +30,7 @@ import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.server.config.Defaults;
 import org.apache.kafka.tools.Tuple2;
-import org.apache.kafka.tools.consumergroup.ConsumerGroupCommand.ConsumerGroupService;
+import org.apache.kafka.tools.consumer.group.ConsumerGroupCommand.ConsumerGroupService;
 import org.junit.jupiter.api.Test;
 
 import java.util.Collections;

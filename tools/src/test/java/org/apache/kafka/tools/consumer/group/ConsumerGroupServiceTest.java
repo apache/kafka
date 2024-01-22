@@ -14,7 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.tools.consumergroup;
+package org.apache.kafka.tools.consumer.group;
 
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClientTestUtils;
@@ -39,7 +39,7 @@ import org.apache.kafka.common.TopicPartitionInfo;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.tools.Tuple2;
-import org.apache.kafka.tools.consumergroup.ConsumerGroupCommand.ConsumerGroupService;
+import org.apache.kafka.tools.consumer.group.ConsumerGroupCommand.ConsumerGroupService;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentMatcher;
 import org.mockito.ArgumentMatchers;

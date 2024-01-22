@@ -14,7 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.tools.consumergroup;
+package org.apache.kafka.tools.consumer.group;
 
 import kafka.server.KafkaConfig;
 import kafka.utils.TestUtils;
@@ -25,7 +25,7 @@ import org.apache.kafka.clients.consumer.RangeAssignor;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.serialization.StringDeserializer;
-import org.apache.kafka.tools.consumergroup.ConsumerGroupCommand.ConsumerGroupService;
+import org.apache.kafka.tools.consumer.group.ConsumerGroupCommand.ConsumerGroupService;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.TestInfo;

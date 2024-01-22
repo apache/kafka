@@ -14,7 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.tools.consumergroup;
+package org.apache.kafka.tools.consumer.group;
 
 import joptsimple.OptionException;
 import kafka.server.KafkaConfig;
@@ -23,7 +23,7 @@ import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.test.TestUtils;
-import org.apache.kafka.tools.consumergroup.ConsumerGroupCommand.ConsumerGroupService;
+import org.apache.kafka.tools.consumer.group.ConsumerGroupCommand.ConsumerGroupService;
 import org.junit.jupiter.api.Test;
 import scala.collection.Seq;
 
