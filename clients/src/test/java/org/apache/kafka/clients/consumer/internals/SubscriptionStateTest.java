@@ -267,6 +267,46 @@ public class SubscriptionStateTest {
     }
 
     @Test
+    public void testPartitionsPendingOnAssignedCallbackKeepPositionDefined() {
+        // New partition assigned. Should not be fetchable or initializing positions.
+        state.assignFromUser(singleton(tp0));
+        state.markPendingOnAssignedCallback(singleton(tp0), true);
+        assertFalse(state.isFetchable(tp0));
+        assertEquals(0, state.initializingPartitions().size());
+        assertFalse(state.isPaused(tp0));
+
+        // Simulate callback setting position to start fetching from
+        state.seek(tp0, 100);
+
+        // Callback completed. Partition should be fetchable, and should not require
+        // initializing positions (position already defined in the callback)
+        state.markPendingOnAssignedCallback(singleton(tp0), false);
+        assertEquals(0, state.initializingPartitions().size());
+        assertTrue(state.isFetchable(tp0));
+        assertTrue(state.hasAllFetchPositions());
+        assertEquals(100L, state.position(tp0).offset);
+    }
+
+    @Test
+    public void testPartitionsPendingOnAssignedCallbackInitializesPositions() {
+        // New partition assigned. Should not be fetchable or initializing positions.
+        state.assignFromUser(singleton(tp0));
+        state.markPendingOnAssignedCallback(singleton(tp0), true);
+        assertFalse(state.isFetchable(tp0));
+        assertEquals(0, state.initializingPartitions().size());
+        assertFalse(state.isPaused(tp0));
+
+        // Callback completed (without updating positions). Partition should require initializing
+        // positions, and start fetching once a valid position is set.
+        state.markPendingOnAssignedCallback(singleton(tp0), false);
+        assertEquals(1, state.initializingPartitions().size());
+        state.seek(tp0, 100);
+        assertTrue(state.isFetchable(tp0));
+        assertTrue(state.hasAllFetchPositions());
+        assertEquals(100L, state.position(tp0).offset);
+    }
+
+    @Test
     public void invalidPositionUpdate() {
         state.subscribe(singleton(topic), Optional.of(rebalanceListener));
         assertTrue(state.checkAssignmentMatchedSubscription(singleton(tp0)));

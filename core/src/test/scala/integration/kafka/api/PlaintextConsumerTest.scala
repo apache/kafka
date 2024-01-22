@@ -1594,44 +1594,6 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     assertEquals(500, consumer.committed(Set(tp2).asJava).get(tp2).offset)
   }
 
-  // This test only applies to the async consumer because it is specific to how it prevents
-  // fetching while the onPartitionsAssigned callback is executed. In the async consumer,
-  // callbacks run in the App thread, while the fetching happens in the Background thread, so
-  // partitions are paused until the onPartitionsAssigned completes, to ensure that no records
-  // are fetched in the Background thread in the meantime.
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersConsumerGroupProtocolOnly"))
-  def testPartitionsPauseUntilAssignCallbackCompletes(quorum: String, groupProtocol: String): Unit = {
-    val topic1 = "topic1"
-    val numPartitions = 2
-    createTopic(topic1, numPartitions, brokerCount)
-    val consumer = createConsumer()
-
-    val rebalanceListener = new ConsumerRebalanceListener {
-      override def onPartitionsAssigned(partitions: util.Collection[TopicPartition]) = {
-        assertEquals(numPartitions, consumer.paused().size())
-      }
-      override def onPartitionsRevoked(partitions: util.Collection[TopicPartition]) = {}
-    }
-
-    consumer.subscribe(List(topic).asJava, rebalanceListener)
-    awaitAssignment(consumer, Set(tp, tp2))
-
-    val numRecords = 100
-    val producer = createProducer()
-    val startingTimestamp = System.currentTimeMillis()
-
-    // Consume from first partition to check it's not paused anymore
-    sendRecords(producer, numRecords, tp, startingTimestamp = startingTimestamp)
-    consumeAndVerifyRecords(consumer = consumer, numRecords = numRecords, startingOffset = 0,
-      startingTimestamp = startingTimestamp, tp = tp)
-
-    // Consume from second partition to check it's not paused anymore
-    sendRecords(producer, numRecords, tp2, startingTimestamp = startingTimestamp)
-    consumeAndVerifyRecords(consumer = consumer, numRecords = numRecords, startingOffset = 0,
-      startingTimestamp = startingTimestamp, tp = tp2)
-  }
-
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
   @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
   def testPerPartitionLeadMetricsCleanUpWithSubscribe(quorum: String, groupProtocol: String): Unit = {

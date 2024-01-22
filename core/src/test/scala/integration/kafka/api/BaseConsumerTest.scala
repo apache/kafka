@@ -144,13 +144,6 @@ object BaseConsumerTest {
         Arguments.of("kraft+kip848", "classic"))
   }
 
-  // For tests that only work with the async consumer (consumer protocol)
-  def getTestQuorumAndGroupProtocolParametersConsumerGroupProtocolOnly(): java.util.stream
-  .Stream[Arguments] = {
-    java.util.stream.Stream.of[Arguments](
-      Arguments.of("kraft+kip848", "consumer"))
-  }
-
   val updateProducerCount = new AtomicInteger()
   val updateConsumerCount = new AtomicInteger()
 
