@@ -240,14 +240,14 @@ public class ConsumerGroupCommandOptions extends CommandDefaultOptions {
             if (!options.has(groupOpt) && !options.has(allGroupsOpt))
                 CommandLineUtils.printUsageAndExit(parser,
                     "Option " + resetOffsetsOpt + " takes one of these options: " + join(allGroupSelectionScopeOpts, ", "));
-            CommandLineUtils.checkInvalidArgs(parser, options, resetToOffsetOpt,   minus(allResetOffsetScenarioOpts, resetToOffsetOpt));
+            CommandLineUtils.checkInvalidArgs(parser, options, resetToOffsetOpt, minus(allResetOffsetScenarioOpts, resetToOffsetOpt));
             CommandLineUtils.checkInvalidArgs(parser, options, resetToDatetimeOpt, minus(allResetOffsetScenarioOpts, resetToDatetimeOpt));
             CommandLineUtils.checkInvalidArgs(parser, options, resetByDurationOpt, minus(allResetOffsetScenarioOpts, resetByDurationOpt));
             CommandLineUtils.checkInvalidArgs(parser, options, resetToEarliestOpt, minus(allResetOffsetScenarioOpts, resetToEarliestOpt));
-            CommandLineUtils.checkInvalidArgs(parser, options, resetToLatestOpt,   minus(allResetOffsetScenarioOpts, resetToLatestOpt));
-            CommandLineUtils.checkInvalidArgs(parser, options, resetToCurrentOpt,  minus(allResetOffsetScenarioOpts, resetToCurrentOpt));
-            CommandLineUtils.checkInvalidArgs(parser, options, resetShiftByOpt,    minus(allResetOffsetScenarioOpts, resetShiftByOpt));
-            CommandLineUtils.checkInvalidArgs(parser, options, resetFromFileOpt,   minus(allResetOffsetScenarioOpts, resetFromFileOpt));
+            CommandLineUtils.checkInvalidArgs(parser, options, resetToLatestOpt, minus(allResetOffsetScenarioOpts, resetToLatestOpt));
+            CommandLineUtils.checkInvalidArgs(parser, options, resetToCurrentOpt, minus(allResetOffsetScenarioOpts, resetToCurrentOpt));
+            CommandLineUtils.checkInvalidArgs(parser, options, resetShiftByOpt, minus(allResetOffsetScenarioOpts, resetShiftByOpt));
+            CommandLineUtils.checkInvalidArgs(parser, options, resetFromFileOpt, minus(allResetOffsetScenarioOpts, resetFromFileOpt));
         }
 
         CommandLineUtils.checkInvalidArgs(parser, options, groupOpt, minus(allGroupSelectionScopeOpts, groupOpt));
