@@ -34,6 +34,7 @@ import org.eclipse.jgit.revwalk.RevTree;
 import org.eclipse.jgit.revwalk.RevWalk;
 import org.eclipse.jgit.treewalk.TreeWalk;
 import org.eclipse.jgit.treewalk.filter.PathFilter;
+import org.eclipse.jgit.treewalk.filter.TreeFilter;
 
 
 import java.io.BufferedReader;
@@ -41,6 +42,7 @@ import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.FileReader;
 import java.io.IOException;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Iterator;
@@ -56,26 +58,25 @@ public class MetadataSchemaChecker {
     static int oldFirstVersion = -1;
     static int newLatestVersion = -1;
     static int newFirstVersion = -1;
-    static String[] filesCheckMetadata = new File(System.getProperty("user.dir") + "/metadata/src/main/resources/common/metadata/").list();
+    static String[] filesCheckMetadata = Paths.get(Paths.get("").toAbsolutePath() + "/metadata/src/main/resources/common/metadata/").toFile().list();
     public static void main(String[] args) throws Exception {
 
         try {
             List<String> localContent = new ArrayList<>();
-            for(String fileName: filesCheckMetadata) {
-                final String dir = System.getProperty("user.dir");
+            for (String fileName: filesCheckMetadata) {
+                final String dir = String.valueOf(Paths.get("").toAbsolutePath());
                 String path = dir + "/metadata/src/main/resources/common/metadata/" + fileName;
                 BufferedReader reader = new BufferedReader(new FileReader(path));
-                for (int i = 0; i < 15; i++) {
-                    reader.readLine();
-                }
                 StringBuilder content = new StringBuilder();
                 boolean print = false;
                 for (String line = reader.readLine(); line != null; line = reader.readLine()) {
-                    if (line.charAt(0) == '{') {
-                        print = true;
-                    }
-                    if (print && !line.contains("//")) {
-                        content.append(line);
+                    if(!line.isEmpty()) {
+                        if (line.charAt(0) == '{') {
+                            print = true;
+                        }
+                        if (print && !line.trim().startsWith("//")) {
+                            content.append(line);
+                        }
                     }
                 }
                 localContent.add(content.toString());
@@ -95,7 +96,9 @@ public class MetadataSchemaChecker {
                 JsonNode jsonNode2 = objectMapper.readTree(localContent.get(i));
 
                 checkApiTypeVersions(jsonNode1, jsonNode2);
-                parser((ArrayNode) jsonNode1.get("fields"), (ArrayNode) jsonNode2.get("fields"));
+                System.out.println("\u001B[32m" + gitContent.get(i));
+                System.out.println("\u001B[31m" + localContent.get(i));
+                //parser((ArrayNode) jsonNode1.get("fields"), (ArrayNode) jsonNode2.get("fields"));
             }
 
         } catch (IOException e) {
@@ -106,7 +109,7 @@ public class MetadataSchemaChecker {
     private static List<String> GetDataFromGit() throws IOException, GitAPIException {
         List<String> gitSchemas = new ArrayList<>();
 
-        Git git = Git.open(new File(System.getProperty("user.dir") + "/.git"));
+        Git git = Git.open(new File(Paths.get("").toAbsolutePath() + "/.git"));
         Repository repository = git.getRepository();
         Ref head = git.getRepository().getRefDatabase().firstExactRef("refs/heads/trunk");
 
@@ -128,12 +131,14 @@ public class MetadataSchemaChecker {
                     String content = new String(loader.getBytes());
                     String[] lines = content.split("\n");
                     boolean print = false;
-                    for (int i = 15; i < lines.length; i++) {
-                        if (lines[i].charAt(0) == '{') {
-                            print = true;
-                        }
-                        if (print && !lines[i].contains("//")) {
-                            stringBuilder.append(lines[i]);
+                    for (String line : lines) {
+                        if(!line.isEmpty()) {
+                            if (line.charAt(0) == '{') {
+                                print = true;
+                            }
+                            if (print && !line.trim().startsWith("//")) {
+                                stringBuilder.append(line);
+                            }
                         }
                     }
                 }
@@ -225,6 +230,7 @@ public class MetadataSchemaChecker {
     }
 
     private static boolean parseVersion(JsonNode nodeOrig, JsonNode nodeNew) {
+
         String[] oldVersion = cleanUpVersionStrings(String.valueOf(nodeOrig.get("versions")));
         String[] newVersion = cleanUpVersionStrings(String.valueOf(nodeNew.get("versions")));
 
