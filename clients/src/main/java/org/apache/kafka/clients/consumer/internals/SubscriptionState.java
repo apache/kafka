@@ -685,7 +685,7 @@ public class SubscriptionState {
     }
 
     public synchronized Set<TopicPartition> initializingPartitions() {
-        return collectPartitions(state -> state.fetchState.equals(FetchStates.INITIALIZING));
+        return collectPartitions(state -> state.fetchState.equals(FetchStates.INITIALIZING) && !state.pendingOnAssignedCallback);
     }
 
     private Set<TopicPartition> collectPartitions(Predicate<TopicPartitionState> filter) {
@@ -749,6 +749,11 @@ public class SubscriptionState {
         tps.forEach(tp -> assignedState(tp).markPendingRevocation());
     }
 
+    public synchronized void markPendingOnAssignedCallback(Set<TopicPartition> tps,
+                                                           boolean pendingOnAssignedCallback) {
+        tps.forEach(tp -> assignedState(tp).markPendingOnAssignedCallback(pendingOnAssignedCallback));
+    }
+
     public synchronized void resume(TopicPartition tp) {
         assignedState(tp).resume();
     }
@@ -781,6 +786,7 @@ public class SubscriptionState {
         private Long lastStableOffset;
         private boolean paused;  // whether this partition has been paused by the user
         private boolean pendingRevocation;
+        private boolean pendingOnAssignedCallback;
         private OffsetResetStrategy resetStrategy;  // the strategy to use if the offset needs resetting
         private Long nextRetryTimeMs;
         private Integer preferredReadReplica;
@@ -790,6 +796,7 @@ public class SubscriptionState {
         TopicPartitionState() {
             this.paused = false;
             this.pendingRevocation = false;
+            this.pendingOnAssignedCallback = false;
             this.endOffsetRequested = false;
             this.fetchState = FetchStates.INITIALIZING;
             this.position = null;
@@ -983,12 +990,16 @@ public class SubscriptionState {
             this.pendingRevocation = true;
         }
 
+        private void markPendingOnAssignedCallback(boolean pendingOnAssignedCallback) {
+            this.pendingOnAssignedCallback = pendingOnAssignedCallback;
+        }
+
         private void resume() {
             this.paused = false;
         }
 
         private boolean isFetchable() {
-            return !paused && !pendingRevocation && hasValidPosition();
+            return !paused && !pendingRevocation && !pendingOnAssignedCallback && hasValidPosition();
         }
 
         private void highWatermark(Long highWatermark) {

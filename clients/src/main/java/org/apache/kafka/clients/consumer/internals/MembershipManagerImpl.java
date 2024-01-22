@@ -1134,8 +1134,12 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
         // Make assignment effective on the client by updating the subscription state.
         updateSubscription(assignedPartitions, false);
 
-        // Pause partitions to ensure that fetch does not start until the callback completes.
-        assignedPartitions.forEach(tp -> subscriptions.pause(tp.topicPartition()));
+        // Mark assigned partitions as pendingOnAssignedCallback to temporarily stop fetching or
+        // initializing positions for them. Passing the full set of assigned partitions
+        // (previously owned and newly added), given that they are all provided to the user in the
+        // callback, so we could expect offsets updates for any of them.
+        Set<TopicPartition> assignedTopicPartition = assignedPartitions.stream().map(tIdp -> tIdp.topicPartition()).collect(Collectors.toSet());
+        subscriptions.markPendingOnAssignedCallback(assignedTopicPartition, true);
 
         // Invoke user call back.
         CompletableFuture<Void> result = invokeOnPartitionsAssignedCallback(addedPartitions);
@@ -1143,10 +1147,13 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
         // Resume partitions only if the callback succeeded.
         result.whenComplete((error, callbackResult) -> {
             if (error == null) {
-                assignedPartitions.forEach(tp -> subscriptions.resume(tp.topicPartition()));
+                // Remove pendingOnAssignedCallback flag from the assigned partitions, so we can
+                // start fetching, and updating positions for them if needed.
+                subscriptions.markPendingOnAssignedCallback(assignedTopicPartition, false);
             } else {
-                log.warn("Leaving assigned partitions {} paused after onPartitionsAssigned " +
-                    "callback failed.", addedPartitions, error);
+                log.warn("Leaving assigned partitions {} marked as non-fetchable and not " +
+                    "requiring initializing positions after onPartitionsAssigned callback failed.",
+                    assignedPartitions, error);
             }
         });
 
