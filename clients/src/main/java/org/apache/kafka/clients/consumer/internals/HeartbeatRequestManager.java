@@ -83,11 +83,6 @@ public class HeartbeatRequestManager implements RequestManager {
     private final int maxPollIntervalMs;
 
     /**
-     * The last time in Ms the heartbeat was sent to the coordinator
-     */
-    private long lastHeartbeatSend = 0L;
-
-    /**
      * CoordinatorRequestManager manages the connection to the group coordinator
      */
     private final CoordinatorRequestManager coordinatorRequestManager;
@@ -261,7 +256,6 @@ public class HeartbeatRequestManager implements RequestManager {
         NetworkClientDelegate.UnsentRequest request = makeHeartbeatRequest(ignoreResponse);
         heartbeatRequestState.onSendAttempt(currentTimeMs);
         membershipManager.onHeartbeatRequestSent();
-        lastHeartbeatSend = currentTimeMs;
         return request;
     }
 
@@ -273,7 +267,10 @@ public class HeartbeatRequestManager implements RequestManager {
             return logResponse(request);
         else
             return request.whenComplete((response, exception) -> {
+                System.out.print("=====");
                 if (response != null) {
+                    System.out.print("ehhh: " + response.requestLatencyMs());
+                    heartbeatMetrics.heartbeatSensor.record(response.requestLatencyMs());
                     onResponse((ConsumerGroupHeartbeatResponse) response.responseBody(), request.handler().completionTimeMs());
                 } else {
                     onFailure(exception, request.handler().completionTimeMs());
@@ -433,16 +430,18 @@ public class HeartbeatRequestManager implements RequestManager {
     }
 
     private void registerLastSentHeartbeatMetric(Metrics metrics) {
+        final long lastHeartbeatSend = heartbeatRequestState.lastSentMs;
         Measurable lastHeartbeat = (config, now) -> {
-            if (lastHeartbeatSend == 0L)
+            if (lastHeartbeatSend < 0L)
                 // if no heartbeat is ever triggered, just return -1.
                 return -1d;
             else
                 return TimeUnit.SECONDS.convert(now - lastHeartbeatSend, TimeUnit.MILLISECONDS);
         };
-        heartbeatMetrics.registerMeasurable(
-                "heartbeat-time-max",
-            "The max time taken to receive a response to a heartbeat request",
+        heartbeatMetrics.addMetric(
+                metrics,
+                "last-heartbeat-seconds-ago",
+                "The number of seconds since the last coordinator heartbeat was sent",
                 lastHeartbeat);
     }
 

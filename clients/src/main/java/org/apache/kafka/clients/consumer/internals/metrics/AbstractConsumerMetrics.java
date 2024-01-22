@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.clients.consumer.internals.metrics;
 
+import org.apache.kafka.common.metrics.Measurable;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.stats.Meter;
 import org.apache.kafka.common.metrics.stats.WindowedCount;
@@ -27,11 +28,11 @@ import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.COORDINA
 
 public abstract class AbstractConsumerMetrics {
     protected String groupMetricsName = CONSUMER_METRIC_GROUP_PREFIX + COORDINATOR_METRICS_SUFFIX;
+
+    public AbstractConsumerMetrics() {}
     public AbstractConsumerMetrics(Optional<String> grpMetricsPrefix) {
         grpMetricsPrefix.ifPresent(s -> this.groupMetricsName = s + COORDINATOR_METRICS_SUFFIX);
     }
-
-    public AbstractConsumerMetrics() {}
 
     public static Meter createMeter(Metrics metrics, String groupName, String baseName, String descriptiveName) {
         return new Meter(new WindowedCount(),
@@ -39,5 +40,14 @@ public abstract class AbstractConsumerMetrics {
                         String.format("The number of %s per second", descriptiveName)),
                 metrics.metricName(baseName + "-total", groupName,
                         String.format("The total number of %s", descriptiveName)));
+    }
+
+    public void addMetric(Metrics metrics,
+                          String name,
+                          String description,
+                          Measurable measurable) {
+        metrics.addMetric(
+                metrics.metricName(name, groupMetricsName, description),
+                measurable);
     }
 }
