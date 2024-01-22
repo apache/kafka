@@ -93,6 +93,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -462,7 +463,9 @@ public class GroupMetadataManager {
     public List<ListGroupsResponseData.ListedGroup> listGroups(List<String> statesFilter, long committedOffset) {
         Stream<Group> groupStream = groups.values(committedOffset).stream();
         if (!statesFilter.isEmpty()) {
-            groupStream = groupStream.filter(group -> statesFilter.contains(group.stateAsString(committedOffset)));
+            List<String> caseInsensitiveFilterList = statesFilter.stream().map(String::toLowerCase).collect(Collectors.toList());
+            groupStream = groupStream.filter(group -> caseInsensitiveFilterList.contains(group.stateAsString(committedOffset).toLowerCase(
+                Locale.ROOT)));
         }
         return groupStream.map(group -> group.asListedGroup(committedOffset)).collect(Collectors.toList());
     }
@@ -3395,7 +3398,7 @@ public class GroupMetadataManager {
     /**
      * Remove a member from the group. Cancel member's heartbeat, and prepare rebalance
      * or complete the join phase if necessary.
-     * 
+     *
      * @param group     The classic group.
      * @param memberId  The member id.
      * @param reason    The reason for the LeaveGroup request.

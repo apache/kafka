@@ -9660,6 +9660,21 @@ public class GroupMetadataManagerTest {
         ).collect(Collectors.toMap(ListGroupsResponseData.ListedGroup::groupId, Function.identity()));
 
         assertEquals(expectAllGroupMap, actualAllGroupMap);
+
+        actualAllGroupMap = context.sendListGroups(Arrays.asList("empty", "Assigning")).stream()
+            .collect(Collectors.toMap(ListGroupsResponseData.ListedGroup::groupId, Function.identity()));
+        expectAllGroupMap = Stream.of(
+            new ListGroupsResponseData.ListedGroup()
+                .setGroupId(classicGroup.groupId())
+                .setProtocolType(classicGroupType)
+                .setGroupState(EMPTY.toString()),
+            new ListGroupsResponseData.ListedGroup()
+                .setGroupId(consumerGroupId)
+                .setProtocolType(ConsumerProtocol.PROTOCOL_TYPE)
+                .setGroupState(ConsumerGroup.ConsumerGroupState.ASSIGNING.toString())
+        ).collect(Collectors.toMap(ListGroupsResponseData.ListedGroup::groupId, Function.identity()));
+
+        assertEquals(expectAllGroupMap, actualAllGroupMap);
     }
 
     @Test

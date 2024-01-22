@@ -96,17 +96,15 @@ class ListConsumerGroupTest extends ConsumerGroupCommandTest {
     assertEquals(Set(ConsumerGroupState.DEAD, ConsumerGroupState.COMPLETING_REBALANCE), result)
 
     result = ConsumerGroupCommand.consumerGroupStatesFromString("stable")
-    assertEquals(Set(ConsumerGroupState.NEW_CONSUMER_GROUP_STABLE), result)
+    assertEquals(Set(ConsumerGroupState.STABLE), result)
 
     result = ConsumerGroupCommand.consumerGroupStatesFromString("stable, assigning")
-    assertEquals(Set(ConsumerGroupState.NEW_CONSUMER_GROUP_STABLE, ConsumerGroupState.NEW_CONSUMER_GROUP_ASSIGNING), result)
+    assertEquals(Set(ConsumerGroupState.STABLE, ConsumerGroupState.ASSIGNING), result)
 
     result = ConsumerGroupCommand.consumerGroupStatesFromString("dead,reconciling,")
-    assertEquals(Set(ConsumerGroupState.NEW_CONSUMER_GROUP_DEAD, ConsumerGroupState.NEW_CONSUMER_GROUP_RECONCILING), result)
+    assertEquals(Set(ConsumerGroupState.DEAD, ConsumerGroupState.RECONCILING), result)
 
     assertThrows(classOf[IllegalArgumentException], () => ConsumerGroupCommand.consumerGroupStatesFromString("bad, wrong"))
-
-    assertThrows(classOf[IllegalArgumentException], () => ConsumerGroupCommand.consumerGroupStatesFromString("STABLE"))
 
     assertThrows(classOf[IllegalArgumentException], () => ConsumerGroupCommand.consumerGroupStatesFromString("  bad, Stable"))
 
@@ -134,6 +132,12 @@ class ListConsumerGroupTest extends ConsumerGroupCommandTest {
     }, s"Expected to find $simpleGroup, $group and the header, but found $out")
 
     cgcArgs = Array("--bootstrap-server", bootstrapServers(), "--list", "--state", "Stable")
+    TestUtils.waitUntilTrue(() => {
+      out = TestUtils.grabConsoleOutput(ConsumerGroupCommand.main(cgcArgs))
+      out.contains("STATE") && out.contains(group) && out.contains("Stable")
+    }, s"Expected to find $group in state Stable and the header, but found $out")
+
+    cgcArgs = Array("--bootstrap-server", bootstrapServers(), "--list", "--state", "stable")
     TestUtils.waitUntilTrue(() => {
       out = TestUtils.grabConsoleOutput(ConsumerGroupCommand.main(cgcArgs))
       out.contains("STATE") && out.contains(group) && out.contains("Stable")
