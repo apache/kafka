@@ -121,20 +121,22 @@ public class DeadLetterQueueReporter implements ErrorReporter {
     /**
      * Write the raw records into a Kafka topic and return the producer future.
      *
-     * @param context processing context containing the raw record at {@link ProcessingContext#consumerRecord()}.
+     * @param context processing context containing the raw record at {@link ProcessingContext#original()}.
      * @return the future associated with the writing of this record; never null
      */
-    public Future<RecordMetadata> report(ProcessingContext context) {
+    @SuppressWarnings("unchecked")
+    public Future<RecordMetadata> report(ProcessingContext<?> context) {
         if (dlqTopicName.isEmpty()) {
             return CompletableFuture.completedFuture(null);
         }
         errorHandlingMetrics.recordDeadLetterQueueProduceRequest();
 
-        ConsumerRecord<byte[], byte[]> originalMessage = context.consumerRecord();
-        if (originalMessage == null) {
+        if (!(context.original() instanceof ConsumerRecord)) {
             errorHandlingMetrics.recordDeadLetterQueueProduceFailed();
             return CompletableFuture.completedFuture(null);
         }
+        ProcessingContext<ConsumerRecord<byte[], byte[]>> sinkContext = (ProcessingContext<ConsumerRecord<byte[], byte[]>>) context;
+        ConsumerRecord<byte[], byte[]> originalMessage = sinkContext.original();
 
         ProducerRecord<byte[], byte[]> producerRecord;
         if (originalMessage.timestamp() == RecordBatch.NO_TIMESTAMP) {
@@ -146,7 +148,7 @@ public class DeadLetterQueueReporter implements ErrorReporter {
         }
 
         if (connConfig.isDlqContextHeadersEnabled()) {
-            populateContextHeaders(producerRecord, context);
+            populateContextHeaders(producerRecord, sinkContext);
         }
 
         return this.kafkaProducer.send(producerRecord, (metadata, exception) -> {
@@ -158,12 +160,12 @@ public class DeadLetterQueueReporter implements ErrorReporter {
     }
 
     // Visible for testing
-    void populateContextHeaders(ProducerRecord<byte[], byte[]> producerRecord, ProcessingContext context) {
+    void populateContextHeaders(ProducerRecord<byte[], byte[]> producerRecord, ProcessingContext<ConsumerRecord<byte[], byte[]>> context) {
         Headers headers = producerRecord.headers();
-        if (context.consumerRecord() != null) {
-            headers.add(ERROR_HEADER_ORIG_TOPIC, toBytes(context.consumerRecord().topic()));
-            headers.add(ERROR_HEADER_ORIG_PARTITION, toBytes(context.consumerRecord().partition()));
-            headers.add(ERROR_HEADER_ORIG_OFFSET, toBytes(context.consumerRecord().offset()));
+        if (context.original() != null) {
+            headers.add(ERROR_HEADER_ORIG_TOPIC, toBytes(context.original().topic()));
+            headers.add(ERROR_HEADER_ORIG_PARTITION, toBytes(context.original().partition()));
+            headers.add(ERROR_HEADER_ORIG_OFFSET, toBytes(context.original().offset()));
         }
 
         headers.add(ERROR_HEADER_CONNECTOR_NAME, toBytes(connectorTaskId.connector()));

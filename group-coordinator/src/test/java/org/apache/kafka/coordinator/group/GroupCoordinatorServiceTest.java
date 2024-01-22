@@ -59,6 +59,7 @@ import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.RequestContext;
 import org.apache.kafka.common.requests.RequestHeader;
+import org.apache.kafka.common.requests.TransactionResult;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.utils.BufferSupplier;
@@ -79,12 +80,14 @@ import org.mockito.ArgumentMatchers;
 import org.mockito.internal.util.collections.Sets;
 
 import java.net.InetAddress;
+import java.time.Duration;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.OptionalInt;
 import java.util.Properties;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
@@ -92,8 +95,10 @@ import java.util.stream.Stream;
 
 import static org.apache.kafka.common.requests.JoinGroupRequest.UNKNOWN_MEMBER_ID;
 import static org.apache.kafka.coordinator.group.TestUtil.requestContext;
+import static org.apache.kafka.test.TestUtils.assertFutureThrows;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
@@ -123,7 +128,8 @@ public class GroupCoordinatorServiceTest {
             120,
             10 * 5 * 1000,
             600000L,
-            24 * 60 * 1000L
+            24 * 60 * 1000L,
+            5000
         );
     }
 
@@ -186,6 +192,7 @@ public class GroupCoordinatorServiceTest {
         when(runtime.scheduleWriteOperation(
             ArgumentMatchers.eq("consumer-group-heartbeat"),
             ArgumentMatchers.eq(new TopicPartition("__consumer_offsets", 0)),
+            ArgumentMatchers.eq(Duration.ofMillis(5000)),
             ArgumentMatchers.any()
         )).thenReturn(CompletableFuture.completedFuture(
             new ConsumerGroupHeartbeatResponseData()
@@ -203,6 +210,7 @@ public class GroupCoordinatorServiceTest {
         return Stream.of(
             Arguments.arguments(new UnknownTopicOrPartitionException(), Errors.COORDINATOR_NOT_AVAILABLE.code(), null),
             Arguments.arguments(new NotEnoughReplicasException(), Errors.COORDINATOR_NOT_AVAILABLE.code(), null),
+            Arguments.arguments(new org.apache.kafka.common.errors.TimeoutException(), Errors.COORDINATOR_NOT_AVAILABLE.code(), null),
             Arguments.arguments(new NotLeaderOrFollowerException(), Errors.NOT_COORDINATOR.code(), null),
             Arguments.arguments(new KafkaStorageException(), Errors.NOT_COORDINATOR.code(), null),
             Arguments.arguments(new RecordTooLargeException(), Errors.UNKNOWN_SERVER_ERROR.code(), null),
@@ -235,6 +243,7 @@ public class GroupCoordinatorServiceTest {
         when(runtime.scheduleWriteOperation(
             ArgumentMatchers.eq("consumer-group-heartbeat"),
             ArgumentMatchers.eq(new TopicPartition("__consumer_offsets", 0)),
+            ArgumentMatchers.eq(Duration.ofMillis(5000)),
             ArgumentMatchers.any()
         )).thenReturn(FutureUtils.failedFuture(exception));
 
@@ -327,7 +336,26 @@ public class GroupCoordinatorServiceTest {
 
         verify(runtime, times(1)).scheduleUnloadOperation(
             new TopicPartition("__consumer_offsets", 5),
-            10
+            OptionalInt.of(10)
+        );
+    }
+
+    @Test
+    public void testOnResignationWithEmptyLeaderEpoch() {
+        CoordinatorRuntime<GroupCoordinatorShard, Record> runtime = mockRuntime();
+        GroupCoordinatorService service = new GroupCoordinatorService(
+            new LogContext(),
+            createConfig(),
+            runtime,
+            new GroupCoordinatorMetrics()
+        );
+
+        service.startup(() -> 1);
+        service.onResignation(5, OptionalInt.empty());
+
+        verify(runtime, times(1)).scheduleUnloadOperation(
+            new TopicPartition("__consumer_offsets", 5),
+            OptionalInt.empty()
         );
     }
 
@@ -347,8 +375,9 @@ public class GroupCoordinatorServiceTest {
         service.startup(() -> 1);
 
         when(runtime.scheduleWriteOperation(
-            ArgumentMatchers.eq("generic-group-join"),
+            ArgumentMatchers.eq("classic-group-join"),
             ArgumentMatchers.eq(new TopicPartition("__consumer_offsets", 0)),
+            ArgumentMatchers.eq(Duration.ofMillis(5000)),
             ArgumentMatchers.any()
         )).thenReturn(CompletableFuture.completedFuture(
             new JoinGroupResponseData()
@@ -379,8 +408,9 @@ public class GroupCoordinatorServiceTest {
         service.startup(() -> 1);
 
         when(runtime.scheduleWriteOperation(
-            ArgumentMatchers.eq("generic-group-join"),
+            ArgumentMatchers.eq("classic-group-join"),
             ArgumentMatchers.eq(new TopicPartition("__consumer_offsets", 0)),
+            ArgumentMatchers.eq(Duration.ofMillis(5000)),
             ArgumentMatchers.any()
         )).thenReturn(FutureUtils.failedFuture(new IllegalStateException()));
 
@@ -485,8 +515,9 @@ public class GroupCoordinatorServiceTest {
         service.startup(() -> 1);
 
         when(runtime.scheduleWriteOperation(
-            ArgumentMatchers.eq("generic-group-sync"),
+            ArgumentMatchers.eq("classic-group-sync"),
             ArgumentMatchers.eq(new TopicPartition("__consumer_offsets", 0)),
+            ArgumentMatchers.eq(Duration.ofMillis(5000)),
             ArgumentMatchers.any()
         )).thenReturn(CompletableFuture.completedFuture(
             new SyncGroupResponseData()
@@ -517,8 +548,9 @@ public class GroupCoordinatorServiceTest {
         service.startup(() -> 1);
 
         when(runtime.scheduleWriteOperation(
-            ArgumentMatchers.eq("generic-group-sync"),
+            ArgumentMatchers.eq("classic-group-sync"),
             ArgumentMatchers.eq(new TopicPartition("__consumer_offsets", 0)),
+            ArgumentMatchers.eq(Duration.ofMillis(5000)),
             ArgumentMatchers.any()
         )).thenReturn(FutureUtils.failedFuture(new IllegalStateException()));
 
@@ -607,7 +639,7 @@ public class GroupCoordinatorServiceTest {
         service.startup(() -> 1);
 
         when(runtime.scheduleReadOperation(
-            ArgumentMatchers.eq("generic-group-heartbeat"),
+            ArgumentMatchers.eq("classic-group-heartbeat"),
             ArgumentMatchers.eq(new TopicPartition("__consumer_offsets", 0)),
             ArgumentMatchers.any()
         )).thenReturn(CompletableFuture.completedFuture(
@@ -639,7 +671,7 @@ public class GroupCoordinatorServiceTest {
         service.startup(() -> 1);
 
         when(runtime.scheduleReadOperation(
-            ArgumentMatchers.eq("generic-group-heartbeat"),
+            ArgumentMatchers.eq("classic-group-heartbeat"),
             ArgumentMatchers.eq(new TopicPartition("__consumer_offsets", 0)),
             ArgumentMatchers.any()
         )).thenReturn(FutureUtils.failedFuture(
@@ -671,7 +703,7 @@ public class GroupCoordinatorServiceTest {
         service.startup(() -> 1);
 
         when(runtime.scheduleReadOperation(
-            ArgumentMatchers.eq("generic-group-heartbeat"),
+            ArgumentMatchers.eq("classic-group-heartbeat"),
             ArgumentMatchers.eq(new TopicPartition("__consumer_offsets", 0)),
             ArgumentMatchers.any()
         )).thenReturn(FutureUtils.failedFuture(
@@ -1075,6 +1107,7 @@ public class GroupCoordinatorServiceTest {
             when(runtime.scheduleWriteOperation(
                 ArgumentMatchers.eq("fetch-offsets"),
                 ArgumentMatchers.eq(new TopicPartition("__consumer_offsets", 0)),
+                ArgumentMatchers.eq(Duration.ofMillis(5000)),
                 ArgumentMatchers.any()
             )).thenReturn(CompletableFuture.completedFuture(response));
         } else {
@@ -1160,6 +1193,7 @@ public class GroupCoordinatorServiceTest {
             when(runtime.scheduleWriteOperation(
                 ArgumentMatchers.eq("fetch-all-offsets"),
                 ArgumentMatchers.eq(new TopicPartition("__consumer_offsets", 0)),
+                ArgumentMatchers.eq(Duration.ofMillis(5000)),
                 ArgumentMatchers.any()
             )).thenReturn(CompletableFuture.completedFuture(response));
         } else {
@@ -1226,8 +1260,9 @@ public class GroupCoordinatorServiceTest {
         service.startup(() -> 1);
 
         when(runtime.scheduleWriteOperation(
-            ArgumentMatchers.eq("generic-group-leave"),
+            ArgumentMatchers.eq("classic-group-leave"),
             ArgumentMatchers.eq(new TopicPartition("__consumer_offsets", 0)),
+            ArgumentMatchers.eq(Duration.ofMillis(5000)),
             ArgumentMatchers.any()
         )).thenReturn(CompletableFuture.completedFuture(
             new LeaveGroupResponseData()
@@ -1266,8 +1301,9 @@ public class GroupCoordinatorServiceTest {
         service.startup(() -> 1);
 
         when(runtime.scheduleWriteOperation(
-            ArgumentMatchers.eq("generic-group-leave"),
+            ArgumentMatchers.eq("classic-group-leave"),
             ArgumentMatchers.eq(new TopicPartition("__consumer_offsets", 0)),
+            ArgumentMatchers.eq(Duration.ofMillis(5000)),
             ArgumentMatchers.any()
         )).thenReturn(FutureUtils.failedFuture(
             new UnknownMemberIdException()
@@ -1494,6 +1530,7 @@ public class GroupCoordinatorServiceTest {
         when(runtime.scheduleWriteOperation(
             ArgumentMatchers.eq("delete-offsets"),
             ArgumentMatchers.eq(new TopicPartition("__consumer_offsets", 0)),
+            ArgumentMatchers.eq(Duration.ofMillis(5000)),
             ArgumentMatchers.any()
         )).thenReturn(CompletableFuture.completedFuture(response));
 
@@ -1535,6 +1572,7 @@ public class GroupCoordinatorServiceTest {
         when(runtime.scheduleWriteOperation(
             ArgumentMatchers.eq("delete-offsets"),
             ArgumentMatchers.eq(new TopicPartition("__consumer_offsets", 0)),
+            ArgumentMatchers.eq(Duration.ofMillis(5000)),
             ArgumentMatchers.any()
         )).thenReturn(CompletableFuture.completedFuture(response));
 
@@ -1581,6 +1619,7 @@ public class GroupCoordinatorServiceTest {
         when(runtime.scheduleWriteOperation(
             ArgumentMatchers.eq("delete-offsets"),
             ArgumentMatchers.eq(new TopicPartition("__consumer_offsets", 0)),
+            ArgumentMatchers.eq(Duration.ofMillis(5000)),
             ArgumentMatchers.any()
         )).thenReturn(FutureUtils.failedFuture(exception));
 
@@ -1665,6 +1704,7 @@ public class GroupCoordinatorServiceTest {
         when(runtime.scheduleWriteOperation(
             ArgumentMatchers.eq("delete-groups"),
             ArgumentMatchers.eq(new TopicPartition("__consumer_offsets", 2)),
+            ArgumentMatchers.eq(Duration.ofMillis(5000)),
             ArgumentMatchers.any()
         )).thenReturn(CompletableFuture.completedFuture(resultCollection1));
 
@@ -1672,12 +1712,14 @@ public class GroupCoordinatorServiceTest {
         when(runtime.scheduleWriteOperation(
             ArgumentMatchers.eq("delete-groups"),
             ArgumentMatchers.eq(new TopicPartition("__consumer_offsets", 0)),
+            ArgumentMatchers.eq(Duration.ofMillis(5000)),
             ArgumentMatchers.any()
         )).thenReturn(resultCollectionFuture);
 
         when(runtime.scheduleWriteOperation(
             ArgumentMatchers.eq("delete-groups"),
             ArgumentMatchers.eq(new TopicPartition("__consumer_offsets", 1)),
+            ArgumentMatchers.eq(Duration.ofMillis(5000)),
             ArgumentMatchers.any()
         )).thenReturn(FutureUtils.failedFuture(Errors.COORDINATOR_LOAD_IN_PROGRESS.exception()));
 
@@ -1710,6 +1752,7 @@ public class GroupCoordinatorServiceTest {
         when(runtime.scheduleWriteOperation(
             ArgumentMatchers.eq("delete-groups"),
             ArgumentMatchers.eq(new TopicPartition("__consumer_offsets", 0)),
+            ArgumentMatchers.eq(Duration.ofMillis(5000)),
             ArgumentMatchers.any()
         )).thenReturn(FutureUtils.failedFuture(exception));
 
@@ -1850,6 +1893,8 @@ public class GroupCoordinatorServiceTest {
         TxnOffsetCommitRequestData request = new TxnOffsetCommitRequestData()
             .setGroupId("foo")
             .setTransactionalId("transactional-id")
+            .setProducerId(10L)
+            .setProducerEpoch((short) 5)
             .setMemberId("member-id")
             .setGenerationId(10)
             .setTopics(Collections.singletonList(new TxnOffsetCommitRequestData.TxnOffsetCommitRequestTopic()
@@ -1865,9 +1910,13 @@ public class GroupCoordinatorServiceTest {
                     .setPartitionIndex(0)
                     .setErrorCode(Errors.NONE.code())))));
 
-        when(runtime.scheduleWriteOperation(
+        when(runtime.scheduleTransactionalWriteOperation(
             ArgumentMatchers.eq("txn-commit-offset"),
             ArgumentMatchers.eq(new TopicPartition("__consumer_offsets", 0)),
+            ArgumentMatchers.eq("transactional-id"),
+            ArgumentMatchers.eq(10L),
+            ArgumentMatchers.eq((short) 5),
+            ArgumentMatchers.eq(Duration.ofMillis(5000)),
             ArgumentMatchers.any()
         )).thenReturn(CompletableFuture.completedFuture(response));
 
@@ -1878,5 +1927,133 @@ public class GroupCoordinatorServiceTest {
         );
 
         assertEquals(response, future.get());
+    }
+
+    @Test
+    public void testCommitTransactionalOffsetsWithWrappedError() throws ExecutionException, InterruptedException {
+        CoordinatorRuntime<GroupCoordinatorShard, Record> runtime = mockRuntime();
+        GroupCoordinatorService service = new GroupCoordinatorService(
+            new LogContext(),
+            createConfig(),
+            runtime,
+            new GroupCoordinatorMetrics()
+        );
+        service.startup(() -> 1);
+
+        TxnOffsetCommitRequestData request = new TxnOffsetCommitRequestData()
+            .setGroupId("foo")
+            .setTransactionalId("transactional-id")
+            .setProducerId(10L)
+            .setProducerEpoch((short) 5)
+            .setMemberId("member-id")
+            .setGenerationId(10)
+            .setTopics(Collections.singletonList(new TxnOffsetCommitRequestData.TxnOffsetCommitRequestTopic()
+                .setName("topic")
+                .setPartitions(Collections.singletonList(new TxnOffsetCommitRequestData.TxnOffsetCommitRequestPartition()
+                    .setPartitionIndex(0)
+                    .setCommittedOffset(100)))));
+
+        TxnOffsetCommitResponseData response = new TxnOffsetCommitResponseData()
+            .setTopics(Collections.singletonList(new TxnOffsetCommitResponseData.TxnOffsetCommitResponseTopic()
+                .setName("topic")
+                .setPartitions(Collections.singletonList(new TxnOffsetCommitResponseData.TxnOffsetCommitResponsePartition()
+                    .setPartitionIndex(0)
+                    .setErrorCode(Errors.COORDINATOR_NOT_AVAILABLE.code())))));
+
+        when(runtime.scheduleTransactionalWriteOperation(
+            ArgumentMatchers.eq("txn-commit-offset"),
+            ArgumentMatchers.eq(new TopicPartition("__consumer_offsets", 0)),
+            ArgumentMatchers.eq("transactional-id"),
+            ArgumentMatchers.eq(10L),
+            ArgumentMatchers.eq((short) 5),
+            ArgumentMatchers.eq(Duration.ofMillis(5000)),
+            ArgumentMatchers.any()
+        )).thenReturn(FutureUtils.failedFuture(new CompletionException(Errors.NOT_ENOUGH_REPLICAS.exception())));
+
+        CompletableFuture<TxnOffsetCommitResponseData> future = service.commitTransactionalOffsets(
+            requestContext(ApiKeys.TXN_OFFSET_COMMIT),
+            request,
+            BufferSupplier.NO_CACHING
+        );
+
+        assertEquals(response, future.get());
+    }
+
+    @Test
+    public void testCompleteTransaction() throws ExecutionException, InterruptedException {
+        CoordinatorRuntime<GroupCoordinatorShard, Record> runtime = mockRuntime();
+        GroupCoordinatorService service = new GroupCoordinatorService(
+            new LogContext(),
+            createConfig(),
+            runtime,
+            new GroupCoordinatorMetrics()
+        );
+        service.startup(() -> 1);
+
+        when(runtime.scheduleTransactionCompletion(
+            ArgumentMatchers.eq("write-txn-marker"),
+            ArgumentMatchers.eq(new TopicPartition("__consumer_offsets", 0)),
+            ArgumentMatchers.eq(100L),
+            ArgumentMatchers.eq((short) 5),
+            ArgumentMatchers.eq(10),
+            ArgumentMatchers.eq(TransactionResult.COMMIT),
+            ArgumentMatchers.eq(Duration.ofMillis(100))
+        )).thenReturn(CompletableFuture.completedFuture(null));
+
+        CompletableFuture<Void> future = service.completeTransaction(
+            new TopicPartition("__consumer_offsets", 0),
+            100L,
+            (short) 5,
+            10,
+            TransactionResult.COMMIT,
+            Duration.ofMillis(100)
+        );
+
+        assertNull(future.get());
+    }
+
+    @Test
+    public void testCompleteTransactionWhenNotCoordinatorServiceStarted() {
+        CoordinatorRuntime<GroupCoordinatorShard, Record> runtime = mockRuntime();
+        GroupCoordinatorService service = new GroupCoordinatorService(
+            new LogContext(),
+            createConfig(),
+            runtime,
+            new GroupCoordinatorMetrics()
+        );
+
+        CompletableFuture<Void> future = service.completeTransaction(
+            new TopicPartition("foo", 0),
+            100L,
+            (short) 5,
+            10,
+            TransactionResult.COMMIT,
+            Duration.ofMillis(100)
+        );
+
+        assertFutureThrows(future, CoordinatorNotAvailableException.class);
+    }
+
+    @Test
+    public void testCompleteTransactionWithUnexpectedPartition() {
+        CoordinatorRuntime<GroupCoordinatorShard, Record> runtime = mockRuntime();
+        GroupCoordinatorService service = new GroupCoordinatorService(
+            new LogContext(),
+            createConfig(),
+            runtime,
+            new GroupCoordinatorMetrics()
+        );
+        service.startup(() -> 1);
+
+        CompletableFuture<Void> future = service.completeTransaction(
+            new TopicPartition("foo", 0),
+            100L,
+            (short) 5,
+            10,
+            TransactionResult.COMMIT,
+            Duration.ofMillis(100)
+        );
+
+        assertFutureThrows(future, IllegalStateException.class);
     }
 }

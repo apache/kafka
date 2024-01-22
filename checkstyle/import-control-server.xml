@@ -70,6 +70,11 @@
   <!-- server-metrics specific classes -->
   <allow pkg="org.apache.kafka.server.metrics" />
 
+  <!-- server-configs dependencies -->
+  <allow pkg="org.apache.kafka.coordinator" />
+  <allow pkg="org.apache.kafka.common" />
+  <allow pkg="org.apache.kafka.raft" />
+
   <subpackage name="metrics">
     <allow class="org.apache.kafka.server.authorizer.AuthorizableRequestContext" />
     <allow pkg="org.apache.kafka.server.telemetry" />

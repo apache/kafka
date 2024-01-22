@@ -23,8 +23,8 @@ import java.net.{InetAddress, Socket}
 import java.util.concurrent._
 import java.util.{Collections, Properties}
 import kafka.server.{BaseRequestTest, KafkaConfig}
-import kafka.utils.TestUtils
-import org.apache.kafka.clients.admin.{Admin, AdminClientConfig}
+import kafka.utils.{TestInfoUtils, TestUtils}
+import org.apache.kafka.clients.admin.Admin
 import org.apache.kafka.common.config.internals.QuotaConfigs
 import org.apache.kafka.common.message.ProduceRequestData
 import org.apache.kafka.common.network.ListenerName
@@ -35,7 +35,9 @@ import org.apache.kafka.common.requests.{ProduceRequest, ProduceResponse}
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.{KafkaException, requests}
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo}
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.ValueSource
 
 import scala.jdk.CollectionConverters._
 
@@ -49,6 +51,7 @@ class DynamicConnectionQuotaTest extends BaseRequestTest {
   val unknownHost = "255.255.0.1"
   val plaintextListenerDefaultQuota = 30
   var executor: ExecutorService = _
+  var admin: Admin = _
 
   override def brokerPropertyOverrides(properties: Properties): Unit = {
     properties.put(KafkaConfig.NumQuotaSamplesProp, "2")
@@ -58,11 +61,13 @@ class DynamicConnectionQuotaTest extends BaseRequestTest {
   @BeforeEach
   override def setUp(testInfo: TestInfo): Unit = {
     super.setUp(testInfo)
-    TestUtils.createTopic(zkClient, topic, brokerCount, brokerCount, servers)
+    admin = createAdminClient(listener)
+    TestUtils.createTopicWithAdmin(admin, topic, brokers, controllerServers)
   }
 
   @AfterEach
   override def tearDown(): Unit = {
+    if (admin != null) admin.close()
     try {
       if (executor != null) {
         executor.shutdownNow()
@@ -73,8 +78,9 @@ class DynamicConnectionQuotaTest extends BaseRequestTest {
     }
   }
 
-  @Test
-  def testDynamicConnectionQuota(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testDynamicConnectionQuota(quorum: String): Unit = {
     val maxConnectionsPerIP = 5
 
     def connectAndVerify(): Unit = {
@@ -100,8 +106,9 @@ class DynamicConnectionQuotaTest extends BaseRequestTest {
     verifyMaxConnections(maxConnectionsPerIPOverride, connectAndVerify)
   }
 
-  @Test
-  def testDynamicListenerConnectionQuota(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testDynamicListenerConnectionQuota(quorum: String): Unit = {
     val initialConnectionCount = connectionCount
 
     def connectAndVerify(): Unit = {
@@ -123,7 +130,7 @@ class DynamicConnectionQuotaTest extends BaseRequestTest {
     // Create another listener and verify listener connection limit of 5 for each listener
     val newListeners = "PLAINTEXT://localhost:0,INTERNAL://localhost:0"
     props.put(KafkaConfig.ListenersProp, newListeners)
-    props.put(KafkaConfig.ListenerSecurityProtocolMapProp, "PLAINTEXT:PLAINTEXT,INTERNAL:PLAINTEXT")
+    props.put(KafkaConfig.ListenerSecurityProtocolMapProp, "PLAINTEXT:PLAINTEXT,INTERNAL:PLAINTEXT, CONTROLLER: PLAINTEXT")
     props.put(KafkaConfig.MaxConnectionsProp, "10")
     props.put("listener.name.internal.max.connections", "5")
     props.put("listener.name.plaintext.max.connections", "5")
@@ -171,15 +178,17 @@ class DynamicConnectionQuotaTest extends BaseRequestTest {
     TestUtils.waitUntilTrue(() => initialConnectionCount == connectionCount, "Connections not closed")
   }
 
-  @Test
-  def testDynamicListenerConnectionCreationRateQuota(): Unit = {
+
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testDynamicListenerConnectionCreationRateQuota(quorum: String): Unit = {
     // Create another listener. PLAINTEXT is an inter-broker listener
     // keep default limits
     val newListenerNames = Seq("PLAINTEXT", "EXTERNAL")
     val newListeners = "PLAINTEXT://localhost:0,EXTERNAL://localhost:0"
     val props = new Properties
     props.put(KafkaConfig.ListenersProp, newListeners)
-    props.put(KafkaConfig.ListenerSecurityProtocolMapProp, "PLAINTEXT:PLAINTEXT,EXTERNAL:PLAINTEXT")
+    props.put(KafkaConfig.ListenerSecurityProtocolMapProp, "PLAINTEXT:PLAINTEXT,EXTERNAL:PLAINTEXT,CONTROLLER:PLAINTEXT")
     reconfigureServers(props, perBrokerConfig = true, (KafkaConfig.ListenersProp, newListeners))
     waitForListener("EXTERNAL")
 
@@ -188,7 +197,6 @@ class DynamicConnectionQuotaTest extends BaseRequestTest {
 
     // new broker-wide connection rate limit
     val connRateLimit = 9
-
     // before setting connection rate to 10, verify we can do at least double that by default (no limit)
     verifyConnectionRate(2 * connRateLimit, plaintextListenerDefaultQuota, "PLAINTEXT", ignoreIOExceptions = false)
     waitForConnectionCount(initialConnectionCount)
@@ -233,8 +241,9 @@ class DynamicConnectionQuotaTest extends BaseRequestTest {
     waitForConnectionCount(initialConnectionCount)
   }
 
-  @Test
-  def testDynamicIpConnectionRateQuota(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testDynamicIpConnectionRateQuota(quorum: String): Unit = {
     val connRateLimit = 10
     val initialConnectionCount = connectionCount
     // before setting connection rate to 10, verify we can do at least double that by default (no limit)
@@ -253,29 +262,23 @@ class DynamicConnectionQuotaTest extends BaseRequestTest {
 
   private def reconfigureServers(newProps: Properties, perBrokerConfig: Boolean, aPropToVerify: (String, String)): Unit = {
     val initialConnectionCount = connectionCount
-    val adminClient = createAdminClient()
-    TestUtils.incrementalAlterConfigs(servers, adminClient, newProps, perBrokerConfig).all.get()
+    TestUtils.incrementalAlterConfigs(brokers, admin, newProps, perBrokerConfig).all.get()
     waitForConfigOnServer(aPropToVerify._1, aPropToVerify._2)
-    adminClient.close()
     TestUtils.waitUntilTrue(() => initialConnectionCount == connectionCount,
       s"Admin client connection not closed (initial = $initialConnectionCount, current = $connectionCount)")
   }
 
   private def updateIpConnectionRate(ip: Option[String], updatedRate: Int): Unit = {
     val initialConnectionCount = connectionCount
-    val adminClient = createAdminClient()
-    try {
-      val entity = new ClientQuotaEntity(Map(ClientQuotaEntity.IP -> ip.orNull).asJava)
-      val request = Map(entity -> Map(QuotaConfigs.IP_CONNECTION_RATE_OVERRIDE_CONFIG -> Some(updatedRate.toDouble)))
-      TestUtils.alterClientQuotas(adminClient, request).all.get()
-      // use a random throwaway address if ip isn't specified to get the default value
-      TestUtils.waitUntilTrue(() => servers.head.socketServer.connectionQuotas.
-        connectionRateForIp(InetAddress.getByName(ip.getOrElse(unknownHost))) == updatedRate,
-        s"Timed out waiting for connection rate update to propagate"
-      )
-    } finally {
-      adminClient.close()
-    }
+    val entity = new ClientQuotaEntity(Map(ClientQuotaEntity.IP -> ip.orNull).asJava)
+    val request = Map(entity -> Map(QuotaConfigs.IP_CONNECTION_RATE_OVERRIDE_CONFIG -> Some(updatedRate.toDouble)))
+    TestUtils.alterClientQuotas(admin, request).all.get()
+    // use a random throwaway address if ip isn't specified to get the default value
+    TestUtils.waitUntilTrue(() => brokers.head.socketServer.connectionQuotas.
+      connectionRateForIp(InetAddress.getByName(ip.getOrElse(unknownHost))) == updatedRate,
+      s"Timed out waiting for connection rate update to propagate"
+    )
+
     TestUtils.waitUntilTrue(() => initialConnectionCount == connectionCount,
       s"Admin client connection not closed (initial = $initialConnectionCount, current = $connectionCount)")
   }
@@ -283,25 +286,16 @@ class DynamicConnectionQuotaTest extends BaseRequestTest {
   private def waitForListener(listenerName: String): Unit = {
     TestUtils.retry(maxWaitMs = 10000) {
       try {
-        assertTrue(servers.head.socketServer.boundPort(ListenerName.normalised(listenerName)) > 0)
+        assertTrue(brokers.head.socketServer.boundPort(ListenerName.normalised(listenerName)) > 0)
       } catch {
         case e: KafkaException => throw new AssertionError(e)
       }
     }
   }
 
-  private def createAdminClient(): Admin = {
-    val bootstrapServers = TestUtils.bootstrapServers(servers, new ListenerName(securityProtocol.name))
-    val config = new Properties()
-    config.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers)
-    config.put(AdminClientConfig.METADATA_MAX_AGE_CONFIG, "10")
-    val adminClient = Admin.create(config)
-    adminClient
-  }
-
   private def waitForConfigOnServer(propName: String, propValue: String, maxWaitMs: Long = 10000): Unit = {
     TestUtils.retry(maxWaitMs) {
-      assertEquals(propValue, servers.head.config.originals.get(propName))
+      assertEquals(propValue, brokers.head.config.originals.get(propName))
     }
   }
 
@@ -320,11 +314,11 @@ class DynamicConnectionQuotaTest extends BaseRequestTest {
       .setTransactionalId(null))
       .build()
 
-  def connectionCount: Int = servers.head.socketServer.connectionCount(localAddress)
+  def connectionCount: Int = brokers.head.socketServer.connectionCount(localAddress)
 
   def connect(listener: String): Socket = {
     val listenerName = ListenerName.normalised(listener)
-    new Socket("localhost", servers.head.socketServer.boundPort(listenerName))
+    new Socket("localhost", brokers.head.socketServer.boundPort(listenerName))
   }
 
   private def createAndVerifyConnection(listener: String = "PLAINTEXT"): Unit = {

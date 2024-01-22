@@ -78,7 +78,6 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.MockitoJUnitRunner;
 import org.mockito.stubbing.Answer;
-import org.mockito.stubbing.OngoingStubbing;
 
 import javax.crypto.SecretKey;
 import java.util.ArrayList;
@@ -2695,15 +2694,14 @@ public class DistributedHerderTest {
         expectRebalance(1, Collections.emptyList(), Collections.emptyList());
         expectMemberPoll();
 
-        OngoingStubbing<RestClient.HttpResponse<Object>> expectRequest = when(restClient.httpRequest(
-                any(), eq("PUT"), isNull(), isNull(), isNull(), any(), any()
-        ));
-
-        if (succeed) {
-            expectRequest.thenReturn(null);
-        } else {
-            expectRequest.thenThrow(new ConnectRestException(409, "Rebalance :("));
-        }
+        doAnswer(invocation -> {
+            if (!succeed) {
+                throw new ConnectRestException(409, "Rebalance :(");
+            }
+            return null;
+        }).when(restClient).httpRequest(
+                any(), eq("PUT"), isNull(), isNull(), any(), any()
+        );
 
         ArgumentCaptor<Runnable> forwardRequest = ArgumentCaptor.forClass(Runnable.class);
 
@@ -3291,10 +3289,10 @@ public class DistributedHerderTest {
         changedTaskConfigs.add(TASK_CONFIG);
         when(worker.connectorTaskConfigs(CONN1, sinkConnectorConfig)).thenReturn(changedTaskConfigs);
 
-        when(restClient.httpRequest(any(), eq("POST"), any(), any(), any(), any(), any()))
-                .thenThrow(new ConnectException("Request to leader to reconfigure connector tasks failed"))
-                .thenThrow(new ConnectException("Request to leader to reconfigure connector tasks failed"))
-                .thenReturn(null);
+        doThrow(new ConnectException("Request to leader to reconfigure connector tasks failed"))
+                .doThrow(new ConnectException("Request to leader to reconfigure connector tasks failed"))
+                .doNothing()
+                .when(restClient).httpRequest(any(), eq("POST"), any(), any(), any(), any());
 
         expectAndVerifyTaskReconfigurationRetries();
     }

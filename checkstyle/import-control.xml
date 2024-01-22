@@ -180,6 +180,10 @@
       <allow pkg="org.apache.kafka.clients.admin" />
       <!-- for testing -->
       <allow pkg="org.apache.kafka.common.errors" />
+      <!-- for testing -->
+      <allow pkg="io.opentelemetry.proto"/>
+      <!-- for testing -->
+      <allow pkg="org.apache.kafka.common.telemetry" />
     </subpackage>
 
     <subpackage name="serialization">
@@ -248,6 +252,7 @@
       <allow pkg="org.apache.kafka.server.common"/>
       <allow pkg="org.apache.kafka.server.record"/>
       <allow pkg="org.apache.kafka.server.util"/>
+      <allow pkg="org.apache.kafka.storage.internals.log"/>
       <allow pkg="org.apache.kafka.test" />
       <allow pkg="org.apache.kafka.timeline" />
       <subpackage name="metrics">
@@ -393,6 +398,7 @@
       <allow class="kafka.zk.EmbeddedZookeeper"/>
       <allow pkg="com.fasterxml.jackson" />
       <allow pkg="org.apache.kafka.tools" />
+      <allow pkg="org.apache.kafka.server.config" />
     </subpackage>
 
     <subpackage name="test">
@@ -408,6 +414,7 @@
         <allow pkg="com.fasterxml.jackson" />
         <allow pkg="kafka.utils" />
         <allow pkg="org.apache.zookeeper" />
+        <allow pkg="org.apache.log4j" />
       </subpackage>
     </subpackage>
   </subpackage>
@@ -439,6 +446,7 @@
     <allow pkg="org.apache.kafka.common.protocol" />
     <allow pkg="org.apache.kafka.server.common" />
     <allow pkg="org.apache.kafka.server.common.serialization" />
+    <allow pkg="org.apache.kafka.server.fault"/>
     <allow pkg="org.apache.kafka.server.util" />
     <allow pkg="org.apache.kafka.test"/>
     <allow pkg="com.fasterxml.jackson" />
@@ -513,6 +521,9 @@
       <allow pkg="kafka.server" />
       <subpackage name="rest">
         <allow pkg="javax.ws.rs" />
+        <allow pkg="javax.inject" />
+        <allow pkg="org.glassfish.jersey" />
+        <allow pkg="org.glassfish.hk2" />
       </subpackage>
     </subpackage>
 
@@ -527,6 +538,8 @@
       <subpackage name="rest">
         <allow pkg="org.eclipse.jetty" />
         <allow pkg="javax.ws.rs" />
+        <allow pkg="javax.inject" />
+        <allow pkg="org.glassfish.hk2" />
         <allow pkg="javax.servlet" />
         <allow pkg="org.glassfish.jersey" />
         <allow pkg="com.fasterxml.jackson" />

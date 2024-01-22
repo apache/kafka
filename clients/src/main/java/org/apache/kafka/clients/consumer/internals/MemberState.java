@@ -107,14 +107,14 @@ public enum MemberState {
      * within the <code>max.poll.interval.ms</code> time bound; therefore causing the member to leave the
      * group. The member rejoins on the next poll.
      */
-    STALED;
+    STALE;
 
     // Valid state transitions
     static {
 
         STABLE.previousValidStates = Arrays.asList(JOINING, ACKNOWLEDGING, RECONCILING);
 
-        RECONCILING.previousValidStates = Arrays.asList(STABLE, JOINING, ACKNOWLEDGING);
+        RECONCILING.previousValidStates = Arrays.asList(STABLE, JOINING, ACKNOWLEDGING, RECONCILING);
 
         ACKNOWLEDGING.previousValidStates = Arrays.asList(RECONCILING);
 
@@ -124,16 +124,16 @@ public enum MemberState {
         FENCED.previousValidStates = Arrays.asList(JOINING, STABLE, RECONCILING, ACKNOWLEDGING,
                 PREPARE_LEAVING, LEAVING);
 
-        JOINING.previousValidStates = Arrays.asList(FENCED, UNSUBSCRIBED, STALED);
+        JOINING.previousValidStates = Arrays.asList(FENCED, UNSUBSCRIBED, STALE);
 
         PREPARE_LEAVING.previousValidStates = Arrays.asList(JOINING, STABLE, RECONCILING,
                 ACKNOWLEDGING, UNSUBSCRIBED, FENCED);
 
         LEAVING.previousValidStates = Arrays.asList(PREPARE_LEAVING);
 
-        UNSUBSCRIBED.previousValidStates = Arrays.asList(LEAVING);
+        UNSUBSCRIBED.previousValidStates = Arrays.asList(PREPARE_LEAVING, LEAVING);
 
-        STALED.previousValidStates = Arrays.asList(JOINING, RECONCILING, ACKNOWLEDGING, STABLE);
+        STALE.previousValidStates = Arrays.asList(JOINING, RECONCILING, ACKNOWLEDGING, STABLE);
     }
 
     private List<MemberState> previousValidStates;
@@ -144,5 +144,14 @@ public enum MemberState {
 
     public List<MemberState> getPreviousValidStates() {
         return this.previousValidStates;
+    }
+
+    /**
+     * @return True if the member is in a state where it should reconcile the new assignment.
+     * Expected to be true whenever the member is part of the group and intends of staying in it
+     * (ex. false when the member is preparing to leave the group).
+     */
+    public boolean canHandleNewAssignment() {
+        return MemberState.RECONCILING.getPreviousValidStates().contains(this);
     }
 }

@@ -18,6 +18,7 @@ package org.apache.kafka.connect.runtime;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.connect.header.Header;
+import org.apache.kafka.connect.runtime.errors.ProcessingContext;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -38,7 +39,8 @@ public class InternalSinkRecordTest {
     public void testNewRecordHeaders() {
         SinkRecord sinkRecord = new SinkRecord(TOPIC, 0, null, null, null, null, 10);
         ConsumerRecord<byte[], byte[]> consumerRecord = new ConsumerRecord<>("test-topic", 0, 10, null, null);
-        InternalSinkRecord internalSinkRecord = new InternalSinkRecord(consumerRecord, sinkRecord);
+        ProcessingContext<ConsumerRecord<byte[], byte[]>> context = new ProcessingContext<>(consumerRecord);
+        InternalSinkRecord internalSinkRecord = new InternalSinkRecord(context, sinkRecord);
         assertTrue(internalSinkRecord.headers().isEmpty());
         assertTrue(sinkRecord.headers().isEmpty());
 
@@ -52,7 +54,8 @@ public class InternalSinkRecordTest {
         String transformedTopic = "transformed-test-topic";
         SinkRecord sinkRecord = new SinkRecord(transformedTopic, 0, null, null, null, null, 10);
         ConsumerRecord<byte[], byte[]> consumerRecord = new ConsumerRecord<>(TOPIC, 0, 10, null, null);
-        InternalSinkRecord internalSinkRecord = new InternalSinkRecord(consumerRecord, sinkRecord);
+        ProcessingContext<ConsumerRecord<byte[], byte[]>> context = new ProcessingContext<>(consumerRecord);
+        InternalSinkRecord internalSinkRecord = new InternalSinkRecord(context, sinkRecord);
 
         assertEquals(TOPIC, internalSinkRecord.originalTopic());
         assertEquals(0, internalSinkRecord.originalKafkaPartition().intValue());
