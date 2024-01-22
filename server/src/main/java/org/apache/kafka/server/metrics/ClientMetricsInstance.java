@@ -129,14 +129,14 @@ public class ClientMetricsInstance {
     }
 
     public synchronized void cancelExpirationTimerTask() {
-        if (this.expirationTimerTask != null) {
-            this.expirationTimerTask.cancel();
-            this.expirationTimerTask = null;
+        if (expirationTimerTask != null) {
+            expirationTimerTask.cancel();
+            expirationTimerTask = null;
         }
     }
 
     public synchronized void updateExpirationTimerTask(TimerTask timerTask) {
         cancelExpirationTimerTask();
-        this.expirationTimerTask = timerTask;
+        expirationTimerTask = timerTask;
     }
 }

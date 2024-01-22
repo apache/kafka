@@ -924,7 +924,7 @@ public class ClientMetricsManagerTest {
     }
 
     @Test
-    public void testCacheEviction() throws UnknownHostException, InterruptedException {
+    public void testCacheEviction() throws UnknownHostException {
         Properties properties = new Properties();
         properties.put("metrics", ClientMetricsConfigs.ALL_SUBSCRIBED_METRICS_CONFIG);
         properties.put(ClientMetricsConfigs.PUSH_INTERVAL_MS, "100");
@@ -946,12 +946,13 @@ public class ClientMetricsManagerTest {
             while (clientMetricsManager.expirationTimer().size() != 0 ||
                 clientMetricsManager.clientInstance(response.data().clientInstanceId()) != null) {
                 // Wait for cache eviction to happen.
+                Thread.sleep(100);
             }
         });
     }
 
     @Test
-    public void testCacheEvictionWithMultipleClients() throws UnknownHostException, InterruptedException {
+    public void testCacheEvictionWithMultipleClients() throws UnknownHostException {
         Properties properties = new Properties();
         properties.put("metrics", ClientMetricsConfigs.ALL_SUBSCRIBED_METRICS_CONFIG);
         properties.put(ClientMetricsConfigs.PUSH_INTERVAL_MS, "100");
@@ -979,6 +980,7 @@ public class ClientMetricsManagerTest {
                 clientMetricsManager.clientInstance(response1.data().clientInstanceId()) != null ||
                 clientMetricsManager.clientInstance(response2.data().clientInstanceId()) != null) {
                 // Wait for cache eviction to happen.
+                Thread.sleep(100);
             }
         });
     }
