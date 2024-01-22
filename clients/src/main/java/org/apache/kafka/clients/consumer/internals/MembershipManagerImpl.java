@@ -1151,9 +1151,18 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
                 // start fetching, and updating positions for them if needed.
                 subscriptions.markPendingOnAssignedCallback(assignedTopicPartition, false);
             } else {
-                log.warn("Leaving assigned partitions {} marked as non-fetchable and not " +
-                    "requiring initializing positions after onPartitionsAssigned callback failed.",
-                    assignedPartitions, error);
+                // Remove pendingOnAssignedCallback flag from the previously owned only so that
+                // fetching can resume for them on the next poll iteration. Keeping newly added
+                // partitions as non-fetchable after the callback failure, as they are expected to
+                // be revoked and removed from the subscription after not being acked to the broker.
+                Set<TopicPartition> previouslyOwned =
+                    assignedTopicPartition.stream().filter(tp -> !addedPartitions.contains(tp)).collect(Collectors.toSet());
+                subscriptions.markPendingOnAssignedCallback(previouslyOwned, false);
+                if (!addedPartitions.isEmpty()) {
+                    log.warn("Leaving newly assigned partitions {} marked as non-fetchable and not " +
+                            "requiring initializing positions after onPartitionsAssigned callback failed.",
+                        addedPartitions, error);
+                }
             }
         });
 
