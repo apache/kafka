@@ -322,7 +322,7 @@ public class FetchRequestManagerTest {
         assertFalse(fetcher.hasCompletedFetches());
 
         // Successfully start fetching again, once the partition is not waiting for the callback anymore
-        subscriptions.markPendingOnAssignedCallback(singleton(tp0), false);
+        subscriptions.enablePartitionsAwaitingCallback(singleton(tp0));
         assertNonEmptyFetch();
     }
 
