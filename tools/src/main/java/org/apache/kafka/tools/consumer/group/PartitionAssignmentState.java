@@ -19,25 +19,23 @@ package org.apache.kafka.tools.consumer.group;
 import org.apache.kafka.common.Node;
 
 import java.util.Optional;
-import java.util.OptionalInt;
-import java.util.OptionalLong;
 
 class PartitionAssignmentState {
     public final String group;
     public final Optional<Node> coordinator;
     public final Optional<String> topic;
-    public final OptionalInt partition;
-    public final OptionalLong offset;
-    public final OptionalLong lag;
+    public final Optional<Integer> partition;
+    public final Optional<Long> offset;
+    public final Optional<Long> lag;
     public final Optional<String> consumerId;
     public final Optional<String> host;
     public final Optional<String> clientId;
-    public final OptionalLong logEndOffset;
+    public final Optional<Long> logEndOffset;
 
     public PartitionAssignmentState(String group, Optional<Node> coordinator, Optional<String> topic,
-                                    OptionalInt partition, OptionalLong offset, OptionalLong lag,
+                                    Optional<Integer> partition, Optional<Long> offset, Optional<Long> lag,
                                     Optional<String> consumerId, Optional<String> host, Optional<String> clientId,
-                                    OptionalLong logEndOffset) {
+                                    Optional<Long> logEndOffset) {
         this.group = group;
         this.coordinator = coordinator;
         this.topic = topic;
