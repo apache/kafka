@@ -39,6 +39,7 @@ import org.apache.kafka.common.metrics.stats.Meter;
 import org.apache.kafka.common.metrics.stats.WindowedCount;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.RecordBatch;
+import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.requests.OffsetCommitRequest;
 import org.apache.kafka.common.requests.OffsetCommitResponse;
 import org.apache.kafka.common.requests.OffsetFetchRequest;
@@ -494,31 +495,7 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
 
             OffsetCommitRequest.Builder builder = new OffsetCommitRequest.Builder(data);
 
-            NetworkClientDelegate.UnsentRequest resp = new NetworkClientDelegate.UnsentRequest(
-                builder,
-                coordinatorRequestManager.coordinator());
-            resp.whenComplete(
-                (response, throwable) -> {
-                    try {
-                        if (throwable == null) {
-                            log.debug("OffsetCommit response received for offsets {} ", offsets);
-                            onResponse(response);
-                        } else {
-                            log.debug("OffsetCommit completed with error for offsets {}", offsets, throwable);
-                            long currentTimeMs = resp.handler().completionTimeMs();
-                            handleCoordinatorDisconnect(throwable, currentTimeMs);
-                            if (throwable instanceof RetriableException) {
-                                maybeRetry(currentTimeMs, throwable);
-                            } else {
-                                future.completeExceptionally(throwable);
-                            }
-                        }
-                    } catch (Throwable t) {
-                        log.error("Unexpected error when completing offset commit: {}", this, t);
-                        future.completeExceptionally(t);
-                    }
-                });
-            return resp;
+            return buildRequestWithResponseHandling(builder);
         }
 
         /**
@@ -527,7 +504,8 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
          *   - handle expected errors and fail the future with specific exceptions depending on the error
          *   - fail the future with a non-recoverable KafkaException for all unexpected errors (even if retriable)
          */
-        public void onResponse(final ClientResponse response) {
+        @Override
+        void onResponse(final ClientResponse response) {
             commitSensor.record(response.requestLatencyMs());
             long currentTimeMs = response.receivedTimeMs();
             OffsetCommitResponse commitResponse = (OffsetCommitResponse) response.responseBody();
@@ -625,6 +603,16 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
             pendingRequests.addOffsetCommitRequest(this);
         }
 
+        @Override
+        String requestDescription() {
+            return "OffsetCommit request for offsets " + offsets;
+        }
+
+        @Override
+        CompletableFuture<?> future() {
+            return future;
+        }
+
         private boolean isExpired(final long currentTimeMs) {
             return expirationTimeMs.isPresent() && expirationTimeMs.get() <= currentTimeMs;
         }
@@ -675,7 +663,7 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
      * Represents a request that can be retried or aborted, based on member ID and epoch
      * information.
      */
-    abstract static class RetriableRequestState extends RequestState {
+    abstract class RetriableRequestState extends RequestState {
 
         /**
          * Member info (ID and epoch) to be included in the request if present.
@@ -721,6 +709,55 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
         }
 
         abstract void maybeRetry(long currentTimeMs, Throwable throwable);
+
+        /**
+         * @return String containing the request name and arguments, to be used for logging
+         * purposes.
+         */
+        abstract String requestDescription();
+
+        /**
+         * @return Future that will complete with the request response or failure.
+         */
+        abstract CompletableFuture<?> future();
+
+        /**
+         * Build request with the given builder, including response handling logic.
+         */
+        NetworkClientDelegate.UnsentRequest buildRequestWithResponseHandling(final AbstractRequest.Builder<?> builder) {
+            NetworkClientDelegate.UnsentRequest request = new NetworkClientDelegate.UnsentRequest(
+                builder,
+                coordinatorRequestManager.coordinator());
+            request.whenComplete(
+                (response, throwable) -> {
+                    long currentTimeMs = request.handler().completionTimeMs();
+                    handleClientResponse(response, throwable, currentTimeMs);
+                });
+            return request;
+        }
+
+        private void handleClientResponse(final ClientResponse response,
+                                          final Throwable error,
+                                          final long currentTimeMs) {
+            try {
+                if (error == null) {
+                    onResponse(response);
+                } else {
+                    log.debug("{} completed with error", requestDescription(), error);
+                    handleCoordinatorDisconnect(error, currentTimeMs);
+                    if (error instanceof RetriableException) {
+                        maybeRetry(currentTimeMs, error);
+                    } else {
+                        future().completeExceptionally(error);
+                    }
+                }
+            } catch (Throwable t) {
+                log.error("Unexpected error handling response for ", requestDescription(), t);
+                future().completeExceptionally(t);
+            }
+        }
+
+        abstract void onResponse(final ClientResponse response);
     }
 
     class OffsetFetchRequestState extends RetriableRequestState {
@@ -786,36 +823,22 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
                         new ArrayList<>(this.requestedPartitions),
                         throwOnFetchStableOffsetUnsupported);
             }
-            NetworkClientDelegate.UnsentRequest request =
-                new NetworkClientDelegate.UnsentRequest(builder, coordinatorRequestManager.coordinator());
-            return request.whenComplete((response, error) -> {
-                if (error == null) {
-                    onResponse(response.receivedTimeMs(), (OffsetFetchResponse) response.responseBody());
-                } else {
-                    log.debug("OffsetFetch completed with error for partitions {}", requestedPartitions, error);
-                    long currentTimeMs = request.handler().completionTimeMs();
-                    handleCoordinatorDisconnect(error, currentTimeMs);
-                    if (error instanceof RetriableException) {
-                        maybeRetry(currentTimeMs, error);
-                    } else {
-                        future.completeExceptionally(error);
-                    }
-                }
-            });
+            return buildRequestWithResponseHandling(builder);
         }
 
         /**
-         * Handle request responses, including successful and failed.
+         * Handle OffsetFetch response, including successful and failed.
          */
-        public void onResponse(
-                final long currentTimeMs,
-                final OffsetFetchResponse response) {
-            Errors responseError = response.groupLevelError(groupId);
+        @Override
+        void onResponse(final ClientResponse response) {
+            long currentTimeMs = response.receivedTimeMs();
+            OffsetFetchResponse fetchResponse = (OffsetFetchResponse) response.responseBody();
+            Errors responseError = fetchResponse.groupLevelError(groupId);
             if (responseError != Errors.NONE) {
                 onFailure(currentTimeMs, responseError);
                 return;
             }
-            onSuccess(currentTimeMs, response);
+            onSuccess(currentTimeMs, fetchResponse);
         }
 
         /**
@@ -869,6 +892,16 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
             onFailedAttempt(currentTimeMs);
             pendingRequests.inflightOffsetFetches.remove(this);
             pendingRequests.addOffsetFetchRequest(this);
+        }
+
+        @Override
+        String requestDescription() {
+            return "OffsetFetch request for partitions " + requestedPartitions;
+        }
+
+        @Override
+        CompletableFuture<?> future() {
+            return future;
         }
 
         private boolean isExpired(final long currentTimeMs) {
