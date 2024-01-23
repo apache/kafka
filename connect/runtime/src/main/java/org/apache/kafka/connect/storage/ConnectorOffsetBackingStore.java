@@ -19,7 +19,6 @@ package org.apache.kafka.connect.storage;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.connect.runtime.WorkerConfig;
 import org.apache.kafka.connect.util.Callback;
-import org.apache.kafka.connect.util.FutureCallback;
 import org.apache.kafka.connect.util.LoggingContext;
 import org.apache.kafka.connect.util.TopicAdmin;
 import org.slf4j.Logger;
@@ -35,14 +34,12 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
-import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.function.Supplier;
-import java.util.stream.Collectors;
 
 /**
  * An {@link OffsetBackingStore} with support for reading from and writing to a worker-global
@@ -259,13 +256,23 @@ public class ConnectorOffsetBackingStore implements OffsetBackingStore {
      * <p>If configured to use a connector-specific offset store, the returned {@link Future} corresponds to a
      * write to that store, and the passed-in {@link Callback} is invoked once that write completes. If a worker-global
      * store is provided, a secondary write is made to that store if the write to the connector-specific store
-     * succeeds. Errors with this secondary write are not reflected in the returned {@link Future} or the passed-in
-     * {@link Callback}; they are only logged as a warning to users. The only exception to this rule is when the offsets
-     * that need to be committed contains tombstone records as well. In such cases, a write consisting of only tombstone
-     * offsets would first happen on the worker-global store and only if it succeeds, would all the offsets be written
-     * to the connector-specific store and the regular offsets would be written to the worker-global store. Note that
-     * in this case, failure to write regular offsets to secondary store would still not reflect in the returned
-     * {@link Future} or the passed-in {@link Callback}
+     * succeeds.
+     * <p>
+     * Normally, errors with this secondary write are not reflected in the returned {@link Future} or the passed-in
+     * {@link Callback}; they are only logged as a warning to users. The only exception to this rule is when the
+     * offsets that need to be committed contain tombstone records.
+     * <p>When the to-be-committed offsets contain tombstones, offset commits take place in three phases:
+     * <ol>
+     *     <li>First, only the tombstone offsets are written to the worker-global store. Failures during this step will
+     *     be reflected in the returned {@link Future} and reported to the passed-in {@link Callback}.</li>
+     *     <li>If and only if the previous write to the worker-global store succeeded, all offsets (both tombstones and
+     *     non-tombstones) are written to the connector-specific store. Failures during this step will also be
+     *     reflected in the returned {@link Future} and reported to the passed-in {@link Callback}.</li>
+     *     <li>Finally, if and only if the previous write to the connector-specific store succeeded, all offsets with
+     *     non-tombstone values are written to the worker-global store. Failures during this step will only be reported
+     *     as warning log messages, and will not be reflected in the returned {@link Future} or reported to the
+     *     passed-in {@link Callback}.</li>
+     * </ol>
      *
      * <p>If not configured to use a connector-specific offset store, the returned {@link Future} corresponds to a
      * write to the worker-global offset store, and the passed-in {@link Callback} is invoked once that write completes.
@@ -273,6 +280,10 @@ public class ConnectorOffsetBackingStore implements OffsetBackingStore {
      * @param values map from key to value
      * @param callback callback to invoke on completion of the primary write
      * @return void future for the primary write
+    *
+     * @see <a href="https://issues.apache.org/jira/browse/KAFKA-15018">KAFKA-15018</a> for context on the three-step
+     * write sequence
+     *
      */
     @Override
     public Future<Void> set(Map<ByteBuffer, ByteBuffer> values, Callback<Void> callback) {
@@ -290,53 +301,44 @@ public class ConnectorOffsetBackingStore implements OffsetBackingStore {
             throw new IllegalStateException("At least one non-null offset store must be provided");
         }
 
-        List<ByteBuffer> partitionsWithTombstoneOffsets = values.entrySet().stream()
-                .filter(offsetEntry -> offsetEntry.getValue() == null)
-                .map(Map.Entry::getKey).collect(Collectors.toList());
-
+        Map<ByteBuffer, ByteBuffer> regularOffsets = new HashMap<>();
         Map<ByteBuffer, ByteBuffer> tombstoneOffsets = new HashMap<>();
-        for (ByteBuffer partition : partitionsWithTombstoneOffsets) {
-            tombstoneOffsets.put(partition, null);
-        }
-        Map<ByteBuffer, ByteBuffer> regularOffsets = values.entrySet().stream()
-                .filter(offsetEntry -> offsetEntry.getValue() != null)
-                .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+        values.forEach((partition, offset) -> {
+            if (offset == null) {
+                tombstoneOffsets.put(partition, null);
+            } else {
+                regularOffsets.put(partition, offset);
+            }
+        });
 
-        // If the supplied offsets contain tombstone values, then tombstone offsets are extracted first,
-        // written to the secondary store in a synchronous manner and then to the primary store.
-        // This is because, if a tombstone offset is successfully written to the per-connector offsets topic,
-        // but cannot be written to the global offsets topic, then the global offsets topic will still contain that
-        // source offset, but the per-connector topic will not. Due to the fallback-on-global logic used by the worker,
-        // if a task requests offsets for one of the tombstoned partitions, the worker will provide it with the
-        // offsets present in the global offsets topic, instead of indicating to the task that no offsets can be found.
-        CompletableFuture<Void> offsetWriteFuture = CompletableFuture.completedFuture(null);
         if (secondaryStore != null && !tombstoneOffsets.isEmpty()) {
-            offsetWriteFuture.thenAccept(v -> {
-                Future<Void> secondaryWriteFuture = secondaryStore.set(tombstoneOffsets, new FutureCallback<>());
-                try {
-                    if (exactlyOnce) {
-                        secondaryWriteFuture.get();
-                    } else {
-                        secondaryWriteFuture.get(offsetFlushTimeoutMs, TimeUnit.MILLISECONDS);
-                    }
-                } catch (ExecutionException e) {
-                    log.error("{} Flush of tombstone(s) offsets to secondary store threw an unexpected exception: ", this, e.getCause());
-                    callback.onCompletion(e.getCause(), null);
-                } catch (Exception e) {
-                    log.error("{} Got Exception when trying to flush tombstone(s) offsets to secondary store", this, e);
-                    callback.onCompletion(e, null);
+            Future<Void> secondaryWriteFuture = secondaryStore.set(tombstoneOffsets, (t, r) -> { });
+            try {
+                if (exactlyOnce) {
+                    secondaryWriteFuture.get();
+                } else {
+                    secondaryWriteFuture.get(offsetFlushTimeoutMs, TimeUnit.MILLISECONDS);
                 }
-            });
+                log.debug("Successfully flushed tombstone offsets to secondary store");
+            } catch (ExecutionException e) {
+                log.error("{} Failed to flush tombstone offsets to secondary store", this, e.getCause());
+                callback.onCompletion(e.getCause(), null);
+                return secondaryWriteFuture;
+            } catch (Throwable e) {
+                log.error("{} Failed to flush tombstone offsets to secondary store", this, e);
+                callback.onCompletion(e, null);
+                return secondaryWriteFuture;
+            }
         }
-        offsetWriteFuture.thenAccept(v -> primaryStore.set(values, new FutureCallback<>((primaryWriteError, ignored) -> {
+
+        return primaryStore.set(values, (primaryWriteError, ignored) -> {
             if (secondaryStore != null) {
                 if (primaryWriteError != null) {
-                    log.trace("Skipping offsets write to secondary store because primary write has failed", primaryWriteError);
-                    callback.onCompletion(primaryWriteError, null);
+                    log.info("Skipping offsets write to secondary store because primary write has failed", primaryWriteError);
                 } else {
                     try {
                         // Invoke OffsetBackingStore::set but ignore the resulting future; we don't block on writes to this
-                        // backing store.
+                        // backing store for regular non-tombstone offsets.
                         secondaryStore.set(regularOffsets, (secondaryWriteError, ignored2) -> {
                             try (LoggingContext context = loggingContext()) {
                                 if (secondaryWriteError != null) {
@@ -349,11 +351,12 @@ public class ConnectorOffsetBackingStore implements OffsetBackingStore {
                     } catch (Exception e) {
                         log.warn("Failed to write offsets to secondary backing store", e);
                     }
-                    callback.onCompletion(null, null);
                 }
             }
-        })));
-        return offsetWriteFuture;
+            try (LoggingContext context = loggingContext()) {
+                callback.onCompletion(primaryWriteError, ignored);
+            }
+        });
     }
 
     @Override
