@@ -37,6 +37,7 @@ import org.apache.kafka.connect.runtime.ConnectMetrics.MetricGroup;
 import org.apache.kafka.connect.runtime.WorkerSinkTask.SinkTaskMetricsGroup;
 import org.apache.kafka.connect.runtime.errors.ErrorHandlingMetrics;
 import org.apache.kafka.connect.runtime.errors.ErrorReporter;
+import org.apache.kafka.connect.runtime.errors.ProcessingContext;
 import org.apache.kafka.connect.runtime.errors.RetryWithToleranceOperator;
 import org.apache.kafka.connect.runtime.errors.RetryWithToleranceOperatorTest;
 import org.apache.kafka.connect.runtime.isolation.PluginClassLoader;
@@ -84,6 +85,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.times;
@@ -141,7 +143,7 @@ public class WorkerSinkTaskMockitoTest {
     @Mock
     private HeaderConverter headerConverter;
     @Mock
-    private TransformationChain<SinkRecord> transformationChain;
+    private TransformationChain<ConsumerRecord<byte[], byte[]>, SinkRecord> transformationChain;
     @Mock
     private TaskStatus.Listener statusListener;
     @Mock
@@ -150,7 +152,7 @@ public class WorkerSinkTaskMockitoTest {
     private KafkaConsumer<byte[], byte[]> consumer;
     @Mock
     private ErrorHandlingMetrics errorHandlingMetrics;
-    private ConsumerRebalanceListener rebalanceListener;
+    private ArgumentCaptor<ConsumerRebalanceListener> rebalanceListener = ArgumentCaptor.forClass(ConsumerRebalanceListener.class);
     @Rule
     public final MockitoRule rule = MockitoJUnit.rule().strictness(Strictness.STRICT_STUBS);
 
@@ -175,17 +177,17 @@ public class WorkerSinkTaskMockitoTest {
     }
 
     private void createTask(TargetState initialState, Converter keyConverter, Converter valueConverter, HeaderConverter headerConverter) {
-        createTask(initialState, keyConverter, valueConverter, headerConverter, RetryWithToleranceOperatorTest.NOOP_OPERATOR, Collections::emptyList);
+        createTask(initialState, keyConverter, valueConverter, headerConverter, RetryWithToleranceOperatorTest.noopOperator(), Collections::emptyList);
     }
 
     private void createTask(TargetState initialState, Converter keyConverter, Converter valueConverter, HeaderConverter headerConverter,
-                            RetryWithToleranceOperator retryWithToleranceOperator, Supplier<List<ErrorReporter>> errorReportersSupplier) {
+                            RetryWithToleranceOperator<ConsumerRecord<byte[], byte[]>> retryWithToleranceOperator,
+                            Supplier<List<ErrorReporter<ConsumerRecord<byte[], byte[]>>>> errorReportersSupplier) {
         workerTask = new WorkerSinkTask(
                 taskId, sinkTask, statusListener, initialState, workerConfig, ClusterConfigState.EMPTY, metrics,
                 keyConverter, valueConverter, errorHandlingMetrics, headerConverter,
                 transformationChain, consumer, pluginLoader, time,
                 retryWithToleranceOperator, null, statusBackingStore, errorReportersSupplier);
-        rebalanceListener = workerTask.getRebalanceListener();
     }
 
     @After
@@ -332,7 +334,6 @@ public class WorkerSinkTaskMockitoTest {
         workerTask.close();
         verify(sinkTask).stop();
         verify(consumer).close();
-        verify(transformationChain).close();
         verify(headerConverter).close();
     }
 
@@ -343,7 +344,7 @@ public class WorkerSinkTaskMockitoTest {
 
         expectPollInitialAssignment()
                 .thenAnswer((Answer<ConsumerRecords<byte[], byte[]>>) invocation -> {
-                    rebalanceListener.onPartitionsLost(INITIAL_ASSIGNMENT);
+                    rebalanceListener.getValue().onPartitionsLost(INITIAL_ASSIGNMENT);
                     return ConsumerRecords.empty();
                 });
 
@@ -371,7 +372,7 @@ public class WorkerSinkTaskMockitoTest {
 
         expectPollInitialAssignment()
                 .thenAnswer((Answer<ConsumerRecords<byte[], byte[]>>) invocation -> {
-                    rebalanceListener.onPartitionsRevoked(INITIAL_ASSIGNMENT);
+                    rebalanceListener.getValue().onPartitionsRevoked(INITIAL_ASSIGNMENT);
                     return ConsumerRecords.empty();
                 });
 
@@ -398,8 +399,8 @@ public class WorkerSinkTaskMockitoTest {
 
         expectPollInitialAssignment()
                 .thenAnswer((Answer<ConsumerRecords<byte[], byte[]>>) invocation -> {
-                    rebalanceListener.onPartitionsRevoked(INITIAL_ASSIGNMENT);
-                    rebalanceListener.onPartitionsAssigned(INITIAL_ASSIGNMENT);
+                    rebalanceListener.getValue().onPartitionsRevoked(INITIAL_ASSIGNMENT);
+                    rebalanceListener.getValue().onPartitionsAssigned(INITIAL_ASSIGNMENT);
                     return ConsumerRecords.empty();
                 });
 
@@ -440,22 +441,22 @@ public class WorkerSinkTaskMockitoTest {
 
         when(consumer.poll(any(Duration.class)))
                 .thenAnswer((Answer<ConsumerRecords<byte[], byte[]>>) invocation -> {
-                    rebalanceListener.onPartitionsAssigned(INITIAL_ASSIGNMENT);
+                    rebalanceListener.getValue().onPartitionsAssigned(INITIAL_ASSIGNMENT);
                     return ConsumerRecords.empty();
                 })
                 .thenAnswer((Answer<ConsumerRecords<byte[], byte[]>>) invocation -> {
-                    rebalanceListener.onPartitionsRevoked(Collections.singleton(TOPIC_PARTITION));
-                    rebalanceListener.onPartitionsAssigned(Collections.emptySet());
+                    rebalanceListener.getValue().onPartitionsRevoked(Collections.singleton(TOPIC_PARTITION));
+                    rebalanceListener.getValue().onPartitionsAssigned(Collections.emptySet());
                     return ConsumerRecords.empty();
                 })
                 .thenAnswer((Answer<ConsumerRecords<byte[], byte[]>>) invocation -> {
-                    rebalanceListener.onPartitionsRevoked(Collections.emptySet());
-                    rebalanceListener.onPartitionsAssigned(Collections.singleton(TOPIC_PARTITION3));
+                    rebalanceListener.getValue().onPartitionsRevoked(Collections.emptySet());
+                    rebalanceListener.getValue().onPartitionsAssigned(Collections.singleton(TOPIC_PARTITION3));
                     return ConsumerRecords.empty();
                 })
                 .thenAnswer((Answer<ConsumerRecords<byte[], byte[]>>) invocation -> {
-                    rebalanceListener.onPartitionsLost(Collections.singleton(TOPIC_PARTITION3));
-                    rebalanceListener.onPartitionsAssigned(Collections.singleton(TOPIC_PARTITION));
+                    rebalanceListener.getValue().onPartitionsLost(Collections.singleton(TOPIC_PARTITION3));
+                    rebalanceListener.getValue().onPartitionsAssigned(Collections.singleton(TOPIC_PARTITION));
                     return ConsumerRecords.empty();
                 });
 
@@ -565,7 +566,7 @@ public class WorkerSinkTaskMockitoTest {
     }
 
     private void verifyInitializeTask() {
-        verify(consumer).subscribe(asList(TOPIC), rebalanceListener);
+        verify(consumer).subscribe(eq(asList(TOPIC)), rebalanceListener.capture());
         verify(sinkTask).initialize(sinkTaskContext.capture());
         verify(sinkTask).start(TASK_PROPS);
     }
@@ -576,7 +577,7 @@ public class WorkerSinkTaskMockitoTest {
 
         return when(consumer.poll(any(Duration.class))).thenAnswer(
                 invocation -> {
-                    rebalanceListener.onPartitionsAssigned(INITIAL_ASSIGNMENT);
+                    rebalanceListener.getValue().onPartitionsAssigned(INITIAL_ASSIGNMENT);
                     return ConsumerRecords.empty();
                 }
         );
@@ -626,10 +627,11 @@ public class WorkerSinkTaskMockitoTest {
         expectTransformation(topicPrefix);
     }
 
+    @SuppressWarnings("unchecked")
     private void expectTransformation(final String topicPrefix) {
-        when(transformationChain.apply(any(SinkRecord.class))).thenAnswer((Answer<SinkRecord>)
+        when(transformationChain.apply(any(ProcessingContext.class), any(SinkRecord.class))).thenAnswer((Answer<SinkRecord>)
                 invocation -> {
-                    SinkRecord origRecord = invocation.getArgument(0);
+                    SinkRecord origRecord = invocation.getArgument(1);
                     return topicPrefix != null && !topicPrefix.isEmpty()
                             ? origRecord.newRecord(
                             topicPrefix + origRecord.topic(),
