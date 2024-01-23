@@ -52,11 +52,13 @@ public interface CoordinatorShard<U> {
     /**
      * Replay a record to update the state machine.
      *
+     * @param offset        The offset of the record in the log.
      * @param producerId    The producer id.
      * @param producerEpoch The producer epoch.
      * @param record        The record to replay.
      */
     void replay(
+        long offset,
         long producerId,
         short producerEpoch,
         U record

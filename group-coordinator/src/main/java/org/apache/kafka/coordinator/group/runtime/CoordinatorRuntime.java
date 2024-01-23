@@ -713,13 +713,17 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
                         try {
                             // Apply the records to the state machine.
                             if (result.replayRecords()) {
-                                result.records().forEach(record ->
+                                // We compute the offset of the record based on the last written offset. The
+                                // coordinator is the single writer to the underlying partition so we can
+                                // deduce it like this.
+                                for (int i = 0; i < result.records().size(); i++) {
                                     context.coordinator.replay(
+                                        prevLastWrittenOffset + i,
                                         producerId,
                                         producerEpoch,
-                                        record
-                                    )
-                                );
+                                        result.records().get(i)
+                                    );
+                                }
                             }
 
                             // Write the records to the log and update the last written
