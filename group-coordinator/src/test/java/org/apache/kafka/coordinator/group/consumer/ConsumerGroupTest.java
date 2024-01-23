@@ -872,7 +872,8 @@ public class ConsumerGroupTest {
                 new ConsumerGroupDescribeResponseData.Member().setMemberId("member2")
                     .setSubscribedTopicRegex("")
             ));
-        ConsumerGroupDescribeResponseData.DescribedGroup actual = group.asDescribedGroup(1, "");
+        ConsumerGroupDescribeResponseData.DescribedGroup actual = group.asDescribedGroup(1, "",
+            new GroupMetadataManagerTest.MetadataImageBuilder().build().topics());
 
         assertEquals(expected, actual);
     }

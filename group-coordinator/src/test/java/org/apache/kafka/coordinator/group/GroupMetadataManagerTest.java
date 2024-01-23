@@ -9690,7 +9690,10 @@ public class GroupMetadataManagerTest {
                 .setGroupEpoch(epoch)
                 .setGroupId(consumerGroupIds.get(1))
                 .setMembers(Arrays.asList(
-                    memberBuilder.build().asConsumerGroupDescribeMember(new Assignment(Collections.emptyMap()), new HashMap<>())
+                    memberBuilder.build().asConsumerGroupDescribeMember(
+                        new Assignment(Collections.emptyMap()),
+                        new MetadataImageBuilder().build().topics()
+                    )
                 ))
                 .setGroupState("assigning")
                 .setAssignorName("assignorName")
@@ -9727,10 +9730,15 @@ public class GroupMetadataManagerTest {
         String memberId1 = "memberId1";
         String memberId2 = "memberId2";
         String topicName = "topicName";
+        Uuid topicId = Uuid.randomUuid();
+        MetadataImage metadataImage = new MetadataImageBuilder()
+            .addTopic(topicId, topicName, 3)
+            .build();
 
         MockPartitionAssignor assignor = new MockPartitionAssignor("range");
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
             .withAssignors(Collections.singletonList(assignor))
+            .withMetadataImage(metadataImage)
             .build();
 
         ConsumerGroupMember.Builder memberBuilder1 = new ConsumerGroupMember.Builder(memberId1)
@@ -9739,15 +9747,10 @@ public class GroupMetadataManagerTest {
         context.replay(RecordHelpers.newGroupEpochRecord(consumerGroupId, epoch + 1));
 
         Map<Uuid, Set<Integer>> assignmentMap = new HashMap<>();
-        Uuid topicId = Uuid.randomUuid();
         assignmentMap.put(topicId, Collections.emptySet());
-
-        Map<String, TopicMetadata> subscriptionMetadata = new HashMap<>();
-        subscriptionMetadata.put(topicName, new TopicMetadata(topicId, topicName, 1, new HashMap<>()));
 
         ConsumerGroupMember.Builder memberBuilder2 = new ConsumerGroupMember.Builder(memberId2);
         context.replay(RecordHelpers.newMemberSubscriptionRecord(consumerGroupId, memberBuilder2.build()));
-        context.replay(RecordHelpers.newGroupSubscriptionMetadataRecord(consumerGroupId, subscriptionMetadata));
         context.replay(RecordHelpers.newTargetAssignmentRecord(consumerGroupId, memberId2, assignmentMap));
         context.replay(RecordHelpers.newCurrentAssignmentRecord(consumerGroupId, memberBuilder2.build()));
         context.replay(RecordHelpers.newGroupEpochRecord(consumerGroupId, epoch + 2));
@@ -9768,8 +9771,8 @@ public class GroupMetadataManagerTest {
         describedGroup = new ConsumerGroupDescribeResponseData.DescribedGroup()
             .setGroupId(consumerGroupId)
             .setMembers(Arrays.asList(
-                memberBuilder1.build().asConsumerGroupDescribeMember(new Assignment(Collections.emptyMap()), subscriptionMetadata),
-                memberBuilder2.build().asConsumerGroupDescribeMember(new Assignment(assignmentMap), subscriptionMetadata)
+                memberBuilder1.build().asConsumerGroupDescribeMember(new Assignment(Collections.emptyMap()), metadataImage.topics()),
+                memberBuilder2.build().asConsumerGroupDescribeMember(new Assignment(assignmentMap), metadataImage.topics())
             ))
             .setGroupState("assigning")
             .setAssignorName("range")

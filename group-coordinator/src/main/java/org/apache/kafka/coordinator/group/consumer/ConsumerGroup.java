@@ -953,7 +953,11 @@ public class ConsumerGroup implements Group {
         return value == null ? 1 : value + 1;
     }
 
-    public ConsumerGroupDescribeResponseData.DescribedGroup asDescribedGroup(long committedOffset, String defaultAssignor) {
+    public ConsumerGroupDescribeResponseData.DescribedGroup asDescribedGroup(
+        long committedOffset,
+        String defaultAssignor,
+        TopicsImage topicsImage
+    ) {
         ConsumerGroupDescribeResponseData.DescribedGroup describedGroup = new ConsumerGroupDescribeResponseData.DescribedGroup()
             .setGroupId(groupId)
             .setAssignorName(preferredServerAssignor(committedOffset).orElse(defaultAssignor))
@@ -964,7 +968,7 @@ public class ConsumerGroup implements Group {
             entry -> describedGroup.members().add(
                 entry.getValue().asConsumerGroupDescribeMember(
                     targetAssignment.get(entry.getValue().memberId(), committedOffset),
-                    subscriptionMetadata()
+                    topicsImage
                 )
             )
         );

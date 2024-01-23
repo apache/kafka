@@ -20,6 +20,8 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.ConsumerGroupDescribeResponseData;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupCurrentMemberAssignmentValue;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupMemberMetadataValue;
+import org.apache.kafka.image.TopicImage;
+import org.apache.kafka.image.TopicsImage;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -32,8 +34,6 @@ import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.Set;
 import java.util.stream.Collectors;
-
-import static org.apache.kafka.common.protocol.Errors.UNKNOWN_TOPIC_ID;
 
 /**
  * ConsumerGroupMember contains all the information related to a member
@@ -556,17 +556,17 @@ public class ConsumerGroupMember {
      */
     public ConsumerGroupDescribeResponseData.Member asConsumerGroupDescribeMember(
         Assignment targetAssignment,
-        Map<String, TopicMetadata> subscriptionMetadata
+        TopicsImage topicsImage
     ) {
         return new ConsumerGroupDescribeResponseData.Member()
             .setMemberEpoch(memberEpoch)
             .setMemberId(memberId)
             .setAssignment(new ConsumerGroupDescribeResponseData.Assignment()
-                .setTopicPartitions(topicPartitionsFromMap(assignedPartitions, subscriptionMetadata)))
+            .setTopicPartitions(topicPartitionsFromMap(assignedPartitions, topicsImage)))
             .setTargetAssignment(new ConsumerGroupDescribeResponseData.Assignment()
                 .setTopicPartitions(topicPartitionsFromMap(
                     targetAssignment != null ? targetAssignment.partitions() : Collections.emptyMap(),
-                    subscriptionMetadata
+                    topicsImage
                 )))
             .setClientHost(clientHost)
             .setClientId(clientId)
@@ -578,26 +578,38 @@ public class ConsumerGroupMember {
 
     private static List<ConsumerGroupDescribeResponseData.TopicPartitions> topicPartitionsFromMap(
         Map<Uuid, Set<Integer>> partitions,
-        Map<String, TopicMetadata> subscriptionMetadata
+        TopicsImage topicsImage
     ) {
-        return partitions.entrySet().stream().map(
-            item -> new ConsumerGroupDescribeResponseData.TopicPartitions()
-                .setTopicId(item.getKey())
-                .setTopicName(lookupTopicNameById(item.getKey(), subscriptionMetadata))
-                .setPartitions(new ArrayList<>(item.getValue()))
-        ).collect(Collectors.toList());
+        List<ConsumerGroupDescribeResponseData.TopicPartitions> topicPartitions = new ArrayList<>();
+        for (Map.Entry<Uuid, Set<Integer>> entry : partitions.entrySet()) {
+            Uuid topicId = entry.getKey();
+            Set<Integer> partitionSet = partitions.get(topicId);
+//        partitions.forEach((topicId, partitionSet) -> {
+            String topicName = lookupTopicNameById(topicId, topicsImage);
+            if (topicName != null) {
+                topicPartitions.add(new ConsumerGroupDescribeResponseData.TopicPartitions()
+                    .setTopicId(topicId)
+                    .setTopicName(topicName)
+                    .setPartitions(new ArrayList<>(partitionSet)));
+            } else {
+                // When the topic has been deleted and the group/member hasn't updated,
+                // directly remove the topic from the assignment.
+                partitions.remove(topicId, partitionSet);
+            }
+        }
+        return topicPartitions;
     }
 
     private static String lookupTopicNameById(
         Uuid topicId,
-        Map<String, TopicMetadata> subscriptionMetadata
+        TopicsImage topicsImage
     ) {
-        for (TopicMetadata topicMetadata : subscriptionMetadata.values()) {
-            if (topicId.equals(topicMetadata.id())) {
-                return topicMetadata.name();
-            }
+        TopicImage topicImage = topicsImage.getTopic(topicId);
+        if (topicImage != null) {
+            return topicImage.name();
+        } else {
+            return null;
         }
-        throw UNKNOWN_TOPIC_ID.exception("The subscription metadata does not contain " + topicId);
     }
 
     @Override

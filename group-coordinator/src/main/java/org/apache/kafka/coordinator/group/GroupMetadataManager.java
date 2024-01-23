@@ -483,7 +483,11 @@ public class GroupMetadataManager {
         final List<ConsumerGroupDescribeResponseData.DescribedGroup> describedGroups = new ArrayList<>();
         groupIds.forEach(groupId -> {
             try {
-                describedGroups.add(consumerGroup(groupId, committedOffset).asDescribedGroup(committedOffset, defaultAssignor.name()));
+                describedGroups.add(consumerGroup(groupId, committedOffset).asDescribedGroup(
+                    committedOffset,
+                    defaultAssignor.name(),
+                    metadataImage.topics()
+                ));
             } catch (GroupIdNotFoundException exception) {
                 describedGroups.add(new ConsumerGroupDescribeResponseData.DescribedGroup()
                     .setGroupId(groupId)
