@@ -95,13 +95,11 @@ import java.util.stream.Collectors;
 
 import static java.util.Arrays.asList;
 import static java.util.Collections.singleton;
-import static org.easymock.EasyMock.createMock;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertSame;
-import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
@@ -156,7 +154,7 @@ public class WorkerSinkTaskTest {
     @Mock
     private HeaderConverter headerConverter;
     @Mock
-    private TransformationChain<SinkRecord> transformationChain;
+    private TransformationChain<ConsumerRecord<byte[], byte[]>, SinkRecord> transformationChain;
     @Mock
     private TaskStatus.Listener statusListener;
     @Mock
@@ -190,11 +188,11 @@ public class WorkerSinkTaskTest {
     }
 
     private void createTask(TargetState initialState, Converter keyConverter, Converter valueConverter, HeaderConverter headerConverter) {
-        createTask(initialState, keyConverter, valueConverter, headerConverter, RetryWithToleranceOperatorTest.NOOP_OPERATOR, Collections::emptyList);
+        createTask(initialState, keyConverter, valueConverter, headerConverter, RetryWithToleranceOperatorTest.noopOperator(), Collections::emptyList);
     }
 
     private void createTask(TargetState initialState, Converter keyConverter, Converter valueConverter, HeaderConverter headerConverter,
-                            RetryWithToleranceOperator retryWithToleranceOperator, Supplier<List<ErrorReporter>> errorReportersSupplier) {
+                            RetryWithToleranceOperator<ConsumerRecord<byte[], byte[]>> retryWithToleranceOperator, Supplier<List<ErrorReporter<ConsumerRecord<byte[], byte[]>>>> errorReportersSupplier) {
         workerTask = new WorkerSinkTask(
                 taskId, sinkTask, statusListener, initialState, workerConfig, ClusterConfigState.EMPTY, metrics,
                 keyConverter, valueConverter, errorHandlingMetrics, headerConverter,
@@ -360,9 +358,6 @@ public class WorkerSinkTaskTest {
             );
             return null;
         });
-        transformationChain.close();
-        PowerMock.expectLastCall();
-
         headerConverter.close();
         PowerMock.expectLastCall();
 
@@ -1964,44 +1959,6 @@ public class WorkerSinkTaskTest {
     }
 
     @Test
-    public void testErrorReportersConfigured() {
-        RetryWithToleranceOperator retryWithToleranceOperator = createMock(RetryWithToleranceOperator.class);
-        List<ErrorReporter> errorReporters = Collections.singletonList(createMock(ErrorReporter.class));
-        createTask(initialState, keyConverter, valueConverter, headerConverter, retryWithToleranceOperator,
-                () -> errorReporters);
-
-        expectInitializeTask();
-        Capture<List<ErrorReporter>> errorReportersCapture = EasyMock.newCapture();
-        retryWithToleranceOperator.reporters(EasyMock.capture(errorReportersCapture));
-        PowerMock.expectLastCall();
-
-        PowerMock.replayAll(retryWithToleranceOperator);
-
-        workerTask.initialize(TASK_CONFIG);
-        workerTask.initializeAndStart();
-
-        assertEquals(errorReporters, errorReportersCapture.getValue());
-
-        PowerMock.verifyAll();
-    }
-
-    @Test
-    public void testErrorReporterConfigurationExceptionPropagation() {
-        createTask(initialState, keyConverter, valueConverter, headerConverter, RetryWithToleranceOperatorTest.NOOP_OPERATOR,
-                () -> {
-                    throw new ConnectException("Failed to create error reporters");
-                }
-        );
-
-        PowerMock.replayAll();
-
-        workerTask.initialize(TASK_CONFIG);
-        assertThrows(ConnectException.class, () -> workerTask.initializeAndStart());
-
-        PowerMock.verifyAll();
-    }
-
-    @Test
     public void testPartitionCountInCaseOfPartitionRevocation() {
         MockConsumer<byte[], byte[]> mockConsumer = new MockConsumer<>(OffsetResetStrategy.EARLIEST);
         // Setting up Worker Sink Task to check metrics
@@ -2009,7 +1966,7 @@ public class WorkerSinkTaskTest {
                 taskId, sinkTask, statusListener, TargetState.PAUSED, workerConfig, ClusterConfigState.EMPTY, metrics,
                 keyConverter, valueConverter, errorHandlingMetrics, headerConverter,
                 transformationChain, mockConsumer, pluginLoader, time,
-                RetryWithToleranceOperatorTest.NOOP_OPERATOR, null, statusBackingStore, Collections::emptyList);
+                RetryWithToleranceOperatorTest.noopOperator(), null, statusBackingStore, Collections::emptyList);
         mockConsumer.updateBeginningOffsets(new HashMap<TopicPartition, Long>() {{
                 put(TOPIC_PARTITION, 0 * 1L);
                 put(TOPIC_PARTITION2, 0 * 1L);

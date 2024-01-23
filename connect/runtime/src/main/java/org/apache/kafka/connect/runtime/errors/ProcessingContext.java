@@ -16,10 +16,6 @@
  */
 package org.apache.kafka.connect.runtime.errors;
 
-import org.apache.kafka.clients.consumer.ConsumerRecord;
-import org.apache.kafka.common.record.TimestampType;
-import org.apache.kafka.connect.source.SourceRecord;
-
 /**
  * Contains all the metadata related to the currently evaluating operation, and associated with a particular
  * sink or source record from the consumer or task, respectively. This class is not thread safe, and so once an
@@ -88,39 +84,6 @@ public class ProcessingContext<T> {
     public void currentContext(Stage stage, Class<?> klass) {
         position(stage);
         executingClass(klass);
-    }
-
-    @Override
-    public String toString() {
-        return toString(false);
-    }
-
-    public String toString(boolean includeMessage) {
-        StringBuilder builder = new StringBuilder();
-        builder.append("Executing stage '");
-        builder.append(stage().name());
-        builder.append("' with class '");
-        builder.append(executingClass() == null ? "null" : executingClass().getName());
-        builder.append('\'');
-        T original = original();
-        if (includeMessage && original instanceof SourceRecord) {
-            builder.append(", where source record is = ");
-            builder.append(original);
-        } else if (includeMessage && original instanceof ConsumerRecord) {
-            @SuppressWarnings("unchecked")
-            ConsumerRecord<byte[], byte[]> msg = (ConsumerRecord<byte[], byte[]>) original;
-            builder.append(", where consumed record is ");
-            builder.append("{topic='").append(msg.topic()).append('\'');
-            builder.append(", partition=").append(msg.partition());
-            builder.append(", offset=").append(msg.offset());
-            if (msg.timestampType() == TimestampType.CREATE_TIME || msg.timestampType() == TimestampType.LOG_APPEND_TIME) {
-                builder.append(", timestamp=").append(msg.timestamp());
-                builder.append(", timestampType=").append(msg.timestampType());
-            }
-            builder.append("}");
-        }
-        builder.append('.');
-        return builder.toString();
     }
 
     /**

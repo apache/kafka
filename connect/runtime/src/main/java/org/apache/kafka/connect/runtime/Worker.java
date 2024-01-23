@@ -27,6 +27,7 @@ import org.apache.kafka.clients.admin.FenceProducersOptions;
 import org.apache.kafka.clients.admin.ListConsumerGroupOffsetsOptions;
 import org.apache.kafka.clients.admin.ListConsumerGroupOffsetsResult;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.producer.KafkaProducer;
@@ -47,6 +48,7 @@ import org.apache.kafka.common.utils.ThreadUtils;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.connect.connector.ConnectRecord;
 import org.apache.kafka.connect.connector.Connector;
 import org.apache.kafka.connect.connector.Task;
 import org.apache.kafka.connect.connector.policy.ConnectorClientConfigOverridePolicy;
@@ -155,7 +157,7 @@ public class Worker {
     private final OffsetBackingStore globalOffsetBackingStore;
 
     private final ConcurrentMap<String, WorkerConnector> connectors = new ConcurrentHashMap<>();
-    private final ConcurrentMap<ConnectorTaskId, WorkerTask> tasks = new ConcurrentHashMap<>();
+    private final ConcurrentMap<ConnectorTaskId, WorkerTask<?, ?>> tasks = new ConcurrentHashMap<>();
     private Optional<SourceTaskOffsetCommitter> sourceTaskOffsetCommitter = Optional.empty();
     private final WorkerConfigTransformer workerConfigTransformer;
     private final ConnectorClientConfigOverridePolicy connectorClientConfigOverridePolicy;
@@ -606,9 +608,9 @@ public class Worker {
             Map<String, String> connProps,
             Map<String, String> taskProps,
             TaskStatus.Listener statusListener,
-            TaskBuilder taskBuilder
+            TaskBuilder<?, ?> taskBuilder
     ) {
-        final WorkerTask workerTask;
+        final WorkerTask<?, ?> workerTask;
         final TaskStatus.Listener taskStatusListener = workerMetricsGroup.wrapStatusListener(statusListener);
         try (LoggingContext loggingContext = LoggingContext.forTask(id)) {
             log.info("Creating task {}", id);
@@ -673,7 +675,7 @@ public class Worker {
                 return false;
             }
 
-            WorkerTask existing = tasks.putIfAbsent(id, workerTask);
+            WorkerTask<?, ?> existing = tasks.putIfAbsent(id, workerTask);
             if (existing != null)
                 throw new ConnectException("Task already exists in this worker: " + id);
 
@@ -956,11 +958,11 @@ public class Worker {
         return new ErrorHandlingMetrics(id, metrics);
     }
 
-    private List<ErrorReporter> sinkTaskReporters(ConnectorTaskId id, SinkConnectorConfig connConfig,
-                                                  ErrorHandlingMetrics errorHandlingMetrics,
-                                                  Class<? extends Connector> connectorClass) {
-        ArrayList<ErrorReporter> reporters = new ArrayList<>();
-        LogReporter logReporter = new LogReporter(id, connConfig, errorHandlingMetrics);
+    private List<ErrorReporter<ConsumerRecord<byte[], byte[]>>> sinkTaskReporters(ConnectorTaskId id, SinkConnectorConfig connConfig,
+                                                     ErrorHandlingMetrics errorHandlingMetrics,
+                                                     Class<? extends Connector> connectorClass) {
+        ArrayList<ErrorReporter<ConsumerRecord<byte[], byte[]>>> reporters = new ArrayList<>();
+        LogReporter<ConsumerRecord<byte[], byte[]>> logReporter = new LogReporter.Sink(id, connConfig, errorHandlingMetrics);
         reporters.add(logReporter);
 
         // check if topic for dead letter queue exists
@@ -977,10 +979,10 @@ public class Worker {
         return reporters;
     }
 
-    private List<ErrorReporter> sourceTaskReporters(ConnectorTaskId id, ConnectorConfig connConfig,
-                                                      ErrorHandlingMetrics errorHandlingMetrics) {
-        List<ErrorReporter> reporters = new ArrayList<>();
-        LogReporter logReporter = new LogReporter(id, connConfig, errorHandlingMetrics);
+    private List<ErrorReporter<SourceRecord>> sourceTaskReporters(ConnectorTaskId id, ConnectorConfig connConfig,
+                                                       ErrorHandlingMetrics errorHandlingMetrics) {
+        List<ErrorReporter<SourceRecord>> reporters = new ArrayList<>();
+        LogReporter<SourceRecord> logReporter = new LogReporter.Source(id, connConfig, errorHandlingMetrics);
         reporters.add(logReporter);
 
         return reporters;
@@ -988,7 +990,7 @@ public class Worker {
 
     private WorkerErrantRecordReporter createWorkerErrantRecordReporter(
         SinkConnectorConfig connConfig,
-        RetryWithToleranceOperator retryWithToleranceOperator,
+        RetryWithToleranceOperator<ConsumerRecord<byte[], byte[]>> retryWithToleranceOperator,
         Converter keyConverter,
         Converter valueConverter,
         HeaderConverter headerConverter
@@ -1002,7 +1004,7 @@ public class Worker {
 
     private void stopTask(ConnectorTaskId taskId) {
         try (LoggingContext loggingContext = LoggingContext.forTask(taskId)) {
-            WorkerTask task = tasks.get(taskId);
+            WorkerTask<?, ?> task = tasks.get(taskId);
             if (task == null) {
                 log.warn("Ignoring stop request for unowned task {}", taskId);
                 return;
@@ -1028,7 +1030,7 @@ public class Worker {
 
     private void awaitStopTask(ConnectorTaskId taskId, long timeout) {
         try (LoggingContext loggingContext = LoggingContext.forTask(taskId)) {
-            WorkerTask task = tasks.remove(taskId);
+            WorkerTask<?, ?> task = tasks.remove(taskId);
             if (task == null) {
                 log.warn("Ignoring await stop request for non-present task {}", taskId);
                 return;
@@ -1136,9 +1138,9 @@ public class Worker {
             }
         }
 
-        for (Map.Entry<ConnectorTaskId, WorkerTask> taskEntry : tasks.entrySet()) {
+        for (Map.Entry<ConnectorTaskId, WorkerTask<?, ?>> taskEntry : tasks.entrySet()) {
             if (taskEntry.getKey().connector().equals(connName)) {
-                WorkerTask workerTask = taskEntry.getValue();
+                WorkerTask<?, ?> workerTask = taskEntry.getValue();
                 try (LoaderSwap loaderSwap = plugins.withClassLoader(workerTask.loader())) {
                     workerTask.transitionTo(state);
                 }
@@ -1685,7 +1687,7 @@ public class Worker {
         return workerMetricsGroup;
     }
 
-    abstract class TaskBuilder {
+    abstract class TaskBuilder<T, R extends ConnectRecord<R>> {
 
         private final ConnectorTaskId id;
         private final ClusterConfigState configState;
@@ -1709,37 +1711,37 @@ public class Worker {
             this.initialState = initialState;
         }
 
-        public TaskBuilder withTask(Task task) {
+        public TaskBuilder<T, R> withTask(Task task) {
             this.task = task;
             return this;
         }
 
-        public TaskBuilder withConnectorConfig(ConnectorConfig connectorConfig) {
+        public TaskBuilder<T, R> withConnectorConfig(ConnectorConfig connectorConfig) {
             this.connectorConfig = connectorConfig;
             return this;
         }
 
-        public TaskBuilder withKeyConverter(Converter keyConverter) {
+        public TaskBuilder<T, R> withKeyConverter(Converter keyConverter) {
             this.keyConverter = keyConverter;
             return this;
         }
 
-        public TaskBuilder withValueConverter(Converter valueConverter) {
+        public TaskBuilder<T, R> withValueConverter(Converter valueConverter) {
             this.valueConverter = valueConverter;
             return this;
         }
 
-        public TaskBuilder withHeaderConverter(HeaderConverter headerConverter) {
+        public TaskBuilder<T, R> withHeaderConverter(HeaderConverter headerConverter) {
             this.headerConverter = headerConverter;
             return this;
         }
 
-        public TaskBuilder withClassloader(ClassLoader classLoader) {
+        public TaskBuilder<T, R> withClassloader(ClassLoader classLoader) {
             this.classLoader = classLoader;
             return this;
         }
 
-        public WorkerTask build() {
+        public WorkerTask<T, R> build() {
             Objects.requireNonNull(task, "Task cannot be null");
             Objects.requireNonNull(connectorConfig, "Connector config used by task cannot be null");
             Objects.requireNonNull(keyConverter, "Key converter used by task cannot be null");
@@ -1750,31 +1752,39 @@ public class Worker {
             ErrorHandlingMetrics errorHandlingMetrics = errorHandlingMetrics(id);
             final Class<? extends Connector> connectorClass = plugins.connectorClass(
                     connectorConfig.getString(ConnectorConfig.CONNECTOR_CLASS_CONFIG));
-            RetryWithToleranceOperator retryWithToleranceOperator = new RetryWithToleranceOperator(connectorConfig.errorRetryTimeout(),
+
+            RetryWithToleranceOperator<T> retryWithToleranceOperator = new RetryWithToleranceOperator<>(connectorConfig.errorRetryTimeout(),
                     connectorConfig.errorMaxDelayInMillis(), connectorConfig.errorToleranceType(), Time.SYSTEM, errorHandlingMetrics);
+
+            TransformationChain<T, R> transformationChain = new TransformationChain<>(connectorConfig.<R>transformationStages(), retryWithToleranceOperator);
+            log.info("Initializing: {}", transformationChain);
 
             return doBuild(task, id, configState, statusListener, initialState,
                     connectorConfig, keyConverter, valueConverter, headerConverter, classLoader,
-                    errorHandlingMetrics, connectorClass, retryWithToleranceOperator);
+                    retryWithToleranceOperator, transformationChain,
+                    errorHandlingMetrics, connectorClass);
         }
 
-        abstract WorkerTask doBuild(Task task,
-                                    ConnectorTaskId id,
-                                    ClusterConfigState configState,
-                                    TaskStatus.Listener statusListener,
-                                    TargetState initialState,
-                                    ConnectorConfig connectorConfig,
-                                    Converter keyConverter,
-                                    Converter valueConverter,
-                                    HeaderConverter headerConverter,
-                                    ClassLoader classLoader,
-                                    ErrorHandlingMetrics errorHandlingMetrics,
-                                    Class<? extends Connector> connectorClass,
-                                    RetryWithToleranceOperator retryWithToleranceOperator);
+        abstract WorkerTask<T, R> doBuild(
+                Task task,
+                ConnectorTaskId id,
+                ClusterConfigState configState,
+                TaskStatus.Listener statusListener,
+                TargetState initialState,
+                ConnectorConfig connectorConfig,
+                Converter keyConverter,
+                Converter valueConverter,
+                HeaderConverter headerConverter,
+                ClassLoader classLoader,
+                RetryWithToleranceOperator<T> retryWithToleranceOperator,
+                TransformationChain<T, R> transformationChain,
+                ErrorHandlingMetrics errorHandlingMetrics,
+                Class<? extends Connector> connectorClass
+        );
 
     }
 
-    class SinkTaskBuilder extends TaskBuilder {
+    class SinkTaskBuilder extends TaskBuilder<ConsumerRecord<byte[], byte[]>, SinkRecord> {
         public SinkTaskBuilder(ConnectorTaskId id,
                                ClusterConfigState configState,
                                TaskStatus.Listener statusListener,
@@ -1783,22 +1793,22 @@ public class Worker {
         }
 
         @Override
-        public WorkerTask doBuild(Task task,
-                           ConnectorTaskId id,
-                           ClusterConfigState configState,
-                           TaskStatus.Listener statusListener,
-                           TargetState initialState,
-                           ConnectorConfig connectorConfig,
-                           Converter keyConverter,
-                           Converter valueConverter,
-                           HeaderConverter headerConverter,
-                           ClassLoader classLoader,
-                           ErrorHandlingMetrics errorHandlingMetrics,
-                           Class<? extends Connector> connectorClass,
-                           RetryWithToleranceOperator retryWithToleranceOperator) {
-
-            TransformationChain<SinkRecord> transformationChain = new TransformationChain<>(connectorConfig.<SinkRecord>transformationStages(), retryWithToleranceOperator);
-            log.info("Initializing: {}", transformationChain);
+        public WorkerTask<ConsumerRecord<byte[], byte[]>, SinkRecord> doBuild(
+                Task task,
+                ConnectorTaskId id,
+                ClusterConfigState configState,
+                TaskStatus.Listener statusListener,
+                TargetState initialState,
+                ConnectorConfig connectorConfig,
+                Converter keyConverter,
+                Converter valueConverter,
+                HeaderConverter headerConverter,
+                ClassLoader classLoader,
+                RetryWithToleranceOperator<ConsumerRecord<byte[], byte[]>> retryWithToleranceOperator,
+                TransformationChain<ConsumerRecord<byte[], byte[]>, SinkRecord> transformationChain,
+                ErrorHandlingMetrics errorHandlingMetrics,
+                Class<? extends Connector> connectorClass
+        ) {
             SinkConnectorConfig sinkConfig = new SinkConnectorConfig(plugins, connectorConfig.originalsStrings());
             WorkerErrantRecordReporter workerErrantRecordReporter = createWorkerErrantRecordReporter(sinkConfig, retryWithToleranceOperator,
                     keyConverter, valueConverter, headerConverter);
@@ -1815,7 +1825,7 @@ public class Worker {
         }
     }
 
-    class SourceTaskBuilder extends TaskBuilder {
+    class SourceTaskBuilder extends TaskBuilder<SourceRecord, SourceRecord> {
         public SourceTaskBuilder(ConnectorTaskId id,
                                ClusterConfigState configState,
                                TaskStatus.Listener statusListener,
@@ -1824,24 +1834,24 @@ public class Worker {
         }
 
         @Override
-        public WorkerTask doBuild(Task task,
-                           ConnectorTaskId id,
-                           ClusterConfigState configState,
-                           TaskStatus.Listener statusListener,
-                           TargetState initialState,
-                           ConnectorConfig connectorConfig,
-                           Converter keyConverter,
-                           Converter valueConverter,
-                           HeaderConverter headerConverter,
-                           ClassLoader classLoader,
-                           ErrorHandlingMetrics errorHandlingMetrics,
-                           Class<? extends Connector> connectorClass,
-                           RetryWithToleranceOperator retryWithToleranceOperator) {
-
+        public WorkerTask<SourceRecord, SourceRecord> doBuild(
+                Task task,
+                ConnectorTaskId id,
+                ClusterConfigState configState,
+                TaskStatus.Listener statusListener,
+                TargetState initialState,
+                ConnectorConfig connectorConfig,
+                Converter keyConverter,
+                Converter valueConverter,
+                HeaderConverter headerConverter,
+                ClassLoader classLoader,
+                RetryWithToleranceOperator<SourceRecord> retryWithToleranceOperator,
+                TransformationChain<SourceRecord, SourceRecord> transformationChain,
+                ErrorHandlingMetrics errorHandlingMetrics,
+                Class<? extends Connector> connectorClass
+        ) {
             SourceConnectorConfig sourceConfig = new SourceConnectorConfig(plugins,
                     connectorConfig.originalsStrings(), config.topicCreationEnable());
-            TransformationChain<SourceRecord> transformationChain = new TransformationChain<>(sourceConfig.<SourceRecord>transformationStages(), retryWithToleranceOperator);
-            log.info("Initializing: {}", transformationChain);
 
             Map<String, Object> producerProps = baseProducerConfigs(id.connector(), "connector-producer-" + id, config, sourceConfig, connectorClass,
                     connectorClientConfigOverridePolicy, kafkaClusterId);
@@ -1875,7 +1885,7 @@ public class Worker {
         }
     }
 
-    class ExactlyOnceSourceTaskBuilder extends TaskBuilder {
+    class ExactlyOnceSourceTaskBuilder extends TaskBuilder<SourceRecord, SourceRecord> {
         private final Runnable preProducerCheck;
         private final Runnable postProducerCheck;
 
@@ -1891,25 +1901,24 @@ public class Worker {
         }
 
         @Override
-        public WorkerTask doBuild(Task task,
-                                  ConnectorTaskId id,
-                                  ClusterConfigState configState,
-                                  TaskStatus.Listener statusListener,
-                                  TargetState initialState,
-                                  ConnectorConfig connectorConfig,
-                                  Converter keyConverter,
-                                  Converter valueConverter,
-                                  HeaderConverter headerConverter,
-                                  ClassLoader classLoader,
-                                  ErrorHandlingMetrics errorHandlingMetrics,
-                                  Class<? extends Connector> connectorClass,
-                                  RetryWithToleranceOperator retryWithToleranceOperator) {
-
+        public WorkerTask<SourceRecord, SourceRecord> doBuild(
+                Task task,
+                ConnectorTaskId id,
+                ClusterConfigState configState,
+                TaskStatus.Listener statusListener,
+                TargetState initialState,
+                ConnectorConfig connectorConfig,
+                Converter keyConverter,
+                Converter valueConverter,
+                HeaderConverter headerConverter,
+                ClassLoader classLoader,
+                RetryWithToleranceOperator<SourceRecord> retryWithToleranceOperator,
+                TransformationChain<SourceRecord, SourceRecord> transformationChain,
+                ErrorHandlingMetrics errorHandlingMetrics,
+                Class<? extends Connector> connectorClass
+        ) {
             SourceConnectorConfig sourceConfig = new SourceConnectorConfig(plugins,
                     connectorConfig.originalsStrings(), config.topicCreationEnable());
-            TransformationChain<SourceRecord> transformationChain = new TransformationChain<>(sourceConfig.<SourceRecord>transformationStages(), retryWithToleranceOperator);
-            log.info("Initializing: {}", transformationChain);
-
             Map<String, Object> producerProps = exactlyOnceSourceTaskProducerConfigs(
                     id, config, sourceConfig, connectorClass,
                     connectorClientConfigOverridePolicy, kafkaClusterId);
@@ -2238,11 +2247,11 @@ public class Worker {
         private final ConnectMetricsRegistry registry;
         private final ConcurrentMap<String, MetricGroup> connectorStatusMetrics = new ConcurrentHashMap<>();
         private final Herder herder;
-        private final ConcurrentMap<ConnectorTaskId, WorkerTask> tasks;
+        private final ConcurrentMap<ConnectorTaskId, WorkerTask<?, ?>> tasks;
 
 
         protected ConnectorStatusMetricsGroup(
-            ConnectMetrics connectMetrics, ConcurrentMap<ConnectorTaskId, WorkerTask> tasks, Herder herder) {
+                ConnectMetrics connectMetrics, ConcurrentMap<ConnectorTaskId, WorkerTask<?, ?>> tasks, Herder herder) {
             this.connectMetrics = connectMetrics;
             this.registry = connectMetrics.registry();
             this.tasks = tasks;
