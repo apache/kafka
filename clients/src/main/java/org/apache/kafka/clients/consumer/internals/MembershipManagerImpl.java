@@ -537,13 +537,35 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
      * Update a new assignment by setting the assigned partitions in the member subscription.
      *
      * @param assignedPartitions Topic partitions to take as the new subscription assignment
-     * @param clearAssignments True if the pending assignments and metadata cache should be cleared
+     * @param clearAssignments   True if the pending assignments and metadata cache should be cleared
      */
     private void updateSubscription(SortedSet<TopicIdPartition> assignedPartitions,
                                     boolean clearAssignments) {
         Collection<TopicPartition> assignedTopicPartitions = toTopicPartitionSet(assignedPartitions);
         subscriptions.assignFromSubscribed(assignedTopicPartitions);
-        // Make assignment effective on the member group manager.
+        updateAssignmentLocally(assignedPartitions, clearAssignments);
+    }
+
+    /**
+     * Update a new assignment by setting the assigned partitions in the member subscription.
+     * This will mark the newly added partitions as pending callback, to prevent fetching records
+     * or updating positions for them while the callback runs.
+     *
+     * @param assignedPartitions Full assignment, to update in the subscription state
+     * @param addedPartitions    Newly added partitions
+     */
+    private void updateSubscriptionAwaitingCallback(SortedSet<TopicIdPartition> assignedPartitions,
+                                                    SortedSet<TopicPartition> addedPartitions) {
+        Collection<TopicPartition> assignedTopicPartitions = toTopicPartitionSet(assignedPartitions);
+        subscriptions.assignFromSubscribedAwaitingCallback(assignedTopicPartitions, addedPartitions);
+        updateAssignmentLocally(assignedPartitions, false);
+    }
+
+    /**
+     * Make assignment effective on the group manager.
+     */
+    private void updateAssignmentLocally(SortedSet<TopicIdPartition> assignedPartitions,
+                                         boolean clearAssignments) {
         updateCurrentAssignment(assignedPartitions);
         if (clearAssignments) {
             clearPendingAssignmentsAndLocalNamesCache();
@@ -1118,10 +1140,11 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
     /**
      * Make new assignment effective and trigger onPartitionsAssigned callback for the partitions
      * added. This will also update the local topic names cache, removing from it all topics that
-     * are not assigned to the member anymore.
+     * are not assigned to the member anymore. This also ensures that records are not fetched and
+     * positions are not initialized for the newly added partitions until the callback completes.
      *
-     * @param assignedPartitions New assignment that will be updated in the member subscription
-     *                           state.
+     * @param assignedPartitions Full assignment that will be updated in the member subscription
+     *                           state. This includes previously owned and newly added partitions.
      * @param addedPartitions    Partitions contained in the new assignment that were not owned by
      *                           the member before. These will be provided to the
      *                           onPartitionsAssigned callback.
@@ -1131,33 +1154,20 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
             SortedSet<TopicIdPartition> assignedPartitions,
             SortedSet<TopicPartition> addedPartitions) {
 
-        // Make assignment effective on the client by updating the subscription state.
-        updateSubscription(assignedPartitions, false);
-
-        // Mark assigned partitions as pendingOnAssignedCallback to temporarily stop fetching or
-        // initializing positions for them. Passing the full set of assigned partitions
-        // (previously owned and newly added), given that they are all provided to the user in the
-        // callback, so we could expect offsets updates for any of them.
-        Set<TopicPartition> assignedTopicPartition = assignedPartitions.stream().map(tIdp -> tIdp.topicPartition()).collect(Collectors.toSet());
-        subscriptions.markPendingOnAssignedCallback(assignedTopicPartition, true);
+        // Update assignment in the subscription state, and ensure that no fetching or positions
+        // initialization happens for the newly added partitions while the callback runs.
+        updateSubscriptionAwaitingCallback(assignedPartitions, addedPartitions);
 
         // Invoke user call back.
         CompletableFuture<Void> result = invokeOnPartitionsAssignedCallback(addedPartitions);
-
-        // Resume partitions only if the callback succeeded.
         result.whenComplete((error, callbackResult) -> {
             if (error == null) {
-                // Remove pendingOnAssignedCallback flag from the assigned partitions, so we can
-                // start fetching, and updating positions for them if needed.
-                subscriptions.markPendingOnAssignedCallback(assignedTopicPartition, false);
+                // Enable newly added partitions to start fetching and updating positions for them.
+                subscriptions.enablePartitionsAwaitingCallback(addedPartitions);
             } else {
-                // Remove pendingOnAssignedCallback flag from the previously owned only so that
-                // fetching can resume for them on the next poll iteration. Keeping newly added
-                // partitions as non-fetchable after the callback failure, as they are expected to
-                // be revoked and removed from the subscription after not being acked to the broker.
-                Set<TopicPartition> previouslyOwned =
-                    assignedTopicPartition.stream().filter(tp -> !addedPartitions.contains(tp)).collect(Collectors.toSet());
-                subscriptions.markPendingOnAssignedCallback(previouslyOwned, false);
+                // Keeping newly added partitions as non-fetchable after the callback failure.
+                // They will be retried on the next reconciliation loop, until it succeeds or the
+                // broker removes them from the assignment.
                 if (!addedPartitions.isEmpty()) {
                     log.warn("Leaving newly assigned partitions {} marked as non-fetchable and not " +
                             "requiring initializing positions after onPartitionsAssigned callback failed.",

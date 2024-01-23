@@ -749,9 +749,36 @@ public class SubscriptionState {
         tps.forEach(tp -> assignedState(tp).markPendingRevocation());
     }
 
-    public synchronized void markPendingOnAssignedCallback(Set<TopicPartition> tps,
-                                                           boolean pendingOnAssignedCallback) {
+    // Visible for testing
+    synchronized void markPendingOnAssignedCallback(Collection<TopicPartition> tps,
+                                                    boolean pendingOnAssignedCallback) {
         tps.forEach(tp -> assignedState(tp).markPendingOnAssignedCallback(pendingOnAssignedCallback));
+    }
+
+    /**
+     * Change the assignment to the specified partitions returned from the coordinator and mark
+     * them as awaiting onPartitionsAssigned callback. This will ensure that the partitions are
+     * included in the assignment, but are not fetchable or initialize positions while the
+     * callback runs. This is expected to be used by the async consumer.
+     *
+     * @param fullAssignment  Full collection of partitions assigned. Includes previously owned
+     *                        and newly added partitions.
+     * @param addedPartitions Subset of the fullAssignment containing the added partitions. These
+     *                        are not fetchable until the onPartitionsAssigned callback completes.
+     */
+    public synchronized void assignFromSubscribedAwaitingCallback(Collection<TopicPartition> fullAssignment,
+                                                                  Collection<TopicPartition> addedPartitions) {
+        assignFromSubscribed(fullAssignment);
+        markPendingOnAssignedCallback(addedPartitions, true);
+    }
+
+    /**
+     * Enable fetching and updating positions for the given partitions that were added to the
+     * assignment, but waiting for the onPartitionsAssigned callback to complete. This is
+     * expected to be used by the async consumer.
+     */
+    public synchronized void enablePartitionsAwaitingCallback(Collection<TopicPartition> partitions) {
+        markPendingOnAssignedCallback(partitions, false);
     }
 
     public synchronized void resume(TopicPartition tp) {
