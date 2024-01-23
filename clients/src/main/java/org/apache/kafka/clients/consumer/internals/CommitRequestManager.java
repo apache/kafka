@@ -531,9 +531,9 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
                         maybeRetry(currentTimeMs, error.exception());
                         return;
                     } else if (error == Errors.FENCED_INSTANCE_ID) {
-                        log.error("OffsetCommit failed due to group instance id {} fenced: {}",
-                            groupInstanceId, error.message());
-                        future.completeExceptionally(new CommitFailedException());
+                        String fencedError = "OffsetCommit failed due to group instance id fenced: " + groupInstanceId;
+                        log.error(fencedError, error.message());
+                        future.completeExceptionally(new CommitFailedException(fencedError));
                         return;
                     } else if (error == Errors.OFFSET_METADATA_TOO_LARGE ||
                         error == Errors.INVALID_COMMIT_OFFSET_SIZE) {
