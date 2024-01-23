@@ -274,48 +274,36 @@ public class CommitRequestManagerTest {
 
     @Test
     public void testCommitSyncThrowsCommitFailedExceptionOnFencedInstanceId() {
-        testCommitSyncFailsWithCommitFailedExceptionOnError(Errors.FENCED_INSTANCE_ID);
+        testCommitSyncFailsWithErrorException(Errors.FENCED_INSTANCE_ID, CommitFailedException.class);
     }
 
     @Test
     public void testCommitSyncThrowsCommitFailedExceptionOnUnknownMemberId() {
-        testCommitSyncFailsWithCommitFailedExceptionOnError(Errors.UNKNOWN_MEMBER_ID);
-    }
-
-    private void testCommitSyncFailsWithCommitFailedExceptionOnError(Errors commitError) {
-        CommitRequestManager commitRequestManger = create(false, 100);
-        when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(mockedNode));
-
-        Map<TopicPartition, OffsetAndMetadata> offsets = Collections.singletonMap(
-            new TopicPartition("topic", 1),
-            new OffsetAndMetadata(0));
-
-        // Send sync offset commit request that fails with an error that is expected to propagate
-        // a CommitFailedException
-        Long expirationTimeMs = time.milliseconds() + retryBackoffMs;
-        CompletableFuture<Void> commitResult = commitRequestManger.addOffsetCommitRequest(offsets, Optional.of(expirationTimeMs), false);
-        completeOffsetCommitRequestWithError(commitRequestManger, commitError);
-        assertFutureThrows(commitResult, CommitFailedException.class);
+        testCommitSyncFailsWithErrorException(Errors.UNKNOWN_MEMBER_ID, CommitFailedException.class);
     }
 
     @Test
     public void testCommitSyncThrowsOffsetMetadataTooLargeException() {
         // Error with metadata provided by the user should propagate the exception, so they can handle it.
-        testCommitSyncFailsWithErrorException(Errors.OFFSET_METADATA_TOO_LARGE);
+        testCommitSyncFailsWithErrorException(Errors.OFFSET_METADATA_TOO_LARGE,
+            Errors.OFFSET_METADATA_TOO_LARGE.exception().getClass());
     }
 
     @Test
     public void testCommitSyncThrowsInvalidCommitOffsetSizeException() {
         // Error with data provided by the user should propagate the exception, so they can handle it.
-        testCommitSyncFailsWithErrorException(Errors.INVALID_COMMIT_OFFSET_SIZE);
+        testCommitSyncFailsWithErrorException(Errors.INVALID_COMMIT_OFFSET_SIZE,
+            Errors.INVALID_COMMIT_OFFSET_SIZE.exception().getClass());
     }
 
     @Test
     public void testCommitSyncThrowsGroupAuthorizationException() {
-        testCommitSyncFailsWithErrorException(Errors.GROUP_AUTHORIZATION_FAILED);
+        testCommitSyncFailsWithErrorException(Errors.GROUP_AUTHORIZATION_FAILED,
+            Errors.GROUP_AUTHORIZATION_FAILED.exception().getClass());
     }
 
-    private void testCommitSyncFailsWithErrorException(Errors commitError) {
+    private void testCommitSyncFailsWithErrorException(Errors commitError,
+                                                       Class<? extends Exception> expectedException) {
         CommitRequestManager commitRequestManger = create(false, 100);
         when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(mockedNode));
 
@@ -328,7 +316,7 @@ public class CommitRequestManagerTest {
         Long expirationTimeMs = time.milliseconds() + retryBackoffMs;
         CompletableFuture<Void> commitResult = commitRequestManger.addOffsetCommitRequest(offsets, Optional.of(expirationTimeMs), false);
         completeOffsetCommitRequestWithError(commitRequestManger, commitError);
-        assertFutureThrows(commitResult, commitError.exception().getClass());
+        assertFutureThrows(commitResult, expectedException);
     }
 
     @Test
@@ -586,29 +574,12 @@ public class CommitRequestManagerTest {
 
     @Test
     public void testCommitAsyncThrowsKafkaExceptionForUnexpectedRetriableError() {
-        testCommitAsyncThrowsKafkaException(Errors.CORRUPT_MESSAGE);
+        testCommitSyncFailsWithErrorException(Errors.CORRUPT_MESSAGE, KafkaException.class);
     }
 
     @Test
     public void testCommitAsyncThrowsKafkaExceptionForUnexpectedNonRetriableError() {
-        testCommitAsyncThrowsKafkaException(Errors.UNKNOWN_SERVER_ERROR);
-    }
-
-    private void testCommitAsyncThrowsKafkaException(Errors error) {
-        CommitRequestManager commitRequestManger = create(true, 100);
-        when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(mockedNode));
-
-        Map<TopicPartition, OffsetAndMetadata> offsets = Collections.singletonMap(new TopicPartition("topic", 1),
-            new OffsetAndMetadata(0));
-
-        // Send async commit that fails with unexpected error. Should fail with KafkaException.
-        CompletableFuture<Void> commitResult = commitRequestManger.addOffsetCommitRequest(offsets, Optional.empty(), false);
-        completeOffsetCommitRequestWithError(commitRequestManger, error);
-        NetworkClientDelegate.PollResult res = commitRequestManger.poll(time.milliseconds());
-        assertEquals(0, res.unsentRequests.size());
-        assertTrue(commitResult.isDone());
-        assertTrue(commitResult.isCompletedExceptionally());
-        assertFutureThrows(commitResult, KafkaException.class);
+        testCommitSyncFailsWithErrorException(Errors.UNKNOWN_SERVER_ERROR, KafkaException.class);
     }
 
     @Test
