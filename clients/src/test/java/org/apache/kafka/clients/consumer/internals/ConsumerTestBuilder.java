@@ -165,19 +165,19 @@ public class ConsumerTestBuilder implements Closeable {
                 fetchConfig.isolationLevel,
                 time,
                 retryBackoffMs,
-                requestTimeoutMs,
                 apiVersions,
                 networkClientDelegate,
                 backgroundEventHandler,
                 logContext));
 
-        this.topicMetadataRequestManager = spy(new TopicMetadataRequestManager(logContext, config));
+        this.topicMetadataRequestManager = spy(new TopicMetadataRequestManager(logContext, config, time));
 
         if (groupInfo.isPresent()) {
             GroupInformation gi = groupInfo.get();
             CoordinatorRequestManager coordinator = spy(new CoordinatorRequestManager(
                     time,
                     logContext,
+                    requestTimeoutMs,
                     DEFAULT_RETRY_BACKOFF_MS,
                     DEFAULT_RETRY_BACKOFF_MAX_MS,
                     backgroundEventHandler,
@@ -251,7 +251,8 @@ public class ConsumerTestBuilder implements Closeable {
                 fetchBuffer,
                 metricsManager,
                 networkClientDelegate,
-                apiVersions));
+                apiVersions,
+                requestTimeoutMs));
         this.requestManagers = new RequestManagers(logContext,
                 offsetsRequestManager,
                 topicMetadataRequestManager,

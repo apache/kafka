@@ -16,11 +16,13 @@
  */
 package org.apache.kafka.clients.consumer.internals.events;
 
+import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetAndTimestamp;
 import org.apache.kafka.clients.consumer.internals.CachedSupplier;
 import org.apache.kafka.clients.consumer.internals.CommitRequestManager;
 import org.apache.kafka.clients.consumer.internals.ConsumerMetadata;
 import org.apache.kafka.clients.consumer.internals.ConsumerNetworkThread;
+import org.apache.kafka.clients.consumer.internals.ConsumerUtils;
 import org.apache.kafka.clients.consumer.internals.MembershipManager;
 import org.apache.kafka.clients.consumer.internals.RequestManagers;
 import org.apache.kafka.common.KafkaException;
@@ -32,7 +34,6 @@ import org.slf4j.Logger;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Optional;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Supplier;
@@ -69,8 +70,12 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
     @Override
     public void process(ApplicationEvent event) {
         switch (event.type()) {
-            case COMMIT:
-                process((CommitApplicationEvent) event);
+            case COMMIT_SYNC:
+                process((CommitSyncApplicationEvent) event);
+                return;
+
+            case COMMIT_ASYNC:
+                process((CommitAsyncApplicationEvent) event);
                 return;
 
             case POLL:
@@ -139,7 +144,7 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
         requestManagers.heartbeatRequestManager.ifPresent(hrm -> hrm.resetPollTimer(event.pollTimeMs()));
     }
 
-    private void process(final CommitApplicationEvent event) {
+    private void process(final CommitSyncApplicationEvent event) {
         if (!requestManagers.commitRequestManager.isPresent()) {
             // Leaving this error handling here, but it is a bit strange as the commit API should enforce the group.id
             // upfront, so we should never get to this block.
@@ -149,8 +154,30 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
         }
 
         CommitRequestManager manager = requestManagers.commitRequestManager.get();
-        Optional<Long> expirationTimeMs = event.retryTimeoutMs().map(this::getExpirationTimeForTimeout);
-        event.chain(manager.addOffsetCommitRequest(event.offsets(), expirationTimeMs, false));
+        CompletableFuture<Void> future = manager.addOffsetCommitRequest(
+                event.offsets(),
+                event.remainingMs(),
+                false
+        );
+        chain(event, future);
+    }
+
+    private void process(final CommitAsyncApplicationEvent event) {
+        if (!requestManagers.commitRequestManager.isPresent()) {
+            // Leaving this error handling here, but it is a bit strange as the commit API should enforce the group.id
+            // upfront, so we should never get to this block.
+            Exception exception = new KafkaException("Unable to commit offset. Most likely because the group.id wasn't set");
+            event.future().completeExceptionally(exception);
+            return;
+        }
+
+        CommitRequestManager manager = requestManagers.commitRequestManager.get();
+        CompletableFuture<Void> future = manager.addOffsetCommitRequest(
+                event.offsets(),
+                Long.MAX_VALUE,
+                false
+        );
+        ConsumerUtils.chain(future, event.future());
     }
 
     private void process(final FetchCommittedOffsetsApplicationEvent event) {
@@ -160,14 +187,16 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
             return;
         }
         CommitRequestManager manager = requestManagers.commitRequestManager.get();
-        long expirationTimeMs = getExpirationTimeForTimeout(event.timeout());
-        event.chain(manager.addOffsetFetchRequest(event.partitions(), expirationTimeMs));
+        CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> future = manager.addOffsetFetchRequest(
+                event.partitions(),
+                event.remainingMs()
+        );
+        chain(event, future);
     }
 
     private void process(final NewTopicsMetadataUpdateRequestEvent ignored) {
         metadata.requestUpdateForNewTopics();
     }
-
 
     /**
      * Commit all consumed if auto-commit is enabled. Note this will trigger an async commit,
@@ -183,10 +212,13 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
     }
 
     private void process(final ListOffsetsApplicationEvent event) {
-        final CompletableFuture<Map<TopicPartition, OffsetAndTimestamp>> future =
-                requestManagers.offsetsRequestManager.fetchOffsets(event.timestampsToSearch(),
-                        event.requireTimestamps());
-        event.chain(future);
+        final CompletableFuture<Map<TopicPartition, OffsetAndTimestamp>> future;
+        future = requestManagers.offsetsRequestManager.fetchOffsets(
+                event.timestampsToSearch(),
+                event.requireTimestamps(),
+                event.remainingMs()
+        );
+        chain(event, future);
     }
 
     /**
@@ -218,31 +250,31 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
             return;
         }
         MembershipManager membershipManager = requestManagers.heartbeatRequestManager.get().membershipManager();
-        CompletableFuture<Void> result = membershipManager.leaveGroup();
-        event.chain(result);
+        CompletableFuture<Void> result = membershipManager.leaveGroup(event.remainingMs());
+        chain(event, result);
     }
 
     private void process(final ResetPositionsApplicationEvent event) {
-        CompletableFuture<Void> result = requestManagers.offsetsRequestManager.resetPositionsIfNeeded();
-        event.chain(result);
+        CompletableFuture<Void> result = requestManagers.offsetsRequestManager.resetPositionsIfNeeded(event.remainingMs());
+        chain(event, result);
     }
 
     private void process(final ValidatePositionsApplicationEvent event) {
-        CompletableFuture<Void> result = requestManagers.offsetsRequestManager.validatePositionsIfNeeded();
-        event.chain(result);
+        CompletableFuture<Void> result = requestManagers.offsetsRequestManager.validatePositionsIfNeeded(event.remainingMs());
+        chain(event, result);
     }
 
     private void process(final TopicMetadataApplicationEvent event) {
+        final long timeoutMs = event.remainingMs();
         final CompletableFuture<Map<String, List<PartitionInfo>>> future;
 
-        long expirationTimeMs = getExpirationTimeForTimeout(event.getTimeoutMs());
         if (event.isAllTopics()) {
-            future = requestManagers.topicMetadataRequestManager.requestAllTopicsMetadata(expirationTimeMs);
+            future = requestManagers.topicMetadataRequestManager.requestAllTopicsMetadata(timeoutMs);
         } else {
-            future = requestManagers.topicMetadataRequestManager.requestTopicMetadata(event.topic(), expirationTimeMs);
+            future = requestManagers.topicMetadataRequestManager.requestTopicMetadata(event.topic(), timeoutMs);
         }
 
-        event.chain(future);
+        chain(event, future);
     }
 
     private void process(final ConsumerRebalanceListenerCallbackCompletedEvent event) {
@@ -273,22 +305,13 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
             Objects.requireNonNull(requestManagers.heartbeatRequestManager.get().membershipManager(), "Expecting " +
                 "membership manager to be non-null");
         log.debug("Leaving group before closing");
-        CompletableFuture<Void> future = membershipManager.leaveGroup();
+        CompletableFuture<Void> future = membershipManager.leaveGroup(event.remainingMs());
         // The future will be completed on heartbeat sent
-        event.chain(future);
+        chain(event, future);
     }
 
-    /**
-     * @return Expiration time in milliseconds calculated with the current time plus the given
-     * timeout. Returns Long.MAX_VALUE if the expiration overflows it.
-     * Visible for testing.
-     */
-    long getExpirationTimeForTimeout(final long timeoutMs) {
-        long expiration = System.currentTimeMillis() + timeoutMs;
-        if (expiration < 0) {
-            return Long.MAX_VALUE;
-        }
-        return expiration;
+    private <T> void chain(CompletableApplicationEvent<T> event, CompletableFuture<T> future) {
+        ConsumerUtils.chain(future, event.future());
     }
 
     /**

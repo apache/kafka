@@ -21,6 +21,7 @@ import org.apache.kafka.clients.consumer.CommitFailedException;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.RetriableCommitFailedException;
+import org.apache.kafka.clients.consumer.internals.events.CommitSyncApplicationEvent;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.DisconnectException;
@@ -303,17 +304,17 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
     }
 
     /**
-     * Handles {@link org.apache.kafka.clients.consumer.internals.events.CommitApplicationEvent}. It creates an
+     * Handles {@link CommitSyncApplicationEvent}. It creates an
      * {@link OffsetCommitRequestState} and enqueue it to send later.
      */
     public CompletableFuture<Void> addOffsetCommitRequest(final Map<TopicPartition, OffsetAndMetadata> offsets,
-                                                          final Optional<Long> expirationTimeMs,
+                                                          final long timeoutMs,
                                                           final boolean retryOnStaleEpoch) {
         if (offsets.isEmpty()) {
             log.debug("Skipping commit of empty offsets");
             return CompletableFuture.completedFuture(null);
         }
-        return pendingRequests.addOffsetCommitRequest(offsets, expirationTimeMs, retryOnStaleEpoch).future;
+        return pendingRequests.addOffsetCommitRequest(offsets, timeoutMs, retryOnStaleEpoch).future;
     }
 
     /**
@@ -495,7 +496,9 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
 
             NetworkClientDelegate.UnsentRequest resp = new NetworkClientDelegate.UnsentRequest(
                 builder,
-                coordinatorRequestManager.coordinator());
+                coordinatorRequestManager.coordinator(),
+                timer
+            );
             resp.whenComplete(
                 (response, throwable) -> {
                     try {

@@ -50,6 +50,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
@@ -204,6 +205,16 @@ public final class ConsumerUtils {
                 }
             }
         }
+    }
+
+    public static <T> void chain(final CompletableFuture<T> a, final CompletableFuture<T> b) {
+        a.whenComplete((value, exception) -> {
+            if (exception != null) {
+                b.completeExceptionally(exception);
+            } else {
+                b.complete(value);
+            }
+        });
     }
 
     public static <T> T getResult(Future<T> future, Timer timer) {

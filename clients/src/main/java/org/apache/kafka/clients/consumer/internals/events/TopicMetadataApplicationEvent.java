@@ -17,28 +17,27 @@
 package org.apache.kafka.clients.consumer.internals.events;
 
 import org.apache.kafka.common.PartitionInfo;
+import org.apache.kafka.common.utils.Timer;
 
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
 public class TopicMetadataApplicationEvent extends CompletableApplicationEvent<Map<String, List<PartitionInfo>>> {
+
     private final String topic;
     private final boolean allTopics;
-    private final long timeoutMs;
 
-    public TopicMetadataApplicationEvent(final long timeoutMs) {
-        super(Type.TOPIC_METADATA);
+    public TopicMetadataApplicationEvent(final Timer timer) {
+        super(Type.TOPIC_METADATA, timer);
         this.topic = null;
         this.allTopics = true;
-        this.timeoutMs = timeoutMs;
     }
 
-    public TopicMetadataApplicationEvent(final String topic, final long timeoutMs) {
-        super(Type.TOPIC_METADATA);
+    public TopicMetadataApplicationEvent(final String topic, final Timer timer) {
+        super(Type.TOPIC_METADATA, timer);
         this.topic = topic;
         this.allTopics = false;
-        this.timeoutMs = timeoutMs;
     }
 
     public String topic() {
@@ -49,15 +48,9 @@ public class TopicMetadataApplicationEvent extends CompletableApplicationEvent<M
         return allTopics;
     }
 
-    public long getTimeoutMs() {
-        return timeoutMs;
-    }
     @Override
-    public String toString() {
-        return getClass().getSimpleName() + " {" + toStringBase() +
-                ", topic=" + topic +
-                ", allTopics=" + allTopics +
-                ", timeoutMs=" + timeoutMs + "}";
+    public int hashCode() {
+        return Objects.hash(super.hashCode(), topic, allTopics);
     }
 
     @Override
@@ -68,11 +61,14 @@ public class TopicMetadataApplicationEvent extends CompletableApplicationEvent<M
 
         TopicMetadataApplicationEvent that = (TopicMetadataApplicationEvent) o;
 
-        return topic.equals(that.topic) && (allTopics == that.allTopics) && (timeoutMs == that.timeoutMs);
+        // TODO: fix this potential NPE
+        return topic.equals(that.topic) && (allTopics == that.allTopics);
     }
 
     @Override
-    public int hashCode() {
-        return Objects.hash(super.hashCode(), topic, allTopics, timeoutMs);
+    public String toString() {
+        return getClass().getSimpleName() + " {" + toStringBase() +
+                ", topic=" + topic +
+                ", allTopics=" + allTopics + "}";
     }
 }

@@ -22,23 +22,34 @@ import org.apache.kafka.common.utils.Timer;
 
 import java.util.Collections;
 import java.util.Map;
-import java.util.Set;
 
-public class FetchCommittedOffsetsApplicationEvent extends CompletableApplicationEvent<Map<TopicPartition, OffsetAndMetadata>> {
+public class CommitSyncApplicationEvent extends CompletableApplicationEvent<Void> {
 
     /**
-     * Partitions to retrieve committed offsets for.
+     * Offsets to commit per partition.
      */
-    private final Set<TopicPartition> partitions;
+    private final Map<TopicPartition, OffsetAndMetadata> offsets;
 
-    public FetchCommittedOffsetsApplicationEvent(final Set<TopicPartition> partitions,
-                                                 final Timer timer) {
-        super(Type.FETCH_COMMITTED_OFFSETS, timer);
-        this.partitions = Collections.unmodifiableSet(partitions);
+    /**
+     * Create new event to commit offsets. If timer is present, the request will be retried on
+     * retriable errors until the timer expires (sync commit offsets request). If the timer is
+     * not present, the request will be sent without waiting for a response of retrying (async
+     * commit offsets request).
+     */
+    public CommitSyncApplicationEvent(final Map<TopicPartition, OffsetAndMetadata> offsets,
+                                      final Timer timer) {
+        super(Type.COMMIT_SYNC, timer);
+        this.offsets = Collections.unmodifiableMap(offsets);
+
+        for (OffsetAndMetadata offsetAndMetadata : offsets.values()) {
+            if (offsetAndMetadata.offset() < 0) {
+                throw new IllegalArgumentException("Invalid offset: " + offsetAndMetadata.offset());
+            }
+        }
     }
 
-    public Set<TopicPartition> partitions() {
-        return partitions;
+    public Map<TopicPartition, OffsetAndMetadata> offsets() {
+        return offsets;
     }
 
     @Override
@@ -47,23 +58,23 @@ public class FetchCommittedOffsetsApplicationEvent extends CompletableApplicatio
         if (o == null || getClass() != o.getClass()) return false;
         if (!super.equals(o)) return false;
 
-        FetchCommittedOffsetsApplicationEvent that = (FetchCommittedOffsetsApplicationEvent) o;
+        CommitSyncApplicationEvent that = (CommitSyncApplicationEvent) o;
 
-        return partitions.equals(that.partitions);
+        return offsets.equals(that.offsets);
     }
 
     @Override
     public int hashCode() {
         int result = super.hashCode();
-        result = 31 * result + partitions.hashCode();
+        result = 31 * result + offsets.hashCode();
         return result;
     }
 
     @Override
     public String toString() {
-        return getClass().getSimpleName() + "{" +
+        return "CommitApplicationEvent{" +
                 toStringBase() +
-                ", partitions=" + partitions +
+                ", offsets=" + offsets +
                 '}';
     }
 }

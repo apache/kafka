@@ -203,7 +203,7 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
      * requests in cases where a currently assigned topic is in the target assignment (new
      * partition assigned, or revoked), but it is not present the Metadata cache at that moment.
      * The cache is cleared when the subscription changes ({@link #transitionToJoining()}, the
-     * member fails ({@link #transitionToFatal()} or leaves the group ({@link #leaveGroup()}).
+     * member fails ({@link #transitionToFatal()} or leaves the group ({@link MembershipManager#leaveGroup(long)}).
      */
     private final Map<Uuid, String> assignedTopicNamesCache;
 
@@ -240,7 +240,7 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
     private int memberEpochOnReconciliationStart;
 
     /**
-     * If the member is currently leaving the group after a call to {@link #leaveGroup()}}, this
+     * If the member is currently leaving the group after a call to {@link MembershipManager#leaveGroup(long)}}, this
      * will have a future that will complete when the ongoing leave operation completes
      * (callbacks executed and heartbeat request to leave is sent out). This will be empty is the
      * member is not leaving.
@@ -584,7 +584,7 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
      * {@inheritDoc}
      */
     @Override
-    public CompletableFuture<Void> leaveGroup() {
+    public CompletableFuture<Void> leaveGroup(long timeoutMs) {
         if (state == MemberState.UNSUBSCRIBED || state == MemberState.FATAL) {
             // Member is not part of the group. No-op and return completed future to avoid
             // unnecessary transitions.

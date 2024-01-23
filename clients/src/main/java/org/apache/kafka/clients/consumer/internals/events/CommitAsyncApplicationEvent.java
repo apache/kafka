@@ -21,9 +21,12 @@ import org.apache.kafka.common.TopicPartition;
 
 import java.util.Collections;
 import java.util.Map;
-import java.util.Optional;
+import java.util.Objects;
+import java.util.concurrent.CompletableFuture;
 
-public class CommitApplicationEvent extends CompletableApplicationEvent<Void> {
+public class CommitAsyncApplicationEvent extends ApplicationEvent {
+
+    private final CompletableFuture<Void> future;
 
     /**
      * Offsets to commit per partition.
@@ -31,22 +34,12 @@ public class CommitApplicationEvent extends CompletableApplicationEvent<Void> {
     private final Map<TopicPartition, OffsetAndMetadata> offsets;
 
     /**
-     * Time to wait for a response, retrying on retriable errors. If not present, the request is
-     * triggered without waiting for a response or being retried.
+     * Create new event to commit offsets.
      */
-    private final Optional<Long> retryTimeoutMs;
-
-    /**
-     * Create new event to commit offsets. If timer is present, the request will be retried on
-     * retriable errors until the timer expires (sync commit offsets request). If the timer is
-     * not present, the request will be sent without waiting for a response of retrying (async
-     * commit offsets request).
-     */
-    public CommitApplicationEvent(final Map<TopicPartition, OffsetAndMetadata> offsets,
-                                  final Optional<Long> retryTimeoutMs) {
-        super(Type.COMMIT);
+    public CommitAsyncApplicationEvent(final Map<TopicPartition, OffsetAndMetadata> offsets) {
+        super(Type.COMMIT_ASYNC);
         this.offsets = Collections.unmodifiableMap(offsets);
-        this.retryTimeoutMs = retryTimeoutMs;
+        this.future = new CompletableFuture<>();
 
         for (OffsetAndMetadata offsetAndMetadata : offsets.values()) {
             if (offsetAndMetadata.offset() < 0) {
@@ -59,8 +52,8 @@ public class CommitApplicationEvent extends CompletableApplicationEvent<Void> {
         return offsets;
     }
 
-    public Optional<Long> retryTimeoutMs() {
-        return retryTimeoutMs;
+    public CompletableFuture<Void> future() {
+        return future;
     }
 
     @Override
@@ -69,24 +62,22 @@ public class CommitApplicationEvent extends CompletableApplicationEvent<Void> {
         if (o == null || getClass() != o.getClass()) return false;
         if (!super.equals(o)) return false;
 
-        CommitApplicationEvent that = (CommitApplicationEvent) o;
+        CommitAsyncApplicationEvent that = (CommitAsyncApplicationEvent) o;
 
-        return offsets.equals(that.offsets);
+        return offsets.equals(that.offsets) && future.equals(that.future);
     }
 
     @Override
     public int hashCode() {
-        int result = super.hashCode();
-        result = 31 * result + offsets.hashCode();
-        return result;
+        return 31 * super.hashCode() + Objects.hash(offsets, future);
     }
 
     @Override
     public String toString() {
-        return "CommitApplicationEvent{" +
+        return "CommitAsyncApplicationEvent{" +
                 toStringBase() +
                 ", offsets=" + offsets +
-                ", retryTimeout=" + (retryTimeoutMs.map(t -> t + "ms").orElse("none")) +
+                ", future=" + future +
                 '}';
     }
 }

@@ -29,6 +29,7 @@ import org.apache.kafka.common.requests.FindCoordinatorRequest;
 import org.apache.kafka.common.requests.FindCoordinatorResponse;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.Timer;
 import org.slf4j.Logger;
 
 import java.util.Objects;
@@ -52,6 +53,7 @@ import static org.apache.kafka.clients.consumer.internals.NetworkClientDelegate.
 public class CoordinatorRequestManager implements RequestManager {
     private static final long COORDINATOR_DISCONNECT_LOGGING_INTERVAL_MS = 60 * 1000;
     private final Time time;
+    private final long requestTimeoutMs;
     private final Logger log;
     private final BackgroundEventHandler backgroundEventHandler;
     private final String groupId;
@@ -64,15 +66,17 @@ public class CoordinatorRequestManager implements RequestManager {
     public CoordinatorRequestManager(
         final Time time,
         final LogContext logContext,
+        final long requestTimeoutMs,
         final long retryBackoffMs,
         final long retryBackoffMaxMs,
-        final BackgroundEventHandler errorHandler,
+        final BackgroundEventHandler backgroundEventHandler,
         final String groupId
     ) {
         Objects.requireNonNull(groupId);
         this.time = time;
         this.log = logContext.logger(this.getClass());
-        this.backgroundEventHandler = errorHandler;
+        this.requestTimeoutMs = requestTimeoutMs;
+        this.backgroundEventHandler = backgroundEventHandler;
         this.groupId = groupId;
         this.coordinatorRequestState = new RequestState(
                 logContext,
@@ -110,9 +114,11 @@ public class CoordinatorRequestManager implements RequestManager {
         FindCoordinatorRequestData data = new FindCoordinatorRequestData()
                 .setKeyType(FindCoordinatorRequest.CoordinatorType.GROUP.id())
                 .setKey(this.groupId);
+        Timer timer = time.timer(requestTimeoutMs);
         NetworkClientDelegate.UnsentRequest unsentRequest = new NetworkClientDelegate.UnsentRequest(
             new FindCoordinatorRequest.Builder(data),
-            Optional.empty()
+            Optional.empty(),
+                timer
         );
 
         return unsentRequest.whenComplete((clientResponse, throwable) -> {

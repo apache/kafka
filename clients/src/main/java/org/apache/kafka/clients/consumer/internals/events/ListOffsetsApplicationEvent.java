@@ -18,9 +18,9 @@ package org.apache.kafka.clients.consumer.internals.events;
 
 import org.apache.kafka.clients.consumer.OffsetAndTimestamp;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.utils.Timer;
 
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.Map;
 
 /**
@@ -36,23 +36,12 @@ public class ListOffsetsApplicationEvent extends CompletableApplicationEvent<Map
     private final Map<TopicPartition, Long> timestampsToSearch;
     private final boolean requireTimestamps;
 
-    public ListOffsetsApplicationEvent(Map<TopicPartition, Long> timestampToSearch, boolean requireTimestamps) {
-        super(Type.LIST_OFFSETS);
+    public ListOffsetsApplicationEvent(Map<TopicPartition, Long> timestampToSearch,
+                                       boolean requireTimestamps,
+                                       Timer timer) {
+        super(Type.LIST_OFFSETS, timer);
         this.timestampsToSearch = Collections.unmodifiableMap(timestampToSearch);
         this.requireTimestamps = requireTimestamps;
-    }
-
-    /**
-     * Build result representing that no offsets were found as part of the current event.
-     *
-     * @return Map containing all the partitions the event was trying to get offsets for, and
-     * null {@link OffsetAndTimestamp} as value
-     */
-    public Map<TopicPartition, OffsetAndTimestamp> emptyResult() {
-        HashMap<TopicPartition, OffsetAndTimestamp> offsetsByTimes = new HashMap<>(timestampsToSearch.size());
-        for (Map.Entry<TopicPartition, Long> entry : timestampsToSearch.entrySet())
-            offsetsByTimes.put(entry.getKey(), null);
-        return offsetsByTimes;
     }
 
     public Map<TopicPartition, Long> timestampsToSearch() {

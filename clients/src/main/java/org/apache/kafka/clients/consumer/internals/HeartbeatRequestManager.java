@@ -23,6 +23,7 @@ import org.apache.kafka.clients.consumer.internals.events.ApplicationEventProces
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEventHandler;
 import org.apache.kafka.clients.consumer.internals.events.ErrorBackgroundEvent;
 import org.apache.kafka.clients.consumer.internals.events.GroupMetadataUpdateEvent;
+import org.apache.kafka.common.Node;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
 import org.apache.kafka.common.errors.RetriableException;
@@ -39,6 +40,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.SortedSet;
 import java.util.TreeSet;
 import java.util.stream.Collectors;
@@ -249,12 +251,16 @@ public class HeartbeatRequestManager implements RequestManager {
     }
 
     private NetworkClientDelegate.UnsentRequest makeHeartbeatRequest(final boolean ignoreResponse) {
+        Optional<Node> coordinator = coordinatorRequestManager.coordinator();
+        ConsumerGroupHeartbeatRequest.Builder requestBuilder = new ConsumerGroupHeartbeatRequest.Builder(heartbeatState.buildRequestData());
         NetworkClientDelegate.UnsentRequest request = new NetworkClientDelegate.UnsentRequest(
-            new ConsumerGroupHeartbeatRequest.Builder(this.heartbeatState.buildRequestData()),
-            coordinatorRequestManager.coordinator());
-        if (ignoreResponse)
+                requestBuilder,
+                coordinator,
+                pollTimer
+        );
+        if (ignoreResponse) {
             return logResponse(request);
-        else
+        } else {
             return request.whenComplete((response, exception) -> {
                 if (response != null) {
                     onResponse((ConsumerGroupHeartbeatResponse) response.responseBody(), request.handler().completionTimeMs());
@@ -262,6 +268,7 @@ public class HeartbeatRequestManager implements RequestManager {
                     onFailure(exception, request.handler().completionTimeMs());
                 }
             });
+        }
     }
 
     private NetworkClientDelegate.UnsentRequest logResponse(final NetworkClientDelegate.UnsentRequest request) {
