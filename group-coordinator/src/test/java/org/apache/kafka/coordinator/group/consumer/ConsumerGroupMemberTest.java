@@ -423,6 +423,5 @@ public class ConsumerGroupMemberTest {
                 .build().topics()
         );
         assertEquals(expected, actual);
-        assertEquals(Collections.emptyMap(), member.assignedPartitions());
     }
 }

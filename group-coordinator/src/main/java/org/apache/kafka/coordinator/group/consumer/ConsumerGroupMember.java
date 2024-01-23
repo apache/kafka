@@ -581,21 +581,15 @@ public class ConsumerGroupMember {
         TopicsImage topicsImage
     ) {
         List<ConsumerGroupDescribeResponseData.TopicPartitions> topicPartitions = new ArrayList<>();
-        for (Map.Entry<Uuid, Set<Integer>> entry : partitions.entrySet()) {
-            Uuid topicId = entry.getKey();
-            Set<Integer> partitionSet = partitions.get(topicId);
+        partitions.forEach((topicId, partitionSet) -> {
             String topicName = lookupTopicNameById(topicId, topicsImage);
             if (topicName != null) {
                 topicPartitions.add(new ConsumerGroupDescribeResponseData.TopicPartitions()
                     .setTopicId(topicId)
                     .setTopicName(topicName)
                     .setPartitions(new ArrayList<>(partitionSet)));
-            } else {
-                // When the topic has been deleted and the group/member hasn't updated,
-                // directly remove the topic from the assignment.
-                partitions.remove(topicId, partitionSet);
             }
-        }
+        });
         return topicPartitions;
     }
 
