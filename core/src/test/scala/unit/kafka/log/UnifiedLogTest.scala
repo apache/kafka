@@ -2132,7 +2132,8 @@ class UnifiedLogTest {
     val logConfig = LogTestUtils.createLogConfig(segmentBytes = 200, indexIntervalBytes = 1)
     val log = createLog(logDir, logConfig)
 
-    assertEquals(None, log.fetchOffsetByTimestamp(ListOffsetsRequest.LATEST_TIERED_TIMESTAMP))
+    assertEquals(Some(new TimestampAndOffset(ListOffsetsResponse.UNKNOWN_TIMESTAMP, -1, Optional.of(-1))),
+      log.fetchOffsetByTimestamp(ListOffsetsRequest.LATEST_TIERED_TIMESTAMP))
 
     val firstTimestamp = mockTime.milliseconds
     val leaderEpoch = 0
@@ -2147,12 +2148,8 @@ class UnifiedLogTest {
       timestamp = secondTimestamp),
       leaderEpoch = leaderEpoch)
 
-    log.appendAsLeader(TestUtils.singletonRecords(
-      value = TestUtils.randomBytes(10),
-      timestamp = firstTimestamp),
-      leaderEpoch = leaderEpoch)
-
-    assertEquals(None, log.fetchOffsetByTimestamp(ListOffsetsRequest.LATEST_TIERED_TIMESTAMP))
+    assertEquals(Some(new TimestampAndOffset(ListOffsetsResponse.UNKNOWN_TIMESTAMP, -1, Optional.of(-1))),
+      log.fetchOffsetByTimestamp(ListOffsetsRequest.LATEST_TIERED_TIMESTAMP))
   }
 
   @Test
@@ -2165,7 +2162,7 @@ class UnifiedLogTest {
       .thenReturn(Optional.empty[TimestampAndOffset]())
 
     assertEquals(None, log.fetchOffsetByTimestamp(0L, Some(remoteLogManager)))
-    assertEquals(Some(new TimestampAndOffset(ListOffsetsResponse.UNKNOWN_TIMESTAMP, 0, Optional.empty())),
+    assertEquals(Some(new TimestampAndOffset(ListOffsetsResponse.UNKNOWN_TIMESTAMP, 0, Optional.of(-1))),
       log.fetchOffsetByTimestamp(ListOffsetsRequest.EARLIEST_LOCAL_TIMESTAMP, Some(remoteLogManager)))
 
     val firstTimestamp = mockTime.milliseconds
@@ -2193,6 +2190,7 @@ class UnifiedLogTest {
     log._localLogStartOffset = 1
     log._highestOffsetInRemoteStorage = 0
 
+    // In the assertions below we test that offset 0 (first timestamp) is in remote and offset 1 (second timestamp) is in local storage.
     assertEquals(Some(new TimestampAndOffset(firstTimestamp, 0L, Optional.of(firstLeaderEpoch))),
       log.fetchOffsetByTimestamp(firstTimestamp, Some(remoteLogManager)))
     assertEquals(Some(new TimestampAndOffset(secondTimestamp, 1L, Optional.of(secondLeaderEpoch))),

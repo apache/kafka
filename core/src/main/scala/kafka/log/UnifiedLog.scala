@@ -1281,9 +1281,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
 
       if (config.messageFormatVersion.isLessThan(IBP_0_10_0_IV0) &&
         targetTimestamp != ListOffsetsRequest.EARLIEST_TIMESTAMP &&
-        targetTimestamp != ListOffsetsRequest.EARLIEST_LOCAL_TIMESTAMP &&
-        targetTimestamp != ListOffsetsRequest.LATEST_TIMESTAMP &&
-        targetTimestamp != ListOffsetsRequest.LATEST_TIERED_TIMESTAMP)
+        targetTimestamp != ListOffsetsRequest.LATEST_TIMESTAMP)
         throw new UnsupportedForMessageFormatException(s"Cannot search offsets based on timestamp because message format version " +
           s"for partition $topicPartition is ${config.messageFormatVersion} which is earlier than the minimum " +
           s"required version $IBP_0_10_0_IV0")
@@ -1303,26 +1301,28 @@ class UnifiedLog(@volatile var logStartOffset: Long,
       } else if (targetTimestamp == ListOffsetsRequest.EARLIEST_LOCAL_TIMESTAMP) {
         val curLocalLogStartOffset = localLogStartOffset()
 
-        val epochOpt: Optional[Integer] = leaderEpochCache.asJava.flatMap(cache => {
-          val epoch = cache.epochForOffset(curLocalLogStartOffset)
-          if (epoch.isPresent) Optional.of[Integer](epoch.getAsInt) else Optional.empty[Integer]()
-        })
+        var epochResult: Optional[Integer] = Optional.of(RecordBatch.NO_PARTITION_LEADER_EPOCH)
+        if (leaderEpochCache.isDefined) {
+          val epochOpt = leaderEpochCache.get.epochForOffset(curLocalLogStartOffset)
+          if (epochOpt.isPresent) epochResult = Optional.of(epochOpt.getAsInt)
+        }
 
-        Some(new TimestampAndOffset(RecordBatch.NO_TIMESTAMP, curLocalLogStartOffset, epochOpt))
+        Some(new TimestampAndOffset(RecordBatch.NO_TIMESTAMP, curLocalLogStartOffset, epochResult))
       } else if (targetTimestamp == ListOffsetsRequest.LATEST_TIMESTAMP) {
         Some(new TimestampAndOffset(RecordBatch.NO_TIMESTAMP, logEndOffset, latestEpochAsOptional(leaderEpochCache)))
       } else if (targetTimestamp == ListOffsetsRequest.LATEST_TIERED_TIMESTAMP) {
         if (remoteLogEnabled()) {
           val curHighestRemoteOffset = highestOffsetInRemoteStorage()
 
-          val optEpoch: Optional[Integer] = leaderEpochCache.asJava.flatMap(cache => {
-            val epoch = cache.epochForOffset(curHighestRemoteOffset)
-            if (epoch.isPresent) Optional.of[Integer](epoch.getAsInt) else Optional.empty[Integer]()
-          })
+          var epochResult: Optional[Integer] = Optional.of(RecordBatch.NO_PARTITION_LEADER_EPOCH)
+          if (leaderEpochCache.isDefined) {
+            val epochOpt = leaderEpochCache.get.epochForOffset(curHighestRemoteOffset)
+            if (epochOpt.isPresent) epochResult = Optional.of(epochOpt.getAsInt)
+          }
 
-          Some(new TimestampAndOffset(RecordBatch.NO_TIMESTAMP, highestOffsetInRemoteStorage(), optEpoch))
+          Some(new TimestampAndOffset(RecordBatch.NO_TIMESTAMP, curHighestRemoteOffset, epochResult))
         } else {
-          Option.empty
+          Some(new TimestampAndOffset(RecordBatch.NO_TIMESTAMP, -1L, Optional.of(-1)))
         }
       } else if (targetTimestamp == ListOffsetsRequest.MAX_TIMESTAMP) {
         // Cache to avoid race conditions. `toBuffer` is faster than most alternatives and provides
