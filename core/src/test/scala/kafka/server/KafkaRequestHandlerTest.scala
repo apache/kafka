@@ -655,10 +655,6 @@ class KafkaRequestHandlerTest {
 
   @Test
   def testLogSizeBytesMetricWithRemovingNonexistentPartitions(): Unit = {
-//    val props = kafka.utils.TestUtils.createDummyBrokerConfig()
-//    props.setProperty(RemoteLogManagerConfig.REMOTE_LOG_STORAGE_SYSTEM_ENABLE_PROP, true.toString)
-//    val brokerTopicStats = new BrokerTopicStats(java.util.Optional.of(KafkaConfig.fromProps(props)))
-//    val topic = "topic"
     brokerTopicStats.recordRemoteLogSizeBytes(topic, 0, 1)
     brokerTopicStats.recordRemoteLogSizeBytes(topic, 1, 2)
 
