@@ -413,46 +413,46 @@ class BrokerTopicMetrics(name: Option[String], configOpt: java.util.Optional[Kaf
   }
 
   // Visible for testing
-  def remoteCopyLagBytes: Long = metricGaugeTypeMap.get(RemoteStorageMetrics.REMOTE_COPY_LAG_BYTES_METRIC.getName).aggregatedMetric.value()
+  def remoteCopyLagBytes: Long = remoteCopyLagBytesAggrMetric().value()
 
   def remoteCopyLagSegmentsAggrMetric(): AggregatedMetric = {
     metricGaugeTypeMap.get(RemoteStorageMetrics.REMOTE_COPY_LAG_SEGMENTS_METRIC.getName).aggregatedMetric
   }
 
   // Visible for testing
-  def remoteCopyLagSegments: Long = metricGaugeTypeMap.get(RemoteStorageMetrics.REMOTE_COPY_LAG_SEGMENTS_METRIC.getName).aggregatedMetric.value()
+  def remoteCopyLagSegments: Long = remoteCopyLagSegmentsAggrMetric().value()
 
   def remoteLogMetadataCountAggrMetric(): AggregatedMetric = {
     metricGaugeTypeMap.get(RemoteStorageMetrics.REMOTE_LOG_METADATA_COUNT_METRIC.getName).aggregatedMetric
   }
 
-  def remoteLogMetadataCount: Long = metricGaugeTypeMap.get(RemoteStorageMetrics.REMOTE_LOG_METADATA_COUNT_METRIC.getName).aggregatedMetric.value()
+  def remoteLogMetadataCount: Long = remoteLogMetadataCountAggrMetric().value()
 
   def remoteLogSizeBytesAggrMetric(): AggregatedMetric = {
     metricGaugeTypeMap.get(RemoteStorageMetrics.REMOTE_LOG_SIZE_BYTES_METRIC.getName).aggregatedMetric
   }
 
-  def remoteLogSizeBytes: Long = metricGaugeTypeMap.get(RemoteStorageMetrics.REMOTE_LOG_SIZE_BYTES_METRIC.getName).aggregatedMetric.value()
+  def remoteLogSizeBytes: Long = remoteLogSizeBytesAggrMetric().value()
 
   def remoteLogSizeComputationTimeAggrMetric(): AggregatedMetric = {
     metricGaugeTypeMap.get(RemoteStorageMetrics.REMOTE_LOG_SIZE_COMPUTATION_TIME_METRIC.getName).aggregatedMetric
   }
 
-  def remoteLogSizeComputationTime: Long = metricGaugeTypeMap.get(RemoteStorageMetrics.REMOTE_LOG_SIZE_COMPUTATION_TIME_METRIC.getName).aggregatedMetric.value()
+  def remoteLogSizeComputationTime: Long = remoteLogSizeComputationTimeAggrMetric().value()
 
   def remoteDeleteLagBytesAggrMetric(): AggregatedMetric = {
     metricGaugeTypeMap.get(RemoteStorageMetrics.REMOTE_DELETE_LAG_BYTES_METRIC.getName).aggregatedMetric
   }
 
   // Visible for testing
-  def remoteDeleteLagBytes: Long = metricGaugeTypeMap.get(RemoteStorageMetrics.REMOTE_DELETE_LAG_BYTES_METRIC.getName).aggregatedMetric.value()
+  def remoteDeleteLagBytes: Long = remoteDeleteLagBytesAggrMetric().value()
 
   def remoteDeleteLagSegmentsAggrMetric(): AggregatedMetric = {
     metricGaugeTypeMap.get(RemoteStorageMetrics.REMOTE_DELETE_LAG_SEGMENTS_METRIC.getName).aggregatedMetric
   }
 
   // Visible for testing
-  def remoteDeleteLagSegments: Long = metricGaugeTypeMap.get(RemoteStorageMetrics.REMOTE_DELETE_LAG_SEGMENTS_METRIC.getName).aggregatedMetric.value()
+  def remoteDeleteLagSegments: Long = remoteDeleteLagSegmentsAggrMetric().value()
 
   def remoteCopyBytesRate: Meter = metricTypeMap.get(RemoteStorageMetrics.REMOTE_COPY_BYTES_PER_SEC_METRIC.getName).meter()
 

@@ -1396,11 +1396,13 @@ object TestUtils extends Logging {
   // Note: Call this method in the test itself, rather than the @AfterEach method.
   // Because of the assert, if assertNoNonDaemonThreads fails, nothing after would be executed.
   def assertNoNonDaemonThreads(threadNamePrefix: String): Unit = {
-    val nonDaemonThreads = Thread.getAllStackTraces.keySet.asScala.filter { t =>
-      !t.isDaemon && t.isAlive && t.getName.startsWith(threadNamePrefix)
-    }
-    val threadCount = nonDaemonThreads.size
-    assertEquals(0, threadCount, s"Found unexpected $threadCount NonDaemon threads=${nonDaemonThreads.map(t => t.getName).mkString(", ")}")
+    var nonDemonThreads: mutable.Set[Thread] = mutable.Set.empty[Thread]
+    waitUntilTrue(() => {
+      nonDemonThreads = Thread.getAllStackTraces.keySet.asScala.filter { t =>
+        !t.isDaemon && t.isAlive && t.getName.startsWith(threadNamePrefix)
+      }
+      0 == nonDemonThreads.size
+    }, s"Found unexpected ${nonDemonThreads.size} NonDaemon threads=${nonDemonThreads.map(t => t.getName).mkString(", ")}", 1000)
   }
 
   def numThreadsRunning(threadNamePrefix: String, isDaemon: Boolean): mutable.Set[Thread] = {
