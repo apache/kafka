@@ -384,9 +384,9 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
             halt();
 
             log.info("Herder stopped");
-            herderMetrics.close();
         } catch (Throwable t) {
             log.error("Uncaught exception in herder work thread, exiting: ", t);
+            Utils.closeQuietly(this::stopServices, "herder services");
             Exit.exit(1);
         } finally {
             running = false;
@@ -787,6 +787,9 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
         tasksToRestart.addAll(tasksToStop);
     }
 
+    /**
+     * Perform an orderly shutdown when triggered via {@link #stop()}
+     */
     // public for testing
     public void halt() {
         synchronized (this) {
@@ -795,8 +798,6 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
             worker.stopAndAwaitConnectors();
             worker.stopAndAwaitTasks();
 
-            member.stop();
-
             // Explicitly fail any outstanding requests so they actually get a response and get an
             // understandable reason for their failure.
             DistributedHerderRequest request = requests.pollFirst();
@@ -804,7 +805,6 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                 request.callback().onCompletion(new ConnectException("Worker is shutting down"), null);
                 request = requests.pollFirst();
             }
-
             stopServices();
         }
     }
@@ -814,8 +814,17 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
         try {
             super.stopServices();
         } finally {
-            this.uponShutdown.forEach(closeable -> Utils.closeQuietly(closeable, closeable != null ? closeable.toString() : "<unknown>"));
+            closeResources();
         }
+    }
+
+    /**
+     * Close resources managed by this herder but which are not explicitly started.
+     */
+    private void closeResources() {
+        Utils.closeQuietly(member::stop, "worker group member");
+        Utils.closeQuietly(herderMetrics::close, "herder metrics");
+        this.uponShutdown.forEach(closeable -> Utils.closeQuietly(closeable, closeable != null ? closeable.toString() : "<unknown>"));
     }
 
     // Timeout for herderExecutor to gracefully terminate is set to a value to accommodate
@@ -1268,7 +1277,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                         try {
                             String stageDescription = "Forwarding zombie fencing request to the leader at " + workerUrl;
                             try (TemporaryStage stage = new TemporaryStage(stageDescription, callback, time)) {
-                                restClient.httpRequest(fenceUrl, "PUT", null, null, null, sessionKey, requestSignatureAlgorithm);
+                                restClient.httpRequest(fenceUrl, "PUT", null, null, sessionKey, requestSignatureAlgorithm);
                             }
                             callback.onCompletion(null, null);
                         } catch (Throwable t) {
@@ -2224,7 +2233,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                     log.trace("Forwarding task configurations for connector {} to leader", connName);
                     String stageDescription = "Forwarding task configurations to the leader at " + leaderUrl;
                     try (TemporaryStage stage = new TemporaryStage(stageDescription, cb, time)) {
-                        restClient.httpRequest(reconfigUrl, "POST", null, rawTaskProps, null, sessionKey, requestSignatureAlgorithm);
+                        restClient.httpRequest(reconfigUrl, "POST", null, rawTaskProps, sessionKey, requestSignatureAlgorithm);
                     }
                     cb.onCompletion(null, null);
                 } catch (ConnectException e) {

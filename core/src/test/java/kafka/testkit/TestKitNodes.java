@@ -34,7 +34,7 @@ public class TestKitNodes {
         private boolean combined = false;
         private Uuid clusterId = null;
         private BootstrapMetadata bootstrapMetadata = BootstrapMetadata.
-            fromVersion(MetadataVersion.latest(), "testkit");
+            fromVersion(MetadataVersion.latestTesting(), "testkit");
         private final NavigableMap<Integer, ControllerNode.Builder> controllerNodeBuilders = new TreeMap<>();
         private final NavigableMap<Integer, BrokerNode.Builder> brokerNodeBuilders = new TreeMap<>();
 

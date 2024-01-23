@@ -60,6 +60,7 @@ import org.apache.kafka.clients.consumer.internals.events.SubscriptionChangeAppl
 import org.apache.kafka.clients.consumer.internals.events.TopicMetadataApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.UnsubscribeApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.ValidatePositionsApplicationEvent;
+import org.apache.kafka.clients.consumer.internals.metrics.RebalanceCallbackMetrics;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.KafkaException;
@@ -376,7 +377,8 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                     apiVersions,
                     fetchMetricsManager,
                     networkClientDelegateSupplier,
-                    clientTelemetryReporter);
+                    clientTelemetryReporter,
+                    metrics);
             final Supplier<ApplicationEventProcessor> applicationEventProcessorSupplier = ApplicationEventProcessor.supplier(logContext,
                     metadata,
                     applicationEventQueue,
@@ -388,16 +390,12 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                     applicationEventProcessorSupplier,
                     networkClientDelegateSupplier,
                     requestManagersSupplier);
-            ConsumerCoordinatorMetrics coordinatorMetrics = new ConsumerCoordinatorMetrics(
-                    subscriptions,
-                    metrics,
-                    CONSUMER_METRIC_GROUP_PREFIX
-            );
+
             ConsumerRebalanceListenerInvoker rebalanceListenerInvoker = new ConsumerRebalanceListenerInvoker(
                     logContext,
                     subscriptions,
                     time,
-                    coordinatorMetrics
+                    new RebalanceCallbackMetrics(metrics)
             );
             this.backgroundEventProcessor = new BackgroundEventProcessor(
                     logContext,
@@ -528,11 +526,6 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             GroupRebalanceConfig.ProtocolType.CONSUMER
         );
 
-        ConsumerCoordinatorMetrics coordinatorMetrics = new ConsumerCoordinatorMetrics(
-                subscriptions,
-                metrics,
-                CONSUMER_METRIC_GROUP_PREFIX
-        );
         this.groupMetadata = initializeGroupMetadata(config, groupRebalanceConfig);
 
         BlockingQueue<ApplicationEvent> applicationEventQueue = new LinkedBlockingQueue<>();
@@ -545,7 +538,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             logContext,
             subscriptions,
             time,
-            coordinatorMetrics
+            new RebalanceCallbackMetrics(metrics)
         );
         ApiVersions apiVersions = new ApiVersions();
         Supplier<NetworkClientDelegate> networkClientDelegateSupplier = () -> new NetworkClientDelegate(
@@ -566,8 +559,8 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             apiVersions,
             fetchMetricsManager,
             networkClientDelegateSupplier,
-            clientTelemetryReporter
-        );
+            clientTelemetryReporter,
+            metrics);
         Supplier<ApplicationEventProcessor> applicationEventProcessorSupplier = ApplicationEventProcessor.supplier(
                 logContext,
                 metadata,
@@ -920,6 +913,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     public Map<TopicPartition, OffsetAndMetadata> committed(final Set<TopicPartition> partitions,
                                                             final Duration timeout) {
         acquireAndEnsureOpen();
+        long start = time.nanoseconds();
         try {
             maybeThrowInvalidGroupIdException();
             if (partitions.isEmpty()) {
@@ -943,6 +937,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                 wakeupTrigger.clearTask();
             }
         } finally {
+            kafkaConsumerMetrics.recordCommitted(time.nanoseconds() - start);
             release();
         }
     }
