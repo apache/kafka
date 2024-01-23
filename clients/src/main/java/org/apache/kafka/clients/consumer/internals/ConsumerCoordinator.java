@@ -29,6 +29,7 @@ import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetCommitCallback;
 import org.apache.kafka.clients.consumer.RetriableCommitFailedException;
 import org.apache.kafka.clients.consumer.internals.Utils.TopicPartitionComparator;
+import org.apache.kafka.clients.consumer.internals.metrics.RebalanceCallbackMetrics;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
@@ -47,7 +48,11 @@ import org.apache.kafka.common.message.JoinGroupRequestData;
 import org.apache.kafka.common.message.JoinGroupResponseData;
 import org.apache.kafka.common.message.OffsetCommitRequestData;
 import org.apache.kafka.common.message.OffsetCommitResponseData;
+import org.apache.kafka.common.metrics.Measurable;
 import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.metrics.Sensor;
+import org.apache.kafka.common.metrics.stats.Avg;
+import org.apache.kafka.common.metrics.stats.Max;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.RecordBatch;
@@ -84,6 +89,7 @@ import java.util.stream.Collectors;
 
 import static org.apache.kafka.clients.consumer.ConsumerConfig.ASSIGN_FROM_SUBSCRIBED_ASSIGNORS;
 import static org.apache.kafka.clients.consumer.CooperativeStickyAssignor.COOPERATIVE_STICKY_ASSIGNOR_NAME;
+import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.COORDINATOR_METRICS_SUFFIX;
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.refreshCommittedOffsets;
 
 /**
@@ -187,7 +193,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         this.autoCommitIntervalMs = autoCommitIntervalMs;
         this.assignors = assignors;
         this.completedOffsetCommits = new ConcurrentLinkedQueue<>();
-        this.coordinatorMetrics = new ConsumerCoordinatorMetrics(subscriptions, metrics, metricGrpPrefix);
+        this.coordinatorMetrics = new ConsumerCoordinatorMetrics(metrics, metricGrpPrefix);
         this.interceptors = interceptors;
         this.inFlightAsyncCommits = new AtomicInteger();
         this.pendingAsyncCommits = new AtomicInteger();
@@ -229,7 +235,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             logContext,
             subscriptions,
             time,
-            coordinatorMetrics
+            new RebalanceCallbackMetrics(metrics, metricGrpPrefix)
         );
         this.metadata.requestUpdate(true);
     }
@@ -1544,6 +1550,29 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         @Override
         public String toString() {
             return "(version" + version + ": " + partitionsPerTopic + ")";
+        }
+    }
+
+    private class ConsumerCoordinatorMetrics {
+        private final String metricGrpName;
+        private final Sensor commitSensor;
+
+        private ConsumerCoordinatorMetrics(Metrics metrics, String metricGrpPrefix) {
+            this.metricGrpName = metricGrpPrefix + COORDINATOR_METRICS_SUFFIX;
+
+            this.commitSensor = metrics.sensor("commit-latency");
+            this.commitSensor.add(metrics.metricName("commit-latency-avg",
+                this.metricGrpName,
+                "The average time taken for a commit request"), new Avg());
+            this.commitSensor.add(metrics.metricName("commit-latency-max",
+                this.metricGrpName,
+                "The max time taken for a commit request"), new Max());
+            this.commitSensor.add(createMeter(metrics, metricGrpName, "commit", "commit calls"));
+
+            Measurable numParts = (config, now) -> subscriptions.numAssignedPartitions();
+            metrics.addMetric(metrics.metricName("assigned-partitions",
+                this.metricGrpName,
+                "The number of partitions currently assigned to this consumer"), numParts);
         }
     }
 

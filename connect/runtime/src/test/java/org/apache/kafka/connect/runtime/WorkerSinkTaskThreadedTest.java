@@ -135,7 +135,7 @@ public class WorkerSinkTaskThreadedTest {
     @Mock
     private HeaderConverter headerConverter;
     @Mock
-    private TransformationChain<SinkRecord> transformationChain;
+    private TransformationChain<ConsumerRecord<byte[], byte[]>, SinkRecord> transformationChain;
     private WorkerSinkTask workerTask;
     @Mock
     private KafkaConsumer<byte[], byte[]> consumer;
@@ -173,7 +173,7 @@ public class WorkerSinkTaskThreadedTest {
         workerTask = new WorkerSinkTask(
                 taskId, sinkTask, statusListener, initialState, workerConfig, ClusterConfigState.EMPTY, metrics, keyConverter,
                 valueConverter, errorHandlingMetrics, headerConverter, transformationChain,
-                consumer, pluginLoader, time, RetryWithToleranceOperatorTest.NOOP_OPERATOR, null, statusBackingStore,
+                consumer, pluginLoader, time, RetryWithToleranceOperatorTest.noopOperator(), null, statusBackingStore,
                 Collections::emptyList);
         recordsReturned = 0;
     }

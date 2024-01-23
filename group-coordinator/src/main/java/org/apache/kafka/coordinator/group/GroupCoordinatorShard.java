@@ -639,6 +639,7 @@ public class GroupCoordinatorShard implements CoordinatorShard<Record> {
     /**
      * Replays the Record to update the hard state of the group coordinator.
      *
+     * @param offset        The offset of the record in the log.
      * @param producerId    The producer id.
      * @param producerEpoch The producer epoch.
      * @param record        The record to apply to the state machine.
@@ -646,6 +647,7 @@ public class GroupCoordinatorShard implements CoordinatorShard<Record> {
      */
     @Override
     public void replay(
+        long offset,
         long producerId,
         short producerEpoch,
         Record record
@@ -657,6 +659,7 @@ public class GroupCoordinatorShard implements CoordinatorShard<Record> {
             case 0:
             case 1:
                 offsetMetadataManager.replay(
+                    offset,
                     producerId,
                     (OffsetCommitKey) key.message(),
                     (OffsetCommitValue) messageOrNull(value)

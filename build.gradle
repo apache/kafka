@@ -849,6 +849,9 @@ project(':server') {
   dependencies {
     implementation project(':clients')
     implementation project(':server-common')
+    implementation project(':group-coordinator')
+    implementation project(':transaction-coordinator')
+    implementation project(':raft')
     implementation libs.metrics
 
     implementation libs.slf4jApi
@@ -926,6 +929,7 @@ project(':core') {
 
     implementation project(':server-common')
     implementation project(':group-coordinator')
+    implementation project(':transaction-coordinator')
     implementation project(':metadata')
     implementation project(':storage:storage-api')
     implementation project(':tools:tools-api')
@@ -1361,6 +1365,27 @@ project(':group-coordinator') {
 
   compileJava.dependsOn 'processMessages'
   srcJar.dependsOn 'processMessages'
+}
+
+project(':transaction-coordinator') {
+  archivesBaseName = "kafka-transaction-coordinator"
+
+  sourceSets {
+    main {
+      java {
+        srcDirs = ["src/generated/java", "src/main/java"]
+      }
+    }
+    test {
+      java {
+        srcDirs = ["src/generated/java", "src/test/java"]
+      }
+    }
+  }
+
+  javadoc {
+    enabled = false
+  }
 }
 
 project(':examples') {

@@ -97,6 +97,7 @@ include 'clients',
     'streams:upgrade-system-tests-35',
     'tools',
     'tools:tools-api',
+    'transaction-coordinator',
     'trogdor'
 
 project(":storage:api").name = "storage-api"

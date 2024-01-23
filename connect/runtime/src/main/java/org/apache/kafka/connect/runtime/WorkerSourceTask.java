@@ -74,7 +74,7 @@ class WorkerSourceTask extends AbstractWorkerSourceTask {
                             Converter valueConverter,
                             ErrorHandlingMetrics errorMetrics,
                             HeaderConverter headerConverter,
-                            TransformationChain<SourceRecord> transformationChain,
+                            TransformationChain<SourceRecord, SourceRecord> transformationChain,
                             Producer<byte[], byte[]> producer,
                             TopicAdmin admin,
                             Map<String, TopicCreationGroup> topicGroups,
@@ -86,10 +86,10 @@ class WorkerSourceTask extends AbstractWorkerSourceTask {
                             ConnectMetrics connectMetrics,
                             ClassLoader loader,
                             Time time,
-                            RetryWithToleranceOperator retryWithToleranceOperator,
+                            RetryWithToleranceOperator<SourceRecord> retryWithToleranceOperator,
                             StatusBackingStore statusBackingStore,
                             Executor closeExecutor,
-                            Supplier<List<ErrorReporter>> errorReportersSupplier) {
+                            Supplier<List<ErrorReporter<SourceRecord>>> errorReportersSupplier) {
 
         super(id, task, statusListener, initialState, keyConverter, valueConverter, headerConverter, transformationChain,
                 new WorkerSourceTaskContext(offsetReader, id, configState, null), producer,

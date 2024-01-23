@@ -6,8 +6,10 @@ You need to have [Java](http://www.oracle.com/technetwork/java/javase/downloads/
 
 We build and test Apache Kafka with Java 8, 11, 17 and 21. We set the `release` parameter in javac and scalac
 to `8` to ensure the generated binaries are compatible with Java 8 or higher (independently of the Java version
-used for compilation). Java 8 support has been deprecated since Apache Kafka 3.0 and will be removed in Apache
-Kafka 4.0 (see [KIP-750](https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=181308223) for more details).
+used for compilation). Java 8 support project-wide has been deprecated since Apache Kafka 3.0, Java 11 support for
+the broker and tools has been deprecated since Apache Kafka 3.7 and removal of both is planned for Apache Kafka 4.0 (
+see [KIP-750](https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=181308223) and
+[KIP-1013](https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=284789510) for more details).
 
 Scala 2.12 and 2.13 are supported and 2.13 is used by default. Scala 2.12 support has been deprecated since
 Apache Kafka 3.0 and will be removed in Apache Kafka 4.0 (see [KIP-751](https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=181308218)

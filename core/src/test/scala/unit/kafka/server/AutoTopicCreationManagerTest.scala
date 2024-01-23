@@ -333,7 +333,7 @@ class AutoTopicCreationManagerTest {
 
     val requestHeader = new RequestHeader(ApiKeys.METADATA, ApiKeys.METADATA.latestVersion,
       "clientId", 0)
-    new RequestContext(requestHeader, "1", InetAddress.getLocalHost,
+    new RequestContext(requestHeader, "1", InetAddress.getLocalHost, Optional.empty(),
       kafkaPrincipal, ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT),
       SecurityProtocol.PLAINTEXT, ClientInformation.EMPTY, false, principalSerde)
   }
