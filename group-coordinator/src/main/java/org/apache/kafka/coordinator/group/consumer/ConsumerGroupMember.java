@@ -562,7 +562,7 @@ public class ConsumerGroupMember {
             .setMemberEpoch(memberEpoch)
             .setMemberId(memberId)
             .setAssignment(new ConsumerGroupDescribeResponseData.Assignment()
-            .setTopicPartitions(topicPartitionsFromMap(assignedPartitions, topicsImage)))
+                .setTopicPartitions(topicPartitionsFromMap(assignedPartitions, topicsImage)))
             .setTargetAssignment(new ConsumerGroupDescribeResponseData.Assignment()
                 .setTopicPartitions(topicPartitionsFromMap(
                     targetAssignment != null ? targetAssignment.partitions() : Collections.emptyMap(),
@@ -584,7 +584,6 @@ public class ConsumerGroupMember {
         for (Map.Entry<Uuid, Set<Integer>> entry : partitions.entrySet()) {
             Uuid topicId = entry.getKey();
             Set<Integer> partitionSet = partitions.get(topicId);
-//        partitions.forEach((topicId, partitionSet) -> {
             String topicName = lookupTopicNameById(topicId, topicsImage);
             if (topicName != null) {
                 topicPartitions.add(new ConsumerGroupDescribeResponseData.TopicPartitions()
