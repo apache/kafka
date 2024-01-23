@@ -799,7 +799,6 @@ class ReplicaManager(val config: KafkaConfig,
    * @param timeout                       maximum time we will wait to append before returning
    * @param requiredAcks                  number of replicas who must acknowledge the append before sending the response
    * @param internalTopicsAllowed         boolean indicating whether internal topics can be appended to
-   * @param origin                        source of the append request (ie, client, replication, coordinator)
    * @param transactionalId               the transactional ID for the produce request or null if there is none.
    * @param entriesPerPartition           the records per partition to be appended
    * @param responseCallback              callback for sending the response
@@ -811,7 +810,6 @@ class ReplicaManager(val config: KafkaConfig,
   def handleProduceAppend(timeout: Long,
                           requiredAcks: Short,
                           internalTopicsAllowed: Boolean,
-                          origin: AppendOrigin,
                           transactionalId: String,
                           entriesPerPartition: Map[TopicPartition, MemoryRecords],
                           responseCallback: Map[TopicPartition, PartitionResponse] => Unit,
@@ -865,7 +863,7 @@ class ReplicaManager(val config: KafkaConfig,
         timeout = timeout,
         requiredAcks = requiredAcks,
         internalTopicsAllowed = internalTopicsAllowed,
-        origin = origin,
+        origin = AppendOrigin.CLIENT,
         entriesPerPartition = entriesWithoutErrorsPerPartition,
         responseCallback = newResponseCallback,
         recordValidationStatsCallback = recordValidationStatsCallback,
@@ -879,6 +877,7 @@ class ReplicaManager(val config: KafkaConfig,
       postVerificationCallback(Map.empty[TopicPartition, Errors], requestLocal, Map.empty[TopicPartition, VerificationGuard])
       return
     }
+
     maybeStartTransactionVerificationForPartitions(topicPartitionBatchInfo, transactionalId,
       transactionalProducerInfo.head._1, transactionalProducerInfo.head._2, requestLocal, postVerificationCallback)
   }

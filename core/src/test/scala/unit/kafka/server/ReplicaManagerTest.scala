@@ -3022,15 +3022,15 @@ class ReplicaManagerTest {
       responses.foreach( response => assertTrue(responses.get(response._1).isDefined))
       result.fire(responses)
     }
-      replicaManager.handleProduceAppend(
-        timeout = 1000,
-        requiredAcks = requiredAcks,
-        internalTopicsAllowed = false,
-        origin = origin,
-        transactionalId = transactionalId,
-        entriesPerPartition = entriesToAppend,
-        responseCallback = appendCallback,
-      )
+
+    replicaManager.handleProduceAppend(
+      timeout = 1000,
+      requiredAcks = requiredAcks,
+      internalTopicsAllowed = false,
+      transactionalId = transactionalId,
+      entriesPerPartition = entriesToAppend,
+      responseCallback = appendCallback,
+    )
 
     result
   }
@@ -3054,7 +3054,6 @@ class ReplicaManagerTest {
       timeout = 1000,
       requiredAcks = requiredAcks,
       internalTopicsAllowed = false,
-      origin = origin,
       transactionalId = transactionalId,
       entriesPerPartition = entriesPerPartition,
       responseCallback = appendCallback,
