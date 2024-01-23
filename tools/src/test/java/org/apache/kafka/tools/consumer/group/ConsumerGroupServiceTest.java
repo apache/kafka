@@ -47,6 +47,7 @@ import scala.Some;
 import scala.Tuple2;
 import scala.collection.JavaConverters;
 import scala.collection.Seq;
+import scala.collection.immutable.Map$;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -220,8 +221,8 @@ public class ConsumerGroupServiceTest {
                 .thenReturn(listOffsetsResult());
 
         scala.collection.Map<String, scala.collection.Map<TopicPartition, OffsetAndMetadata>> resetResult = groupService.resetOffsets();
-        assertEquals(Collections.singleton(GROUP), JavaConverters.asJava(resetResult.keySet()));
-        assertEquals(new HashSet<>(TOPIC_PARTITIONS), JavaConverters.asJava(resetResult.get(GROUP).get().keys().toSet()));
+        assertEquals(set(Collections.singletonList(GROUP)), resetResult.keySet());
+        assertEquals(set(TOPIC_PARTITIONS), resetResult.get(GROUP).get().keys().toSet());
 
         verify(admin, times(1)).describeConsumerGroups(ArgumentMatchers.eq(Collections.singletonList(GROUP)), any());
         verify(admin, times(1)).describeTopics(ArgumentMatchers.eq(topicsWithoutPartitionsSpecified), any());
@@ -229,7 +230,7 @@ public class ConsumerGroupServiceTest {
     }
 
     private ConsumerGroupCommand.ConsumerGroupService consumerGroupService(String[] args) {
-        return new ConsumerGroupCommand.ConsumerGroupService(new kafka.admin.ConsumerGroupCommand.ConsumerGroupCommandOptions(args), JavaConverters.asScala(Collections.emptyMap())) {
+        return new ConsumerGroupCommand.ConsumerGroupService(new kafka.admin.ConsumerGroupCommand.ConsumerGroupCommandOptions(args), Map$.MODULE$.empty()) {
             @Override
             public Admin createAdminClient(scala.collection.Map<String, String> configOverrides) {
                 return admin;
@@ -289,5 +290,10 @@ public class ConsumerGroupServiceTest {
 
     private Map<String, ListConsumerGroupOffsetsSpec> listConsumerGroupOffsetsSpec() {
         return Collections.singletonMap(GROUP, new ListConsumerGroupOffsetsSpec());
+    }
+
+    @SuppressWarnings({"deprecation"})
+    private static <T> scala.collection.immutable.Set<T> set(final Collection<T> set) {
+        return JavaConverters.asScalaSet(new HashSet<>(set)).toSet();
     }
 }
