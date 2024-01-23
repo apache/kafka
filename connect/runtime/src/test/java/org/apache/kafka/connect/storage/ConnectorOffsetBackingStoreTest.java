@@ -37,16 +37,19 @@ import org.junit.Test;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.List;
 import java.util.Map;
 import java.util.HashMap;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.ExecutionException;
 
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.mockito.Mockito.mock;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
+import static org.mockito.Mockito.when;
 
 public class ConnectorOffsetBackingStoreTest {
 
@@ -54,6 +57,10 @@ public class ConnectorOffsetBackingStoreTest {
     // Connect format - any types should be accepted here
     private static final Map<String, Object> OFFSET_KEY = Collections.singletonMap("key", "key");
     private static final Map<String, Object> OFFSET_VALUE = Collections.singletonMap("key", 12);
+
+    // Serialized
+    private static final byte[] OFFSET_KEY_SERIALIZED = "key-serialized".getBytes();
+    private static final byte[] OFFSET_VALUE_SERIALIZED = "value-serialized".getBytes();
 
     private static final Exception PRODUCE_EXCEPTION = new KafkaException();
 
@@ -75,10 +82,14 @@ public class ConnectorOffsetBackingStoreTest {
                 mock(TopicAdmin.class));
 
 
-        offsetBackingStore.set(getSerialisedOffsets(OFFSET_KEY, null), (error, result) -> {
-            assertEquals(PRODUCE_EXCEPTION, error);
-            assertNull(result);
-        }).get(1000L, TimeUnit.MILLISECONDS);
+        try {
+            offsetBackingStore.set(getSerialisedOffsets(OFFSET_KEY, OFFSET_KEY_SERIALIZED, null, null), (error, result) -> {
+                assertEquals(PRODUCE_EXCEPTION, error);
+                assertNull(result);
+            }).get(1000L, TimeUnit.MILLISECONDS);
+        } catch (ExecutionException e) {
+            assertEquals(PRODUCE_EXCEPTION, e.getCause());
+        }
     }
 
     @Test
@@ -94,11 +105,10 @@ public class ConnectorOffsetBackingStoreTest {
                 "offsets-topic",
                 mock(TopicAdmin.class));
 
-        offsetBackingStore.set(getSerialisedOffsets(OFFSET_KEY, null), (error, result) -> {
+        offsetBackingStore.set(getSerialisedOffsets(OFFSET_KEY, OFFSET_KEY_SERIALIZED, null, null), (error, result) -> {
             assertNull(error);
             assertNull(result);
         }).get(1000L, TimeUnit.MILLISECONDS);
-
     }
 
     @Test
@@ -114,7 +124,7 @@ public class ConnectorOffsetBackingStoreTest {
                 "offsets-topic",
                 mock(TopicAdmin.class));
 
-        offsetBackingStore.set(getSerialisedOffsets(OFFSET_KEY, OFFSET_VALUE), (error, result) -> {
+        offsetBackingStore.set(getSerialisedOffsets(OFFSET_KEY, OFFSET_KEY_SERIALIZED, OFFSET_VALUE, OFFSET_VALUE_SERIALIZED), (error, result) -> {
             assertNull(error);
             assertNull(result);
         }).get(1000L, TimeUnit.MILLISECONDS);
@@ -133,7 +143,7 @@ public class ConnectorOffsetBackingStoreTest {
                 "offsets-topic",
                 mock(TopicAdmin.class));
 
-        offsetBackingStore.set(getSerialisedOffsets(OFFSET_KEY, OFFSET_VALUE), (error, result) -> {
+        offsetBackingStore.set(getSerialisedOffsets(OFFSET_KEY, OFFSET_KEY_SERIALIZED, OFFSET_VALUE, OFFSET_VALUE_SERIALIZED), (error, result) -> {
             assertNull(error);
             assertNull(result);
         }).get(1000L, TimeUnit.MILLISECONDS);
@@ -146,16 +156,20 @@ public class ConnectorOffsetBackingStoreTest {
         KafkaOffsetBackingStore workerStore = setupOffsetBackingStoreWithProducer("topic2", false);
 
         ConnectorOffsetBackingStore offsetBackingStore = ConnectorOffsetBackingStore.withConnectorAndWorkerStores(
-                () -> LoggingContext.forConnector("source-connector"),
-                workerStore,
-                connectorStore,
-                "offsets-topic",
-                mock(TopicAdmin.class));
+            () -> LoggingContext.forConnector("source-connector"),
+            workerStore,
+            connectorStore,
+            "offsets-topic",
+            mock(TopicAdmin.class));
 
-        offsetBackingStore.set(getSerialisedOffsets(OFFSET_KEY, OFFSET_VALUE), (error, result) -> {
-            assertEquals(PRODUCE_EXCEPTION, error);
-            assertNull(result);
-        }).get(1000L, TimeUnit.MILLISECONDS);
+        try {
+            offsetBackingStore.set(getSerialisedOffsets(OFFSET_KEY, OFFSET_KEY_SERIALIZED, OFFSET_VALUE, OFFSET_VALUE_SERIALIZED), (error, result) -> {
+                assertEquals(PRODUCE_EXCEPTION, error);
+                assertNull(result);
+            }).get(1000L, TimeUnit.MILLISECONDS);
+        } catch (ExecutionException e) {
+            assertEquals(PRODUCE_EXCEPTION, e.getCause());
+        }
     }
 
     @Test
@@ -171,10 +185,14 @@ public class ConnectorOffsetBackingStoreTest {
                 "offsets-topic",
                 mock(TopicAdmin.class));
 
-        offsetBackingStore.set(getSerialisedOffsets(OFFSET_KEY, null), (error, result) -> {
-            assertEquals(PRODUCE_EXCEPTION, error);
-            assertNull(result);
-        }).get(1000L, TimeUnit.MILLISECONDS);
+        try {
+            offsetBackingStore.set(getSerialisedOffsets(OFFSET_KEY, OFFSET_KEY_SERIALIZED, null, null), (error, result) -> {
+                assertEquals(PRODUCE_EXCEPTION, error);
+                assertNull(result);
+            }).get(1000L, TimeUnit.MILLISECONDS);
+        } catch (ExecutionException e) {
+            assertEquals(PRODUCE_EXCEPTION, e.getCause());
+        }
     }
 
     @Test
@@ -188,7 +206,7 @@ public class ConnectorOffsetBackingStoreTest {
                 "offsets-topic",
                 mock(TopicAdmin.class));
 
-        offsetBackingStore.set(getSerialisedOffsets(OFFSET_KEY, OFFSET_VALUE), (error, result) -> {
+        offsetBackingStore.set(getSerialisedOffsets(OFFSET_KEY, OFFSET_KEY_SERIALIZED, OFFSET_VALUE, OFFSET_VALUE_SERIALIZED), (error, result) -> {
             assertNull(error);
             assertNull(result);
         }).get(1000L, TimeUnit.MILLISECONDS);
@@ -206,11 +224,14 @@ public class ConnectorOffsetBackingStoreTest {
                 "offsets-topic",
                 mock(TopicAdmin.class));
 
-        offsetBackingStore.set(getSerialisedOffsets(OFFSET_KEY, OFFSET_VALUE), (error, result) -> {
-            assertEquals(PRODUCE_EXCEPTION, error);
-            assertNull(result);
-        }).get(1000L, TimeUnit.MILLISECONDS);
-
+        try {
+            offsetBackingStore.set(getSerialisedOffsets(OFFSET_KEY, OFFSET_KEY_SERIALIZED, OFFSET_VALUE, OFFSET_VALUE_SERIALIZED), (error, result) -> {
+                assertEquals(PRODUCE_EXCEPTION, error);
+                assertNull(result);
+            }).get(1000L, TimeUnit.MILLISECONDS);
+        } catch (ExecutionException e) {
+            assertEquals(PRODUCE_EXCEPTION, e.getCause());
+        }
     }
 
     @SuppressWarnings("unchecked")
@@ -257,15 +278,14 @@ public class ConnectorOffsetBackingStoreTest {
         };
     }
 
-    private Map<ByteBuffer, ByteBuffer> getSerialisedOffsets(Map<String, Object> offsetKey, Map<String, Object> offsetValue) {
-        Map<ByteBuffer, ByteBuffer> offsetsSerialized = new HashMap<>();
+    private Map<ByteBuffer, ByteBuffer> getSerialisedOffsets(Map<String, Object> key, byte[] keySerialized,
+                                                             Map<String, Object> value, byte[] valueSerialized) {
+        List<Object> keyWrapped = Arrays.asList(NAMESPACE, key);
+        when(keyConverter.fromConnectData(NAMESPACE, null, keyWrapped)).thenReturn(keySerialized);
+        when(valueConverter.fromConnectData(NAMESPACE, null, value)).thenReturn(valueSerialized);
 
-        byte[] key = keyConverter.fromConnectData(NAMESPACE, null, Arrays.asList(NAMESPACE, offsetKey));
-        ByteBuffer keyBuffer = (key != null) ? ByteBuffer.wrap(key) : null;
-        byte[] value = valueConverter.fromConnectData(NAMESPACE, null, offsetValue);
-        ByteBuffer valueBuffer = (value != null) ? ByteBuffer.wrap(value) : null;
-
-        offsetsSerialized.put(keyBuffer, valueBuffer);
-        return offsetsSerialized;
+        return Collections.singletonMap(
+            keySerialized == null ? null : ByteBuffer.wrap(keySerialized),
+            valueSerialized == null ? null : ByteBuffer.wrap(valueSerialized));
     }
 }
