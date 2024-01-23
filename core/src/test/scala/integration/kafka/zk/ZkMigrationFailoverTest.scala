@@ -268,6 +268,9 @@ class ZkMigrationFailoverTest extends Logging {
     } finally {
       driver1.close()
       driver2.close()
+      Utils.closeQuietly(zookeeper, "EmbeddedZookeeper")
+      zookeeper.shutdown()
+      if (zkClient != null) Utils.closeQuietly(zkClient, "KafkaZkClient")
     }
   }
 }
