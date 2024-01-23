@@ -924,7 +924,7 @@ public class ClientMetricsManagerTest {
     }
 
     @Test
-    public void testCacheEviction() throws UnknownHostException {
+    public void testCacheEviction() throws UnknownHostException, InterruptedException {
         Properties properties = new Properties();
         properties.put("metrics", ClientMetricsConfigs.ALL_SUBSCRIBED_METRICS_CONFIG);
         properties.put(ClientMetricsConfigs.PUSH_INTERVAL_MS, "100");
@@ -939,20 +939,21 @@ public class ClientMetricsManagerTest {
 
         assertNotNull(clientMetricsManager.clientInstance(response.data().clientInstanceId()));
         assertEquals(1, clientMetricsManager.expirationTimer().size());
-        // Cache expiry should occur after 100 * 3 = 300 ms, wait for at most 600 ms for the eviction
-        // to happen as eviction timer is scheduled in different thread.
-        assertTimeoutPreemptively(Duration.ofMillis(600), () -> {
+        // Cache expiry should occur after 100 * 3 = 300 ms, wait for the eviction to happen.
+        // Force clocks to advance by 300 ms.
+        clientMetricsManager.expirationTimer().advanceClock(300);
+        assertTimeoutPreemptively(Duration.ofMillis(300), () -> {
             // Validate that cache eviction happens and client instance is removed from cache.
             while (clientMetricsManager.expirationTimer().size() != 0 ||
                 clientMetricsManager.clientInstance(response.data().clientInstanceId()) != null) {
                 // Wait for cache eviction to happen.
-                Thread.sleep(100);
+                Thread.sleep(50);
             }
         });
     }
 
     @Test
-    public void testCacheEvictionWithMultipleClients() throws UnknownHostException {
+    public void testCacheEvictionWithMultipleClients() throws UnknownHostException, InterruptedException {
         Properties properties = new Properties();
         properties.put("metrics", ClientMetricsConfigs.ALL_SUBSCRIBED_METRICS_CONFIG);
         properties.put(ClientMetricsConfigs.PUSH_INTERVAL_MS, "100");
@@ -972,15 +973,16 @@ public class ClientMetricsManagerTest {
         assertNotNull(clientMetricsManager.clientInstance(response1.data().clientInstanceId()));
         assertNotNull(clientMetricsManager.clientInstance(response2.data().clientInstanceId()));
         assertEquals(2, clientMetricsManager.expirationTimer().size());
-        // Cache expiry should occur after 100 * 3 = 300 ms, wait for at most 600 ms for the eviction
-        // to happen as eviction timer is scheduled in different thread.
-        assertTimeoutPreemptively(Duration.ofMillis(600), () -> {
+        // Cache expiry should occur after 100 * 3 = 300 ms, wait for the eviction to happen.
+        // Force clocks to advance by 300 ms.
+        clientMetricsManager.expirationTimer().advanceClock(300);
+        assertTimeoutPreemptively(Duration.ofMillis(300), () -> {
             // Validate that cache eviction happens and client instance is removed from cache.
             while (clientMetricsManager.expirationTimer().size() != 0 ||
                 clientMetricsManager.clientInstance(response1.data().clientInstanceId()) != null ||
                 clientMetricsManager.clientInstance(response2.data().clientInstanceId()) != null) {
                 // Wait for cache eviction to happen.
-                Thread.sleep(100);
+                Thread.sleep(50);
             }
         });
     }

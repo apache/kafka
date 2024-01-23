@@ -467,17 +467,17 @@ public class ClientMetricsManager implements AutoCloseable {
 
         private static final long CACHE_ERROR_LOG_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
 
-        private final Uuid uuid;
+        private final Uuid clientInstanceId;
 
-        private ExpirationTimerTask(Uuid uuid, long delayMs) {
+        private ExpirationTimerTask(Uuid clientInstanceId, long delayMs) {
             super(delayMs);
-            this.uuid = uuid;
+            this.clientInstanceId = clientInstanceId;
         }
 
         @Override
         public void run() {
-            log.trace("Expiration timer task run for client instance id: {}, after delay ms: {}", uuid, delayMs);
-            if (!clientInstanceCache.remove(uuid)) {
+            log.trace("Expiration timer task run for client instance id: {}, after delay ms: {}", clientInstanceId, delayMs);
+            if (!clientInstanceCache.remove(clientInstanceId)) {
                 /*
                  This can only happen if the client instance is removed from the cache by the LRU
                  eviction policy before the expiration timer task is executed. Log a warning as broker
@@ -488,7 +488,7 @@ public class ClientMetricsManager implements AutoCloseable {
                 if (time.milliseconds() - lastErrorMs > CACHE_ERROR_LOG_INTERVAL_MS &&
                     lastCacheErrorLogMs.compareAndSet(lastErrorMs, time.milliseconds())) {
                     log.warn("Client metrics instance cache cannot find the client instance id: {}. The cache"
-                        + " must be at capacity, size: {} ", uuid, clientInstanceCache.size());
+                        + " must be at capacity, size: {} ", clientInstanceId, clientInstanceCache.size());
                 }
             }
         }
