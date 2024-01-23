@@ -75,7 +75,7 @@ import static org.apache.kafka.connect.runtime.WorkerConfig.TOPIC_TRACKING_ENABL
  * WorkerTask that contains shared logic for running source tasks with either standard semantics
  * (i.e., either at-least-once or at-most-once) or exactly-once semantics.
  */
-public abstract class AbstractWorkerSourceTask extends WorkerTask {
+public abstract class AbstractWorkerSourceTask extends WorkerTask<SourceRecord, SourceRecord> {
     private static final Logger log = LoggerFactory.getLogger(AbstractWorkerSourceTask.class);
 
     private static final long SEND_FAILED_BACKOFF_MS = 100;
@@ -192,7 +192,6 @@ public abstract class AbstractWorkerSourceTask extends WorkerTask {
     private final Converter keyConverter;
     private final Converter valueConverter;
     private final HeaderConverter headerConverter;
-    private final TransformationChain<SourceRecord> transformationChain;
     private final TopicAdmin admin;
     private final CloseableOffsetStorageReader offsetReader;
     private final SourceTaskMetricsGroup sourceTaskMetricsGroup;
@@ -200,7 +199,6 @@ public abstract class AbstractWorkerSourceTask extends WorkerTask {
     private final boolean topicTrackingEnabled;
     private final TopicCreation topicCreation;
     private final Executor closeExecutor;
-    private final Supplier<List<ErrorReporter>> errorReportersSupplier;
 
     // Visible for testing
     List<SourceRecord> toSend;
@@ -215,7 +213,7 @@ public abstract class AbstractWorkerSourceTask extends WorkerTask {
                                        Converter keyConverter,
                                        Converter valueConverter,
                                        HeaderConverter headerConverter,
-                                       TransformationChain<SourceRecord> transformationChain,
+                                       TransformationChain<SourceRecord, SourceRecord> transformationChain,
                                        WorkerSourceTaskContext sourceTaskContext,
                                        Producer<byte[], byte[]> producer,
                                        TopicAdmin admin,
@@ -228,20 +226,20 @@ public abstract class AbstractWorkerSourceTask extends WorkerTask {
                                        ErrorHandlingMetrics errorMetrics,
                                        ClassLoader loader,
                                        Time time,
-                                       RetryWithToleranceOperator retryWithToleranceOperator,
+                                       RetryWithToleranceOperator<SourceRecord> retryWithToleranceOperator,
                                        StatusBackingStore statusBackingStore,
                                        Executor closeExecutor,
-                                       Supplier<List<ErrorReporter>> errorReportersSupplier) {
+                                       Supplier<List<ErrorReporter<SourceRecord>>> errorReportersSupplier) {
 
         super(id, statusListener, initialState, loader, connectMetrics, errorMetrics,
-                retryWithToleranceOperator, time, statusBackingStore);
+                retryWithToleranceOperator, transformationChain, errorReportersSupplier,
+                time, statusBackingStore);
 
         this.workerConfig = workerConfig;
         this.task = task;
         this.keyConverter = keyConverter;
         this.valueConverter = valueConverter;
         this.headerConverter = headerConverter;
-        this.transformationChain = transformationChain;
         this.producer = producer;
         this.admin = admin;
         this.offsetReader = offsetReader;
@@ -249,8 +247,6 @@ public abstract class AbstractWorkerSourceTask extends WorkerTask {
         this.offsetStore = Objects.requireNonNull(offsetStore, "offset store cannot be null for source tasks");
         this.closeExecutor = closeExecutor;
         this.sourceTaskContext = sourceTaskContext;
-        this.errorReportersSupplier = errorReportersSupplier;
-
         this.stopRequestedLatch = new CountDownLatch(1);
         this.sourceTaskMetricsGroup = new SourceTaskMetricsGroup(id, connectMetrics);
         this.topicTrackingEnabled = workerConfig.getBoolean(TOPIC_TRACKING_ENABLE_CONFIG);
@@ -269,7 +265,6 @@ public abstract class AbstractWorkerSourceTask extends WorkerTask {
 
     @Override
     protected void initializeAndStart() {
-        retryWithToleranceOperator.reporters(errorReportersSupplier.get());
         prepareToInitializeTask();
         offsetStore.start();
         // If we try to start the task at all by invoking initialize, then count this as
@@ -322,8 +317,6 @@ public abstract class AbstractWorkerSourceTask extends WorkerTask {
         if (admin != null) {
             Utils.closeQuietly(() -> admin.close(Duration.ofSeconds(30)), "source task admin");
         }
-        Utils.closeQuietly(transformationChain, "transformation chain");
-        Utils.closeQuietly(retryWithToleranceOperator, "retry operator");
         Utils.closeQuietly(offsetReader, "offset reader");
         Utils.closeQuietly(offsetStore::stop, "offset backing store");
         Utils.closeQuietly(headerConverter, "header converter");

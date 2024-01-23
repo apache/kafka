@@ -820,7 +820,7 @@ public class WorkerTest {
 
     @Test
     public void testConnectorStatusMetricsGroup_taskStatusCounter() {
-        ConcurrentMap<ConnectorTaskId, WorkerTask> tasks = new ConcurrentHashMap<>();
+        ConcurrentMap<ConnectorTaskId, WorkerTask<?, ?>> tasks = new ConcurrentHashMap<>();
         tasks.put(new ConnectorTaskId("c1", 0), mock(WorkerSourceTask.class));
         tasks.put(new ConnectorTaskId("c1", 1), mock(WorkerSourceTask.class));
         tasks.put(new ConnectorTaskId("c2", 0), mock(WorkerSourceTask.class));
@@ -2701,7 +2701,7 @@ public class WorkerTest {
      * All AutoClosable objects (producers, consumers, admin clients, etc.) are closed, as their lifetimes
      * are managed by the WorkerTask. While the worker task is mocked, it cannot manage the lifetimes itself.
      */
-    private static void workerTaskConstructor(WorkerTask mock, MockedConstruction.Context context) {
+    private static void workerTaskConstructor(WorkerTask<?, ?> mock, MockedConstruction.Context context) {
         for (Object argument : context.arguments()) {
             if (argument instanceof AutoCloseable) {
                 Utils.closeQuietly((AutoCloseable) argument, "worker task client");

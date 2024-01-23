@@ -513,7 +513,7 @@ public class RecordHelpers {
             ),
             new ApiMessageAndVersion(
                 new OffsetCommitValue()
-                    .setOffset(offsetAndMetadata.offset)
+                    .setOffset(offsetAndMetadata.committedOffset)
                     .setLeaderEpoch(offsetAndMetadata.leaderEpoch.orElse(RecordBatch.NO_PARTITION_LEADER_EPOCH))
                     .setMetadata(offsetAndMetadata.metadata)
                     .setCommitTimestamp(offsetAndMetadata.commitTimestampMs)

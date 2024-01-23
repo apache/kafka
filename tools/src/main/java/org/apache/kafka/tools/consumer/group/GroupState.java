@@ -14,25 +14,22 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.connect.runtime.errors;
+package org.apache.kafka.tools.consumer.group;
 
-import org.apache.kafka.clients.producer.RecordMetadata;
+import org.apache.kafka.common.Node;
 
-import java.util.concurrent.Future;
+class GroupState {
+    public final String group;
+    public final Node coordinator;
+    public final String assignmentStrategy;
+    public final String state;
+    public final int numMembers;
 
-/**
- * Report an error using the information contained in the {@link ProcessingContext}.
- */
-public interface ErrorReporter<T> extends AutoCloseable {
-
-    /**
-     * Report an error and return the producer future.
-     *
-     * @param context the processing context (cannot be null).
-     * @return future result from the producer sending a record to Kafka.
-     */
-    Future<RecordMetadata> report(ProcessingContext<T> context);
-
-    @Override
-    default void close() { }
+    public GroupState(String group, Node coordinator, String assignmentStrategy, String state, int numMembers) {
+        this.group = group;
+        this.coordinator = coordinator;
+        this.assignmentStrategy = assignmentStrategy;
+        this.state = state;
+        this.numMembers = numMembers;
+    }
 }

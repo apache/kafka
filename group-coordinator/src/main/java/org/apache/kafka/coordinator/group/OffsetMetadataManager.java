@@ -738,7 +738,7 @@ public class OffsetMetadataManager {
                 } else {
                     topicResponse.partitions().add(new OffsetFetchResponseData.OffsetFetchResponsePartitions()
                         .setPartitionIndex(partitionIndex)
-                        .setCommittedOffset(offsetAndMetadata.offset)
+                        .setCommittedOffset(offsetAndMetadata.committedOffset)
                         .setCommittedLeaderEpoch(offsetAndMetadata.leaderEpoch.orElse(-1))
                         .setMetadata(offsetAndMetadata.metadata));
                 }
@@ -799,7 +799,7 @@ public class OffsetMetadataManager {
                     } else {
                         topicResponse.partitions().add(new OffsetFetchResponseData.OffsetFetchResponsePartitions()
                             .setPartitionIndex(partition)
-                            .setCommittedOffset(offsetAndMetadata.offset)
+                            .setCommittedOffset(offsetAndMetadata.committedOffset)
                             .setCommittedLeaderEpoch(offsetAndMetadata.leaderEpoch.orElse(-1))
                             .setMetadata(offsetAndMetadata.metadata));
                     }
@@ -884,12 +884,14 @@ public class OffsetMetadataManager {
     /**
      * Replays OffsetCommitKey/Value to update or delete the corresponding offsets.
      *
-     * @param producerId The producer id of the batch containing the provided
-     *                   key and value.
-     * @param key        A OffsetCommitKey key.
-     * @param value      A OffsetCommitValue value.
+     * @param recordOffset  The offset of the record in the log.
+     * @param producerId    The producer id of the batch containing the provided
+     *                      key and value.
+     * @param key           A OffsetCommitKey key.
+     * @param value         A OffsetCommitValue value.
      */
     public void replay(
+        long recordOffset,
         long producerId,
         OffsetCommitKey key,
         OffsetCommitValue value
@@ -918,7 +920,7 @@ public class OffsetMetadataManager {
                     groupId,
                     topic,
                     partition,
-                    OffsetAndMetadata.fromRecord(value)
+                    OffsetAndMetadata.fromRecord(recordOffset, value)
                 );
                 if (previousValue == null) {
                     metrics.incrementNumOffsets();
@@ -934,7 +936,7 @@ public class OffsetMetadataManager {
                         groupId,
                         topic,
                         partition,
-                        OffsetAndMetadata.fromRecord(value)
+                        OffsetAndMetadata.fromRecord(recordOffset, value)
                     );
                 openTransactionsByGroup
                     .computeIfAbsent(groupId, __ -> new TimelineHashSet<>(snapshotRegistry, 1))
@@ -979,15 +981,30 @@ public class OffsetMetadataManager {
             pendingOffsets.offsetsByGroup.forEach((groupId, topicOffsets) -> {
                 topicOffsets.forEach((topicName, partitionOffsets) -> {
                     partitionOffsets.forEach((partitionId, offsetAndMetadata) -> {
-                        log.debug("Committed transaction offset commit for producer id {} in group {} " +
-                            "with topic {}, partition {}, and offset {}.",
-                            producerId, groupId, topicName, partitionId, offsetAndMetadata);
-                        offsets.put(
+                        OffsetAndMetadata existingOffsetAndMetadata = offsets.get(
                             groupId,
                             topicName,
-                            partitionId,
-                            offsetAndMetadata
+                            partitionId
                         );
+
+                        // We always keep the most recent committed offset when we have a mix of transactional and regular
+                        // offset commits. Without preserving information of the commit record offset, compaction of the
+                        // __consumer_offsets topic itself may result in the wrong offset commit being materialized.
+                        if (existingOffsetAndMetadata == null || offsetAndMetadata.recordOffset > existingOffsetAndMetadata.recordOffset) {
+                            log.debug("Committed transactional offset commit {} for producer id {} in group {} " +
+                                "with topic {} and partition {}.",
+                                offsetAndMetadata, producerId, groupId, topicName, partitionId);
+                            offsets.put(
+                                groupId,
+                                topicName,
+                                partitionId,
+                                offsetAndMetadata
+                            );
+                        } else {
+                            log.info("Skipped the materialization of transactional offset commit {} for producer id {} in group {} with topic {}, " +
+                                "partition {} since its record offset {} is smaller than the record offset {} of the last committed offset.",
+                                offsetAndMetadata, producerId, groupId, topicName, partitionId, offsetAndMetadata.recordOffset, existingOffsetAndMetadata.recordOffset);
+                        }
                     });
                 });
             });

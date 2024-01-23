@@ -52,7 +52,7 @@ public class WorkerErrantRecordReporterTest {
     @Mock private ProcessingContext<ConsumerRecord<byte[], byte[]>> context;
     @Mock private InternalSinkRecord record;
     @Mock private ErrorHandlingMetrics errorHandlingMetrics;
-    @Mock private ErrorReporter errorReporter;
+    @Mock private ErrorReporter<ConsumerRecord<byte[], byte[]>> errorReporter;
 
     @Test
     public void testGetFutures() {
@@ -94,7 +94,7 @@ public class WorkerErrantRecordReporterTest {
     }
 
     private void initializeReporter(boolean errorsTolerated) {
-        RetryWithToleranceOperator retryWithToleranceOperator = new RetryWithToleranceOperator(
+        RetryWithToleranceOperator<ConsumerRecord<byte[], byte[]>> retryWithToleranceOperator = new RetryWithToleranceOperator<>(
                 5000,
                 ConnectorConfig.ERRORS_RETRY_MAX_DELAY_DEFAULT,
                 errorsTolerated ? ToleranceType.ALL : ToleranceType.NONE,
