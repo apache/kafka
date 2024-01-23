@@ -33,6 +33,7 @@ import org.apache.kafka.connect.runtime.isolation.PluginsTest.TestConverter;
 import org.apache.kafka.connect.runtime.isolation.PluginsTest.TestableWorkerConfig;
 import org.apache.kafka.connect.sink.SinkConnector;
 import org.apache.kafka.connect.sink.SinkTask;
+import org.apache.kafka.connect.source.SourceRecord;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -71,6 +72,7 @@ import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -91,20 +93,23 @@ public class RetryWithToleranceOperatorTest {
             put(WorkerConfig.VALUE_CONVERTER_CLASS_CONFIG, TestConverter.class.getName());
         }};
 
-    public static final RetryWithToleranceOperator NOOP_OPERATOR = new RetryWithToleranceOperator(
-            ERRORS_RETRY_TIMEOUT_DEFAULT, ERRORS_RETRY_MAX_DELAY_DEFAULT, NONE, SYSTEM,
-            new ErrorHandlingMetrics(
-                    new ConnectorTaskId("noop-connector", -1),
-                    new ConnectMetrics("noop-worker", new TestableWorkerConfig(PROPERTIES),
-                            new SystemTime(), "test-cluster"))
-    );
-    public static final RetryWithToleranceOperator ALL_OPERATOR = new RetryWithToleranceOperator(
-            ERRORS_RETRY_TIMEOUT_DEFAULT, ERRORS_RETRY_MAX_DELAY_DEFAULT, ALL, SYSTEM,
-            new ErrorHandlingMetrics(
-                    new ConnectorTaskId("errors-all-tolerate-connector", -1),
-                    new ConnectMetrics("errors-all-tolerate-worker", new TestableWorkerConfig(PROPERTIES),
-                            new SystemTime(), "test-cluster"))
-    );
+    public static <T> RetryWithToleranceOperator<T> noopOperator() {
+        return genericOperator(ERRORS_RETRY_TIMEOUT_DEFAULT, NONE, new ErrorHandlingMetrics(
+                new ConnectorTaskId("noop-connector", -1),
+                new ConnectMetrics("noop-worker", new TestableWorkerConfig(PROPERTIES),
+                        new SystemTime(), "test-cluster")));
+    }
+
+    public static <T> RetryWithToleranceOperator<T> allOperator() {
+        return genericOperator(ERRORS_RETRY_TIMEOUT_DEFAULT, ALL, new ErrorHandlingMetrics(
+                new ConnectorTaskId("errors-all-tolerate-connector", -1),
+                new ConnectMetrics("errors-all-tolerate-worker", new TestableWorkerConfig(PROPERTIES),
+                        new SystemTime(), "test-cluster")));
+    }
+
+    private static <T> RetryWithToleranceOperator<T> genericOperator(int retryTimeout, ToleranceType toleranceType, ErrorHandlingMetrics metrics) {
+        return new RetryWithToleranceOperator<>(retryTimeout, ERRORS_RETRY_MAX_DELAY_DEFAULT, toleranceType, SYSTEM, metrics);
+    }
 
     @Mock
     private Operation<String> mockOperation;
@@ -120,8 +125,7 @@ public class RetryWithToleranceOperatorTest {
 
     @Test
     public void testExecuteFailed() {
-        RetryWithToleranceOperator retryWithToleranceOperator = new RetryWithToleranceOperator(0,
-            ERRORS_RETRY_MAX_DELAY_DEFAULT, ALL, SYSTEM, errorHandlingMetrics);
+        RetryWithToleranceOperator<ConsumerRecord<byte[], byte[]>> retryWithToleranceOperator = genericOperator(0, ALL, errorHandlingMetrics);
 
         ProcessingContext<ConsumerRecord<byte[], byte[]>> context = new ProcessingContext<>(consumerRecord);
         retryWithToleranceOperator.executeFailed(context, Stage.TASK_PUT,
@@ -130,8 +134,7 @@ public class RetryWithToleranceOperatorTest {
 
     @Test
     public void testExecuteFailedNoTolerance() {
-        RetryWithToleranceOperator retryWithToleranceOperator = new RetryWithToleranceOperator(0,
-            ERRORS_RETRY_MAX_DELAY_DEFAULT, NONE, SYSTEM, errorHandlingMetrics);
+        RetryWithToleranceOperator<ConsumerRecord<byte[], byte[]>> retryWithToleranceOperator = genericOperator(0, NONE, errorHandlingMetrics);
 
         ProcessingContext<ConsumerRecord<byte[], byte[]>> context = new ProcessingContext<>(consumerRecord);
         assertThrows(ConnectException.class, () -> retryWithToleranceOperator.executeFailed(context, Stage.TASK_PUT,
@@ -189,7 +192,7 @@ public class RetryWithToleranceOperatorTest {
     }
 
     private void testHandleExceptionInStage(Stage type, Exception ex) {
-        RetryWithToleranceOperator retryWithToleranceOperator = setupExecutor();
+        RetryWithToleranceOperator<ConsumerRecord<byte[], byte[]>> retryWithToleranceOperator = setupExecutor();
         ProcessingContext<ConsumerRecord<byte[], byte[]>> context = new ProcessingContext<>(consumerRecord);
         Operation<?> exceptionThrower = () -> {
             throw ex;
@@ -198,8 +201,8 @@ public class RetryWithToleranceOperatorTest {
         assertTrue(context.failed());
     }
 
-    private RetryWithToleranceOperator setupExecutor() {
-        RetryWithToleranceOperator retryWithToleranceOperator = new RetryWithToleranceOperator(0, ERRORS_RETRY_MAX_DELAY_DEFAULT, ALL, SYSTEM, errorHandlingMetrics);
+    private <T> RetryWithToleranceOperator<T> setupExecutor() {
+        RetryWithToleranceOperator<T> retryWithToleranceOperator = genericOperator(0, ALL, errorHandlingMetrics);
         return retryWithToleranceOperator;
     }
 
@@ -226,7 +229,7 @@ public class RetryWithToleranceOperatorTest {
     public void execAndHandleRetriableError(long errorRetryTimeout, int numRetriableExceptionsThrown, List<Long> expectedWaits, Exception e, boolean successExpected) throws Exception {
         MockTime time = new MockTime(0, 0, 0);
         CountDownLatch exitLatch = mock(CountDownLatch.class);
-        RetryWithToleranceOperator retryWithToleranceOperator = new RetryWithToleranceOperator(errorRetryTimeout, ERRORS_RETRY_MAX_DELAY_DEFAULT, ALL, time, errorHandlingMetrics, exitLatch);
+        RetryWithToleranceOperator<ConsumerRecord<byte[], byte[]>> retryWithToleranceOperator = new RetryWithToleranceOperator<>(errorRetryTimeout, ERRORS_RETRY_MAX_DELAY_DEFAULT, ALL, time, errorHandlingMetrics, exitLatch);
 
         OngoingStubbing<String> mockOperationCall = when(mockOperation.call());
         for (int i = 0; i < numRetriableExceptionsThrown; i++) {
@@ -261,7 +264,7 @@ public class RetryWithToleranceOperatorTest {
     public void testExecAndHandleNonRetriableError() throws Exception {
         MockTime time = new MockTime(0, 0, 0);
         CountDownLatch exitLatch = mock(CountDownLatch.class);
-        RetryWithToleranceOperator retryWithToleranceOperator = new RetryWithToleranceOperator(6000, ERRORS_RETRY_MAX_DELAY_DEFAULT, ALL, time, errorHandlingMetrics, exitLatch);
+        RetryWithToleranceOperator<ConsumerRecord<byte[], byte[]>> retryWithToleranceOperator = new RetryWithToleranceOperator<>(6000, ERRORS_RETRY_MAX_DELAY_DEFAULT, ALL, time, errorHandlingMetrics, exitLatch);
 
         when(mockOperation.call()).thenThrow(new Exception("Test"));
 
@@ -279,7 +282,7 @@ public class RetryWithToleranceOperatorTest {
     public void testExitLatch() throws Exception {
         MockTime time = new MockTime(0, 0, 0);
         CountDownLatch exitLatch = mock(CountDownLatch.class);
-        RetryWithToleranceOperator retryWithToleranceOperator = new RetryWithToleranceOperator(-1, ERRORS_RETRY_MAX_DELAY_DEFAULT, ALL, time, errorHandlingMetrics, exitLatch);
+        RetryWithToleranceOperator<ConsumerRecord<byte[], byte[]>> retryWithToleranceOperator = new RetryWithToleranceOperator<>(-1, ERRORS_RETRY_MAX_DELAY_DEFAULT, ALL, time, errorHandlingMetrics, exitLatch);
         when(mockOperation.call()).thenThrow(new RetriableException("test"));
 
         when(exitLatch.await(300L, TimeUnit.MILLISECONDS)).thenAnswer(i -> {
@@ -314,7 +317,7 @@ public class RetryWithToleranceOperatorTest {
     public void testBackoffLimit() throws Exception {
         MockTime time = new MockTime(0, 0, 0);
         CountDownLatch exitLatch = mock(CountDownLatch.class);
-        RetryWithToleranceOperator retryWithToleranceOperator = new RetryWithToleranceOperator(5, 5000, NONE, time, errorHandlingMetrics, exitLatch);
+        RetryWithToleranceOperator<ConsumerRecord<byte[], byte[]>> retryWithToleranceOperator = new RetryWithToleranceOperator<>(5, 5000, NONE, time, errorHandlingMetrics, exitLatch);
 
         when(exitLatch.await(300, TimeUnit.MILLISECONDS)).thenAnswer(i -> {
             time.sleep(300);
@@ -354,16 +357,16 @@ public class RetryWithToleranceOperatorTest {
 
     @Test
     public void testToleranceLimit() {
-        RetryWithToleranceOperator retryWithToleranceOperator = new RetryWithToleranceOperator(ERRORS_RETRY_TIMEOUT_DEFAULT, ERRORS_RETRY_MAX_DELAY_DEFAULT, NONE, SYSTEM, errorHandlingMetrics);
+        RetryWithToleranceOperator<ConsumerRecord<byte[], byte[]>> retryWithToleranceOperator = genericOperator(ERRORS_RETRY_TIMEOUT_DEFAULT, NONE, errorHandlingMetrics);
         retryWithToleranceOperator.markAsFailed();
         assertFalse("should not tolerate any errors", retryWithToleranceOperator.withinToleranceLimits());
 
-        retryWithToleranceOperator = new RetryWithToleranceOperator(ERRORS_RETRY_TIMEOUT_DEFAULT, ERRORS_RETRY_MAX_DELAY_DEFAULT, ALL, SYSTEM, errorHandlingMetrics);
+        retryWithToleranceOperator = genericOperator(ERRORS_RETRY_TIMEOUT_DEFAULT, ALL, errorHandlingMetrics);
         retryWithToleranceOperator.markAsFailed();
         retryWithToleranceOperator.markAsFailed();
         assertTrue("should tolerate all errors", retryWithToleranceOperator.withinToleranceLimits());
 
-        retryWithToleranceOperator = new RetryWithToleranceOperator(ERRORS_RETRY_TIMEOUT_DEFAULT, ERRORS_RETRY_MAX_DELAY_DEFAULT, NONE, SYSTEM, errorHandlingMetrics);
+        retryWithToleranceOperator = genericOperator(ERRORS_RETRY_TIMEOUT_DEFAULT, NONE, errorHandlingMetrics);
         assertTrue("no tolerance is within limits if no failures", retryWithToleranceOperator.withinToleranceLimits());
     }
 
@@ -409,10 +412,10 @@ public class RetryWithToleranceOperatorTest {
     private void testReport(int numberOfReports) {
         MockTime time = new MockTime(0, 0, 0);
         CountDownLatch exitLatch = mock(CountDownLatch.class);
-        RetryWithToleranceOperator retryWithToleranceOperator = new RetryWithToleranceOperator(-1, ERRORS_RETRY_MAX_DELAY_DEFAULT, ALL, time, errorHandlingMetrics, exitLatch);
+        RetryWithToleranceOperator<ConsumerRecord<byte[], byte[]>> retryWithToleranceOperator = new RetryWithToleranceOperator<>(-1, ERRORS_RETRY_MAX_DELAY_DEFAULT, ALL, time, errorHandlingMetrics, exitLatch);
         ConsumerRecord<byte[], byte[]> consumerRecord = new ConsumerRecord<>("t", 0, 0, null, null);
         List<CompletableFuture<RecordMetadata>> fs = IntStream.range(0, numberOfReports).mapToObj(i -> new CompletableFuture<RecordMetadata>()).collect(Collectors.toList());
-        List<ErrorReporter> reporters = IntStream.range(0, numberOfReports).mapToObj(i -> (ErrorReporter) c -> fs.get(i)).collect(Collectors.toList());
+        List<ErrorReporter<ConsumerRecord<byte[], byte[]>>> reporters = IntStream.range(0, numberOfReports).mapToObj(i -> (ErrorReporter<ConsumerRecord<byte[], byte[]>>) c -> fs.get(i)).collect(Collectors.toList());
         retryWithToleranceOperator.reporters(reporters);
         ProcessingContext<ConsumerRecord<byte[], byte[]>> context = new ProcessingContext<>(consumerRecord);
         Future<Void> result = retryWithToleranceOperator.report(context);
@@ -421,5 +424,41 @@ public class RetryWithToleranceOperatorTest {
             f.complete(new RecordMetadata(new TopicPartition("t", 0), 0, 0, 0, 0, 0));
         });
         assertTrue(result.isDone());
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    public void testCloseErrorReporters() {
+        ErrorReporter<SourceRecord> reporterA = mock(ErrorReporter.class);
+        ErrorReporter<SourceRecord> reporterB = mock(ErrorReporter.class);
+
+        RetryWithToleranceOperator<SourceRecord> retryWithToleranceOperator = allOperator();
+
+        retryWithToleranceOperator.reporters(Arrays.asList(reporterA, reporterB));
+
+        // Even though the reporters throw exceptions, they should both still be closed.
+
+        retryWithToleranceOperator.close();
+        verify(reporterA).close();
+        verify(reporterB).close();
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    public void testCloseErrorReportersExceptionPropagation() {
+        ErrorReporter<SourceRecord> reporterA = mock(ErrorReporter.class);
+        ErrorReporter<SourceRecord> reporterB = mock(ErrorReporter.class);
+
+        RetryWithToleranceOperator<SourceRecord> retryWithToleranceOperator = allOperator();
+
+        retryWithToleranceOperator.reporters(Arrays.asList(reporterA, reporterB));
+
+        // Even though the reporters throw exceptions, they should both still be closed.
+        doThrow(new RuntimeException()).when(reporterA).close();
+        doThrow(new RuntimeException()).when(reporterB).close();
+
+        assertThrows(ConnectException.class, retryWithToleranceOperator::close);
+        verify(reporterA).close();
+        verify(reporterB).close();
     }
 }

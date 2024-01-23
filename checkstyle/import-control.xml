@@ -331,7 +331,7 @@
       <allow pkg="scala" />
     </subpackage>
 
-    <subpackage name="consumergroup">
+    <subpackage name="consumer.group">
       <allow pkg="kafka.security"/>
       <allow pkg="org.apache.kafka.metadata.authorizer"/>
       <allow pkg="org.apache.kafka.tools"/>

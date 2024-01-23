@@ -144,6 +144,20 @@ public class ToolsUtils {
     }
 
     /**
+     * @param set Source set.
+     * @param toRemove Elements to remove.
+     * @return {@code set} copy without {@code toRemove} elements.
+     * @param <T> Element type.
+     */
+    @SuppressWarnings("unchecked")
+    public static <T> Set<T> minus(Set<T> set, T...toRemove) {
+        Set<T> res = new HashSet<>(set);
+        for (T t : toRemove)
+            res.remove(t);
+        return res;
+    }
+
+    /**
      * This is a simple wrapper around `CommandLineUtils.printUsageAndExit`.
      * It is needed for tools migration (KAFKA-14525), as there is no Java equivalent for return type `Nothing`.
      * Can be removed once [[kafka.admin.ConsumerGroupCommand]], [[kafka.tools.ConsoleConsumer]]
