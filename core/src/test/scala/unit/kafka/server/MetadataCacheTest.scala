@@ -44,12 +44,12 @@ import scala.jdk.CollectionConverters._
 object MetadataCacheTest {
   def zkCacheProvider(): util.stream.Stream[MetadataCache] =
     util.stream.Stream.of[MetadataCache](
-      MetadataCache.zkMetadataCache(1, MetadataVersion.latest())
+      MetadataCache.zkMetadataCache(1, MetadataVersion.latestTesting())
     )
 
   def cacheProvider(): util.stream.Stream[MetadataCache] =
     util.stream.Stream.of[MetadataCache](
-      MetadataCache.zkMetadataCache(1, MetadataVersion.latest()),
+      MetadataCache.zkMetadataCache(1, MetadataVersion.latestTesting()),
       MetadataCache.kRaftMetadataCache(1)
     )
 
@@ -954,7 +954,7 @@ class MetadataCacheTest {
     )(
       verifier: ZkMetadataCache => Unit
     ): Unit = {
-      val cache = MetadataCache.zkMetadataCache(1, MetadataVersion.latest(), zkMigrationEnabled = zkMigrationEnabled)
+      val cache = MetadataCache.zkMetadataCache(1, MetadataVersion.latestTesting(), zkMigrationEnabled = zkMigrationEnabled)
       cache.updateMetadata(1, new UpdateMetadataRequest.Builder(8, 1, 42, brokerEpoch,
         initialTopicStates.flatMap(_._2.values).toList.asJava, Seq.empty.asJava, initialTopicIds.asJava).build())
       cache.updateMetadata(1, updateMetadataRequest)

@@ -24,6 +24,7 @@ import org.apache.kafka.connect.runtime.distributed.Crypto;
 import org.apache.kafka.connect.runtime.rest.HerderRequestHandler;
 import org.apache.kafka.connect.runtime.rest.InternalRequestSignature;
 import org.apache.kafka.connect.runtime.rest.RestClient;
+import org.apache.kafka.connect.runtime.rest.RestRequestTimeout;
 import org.apache.kafka.connect.util.FutureCallback;
 
 import javax.ws.rs.POST;
@@ -45,7 +46,7 @@ import java.util.Map;
  * requests that originate from a user and are forwarded from one worker to another.
  */
 @Produces(MediaType.APPLICATION_JSON)
-public abstract class InternalClusterResource implements ConnectResource {
+public abstract class InternalClusterResource {
 
     private static final TypeReference<List<Map<String, String>>> TASK_CONFIGS_TYPE =
             new TypeReference<List<Map<String, String>>>() { };
@@ -56,13 +57,8 @@ public abstract class InternalClusterResource implements ConnectResource {
     @Context
     UriInfo uriInfo;
 
-    protected InternalClusterResource(RestClient restClient) {
-        this.requestHandler = new HerderRequestHandler(restClient, DEFAULT_REST_REQUEST_TIMEOUT_MS);
-    }
-
-    @Override
-    public void requestTimeout(long requestTimeoutMs) {
-        requestHandler.requestTimeoutMs(requestTimeoutMs);
+    protected InternalClusterResource(RestClient restClient, RestRequestTimeout requestTimeout) {
+        this.requestHandler = new HerderRequestHandler(restClient, requestTimeout);
     }
 
     /**

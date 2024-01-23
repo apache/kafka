@@ -561,6 +561,38 @@ public class NetworkClientTest {
     }
 
     @Test
+    public void testConnectionTimeoutAfterThrottling() {
+        awaitReady(client, node);
+        short requestVersion = PRODUCE.latestVersion();
+        int timeoutMs = 1000;
+        ProduceRequest.Builder builder = new ProduceRequest.Builder(
+            requestVersion,
+            requestVersion,
+            new ProduceRequestData()
+                .setAcks((short) 1)
+                .setTimeoutMs(timeoutMs));
+        TestCallbackHandler handler = new TestCallbackHandler();
+        ClientRequest r1 = client.newClientRequest(node.idString(), builder, time.milliseconds(), true,
+                defaultRequestTimeoutMs, handler);
+
+        client.send(r1, time.milliseconds());
+        client.poll(0, time.milliseconds());
+
+        // Throttle long enough to ensure other inFlight requests timeout.
+        ProduceResponse pr = new ProduceResponse(new ProduceResponseData().setThrottleTimeMs(timeoutMs));
+        ByteBuffer buffer = RequestTestUtils.serializeResponseWithHeader(pr, requestVersion, r1.correlationId());
+        selector.delayedReceive(new DelayedReceive(node.idString(), new NetworkReceive(node.idString(), buffer)));
+        ClientRequest r2 = client.newClientRequest(node.idString(), builder, time.milliseconds(), true,
+                defaultRequestTimeoutMs, handler);
+        client.send(r2, time.milliseconds());
+        time.sleep(timeoutMs);
+        client.poll(0, time.milliseconds());
+
+        assertEquals(1, client.inFlightRequestCount(node.idString()));
+        assertFalse(client.connectionFailed(node), "Connection should not have failed due to the extra time spent throttling.");
+    }
+
+    @Test
     public void testConnectionThrottling() {
         // Instrument the test to return a response with a 100ms throttle delay.
         awaitReady(client, node);

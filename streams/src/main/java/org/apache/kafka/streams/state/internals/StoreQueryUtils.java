@@ -410,7 +410,7 @@ public final class StoreQueryUtils {
     @SuppressWarnings({"unchecked", "rawtypes"})
     public static <V> Function<byte[], V> getDeserializeValue(final StateSerdes<?, V> serdes, final StateStore wrapped) {
         final Serde<V> valueSerde = serdes.valueSerde();
-        final boolean timestamped = WrappedStateStore.isTimestamped(wrapped);
+        final boolean timestamped = WrappedStateStore.isTimestamped(wrapped) || isAdapter(wrapped);
         final Deserializer<V> deserializer;
         if (!timestamped && valueSerde instanceof ValueAndTimestampSerde) {
             final ValueAndTimestampDeserializer valueAndTimestampDeserializer =
@@ -420,6 +420,16 @@ public final class StoreQueryUtils {
             deserializer = valueSerde.deserializer();
         }
         return byteArray -> deserializer.deserialize(serdes.topic(), byteArray);
+    }
+
+    public static boolean isAdapter(final StateStore stateStore) {
+        if (stateStore instanceof KeyValueToTimestampedKeyValueByteStoreAdapter) {
+            return true;
+        } else if (stateStore instanceof WrappedStateStore) {
+            return isAdapter(((WrappedStateStore) stateStore).wrapped());
+        } else {
+            return false;
+        }
     }
 
     @SuppressWarnings({"unchecked", "rawtypes"})

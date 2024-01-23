@@ -54,6 +54,7 @@ import java.util.Queue;
 import java.util.Set;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Predicate;
 import java.util.function.Supplier;
 
 
@@ -195,6 +196,7 @@ public class KafkaBasedLog<K, V> {
      * @param consumedCallback   callback to invoke for each {@link ConsumerRecord} consumed when tailing the log
      * @param time               Time interface
      * @param initializer        the function that should be run when this log is {@link #start() started}; may be null
+     * @param readTopicPartition A predicate which returns true for each {@link TopicPartition} that should be read
      * @return a {@link KafkaBasedLog} using the given clients
      */
     public static <K, V> KafkaBasedLog<K, V> withExistingClients(String topic,
@@ -203,8 +205,11 @@ public class KafkaBasedLog<K, V> {
                                                                  TopicAdmin topicAdmin,
                                                                  Callback<ConsumerRecord<K, V>> consumedCallback,
                                                                  Time time,
-                                                                 java.util.function.Consumer<TopicAdmin> initializer) {
+                                                                 java.util.function.Consumer<TopicAdmin> initializer,
+                                                                 Predicate<TopicPartition> readTopicPartition
+    ) {
         Objects.requireNonNull(topicAdmin);
+        Objects.requireNonNull(readTopicPartition);
         return new KafkaBasedLog<K, V>(topic,
                 Collections.emptyMap(),
                 Collections.emptyMap(),
@@ -221,6 +226,19 @@ public class KafkaBasedLog<K, V> {
             @Override
             protected Consumer<K, V> createConsumer() {
                 return consumer;
+            }
+
+            @Override
+            protected boolean readPartition(TopicPartition topicPartition) {
+                return readTopicPartition.test(topicPartition);
+            }
+
+            @Override
+            public void stop() {
+                super.stop();
+                // Close the clients here, if the thread that was responsible for closing them was never started.
+                Utils.closeQuietly(producer, "producer");
+                Utils.closeQuietly(consumer, "consumer");
             }
         };
     }

@@ -125,6 +125,7 @@ class LeaderEpochIntegrationTest extends QuorumTestHarness with Logging {
 
     //When
     val offsetsForEpochs = fetcher0.leaderOffsetsFor(epochsRequested)
+    fetcher0.close()
 
     //Then end offset should be correct
     assertEquals(10, offsetsForEpochs(t1p0).endOffset)
@@ -138,6 +139,7 @@ class LeaderEpochIntegrationTest extends QuorumTestHarness with Logging {
     val fetcher1 = new TestFetcherThread(sender(from = brokers(2), to = brokers(1)))
     val offsetsForEpochs1 = fetcher1.leaderOffsetsFor(epochsRequested)
     assertEquals(20, offsetsForEpochs1(t1p1).endOffset)
+    fetcher1.close()
   }
 
   @Test
@@ -168,6 +170,7 @@ class LeaderEpochIntegrationTest extends QuorumTestHarness with Logging {
     brokers(1).startup()
 
     producer.send(new ProducerRecord(tp.topic, tp.partition, null, "IHeartLogs".getBytes)).get
+    fetcher.close()
     fetcher = new TestFetcherThread(sender(brokers(0), brokers(1)))
 
     //Then epoch 0 should still be the start offset of epoch 1
@@ -193,6 +196,7 @@ class LeaderEpochIntegrationTest extends QuorumTestHarness with Logging {
     brokers(1).startup()
 
     producer.send(new ProducerRecord(tp.topic, tp.partition, null, "IHeartLogs".getBytes)).get
+    fetcher.close()
     fetcher = new TestFetcherThread(sender(brokers(0), brokers(1)))
 
     //Then Epoch 0 should still map to offset 1
@@ -207,6 +211,7 @@ class LeaderEpochIntegrationTest extends QuorumTestHarness with Logging {
 
     //Adding some extra assertions here to save test setup.
     shouldSupportRequestsForEpochsNotOnTheLeader(fetcher)
+    fetcher.close()
   }
 
   //Appended onto the previous test to save on setup cost.
@@ -299,5 +304,7 @@ class LeaderEpochIntegrationTest extends QuorumTestHarness with Logging {
         }
       }.toMap
     }
+
+    def close(): Unit = sender.close()
   }
 }
