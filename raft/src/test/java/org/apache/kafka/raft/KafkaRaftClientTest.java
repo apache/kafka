@@ -540,6 +540,22 @@ public class KafkaRaftClientTest {
     }
 
     @Test
+    public void testLeaderShouldNotResignLeadershipIfOnlyOneVoters() throws Exception {
+        int localId = 0;
+        Set<Integer> voters = Utils.mkSet(localId);
+
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters).build();
+        assertEquals(OptionalInt.of(localId), context.currentLeader());
+
+        // checkQuorum timeout is expired without receiving fetch request from other voters, but since there is only 1 voter,
+        // the leader should not get resigned
+        context.time.sleep(context.checkQuorumTimeoutMs);
+        context.client.poll();
+
+        assertFalse(context.client.quorum().isResigned());
+    }
+
+    @Test
     public void testElectionTimeoutAfterUserInitiatedResign() throws Exception {
         int localId = 0;
         int otherNodeId = 1;
