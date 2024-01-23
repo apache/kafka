@@ -155,7 +155,7 @@ public class ErrorReporterTest {
 
     @Test
     public void testLogOnDisabledLogReporter() {
-        LogReporter logReporter = new LogReporter(TASK_ID, config(emptyMap()), errorHandlingMetrics);
+        LogReporter<ConsumerRecord<byte[], byte[]>> logReporter = new LogReporter.Sink(TASK_ID, config(emptyMap()), errorHandlingMetrics);
 
         ProcessingContext<ConsumerRecord<byte[], byte[]>> context = processingContext();
         context.error(new RuntimeException());
@@ -167,7 +167,7 @@ public class ErrorReporterTest {
 
     @Test
     public void testLogOnEnabledLogReporter() {
-        LogReporter logReporter = new LogReporter(TASK_ID, config(singletonMap(ConnectorConfig.ERRORS_LOG_ENABLE_CONFIG, "true")), errorHandlingMetrics);
+        LogReporter<ConsumerRecord<byte[], byte[]>> logReporter = new LogReporter.Sink(TASK_ID, config(singletonMap(ConnectorConfig.ERRORS_LOG_ENABLE_CONFIG, "true")), errorHandlingMetrics);
 
         ProcessingContext<ConsumerRecord<byte[], byte[]>> context = processingContext();
         context.error(new RuntimeException());
@@ -179,7 +179,7 @@ public class ErrorReporterTest {
 
     @Test
     public void testLogMessageWithNoRecords() {
-        LogReporter logReporter = new LogReporter(TASK_ID, config(singletonMap(ConnectorConfig.ERRORS_LOG_ENABLE_CONFIG, "true")), errorHandlingMetrics);
+        LogReporter<ConsumerRecord<byte[], byte[]>> logReporter = new LogReporter.Sink(TASK_ID, config(singletonMap(ConnectorConfig.ERRORS_LOG_ENABLE_CONFIG, "true")), errorHandlingMetrics);
 
         ProcessingContext<ConsumerRecord<byte[], byte[]>> context = processingContext();
 
@@ -194,7 +194,7 @@ public class ErrorReporterTest {
         props.put(ConnectorConfig.ERRORS_LOG_ENABLE_CONFIG, "true");
         props.put(ConnectorConfig.ERRORS_LOG_INCLUDE_MESSAGES_CONFIG, "true");
 
-        LogReporter logReporter = new LogReporter(TASK_ID, config(props), errorHandlingMetrics);
+        LogReporter<ConsumerRecord<byte[], byte[]>> logReporter = new LogReporter.Sink(TASK_ID, config(props), errorHandlingMetrics);
 
         ProcessingContext<ConsumerRecord<byte[], byte[]>> context = processingContext();
 
@@ -210,7 +210,7 @@ public class ErrorReporterTest {
         props.put(ConnectorConfig.ERRORS_LOG_ENABLE_CONFIG, "true");
         props.put(ConnectorConfig.ERRORS_LOG_INCLUDE_MESSAGES_CONFIG, "true");
 
-        LogReporter logReporter = new LogReporter(TASK_ID, config(props), errorHandlingMetrics);
+        LogReporter<ConsumerRecord<byte[], byte[]>> logReporter = new LogReporter.Sink(TASK_ID, config(props), errorHandlingMetrics);
 
         ProcessingContext<ConsumerRecord<byte[], byte[]>> context = processingContext();
 

@@ -17,6 +17,7 @@
 package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
+import org.apache.kafka.clients.consumer.internals.metrics.RebalanceCallbackMetrics;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.errors.WakeupException;
@@ -40,16 +41,16 @@ public class ConsumerRebalanceListenerInvoker {
     private final Logger log;
     private final SubscriptionState subscriptions;
     private final Time time;
-    private final ConsumerCoordinatorMetrics coordinatorMetrics;
+    private final RebalanceCallbackMetrics metrics;
 
     ConsumerRebalanceListenerInvoker(LogContext logContext,
                                      SubscriptionState subscriptions,
                                      Time time,
-                                     ConsumerCoordinatorMetrics coordinatorMetrics) {
+                                     RebalanceCallbackMetrics metrics) {
         this.log = logContext.logger(getClass());
         this.subscriptions = subscriptions;
         this.time = time;
-        this.coordinatorMetrics = coordinatorMetrics;
+        this.metrics = metrics;
     }
 
     public Exception invokePartitionsAssigned(final SortedSet<TopicPartition> assignedPartitions) {
@@ -61,7 +62,7 @@ public class ConsumerRebalanceListenerInvoker {
             try {
                 final long startMs = time.milliseconds();
                 listener.get().onPartitionsAssigned(assignedPartitions);
-                coordinatorMetrics.assignCallbackSensor.record(time.milliseconds() - startMs);
+                metrics.assignCallbackSensor.record(time.milliseconds() - startMs);
             } catch (WakeupException | InterruptException e) {
                 throw e;
             } catch (Exception e) {
@@ -87,7 +88,7 @@ public class ConsumerRebalanceListenerInvoker {
             try {
                 final long startMs = time.milliseconds();
                 listener.get().onPartitionsRevoked(revokedPartitions);
-                coordinatorMetrics.revokeCallbackSensor.record(time.milliseconds() - startMs);
+                metrics.revokeCallbackSensor.record(time.milliseconds() - startMs);
             } catch (WakeupException | InterruptException e) {
                 throw e;
             } catch (Exception e) {
@@ -113,7 +114,7 @@ public class ConsumerRebalanceListenerInvoker {
             try {
                 final long startMs = time.milliseconds();
                 listener.get().onPartitionsLost(lostPartitions);
-                coordinatorMetrics.loseCallbackSensor.record(time.milliseconds() - startMs);
+                metrics.loseCallbackSensor.record(time.milliseconds() - startMs);
             } catch (WakeupException | InterruptException e) {
                 throw e;
             } catch (Exception e) {

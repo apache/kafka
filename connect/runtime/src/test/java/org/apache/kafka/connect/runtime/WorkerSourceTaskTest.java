@@ -157,7 +157,7 @@ public class WorkerSourceTaskTest {
     @Mock
     private HeaderConverter headerConverter;
     @Mock
-    private TransformationChain<SourceRecord> transformationChain;
+    private TransformationChain<SourceRecord, SourceRecord> transformationChain;
     @Mock
     private KafkaProducer<byte[], byte[]> producer;
     @Mock
@@ -244,23 +244,23 @@ public class WorkerSourceTaskTest {
     }
 
     private void createWorkerTask() {
-        createWorkerTask(TargetState.STARTED, RetryWithToleranceOperatorTest.NOOP_OPERATOR);
+        createWorkerTask(TargetState.STARTED, RetryWithToleranceOperatorTest.noopOperator());
     }
 
     private void createWorkerTaskWithErrorToleration() {
-        createWorkerTask(TargetState.STARTED, RetryWithToleranceOperatorTest.ALL_OPERATOR);
+        createWorkerTask(TargetState.STARTED, RetryWithToleranceOperatorTest.allOperator());
     }
 
     private void createWorkerTask(TargetState initialState) {
-        createWorkerTask(initialState, RetryWithToleranceOperatorTest.NOOP_OPERATOR);
+        createWorkerTask(initialState, RetryWithToleranceOperatorTest.noopOperator());
     }
 
-    private void createWorkerTask(TargetState initialState, RetryWithToleranceOperator retryWithToleranceOperator) {
+    private void createWorkerTask(TargetState initialState, RetryWithToleranceOperator<SourceRecord> retryWithToleranceOperator) {
         createWorkerTask(initialState, keyConverter, valueConverter, headerConverter, retryWithToleranceOperator);
     }
 
     private void createWorkerTask(TargetState initialState, Converter keyConverter, Converter valueConverter,
-                                  HeaderConverter headerConverter, RetryWithToleranceOperator retryWithToleranceOperator) {
+                                  HeaderConverter headerConverter, RetryWithToleranceOperator<SourceRecord> retryWithToleranceOperator) {
         workerTask = new WorkerSourceTask(taskId, sourceTask, statusListener, initialState, keyConverter, valueConverter, errorHandlingMetrics, headerConverter,
                 transformationChain, producer, admin, TopicCreationGroup.configuredGroups(sourceConfig),
                 offsetReader, offsetWriter, offsetStore, config, clusterConfigState, metrics, plugins.delegatingLoader(), Time.SYSTEM,

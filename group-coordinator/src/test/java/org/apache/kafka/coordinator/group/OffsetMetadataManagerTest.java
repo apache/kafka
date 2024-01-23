@@ -461,6 +461,7 @@ public class OffsetMetadataManagerTest {
             switch (key.version()) {
                 case OffsetCommitKey.HIGHEST_SUPPORTED_VERSION:
                     offsetMetadataManager.replay(
+                        lastWrittenOffset,
                         producerId,
                         (OffsetCommitKey) key.message(),
                         (OffsetCommitValue) messageOrNull(value)
@@ -2515,6 +2516,7 @@ public class OffsetMetadataManagerTest {
         OffsetMetadataManagerTestContext context = new OffsetMetadataManagerTestContext.Builder().build();
 
         verifyReplay(context, "foo", "bar", 0, new OffsetAndMetadata(
+            0L,
             100L,
             OptionalInt.empty(),
             "small",
@@ -2523,6 +2525,7 @@ public class OffsetMetadataManagerTest {
         ));
 
         verifyReplay(context, "foo", "bar", 0, new OffsetAndMetadata(
+            1L,
             200L,
             OptionalInt.of(10),
             "small",
@@ -2531,6 +2534,7 @@ public class OffsetMetadataManagerTest {
         ));
 
         verifyReplay(context, "foo", "bar", 1, new OffsetAndMetadata(
+            2L,
             200L,
             OptionalInt.of(10),
             "small",
@@ -2539,6 +2543,7 @@ public class OffsetMetadataManagerTest {
         ));
 
         verifyReplay(context, "foo", "bar", 1, new OffsetAndMetadata(
+            3L,
             300L,
             OptionalInt.of(10),
             "small",
@@ -2552,6 +2557,7 @@ public class OffsetMetadataManagerTest {
         OffsetMetadataManagerTestContext context = new OffsetMetadataManagerTestContext.Builder().build();
 
         verifyTransactionalReplay(context, 5, "foo", "bar", 0, new OffsetAndMetadata(
+            0L,
             100L,
             OptionalInt.empty(),
             "small",
@@ -2560,6 +2566,7 @@ public class OffsetMetadataManagerTest {
         ));
 
         verifyTransactionalReplay(context, 5, "foo", "bar", 1, new OffsetAndMetadata(
+            1L,
             101L,
             OptionalInt.empty(),
             "small",
@@ -2568,6 +2575,7 @@ public class OffsetMetadataManagerTest {
         ));
 
         verifyTransactionalReplay(context, 5, "bar", "zar", 0, new OffsetAndMetadata(
+            2L,
             100L,
             OptionalInt.empty(),
             "small",
@@ -2576,6 +2584,7 @@ public class OffsetMetadataManagerTest {
         ));
 
         verifyTransactionalReplay(context, 5, "bar", "zar", 1, new OffsetAndMetadata(
+            3L,
             101L,
             OptionalInt.empty(),
             "small",
@@ -2584,6 +2593,7 @@ public class OffsetMetadataManagerTest {
         ));
 
         verifyTransactionalReplay(context, 6, "foo", "bar", 2, new OffsetAndMetadata(
+            4L,
             102L,
             OptionalInt.empty(),
             "small",
@@ -2592,6 +2602,7 @@ public class OffsetMetadataManagerTest {
         ));
 
         verifyTransactionalReplay(context, 6, "foo", "bar", 3, new OffsetAndMetadata(
+            5L,
             102L,
             OptionalInt.empty(),
             "small",
@@ -2606,6 +2617,7 @@ public class OffsetMetadataManagerTest {
 
         // Verify replay adds the offset the map.
         verifyReplay(context, "foo", "bar", 0, new OffsetAndMetadata(
+            0L,
             100L,
             OptionalInt.empty(),
             "small",
@@ -2628,8 +2640,19 @@ public class OffsetMetadataManagerTest {
     public void testReplayTransactionEndMarkerWithCommit() {
         OffsetMetadataManagerTestContext context = new OffsetMetadataManagerTestContext.Builder().build();
 
+        // Add regular offset commit.
+        verifyReplay(context, "foo", "bar", 0, new OffsetAndMetadata(
+            0L,
+            99L,
+            OptionalInt.empty(),
+            "small",
+            context.time.milliseconds(),
+            OptionalLong.empty()
+        ));
+
         // Add pending transactional commit for producer id 5.
         verifyTransactionalReplay(context, 5L, "foo", "bar", 0, new OffsetAndMetadata(
+            1L,
             100L,
             OptionalInt.empty(),
             "small",
@@ -2639,6 +2662,7 @@ public class OffsetMetadataManagerTest {
 
         // Add pending transactional commit for producer id 6.
         verifyTransactionalReplay(context, 6L, "foo", "bar", 1, new OffsetAndMetadata(
+            2L,
             200L,
             OptionalInt.empty(),
             "small",
@@ -2662,6 +2686,7 @@ public class OffsetMetadataManagerTest {
 
         // ... and added to the main offset storage.
         assertEquals(new OffsetAndMetadata(
+            1L,
             100L,
             OptionalInt.empty(),
             "small",
@@ -2688,6 +2713,57 @@ public class OffsetMetadataManagerTest {
             "foo",
             "bar",
             1
+        ));
+    }
+
+    @Test
+    public void testReplayTransactionEndMarkerKeepsTheMostRecentCommittedOffset() {
+        OffsetMetadataManagerTestContext context = new OffsetMetadataManagerTestContext.Builder().build();
+
+        // Add pending transactional offset commit for producer id 5.
+        verifyTransactionalReplay(context, 5L, "foo", "bar", 0, new OffsetAndMetadata(
+            0L,
+            100L,
+            OptionalInt.empty(),
+            "small",
+            context.time.milliseconds(),
+            OptionalLong.empty()
+        ));
+
+        // Add regular offset commit.
+        verifyReplay(context, "foo", "bar", 0, new OffsetAndMetadata(
+            1L,
+            101L,
+            OptionalInt.empty(),
+            "small",
+            context.time.milliseconds(),
+            OptionalLong.empty()
+        ));
+
+        // Replaying an end marker to commit transaction of producer id 5.
+        context.replayEndTransactionMarker(5L, TransactionResult.COMMIT);
+
+        // The pending offset is removed...
+        assertNull(context.offsetMetadataManager.pendingTransactionalOffset(
+            5L,
+            "foo",
+            "bar",
+            0
+        ));
+
+        // ... but it is not added to the main storage because the regular
+        // committed offset is more recent.
+        assertEquals(new OffsetAndMetadata(
+            1L,
+            101L,
+            OptionalInt.empty(),
+            "small",
+            context.time.milliseconds(),
+            OptionalLong.empty()
+        ), context.offsetMetadataManager.offset(
+            "foo",
+            "bar",
+            0
         ));
     }
 

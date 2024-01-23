@@ -504,7 +504,7 @@ class DescribeTopicPartitionsRequestHandlerTest {
         // and have a non KafkaPrincipal.ANONYMOUS principal. This test is done before the check
         // for forwarding because after forwarding the context will have a different context.
         // We validate the context authenticated failure case in other integration tests.
-        RequestContext context = new RequestContext(header, "1", InetAddress.getLocalHost(), new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "Alice"),
+        RequestContext context = new RequestContext(header, "1", InetAddress.getLocalHost(), Optional.empty(), new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "Alice"),
                 listenerName, SecurityProtocol.SSL, ClientInformation.EMPTY, false,
                 Optional.of(kafkaPrincipalSerde));
         return new RequestChannel.Request(1, context, 0, MemoryPool.NONE, buffer,

@@ -34,6 +34,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.Optional;
 import java.util.Properties;
 
 public class ClientMetricsTestUtils {
@@ -45,6 +46,7 @@ public class ClientMetricsTestUtils {
         ClientMetricsConfigs.CLIENT_SOFTWARE_NAME + "=apache-kafka-java",
         ClientMetricsConfigs.CLIENT_SOFTWARE_VERSION + "=3.5.*"
     ));
+    public static final int CLIENT_PORT = 56078;
 
     public static Properties defaultProperties() {
         Properties props = new Properties();
@@ -59,6 +61,7 @@ public class ClientMetricsTestUtils {
             new RequestHeader(ApiKeys.GET_TELEMETRY_SUBSCRIPTIONS, (short) 0, "producer-1", 0),
             "1",
             InetAddress.getLocalHost(),
+            Optional.of(CLIENT_PORT),
             KafkaPrincipal.ANONYMOUS,
             ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT),
             SecurityProtocol.PLAINTEXT,
@@ -71,6 +74,7 @@ public class ClientMetricsTestUtils {
             new RequestHeader(ApiKeys.GET_TELEMETRY_SUBSCRIPTIONS, (short) 0, "producer-1", 0),
              "1",
             InetAddress.getLocalHost(),
+            Optional.of(CLIENT_PORT),
             KafkaPrincipal.ANONYMOUS,
             ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT),
             SecurityProtocol.PLAINTEXT,

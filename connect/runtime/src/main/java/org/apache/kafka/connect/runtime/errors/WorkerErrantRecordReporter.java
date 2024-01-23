@@ -50,7 +50,7 @@ public class WorkerErrantRecordReporter implements ErrantRecordReporter {
 
     private static final Logger log = LoggerFactory.getLogger(WorkerErrantRecordReporter.class);
 
-    private final RetryWithToleranceOperator retryWithToleranceOperator;
+    private final RetryWithToleranceOperator<ConsumerRecord<byte[], byte[]>> retryWithToleranceOperator;
     private final Converter keyConverter;
     private final Converter valueConverter;
     private final HeaderConverter headerConverter;
@@ -60,7 +60,7 @@ public class WorkerErrantRecordReporter implements ErrantRecordReporter {
     private final AtomicReference<Throwable> taskPutException;
 
     public WorkerErrantRecordReporter(
-        RetryWithToleranceOperator retryWithToleranceOperator,
+        RetryWithToleranceOperator<ConsumerRecord<byte[], byte[]>> retryWithToleranceOperator,
         Converter keyConverter,
         Converter valueConverter,
         HeaderConverter headerConverter
