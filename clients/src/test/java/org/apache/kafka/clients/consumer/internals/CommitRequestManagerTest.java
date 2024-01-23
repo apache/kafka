@@ -272,38 +272,10 @@ public class CommitRequestManagerTest {
         assertExceptionHandling(commitRequestManger, error, true);
     }
 
-    @Test
-    public void testCommitSyncThrowsCommitFailedExceptionOnFencedInstanceId() {
-        testCommitSyncFailsWithErrorException(Errors.FENCED_INSTANCE_ID, CommitFailedException.class);
-    }
-
-    @Test
-    public void testCommitSyncThrowsCommitFailedExceptionOnUnknownMemberId() {
-        testCommitSyncFailsWithErrorException(Errors.UNKNOWN_MEMBER_ID, CommitFailedException.class);
-    }
-
-    @Test
-    public void testCommitSyncThrowsOffsetMetadataTooLargeException() {
-        // Error with metadata provided by the user should propagate the exception, so they can handle it.
-        testCommitSyncFailsWithErrorException(Errors.OFFSET_METADATA_TOO_LARGE,
-            Errors.OFFSET_METADATA_TOO_LARGE.exception().getClass());
-    }
-
-    @Test
-    public void testCommitSyncThrowsInvalidCommitOffsetSizeException() {
-        // Error with data provided by the user should propagate the exception, so they can handle it.
-        testCommitSyncFailsWithErrorException(Errors.INVALID_COMMIT_OFFSET_SIZE,
-            Errors.INVALID_COMMIT_OFFSET_SIZE.exception().getClass());
-    }
-
-    @Test
-    public void testCommitSyncThrowsGroupAuthorizationException() {
-        testCommitSyncFailsWithErrorException(Errors.GROUP_AUTHORIZATION_FAILED,
-            Errors.GROUP_AUTHORIZATION_FAILED.exception().getClass());
-    }
-
-    private void testCommitSyncFailsWithErrorException(Errors commitError,
-                                                       Class<? extends Exception> expectedException) {
+    @ParameterizedTest
+    @MethodSource("commitSyncExpectedExceptions")
+    public void testCommitSyncFailsWithExpectedException(Errors commitError,
+                                                      Class<? extends Exception> expectedException) {
         CommitRequestManager commitRequestManger = create(false, 100);
         when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(mockedNode));
 
@@ -311,12 +283,22 @@ public class CommitRequestManagerTest {
             new TopicPartition("topic", 1),
             new OffsetAndMetadata(0));
 
-        // Send sync offset commit request that fails with an error that is expected to propagate
-        // the error.exception()
+        // Send sync offset commit that fails and verify it propagates the expected exception.
         Long expirationTimeMs = time.milliseconds() + retryBackoffMs;
         CompletableFuture<Void> commitResult = commitRequestManger.addOffsetCommitRequest(offsets, Optional.of(expirationTimeMs), false);
         completeOffsetCommitRequestWithError(commitRequestManger, commitError);
         assertFutureThrows(commitResult, expectedException);
+    }
+
+    private static Stream<Arguments> commitSyncExpectedExceptions() {
+        return Stream.of(
+            Arguments.of(Errors.FENCED_INSTANCE_ID, CommitFailedException.class),
+            Arguments.of(Errors.UNKNOWN_MEMBER_ID, CommitFailedException.class),
+            Arguments.of(Errors.OFFSET_METADATA_TOO_LARGE, Errors.OFFSET_METADATA_TOO_LARGE.exception().getClass()),
+            Arguments.of(Errors.INVALID_COMMIT_OFFSET_SIZE, Errors.INVALID_COMMIT_OFFSET_SIZE.exception().getClass()),
+            Arguments.of(Errors.GROUP_AUTHORIZATION_FAILED, Errors.GROUP_AUTHORIZATION_FAILED.exception().getClass()),
+            Arguments.of(Errors.CORRUPT_MESSAGE, KafkaException.class),
+            Arguments.of(Errors.UNKNOWN_SERVER_ERROR, KafkaException.class));
     }
 
     @Test
@@ -485,17 +467,10 @@ public class CommitRequestManagerTest {
         }
     }
 
-    @Test
-    public void testOffsetFetchCoordinatorNotAvailable() {
-        testOffsetFetchMarksCoordinatorUnknownOnRetriableCoordinatorErrors(Errors.COORDINATOR_NOT_AVAILABLE);
-    }
-
-    @Test
-    public void testOffsetFetchNotCoordinator() {
-        testOffsetFetchMarksCoordinatorUnknownOnRetriableCoordinatorErrors(Errors.NOT_COORDINATOR);
-    }
-
-    private void testOffsetFetchMarksCoordinatorUnknownOnRetriableCoordinatorErrors(Errors error) {
+    @ParameterizedTest
+    @MethodSource("offsetFetchRetriableCoordinatorErrors")
+    public void testOffsetFetchMarksCoordinatorUnknownOnRetriableCoordinatorErrors(Errors error,
+                                                                                   boolean shouldRediscoverCoordinator) {
         CommitRequestManager commitRequestManager = create(false, 100);
         when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(mockedNode));
 
@@ -507,9 +482,11 @@ public class CommitRequestManagerTest {
 
         completeOffsetFetchRequestWithError(commitRequestManager, partitions, error);
 
-        // Request not completed just yet, but should have marked the coordinator unknown
+        // Request not completed just yet
         assertFalse(result.isDone());
-        assertCoordinatorDisconnect();
+        if (shouldRediscoverCoordinator) {
+            assertCoordinatorDisconnect();
+        }
 
         // Request should be retried with backoff.
         NetworkClientDelegate.PollResult res = commitRequestManager.poll(time.milliseconds());
@@ -570,42 +547,6 @@ public class CommitRequestManagerTest {
 
         // We expect that the request should not have been retried on this async commit.
         assertExceptionHandling(commitRequestManger, error, false);
-    }
-
-    @Test
-    public void testCommitAsyncThrowsKafkaExceptionForUnexpectedRetriableError() {
-        testCommitSyncFailsWithErrorException(Errors.CORRUPT_MESSAGE, KafkaException.class);
-    }
-
-    @Test
-    public void testCommitAsyncThrowsKafkaExceptionForUnexpectedNonRetriableError() {
-        testCommitSyncFailsWithErrorException(Errors.UNKNOWN_SERVER_ERROR, KafkaException.class);
-    }
-
-    @Test
-    public void testCommitSyncThrowsKafkaExceptionForUnexpectedRetriableError() {
-        testCommitSyncThrowsKafkaException(Errors.CORRUPT_MESSAGE);
-    }
-
-    @Test
-    public void testCommitSyncThrowsKafkaExceptionForUnexpectedNonRetriableError() {
-        testCommitSyncThrowsKafkaException(Errors.UNKNOWN_SERVER_ERROR);
-    }
-
-    private void testCommitSyncThrowsKafkaException(Errors error) {
-        CommitRequestManager commitRequestManger = create(false, 100);
-        when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(mockedNode));
-
-        Map<TopicPartition, OffsetAndMetadata> offsets = Collections.singletonMap(
-            new TopicPartition("topic", 1),
-            new OffsetAndMetadata(0));
-
-        // Send sync commit that fails with an unexpected error. Should fail with a KafkaException.
-        long expirationTimeMs = time.milliseconds() + retryBackoffMs;
-        CompletableFuture<Void> commitResult = commitRequestManger.addOffsetCommitRequest(offsets, Optional.of(expirationTimeMs), false);
-        completeOffsetCommitRequestWithError(commitRequestManger, error);
-        assertTrue(commitResult.isDone());
-        assertFutureThrows(commitResult, KafkaException.class);
     }
 
     @Test
@@ -985,6 +926,17 @@ public class CommitRequestManagerTest {
             // Adding STALE_MEMBER_EPOCH as non-retriable here because it is only retried if a new
             // member epoch is received. Tested separately.
             Arguments.of(Errors.STALE_MEMBER_EPOCH, false));
+    }
+
+    /**
+     * @return Retriable coordinator errors and a boolean indicating if it is expected to mark
+     * the coordinator unknown when the error occurs.
+     */
+    private static Stream<Arguments> offsetFetchRetriableCoordinatorErrors() {
+        return Stream.of(
+            Arguments.of(Errors.NOT_COORDINATOR, true),
+            Arguments.of(Errors.COORDINATOR_NOT_AVAILABLE, true),
+            Arguments.of(Errors.COORDINATOR_LOAD_IN_PROGRESS, false));
     }
 
     @ParameterizedTest
