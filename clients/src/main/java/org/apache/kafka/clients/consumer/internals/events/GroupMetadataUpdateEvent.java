@@ -68,12 +68,4 @@ public class GroupMetadataUpdateEvent extends BackgroundEvent {
             ", memberEpoch=" + memberEpoch +
             ", memberId='" + memberId + '\'';
     }
-
-    @Override
-    public String toString() {
-        return "GroupMetadataUpdateEvent{" +
-            toStringBase() +
-            '}';
-    }
-
 }

@@ -33,7 +33,7 @@ import org.apache.kafka.clients.consumer.RoundRobinAssignor;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEventHandler;
 import org.apache.kafka.clients.consumer.internals.events.AssignmentChangeApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
-import org.apache.kafka.clients.consumer.internals.events.CommitSyncApplicationEvent;
+import org.apache.kafka.clients.consumer.internals.events.CommitApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.CommitOnCloseApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.CompletableApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.CompletableBackgroundEvent;
@@ -245,9 +245,9 @@ public class AsyncKafkaConsumerTest {
 
         consumer.commitAsync(offsets, null);
 
-        final ArgumentCaptor<CommitSyncApplicationEvent> commitEventCaptor = ArgumentCaptor.forClass(CommitSyncApplicationEvent.class);
+        final ArgumentCaptor<CommitApplicationEvent> commitEventCaptor = ArgumentCaptor.forClass(CommitApplicationEvent.class);
         verify(applicationEventHandler).add(commitEventCaptor.capture());
-        final CommitSyncApplicationEvent commitEvent = commitEventCaptor.getValue();
+        final CommitApplicationEvent commitEvent = commitEventCaptor.getValue();
         assertEquals(offsets, commitEvent.offsets());
         assertDoesNotThrow(() -> commitEvent.future().complete(null));
         assertDoesNotThrow(() -> consumer.commitAsync(offsets, null));
@@ -298,9 +298,9 @@ public class AsyncKafkaConsumerTest {
 
         assertDoesNotThrow(() -> consumer.commitAsync(offsets, callback));
 
-        final ArgumentCaptor<CommitSyncApplicationEvent> commitEventCaptor = ArgumentCaptor.forClass(CommitSyncApplicationEvent.class);
+        final ArgumentCaptor<CommitApplicationEvent> commitEventCaptor = ArgumentCaptor.forClass(CommitApplicationEvent.class);
         verify(applicationEventHandler).add(commitEventCaptor.capture());
-        final CommitSyncApplicationEvent commitEvent = commitEventCaptor.getValue();
+        final CommitApplicationEvent commitEvent = commitEventCaptor.getValue();
         commitEvent.future().completeExceptionally(Errors.FENCED_INSTANCE_ID.exception());
 
         assertThrows(Errors.FENCED_INSTANCE_ID.exception().getClass(), () -> consumer.commitAsync());
@@ -486,7 +486,7 @@ public class AsyncKafkaConsumerTest {
 
         verify(metadata).updateLastSeenEpochIfNewer(t0, 2);
         verify(metadata).updateLastSeenEpochIfNewer(t1, 1);
-        verify(applicationEventHandler).add(ArgumentMatchers.isA(CommitSyncApplicationEvent.class));
+        verify(applicationEventHandler).add(ArgumentMatchers.isA(CommitApplicationEvent.class));
     }
 
     @Test
@@ -520,7 +520,7 @@ public class AsyncKafkaConsumerTest {
 
         verify(metadata).updateLastSeenEpochIfNewer(t0, 2);
         verify(metadata).updateLastSeenEpochIfNewer(t1, 1);
-        verify(applicationEventHandler).add(ArgumentMatchers.isA(CommitSyncApplicationEvent.class));
+        verify(applicationEventHandler).add(ArgumentMatchers.isA(CommitApplicationEvent.class));
     }
 
     @Test
@@ -633,7 +633,7 @@ public class AsyncKafkaConsumerTest {
         subscriptions.assignFromSubscribed(singleton(new TopicPartition("topic", 0)));
         subscriptions.seek(new TopicPartition("topic", 0), 100);
         consumer.maybeAutoCommitSync(true, time.timer(100), null);
-        verify(applicationEventHandler).add(any(CommitSyncApplicationEvent.class));
+        verify(applicationEventHandler).add(any(CommitApplicationEvent.class));
     }
 
     @Test
@@ -651,7 +651,7 @@ public class AsyncKafkaConsumerTest {
         subscriptions.assignFromSubscribed(singleton(new TopicPartition("topic", 0)));
         subscriptions.seek(new TopicPartition("topic", 0), 100);
         consumer.maybeAutoCommitSync(false, time.timer(100), null);
-        verify(applicationEventHandler, never()).add(any(CommitSyncApplicationEvent.class));
+        verify(applicationEventHandler, never()).add(any(CommitApplicationEvent.class));
     }
 
     private void assertMockCommitCallbackInvoked(final Executable task,
@@ -1427,18 +1427,18 @@ public class AsyncKafkaConsumerTest {
 
     private void completeCommitApplicationEventExceptionally(Exception ex) {
         doAnswer(invocation -> {
-            CommitSyncApplicationEvent event = invocation.getArgument(0);
+            CommitApplicationEvent event = invocation.getArgument(0);
             event.future().completeExceptionally(ex);
             return null;
-        }).when(applicationEventHandler).add(ArgumentMatchers.isA(CommitSyncApplicationEvent.class));
+        }).when(applicationEventHandler).add(ArgumentMatchers.isA(CommitApplicationEvent.class));
     }
 
     private void completeCommitApplicationEventExceptionally() {
         doAnswer(invocation -> {
-            CommitSyncApplicationEvent event = invocation.getArgument(0);
+            CommitApplicationEvent event = invocation.getArgument(0);
             event.future().complete(null);
             return null;
-        }).when(applicationEventHandler).add(ArgumentMatchers.isA(CommitSyncApplicationEvent.class));
+        }).when(applicationEventHandler).add(ArgumentMatchers.isA(CommitApplicationEvent.class));
     }
 
     private void completeFetchedCommittedOffsetApplicationEventSuccessfully(final Map<TopicPartition, OffsetAndMetadata> committedOffsets) {

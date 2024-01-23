@@ -29,6 +29,8 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.Timer;
 import org.slf4j.Logger;
 
 import java.util.List;
@@ -45,15 +47,18 @@ import java.util.function.Supplier;
 public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> {
 
     private final Logger log;
+    private final Time time;
     private final ConsumerMetadata metadata;
     private final RequestManagers requestManagers;
 
     public ApplicationEventProcessor(final LogContext logContext,
+                                     final Time time,
                                      final BlockingQueue<ApplicationEvent> applicationEventQueue,
                                      final RequestManagers requestManagers,
                                      final ConsumerMetadata metadata) {
         super(logContext, applicationEventQueue);
         this.log = logContext.logger(ApplicationEventProcessor.class);
+        this.time = time;
         this.requestManagers = requestManagers;
         this.metadata = metadata;
     }
@@ -70,12 +75,8 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
     @Override
     public void process(ApplicationEvent event) {
         switch (event.type()) {
-            case COMMIT_SYNC:
-                process((CommitSyncApplicationEvent) event);
-                return;
-
-            case COMMIT_ASYNC:
-                process((CommitAsyncApplicationEvent) event);
+            case COMMIT:
+                process((CommitApplicationEvent) event);
                 return;
 
             case POLL:
@@ -144,7 +145,7 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
         requestManagers.heartbeatRequestManager.ifPresent(hrm -> hrm.resetPollTimer(event.pollTimeMs()));
     }
 
-    private void process(final CommitSyncApplicationEvent event) {
+    private void process(final CommitApplicationEvent event) {
         if (!requestManagers.commitRequestManager.isPresent()) {
             // Leaving this error handling here, but it is a bit strange as the commit API should enforce the group.id
             // upfront, so we should never get to this block.
@@ -153,31 +154,10 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
             return;
         }
 
+        Timer timer = timer(event);
         CommitRequestManager manager = requestManagers.commitRequestManager.get();
-        CompletableFuture<Void> future = manager.addOffsetCommitRequest(
-                event.offsets(),
-                event.remainingMs(),
-                false
-        );
+        CompletableFuture<Void> future = manager.addOffsetCommitRequest(event.offsets(), timer, false);
         chain(event, future);
-    }
-
-    private void process(final CommitAsyncApplicationEvent event) {
-        if (!requestManagers.commitRequestManager.isPresent()) {
-            // Leaving this error handling here, but it is a bit strange as the commit API should enforce the group.id
-            // upfront, so we should never get to this block.
-            Exception exception = new KafkaException("Unable to commit offset. Most likely because the group.id wasn't set");
-            event.future().completeExceptionally(exception);
-            return;
-        }
-
-        CommitRequestManager manager = requestManagers.commitRequestManager.get();
-        CompletableFuture<Void> future = manager.addOffsetCommitRequest(
-                event.offsets(),
-                Long.MAX_VALUE,
-                false
-        );
-        ConsumerUtils.chain(future, event.future());
     }
 
     private void process(final FetchCommittedOffsetsApplicationEvent event) {
@@ -186,10 +166,12 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
                     "offset because the CommittedRequestManager is not available. Check if group.id was set correctly"));
             return;
         }
+
+        Timer timer = timer(event);
         CommitRequestManager manager = requestManagers.commitRequestManager.get();
         CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> future = manager.addOffsetFetchRequest(
                 event.partitions(),
-                event.remainingMs()
+                timer
         );
         chain(event, future);
     }
@@ -213,10 +195,11 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
 
     private void process(final ListOffsetsApplicationEvent event) {
         final CompletableFuture<Map<TopicPartition, OffsetAndTimestamp>> future;
+        final Timer timer = timer(event);
         future = requestManagers.offsetsRequestManager.fetchOffsets(
                 event.timestampsToSearch(),
                 event.requireTimestamps(),
-                event.remainingMs()
+                timer
         );
         chain(event, future);
     }
@@ -250,28 +233,31 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
             return;
         }
         MembershipManager membershipManager = requestManagers.heartbeatRequestManager.get().membershipManager();
-        CompletableFuture<Void> result = membershipManager.leaveGroup(event.remainingMs());
+        Timer timer = timer(event);
+        CompletableFuture<Void> result = membershipManager.leaveGroup(timer);
         chain(event, result);
     }
 
     private void process(final ResetPositionsApplicationEvent event) {
-        CompletableFuture<Void> result = requestManagers.offsetsRequestManager.resetPositionsIfNeeded(event.remainingMs());
+        Timer timer = timer(event);
+        CompletableFuture<Void> result = requestManagers.offsetsRequestManager.resetPositionsIfNeeded(timer);
         chain(event, result);
     }
 
     private void process(final ValidatePositionsApplicationEvent event) {
-        CompletableFuture<Void> result = requestManagers.offsetsRequestManager.validatePositionsIfNeeded(event.remainingMs());
+        Timer timer = timer(event);
+        CompletableFuture<Void> result = requestManagers.offsetsRequestManager.validatePositionsIfNeeded(timer);
         chain(event, result);
     }
 
     private void process(final TopicMetadataApplicationEvent event) {
-        final long timeoutMs = event.remainingMs();
+        final Timer timer = timer(event);
         final CompletableFuture<Map<String, List<PartitionInfo>>> future;
 
         if (event.isAllTopics()) {
-            future = requestManagers.topicMetadataRequestManager.requestAllTopicsMetadata(timeoutMs);
+            future = requestManagers.topicMetadataRequestManager.requestAllTopicsMetadata(timer);
         } else {
-            future = requestManagers.topicMetadataRequestManager.requestTopicMetadata(event.topic(), timeoutMs);
+            future = requestManagers.topicMetadataRequestManager.requestTopicMetadata(event.topic(), timer);
         }
 
         chain(event, future);
@@ -305,7 +291,8 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
             Objects.requireNonNull(requestManagers.heartbeatRequestManager.get().membershipManager(), "Expecting " +
                 "membership manager to be non-null");
         log.debug("Leaving group before closing");
-        CompletableFuture<Void> future = membershipManager.leaveGroup(event.remainingMs());
+        final Timer timer = timer(event);
+        CompletableFuture<Void> future = membershipManager.leaveGroup(timer);
         // The future will be completed on heartbeat sent
         chain(event, future);
     }
@@ -314,11 +301,16 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
         ConsumerUtils.chain(future, event.future());
     }
 
+    private Timer timer(CompletableEvent<?> event) {
+        return time.timer(event.deadlineMs() - time.milliseconds());
+    }
+
     /**
      * Creates a {@link Supplier} for deferred creation during invocation by
      * {@link ConsumerNetworkThread}.
      */
     public static Supplier<ApplicationEventProcessor> supplier(final LogContext logContext,
+                                                               final Time time,
                                                                final ConsumerMetadata metadata,
                                                                final BlockingQueue<ApplicationEvent> applicationEventQueue,
                                                                final Supplier<RequestManagers> requestManagersSupplier) {
@@ -328,6 +320,7 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
                 RequestManagers requestManagers = requestManagersSupplier.get();
                 return new ApplicationEventProcessor(
                         logContext,
+                        time,
                         applicationEventQueue,
                         requestManagers,
                         metadata

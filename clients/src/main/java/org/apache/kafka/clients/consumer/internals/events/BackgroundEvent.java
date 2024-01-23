@@ -59,9 +59,7 @@ public abstract class BackgroundEvent {
     }
 
     @Override
-    public String toString() {
-        return "BackgroundEvent{" +
-                toStringBase() +
-                '}';
+    public final String toString() {
+        return getClass().getSimpleName() + "{" + toStringBase() + '}';
     }
 }

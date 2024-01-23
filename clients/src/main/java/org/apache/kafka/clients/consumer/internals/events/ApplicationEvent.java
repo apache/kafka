@@ -24,7 +24,7 @@ import java.util.Objects;
 public abstract class ApplicationEvent {
 
     public enum Type {
-        COMMIT_SYNC, COMMIT_ASYNC, POLL, FETCH_COMMITTED_OFFSETS, NEW_TOPICS_METADATA_UPDATE, ASSIGNMENT_CHANGE,
+        COMMIT, POLL, FETCH_COMMITTED_OFFSETS, NEW_TOPICS_METADATA_UPDATE, ASSIGNMENT_CHANGE,
         LIST_OFFSETS, RESET_POSITIONS, VALIDATE_POSITIONS, TOPIC_METADATA, SUBSCRIPTION_CHANGE,
         UNSUBSCRIBE, CONSUMER_REBALANCE_LISTENER_CALLBACK_COMPLETED,
         COMMIT_ON_CLOSE, LEAVE_ON_CLOSE
@@ -60,9 +60,7 @@ public abstract class ApplicationEvent {
     }
 
     @Override
-    public String toString() {
-        return "ApplicationEvent{" +
-                toStringBase() +
-                '}';
+    public final String toString() {
+        return getClass().getSimpleName() + "{" + toStringBase() + '}';
     }
 }

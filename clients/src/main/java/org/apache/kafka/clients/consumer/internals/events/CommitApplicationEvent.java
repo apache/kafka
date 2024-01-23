@@ -18,15 +18,12 @@ package org.apache.kafka.clients.consumer.internals.events;
 
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.utils.Timer;
 
 import java.util.Collections;
 import java.util.Map;
-import java.util.Objects;
-import java.util.concurrent.CompletableFuture;
 
-public class CommitAsyncApplicationEvent extends ApplicationEvent {
-
-    private final CompletableFuture<Void> future;
+public class CommitApplicationEvent extends CompletableApplicationEvent<Void> {
 
     /**
      * Offsets to commit per partition.
@@ -34,12 +31,14 @@ public class CommitAsyncApplicationEvent extends ApplicationEvent {
     private final Map<TopicPartition, OffsetAndMetadata> offsets;
 
     /**
-     * Create new event to commit offsets.
+     * Create new event to commit offsets. If timer is present, the request will be retried on
+     * retriable errors until the timer expires (sync commit offsets request). If the timer is
+     * not present, the request will be sent without waiting for a response of retrying (async
+     * commit offsets request).
      */
-    public CommitAsyncApplicationEvent(final Map<TopicPartition, OffsetAndMetadata> offsets) {
-        super(Type.COMMIT_ASYNC);
+    public CommitApplicationEvent(final Map<TopicPartition, OffsetAndMetadata> offsets, final Timer timer) {
+        super(Type.COMMIT_SYNC, timer);
         this.offsets = Collections.unmodifiableMap(offsets);
-        this.future = new CompletableFuture<>();
 
         for (OffsetAndMetadata offsetAndMetadata : offsets.values()) {
             if (offsetAndMetadata.offset() < 0) {
@@ -52,32 +51,26 @@ public class CommitAsyncApplicationEvent extends ApplicationEvent {
         return offsets;
     }
 
-    public CompletableFuture<Void> future() {
-        return future;
-    }
-
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
         if (!super.equals(o)) return false;
 
-        CommitAsyncApplicationEvent that = (CommitAsyncApplicationEvent) o;
+        CommitApplicationEvent that = (CommitApplicationEvent) o;
 
-        return offsets.equals(that.offsets) && future.equals(that.future);
+        return offsets.equals(that.offsets);
     }
 
     @Override
     public int hashCode() {
-        return 31 * super.hashCode() + Objects.hash(offsets, future);
+        int result = super.hashCode();
+        result = 31 * result + offsets.hashCode();
+        return result;
     }
 
     @Override
-    public String toString() {
-        return "CommitAsyncApplicationEvent{" +
-                toStringBase() +
-                ", offsets=" + offsets +
-                ", future=" + future +
-                '}';
+    protected String toStringBase() {
+        return super.toStringBase() + ", offsets=" + offsets;
     }
 }

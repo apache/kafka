@@ -20,6 +20,7 @@ import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.internals.events.ConsumerRebalanceListenerCallbackCompletedEvent;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatResponseData;
+import org.apache.kafka.common.utils.Timer;
 
 import java.util.Map;
 import java.util.Optional;
@@ -124,7 +125,7 @@ public interface MembershipManager {
      * @return Future that will complete when the callback execution completes and the heartbeat
      * to leave the group has been sent out.
      */
-    CompletableFuture<Void> leaveGroup(long timeoutMs);
+    CompletableFuture<Void> leaveGroup(Timer timer);
 
     /**
      * @return True if the member should send heartbeat to the coordinator without waiting for

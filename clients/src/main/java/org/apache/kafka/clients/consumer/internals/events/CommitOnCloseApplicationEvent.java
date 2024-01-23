@@ -21,11 +21,4 @@ public class CommitOnCloseApplicationEvent extends ApplicationEvent {
     public CommitOnCloseApplicationEvent() {
         super(Type.COMMIT_ON_CLOSE);
     }
-
-    @Override
-    public String toString() {
-        return "CommitOnCloseApplicationEvent{" +
-                toStringBase() +
-                '}';
-    }
 }

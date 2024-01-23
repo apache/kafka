@@ -17,11 +17,13 @@
 package org.apache.kafka.clients.consumer.internals.events;
 
 import org.apache.kafka.clients.consumer.internals.ConsumerNetworkThread;
+import org.apache.kafka.clients.consumer.internals.ConsumerUtils;
 import org.apache.kafka.clients.consumer.internals.NetworkClientDelegate;
 import org.apache.kafka.clients.consumer.internals.RequestManagers;
 import org.apache.kafka.common.internals.IdempotentCloser;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.Timer;
 import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 
@@ -29,6 +31,7 @@ import java.io.Closeable;
 import java.time.Duration;
 import java.util.Objects;
 import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
@@ -40,6 +43,7 @@ import java.util.function.Supplier;
 public class ApplicationEventHandler implements Closeable {
 
     private final Logger log;
+    private final Time time;
     private final BlockingQueue<ApplicationEvent> applicationEventQueue;
     private final ConsumerNetworkThread networkThread;
     private final IdempotentCloser closer = new IdempotentCloser();
@@ -51,6 +55,7 @@ public class ApplicationEventHandler implements Closeable {
                                    final Supplier<NetworkClientDelegate> networkClientDelegateSupplier,
                                    final Supplier<RequestManagers> requestManagersSupplier) {
         this.log = logContext.logger(ApplicationEventHandler.class);
+        this.time = time;
         this.applicationEventQueue = applicationEventQueue;
         this.networkThread = new ConsumerNetworkThread(logContext,
                 time,
@@ -98,7 +103,8 @@ public class ApplicationEventHandler implements Closeable {
      *
      * <p/>
      *
-     * See {@link CompletableApplicationEvent#get()} and {@link Future#get(long, TimeUnit)} for more details.
+     * See {@link CompletableApplicationEvent#future()}, {@link CompletableApplicationEvent#deadlineMs()}, and
+     * {@link Future#get(long, TimeUnit)} for more details.
      *
      * @param event A {@link CompletableApplicationEvent} created by the polling thread
      * @return      Value that is the result of the event
@@ -107,7 +113,9 @@ public class ApplicationEventHandler implements Closeable {
     public <T> T addAndGet(final CompletableApplicationEvent<T> event) {
         Objects.requireNonNull(event, "CompletableApplicationEvent provided to addAndGet must be non-null");
         add(event);
-        return event.get();
+        CompletableFuture<T> future = event.future();
+        Timer timer = time.timer(event.deadlineMs() - time.milliseconds());
+        return ConsumerUtils.getResult(future, timer);
     }
 
     @Override

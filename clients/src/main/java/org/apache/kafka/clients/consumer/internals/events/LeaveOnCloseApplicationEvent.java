@@ -23,11 +23,4 @@ public class LeaveOnCloseApplicationEvent extends CompletableApplicationEvent<Vo
     public LeaveOnCloseApplicationEvent(Timer timer) {
         super(Type.LEAVE_ON_CLOSE, timer);
     }
-
-    @Override
-    public String toString() {
-        return "LeaveOnCloseApplicationEvent{" +
-            toStringBase() +
-            '}';
-    }
 }

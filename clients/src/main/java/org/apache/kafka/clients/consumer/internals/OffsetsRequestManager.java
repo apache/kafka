@@ -152,7 +152,7 @@ public class OffsetsRequestManager implements RequestManager, ClusterResourceLis
     public CompletableFuture<Map<TopicPartition, OffsetAndTimestamp>> fetchOffsets(
             final Map<TopicPartition, Long> timestampsToSearch,
             final boolean requireTimestamps,
-            long timeoutMs) {
+            final Timer timer) {
         if (timestampsToSearch.isEmpty()) {
             return CompletableFuture.completedFuture(Collections.emptyMap());
         }
@@ -174,7 +174,6 @@ public class OffsetsRequestManager implements RequestManager, ClusterResourceLis
             }
         });
 
-        Timer timer = time.timer(timeoutMs);
         fetchOffsetsByTimes(timestampsToSearch, requireTimestamps, listOffsetsRequestState, timer);
 
         return listOffsetsRequestState.globalResult.thenApply(result ->
@@ -193,7 +192,7 @@ public class OffsetsRequestManager implements RequestManager, ClusterResourceLis
      * an error is received in the response, it will be saved to be thrown on the next call to
      * this function (ex. {@link org.apache.kafka.common.errors.TopicAuthorizationException})
      */
-    public CompletableFuture<Void> resetPositionsIfNeeded(long timeoutMs) {
+    public CompletableFuture<Void> resetPositionsIfNeeded(Timer timer) {
         Map<TopicPartition, Long> offsetResetTimestamps;
 
         try {
@@ -206,7 +205,7 @@ public class OffsetsRequestManager implements RequestManager, ClusterResourceLis
         if (offsetResetTimestamps.isEmpty())
             return CompletableFuture.completedFuture(null);
 
-        return sendListOffsetsRequestsAndResetPositions(offsetResetTimestamps, timeoutMs);
+        return sendListOffsetsRequestsAndResetPositions(offsetResetTimestamps, timer);
     }
 
     /**
@@ -221,14 +220,14 @@ public class OffsetsRequestManager implements RequestManager, ClusterResourceLis
      * detected, a {@link LogTruncationException} will be saved in memory, to be thrown on the
      * next call to this function.
      */
-    public CompletableFuture<Void> validatePositionsIfNeeded(long timeoutMs) {
+    public CompletableFuture<Void> validatePositionsIfNeeded(Timer timer) {
         Map<TopicPartition, SubscriptionState.FetchPosition> partitionsToValidate =
                 offsetFetcherUtils.getPartitionsToValidate();
         if (partitionsToValidate.isEmpty()) {
             return CompletableFuture.completedFuture(null);
         }
 
-        return sendOffsetsForLeaderEpochRequestsAndValidatePositions(partitionsToValidate, timeoutMs);
+        return sendOffsetsForLeaderEpochRequestsAndValidatePositions(partitionsToValidate, timer);
     }
 
     /**
@@ -394,18 +393,17 @@ public class OffsetsRequestManager implements RequestManager, ClusterResourceLis
      */
     private CompletableFuture<Void> sendListOffsetsRequestsAndResetPositions(
             final Map<TopicPartition, Long> timestampsToSearch,
-            long timeoutMs) {
+            final Timer timer) {
         Map<Node, Map<TopicPartition, ListOffsetsRequestData.ListOffsetsPartition>> timestampsToSearchByNode =
                 groupListOffsetRequests(timestampsToSearch, Optional.empty());
 
         final AtomicInteger expectedResponses = new AtomicInteger(0);
         final CompletableFuture<Void> globalResult = new CompletableFuture<>();
         final List<NetworkClientDelegate.UnsentRequest> unsentRequests = new ArrayList<>();
-        final Timer timer = time.timer(timeoutMs);
 
         timestampsToSearchByNode.forEach((node, resetTimestamps) -> {
             subscriptionState.setNextAllowedRetry(resetTimestamps.keySet(),
-                    time.milliseconds() + timeoutMs);
+                    time.milliseconds() + timer.remainingMs());
 
             CompletableFuture<ListOffsetResult> partialResult = buildListOffsetRequestToNode(
                     node,
@@ -459,16 +457,15 @@ public class OffsetsRequestManager implements RequestManager, ClusterResourceLis
      */
     private CompletableFuture<Void> sendOffsetsForLeaderEpochRequestsAndValidatePositions(
             Map<TopicPartition, SubscriptionState.FetchPosition> partitionsToValidate,
-            long timeoutMs) {
+            Timer timer) {
 
         final Map<Node, Map<TopicPartition, SubscriptionState.FetchPosition>> regrouped =
                 regroupFetchPositionsByLeader(partitionsToValidate);
 
-        long nextResetTimeMs = time.milliseconds() + timeoutMs;
+        long nextResetTimeMs = time.milliseconds() + timer.remainingMs();
         final AtomicInteger expectedResponses = new AtomicInteger(0);
         final CompletableFuture<Void> globalResult = new CompletableFuture<>();
         final List<NetworkClientDelegate.UnsentRequest> unsentRequests = new ArrayList<>();
-        final Timer timer = time.timer(timeoutMs);
         regrouped.forEach((node, fetchPositions) -> {
 
             if (node.isEmpty()) {

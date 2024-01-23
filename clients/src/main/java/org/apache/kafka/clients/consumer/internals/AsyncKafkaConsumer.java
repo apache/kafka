@@ -43,7 +43,7 @@ import org.apache.kafka.clients.consumer.internals.events.AssignmentChangeApplic
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEventHandler;
 import org.apache.kafka.clients.consumer.internals.events.CommitAsyncApplicationEvent;
-import org.apache.kafka.clients.consumer.internals.events.CommitSyncApplicationEvent;
+import org.apache.kafka.clients.consumer.internals.events.CommitApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.CommitOnCloseApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.CompletableApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.ConsumerRebalanceListenerCallbackCompletedEvent;
@@ -1346,7 +1346,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
 
             if (!offsets.isEmpty()) {
                 Timer timer = time.timer(timeout);
-                final CommitSyncApplicationEvent commitEvent = new CommitSyncApplicationEvent(offsets, timer);
+                final CommitApplicationEvent commitEvent = new CommitApplicationEvent(offsets, timer);
 
                 // the task can only be woken up if the top level API call is commitSync
                 wakeupTrigger.setActiveTask(commitEvent.future());

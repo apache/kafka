@@ -66,9 +66,7 @@ public class TopicMetadataApplicationEvent extends CompletableApplicationEvent<M
     }
 
     @Override
-    public String toString() {
-        return getClass().getSimpleName() + " {" + toStringBase() +
-                ", topic=" + topic +
-                ", allTopics=" + allTopics + "}";
+    public String toStringBase() {
+        return toStringBase() + ", topic=" + topic + ", allTopics=" + allTopics + "}";
     }
 }

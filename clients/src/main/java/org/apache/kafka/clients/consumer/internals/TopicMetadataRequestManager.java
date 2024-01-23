@@ -103,10 +103,10 @@ public class TopicMetadataRequestManager implements RequestManager {
      *
      * @return the future of the metadata request.
      */
-    public CompletableFuture<Map<String, List<PartitionInfo>>> requestAllTopicsMetadata(final long timeoutMs) {
+    public CompletableFuture<Map<String, List<PartitionInfo>>> requestAllTopicsMetadata(final Timer timer) {
         TopicMetadataRequestState newRequest = new TopicMetadataRequestState(
                 logContext,
-                time.timer(timeoutMs),
+                timer,
                 retryBackoffMs,
                 retryBackoffMaxMs);
         inflightRequests.add(newRequest);
@@ -120,11 +120,11 @@ public class TopicMetadataRequestManager implements RequestManager {
      * @return the future of the metadata request.
      */
     public CompletableFuture<Map<String, List<PartitionInfo>>> requestTopicMetadata(final String topic,
-                                                                                    final long timeoutMs) {
+                                                                                    final Timer timer) {
         TopicMetadataRequestState newRequest = new TopicMetadataRequestState(
                 logContext,
                 topic,
-                time.timer(timeoutMs),
+                timer,
                 retryBackoffMs,
                 retryBackoffMaxMs);
         inflightRequests.add(newRequest);
