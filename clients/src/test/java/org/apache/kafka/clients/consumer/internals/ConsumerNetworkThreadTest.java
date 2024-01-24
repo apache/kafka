@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
+import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.MockClient;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEvent;
@@ -39,6 +40,7 @@ import org.apache.kafka.common.requests.OffsetCommitRequest;
 import org.apache.kafka.common.requests.OffsetCommitResponse;
 import org.apache.kafka.common.requests.RequestTestUtils;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.Timer;
 import org.apache.kafka.test.TestCondition;
 import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.AfterEach;
@@ -56,7 +58,6 @@ import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CompletableFuture;
 
 import static org.apache.kafka.clients.consumer.internals.ConsumerTestBuilder.DEFAULT_HEARTBEAT_INTERVAL_MS;
-import static org.apache.kafka.clients.consumer.internals.ConsumerTestBuilder.DEFAULT_REQUEST_TIMEOUT_MS;
 import static org.apache.kafka.test.TestUtils.DEFAULT_MAX_WAIT_MS;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -88,6 +89,7 @@ public class ConsumerNetworkThreadTest {
     private ConsumerNetworkThread consumerNetworkThread;
     private MockClient client;
     private SubscriptionState subscriptions;
+    private int defaultApiTimeoutMs;
 
     @BeforeEach
     public void setup() {
@@ -106,6 +108,7 @@ public class ConsumerNetworkThreadTest {
         consumerNetworkThread = testBuilder.consumerNetworkThread;
         subscriptions = testBuilder.subscriptions;
         consumerNetworkThread.initializeResources();
+        defaultApiTimeoutMs = testBuilder.config.getInt(CommonClientConfigs.DEFAULT_API_TIMEOUT_MS_CONFIG);
     }
 
     @AfterEach
@@ -135,7 +138,8 @@ public class ConsumerNetworkThreadTest {
 
     @Test
     public void testApplicationEvent() {
-        ApplicationEvent e = new CommitApplicationEvent(new HashMap<>(), Optional.empty());
+        Timer timer = time.timer(defaultApiTimeoutMs);
+        ApplicationEvent e = new CommitApplicationEvent(new HashMap<>(), timer, false);
         applicationEventsQueue.add(e);
         consumerNetworkThread.runOnce();
         verify(applicationEventProcessor, times(1)).process(e);
@@ -151,7 +155,8 @@ public class ConsumerNetworkThreadTest {
 
     @Test
     public void testCommitEvent() {
-        ApplicationEvent e = new CommitApplicationEvent(new HashMap<>(), Optional.empty());
+        Timer timer = time.timer(defaultApiTimeoutMs);
+        ApplicationEvent e = new CommitApplicationEvent(new HashMap<>(), timer, false);
         applicationEventsQueue.add(e);
         consumerNetworkThread.runOnce();
         verify(applicationEventProcessor).process(any(CommitApplicationEvent.class));
@@ -159,8 +164,9 @@ public class ConsumerNetworkThreadTest {
 
     @Test
     public void testListOffsetsEventIsProcessed() {
+        Timer timer = time.timer(defaultApiTimeoutMs);
         Map<TopicPartition, Long> timestamps = Collections.singletonMap(new TopicPartition("topic1", 1), 5L);
-        ApplicationEvent e = new ListOffsetsApplicationEvent(timestamps, true, time.timer(Long.MAX_VALUE));
+        ApplicationEvent e = new ListOffsetsApplicationEvent(timestamps, true, timer);
         applicationEventsQueue.add(e);
         consumerNetworkThread.runOnce();
         verify(applicationEventProcessor).process(any(ListOffsetsApplicationEvent.class));
@@ -178,9 +184,10 @@ public class ConsumerNetworkThreadTest {
 
     @Test
     public void testResetPositionsProcessFailureIsIgnored() {
-        doThrow(new NullPointerException()).when(offsetsRequestManager).resetPositionsIfNeeded();
+        Timer timer = time.timer(defaultApiTimeoutMs);
+        doThrow(new NullPointerException()).when(offsetsRequestManager).resetPositionsIfNeeded(timer);
 
-        ResetPositionsApplicationEvent event = new ResetPositionsApplicationEvent(time.timer(Long.MAX_VALUE));
+        ResetPositionsApplicationEvent event = new ResetPositionsApplicationEvent(timer);
         applicationEventsQueue.add(event);
         assertDoesNotThrow(() -> consumerNetworkThread.runOnce());
 
@@ -189,7 +196,8 @@ public class ConsumerNetworkThreadTest {
 
     @Test
     public void testValidatePositionsEventIsProcessed() {
-        ValidatePositionsApplicationEvent e = new ValidatePositionsApplicationEvent(time.timer(Long.MAX_VALUE));
+        Timer timer = time.timer(defaultApiTimeoutMs);
+        ValidatePositionsApplicationEvent e = new ValidatePositionsApplicationEvent(timer);
         applicationEventsQueue.add(e);
         consumerNetworkThread.runOnce();
         verify(applicationEventProcessor).process(any(ValidatePositionsApplicationEvent.class));
@@ -198,9 +206,10 @@ public class ConsumerNetworkThreadTest {
 
     @Test
     public void testAssignmentChangeEvent() {
+        Timer timer = time.timer(defaultApiTimeoutMs);
         HashMap<TopicPartition, OffsetAndMetadata> offset = mockTopicPartitionOffset();
 
-        final long currentTimeMs = time.milliseconds();
+        final long currentTimeMs = timer.currentTimeMs();
         ApplicationEvent e = new AssignmentChangeApplicationEvent(offset, currentTimeMs);
         applicationEventsQueue.add(e);
 
@@ -214,20 +223,22 @@ public class ConsumerNetworkThreadTest {
 
     @Test
     void testFetchTopicMetadata() {
-        applicationEventsQueue.add(new TopicMetadataApplicationEvent("topic", time.timer(Long.MAX_VALUE)));
+        Timer timer = time.timer(defaultApiTimeoutMs);
+        applicationEventsQueue.add(new TopicMetadataApplicationEvent("topic", timer));
         consumerNetworkThread.runOnce();
         verify(applicationEventProcessor).process(any(TopicMetadataApplicationEvent.class));
     }
 
     @Test
     void testPollResultTimer() {
+        Timer timer = time.timer(defaultApiTimeoutMs);
         NetworkClientDelegate.UnsentRequest req = new NetworkClientDelegate.UnsentRequest(
                 new FindCoordinatorRequest.Builder(
                         new FindCoordinatorRequestData()
                                 .setKeyType(FindCoordinatorRequest.CoordinatorType.TRANSACTION.id())
                                 .setKey("foobar")),
                 Optional.empty(),
-                time.timer(DEFAULT_REQUEST_TIMEOUT_MS)
+                timer
         );
 
         // purposely setting a non-MAX time to ensure it is returning Long.MAX_VALUE upon success
@@ -270,12 +281,13 @@ public class ConsumerNetworkThreadTest {
 
     @Test
     void testEnsureEventsAreCompleted() {
+        Timer timer = time.timer(defaultApiTimeoutMs);
         Node node = metadata.fetch().nodes().get(0);
-        coordinatorRequestManager.markCoordinatorUnknown("test", time.milliseconds());
+        coordinatorRequestManager.markCoordinatorUnknown("test", timer.currentTimeMs());
         client.prepareResponse(FindCoordinatorResponse.prepareResponse(Errors.NONE, "group-id", node));
         prepareOffsetCommitRequest(new HashMap<>(), Errors.NONE, false);
-        CompletableApplicationEvent<Void> event1 = spy(new CommitApplicationEvent(Collections.emptyMap(), Optional.empty()));
-        ApplicationEvent event2 = new CommitApplicationEvent(Collections.emptyMap(), Optional.empty());
+        CompletableApplicationEvent<Void> event1 = spy(new CommitApplicationEvent(Collections.emptyMap(), timer, false));
+        ApplicationEvent event2 = new CommitApplicationEvent(Collections.emptyMap(), timer, false);
         CompletableFuture<Void> future = new CompletableFuture<>();
         when(event1.future()).thenReturn(future);
         applicationEventsQueue.add(event1);

@@ -17,6 +17,7 @@
 package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.ClientResponse;
+import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
@@ -35,6 +36,7 @@ import org.apache.kafka.common.requests.RequestTestUtils;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.common.utils.Timer;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -62,6 +64,7 @@ import static org.mockito.Mockito.spy;
 public class TopicMetadataRequestManagerTest {
     private MockTime time;
     private TopicMetadataRequestManager topicMetadataRequestManager;
+    private int defaultApiTimeoutMs;
 
     @BeforeEach
     public void setup() {
@@ -71,26 +74,29 @@ public class TopicMetadataRequestManagerTest {
         props.put(ALLOW_AUTO_CREATE_TOPICS_CONFIG, false);
         props.put(KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
         props.put(VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
+        ConsumerConfig config = new ConsumerConfig(props);
         this.topicMetadataRequestManager = spy(new TopicMetadataRequestManager(
             new LogContext(),
-            new ConsumerConfig(props),
-            time));
+            config));
+        this.defaultApiTimeoutMs = config.getInt(CommonClientConfigs.DEFAULT_API_TIMEOUT_MS_CONFIG);
     }
 
     @Test
     public void testPoll_SuccessfulRequestTopicMetadata() {
         String topic = "hello";
-        this.topicMetadataRequestManager.requestTopicMetadata(topic, Long.MAX_VALUE);
-        this.time.sleep(100);
-        NetworkClientDelegate.PollResult res = this.topicMetadataRequestManager.poll(this.time.milliseconds());
+        Timer timer = time.timer(defaultApiTimeoutMs);
+        this.topicMetadataRequestManager.requestTopicMetadata(topic, timer);
+        timer.sleep(100);
+        NetworkClientDelegate.PollResult res = this.topicMetadataRequestManager.poll(timer.currentTimeMs());
         assertEquals(1, res.unsentRequests.size());
     }
 
     @Test
     public void testPoll_SuccessfulRequestAllTopicsMetadata() {
-        this.topicMetadataRequestManager.requestAllTopicsMetadata(Long.MAX_VALUE);
-        this.time.sleep(100);
-        NetworkClientDelegate.PollResult res = this.topicMetadataRequestManager.poll(this.time.milliseconds());
+        Timer timer = time.timer(defaultApiTimeoutMs);
+        this.topicMetadataRequestManager.requestAllTopicsMetadata(timer);
+        timer.sleep(100);
+        NetworkClientDelegate.PollResult res = this.topicMetadataRequestManager.poll(timer.currentTimeMs());
         assertEquals(1, res.unsentRequests.size());
     }
 
@@ -98,13 +104,15 @@ public class TopicMetadataRequestManagerTest {
     @MethodSource("exceptionProvider")
     public void testTopicExceptionAndInflightRequests(final Errors error, final boolean shouldRetry) {
         String topic = "hello";
-        this.topicMetadataRequestManager.requestTopicMetadata(topic, Long.MAX_VALUE);
-        this.time.sleep(100);
-        NetworkClientDelegate.PollResult res = this.topicMetadataRequestManager.poll(this.time.milliseconds());
+        Timer timer = time.timer(defaultApiTimeoutMs);
+        this.topicMetadataRequestManager.requestTopicMetadata(topic, timer);
+        timer.sleep(100);
+        NetworkClientDelegate.PollResult res = this.topicMetadataRequestManager.poll(timer.currentTimeMs());
         res.unsentRequests.get(0).future().complete(buildTopicMetadataClientResponse(
             res.unsentRequests.get(0),
             topic,
-            error));
+            error,
+            timer));
         List<TopicMetadataRequestManager.TopicMetadataRequestState> inflights = this.topicMetadataRequestManager.inflightRequests();
 
         if (shouldRetry) {
@@ -118,12 +126,14 @@ public class TopicMetadataRequestManagerTest {
     @ParameterizedTest
     @MethodSource("exceptionProvider")
     public void testAllTopicsExceptionAndInflightRequests(final Errors error, final boolean shouldRetry) {
-        this.topicMetadataRequestManager.requestAllTopicsMetadata(Long.MAX_VALUE);
-        this.time.sleep(100);
-        NetworkClientDelegate.PollResult res = this.topicMetadataRequestManager.poll(this.time.milliseconds());
+        Timer timer = time.timer(defaultApiTimeoutMs);
+        this.topicMetadataRequestManager.requestAllTopicsMetadata(timer);
+        timer.sleep(100);
+        NetworkClientDelegate.PollResult res = this.topicMetadataRequestManager.poll(timer.currentTimeMs());
         res.unsentRequests.get(0).future().complete(buildAllTopicsMetadataClientResponse(
                 res.unsentRequests.get(0),
-                error));
+                error,
+                timer));
         List<TopicMetadataRequestManager.TopicMetadataRequestState> inflights = this.topicMetadataRequestManager.inflightRequests();
 
         if (shouldRetry) {
@@ -138,33 +148,35 @@ public class TopicMetadataRequestManagerTest {
         String topic = "hello";
 
         // Request topic metadata with 1000ms expiration
-        long now = this.time.milliseconds();
+        Timer timer = time.timer(1000);
         CompletableFuture<Map<String, List<PartitionInfo>>> future =
-            this.topicMetadataRequestManager.requestTopicMetadata(topic, now + 1000L);
+            this.topicMetadataRequestManager.requestTopicMetadata(topic, timer);
         assertEquals(1, this.topicMetadataRequestManager.inflightRequests().size());
 
         // Poll the request manager to get the list of requests to send
         // - fail the request with a RetriableException
-        NetworkClientDelegate.PollResult res = this.topicMetadataRequestManager.poll(this.time.milliseconds());
+        NetworkClientDelegate.PollResult res = this.topicMetadataRequestManager.poll(timer.currentTimeMs());
         assertEquals(1, res.unsentRequests.size());
         res.unsentRequests.get(0).future().complete(buildTopicMetadataClientResponse(
             res.unsentRequests.get(0),
             topic,
-            Errors.REQUEST_TIMED_OUT));
+            Errors.REQUEST_TIMED_OUT,
+            timer));
 
         // Sleep for long enough to exceed the backoff delay but still within the expiration
         // - fail the request again with a RetriableException
-        this.time.sleep(500);
-        res = this.topicMetadataRequestManager.poll(this.time.milliseconds());
+        timer.sleep(500);
+        res = this.topicMetadataRequestManager.poll(timer.currentTimeMs());
         assertEquals(1, res.unsentRequests.size());
         res.unsentRequests.get(0).future().complete(buildTopicMetadataClientResponse(
             res.unsentRequests.get(0),
             topic,
-            Errors.REQUEST_TIMED_OUT));
+            Errors.REQUEST_TIMED_OUT,
+            timer));
 
         // Sleep for long enough to expire the request which should fail
-        this.time.sleep(1000);
-        res = this.topicMetadataRequestManager.poll(this.time.milliseconds());
+        timer.sleep(1000);
+        res = this.topicMetadataRequestManager.poll(timer.currentTimeMs());
         assertEquals(0, res.unsentRequests.size());
         assertEquals(0, this.topicMetadataRequestManager.inflightRequests().size());
         assertTrue(future.isCompletedExceptionally());
@@ -174,9 +186,9 @@ public class TopicMetadataRequestManagerTest {
     @MethodSource("hardFailureExceptionProvider")
     public void testHardFailures(Exception exception) {
         String topic = "hello";
-
-        this.topicMetadataRequestManager.requestTopicMetadata(topic, Long.MAX_VALUE);
-        NetworkClientDelegate.PollResult res = this.topicMetadataRequestManager.poll(this.time.milliseconds());
+        Timer timer = time.timer(defaultApiTimeoutMs);
+        this.topicMetadataRequestManager.requestTopicMetadata(topic, timer);
+        NetworkClientDelegate.PollResult res = this.topicMetadataRequestManager.poll(timer.currentTimeMs());
         assertEquals(1, res.unsentRequests.size());
 
         res.unsentRequests.get(0).future().completeExceptionally(exception);
@@ -191,37 +203,39 @@ public class TopicMetadataRequestManagerTest {
     @Test
     public void testNetworkTimeout() {
         String topic = "hello";
-
-        topicMetadataRequestManager.requestTopicMetadata(topic, Long.MAX_VALUE);
-        NetworkClientDelegate.PollResult res = this.topicMetadataRequestManager.poll(this.time.milliseconds());
+        Timer timer = time.timer(defaultApiTimeoutMs);
+        topicMetadataRequestManager.requestTopicMetadata(topic, timer);
+        NetworkClientDelegate.PollResult res = this.topicMetadataRequestManager.poll(timer.currentTimeMs());
         assertEquals(1, res.unsentRequests.size());
-        NetworkClientDelegate.PollResult res2 = this.topicMetadataRequestManager.poll(this.time.milliseconds());
+        NetworkClientDelegate.PollResult res2 = this.topicMetadataRequestManager.poll(timer.currentTimeMs());
         assertEquals(0, res2.unsentRequests.size());
 
         // Mimic a network timeout
-        res.unsentRequests.get(0).handler().onFailure(time.milliseconds(), new TimeoutException());
+        res.unsentRequests.get(0).handler().onFailure(timer.currentTimeMs(), new TimeoutException());
 
-        long backoffMs = topicMetadataRequestManager.inflightRequests().get(0).remainingBackoffMs(time.milliseconds());
+        long backoffMs = topicMetadataRequestManager.inflightRequests().get(0).remainingBackoffMs(timer.currentTimeMs());
         // Sleep for exponential backoff - 1ms
-        time.sleep(backoffMs - 1);
-        res2 = topicMetadataRequestManager.poll(this.time.milliseconds());
+        timer.sleep(backoffMs - 1);
+        res2 = topicMetadataRequestManager.poll(timer.currentTimeMs());
         assertEquals(0, res2.unsentRequests.size());
 
-        time.sleep(1);
-        res2 = topicMetadataRequestManager.poll(this.time.milliseconds());
+        timer.sleep(1);
+        res2 = topicMetadataRequestManager.poll(timer.currentTimeMs());
         assertEquals(1, res2.unsentRequests.size());
 
         res2.unsentRequests.get(0).future().complete(buildTopicMetadataClientResponse(
             res2.unsentRequests.get(0),
             topic,
-            Errors.NONE));
+            Errors.NONE,
+            timer));
         assertTrue(topicMetadataRequestManager.inflightRequests().isEmpty());
     }
 
     private ClientResponse buildTopicMetadataClientResponse(
             final NetworkClientDelegate.UnsentRequest request,
             final String topic,
-            final Errors error) {
+            final Errors error,
+            final Timer timer) {
         AbstractRequest abstractRequest = request.requestBuilder().build();
         assertTrue(abstractRequest instanceof MetadataRequest);
         MetadataRequest metadataRequest = (MetadataRequest) abstractRequest;
@@ -237,8 +251,8 @@ public class TopicMetadataRequestManagerTest {
                 new RequestHeader(ApiKeys.METADATA, metadataRequest.version(), "mockClientId", 1),
                 request.handler(),
                 "-1",
-                time.milliseconds(),
-                time.milliseconds(),
+                timer.currentTimeMs(),
+                timer.currentTimeMs(),
                 false,
                 null,
                 null,
@@ -247,7 +261,8 @@ public class TopicMetadataRequestManagerTest {
 
     private ClientResponse buildAllTopicsMetadataClientResponse(
         final NetworkClientDelegate.UnsentRequest request,
-        final Errors error) {
+        final Errors error,
+        final Timer timer) {
         AbstractRequest abstractRequest = request.requestBuilder().build();
         assertTrue(abstractRequest instanceof MetadataRequest);
         MetadataRequest metadataRequest = (MetadataRequest) abstractRequest;
@@ -265,8 +280,8 @@ public class TopicMetadataRequestManagerTest {
             new RequestHeader(ApiKeys.METADATA, metadataRequest.version(), "mockClientId", 1),
             request.handler(),
             "-1",
-            time.milliseconds(),
-            time.milliseconds(),
+            timer.currentTimeMs(),
+            timer.currentTimeMs(),
             false,
             null,
             null,

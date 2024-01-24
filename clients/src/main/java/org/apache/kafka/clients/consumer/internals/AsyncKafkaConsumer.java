@@ -784,9 +784,18 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             return CompletableFuture.completedFuture(null);
         }
 
-        final long timeout = retryTimeoutMs.orElse(Long.MAX_VALUE);
-        final Timer timer = time.timer(timeout);
-        final CommitApplicationEvent commitEvent = new CommitApplicationEvent(offsets, timer);
+        final Timer timer;
+        final boolean allowsRetries;
+
+        if (retryTimeoutMs.isPresent()) {
+            timer = time.timer(retryTimeoutMs.get());
+            allowsRetries = true;
+        } else {
+            timer = time.timer(defaultApiTimeoutMs);
+            allowsRetries = false;
+        }
+
+        final CommitApplicationEvent commitEvent = new CommitApplicationEvent(offsets, timer, allowsRetries);
         if (isWakeupable) {
             // the task can only be woken up if the top level API call is commitSync
             wakeupTrigger.setActiveTask(commitEvent.future());

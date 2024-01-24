@@ -53,7 +53,7 @@ import static org.apache.kafka.clients.consumer.internals.NetworkClientDelegate.
 public class CoordinatorRequestManager implements RequestManager {
     private static final long COORDINATOR_DISCONNECT_LOGGING_INTERVAL_MS = 60 * 1000;
     private final Time time;
-    private final long requestTimeoutMs;
+    private final long defaultApiTimeoutMs;
     private final Logger log;
     private final BackgroundEventHandler backgroundEventHandler;
     private final String groupId;
@@ -66,7 +66,7 @@ public class CoordinatorRequestManager implements RequestManager {
     public CoordinatorRequestManager(
         final Time time,
         final LogContext logContext,
-        final long requestTimeoutMs,
+        final long defaultApiTimeoutMs,
         final long retryBackoffMs,
         final long retryBackoffMaxMs,
         final BackgroundEventHandler backgroundEventHandler,
@@ -75,7 +75,7 @@ public class CoordinatorRequestManager implements RequestManager {
         Objects.requireNonNull(groupId);
         this.time = time;
         this.log = logContext.logger(this.getClass());
-        this.requestTimeoutMs = requestTimeoutMs;
+        this.defaultApiTimeoutMs = defaultApiTimeoutMs;
         this.backgroundEventHandler = backgroundEventHandler;
         this.groupId = groupId;
         this.coordinatorRequestState = new RequestState(
@@ -114,11 +114,11 @@ public class CoordinatorRequestManager implements RequestManager {
         FindCoordinatorRequestData data = new FindCoordinatorRequestData()
                 .setKeyType(FindCoordinatorRequest.CoordinatorType.GROUP.id())
                 .setKey(this.groupId);
-        Timer timer = time.timer(requestTimeoutMs);
+        Timer timer = time.timer(defaultApiTimeoutMs);
         NetworkClientDelegate.UnsentRequest unsentRequest = new NetworkClientDelegate.UnsentRequest(
             new FindCoordinatorRequest.Builder(data),
             Optional.empty(),
-                timer
+            timer
         );
 
         return unsentRequest.whenComplete((clientResponse, throwable) -> {

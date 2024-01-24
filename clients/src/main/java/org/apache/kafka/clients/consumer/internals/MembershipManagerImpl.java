@@ -38,6 +38,7 @@ import org.apache.kafka.common.requests.ConsumerGroupHeartbeatRequest;
 import org.apache.kafka.common.telemetry.internals.ClientTelemetryProvider;
 import org.apache.kafka.common.telemetry.internals.ClientTelemetryReporter;
 import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
 import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
@@ -191,6 +192,11 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
     private final Logger log;
 
     /**
+     * Time instance used to create {@link Timer timers}.
+     */
+    private final Time time;
+
+    /**
      * Manager to perform commit requests needed before revoking partitions (if auto-commit is
      * enabled)
      */
@@ -285,7 +291,8 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
                                  ConsumerMetadata metadata,
                                  LogContext logContext,
                                  Optional<ClientTelemetryReporter> clientTelemetryReporter,
-                                 BackgroundEventHandler backgroundEventHandler) {
+                                 BackgroundEventHandler backgroundEventHandler,
+                                 Time time) {
         this.groupId = groupId;
         this.state = MemberState.UNSUBSCRIBED;
         this.serverAssignor = serverAssignor;
@@ -302,6 +309,7 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
         this.clientTelemetryReporter = clientTelemetryReporter;
         this.rebalanceTimeoutMs = rebalanceTimeoutMs;
         this.backgroundEventHandler = backgroundEventHandler;
+        this.time = time;
     }
 
     /**
@@ -597,7 +605,7 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
         CompletableFuture<Void> leaveResult = new CompletableFuture<>();
         leaveGroupInProgress = Optional.of(leaveResult);
 
-        CompletableFuture<Void> callbackResult = invokeOnPartitionsRevokedOrLostToReleaseAssignment();
+        CompletableFuture<Void> callbackResult = invokeOnPartitionsRevokedOrLostToReleaseAssignment(timer);
         callbackResult.whenComplete((result, error) -> {
             // Clear the subscription, no matter if the callback execution failed or succeeded.
             updateSubscription(new TreeSet<>(TOPIC_ID_PARTITION_COMPARATOR), true);
@@ -627,7 +635,7 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
      *
      * @return Future that will complete when the callback execution completes.
      */
-    private CompletableFuture<Void> invokeOnPartitionsRevokedOrLostToReleaseAssignment() {
+    private CompletableFuture<Void> invokeOnPartitionsRevokedOrLostToReleaseAssignment(Timer timer) {
         SortedSet<TopicPartition> droppedPartitions = new TreeSet<>(TOPIC_PARTITION_COMPARATOR);
         droppedPartitions.addAll(subscriptions.assignedPartitions());
 
@@ -833,7 +841,8 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
         // best effort to commit the offsets in the case where the epoch might have changed while
         // the current reconciliation is in process. Note this is using the rebalance timeout as
         // it is the limit enforced by the broker to complete the reconciliation process.
-        commitResult = commitRequestManager.maybeAutoCommitAllConsumedNow(rebalanceTimeoutMs, true);
+        Timer timer = time.timer(rebalanceTimeoutMs);
+        commitResult = commitRequestManager.maybeAutoCommitAllConsumedNow(Optional.of(timer), true);
 
         // Execute commit -> onPartitionsRevoked -> onPartitionsAssigned.
         commitResult.whenComplete((commitReqResult, commitReqError) -> {
@@ -1199,14 +1208,12 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
      * @return Future that will be chained within the rest of the reconciliation logic
      */
     private CompletableFuture<Void> enqueueConsumerRebalanceListenerCallback(ConsumerRebalanceListenerMethodName methodName,
-                                                                             Set<TopicPartition> partitions,
-                                                                             Timer timer) {
+                                                                             Set<TopicPartition> partitions) {
         SortedSet<TopicPartition> sortedPartitions = new TreeSet<>(TOPIC_PARTITION_COMPARATOR);
         sortedPartitions.addAll(partitions);
         CompletableBackgroundEvent<Void> event = new ConsumerRebalanceListenerCallbackNeededEvent(
-                methodName,
-                sortedPartitions,
-                timer
+            methodName,
+            sortedPartitions
         );
         backgroundEventHandler.add(event);
         log.debug("The event to trigger the {} method execution was enqueued successfully", methodName.fullyQualifiedMethodName());

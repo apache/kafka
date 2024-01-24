@@ -27,6 +27,7 @@ import org.apache.kafka.clients.consumer.internals.RequestManagers;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
@@ -35,6 +36,7 @@ import org.slf4j.Logger;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Supplier;
@@ -153,9 +155,25 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
             return;
         }
 
-        Timer timer = timer(event);
+        final Optional<Timer> timer;
+
+        if (event.allowsRetries()) {
+            Timer t = timer(event);
+
+            if (maybeTimeout(event, t, "Unable to commit offset due to exceeding timeout"))
+                return;
+
+            timer = Optional.of(t);
+        } else {
+            timer = Optional.empty();
+        }
+
         CommitRequestManager manager = requestManagers.commitRequestManager.get();
-        CompletableFuture<Void> future = manager.addOffsetCommitRequest(event.offsets(), timer, false);
+        CompletableFuture<Void> future = manager.addOffsetCommitRequest(
+            event.offsets(),
+            timer,
+            false
+        );
         event.chain(future);
     }
 
@@ -167,6 +185,10 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
         }
 
         Timer timer = timer(event);
+
+        if (maybeTimeout(event, timer, "Unable to fetch committed offset due to exceeding timeout"))
+            return;
+
         CommitRequestManager manager = requestManagers.commitRequestManager.get();
         CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> future = manager.addOffsetFetchRequest(
                 event.partitions(),
@@ -195,6 +217,10 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
     private void process(final ListOffsetsApplicationEvent event) {
         final CompletableFuture<Map<TopicPartition, OffsetAndTimestamp>> future;
         final Timer timer = timer(event);
+
+        if (maybeTimeout(event, timer, "Unable to list offsets due to exceeding timeout"))
+            return;
+
         future = requestManagers.offsetsRequestManager.fetchOffsets(
                 event.timestampsToSearch(),
                 event.requireTimestamps(),
@@ -233,24 +259,40 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
         }
         MembershipManager membershipManager = requestManagers.heartbeatRequestManager.get().membershipManager();
         Timer timer = timer(event);
+
+        if (maybeTimeout(event, timer, "Unable to unsubscribe due to exceeding timeout"))
+            return;
+
         CompletableFuture<Void> result = membershipManager.leaveGroup(timer);
         event.chain(result);
     }
 
     private void process(final ResetPositionsApplicationEvent event) {
         Timer timer = timer(event);
+
+        if (maybeTimeout(event, timer, "Unable to reset positions due to exceeding timeout"))
+            return;
+
         CompletableFuture<Void> result = requestManagers.offsetsRequestManager.resetPositionsIfNeeded(timer);
         event.chain(result);
     }
 
     private void process(final ValidatePositionsApplicationEvent event) {
         Timer timer = timer(event);
+
+        if (maybeTimeout(event, timer, "Unable to validate positions due to exceeding timeout"))
+            return;
+
         CompletableFuture<Void> result = requestManagers.offsetsRequestManager.validatePositionsIfNeeded(timer);
         event.chain(result);
     }
 
     private void process(final TopicMetadataApplicationEvent event) {
-        final Timer timer = timer(event);
+        Timer timer = timer(event);
+
+        if (maybeTimeout(event, timer, "Unable to retrieve topic metadata due to exceeding timeout"))
+            return;
+
         final CompletableFuture<Map<String, List<PartitionInfo>>> future;
 
         if (event.isAllTopics()) {
@@ -291,6 +333,10 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
                 "membership manager to be non-null");
         log.debug("Leaving group before closing");
         final Timer timer = timer(event);
+
+        if (maybeTimeout(event, timer, "Unable to leave group due to exceeding timeout"))
+            return;
+
         CompletableFuture<Void> future = membershipManager.leaveGroup(timer);
         // The future will be completed on heartbeat sent
         event.chain(future);
@@ -299,12 +345,19 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
     /**
      * Creates a {@link Timer time} for the network I/O thread that is <em>separate</em> from the timer for the
      * application thread.
-     *
-     * @param event
-     * @return
      */
     private Timer timer(CompletableEvent<?> event) {
         return time.timer(event.deadlineMs() - time.milliseconds());
+    }
+
+    private boolean maybeTimeout(CompletableEvent<?> event, Timer timer, String timeoutMessage) {
+        if (timer.isExpired()) {
+            Exception exception = new TimeoutException(timeoutMessage);
+            event.future().completeExceptionally(exception);
+            return true;
+        } else {
+            return false;
+        }
     }
 
     /**

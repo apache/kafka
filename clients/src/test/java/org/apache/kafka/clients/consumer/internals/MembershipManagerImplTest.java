@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
+import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEventHandler;
 import org.apache.kafka.clients.consumer.internals.events.ConsumerRebalanceListenerCallbackCompletedEvent;
@@ -33,6 +34,7 @@ import org.apache.kafka.common.requests.ConsumerGroupHeartbeatResponse;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.Timer;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -91,6 +93,7 @@ public class MembershipManagerImplTest {
     private BlockingQueue<BackgroundEvent> backgroundEventQueue;
     private BackgroundEventHandler backgroundEventHandler;
     private Time time;
+    private int defaultApiTimeoutMs;
 
     @BeforeEach
     public void setup() {
@@ -101,6 +104,7 @@ public class MembershipManagerImplTest {
         backgroundEventQueue = testBuilder.backgroundEventQueue;
         backgroundEventHandler = testBuilder.backgroundEventHandler;
         time = testBuilder.time;
+        defaultApiTimeoutMs = testBuilder.config.getInt(CommonClientConfigs.DEFAULT_API_TIMEOUT_MS_CONFIG);
     }
 
     @AfterEach
@@ -167,7 +171,8 @@ public class MembershipManagerImplTest {
         // Following joins should not register again.
         receiveEmptyAssignment(manager);
         mockLeaveGroup();
-        manager.leaveGroup();
+        Timer timer = time.timer(defaultApiTimeoutMs);
+        manager.leaveGroup(timer);
         assertEquals(MemberState.LEAVING, manager.state());
         manager.onHeartbeatRequestSent();
         assertEquals(MemberState.UNSUBSCRIBED, manager.state());
@@ -279,7 +284,8 @@ public class MembershipManagerImplTest {
         clearInvocations(listener);
 
         mockLeaveGroup();
-        membershipManager.leaveGroup();
+        Timer timer = time.timer(defaultApiTimeoutMs);
+        membershipManager.leaveGroup(timer);
         assertEquals(MemberState.LEAVING, membershipManager.state());
         verify(listener).onMemberEpochUpdated(Optional.empty(), Optional.empty());
     }
@@ -383,7 +389,8 @@ public class MembershipManagerImplTest {
 
         // Start leaving group.
         mockLeaveGroup();
-        membershipManager.leaveGroup();
+        Timer timer = time.timer(defaultApiTimeoutMs);
+        membershipManager.leaveGroup(timer);
         assertEquals(MemberState.LEAVING, membershipManager.state());
 
         // Get fenced while leaving. Member should not trigger any callback or try to
@@ -409,7 +416,8 @@ public class MembershipManagerImplTest {
         // Static member should leave the group with epoch -2.
         MembershipManagerImpl membershipManager = createMemberInStableState("instance1");
         mockLeaveGroup();
-        membershipManager.leaveGroup();
+        Timer timer = time.timer(defaultApiTimeoutMs);
+        membershipManager.leaveGroup(timer);
         assertEquals(MemberState.LEAVING, membershipManager.state());
         assertEquals(ConsumerGroupHeartbeatRequest.LEAVE_GROUP_STATIC_MEMBER_EPOCH,
                 membershipManager.memberEpoch());
@@ -417,7 +425,7 @@ public class MembershipManagerImplTest {
         // Dynamic member should leave the group with epoch -1.
         membershipManager = createMemberInStableState(null);
         mockLeaveGroup();
-        membershipManager.leaveGroup();
+        membershipManager.leaveGroup(timer);
         assertEquals(MemberState.LEAVING, membershipManager.state());
         assertEquals(ConsumerGroupHeartbeatRequest.LEAVE_GROUP_MEMBER_EPOCH,
                 membershipManager.memberEpoch());
@@ -593,11 +601,12 @@ public class MembershipManagerImplTest {
     @Test
     public void testLeaveGroupWhenMemberAlreadyLeaving() {
         MembershipManager membershipManager = createMemberInStableState();
+        Timer timer = time.timer(defaultApiTimeoutMs);
 
         // First leave attempt. Should trigger the callbacks and stay LEAVING until
         // callbacks complete and the heartbeat is sent out.
         mockLeaveGroup();
-        CompletableFuture<Void> leaveResult1 = membershipManager.leaveGroup();
+        CompletableFuture<Void> leaveResult1 = membershipManager.leaveGroup(timer);
         assertFalse(leaveResult1.isDone());
         assertEquals(MemberState.LEAVING, membershipManager.state());
         verify(subscriptionState).assignFromSubscribed(Collections.emptySet());
@@ -607,7 +616,7 @@ public class MembershipManagerImplTest {
         // trigger any callbacks, and return a future that will complete when the ongoing first
         // leave operation completes.
         mockLeaveGroup();
-        CompletableFuture<Void> leaveResult2 = membershipManager.leaveGroup();
+        CompletableFuture<Void> leaveResult2 = membershipManager.leaveGroup(timer);
         verify(subscriptionState, never()).rebalanceListener();
         assertFalse(leaveResult2.isDone());
 
@@ -624,11 +633,12 @@ public class MembershipManagerImplTest {
 
     @Test
     public void testLeaveGroupWhenMemberAlreadyLeft() {
+        Timer timer = time.timer(defaultApiTimeoutMs);
         MembershipManager membershipManager = createMemberInStableState();
 
         // Leave group triggered and completed
         mockLeaveGroup();
-        CompletableFuture<Void> leaveResult1 = membershipManager.leaveGroup();
+        CompletableFuture<Void> leaveResult1 = membershipManager.leaveGroup(timer);
         assertEquals(MemberState.LEAVING, membershipManager.state());
         membershipManager.onHeartbeatRequestSent();
         assertEquals(MemberState.UNSUBSCRIBED, membershipManager.state());
@@ -640,7 +650,7 @@ public class MembershipManagerImplTest {
         // Call to leave group again, when member already left. Should be no-op (no callbacks,
         // no assignment updated)
         mockLeaveGroup();
-        CompletableFuture<Void> leaveResult2 = membershipManager.leaveGroup();
+        CompletableFuture<Void> leaveResult2 = membershipManager.leaveGroup(timer);
         assertTrue(leaveResult2.isDone());
         assertFalse(leaveResult2.isCompletedExceptionally());
         assertEquals(MemberState.UNSUBSCRIBED, membershipManager.state());
@@ -683,11 +693,12 @@ public class MembershipManagerImplTest {
 
     @Test
     public void testFatalFailureWhenStateIsLeaving() {
+        Timer timer = time.timer(defaultApiTimeoutMs);
         MembershipManagerImpl membershipManager = createMemberInStableState();
 
         // Start leaving group.
         mockLeaveGroup();
-        membershipManager.leaveGroup();
+        membershipManager.leaveGroup(timer);
         assertEquals(MemberState.LEAVING, membershipManager.state());
 
         // Get fatal failure while waiting to send the heartbeat to leave. Member should
@@ -702,11 +713,12 @@ public class MembershipManagerImplTest {
 
     @Test
     public void testFatalFailureWhenMemberAlreadyLeft() {
+        Timer timer = time.timer(defaultApiTimeoutMs);
         MembershipManagerImpl membershipManager = createMemberInStableState();
 
         // Start leaving group.
         mockLeaveGroup();
-        membershipManager.leaveGroup();
+        membershipManager.leaveGroup(timer);
         assertEquals(MemberState.LEAVING, membershipManager.state());
 
         // Last heartbeat sent.
@@ -1726,9 +1738,10 @@ public class MembershipManagerImplTest {
      * transition to {@link MemberState#UNSUBSCRIBED}
      */
     private void testLeaveGroupReleasesAssignmentAndResetsEpochToSendLeaveGroup(MembershipManager membershipManager) {
+        Timer timer = time.timer(defaultApiTimeoutMs);
         mockLeaveGroup();
 
-        CompletableFuture<Void> leaveResult = membershipManager.leaveGroup();
+        CompletableFuture<Void> leaveResult = membershipManager.leaveGroup(timer);
 
         assertEquals(MemberState.LEAVING, membershipManager.state());
         assertFalse(leaveResult.isDone(), "Leave group result should not complete until the " +
@@ -1753,6 +1766,7 @@ public class MembershipManagerImplTest {
     private ConsumerRebalanceListenerCallbackCompletedEvent mockPrepareLeavingStuckOnUserCallback(
         MembershipManagerImpl membershipManager,
         ConsumerRebalanceListenerInvoker invoker) {
+        Timer timer = time.timer(defaultApiTimeoutMs);
         String topicName = "topic1";
         TopicPartition ownedPartition = new TopicPartition(topicName, 0);
 
@@ -1763,7 +1777,7 @@ public class MembershipManagerImplTest {
         when(subscriptionState.rebalanceListener()).thenReturn(Optional.of(listener));
         doNothing().when(subscriptionState).markPendingRevocation(anySet());
         when(commitRequestManager.autoCommitEnabled()).thenReturn(false);
-        membershipManager.leaveGroup();
+        membershipManager.leaveGroup(timer);
         return performCallback(
             membershipManager,
             invoker,

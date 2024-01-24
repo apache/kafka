@@ -45,6 +45,7 @@ import org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse;
 import org.apache.kafka.common.requests.RequestHeader;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.common.utils.Timer;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -101,6 +102,7 @@ public class OffsetsRequestManagerTest {
     private static final IsolationLevel DEFAULT_ISOLATION_LEVEL = IsolationLevel.READ_COMMITTED;
     private static final int RETRY_BACKOFF_MS = 500;
     private static final int REQUEST_TIMEOUT_MS = 500;
+    private static final int DEFAULT_API_TIMEOUT_MS = 60000;
 
     @BeforeEach
     public void setup() {
@@ -131,14 +133,16 @@ public class OffsetsRequestManagerTest {
                 ListOffsetsRequest.EARLIEST_TIMESTAMP);
 
         mockSuccessfulRequest(Collections.singletonMap(TEST_PARTITION_1, LEADER_1));
+        Timer timer = time.timer(DEFAULT_API_TIMEOUT_MS);
         CompletableFuture<Map<TopicPartition, OffsetAndTimestamp>> result = requestManager.fetchOffsets(
                 timestampsToSearch,
-                false);
+                false,
+                timer);
         assertEquals(1, requestManager.requestsToSend());
         assertEquals(0, requestManager.requestsToRetry());
 
         Map<TopicPartition, OffsetAndTimestamp> expectedOffsets = Collections.singletonMap(TEST_PARTITION_1, new OffsetAndTimestamp(5L, 1L));
-        verifySuccessfulPollAndResponseReceived(result, expectedOffsets);
+        verifySuccessfulPollAndResponseReceived(result, expectedOffsets, timer);
     }
 
     @Test
@@ -148,12 +152,13 @@ public class OffsetsRequestManagerTest {
 
         // Building list offsets request fails with unknown leader
         mockFailedRequest_MissingLeader();
+        Timer timer = time.timer(DEFAULT_API_TIMEOUT_MS);
         CompletableFuture<Map<TopicPartition, OffsetAndTimestamp>> fetchOffsetsFuture =
-                requestManager.fetchOffsets(timestampsToSearch, false);
+                requestManager.fetchOffsets(timestampsToSearch, false, timer);
         assertEquals(0, requestManager.requestsToSend());
         assertEquals(1, requestManager.requestsToRetry());
         verify(metadata).requestUpdate(true);
-        NetworkClientDelegate.PollResult res = requestManager.poll(time.milliseconds());
+        NetworkClientDelegate.PollResult res = requestManager.poll(timer.currentTimeMs());
         assertEquals(0, res.unsentRequests.size());
         // Metadata update not happening within the time boundaries of the request future, so
         // future should time out.
@@ -172,26 +177,30 @@ public class OffsetsRequestManagerTest {
         partitionLeaders.put(TEST_PARTITION_1, LEADER_1);
         partitionLeaders.put(TEST_PARTITION_2, LEADER_1);
         mockSuccessfulRequest(partitionLeaders);
+        Timer timer = time.timer(DEFAULT_API_TIMEOUT_MS);
         CompletableFuture<Map<TopicPartition, OffsetAndTimestamp>> result = requestManager.fetchOffsets(
                 timestampsToSearch,
-                false);
+                false,
+                timer);
         assertEquals(1, requestManager.requestsToSend());
         assertEquals(0, requestManager.requestsToRetry());
 
         Map<TopicPartition, OffsetAndTimestamp> expectedOffsets = timestampsToSearch.entrySet().stream()
                 .collect(Collectors.toMap(e -> e.getKey(), e -> new OffsetAndTimestamp(5L, 1L)));
-        verifySuccessfulPollAndResponseReceived(result, expectedOffsets);
+        verifySuccessfulPollAndResponseReceived(result, expectedOffsets, timer);
     }
 
     @Test
     public void testListOffsetsRequestEmpty() throws ExecutionException, InterruptedException {
+        Timer timer = time.timer(DEFAULT_API_TIMEOUT_MS);
         CompletableFuture<Map<TopicPartition, OffsetAndTimestamp>> result = requestManager.fetchOffsets(
                 Collections.emptyMap(),
-                false);
+                false,
+                timer);
         assertEquals(0, requestManager.requestsToSend());
         assertEquals(0, requestManager.requestsToRetry());
 
-        NetworkClientDelegate.PollResult pollResult = requestManager.poll(time.milliseconds());
+        NetworkClientDelegate.PollResult pollResult = requestManager.poll(timer.currentTimeMs());
         assertTrue(pollResult.unsentRequests.isEmpty());
 
         assertEquals(0, requestManager.requestsToRetry());
@@ -209,16 +218,18 @@ public class OffsetsRequestManagerTest {
                 ListOffsetsRequest.EARLIEST_TIMESTAMP);
 
         mockSuccessfulRequest(Collections.singletonMap(TEST_PARTITION_1, LEADER_1));
+        Timer timer = time.timer(DEFAULT_API_TIMEOUT_MS);
         CompletableFuture<Map<TopicPartition, OffsetAndTimestamp>> result = requestManager.fetchOffsets(
                 timestampsToSearch,
-                false);
+                false,
+                timer);
         assertEquals(1, requestManager.requestsToSend());
         assertEquals(0, requestManager.requestsToRetry());
 
         List<ListOffsetsResponseData.ListOffsetsTopicResponse> topicResponses = Collections.singletonList(
                 mockUnknownOffsetResponse(TEST_PARTITION_1));
 
-        NetworkClientDelegate.PollResult retriedPoll = requestManager.poll(time.milliseconds());
+        NetworkClientDelegate.PollResult retriedPoll = requestManager.poll(timer.currentTimeMs());
         verifySuccessfulPollAwaitingResponse(retriedPoll);
         NetworkClientDelegate.UnsentRequest unsentRequest = retriedPoll.unsentRequests.get(0);
         ClientResponse clientResponse = buildClientResponse(unsentRequest, topicResponses);
@@ -237,14 +248,16 @@ public class OffsetsRequestManagerTest {
 
         // Building list offsets request fails with unknown leader
         mockFailedRequest_MissingLeader();
+        Timer timer = time.timer(DEFAULT_API_TIMEOUT_MS);
         CompletableFuture<Map<TopicPartition, OffsetAndTimestamp>> fetchOffsetsFuture =
                 requestManager.fetchOffsets(timestampsToSearch,
-                        false);
+                        false,
+                                        timer);
         assertEquals(0, requestManager.requestsToSend());
         assertEquals(1, requestManager.requestsToRetry());
         verify(metadata).requestUpdate(true);
 
-        NetworkClientDelegate.PollResult res = requestManager.poll(time.milliseconds());
+        NetworkClientDelegate.PollResult res = requestManager.poll(timer.currentTimeMs());
         assertEquals(0, res.unsentRequests.size());
         assertFalse(fetchOffsetsFuture.isDone());
 
@@ -256,7 +269,7 @@ public class OffsetsRequestManagerTest {
 
         Map<TopicPartition, OffsetAndTimestamp> expectedOffsets = Collections.singletonMap(
                 TEST_PARTITION_1, new OffsetAndTimestamp(5L, 1L));
-        verifySuccessfulPollAndResponseReceived(fetchOffsetsFuture, expectedOffsets);
+        verifySuccessfulPollAndResponseReceived(fetchOffsetsFuture, expectedOffsets, timer);
     }
 
     @ParameterizedTest
@@ -267,14 +280,16 @@ public class OffsetsRequestManagerTest {
 
         // List offsets request successfully built
         mockSuccessfulRequest(Collections.singletonMap(TEST_PARTITION_1, LEADER_1));
+        Timer timer = time.timer(DEFAULT_API_TIMEOUT_MS);
         CompletableFuture<Map<TopicPartition, OffsetAndTimestamp>> fetchOffsetsFuture = requestManager.fetchOffsets(
                 timestampsToSearch,
-                false);
+                false,
+                timer);
         assertEquals(1, requestManager.requestsToSend());
         assertEquals(0, requestManager.requestsToRetry());
 
         // Request successfully sent to single broker
-        NetworkClientDelegate.PollResult res = requestManager.poll(time.milliseconds());
+        NetworkClientDelegate.PollResult res = requestManager.poll(timer.currentTimeMs());
         verifySuccessfulPollAwaitingResponse(res);
         assertFalse(fetchOffsetsFuture.isDone());
 
@@ -294,7 +309,7 @@ public class OffsetsRequestManagerTest {
         assertEquals(1, requestManager.requestsToSend());
 
         Map<TopicPartition, OffsetAndTimestamp> expectedOffsets = Collections.singletonMap(TEST_PARTITION_1, new OffsetAndTimestamp(5L, 1L));
-        verifySuccessfulPollAndResponseReceived(fetchOffsetsFuture, expectedOffsets);
+        verifySuccessfulPollAndResponseReceived(fetchOffsetsFuture, expectedOffsets, timer);
     }
 
     @Test
@@ -315,14 +330,16 @@ public class OffsetsRequestManagerTest {
 
         // List offsets request successfully built
         mockSuccessfulRequest(Collections.singletonMap(TEST_PARTITION_1, LEADER_1));
+        Timer timer = time.timer(DEFAULT_API_TIMEOUT_MS);
         CompletableFuture<Map<TopicPartition, OffsetAndTimestamp>> fetchOffsetsFuture = requestManager.fetchOffsets(
                 timestampsToSearch,
-                false);
+                false,
+                timer);
         assertEquals(1, requestManager.requestsToSend());
         assertEquals(0, requestManager.requestsToRetry());
 
         // Request successfully sent to single broker
-        NetworkClientDelegate.PollResult res = requestManager.poll(time.milliseconds());
+        NetworkClientDelegate.PollResult res = requestManager.poll(timer.currentTimeMs());
         verifySuccessfulPollAwaitingResponse(res);
         assertFalse(fetchOffsetsFuture.isDone());
 
@@ -352,14 +369,16 @@ public class OffsetsRequestManagerTest {
         partitionLeaders.put(TEST_PARTITION_1, LEADER_1);
         partitionLeaders.put(TEST_PARTITION_2, LEADER_2);
         mockSuccessfulRequest(partitionLeaders);
+        Timer timer = time.timer(DEFAULT_API_TIMEOUT_MS);
         CompletableFuture<Map<TopicPartition, OffsetAndTimestamp>> fetchOffsetsFuture = requestManager.fetchOffsets(
                 timestampsToSearch,
-                false);
+                false,
+                timer);
         assertEquals(2, requestManager.requestsToSend());
         assertEquals(0, requestManager.requestsToRetry());
 
         // Requests successfully sent to both brokers
-        NetworkClientDelegate.PollResult res = requestManager.poll(time.milliseconds());
+        NetworkClientDelegate.PollResult res = requestManager.poll(timer.currentTimeMs());
         verifySuccessfulPollAwaitingResponse(res, 2);
         assertFalse(fetchOffsetsFuture.isDone());
 
@@ -386,7 +405,7 @@ public class OffsetsRequestManagerTest {
         assertEquals(1, requestManager.requestsToSend());
 
         // Following poll should send the request and get a successful response
-        NetworkClientDelegate.PollResult retriedPoll = requestManager.poll(time.milliseconds());
+        NetworkClientDelegate.PollResult retriedPoll = requestManager.poll(timer.currentTimeMs());
         verifySuccessfulPollAwaitingResponse(retriedPoll);
         NetworkClientDelegate.UnsentRequest unsentRequest = retriedPoll.unsentRequests.get(0);
         ClientResponse clientResponse = buildClientResponse(unsentRequest,
@@ -405,15 +424,17 @@ public class OffsetsRequestManagerTest {
 
         // List offsets request successfully built
         mockSuccessfulRequest(Collections.singletonMap(TEST_PARTITION_1, LEADER_1));
+        Timer timer = time.timer(DEFAULT_API_TIMEOUT_MS);
         CompletableFuture<Map<TopicPartition, OffsetAndTimestamp>> fetchOffsetsFuture =
                 requestManager.fetchOffsets(
                         timestampsToSearch,
-                        false);
+                        false,
+                        timer);
         assertEquals(1, requestManager.requestsToSend());
         assertEquals(0, requestManager.requestsToRetry());
 
         // Request successfully sent
-        NetworkClientDelegate.PollResult res = requestManager.poll(time.milliseconds());
+        NetworkClientDelegate.PollResult res = requestManager.poll(timer.currentTimeMs());
         verifySuccessfulPollAwaitingResponse(res);
 
         // Response received with non-retriable auth error
@@ -434,15 +455,17 @@ public class OffsetsRequestManagerTest {
 
         // List offsets request successfully built
         mockSuccessfulRequest(Collections.singletonMap(TEST_PARTITION_1, LEADER_1));
+        Timer timer = time.timer(DEFAULT_API_TIMEOUT_MS);
         CompletableFuture<Map<TopicPartition, OffsetAndTimestamp>> fetchOffsetsFuture =
                 requestManager.fetchOffsets(
                         timestampsToSearch,
-                        false);
+                        false,
+                        timer);
         assertEquals(1, requestManager.requestsToSend());
         assertEquals(0, requestManager.requestsToRetry());
 
         // Request successfully sent
-        NetworkClientDelegate.PollResult res = requestManager.poll(time.milliseconds());
+        NetworkClientDelegate.PollResult res = requestManager.poll(timer.currentTimeMs());
         verifySuccessfulPollAwaitingResponse(res);
 
         // Response received
@@ -466,15 +489,17 @@ public class OffsetsRequestManagerTest {
 
         // List offsets request successfully built
         mockSuccessfulRequest(Collections.singletonMap(TEST_PARTITION_1, LEADER_1));
+        Timer timer = time.timer(DEFAULT_API_TIMEOUT_MS);
         CompletableFuture<Map<TopicPartition, OffsetAndTimestamp>> fetchOffsetsFuture =
                 requestManager.fetchOffsets(
                         timestampsToSearch,
-                        false);
+                        false,
+                        timer);
         assertEquals(1, requestManager.requestsToSend());
         assertEquals(0, requestManager.requestsToRetry());
 
         // Request successfully sent
-        NetworkClientDelegate.PollResult res = requestManager.poll(time.milliseconds());
+        NetworkClientDelegate.PollResult res = requestManager.poll(timer.currentTimeMs());
         verifySuccessfulPollAwaitingResponse(res);
 
         // Response received with auth error
@@ -491,17 +516,19 @@ public class OffsetsRequestManagerTest {
 
     @Test
     public void testResetPositionsSendNoRequestIfNoPartitionsNeedingReset() {
-        when(subscriptionState.partitionsNeedingReset(time.milliseconds())).thenReturn(Collections.emptySet());
-        requestManager.resetPositionsIfNeeded();
+        Timer timer = time.timer(DEFAULT_API_TIMEOUT_MS);
+        when(subscriptionState.partitionsNeedingReset(timer.currentTimeMs())).thenReturn(Collections.emptySet());
+        requestManager.resetPositionsIfNeeded(timer);
         assertEquals(0, requestManager.requestsToSend());
     }
 
     @Test
     public void testResetPositionsMissingLeader() {
         mockFailedRequest_MissingLeader();
-        when(subscriptionState.partitionsNeedingReset(time.milliseconds())).thenReturn(Collections.singleton(TEST_PARTITION_1));
+        Timer timer = time.timer(DEFAULT_API_TIMEOUT_MS);
+        when(subscriptionState.partitionsNeedingReset(timer.currentTimeMs())).thenReturn(Collections.singleton(TEST_PARTITION_1));
         when(subscriptionState.resetStrategy(any())).thenReturn(OffsetResetStrategy.EARLIEST);
-        requestManager.resetPositionsIfNeeded();
+        requestManager.resetPositionsIfNeeded(timer);
         verify(metadata).requestUpdate(true);
         assertEquals(0, requestManager.requestsToSend());
     }
@@ -522,14 +549,15 @@ public class OffsetsRequestManagerTest {
 
     @Test
     public void testResetOffsetsAuthorizationFailure() {
-        when(subscriptionState.partitionsNeedingReset(time.milliseconds())).thenReturn(Collections.singleton(TEST_PARTITION_1));
+        Timer timer = time.timer(DEFAULT_API_TIMEOUT_MS);
+        when(subscriptionState.partitionsNeedingReset(timer.currentTimeMs())).thenReturn(Collections.singleton(TEST_PARTITION_1));
         when(subscriptionState.resetStrategy(any())).thenReturn(OffsetResetStrategy.EARLIEST);
         mockSuccessfulRequest(Collections.singletonMap(TEST_PARTITION_1, LEADER_1));
 
-        requestManager.resetPositionsIfNeeded();
+        requestManager.resetPositionsIfNeeded(timer);
 
         // Reset positions response with TopicAuthorizationException
-        NetworkClientDelegate.PollResult res = requestManager.poll(time.milliseconds());
+        NetworkClientDelegate.PollResult res = requestManager.poll(timer.currentTimeMs());
         NetworkClientDelegate.UnsentRequest unsentRequest = res.unsentRequests.get(0);
         Errors topicAuthorizationFailedError = Errors.TOPIC_AUTHORIZATION_FAILED;
         ClientResponse clientResponse = buildClientResponseWithErrors(
@@ -544,7 +572,7 @@ public class OffsetsRequestManagerTest {
 
         // Following resetPositions should enqueue the previous exception in the background event queue
         // without performing any request
-        assertDoesNotThrow(() -> requestManager.resetPositionsIfNeeded());
+        assertDoesNotThrow(() -> requestManager.resetPositionsIfNeeded(timer));
         assertEquals(0, requestManager.requestsToSend());
 
         // Check that the event was enqueued during resetPositionsIfNeeded
@@ -573,14 +601,15 @@ public class OffsetsRequestManagerTest {
 
         mockSuccessfulBuildRequestForValidatingPositions(position, LEADER_1);
 
-        requestManager.validatePositionsIfNeeded();
+        Timer timer = time.timer(DEFAULT_API_TIMEOUT_MS);
+        requestManager.validatePositionsIfNeeded(timer);
         assertEquals(1, requestManager.requestsToSend(), "Invalid request count");
 
         verify(subscriptionState).setNextAllowedRetry(any(), anyLong());
 
         // Validate positions response with end offsets
         when(metadata.currentLeader(tp)).thenReturn(testLeaderEpoch(LEADER_1, leaderAndEpoch.epoch));
-        NetworkClientDelegate.PollResult pollResult = requestManager.poll(time.milliseconds());
+        NetworkClientDelegate.PollResult pollResult = requestManager.poll(timer.currentTimeMs());
         NetworkClientDelegate.UnsentRequest unsentRequest = pollResult.unsentRequests.get(0);
         ClientResponse clientResponse = buildOffsetsForLeaderEpochResponse(unsentRequest,
                 Collections.singletonList(tp), expectedEndOffset);
@@ -592,15 +621,16 @@ public class OffsetsRequestManagerTest {
 
     @Test
     public void testValidatePositionsMissingLeader() {
+        Timer timer = time.timer(DEFAULT_API_TIMEOUT_MS);
         Metadata.LeaderAndEpoch leaderAndEpoch = new Metadata.LeaderAndEpoch(Optional.of(Node.noNode()),
                 Optional.of(5));
         SubscriptionState.FetchPosition position = new SubscriptionState.FetchPosition(5L,
                 Optional.of(10), leaderAndEpoch);
-        when(subscriptionState.partitionsNeedingValidation(time.milliseconds())).thenReturn(Collections.singleton(TEST_PARTITION_1));
+        when(subscriptionState.partitionsNeedingValidation(timer.currentTimeMs())).thenReturn(Collections.singleton(TEST_PARTITION_1));
         when(subscriptionState.position(any())).thenReturn(position, position);
         NodeApiVersions nodeApiVersions = NodeApiVersions.create();
         when(apiVersions.get(LEADER_1.idString())).thenReturn(nodeApiVersions);
-        requestManager.validatePositionsIfNeeded();
+        requestManager.validatePositionsIfNeeded(timer);
         verify(metadata).requestUpdate(true);
         assertEquals(0, requestManager.requestsToSend());
     }
@@ -613,10 +643,11 @@ public class OffsetsRequestManagerTest {
                 Optional.of(10), leaderAndEpoch);
         mockSuccessfulBuildRequestForValidatingPositions(position, LEADER_1);
 
-        requestManager.validatePositionsIfNeeded();
+        Timer timer = time.timer(DEFAULT_API_TIMEOUT_MS);
+        requestManager.validatePositionsIfNeeded(timer);
 
         // Validate positions response with TopicAuthorizationException
-        NetworkClientDelegate.PollResult res = requestManager.poll(time.milliseconds());
+        NetworkClientDelegate.PollResult res = requestManager.poll(timer.currentTimeMs());
         NetworkClientDelegate.UnsentRequest unsentRequest = res.unsentRequests.get(0);
         ClientResponse clientResponse =
                 buildOffsetsForLeaderEpochResponseWithErrors(unsentRequest, Collections.singletonMap(TEST_PARTITION_1, Errors.TOPIC_AUTHORIZATION_FAILED));
@@ -627,7 +658,7 @@ public class OffsetsRequestManagerTest {
 
         // Following validatePositions should raise the previous exception without performing any
         // request
-        assertThrows(TopicAuthorizationException.class, () -> requestManager.validatePositionsIfNeeded());
+        assertThrows(TopicAuthorizationException.class, () -> requestManager.validatePositionsIfNeeded(timer));
         assertEquals(0, requestManager.requestsToSend());
     }
 
@@ -639,26 +670,28 @@ public class OffsetsRequestManagerTest {
         SubscriptionState.FetchPosition position = new SubscriptionState.FetchPosition(currentOffset,
                 Optional.of(10), leaderAndEpoch);
 
-        when(subscriptionState.partitionsNeedingValidation(time.milliseconds())).thenReturn(Collections.singleton(TEST_PARTITION_1));
+        Timer timer = time.timer(DEFAULT_API_TIMEOUT_MS);
+        when(subscriptionState.partitionsNeedingValidation(timer.currentTimeMs())).thenReturn(Collections.singleton(TEST_PARTITION_1));
         when(subscriptionState.position(any())).thenReturn(position, position);
 
         // No api version info initially available
         when(apiVersions.get(LEADER_1.idString())).thenReturn(null);
-        requestManager.validatePositionsIfNeeded();
+        requestManager.validatePositionsIfNeeded(timer);
         assertEquals(0, requestManager.requestsToSend(), "Invalid request count");
         verify(subscriptionState, never()).completeValidation(TEST_PARTITION_1);
         verify(subscriptionState, never()).setNextAllowedRetry(any(), anyLong());
 
         // Api version updated, next validate positions should successfully build the request
         when(apiVersions.get(LEADER_1.idString())).thenReturn(NodeApiVersions.create());
-        when(subscriptionState.partitionsNeedingValidation(time.milliseconds())).thenReturn(Collections.singleton(TEST_PARTITION_1));
+        when(subscriptionState.partitionsNeedingValidation(timer.currentTimeMs())).thenReturn(Collections.singleton(TEST_PARTITION_1));
         when(subscriptionState.position(any())).thenReturn(position, position);
-        requestManager.validatePositionsIfNeeded();
+        requestManager.validatePositionsIfNeeded(timer);
         assertEquals(1, requestManager.requestsToSend(), "Invalid request count");
     }
 
     private void mockSuccessfulBuildRequestForValidatingPositions(SubscriptionState.FetchPosition position, Node leader) {
-        when(subscriptionState.partitionsNeedingValidation(time.milliseconds())).thenReturn(Collections.singleton(TEST_PARTITION_1));
+        Timer timer = time.timer(DEFAULT_API_TIMEOUT_MS);
+        when(subscriptionState.partitionsNeedingValidation(timer.currentTimeMs())).thenReturn(Collections.singleton(TEST_PARTITION_1));
         when(subscriptionState.position(any())).thenReturn(position, position);
         NodeApiVersions nodeApiVersions = NodeApiVersions.create();
         when(apiVersions.get(leader.idString())).thenReturn(nodeApiVersions);
@@ -671,16 +704,17 @@ public class OffsetsRequestManagerTest {
         long offset = 5L;
         Map<TopicPartition, OffsetAndTimestamp> expectedOffsets = Collections.singletonMap(tp,
                 new OffsetAndTimestamp(offset, 1L, leaderAndEpoch.epoch));
-        when(subscriptionState.partitionsNeedingReset(time.milliseconds())).thenReturn(Collections.singleton(tp));
+        Timer timer = time.timer(DEFAULT_API_TIMEOUT_MS);
+        when(subscriptionState.partitionsNeedingReset(timer.currentTimeMs())).thenReturn(Collections.singleton(tp));
         when(subscriptionState.resetStrategy(any())).thenReturn(strategy);
         mockSuccessfulRequest(Collections.singletonMap(tp, leader));
 
-        requestManager.resetPositionsIfNeeded();
+        requestManager.resetPositionsIfNeeded(timer);
         assertEquals(1, requestManager.requestsToSend());
 
         // Reset positions response with offsets
         when(metadata.currentLeader(tp)).thenReturn(testLeaderEpoch(leader, leaderAndEpoch.epoch));
-        NetworkClientDelegate.PollResult pollResult = requestManager.poll(time.milliseconds());
+        NetworkClientDelegate.PollResult pollResult = requestManager.poll(timer.currentTimeMs());
         NetworkClientDelegate.UnsentRequest unsentRequest = pollResult.unsentRequests.get(0);
         ClientResponse clientResponse = buildClientResponse(unsentRequest, expectedOffsets);
         clientResponse.onComplete();
@@ -715,10 +749,10 @@ public class OffsetsRequestManagerTest {
 
     private void verifySuccessfulPollAndResponseReceived(
             CompletableFuture<Map<TopicPartition, OffsetAndTimestamp>> actualResult,
-            Map<TopicPartition, OffsetAndTimestamp> expectedResult) throws ExecutionException,
+            Map<TopicPartition, OffsetAndTimestamp> expectedResult, Timer timer) throws ExecutionException,
             InterruptedException {
         // Following poll should send the request and get a response
-        NetworkClientDelegate.PollResult retriedPoll = requestManager.poll(time.milliseconds());
+        NetworkClientDelegate.PollResult retriedPoll = requestManager.poll(timer.currentTimeMs());
         verifySuccessfulPollAwaitingResponse(retriedPoll);
         NetworkClientDelegate.UnsentRequest unsentRequest = retriedPoll.unsentRequests.get(0);
         ClientResponse clientResponse = buildClientResponse(unsentRequest, expectedResult);
@@ -856,8 +890,8 @@ public class OffsetsRequestManagerTest {
                 new RequestHeader(ApiKeys.OFFSET_FOR_LEADER_EPOCH, offsetsForLeaderEpochRequest.version(), "", 1),
                 request.handler(),
                 "-1",
-                time.milliseconds(),
-                time.milliseconds(),
+                request.timer().currentTimeMs(),
+                request.timer().currentTimeMs(),
                 false,
                 null,
                 null,
@@ -889,8 +923,8 @@ public class OffsetsRequestManagerTest {
                 new RequestHeader(ApiKeys.OFFSET_FOR_LEADER_EPOCH, offsetsForLeaderEpochRequest.version(), "", 1),
                 request.handler(),
                 "-1",
-                time.milliseconds(),
-                time.milliseconds(),
+                request.timer().currentTimeMs(),
+                request.timer().currentTimeMs(),
                 false,
                 null,
                 null,
@@ -938,8 +972,8 @@ public class OffsetsRequestManagerTest {
                 new RequestHeader(ApiKeys.OFFSET_FETCH, offsetFetchRequest.version(), "", 1),
                 request.handler(),
                 "-1",
-                time.milliseconds(),
-                time.milliseconds(),
+                request.timer().currentTimeMs(),
+                request.timer().currentTimeMs(),
                 disconnected,
                 null,
                 authenticationException,

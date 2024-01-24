@@ -22,6 +22,7 @@ import org.apache.kafka.common.utils.Timer;
 
 import java.util.Collections;
 import java.util.Map;
+import java.util.Objects;
 
 public class CommitApplicationEvent extends CompletableApplicationEvent<Void> {
 
@@ -31,14 +32,25 @@ public class CommitApplicationEvent extends CompletableApplicationEvent<Void> {
     private final Map<TopicPartition, OffsetAndMetadata> offsets;
 
     /**
+     * The value of this flag is <code>true</code> if the requests allows to be retried
+     * (sync requests that provide an expiration time to bound the retries). The value
+     * of <code>false</code> means that we do not allow retries on RetriableErrors (async
+     * requests that does not provide an expiration time for retries).
+     */
+    private final boolean allowsRetries;
+
+    /**
      * Create new event to commit offsets. If timer is present, the request will be retried on
      * retriable errors until the timer expires (sync commit offsets request). If the timer is
      * not present, the request will be sent without waiting for a response of retrying (async
      * commit offsets request).
      */
-    public CommitApplicationEvent(final Map<TopicPartition, OffsetAndMetadata> offsets, final Timer timer) {
-        super(Type.COMMIT_SYNC, timer);
+    public CommitApplicationEvent(final Map<TopicPartition, OffsetAndMetadata> offsets,
+                                  final Timer timer,
+                                  final boolean allowsRetries) {
+        super(Type.COMMIT, timer);
         this.offsets = Collections.unmodifiableMap(offsets);
+        this.allowsRetries = allowsRetries;
 
         for (OffsetAndMetadata offsetAndMetadata : offsets.values()) {
             if (offsetAndMetadata.offset() < 0) {
@@ -51,6 +63,10 @@ public class CommitApplicationEvent extends CompletableApplicationEvent<Void> {
         return offsets;
     }
 
+    public boolean allowsRetries() {
+        return allowsRetries;
+    }
+
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
@@ -59,14 +75,12 @@ public class CommitApplicationEvent extends CompletableApplicationEvent<Void> {
 
         CommitApplicationEvent that = (CommitApplicationEvent) o;
 
-        return offsets.equals(that.offsets);
+        return offsets.equals(that.offsets) && allowsRetries == that.allowsRetries;
     }
 
     @Override
     public int hashCode() {
-        int result = super.hashCode();
-        result = 31 * result + offsets.hashCode();
-        return result;
+        return 31 * super.hashCode() + Objects.hash(offsets, allowsRetries);
     }
 
     @Override
@@ -74,6 +88,7 @@ public class CommitApplicationEvent extends CompletableApplicationEvent<Void> {
         return "CommitApplicationEvent{" +
                 toStringBase() +
                 ", offsets=" + offsets +
+                ", allowsRetries=" + allowsRetries +
                 '}';
     }
 }

@@ -137,7 +137,7 @@ public class ConsumerTestBuilder implements Closeable {
 
         this.fetchConfig = new FetchConfig(config);
         this.retryBackoffMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG);
-        final long requestTimeoutMs = config.getInt(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG);
+        final int requestTimeoutMs = config.getInt(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG);
         this.metrics = createMetrics(config, time);
 
         this.subscriptions = spy(createSubscriptionState(config, logContext));
@@ -203,7 +203,8 @@ public class ConsumerTestBuilder implements Closeable {
                         metadata,
                         logContext,
                         Optional.empty(),
-                        backgroundEventHandler
+                        backgroundEventHandler,
+                        time
                 )
             );
             HeartbeatRequestManager.HeartbeatState heartbeatState = spy(new HeartbeatRequestManager.HeartbeatState(

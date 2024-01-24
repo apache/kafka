@@ -177,7 +177,7 @@ public class FetchRequestManagerTest {
     private int maxWaitMs = 0;
     private int fetchSize = 1000;
     private long retryBackoffMs = 100;
-    private long requestTimeoutMs = 30000;
+    private int requestTimeoutMs = 30000;
     private MockTime time = new MockTime(1);
     private SubscriptionState subscriptions;
     private ConsumerMetadata metadata;
@@ -3530,14 +3530,15 @@ public class FetchRequestManagerTest {
                 metricsManager,
                 networkClientDelegate,
                 fetchCollector,
-                apiVersions));
+                apiVersions,
+                requestTimeoutMs));
         ConsumerNetworkClient consumerNetworkClient = new ConsumerNetworkClient(
                 logContext,
                 client,
                 metadata,
                 time,
                 retryBackoffMs,
-                (int) requestTimeoutMs,
+                requestTimeoutMs,
                 Integer.MAX_VALUE);
         offsetFetcher = new OffsetFetcher(logContext,
                 consumerNetworkClient,
@@ -3589,8 +3590,9 @@ public class FetchRequestManagerTest {
                                            FetchMetricsManager metricsManager,
                                            NetworkClientDelegate networkClientDelegate,
                                            FetchCollector<K, V> fetchCollector,
-                                           ApiVersions apiVersions) {
-            super(logContext, time, metadata, subscriptions, fetchConfig, fetchBuffer, metricsManager, networkClientDelegate, apiVersions);
+                                           ApiVersions apiVersions,
+                                           int requestTimeoutMs) {
+            super(logContext, time, metadata, subscriptions, fetchConfig, fetchBuffer, metricsManager, networkClientDelegate, apiVersions, requestTimeoutMs);
             this.fetchCollector = fetchCollector;
         }
 

@@ -16,8 +16,6 @@
  */
 package org.apache.kafka.clients.consumer.internals.events;
 
-import org.apache.kafka.common.utils.Timer;
-
 import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 
@@ -27,25 +25,17 @@ import java.util.concurrent.CompletableFuture;
  *
  * @param <T>
  */
-public abstract class CompletableBackgroundEvent<T> extends BackgroundEvent implements CompletableEvent<T> {
+public abstract class CompletableBackgroundEvent<T> extends BackgroundEvent {
 
     private final CompletableFuture<T> future;
-    private final long deadlineMs;
 
-    protected CompletableBackgroundEvent(Type type, Timer timer) {
+    protected CompletableBackgroundEvent(Type type) {
         super(type);
         this.future = new CompletableFuture<>();
-        this.deadlineMs = timer.remainingMs() + timer.currentTimeMs();
     }
 
-    @Override
     public CompletableFuture<T> future() {
         return future;
-    }
-
-    @Override
-    public long deadlineMs() {
-        return deadlineMs;
     }
 
     @Override
@@ -56,12 +46,12 @@ public abstract class CompletableBackgroundEvent<T> extends BackgroundEvent impl
 
         CompletableBackgroundEvent<?> that = (CompletableBackgroundEvent<?>) o;
 
-        return future.equals(that.future) && deadlineMs == that.deadlineMs;
+        return future.equals(that.future);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(future, deadlineMs);
+        return Objects.hash(future);
     }
 
     @Override
