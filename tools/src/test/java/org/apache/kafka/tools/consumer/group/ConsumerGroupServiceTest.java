@@ -119,7 +119,7 @@ public class ConsumerGroupServiceTest {
         TopicPartition testTopicPartition4 = new TopicPartition("testTopic2", 1);
         TopicPartition testTopicPartition5 = new TopicPartition("testTopic2", 2);
 
-        // Some topic's partitions gets valid OffsetAndMetadata values, other gets nulls values and others aren't defined
+        // Some topic's partitions gets valid OffsetAndMetadata values, other gets nulls values (negative integers) and others aren't defined
         Map<TopicPartition, OffsetAndMetadata> committedOffsets = new HashMap<>();
 
         committedOffsets.put(testTopicPartition1, new OffsetAndMetadata(100));
