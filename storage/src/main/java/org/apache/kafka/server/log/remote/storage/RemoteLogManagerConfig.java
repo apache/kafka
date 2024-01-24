@@ -122,6 +122,10 @@ public final class RemoteLogManagerConfig {
             "So, jitter factor can be any random value with in that range.";
     public static final double DEFAULT_REMOTE_LOG_MANAGER_TASK_RETRY_JITTER = 0.2;
 
+    public static final String REMOTE_LOG_READER_FETCH_TIMEOUT_MS_PROP = "remote.log.reader.fetch.timeout.ms";
+    public static final String REMOTE_LOG_READER_FETCH_TIMEOUT_MS_DOC = "Fetch timeout for reading remote log";
+    public static final int DEFAULT_REMOTE_LOG_READER_FETCH_TIMEOUT_MS = 2000;
+
     public static final String REMOTE_LOG_READER_THREADS_PROP = "remote.log.reader.threads";
     public static final String REMOTE_LOG_READER_THREADS_DOC = "Size of the thread pool that is allocated for handling remote log reads.";
     public static final int DEFAULT_REMOTE_LOG_READER_THREADS = 10;
@@ -255,7 +259,13 @@ public final class RemoteLogManagerConfig {
                                   DEFAULT_LOG_LOCAL_RETENTION_BYTES,
                                   atLeast(DEFAULT_LOG_LOCAL_RETENTION_BYTES),
                                   MEDIUM,
-                                  LOG_LOCAL_RETENTION_BYTES_DOC);
+                                  LOG_LOCAL_RETENTION_BYTES_DOC)
+                  .define(REMOTE_LOG_READER_FETCH_TIMEOUT_MS_PROP,
+                                  LONG,
+                                  DEFAULT_REMOTE_LOG_READER_FETCH_TIMEOUT_MS,
+                                  atLeast(1),
+                                  MEDIUM,
+                                  REMOTE_LOG_READER_FETCH_TIMEOUT_MS_DOC);
     }
 
     private final boolean enableRemoteStorageSystem;
@@ -277,6 +287,7 @@ public final class RemoteLogManagerConfig {
     private final HashMap<String, Object> remoteLogMetadataManagerProps;
     private final String remoteLogMetadataManagerListenerName;
     private final int remoteLogMetadataCustomMetadataMaxBytes;
+    private final long remoteLogReaderFetchTimeoutMs;
 
     public RemoteLogManagerConfig(AbstractConfig config) {
         this(config.getBoolean(REMOTE_LOG_STORAGE_SYSTEM_ENABLE_PROP),
@@ -301,7 +312,8 @@ public final class RemoteLogManagerConfig {
              config.getString(REMOTE_LOG_METADATA_MANAGER_CONFIG_PREFIX_PROP),
              config.getString(REMOTE_LOG_METADATA_MANAGER_CONFIG_PREFIX_PROP) != null
                  ? config.originalsWithPrefix(config.getString(REMOTE_LOG_METADATA_MANAGER_CONFIG_PREFIX_PROP))
-                 : Collections.emptyMap());
+                 : Collections.emptyMap(),
+            config.getLong(REMOTE_LOG_READER_FETCH_TIMEOUT_MS_PROP));
     }
 
     // Visible for testing
@@ -323,7 +335,8 @@ public final class RemoteLogManagerConfig {
                                   String remoteStorageManagerPrefix,
                                   Map<String, Object> remoteStorageManagerProps, /* properties having keys stripped out with remoteStorageManagerPrefix */
                                   String remoteLogMetadataManagerPrefix,
-                                  Map<String, Object> remoteLogMetadataManagerProps /* properties having keys stripped out with remoteLogMetadataManagerPrefix */
+                                  Map<String, Object> remoteLogMetadataManagerProps, /* properties having keys stripped out with remoteLogMetadataManagerPrefix */
+                                  long remoteLogReaderFetchTimeoutMs
     ) {
         this.enableRemoteStorageSystem = enableRemoteStorageSystem;
         this.remoteStorageManagerClassName = remoteStorageManagerClassName;
@@ -344,6 +357,7 @@ public final class RemoteLogManagerConfig {
         this.remoteLogMetadataManagerProps = new HashMap<>(remoteLogMetadataManagerProps);
         this.remoteLogMetadataManagerListenerName = remoteLogMetadataManagerListenerName;
         this.remoteLogMetadataCustomMetadataMaxBytes = remoteLogMetadataCustomMetadataMaxBytes;
+        this.remoteLogReaderFetchTimeoutMs = remoteLogReaderFetchTimeoutMs;
     }
 
     public boolean enableRemoteStorageSystem() {
@@ -392,6 +406,10 @@ public final class RemoteLogManagerConfig {
 
     public int remoteLogReaderThreads() {
         return remoteLogReaderThreads;
+    }
+
+    public long remoteLogReaderFetchTimeoutMs() {
+        return remoteLogReaderFetchTimeoutMs;
     }
 
     public int remoteLogReaderMaxPendingTasks() {
@@ -445,7 +463,8 @@ public final class RemoteLogManagerConfig {
                 && Objects.equals(remoteStorageManagerProps, that.remoteStorageManagerProps)
                 && Objects.equals(remoteLogMetadataManagerProps, that.remoteLogMetadataManagerProps)
                 && Objects.equals(remoteStorageManagerPrefix, that.remoteStorageManagerPrefix)
-                && Objects.equals(remoteLogMetadataManagerPrefix, that.remoteLogMetadataManagerPrefix);
+                && Objects.equals(remoteLogMetadataManagerPrefix, that.remoteLogMetadataManagerPrefix)
+                && remoteLogReaderFetchTimeoutMs == that.remoteLogReaderFetchTimeoutMs;
     }
 
     @Override
@@ -455,7 +474,7 @@ public final class RemoteLogManagerConfig {
                             remoteLogMetadataCustomMetadataMaxBytes, remoteLogIndexFileCacheTotalSizeBytes, remoteLogManagerThreadPoolSize, remoteLogManagerTaskIntervalMs,
                             remoteLogManagerTaskRetryBackoffMs, remoteLogManagerTaskRetryBackoffMaxMs, remoteLogManagerTaskRetryJitter,
                             remoteLogReaderThreads, remoteLogReaderMaxPendingTasks, remoteStorageManagerProps, remoteLogMetadataManagerProps,
-                            remoteStorageManagerPrefix, remoteLogMetadataManagerPrefix);
+                            remoteStorageManagerPrefix, remoteLogMetadataManagerPrefix, remoteLogReaderFetchTimeoutMs);
     }
 
     public static void main(String[] args) {
