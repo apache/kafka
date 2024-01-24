@@ -48,7 +48,10 @@ public class PollApplicationEvent extends ApplicationEvent {
     }
 
     @Override
-    public String toStringBase() {
-        return toStringBase() + ", pollTimeMs=" + pollTimeMs;
+    public String toString() {
+        return "PollApplicationEvent{" +
+                toStringBase() +
+                ", pollTimeMs=" + pollTimeMs +
+                '}';
     }
 }

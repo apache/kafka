@@ -27,7 +27,7 @@ public class LeaveOnCloseApplicationEvent extends CompletableApplicationEvent<Vo
     @Override
     public String toString() {
         return "LeaveOnCloseApplicationEvent{" +
-                toStringBase() +
-                '}';
+            toStringBase() +
+            '}';
     }
 }

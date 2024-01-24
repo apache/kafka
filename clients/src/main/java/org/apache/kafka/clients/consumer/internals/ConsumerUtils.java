@@ -252,4 +252,18 @@ public final class ConsumerUtils {
         else
             return new KafkaException(message, t);
     }
+
+    /**
+     * @return Expiration time in milliseconds calculated with the current time plus the given
+     * timeout. Returns Long.MAX_VALUE if the expiration overflows it.
+     * Visible for testing.
+     */
+    public static long getExpirationTimeForTimeout(final long timeoutMs) {
+        // TODO: should use Time.milliseconds(), not System.currentTimeMillis()
+        long expiration = System.currentTimeMillis() + timeoutMs;
+        if (expiration < 0) {
+            return Long.MAX_VALUE;
+        }
+        return expiration;
+    }
 }

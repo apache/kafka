@@ -24,7 +24,6 @@ import java.util.Map;
 import java.util.Objects;
 
 public class TopicMetadataApplicationEvent extends CompletableApplicationEvent<Map<String, List<PartitionInfo>>> {
-
     private final String topic;
     private final boolean allTopics;
 
@@ -49,6 +48,13 @@ public class TopicMetadataApplicationEvent extends CompletableApplicationEvent<M
     }
 
     @Override
+    public String toString() {
+        return getClass().getSimpleName() + " {" + toStringBase() +
+                ", topic=" + topic +
+                ", allTopics=" + allTopics + "}";
+    }
+
+    @Override
     public int hashCode() {
         return Objects.hash(super.hashCode(), topic, allTopics);
     }
@@ -65,8 +71,4 @@ public class TopicMetadataApplicationEvent extends CompletableApplicationEvent<M
         return topic.equals(that.topic) && (allTopics == that.allTopics);
     }
 
-    @Override
-    public String toStringBase() {
-        return toStringBase() + ", topic=" + topic + ", allTopics=" + allTopics + "}";
-    }
 }
