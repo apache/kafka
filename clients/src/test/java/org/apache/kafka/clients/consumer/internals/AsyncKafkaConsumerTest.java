@@ -829,10 +829,9 @@ public class AsyncKafkaConsumerTest {
         final HashMap<TopicPartition, OffsetAndMetadata> offsets = mockTopicPartitionOffset();
         doAnswer(invocation -> {
             CompletableApplicationEvent<?> event = invocation.getArgument(0);
-            Timer timer = invocation.getArgument(1);
             assertInstanceOf(FetchCommittedOffsetsApplicationEvent.class, event);
             assertTrue(event.future().isCompletedExceptionally());
-            return ConsumerUtils.getResult(event.future(), timer);
+            return event.get();
         })
             .when(applicationEventHandler)
             .addAndGet(any(FetchCommittedOffsetsApplicationEvent.class));
@@ -1320,7 +1319,6 @@ public class AsyncKafkaConsumerTest {
     @Test
     public void testProcessBackgroundEventsWithInitialDelay() throws Exception {
         consumer = newConsumer();
-        Time time = new MockTime();
         Timer timer = time.timer(1000);
         CompletableFuture<?> future = mock(CompletableFuture.class);
         CountDownLatch latch = new CountDownLatch(3);
@@ -1356,7 +1354,6 @@ public class AsyncKafkaConsumerTest {
     @Test
     public void testProcessBackgroundEventsWithoutDelay() {
         consumer = newConsumer();
-        Time time = new MockTime();
         Timer timer = time.timer(1000);
 
         // Create a future that is already completed.
@@ -1378,7 +1375,6 @@ public class AsyncKafkaConsumerTest {
     @Test
     public void testProcessBackgroundEventsTimesOut() throws Exception {
         consumer = newConsumer();
-        Time time = new MockTime();
         Timer timer = time.timer(1000);
         CompletableFuture<?> future = mock(CompletableFuture.class);
 

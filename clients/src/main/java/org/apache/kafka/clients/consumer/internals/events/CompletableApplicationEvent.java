@@ -56,6 +56,11 @@ public abstract class CompletableApplicationEvent<T> extends ApplicationEvent im
     }
 
     public void chain(final CompletableFuture<T> providedFuture) {
+        Objects.requireNonNull(
+            providedFuture,
+            () -> String.format("Could not chain the event's future (%s) to the provided future because the provided future was null", this.future)
+        );
+
         providedFuture.whenComplete((value, exception) -> {
             if (exception != null) {
                 this.future.completeExceptionally(exception);
