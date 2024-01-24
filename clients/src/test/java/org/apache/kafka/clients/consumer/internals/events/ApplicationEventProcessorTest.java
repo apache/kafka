@@ -18,7 +18,6 @@ package org.apache.kafka.clients.consumer.internals.events;
 
 import org.apache.kafka.clients.consumer.internals.CommitRequestManager;
 import org.apache.kafka.clients.consumer.internals.ConsumerMetadata;
-import org.apache.kafka.clients.consumer.internals.ConsumerUtils;
 import org.apache.kafka.clients.consumer.internals.CoordinatorRequestManager;
 import org.apache.kafka.clients.consumer.internals.FetchRequestManager;
 import org.apache.kafka.clients.consumer.internals.HeartbeatRequestManager;
@@ -40,8 +39,8 @@ import java.util.Optional;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CompletableFuture;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
@@ -106,9 +105,9 @@ public class ApplicationEventProcessorTest {
         Timer timer = time.timer(Long.MAX_VALUE);
         LeaveOnCloseApplicationEvent event = new LeaveOnCloseApplicationEvent(timer);
         when(heartbeatRequestManager.membershipManager()).thenReturn(membershipManager);
-        when(membershipManager.leaveGroup(timer)).thenReturn(CompletableFuture.completedFuture(null));
+        when(membershipManager.leaveGroup(any())).thenReturn(CompletableFuture.completedFuture(null));
         processor.process(event);
-        verify(membershipManager).leaveGroup(timer);
+        verify(membershipManager).leaveGroup(any());
         assertTrue(event.future().isDone());
     }
 
