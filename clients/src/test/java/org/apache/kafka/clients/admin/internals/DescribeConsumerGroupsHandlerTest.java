@@ -20,7 +20,6 @@ import static java.util.Collections.emptyList;
 import static java.util.Collections.emptySet;
 import static java.util.Collections.singleton;
 import static java.util.Collections.singletonList;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -28,7 +27,10 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashSet;
+import java.util.Iterator;
+import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -40,18 +42,25 @@ import org.apache.kafka.clients.consumer.internals.ConsumerProtocol;
 import org.apache.kafka.common.ConsumerGroupState;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
 import org.apache.kafka.common.errors.GroupIdNotFoundException;
 import org.apache.kafka.common.errors.InvalidGroupIdException;
+import org.apache.kafka.common.message.ConsumerGroupDescribeRequestData;
+import org.apache.kafka.common.message.ConsumerGroupDescribeResponseData;
+import org.apache.kafka.common.message.DescribeGroupsRequestData;
 import org.apache.kafka.common.message.DescribeGroupsResponseData;
 import org.apache.kafka.common.message.DescribeGroupsResponseData.DescribedGroup;
 import org.apache.kafka.common.message.DescribeGroupsResponseData.DescribedGroupMember;
+import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.requests.DescribeGroupsRequest;
+import org.apache.kafka.common.requests.ConsumerGroupDescribeResponse;
 import org.apache.kafka.common.requests.DescribeGroupsResponse;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Utils;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 public class DescribeConsumerGroupsHandlerTest {
 
@@ -66,17 +75,63 @@ public class DescribeConsumerGroupsHandlerTest {
     private final Set<TopicPartition> tps = new HashSet<>(Arrays.asList(
             new TopicPartition("foo", 0), new TopicPartition("bar",  1)));
 
-    @Test
-    public void testBuildRequest() {
-        DescribeConsumerGroupsHandler handler = new DescribeConsumerGroupsHandler(false, logContext);
-        DescribeGroupsRequest request = handler.buildBatchedRequest(1, keys).build();
-        assertEquals(2, request.data().groups().size());
-        assertFalse(request.data().includeAuthorizedOperations());
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testBuildRequest(boolean includeAuthorizedOperations) {
+        DescribeConsumerGroupsHandler handler = new DescribeConsumerGroupsHandler(includeAuthorizedOperations, logContext);
 
-        handler = new DescribeConsumerGroupsHandler(true, logContext);
-        request = handler.buildBatchedRequest(1, keys).build();
-        assertEquals(2, request.data().groups().size());
-        assertTrue(request.data().includeAuthorizedOperations());
+        // Build request for the two groups. It should return one request for
+        // the new describe group API.
+        Collection<AdminApiHandler.RequestAndKeys<CoordinatorKey>> requestAndKeys = handler.buildRequest(1, keys);
+        assertEquals(1, requestAndKeys.size());
+        assertRequestAndKeys(
+            requestAndKeys.iterator().next(),
+            keys,
+            new ConsumerGroupDescribeRequestData()
+                .setGroupIds(new ArrayList<>(groupIds))
+                .setIncludeAuthorizedOperations(includeAuthorizedOperations)
+        );
+
+        // Handle the response. We return a retriable error for the first group
+        // and a GROUP_ID_NOT_FOUND for the second one. The GROUP_ID_NOT_FOUND
+        // means that the group must be described with the classic API.
+        handler.handleResponse(
+            coordinator,
+            keys,
+            new ConsumerGroupDescribeResponse(new ConsumerGroupDescribeResponseData()
+                .setGroups(Arrays.asList(
+                    new ConsumerGroupDescribeResponseData.DescribedGroup()
+                        .setGroupId(groupId1)
+                        .setErrorCode(Errors.COORDINATOR_LOAD_IN_PROGRESS.code()),
+                    new ConsumerGroupDescribeResponseData.DescribedGroup()
+                        .setGroupId(groupId2)
+                        .setErrorCode(Errors.GROUP_ID_NOT_FOUND.code())
+                ))
+            )
+        );
+
+        // Build request. It should return one request using the new describe API
+        // for the first group and one request using the classic describe API for
+        // the second group.
+        requestAndKeys = handler.buildRequest(1, keys);
+        assertEquals(2, requestAndKeys.size(), requestAndKeys.toString());
+        Iterator<AdminApiHandler.RequestAndKeys<CoordinatorKey>> iterator = requestAndKeys.iterator();
+
+        assertRequestAndKeys(
+            iterator.next(),
+            Collections.singleton(CoordinatorKey.byGroupId(groupId1)),
+            new ConsumerGroupDescribeRequestData()
+                .setGroupIds(Collections.singletonList(groupId1))
+                .setIncludeAuthorizedOperations(includeAuthorizedOperations)
+        );
+
+        assertRequestAndKeys(
+            iterator.next(),
+            Collections.singleton(CoordinatorKey.byGroupId(groupId2)),
+            new DescribeGroupsRequestData()
+                .setGroups(Collections.singletonList(groupId2))
+                .setIncludeAuthorizedOperations(includeAuthorizedOperations)
+        );
     }
 
     @Test
@@ -86,7 +141,67 @@ public class DescribeConsumerGroupsHandlerTest {
     }
 
     @Test
-    public void testSuccessfulHandleResponse() {
+    public void testSuccessfulHandleConsumerGroupResponse() {
+        DescribeConsumerGroupsHandler handler = new DescribeConsumerGroupsHandler(false, logContext);
+        Collection<MemberDescription> members = singletonList(new MemberDescription(
+            "memberId",
+            Optional.of("instanceId"),
+            "clientId",
+            "host",
+            new MemberAssignment(tps)
+        ));
+        ConsumerGroupDescription expected = new ConsumerGroupDescription(
+            groupId1,
+            false,
+            members,
+            "range",
+            ConsumerGroupState.STABLE,
+            coordinator
+        );
+        AdminApiHandler.ApiResult<CoordinatorKey, ConsumerGroupDescription> result = handler.handleResponse(
+            coordinator,
+            Collections.singleton(CoordinatorKey.byGroupId(groupId1)),
+            new ConsumerGroupDescribeResponse(
+                new ConsumerGroupDescribeResponseData()
+                    .setGroups(Collections.singletonList(
+                        new ConsumerGroupDescribeResponseData.DescribedGroup()
+                            .setGroupId(groupId1)
+                            .setGroupState("Stable")
+                            .setGroupEpoch(10)
+                            .setAssignmentEpoch(10)
+                            .setAssignorName("range")
+                            .setAuthorizedOperations(Utils.to32BitField(emptySet()))
+                            .setMembers(singletonList(
+                                new ConsumerGroupDescribeResponseData.Member()
+                                    .setMemberId("memberId")
+                                    .setInstanceId("instanceId")
+                                    .setClientHost("host")
+                                    .setClientId("clientId")
+                                    .setMemberEpoch(10)
+                                    .setRackId("rackid")
+                                    .setSubscribedTopicNames(singletonList("foo"))
+                                    .setSubscribedTopicRegex("regex")
+                                    .setAssignment(new ConsumerGroupDescribeResponseData.Assignment()
+                                        .setTopicPartitions(Arrays.asList(
+                                            new ConsumerGroupDescribeResponseData.TopicPartitions()
+                                                .setTopicId(Uuid.randomUuid())
+                                                .setTopicName("foo")
+                                                .setPartitions(Collections.singletonList(0)),
+                                            new ConsumerGroupDescribeResponseData.TopicPartitions()
+                                                .setTopicId(Uuid.randomUuid())
+                                                .setTopicName("bar")
+                                                .setPartitions(Collections.singletonList(1))
+                                        ))
+                                    )
+                            ))
+                    ))
+            )
+        );
+        assertCompleted(result, expected);
+    }
+
+    @Test
+    public void testSuccessfulHandleClassicGroupResponse() {
         Collection<MemberDescription> members = singletonList(new MemberDescription(
                 "memberId",
                 "clientId",
@@ -99,26 +214,55 @@ public class DescribeConsumerGroupsHandlerTest {
                 "assignor",
                 ConsumerGroupState.STABLE,
                 coordinator);
-        assertCompleted(handleWithError(Errors.NONE, ""), expected);
+        assertCompleted(handleClassicGroupWithError(Errors.NONE, ""), expected);
     }
 
     @Test
-    public void testUnmappedHandleResponse() {
-        assertUnmapped(handleWithError(Errors.COORDINATOR_NOT_AVAILABLE, ""));
-        assertUnmapped(handleWithError(Errors.NOT_COORDINATOR, ""));
+    public void testUnmappedHandleClassicGroupResponse() {
+        assertUnmapped(handleClassicGroupWithError(Errors.COORDINATOR_NOT_AVAILABLE, ""));
+        assertUnmapped(handleClassicGroupWithError(Errors.NOT_COORDINATOR, ""));
     }
 
     @Test
-    public void testRetriableHandleResponse() {
-        assertRetriable(handleWithError(Errors.COORDINATOR_LOAD_IN_PROGRESS, ""));
+    public void testRetriableHandleClassicGroupResponse() {
+        assertRetriable(handleClassicGroupWithError(Errors.COORDINATOR_LOAD_IN_PROGRESS, ""));
     }
 
     @Test
-    public void testFailedHandleResponse() {
-        assertFailed(GroupAuthorizationException.class, handleWithError(Errors.GROUP_AUTHORIZATION_FAILED, ""));
-        assertFailed(GroupIdNotFoundException.class, handleWithError(Errors.GROUP_ID_NOT_FOUND, ""));
-        assertFailed(InvalidGroupIdException.class, handleWithError(Errors.INVALID_GROUP_ID, ""));
-        assertFailed(IllegalArgumentException.class, handleWithError(Errors.NONE, "custom-protocol"));
+    public void testFailedHandleClassicGroupResponse() {
+        assertFailed(GroupAuthorizationException.class, handleClassicGroupWithError(Errors.GROUP_AUTHORIZATION_FAILED, ""));
+        assertFailed(GroupIdNotFoundException.class, handleClassicGroupWithError(Errors.GROUP_ID_NOT_FOUND, ""));
+        assertFailed(InvalidGroupIdException.class, handleClassicGroupWithError(Errors.INVALID_GROUP_ID, ""));
+        assertFailed(IllegalArgumentException.class, handleClassicGroupWithError(Errors.NONE, "custom-protocol"));
+    }
+
+    @Test
+    public void testUnmappedHandleConsumerGroupResponse() {
+        assertUnmapped(handleConsumerGroupWithError(Errors.COORDINATOR_NOT_AVAILABLE));
+        assertUnmapped(handleConsumerGroupWithError(Errors.NOT_COORDINATOR));
+    }
+
+    @Test
+    public void testRetriableHandleConsumerGroupResponse() {
+        assertRetriable(handleConsumerGroupWithError(Errors.COORDINATOR_LOAD_IN_PROGRESS));
+        assertRetriable(handleConsumerGroupWithError(Errors.GROUP_ID_NOT_FOUND));
+    }
+
+    @Test
+    public void testFailedHandleConsumerGroupResponse() {
+        assertFailed(GroupAuthorizationException.class, handleConsumerGroupWithError(Errors.GROUP_AUTHORIZATION_FAILED));
+        assertFailed(InvalidGroupIdException.class, handleConsumerGroupWithError(Errors.INVALID_GROUP_ID));
+    }
+
+    private ConsumerGroupDescribeResponse buildConsumerGroupDescribeResponse(Errors error) {
+        return new ConsumerGroupDescribeResponse(
+            new ConsumerGroupDescribeResponseData()
+                .setGroups(Collections.singletonList(
+                    new ConsumerGroupDescribeResponseData.DescribedGroup()
+                        .setGroupId(groupId1)
+                        .setErrorCode(error.code())
+                ))
+        );
     }
 
     private DescribeGroupsResponse buildResponse(Errors error, String protocolType) {
@@ -143,12 +287,20 @@ public class DescribeConsumerGroupsHandlerTest {
         return response;
     }
 
-    private AdminApiHandler.ApiResult<CoordinatorKey, ConsumerGroupDescription> handleWithError(
+    private AdminApiHandler.ApiResult<CoordinatorKey, ConsumerGroupDescription> handleClassicGroupWithError(
         Errors error,
         String protocolType
     ) {
         DescribeConsumerGroupsHandler handler = new DescribeConsumerGroupsHandler(true, logContext);
         DescribeGroupsResponse response = buildResponse(error, protocolType);
+        return handler.handleResponse(coordinator, singleton(CoordinatorKey.byGroupId(groupId1)), response);
+    }
+
+    private AdminApiHandler.ApiResult<CoordinatorKey, ConsumerGroupDescription> handleConsumerGroupWithError(
+        Errors error
+    ) {
+        DescribeConsumerGroupsHandler handler = new DescribeConsumerGroupsHandler(true, logContext);
+        ConsumerGroupDescribeResponse response = buildConsumerGroupDescribeResponse(error);
         return handler.handleResponse(coordinator, singleton(CoordinatorKey.byGroupId(groupId1)), response);
     }
 
@@ -188,5 +340,14 @@ public class DescribeConsumerGroupsHandlerTest {
         assertEquals(emptyList(), result.unmappedKeys);
         assertEquals(singleton(key), result.failedKeys.keySet());
         assertTrue(expectedExceptionType.isInstance(result.failedKeys.get(key)));
+    }
+
+    private void assertRequestAndKeys(
+        AdminApiHandler.RequestAndKeys<CoordinatorKey> requestAndKeys,
+        Set<CoordinatorKey> expectedKeys,
+        ApiMessage expectedRequest
+    ) {
+        assertEquals(expectedKeys, requestAndKeys.keys);
+        assertEquals(expectedRequest, requestAndKeys.request.build().data());
     }
 }

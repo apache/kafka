@@ -37,11 +37,15 @@ import org.apache.kafka.common.ConsumerGroupState;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.acl.AclOperation;
+import org.apache.kafka.common.message.ConsumerGroupDescribeRequestData;
+import org.apache.kafka.common.message.ConsumerGroupDescribeResponseData;
 import org.apache.kafka.common.message.DescribeGroupsRequestData;
 import org.apache.kafka.common.message.DescribeGroupsResponseData.DescribedGroup;
 import org.apache.kafka.common.message.DescribeGroupsResponseData.DescribedGroupMember;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.AbstractResponse;
+import org.apache.kafka.common.requests.ConsumerGroupDescribeRequest;
+import org.apache.kafka.common.requests.ConsumerGroupDescribeResponse;
 import org.apache.kafka.common.requests.DescribeGroupsRequest;
 import org.apache.kafka.common.requests.DescribeGroupsResponse;
 import org.apache.kafka.common.requests.FindCoordinatorRequest;
@@ -51,11 +55,12 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 
-public class DescribeConsumerGroupsHandler extends AdminApiHandler.Batched<CoordinatorKey, ConsumerGroupDescription> {
+public class DescribeConsumerGroupsHandler implements AdminApiHandler<CoordinatorKey, ConsumerGroupDescription> {
 
     private final boolean includeAuthorizedOperations;
     private final Logger log;
     private final AdminApiLookupStrategy<CoordinatorKey> lookupStrategy;
+    private final Map<String, Boolean> useClassicGroupApi;
 
     public DescribeConsumerGroupsHandler(
         boolean includeAuthorizedOperations,
@@ -64,6 +69,7 @@ public class DescribeConsumerGroupsHandler extends AdminApiHandler.Batched<Coord
         this.includeAuthorizedOperations = includeAuthorizedOperations;
         this.log = logContext.logger(DescribeConsumerGroupsHandler.class);
         this.lookupStrategy = new CoordinatorStrategy(CoordinatorType.GROUP, logContext);
+        this.useClassicGroupApi = new HashMap<>();
     }
 
     private static Set<CoordinatorKey> buildKeySet(Collection<String> groupIds) {
@@ -80,7 +86,7 @@ public class DescribeConsumerGroupsHandler extends AdminApiHandler.Batched<Coord
 
     @Override
     public String apiName() {
-        return "describeGroups";
+        return "describeConsumerGroups";
     }
 
     @Override
@@ -89,18 +95,42 @@ public class DescribeConsumerGroupsHandler extends AdminApiHandler.Batched<Coord
     }
 
     @Override
-    public DescribeGroupsRequest.Builder buildBatchedRequest(int coordinatorId, Set<CoordinatorKey> keys) {
-        List<String> groupIds = keys.stream().map(key -> {
+    public Collection<RequestAndKeys<CoordinatorKey>> buildRequest(int coordinatorId, Set<CoordinatorKey> keys) {
+        Set<CoordinatorKey> newConsumerGroups = new HashSet<>();
+        Set<CoordinatorKey> oldConsumerGroups = new HashSet<>();
+
+        keys.forEach(key -> {
             if (key.type != FindCoordinatorRequest.CoordinatorType.GROUP) {
-                throw new IllegalArgumentException("Invalid transaction coordinator key " + key +
+                throw new IllegalArgumentException("Invalid group coordinator key " + key +
                     " when building `DescribeGroups` request");
             }
-            return key.idValue;
-        }).collect(Collectors.toList());
-        DescribeGroupsRequestData data = new DescribeGroupsRequestData()
-            .setGroups(groupIds)
-            .setIncludeAuthorizedOperations(includeAuthorizedOperations);
-        return new DescribeGroupsRequest.Builder(data);
+
+            // Be default, we always try with using the new consumer group
+            // describe API. If it fails, we fail back to using the classic
+            // group API.
+            if (useClassicGroupApi.getOrDefault(key.idValue, false)) {
+                oldConsumerGroups.add(key);
+            } else {
+                newConsumerGroups.add(key);
+            }
+        });
+
+        List<RequestAndKeys<CoordinatorKey>> requests = new ArrayList<>();
+        if (!newConsumerGroups.isEmpty()) {
+            ConsumerGroupDescribeRequestData data = new ConsumerGroupDescribeRequestData()
+                .setGroupIds(newConsumerGroups.stream().map(key -> key.idValue).collect(Collectors.toList()))
+                .setIncludeAuthorizedOperations(includeAuthorizedOperations);
+            requests.add(new RequestAndKeys<>(new ConsumerGroupDescribeRequest.Builder(data, true), newConsumerGroups));
+        }
+
+        if (!oldConsumerGroups.isEmpty()) {
+            DescribeGroupsRequestData data = new DescribeGroupsRequestData()
+                .setGroups(oldConsumerGroups.stream().map(key -> key.idValue).collect(Collectors.toList()))
+                .setIncludeAuthorizedOperations(includeAuthorizedOperations);
+            requests.add(new RequestAndKeys<>(new DescribeGroupsRequest.Builder(data), oldConsumerGroups));
+        }
+
+        return requests;
     }
 
     @Override
@@ -109,16 +139,106 @@ public class DescribeConsumerGroupsHandler extends AdminApiHandler.Batched<Coord
         Set<CoordinatorKey> groupIds,
         AbstractResponse abstractResponse
     ) {
-        final DescribeGroupsResponse response = (DescribeGroupsResponse) abstractResponse;
         final Map<CoordinatorKey, ConsumerGroupDescription> completed = new HashMap<>();
         final Map<CoordinatorKey, Throwable> failed = new HashMap<>();
         final Set<CoordinatorKey> groupsToUnmap = new HashSet<>();
 
+        if (abstractResponse instanceof DescribeGroupsResponse) {
+            return handledClassicGroupResponse(
+                coordinator,
+                completed,
+                failed,
+                groupsToUnmap,
+                (DescribeGroupsResponse) abstractResponse
+            );
+        } else if (abstractResponse instanceof ConsumerGroupDescribeResponse) {
+            return handledConsumerGroupResponse(
+                coordinator,
+                completed,
+                failed,
+                groupsToUnmap,
+                (ConsumerGroupDescribeResponse) abstractResponse
+            );
+        } else {
+            throw new IllegalArgumentException("Received an unexpected response type.");
+        }
+    }
+
+    private ApiResult<CoordinatorKey, ConsumerGroupDescription> handledConsumerGroupResponse(
+        Node coordinator,
+        Map<CoordinatorKey, ConsumerGroupDescription> completed,
+        Map<CoordinatorKey, Throwable> failed,
+        Set<CoordinatorKey> groupsToUnmap,
+        ConsumerGroupDescribeResponse response
+    ) {
+        for (ConsumerGroupDescribeResponseData.DescribedGroup describedGroup : response.data().groups()) {
+            final CoordinatorKey groupIdKey = CoordinatorKey.byGroupId(describedGroup.groupId());
+            final Errors error = Errors.forCode(describedGroup.errorCode());
+            if (error != Errors.NONE) {
+                handleError(
+                    groupIdKey,
+                    error,
+                    describedGroup.errorMessage(),
+                    failed,
+                    groupsToUnmap,
+                    true
+                );
+                continue;
+            }
+
+            final Set<AclOperation> authorizedOperations = validAclOperations(describedGroup.authorizedOperations());
+            final List<MemberDescription> memberDescriptions = new ArrayList<>(describedGroup.members().size());
+
+            describedGroup.members().forEach(groupMember -> {
+                final Set<TopicPartition> partitions = groupMember.assignment().topicPartitions().stream().flatMap(topic ->
+                    topic.partitions().stream().map(partition ->
+                        new TopicPartition(topic.topicName(), partition)
+                    )
+                ).collect(Collectors.toSet());
+
+                memberDescriptions.add(new MemberDescription(
+                    groupMember.memberId(),
+                    Optional.ofNullable(groupMember.instanceId()),
+                    groupMember.clientId(),
+                    groupMember.clientHost(),
+                    new MemberAssignment(partitions)));
+            });
+
+            final ConsumerGroupDescription consumerGroupDescription =
+                new ConsumerGroupDescription(
+                    groupIdKey.idValue,
+                    false,
+                    memberDescriptions,
+                    describedGroup.assignorName(),
+                    ConsumerGroupState.parse(describedGroup.groupState()),
+                    coordinator,
+                    authorizedOperations
+                );
+            completed.put(groupIdKey, consumerGroupDescription);
+        }
+
+        return new ApiResult<>(completed, failed, new ArrayList<>(groupsToUnmap));
+    }
+
+    private ApiResult<CoordinatorKey, ConsumerGroupDescription> handledClassicGroupResponse(
+        Node coordinator,
+        Map<CoordinatorKey, ConsumerGroupDescription> completed,
+        Map<CoordinatorKey, Throwable> failed,
+        Set<CoordinatorKey> groupsToUnmap,
+        DescribeGroupsResponse response
+    ) {
         for (DescribedGroup describedGroup : response.data().groups()) {
             CoordinatorKey groupIdKey = CoordinatorKey.byGroupId(describedGroup.groupId());
             Errors error = Errors.forCode(describedGroup.errorCode());
             if (error != Errors.NONE) {
-                handleError(groupIdKey, error, failed, groupsToUnmap);
+                handleError(
+                    groupIdKey,
+                    error,
+                    null,
+                    failed,
+                    groupsToUnmap,
+                    false
+                );
                 continue;
             }
             final String protocolType = describedGroup.protocolType();
@@ -161,19 +281,21 @@ public class DescribeConsumerGroupsHandler extends AdminApiHandler.Batched<Coord
     private void handleError(
         CoordinatorKey groupId,
         Errors error,
+        String errorMsg,
         Map<CoordinatorKey, Throwable> failed,
-        Set<CoordinatorKey> groupsToUnmap
+        Set<CoordinatorKey> groupsToUnmap,
+        boolean isConsumerGroupResponse
     ) {
         switch (error) {
             case GROUP_AUTHORIZATION_FAILED:
-                log.debug("`DescribeGroups` request for group id {} failed due to error {}", groupId.idValue, error);
-                failed.put(groupId, error.exception());
+                log.debug("`DescribeGroups` request for group id {} failed due to error {}.", groupId.idValue, error);
+                failed.put(groupId, error.exception(errorMsg));
                 break;
 
             case COORDINATOR_LOAD_IN_PROGRESS:
                 // If the coordinator is in the middle of loading, then we just need to retry
                 log.debug("`DescribeGroups` request for group id {} failed because the coordinator " +
-                    "is still in the process of loading state. Will retry", groupId.idValue);
+                    "is still in the process of loading state. Will retry.", groupId.idValue);
                 break;
 
             case COORDINATOR_NOT_AVAILABLE:
@@ -181,13 +303,24 @@ public class DescribeConsumerGroupsHandler extends AdminApiHandler.Batched<Coord
                 // If the coordinator is unavailable or there was a coordinator change, then we unmap
                 // the key so that we retry the `FindCoordinator` request
                 log.debug("`DescribeGroups` request for group id {} returned error {}. " +
-                    "Will attempt to find the coordinator again and retry", groupId.idValue, error);
+                    "Will attempt to find the coordinator again and retry.", groupId.idValue, error);
                 groupsToUnmap.add(groupId);
                 break;
 
+            case GROUP_ID_NOT_FOUND:
+                if (isConsumerGroupResponse) {
+                    log.debug("`DescribeGroups` request for group id {} failed because the group is not " +
+                        "a new consumer group. Will retry with old API.", groupId.idValue);
+                    useClassicGroupApi.put(groupId.idValue, true);
+                } else {
+                    log.error("`DescribeGroups` request for group id {} because the group does not exist.", groupId.idValue);
+                    failed.put(groupId, error.exception(errorMsg));
+                }
+                break;
+
             default:
-                log.error("`DescribeGroups` request for group id {} failed due to unexpected error {}", groupId.idValue, error);
-                failed.put(groupId, error.exception());
+                log.error("`DescribeGroups` request for group id {} failed due to unexpected error {}.", groupId.idValue, error);
+                failed.put(groupId, error.exception(errorMsg));
         }
     }
 

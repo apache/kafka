@@ -79,6 +79,7 @@ import org.apache.kafka.common.message.AlterUserScramCredentialsResponseData;
 import org.apache.kafka.common.message.ApiMessageType;
 import org.apache.kafka.common.message.ApiVersionsResponseData;
 import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersion;
+import org.apache.kafka.common.message.ConsumerGroupDescribeResponseData;
 import org.apache.kafka.common.message.CreateAclsResponseData;
 import org.apache.kafka.common.message.CreatePartitionsResponseData;
 import org.apache.kafka.common.message.CreatePartitionsResponseData.CreatePartitionsTopicResult;
@@ -151,6 +152,7 @@ import org.apache.kafka.common.requests.AlterUserScramCredentialsResponse;
 import org.apache.kafka.common.requests.ApiError;
 import org.apache.kafka.common.requests.ApiVersionsRequest;
 import org.apache.kafka.common.requests.ApiVersionsResponse;
+import org.apache.kafka.common.requests.ConsumerGroupDescribeResponse;
 import org.apache.kafka.common.requests.CreateAclsResponse;
 import org.apache.kafka.common.requests.CreatePartitionsRequest;
 import org.apache.kafka.common.requests.CreatePartitionsResponse;
@@ -3045,7 +3047,6 @@ public class KafkaAdminClientTest {
         }
     }
 
-
     @Test
     public void testDescribeConsumerGroups() throws Exception {
         try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(mockCluster(1, 0))) {
@@ -3057,9 +3058,20 @@ public class KafkaAdminClientTest {
 
             env.kafkaClient().prepareResponse(prepareFindCoordinatorResponse(Errors.NONE, env.cluster().controller()));
 
+            // The first request sent will be a ConsumerGroupDescribe request. Let's
+            // fail it in order to fail back to using the classic version.
+            env.kafkaClient().prepareResponse(new ConsumerGroupDescribeResponse(
+                new ConsumerGroupDescribeResponseData()
+                    .setGroups(Collections.singletonList(
+                        new ConsumerGroupDescribeResponseData.DescribedGroup()
+                            .setGroupId(GROUP_ID)
+                            .setErrorCode(Errors.GROUP_ID_NOT_FOUND.code())
+                    ))
+            ));
+
             DescribeGroupsResponseData data = new DescribeGroupsResponseData();
 
-            //Retriable errors should be retried
+            // Retriable errors should be retried
             data.groups().add(DescribeGroupsResponse.groupMetadata(
                 GROUP_ID,
                 Errors.COORDINATOR_LOAD_IN_PROGRESS,
@@ -3252,6 +3264,129 @@ public class KafkaAdminClientTest {
             final DescribeConsumerGroupsResult result = env.adminClient().describeConsumerGroups(singletonList(GROUP_ID));
 
             TestUtils.assertFutureError(result.describedGroups().get(GROUP_ID), IllegalArgumentException.class);
+        }
+    }
+
+    @Test
+    public void testDescribeOldAndNewConsumerGroups() throws Exception {
+        try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(mockCluster(1, 0))) {
+            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
+
+            env.kafkaClient().prepareResponse(new FindCoordinatorResponse(
+                new FindCoordinatorResponseData()
+                    .setCoordinators(Arrays.asList(
+                        FindCoordinatorResponse.prepareCoordinatorResponse(Errors.NONE, "grp1", env.cluster().controller()),
+                        FindCoordinatorResponse.prepareCoordinatorResponse(Errors.NONE, "grp2", env.cluster().controller())
+                    ))
+            ));
+
+            env.kafkaClient().prepareResponse(new ConsumerGroupDescribeResponse(
+                new ConsumerGroupDescribeResponseData()
+                    .setGroups(Arrays.asList(
+                        new ConsumerGroupDescribeResponseData.DescribedGroup()
+                            .setGroupId("grp1")
+                            .setGroupState("Stable")
+                            .setGroupEpoch(10)
+                            .setAssignmentEpoch(10)
+                            .setAssignorName("range")
+                            .setAuthorizedOperations(Utils.to32BitField(emptySet()))
+                            .setMembers(singletonList(
+                                new ConsumerGroupDescribeResponseData.Member()
+                                    .setMemberId("memberId")
+                                    .setInstanceId("instanceId")
+                                    .setClientHost("host")
+                                    .setClientId("clientId")
+                                    .setMemberEpoch(10)
+                                    .setRackId("rackid")
+                                    .setSubscribedTopicNames(singletonList("foo"))
+                                    .setSubscribedTopicRegex("regex")
+                                    .setAssignment(new ConsumerGroupDescribeResponseData.Assignment()
+                                        .setTopicPartitions(Arrays.asList(
+                                            new ConsumerGroupDescribeResponseData.TopicPartitions()
+                                                .setTopicId(Uuid.randomUuid())
+                                                .setTopicName("foo")
+                                                .setPartitions(Collections.singletonList(0))
+                                        ))
+                                    )
+                            )),
+                        new ConsumerGroupDescribeResponseData.DescribedGroup()
+                            .setGroupId("grp2")
+                            .setErrorCode(Errors.GROUP_ID_NOT_FOUND.code())
+                    ))
+            ));
+
+            env.kafkaClient().prepareResponse(new DescribeGroupsResponse(
+                new DescribeGroupsResponseData()
+                    .setGroups(Collections.singletonList(
+                        DescribeGroupsResponse.groupMetadata(
+                            "grp2",
+                            Errors.NONE,
+                            "Stable",
+                            ConsumerProtocol.PROTOCOL_TYPE,
+                            "range",
+                            singletonList(
+                                DescribeGroupsResponse.groupMember(
+                                    "0",
+                                    null,
+                                    "clientId0",
+                                    "clientHost",
+                                    ConsumerProtocol.serializeAssignment(
+                                        new ConsumerPartitionAssignor.Assignment(
+                                            Collections.singletonList(new TopicPartition("bar", 0))
+                                        )
+                                    ).array(),
+                                    null
+                                )
+                            ),
+                            Collections.emptySet()
+                        )
+                    ))
+            ));
+
+            DescribeConsumerGroupsResult result = env.adminClient()
+                .describeConsumerGroups(Arrays.asList("grp1", "grp2"));
+
+            Map<String, ConsumerGroupDescription> expectedResult = new HashMap<>();
+            expectedResult.put("grp1", new ConsumerGroupDescription(
+                "grp1",
+                false,
+                Collections.singletonList(
+                    new MemberDescription(
+                        "memberId",
+                        Optional.of("instanceId"),
+                        "clientId",
+                        "host",
+                        new MemberAssignment(
+                            Collections.singleton(new TopicPartition("foo", 0))
+                        )
+                    )
+                ),
+                "range",
+                ConsumerGroupState.STABLE,
+                env.cluster().controller(),
+                Collections.emptySet()
+            ));
+            expectedResult.put("grp2", new ConsumerGroupDescription(
+                "grp2",
+                false,
+                Collections.singletonList(
+                    new MemberDescription(
+                        "0",
+                        Optional.empty(),
+                        "clientId0",
+                        "clientHost",
+                        new MemberAssignment(
+                            Collections.singleton(new TopicPartition("bar", 0))
+                        )
+                    )
+                ),
+                "range",
+                ConsumerGroupState.STABLE,
+                env.cluster().controller(),
+                Collections.emptySet()
+            ));
+
+            assertEquals(expectedResult, result.all().get());
         }
     }
 
