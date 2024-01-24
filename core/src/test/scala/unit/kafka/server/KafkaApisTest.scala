@@ -4302,7 +4302,7 @@ class KafkaApisTest extends Logging {
       Optional.empty())).asJava
     val fetchMetadata = new JFetchMetadata(0, 0)
     val fetchContext = new FullFetchContext(time, new FetchSessionCache(1000, 100),
-      fetchMetadata, fetchData, false, false)
+      fetchMetadata, fetchData, true, false)
     when(fetchManager.newContext(
       any[Short],
       any[JFetchMetadata],
