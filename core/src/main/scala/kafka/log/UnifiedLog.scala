@@ -46,7 +46,7 @@ import org.apache.kafka.storage.internals.log.{AbortedTxn, AppendOrigin, BatchMe
 import java.io.{File, IOException}
 import java.nio.file.{Files, Path}
 import java.util
-import java.util.concurrent.{ConcurrentHashMap, ConcurrentMap}
+import java.util.concurrent.{ConcurrentHashMap, ConcurrentMap, ScheduledFuture}
 import java.util.stream.Collectors
 import java.util.{Collections, Optional, OptionalInt, OptionalLong}
 import scala.annotation.nowarn
@@ -202,7 +202,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
    *     set _topicId and write to the partition metadata file.
    *   - Otherwise set _topicId to None
    */
-  def initializeTopicId(): Unit =  {
+  private def initializeTopicId(): Unit =  {
     val partMetadataFile = partitionMetadataFile.getOrElse(
       throw new KafkaException("The partitionMetadataFile should have been initialized"))
 
@@ -466,7 +466,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
 
   }
 
-  val producerExpireCheck = scheduler.schedule("PeriodicProducerExpirationCheck", () => removeExpiredProducers(time.milliseconds),
+  val producerExpireCheck: ScheduledFuture[_] = scheduler.schedule("PeriodicProducerExpirationCheck", () => removeExpiredProducers(time.milliseconds),
     producerIdExpirationCheckIntervalMs, producerIdExpirationCheckIntervalMs)
 
   // Visible for testing
@@ -613,9 +613,9 @@ class UnifiedLog(@volatile var logStartOffset: Long,
   /**
    * Maybe create the VerificationStateEntry for the given producer ID -- always return the VerificationGuard
    */
-  def maybeCreateVerificationGuard(producerId: Long,
-                                   sequence: Int,
-                                   epoch: Short): VerificationGuard = lock synchronized {
+  private def maybeCreateVerificationGuard(producerId: Long,
+                                           sequence: Int,
+                                           epoch: Short): VerificationGuard = lock synchronized {
     producerStateManager.maybeCreateVerificationStateEntry(producerId, sequence, epoch).verificationGuard
   }
 
@@ -1923,28 +1923,28 @@ class UnifiedLog(@volatile var logStartOffset: Long,
 }
 
 object UnifiedLog extends Logging {
-  val LogFileSuffix = LogFileUtils.LOG_FILE_SUFFIX
+  val LogFileSuffix: String = LogFileUtils.LOG_FILE_SUFFIX
 
-  val IndexFileSuffix = LogFileUtils.INDEX_FILE_SUFFIX
+  val IndexFileSuffix: String = LogFileUtils.INDEX_FILE_SUFFIX
 
-  val TimeIndexFileSuffix = LogFileUtils.TIME_INDEX_FILE_SUFFIX
+  val TimeIndexFileSuffix: String = LogFileUtils.TIME_INDEX_FILE_SUFFIX
 
-  val TxnIndexFileSuffix = LogFileUtils.TXN_INDEX_FILE_SUFFIX
+  val TxnIndexFileSuffix: String = LogFileUtils.TXN_INDEX_FILE_SUFFIX
 
-  val CleanedFileSuffix = LocalLog.CleanedFileSuffix
+  val CleanedFileSuffix: String = LocalLog.CleanedFileSuffix
 
-  val SwapFileSuffix = LocalLog.SwapFileSuffix
+  val SwapFileSuffix: String = LocalLog.SwapFileSuffix
 
-  val DeleteDirSuffix = LocalLog.DeleteDirSuffix
+  val DeleteDirSuffix: String = LocalLog.DeleteDirSuffix
 
-  val StrayDirSuffix = LocalLog.StrayDirSuffix
+  val StrayDirSuffix: String = LocalLog.StrayDirSuffix
 
-  val FutureDirSuffix = LocalLog.FutureDirSuffix
+  val FutureDirSuffix: String = LocalLog.FutureDirSuffix
 
   private[log] val DeleteDirPattern = LocalLog.DeleteDirPattern
   private[log] val FutureDirPattern = LocalLog.FutureDirPattern
 
-  val UnknownOffset = LocalLog.UnknownOffset
+  val UnknownOffset: Long = LocalLog.UnknownOffset
 
   def isRemoteLogEnabled(remoteStorageSystemEnable: Boolean,
                          config: LogConfig,
