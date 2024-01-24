@@ -63,7 +63,11 @@ public class AssignmentChangeApplicationEvent extends ApplicationEvent {
     }
 
     @Override
-    protected String toStringBase() {
-        return toStringBase() + ", offsets=" + offsets + ", currentTimeMs=" + currentTimeMs;
+    public String toString() {
+        return "AssignmentChangeApplicationEvent{" +
+                toStringBase() +
+                ", offsets=" + offsets +
+                ", currentTimeMs=" + currentTimeMs +
+                '}';
     }
 }

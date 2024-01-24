@@ -60,7 +60,9 @@ public abstract class ApplicationEvent {
     }
 
     @Override
-    public final String toString() {
-        return getClass().getSimpleName() + "{" + toStringBase() + '}';
+    public String toString() {
+        return "ApplicationEvent{" +
+                toStringBase() +
+                '}';
     }
 }
