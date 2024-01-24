@@ -86,4 +86,11 @@ public class ConsumerRebalanceListenerCallbackCompletedEvent extends Application
                 ", future=" + future +
                 ", error=" + error;
     }
+
+    @Override
+    public String toString() {
+        return getClass().getSimpleName() + "{" +
+                toStringBase() +
+                '}';
+    }
 }

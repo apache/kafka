@@ -66,6 +66,13 @@ public abstract class CompletableApplicationEvent<T> extends ApplicationEvent im
 
     @Override
     protected String toStringBase() {
-        return super.toStringBase() + ", future=" + future + ", deadlineMs=" + deadlineMs;
+        return super.toStringBase() + ", future=" + future;
+    }
+
+    @Override
+    public String toString() {
+        return getClass().getSimpleName() + "{" +
+                toStringBase() +
+                '}';
     }
 }
