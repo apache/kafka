@@ -339,8 +339,8 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             this.deserializers = new Deserializers<>(config, keyDeserializer, valueDeserializer);
             this.subscriptions = createSubscriptionState(config, logContext);
             ClusterResourceListeners clusterResourceListeners = ClientUtils.configureClusterResourceListeners(metrics.reporters(),
-                interceptorList,
-                Arrays.asList(deserializers.keyDeserializer, deserializers.valueDeserializer));
+                    interceptorList,
+                    Arrays.asList(deserializers.keyDeserializer, deserializers.valueDeserializer));
             this.metadata = metadataFactory.build(config, subscriptions, logContext, clusterResourceListeners);
             final List<InetSocketAddress> addresses = ClientUtils.parseAndValidateAddresses(config);
             metadata.bootstrap(addresses);
@@ -352,73 +352,73 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             ApiVersions apiVersions = new ApiVersions();
             final BlockingQueue<ApplicationEvent> applicationEventQueue = new LinkedBlockingQueue<>();
             final BackgroundEventHandler backgroundEventHandler = new BackgroundEventHandler(
-                logContext,
-                backgroundEventQueue
+                    logContext,
+                    backgroundEventQueue
             );
 
             // This FetchBuffer is shared between the application and network threads.
             this.fetchBuffer = new FetchBuffer(logContext);
             final Supplier<NetworkClientDelegate> networkClientDelegateSupplier = NetworkClientDelegate.supplier(time,
-                logContext,
-                metadata,
-                config,
-                apiVersions,
-                metrics,
-                fetchMetricsManager,
-                clientTelemetryReporter.map(ClientTelemetryReporter::telemetrySender).orElse(null));
+                    logContext,
+                    metadata,
+                    config,
+                    apiVersions,
+                    metrics,
+                    fetchMetricsManager,
+                    clientTelemetryReporter.map(ClientTelemetryReporter::telemetrySender).orElse(null));
             final Supplier<RequestManagers> requestManagersSupplier = RequestManagers.supplier(time,
-                logContext,
-                backgroundEventHandler,
-                metadata,
-                subscriptions,
-                fetchBuffer,
-                config,
-                groupRebalanceConfig,
-                apiVersions,
-                fetchMetricsManager,
-                networkClientDelegateSupplier,
-                clientTelemetryReporter,
-                metrics);
+                    logContext,
+                    backgroundEventHandler,
+                    metadata,
+                    subscriptions,
+                    fetchBuffer,
+                    config,
+                    groupRebalanceConfig,
+                    apiVersions,
+                    fetchMetricsManager,
+                    networkClientDelegateSupplier,
+                    clientTelemetryReporter,
+                    metrics);
             final Supplier<ApplicationEventProcessor> applicationEventProcessorSupplier = ApplicationEventProcessor.supplier(logContext,
-                time,
-                metadata,
-                applicationEventQueue,
-                requestManagersSupplier);
+                    time,
+                    metadata,
+                    applicationEventQueue,
+                    requestManagersSupplier);
             this.applicationEventHandler = applicationEventHandlerFactory.build(
-                logContext,
-                time,
-                applicationEventQueue,
-                applicationEventProcessorSupplier,
-                networkClientDelegateSupplier,
-                requestManagersSupplier);
+                    logContext,
+                    time,
+                    applicationEventQueue,
+                    applicationEventProcessorSupplier,
+                    networkClientDelegateSupplier,
+                    requestManagersSupplier);
 
             ConsumerRebalanceListenerInvoker rebalanceListenerInvoker = new ConsumerRebalanceListenerInvoker(
-                logContext,
-                subscriptions,
-                time,
-                new RebalanceCallbackMetrics(metrics)
+                    logContext,
+                    subscriptions,
+                    time,
+                    new RebalanceCallbackMetrics(metrics)
             );
             this.backgroundEventProcessor = new BackgroundEventProcessor(
-                logContext,
-                backgroundEventQueue,
-                applicationEventHandler,
-                rebalanceListenerInvoker
+                    logContext,
+                    backgroundEventQueue,
+                    applicationEventHandler,
+                    rebalanceListenerInvoker
             );
             this.assignors = ConsumerPartitionAssignor.getAssignorInstances(
-                config.getList(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG),
-                config.originals(Collections.singletonMap(ConsumerConfig.CLIENT_ID_CONFIG, clientId))
+                    config.getList(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG),
+                    config.originals(Collections.singletonMap(ConsumerConfig.CLIENT_ID_CONFIG, clientId))
             );
 
             this.groupMetadata = initializeGroupMetadata(config, groupRebalanceConfig);
 
             // The FetchCollector is only used on the application thread.
             this.fetchCollector = fetchCollectorFactory.build(logContext,
-                metadata,
-                subscriptions,
-                fetchConfig,
-                deserializers,
-                fetchMetricsManager,
-                time);
+                    metadata,
+                    subscriptions,
+                    fetchConfig,
+                    deserializers,
+                    fetchMetricsManager,
+                    time);
 
             this.kafkaConsumerMetrics = new KafkaConsumerMetrics(metrics, CONSUMER_METRIC_GROUP_PREFIX);
 
@@ -468,10 +468,10 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         this.interceptors = Objects.requireNonNull(interceptors);
         this.time = time;
         this.backgroundEventProcessor = new BackgroundEventProcessor(
-            logContext,
-            backgroundEventQueue,
-            applicationEventHandler,
-            rebalanceListenerInvoker
+                logContext,
+                backgroundEventQueue,
+                applicationEventHandler,
+                rebalanceListenerInvoker
         );
         this.metrics = metrics;
         this.groupMetadata = initializeGroupMetadata(groupId, Optional.empty());
@@ -514,12 +514,12 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         ConsumerMetrics metricsRegistry = new ConsumerMetrics(CONSUMER_METRIC_GROUP_PREFIX);
         FetchMetricsManager fetchMetricsManager = new FetchMetricsManager(metrics, metricsRegistry.fetcherMetrics);
         this.fetchCollector = new FetchCollector<>(logContext,
-            metadata,
-            subscriptions,
-            new FetchConfig(config),
-            deserializers,
-            fetchMetricsManager,
-            time);
+                metadata,
+                subscriptions,
+                new FetchConfig(config),
+                deserializers,
+                fetchMetricsManager,
+                time);
         this.kafkaConsumerMetrics = new KafkaConsumerMetrics(metrics, "consumer");
 
         GroupRebalanceConfig groupRebalanceConfig = new GroupRebalanceConfig(
@@ -563,23 +563,23 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             clientTelemetryReporter,
             metrics);
         Supplier<ApplicationEventProcessor> applicationEventProcessorSupplier = ApplicationEventProcessor.supplier(
-            logContext,
-            time,
-            metadata,
-            applicationEventQueue,
-            requestManagersSupplier
+                logContext,
+                time,
+                metadata,
+                applicationEventQueue,
+                requestManagersSupplier
         );
         this.applicationEventHandler = new ApplicationEventHandler(logContext,
-            time,
-            applicationEventQueue,
-            applicationEventProcessorSupplier,
-            networkClientDelegateSupplier,
-            requestManagersSupplier);
+                time,
+                applicationEventQueue,
+                applicationEventProcessorSupplier,
+                networkClientDelegateSupplier,
+                requestManagersSupplier);
         this.backgroundEventProcessor = new BackgroundEventProcessor(
-            logContext,
-            backgroundEventQueue,
-            applicationEventHandler,
-            rebalanceListenerInvoker
+                logContext,
+                backgroundEventQueue,
+                applicationEventHandler,
+                rebalanceListenerInvoker
         );
     }
 
