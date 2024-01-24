@@ -97,10 +97,10 @@ public class ConsumerGroupServiceTest {
         when(admin.listOffsets(offsetsArgMatcher(), any()))
                 .thenReturn(listOffsetsResult());
 
-        Tuple2<Option<String>, Option<Seq<ConsumerGroupCommand.PartitionAssignmentState>>> res = groupService.collectGroupOffsets(GROUP);
-        assertEquals(Some.apply("Stable"), res._1);
-        assertTrue(res._2.isDefined());
-        assertEquals(TOPIC_PARTITIONS.size(), res._2.get().size());
+        Tuple2<Option<String>, Option<Seq<ConsumerGroupCommand.PartitionAssignmentState>>> statesAndAssignments = groupService.collectGroupOffsets(GROUP);
+        assertEquals(Some.apply("Stable"), statesAndAssignments._1);
+        assertTrue(statesAndAssignments._2.isDefined());
+        assertEquals(TOPIC_PARTITIONS.size(), statesAndAssignments._2.get().size());
 
         verify(admin, times(1)).describeConsumerGroups(ArgumentMatchers.eq(Collections.singletonList(GROUP)), any());
         verify(admin, times(1)).listConsumerGroupOffsets(ArgumentMatchers.eq(listConsumerGroupOffsetsSpec()), any());
@@ -119,7 +119,7 @@ public class ConsumerGroupServiceTest {
         TopicPartition testTopicPartition4 = new TopicPartition("testTopic2", 1);
         TopicPartition testTopicPartition5 = new TopicPartition("testTopic2", 2);
 
-        // Some topic's partitions gets valid OffsetAndMetadata values, other gets nulls values (negative integers) and others aren't defined
+        // Some topic's partitions gets valid OffsetAndMetadata values, other gets nulls values and others aren't defined
         Map<TopicPartition, OffsetAndMetadata> committedOffsets = new HashMap<>();
 
         committedOffsets.put(testTopicPartition1, new OffsetAndMetadata(100));
@@ -170,9 +170,9 @@ public class ConsumerGroupServiceTest {
         )).thenReturn(new ListOffsetsResult(endOffsets.entrySet().stream().filter(e -> unassignedTopicPartitions.contains(e.getKey()))
                 .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue))));
 
-        Tuple2<Option<String>, Option<Seq<ConsumerGroupCommand.PartitionAssignmentState>>> res = groupService.collectGroupOffsets(GROUP);
-        Option<String> state = res._1;
-        Option<Seq<ConsumerGroupCommand.PartitionAssignmentState>> assignments = res._2;
+        Tuple2<Option<String>, Option<Seq<ConsumerGroupCommand.PartitionAssignmentState>>> statesAndAssignments = groupService.collectGroupOffsets(GROUP);
+        Option<String> state = statesAndAssignments._1;
+        Option<Seq<ConsumerGroupCommand.PartitionAssignmentState>> assignments = statesAndAssignments._2;
 
         Map<TopicPartition, Optional<Long>> returnedOffsets = new HashMap<>();
         assignments.foreach(results -> {
