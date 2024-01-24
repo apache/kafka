@@ -42,10 +42,10 @@ import scala.util.{Failure, Success, Try}
 
 object ProducerIdManager {
   // Once we reach this percentage of PIDs consumed from the current block, trigger a fetch of the next block
-  val PidPrefetchThreshold = 0.90
-  val IterationLimit = 3
-  val RetryBackoffMs = 50
-  val NoRetry = -1L
+  val PidPrefetchThreshold: Double = 0.90
+  val IterationLimit: Int = 3
+  val RetryBackoffMs: Int = 50
+  val NoRetry: Long = -1L
 
   // Creates a ProducerIdGenerate that directly interfaces with ZooKeeper, IBP < 3.0-IV0
   def zk(brokerId: Int, zkClient: KafkaZkClient): ZkProducerIdManager = {
