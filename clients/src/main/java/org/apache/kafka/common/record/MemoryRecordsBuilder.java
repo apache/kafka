@@ -65,6 +65,7 @@ public class MemoryRecordsBuilder implements AutoCloseable {
     private final int partitionLeaderEpoch;
     private final int writeLimit;
     private final int batchHeaderSizeInBytes;
+    private final long deleteHorizonMs;
 
     // Use a conservative estimate of the compression ratio. The producer overrides this using statistics
     // from previous batches before appending any records.
@@ -80,7 +81,6 @@ public class MemoryRecordsBuilder implements AutoCloseable {
     private int numRecords = 0;
     private float actualCompressionRatio = 1;
     private long maxTimestamp = RecordBatch.NO_TIMESTAMP;
-    private long deleteHorizonMs;
     private long offsetOfMaxTimestamp = -1;
     private Long lastOffset = null;
     private Long baseTimestamp = null;

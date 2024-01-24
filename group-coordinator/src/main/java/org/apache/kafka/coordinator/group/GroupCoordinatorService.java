@@ -1029,12 +1029,9 @@ public class GroupCoordinatorService implements GroupCoordinator {
         OptionalInt groupMetadataPartitionLeaderEpoch
     ) {
         throwIfNotActive();
-        if (!groupMetadataPartitionLeaderEpoch.isPresent()) {
-            throw new IllegalArgumentException("The leader epoch should always be provided in KRaft.");
-        }
         runtime.scheduleUnloadOperation(
             new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, groupMetadataPartitionIndex),
-            groupMetadataPartitionLeaderEpoch.getAsInt()
+            groupMetadataPartitionLeaderEpoch
         );
     }
 
@@ -1106,6 +1103,8 @@ public class GroupCoordinatorService implements GroupCoordinator {
      * @return The Errors instance associated with the given exception.
      */
     private static Errors normalizeException(Throwable exception) {
+        exception = Errors.maybeUnwrapException(exception);
+
         if (exception instanceof UnknownTopicOrPartitionException ||
             exception instanceof NotEnoughReplicasException ||
             exception instanceof TimeoutException) {

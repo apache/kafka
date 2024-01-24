@@ -490,6 +490,22 @@ public class LeaderStateTest {
     }
 
     @Test
+    public void testCheckQuorumWithOneVoter() {
+        int observer = 1;
+        // Only 1 voter quorum
+        LeaderState<?> state = newLeaderState(mkSet(localId), 0L);
+        assertEquals(Long.MAX_VALUE, state.timeUntilCheckQuorumExpires(time.milliseconds()));
+
+        // When checkQuorum timeout not exceeded and got no fetch request from voter, it should not expire the timer
+        time.sleep(checkQuorumTimeoutMs);
+        assertEquals(Long.MAX_VALUE, state.timeUntilCheckQuorumExpires(time.milliseconds()));
+
+        // received fetch requests from 1 observer node, the timer still return Long.MAX_VALUE.
+        state.updateCheckQuorumForFollowingVoter(observer, time.milliseconds());
+        assertEquals(Long.MAX_VALUE, state.timeUntilCheckQuorumExpires(time.milliseconds()));
+    }
+
+    @Test
     public void testNoOpForNegativeRemoteNodeId() {
         MockTime time = new MockTime();
         int replicaId = -1;

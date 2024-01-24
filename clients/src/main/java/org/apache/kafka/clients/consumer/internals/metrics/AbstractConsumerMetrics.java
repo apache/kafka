@@ -14,9 +14,16 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package org.apache.kafka.clients.consumer.internals.metrics;
 
-package kafka.common
+import java.util.Optional;
 
-class InconsistentNodeIdException(message: String, cause: Throwable) extends RuntimeException(message, cause) {
-  def this(message: String) = this(message, null)
+import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.CONSUMER_METRIC_GROUP_PREFIX;
+import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.COORDINATOR_METRICS_SUFFIX;
+
+public abstract class AbstractConsumerMetrics {
+    protected String groupMetricsName = CONSUMER_METRIC_GROUP_PREFIX + COORDINATOR_METRICS_SUFFIX;
+    public AbstractConsumerMetrics(Optional<String> grpMetricsPrefix) {
+        grpMetricsPrefix.ifPresent(s -> this.groupMetricsName = s + COORDINATOR_METRICS_SUFFIX);
+    }
 }

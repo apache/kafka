@@ -36,7 +36,7 @@ import org.apache.kafka.common.message._
 import org.apache.kafka.common.metrics.{KafkaMetric, Quota, Sensor}
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.ApiKeys
-import org.apache.kafka.common.quota.{ClientQuotaAlteration, ClientQuotaEntity, ClientQuotaFilter}
+import org.apache.kafka.common.quota.ClientQuotaFilter
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.resource.{PatternType, ResourceType => AdminResourceType}
@@ -131,19 +131,6 @@ class RequestQuotaTest extends BaseRequestTest {
       assertEquals(Quota.upperBound(1), produceQuotaManager.quota("some-user", smallQuotaProducerClientId), s"Produce quota override not set")
       val consumeQuotaManager = brokers.head.dataPlaneRequestProcessor.quotas.fetch
       assertEquals(Quota.upperBound(1), consumeQuotaManager.quota("some-user", smallQuotaConsumerClientId), s"Consume quota override not set")
-    }
-  }
-
-  private def changeClientIdConfig(sanitizedClientId: String, configs: Properties): Unit = {
-    if (isKRaftTest()) {
-      val admin = createAdminClient()
-      admin.alterClientQuotas(Collections.singleton(
-        new ClientQuotaAlteration(
-          new ClientQuotaEntity(Map(ClientQuotaEntity.CLIENT_ID -> (if (sanitizedClientId == "<default>") null else sanitizedClientId)).asJava),
-          configs.asScala.map { case (key, value) => new ClientQuotaAlteration.Op(key, value.toDouble) }.toList.asJava)
-      )).all().get()
-    } else {
-      adminZkClient.changeClientIdConfig(sanitizedClientId, configs)
     }
   }
 

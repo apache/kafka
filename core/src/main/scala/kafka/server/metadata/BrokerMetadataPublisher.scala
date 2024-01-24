@@ -301,7 +301,7 @@ class BrokerMetadataPublisher(
       changes.deletes.forEach { topicPartition =>
         resignation(topicPartition.partition, None)
       }
-      changes.leaders.forEach { (topicPartition, partitionInfo) =>
+      changes.electedLeaders.forEach { (topicPartition, partitionInfo) =>
         election(topicPartition.partition, partitionInfo.partition.leaderEpoch)
       }
       changes.followers.forEach { (topicPartition, partitionInfo) =>
