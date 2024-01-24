@@ -70,7 +70,10 @@ public class CommitApplicationEvent extends CompletableApplicationEvent<Void> {
     }
 
     @Override
-    protected String toStringBase() {
-        return super.toStringBase() + ", offsets=" + offsets;
+    public String toString() {
+        return "CommitApplicationEvent{" +
+                toStringBase() +
+                ", offsets=" + offsets +
+                '}';
     }
 }

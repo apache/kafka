@@ -60,7 +60,10 @@ public class FetchCommittedOffsetsApplicationEvent extends CompletableApplicatio
     }
 
     @Override
-    protected String toStringBase() {
-        return toStringBase() + ", partitions=" + partitions;
+    public String toString() {
+        return getClass().getSimpleName() + "{" +
+                toStringBase() +
+                ", partitions=" + partitions +
+                '}';
     }
 }

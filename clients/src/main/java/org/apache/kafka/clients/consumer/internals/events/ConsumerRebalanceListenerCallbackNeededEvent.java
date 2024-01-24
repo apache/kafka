@@ -79,4 +79,11 @@ public class ConsumerRebalanceListenerCallbackNeededEvent extends CompletableBac
                 ", methodName=" + methodName +
                 ", partitions=" + partitions;
     }
+
+    @Override
+    public String toString() {
+        return getClass().getSimpleName() + "{" +
+                toStringBase() +
+                '}';
+    }
 }

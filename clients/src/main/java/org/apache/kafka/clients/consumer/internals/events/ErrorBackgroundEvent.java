@@ -53,7 +53,10 @@ public class ErrorBackgroundEvent extends BackgroundEvent {
     }
 
     @Override
-    protected String toStringBase() {
-        return toStringBase() + ", error=" + error;
+    public String toString() {
+        return "ErrorBackgroundEvent{" +
+                toStringBase() +
+                ", error=" + error +
+                '}';
     }
 }
