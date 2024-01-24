@@ -280,6 +280,61 @@ public class FetchRequestManagerTest {
         assertNull(fetchRecords().get(tp0));
     }
 
+    /**
+     * This validates that in-flight fetch requests are not completed for partitions that are
+     * waiting for the onPartitionsAssigned callback to complete. Note that this
+     * markPendingOnAssignedCallback functionality is only used from the {@link AsyncKafkaConsumer}.
+     */
+    @Test
+    public void testInflightFetchResultNotProcessedForPartitionsAwaitingCallbackCompletion() {
+        buildFetcher();
+
+        assignFromUser(singleton(tp0));
+        subscriptions.seek(tp0, 0);
+
+        assertEquals(1, sendFetches());
+        subscriptions.markPendingOnAssignedCallback(singleton(tp0), true);
+
+        client.prepareResponse(fullFetchResponse(tidp0, records, Errors.NONE, 100L, 0));
+        networkClientDelegate.poll(time.timer(0));
+        assertNull(fetchRecords().get(tp0));
+    }
+
+    /**
+     * This validates that no records are fetched for partitions that are waiting for the
+     * onPartitionsAssigned callback to complete. Note that this markPendingOnAssignedCallback
+     * functionality is only used from the {@link AsyncKafkaConsumer}.
+     */
+    @Test
+    public void testFetchResultNotProcessedForPartitionsAwaitingCallbackCompletion() {
+        buildFetcher();
+
+        assignFromUser(singleton(tp0));
+        subscriptions.seek(tp0, 0);
+
+        // Successfully fetch from partition (not marked as involved in the callback yet)
+        assertNonEmptyFetch();
+
+        // Mark partition as pendingOnAssignedCallback. No records should be fetched for it
+        subscriptions.markPendingOnAssignedCallback(singleton(tp0), true);
+        assertEquals(0, sendFetches());
+        networkClientDelegate.poll(time.timer(0));
+        assertFalse(fetcher.hasCompletedFetches());
+
+        // Successfully start fetching again, once the partition is not waiting for the callback anymore
+        subscriptions.enablePartitionsAwaitingCallback(singleton(tp0));
+        assertNonEmptyFetch();
+    }
+
+    private void assertNonEmptyFetch() {
+        assertEquals(1, sendFetches());
+        client.prepareResponse(fullFetchResponse(tidp0, records, Errors.NONE, 100L, 0));
+        networkClientDelegate.poll(time.timer(0));
+        assertTrue(fetcher.hasCompletedFetches());
+        fetchRecords();
+        assertEquals(4L, subscriptions.position(tp0).offset);
+    }
+
     @Test
     public void testCloseShouldBeIdempotent() {
         buildFetcher();

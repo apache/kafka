@@ -41,11 +41,13 @@ import org.apache.kafka.server.metrics.ClientMetricsConfigs;
 import org.apache.kafka.server.metrics.ClientMetricsInstance;
 import org.apache.kafka.server.metrics.ClientMetricsInstanceMetadata;
 import org.apache.kafka.server.metrics.ClientMetricsReceiverPlugin;
+import org.apache.kafka.server.util.timer.SystemTimer;
+import org.apache.kafka.server.util.timer.SystemTimerReaper;
+import org.apache.kafka.server.util.timer.Timer;
+import org.apache.kafka.server.util.timer.TimerTask;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.Closeable;
-import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -59,36 +61,49 @@ import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.regex.Pattern;
 
 /**
  * Handles client telemetry metrics requests/responses, subscriptions and instance information.
  */
-public class ClientMetricsManager implements Closeable {
+public class ClientMetricsManager implements AutoCloseable {
 
     private static final Logger log = LoggerFactory.getLogger(ClientMetricsManager.class);
     private static final List<Byte> SUPPORTED_COMPRESSION_TYPES = Collections.unmodifiableList(
         Arrays.asList(CompressionType.ZSTD.id, CompressionType.LZ4.id, CompressionType.GZIP.id, CompressionType.SNAPPY.id));
     // Max cache size (16k active client connections per broker)
-    private static final int CM_CACHE_MAX_SIZE = 16384;
+    private static final int CACHE_MAX_SIZE = 16384;
+    private static final int DEFAULT_CACHE_EXPIRY_MS = 60 * 1000;
 
     private final ClientMetricsReceiverPlugin receiverPlugin;
     private final Cache<Uuid, ClientMetricsInstance> clientInstanceCache;
+    private final Timer expirationTimer;
     private final Map<String, SubscriptionInfo> subscriptionMap;
     private final int clientTelemetryMaxBytes;
     private final Time time;
+    private final int cacheExpiryMs;
+    private final AtomicLong lastCacheErrorLogMs;
 
     // The latest subscription version is used to determine if subscription has changed and needs
     // to re-evaluate the client instance subscription id as per changed subscriptions.
     private final AtomicInteger subscriptionUpdateVersion;
 
     public ClientMetricsManager(ClientMetricsReceiverPlugin receiverPlugin, int clientTelemetryMaxBytes, Time time) {
+        this(receiverPlugin, clientTelemetryMaxBytes, time, DEFAULT_CACHE_EXPIRY_MS);
+    }
+
+    // Visible for testing
+    ClientMetricsManager(ClientMetricsReceiverPlugin receiverPlugin, int clientTelemetryMaxBytes, Time time, int cacheExpiryMs) {
         this.receiverPlugin = receiverPlugin;
         this.subscriptionMap = new ConcurrentHashMap<>();
         this.subscriptionUpdateVersion = new AtomicInteger(0);
-        this.clientInstanceCache = new SynchronizedCache<>(new LRUCache<>(CM_CACHE_MAX_SIZE));
+        this.clientInstanceCache = new SynchronizedCache<>(new LRUCache<>(CACHE_MAX_SIZE));
+        this.expirationTimer = new SystemTimerReaper("client-metrics-reaper", new SystemTimer("client-metrics"));
         this.clientTelemetryMaxBytes = clientTelemetryMaxBytes;
         this.time = time;
+        this.cacheExpiryMs = cacheExpiryMs;
+        this.lastCacheErrorLogMs = new AtomicLong(0);
     }
 
     public Set<String> listClientMetricsResources() {
@@ -192,8 +207,9 @@ public class ClientMetricsManager implements Closeable {
     }
 
     @Override
-    public void close() throws IOException {
+    public void close() throws Exception {
         subscriptionMap.clear();
+        expirationTimer.close();
     }
 
     private void updateClientSubscription(String subscriptionName, ClientMetricsConfigs configs) {
@@ -253,9 +269,17 @@ public class ClientMetricsManager implements Closeable {
                 if (clientInstance.subscriptionVersion() >= subscriptionUpdateVersion.get()) {
                     return clientInstance;
                 }
+                // Cancel the existing expiration timer task for the old client instance.
+                clientInstance.cancelExpirationTimerTask();
                 clientInstance = createClientInstanceAndUpdateCache(clientInstanceId, clientInstance.instanceMetadata());
             }
         }
+
+        // Update the expiration timer task for the client instance.
+        long expirationTimeMs = Math.max(cacheExpiryMs, clientInstance.pushIntervalMs() * 3);
+        TimerTask timerTask = new ExpirationTimerTask(clientInstanceId, expirationTimeMs);
+        clientInstance.updateExpirationTimerTask(timerTask);
+        expirationTimer.add(timerTask);
 
         return clientInstance;
     }
@@ -402,6 +426,11 @@ public class ClientMetricsManager implements Closeable {
         return subscriptionUpdateVersion.get();
     }
 
+    // Visible for testing
+    Timer expirationTimer() {
+        return expirationTimer;
+    }
+
     public static class SubscriptionInfo {
 
         private final String name;
@@ -431,6 +460,37 @@ public class ClientMetricsManager implements Closeable {
 
         public Map<String, Pattern> matchPattern() {
             return matchPattern;
+        }
+    }
+
+    private final class ExpirationTimerTask extends TimerTask {
+
+        private static final long CACHE_ERROR_LOG_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
+
+        private final Uuid clientInstanceId;
+
+        private ExpirationTimerTask(Uuid clientInstanceId, long delayMs) {
+            super(delayMs);
+            this.clientInstanceId = clientInstanceId;
+        }
+
+        @Override
+        public void run() {
+            log.trace("Expiration timer task run for client instance id: {}, after delay ms: {}", clientInstanceId, delayMs);
+            if (!clientInstanceCache.remove(clientInstanceId)) {
+                /*
+                 This can only happen if the client instance is removed from the cache by the LRU
+                 eviction policy before the expiration timer task is executed. Log a warning as broker
+                 cache is not able to hold all the client instances. Log only once every CACHE_ERROR_LOG_INTERVAL_MS
+                 to avoid flooding the logs.
+                */
+                long lastErrorMs = lastCacheErrorLogMs.get();
+                if (time.milliseconds() - lastErrorMs > CACHE_ERROR_LOG_INTERVAL_MS &&
+                    lastCacheErrorLogMs.compareAndSet(lastErrorMs, time.milliseconds())) {
+                    log.warn("Client metrics instance cache cannot find the client instance id: {}. The cache"
+                        + " must be at capacity, size: {} ", clientInstanceId, clientInstanceCache.size());
+                }
+            }
         }
     }
 }
