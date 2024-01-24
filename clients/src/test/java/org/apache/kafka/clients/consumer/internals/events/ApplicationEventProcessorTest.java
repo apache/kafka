@@ -102,15 +102,6 @@ public class ApplicationEventProcessorTest {
     }
 
     @Test
-    public void testExpirationCalculation() {
-        assertEquals(Long.MAX_VALUE, ConsumerUtils.getExpirationTimeForTimeout(Long.MAX_VALUE));
-        assertEquals(Long.MAX_VALUE, ConsumerUtils.getExpirationTimeForTimeout(Long.MAX_VALUE - 1));
-        long timeout = ConsumerUtils.getExpirationTimeForTimeout(1000);
-        assertTrue(timeout > 0);
-        assertTrue(timeout < Long.MAX_VALUE);
-    }
-
-    @Test
     public void testPrepClosingLeaveGroupEvent() {
         Timer timer = time.timer(Long.MAX_VALUE);
         LeaveOnCloseApplicationEvent event = new LeaveOnCloseApplicationEvent(timer);

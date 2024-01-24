@@ -153,10 +153,14 @@ public class AsyncKafkaConsumerTest {
     }
 
     private AsyncKafkaConsumer<String, String> newConsumer() {
+        return newConsumer(time);
+    }
+
+    private AsyncKafkaConsumer<String, String> newConsumer(Time time) {
         final Properties props = requiredConsumerProperties();
         props.put(ConsumerConfig.GROUP_ID_CONFIG, "group-id");
         final ConsumerConfig config = new ConsumerConfig(props);
-        return newConsumer(config);
+        return newConsumer(config, time);
     }
 
     private AsyncKafkaConsumer<String, String> newConsumerWithoutGroupId() {
@@ -172,7 +176,7 @@ public class AsyncKafkaConsumerTest {
         return newConsumer(config);
     }
 
-    private AsyncKafkaConsumer<String, String> newConsumer(ConsumerConfig config) {
+    private AsyncKafkaConsumer<String, String> newConsumer(ConsumerConfig config, Time time) {
         return new AsyncKafkaConsumer<>(
             config,
             new StringDeserializer(),
@@ -183,6 +187,10 @@ public class AsyncKafkaConsumerTest {
             (a, b, c, d) -> metadata,
             backgroundEventQueue
         );
+    }
+
+    private AsyncKafkaConsumer<String, String> newConsumer(ConsumerConfig config) {
+        return newConsumer(config, time);
     }
 
     private AsyncKafkaConsumer<String, String> newConsumer(
@@ -825,7 +833,8 @@ public class AsyncKafkaConsumerTest {
 
     @Test
     public void testWakeupCommitted() {
-        consumer = newConsumer();
+        Time time = new MockTime();
+        consumer = newConsumer(time);
         final HashMap<TopicPartition, OffsetAndMetadata> offsets = mockTopicPartitionOffset();
         doAnswer(invocation -> {
             CompletableApplicationEvent<?> event = invocation.getArgument(0);
@@ -1034,7 +1043,6 @@ public class AsyncKafkaConsumerTest {
         doReturn(Fetch.empty()).when(fetchCollector).collectFetch(any(FetchBuffer.class));
         consumer.subscribe(Collections.singletonList("topic"), consumerRebalanceListener);
         SortedSet<TopicPartition> partitions = Collections.emptySortedSet();
-        Timer timer = time.timer(defaultApiTimeoutMs);
 
         for (ConsumerRebalanceListenerMethodName methodName : methodNames) {
             CompletableBackgroundEvent<Void> e = new ConsumerRebalanceListenerCallbackNeededEvent(
@@ -1318,7 +1326,8 @@ public class AsyncKafkaConsumerTest {
      */
     @Test
     public void testProcessBackgroundEventsWithInitialDelay() throws Exception {
-        consumer = newConsumer();
+        Time time = new MockTime();
+        consumer = newConsumer(time);
         Timer timer = time.timer(1000);
         CompletableFuture<?> future = mock(CompletableFuture.class);
         CountDownLatch latch = new CountDownLatch(3);
@@ -1353,7 +1362,8 @@ public class AsyncKafkaConsumerTest {
      */
     @Test
     public void testProcessBackgroundEventsWithoutDelay() {
-        consumer = newConsumer();
+        Time time = new MockTime();
+        consumer = newConsumer(time);
         Timer timer = time.timer(1000);
 
         // Create a future that is already completed.
@@ -1374,7 +1384,8 @@ public class AsyncKafkaConsumerTest {
      */
     @Test
     public void testProcessBackgroundEventsTimesOut() throws Exception {
-        consumer = newConsumer();
+        Time time = new MockTime();
+        consumer = newConsumer(time);
         Timer timer = time.timer(1000);
         CompletableFuture<?> future = mock(CompletableFuture.class);
 
