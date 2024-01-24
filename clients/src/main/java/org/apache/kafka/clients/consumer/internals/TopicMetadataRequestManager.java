@@ -69,16 +69,14 @@ public class TopicMetadataRequestManager implements RequestManager {
     private final long retryBackoffMaxMs;
     private final Logger log;
     private final LogContext logContext;
-    private final Time time;
 
-    public TopicMetadataRequestManager(final LogContext context, final ConsumerConfig config, final Time time) {
+    public TopicMetadataRequestManager(final LogContext context, final ConsumerConfig config) {
         logContext = context;
         log = logContext.logger(getClass());
         inflightRequests = new LinkedList<>();
         retryBackoffMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG);
         retryBackoffMaxMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MAX_MS_CONFIG);
         allowAutoTopicCreation = config.getBoolean(ConsumerConfig.ALLOW_AUTO_CREATE_TOPICS_CONFIG);
-        this.time = time;
     }
 
     @Override

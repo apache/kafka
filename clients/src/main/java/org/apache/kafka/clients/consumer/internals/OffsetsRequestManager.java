@@ -82,6 +82,7 @@ public class OffsetsRequestManager implements RequestManager, ClusterResourceLis
 
     private final Set<ListOffsetsRequestState> requestsToRetry;
     private final List<NetworkClientDelegate.UnsentRequest> requestsToSend;
+    private final long requestTimeoutMs;
     private final Time time;
     private final ApiVersions apiVersions;
     private final NetworkClientDelegate networkClientDelegate;
@@ -93,6 +94,7 @@ public class OffsetsRequestManager implements RequestManager, ClusterResourceLis
                                  final IsolationLevel isolationLevel,
                                  final Time time,
                                  final long retryBackoffMs,
+                                 final long requestTimeoutMs,
                                  final ApiVersions apiVersions,
                                  final NetworkClientDelegate networkClientDelegate,
                                  final BackgroundEventHandler backgroundEventHandler,
@@ -113,6 +115,7 @@ public class OffsetsRequestManager implements RequestManager, ClusterResourceLis
         this.requestsToSend = new ArrayList<>();
         this.subscriptionState = subscriptionState;
         this.time = time;
+        this.requestTimeoutMs = requestTimeoutMs;
         this.apiVersions = apiVersions;
         this.networkClientDelegate = networkClientDelegate;
         this.backgroundEventHandler = backgroundEventHandler;
@@ -259,7 +262,7 @@ public class OffsetsRequestManager implements RequestManager, ClusterResourceLis
         // fetchOffsetsByTimes call if any of the requests being retried fails
         List<ListOffsetsRequestState> requestsToProcess = new ArrayList<>(requestsToRetry);
         requestsToRetry.clear();
-        Timer timer = time.timer(55);
+        Timer timer = time.timer(requestTimeoutMs);
         requestsToProcess.forEach(requestState -> {
             Map<TopicPartition, Long> timestampsToSearch =
                     new HashMap<>(requestState.remainingToSearch);
@@ -403,7 +406,7 @@ public class OffsetsRequestManager implements RequestManager, ClusterResourceLis
 
         timestampsToSearchByNode.forEach((node, resetTimestamps) -> {
             subscriptionState.setNextAllowedRetry(resetTimestamps.keySet(),
-                    time.milliseconds() + timer.remainingMs());
+                    time.milliseconds() + requestTimeoutMs);
 
             CompletableFuture<ListOffsetResult> partialResult = buildListOffsetRequestToNode(
                     node,

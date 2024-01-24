@@ -38,6 +38,7 @@ import org.apache.kafka.common.requests.ConsumerGroupHeartbeatRequest;
 import org.apache.kafka.common.telemetry.internals.ClientTelemetryProvider;
 import org.apache.kafka.common.telemetry.internals.ClientTelemetryReporter;
 import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.Timer;
 import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 
@@ -202,7 +203,7 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
      * requests in cases where a currently assigned topic is in the target assignment (new
      * partition assigned, or revoked), but it is not present the Metadata cache at that moment.
      * The cache is cleared when the subscription changes ({@link #transitionToJoining()}, the
-     * member fails ({@link #transitionToFatal()} or leaves the group ({@link MembershipManager#leaveGroup(long)}).
+     * member fails ({@link #transitionToFatal()} or leaves the group ({@link #leaveGroup(Timer)}).
      */
     private final Map<Uuid, String> assignedTopicNamesCache;
 
@@ -239,7 +240,7 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
     private int memberEpochOnReconciliationStart;
 
     /**
-     * If the member is currently leaving the group after a call to {@link MembershipManager#leaveGroup(long)}}, this
+     * If the member is currently leaving the group after a call to {@link #leaveGroup(Timer)}}, this
      * will have a future that will complete when the ongoing leave operation completes
      * (callbacks executed and heartbeat request to leave is sent out). This will be empty is the
      * member is not leaving.
@@ -579,7 +580,7 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
      * {@inheritDoc}
      */
     @Override
-    public CompletableFuture<Void> leaveGroup(long timeoutMs) {
+    public CompletableFuture<Void> leaveGroup(Timer timer) {
         if (state == MemberState.UNSUBSCRIBED || state == MemberState.FATAL) {
             // Member is not part of the group. No-op and return completed future to avoid
             // unnecessary transitions.
@@ -1198,10 +1199,15 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
      * @return Future that will be chained within the rest of the reconciliation logic
      */
     private CompletableFuture<Void> enqueueConsumerRebalanceListenerCallback(ConsumerRebalanceListenerMethodName methodName,
-                                                                             Set<TopicPartition> partitions) {
+                                                                             Set<TopicPartition> partitions,
+                                                                             Timer timer) {
         SortedSet<TopicPartition> sortedPartitions = new TreeSet<>(TOPIC_PARTITION_COMPARATOR);
         sortedPartitions.addAll(partitions);
-        CompletableBackgroundEvent<Void> event = new ConsumerRebalanceListenerCallbackNeededEvent(methodName, sortedPartitions);
+        CompletableBackgroundEvent<Void> event = new ConsumerRebalanceListenerCallbackNeededEvent(
+                methodName,
+                sortedPartitions,
+                timer
+        );
         backgroundEventHandler.add(event);
         log.debug("The event to trigger the {} method execution was enqueued successfully", methodName.fullyQualifiedMethodName());
         return event.future();
