@@ -22,9 +22,9 @@ package org.apache.kafka.tools.SchemaChecker;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
+import org.apache.kafka.clients.admin.FinalizedVersionRange;
 import org.eclipse.jgit.api.Git;
 import org.eclipse.jgit.api.errors.GitAPIException;
-
 import org.eclipse.jgit.lib.ObjectId;
 import org.eclipse.jgit.lib.ObjectLoader;
 import org.eclipse.jgit.lib.Ref;
@@ -42,6 +42,7 @@ import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.FileReader;
 import java.io.IOException;
+import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -54,10 +55,10 @@ public class MetadataSchemaChecker {
 
     static int latestTag = -1;
     static int  latestTagVersion = -1;
-    static int oldLatestVersion = -1;
-    static int oldFirstVersion = -1;
-    static int newLatestVersion = -1;
-    static int newFirstVersion = -1;
+    static int originalHighestVersion = -1;
+    static int originalLowestVersion = -1;
+    static int editedHighestVersion = -1;
+    static int editedLowestVersion = -1;
     static String[] filesCheckMetadata = Paths.get(Paths.get("").toAbsolutePath() + "/metadata/src/main/resources/common/metadata/").toFile().list();
     public static void main(String[] args) throws Exception {
 
@@ -65,8 +66,8 @@ public class MetadataSchemaChecker {
             List<String> localContent = new ArrayList<>();
             for (String fileName: filesCheckMetadata) {
                 final String dir = String.valueOf(Paths.get("").toAbsolutePath());
-                String path = dir + "/metadata/src/main/resources/common/metadata/" + fileName;
-                BufferedReader reader = new BufferedReader(new FileReader(path));
+                Path path = Paths.get(dir + "/metadata/src/main/resources/common/metadata/" + fileName);
+                BufferedReader reader = new BufferedReader(new FileReader(String.valueOf(path)));
                 StringBuilder content = new StringBuilder();
                 boolean print = false;
                 for (String line = reader.readLine(); line != null; line = reader.readLine()) {
@@ -96,9 +97,7 @@ public class MetadataSchemaChecker {
                 JsonNode jsonNode2 = objectMapper.readTree(localContent.get(i));
 
                 checkApiTypeVersions(jsonNode1, jsonNode2);
-                System.out.println("\u001B[32m" + gitContent.get(i));
-                System.out.println("\u001B[31m" + localContent.get(i));
-                //parser((ArrayNode) jsonNode1.get("fields"), (ArrayNode) jsonNode2.get("fields"));
+                parser((ArrayNode) jsonNode1.get("fields"), (ArrayNode) jsonNode2.get("fields"));
             }
 
         } catch (IOException e) {
@@ -121,7 +120,7 @@ public class MetadataSchemaChecker {
                 try (TreeWalk treeWalk = new TreeWalk(repository)) {
                     treeWalk.addTree(tree);
                     treeWalk.setRecursive(true);
-                    treeWalk.setFilter(PathFilter.create("metadata/src/main/resources/common/metadata/" + fileName));
+                    treeWalk.setFilter(PathFilter.create(String.valueOf(Paths.get("metadata/src/main/resources/common/metadata/" + fileName))));
                     if (!treeWalk.next()) {
                         throw new IllegalStateException("Did not find expected file /metadata/src/main/resources/common/metadata/" + fileName);
                     }
@@ -159,25 +158,26 @@ public class MetadataSchemaChecker {
                                             ", New Type: " + original.get("type"));
         }
         String[] oldValidVersions = cleanUpVersionStrings(String.valueOf(original.get("validVersions")));
-        String[] newValidVersions = cleanUpVersionStrings(String.valueOf(original.get("validVersions")));
-        oldFirstVersion = Integer.parseInt(oldValidVersions[0]);
-        newFirstVersion = Integer.parseInt(newValidVersions[0]);
+        String[] newValidVersions = cleanUpVersionStrings(String.valueOf(edited.get("validVersions")));
+
+        originalLowestVersion = Integer.parseInt(oldValidVersions[0]);
+        editedLowestVersion = Integer.parseInt(newValidVersions[0]);
         if (oldValidVersions.length == 1) {
-            oldLatestVersion = Integer.parseInt(oldValidVersions[0]);
+            originalHighestVersion = Integer.parseInt(oldValidVersions[0]);
         } else {
-            oldLatestVersion = Integer.parseInt(oldValidVersions[1]);
+            originalHighestVersion = Integer.parseInt(oldValidVersions[1]);
         }
         if (newValidVersions.length == 1) {
-            newLatestVersion = Integer.parseInt(newValidVersions[0]);
+            editedHighestVersion = Integer.parseInt(newValidVersions[0]);
         } else {
-            newLatestVersion = Integer.parseInt(newValidVersions[1]);
+            editedHighestVersion = Integer.parseInt(newValidVersions[1]);
         }
 
-        if (oldLatestVersion != newLatestVersion && oldLatestVersion + 1 != newLatestVersion) {
+        if (originalHighestVersion != editedHighestVersion && originalHighestVersion + 1 != editedHighestVersion) {
             throw new IllegalStateException("Invalid latest version, can at most be one higher than the previous. Original version: "
-                                            + oldLatestVersion + ", New Version: " + newLatestVersion);
+                                            + originalHighestVersion + ", New Version: " + editedHighestVersion);
         }
-        if (oldFirstVersion != newFirstVersion) {
+        if (originalLowestVersion != editedLowestVersion) {
             throw new IllegalStateException("cannot change lower end of valid versions");
         }
     }
@@ -230,32 +230,44 @@ public class MetadataSchemaChecker {
     }
 
     private static boolean parseVersion(JsonNode nodeOrig, JsonNode nodeNew) {
-
         String[] oldVersion = cleanUpVersionStrings(String.valueOf(nodeOrig.get("versions")));
         String[] newVersion = cleanUpVersionStrings(String.valueOf(nodeNew.get("versions")));
+        FinalizedVersionRange oldRange;
+        FinalizedVersionRange newRange;
 
-        if (!Arrays.equals(oldVersion, newVersion)) {
-            if (oldVersion.length == 2 && newVersion.length == 1) {
-                int cutoff = Integer.parseInt(oldVersion[1]);
-                if (cutoff > Integer.parseInt(newVersion[0])) {
+        if (oldVersion.length == 1) {
+            oldRange = new FinalizedVersionRange(Short.parseShort(oldVersion[0]), Short.MAX_VALUE);
+        } else {
+            oldRange = new FinalizedVersionRange(Short.parseShort(oldVersion[0]), Short.parseShort(oldVersion[1]));
+        }
+        if (newVersion.length == 1) {
+            newRange = new FinalizedVersionRange(Short.parseShort(newVersion[0]), Short.MAX_VALUE);
+        } else {
+            newRange = new FinalizedVersionRange(Short.parseShort(newVersion[0]), Short.parseShort(newVersion[1]));
+        }
+
+        if (!oldRange.equals(newRange)) {
+            if (oldRange.maxVersionLevel() != Short.MAX_VALUE && newRange.maxVersionLevel() == Short.MAX_VALUE) {
+                int cutoff = oldRange.maxVersionLevel();
+                if (cutoff > newRange.minVersionLevel()) {
                     parseNewField(nodeNew);
                     return true;
                 } else {
                     throw new IllegalStateException("new schema cannot reopen already closed field");
                 }
-            } else if (oldVersion.length == 2 && newVersion.length == 2) {
+            } else if (oldRange.maxVersionLevel() != Short.MAX_VALUE && newRange.maxVersionLevel() != Short.MAX_VALUE) {
                 throw new IllegalStateException("cannot changed already closed field");
-            } else if (oldVersion.length == 1 && newVersion.length == 2) {
-                if (!Objects.equals(oldVersion[0], newVersion[0])) {
+            } else if (oldRange.maxVersionLevel() == Short.MAX_VALUE && newRange.maxVersionLevel() != Short.MAX_VALUE) {
+                if (oldRange.minVersionLevel() != newRange.minVersionLevel()) {
                     throw new IllegalStateException("cannot change lower end of ");
                 }
-                int cutoffVersion = Integer.parseInt(newVersion[1]);
-                if (cutoffVersion != newLatestVersion && cutoffVersion + 1 != newLatestVersion) {
+                int cutoffVersion = newRange.maxVersionLevel();
+                if (cutoffVersion != editedHighestVersion && cutoffVersion + 1 != editedHighestVersion) {
                     throw new IllegalStateException("Invalid closing version for field");
                 }
-            } else if (oldVersion.length == 1 && newVersion.length == 1) {
-                int oldInt = Integer.parseInt(oldVersion[0]);
-                int newInt = Integer.parseInt(newVersion[0]);
+            } else if (oldRange.maxVersionLevel() == Short.MAX_VALUE && newRange.maxVersionLevel() == Short.MAX_VALUE) {
+                int oldInt = oldRange.minVersionLevel();
+                int newInt = newRange.minVersionLevel();
                 if (oldInt < newInt) {
                     parseNewField(nodeNew);
                     return true;
@@ -270,24 +282,38 @@ public class MetadataSchemaChecker {
     private static void parseNullableVersion(JsonNode nodeOrig, JsonNode nodeNew) {
         String[] oldVersion = cleanUpVersionStrings(String.valueOf(nodeOrig.get("nullableVersions")));
         String[] newVersion = cleanUpVersionStrings(String.valueOf(nodeNew.get("nullableVersions")));
+        FinalizedVersionRange oldRange;
+        FinalizedVersionRange newRange;
+        if (oldVersion.length == 1) {
+            oldRange = new FinalizedVersionRange(Short.parseShort(oldVersion[0]), Short.MAX_VALUE);
+        } else {
+            oldRange = new FinalizedVersionRange(Short.parseShort(oldVersion[0]), Short.parseShort(oldVersion[1]));
+        }
+        if (newVersion.length == 1) {
+            newRange = new FinalizedVersionRange(Short.parseShort(newVersion[0]), Short.MAX_VALUE);
+        } else {
+            newRange = new FinalizedVersionRange(Short.parseShort(newVersion[0]), Short.parseShort(newVersion[1]));
+        }
+
         if (nodeOrig.has("nullableVersions")) {
             if (!nodeNew.has("nullableVersions")) {
                 throw new IllegalStateException("field is missing nullable information");
             }
-            if (oldVersion.length == 2 && newVersion.length == 1) {
+            if (oldRange.maxVersionLevel() != Short.MAX_VALUE && newRange.maxVersionLevel() == Short.MAX_VALUE) {
                 throw new IllegalStateException("cannot make field nullable after closing nullable versions");
             }
-            if (oldVersion.length == 1 && newVersion.length == 2) {
-                if (!Objects.equals(oldVersion[0], newVersion[0])) {
+            if (oldRange.maxVersionLevel() == Short.MAX_VALUE && newRange.maxVersionLevel() != Short.MAX_VALUE) {
+
+                if (oldRange.minVersionLevel() != newRange.minVersionLevel()) {
                     throw new IllegalStateException("invalid closing version for nullable versions");
                 }
-                if (Integer.parseInt(newVersion[1]) != newLatestVersion) {
+                if (newRange.maxVersionLevel() != editedHighestVersion) {
                     throw new IllegalStateException("incorrect closing version for nullable versions");
                 }
             }
 
         } else if (nodeNew.has("nullableVersions")) {
-            if (Integer.parseInt(newVersion[0]) != newLatestVersion) {
+            if (newRange.minVersionLevel() != editedHighestVersion) {
                 throw new IllegalStateException("invalid version for new nullable version");
             }
         }
@@ -321,17 +347,17 @@ public class MetadataSchemaChecker {
 
     private static void parseNewField(JsonNode node) {
         String[] versions = cleanUpVersionStrings(String.valueOf(node.get("versions")));
-        if (oldLatestVersion + 1 != newLatestVersion && !node.has("tag")) {
+        if (originalHighestVersion + 1 != editedHighestVersion && !node.has("tag")) {
             throw new IllegalStateException("New schemas with new fields need to be on the next version iteration");
         }
-        if (newLatestVersion != Integer.parseInt(versions[0]) && !node.has("tag")) {
+        if (editedHighestVersion != Integer.parseInt(versions[0]) && !node.has("tag")) {
             throw new IllegalStateException("new field version not correct");
         }
         if (!node.has("type") && !node.has("fields")) {
             throw new IllegalStateException("new field requires a type if it doesn't have fields node ");
         }
 
-        if (Integer.parseInt(versions[0]) != (oldLatestVersion + 1) && !node.has("tag")) {
+        if (Integer.parseInt(versions[0]) != (originalHighestVersion + 1) && !node.has("tag")) {
             throw new IllegalStateException("New field must be on next version");
         }
         if (node.has("tag")) {
@@ -343,8 +369,8 @@ public class MetadataSchemaChecker {
             if (Integer.parseInt(taggedVersions[0]) != latestTagVersion + 1) {
                 throw new IllegalStateException("taggedVersion incorrect for new tagged field");
             }
-            if (Integer.parseInt(versions[0]) < oldLatestVersion ||
-                Integer.parseInt(versions[0]) > newLatestVersion) {
+            if (Integer.parseInt(versions[0]) < originalHighestVersion ||
+                Integer.parseInt(versions[0]) > editedHighestVersion) {
                 throw new IllegalStateException("Invalid version for new tagged field");
             }
         }
