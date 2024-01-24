@@ -26,8 +26,13 @@ import java.util.Set;
 import java.util.Map;
 
 public final class LocalReplicaChanges {
+    // partitions for which the broker is not a replica anymore
     private final Set<TopicPartition> deletes;
+    // partitions for which the broker is now a leader (leader epoch bump on the leader)
+    private final Map<TopicPartition, PartitionInfo> electedLeaders;
+    // partitions for which the isr or replicas change if the broker is a leader (partition epoch bump on the leader)
     private final Map<TopicPartition, PartitionInfo> leaders;
+    // partitions for which the broker is now a follower or follower with isr or replica updates (partition epoch bump on follower)
     private final Map<TopicPartition, PartitionInfo> followers;
     // The topic name -> topic id map in leaders and followers changes
     private final Map<String, Uuid> topicIds;
@@ -35,12 +40,14 @@ public final class LocalReplicaChanges {
 
     LocalReplicaChanges(
         Set<TopicPartition> deletes,
+        Map<TopicPartition, PartitionInfo> electedLeaders,
         Map<TopicPartition, PartitionInfo> leaders,
         Map<TopicPartition, PartitionInfo> followers,
         Map<String, Uuid> topicIds,
         Map<TopicIdPartition, Uuid> directoryIds
     ) {
         this.deletes = deletes;
+        this.electedLeaders = electedLeaders;
         this.leaders = leaders;
         this.followers = followers;
         this.topicIds = topicIds;
@@ -49,6 +56,10 @@ public final class LocalReplicaChanges {
 
     public Set<TopicPartition> deletes() {
         return deletes;
+    }
+
+    public Map<TopicPartition, PartitionInfo> electedLeaders() {
+        return electedLeaders;
     }
 
     public Map<TopicPartition, PartitionInfo> leaders() {
@@ -66,8 +77,9 @@ public final class LocalReplicaChanges {
     @Override
     public String toString() {
         return String.format(
-            "LocalReplicaChanges(deletes = %s, leaders = %s, followers = %s)",
+            "LocalReplicaChanges(deletes = %s, newly elected leaders = %s, leaders = %s, followers = %s)",
             deletes,
+            electedLeaders,
             leaders,
             followers
         );
