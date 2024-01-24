@@ -40,6 +40,7 @@ class DelayedRemoteFetchTest {
   private val logStartOffset = 0L
   private val currentLeaderEpoch = Optional.of[Integer](10)
   private val replicaId = 1
+  private val remoteFetchMaxWaitMs = 30000L
 
   private val fetchStatus = FetchPartitionStatus(
     startOffsetMetadata = new LogOffsetMetadata(fetchOffset),
@@ -65,7 +66,7 @@ class DelayedRemoteFetchTest {
     val logReadInfo = buildReadResult(Errors.NONE, highWatermark, leaderLogStartOffset)
 
     val delayedRemoteFetch = new DelayedRemoteFetch(null, future, fetchInfo, Seq(topicIdPartition -> fetchStatus), fetchParams,
-      Seq(topicIdPartition -> logReadInfo), replicaManager, callback)
+      Seq(topicIdPartition -> logReadInfo), replicaManager, callback, remoteFetchMaxWaitMs)
 
     when(replicaManager.getPartitionOrException(topicIdPartition.topicPartition))
       .thenReturn(mock(classOf[Partition]))
@@ -103,7 +104,7 @@ class DelayedRemoteFetchTest {
     val logReadInfo = buildReadResult(Errors.NONE)
 
     val delayedRemoteFetch = new DelayedRemoteFetch(null, future, fetchInfo, Seq(topicIdPartition -> fetchStatus), fetchParams,
-      Seq(topicIdPartition -> logReadInfo), replicaManager, callback)
+      Seq(topicIdPartition -> logReadInfo), replicaManager, callback, remoteFetchMaxWaitMs)
 
     // delayed remote fetch should still be able to complete
     assertTrue(delayedRemoteFetch.tryComplete())
@@ -134,7 +135,7 @@ class DelayedRemoteFetchTest {
     val logReadInfo = buildReadResult(Errors.FENCED_LEADER_EPOCH)
 
     val delayedRemoteFetch = new DelayedRemoteFetch(null, future, fetchInfo, Seq(topicIdPartition -> fetchStatus), fetchParams,
-      Seq(topicIdPartition -> logReadInfo), replicaManager, callback)
+      Seq(topicIdPartition -> logReadInfo), replicaManager, callback, remoteFetchMaxWaitMs)
 
     assertTrue(delayedRemoteFetch.tryComplete())
     assertTrue(delayedRemoteFetch.isCompleted)

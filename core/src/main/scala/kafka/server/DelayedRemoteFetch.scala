@@ -37,8 +37,10 @@ class DelayedRemoteFetch(remoteFetchTask: Future[Void],
                          fetchParams: FetchParams,
                          localReadResults: Seq[(TopicIdPartition, LogReadResult)],
                          replicaManager: ReplicaManager,
-                         responseCallback: Seq[(TopicIdPartition, FetchPartitionData)] => Unit)
-  extends DelayedOperation(fetchParams.maxWaitMs) {
+                         responseCallback: Seq[(TopicIdPartition, FetchPartitionData)] => Unit,
+                         // TODO: temporal workaround, wait for workaround on KAFKA-15776
+                         maxWaitMs: Long)
+  extends DelayedOperation(maxWaitMs) {
 
   /**
    * The operation can be completed if:

@@ -143,6 +143,12 @@ public final class RemoteLogManagerConfig {
             "less than or equal to `log.retention.bytes` value.";
     public static final Long DEFAULT_LOG_LOCAL_RETENTION_BYTES = -2L;
 
+    // TODO: temporal workaround, wait for workaround on KAFKA-15776
+    public static final String REMOTE_FETCH_MAX_WAIT_MS_PROP = "remote.fetch.max.wait.ms";
+    public static final String REMOTE_FETCH_MAX_WAIT_MS_DOC = "Fetch timeout for reading remote log";
+    public static final int DEFAULT_REMOTE_FETCH_MAX_WAIT_MS = 2000;
+
+
     public static final ConfigDef CONFIG_DEF = new ConfigDef();
 
     static {
@@ -255,7 +261,13 @@ public final class RemoteLogManagerConfig {
                                   DEFAULT_LOG_LOCAL_RETENTION_BYTES,
                                   atLeast(DEFAULT_LOG_LOCAL_RETENTION_BYTES),
                                   MEDIUM,
-                                  LOG_LOCAL_RETENTION_BYTES_DOC);
+                                  LOG_LOCAL_RETENTION_BYTES_DOC)
+                  .define(REMOTE_FETCH_MAX_WAIT_MS_PROP,
+                                  LONG,
+                                  DEFAULT_REMOTE_FETCH_MAX_WAIT_MS,
+                                  atLeast(1),
+                                  MEDIUM,
+                                  REMOTE_FETCH_MAX_WAIT_MS_DOC);
     }
 
     private final boolean enableRemoteStorageSystem;
@@ -277,6 +289,7 @@ public final class RemoteLogManagerConfig {
     private final HashMap<String, Object> remoteLogMetadataManagerProps;
     private final String remoteLogMetadataManagerListenerName;
     private final int remoteLogMetadataCustomMetadataMaxBytes;
+    private final long remoteFetchMaxWaitMs;
 
     public RemoteLogManagerConfig(AbstractConfig config) {
         this(config.getBoolean(REMOTE_LOG_STORAGE_SYSTEM_ENABLE_PROP),
@@ -301,7 +314,8 @@ public final class RemoteLogManagerConfig {
              config.getString(REMOTE_LOG_METADATA_MANAGER_CONFIG_PREFIX_PROP),
              config.getString(REMOTE_LOG_METADATA_MANAGER_CONFIG_PREFIX_PROP) != null
                  ? config.originalsWithPrefix(config.getString(REMOTE_LOG_METADATA_MANAGER_CONFIG_PREFIX_PROP))
-                 : Collections.emptyMap());
+                 : Collections.emptyMap(),
+             config.getLong(REMOTE_FETCH_MAX_WAIT_MS_PROP));
     }
 
     // Visible for testing
@@ -323,7 +337,8 @@ public final class RemoteLogManagerConfig {
                                   String remoteStorageManagerPrefix,
                                   Map<String, Object> remoteStorageManagerProps, /* properties having keys stripped out with remoteStorageManagerPrefix */
                                   String remoteLogMetadataManagerPrefix,
-                                  Map<String, Object> remoteLogMetadataManagerProps /* properties having keys stripped out with remoteLogMetadataManagerPrefix */
+                                  Map<String, Object> remoteLogMetadataManagerProps, /* properties having keys stripped out with remoteLogMetadataManagerPrefix */
+                                  long remoteFetchMaxWaitMs
     ) {
         this.enableRemoteStorageSystem = enableRemoteStorageSystem;
         this.remoteStorageManagerClassName = remoteStorageManagerClassName;
@@ -344,6 +359,7 @@ public final class RemoteLogManagerConfig {
         this.remoteLogMetadataManagerProps = new HashMap<>(remoteLogMetadataManagerProps);
         this.remoteLogMetadataManagerListenerName = remoteLogMetadataManagerListenerName;
         this.remoteLogMetadataCustomMetadataMaxBytes = remoteLogMetadataCustomMetadataMaxBytes;
+        this.remoteFetchMaxWaitMs = remoteFetchMaxWaitMs;
     }
 
     public boolean enableRemoteStorageSystem() {
@@ -420,6 +436,10 @@ public final class RemoteLogManagerConfig {
 
     public Map<String, Object> remoteLogMetadataManagerProps() {
         return Collections.unmodifiableMap(remoteLogMetadataManagerProps);
+    }
+
+    public long remoteFetchMaxWaitMs() {
+        return remoteFetchMaxWaitMs;
     }
 
     @Override
