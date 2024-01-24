@@ -20,6 +20,7 @@ import static java.util.Collections.emptyList;
 import static java.util.Collections.emptySet;
 import static java.util.Collections.singleton;
 import static java.util.Collections.singletonList;
+import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -46,6 +47,7 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
 import org.apache.kafka.common.errors.GroupIdNotFoundException;
 import org.apache.kafka.common.errors.InvalidGroupIdException;
+import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.ConsumerGroupDescribeRequestData;
 import org.apache.kafka.common.message.ConsumerGroupDescribeResponseData;
 import org.apache.kafka.common.message.DescribeGroupsRequestData;
@@ -148,7 +150,14 @@ public class DescribeConsumerGroupsHandlerTest {
             Optional.of("instanceId"),
             "clientId",
             "host",
-            new MemberAssignment(tps)
+            new MemberAssignment(mkSet(
+                new TopicPartition("foo", 0),
+                new TopicPartition("bar",  1))
+            ),
+            Optional.of(new MemberAssignment(mkSet(
+                new TopicPartition("foo", 1),
+                new TopicPartition("bar",  2)
+            )))
         ));
         ConsumerGroupDescription expected = new ConsumerGroupDescription(
             groupId1,
@@ -191,8 +200,18 @@ public class DescribeConsumerGroupsHandlerTest {
                                                 .setTopicId(Uuid.randomUuid())
                                                 .setTopicName("bar")
                                                 .setPartitions(Collections.singletonList(1))
-                                        ))
-                                    )
+                                        )))
+                                    .setTargetAssignment(new ConsumerGroupDescribeResponseData.Assignment()
+                                        .setTopicPartitions(Arrays.asList(
+                                            new ConsumerGroupDescribeResponseData.TopicPartitions()
+                                                .setTopicId(Uuid.randomUuid())
+                                                .setTopicName("foo")
+                                                .setPartitions(Collections.singletonList(1)),
+                                            new ConsumerGroupDescribeResponseData.TopicPartitions()
+                                                .setTopicId(Uuid.randomUuid())
+                                                .setTopicName("bar")
+                                                .setPartitions(Collections.singletonList(2))
+                                        )))
                             ))
                     ))
             )
@@ -230,6 +249,7 @@ public class DescribeConsumerGroupsHandlerTest {
 
     @Test
     public void testFailedHandleClassicGroupResponse() {
+        assertFailed(UnsupportedVersionException.class, handleClassicGroupWithError(Errors.UNSUPPORTED_VERSION, ""));
         assertFailed(GroupAuthorizationException.class, handleClassicGroupWithError(Errors.GROUP_AUTHORIZATION_FAILED, ""));
         assertFailed(GroupIdNotFoundException.class, handleClassicGroupWithError(Errors.GROUP_ID_NOT_FOUND, ""));
         assertFailed(InvalidGroupIdException.class, handleClassicGroupWithError(Errors.INVALID_GROUP_ID, ""));
@@ -246,6 +266,7 @@ public class DescribeConsumerGroupsHandlerTest {
     public void testRetriableHandleConsumerGroupResponse() {
         assertRetriable(handleConsumerGroupWithError(Errors.COORDINATOR_LOAD_IN_PROGRESS));
         assertRetriable(handleConsumerGroupWithError(Errors.GROUP_ID_NOT_FOUND));
+        assertRetriable(handleConsumerGroupWithError(Errors.UNSUPPORTED_VERSION));
     }
 
     @Test

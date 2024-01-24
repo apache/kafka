@@ -152,6 +152,7 @@ import org.apache.kafka.common.requests.AlterUserScramCredentialsResponse;
 import org.apache.kafka.common.requests.ApiError;
 import org.apache.kafka.common.requests.ApiVersionsRequest;
 import org.apache.kafka.common.requests.ApiVersionsResponse;
+import org.apache.kafka.common.requests.ConsumerGroupDescribeRequest;
 import org.apache.kafka.common.requests.ConsumerGroupDescribeResponse;
 import org.apache.kafka.common.requests.CreateAclsResponse;
 import org.apache.kafka.common.requests.CreatePartitionsRequest;
@@ -168,6 +169,7 @@ import org.apache.kafka.common.requests.DescribeClientQuotasResponse;
 import org.apache.kafka.common.requests.DescribeClusterRequest;
 import org.apache.kafka.common.requests.DescribeClusterResponse;
 import org.apache.kafka.common.requests.DescribeConfigsResponse;
+import org.apache.kafka.common.requests.DescribeGroupsRequest;
 import org.apache.kafka.common.requests.DescribeGroupsResponse;
 import org.apache.kafka.common.requests.DescribeLogDirsResponse;
 import org.apache.kafka.common.requests.DescribeProducersRequest;
@@ -3060,14 +3062,8 @@ public class KafkaAdminClientTest {
 
             // The first request sent will be a ConsumerGroupDescribe request. Let's
             // fail it in order to fail back to using the classic version.
-            env.kafkaClient().prepareResponse(new ConsumerGroupDescribeResponse(
-                new ConsumerGroupDescribeResponseData()
-                    .setGroups(Collections.singletonList(
-                        new ConsumerGroupDescribeResponseData.DescribedGroup()
-                            .setGroupId(GROUP_ID)
-                            .setErrorCode(Errors.GROUP_ID_NOT_FOUND.code())
-                    ))
-            ));
+            env.kafkaClient().prepareUnsupportedVersionResponse(
+                request -> request instanceof ConsumerGroupDescribeRequest);
 
             DescribeGroupsResponseData data = new DescribeGroupsResponseData();
 
@@ -3163,6 +3159,11 @@ public class KafkaAdminClientTest {
 
             env.kafkaClient().prepareResponse(prepareFindCoordinatorResponse(Errors.NONE, env.cluster().controller()));
 
+            // The first request sent will be a ConsumerGroupDescribe request. Let's
+            // fail it in order to fail back to using the classic version.
+            env.kafkaClient().prepareUnsupportedVersionResponse(
+                request -> request instanceof ConsumerGroupDescribeRequest);
+
             TopicPartition myTopicPartition0 = new TopicPartition("my_topic", 0);
             TopicPartition myTopicPartition1 = new TopicPartition("my_topic", 1);
             TopicPartition myTopicPartition2 = new TopicPartition("my_topic", 2);
@@ -3222,6 +3223,11 @@ public class KafkaAdminClientTest {
             env.kafkaClient().prepareResponse(
                 prepareFindCoordinatorResponse(Errors.NONE, env.cluster().controller()));
 
+            // The first request sent will be a ConsumerGroupDescribe request. Let's
+            // fail it in order to fail back to using the classic version.
+            env.kafkaClient().prepareUnsupportedVersionResponse(
+                request -> request instanceof ConsumerGroupDescribeRequest);
+
             DescribeGroupsResponseData data = new DescribeGroupsResponseData();
             data.groups().add(DescribeGroupsResponse.groupMetadata(
                 GROUP_ID,
@@ -3248,6 +3254,11 @@ public class KafkaAdminClientTest {
 
             env.kafkaClient().prepareResponse(prepareFindCoordinatorResponse(Errors.NONE, env.cluster().controller()));
 
+            // The first request sent will be a ConsumerGroupDescribe request. Let's
+            // fail it in order to fail back to using the classic version.
+            env.kafkaClient().prepareUnsupportedVersionResponse(
+                request -> request instanceof ConsumerGroupDescribeRequest);
+
             DescribeGroupsResponseData data = new DescribeGroupsResponseData();
 
             data.groups().add(DescribeGroupsResponse.groupMetadata(
@@ -3264,6 +3275,27 @@ public class KafkaAdminClientTest {
             final DescribeConsumerGroupsResult result = env.adminClient().describeConsumerGroups(singletonList(GROUP_ID));
 
             TestUtils.assertFutureError(result.describedGroups().get(GROUP_ID), IllegalArgumentException.class);
+        }
+    }
+
+    @Test
+    public void testDescribeGroupsWithBothUnsupportedApis() throws InterruptedException {
+        try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(mockCluster(1, 0))) {
+            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
+
+            env.kafkaClient().prepareResponse(prepareFindCoordinatorResponse(Errors.NONE, env.cluster().controller()));
+
+            // The first request sent will be a ConsumerGroupDescribe request. Let's
+            // fail it in order to fail back to using the classic version.
+            env.kafkaClient().prepareUnsupportedVersionResponse(
+                request -> request instanceof ConsumerGroupDescribeRequest);
+
+            // Let's also fail the second one.
+            env.kafkaClient().prepareUnsupportedVersionResponse(
+                request -> request instanceof DescribeGroupsRequest);
+
+            DescribeConsumerGroupsResult result = env.adminClient().describeConsumerGroups(singletonList(GROUP_ID));
+            TestUtils.assertFutureError(result.describedGroups().get(GROUP_ID), UnsupportedVersionException.class);
         }
     }
 
@@ -3301,13 +3333,19 @@ public class KafkaAdminClientTest {
                                     .setSubscribedTopicNames(singletonList("foo"))
                                     .setSubscribedTopicRegex("regex")
                                     .setAssignment(new ConsumerGroupDescribeResponseData.Assignment()
-                                        .setTopicPartitions(Arrays.asList(
+                                        .setTopicPartitions(singletonList(
                                             new ConsumerGroupDescribeResponseData.TopicPartitions()
                                                 .setTopicId(Uuid.randomUuid())
                                                 .setTopicName("foo")
-                                                .setPartitions(Collections.singletonList(0))
-                                        ))
-                                    )
+                                                .setPartitions(singletonList(0))
+                                        )))
+                                    .setTargetAssignment(new ConsumerGroupDescribeResponseData.Assignment()
+                                        .setTopicPartitions(singletonList(
+                                            new ConsumerGroupDescribeResponseData.TopicPartitions()
+                                                .setTopicId(Uuid.randomUuid())
+                                                .setTopicName("foo")
+                                                .setPartitions(singletonList(1))
+                                        )))
                             )),
                         new ConsumerGroupDescribeResponseData.DescribedGroup()
                             .setGroupId("grp2")
@@ -3358,7 +3396,10 @@ public class KafkaAdminClientTest {
                         "host",
                         new MemberAssignment(
                             Collections.singleton(new TopicPartition("foo", 0))
-                        )
+                        ),
+                        Optional.of(new MemberAssignment(
+                            Collections.singleton(new TopicPartition("foo", 1))
+                        ))
                     )
                 ),
                 "range",

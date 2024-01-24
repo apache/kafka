@@ -37,6 +37,7 @@ import org.apache.kafka.common.ConsumerGroupState;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.acl.AclOperation;
+import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.ConsumerGroupDescribeRequestData;
 import org.apache.kafka.common.message.ConsumerGroupDescribeResponseData;
 import org.apache.kafka.common.message.DescribeGroupsRequestData;
@@ -164,6 +165,25 @@ public class DescribeConsumerGroupsHandler implements AdminApiHandler<Coordinato
         }
     }
 
+    @Override
+    public Map<CoordinatorKey, Throwable> handleUnsupportedVersionException(
+        int coordinator,
+        UnsupportedVersionException exception,
+        Set<CoordinatorKey> keys
+    ) {
+        Map<CoordinatorKey, Throwable> errors = new HashMap<>();
+
+        keys.forEach(key -> {
+            Boolean prev = useClassicGroupApi.put(key.idValue, true);
+            if (prev != null && prev) {
+                // We already tried with the classic group API so we need to fail now.
+                errors.put(key, exception);
+            }
+        });
+
+        return errors;
+    }
+
     private ApiResult<CoordinatorKey, ConsumerGroupDescription> handledConsumerGroupResponse(
         Node coordinator,
         Map<CoordinatorKey, ConsumerGroupDescription> completed,
@@ -190,18 +210,14 @@ public class DescribeConsumerGroupsHandler implements AdminApiHandler<Coordinato
             final List<MemberDescription> memberDescriptions = new ArrayList<>(describedGroup.members().size());
 
             describedGroup.members().forEach(groupMember -> {
-                final Set<TopicPartition> partitions = groupMember.assignment().topicPartitions().stream().flatMap(topic ->
-                    topic.partitions().stream().map(partition ->
-                        new TopicPartition(topic.topicName(), partition)
-                    )
-                ).collect(Collectors.toSet());
-
                 memberDescriptions.add(new MemberDescription(
                     groupMember.memberId(),
                     Optional.ofNullable(groupMember.instanceId()),
                     groupMember.clientId(),
                     groupMember.clientHost(),
-                    new MemberAssignment(partitions)));
+                    new MemberAssignment(convertAssignment(groupMember.assignment())),
+                    Optional.of(new MemberAssignment(convertAssignment(groupMember.targetAssignment())))
+                ));
             });
 
             final ConsumerGroupDescription consumerGroupDescription =
@@ -278,6 +294,14 @@ public class DescribeConsumerGroupsHandler implements AdminApiHandler<Coordinato
         return new ApiResult<>(completed, failed, new ArrayList<>(groupsToUnmap));
     }
 
+    private Set<TopicPartition> convertAssignment(ConsumerGroupDescribeResponseData.Assignment assignment) {
+        return assignment.topicPartitions().stream().flatMap(topic ->
+            topic.partitions().stream().map(partition ->
+                new TopicPartition(topic.topicName(), partition)
+            )
+        ).collect(Collectors.toSet());
+    }
+
     private void handleError(
         CoordinatorKey groupId,
         Errors error,
@@ -305,6 +329,16 @@ public class DescribeConsumerGroupsHandler implements AdminApiHandler<Coordinato
                 log.debug("`DescribeGroups` request for group id {} returned error {}. " +
                     "Will attempt to find the coordinator again and retry.", groupId.idValue, error);
                 groupsToUnmap.add(groupId);
+                break;
+
+            case UNSUPPORTED_VERSION:
+                if (isConsumerGroupResponse) {
+                    log.debug("`DescribeGroups` request for group id {} failed because the API is not " +
+                        "supported. Will retry with old API.", groupId.idValue);
+                    useClassicGroupApi.put(groupId.idValue, true);
+                } else {
+                    failed.put(groupId, error.exception(errorMsg));
+                }
                 break;
 
             case GROUP_ID_NOT_FOUND:
