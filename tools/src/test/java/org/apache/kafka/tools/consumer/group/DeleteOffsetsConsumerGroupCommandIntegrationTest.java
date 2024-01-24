@@ -29,6 +29,7 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.server.config.Defaults;
 import org.junit.jupiter.api.Test;
 
 import java.util.Collections;
@@ -197,7 +198,7 @@ public class DeleteOffsetsConsumerGroupCommandIntegrationTest extends ConsumerGr
         config.putIfAbsent(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class.getName());
         // Increase timeouts to avoid having a rebalance during the test
         config.putIfAbsent(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, Integer.toString(Integer.MAX_VALUE));
-        config.putIfAbsent(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, Integer.toString(1800000));
+        config.putIfAbsent(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, Integer.toString(Defaults.GROUP_MAX_SESSION_TIMEOUT_MS));
 
         return new KafkaConsumer<>(config);
     }
