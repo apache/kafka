@@ -208,6 +208,7 @@ public final class ConsumerUtils {
 
     public static <T> T getResult(Future<T> future, Timer timer) {
         try {
+            timer.update();
             return future.get(timer.remainingMs(), TimeUnit.MILLISECONDS);
         } catch (ExecutionException e) {
             throw maybeWrapAsKafkaException(e.getCause());

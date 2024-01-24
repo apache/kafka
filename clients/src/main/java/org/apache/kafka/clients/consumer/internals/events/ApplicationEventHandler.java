@@ -103,8 +103,7 @@ public class ApplicationEventHandler implements Closeable {
      *
      * <p/>
      *
-     * See {@link CompletableApplicationEvent#future()}, {@link CompletableApplicationEvent#deadlineMs()}, and
-     * {@link Future#get(long, TimeUnit)} for more details.
+     * See {@link CompletableApplicationEvent#get()} and {@link Future#get(long, TimeUnit)} for more details.
      *
      * @param event A {@link CompletableApplicationEvent} created by the polling thread
      * @return      Value that is the result of the event
@@ -113,9 +112,7 @@ public class ApplicationEventHandler implements Closeable {
     public <T> T addAndGet(final CompletableApplicationEvent<T> event) {
         Objects.requireNonNull(event, "CompletableApplicationEvent provided to addAndGet must be non-null");
         add(event);
-        CompletableFuture<T> future = event.future();
-        Timer timer = time.timer(event.deadlineMs() - time.milliseconds());
-        return ConsumerUtils.getResult(future, timer);
+        return event.get();
     }
 
     @Override

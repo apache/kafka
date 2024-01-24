@@ -31,11 +31,13 @@ import java.util.concurrent.CompletableFuture;
 public abstract class CompletableApplicationEvent<T> extends ApplicationEvent implements CompletableEvent<T> {
 
     private final CompletableFuture<T> future;
+    private final Timer timer;
     private final long deadlineMs;
 
     protected CompletableApplicationEvent(Type type, Timer timer) {
         super(type);
         this.future = new CompletableFuture<>();
+        this.timer = timer;
         this.deadlineMs = timer.remainingMs() + timer.currentTimeMs();
     }
 
@@ -44,7 +46,12 @@ public abstract class CompletableApplicationEvent<T> extends ApplicationEvent im
         return future;
     }
 
-    public T get(Timer timer) {
+    @Override
+    public long deadlineMs() {
+        return deadlineMs;
+    }
+
+    public T get() {
         return ConsumerUtils.getResult(future, timer);
     }
 
@@ -56,10 +63,6 @@ public abstract class CompletableApplicationEvent<T> extends ApplicationEvent im
                 this.future.complete(value);
             }
         });
-    }
-    @Override
-    public long deadlineMs() {
-        return deadlineMs;
     }
 
     @Override
@@ -80,7 +83,7 @@ public abstract class CompletableApplicationEvent<T> extends ApplicationEvent im
 
     @Override
     protected String toStringBase() {
-        return super.toStringBase() + ", future=" + future;
+        return super.toStringBase() + ", future=" + future + ", deadlineMs=" + deadlineMs;
     }
 
     @Override
