@@ -165,12 +165,13 @@ public class ConsumerTestBuilder implements Closeable {
                 fetchConfig.isolationLevel,
                 time,
                 retryBackoffMs,
+                requestTimeoutMs,
                 apiVersions,
                 networkClientDelegate,
                 backgroundEventHandler,
                 logContext));
 
-        this.topicMetadataRequestManager = spy(new TopicMetadataRequestManager(logContext, config, time));
+        this.topicMetadataRequestManager = spy(new TopicMetadataRequestManager(logContext, config));
 
         if (groupInfo.isPresent()) {
             GroupInformation gi = groupInfo.get();
@@ -202,8 +203,7 @@ public class ConsumerTestBuilder implements Closeable {
                         metadata,
                         logContext,
                         Optional.empty(),
-                        backgroundEventHandler,
-                        time
+                        backgroundEventHandler
                 )
             );
             HeartbeatRequestManager.HeartbeatState heartbeatState = spy(new HeartbeatRequestManager.HeartbeatState(
@@ -262,6 +262,7 @@ public class ConsumerTestBuilder implements Closeable {
                 heartbeatRequestManager);
         this.applicationEventProcessor = spy(new ApplicationEventProcessor(
                 logContext,
+                time,
                 applicationEventQueue,
                 requestManagers,
                 metadata

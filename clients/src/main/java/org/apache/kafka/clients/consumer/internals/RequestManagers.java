@@ -131,6 +131,7 @@ public class RequestManagers implements Closeable {
                         fetchConfig.isolationLevel,
                         time,
                         retryBackoffMs,
+                        requestTimeoutMs,
                         apiVersions,
                         networkClientDelegate,
                         backgroundEventHandler,
@@ -145,10 +146,7 @@ public class RequestManagers implements Closeable {
                         networkClientDelegate,
                         apiVersions,
                         requestTimeoutMs);
-                final TopicMetadataRequestManager topic = new TopicMetadataRequestManager(
-                        logContext,
-                        config,
-                        time);
+                final TopicMetadataRequestManager topic = new TopicMetadataRequestManager(logContext, config);
                 HeartbeatRequestManager heartbeatRequestManager = null;
                 MembershipManager membershipManager = null;
                 CoordinatorRequestManager coordinator = null;
@@ -182,8 +180,7 @@ public class RequestManagers implements Closeable {
                             metadata,
                             logContext,
                             clientTelemetryReporter,
-                            backgroundEventHandler,
-                            time);
+                            backgroundEventHandler);
                     membershipManager.registerStateListener(commit);
                     heartbeatRequestManager = new HeartbeatRequestManager(
                             logContext,

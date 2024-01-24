@@ -22,7 +22,6 @@ import org.apache.kafka.clients.consumer.internals.CachedSupplier;
 import org.apache.kafka.clients.consumer.internals.CommitRequestManager;
 import org.apache.kafka.clients.consumer.internals.ConsumerMetadata;
 import org.apache.kafka.clients.consumer.internals.ConsumerNetworkThread;
-import org.apache.kafka.clients.consumer.internals.ConsumerUtils;
 import org.apache.kafka.clients.consumer.internals.MembershipManager;
 import org.apache.kafka.clients.consumer.internals.RequestManagers;
 import org.apache.kafka.common.KafkaException;
@@ -157,7 +156,7 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
         Timer timer = timer(event);
         CommitRequestManager manager = requestManagers.commitRequestManager.get();
         CompletableFuture<Void> future = manager.addOffsetCommitRequest(event.offsets(), timer, false);
-        chain(event, future);
+        event.chain(future);
     }
 
     private void process(final FetchCommittedOffsetsApplicationEvent event) {
@@ -173,7 +172,7 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
                 event.partitions(),
                 timer
         );
-        chain(event, future);
+        event.chain(future);
     }
 
     private void process(final NewTopicsMetadataUpdateRequestEvent ignored) {
@@ -201,7 +200,7 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
                 event.requireTimestamps(),
                 timer
         );
-        chain(event, future);
+        event.chain(future);
     }
 
     /**
@@ -235,19 +234,19 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
         MembershipManager membershipManager = requestManagers.heartbeatRequestManager.get().membershipManager();
         Timer timer = timer(event);
         CompletableFuture<Void> result = membershipManager.leaveGroup(timer);
-        chain(event, result);
+        event.chain(result);
     }
 
     private void process(final ResetPositionsApplicationEvent event) {
         Timer timer = timer(event);
         CompletableFuture<Void> result = requestManagers.offsetsRequestManager.resetPositionsIfNeeded(timer);
-        chain(event, result);
+        event.chain(result);
     }
 
     private void process(final ValidatePositionsApplicationEvent event) {
         Timer timer = timer(event);
         CompletableFuture<Void> result = requestManagers.offsetsRequestManager.validatePositionsIfNeeded(timer);
-        chain(event, result);
+        event.chain(result);
     }
 
     private void process(final TopicMetadataApplicationEvent event) {
@@ -260,7 +259,7 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
             future = requestManagers.topicMetadataRequestManager.requestTopicMetadata(event.topic(), timer);
         }
 
-        chain(event, future);
+        event.chain(future);
     }
 
     private void process(final ConsumerRebalanceListenerCallbackCompletedEvent event) {
@@ -294,13 +293,16 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
         final Timer timer = timer(event);
         CompletableFuture<Void> future = membershipManager.leaveGroup(timer);
         // The future will be completed on heartbeat sent
-        chain(event, future);
+        event.chain(future);
     }
 
-    private <T> void chain(CompletableApplicationEvent<T> event, CompletableFuture<T> future) {
-        ConsumerUtils.chain(future, event.future());
-    }
-
+    /**
+     * Creates a {@link Timer time} for the network I/O thread that is <em>separate</em> from the timer for the
+     * application thread.
+     *
+     * @param event
+     * @return
+     */
     private Timer timer(CompletableEvent<?> event) {
         return time.timer(event.deadlineMs() - time.milliseconds());
     }

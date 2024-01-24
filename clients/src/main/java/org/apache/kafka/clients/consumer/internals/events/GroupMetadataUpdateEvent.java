@@ -75,4 +75,5 @@ public class GroupMetadataUpdateEvent extends BackgroundEvent {
             toStringBase() +
             '}';
     }
+
 }

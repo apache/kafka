@@ -18,6 +18,7 @@ package org.apache.kafka.clients.consumer.internals.events;
 
 import org.apache.kafka.clients.consumer.internals.CommitRequestManager;
 import org.apache.kafka.clients.consumer.internals.ConsumerMetadata;
+import org.apache.kafka.clients.consumer.internals.ConsumerUtils;
 import org.apache.kafka.clients.consumer.internals.CoordinatorRequestManager;
 import org.apache.kafka.clients.consumer.internals.FetchRequestManager;
 import org.apache.kafka.clients.consumer.internals.HeartbeatRequestManager;
@@ -27,6 +28,9 @@ import org.apache.kafka.clients.consumer.internals.OffsetsRequestManager;
 import org.apache.kafka.clients.consumer.internals.RequestManagers;
 import org.apache.kafka.clients.consumer.internals.TopicMetadataRequestManager;
 import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.Timer;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -44,6 +48,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 public class ApplicationEventProcessorTest {
+    private Time time;
     private ApplicationEventProcessor processor;
     private BlockingQueue applicationEventQueue = mock(BlockingQueue.class);
     private RequestManagers requestManagers;
@@ -61,6 +66,7 @@ public class ApplicationEventProcessorTest {
     @BeforeEach
     @SuppressWarnings("unchecked")
     public void setup() {
+        time = new MockTime();
         LogContext logContext = new LogContext();
         offsetRequestManager = mock(OffsetsRequestManager.class);
         offsetsRequestManager = mock(OffsetsRequestManager.class);
@@ -79,7 +85,8 @@ public class ApplicationEventProcessorTest {
             Optional.of(commitRequestManager),
             Optional.of(heartbeatRequestManager));
         processor = new ApplicationEventProcessor(
-            new LogContext(),
+            logContext,
+            time,
             applicationEventQueue,
             requestManagers,
             metadata
@@ -96,20 +103,21 @@ public class ApplicationEventProcessorTest {
 
     @Test
     public void testExpirationCalculation() {
-        assertEquals(Long.MAX_VALUE, processor.getExpirationTimeForTimeout(Long.MAX_VALUE));
-        assertEquals(Long.MAX_VALUE, processor.getExpirationTimeForTimeout(Long.MAX_VALUE - 1));
-        long timeout = processor.getExpirationTimeForTimeout(1000);
+        assertEquals(Long.MAX_VALUE, ConsumerUtils.getExpirationTimeForTimeout(Long.MAX_VALUE));
+        assertEquals(Long.MAX_VALUE, ConsumerUtils.getExpirationTimeForTimeout(Long.MAX_VALUE - 1));
+        long timeout = ConsumerUtils.getExpirationTimeForTimeout(1000);
         assertTrue(timeout > 0);
         assertTrue(timeout < Long.MAX_VALUE);
     }
 
     @Test
     public void testPrepClosingLeaveGroupEvent() {
-        LeaveOnCloseApplicationEvent event = new LeaveOnCloseApplicationEvent(Long.MAX_VALUE);
+        Timer timer = time.timer(Long.MAX_VALUE);
+        LeaveOnCloseApplicationEvent event = new LeaveOnCloseApplicationEvent(timer);
         when(heartbeatRequestManager.membershipManager()).thenReturn(membershipManager);
-        when(membershipManager.leaveGroup()).thenReturn(CompletableFuture.completedFuture(null));
+        when(membershipManager.leaveGroup(timer)).thenReturn(CompletableFuture.completedFuture(null));
         processor.process(event);
-        verify(membershipManager).leaveGroup();
+        verify(membershipManager).leaveGroup(timer);
         assertTrue(event.future().isDone());
     }
 
