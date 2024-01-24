@@ -254,14 +254,14 @@ public class ConsumerGroupServiceTest {
     private ListConsumerGroupOffsetsResult listGroupOffsetsResult(String groupId) {
         Map<TopicPartition, OffsetAndMetadata> offsets = TOPIC_PARTITIONS.stream().collect(Collectors.toMap(
                 Function.identity(),
-                tp -> new OffsetAndMetadata(100)));
+                unused -> new OffsetAndMetadata(100)));
         return AdminClientTestUtils.listConsumerGroupOffsetsResult(Collections.singletonMap(groupId, offsets));
     }
 
     private Map<TopicPartition, OffsetSpec> offsetsArgMatcher() {
         Map<TopicPartition, OffsetSpec> expectedOffsets = TOPIC_PARTITIONS.stream().collect(Collectors.toMap(
                 Function.identity(),
-                tp -> OffsetSpec.latest()
+                unused -> OffsetSpec.latest()
         ));
         return ArgumentMatchers.argThat(map ->
                 Objects.equals(map.keySet(), expectedOffsets.keySet()) && map.values().stream().allMatch(v -> v instanceof OffsetSpec.LatestSpec)
@@ -272,7 +272,7 @@ public class ConsumerGroupServiceTest {
         ListOffsetsResultInfo resultInfo = new ListOffsetsResultInfo(100, System.currentTimeMillis(), Optional.of(1));
         Map<TopicPartition, KafkaFuture<ListOffsetsResultInfo>> futures = TOPIC_PARTITIONS.stream().collect(Collectors.toMap(
                 Function.identity(),
-                tp -> KafkaFuture.completedFuture(resultInfo)));
+                unused -> KafkaFuture.completedFuture(resultInfo)));
         return new ListOffsetsResult(futures);
     }
 
