@@ -709,7 +709,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                 if (!fetch.isEmpty()) {
                     if (fetch.records().isEmpty()) {
                         log.trace("Returning empty records from `poll()` "
-                            + "since the consumer's position has advanced for at least one topic partition");
+                                + "since the consumer's position has advanced for at least one topic partition");
                     }
 
                     return interceptors.onConsume(new ConsumerRecords<>(fetch.records()));
@@ -978,11 +978,11 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
 
             final Timer timer = time.timer(timeout);
             final TopicMetadataApplicationEvent topicMetadataApplicationEvent =
-                new TopicMetadataApplicationEvent(topic, timer);
+                    new TopicMetadataApplicationEvent(topic, timer);
             wakeupTrigger.setActiveTask(topicMetadataApplicationEvent.future());
             try {
                 Map<String, List<PartitionInfo>> topicMetadata =
-                    applicationEventHandler.addAndGet(topicMetadataApplicationEvent);
+                        applicationEventHandler.addAndGet(topicMetadataApplicationEvent);
 
                 return topicMetadata.getOrDefault(topic, Collections.emptyList());
             } finally {
@@ -1444,8 +1444,8 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
      */
     private void updatePatternSubscription(Cluster cluster) {
         final Set<String> topicsToSubscribe = cluster.topics().stream()
-            .filter(subscriptions::matchesSubscribedPattern)
-            .collect(Collectors.toSet());
+                .filter(subscriptions::matchesSubscribedPattern)
+                .collect(Collectors.toSet());
         if (subscriptions.subscribeFromPattern(topicsToSubscribe))
             metadata.requestUpdateForNewTopics();
     }
@@ -1478,7 +1478,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     @Deprecated
     public ConsumerRecords<K, V> poll(final long timeoutMs) {
         throw new UnsupportedOperationException("Consumer.poll(long) is not supported when \"group.protocol\" is \"consumer\". " +
-            "This method is deprecated and will be removed in the next major release.");
+             "This method is deprecated and will be removed in the next major release.");
     }
 
     // Visible for testing
@@ -1488,8 +1488,8 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
 
     private Fetch<K, V> pollForFetches(Timer timer) {
         long pollTimeout = isCommittedOffsetsManagementEnabled()
-            ? Math.min(applicationEventHandler.maximumTimeToWait(), timer.remainingMs())
-            : timer.remainingMs();
+                ? Math.min(applicationEventHandler.maximumTimeToWait(), timer.remainingMs())
+                : timer.remainingMs();
 
         // if data is available already, return it immediately
         final Fetch<K, V> fetch = collectFetch();
