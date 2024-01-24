@@ -1,3 +1,7 @@
+
+
+
+
 /*
  *
  *  Licensed to the Apache Software Foundation (ASF) under one or more
@@ -88,7 +92,7 @@ def tryStreamsArchetype() {
 
 def buildNightly() {
     // Trigger the job at 10 AM
-    def currentHour = currentBuild.rawBuild.getTimeInMillis() / 1000 / 60 / 60 / % 24
+    def currentHour = currentBuild.rawBuild.getTimeInMillis() / 1000 / 60 / 60 % 24
     return currentHour == 10
 }
 
