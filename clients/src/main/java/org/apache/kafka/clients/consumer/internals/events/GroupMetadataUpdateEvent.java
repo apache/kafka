@@ -72,7 +72,7 @@ public class GroupMetadataUpdateEvent extends BackgroundEvent {
     @Override
     public String toString() {
         return "GroupMetadataUpdateEvent{" +
-                toStringBase() +
-                '}';
+            toStringBase() +
+            '}';
     }
 }

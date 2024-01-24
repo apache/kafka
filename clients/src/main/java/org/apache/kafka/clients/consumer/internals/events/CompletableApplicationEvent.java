@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.clients.consumer.internals.events;
 
+import org.apache.kafka.clients.consumer.internals.ConsumerUtils;
 import org.apache.kafka.common.utils.Timer;
 
 import java.util.Objects;
@@ -43,6 +44,19 @@ public abstract class CompletableApplicationEvent<T> extends ApplicationEvent im
         return future;
     }
 
+    public T get(Timer timer) {
+        return ConsumerUtils.getResult(future, timer);
+    }
+
+    public void chain(final CompletableFuture<T> providedFuture) {
+        providedFuture.whenComplete((value, exception) -> {
+            if (exception != null) {
+                this.future.completeExceptionally(exception);
+            } else {
+                this.future.complete(value);
+            }
+        });
+    }
     @Override
     public long deadlineMs() {
         return deadlineMs;

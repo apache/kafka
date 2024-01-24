@@ -55,11 +55,6 @@ public class TopicMetadataApplicationEvent extends CompletableApplicationEvent<M
     }
 
     @Override
-    public int hashCode() {
-        return Objects.hash(super.hashCode(), topic, allTopics);
-    }
-
-    @Override
     public boolean equals(Object o) {
         if (this == o) return true;
         if (!(o instanceof TopicMetadataApplicationEvent)) return false;
@@ -71,4 +66,8 @@ public class TopicMetadataApplicationEvent extends CompletableApplicationEvent<M
         return topic.equals(that.topic) && (allTopics == that.allTopics);
     }
 
+    @Override
+    public int hashCode() {
+        return Objects.hash(super.hashCode(), topic, allTopics);
+    }
 }
