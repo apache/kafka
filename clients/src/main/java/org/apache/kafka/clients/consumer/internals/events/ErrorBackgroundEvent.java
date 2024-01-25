@@ -26,7 +26,6 @@ public class ErrorBackgroundEvent extends BackgroundEvent {
 
     public ErrorBackgroundEvent(Throwable t) {
         super(Type.ERROR);
-        Objects.requireNonNull(t);
         this.error = t instanceof RuntimeException ? (RuntimeException) t : new KafkaException(t);
     }
 

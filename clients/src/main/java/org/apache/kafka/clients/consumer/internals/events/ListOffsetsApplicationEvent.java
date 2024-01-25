@@ -37,9 +37,7 @@ public class ListOffsetsApplicationEvent extends CompletableApplicationEvent<Map
     private final Map<TopicPartition, Long> timestampsToSearch;
     private final boolean requireTimestamps;
 
-    public ListOffsetsApplicationEvent(Map<TopicPartition, Long> timestampToSearch,
-                                       boolean requireTimestamps,
-                                       Timer timer) {
+    public ListOffsetsApplicationEvent(Map<TopicPartition, Long> timestampToSearch, boolean requireTimestamps, Timer timer) {
         super(Type.LIST_OFFSETS, timer);
         this.timestampsToSearch = Collections.unmodifiableMap(timestampToSearch);
         this.requireTimestamps = requireTimestamps;
