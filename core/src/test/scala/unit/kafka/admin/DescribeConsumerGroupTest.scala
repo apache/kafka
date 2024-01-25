@@ -23,21 +23,20 @@ import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.TimeoutException
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.ValueSource
+import org.junit.jupiter.params.provider.{MethodSource, ValueSource}
 
 import scala.concurrent.ExecutionException
 import scala.util.Random
 
 class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
-
   private val describeTypeOffsets = Array(Array(""), Array("--offsets"))
   private val describeTypeMembers = Array(Array("--members"), Array("--members", "--verbose"))
   private val describeTypeState = Array(Array("--state"))
   private val describeTypes = describeTypeOffsets ++ describeTypeMembers ++ describeTypeState
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("zk", "kraft"))
-  def testDescribeNonExistingGroup(quorum: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
+  def testDescribeNonExistingGroup(quorum: String, groupProtocol: String): Unit = {
     createOffsetsTopic()
 
     val missingGroup = "missing.group"
@@ -97,14 +96,14 @@ class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
     assertTrue(exitMessage.get.contains("Option [describe] does not take a value for [state]"))
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("zk", "kraft"))
-  def testDescribeOffsetsOfNonExistingGroup(quorum: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
+  def testDescribeOffsetsOfNonExistingGroup(quorum: String, groupProtocol: String): Unit = {
     val group = "missing.group"
     createOffsetsTopic()
 
     // run one consumer in the group consuming from a single-partition topic
-    addConsumerGroupExecutor(numConsumers = 1)
+    addConsumerGroupExecutor(numConsumers = 1, groupProtocol = groupProtocol)
     // note the group to be queried is a different (non-existing) group
     val cgcArgs = Array("--bootstrap-server", bootstrapServers(), "--describe", "--group", group)
     val service = getConsumerGroupService(cgcArgs)
@@ -114,14 +113,14 @@ class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
       s"Expected the state to be 'Dead', with no members in the group '$group'.")
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("zk", "kraft"))
-  def testDescribeMembersOfNonExistingGroup(quorum: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
+  def testDescribeMembersOfNonExistingGroup(quorum: String, groupProtocol: String): Unit = {
     val group = "missing.group"
     createOffsetsTopic()
 
     // run one consumer in the group consuming from a single-partition topic
-    addConsumerGroupExecutor(numConsumers = 1)
+    addConsumerGroupExecutor(numConsumers = 1, groupProtocol = groupProtocol)
     // note the group to be queried is a different (non-existing) group
     val cgcArgs = Array("--bootstrap-server", bootstrapServers(), "--describe", "--group", group)
     val service = getConsumerGroupService(cgcArgs)
@@ -135,14 +134,14 @@ class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
       s"Expected the state to be 'Dead', with no members in the group '$group' (verbose option).")
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("zk", "kraft"))
-  def testDescribeStateOfNonExistingGroup(quorum: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
+  def testDescribeStateOfNonExistingGroup(quorum: String, groupProtocol: String): Unit = {
     val group = "missing.group"
     createOffsetsTopic()
 
     // run one consumer in the group consuming from a single-partition topic
-    addConsumerGroupExecutor(numConsumers = 1)
+    addConsumerGroupExecutor(numConsumers = 1, groupProtocol = groupProtocol)
     // note the group to be queried is a different (non-existing) group
     val cgcArgs = Array("--bootstrap-server", bootstrapServers(), "--describe", "--group", group)
     val service = getConsumerGroupService(cgcArgs)
@@ -154,15 +153,15 @@ class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
     )
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("zk", "kraft"))
-  def testDescribeExistingGroup(quorum: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
+  def testDescribeExistingGroup(quorum: String, groupProtocol: String): Unit = {
     createOffsetsTopic()
 
     for (describeType <- describeTypes) {
       val group = this.group + describeType.mkString("")
       // run one consumer in the group consuming from a single-partition topic
-      addConsumerGroupExecutor(numConsumers = 1, group = group)
+      addConsumerGroupExecutor(numConsumers = 1, group = group, groupProtocol = groupProtocol)
       val cgcArgs = Array("--bootstrap-server", bootstrapServers(), "--describe", "--group", group) ++ describeType
       val service = getConsumerGroupService(cgcArgs)
 
@@ -173,15 +172,15 @@ class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
     }
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("zk", "kraft"))
-  def testDescribeExistingGroups(quorum: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
+  def testDescribeExistingGroups(quorum: String, groupProtocol: String): Unit = {
     createOffsetsTopic()
 
     // Create N single-threaded consumer groups from a single-partition topic
     val groups = (for (describeType <- describeTypes) yield {
       val group = this.group + describeType.mkString("")
-      addConsumerGroupExecutor(numConsumers = 1, group = group)
+      addConsumerGroupExecutor(numConsumers = 1, group = group, groupProtocol = groupProtocol)
       Array("--group", group)
     }).flatten
 
@@ -199,15 +198,15 @@ class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
     }
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("zk", "kraft"))
-  def testDescribeAllExistingGroups(quorum: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
+  def testDescribeAllExistingGroups(quorum: String, groupProtocol: String): Unit = {
     createOffsetsTopic()
 
     // Create N single-threaded consumer groups from a single-partition topic
     for (describeType <- describeTypes) {
       val group = this.group + describeType.mkString("")
-      addConsumerGroupExecutor(numConsumers = 1, group = group)
+      addConsumerGroupExecutor(numConsumers = 1, group = group, groupProtocol = groupProtocol)
     }
 
     val expectedNumLines = describeTypes.length * 2
@@ -224,13 +223,13 @@ class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
     }
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("zk", "kraft"))
-  def testDescribeOffsetsOfExistingGroup(quorum: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
+  def testDescribeOffsetsOfExistingGroup(quorum: String, groupProtocol: String): Unit = {
     createOffsetsTopic()
 
     // run one consumer in the group consuming from a single-partition topic
-    addConsumerGroupExecutor(numConsumers = 1)
+    addConsumerGroupExecutor(numConsumers = 1, groupProtocol = groupProtocol)
 
     val cgcArgs = Array("--bootstrap-server", bootstrapServers(), "--describe", "--group", group)
     val service = getConsumerGroupService(cgcArgs)
@@ -246,13 +245,13 @@ class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
     }, s"Expected a 'Stable' group status, rows and valid values for consumer id / client id / host columns in describe results for group $group.")
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("zk", "kraft"))
-  def testDescribeMembersOfExistingGroup(quorum: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
+  def testDescribeMembersOfExistingGroup(quorum: String, groupProtocol: String): Unit = {
     createOffsetsTopic()
 
     // run one consumer in the group consuming from a single-partition topic
-    addConsumerGroupExecutor(numConsumers = 1)
+    addConsumerGroupExecutor(numConsumers = 1, groupProtocol = groupProtocol)
     val cgcArgs = Array("--bootstrap-server", bootstrapServers(), "--describe", "--group", group)
     val service = getConsumerGroupService(cgcArgs)
 
@@ -280,13 +279,13 @@ class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
     }
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("zk", "kraft"))
-  def testDescribeStateOfExistingGroup(quorum: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
+  def testDescribeStateOfExistingGroup(quorum: String, groupProtocol: String): Unit = {
     createOffsetsTopic()
 
     // run one consumer in the group consuming from a single-partition topic
-    addConsumerGroupExecutor(numConsumers = 1)
+    addConsumerGroupExecutor(numConsumers = 1, groupProtocol = groupProtocol)
     val cgcArgs = Array("--bootstrap-server", bootstrapServers(), "--describe", "--group", group)
     val service = getConsumerGroupService(cgcArgs)
 
@@ -300,13 +299,13 @@ class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
     }, s"Expected a 'Stable' group status, with one member and round robin assignment strategy for group $group.")
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("zk", "kraft"))
-  def testDescribeStateOfExistingGroupWithRoundRobinAssignor(quorum: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
+  def testDescribeStateOfExistingGroupWithRoundRobinAssignor(quorum: String, groupProtocol: String): Unit = {
     createOffsetsTopic()
 
     // run one consumer in the group consuming from a single-partition topic
-    addConsumerGroupExecutor(numConsumers = 1, strategy = classOf[RoundRobinAssignor].getName)
+    addConsumerGroupExecutor(numConsumers = 1, strategy = classOf[RoundRobinAssignor].getName, groupProtocol = groupProtocol)
     val cgcArgs = Array("--bootstrap-server", bootstrapServers(), "--describe", "--group", group)
     val service = getConsumerGroupService(cgcArgs)
 
@@ -320,15 +319,15 @@ class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
     }, s"Expected a 'Stable' group status, with one member and round robin assignment strategy for group $group.")
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("zk", "kraft"))
-  def testDescribeExistingGroupWithNoMembers(quorum: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
+  def testDescribeExistingGroupWithNoMembers(quorum: String, groupProtocol: String): Unit = {
     createOffsetsTopic()
 
     for (describeType <- describeTypes) {
       val group = this.group + describeType.mkString("")
       // run one consumer in the group consuming from a single-partition topic
-      val executor = addConsumerGroupExecutor(numConsumers = 1, group = group)
+      val executor = addConsumerGroupExecutor(numConsumers = 1, group = group, groupProtocol = groupProtocol)
       val cgcArgs = Array("--bootstrap-server", bootstrapServers(), "--describe", "--group", group) ++ describeType
       val service = getConsumerGroupService(cgcArgs)
 
@@ -345,13 +344,13 @@ class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
     }
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("zk", "kraft"))
-  def testDescribeOffsetsOfExistingGroupWithNoMembers(quorum: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
+  def testDescribeOffsetsOfExistingGroupWithNoMembers(quorum: String, groupProtocol: String): Unit = {
     createOffsetsTopic()
 
     // run one consumer in the group consuming from a single-partition topic
-    val executor = addConsumerGroupExecutor(numConsumers = 1)
+    val executor = addConsumerGroupExecutor(numConsumers = 1, groupProtocol = groupProtocol)
 
     val cgcArgs = Array("--bootstrap-server", bootstrapServers(), "--describe", "--group", group)
     val service = getConsumerGroupService(cgcArgs)
@@ -378,13 +377,13 @@ class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
     assertTrue(succeeded, s"Expected no active member in describe group results, state: $state, assignments: $assignments")
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("zk", "kraft"))
-  def testDescribeMembersOfExistingGroupWithNoMembers(quorum: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
+  def testDescribeMembersOfExistingGroupWithNoMembers(quorum: String, groupProtocol: String): Unit = {
     createOffsetsTopic()
 
     // run one consumer in the group consuming from a single-partition topic
-    val executor = addConsumerGroupExecutor(numConsumers = 1)
+    val executor = addConsumerGroupExecutor(numConsumers = 1, groupProtocol = groupProtocol)
 
     val cgcArgs = Array("--bootstrap-server", bootstrapServers(), "--describe", "--group", group)
     val service = getConsumerGroupService(cgcArgs)
@@ -403,13 +402,13 @@ class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
     }, s"Expected no member in describe group members results for group '$group'")
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("zk", "kraft"))
-  def testDescribeStateOfExistingGroupWithNoMembers(quorum: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
+  def testDescribeStateOfExistingGroupWithNoMembers(quorum: String, groupProtocol: String): Unit = {
     createOffsetsTopic()
 
     // run one consumer in the group consuming from a single-partition topic
-    val executor = addConsumerGroupExecutor(numConsumers = 1)
+    val executor = addConsumerGroupExecutor(numConsumers = 1, groupProtocol = groupProtocol)
 
     val cgcArgs = Array("--bootstrap-server", bootstrapServers(), "--describe", "--group", group)
     val service = getConsumerGroupService(cgcArgs)
@@ -431,15 +430,15 @@ class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
     }, s"Expected the group '$group' to become empty after the only member leaving.")
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("zk", "kraft"))
-  def testDescribeWithConsumersWithoutAssignedPartitions(quorum: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
+  def testDescribeWithConsumersWithoutAssignedPartitions(quorum: String, groupProtocol: String): Unit = {
     createOffsetsTopic()
 
     for (describeType <- describeTypes) {
       val group = this.group + describeType.mkString("")
       // run two consumers in the group consuming from a single-partition topic
-      addConsumerGroupExecutor(numConsumers = 2, group = group)
+      addConsumerGroupExecutor(numConsumers = 2, group = group, groupProtocol = groupProtocol)
       val cgcArgs = Array("--bootstrap-server", bootstrapServers(), "--describe", "--group", group) ++ describeType
       val service = getConsumerGroupService(cgcArgs)
 
@@ -451,13 +450,13 @@ class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
     }
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("zk", "kraft"))
-  def testDescribeOffsetsWithConsumersWithoutAssignedPartitions(quorum: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
+  def testDescribeOffsetsWithConsumersWithoutAssignedPartitions(quorum: String, groupProtocol: String): Unit = {
     createOffsetsTopic()
 
     // run two consumers in the group consuming from a single-partition topic
-    addConsumerGroupExecutor(numConsumers = 2)
+    addConsumerGroupExecutor(numConsumers = 2, groupProtocol = groupProtocol)
 
     val cgcArgs = Array("--bootstrap-server", bootstrapServers(), "--describe", "--group", group)
     val service = getConsumerGroupService(cgcArgs)
@@ -471,13 +470,13 @@ class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
     }, "Expected rows for consumers with no assigned partitions in describe group results")
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("zk", "kraft"))
-  def testDescribeMembersWithConsumersWithoutAssignedPartitions(quorum: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
+  def testDescribeMembersWithConsumersWithoutAssignedPartitions(quorum: String, groupProtocol: String): Unit = {
     createOffsetsTopic()
 
     // run two consumers in the group consuming from a single-partition topic
-    addConsumerGroupExecutor(numConsumers = 2)
+    addConsumerGroupExecutor(numConsumers = 2, groupProtocol = groupProtocol)
 
     val cgcArgs = Array("--bootstrap-server", bootstrapServers(), "--describe", "--group", group)
     val service = getConsumerGroupService(cgcArgs)
@@ -497,13 +496,13 @@ class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
       "Expected additional columns in verbose version of describe members")
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("zk", "kraft"))
-  def testDescribeStateWithConsumersWithoutAssignedPartitions(quorum: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
+  def testDescribeStateWithConsumersWithoutAssignedPartitions(quorum: String, groupProtocol: String): Unit = {
     createOffsetsTopic()
 
     // run two consumers in the group consuming from a single-partition topic
-    addConsumerGroupExecutor(numConsumers = 2)
+    addConsumerGroupExecutor(numConsumers = 2, groupProtocol = groupProtocol)
 
     val cgcArgs = Array("--bootstrap-server", bootstrapServers(), "--describe", "--group", group)
     val service = getConsumerGroupService(cgcArgs)
@@ -514,9 +513,9 @@ class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
     }, "Expected two consumers in describe group results")
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("zk", "kraft"))
-  def testDescribeWithMultiPartitionTopicAndMultipleConsumers(quorum: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
+  def testDescribeWithMultiPartitionTopicAndMultipleConsumers(quorum: String, groupProtocol: String): Unit = {
     createOffsetsTopic()
 
     val topic2 = "foo2"
@@ -525,7 +524,7 @@ class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
     for (describeType <- describeTypes) {
       val group = this.group + describeType.mkString("")
       // run two consumers in the group consuming from a two-partition topic
-      addConsumerGroupExecutor(2, topic2, group = group)
+      addConsumerGroupExecutor(2, topic2, group = group, groupProtocol = groupProtocol)
       val cgcArgs = Array("--bootstrap-server", bootstrapServers(), "--describe", "--group", group) ++ describeType
       val service = getConsumerGroupService(cgcArgs)
 
@@ -537,16 +536,16 @@ class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
     }
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("zk", "kraft"))
-  def testDescribeOffsetsWithMultiPartitionTopicAndMultipleConsumers(quorum: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
+  def testDescribeOffsetsWithMultiPartitionTopicAndMultipleConsumers(quorum: String, groupProtocol: String): Unit = {
     createOffsetsTopic()
 
     val topic2 = "foo2"
     createTopic(topic2, 2, 1)
 
     // run two consumers in the group consuming from a two-partition topic
-    addConsumerGroupExecutor(numConsumers = 2, topic2)
+    addConsumerGroupExecutor(numConsumers = 2, topic2, groupProtocol = groupProtocol)
 
     val cgcArgs = Array("--bootstrap-server", bootstrapServers(), "--describe", "--group", group)
     val service = getConsumerGroupService(cgcArgs)
@@ -561,16 +560,16 @@ class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
     }, "Expected two rows (one row per consumer) in describe group results.")
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("zk", "kraft"))
-  def testDescribeMembersWithMultiPartitionTopicAndMultipleConsumers(quorum: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
+  def testDescribeMembersWithMultiPartitionTopicAndMultipleConsumers(quorum: String, groupProtocol: String): Unit = {
     createOffsetsTopic()
 
     val topic2 = "foo2"
     createTopic(topic2, 2, 1)
 
     // run two consumers in the group consuming from a two-partition topic
-    addConsumerGroupExecutor(numConsumers = 2, topic2)
+    addConsumerGroupExecutor(numConsumers = 2, topic2, groupProtocol = groupProtocol)
 
     val cgcArgs = Array("--bootstrap-server", bootstrapServers(), "--describe", "--group", group)
     val service = getConsumerGroupService(cgcArgs)
@@ -589,16 +588,16 @@ class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
       "Expected additional columns in verbose version of describe members")
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("zk", "kraft"))
-  def testDescribeStateWithMultiPartitionTopicAndMultipleConsumers(quorum: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
+  def testDescribeStateWithMultiPartitionTopicAndMultipleConsumers(quorum: String, groupProtocol: String): Unit = {
     createOffsetsTopic()
 
     val topic2 = "foo2"
     createTopic(topic2, 2, 1)
 
     // run two consumers in the group consuming from a two-partition topic
-    addConsumerGroupExecutor(numConsumers = 2, topic2)
+    addConsumerGroupExecutor(numConsumers = 2, topic2, groupProtocol = groupProtocol)
 
     val cgcArgs = Array("--bootstrap-server", bootstrapServers(), "--describe", "--group", group)
     val service = getConsumerGroupService(cgcArgs)
@@ -610,7 +609,7 @@ class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
   }
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
   def testDescribeSimpleConsumerGroup(quorum: String): Unit = {
     // Ensure that the offsets of consumers which don't use group management are still displayed
 
@@ -628,16 +627,16 @@ class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
     }, "Expected a stable group with two members in describe group state result.")
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("zk", "kraft"))
-  def testDescribeGroupWithShortInitializationTimeout(quorum: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
+  def testDescribeGroupWithShortInitializationTimeout(quorum: String, groupProtocol: String): Unit = {
     // Let creation of the offsets topic happen during group initialization to ensure that initialization doesn't
     // complete before the timeout expires
 
     val describeType = describeTypes(Random.nextInt(describeTypes.length))
     val group = this.group + describeType.mkString("")
     // run one consumer in the group consuming from a single-partition topic
-    addConsumerGroupExecutor(numConsumers = 1)
+    addConsumerGroupExecutor(numConsumers = 1, groupProtocol = groupProtocol)
     // set the group initialization timeout too low for the group to stabilize
     val cgcArgs = Array("--bootstrap-server", bootstrapServers(), "--describe", "--timeout", "1", "--group", group) ++ describeType
     val service = getConsumerGroupService(cgcArgs)
@@ -646,14 +645,14 @@ class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
     assertEquals(classOf[TimeoutException], e.getCause.getClass)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("zk", "kraft"))
-  def testDescribeGroupOffsetsWithShortInitializationTimeout(quorum: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
+  def testDescribeGroupOffsetsWithShortInitializationTimeout(quorum: String, groupProtocol: String): Unit = {
     // Let creation of the offsets topic happen during group initialization to ensure that initialization doesn't
     // complete before the timeout expires
 
     // run one consumer in the group consuming from a single-partition topic
-    addConsumerGroupExecutor(numConsumers = 1)
+    addConsumerGroupExecutor(numConsumers = 1, groupProtocol = groupProtocol)
 
     // set the group initialization timeout too low for the group to stabilize
     val cgcArgs = Array("--bootstrap-server", bootstrapServers(), "--describe", "--group", group, "--timeout", "1")
@@ -663,14 +662,14 @@ class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
     assertEquals(classOf[TimeoutException], e.getCause.getClass)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("zk", "kraft"))
-  def testDescribeGroupMembersWithShortInitializationTimeout(quorum: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
+  def testDescribeGroupMembersWithShortInitializationTimeout(quorum: String, groupProtocol: String): Unit = {
     // Let creation of the offsets topic happen during group initialization to ensure that initialization doesn't
     // complete before the timeout expires
 
     // run one consumer in the group consuming from a single-partition topic
-    addConsumerGroupExecutor(numConsumers = 1)
+    addConsumerGroupExecutor(numConsumers = 1, groupProtocol = groupProtocol)
 
     // set the group initialization timeout too low for the group to stabilize
     val cgcArgs = Array("--bootstrap-server", bootstrapServers(), "--describe", "--group", group, "--timeout", "1")
@@ -682,14 +681,14 @@ class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
     assertEquals(classOf[TimeoutException], e.getCause.getClass)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("zk", "kraft"))
-  def testDescribeGroupStateWithShortInitializationTimeout(quorum: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
+  def testDescribeGroupStateWithShortInitializationTimeout(quorum: String, groupProtocol: String): Unit = {
     // Let creation of the offsets topic happen during group initialization to ensure that initialization doesn't
     // complete before the timeout expires
 
     // run one consumer in the group consuming from a single-partition topic
-    addConsumerGroupExecutor(numConsumers = 1)
+    addConsumerGroupExecutor(numConsumers = 1, groupProtocol = groupProtocol)
 
     // set the group initialization timeout too low for the group to stabilize
     val cgcArgs = Array("--bootstrap-server", bootstrapServers(), "--describe", "--group", group, "--timeout", "1")
@@ -706,16 +705,16 @@ class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
     assertThrows(classOf[joptsimple.OptionException], () => getConsumerGroupService(cgcArgs))
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("zk", "kraft"))
-  def testDescribeNonOffsetCommitGroup(quorum: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
+  def testDescribeNonOffsetCommitGroup(quorum: String, groupProtocol: String): Unit = {
     createOffsetsTopic()
 
     val customProps = new Properties
     // create a consumer group that never commits offsets
     customProps.setProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false")
     // run one consumer in the group consuming from a single-partition topic
-    addConsumerGroupExecutor(numConsumers = 1, customPropsOpt = Some(customProps))
+    addConsumerGroupExecutor(numConsumers = 1, customPropsOpt = Some(customProps), groupProtocol = groupProtocol)
 
     val cgcArgs = Array("--bootstrap-server", bootstrapServers(), "--describe", "--group", group)
     val service = getConsumerGroupService(cgcArgs)
