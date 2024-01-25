@@ -275,7 +275,7 @@ public class CommitRequestManagerTest {
     @ParameterizedTest
     @MethodSource("commitSyncExpectedExceptions")
     public void testCommitSyncFailsWithExpectedException(Errors commitError,
-                                                      Class<? extends Exception> expectedException) {
+                                                         Class<? extends Exception> expectedException) {
         CommitRequestManager commitRequestManger = create(false, 100);
         when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(mockedNode));
 
