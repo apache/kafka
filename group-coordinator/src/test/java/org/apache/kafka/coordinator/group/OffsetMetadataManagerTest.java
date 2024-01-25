@@ -2385,6 +2385,7 @@ public class OffsetMetadataManagerTest {
         context.commitOffset(10L, "foo", "bar", 0, 100L, 0, context.time.milliseconds());
         assertFalse(group.isSubscribedToTopic("bar"));
         context.testOffsetDeleteWith("foo", "bar", 0, Errors.NONE);
+        assertFalse(context.hasOffset("foo", "bar", 0));
     }
 
     @ParameterizedTest

@@ -608,7 +608,7 @@ public class OffsetMetadataManager {
                         .setPartitionIndex(partition.partitionIndex())
                     );
 
-                    // A tombstone is written if an offset in present is the main storage or
+                    // A tombstone is written if an offset is present in the main storage or
                     // if a pending transactional offset exists.
                     if (hasCommittedOffset(request.groupId(), topic.name(), partition.partitionIndex()) ||
                         hasPendingTransactionalOffsets(request.groupId(), topic.name(), partition.partitionIndex())) {
