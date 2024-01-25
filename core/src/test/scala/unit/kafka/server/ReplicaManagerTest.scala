@@ -4804,7 +4804,10 @@ class ReplicaManagerTest {
 
       replicaManager.becomeLeaderOrFollower(0, request, (_, _) => ())
 
-      assertEquals(HostedPartition.Offline, replicaManager.getPartition(topicPartition))
+      assertEquals(
+        HostedPartition.Offline(Some(request.topicIds().get(topicPartition.topic()))),
+        replicaManager.getPartition(topicPartition)
+      )
     } finally {
       replicaManager.shutdown(checkpointHW = false)
     }
@@ -5563,7 +5566,7 @@ class ReplicaManagerTest {
       replicaManager.applyDelta(topicsDelta, leaderMetadataImage)
       verifyRLMOnLeadershipChange(Collections.emptySet(), Collections.emptySet())
 
-      assertEquals(HostedPartition.Offline, replicaManager.getPartition(topicPartition))
+      assertEquals(HostedPartition.Offline(Some(FOO_UUID)), replicaManager.getPartition(topicPartition))
     } finally {
       replicaManager.shutdown(checkpointHW = false)
     }
