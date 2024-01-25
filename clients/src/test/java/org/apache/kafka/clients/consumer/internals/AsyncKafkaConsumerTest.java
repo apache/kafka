@@ -59,7 +59,6 @@ import org.apache.kafka.common.errors.InvalidGroupIdException;
 import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.WakeupException;
-import org.apache.kafka.common.metrics.Measurable;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.JoinGroupRequest;
@@ -1398,23 +1397,6 @@ public class AsyncKafkaConsumerTest {
             // Because we forced our mocked future to continuously time out, we should have no time remaining.
             assertEquals(0, timer.remainingMs());
         }
-    }
-
-    @Test
-    public void testBS() {
-        rlb = 1000L;
-        Measurable lastRebalance = (config, now) -> {
-            return TimeUnit.SECONDS.convert(now - rlb, TimeUnit.MILLISECONDS);
-        };
-
-        System.out.println(lastRebalance.measure(null, System.currentTimeMillis())); // Prints some value
-
-// Update lastRebalanceEndMs
-        rlb = 2000L;
-
-        System.out.println(lastRebalance.measure(null, System.currentTimeMillis())); // Still uses the captured value,
-        // not the updated one
-
     }
 
     private HashMap<TopicPartition, OffsetAndMetadata> mockTopicPartitionOffset() {

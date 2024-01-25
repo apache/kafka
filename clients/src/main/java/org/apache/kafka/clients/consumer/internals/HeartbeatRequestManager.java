@@ -136,8 +136,7 @@ public class HeartbeatRequestManager implements RequestManager {
         this.heartbeatRequestState = new HeartbeatRequestState(logContext, time, 0, retryBackoffMs,
             retryBackoffMaxMs, maxPollIntervalMs);
         this.pollTimer = time.timer(maxPollIntervalMs);
-        this.heartbeatMetrics = new HeartbeatMetrics(metrics);
-        registerLastSentHeartbeatMetric(metrics);
+        this.heartbeatMetrics = createHeartbeatMetrics(metrics);
     }
 
     // Visible for testing
@@ -159,8 +158,7 @@ public class HeartbeatRequestManager implements RequestManager {
         this.membershipManager = membershipManager;
         this.backgroundEventHandler = backgroundEventHandler;
         this.pollTimer = timer;
-        this.heartbeatMetrics = new HeartbeatMetrics(metrics);
-        registerLastSentHeartbeatMetric(metrics);
+        this.heartbeatMetrics = createHeartbeatMetrics(metrics);
     }
 
     /**
@@ -267,9 +265,7 @@ public class HeartbeatRequestManager implements RequestManager {
             return logResponse(request);
         else
             return request.whenComplete((response, exception) -> {
-                System.out.print("=====");
                 if (response != null) {
-                    System.out.print("ehhh: " + response.requestLatencyMs());
                     heartbeatMetrics.heartbeatSensor.record(response.requestLatencyMs());
                     onResponse((ConsumerGroupHeartbeatResponse) response.responseBody(), request.handler().completionTimeMs());
                 } else {
@@ -281,6 +277,7 @@ public class HeartbeatRequestManager implements RequestManager {
     private NetworkClientDelegate.UnsentRequest logResponse(final NetworkClientDelegate.UnsentRequest request) {
         return request.whenComplete((response, exception) -> {
             if (response != null) {
+                heartbeatMetrics.heartbeatSensor.record(response.requestLatencyMs());
                 Errors error =
                     Errors.forCode(((ConsumerGroupHeartbeatResponse) response.responseBody()).data().errorCode());
                 if (error == Errors.NONE)
@@ -429,20 +426,22 @@ public class HeartbeatRequestManager implements RequestManager {
         membershipManager.transitionToFatal();
     }
 
-    private void registerLastSentHeartbeatMetric(Metrics metrics) {
-        final long lastHeartbeatSend = heartbeatRequestState.lastSentMs;
+    private HeartbeatMetrics createHeartbeatMetrics(Metrics metrics) {
+        HeartbeatMetrics hbm = new HeartbeatMetrics(metrics);
         Measurable lastHeartbeat = (config, now) -> {
+            final long lastHeartbeatSend = heartbeatRequestState.lastSentMs;
             if (lastHeartbeatSend < 0L)
                 // if no heartbeat is ever triggered, just return -1.
                 return -1d;
             else
                 return TimeUnit.SECONDS.convert(now - lastHeartbeatSend, TimeUnit.MILLISECONDS);
         };
-        heartbeatMetrics.addMetric(
-                metrics,
-                "last-heartbeat-seconds-ago",
-                "The number of seconds since the last coordinator heartbeat was sent",
-                lastHeartbeat);
+        hbm.addMetric(
+            metrics,
+            "last-heartbeat-seconds-ago",
+            "The number of seconds since the last coordinator heartbeat was sent",
+            lastHeartbeat);
+        return hbm;
     }
 
     /**
