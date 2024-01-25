@@ -330,7 +330,7 @@ class GroupCoordinatorAdapterTest {
     testListGroups(null, null, Set.empty, Set.empty)
     testListGroups(List(), List(), Set.empty, Set.empty)
     testListGroups(List("Stable, Empty"), List(), Set("Stable, Empty"), Set.empty)
-    testListGroups(List(), List("consumer"), Set.empty, Set("consumer"))
+    testListGroups(List(), List("classic"), Set.empty, Set("classic"))
   }
 
   def testListGroups(

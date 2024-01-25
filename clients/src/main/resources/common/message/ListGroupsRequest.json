@@ -29,8 +29,8 @@
   "flexibleVersions": "3+",
   "fields": [
     { "name": "StatesFilter", "type": "[]string", "versions": "4+",
-      "about": "The states of the groups we want to list. If empty all groups are returned with their state." },
+      "about": "The states of the groups we want to list. If empty, all groups are returned with their state." },
     { "name": "TypesFilter", "type": "[]string", "versions": "5+",
-      "about": "The types of the groups we want to list. If empty all groups are returned" }
+      "about": "The types of the groups we want to list. If empty, all groups are returned with their type." }
   ]
 }
