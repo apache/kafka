@@ -62,8 +62,8 @@ public class TopicMetadataApplicationEvent extends CompletableApplicationEvent<M
 
         TopicMetadataApplicationEvent that = (TopicMetadataApplicationEvent) o;
 
-        // TODO: fix this potential NPE
-        return topic.equals(that.topic) && (allTopics == that.allTopics);
+        // We use this utility method to keep this logic succinct because topic and/or that.topic can be null.
+        return Objects.equals(topic, that.topic) && (allTopics == that.allTopics);
     }
 
     @Override
