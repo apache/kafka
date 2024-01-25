@@ -192,6 +192,7 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
         metadata.requestUpdateForNewTopics();
     }
 
+
     /**
      * Commit all consumed if auto-commit is enabled. Note this will trigger an async commit,
      * that will not be retried if the commit request fails.
