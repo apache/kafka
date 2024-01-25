@@ -21,27 +21,29 @@ import kafka.controller.StateChangeLogger
 import kafka.server.{CachedControllerId, KRaftCachedControllerId, MetadataCache}
 import kafka.utils.Logging
 import org.apache.kafka.admin.BrokerMetadata
+import org.apache.kafka.common._
+import org.apache.kafka.common.config.ConfigResource
+import org.apache.kafka.common.errors.InvalidTopicException
 import org.apache.kafka.common.internals.Topic
+import org.apache.kafka.common.message.DescribeTopicPartitionsResponseData.{Cursor, DescribeTopicPartitionsResponsePartition, DescribeTopicPartitionsResponseTopic}
 import org.apache.kafka.common.message.MetadataResponseData.{MetadataResponsePartition, MetadataResponseTopic}
-import org.apache.kafka.common.{Cluster, Node, PartitionInfo, TopicPartition, Uuid}
 import org.apache.kafka.common.message.UpdateMetadataRequestData.UpdateMetadataPartitionState
+import org.apache.kafka.common.message._
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.MetadataResponse
 import org.apache.kafka.image.MetadataImage
-
-import java.util
-import java.util.{Collections, Properties}
-import java.util.concurrent.ThreadLocalRandom
-import org.apache.kafka.common.config.ConfigResource
-import org.apache.kafka.common.message.{DescribeClientQuotasRequestData, DescribeClientQuotasResponseData}
-import org.apache.kafka.common.message.{DescribeUserScramCredentialsRequestData, DescribeUserScramCredentialsResponseData}
 import org.apache.kafka.metadata.{BrokerRegistration, PartitionRegistration, Replicas}
 import org.apache.kafka.server.common.{Features, MetadataVersion}
 
+import java.util
+import java.util.concurrent.ThreadLocalRandom
+import java.util.{Collections, Properties}
+import scala.collection.mutable.ListBuffer
 import scala.collection.{Map, Seq, Set, mutable}
-import scala.jdk.CollectionConverters._
 import scala.compat.java8.OptionConverters._
+import scala.jdk.CollectionConverters._
+import scala.util.control.Breaks._
 
 
 class KRaftMetadataCache(val brokerId: Int) extends MetadataCache with Logging with ConfigRepository {
@@ -140,6 +142,73 @@ class KRaftMetadataCache(val brokerId: Int) extends MetadataCache with Logging w
     }
   }
 
+  /**
+   * Return topic partition metadata for the given topic, listener and index range. Also, return the next partition
+   * index that is not included in the result.
+   *
+   * @param image                       The metadata image
+   * @param topicName                   The name of the topic.
+   * @param listenerName                The listener name.
+   * @param startIndex                  The smallest index of the partitions to be included in the result.
+   * @param upperIndex                  The upper limit of the index of the partitions to be included in the result.
+   *                                    Note that, the upper index can be larger than the largest partition index in
+   *                                    this topic.
+   * @return                            A collection of topic partition metadata and next partition index (-1 means
+   *                                    no next partition).
+   */
+  private def getPartitionMetadataForDescribeTopicResponse(
+    image: MetadataImage,
+    topicName: String,
+    listenerName: ListenerName,
+    startIndex: Int,
+    maxCount: Int
+  ): (Option[List[DescribeTopicPartitionsResponsePartition]], Int) = {
+    Option(image.topics().getTopic(topicName)) match {
+      case None => (None, -1)
+      case Some(topic) => {
+        val result = new ListBuffer[DescribeTopicPartitionsResponsePartition]()
+        val partitions = topic.partitions().keySet()
+        val upperIndex = topic.partitions().size().min(startIndex + maxCount)
+        val nextIndex = if (upperIndex < partitions.size()) upperIndex else -1
+        for (partitionId <- startIndex until upperIndex) {
+          topic.partitions().get(partitionId) match {
+            case partition : PartitionRegistration => {
+              val filteredReplicas = maybeFilterAliveReplicas(image, partition.replicas,
+                listenerName, false)
+              val filteredIsr = maybeFilterAliveReplicas(image, partition.isr, listenerName, false)
+              val offlineReplicas = getOfflineReplicas(image, partition, listenerName)
+              val maybeLeader = getAliveEndpoint(image, partition.leader, listenerName)
+              maybeLeader match {
+                case None =>
+                  result.append(new DescribeTopicPartitionsResponsePartition()
+                    .setPartitionIndex(partitionId)
+                    .setLeaderId(MetadataResponse.NO_LEADER_ID)
+                    .setLeaderEpoch(partition.leaderEpoch)
+                    .setReplicaNodes(filteredReplicas)
+                    .setIsrNodes(filteredIsr)
+                    .setOfflineReplicas(offlineReplicas)
+                    .setEligibleLeaderReplicas(Replicas.toList(partition.elr))
+                    .setLastKnownElr(Replicas.toList(partition.lastKnownElr)))
+                case Some(leader) =>
+                  result.append(new DescribeTopicPartitionsResponsePartition()
+                    .setPartitionIndex(partitionId)
+                    .setLeaderId(leader.id())
+                    .setLeaderEpoch(partition.leaderEpoch)
+                    .setReplicaNodes(filteredReplicas)
+                    .setIsrNodes(filteredIsr)
+                    .setOfflineReplicas(offlineReplicas)
+                    .setEligibleLeaderReplicas(Replicas.toList(partition.elr))
+                    .setLastKnownElr(Replicas.toList(partition.lastKnownElr)))
+              }
+            }
+            case _ => warn(s"The partition $partitionId does not exist for $topicName")
+          }
+        }
+        (Some(result.toList), nextIndex)
+      }
+    }
+  }
+
   private def getOfflineReplicas(image: MetadataImage,
                                  partition: PartitionRegistration,
                                  listenerName: ListenerName): util.List[Integer] = {
@@ -187,6 +256,86 @@ class KRaftMetadataCache(val brokerId: Int) extends MetadataCache with Logging w
           .setPartitions(partitionMetadata.toBuffer.asJava)
       }
     }
+  }
+
+  /**
+   * Get the topic metadata for the given topics.
+   *
+   * The quota is used to limit the number of partitions to return. The NextTopicPartition field points to the first
+   * partition can't be returned due the limit.
+   * If a topic can't return any partition due to quota limit reached, this topic will not be included in the response.
+   *
+   * Note, the topics should be sorted in alphabetical order. The topics in the DescribeTopicPartitionsResponseData
+   * will also be sorted in alphabetical order.
+   *
+   * @param topics                        The iterator of topics and their corresponding first partition id to fetch.
+   * @param listenerName                  The listener name.
+   * @param firstTopicPartitionStartIndex The start partition index for the first topic
+   * @param maximumNumberOfPartitions     The max number of partitions to return.
+   * @param ignoreTopicsWithExceptions    Whether ignore the topics with exception.
+   */
+  def getTopicMetadataForDescribeTopicResponse(
+    topics: Iterator[String],
+    listenerName: ListenerName,
+    topicPartitionStartIndex: String => Int,
+    maximumNumberOfPartitions: Int,
+    ignoreTopicsWithExceptions: Boolean
+  ): DescribeTopicPartitionsResponseData = {
+    val image = _currentImage
+    var remaining = maximumNumberOfPartitions
+    val result = new DescribeTopicPartitionsResponseData()
+    breakable {
+      topics.foreach { topicName =>
+        if (remaining > 0) {
+          val (partitionResponse, nextPartition) =
+            getPartitionMetadataForDescribeTopicResponse(
+              image, topicName, listenerName, topicPartitionStartIndex(topicName), remaining
+            )
+          partitionResponse.map(partitions => {
+            val response = new DescribeTopicPartitionsResponseTopic()
+              .setErrorCode(Errors.NONE.code)
+              .setName(topicName)
+              .setTopicId(Option(image.topics().getTopic(topicName).id()).getOrElse(Uuid.ZERO_UUID))
+              .setIsInternal(Topic.isInternal(topicName))
+              .setPartitions(partitions.asJava)
+            result.topics().add(response)
+
+            if (nextPartition != -1) {
+              result.setNextCursor(new Cursor()
+                .setTopicName(topicName)
+                .setPartitionIndex(nextPartition)
+              )
+              break()
+            }
+            remaining -= partitions.size
+          })
+
+          if (!ignoreTopicsWithExceptions && !partitionResponse.isDefined) {
+            val error = try {
+              Topic.validate(topicName)
+              Errors.UNKNOWN_TOPIC_OR_PARTITION
+            } catch {
+              case _: InvalidTopicException =>
+                Errors.INVALID_TOPIC_EXCEPTION
+            }
+            result.topics().add(new DescribeTopicPartitionsResponseTopic()
+              .setErrorCode(error.code())
+              .setName(topicName)
+              .setTopicId(getTopicId(topicName))
+              .setIsInternal(Topic.isInternal(topicName)))
+          }
+        } else if (remaining == 0) {
+          // The cursor should point to the beginning of the current topic. All the partitions in the previous topic
+          // should be fulfilled. Note that, if a partition is pointed in the NextTopicPartition, it does not mean
+          // this topic exists.
+          result.setNextCursor(new Cursor()
+            .setTopicName(topicName)
+            .setPartitionIndex(0))
+          break()
+        }
+      }
+    }
+    result
   }
 
   override def getAllTopics(): Set[String] = _currentImage.topics().topicsByName().keySet().asScala
