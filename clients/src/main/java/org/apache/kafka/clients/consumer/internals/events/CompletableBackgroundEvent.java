@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.clients.consumer.internals.events;
 
-import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 
 /**
@@ -25,7 +24,7 @@ import java.util.concurrent.CompletableFuture;
  *
  * @param <T>
  */
-public abstract class CompletableBackgroundEvent<T> extends BackgroundEvent {
+public abstract class CompletableBackgroundEvent<T> extends BackgroundEvent implements CompletableEvent<T> {
 
     private final CompletableFuture<T> future;
 
@@ -34,6 +33,7 @@ public abstract class CompletableBackgroundEvent<T> extends BackgroundEvent {
         this.future = new CompletableFuture<>();
     }
 
+    @Override
     public CompletableFuture<T> future() {
         return future;
     }
@@ -51,7 +51,9 @@ public abstract class CompletableBackgroundEvent<T> extends BackgroundEvent {
 
     @Override
     public int hashCode() {
-        return Objects.hash(future);
+        int result = super.hashCode();
+        result = 31 * result + future.hashCode();
+        return result;
     }
 
     @Override
