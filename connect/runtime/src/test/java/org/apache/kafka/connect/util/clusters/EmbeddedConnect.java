@@ -962,7 +962,7 @@ abstract class EmbeddedConnect {
         return workers().stream()
                 .filter(w -> {
                     try {
-                        String endpoint = w.url().resolve("/connectors/liveness-check/status").toString();
+                        String endpoint = w.url().resolve("/connectors/liveness-check").toString();
                         Response response = requestGet(endpoint);
                         boolean live = response.getStatus() == Response.Status.NOT_FOUND.getStatusCode()
                                 || response.getStatus() == Response.Status.OK.getStatusCode();
