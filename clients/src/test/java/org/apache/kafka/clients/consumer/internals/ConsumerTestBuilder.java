@@ -217,7 +217,6 @@ public class ConsumerTestBuilder implements Closeable {
                     retryBackoffMs,
                     DEFAULT_RETRY_BACKOFF_MAX_MS,
                     gi.heartbeatJitterMs));
-
             HeartbeatRequestManager heartbeat = spy(new HeartbeatRequestManager(
                     logContext,
                     pollTimer,
