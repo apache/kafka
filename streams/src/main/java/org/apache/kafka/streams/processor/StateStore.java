@@ -165,4 +165,22 @@ public interface StateStore {
             "getPosition is not implemented by this StateStore (" + getClass() + ")"
         );
     }
+
+    /**
+     * Return an approximate count of memory used by records not yet committed to this StateStore.
+     * <p>
+     * This method will return an approximation of the memory that would be freed by the next call to {@link
+     * #flush()}.
+     * <p>
+     * If no records have been written to this store since {@link #init(StateStoreContext, StateStore) opening}, or
+     * since the last {@link #flush()}; or if this store does not support atomic transactions, it will return {@code
+     * 0}, as no records are currently being buffered.
+     *
+     * @return The approximate size of all records awaiting {@link #flush()}; or {@code 0} if this store does not
+     *         support transactions, or has not been written to since {@link #init(StateStoreContext, StateStore)} or
+     *         last {@link #flush()}.
+     */
+    default long approximateNumUncommittedBytes() {
+        return 0;
+    }
 }

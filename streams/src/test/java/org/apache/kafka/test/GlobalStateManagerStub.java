@@ -103,4 +103,9 @@ public class GlobalStateManagerStub implements GlobalStateManager {
     public String changelogFor(final String storeName) {
         return null;
     }
+
+    @Override
+    public long approximateNumUncommittedBytes() {
+        return 0;
+    }
 }

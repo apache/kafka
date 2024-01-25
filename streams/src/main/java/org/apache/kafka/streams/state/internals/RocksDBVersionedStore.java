@@ -304,6 +304,11 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
     }
 
     @Override
+    public long approximateNumUncommittedBytes() {
+        return segmentStores.approximateNumUncommittedBytes();
+    }
+
+    @Override
     public void flush() {
         segmentStores.flush();
         // flushing segments store includes flushing latest value store, since they share the

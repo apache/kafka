@@ -52,14 +52,18 @@ public class TaskExecutor {
     private final TaskManager taskManager;
     private final TaskExecutionMetadata executionMetadata;
 
+    private final long maxUncommittedStateBytes;
+
     public TaskExecutor(final TasksRegistry tasks,
                         final TaskManager taskManager,
                         final TaskExecutionMetadata executionMetadata,
-                        final LogContext logContext) {
+                        final LogContext logContext,
+                        final long maxUncommittedStateBytes) {
         this.tasks = tasks;
         this.taskManager = taskManager;
         this.executionMetadata = executionMetadata;
         this.log = logContext.logger(getClass());
+        this.maxUncommittedStateBytes = maxUncommittedStateBytes;
     }
 
     /**
@@ -157,7 +161,10 @@ public class TaskExecutor {
             if (task.commitNeeded()) {
                 task.clearTaskTimeout();
                 ++committed;
-                task.postCommit(false);
+                // under EOS, we need to enforce a checkpoint if our transaction buffers have exceeded their capacity
+                // todo: find a way to proactively commit *before* exceeding capacity
+                final boolean enforceCheckpoint = maxUncommittedStateBytes > -1 && tasks.approximateUncommittedStateBytes() >= maxUncommittedStateBytes;
+                task.postCommit(enforceCheckpoint);
             }
         }
 

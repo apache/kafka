@@ -38,7 +38,7 @@ public class TaskExecutorTest {
         final TaskManager taskManager = mock(TaskManager.class);
         final TaskExecutionMetadata metadata = mock(TaskExecutionMetadata.class);
 
-        final TaskExecutor taskExecutor = new TaskExecutor(tasks, taskManager, metadata, new LogContext());
+        final TaskExecutor taskExecutor = new TaskExecutor(tasks, taskManager, metadata, new LogContext(), -1L);
 
         taskExecutor.punctuate();
         verify(tasks).activeTasks();
@@ -57,7 +57,7 @@ public class TaskExecutorTest {
         when(taskManager.threadProducer()).thenReturn(producer);
         when(producer.transactionInFlight()).thenReturn(true);
 
-        final TaskExecutor taskExecutor = new TaskExecutor(tasks, taskManager, metadata, new LogContext());
+        final TaskExecutor taskExecutor = new TaskExecutor(tasks, taskManager, metadata, new LogContext(), -1L);
         taskExecutor.commitOffsetsOrTransaction(Collections.emptyMap());
 
         verify(producer).commitTransaction(Collections.emptyMap(), groupMetadata);
@@ -81,7 +81,7 @@ public class TaskExecutorTest {
         when(taskManager.streamsProducerForTask(taskId)).thenReturn(producer);
         when(producer.transactionInFlight()).thenReturn(true);
 
-        final TaskExecutor taskExecutor = new TaskExecutor(tasks, taskManager, metadata, new LogContext());
+        final TaskExecutor taskExecutor = new TaskExecutor(tasks, taskManager, metadata, new LogContext(), -1L);
         taskExecutor.commitOffsetsOrTransaction(Collections.emptyMap());
 
         verify(producer).commitTransaction(Collections.emptyMap(), groupMetadata);

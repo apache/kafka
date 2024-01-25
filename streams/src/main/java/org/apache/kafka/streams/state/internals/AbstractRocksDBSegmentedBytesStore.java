@@ -338,6 +338,11 @@ public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements Se
     }
 
     @Override
+    public long approximateNumUncommittedBytes() {
+        return segments.approximateNumUncommittedBytes();
+    }
+
+    @Override
     public void flush() {
         segments.flush();
     }

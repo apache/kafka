@@ -206,6 +206,11 @@ public class KeyValueToTimestampedKeyValueByteStoreAdapter implements KeyValueSt
         return store.approximateNumEntries();
     }
 
+    @Override
+    public long approximateNumUncommittedBytes() {
+        return store.approximateNumUncommittedBytes();
+    }
+
     private static class KeyValueToTimestampedKeyValueAdapterIterator implements ManagedKeyValueIterator<Bytes, byte[]> {
 
         private final RocksDbIterator rocksDbIterator;

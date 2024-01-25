@@ -38,6 +38,8 @@ interface Segments<S extends Segment> {
 
     List<S> allSegments(final boolean forward);
 
+    long approximateNumUncommittedBytes();
+
     void flush();
 
     void close();

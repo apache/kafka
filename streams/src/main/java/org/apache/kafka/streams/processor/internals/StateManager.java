@@ -57,4 +57,10 @@ public interface StateManager {
 
     // TODO: we can remove this when consolidating global state manager into processor state manager
     StateStore getGlobalStore(final String name);
+
+    /**
+     * @return The approximate total size of all records not yet committed to {@link StateStore state stores} managed
+     *         by this StateManager.
+     */
+    long approximateNumUncommittedBytes();
 }

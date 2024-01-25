@@ -338,7 +338,8 @@ public class StreamThreadTest {
             new MockStandbyUpdateListener(),
             threadIdx,
             null,
-            HANDLER
+            HANDLER,
+            -1L
         );
     }
 
@@ -743,7 +744,8 @@ public class StreamThreadTest {
             new MockStandbyUpdateListener(),
             threadIdx,
             null,
-            mockExceptionHandler
+            mockExceptionHandler,
+            -1L
         );
 
         mockClientSupplier.nextRebalanceMs().set(mockTime.milliseconds() - 1L);
@@ -805,7 +807,8 @@ public class StreamThreadTest {
             new MockStandbyUpdateListener(),
             threadIdx,
             null,
-            null
+            null,
+            -1L
         );
 
         mockClientSupplier.nextRebalanceMs().set(mockTime.milliseconds() - 1L);
@@ -1041,7 +1044,8 @@ public class StreamThreadTest {
             null,
             null,
             null,
-            null
+            null,
+            -1L
         ) {
             @Override
             int commit(final Collection<Task> tasksToCommit) {
@@ -1146,7 +1150,8 @@ public class StreamThreadTest {
             null,
             null,
             stateUpdater,
-            schedulingTaskManager
+            schedulingTaskManager,
+            -1L
         ) {
             @Override
             int commit(final Collection<Task> tasksToCommit) {
@@ -1953,7 +1958,8 @@ public class StreamThreadTest {
             new MockStandbyUpdateListener(),
             threadIdx,
             null,
-            HANDLER
+            HANDLER,
+            -1L
         );
 
         thread.setState(StreamThread.State.STARTING);

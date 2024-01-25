@@ -286,6 +286,11 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStore<S extends Seg
     }
 
     @Override
+    public long approximateNumUncommittedBytes() {
+        return segments.approximateNumUncommittedBytes();
+    }
+
+    @Override
     public void flush() {
         segments.flush();
     }

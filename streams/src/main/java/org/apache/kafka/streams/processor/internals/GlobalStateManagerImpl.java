@@ -438,4 +438,11 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
     public final String changelogFor(final String storeName) {
         return storeToChangelogTopic.get(storeName);
     }
+
+    @Override
+    public long approximateNumUncommittedBytes() {
+        return globalStores.values().stream()
+            .map(optional -> optional.map(StateStore::approximateNumUncommittedBytes).orElse(0L))
+            .reduce(0L, Long::sum);
+    }
 }

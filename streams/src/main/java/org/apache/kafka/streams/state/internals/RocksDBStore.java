@@ -740,6 +740,7 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
         void deleteRange(final ColumnFamilyHandle columnFamily, final byte[] from, final byte[] to) throws RocksDBException;
         long approximateNumEntries(final ColumnFamilyHandle columnFamily) throws RocksDBException;
         void flush(final ColumnFamilyHandle... columnFamilies) throws RocksDBException;
+        long approximateNumUncommittedBytes();
         void reset();
         void close();
     }
@@ -789,6 +790,10 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
         @Override
         public long approximateNumEntries(final ColumnFamilyHandle columnFamily) throws RocksDBException {
             return db.getLongProperty(columnFamily, "rocksdb.estimate-num-keys");
+        }
+
+        public long approximateNumUncommittedBytes() {
+            return 0;
         }
 
         @Override
@@ -1012,6 +1017,11 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
     @Override
     public Position getPosition() {
         return position;
+    }
+
+    @Override
+    public long approximateNumUncommittedBytes() {
+        return dbAccessor.approximateNumUncommittedBytes();
     }
 
     /**
