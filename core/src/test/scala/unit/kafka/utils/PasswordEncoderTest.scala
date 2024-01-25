@@ -21,7 +21,7 @@ package kafka.utils
 import javax.crypto.SecretKeyFactory
 import org.apache.kafka.common.config.ConfigException
 import org.apache.kafka.common.config.types.Password
-import org.apache.kafka.server.config.Defaults
+import org.apache.kafka.server.config.KafkaConfig
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
 
@@ -31,9 +31,9 @@ class PasswordEncoderTest {
   def testEncodeDecode(): Unit = {
     val encoder = PasswordEncoder.encrypting(new Password("password-encoder-secret"),
       None,
-      Defaults.PASSWORD_ENCODER_CIPHER_ALGORITHM,
-      Defaults.PASSWORD_ENCODER_KEY_LENGTH,
-      Defaults.PASSWORD_ENCODER_ITERATIONS)
+      KafkaConfig.PASSWORD_ENCODER_CIPHER_ALGORITHM_DEFAULT,
+      KafkaConfig.PASSWORD_ENCODER_KEY_LENGTH_DEFAULT,
+      KafkaConfig.PASSWORD_ENCODER_ITERATIONS_DEFAULT)
     val password = "test-password"
     val encoded = encoder.encode(new Password(password))
     val encodedMap = CoreUtils.parseCsvMap(encoded)
@@ -95,7 +95,7 @@ class PasswordEncoderTest {
         keyFactoryAlg,
         cipherAlg,
         keyLength,
-        Defaults.PASSWORD_ENCODER_ITERATIONS)
+        KafkaConfig.PASSWORD_ENCODER_ITERATIONS_DEFAULT)
       val password = "test-password"
       val encoded = encoder.encode(new Password(password))
       verifyEncodedPassword(encoder, password, encoded)
@@ -106,10 +106,10 @@ class PasswordEncoderTest {
     verifyEncodeDecode(keyFactoryAlg = None, "AES/CBC/PKCS5Padding", keyLength = 128)
     verifyEncodeDecode(keyFactoryAlg = None, "AES/CFB/PKCS5Padding", keyLength = 128)
     verifyEncodeDecode(keyFactoryAlg = None, "AES/OFB/PKCS5Padding", keyLength = 128)
-    verifyEncodeDecode(keyFactoryAlg = Some("PBKDF2WithHmacSHA1"), Defaults.PASSWORD_ENCODER_CIPHER_ALGORITHM, keyLength = 128)
+    verifyEncodeDecode(keyFactoryAlg = Some("PBKDF2WithHmacSHA1"), KafkaConfig.PASSWORD_ENCODER_CIPHER_ALGORITHM_DEFAULT, keyLength = 128)
     verifyEncodeDecode(keyFactoryAlg = None, "AES/GCM/NoPadding", keyLength = 128)
-    verifyEncodeDecode(keyFactoryAlg = Some("PBKDF2WithHmacSHA256"), Defaults.PASSWORD_ENCODER_CIPHER_ALGORITHM, keyLength = 128)
-    verifyEncodeDecode(keyFactoryAlg = Some("PBKDF2WithHmacSHA512"), Defaults.PASSWORD_ENCODER_CIPHER_ALGORITHM, keyLength = 128)
+    verifyEncodeDecode(keyFactoryAlg = Some("PBKDF2WithHmacSHA256"), KafkaConfig.PASSWORD_ENCODER_CIPHER_ALGORITHM_DEFAULT, keyLength = 128)
+    verifyEncodeDecode(keyFactoryAlg = Some("PBKDF2WithHmacSHA512"), KafkaConfig.PASSWORD_ENCODER_CIPHER_ALGORITHM_DEFAULT, keyLength = 128)
   }
 
   private def verifyEncodedPassword(encoder: PasswordEncoder, password: String, encoded: String): Unit = {
