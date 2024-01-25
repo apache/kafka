@@ -1115,7 +1115,7 @@ private[group] class GroupCoordinator(
       // Filter groups based on states and groupTypes. If either is empty, it won't filter on that criterion.
       // While using the old group coordinator, all groups are considered classic groups by default.
       // An empty list is returned for any other type filter.
-      val enumTypesFilter: Set[Group.GroupType] = groupTypes.map(Group.GroupType.fromString)
+      val enumTypesFilter: Set[Group.GroupType] = groupTypes.map(Group.GroupType.parse)
 
       val groups = groupManager.currentGroups.filter { g =>
         states.isEmpty || g.isInStates(states.map(_.toLowerCase)) &&

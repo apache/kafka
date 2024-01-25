@@ -473,7 +473,7 @@ public class GroupMetadataManager {
 
         // Converts each string to a value in the GroupType enum while being case-insensitive.
         Set<Group.GroupType> enumTypesFilter = typesFilter.stream()
-            .map(Group.GroupType::fromString)
+            .map(Group.GroupType::parse)
             .collect(Collectors.toSet());
 
         Predicate<Group> combinedFilter = group -> {

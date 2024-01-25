@@ -19,9 +19,11 @@ package org.apache.kafka.coordinator.group;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.message.ListGroupsResponseData;
 
+import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * Interface common for all groups.
@@ -43,20 +45,26 @@ public interface Group {
         }
 
         /**
-         * Converts a string to its corresponding {@code GroupType} enum value.
-         * This method performs a case-insensitive comparison.
+         * Parse a string into the corresponding {@code GroupType} enum value, in a case-insensitive manner.
          *
          * @return The {{@link GroupType}} according to the string passed.
          *
          * @throws IllegalArgumentException If the input string does not match any {@code GroupType}.
          */
-        public static GroupType fromString(String typeString) {
+        public static GroupType parse(String typeString) {
             for (GroupType type : GroupType.values()) {
                 if (type.name.equalsIgnoreCase(typeString)) {
                     return type;
                 }
             }
-            throw new IllegalArgumentException("Invalid GroupType: " + typeString);
+
+            String validTypes = Arrays.stream(GroupType.values())
+                .map(Enum::toString)
+                .collect(Collectors.joining(", "));
+
+            throw new IllegalArgumentException("Found an invalid GroupType: " + typeString +
+                ". The valid group types are " + validTypes + "."
+            );
         }
     }
 
