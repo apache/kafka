@@ -18,8 +18,6 @@ package org.apache.kafka.clients.consumer.internals.events;
 
 import org.apache.kafka.common.KafkaException;
 
-import java.util.Objects;
-
 public class ErrorBackgroundEvent extends BackgroundEvent {
 
     private final RuntimeException error;
