@@ -196,7 +196,7 @@ public class LogConfig extends AbstractConfig {
     public static final String DEFAULT_MESSAGE_FORMAT_VERSION = IBP_3_0_IV1.version();
 
     public static final String DEFAULT_LOG_DIR = "/tmp/kafka-logs";
-    public static final String DEFAULT_INTER_BROKER_PROTOCOL_VERSION = MetadataVersion.latest().version();
+    public static final String DEFAULT_INTER_BROKER_PROTOCOL_VERSION = MetadataVersion.latestProduction().version();
     public static final boolean DEFAULT_UNSTABLE_API_VERSIONS_ENABLE = false;
     public static final boolean DEFAULT_UNSTABLE_METADATA_VERSIONS_ENABLE = false;
 
