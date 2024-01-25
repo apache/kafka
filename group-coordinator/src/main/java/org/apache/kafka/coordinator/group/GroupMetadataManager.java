@@ -471,15 +471,14 @@ public class GroupMetadataManager {
             .map(String::trim)
             .collect(Collectors.toSet());
 
-        // Convert typesFilter to lowercase to make the filter case-insensitive.
-        Set<String> lowerCaseTypesFilter = typesFilter.stream()
-            .map(String::toLowerCase)
-            .collect(Collectors.toCollection(HashSet::new));
+        // Converts each string to a value in the GroupType enum while being case-insensitive.
+        Set<Group.GroupType> enumTypesFilter = typesFilter.stream()
+            .map(Group.GroupType::fromString)
+            .collect(Collectors.toSet());
 
         Predicate<Group> combinedFilter = group -> {
             boolean stateCheck = statesFilter.isEmpty() || group.isInStates(caseInsensitiveFilterSet, committedOffset);
-            boolean typeCheck = lowerCaseTypesFilter.isEmpty() ||
-                lowerCaseTypesFilter.contains(group.type().toString().toLowerCase());
+            boolean typeCheck = enumTypesFilter.isEmpty() || enumTypesFilter.contains(group.type());
 
             return stateCheck && typeCheck;
         };

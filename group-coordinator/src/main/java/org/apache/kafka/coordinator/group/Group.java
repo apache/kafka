@@ -41,6 +41,23 @@ public interface Group {
         public String toString() {
             return name;
         }
+
+        /**
+         * Converts a string to its corresponding {@code GroupType} enum value.
+         * This method performs a case-insensitive comparison.
+         *
+         * @return The {{@link GroupType}} according to the string passed.
+         *
+         * @throws IllegalArgumentException If the input string does not match any {@code GroupType}.
+         */
+        public static GroupType fromString(String typeString) {
+            for (GroupType type : GroupType.values()) {
+                if (type.name.equalsIgnoreCase(typeString)) {
+                    return type;
+                }
+            }
+            throw new IllegalArgumentException("Invalid GroupType: " + typeString);
+        }
     }
 
     /**
