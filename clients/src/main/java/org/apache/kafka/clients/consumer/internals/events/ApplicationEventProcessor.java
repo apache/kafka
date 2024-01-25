@@ -346,11 +346,11 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
      * Creates a {@link Timer time} for the network I/O thread that is <em>separate</em> from the timer for the
      * application thread.
      */
-    private Timer timer(CompletableEvent<?> event) {
+    private Timer timer(CompletableApplicationEvent<?> event) {
         return time.timer(event.deadlineMs() - time.milliseconds());
     }
 
-    private boolean maybeTimeout(CompletableEvent<?> event, Timer timer, String timeoutMessage) {
+    private boolean maybeTimeout(CompletableApplicationEvent<?> event, Timer timer, String timeoutMessage) {
         if (timer.isExpired()) {
             Exception exception = new TimeoutException(timeoutMessage);
             event.future().completeExceptionally(exception);

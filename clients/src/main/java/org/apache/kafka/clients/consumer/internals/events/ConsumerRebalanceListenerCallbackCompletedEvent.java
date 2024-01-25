@@ -28,7 +28,7 @@ import java.util.concurrent.CompletableFuture;
  * Event that signifies that the application thread has executed the {@link ConsumerRebalanceListener} callback. If
  * the callback execution threw an error, it is included in the event should any event listener want to know.
  */
-public class ConsumerRebalanceListenerCallbackCompletedEvent extends ApplicationEvent implements CompletableEvent<Void> {
+public class ConsumerRebalanceListenerCallbackCompletedEvent extends ApplicationEvent {
 
     private final ConsumerRebalanceListenerMethodName methodName;
     private final CompletableFuture<Void> future;
@@ -47,14 +47,8 @@ public class ConsumerRebalanceListenerCallbackCompletedEvent extends Application
         return methodName;
     }
 
-    @Override
     public CompletableFuture<Void> future() {
         return future;
-    }
-
-    @Override
-    public long deadlineMs() {
-        return Long.MAX_VALUE;
     }
 
     public Optional<KafkaException> error() {

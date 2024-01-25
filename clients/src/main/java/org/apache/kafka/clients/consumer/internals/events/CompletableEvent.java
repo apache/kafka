@@ -21,6 +21,4 @@ import java.util.concurrent.CompletableFuture;
 public interface CompletableEvent<T> {
 
     CompletableFuture<T> future();
-
-    long deadlineMs();
 }
