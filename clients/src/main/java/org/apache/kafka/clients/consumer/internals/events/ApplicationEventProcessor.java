@@ -215,13 +215,12 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
     }
 
     private void process(final ListOffsetsApplicationEvent event) {
-        final CompletableFuture<Map<TopicPartition, OffsetAndTimestamp>> future;
         final Timer timer = timer(event);
 
         if (maybeTimeout(event, timer, "Unable to list offsets due to exceeding timeout"))
             return;
 
-        future = requestManagers.offsetsRequestManager.fetchOffsets(
+        final CompletableFuture<Map<TopicPartition, OffsetAndTimestamp>> future = requestManagers.offsetsRequestManager.fetchOffsets(
                 event.timestampsToSearch(),
                 event.requireTimestamps(),
                 timer
