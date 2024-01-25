@@ -42,7 +42,7 @@ public enum ClassicGroupState {
      *             group is removed by partition emigration => DEAD
      *             group is removed by expiration => DEAD
      */
-    EMPTY("Empty"),
+    EMPTY("Empty", "empty"),
 
     /**
      * Group is preparing to rebalance.
@@ -57,7 +57,7 @@ public enum ClassicGroupState {
      *             all members have left the group => EMPTY
      *             group is removed by partition emigration => DEAD
      */
-    PREPARING_REBALANCE("PreparingRebalance"),
+    PREPARING_REBALANCE("PreparingRebalance", "preparingrebalance"),
 
     /**
      * Group is awaiting state assignment from the leader.
@@ -72,7 +72,7 @@ public enum ClassicGroupState {
      *             member failure detected => PREPARING_REBALANCE
      *             group is removed by partition emigration => DEAD
      */
-    COMPLETING_REBALANCE("CompletingRebalance"),
+    COMPLETING_REBALANCE("CompletingRebalance", "completingrebalance"),
 
     /**
      * Group is stable.
@@ -88,7 +88,7 @@ public enum ClassicGroupState {
      *             follower join-group with new metadata => PREPARING_REBALANCE
      *             group is removed by partition emigration => DEAD
      */
-    STABLE("Stable"),
+    STABLE("Stable", "stable"),
 
     /**
      * Group has no more members and its metadata is being removed.
@@ -101,9 +101,10 @@ public enum ClassicGroupState {
      *         allow offset fetch requests
      * transition: DEAD is a final state before group metadata is cleaned up, so there are no transitions
      */
-    DEAD("Dead");
+    DEAD("Dead", "dead");
 
     private final String name;
+    private final String lowerCaseName;
     private Set<ClassicGroupState> validPreviousStates;
 
     static {
@@ -114,13 +115,18 @@ public enum ClassicGroupState {
         DEAD.addValidPreviousStates(STABLE, PREPARING_REBALANCE, COMPLETING_REBALANCE, EMPTY, DEAD);
     }
 
-    ClassicGroupState(String name) {
+    ClassicGroupState(String name, String lowerCaseName) {
         this.name = name;
+        this.lowerCaseName = lowerCaseName;
     }
 
     @Override
     public String toString() {
         return name;
+    }
+
+    public String toLowerCaseString() {
+        return lowerCaseName;
     }
 
     private void addValidPreviousStates(ClassicGroupState... validPreviousStates) {

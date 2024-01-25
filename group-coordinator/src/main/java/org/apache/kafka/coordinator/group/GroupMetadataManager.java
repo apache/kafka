@@ -93,7 +93,6 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -463,9 +462,7 @@ public class GroupMetadataManager {
     public List<ListGroupsResponseData.ListedGroup> listGroups(List<String> statesFilter, long committedOffset) {
         Stream<Group> groupStream = groups.values(committedOffset).stream();
         if (!statesFilter.isEmpty()) {
-            List<String> caseInsensitiveFilterList = statesFilter.stream().map(String::toLowerCase).collect(Collectors.toList());
-            groupStream = groupStream.filter(group -> caseInsensitiveFilterList.contains(group.stateAsString(committedOffset).toLowerCase(
-                Locale.ROOT)));
+            groupStream = groupStream.filter(group -> group.isInStatesCaseInsensitive(statesFilter, committedOffset));
         }
         return groupStream.map(group -> group.asListedGroup(committedOffset)).collect(Collectors.toList());
     }

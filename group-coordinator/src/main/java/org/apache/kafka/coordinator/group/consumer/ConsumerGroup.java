@@ -46,6 +46,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 import static org.apache.kafka.coordinator.group.consumer.ConsumerGroup.ConsumerGroupState.ASSIGNING;
 import static org.apache.kafka.coordinator.group.consumer.ConsumerGroup.ConsumerGroupState.EMPTY;
@@ -213,6 +214,13 @@ public class ConsumerGroup implements Group {
      */
     public String stateAsString(long committedOffset) {
         return state.get(committedOffset).toString();
+    }
+
+    /**
+     * @return The current state as a lowercase String with given committedOffset.
+     */
+    public String stateAsLowerCaseString(long committedOffset) {
+        return this.stateAsString(committedOffset);
     }
 
     /**
@@ -737,6 +745,12 @@ public class ConsumerGroup implements Group {
     @Override
     public Optional<OffsetExpirationCondition> offsetExpirationCondition() {
         return Optional.of(new OffsetExpirationConditionImpl(offsetAndMetadata -> offsetAndMetadata.commitTimestampMs));
+    }
+
+    @Override
+    public boolean isInStatesCaseInsensitive(List<String> statesFilter, long committedOffset) {
+        Set<String> caseInsensitiveFilterSet = statesFilter.stream().map(String::toLowerCase).map(String::trim).collect(Collectors.toSet());
+        return caseInsensitiveFilterSet.contains(this.stateAsLowerCaseString(committedOffset));
     }
 
     /**

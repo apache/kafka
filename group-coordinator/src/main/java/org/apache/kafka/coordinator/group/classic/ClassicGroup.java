@@ -269,6 +269,16 @@ public class ClassicGroup implements Group {
     }
 
     /**
+     * The state of this group based on the committed offset.
+     *
+     * @return The current state as a lowercase String.
+     */
+    @Override
+    public String stateAsLowerCaseString(long committedOffset) {
+        return this.state.toLowerCaseString();
+    }
+
+    /**
      * @return the group id.
      */
     public String groupId() {
@@ -956,6 +966,12 @@ public class ClassicGroup implements Group {
         return Optional.empty();
     }
 
+    @Override
+    public boolean isInStatesCaseInsensitive(List<String> statesFilter, long committedOffset) {
+        Set<String> caseInsensitiveFilterSet = statesFilter.stream().map(String::toLowerCase).map(String::trim).collect(Collectors.toSet());
+        return caseInsensitiveFilterSet.contains(this.stateAsLowerCaseString(committedOffset));
+    }
+
     /**
      * Verify the member id is up to date for static members. Return true if both conditions met:
      *   1. given member is a known static member to group
@@ -1213,7 +1229,7 @@ public class ClassicGroup implements Group {
 
     /**
      * Complete the join future.
-     * 
+     *
      * @param member    the member.
      * @param response  the join response to complete the future with.
      * @return true if a join future actually completes.
@@ -1233,7 +1249,7 @@ public class ClassicGroup implements Group {
 
     /**
      * Complete a member's sync future.
-     * 
+     *
      * @param member    the member.
      * @param response  the sync response to complete the future with.
      * @return true if a sync future actually completes.

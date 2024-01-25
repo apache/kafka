@@ -58,9 +58,14 @@ public interface Group {
     String stateAsString(long committedOffset);
 
     /**
+     * @return The {{@link GroupType}}'s LowerCase String representation based on the committed offset.
+     */
+    String stateAsLowerCaseString(long committedOffset);
+
+    /**
      * @return the group formatted as a list group response based on the committed offset.
      */
-    public ListGroupsResponseData.ListedGroup asListedGroup(long committedOffset);
+    ListGroupsResponseData.ListedGroup asListedGroup(long committedOffset);
 
     /**
      * @return The group id.
@@ -114,7 +119,7 @@ public interface Group {
      * @return Whether the group is subscribed to the topic.
      */
     boolean isSubscribedToTopic(String topic);
-    
+
     /**
      * Populates the list of records with tombstone(s) for deleting the group.
      *
@@ -133,4 +138,12 @@ public interface Group {
      * @return The offset expiration condition for the group or Empty if no such condition exists.
      */
     Optional<OffsetExpirationCondition> offsetExpirationCondition();
+
+    /**
+     * Returns true if the statesFilter contains the current state with given committedOffset.
+     *
+     * @param statesFilter  The states to filter.
+     * @return true if the state includes, false otherwise.
+     */
+    boolean isInStatesCaseInsensitive(List<String> statesFilter, long committedOffset);
 }

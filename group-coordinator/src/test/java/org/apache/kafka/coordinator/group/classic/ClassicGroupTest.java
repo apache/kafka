@@ -42,6 +42,7 @@ import org.apache.kafka.timeline.SnapshotRegistry;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.Optional;
@@ -83,24 +84,24 @@ public class ClassicGroupTest {
     );
 
     private ClassicGroup group = null;
-    
+
     @BeforeEach
     public void initialize() {
         group = new ClassicGroup(logContext, "groupId", EMPTY, Time.SYSTEM, metrics);
     }
-    
+
     @Test
     public void testCanRebalanceWhenStable() {
         assertTrue(group.canRebalance());
     }
-    
+
     @Test
     public void testCanRebalanceWhenCompletingRebalance() {
         group.transitionTo(PREPARING_REBALANCE);
         group.transitionTo(COMPLETING_REBALANCE);
-        assertTrue(group.canRebalance()); 
+        assertTrue(group.canRebalance());
     }
-    
+
     @Test
     public void testCannotRebalanceWhenPreparingRebalance() {
         group.transitionTo(PREPARING_REBALANCE);
@@ -836,7 +837,7 @@ public class ClassicGroupTest {
             protocolType,
             protocols
         );
-        
+
         group.add(member);
         assertTrue(group.addPendingSyncMember(memberId));
         assertEquals(Collections.singleton(memberId), group.allPendingSyncMembers());
@@ -1272,6 +1273,25 @@ public class ClassicGroupTest {
 
         group.transitionTo(DEAD);
         verify(metrics, times(1)).onClassicGroupStateTransition(STABLE, DEAD);
+    }
+
+    @Test
+    public void testIsInStatesCaseInsensitive() {
+        ClassicGroup group = new ClassicGroup(new LogContext(), "groupId", EMPTY, Time.SYSTEM, mock(GroupCoordinatorMetricsShard.class));
+        assertTrue(group.isInStatesCaseInsensitive(Collections.singletonList("empty"), 0));
+
+        group.transitionTo(PREPARING_REBALANCE);
+        assertTrue(group.isInStatesCaseInsensitive(Collections.singletonList("PreparingRebalance"), 0));
+
+        group.transitionTo(COMPLETING_REBALANCE);
+        assertTrue(group.isInStatesCaseInsensitive(Arrays.asList("PreparingRebalance", "completingrebalance"), 0));
+
+        group.transitionTo(STABLE);
+        assertTrue(group.isInStatesCaseInsensitive(Collections.singletonList("stable "), 0));
+        assertFalse(group.isInStatesCaseInsensitive(Collections.singletonList("empty"), 0));
+
+        group.transitionTo(DEAD);
+        assertTrue(group.isInStatesCaseInsensitive(Arrays.asList("dead", " "), 0));
     }
 
     private void assertState(ClassicGroup group, ClassicGroupState targetState) {

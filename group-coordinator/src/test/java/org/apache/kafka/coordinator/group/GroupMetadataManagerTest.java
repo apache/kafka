@@ -9633,6 +9633,13 @@ public class GroupMetadataManagerTest {
 
         assertEquals(expectAllGroupMap, actualAllGroupMap);
 
+        // List group with case insensitive ‘empty’
+        actualAllGroupMap =
+            context.sendListGroups(Collections.singletonList("empty"))
+                .stream().collect(Collectors.toMap(ListGroupsResponseData.ListedGroup::groupId, Function.identity()));
+
+        assertEquals(expectAllGroupMap, actualAllGroupMap);
+
         context.commit();
         actualAllGroupMap = context.sendListGroups(Collections.emptyList()).stream()
             .collect(Collectors.toMap(ListGroupsResponseData.ListedGroup::groupId, Function.identity()));
