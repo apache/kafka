@@ -192,11 +192,6 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
     private final Logger log;
 
     /**
-     * Time instance used to create {@link Timer timers}.
-     */
-    private final Time time;
-
-    /**
      * Manager to perform commit requests needed before revoking partitions (if auto-commit is
      * enabled)
      */
@@ -281,6 +276,8 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
      * {@link ErrorBackgroundEvent errors} to the application thread.
      */
     private final BackgroundEventHandler backgroundEventHandler;
+
+    private final Time time;
 
     public MembershipManagerImpl(String groupId,
                                  Optional<String> groupInstanceId,
@@ -842,7 +839,9 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
         // the current reconciliation is in process. Note this is using the rebalance timeout as
         // it is the limit enforced by the broker to complete the reconciliation process.
         Timer timer = time.timer(rebalanceTimeoutMs);
-        commitResult = commitRequestManager.maybeAutoCommitAllConsumedNow(Optional.of(timer), true);
+        commitResult = commitRequestManager.maybeAutoCommitAllConsumedNow(
+            Optional.of(time.timer(rebalanceTimeoutMs)),
+            true);
 
         // Execute commit -> onPartitionsRevoked -> onPartitionsAssigned.
         commitResult.whenComplete((commitReqResult, commitReqError) -> {
@@ -1211,10 +1210,7 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
                                                                              Set<TopicPartition> partitions) {
         SortedSet<TopicPartition> sortedPartitions = new TreeSet<>(TOPIC_PARTITION_COMPARATOR);
         sortedPartitions.addAll(partitions);
-        CompletableBackgroundEvent<Void> event = new ConsumerRebalanceListenerCallbackNeededEvent(
-            methodName,
-            sortedPartitions
-        );
+        CompletableBackgroundEvent<Void> event = new ConsumerRebalanceListenerCallbackNeededEvent(methodName, sortedPartitions);
         backgroundEventHandler.add(event);
         log.debug("The event to trigger the {} method execution was enqueued successfully", methodName.fullyQualifiedMethodName());
         return event.future();

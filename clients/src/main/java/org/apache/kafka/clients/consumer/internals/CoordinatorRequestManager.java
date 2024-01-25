@@ -69,14 +69,14 @@ public class CoordinatorRequestManager implements RequestManager {
         final long defaultApiTimeoutMs,
         final long retryBackoffMs,
         final long retryBackoffMaxMs,
-        final BackgroundEventHandler backgroundEventHandler,
+        final BackgroundEventHandler errorHandler,
         final String groupId
     ) {
         Objects.requireNonNull(groupId);
         this.time = time;
         this.log = logContext.logger(this.getClass());
         this.defaultApiTimeoutMs = defaultApiTimeoutMs;
-        this.backgroundEventHandler = backgroundEventHandler;
+        this.backgroundEventHandler = errorHandler;
         this.groupId = groupId;
         this.coordinatorRequestState = new RequestState(
                 logContext,

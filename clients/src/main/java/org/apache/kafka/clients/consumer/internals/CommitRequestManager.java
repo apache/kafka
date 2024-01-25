@@ -21,7 +21,6 @@ import org.apache.kafka.clients.consumer.CommitFailedException;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.RetriableCommitFailedException;
-import org.apache.kafka.clients.consumer.internals.events.CommitApplicationEvent;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.DisconnectException;
@@ -72,7 +71,6 @@ import static org.apache.kafka.clients.consumer.internals.NetworkClientDelegate.
 import static org.apache.kafka.common.protocol.Errors.COORDINATOR_LOAD_IN_PROGRESS;
 
 public class CommitRequestManager implements RequestManager, MemberStateListener {
-
     private final Time time;
     private final SubscriptionState subscriptions;
     private final LogContext logContext;
@@ -311,7 +309,7 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
     }
 
     /**
-     * Handles {@link CommitApplicationEvent}. It creates an
+     * Handles {@link org.apache.kafka.clients.consumer.internals.events.CommitApplicationEvent}. It creates an
      * {@link OffsetCommitRequestState} and enqueue it to send later.
      */
     public CompletableFuture<Void> addOffsetCommitRequest(final Map<TopicPartition, OffsetAndMetadata> offsets,
@@ -424,6 +422,11 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
 
         private final CompletableFuture<Void> future;
 
+        /**
+         * Timer that determines the time until which the request should be retried if it fails with retriable
+         * errors. If not present, the request is triggered without waiting for a response or
+         * retrying.
+         */
         private final Optional<Timer> timer;
 
         OffsetCommitRequestState(final Map<TopicPartition, OffsetAndMetadata> offsets,
@@ -496,7 +499,7 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
 
             OffsetCommitRequest.Builder builder = new OffsetCommitRequest.Builder(data);
 
-            // Timer will be "empty" for async/auto-commit, so create a dummy timer using default.api.timeout.ms.
+            // Timer will be "empty" for async/auto-commit, so use default.api.timeout.ms for the timeout.
             Timer requestTimer = timer.orElseGet(() -> time.timer(defaultApiTimeoutMs));
             NetworkClientDelegate.UnsentRequest resp = new NetworkClientDelegate.UnsentRequest(
                 builder,
@@ -604,7 +607,7 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
                 future.completeExceptionally(commitExceptionForRetriableError(throwable));
                 return;
             }
-            if (timer.isPresent() && timer.get().isExpired()) {
+            if (isExpired()) {
                 // Fail requests that allowed retries (sync requests), but expired.
                 future.completeExceptionally(throwable);
                 return;
@@ -723,6 +726,9 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
 
         private final CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> future;
 
+        /**
+         * Used to determine the time until which the request should be retried if it fails with retriable errors.
+         */
         private final Timer timer;
 
         public OffsetFetchRequestState(final Set<TopicPartition> partitions,
@@ -838,13 +844,17 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
          */
         @Override
         void maybeRetry(long currentTimeMs, Throwable throwable) {
-            if (timer.isExpired()) {
+            if (isExpired()) {
                 future.completeExceptionally(throwable);
                 return;
             }
             onFailedAttempt(currentTimeMs);
             pendingRequests.inflightOffsetFetches.remove(this);
             pendingRequests.addOffsetFetchRequest(this);
+        }
+
+        private boolean isExpired() {
+            return timer.isExpired();
         }
 
         /**
@@ -854,7 +864,7 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
          * @return True if the request expired.
          */
         private boolean maybeExpire() {
-            if (timer.isExpired()) {
+            if (isExpired()) {
                 future.completeExceptionally(new TimeoutException("OffsetFetch request could not " +
                     "complete before timeout expired."));
                 return true;

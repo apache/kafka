@@ -42,7 +42,7 @@ import java.util.stream.Collectors;
 public class FetchRequestManager extends AbstractFetch implements RequestManager {
 
     private final NetworkClientDelegate networkClientDelegate;
-    private final long requestTimeoutMs;
+    private final int defaultApiTimeoutMs;
 
     FetchRequestManager(final LogContext logContext,
                         final Time time,
@@ -53,10 +53,10 @@ public class FetchRequestManager extends AbstractFetch implements RequestManager
                         final FetchMetricsManager metricsManager,
                         final NetworkClientDelegate networkClientDelegate,
                         final ApiVersions apiVersions,
-                        final int requestTimeoutMs) {
+                        final int defaultApiTimeoutMs) {
         super(logContext, metadata, subscriptions, fetchConfig, fetchBuffer, metricsManager, time, apiVersions);
         this.networkClientDelegate = networkClientDelegate;
-        this.requestTimeoutMs = requestTimeoutMs;
+        this.defaultApiTimeoutMs = defaultApiTimeoutMs;
     }
 
     @Override
@@ -106,7 +106,7 @@ public class FetchRequestManager extends AbstractFetch implements RequestManager
     private PollResult pollInternal(Map<Node, FetchSessionHandler.FetchRequestData> fetchRequests,
                                     ResponseHandler<ClientResponse> successHandler,
                                     ResponseHandler<Throwable> errorHandler) {
-        Timer timer = time.timer(requestTimeoutMs);
+        Timer timer = time.timer(defaultApiTimeoutMs);
 
         List<UnsentRequest> requests = fetchRequests.entrySet().stream().map(entry -> {
             final Node fetchTarget = entry.getKey();

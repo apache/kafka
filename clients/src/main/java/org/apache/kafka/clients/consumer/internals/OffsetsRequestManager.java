@@ -82,7 +82,7 @@ public class OffsetsRequestManager implements RequestManager, ClusterResourceLis
 
     private final Set<ListOffsetsRequestState> requestsToRetry;
     private final List<NetworkClientDelegate.UnsentRequest> requestsToSend;
-    private final long requestTimeoutMs;
+    private final long defaultApiTimeoutMs;
     private final Time time;
     private final ApiVersions apiVersions;
     private final NetworkClientDelegate networkClientDelegate;
@@ -94,7 +94,7 @@ public class OffsetsRequestManager implements RequestManager, ClusterResourceLis
                                  final IsolationLevel isolationLevel,
                                  final Time time,
                                  final long retryBackoffMs,
-                                 final long requestTimeoutMs,
+                                 final long defaultApiTimeoutMs,
                                  final ApiVersions apiVersions,
                                  final NetworkClientDelegate networkClientDelegate,
                                  final BackgroundEventHandler backgroundEventHandler,
@@ -115,7 +115,7 @@ public class OffsetsRequestManager implements RequestManager, ClusterResourceLis
         this.requestsToSend = new ArrayList<>();
         this.subscriptionState = subscriptionState;
         this.time = time;
-        this.requestTimeoutMs = requestTimeoutMs;
+        this.defaultApiTimeoutMs = defaultApiTimeoutMs;
         this.apiVersions = apiVersions;
         this.networkClientDelegate = networkClientDelegate;
         this.backgroundEventHandler = backgroundEventHandler;
@@ -262,7 +262,7 @@ public class OffsetsRequestManager implements RequestManager, ClusterResourceLis
         // fetchOffsetsByTimes call if any of the requests being retried fails
         List<ListOffsetsRequestState> requestsToProcess = new ArrayList<>(requestsToRetry);
         requestsToRetry.clear();
-        Timer timer = time.timer(requestTimeoutMs);
+        Timer timer = time.timer(defaultApiTimeoutMs);
         requestsToProcess.forEach(requestState -> {
             Map<TopicPartition, Long> timestampsToSearch =
                     new HashMap<>(requestState.remainingToSearch);
@@ -403,10 +403,9 @@ public class OffsetsRequestManager implements RequestManager, ClusterResourceLis
         final AtomicInteger expectedResponses = new AtomicInteger(0);
         final CompletableFuture<Void> globalResult = new CompletableFuture<>();
         final List<NetworkClientDelegate.UnsentRequest> unsentRequests = new ArrayList<>();
-
+        final long nextResetTimeMs = timer.currentTimeMs() + timer.remainingMs();
         timestampsToSearchByNode.forEach((node, resetTimestamps) -> {
-            subscriptionState.setNextAllowedRetry(resetTimestamps.keySet(),
-                    time.milliseconds() + requestTimeoutMs);
+            subscriptionState.setNextAllowedRetry(resetTimestamps.keySet(), nextResetTimeMs);
 
             CompletableFuture<ListOffsetResult> partialResult = buildListOffsetRequestToNode(
                     node,
@@ -465,7 +464,7 @@ public class OffsetsRequestManager implements RequestManager, ClusterResourceLis
         final Map<Node, Map<TopicPartition, SubscriptionState.FetchPosition>> regrouped =
                 regroupFetchPositionsByLeader(partitionsToValidate);
 
-        long nextResetTimeMs = time.milliseconds() + timer.remainingMs();
+        long nextResetTimeMs = timer.currentTimeMs() + timer.remainingMs();
         final AtomicInteger expectedResponses = new AtomicInteger(0);
         final CompletableFuture<Void> globalResult = new CompletableFuture<>();
         final List<NetworkClientDelegate.UnsentRequest> unsentRequests = new ArrayList<>();

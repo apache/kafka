@@ -251,16 +251,14 @@ public class HeartbeatRequestManager implements RequestManager {
     }
 
     private NetworkClientDelegate.UnsentRequest makeHeartbeatRequest(final boolean ignoreResponse) {
-        Optional<Node> coordinator = coordinatorRequestManager.coordinator();
-        ConsumerGroupHeartbeatRequest.Builder requestBuilder = new ConsumerGroupHeartbeatRequest.Builder(heartbeatState.buildRequestData());
         NetworkClientDelegate.UnsentRequest request = new NetworkClientDelegate.UnsentRequest(
-                requestBuilder,
-                coordinator,
-                pollTimer
+            new ConsumerGroupHeartbeatRequest.Builder(heartbeatState.buildRequestData()),
+            coordinatorRequestManager.coordinator(),
+            pollTimer
         );
-        if (ignoreResponse) {
+        if (ignoreResponse)
             return logResponse(request);
-        } else {
+        else
             return request.whenComplete((response, exception) -> {
                 if (response != null) {
                     onResponse((ConsumerGroupHeartbeatResponse) response.responseBody(), request.handler().completionTimeMs());
@@ -268,7 +266,6 @@ public class HeartbeatRequestManager implements RequestManager {
                     onFailure(exception, request.handler().completionTimeMs());
                 }
             });
-        }
     }
 
     private NetworkClientDelegate.UnsentRequest logResponse(final NetworkClientDelegate.UnsentRequest request) {

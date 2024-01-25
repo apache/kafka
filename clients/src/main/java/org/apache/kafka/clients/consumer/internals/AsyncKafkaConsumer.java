@@ -1017,7 +1017,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
 
             final Timer timer = time.timer(timeout);
             final TopicMetadataApplicationEvent topicMetadataApplicationEvent =
-                new TopicMetadataApplicationEvent(timer);
+                    new TopicMetadataApplicationEvent(timer);
             wakeupTrigger.setActiveTask(topicMetadataApplicationEvent.future());
             try {
                 return applicationEventHandler.addAndGet(topicMetadataApplicationEvent);
@@ -1465,7 +1465,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         try {
             fetchBuffer.retainAll(Collections.emptySet());
             if (groupMetadata.isPresent()) {
-                Timer timer = time.timer(Long.MAX_VALUE);
+                Timer timer = time.timer(defaultApiTimeoutMs);
                 UnsubscribeApplicationEvent unsubscribeApplicationEvent = new UnsubscribeApplicationEvent(timer);
                 applicationEventHandler.add(unsubscribeApplicationEvent);
                 log.info("Unsubscribing all topics or patterns and assigned partitions");
