@@ -224,7 +224,7 @@ object ConfigCommand extends Logging {
 
   /**
    * Pre-process broker configs provided to convert them to persistent format.
-   * Password configs are encrypted using the secret `PasswordEncoderConfigs.SECRET_PROP`.
+   * Password configs are encrypted using the secret `PasswordEncoderConfigs.SECRET`.
    * The secret is removed from `configsToBeAdded` and will not be persisted in ZooKeeper.
    */
   private def preProcessBrokerConfigs(configsToBeAdded: Properties, perBrokerConfig: Boolean): Unit = {

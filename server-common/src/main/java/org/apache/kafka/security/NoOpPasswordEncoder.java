@@ -18,6 +18,9 @@ package org.apache.kafka.security;
 
 import org.apache.kafka.common.config.types.Password;
 
+/**
+ * A password encoder that does not modify the given password. This is used in KRaft mode only.
+ */
 public class NoOpPasswordEncoder implements PasswordEncoder {
 
     @Override

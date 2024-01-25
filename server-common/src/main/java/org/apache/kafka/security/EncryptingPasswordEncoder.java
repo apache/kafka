@@ -34,6 +34,10 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
+/**
+ * Password encoder and decoder implementation. Encoded passwords are persisted as a CSV map
+ * containing the encoded password in base64 and along with the properties used for encryption.
+ */
 public class EncryptingPasswordEncoder implements PasswordEncoder {
 
     private final SecureRandom secureRandom = new SecureRandom();
@@ -45,6 +49,17 @@ public class EncryptingPasswordEncoder implements PasswordEncoder {
     private final int iterations;
     private final CipherParamsEncoder cipherParamsEncoder;
 
+
+    /**
+     * @param secret The secret used for encoding and decoding
+     * @param keyFactoryAlgorithm  Key factory algorithm if configured. By default, PBKDF2WithHmacSHA512 is
+     *                             used if available, PBKDF2WithHmacSHA1 otherwise.
+     * @param cipherAlgorithm Cipher algorithm used for encoding.
+     * @param keyLength Key length used for encoding. This should be valid for the specified algorithms.
+     * @param iterations Iteration count used for encoding.
+     * The provided `keyFactoryAlgorithm`, `cipherAlgorithm`, `keyLength` and `iterations` are used for encoding passwords.
+     * The values used for encoding are stored along with the encoded password and the stored values are used for decoding.
+     */
     public EncryptingPasswordEncoder(
             Password secret,
             Optional<String> keyFactoryAlgorithm,

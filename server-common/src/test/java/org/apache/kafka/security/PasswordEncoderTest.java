@@ -29,7 +29,7 @@ import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.fail;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 class PasswordEncoderTest {
 
@@ -87,11 +87,7 @@ class PasswordEncoderTest {
                 "AES/CBC/PKCS5Padding",
                 128,
                 1024);
-        try {
-            decoder2.decode(encoded);
-            fail("Expected ConfigException to be thrown");
-        } catch (ConfigException expected) {
-        }
+        assertThrows(ConfigException.class, () -> decoder2.decode(encoded));
     }
 
     @Test
