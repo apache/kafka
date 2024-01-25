@@ -169,12 +169,7 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
         }
 
         CommitRequestManager manager = requestManagers.commitRequestManager.get();
-        CompletableFuture<Void> future = manager.addOffsetCommitRequest(
-            event.offsets(),
-            timer,
-            false
-        );
-        event.chain(future);
+        event.chain(manager.addOffsetCommitRequest(event.offsets(), timer, false));
     }
 
     private void process(final FetchCommittedOffsetsApplicationEvent event) {
@@ -190,11 +185,7 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
             return;
 
         CommitRequestManager manager = requestManagers.commitRequestManager.get();
-        CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> future = manager.addOffsetFetchRequest(
-                event.partitions(),
-                timer
-        );
-        event.chain(future);
+        event.chain(manager.addOffsetFetchRequest(event.partitions(), timer));
     }
 
     private void process(final NewTopicsMetadataUpdateRequestEvent ignored) {
