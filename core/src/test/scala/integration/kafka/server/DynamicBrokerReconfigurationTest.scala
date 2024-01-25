@@ -938,7 +938,6 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
   }
 
   @Test
-  @Disabled // TODO: To be re-enabled once we can make it less flaky (KAFKA-7957)
   def testMetricsReporterUpdate(): Unit = {
     // Add a new metrics reporter
     val newProps = new Properties
