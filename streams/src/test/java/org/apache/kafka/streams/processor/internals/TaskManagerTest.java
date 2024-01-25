@@ -58,7 +58,6 @@ import java.nio.file.Files;
 import java.time.Duration;
 import java.util.ArrayList;
 
-import org.easymock.EasyMock;
 import org.easymock.EasyMockRunner;
 import org.easymock.Mock;
 import org.easymock.MockType;
@@ -112,7 +111,6 @@ import static org.easymock.EasyMock.eq;
 import static org.easymock.EasyMock.expect;
 import static org.easymock.EasyMock.expectLastCall;
 import static org.easymock.EasyMock.replay;
-import static org.easymock.EasyMock.reset;
 import static org.easymock.EasyMock.verify;
 import static org.hamcrest.CoreMatchers.hasItem;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -133,6 +131,7 @@ import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.inOrder;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.when;
@@ -2016,13 +2015,14 @@ public class TaskManagerTest {
         assertThat(taskManager.lockedTaskDirectories(), is(mkSet(taskId00, taskId01, taskId02)));
 
         handleAssignment(taskId00Assignment, taskId01Assignment, emptyMap());
-        reset(consumer);
-        expectConsumerAssignmentPaused(consumer);
-        replay(consumer);
 
         taskManager.handleRebalanceComplete();
         assertThat(taskManager.lockedTaskDirectories(), is(mkSet(taskId00, taskId01)));
         verify(stateDirectory);
+
+        final Set<TopicPartition> assignment = singleton(new TopicPartition("assignment", 0));
+        Mockito.verify(mockitoConsumer).pause(assignment);
+        Mockito.verify(mockitoConsumer).resume(assignment);
     }
 
     @Test
@@ -2210,6 +2210,9 @@ public class TaskManagerTest {
         restoringTask.setChangelogOffsets(changelogOffsets);
 
         assertThat(taskManager.getTaskOffsetSums(), is(expectedOffsetSums));
+
+        final Set<TopicPartition> assignment = singleton(new TopicPartition("assignment", 0));
+        Mockito.verify(mockitoConsumer).resume(assignment);
     }
 
     @Test
@@ -2332,19 +2335,12 @@ public class TaskManagerTest {
         task00.setCommittableOffsetsAndMetadata(offsets);
 
         // first `handleAssignment`
-        expectRestoreToBeCompleted(consumer);
+        final Set<TopicPartition> assignment = singleton(new TopicPartition("assignment", 0));
+        when(mockitoConsumer.assignment()).thenReturn(assignment);
+
         when(activeTaskCreator.createTasks(any(), Mockito.eq(taskId00Assignment))).thenReturn(singletonList(task00));
-        expectLastCall();
 
-        // `handleRevocation`
-        consumer.commitSync(offsets);
-        expectLastCall();
-
-        // second `handleAssignment`
-        consumer.commitSync(offsets);
-        expectLastCall();
-
-        replay(consumer);
+        taskManager.setMainConsumer(mockitoConsumer);
 
         taskManager.handleAssignment(taskId00Assignment, emptyMap());
         assertThat(taskManager.tryToCompleteRestoration(time.milliseconds(), null), is(true));
@@ -2358,6 +2354,7 @@ public class TaskManagerTest {
         assertThat(taskManager.activeTaskMap(), Matchers.anEmptyMap());
         assertThat(taskManager.standbyTaskMap(), Matchers.anEmptyMap());
         Mockito.verify(activeTaskCreator).closeAndRemoveTaskProducerIfNeeded(taskId00);
+        Mockito.verify(mockitoConsumer).resume(assignment);
     }
 
     @Test
@@ -2369,12 +2366,9 @@ public class TaskManagerTest {
             }
         };
 
-        // first `handleAssignment`
-        expectRestoreToBeCompleted(consumer);
         when(activeTaskCreator.createTasks(any(), Mockito.eq(taskId00Assignment))).thenReturn(singletonList(task00));
-        expectLastCall();
 
-        replay(consumer);
+        taskManager.setMainConsumer(mockitoConsumer);
 
         taskManager.handleAssignment(taskId00Assignment, emptyMap());
         taskManager.handleRevocation(taskId00Partitions);
@@ -2399,7 +2393,8 @@ public class TaskManagerTest {
         final StateMachineTask task01 = new StateMachineTask(taskId01, taskId01Partitions, false, stateManager);
 
         // `handleAssignment`
-        expectRestoreToBeCompleted(consumer);
+        final Set<TopicPartition> assignment = singleton(new TopicPartition("assignment", 0));
+        when(mockitoConsumer.assignment()).thenReturn(assignment);
         when(activeTaskCreator.createTasks(any(), Mockito.eq(taskId00Assignment))).thenReturn(singletonList(task00));
         when(standbyTaskCreator.createTasks(taskId01Assignment)).thenReturn(singletonList(task01));
 
@@ -2412,10 +2407,10 @@ public class TaskManagerTest {
         expectLockObtainedFor();
         replay(stateDirectory);
 
+        taskManager.setMainConsumer(mockitoConsumer);
+
         taskManager.handleRebalanceStart(emptySet());
         assertThat(taskManager.lockedTaskDirectories(), Matchers.is(mkSet(taskId00, taskId01)));
-
-        replay(consumer);
 
         taskManager.handleAssignment(taskId00Assignment, taskId01Assignment);
         assertThat(taskManager.tryToCompleteRestoration(time.milliseconds(), null), is(true));
@@ -2437,6 +2432,7 @@ public class TaskManagerTest {
 
         assertThat(taskManager.lockedTaskDirectories(), is(emptySet()));
         Mockito.verify(activeTaskCreator).closeAndRemoveTaskProducerIfNeeded(taskId00);
+        Mockito.verify(mockitoConsumer).resume(assignment);
     }
 
     @Test
@@ -2455,15 +2451,14 @@ public class TaskManagerTest {
         task00.setCommittableOffsetsAndMetadata(offsets);
 
         // `handleAssignment`
-        expectRestoreToBeCompleted(consumer);
+        final Set<TopicPartition> assignment = singleton(new TopicPartition("assignment", 0));
+        when(mockitoConsumer.assignment()).thenReturn(assignment);
         when(activeTaskCreator.createTasks(any(), Mockito.eq(taskId00Assignment))).thenReturn(singletonList(task00));
 
         // `handleAssignment`
-        consumer.commitSync(offsets);
-        expectLastCall();
         doThrow(new RuntimeException("KABOOM!")).when(activeTaskCreator).closeAndRemoveTaskProducerIfNeeded(taskId00);
 
-        replay(consumer);
+        taskManager.setMainConsumer(mockitoConsumer);
 
         taskManager.handleAssignment(taskId00Assignment, emptyMap());
         assertThat(taskManager.tryToCompleteRestoration(time.milliseconds(), null), is(true));
@@ -2482,6 +2477,7 @@ public class TaskManagerTest {
         );
         assertThat(thrown.getCause(), instanceOf(RuntimeException.class));
         assertThat(thrown.getCause().getMessage(), is("KABOOM!"));
+        Mockito.verify(mockitoConsumer).resume(assignment);
     }
 
     @Test
@@ -2529,10 +2525,13 @@ public class TaskManagerTest {
         };
 
         // `handleAssignment`
-        expectRestoreToBeCompleted(consumer);
+        final Set<TopicPartition> assignment = singleton(new TopicPartition("assignment", 0));
+        when(mockitoConsumer.assignment())
+            .thenReturn(assignment)
+            .thenReturn(taskId00Partitions);
         when(activeTaskCreator.createTasks(any(), Mockito.eq(taskId00Assignment))).thenReturn(singletonList(task00));
-        expect(consumer.assignment()).andReturn(taskId00Partitions);
-        replay(consumer);
+
+        taskManager.setMainConsumer(mockitoConsumer);
 
         taskManager.handleAssignment(taskId00Assignment, emptyMap());
         assertThat(taskManager.tryToCompleteRestoration(time.milliseconds(), tp -> assertThat(tp, is(empty()))), is(true));
@@ -2548,7 +2547,7 @@ public class TaskManagerTest {
         assertThat(taskManager.activeTaskMap(), is(singletonMap(taskId00, task00)));
         assertThat(taskManager.standbyTaskMap(), Matchers.anEmptyMap());
 
-        verify(consumer);
+        Mockito.verify(mockitoConsumer).resume(assignment);
         Mockito.verify(stateManager).markChangelogAsCorrupted(taskId00Partitions);
     }
 
@@ -2564,10 +2563,13 @@ public class TaskManagerTest {
             }
         };
 
-        expectRestoreToBeCompleted(consumer);
+        final Set<TopicPartition> assignment = singleton(new TopicPartition("assignment", 0));
+        when(mockitoConsumer.assignment())
+            .thenReturn(assignment)
+            .thenReturn(taskId00Partitions);
         when(activeTaskCreator.createTasks(any(), Mockito.eq(taskId00Assignment))).thenReturn(singletonList(task00));
-        expect(consumer.assignment()).andReturn(taskId00Partitions);
-        replay(consumer);
+
+        taskManager.setMainConsumer(mockitoConsumer);
 
         taskManager.handleAssignment(taskId00Assignment, emptyMap());
         assertThat(taskManager.tryToCompleteRestoration(time.milliseconds(), tp -> assertThat(tp, is(empty()))), is(true));
@@ -2581,7 +2583,7 @@ public class TaskManagerTest {
         assertThat(taskManager.activeTaskMap(), is(singletonMap(taskId00, task00)));
         assertThat(taskManager.standbyTaskMap(), Matchers.anEmptyMap());
 
-        verify(consumer);
+        Mockito.verify(mockitoConsumer).resume(assignment);
         Mockito.verify(stateManager).markChangelogAsCorrupted(taskId00Partitions);
     }
 
@@ -2598,12 +2600,13 @@ public class TaskManagerTest {
         // `handleAssignment`
         when(activeTaskCreator.createTasks(any(), Mockito.eq(assignment)))
             .thenReturn(asList(corruptedTask, nonCorruptedTask));
-        expectRestoreToBeCompleted(consumer);
-        expect(consumer.assignment()).andReturn(taskId00Partitions);
-        // check that we should not commit empty map either
-        consumer.commitSync(eq(emptyMap()));
-        expectLastCall().andStubThrow(new AssertionError("should not invoke commitSync when offset map is empty"));
-        replay(consumer);
+
+        final Set<TopicPartition> consumerAssignment = singleton(new TopicPartition("assignment", 0));
+        when(mockitoConsumer.assignment())
+            .thenReturn(consumerAssignment)
+            .thenReturn(taskId00Partitions);
+
+        taskManager.setMainConsumer(mockitoConsumer);
 
         taskManager.handleAssignment(assignment, emptyMap());
         assertThat(taskManager.tryToCompleteRestoration(time.milliseconds(), tp -> assertThat(tp, is(empty()))), is(true));
@@ -2618,7 +2621,9 @@ public class TaskManagerTest {
         assertThat(nonCorruptedTask.partitionsForOffsetReset, equalTo(Collections.emptySet()));
         assertThat(corruptedTask.partitionsForOffsetReset, equalTo(taskId00Partitions));
 
-        verify(consumer);
+        Mockito.verify(mockitoConsumer).resume(consumerAssignment);
+        // check that we should not commit empty map either
+        Mockito.verify(mockitoConsumer, never()).commitSync(emptyMap());
         Mockito.verify(stateManager).markChangelogAsCorrupted(taskId00Partitions);
     }
 
@@ -2637,8 +2642,9 @@ public class TaskManagerTest {
         // `handleAssignment`
         when(activeTaskCreator.createTasks(any(), Mockito.eq(assignment)))
             .thenReturn(asList(corruptedTask, nonRunningNonCorruptedTask));
-        expect(consumer.assignment()).andReturn(taskId00Partitions);
-        replay(consumer);
+        when(mockitoConsumer.assignment()).thenReturn(taskId00Partitions);
+
+        taskManager.setMainConsumer(mockitoConsumer);
 
         taskManager.handleAssignment(assignment, emptyMap());
 
@@ -2650,7 +2656,6 @@ public class TaskManagerTest {
         assertThat(corruptedTask.partitionsForOffsetReset, equalTo(taskId00Partitions));
 
         assertFalse(nonRunningNonCorruptedTask.commitPrepared);
-        verify(consumer);
         Mockito.verify(stateManager).markChangelogAsCorrupted(taskId00Partitions);
     }
 
@@ -2732,9 +2737,10 @@ public class TaskManagerTest {
             .thenReturn(singleton(runningNonCorruptedActive));
         when(standbyTaskCreator.createTasks(taskId00Assignment)).thenReturn(singleton(corruptedStandby));
 
-        expectRestoreToBeCompleted(consumer);
+        final Set<TopicPartition> assignment = singleton(new TopicPartition("assignment", 0));
+        when(mockitoConsumer.assignment()).thenReturn(assignment);
 
-        replay(consumer);
+        taskManager.setMainConsumer(mockitoConsumer);
 
         taskManager.handleAssignment(taskId01Assignment, taskId00Assignment);
         assertThat(taskManager.tryToCompleteRestoration(time.milliseconds(), null), is(true));
@@ -2751,7 +2757,7 @@ public class TaskManagerTest {
 
         assertThat(corruptedStandby.commitPrepared, is(true));
         assertThat(corruptedStandby.state(), is(Task.State.CREATED));
-        verify(consumer);
+        Mockito.verify(mockitoConsumer).resume(assignment);
         Mockito.verify(stateManager).markChangelogAsCorrupted(taskId00Partitions);
     }
 
@@ -2774,13 +2780,16 @@ public class TaskManagerTest {
         when(activeTaskCreator.createTasks(any(), Mockito.eq(assignment)))
             .thenReturn(asList(corruptedActive, uncorruptedActive));
 
-        expectRestoreToBeCompleted(consumer);
+        final Set<TopicPartition> consumerAssignment = singleton(new TopicPartition("assignment", 0));
+        when(mockitoConsumer.assignment())
+            .thenReturn(consumerAssignment)
+            .thenReturn(union(HashSet::new, taskId00Partitions, taskId01Partitions));
 
-        expect(consumer.assignment()).andStubReturn(union(HashSet::new, taskId00Partitions, taskId01Partitions));
-
-        replay(consumer, stateDirectory);
+        replay(stateDirectory);
 
         uncorruptedActive.setCommittableOffsetsAndMetadata(offsets);
+
+        taskManager.setMainConsumer(mockitoConsumer);
 
         taskManager.handleAssignment(assignment, emptyMap());
         assertThat(taskManager.tryToCompleteRestoration(time.milliseconds(), null), is(true));
@@ -2800,7 +2809,7 @@ public class TaskManagerTest {
         assertThat(uncorruptedActive.commitCompleted, is(false));
 
         assertThat(uncorruptedActive.state(), is(State.RUNNING));
-        verify(consumer);
+        Mockito.verify(mockitoConsumer).resume(consumerAssignment);
     }
 
     @Test
@@ -2824,14 +2833,14 @@ public class TaskManagerTest {
         when(activeTaskCreator.createTasks(any(), Mockito.eq(assignment)))
             .thenReturn(asList(corruptedActive, uncorruptedActive));
 
-        expectRestoreToBeCompleted(consumer);
+        final Set<TopicPartition> consumerAssignment = singleton(new TopicPartition("assignment", 0));
+        when(mockitoConsumer.assignment())
+            .thenReturn(consumerAssignment)
+            .thenReturn(union(HashSet::new, taskId00Partitions, taskId01Partitions));
 
-        consumer.commitSync(offsets);
-        expectLastCall().andThrow(new TimeoutException());
+        doThrow(new TimeoutException()).when(mockitoConsumer).commitSync(offsets);
 
-        expect(consumer.assignment()).andStubReturn(union(HashSet::new, taskId00Partitions, taskId01Partitions));
-
-        replay(consumer);
+        taskManager.setMainConsumer(mockitoConsumer);
 
         taskManager.handleAssignment(assignment, emptyMap());
         assertThat(taskManager.tryToCompleteRestoration(time.milliseconds(), null), is(true));
@@ -2861,7 +2870,7 @@ public class TaskManagerTest {
 
         assertThat(corruptedActive.state(), is(Task.State.CREATED));
         assertThat(uncorruptedActive.state(), is(Task.State.CREATED));
-        verify(consumer);
+        Mockito.verify(mockitoConsumer).resume(consumerAssignment);
         Mockito.verify(stateManager).markChangelogAsCorrupted(taskId00Partitions);
     }
 
@@ -2899,16 +2908,17 @@ public class TaskManagerTest {
         when(activeTaskCreator.createTasks(any(), Mockito.eq(assignment)))
             .thenReturn(asList(corruptedActiveTask, uncorruptedActiveTask));
 
-        expectRestoreToBeCompleted(consumer);
+        final Set<TopicPartition> consumerAssignment = singleton(new TopicPartition("assignment", 0));
+        when(mockitoConsumer.assignment())
+            .thenReturn(consumerAssignment)
+            .thenReturn(union(HashSet::new, taskId00Partitions, taskId01Partitions));
 
         final ConsumerGroupMetadata groupMetadata = new ConsumerGroupMetadata("appId");
-        expect(consumer.groupMetadata()).andReturn(groupMetadata);
+        when(mockitoConsumer.groupMetadata()).thenReturn(groupMetadata);
 
         doThrow(new TimeoutException()).when(producer).commitTransaction(offsets, groupMetadata);
 
-        expect(consumer.assignment()).andStubReturn(union(HashSet::new, taskId00Partitions, taskId01Partitions));
-
-        replay(consumer);
+        taskManager.setMainConsumer(mockitoConsumer);
 
         taskManager.handleAssignment(assignment, emptyMap());
         assertThat(taskManager.tryToCompleteRestoration(time.milliseconds(), null), is(true));
@@ -2944,7 +2954,7 @@ public class TaskManagerTest {
         assertThat(uncorruptedActiveTask.state(), is(Task.State.CREATED));
         assertThat(corruptedTaskChangelogMarkedAsCorrupted.get(), is(true));
         assertThat(uncorruptedTaskChangelogMarkedAsCorrupted.get(), is(true));
-        verify(consumer);
+        Mockito.verify(mockitoConsumer).resume(consumerAssignment);
         Mockito.verify(stateManager).markChangelogAsCorrupted(taskId00ChangelogPartitions);
         Mockito.verify(stateManager).markChangelogAsCorrupted(taskId01ChangelogPartitions);
     }
@@ -2978,16 +2988,17 @@ public class TaskManagerTest {
             mkEntry(taskId02, taskId02Partitions)
         );
 
-        expectRestoreToBeCompleted(consumer);
+        final Set<TopicPartition> assignment = singleton(new TopicPartition("assignment", 0));
+        when(mockitoConsumer.assignment())
+            .thenReturn(assignment)
+            .thenReturn(union(HashSet::new, taskId00Partitions, taskId01Partitions, taskId02Partitions));
 
         when(activeTaskCreator.createTasks(any(), Mockito.eq(assignmentActive)))
             .thenReturn(asList(revokedActiveTask, unrevokedActiveTaskWithCommitNeeded, unrevokedActiveTaskWithoutCommitNeeded));
-        expectLastCall();
-        consumer.commitSync(expectedCommittedOffsets);
-        expectLastCall().andThrow(new TimeoutException());
-        expect(consumer.assignment()).andStubReturn(union(HashSet::new, taskId00Partitions, taskId01Partitions, taskId02Partitions));
 
-        replay(consumer);
+        doThrow(new TimeoutException()).when(mockitoConsumer).commitSync(expectedCommittedOffsets);
+
+        taskManager.setMainConsumer(mockitoConsumer);
 
         taskManager.handleAssignment(assignmentActive, emptyMap());
         assertThat(taskManager.tryToCompleteRestoration(time.milliseconds(), null), is(true));
@@ -3000,6 +3011,8 @@ public class TaskManagerTest {
         assertThat(revokedActiveTask.state(), is(State.SUSPENDED));
         assertThat(unrevokedActiveTaskWithCommitNeeded.state(), is(State.CREATED));
         assertThat(unrevokedActiveTaskWithoutCommitNeeded.state(), is(State.RUNNING));
+
+        Mockito.verify(mockitoConsumer).resume(assignment);
     }
 
     @Test
@@ -3038,19 +3051,20 @@ public class TaskManagerTest {
             mkEntry(taskId02, taskId02Partitions)
             );
 
-        expectRestoreToBeCompleted(consumer);
+        final Set<TopicPartition> assignment = singleton(new TopicPartition("assignment", 0));
+        when(mockitoConsumer.assignment())
+            .thenReturn(assignment)
+            .thenReturn(union(HashSet::new, taskId00Partitions, taskId01Partitions, taskId02Partitions));
 
         when(activeTaskCreator.createTasks(any(), Mockito.eq(assignmentActive)))
             .thenReturn(asList(revokedActiveTask, unrevokedActiveTask, unrevokedActiveTaskWithoutCommitNeeded));
 
         final ConsumerGroupMetadata groupMetadata = new ConsumerGroupMetadata("appId");
-        expect(consumer.groupMetadata()).andReturn(groupMetadata);
+        when(mockitoConsumer.groupMetadata()).thenReturn(groupMetadata);
 
         doThrow(new TimeoutException()).when(producer).commitTransaction(expectedCommittedOffsets, groupMetadata);
 
-        expect(consumer.assignment()).andStubReturn(union(HashSet::new, taskId00Partitions, taskId01Partitions, taskId02Partitions));
-
-        replay(consumer);
+        taskManager.setMainConsumer(mockitoConsumer);
 
         taskManager.handleAssignment(assignmentActive, emptyMap());
         assertThat(taskManager.tryToCompleteRestoration(time.milliseconds(), null), is(true));
@@ -3071,17 +3085,18 @@ public class TaskManagerTest {
         assertThat(unrevokedActiveTaskWithoutCommitNeeded.state(), is(State.RUNNING));
         Mockito.verify(stateManager).markChangelogAsCorrupted(taskId00ChangelogPartitions);
         Mockito.verify(stateManager).markChangelogAsCorrupted(taskId01ChangelogPartitions);
+        Mockito.verify(mockitoConsumer).resume(assignment);
     }
 
     @Test
     public void shouldCloseStandbyUnassignedTasksWhenCreatingNewTasks() {
         final Task task00 = new StateMachineTask(taskId00, taskId00Partitions, false, stateManager);
 
-        expectRestoreToBeCompleted(consumer);
+        final Set<TopicPartition> assignment = singleton(new TopicPartition("assignment", 0));
+        when(mockitoConsumer.assignment()).thenReturn(assignment);
         when(standbyTaskCreator.createTasks(taskId00Assignment)).thenReturn(singletonList(task00));
-        consumer.commitSync(Collections.emptyMap());
-        expectLastCall();
-        replay(consumer);
+
+        taskManager.setMainConsumer(mockitoConsumer);
 
         taskManager.handleAssignment(emptyMap(), taskId00Assignment);
         assertThat(taskManager.tryToCompleteRestoration(time.milliseconds(), null), is(true));
@@ -3091,6 +3106,7 @@ public class TaskManagerTest {
         assertThat(task00.state(), is(Task.State.CLOSED));
         assertThat(taskManager.activeTaskMap(), Matchers.anEmptyMap());
         assertThat(taskManager.standbyTaskMap(), Matchers.anEmptyMap());
+        Mockito.verify(mockitoConsumer).resume(assignment);
     }
 
     @Test
@@ -3098,12 +3114,12 @@ public class TaskManagerTest {
         final Task task00 = new StateMachineTask(taskId00, taskId00Partitions, true, stateManager);
         final Task task01 = new StateMachineTask(taskId01, taskId01Partitions, false, stateManager);
 
-        expectRestoreToBeCompleted(consumer);
-        // expect these calls twice (because we're going to tryToCompleteRestoration twice)
-        expectRestoreToBeCompleted(consumer);
+        final Set<TopicPartition> assignment = singleton(new TopicPartition("assignment", 0));
+        when(mockitoConsumer.assignment()).thenReturn(assignment);
         when(activeTaskCreator.createTasks(any(), Mockito.eq(taskId00Assignment))).thenReturn(singletonList(task00));
         when(standbyTaskCreator.createTasks(taskId01Assignment)).thenReturn(singletonList(task01));
-        replay(consumer);
+
+        taskManager.setMainConsumer(mockitoConsumer);
 
         taskManager.handleAssignment(taskId00Assignment, taskId01Assignment);
         assertThat(taskManager.tryToCompleteRestoration(time.milliseconds(), null), is(true));
@@ -3115,18 +3131,21 @@ public class TaskManagerTest {
         assertThat(task00.state(), is(Task.State.RUNNING));
         assertThat(task01.state(), is(Task.State.RUNNING));
 
+        // expect these calls twice (because we're going to tryToCompleteRestoration twice)
         Mockito.verify(activeTaskCreator).createTasks(any(), Mockito.eq(emptyMap()));
+        Mockito.verify(mockitoConsumer, times(2)).assignment();
+        Mockito.verify(mockitoConsumer, times(2)).resume(assignment);
     }
 
     @Test
     public void shouldUpdateInputPartitionsAfterRebalance() {
         final Task task00 = new StateMachineTask(taskId00, taskId00Partitions, true, stateManager);
 
-        expectRestoreToBeCompleted(consumer);
-        // expect these calls twice (because we're going to tryToCompleteRestoration twice)
-        expectRestoreToBeCompleted(consumer);
+        final Set<TopicPartition> assignment = singleton(new TopicPartition("assignment", 0));
+        when(mockitoConsumer.assignment()).thenReturn(assignment);
         when(activeTaskCreator.createTasks(any(), Mockito.eq(taskId00Assignment))).thenReturn(singletonList(task00));
-        replay(consumer);
+
+        taskManager.setMainConsumer(mockitoConsumer);
 
         taskManager.handleAssignment(taskId00Assignment, emptyMap());
         assertThat(taskManager.tryToCompleteRestoration(time.milliseconds(), null), is(true));
@@ -3138,7 +3157,9 @@ public class TaskManagerTest {
         assertThat(taskManager.tryToCompleteRestoration(time.milliseconds(), null), is(true));
         assertThat(task00.state(), is(Task.State.RUNNING));
         assertEquals(newPartitionsSet, task00.inputPartitions());
-        verify(consumer);
+        // expect these calls twice (because we're going to tryToCompleteRestoration twice)
+        Mockito.verify(mockitoConsumer, times(2)).resume(assignment);
+        Mockito.verify(mockitoConsumer, times(2)).assignment();
         Mockito.verify(activeTaskCreator).createTasks(any(), Mockito.eq(emptyMap()));
     }
 
@@ -3244,12 +3265,11 @@ public class TaskManagerTest {
         final Map<TopicPartition, OffsetAndMetadata> offsets = singletonMap(t1p0, new OffsetAndMetadata(0L, null));
         task00.setCommittableOffsetsAndMetadata(offsets);
 
-        expectRestoreToBeCompleted(consumer);
+        final Set<TopicPartition> assignment = singleton(new TopicPartition("assignment", 0));
+        when(mockitoConsumer.assignment()).thenReturn(assignment);
         when(activeTaskCreator.createTasks(any(), Mockito.eq(taskId00Assignment))).thenReturn(singletonList(task00));
-        consumer.commitSync(offsets);
-        expectLastCall();
 
-        replay(consumer);
+        taskManager.setMainConsumer(mockitoConsumer);
 
         taskManager.handleAssignment(taskId00Assignment, emptyMap());
         assertThat(taskManager.tryToCompleteRestoration(time.milliseconds(), null), is(true));
@@ -3257,6 +3277,8 @@ public class TaskManagerTest {
 
         taskManager.handleRevocation(taskId00Partitions);
         assertThat(task00.state(), is(Task.State.SUSPENDED));
+
+        Mockito.verify(mockitoConsumer).resume(assignment);
     }
 
     @Test
@@ -3293,7 +3315,8 @@ public class TaskManagerTest {
         final Map<TaskId, Set<TopicPartition>> assignmentStandby = mkMap(
             mkEntry(taskId10, taskId10Partitions)
         );
-        expectRestoreToBeCompleted(consumer);
+        final Set<TopicPartition> assignment = singleton(new TopicPartition("assignment", 0));
+        when(mockitoConsumer.assignment()).thenReturn(assignment);
 
         when(activeTaskCreator.createTasks(any(), Mockito.eq(assignmentActive)))
             .thenReturn(asList(task00, task01, task02));
@@ -3303,20 +3326,14 @@ public class TaskManagerTest {
             .thenReturn(singletonList(task10));
 
         final ConsumerGroupMetadata groupMetadata = new ConsumerGroupMetadata("appId");
-        expect(consumer.groupMetadata()).andReturn(groupMetadata);
-        producer.commitTransaction(expectedCommittedOffsets, groupMetadata);
-        expectLastCall();
+        when(mockitoConsumer.groupMetadata()).thenReturn(groupMetadata);
 
         task00.committedOffsets();
-        EasyMock.expectLastCall();
         task01.committedOffsets();
-        EasyMock.expectLastCall();
         task02.committedOffsets();
-        EasyMock.expectLastCall();
         task10.committedOffsets();
-        EasyMock.expectLastCall();
 
-        replay(consumer);
+        taskManager.setMainConsumer(mockitoConsumer);
 
         taskManager.handleAssignment(assignmentActive, assignmentStandby);
         assertThat(taskManager.tryToCompleteRestoration(time.milliseconds(), null), is(true));
@@ -3331,6 +3348,9 @@ public class TaskManagerTest {
         assertThat(task01.commitNeeded, is(false));
         assertThat(task02.commitPrepared, is(false));
         assertThat(task10.commitPrepared, is(false));
+
+        Mockito.verify(mockitoConsumer).resume(assignment);
+        Mockito.verify(producer).commitTransaction(expectedCommittedOffsets, groupMetadata);
     }
 
     @Test
@@ -3364,16 +3384,15 @@ public class TaskManagerTest {
         final Map<TaskId, Set<TopicPartition>> assignmentStandby = mkMap(
             mkEntry(taskId10, taskId10Partitions)
         );
-        expectRestoreToBeCompleted(consumer);
+        final Set<TopicPartition> assignment = singleton(new TopicPartition("assignment", 0));
+        when(mockitoConsumer.assignment()).thenReturn(assignment);
 
         when(activeTaskCreator.createTasks(any(), Mockito.eq(assignmentActive)))
             .thenReturn(asList(task00, task01, task02));
         when(standbyTaskCreator.createTasks(assignmentStandby))
             .thenReturn(singletonList(task10));
-        consumer.commitSync(expectedCommittedOffsets);
-        expectLastCall();
 
-        replay(consumer);
+        taskManager.setMainConsumer(mockitoConsumer);
 
         taskManager.handleAssignment(assignmentActive, assignmentStandby);
         assertThat(taskManager.tryToCompleteRestoration(time.milliseconds(), null), is(true));
@@ -3390,6 +3409,9 @@ public class TaskManagerTest {
         assertThat(task01.commitPrepared, is(true));
         assertThat(task02.commitPrepared, is(false));
         assertThat(task10.commitPrepared, is(false));
+
+        Mockito.verify(mockitoConsumer).resume(assignment);
+        Mockito.verify(mockitoConsumer).commitSync(expectedCommittedOffsets);
     }
 
     @Test
@@ -3404,12 +3426,13 @@ public class TaskManagerTest {
         final Map<TaskId, Set<TopicPartition>> assignmentActive = singletonMap(taskId00, taskId00Partitions);
         final Map<TaskId, Set<TopicPartition>> assignmentStandby = singletonMap(taskId10, taskId10Partitions);
 
-        expectRestoreToBeCompleted(consumer);
+        final Set<TopicPartition> assignment = singleton(new TopicPartition("assignment", 0));
+        when(mockitoConsumer.assignment()).thenReturn(assignment);
 
         when(activeTaskCreator.createTasks(any(), Mockito.eq(assignmentActive))).thenReturn(singleton(task00));
         when(standbyTaskCreator.createTasks(assignmentStandby)).thenReturn(singletonList(task10));
 
-        replay(consumer);
+        taskManager.setMainConsumer(mockitoConsumer);
 
         taskManager.handleAssignment(assignmentActive, assignmentStandby);
         assertThat(taskManager.tryToCompleteRestoration(time.milliseconds(), null), is(true));
@@ -3420,6 +3443,8 @@ public class TaskManagerTest {
 
         assertThat(task00.commitNeeded, is(true));
         assertThat(task10.commitPrepared, is(false));
+
+        Mockito.verify(mockitoConsumer).resume(assignment);
     }
 
     @Test
@@ -3434,12 +3459,13 @@ public class TaskManagerTest {
         final Map<TaskId, Set<TopicPartition>> assignmentActive = singletonMap(taskId00, taskId00Partitions);
         final Map<TaskId, Set<TopicPartition>> assignmentStandby = singletonMap(taskId10, taskId10Partitions);
 
-        expectRestoreToBeCompleted(consumer);
+        final Set<TopicPartition> assignment = singleton(new TopicPartition("assignment", 0));
+        when(mockitoConsumer.assignment()).thenReturn(assignment);
 
         when(activeTaskCreator.createTasks(any(), Mockito.eq(assignmentActive))).thenReturn(singleton(task00));
         when(standbyTaskCreator.createTasks(assignmentStandby)).thenReturn(singletonList(task10));
 
-        replay(consumer);
+        taskManager.setMainConsumer(mockitoConsumer);
 
         taskManager.handleAssignment(assignmentActive, assignmentStandby);
         assertThat(taskManager.tryToCompleteRestoration(time.milliseconds(), null), is(true));
@@ -3449,6 +3475,8 @@ public class TaskManagerTest {
         taskManager.handleAssignment(assignmentActive, Collections.emptyMap());
 
         assertThat(task00.commitNeeded, is(true));
+
+        Mockito.verify(mockitoConsumer).resume(assignment);
     }
 
     @Test
@@ -3478,9 +3506,10 @@ public class TaskManagerTest {
             }
         };
 
-        expectRestoreToBeCompleted(consumer);
+        final Set<TopicPartition> assignment = singleton(new TopicPartition("assignment", 0));
+        when(mockitoConsumer.assignment()).thenReturn(assignment);
         when(activeTaskCreator.createTasks(any(), Mockito.eq(taskId00Assignment))).thenReturn(singletonList(task00));
-        replay(consumer);
+        taskManager.setMainConsumer(mockitoConsumer);
         taskManager.handleAssignment(taskId00Assignment, emptyMap());
         assertThat(taskManager.tryToCompleteRestoration(time.milliseconds(), null), is(true));
         assertThat(task00.state(), is(Task.State.RUNNING));
@@ -3488,7 +3517,7 @@ public class TaskManagerTest {
         assertThrows(RuntimeException.class, () -> taskManager.handleRevocation(taskId00Partitions));
         assertThat(task00.state(), is(Task.State.SUSPENDED));
 
-        verify(consumer);
+        Mockito.verify(mockitoConsumer).resume(assignment);
     }
 
     @Test
@@ -3938,10 +3967,13 @@ public class TaskManagerTest {
     @Test
     public void shouldInitializeNewActiveTasks() {
         final StateMachineTask task00 = new StateMachineTask(taskId00, taskId00Partitions, true, stateManager);
-        expectRestoreToBeCompleted(consumer);
+        final Set<TopicPartition> assignment = singleton(new TopicPartition("assignment", 0));
+        when(mockitoConsumer.assignment()).thenReturn(assignment);
+
         when(activeTaskCreator.createTasks(any(), Mockito.eq(taskId00Assignment)))
             .thenReturn(singletonList(task00));
-        replay(consumer);
+
+        taskManager.setMainConsumer(mockitoConsumer);
 
         taskManager.handleAssignment(taskId00Assignment, emptyMap());
         assertThat(taskManager.tryToCompleteRestoration(time.milliseconds(), null), is(true));
@@ -3950,17 +3982,18 @@ public class TaskManagerTest {
         assertThat(taskManager.activeTaskMap(), Matchers.equalTo(singletonMap(taskId00, task00)));
         assertThat(taskManager.standbyTaskMap(), Matchers.anEmptyMap());
         // verifies that we actually resume the assignment at the end of restoration.
-        verify(consumer);
+        Mockito.verify(mockitoConsumer).resume(assignment);
     }
 
     @Test
     public void shouldInitialiseNewStandbyTasks() {
         final StateMachineTask task01 = new StateMachineTask(taskId01, taskId01Partitions, false, stateManager);
 
-        expectRestoreToBeCompleted(consumer);
+        final Set<TopicPartition> assignment = singleton(new TopicPartition("assignment", 0));
+        when(mockitoConsumer.assignment()).thenReturn(assignment);
         when(standbyTaskCreator.createTasks(taskId01Assignment)).thenReturn(singletonList(task01));
 
-        replay(consumer);
+        taskManager.setMainConsumer(mockitoConsumer);
 
         taskManager.handleAssignment(emptyMap(), taskId01Assignment);
         assertThat(taskManager.tryToCompleteRestoration(time.milliseconds(), null), is(true));
@@ -3968,6 +4001,8 @@ public class TaskManagerTest {
         assertThat(task01.state(), is(Task.State.RUNNING));
         assertThat(taskManager.activeTaskMap(), Matchers.anEmptyMap());
         assertThat(taskManager.standbyTaskMap(), Matchers.equalTo(singletonMap(taskId01, task01)));
+
+        Mockito.verify(mockitoConsumer).resume(assignment);
     }
 
     @Test
@@ -3992,15 +4027,14 @@ public class TaskManagerTest {
         task00.setCommittableOffsetsAndMetadata(offsets);
         final StateMachineTask task01 = new StateMachineTask(taskId01, taskId01Partitions, false, stateManager);
 
-        expectRestoreToBeCompleted(consumer);
+        final Set<TopicPartition> assignment = singleton(new TopicPartition("assignment", 0));
+        when(mockitoConsumer.assignment()).thenReturn(assignment);
         when(activeTaskCreator.createTasks(any(), Mockito.eq(taskId00Assignment)))
             .thenReturn(singletonList(task00));
         when(standbyTaskCreator.createTasks(taskId01Assignment))
             .thenReturn(singletonList(task01));
-        consumer.commitSync(offsets);
-        expectLastCall();
 
-        replay(consumer);
+        taskManager.setMainConsumer(mockitoConsumer);
 
         taskManager.handleAssignment(taskId00Assignment, taskId01Assignment);
         assertThat(taskManager.tryToCompleteRestoration(time.milliseconds(), null), is(true));
@@ -4014,6 +4048,9 @@ public class TaskManagerTest {
         assertThat(taskManager.commitAll(), equalTo(2));
         assertThat(task00.commitNeeded, is(false));
         assertThat(task01.commitNeeded, is(false));
+
+        Mockito.verify(mockitoConsumer).resume(assignment);
+        Mockito.verify(mockitoConsumer).commitSync(offsets);
     }
 
     @Test
@@ -4036,15 +4073,14 @@ public class TaskManagerTest {
             mkEntry(taskId05, taskId05Partitions)
         );
 
-        expectRestoreToBeCompleted(consumer);
+        final Set<TopicPartition> assignment = singleton(new TopicPartition("assignment", 0));
+        when(mockitoConsumer.assignment()).thenReturn(assignment);
         when(activeTaskCreator.createTasks(any(), Mockito.eq(assignmentActive)))
             .thenReturn(Arrays.asList(task00, task01, task02));
         when(standbyTaskCreator.createTasks(assignmentStandby))
             .thenReturn(Arrays.asList(task03, task04, task05));
 
-        consumer.commitSync(eq(emptyMap()));
-
-        replay(consumer);
+        taskManager.setMainConsumer(mockitoConsumer);
 
         taskManager.handleAssignment(assignmentActive, assignmentStandby);
         assertThat(taskManager.tryToCompleteRestoration(time.milliseconds(), null), is(true));
@@ -4064,16 +4100,19 @@ public class TaskManagerTest {
         assertThat(task03.commitNeeded, is(false));
         assertThat(task04.commitNeeded, is(true));
         assertThat(task05.commitNeeded, is(false));
+
+        Mockito.verify(mockitoConsumer).resume(assignment);
     }
 
     @Test
     public void shouldNotCommitOffsetsIfOnlyStandbyTasksAssigned() {
         final StateMachineTask task00 = new StateMachineTask(taskId00, taskId00Partitions, false, stateManager);
 
-        expectRestoreToBeCompleted(consumer);
+        final Set<TopicPartition> assignment = singleton(new TopicPartition("assignment", 0));
+        when(mockitoConsumer.assignment()).thenReturn(assignment);
         when(standbyTaskCreator.createTasks(taskId00Assignment)).thenReturn(singletonList(task00));
 
-        replay(consumer);
+        taskManager.setMainConsumer(mockitoConsumer);
 
         taskManager.handleAssignment(Collections.emptyMap(), taskId00Assignment);
         assertThat(taskManager.tryToCompleteRestoration(time.milliseconds(), null), is(true));
@@ -4084,6 +4123,8 @@ public class TaskManagerTest {
 
         assertThat(taskManager.commitAll(), equalTo(1));
         assertThat(task00.commitNeeded, is(false));
+
+        Mockito.verify(mockitoConsumer).resume(assignment);
     }
 
     @Test
@@ -4094,13 +4135,16 @@ public class TaskManagerTest {
         makeTaskFolders(taskId00.toString(), taskId01.toString());
         expectDirectoryNotEmpty(taskId00, taskId01);
         expectLockObtainedFor(taskId00, taskId01);
-        expectRestoreToBeCompleted(consumer);
+        final Set<TopicPartition> assignment = singleton(new TopicPartition("assignment", 0));
+        when(mockitoConsumer.assignment()).thenReturn(assignment);
         when(activeTaskCreator.createTasks(any(), Mockito.eq(taskId00Assignment)))
             .thenReturn(singletonList(task00));
         when(standbyTaskCreator.createTasks(taskId01Assignment))
             .thenReturn(singletonList(task01));
 
-        replay(stateDirectory, consumer);
+        replay(stateDirectory);
+
+        taskManager.setMainConsumer(mockitoConsumer);
 
         taskManager.handleAssignment(taskId00Assignment, taskId01Assignment);
         assertThat(taskManager.tryToCompleteRestoration(time.milliseconds(), null), is(true));
@@ -4122,6 +4166,8 @@ public class TaskManagerTest {
             taskManager.maybeCommitActiveTasksPerUserRequested(),
             equalTo(-1) // sentinel indicating that nothing was done because a rebalance is in progress
         );
+
+        Mockito.verify(mockitoConsumer).resume(assignment);
     }
 
     @Test
@@ -4200,9 +4246,11 @@ public class TaskManagerTest {
             }
         };
 
-        expectRestoreToBeCompleted(consumer);
+        final Set<TopicPartition> assignment = singleton(new TopicPartition("assignment", 0));
+        when(mockitoConsumer.assignment()).thenReturn(assignment);
         when(activeTaskCreator.createTasks(any(), Mockito.eq(taskId00Assignment))).thenReturn(singletonList(task00));
-        replay(consumer);
+
+        taskManager.setMainConsumer(mockitoConsumer);
 
         taskManager.handleAssignment(taskId00Assignment, emptyMap());
         assertThat(taskManager.tryToCompleteRestoration(time.milliseconds(), null), is(true));
@@ -4214,6 +4262,8 @@ public class TaskManagerTest {
         final RuntimeException thrown =
             assertThrows(RuntimeException.class, () -> taskManager.commitAll());
         assertThat(thrown.getMessage(), equalTo("opsh."));
+
+        Mockito.verify(mockitoConsumer).resume(assignment);
     }
 
     @Test
@@ -4225,10 +4275,11 @@ public class TaskManagerTest {
             }
         };
 
-        expectRestoreToBeCompleted(consumer);
+        final Set<TopicPartition> assignment = singleton(new TopicPartition("assignment", 0));
+        when(mockitoConsumer.assignment()).thenReturn(assignment);
         when(standbyTaskCreator.createTasks(taskId01Assignment)).thenReturn(singletonList(task01));
 
-        replay(consumer);
+        taskManager.setMainConsumer(mockitoConsumer);
 
         taskManager.handleAssignment(emptyMap(), taskId01Assignment);
         assertThat(taskManager.tryToCompleteRestoration(time.milliseconds(), null), is(true));
@@ -4240,6 +4291,8 @@ public class TaskManagerTest {
         final RuntimeException thrown =
             assertThrows(RuntimeException.class, () -> taskManager.commitAll());
         assertThat(thrown.getMessage(), equalTo("opsh."));
+
+        Mockito.verify(mockitoConsumer).resume(assignment);
     }
 
     @Test
@@ -4259,10 +4312,11 @@ public class TaskManagerTest {
             }
         };
 
-        expectRestoreToBeCompleted(consumer);
+        final Set<TopicPartition> assignment = singleton(new TopicPartition("assignment", 0));
+        when(mockitoConsumer.assignment()).thenReturn(assignment);
         when(activeTaskCreator.createTasks(any(), Mockito.eq(taskId00Assignment))).thenReturn(singletonList(task00));
 
-        replay(consumer);
+        taskManager.setMainConsumer(mockitoConsumer);
 
         taskManager.handleAssignment(taskId00Assignment, emptyMap());
         assertThat(taskManager.tryToCompleteRestoration(time.milliseconds(), null), is(true));
@@ -4278,6 +4332,8 @@ public class TaskManagerTest {
         inOrder.verify(adminClient).deleteRecords(singletonMap(t1p1, RecordsToDelete.beforeOffset(5L)));
         inOrder.verify(adminClient).deleteRecords(singletonMap(t1p1, RecordsToDelete.beforeOffset(17L)));
         inOrder.verifyNoMoreInteractions();
+
+        Mockito.verify(mockitoConsumer).resume(assignment);
     }
 
     @Test
@@ -4294,9 +4350,11 @@ public class TaskManagerTest {
             }
         };
 
-        expectRestoreToBeCompleted(consumer);
+        final Set<TopicPartition> assignment = singleton(new TopicPartition("assignment", 0));
+        when(mockitoConsumer.assignment()).thenReturn(assignment);
         when(activeTaskCreator.createTasks(any(), Mockito.eq(taskId00Assignment))).thenReturn(singletonList(task00));
-        replay(consumer);
+
+        taskManager.setMainConsumer(mockitoConsumer);
 
         taskManager.handleAssignment(taskId00Assignment, emptyMap());
         assertThat(taskManager.tryToCompleteRestoration(time.milliseconds(), null), is(true));
@@ -4311,20 +4369,23 @@ public class TaskManagerTest {
         // so it would fail verification if we invoke the admin client again.
         purgableOffsets.put(t1p1, 17L);
         taskManager.maybePurgeCommittedRecords();
+
+        Mockito.verify(mockitoConsumer).resume(assignment);
     }
 
     @Test
     public void shouldIgnorePurgeDataErrors() {
         final StateMachineTask task00 = new StateMachineTask(taskId00, taskId00Partitions, true, stateManager);
 
-        expectRestoreToBeCompleted(consumer);
+        final Set<TopicPartition> assignment = singleton(new TopicPartition("assignment", 0));
+        when(mockitoConsumer.assignment()).thenReturn(assignment);
 
         final KafkaFutureImpl<DeletedRecords> futureDeletedRecords = new KafkaFutureImpl<>();
         final DeleteRecordsResult deleteRecordsResult = new DeleteRecordsResult(singletonMap(t1p1, futureDeletedRecords));
         futureDeletedRecords.completeExceptionally(new Exception("KABOOM!"));
         when(adminClient.deleteRecords(any())).thenReturn(deleteRecordsResult);
 
-        replay(consumer);
+        taskManager.setMainConsumer(mockitoConsumer);
 
         taskManager.addTask(task00);
         assertThat(taskManager.tryToCompleteRestoration(time.milliseconds(), null), is(true));
@@ -4335,6 +4396,8 @@ public class TaskManagerTest {
 
         taskManager.maybePurgeCommittedRecords();
         taskManager.maybePurgeCommittedRecords();
+
+        Mockito.verify(mockitoConsumer).resume(assignment);
     }
 
     @Test
@@ -4366,15 +4429,14 @@ public class TaskManagerTest {
             mkEntry(taskId10, taskId10Partitions)
         );
 
-        expectRestoreToBeCompleted(consumer);
+        final Set<TopicPartition> assignment = singleton(new TopicPartition("assignment", 0));
+        when(mockitoConsumer.assignment()).thenReturn(assignment);
         when(activeTaskCreator.createTasks(any(), Mockito.eq(assignmentActive)))
             .thenReturn(asList(task00, task01, task02, task03));
         when(standbyTaskCreator.createTasks(assignmentStandby))
             .thenReturn(singletonList(task04));
-        consumer.commitSync(expectedCommittedOffsets);
-        expectLastCall();
 
-        replay(consumer);
+        taskManager.setMainConsumer(mockitoConsumer);
 
         taskManager.handleAssignment(assignmentActive, assignmentStandby);
         assertThat(taskManager.tryToCompleteRestoration(time.milliseconds(), null), is(true));
@@ -4399,6 +4461,9 @@ public class TaskManagerTest {
         task04.setCommitRequested();
 
         assertThat(taskManager.maybeCommitActiveTasksPerUserRequested(), equalTo(3));
+
+        Mockito.verify(mockitoConsumer).resume(assignment);
+        Mockito.verify(mockitoConsumer).commitSync(expectedCommittedOffsets);
     }
 
     @Test
@@ -4410,10 +4475,12 @@ public class TaskManagerTest {
         assignment.put(taskId00, taskId00Partitions);
         assignment.put(taskId01, taskId01Partitions);
 
-        expectRestoreToBeCompleted(consumer);
+        final Set<TopicPartition> consumerAssignment = singleton(new TopicPartition("assignment", 0));
+        when(mockitoConsumer.assignment()).thenReturn(consumerAssignment);
         when(activeTaskCreator.createTasks(any(), Mockito.eq(assignment)))
             .thenReturn(Arrays.asList(task00, task01));
-        replay(consumer);
+
+        taskManager.setMainConsumer(mockitoConsumer);
 
         taskManager.handleAssignment(assignment, emptyMap());
         assertThat(taskManager.tryToCompleteRestoration(time.milliseconds(), null), is(true));
@@ -4449,6 +4516,8 @@ public class TaskManagerTest {
         // check that if there's no records processable, we would stop early
         assertThat(taskManager.process(3, time), is(5));
         assertThat(taskManager.process(3, time), is(0));
+
+        Mockito.verify(mockitoConsumer).resume(consumerAssignment);
     }
 
     @Test
@@ -4523,9 +4592,11 @@ public class TaskManagerTest {
             }
         };
 
-        expectRestoreToBeCompleted(consumer);
+        final Set<TopicPartition> assignment = singleton(new TopicPartition("assignment", 0));
+        when(mockitoConsumer.assignment()).thenReturn(assignment);
         when(activeTaskCreator.createTasks(any(), Mockito.eq(taskId00Assignment))).thenReturn(singletonList(task00));
-        replay(consumer);
+
+        taskManager.setMainConsumer(mockitoConsumer);
 
         taskManager.handleAssignment(taskId00Assignment, emptyMap());
         assertThat(taskManager.tryToCompleteRestoration(time.milliseconds(), null), is(true));
@@ -4536,6 +4607,8 @@ public class TaskManagerTest {
         task00.addRecords(partition, singletonList(getConsumerRecord(partition, 0L)));
 
         assertThrows(TaskMigratedException.class, () -> taskManager.process(1, time));
+
+        Mockito.verify(mockitoConsumer).resume(assignment);
     }
 
     @Test
@@ -4547,10 +4620,12 @@ public class TaskManagerTest {
             }
         };
 
-        expectRestoreToBeCompleted(consumer);
+        final Set<TopicPartition> assignment = singleton(new TopicPartition("assignment", 0));
+        when(mockitoConsumer.assignment()).thenReturn(assignment);
         when(activeTaskCreator.createTasks(any(), Mockito.eq(taskId00Assignment)))
             .thenReturn(singletonList(task00));
-        replay(consumer);
+
+        taskManager.setMainConsumer(mockitoConsumer);
 
         taskManager.handleAssignment(taskId00Assignment, emptyMap());
         assertThat(taskManager.tryToCompleteRestoration(time.milliseconds(), null), is(true));
@@ -4564,6 +4639,8 @@ public class TaskManagerTest {
         assertThat(exception.taskId().isPresent(), is(true));
         assertThat(exception.taskId().get(), is(taskId00));
         assertThat(exception.getCause().getMessage(), is("oops"));
+
+        Mockito.verify(mockitoConsumer).resume(assignment);
     }
 
     @Test
@@ -4575,9 +4652,11 @@ public class TaskManagerTest {
             }
         };
 
-        expectRestoreToBeCompleted(consumer);
+        final Set<TopicPartition> assignment = singleton(new TopicPartition("assignment", 0));
+        when(mockitoConsumer.assignment()).thenReturn(assignment);
         when(activeTaskCreator.createTasks(any(), Mockito.eq(taskId00Assignment))).thenReturn(singletonList(task00));
-        replay(consumer);
+
+        taskManager.setMainConsumer(mockitoConsumer);
 
         taskManager.handleAssignment(taskId00Assignment, emptyMap());
         assertThat(taskManager.tryToCompleteRestoration(time.milliseconds(), null), is(true));
@@ -4585,6 +4664,8 @@ public class TaskManagerTest {
         assertThat(task00.state(), is(Task.State.RUNNING));
 
         assertThrows(TaskMigratedException.class, () -> taskManager.punctuate());
+
+        Mockito.verify(mockitoConsumer).resume(assignment);
     }
 
     @Test
@@ -4596,9 +4677,11 @@ public class TaskManagerTest {
             }
         };
 
-        expectRestoreToBeCompleted(consumer);
+        final Set<TopicPartition> assignment = singleton(new TopicPartition("assignment", 0));
+        when(mockitoConsumer.assignment()).thenReturn(assignment);
         when(activeTaskCreator.createTasks(any(), Mockito.eq(taskId00Assignment))).thenReturn(singletonList(task00));
-        replay(consumer);
+
+        taskManager.setMainConsumer(mockitoConsumer);
 
         taskManager.handleAssignment(taskId00Assignment, emptyMap());
         assertThat(taskManager.tryToCompleteRestoration(time.milliseconds(), null), is(true));
@@ -4606,6 +4689,8 @@ public class TaskManagerTest {
         assertThat(task00.state(), is(Task.State.RUNNING));
 
         assertThrows(KafkaException.class, () -> taskManager.punctuate());
+
+        Mockito.verify(mockitoConsumer).resume(assignment);
     }
 
     @Test
@@ -4622,9 +4707,11 @@ public class TaskManagerTest {
             }
         };
 
-        expectRestoreToBeCompleted(consumer);
+        final Set<TopicPartition> assignment = singleton(new TopicPartition("assignment", 0));
+        when(mockitoConsumer.assignment()).thenReturn(assignment);
         when(activeTaskCreator.createTasks(any(), Mockito.eq(taskId00Assignment))).thenReturn(singletonList(task00));
-        replay(consumer);
+
+        taskManager.setMainConsumer(mockitoConsumer);
 
         taskManager.handleAssignment(taskId00Assignment, emptyMap());
         assertThat(taskManager.tryToCompleteRestoration(time.milliseconds(), null), is(true));
@@ -4633,6 +4720,8 @@ public class TaskManagerTest {
 
         // one for stream and one for system time
         assertThat(taskManager.punctuate(), equalTo(2));
+
+        Mockito.verify(mockitoConsumer).resume(assignment);
     }
 
     @Test
@@ -4660,12 +4749,11 @@ public class TaskManagerTest {
         final Map<TopicPartition, OffsetAndMetadata> offsets = singletonMap(t1p0, new OffsetAndMetadata(0L, null));
         task00.setCommittableOffsetsAndMetadata(offsets);
 
-        expectRestoreToBeCompleted(consumer);
+        final Set<TopicPartition> assignment = singleton(new TopicPartition("assignment", 0));
+        when(mockitoConsumer.assignment()).thenReturn(assignment);
         when(activeTaskCreator.createTasks(any(), Mockito.eq(taskId00Assignment))).thenReturn(singletonList(task00));
-        consumer.commitSync(offsets);
-        expectLastCall();
 
-        replay(consumer);
+        taskManager.setMainConsumer(mockitoConsumer);
 
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(TaskManager.class)) {
             appender.setClassLoggerToDebug(TaskManager.class);
@@ -4684,6 +4772,8 @@ public class TaskManagerTest {
                     "condition of consumer detecting the heartbeat failure, or the " +
                     "tasks have been cleaned up by the handleAssignment callback.")
             );
+
+            Mockito.verify(mockitoConsumer).resume(assignment);
         }
     }
 
@@ -4821,8 +4911,10 @@ public class TaskManagerTest {
         when(standbyTaskCreator.createTasks(standbyAssignment)).thenReturn(standbyTasks);
         when(activeTaskCreator.createTasks(any(), Mockito.eq(allActiveTasksAssignment))).thenReturn(allActiveTasks);
 
-        expectRestoreToBeCompleted(consumer);
-        replay(consumer);
+        final Set<TopicPartition> assignment = singleton(new TopicPartition("assignment", 0));
+        lenient().when(mockitoConsumer.assignment()).thenReturn(assignment);
+
+        taskManager.setMainConsumer(mockitoConsumer);
 
         taskManager.handleAssignment(allActiveTasksAssignment, standbyAssignment);
         taskManager.tryToCompleteRestoration(time.milliseconds(), null);
@@ -5133,13 +5225,9 @@ public class TaskManagerTest {
         topologyMetadata.pauseTopology(UNNAMED_TOPOLOGY);
 
         assertEquals(taskManager.notPausedTasks().size(), 0);
-    }
 
-    private static void expectRestoreToBeCompleted(final Consumer<byte[], byte[]> consumer) {
         final Set<TopicPartition> assignment = singleton(new TopicPartition("assignment", 0));
-        expect(consumer.assignment()).andReturn(assignment);
-        consumer.resume(assignment);
-        expectLastCall();
+        Mockito.verify(mockitoConsumer).resume(assignment);
     }
 
     private static KafkaFutureImpl<DeletedRecords> completedFuture() {
