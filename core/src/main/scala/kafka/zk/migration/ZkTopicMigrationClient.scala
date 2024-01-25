@@ -34,6 +34,7 @@ import org.apache.zookeeper.CreateMode
 import org.apache.zookeeper.KeeperException.Code
 
 import java.util
+import java.util.Properties
 import scala.collection.Seq
 import scala.collection.mutable.ArrayBuffer
 import scala.jdk.CollectionConverters._
@@ -122,9 +123,17 @@ class ZkTopicMigrationClient(zkClient: KafkaZkClient) extends TopicMigrationClie
         zkClient.defaultAcls(path),
         CreateMode.PERSISTENT)
     }
+    val topicConfigZNode = {
+      val path = ConfigEntityZNode.path(ConfigType.Topic, topicName)
+      CreateRequest(
+        path,
+        ConfigEntityZNode.encode(new Properties()),
+        zkClient.defaultAcls(path),
+        CreateMode.PERSISTENT)
+    }
     val createPartitionZNodeReqs = createTopicPartitionZNodesRequests(topicName, partitions, state)
 
-    val requests = Seq(createTopicZNode) ++ createPartitionZNodeReqs
+    val requests = Seq(createTopicZNode, topicConfigZNode) ++ createPartitionZNodeReqs
     val (migrationZkVersion, responses) = zkClient.retryMigrationRequestsUntilConnected(requests, state)
     val resultCodes = responses.map { response => response.path -> response.resultCode }.toMap
     if (resultCodes(TopicZNode.path(topicName)).equals(Code.NODEEXISTS)) {
