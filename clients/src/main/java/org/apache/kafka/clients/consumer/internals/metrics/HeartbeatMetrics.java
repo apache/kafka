@@ -20,19 +20,25 @@ import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.Max;
 
+import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.CONSUMER_METRIC_GROUP_PREFIX;
+
 public class HeartbeatMetrics extends AbstractConsumerMetrics {
 
     public final Sensor heartbeatSensor;
 
     public HeartbeatMetrics(Metrics metrics) {
-        super(MetricSuffix.COORDINATOR);
+        this(metrics, CONSUMER_METRIC_GROUP_PREFIX);
+    }
+
+    public HeartbeatMetrics(Metrics metrics, String prefix) {
+        super(MetricGroupSuffix.COORDINATOR);
         heartbeatSensor = metrics.sensor("heartbeat-latency");
         heartbeatSensor.add(metrics.metricName("heartbeat-response-time-max",
-                groupMetricsName,
+                metricGroupName,
                 "The max time taken to receive a response to a heartbeat request"),
-                new Max());
+            new Max());
         heartbeatSensor.add(createMeter(metrics,
-                "heartbeat",
-                "heartbeats"));
+            "heartbeat",
+            "heartbeats"));
     }
 }

@@ -428,7 +428,7 @@ public class HeartbeatRequestManager implements RequestManager {
         membershipManager.transitionToFatal();
     }
 
-    private HeartbeatMetrics createHeartbeatMetrics(Metrics metrics) {
+    private HeartbeatMetrics createHeartbeatMetrics(Metrics metrics, String metricGroupPrefix) {
         HeartbeatMetrics hbm = new HeartbeatMetrics(metrics);
         Measurable lastHeartbeat = (config, now) -> {
             final long lastHeartbeatSend = heartbeatRequestState.lastSentMs;
