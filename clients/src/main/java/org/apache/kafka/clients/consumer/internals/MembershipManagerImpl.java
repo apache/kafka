@@ -19,6 +19,7 @@ package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
+import org.apache.kafka.clients.consumer.internals.NetworkClientDelegate.PollResult;
 import org.apache.kafka.clients.consumer.internals.Utils.TopicIdPartitionComparator;
 import org.apache.kafka.clients.consumer.internals.Utils.TopicPartitionComparator;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEventHandler;
@@ -216,6 +217,12 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
     private final Map<Uuid, SortedSet<Integer>> currentTargetAssignment;
 
     /**
+     * Set when we want to attempt reconciliation in the next poll. This is only used to avoid
+     * running reconciliation when metadata is incomplete, but no new information is available.
+     */
+    private boolean attemptReconciliation;
+
+    /**     
      * If there is a reconciliation running (triggering commit, callbacks) for the
      * assignmentReadyToReconcile. This will be true if {@link #reconcile()} has been triggered
      * after receiving a heartbeat response, or a metadata update.
@@ -288,6 +295,7 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
         this.metadata = metadata;
         this.assignedTopicNamesCache = new HashMap<>();
         this.currentTargetAssignment = new HashMap<>();
+        this.attemptReconciliation = false;
         this.currentAssignment = new HashMap<>();
         this.log = logContext.logger(MembershipManagerImpl.class);
         this.stateUpdatesListeners = new ArrayList<>();
@@ -393,9 +401,9 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
 
     /**
      * This will process the assignment received if it is different from the member's current
-     * assignment. If a new assignment is received, this will try to resolve the topic names from
-     * metadata, reconcile the resolved assignment, and keep the unresolved to be reconciled when
-     * metadata is discovered.
+     * assignment. If a new assignment is received, this will make sure reconciliation is attempted
+     * on the next call of `poll`. If another reconciliation is currently in process, the first `poll`
+     * after that reconciliation will trigger the new reconciliation.
      *
      * @param assignment Assignment received from the broker.
      */
@@ -406,7 +414,7 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
             // assignment from the broker, different from the current assignment. Note that the
             // reconciliation might not be triggered just yet because of missing metadata.
             transitionTo(MemberState.RECONCILING);
-            reconcile();
+            attemptReconciliation = true;
         } else {
             // Same assignment received, nothing to reconcile.
             log.debug("Target assignment {} received from the broker is equals to the member " +
@@ -786,6 +794,7 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
                 currentTargetAssignment + " will be handled in the next reconciliation loop.");
             return;
         }
+        attemptReconciliation = false;
 
         // Find the subset of the target assignment that can be resolved to topic names, and trigger a metadata update
         // if some topic IDs are not resolvable.
@@ -929,6 +938,9 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
                     String reason = interruptedReconciliationErrorMessage();
                     log.error("Interrupting reconciliation after partitions assigned callback " +
                         "completed. " + reason);
+                    if (memberHasRejoined) {
+                        attemptReconciliation = true;
+                    }
                 }
             }
         });
@@ -1363,19 +1375,17 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
     }
 
     /**
-     * When cluster metadata is updated, try to resolve topic names for topic IDs received in
-     * assignment that hasn't been resolved yet.
-     * <ul>
-     *     <li>Try to find topic names for all assignments</li>
-     *     <li>Add discovered topic names to the local topic names cache</li>
-     *     <li>If any topics are resolved, trigger a reconciliation process</li>
-     *     <li>If some topics still remain unresolved, request another metadata update</li>
-     * </ul>
+     * When cluster metadata is updated, it may contain new topic names that are required to
+     * completely reconcile the current target assignment.
+     *
+     * This method will make sure reconciliation is attempted on the next call of `poll`.
+     * If another reconciliation is currently in process, the first `poll` after that
+     * reconciliation will trigger the new reconciliation.
      */
     @Override
     public void onUpdate(ClusterResource clusterResource) {
         if (state == MemberState.RECONCILING) {
-            reconcile();
+            attemptReconciliation = true;
         }
     }
 
@@ -1391,5 +1401,17 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
             throw new IllegalArgumentException("State updates listener cannot be null");
         }
         this.stateUpdatesListeners.add(listener);
+    }
+
+    /**
+     * If either a new target assignment or new metadata is available that we have not yet attempted
+     * to reconcile, and we are currently in state RECONCILING, trigger reconciliation.
+     */
+    @Override
+    public PollResult poll(final long currentTimeMs) {
+        if (state == MemberState.RECONCILING && attemptReconciliation) {
+            reconcile();
+        }
+        return PollResult.EMPTY;
     }
 }
