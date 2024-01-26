@@ -67,6 +67,7 @@ import static org.apache.kafka.clients.consumer.internals.ConsumerTestBuilder.DE
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.CONSUMER_METRIC_GROUP_PREFIX;
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.COORDINATOR_METRICS_SUFFIX;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -554,8 +555,7 @@ public class HeartbeatRequestManagerTest {
         when(membershipManager.state()).thenReturn(MemberState.STABLE);
 
         time.sleep(maxPollIntervalMs);
-        NetworkClientDelegate.PollResult pollResult = heartbeatRequestManager.poll(time.milliseconds());
-        assertEquals(1, pollResult.unsentRequests.size());
+        assertHeartbeat(heartbeatRequestManager, heartbeatIntervalMs);
         verify(heartbeatState).reset();
         verify(heartbeatRequestState).reset();
         verify(membershipManager).transitionToStale();
@@ -563,7 +563,7 @@ public class HeartbeatRequestManagerTest {
         assertNoHeartbeat(heartbeatRequestManager);
         heartbeatRequestManager.resetPollTimer(time.milliseconds());
         assertTrue(pollTimer.notExpired());
-        assertHeartbeat(heartbeatRequestManager);
+        assertHeartbeat(heartbeatRequestManager, heartbeatIntervalMs);
     }
 
     @Test
@@ -589,29 +589,28 @@ public class HeartbeatRequestManagerTest {
             backgroundEventHandler);
         when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(new Node(1, "localhost", 9999)));
         when(membershipManager.state()).thenReturn(MemberState.STABLE);
-        NetworkClientDelegate.PollResult pollResult = heartbeatRequestManager.poll(time.milliseconds());
-        assertEquals(1, pollResult.unsentRequests.size());
-        pollResult.unsentRequests.get(0).handler().onComplete(
-            createHeartbeatResponse(pollResult.unsentRequests.get(0), Errors.NONE));
+
+        assertNotNull(getMetric("heartbeat-response-time-max"));
+        assertNotNull(getMetric("heartbeat-rate"));
+        assertNotNull(getMetric("heartbeat-total"));
+        assertNotNull(getMetric("last-heartbeat-seconds-ago"));
+
+        assertHeartbeat(heartbeatRequestManager, 0);
         time.sleep(DEFAULT_HEARTBEAT_INTERVAL_MS);
         assertEquals(1.0, getMetric("heartbeat-total").metricValue());
         assertEquals(heartbeatIntervalMs / 1000d, getMetric("last-heartbeat-seconds-ago").metricValue());
 
-        pollResult = heartbeatRequestManager.poll(time.milliseconds());
-        assertEquals(1, pollResult.unsentRequests.size());
-        pollResult.unsentRequests.get(0).handler().onComplete(
-            createHeartbeatResponse(pollResult.unsentRequests.get(0), Errors.NONE));
-
+        assertHeartbeat(heartbeatRequestManager, DEFAULT_HEARTBEAT_INTERVAL_MS);
         assertEquals(0.06d, (double) getMetric("heartbeat-rate").metricValue(), 0.005d);
         assertEquals(2.0, getMetric("heartbeat-total").metricValue());
         time.sleep(DEFAULT_HEARTBEAT_INTERVAL_MS);
         assertEquals(heartbeatIntervalMs / 1000d, getMetric("last-heartbeat-seconds-ago").metricValue());
     }
 
-    private void assertHeartbeat(HeartbeatRequestManager hrm) {
+    private void assertHeartbeat(HeartbeatRequestManager hrm, int nextPollMs) {
         NetworkClientDelegate.PollResult pollResult = hrm.poll(time.milliseconds());
         assertEquals(1, pollResult.unsentRequests.size());
-        assertEquals(DEFAULT_HEARTBEAT_INTERVAL_MS, pollResult.timeUntilNextPollMs);
+        assertEquals(nextPollMs, pollResult.timeUntilNextPollMs);
         pollResult.unsentRequests.get(0).handler().onComplete(createHeartbeatResponse(pollResult.unsentRequests.get(0),
             Errors.NONE));
     }

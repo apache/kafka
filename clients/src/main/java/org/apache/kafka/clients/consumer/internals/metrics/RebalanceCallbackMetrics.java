@@ -21,8 +21,6 @@ import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.Avg;
 import org.apache.kafka.common.metrics.stats.Max;
 
-import java.util.Optional;
-
 public class RebalanceCallbackMetrics extends AbstractConsumerMetrics {
     public final Sensor revokeCallbackSensor;
     public final Sensor assignCallbackSensor;
@@ -33,7 +31,7 @@ public class RebalanceCallbackMetrics extends AbstractConsumerMetrics {
     }
 
     public RebalanceCallbackMetrics(Metrics metrics, String grpMetricsPrefix) {
-        super(Optional.ofNullable(grpMetricsPrefix));
+        super(MetricSuffix.COORDINATOR);
         revokeCallbackSensor = metrics.sensor("partition-revoked-latency");
         revokeCallbackSensor.add(metrics.metricName("partition-revoked-latency-avg",
             groupMetricsName,

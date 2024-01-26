@@ -141,7 +141,6 @@ public class AsyncKafkaConsumerTest {
     private final ApplicationEventHandler applicationEventHandler = mock(ApplicationEventHandler.class);
     private final ConsumerMetadata metadata = mock(ConsumerMetadata.class);
     private final LinkedBlockingQueue<BackgroundEvent> backgroundEventQueue = new LinkedBlockingQueue<>();
-    long rlb = -1L;
 
     @AfterEach
     public void resetAll() {

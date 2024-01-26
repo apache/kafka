@@ -25,14 +25,13 @@ public class HeartbeatMetrics extends AbstractConsumerMetrics {
     public final Sensor heartbeatSensor;
 
     public HeartbeatMetrics(Metrics metrics) {
-        super();
+        super(MetricSuffix.COORDINATOR);
         heartbeatSensor = metrics.sensor("heartbeat-latency");
         heartbeatSensor.add(metrics.metricName("heartbeat-response-time-max",
                 groupMetricsName,
                 "The max time taken to receive a response to a heartbeat request"),
                 new Max());
         heartbeatSensor.add(createMeter(metrics,
-                groupMetricsName,
                 "heartbeat",
                 "heartbeats"));
     }
