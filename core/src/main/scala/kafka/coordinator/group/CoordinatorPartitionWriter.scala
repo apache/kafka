@@ -27,7 +27,7 @@ import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.requests.TransactionResult
 import org.apache.kafka.common.utils.{BufferSupplier, Time}
 import org.apache.kafka.coordinator.group.runtime.PartitionWriter
-import org.apache.kafka.storage.internals.log.VerificationGuard
+import org.apache.kafka.storage.internals.log.{AppendOrigin, VerificationGuard}
 
 import java.util
 import java.util.concurrent.CompletableFuture
@@ -215,9 +215,11 @@ class CoordinatorPartitionWriter[T](
     verificationGuard: VerificationGuard = VerificationGuard.SENTINEL
   ): Long = {
     var appendResults: Map[TopicPartition, PartitionResponse] = Map.empty
-    replicaManager.appendForGroup(
+    replicaManager.appendRecords(
       timeout = 0L,
       requiredAcks = 1,
+      internalTopicsAllowed = true,
+      origin = AppendOrigin.COORDINATOR,
       entriesPerPartition = Map(tp -> memoryRecords),
       responseCallback = results => appendResults = results,
       requestLocal = RequestLocal.NoCaching,
