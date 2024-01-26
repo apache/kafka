@@ -301,11 +301,17 @@ class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
   @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
-  def testDescribeStateOfExistingGroupWithRoundRobinAssignor(quorum: String, groupProtocol: String): Unit = {
+  def testDescribeStateOfExistingGroupWithNonDefaultAssignor(quorum: String, groupProtocol: String): Unit = {
     createOffsetsTopic()
 
+    val (assignor, expectedName) = if (groupProtocol == "consumer") {
+      ("range", "range")
+    } else {
+      (classOf[RoundRobinAssignor].getName, "roundrobin")
+    }
+
     // run one consumer in the group consuming from a single-partition topic
-    addConsumerGroupExecutor(numConsumers = 1, strategy = classOf[RoundRobinAssignor].getName, groupProtocol = groupProtocol)
+    addConsumerGroupExecutor(numConsumers = 1, strategy = assignor, groupProtocol = groupProtocol)
     val cgcArgs = Array("--bootstrap-server", bootstrapServers(), "--describe", "--group", group)
     val service = getConsumerGroupService(cgcArgs)
 
@@ -313,10 +319,10 @@ class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
       val state = service.collectGroupState(group)
       state.state == "Stable" &&
         state.numMembers == 1 &&
-        state.assignmentStrategy == "roundrobin" &&
+        state.assignmentStrategy == expectedName &&
         state.coordinator != null &&
         brokers.map(_.config.brokerId).toList.contains(state.coordinator.id)
-    }, s"Expected a 'Stable' group status, with one member and round robin assignment strategy for group $group.")
+    }, s"Expected a 'Stable' group status, with one member and $expectedName assignment strategy for group $group.")
   }
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
@@ -350,14 +356,14 @@ class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
     createOffsetsTopic()
 
     // run one consumer in the group consuming from a single-partition topic
-    val executor = addConsumerGroupExecutor(numConsumers = 1, groupProtocol = groupProtocol)
+    val executor = addConsumerGroupExecutor(numConsumers = 1, groupProtocol = groupProtocol, syncCommit = true)
 
     val cgcArgs = Array("--bootstrap-server", bootstrapServers(), "--describe", "--group", group)
     val service = getConsumerGroupService(cgcArgs)
 
     TestUtils.waitUntilTrue(() => {
       val (state, assignments) = service.collectGroupOffsets(group)
-      state.contains("Stable") && assignments.exists(_.exists(_.group == group))
+      state.contains("Stable") && assignments.exists(_.exists(assignment => assignment.group == group && assignment.offset.isDefined))
     }, "Expected the group to initially become stable, and to find group in assignments after initial offset commit.")
 
     // stop the consumer so the group has no active member anymore
@@ -426,7 +432,7 @@ class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
 
     TestUtils.waitUntilTrue(() => {
       val state = service.collectGroupState(group)
-      state.state == "Empty" && state.numMembers == 0 && state.assignmentStrategy == ""
+      state.state == "Empty" && state.numMembers == 0
     }, s"Expected the group '$group' to become empty after the only member leaving.")
   }
 

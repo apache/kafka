@@ -50,7 +50,6 @@ class ConsumerGroupCommandTest extends KafkaServerTestHarness {
 
     if (isNewGroupCoordinatorEnabled()) {
       configs.foreach(_.setProperty(KafkaConfig.NewGroupCoordinatorEnableProp, "true"))
-      configs.foreach(_.setProperty(KafkaConfig.UnstableApiVersionsEnableProp, "true"))
     }
 
     configs.map(KafkaConfig.fromProps)
@@ -166,8 +165,12 @@ object ConsumerGroupCommandTest {
 
     override def configure(props: Properties): Unit = {
       super.configure(props)
-      props.put("partition.assignment.strategy", strategy)
       props.put(ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol)
+      if (groupProtocol.toUpperCase == GroupProtocol.CONSUMER.toString) {
+        props.put(ConsumerConfig.GROUP_REMOTE_ASSIGNOR_CONFIG, strategy)
+      } else {
+        props.put("partition.assignment.strategy", strategy)
+      }
     }
 
     override def subscribe(): Unit = {

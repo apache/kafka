@@ -59,11 +59,11 @@ import static org.apache.kafka.coordinator.group.consumer.ConsumerGroup.Consumer
 public class ConsumerGroup implements Group {
 
     public enum ConsumerGroupState {
-        EMPTY("empty"),
-        ASSIGNING("assigning"),
-        RECONCILING("reconciling"),
-        STABLE("stable"),
-        DEAD("dead");
+        EMPTY("Empty"),
+        ASSIGNING("Assigning"),
+        RECONCILING("Reconciling"),
+        STABLE("Stable"),
+        DEAD("Dead");
 
         private final String name;
 

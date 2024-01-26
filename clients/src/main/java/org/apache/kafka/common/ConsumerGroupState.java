@@ -31,7 +31,9 @@ public enum ConsumerGroupState {
     COMPLETING_REBALANCE("CompletingRebalance"),
     STABLE("Stable"),
     DEAD("Dead"),
-    EMPTY("Empty");
+    EMPTY("Empty"),
+    ASSIGNING("Assigning"),
+    RECONCILING("Reconciling");
 
     private final static Map<String, ConsumerGroupState> NAME_TO_ENUM = Arrays.stream(values())
         .collect(Collectors.toMap(state -> state.name, Function.identity()));
