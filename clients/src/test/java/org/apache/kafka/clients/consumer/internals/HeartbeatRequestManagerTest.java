@@ -85,6 +85,7 @@ public class HeartbeatRequestManagerTest {
     private int maxPollIntervalMs = DEFAULT_MAX_POLL_INTERVAL_MS;
     private long retryBackoffMaxMs = DEFAULT_RETRY_BACKOFF_MAX_MS;
     private static final String DEFAULT_GROUP_ID = "groupId";
+    private String metricGroupPrefix = CONSUMER_METRIC_GROUP_PREFIX;
 
     private ConsumerTestBuilder testBuilder;
     private Time time;
@@ -737,6 +738,7 @@ public class HeartbeatRequestManagerTest {
                 heartbeatState,
                 heartbeatRequestState,
                 backgroundEventHandler,
+                metricGroupPrefix,
                 metrics);
     }
 }

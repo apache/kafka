@@ -35,6 +35,7 @@ import java.util.Optional;
 import java.util.function.Supplier;
 
 import static java.util.Objects.requireNonNull;
+import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.CONSUMER_METRIC_GROUP_PREFIX;
 import static org.apache.kafka.common.utils.Utils.closeQuietly;
 
 /**
@@ -191,6 +192,7 @@ public class RequestManagers implements Closeable {
                             subscriptions,
                             membershipManager,
                             backgroundEventHandler,
+                            CONSUMER_METRIC_GROUP_PREFIX,
                             metrics);
                 }
 
