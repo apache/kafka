@@ -71,7 +71,7 @@ class TransactionStateManager(brokerId: Int,
 
   this.logIdent = "[Transaction State Manager " + brokerId + "]: "
 
-  type SendTxnMarkersCallback = (Int, TransactionResult, TransactionMetadata, TxnTransitMetadata) => Unit
+  private type SendTxnMarkersCallback = (Int, TransactionResult, TransactionMetadata, TxnTransitMetadata) => Unit
 
   /** shutting down flag */
   private val shuttingDown = new AtomicBoolean(false)
@@ -271,12 +271,12 @@ class TransactionStateManager(brokerId: Int,
 
     inReadLock(stateLock) {
       replicaManager.appendRecords(
-        config.requestTimeoutMs,
-        TransactionLog.EnforcedRequiredAcks,
+        timeout = config.requestTimeoutMs,
+        requiredAcks = TransactionLog.EnforcedRequiredAcks,
         internalTopicsAllowed = true,
         origin = AppendOrigin.COORDINATOR,
         entriesPerPartition = Map(transactionPartition -> tombstoneRecords),
-        removeFromCacheCallback,
+        responseCallback = removeFromCacheCallback,
         requestLocal = RequestLocal.NoCaching)
     }
   }
