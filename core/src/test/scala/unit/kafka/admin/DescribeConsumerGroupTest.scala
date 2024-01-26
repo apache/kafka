@@ -304,14 +304,16 @@ class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
   def testDescribeStateOfExistingGroupWithNonDefaultAssignor(quorum: String, groupProtocol: String): Unit = {
     createOffsetsTopic()
 
-    val (assignor, expectedName) = if (groupProtocol == "consumer") {
-      ("range", "range")
+    // run one consumer in the group consuming from a single-partition topic
+    val expectedName = if (groupProtocol == "consumer") {
+      addConsumerGroupExecutor(numConsumers = 1, remoteAssignor = Some("range"), groupProtocol = groupProtocol)
+      "range"
     } else {
-      (classOf[RoundRobinAssignor].getName, "roundrobin")
+      addConsumerGroupExecutor(numConsumers = 1, strategy = classOf[RoundRobinAssignor].getName, groupProtocol = groupProtocol)
+      "roundrobin"
     }
 
-    // run one consumer in the group consuming from a single-partition topic
-    addConsumerGroupExecutor(numConsumers = 1, strategy = assignor, groupProtocol = groupProtocol)
+
     val cgcArgs = Array("--bootstrap-server", bootstrapServers(), "--describe", "--group", group)
     val service = getConsumerGroupService(cgcArgs)
 

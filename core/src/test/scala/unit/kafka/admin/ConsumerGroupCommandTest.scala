@@ -98,10 +98,11 @@ class ConsumerGroupCommandTest extends KafkaServerTestHarness {
                                topic: String = topic,
                                group: String = group,
                                strategy: String = classOf[RangeAssignor].getName,
+                               remoteAssignor: Option[String] = None,
                                customPropsOpt: Option[Properties] = None,
                                syncCommit: Boolean = false,
                                groupProtocol: String = GroupProtocol.CLASSIC.toString): ConsumerGroupExecutor = {
-    val executor = new ConsumerGroupExecutor(bootstrapServers(), numConsumers, group, groupProtocol, topic, strategy, customPropsOpt, syncCommit)
+    val executor = new ConsumerGroupExecutor(bootstrapServers(), numConsumers, group, groupProtocol, topic, strategy, remoteAssignor, customPropsOpt, syncCommit)
     addExecutor(executor)
     executor
   }
@@ -160,14 +161,16 @@ object ConsumerGroupCommandTest {
   }
 
   class ConsumerRunnable(broker: String, groupId: String, groupProtocol: String, topic: String, strategy: String,
-                         customPropsOpt: Option[Properties] = None, syncCommit: Boolean = false)
+                         remoteAssignor: Option[String], customPropsOpt: Option[Properties] = None, syncCommit: Boolean = false)
     extends AbstractConsumerRunnable(broker, groupId, customPropsOpt, syncCommit) {
 
     override def configure(props: Properties): Unit = {
       super.configure(props)
       props.put(ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol)
       if (groupProtocol.toUpperCase == GroupProtocol.CONSUMER.toString) {
-        props.put(ConsumerConfig.GROUP_REMOTE_ASSIGNOR_CONFIG, strategy)
+        remoteAssignor.foreach { assignor =>
+          props.put(ConsumerConfig.GROUP_REMOTE_ASSIGNOR_CONFIG, assignor)
+        }
       } else {
         props.put("partition.assignment.strategy", strategy)
       }
@@ -203,11 +206,11 @@ object ConsumerGroupCommandTest {
   }
 
   class ConsumerGroupExecutor(broker: String, numConsumers: Int, groupId: String, groupProtocol: String, topic: String, strategy: String,
-                              customPropsOpt: Option[Properties] = None, syncCommit: Boolean = false)
+                              remoteAssignor: Option[String], customPropsOpt: Option[Properties] = None, syncCommit: Boolean = false)
     extends AbstractConsumerGroupExecutor(numConsumers) {
 
     for (_ <- 1 to numConsumers) {
-      submit(new ConsumerRunnable(broker, groupId, groupProtocol, topic, strategy, customPropsOpt, syncCommit))
+      submit(new ConsumerRunnable(broker, groupId, groupProtocol, topic, strategy, remoteAssignor, customPropsOpt, syncCommit))
     }
 
   }
