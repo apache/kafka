@@ -1062,7 +1062,8 @@ public class GroupCoordinatorService implements GroupCoordinator {
      * @param request           The request itself for logging purposes.
      * @param exception         The exception to handle.
      * @param responseBuilder   A function which takes an Errors and a String and returns
-     *                          the response. The String can be null.
+     *                          the response. The String can be null. Note that the function
+     *                          could further transform the error depending on the context.
      * @return The response.
      * @param <REQ> The type of the request.
      * @param <RSP> The type of the response.
