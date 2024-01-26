@@ -20,7 +20,7 @@ package kafka.server.metadata
 import java.util.{OptionalInt, Properties}
 import kafka.coordinator.transaction.TransactionCoordinator
 import kafka.log.LogManager
-import kafka.server.{KafkaConfig, ReplicaManager, RequestLocal}
+import kafka.server.{BrokerLifecycleManager, KafkaConfig, ReplicaManager, RequestLocal}
 import kafka.utils.Logging
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.TimeoutException
@@ -29,6 +29,7 @@ import org.apache.kafka.coordinator.group.GroupCoordinator
 import org.apache.kafka.image.loader.LoaderManifest
 import org.apache.kafka.image.publisher.MetadataPublisher
 import org.apache.kafka.image.{MetadataDelta, MetadataImage, TopicDelta}
+import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.server.fault.FaultHandler
 
 import java.util.concurrent.CompletableFuture
@@ -72,7 +73,8 @@ class BrokerMetadataPublisher(
   delegationTokenPublisher: DelegationTokenPublisher,
   aclPublisher: AclPublisher,
   fatalFaultHandler: FaultHandler,
-  metadataPublishingFaultHandler: FaultHandler
+  metadataPublishingFaultHandler: FaultHandler,
+  brokerLifecycleManager: BrokerLifecycleManager,
 ) extends MetadataPublisher with Logging {
   logIdent = s"[BrokerMetadataPublisher id=${config.nodeId}] "
 
@@ -101,6 +103,7 @@ class BrokerMetadataPublisher(
     manifest: LoaderManifest
   ): Unit = {
     val highestOffsetAndEpoch = newImage.highestOffsetAndEpoch()
+    val currentMetadataVersion = metadataCache.metadataVersion()
 
     val deltaName = if (_firstPublish) {
       s"initial MetadataDelta up to ${highestOffsetAndEpoch.offset}"
@@ -130,6 +133,11 @@ class BrokerMetadataPublisher(
       Option(delta.featuresDelta()).foreach { featuresDelta =>
         featuresDelta.metadataVersionChange().ifPresent{ metadataVersion =>
           info(s"Updating metadata.version to ${metadataVersion.featureLevel()} at offset $highestOffsetAndEpoch.")
+          if (currentMetadataVersion.isLessThan(MetadataVersion.IBP_3_7_IV2) && metadataVersion.isAtLeast(MetadataVersion.IBP_3_7_IV2)) {
+            info("Resending BrokerRegistration with existing incarnation-id to inform the " +
+              "controller about log directories in the broker following metadata update")
+            brokerLifecycleManager.handleKraftJBODMetadataVersionUpdate()
+          }
         }
       }
 
