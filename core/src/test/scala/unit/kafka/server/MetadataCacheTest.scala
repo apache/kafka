@@ -16,28 +16,29 @@
   */
 package kafka.server
 
-import org.apache.kafka.common.{DirectoryId, Node, TopicPartition, Uuid}
-
-import java.util
-import java.util.Arrays.asList
-import java.util.Collections
 import kafka.api.LeaderAndIsr
 import kafka.server.metadata.{KRaftMetadataCache, MetadataSnapshot, ZkMetadataCache}
+import org.apache.kafka.common.message.DescribeTopicPartitionsResponseData.DescribeTopicPartitionsResponsePartition
 import org.apache.kafka.common.message.UpdateMetadataRequestData.{UpdateMetadataBroker, UpdateMetadataEndpoint, UpdateMetadataPartitionState, UpdateMetadataTopicState}
+import org.apache.kafka.common.metadata.RegisterBrokerRecord.{BrokerEndpoint, BrokerEndpointCollection}
+import org.apache.kafka.common.metadata._
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.{ApiKeys, ApiMessage, Errors}
 import org.apache.kafka.common.record.RecordBatch
 import org.apache.kafka.common.requests.{AbstractControlRequest, UpdateMetadataRequest}
 import org.apache.kafka.common.security.auth.SecurityProtocol
-import org.apache.kafka.common.metadata.{BrokerRegistrationChangeRecord, PartitionRecord, RegisterBrokerRecord, RemoveTopicRecord, TopicRecord}
-import org.apache.kafka.common.metadata.RegisterBrokerRecord.{BrokerEndpoint, BrokerEndpointCollection}
+import org.apache.kafka.common.{DirectoryId, Node, TopicPartition, Uuid}
 import org.apache.kafka.image.{ClusterImage, MetadataDelta, MetadataImage, MetadataProvenance}
+import org.apache.kafka.metadata.LeaderRecoveryState
 import org.apache.kafka.server.common.MetadataVersion
 import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.MethodSource
-import org.junit.jupiter.api.Test
 
+import java.util
+import java.util.Arrays.asList
+import java.util.Collections
 import scala.collection.{Seq, mutable}
 import scala.jdk.CollectionConverters._
 
@@ -53,7 +54,7 @@ object MetadataCacheTest {
       MetadataCache.kRaftMetadataCache(1)
     )
 
-  def updateCache(cache: MetadataCache, request: UpdateMetadataRequest): Unit = {
+  def updateCache(cache: MetadataCache, request: UpdateMetadataRequest, records: Seq[ApiMessage] = List()): Unit = {
     cache match {
       case c: ZkMetadataCache => c.updateMetadata(0, request)
       case c: KRaftMetadataCache => {
@@ -126,6 +127,7 @@ object MetadataCacheTest {
         request.topicStates().forEach { topic =>
           toRecords(topic).foreach(delta.replay)
         }
+        records.foreach(delta.replay)
         c.setImage(delta.apply(new MetadataProvenance(100L, 10, 1000L)))
       }
       case _ => throw new RuntimeException("Unsupported cache type")
@@ -740,6 +742,169 @@ class MetadataCacheTest {
 
     assertEquals(100L, metadataCache.getAliveBrokerEpoch(0).getOrElse(-1L))
     assertEquals(-1L, metadataCache.getAliveBrokerEpoch(1).getOrElse(-1L))
+  }
+
+  @Test
+  def testGetTopicMetadataForDescribeTopicPartitionsResponse(): Unit = {
+    val metadataCache = MetadataCache.kRaftMetadataCache(0)
+
+    val controllerId = 2
+    val controllerEpoch = 1
+    val securityProtocol = SecurityProtocol.PLAINTEXT
+    val listenerName = ListenerName.forSecurityProtocol(securityProtocol)
+    val topic0 = "test0"
+    val topic1 = "test1"
+
+    val topicIds = new util.HashMap[String, Uuid]()
+    topicIds.put(topic0, Uuid.randomUuid())
+    topicIds.put(topic1, Uuid.randomUuid())
+
+    val partitionMap = Map[(String, Int), PartitionRecord](
+      (topic0, 0) -> new PartitionRecord()
+        .setTopicId(topicIds.get(topic0))
+        .setPartitionId(0)
+        .setReplicas(asList(0, 1, 2))
+        .setLeader(0)
+        .setIsr(asList(0))
+        .setEligibleLeaderReplicas(asList(1))
+        .setLastKnownElr(asList(2))
+        .setLeaderEpoch(0)
+        .setPartitionEpoch(1)
+        .setLeaderRecoveryState(LeaderRecoveryState.RECOVERED.value()),
+      (topic0, 2) -> new PartitionRecord()
+        .setTopicId(topicIds.get(topic0))
+        .setPartitionId(2)
+        .setReplicas(asList(0, 2, 3))
+        .setLeader(3)
+        .setIsr(asList(3))
+        .setEligibleLeaderReplicas(asList(2))
+        .setLastKnownElr(asList(0))
+        .setLeaderEpoch(1)
+        .setPartitionEpoch(2)
+        .setLeaderRecoveryState(LeaderRecoveryState.RECOVERED.value()),
+      (topic0, 1) -> new PartitionRecord()
+        .setTopicId(topicIds.get(topic0))
+        .setPartitionId(1)
+        .setReplicas(asList(0, 1, 3))
+        .setLeader(0)
+        .setIsr(asList(0))
+        .setEligibleLeaderReplicas(asList(1))
+        .setLastKnownElr(asList(3))
+        .setLeaderEpoch(0)
+        .setPartitionEpoch(2)
+        .setLeaderRecoveryState(LeaderRecoveryState.RECOVERED.value()),
+      (topic1, 0) -> new PartitionRecord()
+        .setTopicId(topicIds.get(topic1))
+        .setPartitionId(0)
+        .setReplicas(asList(0, 1, 2))
+        .setLeader(2)
+        .setIsr(asList(2))
+        .setEligibleLeaderReplicas(asList(1))
+        .setLastKnownElr(asList(0))
+        .setLeaderEpoch(10)
+        .setPartitionEpoch(11)
+        .setLeaderRecoveryState(LeaderRecoveryState.RECOVERED.value()),
+    )
+
+    val brokers = Seq(
+      new UpdateMetadataBroker().setId(0).setEndpoints(Seq(new UpdateMetadataEndpoint().setHost("foo0").setPort(9092).setSecurityProtocol(securityProtocol.id).setListener(listenerName.value)).asJava),
+      new UpdateMetadataBroker().setId(1).setEndpoints(Seq(new UpdateMetadataEndpoint().setHost("foo1").setPort(9093).setSecurityProtocol(securityProtocol.id).setListener(listenerName.value)).asJava),
+      new UpdateMetadataBroker().setId(2).setEndpoints(Seq(new UpdateMetadataEndpoint().setHost("foo2").setPort(9094).setSecurityProtocol(securityProtocol.id).setListener(listenerName.value)).asJava),
+      new UpdateMetadataBroker().setId(3).setEndpoints(Seq(new UpdateMetadataEndpoint().setHost("foo3").setPort(9095).setSecurityProtocol(securityProtocol.id).setListener(listenerName.value)).asJava),
+    )
+
+    val version = ApiKeys.UPDATE_METADATA.latestVersion
+    val updateMetadataRequest = new UpdateMetadataRequest.Builder(version, controllerId, controllerEpoch, brokerEpoch,
+      List[UpdateMetadataPartitionState]().asJava, brokers.asJava, topicIds).build()
+    var recordSeq = Seq[ApiMessage](
+      new TopicRecord().setName(topic0).setTopicId(topicIds.get(topic0)),
+      new TopicRecord().setName(topic1).setTopicId(topicIds.get(topic1))
+    )
+    recordSeq = recordSeq ++ partitionMap.values.toSeq
+    MetadataCacheTest.updateCache(metadataCache, updateMetadataRequest, recordSeq)
+
+    def checkTopicMetadata(topic: String, partitionIds: Set[Int], partitions: mutable.Buffer[DescribeTopicPartitionsResponsePartition]): Unit = {
+      partitions.foreach(partition => {
+        val partitionId = partition.partitionIndex()
+        assertTrue(partitionIds.contains(partitionId))
+        val expectedPartition = partitionMap.get((topic, partitionId)).get
+        assertEquals(0, partition.errorCode())
+        assertEquals(expectedPartition.leaderEpoch(), partition.leaderEpoch())
+        assertEquals(expectedPartition.partitionId(), partition.partitionIndex())
+        assertEquals(expectedPartition.eligibleLeaderReplicas(), partition.eligibleLeaderReplicas())
+        assertEquals(expectedPartition.isr(), partition.isrNodes())
+        assertEquals(expectedPartition.lastKnownElr(), partition.lastKnownElr())
+        assertEquals(expectedPartition.leader(), partition.leaderId())
+      })
+    }
+
+    // Basic test
+    var result = metadataCache.getTopicMetadataForDescribeTopicResponse(Seq(topic0, topic1).iterator, listenerName, _ => 0, 10, false).topics().asScala.toList
+    assertEquals(2, result.size)
+    var resultTopic = result(0)
+    assertEquals(topic0, resultTopic.name())
+    assertEquals(0, resultTopic.errorCode())
+    assertEquals(topicIds.get(topic0), resultTopic.topicId())
+    assertEquals(3, resultTopic.partitions().size())
+    checkTopicMetadata(topic0, Set(0, 1, 2), resultTopic.partitions().asScala)
+
+    resultTopic = result(1)
+    assertEquals(topic1, resultTopic.name())
+    assertEquals(0, resultTopic.errorCode())
+    assertEquals(topicIds.get(topic1), resultTopic.topicId())
+    assertEquals(1, resultTopic.partitions().size())
+    checkTopicMetadata(topic1, Set(0), resultTopic.partitions().asScala)
+
+    // Quota reached
+    var response = metadataCache.getTopicMetadataForDescribeTopicResponse(Seq(topic0, topic1).iterator, listenerName, _ => 0, 2, false)
+    result = response.topics().asScala.toList
+    assertEquals(1, result.size)
+    resultTopic = result(0)
+    assertEquals(topic0, resultTopic.name())
+    assertEquals(0, resultTopic.errorCode())
+    assertEquals(topicIds.get(topic0), resultTopic.topicId())
+    assertEquals(2, resultTopic.partitions().size())
+    checkTopicMetadata(topic0, Set(0, 1), resultTopic.partitions().asScala)
+    assertEquals(topic0, response.nextCursor().topicName())
+    assertEquals(2, response.nextCursor().partitionIndex())
+
+    // With start index
+    result = metadataCache.getTopicMetadataForDescribeTopicResponse(Seq(topic0).iterator, listenerName, t => if (t.equals(topic0)) 1 else 0, 10, false).topics().asScala.toList
+    assertEquals(1, result.size)
+    resultTopic = result(0)
+    assertEquals(topic0, resultTopic.name())
+    assertEquals(0, resultTopic.errorCode())
+    assertEquals(topicIds.get(topic0), resultTopic.topicId())
+    assertEquals(2, resultTopic.partitions().size())
+    checkTopicMetadata(topic0, Set(1, 2), resultTopic.partitions().asScala)
+
+    // With start index and quota reached
+    response = metadataCache.getTopicMetadataForDescribeTopicResponse(Seq(topic0, topic1).iterator, listenerName, t => if (t.equals(topic0)) 2 else 0, 1, false)
+    result = response.topics().asScala.toList
+    assertEquals(1, result.size)
+
+    resultTopic = result(0)
+    assertEquals(topic0, resultTopic.name())
+    assertEquals(0, resultTopic.errorCode())
+    assertEquals(topicIds.get(topic0), resultTopic.topicId())
+    assertEquals(1, resultTopic.partitions().size())
+    checkTopicMetadata(topic0, Set(2), resultTopic.partitions().asScala)
+    assertEquals(topic1, response.nextCursor().topicName())
+    assertEquals(0, response.nextCursor().partitionIndex())
+
+    // When the first topic does not exist
+    result = metadataCache.getTopicMetadataForDescribeTopicResponse(Seq("Non-exist", topic0).iterator, listenerName, t => if (t.equals("Non-exist")) 1 else 0, 1, false).topics().asScala.toList
+    assertEquals(2, result.size)
+    resultTopic = result(0)
+    assertEquals("Non-exist", resultTopic.name())
+    assertEquals(3, resultTopic.errorCode())
+
+    resultTopic = result(1)
+    assertEquals(topic0, resultTopic.name())
+    assertEquals(0, resultTopic.errorCode())
+    assertEquals(topicIds.get(topic0), resultTopic.topicId())
+    assertEquals(1, resultTopic.partitions().size())
+    checkTopicMetadata(topic0, Set(0), resultTopic.partitions().asScala)
   }
 
   @ParameterizedTest
