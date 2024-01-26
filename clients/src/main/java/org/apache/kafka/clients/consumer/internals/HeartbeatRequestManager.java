@@ -124,6 +124,7 @@ public class HeartbeatRequestManager implements RequestManager {
         final SubscriptionState subscriptions,
         final MembershipManager membershipManager,
         final BackgroundEventHandler backgroundEventHandler,
+        final String metricGroupPrefix,
         final Metrics metrics) {
         this.coordinatorRequestManager = coordinatorRequestManager;
         this.logger = logContext.logger(getClass());
@@ -136,7 +137,7 @@ public class HeartbeatRequestManager implements RequestManager {
         this.heartbeatRequestState = new HeartbeatRequestState(logContext, time, 0, retryBackoffMs,
             retryBackoffMaxMs, maxPollIntervalMs);
         this.pollTimer = time.timer(maxPollIntervalMs);
-        this.heartbeatMetrics = createHeartbeatMetrics(metrics);
+        this.heartbeatMetrics = createHeartbeatMetrics(metrics, metricGroupPrefix);
     }
 
     // Visible for testing
@@ -149,6 +150,7 @@ public class HeartbeatRequestManager implements RequestManager {
         final HeartbeatState heartbeatState,
         final HeartbeatRequestState heartbeatRequestState,
         final BackgroundEventHandler backgroundEventHandler,
+        final String metricGroupPrefix,
         final Metrics metrics) {
         this.logger = logContext.logger(this.getClass());
         this.maxPollIntervalMs = config.getInt(CommonClientConfigs.MAX_POLL_INTERVAL_MS_CONFIG);
@@ -158,7 +160,7 @@ public class HeartbeatRequestManager implements RequestManager {
         this.membershipManager = membershipManager;
         this.backgroundEventHandler = backgroundEventHandler;
         this.pollTimer = timer;
-        this.heartbeatMetrics = createHeartbeatMetrics(metrics);
+        this.heartbeatMetrics = createHeartbeatMetrics(metrics, metricGroupPrefix);
     }
 
     /**
