@@ -52,18 +52,14 @@ public class TaskExecutor {
     private final TaskManager taskManager;
     private final TaskExecutionMetadata executionMetadata;
 
-    private final long maxUncommittedStateBytes;
-
     public TaskExecutor(final TasksRegistry tasks,
                         final TaskManager taskManager,
                         final TaskExecutionMetadata executionMetadata,
-                        final LogContext logContext,
-                        final long maxUncommittedStateBytes) {
+                        final LogContext logContext) {
         this.tasks = tasks;
         this.taskManager = taskManager;
         this.executionMetadata = executionMetadata;
         this.log = logContext.logger(getClass());
-        this.maxUncommittedStateBytes = maxUncommittedStateBytes;
     }
 
     /**
@@ -145,6 +141,7 @@ public class TaskExecutor {
     int commitTasksAndMaybeUpdateCommittableOffsets(final Collection<Task> tasksToCommit,
                                                     final Map<Task, Map<TopicPartition, OffsetAndMetadata>> consumedOffsetsAndMetadata) {
         int committed = 0;
+        final boolean enfoceCheckpoint = taskManager.needsCommit(false);
         for (final Task task : tasksToCommit) {
             // we need to call commitNeeded first since we need to update committable offsets
             if (task.commitNeeded()) {
@@ -161,10 +158,8 @@ public class TaskExecutor {
             if (task.commitNeeded()) {
                 task.clearTaskTimeout();
                 ++committed;
-                // under EOS, we need to enforce a checkpoint if our transaction buffers have exceeded their capacity
-                // todo: find a way to proactively commit *before* exceeding capacity
-                final boolean enforceCheckpoint = maxUncommittedStateBytes > -1 && tasks.approximateUncommittedStateBytes() >= maxUncommittedStateBytes;
-                task.postCommit(enforceCheckpoint);
+                // under EOS, we need to enforce a checkpoint if our transaction buffers will exceeded their capacity
+                task.postCommit(enfoceCheckpoint);
             }
         }
 

@@ -137,8 +137,7 @@ public class TaskManager {
             this.tasks,
             this,
             topologyMetadata.taskExecutionMetadata(),
-            logContext,
-            maxUncommittedStateBytes
+            logContext
         );
 
         this.maxUncommittedStateBytes = maxUncommittedStateBytes;
@@ -1842,13 +1841,19 @@ public class TaskManager {
         }
     }
 
+    // track the size of the transaction buffer on each iteration to predict when it will be exceeded in advance
     private long lastUncommittedBytes = 0L;
 
-    boolean needsCommit() {
+    boolean needsCommit(final boolean updateDelta) {
+        if (maxUncommittedStateBytes < 0) {
+            // if our transaction buffers are unbounded, we never need to force an early commit
+            return false;
+        }
+
         // force an early commit if the uncommitted bytes exceeds or is *likely to exceed* the configured threshold
         final long uncommittedBytes = tasks.approximateUncommittedStateBytes();
 
-        final long deltaBytes = Math.min(uncommittedBytes, Math.max(uncommittedBytes, uncommittedBytes - lastUncommittedBytes));
+        final long deltaBytes = Math.max(0, uncommittedBytes - lastUncommittedBytes);
 
         final boolean needsCommit =  maxUncommittedStateBytes > -1 && uncommittedBytes + deltaBytes > maxUncommittedStateBytes;
         if (needsCommit) {
@@ -1857,7 +1862,9 @@ public class TaskManager {
                     maxUncommittedStateBytes, lastUncommittedBytes, uncommittedBytes, deltaBytes
             );
         }
-        lastUncommittedBytes = uncommittedBytes;
+        if (updateDelta) {
+            lastUncommittedBytes = uncommittedBytes;
+        }
         return needsCommit;
     }
 
@@ -1915,7 +1922,6 @@ public class TaskManager {
             return -1;
         } else {
             final int committedOffsets = taskExecutor.commitTasksAndMaybeUpdateCommittableOffsets(tasksToCommit, consumedOffsetsAndMetadata);
-            lastUncommittedBytes = 0L;
             return committedOffsets;
         }
     }

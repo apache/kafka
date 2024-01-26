@@ -1376,7 +1376,7 @@ public class StreamThread extends Thread implements ProcessingThread {
      */
     int maybeCommit() {
         final int committed;
-        if (taskManager.needsCommit() || now - lastCommitMs > commitTimeMs) {
+        if (taskManager.needsCommit(true) || now - lastCommitMs > commitTimeMs) {
             if (log.isDebugEnabled()) {
                 log.debug("Committing all active tasks {} and standby tasks {} since {}ms has elapsed (commit interval is {}ms)",
                           taskManager.activeRunningTaskIds(), taskManager.standbyTaskIds(), now - lastCommitMs, commitTimeMs);
