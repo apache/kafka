@@ -718,7 +718,7 @@ public class HeartbeatRequestManagerTest {
     }
 
     private KafkaMetric getMetric(final String name) {
-        return metrics.metrics().get(metrics.metricName(name, CONSUMER_METRIC_GROUP_PREFIX + COORDINATOR_METRICS_SUFFIX));
+        return metrics.metrics().get(metrics.metricName(name, metricGroupPrefix + COORDINATOR_METRICS_SUFFIX));
     }
 
     private HeartbeatRequestManager createHeartbeatRequestManager(

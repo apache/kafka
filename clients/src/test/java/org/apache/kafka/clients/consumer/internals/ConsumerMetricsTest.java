@@ -25,14 +25,12 @@ import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.junit.jupiter.api.Test;
 
-import java.util.Optional;
-
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.CONSUMER_METRICS_SUFFIX;
-import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.CONSUMER_METRIC_GROUP_PREFIX;
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.COORDINATOR_METRICS_SUFFIX;
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.FETCH_MANAGER_METRICS_SUFFIX;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class ConsumerMetricsTest {
     private Time time = new MockTime();
@@ -83,43 +81,28 @@ public class ConsumerMetricsTest {
     @Test
     public void testMetricsGroupName() {
         // consumer-coordinator-metrics
-        NoopCoordinatorMetrics defaultCoordinatorMetrics = new NoopCoordinatorMetrics(Optional.empty());
-        assertEquals(CONSUMER_METRIC_GROUP_PREFIX + COORDINATOR_METRICS_SUFFIX, defaultCoordinatorMetrics.groupMetricsName());
-        NoopCoordinatorMetrics coordinatorMetrics = new NoopCoordinatorMetrics(Optional.of("customCoordinatorPrefix"));
-        assertEquals("customCoordinatorPrefix" + COORDINATOR_METRICS_SUFFIX, coordinatorMetrics.groupMetricsName());
+        NoopConsumerMetrics coordinatorMetrics = new NoopConsumerMetrics("customCoordinatorPrefix", AbstractConsumerMetrics.MetricGroupSuffix.COORDINATOR);
+        assertEquals("customCoordinatorPrefix" + COORDINATOR_METRICS_SUFFIX, coordinatorMetrics.metricGroupName());
 
         // consumer-metrics
-        NoopConsumerMetrics defaultConsumerMetrics = new NoopConsumerMetrics(Optional.empty());
-        assertEquals(CONSUMER_METRIC_GROUP_PREFIX + CONSUMER_METRICS_SUFFIX, defaultConsumerMetrics.groupMetricsName());
-        NoopConsumerMetrics consumerMetrics = new NoopConsumerMetrics(Optional.of("customConsumerPrefix"));
-        assertEquals("customConsumerPrefix" + CONSUMER_METRICS_SUFFIX, consumerMetrics.groupMetricsName());
+        NoopConsumerMetrics consumerMetrics = new NoopConsumerMetrics("customConsumerPrefix", AbstractConsumerMetrics.MetricGroupSuffix.CONSUMER);
+        assertEquals("customConsumerPrefix" + CONSUMER_METRICS_SUFFIX, consumerMetrics.metricGroupName());
 
         // consumer-fetch-manager-metrics
-        NoopFetchManagerMetrics defaultFetchMetrics = new NoopFetchManagerMetrics(Optional.empty());
-        assertEquals(CONSUMER_METRIC_GROUP_PREFIX + FETCH_MANAGER_METRICS_SUFFIX, defaultFetchMetrics.groupMetricsName());
-        NoopFetchManagerMetrics fetchMetrics = new NoopFetchManagerMetrics(Optional.of("customFetchPrefix"));
-        assertEquals("customFetchPrefix" + FETCH_MANAGER_METRICS_SUFFIX, fetchMetrics.groupMetricsName());
+        NoopConsumerMetrics fetchMetrics = new NoopConsumerMetrics("customFetchPrefix", AbstractConsumerMetrics.MetricGroupSuffix.FETCH_MANAGER);
+        assertEquals("customFetchPrefix" + FETCH_MANAGER_METRICS_SUFFIX, fetchMetrics.metricGroupName());
+
+        assertThrows(IllegalArgumentException.class, () -> new NoopConsumerMetrics(null,
+            AbstractConsumerMetrics.MetricGroupSuffix.CONSUMER));
     }
 
     private KafkaMetric getMetric(String metricName, String groupName) {
         return metrics.metrics().get(metrics.metricName(metricName, groupName));
     }
 
-    static class NoopCoordinatorMetrics extends AbstractConsumerMetrics {
-        public NoopCoordinatorMetrics(Optional<String> prefix) {
-            super(prefix, MetricSuffix.COORDINATOR.getSuffix());
-        }
-    }
-
     static class NoopConsumerMetrics extends AbstractConsumerMetrics {
-        public NoopConsumerMetrics(Optional<String> prefix) {
-            super(prefix, MetricSuffix.CONSUMER.getSuffix());
-        }
-    }
-
-    static class NoopFetchManagerMetrics extends AbstractConsumerMetrics {
-        public NoopFetchManagerMetrics(Optional<String> prefix) {
-            super(prefix, MetricSuffix.FETCH_MANAGER.getSuffix());
+        public NoopConsumerMetrics(String prefix, MetricGroupSuffix suffix) {
+            super(prefix, suffix.toString());
         }
     }
 }

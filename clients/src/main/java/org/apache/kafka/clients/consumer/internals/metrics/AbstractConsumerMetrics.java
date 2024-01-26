@@ -22,74 +22,80 @@ import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.stats.Meter;
 import org.apache.kafka.common.metrics.stats.WindowedCount;
 
-import java.util.Objects;
-import java.util.Optional;
-
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.CONSUMER_METRICS_SUFFIX;
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.CONSUMER_METRIC_GROUP_PREFIX;
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.COORDINATOR_METRICS_SUFFIX;
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.FETCH_MANAGER_METRICS_SUFFIX;
 
 /**
- * This class encapsulates the creation of metrics for the kafka consumer. When constructing a metrics object, you
- * need to provide the suffix of the metric group.  These are:
- * <li>
- *     <ul>Group Coordinator: {@link MetricSuffix#COORDINATOR}</ul>
- *     <ul>Consumer metrics: {@link MetricSuffix#CONSUMER}</ul>
- *     <ul>Fetch manager metrics: {@link MetricSuffix#FETCH_MANAGER}</ul>
- * </li>
+ * Base class for different consumer metrics to extend. This class helps to construct the logical group name from the
+ * given prefix and suffix, and provides a few common utilities.
  *
- * If no prefix is provided, we will use the default prefix {@link ConsumerUtils#CONSUMER_METRIC_GROUP_PREFIX}.
+ * <p>
+ * Prefix can be provided by the user and is "consumer-" by default (see {@link ConsumerUtils#CONSUMER_METRIC_GROUP_PREFIX}).
+ * </p>
+ *
+ * <p>
+ * The suffix can be one of the following:
+ * <ul>
+ *     <li><code>-coordinator-metrics</code>: {@link MetricGroupSuffix#COORDINATOR}</li>
+ *     <li><code>-metrics</code>: {@link MetricGroupSuffix#CONSUMER}</li>
+ *     <li><code>-fetch-manager-metrics</code>: {@link MetricGroupSuffix#FETCH_MANAGER}</li>
+ * </ul>
+ * </p>
  */
 public abstract class AbstractConsumerMetrics {
-    protected final String groupMetricsName;
+    protected final String metricGroupName;
 
-    public enum MetricSuffix {
+    public enum MetricGroupSuffix {
         COORDINATOR(COORDINATOR_METRICS_SUFFIX),
         CONSUMER(CONSUMER_METRICS_SUFFIX),
         FETCH_MANAGER(FETCH_MANAGER_METRICS_SUFFIX);
 
         private final String suffix;
 
-        MetricSuffix(String suffix) {
+        MetricGroupSuffix(String suffix) {
             this.suffix = suffix;
         }
 
-        public String getSuffix() {
+        @Override
+        public String toString() {
             return suffix;
         }
     }
 
-    public AbstractConsumerMetrics(MetricSuffix suffix) {
-        this(Optional.empty(), suffix.getSuffix());
+    public AbstractConsumerMetrics(MetricGroupSuffix suffix) {
+        this(CONSUMER_METRIC_GROUP_PREFIX, suffix.toString());
     }
 
-    public AbstractConsumerMetrics(Optional<String> grpMetricsPrefix, String suffix) {
-        Objects.requireNonNull(suffix, "suffix cannot be null");
-        String prefix = grpMetricsPrefix.orElse(CONSUMER_METRIC_GROUP_PREFIX);
-        groupMetricsName = prefix + suffix;
+    public AbstractConsumerMetrics(String prefix, String suffix) {
+        if (suffix == null)
+            throw new IllegalArgumentException("metric group suffix cannot be null");
+        if (prefix == null)
+            throw new IllegalArgumentException("metric group prefix cannot be null");
+        metricGroupName = prefix + suffix;
     }
 
-    public String groupMetricsName() {
-        return groupMetricsName;
+    public String metricGroupName() {
+        return metricGroupName;
     }
 
     public Meter createMeter(Metrics metrics, String baseName, String descriptiveName) {
         return new Meter(new WindowedCount(),
             metrics.metricName(baseName + "-rate",
-                groupMetricsName,
+                metricGroupName,
                 String.format("The number of %s per second", descriptiveName)),
             metrics.metricName(baseName + "-total",
-                groupMetricsName,
+                metricGroupName,
                 String.format("The total number of %s", descriptiveName)));
     }
 
     public void addMetric(Metrics metrics,
-                          String name,
+                          String metricName,
                           String description,
                           Measurable measurable) {
         metrics.addMetric(
-            metrics.metricName(name, groupMetricsName, description),
+            metrics.metricName(metricName, metricGroupName, description),
             measurable);
     }
 }
