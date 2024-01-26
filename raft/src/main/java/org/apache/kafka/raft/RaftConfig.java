@@ -26,6 +26,7 @@ import org.apache.kafka.common.utils.Utils;
 import java.net.InetSocketAddress;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -92,6 +93,16 @@ public class RaftConfig {
     public static final String QUORUM_RETRY_BACKOFF_MS_DOC = CommonClientConfigs.RETRY_BACKOFF_MS_DOC;
     public static final int DEFAULT_QUORUM_RETRY_BACKOFF_MS = 20;
 
+    public static final String NODE_ID_CONFIG = "node.id";
+    public static final String NODE_ID_DOC = "The node ID associated with the roles this process is playing when `process.roles` is non-empty. " +
+        "This is required configuration when running in KRaft mode.";
+    public static final int DEFAULT_NODE_ID = -1;
+
+    public static final String PROCESS_ROLES_CONFIG = "process.roles";
+    public static final String PROCESS_ROLES_DOC = "The roles that this process plays: 'broker', 'controller', or 'broker,controller' if it is both. " +
+        "This configuration is only applicable for clusters in KRaft (Kafka Raft) mode (instead of ZooKeeper). Leave this config undefined or empty for ZooKeeper clusters.";
+    public static final List<String> DEFAULT_PROCESS_ROLES = Collections.emptyList();
+
     private final int requestTimeoutMs;
     private final int retryBackoffMs;
     private final int electionTimeoutMs;
@@ -99,6 +110,8 @@ public class RaftConfig {
     private final int fetchTimeoutMs;
     private final int appendLingerMs;
     private final Map<Integer, AddressSpec> voterConnections;
+    private final Set<String> processRoles;
+    private final int nodeId;
 
     public interface AddressSpec {
     }
@@ -139,31 +152,49 @@ public class RaftConfig {
     }
 
     public RaftConfig(AbstractConfig abstractConfig) {
-        this(parseVoterConnections(abstractConfig.getList(QUORUM_VOTERS_CONFIG)),
+        this(abstractConfig.getList(QUORUM_VOTERS_CONFIG),
             abstractConfig.getInt(QUORUM_REQUEST_TIMEOUT_MS_CONFIG),
             abstractConfig.getInt(QUORUM_RETRY_BACKOFF_MS_CONFIG),
             abstractConfig.getInt(QUORUM_ELECTION_TIMEOUT_MS_CONFIG),
             abstractConfig.getInt(QUORUM_ELECTION_BACKOFF_MAX_MS_CONFIG),
             abstractConfig.getInt(QUORUM_FETCH_TIMEOUT_MS_CONFIG),
-            abstractConfig.getInt(QUORUM_LINGER_MS_CONFIG));
+            abstractConfig.getInt(QUORUM_LINGER_MS_CONFIG),
+            abstractConfig.getInt(NODE_ID_CONFIG),
+            abstractConfig.getList(PROCESS_ROLES_CONFIG));
+    }
+
+    public RaftConfig(Map<?, ?> props) {
+        this(RaftUtil.getStringList(props, QUORUM_VOTERS_CONFIG, DEFAULT_QUORUM_VOTERS),
+            RaftUtil.getInt(props, QUORUM_REQUEST_TIMEOUT_MS_CONFIG, DEFAULT_QUORUM_REQUEST_TIMEOUT_MS),
+            RaftUtil.getInt(props, QUORUM_RETRY_BACKOFF_MS_CONFIG, DEFAULT_QUORUM_RETRY_BACKOFF_MS),
+            RaftUtil.getInt(props, QUORUM_ELECTION_TIMEOUT_MS_CONFIG, DEFAULT_QUORUM_ELECTION_TIMEOUT_MS),
+            RaftUtil.getInt(props, QUORUM_ELECTION_BACKOFF_MAX_MS_CONFIG, DEFAULT_QUORUM_ELECTION_BACKOFF_MAX_MS),
+            RaftUtil.getInt(props, QUORUM_FETCH_TIMEOUT_MS_CONFIG, DEFAULT_QUORUM_FETCH_TIMEOUT_MS),
+            RaftUtil.getInt(props, QUORUM_LINGER_MS_CONFIG, DEFAULT_QUORUM_LINGER_MS),
+            RaftUtil.getInt(props, NODE_ID_CONFIG, DEFAULT_NODE_ID),
+            RaftUtil.getStringList(props, PROCESS_ROLES_CONFIG, DEFAULT_PROCESS_ROLES));
     }
 
     public RaftConfig(
-        Map<Integer, AddressSpec> voterConnections,
+        List<String> voterConnections,
         int requestTimeoutMs,
         int retryBackoffMs,
         int electionTimeoutMs,
         int electionBackoffMaxMs,
         int fetchTimeoutMs,
-        int appendLingerMs
+        int appendLingerMs,
+        int nodeId,
+        List<String> processRoles
     ) {
-        this.voterConnections = voterConnections;
+        this.voterConnections = parseVoterConnections(voterConnections);
         this.requestTimeoutMs = requestTimeoutMs;
         this.retryBackoffMs = retryBackoffMs;
         this.electionTimeoutMs = electionTimeoutMs;
         this.electionBackoffMaxMs = electionBackoffMaxMs;
         this.fetchTimeoutMs = fetchTimeoutMs;
         this.appendLingerMs = appendLingerMs;
+        this.nodeId = nodeId;
+        this.processRoles = parseProcessRoles(processRoles, this.voterConnections, this.nodeId);
     }
 
     public int requestTimeoutMs() {
@@ -190,6 +221,14 @@ public class RaftConfig {
         return appendLingerMs;
     }
 
+    public Set<String> processRoles() {
+        return processRoles;
+    }
+
+    public int nodeId() {
+        return nodeId;
+    }
+
     public Set<Integer> quorumVoterIds() {
         return quorumVoterConnections().keySet();
     }
@@ -204,6 +243,27 @@ public class RaftConfig {
         } catch (NumberFormatException e) {
             throw new ConfigException("Failed to parse voter ID as an integer from " + idString);
         }
+    }
+
+    private static Set<String> parseProcessRoles(List<String> processRoles, Map<Integer, AddressSpec> voterConnections, int nodeId) {
+        Set<String> distinctRoles = new HashSet<>();
+        for (String role : processRoles) {
+            switch (role) {
+                case "broker":
+                    distinctRoles.add("BrokerRole");
+                    break;
+                case "controller":
+                    distinctRoles.add("ControllerRole");
+                    break;
+                default:
+                    throw new ConfigException("Unknown process role '" + role + "'" +
+                        " (only 'broker' and 'controller' are allowed roles)");
+            }
+        }
+        if (distinctRoles.size() != processRoles.size()) {
+            throw new ConfigException("Duplicate role names found in '" + PROCESS_ROLES_CONFIG + "': " + processRoles);
+        }
+        return distinctRoles;
     }
 
     public static Map<Integer, AddressSpec> parseVoterConnections(List<String> voterEntries) {

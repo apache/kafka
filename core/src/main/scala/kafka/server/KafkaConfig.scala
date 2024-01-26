@@ -60,7 +60,7 @@ import scala.collection.{Map, Seq}
 
 object KafkaConfig {
 
-  private val LogConfigPrefix = "log."
+  private val LogConfigPrefix = LogConfig.LOG_CONFIG_PREFIX
 
   def main(args: Array[String]): Unit = {
     System.out.println(configDef.toHtml(4, (config: String) => "brokerconfigs_" + config,
@@ -145,12 +145,12 @@ object KafkaConfig {
   val ConnectionSetupTimeoutMaxMsProp = CommonClientConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS_CONFIG
 
   /** KRaft mode configs */
-  val ProcessRolesProp = "process.roles"
+  val ProcessRolesProp = RaftConfig.PROCESS_ROLES_CONFIG
   val InitialBrokerRegistrationTimeoutMsProp = "initial.broker.registration.timeout.ms"
   val BrokerHeartbeatIntervalMsProp = "broker.heartbeat.interval.ms"
   val BrokerSessionTimeoutMsProp = "broker.session.timeout.ms"
-  val NodeIdProp = "node.id"
-  val MetadataLogDirProp = "metadata.log.dir"
+  val NodeIdProp = RaftConfig.NODE_ID_CONFIG
+  val MetadataLogDirProp = LogConfig.METADATA_LOG_DIR_PROP
   val MetadataSnapshotMaxNewRecordBytesProp = "metadata.log.max.record.bytes.between.snapshots"
   val MetadataSnapshotMaxIntervalMsProp = "metadata.log.max.snapshot.interval.ms"
   val ControllerListenerNamesProp = "controller.listener.names"
@@ -194,8 +194,8 @@ object KafkaConfig {
   val RackProp = "broker.rack"
   /** ********* Log Configuration ***********/
   val NumPartitionsProp = "num.partitions"
-  val LogDirsProp = LogConfigPrefix + "dirs"
-  val LogDirProp = LogConfigPrefix + "dir"
+  val LogDirProp = LogConfig.LOG_DIR_PROP
+  val LogDirsProp = LogConfig.LOG_DIRS_PROP
   val LogSegmentBytesProp = ServerTopicConfigSynonyms.serverSynonym(TopicConfig.SEGMENT_BYTES_CONFIG)
 
   val LogRollTimeMillisProp = ServerTopicConfigSynonyms.serverSynonym(TopicConfig.SEGMENT_MS_CONFIG)
@@ -261,7 +261,7 @@ object KafkaConfig {
   val LeaderImbalanceCheckIntervalSecondsProp = "leader.imbalance.check.interval.seconds"
   val UncleanLeaderElectionEnableProp = ServerTopicConfigSynonyms.serverSynonym(TopicConfig.UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG)
   val InterBrokerSecurityProtocolProp = "security.inter.broker.protocol"
-  val InterBrokerProtocolVersionProp = "inter.broker.protocol.version"
+  val InterBrokerProtocolVersionProp = LogConfig.INTER_BROKER_PROTOCOL_VERSION_PROP
   val InterBrokerListenerNameProp = "inter.broker.listener.name"
   val ReplicaSelectorClassProp = "replica.selector.class"
   /** ********* Controlled shutdown configuration ***********/
@@ -435,8 +435,8 @@ object KafkaConfig {
   val PasswordEncoderIterationsProp = PasswordEncoderConfigs.ITERATIONS
 
   /** Internal Configurations **/
-  val UnstableApiVersionsEnableProp = "unstable.api.versions.enable"
-  val UnstableMetadataVersionsEnableProp = "unstable.metadata.versions.enable"
+  val UnstableApiVersionsEnableProp = LogConfig.UNSTABLE_API_VERSIONS_ENABLE_PROP
+  val UnstableMetadataVersionsEnableProp = LogConfig.UNSTABLE_METADATA_VERSIONS_ENABLE_PROP
 
   /* Documentation */
   /** ********* Zookeeper Configuration ***********/
@@ -503,15 +503,12 @@ object KafkaConfig {
   val ConnectionSetupTimeoutMaxMsDoc = CommonClientConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS_DOC
 
   /** KRaft mode configs */
-  val ProcessRolesDoc = "The roles that this process plays: 'broker', 'controller', or 'broker,controller' if it is both. " +
-    "This configuration is only applicable for clusters in KRaft (Kafka Raft) mode (instead of ZooKeeper). Leave this config undefined or empty for ZooKeeper clusters."
+  val ProcessRolesDoc = RaftConfig.PROCESS_ROLES_DOC
   val InitialBrokerRegistrationTimeoutMsDoc = "When initially registering with the controller quorum, the number of milliseconds to wait before declaring failure and exiting the broker process."
   val BrokerHeartbeatIntervalMsDoc = "The length of time in milliseconds between broker heartbeats. Used when running in KRaft mode."
   val BrokerSessionTimeoutMsDoc = "The length of time in milliseconds that a broker lease lasts if no heartbeats are made. Used when running in KRaft mode."
-  val NodeIdDoc = "The node ID associated with the roles this process is playing when <code>process.roles</code> is non-empty. " +
-    "This is required configuration when running in KRaft mode."
-  val MetadataLogDirDoc = "This configuration determines where we put the metadata log for clusters in KRaft mode. " +
-    "If it is not set, the metadata log is placed in the first log directory from log.dirs."
+  val NodeIdDoc = RaftConfig.NODE_ID_DOC
+  val MetadataLogDirDoc = LogConfig.METADATA_LOG_DIR_DOC
   val MetadataSnapshotMaxNewRecordBytesDoc = "This is the maximum number of bytes in the log between the latest " +
     "snapshot and the high-watermark needed before generating a new snapshot. The default value is " +
     s"${Defaults.METADATA_SNAPSHOT_MAX_NEW_RECORD_BYTES}. To generate snapshots based on the time elapsed, see " +
@@ -625,8 +622,8 @@ object KafkaConfig {
   val RackDoc = "Rack of the broker. This will be used in rack aware replication assignment for fault tolerance. Examples: <code>RACK1</code>, <code>us-east-1d</code>"
   /** ********* Log Configuration ***********/
   val NumPartitionsDoc = "The default number of log partitions per topic"
-  val LogDirDoc = "The directory in which the log data is kept (supplemental for " + LogDirsProp + " property)"
-  val LogDirsDoc = "A comma-separated list of the directories where the log data is stored. If not set, the value in " + LogDirProp + " is used."
+  val LogDirDoc = LogConfig.LOG_DIR_DOC
+  val LogDirsDoc = LogConfig.LOG_DIRS_DOC
   val LogSegmentBytesDoc = "The maximum size of a single log file"
   val LogRollTimeMillisDoc = "The maximum time before a new log segment is rolled out (in milliseconds). If not set, the value in " + LogRollTimeHoursProp + " is used"
   val LogRollTimeHoursDoc = "The maximum time before a new log segment is rolled out (in hours), secondary to " + LogRollTimeMillisProp + " property"
@@ -728,9 +725,7 @@ object KafkaConfig {
   val InterBrokerSecurityProtocolDoc = "Security protocol used to communicate between brokers. Valid values are: " +
     s"${SecurityProtocol.names.asScala.mkString(", ")}. It is an error to set this and $InterBrokerListenerNameProp " +
     "properties at the same time."
-  val InterBrokerProtocolVersionDoc = "Specify which version of the inter-broker protocol will be used.\n" +
-  " This is typically bumped after all brokers were upgraded to a new version.\n" +
-  " Example of some valid values are: 0.8.0, 0.8.1, 0.8.1.1, 0.8.2, 0.8.2.0, 0.8.2.1, 0.9.0.0, 0.9.0.1 Check MetadataVersion for the full list."
+  val InterBrokerProtocolVersionDoc = LogConfig.INTER_BROKER_PROTOCOL_VERSION_DOC
   val InterBrokerListenerNameDoc = s"Name of listener used for communication between brokers. If this is unset, the listener name is defined by $InterBrokerSecurityProtocolProp. " +
     s"It is an error to set this and $InterBrokerSecurityProtocolProp properties at the same time."
   val ReplicaSelectorClassDoc = "The fully qualified class name that implements ReplicaSelector. This is used by the broker to find the preferred read replica. By default, we use an implementation that returns the leader."

@@ -17,6 +17,7 @@
 package org.apache.kafka.storage.internals.log;
 
 import static java.util.Arrays.asList;
+import static org.apache.kafka.common.config.ConfigDef.Importance.HIGH;
 import static org.apache.kafka.common.config.ConfigDef.Range.between;
 import static org.apache.kafka.common.config.ConfigDef.Type.BOOLEAN;
 import static org.apache.kafka.common.config.ConfigDef.Type.DOUBLE;
@@ -30,6 +31,7 @@ import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
 import static org.apache.kafka.common.config.ConfigDef.Type.INT;
 import static org.apache.kafka.common.config.ConfigDef.ValidString.in;
 
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -193,6 +195,11 @@ public class LogConfig extends AbstractConfig {
     @Deprecated
     public static final String DEFAULT_MESSAGE_FORMAT_VERSION = IBP_3_0_IV1.version();
 
+    public static final String DEFAULT_LOG_DIR = "/tmp/kafka-logs";
+    public static final String DEFAULT_INTER_BROKER_PROTOCOL_VERSION = MetadataVersion.latestProduction().version();
+    public static final boolean DEFAULT_UNSTABLE_API_VERSIONS_ENABLE = false;
+    public static final boolean DEFAULT_UNSTABLE_METADATA_VERSIONS_ENABLE = false;
+
     // Leave these out of TopicConfig for now as they are replication quota configs
     public static final String LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG = "leader.replication.throttled.replicas";
     public static final String FOLLOWER_REPLICATION_THROTTLED_REPLICAS_CONFIG = "follower.replication.throttled.replicas";
@@ -207,11 +214,34 @@ public class LogConfig extends AbstractConfig {
     @SuppressWarnings("deprecation")
     private static final String MESSAGE_TIMESTAMP_DIFFERENCE_MAX_MS_DOC = TopicConfig.MESSAGE_TIMESTAMP_DIFFERENCE_MAX_MS_DOC;
 
+    public static final String LOG_CONFIG_PREFIX = "log.";
+    public static final String LOG_DIR_PROP = LOG_CONFIG_PREFIX + "dir";
+    public static final String LOG_DIR_DOC = "The directory in which the log data is kept (supplemental for " + LOG_DIR_PROP + " property)";
+    public static final String LOG_DIRS_PROP = LOG_CONFIG_PREFIX + "dirs";
+    public static final String LOG_DIRS_DOC = "A comma-separated list of the directories where the log data is stored. If not set, the value in " + LOG_DIRS_PROP + " is used.";
+
+    public static final String METADATA_LOG_DIR_PROP = "metadata.log.dir";
+    public static final String METADATA_LOG_DIR_DOC = "This configuration determines where we put the metadata log for clusters in KRaft mode. " +
+        "If it is not set, the metadata log is placed in the first log directory from log.dirs.";
+
+    public static final String INTER_BROKER_PROTOCOL_VERSION_PROP = "inter.broker.protocol.version";
+    public static final String INTER_BROKER_PROTOCOL_VERSION_DOC = "Specify which version of the inter-broker protocol will be used.\n" +
+        " This is typically bumped after all brokers were upgraded to a new version.\n" +
+        " Example of some valid values are: 0.8.0, 0.8.1, 0.8.1.1, 0.8.2, 0.8.2.0, 0.8.2.1, 0.9.0.0, 0.9.0.1 Check MetadataVersion for the full list.";
+
+    // Internal configurations
+    public static final String UNSTABLE_API_VERSIONS_ENABLE_PROP = "unstable.api.versions.enable";
+    public static final String UNSTABLE_METADATA_VERSIONS_ENABLE_PROP = "unstable.metadata.versions.enable";
+
     // Visible for testing
     public static final Set<String> CONFIGS_WITH_NO_SERVER_DEFAULTS = Collections.unmodifiableSet(Utils.mkSet(
         TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG,
         LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG,
-        FOLLOWER_REPLICATION_THROTTLED_REPLICAS_CONFIG
+        FOLLOWER_REPLICATION_THROTTLED_REPLICAS_CONFIG,
+        LOG_DIR_PROP,
+        LOG_DIRS_PROP,
+        METADATA_LOG_DIR_PROP,
+        INTER_BROKER_PROTOCOL_VERSION_PROP
     ));
 
     public static final String LEADER_REPLICATION_THROTTLED_REPLICAS_DOC = "A list of replicas for which log replication should be throttled on " +
@@ -290,7 +320,15 @@ public class LogConfig extends AbstractConfig {
             .define(TopicConfig.LOCAL_LOG_RETENTION_MS_CONFIG, LONG, DEFAULT_LOCAL_RETENTION_MS, atLeast(-2), MEDIUM,
                 TopicConfig.LOCAL_LOG_RETENTION_MS_DOC)
             .define(TopicConfig.LOCAL_LOG_RETENTION_BYTES_CONFIG, LONG, DEFAULT_LOCAL_RETENTION_BYTES, atLeast(-2), MEDIUM,
-                TopicConfig.LOCAL_LOG_RETENTION_BYTES_DOC);
+                TopicConfig.LOCAL_LOG_RETENTION_BYTES_DOC)
+            .define(LOG_DIR_PROP, STRING, DEFAULT_LOG_DIR, HIGH, LOG_DIR_DOC)
+            .define(LOG_DIRS_PROP, STRING, null, HIGH, LOG_DIRS_DOC)
+            .define(METADATA_LOG_DIR_PROP, STRING, null, HIGH, METADATA_LOG_DIR_DOC)
+            .define(INTER_BROKER_PROTOCOL_VERSION_PROP, STRING, DEFAULT_INTER_BROKER_PROTOCOL_VERSION, new MetadataVersionValidator(), MEDIUM, INTER_BROKER_PROTOCOL_VERSION_DOC)
+            // This indicates whether unreleased APIs should be advertised by this node.
+            .defineInternal(UNSTABLE_API_VERSIONS_ENABLE_PROP, BOOLEAN, DEFAULT_UNSTABLE_API_VERSIONS_ENABLE, HIGH)
+            // This indicates whether unreleased MetadataVersions should be enabled on this node.
+            .defineInternal(UNSTABLE_METADATA_VERSIONS_ENABLE_PROP, BOOLEAN, DEFAULT_UNSTABLE_METADATA_VERSIONS_ENABLE, HIGH);
     }
 
     public final Set<String> overriddenConfigs;
@@ -339,6 +377,15 @@ public class LogConfig extends AbstractConfig {
     private final int maxMessageSize;
     private final Map<?, ?> props;
 
+    public final String logDirs;
+    public final String logDir;
+    public final String metadataLogDir;
+    public final String ibpVersion;
+
+    // Internal configurations
+    public final Boolean unstableApiVersionsEnabled;
+    public final Boolean unstableMetadataVersionsEnabled;
+
     public LogConfig(Map<?, ?> props) {
         this(props, Collections.emptySet());
     }
@@ -385,7 +432,13 @@ public class LogConfig extends AbstractConfig {
         this.followerReplicationThrottledReplicas = Collections.unmodifiableList(getList(LogConfig.FOLLOWER_REPLICATION_THROTTLED_REPLICAS_CONFIG));
         this.messageDownConversionEnable = getBoolean(TopicConfig.MESSAGE_DOWNCONVERSION_ENABLE_CONFIG);
 
-        remoteLogConfig = new RemoteLogConfig(this);
+        this.remoteLogConfig = new RemoteLogConfig(this);
+        this.logDirs = getString(LOG_DIRS_PROP);
+        this.logDir = getString(LOG_DIR_PROP);
+        this.metadataLogDir = getString(METADATA_LOG_DIR_PROP);
+        this.ibpVersion = getString(INTER_BROKER_PROTOCOL_VERSION_PROP);
+        this.unstableApiVersionsEnabled = getBoolean(UNSTABLE_API_VERSIONS_ENABLE_PROP);
+        this.unstableMetadataVersionsEnabled = getBoolean(UNSTABLE_METADATA_VERSIONS_ENABLE_PROP);
     }
 
     //In the transition period before messageTimestampDifferenceMaxMs is removed, to maintain backward compatibility,
@@ -498,6 +551,34 @@ public class LogConfig extends AbstractConfig {
 
     public static Map<String, ConfigKey> configKeys() {
         return Collections.unmodifiableMap(CONFIG.configKeys());
+    }
+
+    public List<String> logDirs() {
+        String csvList = logDirs != null ? logDirs : logDir;
+        if (csvList == null || csvList.isEmpty()) {
+            return Collections.emptyList();
+        } else {
+            return Arrays.stream(csvList.split("\\s*,\\s*"))
+                .filter(v -> !v.equals(""))
+                .collect(Collectors.toList());
+        }
+    }
+
+    public String getMetadataLogDir() {
+        if (metadataLogDir != null) {
+            return metadataLogDir;
+        } else {
+            return logDirs().get(0);
+        }
+    }
+
+    public Optional<String> interBrokerProtocolVersion() {
+        String originalIBP = (String) originals().get(LogConfig.INTER_BROKER_PROTOCOL_VERSION_PROP);
+        return originalIBP != null ? Optional.of(originalIBP) : Optional.empty();
+    }
+
+    public Boolean unstableMetadataVersionsEnabled() {
+        return unstableMetadataVersionsEnabled;
     }
 
     /**
