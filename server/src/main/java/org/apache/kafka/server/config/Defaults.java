@@ -193,6 +193,9 @@ public class Defaults {
     public static final int MAX_INCREMENTAL_FETCH_SESSION_CACHE_SLOTS = 1000;
     public static final int FETCH_MAX_BYTES = 55 * 1024 * 1024;
 
+    /** ********* Request Limit Configuration ***********/
+    public static final int MAX_REQUEST_PARTITION_SIZE_LIMIT = 2000;
+
     /** ********* Quota Configuration *********/
     public static final int NUM_QUOTA_SAMPLES = ClientQuotaManagerConfig.DEFAULT_NUM_QUOTA_SAMPLES;
     public static final int QUOTA_WINDOW_SIZE_SECONDS = ClientQuotaManagerConfig.DEFAULT_QUOTA_WINDOW_SIZE_SECONDS;

@@ -159,7 +159,7 @@ class TransactionMarkerChannelManager(
 
   private val transactionsWithPendingMarkers = new ConcurrentHashMap[String, PendingCompleteTxn]
 
-  val writeTxnMarkersRequestVersion: Short =
+  private val writeTxnMarkersRequestVersion: Short =
     if (config.interBrokerProtocolVersion.isAtLeast(IBP_2_8_IV0)) 1
     else 0
 
@@ -176,7 +176,7 @@ class TransactionMarkerChannelManager(
   }
 
   private def removeMetrics(): Unit = {
-    MetricNames.foreach(metricsGroup.removeMetric(_))
+    MetricNames.foreach(metricsGroup.removeMetric)
   }
 
   // visible for testing
@@ -200,7 +200,7 @@ class TransactionMarkerChannelManager(
     trace(s"Added marker ${txnIdAndMarker.txnMarkerEntry} for transactional id ${txnIdAndMarker.txnId} to destination broker $brokerId")
   }
 
-  def retryLogAppends(): Unit = {
+  private def retryLogAppends(): Unit = {
     val txnLogAppendRetries: util.List[PendingCompleteTxn] = new util.ArrayList[PendingCompleteTxn]()
     txnLogAppendRetryQueue.drainTo(txnLogAppendRetries)
     txnLogAppendRetries.forEach { txnLogAppend =>
