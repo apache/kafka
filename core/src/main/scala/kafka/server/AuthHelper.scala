@@ -36,7 +36,7 @@ import org.apache.kafka.common.resource.{PatternType, Resource, ResourcePattern,
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.server.authorizer.{Action, AuthorizationResult, Authorizer}
 
-import scala.collection.{Map, Seq}
+import scala.collection.Seq
 import scala.jdk.CollectionConverters._
 
 class AuthHelper(authorizer: Option[Authorizer]) {
@@ -94,21 +94,6 @@ class AuthHelper(authorizer: Option[Authorizer]) {
           resources, logIfAllowed, logIfDenied)(resourceName)
         resources.partition(resource => authorizedResourceNames.contains(resourceName(resource)))
       case None => (resources, Seq.empty)
-    }
-  }
-
-  def partitionMapByAuthorized[K, V](requestContext: RequestContext,
-                                     operation: AclOperation,
-                                     resourceType: ResourceType,
-                                     resources: Map[K, V],
-                                     logIfAllowed: Boolean = true,
-                                     logIfDenied: Boolean = true)(resourceName: K => String): (Map[K, V], Map[K, V]) = {
-    authorizer match {
-      case Some(_) =>
-        val authorizedResourceNames = filterByAuthorized(requestContext, operation, resourceType,
-          resources.keySet, logIfAllowed, logIfDenied)(resourceName)
-        resources.partition { case (k, _) => authorizedResourceNames.contains(resourceName(k)) }
-      case None => (resources, Map.empty)
     }
   }
 

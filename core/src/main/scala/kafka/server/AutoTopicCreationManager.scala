@@ -50,6 +50,10 @@ trait AutoTopicCreationManager {
 
 object AutoTopicCreationManager {
 
+  /**
+   * @deprecated use [[apply(kafka.server.KafkaConfig, kafka.server.MetadataCache, scala.Option, scala.Option, scala.Option, scala.Option, org.apache.kafka.coordinator.group.GroupCoordinator, kafka.coordinator.transaction.TransactionCoordinator)]]
+   */
+  @deprecated("Use the alternative apply method", "3.8.0")
   def apply(
     config: KafkaConfig,
     metadataCache: MetadataCache,
@@ -60,6 +64,18 @@ object AutoTopicCreationManager {
     groupCoordinator: GroupCoordinator,
     txnCoordinator: TransactionCoordinator,
   ): AutoTopicCreationManager = {
+    apply(config, channelManager, adminManager,
+      controller, groupCoordinator, txnCoordinator)
+  }
+
+  def apply(
+   config: KafkaConfig,
+   channelManager: Option[NodeToControllerChannelManager],
+   adminManager: Option[ZkAdminManager],
+   controller: Option[KafkaController],
+   groupCoordinator: GroupCoordinator,
+   txnCoordinator: TransactionCoordinator,
+ ): AutoTopicCreationManager = {
     new DefaultAutoTopicCreationManager(config, channelManager, adminManager,
       controller, groupCoordinator, txnCoordinator)
   }
