@@ -121,7 +121,7 @@ public class DescribeConsumerGroupsHandler implements AdminApiHandler<Coordinato
             ConsumerGroupDescribeRequestData data = new ConsumerGroupDescribeRequestData()
                 .setGroupIds(newConsumerGroups.stream().map(key -> key.idValue).collect(Collectors.toList()))
                 .setIncludeAuthorizedOperations(includeAuthorizedOperations);
-            requests.add(new RequestAndKeys<>(new ConsumerGroupDescribeRequest.Builder(data, true), newConsumerGroups));
+            requests.add(new RequestAndKeys<>(new ConsumerGroupDescribeRequest.Builder(data), newConsumerGroups));
         }
 
         if (!oldConsumerGroups.isEmpty()) {
