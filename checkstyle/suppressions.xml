@@ -44,6 +44,9 @@
     <suppress checks="MethodLength"
               files="(KafkaClusterTestKit).java"/>
 
+    <!-- server tests -->
+    <suppress checks="MethodLength|JavaNCSS|NPath" files="DescribeTopicPartitionsRequestHandlerTest.java"/>
+
     <!-- Clients -->
     <suppress id="dontUseSystemExit"
               files="Exit.java"/>
