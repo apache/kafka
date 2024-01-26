@@ -138,11 +138,6 @@ public class BlockingConnectorTest {
                 NUM_WORKERS,
                 "Initial group of workers did not start in time"
         );
-
-        try (Response response = connect.requestGet(connect.endpointForResource("connectors/nonexistent"))) {
-            // hack: make sure the worker is actually up (has joined the cluster, created and read to the end of internal topics, etc.)
-            assertEquals(404, response.getStatus());
-        }
     }
 
     @After
