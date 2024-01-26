@@ -3820,7 +3820,9 @@ public class GroupMetadataManager {
 
         scheduleConsumerGroupSessionTimeout(groupId, memberId);
 
-        if (group.groupEpoch() > member.memberEpoch()) {
+        if (group.groupEpoch() > member.memberEpoch() ||
+            !member.partitionsPendingRevocation().isEmpty() ||
+            !member.partitionsPendingAssignment().isEmpty()) {
             new HeartbeatResponseData().setErrorCode(Errors.REBALANCE_IN_PROGRESS.code());
         }
         return new HeartbeatResponseData();
