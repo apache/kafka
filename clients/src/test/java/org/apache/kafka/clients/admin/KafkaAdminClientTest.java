@@ -30,6 +30,7 @@ import org.apache.kafka.clients.consumer.internals.ConsumerProtocol;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.ConsumerGroupState;
 import org.apache.kafka.common.ElectionType;
+import org.apache.kafka.common.GroupType;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.Node;
@@ -3403,6 +3404,7 @@ public class KafkaAdminClientTest {
                     )
                 ),
                 "range",
+                GroupType.CONSUMER,
                 ConsumerGroupState.STABLE,
                 env.cluster().controller(),
                 Collections.emptySet()
@@ -3422,6 +3424,7 @@ public class KafkaAdminClientTest {
                     )
                 ),
                 "range",
+                GroupType.CLASSIC,
                 ConsumerGroupState.STABLE,
                 env.cluster().controller(),
                 Collections.emptySet()

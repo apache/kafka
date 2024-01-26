@@ -41,6 +41,7 @@ import org.apache.kafka.clients.admin.MemberDescription;
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.Assignment;
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol;
 import org.apache.kafka.common.ConsumerGroupState;
+import org.apache.kafka.common.GroupType;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
@@ -164,8 +165,10 @@ public class DescribeConsumerGroupsHandlerTest {
             false,
             members,
             "range",
+            GroupType.CONSUMER,
             ConsumerGroupState.STABLE,
-            coordinator
+            coordinator,
+            Collections.emptySet()
         );
         AdminApiHandler.ApiResult<CoordinatorKey, ConsumerGroupDescription> result = handler.handleResponse(
             coordinator,

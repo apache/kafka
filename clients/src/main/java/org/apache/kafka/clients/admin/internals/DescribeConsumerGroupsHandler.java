@@ -34,6 +34,7 @@ import org.apache.kafka.clients.admin.MemberDescription;
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.Assignment;
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol;
 import org.apache.kafka.common.ConsumerGroupState;
+import org.apache.kafka.common.GroupType;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.acl.AclOperation;
@@ -226,6 +227,7 @@ public class DescribeConsumerGroupsHandler implements AdminApiHandler<Coordinato
                     false,
                     memberDescriptions,
                     describedGroup.assignorName(),
+                    GroupType.CONSUMER,
                     ConsumerGroupState.parse(describedGroup.groupState()),
                     coordinator,
                     authorizedOperations
@@ -280,6 +282,7 @@ public class DescribeConsumerGroupsHandler implements AdminApiHandler<Coordinato
                     new ConsumerGroupDescription(groupIdKey.idValue, protocolType.isEmpty(),
                         memberDescriptions,
                         describedGroup.protocolData(),
+                        GroupType.CLASSIC,
                         ConsumerGroupState.parse(describedGroup.groupState()),
                         coordinator,
                         authorizedOperations);
