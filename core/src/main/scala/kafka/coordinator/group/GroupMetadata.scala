@@ -420,18 +420,6 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
     }
   }
 
-  /**
-    * Verify the member.id is up to date for static members. Return true if both conditions met:
-    *   1. given member is a known static member to group
-    *   2. group stored member.id doesn't match with given member.id
-    */
-  def isStaticMemberFenced(
-    groupInstanceId: String,
-    memberId: String
-  ): Boolean = {
-    currentStaticMemberId(groupInstanceId).exists(_ != memberId)
-  }
-
   def canRebalance: Boolean = PreparingRebalance.validPreviousStates.contains(state)
 
   def transitionTo(groupState: GroupState): Unit = {

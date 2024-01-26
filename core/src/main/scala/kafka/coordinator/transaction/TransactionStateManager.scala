@@ -71,7 +71,7 @@ class TransactionStateManager(brokerId: Int,
 
   this.logIdent = "[Transaction State Manager " + brokerId + "]: "
 
-  type SendTxnMarkersCallback = (Int, TransactionResult, TransactionMetadata, TxnTransitMetadata) => Unit
+  private type SendTxnMarkersCallback = (Int, TransactionResult, TransactionMetadata, TxnTransitMetadata) => Unit
 
   /** shutting down flag */
   private val shuttingDown = new AtomicBoolean(false)
