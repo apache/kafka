@@ -75,10 +75,10 @@ public class ConsumerGroupServiceTest {
     private static final List<String> TOPICS = IntStream.range(0, 5).mapToObj(i -> "testTopic" + i).collect(Collectors.toList());
 
     private static final List<TopicPartition> TOPIC_PARTITIONS = TOPICS.stream()
-        .flatMap(topic -> IntStream.range(0, NUM_PARTITIONS).mapToObj(i -> new TopicPartition(topic, i)))
-        .collect(Collectors.toList());
+            .flatMap(topic -> IntStream.range(0, NUM_PARTITIONS).mapToObj(i -> new TopicPartition(topic, i)))
+            .collect(Collectors.toList());
 
-    private Admin admin = mock(Admin.class);
+    private final Admin admin = mock(Admin.class);
 
     @Test
     public void testAdminRequestsForDescribeOffsets() throws Exception {
@@ -86,11 +86,11 @@ public class ConsumerGroupServiceTest {
         ConsumerGroupService groupService = consumerGroupService(args);
 
         when(admin.describeConsumerGroups(ArgumentMatchers.eq(Collections.singletonList(GROUP)), any()))
-            .thenReturn(describeGroupsResult(ConsumerGroupState.STABLE));
+                .thenReturn(describeGroupsResult(ConsumerGroupState.STABLE));
         when(admin.listConsumerGroupOffsets(ArgumentMatchers.eq(listConsumerGroupOffsetsSpec()), any()))
-            .thenReturn(listGroupOffsetsResult(GROUP));
+                .thenReturn(listGroupOffsetsResult(GROUP));
         when(admin.listOffsets(offsetsArgMatcher(), any()))
-            .thenReturn(listOffsetsResult());
+                .thenReturn(listOffsetsResult());
 
         Tuple2<Optional<String>, Optional<Collection<PartitionAssignmentState>>> res = groupService.collectGroupOffsets(GROUP);
         assertEquals(Optional.of("Stable"), res.v1);
@@ -137,33 +137,33 @@ public class ConsumerGroupServiceTest {
         Set<TopicPartition> unassignedTopicPartitions = new HashSet<>(Arrays.asList(testTopicPartition3, testTopicPartition4, testTopicPartition5));
 
         ConsumerGroupDescription consumerGroupDescription = new ConsumerGroupDescription(GROUP,
-            true,
-            Collections.singleton(new MemberDescription("member1", Optional.of("instance1"), "client1", "host1", new MemberAssignment(assignedTopicPartitions))),
-            RangeAssignor.class.getName(),
-            ConsumerGroupState.STABLE,
-            new Node(1, "localhost", 9092));
+                true,
+                Collections.singleton(new MemberDescription("member1", Optional.of("instance1"), "client1", "host1", new MemberAssignment(assignedTopicPartitions))),
+                RangeAssignor.class.getName(),
+                ConsumerGroupState.STABLE,
+                new Node(1, "localhost", 9092));
 
         Function<Collection<TopicPartition>, ArgumentMatcher<Map<TopicPartition, OffsetSpec>>> offsetsArgMatcher = expectedPartitions ->
-            topicPartitionOffsets -> topicPartitionOffsets != null && topicPartitionOffsets.keySet().equals(expectedPartitions);
+                topicPartitionOffsets -> topicPartitionOffsets != null && topicPartitionOffsets.keySet().equals(expectedPartitions);
 
         KafkaFutureImpl<ConsumerGroupDescription> future = new KafkaFutureImpl<>();
         future.complete(consumerGroupDescription);
         when(admin.describeConsumerGroups(ArgumentMatchers.eq(Collections.singletonList(GROUP)), any()))
-            .thenReturn(new DescribeConsumerGroupsResult(Collections.singletonMap(GROUP, future)));
+                .thenReturn(new DescribeConsumerGroupsResult(Collections.singletonMap(GROUP, future)));
         when(admin.listConsumerGroupOffsets(ArgumentMatchers.eq(listConsumerGroupOffsetsSpec()), any()))
-            .thenReturn(
-                AdminClientTestUtils.listConsumerGroupOffsetsResult(
-                    Collections.singletonMap(GROUP, committedOffsets)));
+                .thenReturn(
+                        AdminClientTestUtils.listConsumerGroupOffsetsResult(
+                                Collections.singletonMap(GROUP, committedOffsets)));
         when(admin.listOffsets(
-            ArgumentMatchers.argThat(offsetsArgMatcher.apply(assignedTopicPartitions)),
-            any()
+                ArgumentMatchers.argThat(offsetsArgMatcher.apply(assignedTopicPartitions)),
+                any()
         )).thenReturn(new ListOffsetsResult(endOffsets.entrySet().stream().filter(e -> assignedTopicPartitions.contains(e.getKey()))
-            .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue))));
+                .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue))));
         when(admin.listOffsets(
-            ArgumentMatchers.argThat(offsetsArgMatcher.apply(unassignedTopicPartitions)),
-            any()
+                ArgumentMatchers.argThat(offsetsArgMatcher.apply(unassignedTopicPartitions)),
+                any()
         )).thenReturn(new ListOffsetsResult(endOffsets.entrySet().stream().filter(e -> unassignedTopicPartitions.contains(e.getKey()))
-            .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue))));
+                .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue))));
 
         Tuple2<Optional<String>, Optional<Collection<PartitionAssignmentState>>> res = groupService.collectGroupOffsets(GROUP);
         Optional<String> state = res.v1;
@@ -204,11 +204,11 @@ public class ConsumerGroupServiceTest {
         ConsumerGroupService groupService = consumerGroupService(args.toArray(new String[0]));
 
         when(admin.describeConsumerGroups(ArgumentMatchers.eq(Collections.singletonList(GROUP)), any()))
-            .thenReturn(describeGroupsResult(ConsumerGroupState.DEAD));
+                .thenReturn(describeGroupsResult(ConsumerGroupState.DEAD));
         when(admin.describeTopics(ArgumentMatchers.eq(topicsWithoutPartitionsSpecified), any()))
-            .thenReturn(describeTopicsResult(topicsWithoutPartitionsSpecified));
+                .thenReturn(describeTopicsResult(topicsWithoutPartitionsSpecified));
         when(admin.listOffsets(offsetsArgMatcher(), any()))
-            .thenReturn(listOffsetsResult());
+                .thenReturn(listOffsetsResult());
 
         Map<String, Map<TopicPartition, OffsetAndMetadata>> resetResult = groupService.resetOffsets();
         assertEquals(Collections.singleton(GROUP), resetResult.keySet());
@@ -231,11 +231,11 @@ public class ConsumerGroupServiceTest {
     private DescribeConsumerGroupsResult describeGroupsResult(ConsumerGroupState groupState) {
         MemberDescription member1 = new MemberDescription("member1", Optional.of("instance1"), "client1", "host1", null);
         ConsumerGroupDescription description = new ConsumerGroupDescription(GROUP,
-            true,
-            Collections.singleton(member1),
-            RangeAssignor.class.getName(),
-            groupState,
-            new Node(1, "localhost", 9092));
+                true,
+                Collections.singleton(member1),
+                RangeAssignor.class.getName(),
+                groupState,
+                new Node(1, "localhost", 9092));
         KafkaFutureImpl<ConsumerGroupDescription> future = new KafkaFutureImpl<>();
         future.complete(description);
         return new DescribeConsumerGroupsResult(Collections.singletonMap(GROUP, future));
@@ -243,26 +243,26 @@ public class ConsumerGroupServiceTest {
 
     private ListConsumerGroupOffsetsResult listGroupOffsetsResult(String groupId) {
         Map<TopicPartition, OffsetAndMetadata> offsets = TOPIC_PARTITIONS.stream().collect(Collectors.toMap(
-            Function.identity(),
-            tp -> new OffsetAndMetadata(100)));
+                Function.identity(),
+                __ -> new OffsetAndMetadata(100)));
         return AdminClientTestUtils.listConsumerGroupOffsetsResult(Collections.singletonMap(groupId, offsets));
     }
 
     private Map<TopicPartition, OffsetSpec> offsetsArgMatcher() {
         Map<TopicPartition, OffsetSpec> expectedOffsets = TOPIC_PARTITIONS.stream().collect(Collectors.toMap(
-            Function.identity(),
-            tp -> OffsetSpec.latest()
+                Function.identity(),
+                __ -> OffsetSpec.latest()
         ));
         return ArgumentMatchers.argThat(map ->
-            Objects.equals(map.keySet(), expectedOffsets.keySet()) && map.values().stream().allMatch(v -> v instanceof OffsetSpec.LatestSpec)
+                Objects.equals(map.keySet(), expectedOffsets.keySet()) && map.values().stream().allMatch(v -> v instanceof OffsetSpec.LatestSpec)
         );
     }
 
     private ListOffsetsResult listOffsetsResult() {
         ListOffsetsResultInfo resultInfo = new ListOffsetsResultInfo(100, System.currentTimeMillis(), Optional.of(1));
         Map<TopicPartition, KafkaFuture<ListOffsetsResultInfo>> futures = TOPIC_PARTITIONS.stream().collect(Collectors.toMap(
-            Function.identity(),
-            tp -> KafkaFuture.completedFuture(resultInfo)));
+                Function.identity(),
+                __ -> KafkaFuture.completedFuture(resultInfo)));
         return new ListOffsetsResult(futures);
     }
 
@@ -271,8 +271,8 @@ public class ConsumerGroupServiceTest {
 
         topics.forEach(topic -> {
             List<TopicPartitionInfo> partitions = IntStream.range(0, NUM_PARTITIONS)
-                .mapToObj(i -> new TopicPartitionInfo(i, null, Collections.emptyList(), Collections.emptyList()))
-                .collect(Collectors.toList());
+                    .mapToObj(i -> new TopicPartitionInfo(i, null, Collections.emptyList(), Collections.emptyList()))
+                    .collect(Collectors.toList());
             topicDescriptions.put(topic, new TopicDescription(topic, false, partitions));
         });
         return AdminClientTestUtils.describeTopicsResult(topicDescriptions);
