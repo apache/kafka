@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.clients.consumer.internals.metrics;
 
-import org.apache.kafka.clients.consumer.internals.ConsumerUtils;
 import org.apache.kafka.common.metrics.Measurable;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.stats.Meter;
@@ -30,10 +29,6 @@ import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.FETCH_MA
 /**
  * Base class for different consumer metrics to extend. This class helps to construct the logical group name from the
  * given prefix and suffix, and provides a few common utilities.
- *
- * <p>
- * Prefix can be provided by the user and is "consumer-" by default (see {@link ConsumerUtils#CONSUMER_METRIC_GROUP_PREFIX}).
- * </p>
  *
  * <p>
  * The suffix can be one of the following:
