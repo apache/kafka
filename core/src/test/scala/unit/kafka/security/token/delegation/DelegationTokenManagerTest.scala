@@ -39,7 +39,7 @@ import org.apache.kafka.common.security.token.delegation.internals.DelegationTok
 import org.apache.kafka.common.security.token.delegation.{DelegationToken, TokenInformation}
 import org.apache.kafka.common.utils.{MockTime, SecurityUtils, Time}
 import org.apache.kafka.server.authorizer._
-import org.apache.kafka.server.config.Defaults
+import org.apache.kafka.server.config.{KafkaConfig => JKafkaConfig}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo}
 
@@ -58,8 +58,8 @@ class DelegationTokenManagerTest extends QuorumTestHarness  {
   val tokenManagers = Buffer[DelegationTokenManager]()
 
   val secretKey = "secretKey"
-  val maxLifeTimeMsDefault = Defaults.DELEGATION_TOKEN_MAX_LIFE_TIME_MS
-  val renewTimeMsDefault = Defaults.DELEGATION_TOKEN_EXPIRY_TIME_MS
+  val maxLifeTimeMsDefault = JKafkaConfig.DELEGATION_TOKEN_MAX_LIFE_TIME_MS_DEFAULT
+  val renewTimeMsDefault = JKafkaConfig.DELEGATION_TOKEN_EXPIRY_TIME_MS_DEFAULT
   var tokenCache: DelegationTokenCache = _
   var props: Properties = _
 
