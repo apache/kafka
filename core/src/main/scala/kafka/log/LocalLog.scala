@@ -24,7 +24,7 @@ import org.apache.kafka.common.record.MemoryRecords
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.common.{KafkaException, TopicPartition}
 import org.apache.kafka.server.util.Scheduler
-import org.apache.kafka.storage.internals.log.{AbortedTxn, FetchDataInfo, LogConfig, LogDirFailureChannel, LogFileUtils, LogOffsetMetadata, LogSegment, LogSegments, OffsetPosition}
+import org.apache.kafka.storage.internals.log.{AbortedTxn, FetchDataInfo, LogConfig, LogDirFailureChannel, LogFileUtils, LogOffsetMetadata, LogSegment, LogSegments, OffsetPosition, SplitSegmentResult}
 
 import java.io.{File, IOException}
 import java.nio.file.Files
@@ -36,14 +36,6 @@ import scala.collection.mutable.ListBuffer
 import scala.collection.{Seq, immutable}
 import scala.compat.java8.OptionConverters._
 import scala.jdk.CollectionConverters._
-
-/**
- * Holds the result of splitting a segment into one or more segments, see LocalLog.splitOverflowedSegment().
- *
- * @param deletedSegments segments deleted when splitting a segment
- * @param newSegments new segments created when splitting a segment
- */
-case class SplitSegmentResult(deletedSegments: Iterable[LogSegment], newSegments: Iterable[LogSegment])
 
 /**
  * An append-only log for storing messages locally. The log is a sequence of LogSegments, each with a base offset.
@@ -785,7 +777,7 @@ object LocalLog extends Logging {
       val newSegmentsToAdd = newSegments.toSeq
       val deletedSegments = LocalLog.replaceSegments(existingSegments, newSegmentsToAdd, List(segment),
         dir, topicPartition, config, scheduler, logDirFailureChannel, logPrefix)
-      SplitSegmentResult(deletedSegments.toSeq, newSegmentsToAdd)
+      return new SplitSegmentResult(deletedSegments.asJava, newSegmentsToAdd.asJava)
     } catch {
       case e: Exception =>
         newSegments.foreach { splitSegment =>
