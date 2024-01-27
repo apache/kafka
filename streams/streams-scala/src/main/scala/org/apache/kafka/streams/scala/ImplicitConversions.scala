@@ -80,13 +80,17 @@ object ImplicitConversions {
   implicit def groupedFromSerde[K, V](implicit keySerde: Serde[K], valueSerde: Serde[V]): Grouped[K, V] =
     Grouped.`with`[K, V]
 
-  implicit def joinedFromKeyValueOtherSerde[K, V, VO](implicit keySerde: Serde[K],
-                                                      valueSerde: Serde[V],
-                                                      otherValueSerde: Serde[VO]): Joined[K, V, VO] =
+  implicit def joinedFromKeyValueOtherSerde[K, V, VO](implicit
+    keySerde: Serde[K],
+    valueSerde: Serde[V],
+    otherValueSerde: Serde[VO]
+  ): Joined[K, V, VO] =
     Joined.`with`[K, V, VO]
 
-  implicit def materializedFromSerde[K, V, S <: StateStore](implicit keySerde: Serde[K],
-                                                            valueSerde: Serde[V]): Materialized[K, V, S] =
+  implicit def materializedFromSerde[K, V, S <: StateStore](implicit
+    keySerde: Serde[K],
+    valueSerde: Serde[V]
+  ): Materialized[K, V, S] =
     Materialized.`with`[K, V, S]
 
   implicit def producedFromSerde[K, V](implicit keySerde: Serde[K], valueSerde: Serde[V]): Produced[K, V] =
@@ -95,8 +99,10 @@ object ImplicitConversions {
   implicit def repartitionedFromSerde[K, V](implicit keySerde: Serde[K], valueSerde: Serde[V]): Repartitioned[K, V] =
     Repartitioned.`with`[K, V]
 
-  implicit def streamJoinFromKeyValueOtherSerde[K, V, VO](implicit keySerde: Serde[K],
-                                                          valueSerde: Serde[V],
-                                                          otherValueSerde: Serde[VO]): StreamJoined[K, V, VO] =
+  implicit def streamJoinFromKeyValueOtherSerde[K, V, VO](implicit
+    keySerde: Serde[K],
+    valueSerde: Serde[V],
+    otherValueSerde: Serde[VO]
+  ): StreamJoined[K, V, VO] =
     StreamJoined.`with`[K, V, VO]
 }
