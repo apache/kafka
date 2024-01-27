@@ -181,7 +181,6 @@ class MiniKdc(config: Properties, workDir: File) extends Logging {
   }
 
   /**
-  /**
     * Creates  multiple principals in the KDC and adds them to a keytab file.
     *
     * An exception will be thrown if the principal cannot be created.
