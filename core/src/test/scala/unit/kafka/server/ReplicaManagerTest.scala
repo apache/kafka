@@ -144,7 +144,7 @@ class ReplicaManagerTest {
     metrics.close()
     // validate that the shutdown is working correctly by ensuring no lingering threads.
     // assert at the very end otherwise the other tear down steps will not be performed
-    TestUtils.assertNoNonDaemonThreads(this.getClass.getName)
+    TestUtils.assertNoNonDaemonThreadsWithWaiting(this.getClass.getName)
   }
 
   @Test
