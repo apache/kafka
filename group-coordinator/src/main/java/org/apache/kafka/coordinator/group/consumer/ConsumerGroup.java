@@ -42,11 +42,11 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
-import java.util.stream.Collectors;
 
 import static org.apache.kafka.coordinator.group.consumer.ConsumerGroup.ConsumerGroupState.ASSIGNING;
 import static org.apache.kafka.coordinator.group.consumer.ConsumerGroup.ConsumerGroupState.EMPTY;
@@ -68,13 +68,21 @@ public class ConsumerGroup implements Group {
 
         private final String name;
 
+        private final String capitalizedName;
+
         ConsumerGroupState(String name) {
             this.name = name;
+            this.capitalizedName = name.substring(0, 1).toUpperCase(Locale.ROOT) +
+                name.substring(1);
         }
 
         @Override
         public String toString() {
             return name;
+        }
+
+        public String toCapitalizedString() {
+            return capitalizedName;
         }
     }
 
@@ -214,13 +222,6 @@ public class ConsumerGroup implements Group {
      */
     public String stateAsString(long committedOffset) {
         return state.get(committedOffset).toString();
-    }
-
-    /**
-     * @return The current state as a lowercase String with given committedOffset.
-     */
-    public String stateAsLowerCaseString(long committedOffset) {
-        return this.stateAsString(committedOffset);
     }
 
     /**
@@ -747,10 +748,17 @@ public class ConsumerGroup implements Group {
         return Optional.of(new OffsetExpirationConditionImpl(offsetAndMetadata -> offsetAndMetadata.commitTimestampMs));
     }
 
+    /**
+     * @return The current state as a capitalized String with given committedOffset.
+     */
+    public String stateAsCapitalizedString(long committedOffset) {
+        return state.get(committedOffset).toCapitalizedString();
+    }
+
     @Override
-    public boolean isInStatesCaseInsensitive(List<String> statesFilter, long committedOffset) {
-        Set<String> caseInsensitiveFilterSet = statesFilter.stream().map(String::toLowerCase).map(String::trim).collect(Collectors.toSet());
-        return caseInsensitiveFilterSet.contains(this.stateAsLowerCaseString(committedOffset));
+    public boolean isInStates(Set<String> statesFilter, long committedOffset) {
+        return statesFilter.contains(this.stateAsCapitalizedString(committedOffset)) || statesFilter.contains(
+            this.stateAsString(committedOffset));
     }
 
     /**

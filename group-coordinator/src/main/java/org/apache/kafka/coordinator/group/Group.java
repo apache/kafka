@@ -21,6 +21,7 @@ import org.apache.kafka.common.message.ListGroupsResponseData;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 /**
  * Interface common for all groups.
@@ -56,11 +57,6 @@ public interface Group {
      * @return The {{@link GroupType}}'s String representation based on the committed offset.
      */
     String stateAsString(long committedOffset);
-
-    /**
-     * @return The {{@link GroupType}}'s LowerCase String representation based on the committed offset.
-     */
-    String stateAsLowerCaseString(long committedOffset);
 
     /**
      * @return the group formatted as a list group response based on the committed offset.
@@ -145,5 +141,5 @@ public interface Group {
      * @param statesFilter  The states to filter.
      * @return true if the state includes, false otherwise.
      */
-    boolean isInStatesCaseInsensitive(List<String> statesFilter, long committedOffset);
+    boolean isInStates(Set<String> statesFilter, long committedOffset);
 }

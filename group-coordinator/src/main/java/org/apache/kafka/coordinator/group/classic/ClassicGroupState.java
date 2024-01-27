@@ -19,6 +19,7 @@ package org.apache.kafka.coordinator.group.classic;
 
 import java.util.Arrays;
 import java.util.HashSet;
+import java.util.Locale;
 import java.util.Set;
 
 /**
@@ -42,7 +43,7 @@ public enum ClassicGroupState {
      *             group is removed by partition emigration => DEAD
      *             group is removed by expiration => DEAD
      */
-    EMPTY("Empty", "empty"),
+    EMPTY("Empty"),
 
     /**
      * Group is preparing to rebalance.
@@ -57,7 +58,7 @@ public enum ClassicGroupState {
      *             all members have left the group => EMPTY
      *             group is removed by partition emigration => DEAD
      */
-    PREPARING_REBALANCE("PreparingRebalance", "preparingrebalance"),
+    PREPARING_REBALANCE("PreparingRebalance"),
 
     /**
      * Group is awaiting state assignment from the leader.
@@ -72,7 +73,7 @@ public enum ClassicGroupState {
      *             member failure detected => PREPARING_REBALANCE
      *             group is removed by partition emigration => DEAD
      */
-    COMPLETING_REBALANCE("CompletingRebalance", "completingrebalance"),
+    COMPLETING_REBALANCE("CompletingRebalance"),
 
     /**
      * Group is stable.
@@ -88,7 +89,7 @@ public enum ClassicGroupState {
      *             follower join-group with new metadata => PREPARING_REBALANCE
      *             group is removed by partition emigration => DEAD
      */
-    STABLE("Stable", "stable"),
+    STABLE("Stable"),
 
     /**
      * Group has no more members and its metadata is being removed.
@@ -101,7 +102,7 @@ public enum ClassicGroupState {
      *         allow offset fetch requests
      * transition: DEAD is a final state before group metadata is cleaned up, so there are no transitions
      */
-    DEAD("Dead", "dead");
+    DEAD("Dead");
 
     private final String name;
     private final String lowerCaseName;
@@ -115,9 +116,9 @@ public enum ClassicGroupState {
         DEAD.addValidPreviousStates(STABLE, PREPARING_REBALANCE, COMPLETING_REBALANCE, EMPTY, DEAD);
     }
 
-    ClassicGroupState(String name, String lowerCaseName) {
+    ClassicGroupState(String name) {
         this.name = name;
-        this.lowerCaseName = lowerCaseName;
+        this.lowerCaseName = name.toLowerCase(Locale.ROOT);
     }
 
     @Override

@@ -1276,22 +1276,22 @@ public class ClassicGroupTest {
     }
 
     @Test
-    public void testIsInStatesCaseInsensitive() {
+    public void testIsInStates() {
         ClassicGroup group = new ClassicGroup(new LogContext(), "groupId", EMPTY, Time.SYSTEM, mock(GroupCoordinatorMetricsShard.class));
-        assertTrue(group.isInStatesCaseInsensitive(Collections.singletonList("empty"), 0));
+        assertTrue(group.isInStates(Collections.singleton("empty"), 0));
 
         group.transitionTo(PREPARING_REBALANCE);
-        assertTrue(group.isInStatesCaseInsensitive(Collections.singletonList("PreparingRebalance"), 0));
+        assertTrue(group.isInStates(Collections.singleton("PreparingRebalance"), 0));
 
         group.transitionTo(COMPLETING_REBALANCE);
-        assertTrue(group.isInStatesCaseInsensitive(Arrays.asList("PreparingRebalance", "completingrebalance"), 0));
+        assertTrue(group.isInStates(new HashSet<>(Arrays.asList("PreparingRebalance", "completingrebalance")), 0));
 
         group.transitionTo(STABLE);
-        assertTrue(group.isInStatesCaseInsensitive(Collections.singletonList("stable "), 0));
-        assertFalse(group.isInStatesCaseInsensitive(Collections.singletonList("empty"), 0));
+        assertTrue(group.isInStates(Collections.singleton("stable"), 0));
+        assertFalse(group.isInStates(Collections.singleton("empty"), 0));
 
         group.transitionTo(DEAD);
-        assertTrue(group.isInStatesCaseInsensitive(Arrays.asList("dead", " "), 0));
+        assertTrue(group.isInStates(new HashSet<>(Arrays.asList("dead", " ")), 0));
     }
 
     private void assertState(ClassicGroup group, ClassicGroupState targetState) {

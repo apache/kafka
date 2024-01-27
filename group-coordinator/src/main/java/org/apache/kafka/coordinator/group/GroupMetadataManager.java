@@ -462,7 +462,8 @@ public class GroupMetadataManager {
     public List<ListGroupsResponseData.ListedGroup> listGroups(List<String> statesFilter, long committedOffset) {
         Stream<Group> groupStream = groups.values(committedOffset).stream();
         if (!statesFilter.isEmpty()) {
-            groupStream = groupStream.filter(group -> group.isInStatesCaseInsensitive(statesFilter, committedOffset));
+            Set<String> caseInsensitiveFilterSet = statesFilter.stream().map(String::toLowerCase).map(String::trim).collect(Collectors.toSet());
+            groupStream = groupStream.filter(group -> group.isInStates(caseInsensitiveFilterSet, committedOffset));
         }
         return groupStream.map(group -> group.asListedGroup(committedOffset)).collect(Collectors.toList());
     }

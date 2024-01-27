@@ -269,16 +269,6 @@ public class ClassicGroup implements Group {
     }
 
     /**
-     * The state of this group based on the committed offset.
-     *
-     * @return The current state as a lowercase String.
-     */
-    @Override
-    public String stateAsLowerCaseString(long committedOffset) {
-        return this.state.toLowerCaseString();
-    }
-
-    /**
      * @return the group id.
      */
     public String groupId() {
@@ -966,10 +956,18 @@ public class ClassicGroup implements Group {
         return Optional.empty();
     }
 
+    /**
+     * The state of this group.
+     *
+     * @return The current state as a lowercase String.
+     */
+    public String stateAsLowerCaseString() {
+        return this.state.toLowerCaseString();
+    }
+
     @Override
-    public boolean isInStatesCaseInsensitive(List<String> statesFilter, long committedOffset) {
-        Set<String> caseInsensitiveFilterSet = statesFilter.stream().map(String::toLowerCase).map(String::trim).collect(Collectors.toSet());
-        return caseInsensitiveFilterSet.contains(this.stateAsLowerCaseString(committedOffset));
+    public boolean isInStates(Set<String> statesFilter, long committedOffset) {
+        return statesFilter.contains(this.stateAsLowerCaseString()) || statesFilter.contains(this.stateAsString());
     }
 
     /**
