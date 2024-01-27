@@ -57,7 +57,9 @@ public interface ReadOnlySessionStore<K, AGG> {
      * @return iterator of sessions with the matching key and aggregated values, from earliest to
      * latest session time.
      * @throws NullPointerException If null is used for key.
+     * @deprecated Use {@link #findSessions(Object, Instant, Instant)} instead
      */
+    @Deprecated
     default KeyValueIterator<Windowed<K>, AGG> findSessions(final K key,
                                                             final long earliestSessionEndTime,
                                                             final long latestSessionStartTime) {
@@ -125,7 +127,9 @@ public interface ReadOnlySessionStore<K, AGG> {
      * @return backward iterator of sessions with the matching key and aggregated values, from
      * latest to earliest session time.
      * @throws NullPointerException If null is used for key.
+     * @deprecated Use {@link #backwardFindSessions(Object, Instant, Instant)} instead
      */
+    @Deprecated
     default KeyValueIterator<Windowed<K>, AGG> backwardFindSessions(final K key,
                                                                     final long earliestSessionEndTime,
                                                                     final long latestSessionStartTime) {
@@ -196,7 +200,9 @@ public interface ReadOnlySessionStore<K, AGG> {
      *                               iteration ends.
      * @return iterator of sessions with the matching keys and aggregated values, from earliest to
      * latest session time.
+     * @deprecated Use {@link #findSessions(Object, Object, Instant, Instant)} instead
      */
+    @Deprecated
     default KeyValueIterator<Windowed<K>, AGG> findSessions(final K keyFrom,
                                                             final K keyTo,
                                                             final long earliestSessionEndTime,
@@ -272,7 +278,9 @@ public interface ReadOnlySessionStore<K, AGG> {
      *                               iteration starts.
      * @return backward iterator of sessions with the matching keys and aggregated values, from
      * latest to earliest session time.
+     * @deprecated Use {@link #backwardFindSessions(Object, Object, Instant, Instant)} instead
      */
+    @Deprecated
     default KeyValueIterator<Windowed<K>, AGG> backwardFindSessions(final K keyFrom,
                                                                     final K keyTo,
                                                                     final long earliestSessionEndTime,
@@ -328,7 +336,9 @@ public interface ReadOnlySessionStore<K, AGG> {
      * @return The value or {@code null} if no session with the exact start and end timestamp exists
      *         for the given key
      * @throws NullPointerException If {@code null} is used for any key.
+     * @deprecated Use {@link #fetchSession(Object, Instant, Instant)} instead
      */
+    @Deprecated
     default AGG fetchSession(final K key,
                              final long sessionStartTime,
                              final long sessionEndTime) {
