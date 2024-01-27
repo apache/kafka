@@ -58,7 +58,6 @@
     <allow pkg="org.apache.kafka.common.internals" exact-match="true" />
     <allow pkg="org.apache.kafka.test" />
     <allow pkg="org.conscrypt" />
-    <allow pkg="com.linkedin.ktls"/>
 
     <subpackage name="acl">
       <allow pkg="org.apache.kafka.common.annotation" />

@@ -16,8 +16,6 @@
  */
 package org.apache.kafka.common.network;
 
-import com.linkedin.ktls.KTLSEnableFailedException;
-import com.linkedin.ktls.KernelTls;
 import java.io.IOException;
 import java.io.EOFException;
 import java.nio.ByteBuffer;
@@ -81,8 +79,6 @@ public class SslTransportLayer implements TransportLayer {
     private final SocketChannel socketChannel;
     private final ChannelMetadataRegistry metadataRegistry;
     private final Logger log;
-    private final KernelTls kernelTLS;
-    private boolean shouldAttemptKtls;
 
     private HandshakeStatus handshakeStatus;
     private SSLEngineResult handshakeResult;
@@ -93,31 +89,24 @@ public class SslTransportLayer implements TransportLayer {
     private ByteBuffer appReadBuffer;
     private ByteBuffer fileChannelBuffer;
     private boolean hasBytesBuffered;
-    private boolean ktlsAttempted;
-    private boolean ktlsEnabled;
 
     public static SslTransportLayer create(String channelId, SelectionKey key, SSLEngine sslEngine,
-                                           ChannelMetadataRegistry metadataRegistry, boolean shouldAttemptKtls)
-        throws IOException {
-        return new SslTransportLayer(channelId, key, sslEngine, metadataRegistry, shouldAttemptKtls);
+                                           ChannelMetadataRegistry metadataRegistry) throws IOException {
+        return new SslTransportLayer(channelId, key, sslEngine, metadataRegistry);
     }
 
     // Prefer `create`, only use this in tests
-    SslTransportLayer(String channelId, SelectionKey key, SSLEngine sslEngine, ChannelMetadataRegistry metadataRegistry,
-        boolean shouldAttemptKtls) {
+    SslTransportLayer(String channelId, SelectionKey key, SSLEngine sslEngine,
+                      ChannelMetadataRegistry metadataRegistry) {
         this.channelId = channelId;
         this.key = key;
         this.socketChannel = (SocketChannel) key.channel();
         this.sslEngine = sslEngine;
-        this.shouldAttemptKtls = shouldAttemptKtls;
-        this.kernelTLS = new KernelTls();
         this.state = State.NOT_INITIALIZED;
         this.metadataRegistry = metadataRegistry;
 
-        final LogContext logContext = new LogContext("[SslTransportLayer channelId=" + channelId + " key=" + key + "] ");
+        final LogContext logContext = new LogContext(String.format("[SslTransportLayer channelId=%s key=%s] ", channelId, key));
         this.log = logContext.logger(getClass());
-
-        log.debug("New SSL channel created with kernel offload turned {}", shouldAttemptKtls ? "on" : "off");
     }
 
     // Visible for testing
@@ -191,10 +180,6 @@ public class SslTransportLayer implements TransportLayer {
         state = State.CLOSING;
         sslEngine.closeOutbound();
         try {
-            if (ktlsEnabled) {
-                kernelTLS.closeNotify(socketChannel);
-                return;
-            }
             if (prevState != State.NOT_INITIALIZED && isConnected()) {
                 if (!flush(netWriteBuffer)) {
                     throw new IOException("Remaining data in the network buffer, can't send SSL close message.");
@@ -422,7 +407,7 @@ public class SslTransportLayer implements TransportLayer {
                 handshakeFinished();
                 break;
             default:
-                throw new IllegalStateException("Unexpected status [" + handshakeStatus + "]");
+                throw new IllegalStateException(String.format("Unexpected status [%s]", handshakeStatus));
         }
     }
 
@@ -710,12 +695,6 @@ public class SslTransportLayer implements TransportLayer {
             throw closingException();
         if (!ready())
             return 0;
-        if (shouldAttemptKtls && !ktlsAttempted) {
-            attemptToEnableKernelTls();
-        }
-        if (ktlsEnabled) {
-            return writeKernelTLS(src);
-        }
 
         int written = 0;
         while (flush(netWriteBuffer) && src.hasRemaining()) {
@@ -745,24 +724,6 @@ public class SslTransportLayer implements TransportLayer {
         return written;
     }
 
-    private int writeKernelTLS(ByteBuffer src) throws IOException {
-        log.trace("Writing with Kernel TLS enabled");
-        return socketChannel.write(src);
-    }
-
-    private void attemptToEnableKernelTls() {
-        try {
-            kernelTLS.enableKernelTlsForSend(sslEngine, socketChannel);
-            log.debug("Kernel TLS enabled on socket on channel {}", channelId);
-            ktlsEnabled = true;
-        } catch (KTLSEnableFailedException e) {
-            log.warn("Attempt to enable KTLS failed with exception, falling back to userspace encryption", e);
-            ktlsEnabled = false;
-        } finally {
-            ktlsAttempted = true;
-        }
-    }
-
     /**
     * Writes a sequence of bytes to this channel from the subsequence of the given buffers.
     *
@@ -774,12 +735,6 @@ public class SslTransportLayer implements TransportLayer {
     */
     @Override
     public long write(ByteBuffer[] srcs, int offset, int length) throws IOException {
-        if (shouldAttemptKtls && !ktlsAttempted) {
-            attemptToEnableKernelTls();
-        }
-        if (ktlsEnabled) {
-            return writeKernelTLS(srcs, offset, length);
-        }
         if ((offset < 0) || (length < 0) || (offset > srcs.length - length))
             throw new IndexOutOfBoundsException();
         int totalWritten = 0;
@@ -800,11 +755,6 @@ public class SslTransportLayer implements TransportLayer {
             }
         }
         return totalWritten;
-    }
-
-    private long writeKernelTLS(ByteBuffer[] srcs, int offset, int length) throws IOException {
-        log.trace("Writing with Kernel TLS enabled");
-        return socketChannel.write(srcs, offset, length);
     }
 
     /**
@@ -1004,12 +954,6 @@ public class SslTransportLayer implements TransportLayer {
             throw closingException();
         if (state != State.READY)
             return 0;
-        if (shouldAttemptKtls && !ktlsAttempted) {
-            attemptToEnableKernelTls();
-        }
-        if (ktlsEnabled) {
-            return transferFromWithKernelTLS(fileChannel, position, count);
-        }
 
         if (!flush(netWriteBuffer))
             return 0;
@@ -1064,11 +1008,5 @@ public class SslTransportLayer implements TransportLayer {
                 return totalBytesWritten;
             throw e;
         }
-    }
-
-    private long transferFromWithKernelTLS(
-        FileChannel fileChannel, long position, long count) throws IOException {
-        log.trace("Transferring from file with Kernel TLS enabled");
-        return fileChannel.transferTo(position, count, socketChannel);
     }
 }

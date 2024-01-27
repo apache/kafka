@@ -204,7 +204,6 @@ public class DefaultSslEngineFactoryTest {
         factory = new DefaultSslEngineFactory();
         configs.put(SslConfigs.SSL_PROTOCOL_CONFIG, "TLSv1.2");
         configs.put(SslConfigs.SSL_CONTEXT_PROVIDER_CLASS_CONFIG, SslConfigs.DEFAULT_SSL_CONTEXT_PROVIDER_CLASS);
-        configs.put(SslConfigs.SSL_KERNEL_OFFLOAD_ENABLE_CONFIG, false);
     }
 
     @Test

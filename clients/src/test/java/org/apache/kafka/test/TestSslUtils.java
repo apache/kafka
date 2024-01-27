@@ -184,8 +184,6 @@ public class TestSslUtils {
         enabledProtocols.add(tlsProtocol);
         sslConfigs.put(SslConfigs.SSL_ENABLED_PROTOCOLS_CONFIG, enabledProtocols);
         sslConfigs.put(SslConfigs.SSL_CONTEXT_PROVIDER_CLASS_CONFIG, SslConfigs.DEFAULT_SSL_CONTEXT_PROVIDER_CLASS);
-        sslConfigs.put(SslConfigs.SSL_KERNEL_OFFLOAD_ENABLE_CONFIG, false);
-        sslConfigs.put(SslConfigs.SSL_KERNEL_OFFLOAD_ENABLE_DOC, false);
         return sslConfigs;
     }
 
@@ -566,8 +564,6 @@ public class TestSslUtils {
             } else {
                 sslConfigs.put(SslConfigs.SSL_CONTEXT_PROVIDER_CLASS_CONFIG, SimpleSslContextProvider.class.getName());
             }
-            sslConfigs.put(SslConfigs.SSL_KERNEL_OFFLOAD_ENABLE_CONFIG, false);
-            sslConfigs.put(SslConfigs.SSL_KERNEL_OFFLOAD_ENABLE_DOC, false);
             return sslConfigs;
         }
 
@@ -593,8 +589,6 @@ public class TestSslUtils {
                 sslConfigs.put(SslConfigs.SSL_KEY_PASSWORD_CONFIG, keyPassword);
                 sslConfigs.put(SslConfigs.SSL_TRUSTSTORE_CERTIFICATES_CONFIG, certPem);
             }
-            sslConfigs.put(SslConfigs.SSL_KERNEL_OFFLOAD_ENABLE_CONFIG, false);
-            sslConfigs.put(SslConfigs.SSL_KERNEL_OFFLOAD_ENABLE_DOC, false);
             return sslConfigs;
         }
     }

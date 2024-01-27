@@ -314,15 +314,6 @@ object RequestChannel extends Logging {
     def updateRequestMetrics(networkThreadTimeNanos: Long, response: Response): Unit = {
       endTimeNanos = Time.SYSTEM.nanoseconds
 
-      val requestQueueTimeMs = nanosToMs(requestDequeueTimeNanos - startTimeNanos)
-      val apiLocalTimeMs = nanosToMs(apiLocalCompleteTimeNanos - requestDequeueTimeNanos)
-      val apiRemoteTimeMs = nanosToMs(responseCompleteTimeNanos - apiLocalCompleteTimeNanos)
-      val responseQueueTimeMs = nanosToMs(responseDequeueTimeNanos - responseCompleteTimeNanos)
-      val responseSendTimeMs = nanosToMs(endTimeNanos - responseDequeueTimeNanos)
-      val responseSendTimeNs = endTimeNanos - responseDequeueTimeNanos
-      val messageConversionsTimeMs = nanosToMs(messageConversionsTimeNanos)
-      val totalTimeMs = nanosToMs(endTimeNanos - startTimeNanos)
-
       val fetchMetricNames =
         if (header.apiKey == ApiKeys.FETCH) {
           val isFromFollower = body[FetchRequest].isFromFollower
@@ -349,7 +340,6 @@ object RequestChannel extends Logging {
         m.throttleTimeHist.update(apiThrottleTimeMs)
         m.responseQueueTimeHist.update(Math.round(responseQueueTimeMs))
         m.responseSendTimeHist.update(Math.round(responseSendTimeMs))
-        m.responseSendTimeNsHist.update(Math.round(responseSendTimeNs))
         m.totalTimeHist.update(Math.round(totalTimeMs))
         m.totalTimeBucketHist.foreach(_.update(totalTimeMs))
         m.requestBytesHist.update(sizeOfBodyInBytes)
@@ -690,7 +680,6 @@ object RequestMetrics {
   val ThrottleTimeMs = "ThrottleTimeMs"
   val ResponseQueueTimeMs = "ResponseQueueTimeMs"
   val ResponseSendTimeMs = "ResponseSendTimeMs"
-  val ResponseSendTimeNs = "ResponseSendTimeNs"
   val TotalTimeMs = "TotalTimeMs"
   val RequestBytes = "RequestBytes"
   val ResponseBytes = "ResponseBytes"
@@ -745,7 +734,6 @@ class RequestMetrics(name: String, config: KafkaConfig) extends KafkaMetricsGrou
   val responseQueueTimeHist = newHistogram(ResponseQueueTimeMs, biased = true, tags)
   // time to send the response to the requester
   val responseSendTimeHist = newHistogram(ResponseSendTimeMs, biased = true, tags)
-  val responseSendTimeNsHist = newHistogram(ResponseSendTimeNs, biased = true, tags)
   val totalTimeHist = newHistogram(TotalTimeMs, biased = true, tags)
   // request size in bytes
   val requestBytesHist = newHistogram(RequestBytes, biased = true, tags)
@@ -855,7 +843,6 @@ class RequestMetrics(name: String, config: KafkaConfig) extends KafkaMetricsGrou
     removeMetric(ResponseQueueTimeMs, tags)
     removeMetric(TotalTimeMs, tags)
     removeMetric(ResponseSendTimeMs, tags)
-    removeMetric(ResponseSendTimeNs, tags)
     removeMetric(RequestBytes, tags)
     removeMetric(ResponseBytes, tags)
     if (name == ApiKeys.FETCH.name || name == ApiKeys.PRODUCE.name) {

@@ -204,10 +204,6 @@ public class SslFactory implements Reconfigurable, Closeable {
         }
     }
 
-    public Mode getMode() {
-        return mode;
-    }
-
     /**
      * Returns host/IP address of remote host without reverse DNS lookup to be used as the host
      * for creating SSL engine. This is used as a hint for session reuse strategy and also for

@@ -280,7 +280,6 @@ object Defaults {
   val SslProtocol = SslConfigs.DEFAULT_SSL_PROTOCOL
   val SslContextProviderClass = SslConfigs.DEFAULT_SSL_CONTEXT_PROVIDER_CLASS
   val SslEnabledProtocols = SslConfigs.DEFAULT_SSL_ENABLED_PROTOCOLS
-  val SslKernelOffloadEnable = SslConfigs.DEFAULT_SSL_KERNEL_OFFLOAD_ENABLE
   val SslKeystoreType = SslConfigs.DEFAULT_SSL_KEYSTORE_TYPE
   val SslTruststoreType = SslConfigs.DEFAULT_SSL_TRUSTSTORE_TYPE
   val SslKeyManagerAlgorithm = SslConfigs.DEFAULT_SSL_KEYMANGER_ALGORITHM
@@ -660,7 +659,6 @@ object KafkaConfig {
   val SslCipherSuitesProp = SslConfigs.SSL_CIPHER_SUITES_CONFIG
   val SslEnabledProtocolsProp = SslConfigs.SSL_ENABLED_PROTOCOLS_CONFIG
   val SslKeystoreTypeProp = SslConfigs.SSL_KEYSTORE_TYPE_CONFIG
-  val SslKernelOffloadEnableProp = SslConfigs.SSL_KERNEL_OFFLOAD_ENABLE_CONFIG
   val SslKeystoreLocationProp = SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG
   val SslKeystorePasswordProp = SslConfigs.SSL_KEYSTORE_PASSWORD_CONFIG
   val SslKeyPasswordProp = SslConfigs.SSL_KEY_PASSWORD_CONFIG
@@ -1126,7 +1124,6 @@ object KafkaConfig {
   val SslContextProviderClassDoc = SslConfigs.SSL_CONTEXT_PROVIDER_CLASS_DOC
   val SslCipherSuitesDoc = SslConfigs.SSL_CIPHER_SUITES_DOC
   val SslEnabledProtocolsDoc = SslConfigs.SSL_ENABLED_PROTOCOLS_DOC
-  val SslKernelOffloadEnableDoc = SslConfigs.SSL_KERNEL_OFFLOAD_ENABLE_DOC
   val SslKeystoreTypeDoc = SslConfigs.SSL_KEYSTORE_TYPE_DOC
   val SslKeystoreLocationDoc = SslConfigs.SSL_KEYSTORE_LOCATION_DOC
   val SslKeystorePasswordDoc = SslConfigs.SSL_KEYSTORE_PASSWORD_DOC
@@ -1466,7 +1463,6 @@ object KafkaConfig {
       .define(PrincipalBuilderClassProp, CLASS, Defaults.DefaultPrincipalSerde, MEDIUM, PrincipalBuilderClassDoc)
       .define(SslProtocolProp, STRING, Defaults.SslProtocol, MEDIUM, SslProtocolDoc)
       .define(SslProviderProp, STRING, null, MEDIUM, SslProviderDoc)
-      .define(SslKernelOffloadEnableProp, BOOLEAN, Defaults.SslKernelOffloadEnable, MEDIUM, SslKernelOffloadEnableDoc)
       .define(SslContextProviderClassProp, STRING, Defaults.SslContextProviderClass, MEDIUM, SslContextProviderClassDoc)
       .define(SslEnabledProtocolsProp, LIST, Defaults.SslEnabledProtocols, MEDIUM, SslEnabledProtocolsDoc)
       .define(SslKeystoreTypeProp, STRING, Defaults.SslKeystoreType, MEDIUM, SslKeystoreTypeDoc)

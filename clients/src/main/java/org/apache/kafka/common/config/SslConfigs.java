@@ -51,10 +51,6 @@ public class SslConfigs {
     public static final String SSL_PROVIDER_CONFIG = "ssl.provider";
     public static final String SSL_PROVIDER_DOC = "The name of the security provider used for SSL connections. Default value is the default security provider of the JVM.";
 
-    public static final String SSL_KERNEL_OFFLOAD_ENABLE_CONFIG = "ssl.kernel.offload.enable";
-    public static final String SSL_KERNEL_OFFLOAD_ENABLE_DOC = "ssl.kernel.offload.enable";
-    public static final boolean DEFAULT_SSL_KERNEL_OFFLOAD_ENABLE = false;
-
     public static final String SSL_CIPHER_SUITES_CONFIG = "ssl.cipher.suites";
     public static final String SSL_CIPHER_SUITES_DOC = "A list of cipher suites. This is a named combination of authentication, encryption, MAC and key exchange algorithm used to negotiate the security settings for a network connection using TLS or SSL network protocol. "
             + "By default all the available cipher suites are supported.";
@@ -144,7 +140,6 @@ public class SslConfigs {
         config.define(SslConfigs.SSL_PROTOCOL_CONFIG, ConfigDef.Type.STRING, SslConfigs.DEFAULT_SSL_PROTOCOL, ConfigDef.Importance.MEDIUM, SslConfigs.SSL_PROTOCOL_DOC)
                 .define(SslConfigs.SSL_CONTEXT_PROVIDER_CLASS_CONFIG, ConfigDef.Type.STRING, SslConfigs.DEFAULT_SSL_CONTEXT_PROVIDER_CLASS, ConfigDef.Importance.MEDIUM, SslConfigs.SSL_CONTEXT_PROVIDER_CLASS_DOC)
                 .define(SslConfigs.SSL_PROVIDER_CONFIG, ConfigDef.Type.STRING, null, ConfigDef.Importance.MEDIUM, SslConfigs.SSL_PROVIDER_DOC)
-                .define(SslConfigs.SSL_KERNEL_OFFLOAD_ENABLE_CONFIG, ConfigDef.Type.BOOLEAN, SslConfigs.DEFAULT_SSL_KERNEL_OFFLOAD_ENABLE, ConfigDef.Importance.MEDIUM, SslConfigs.SSL_KERNEL_OFFLOAD_ENABLE_DOC)
                 .define(SslConfigs.SSL_CIPHER_SUITES_CONFIG, ConfigDef.Type.LIST, null, ConfigDef.Importance.LOW, SslConfigs.SSL_CIPHER_SUITES_DOC)
                 .define(SslConfigs.SSL_ENABLED_PROTOCOLS_CONFIG, ConfigDef.Type.LIST, SslConfigs.DEFAULT_SSL_ENABLED_PROTOCOLS, ConfigDef.Importance.MEDIUM, SslConfigs.SSL_ENABLED_PROTOCOLS_DOC)
                 .define(SslConfigs.SSL_KEYSTORE_TYPE_CONFIG, ConfigDef.Type.STRING, SslConfigs.DEFAULT_SSL_KEYSTORE_TYPE, ConfigDef.Importance.MEDIUM, SslConfigs.SSL_KEYSTORE_TYPE_DOC)
@@ -165,7 +160,6 @@ public class SslConfigs {
     }
 
     public static final Set<String> RECONFIGURABLE_CONFIGS = Utils.mkSet(
-            SslConfigs.SSL_KERNEL_OFFLOAD_ENABLE_CONFIG,
             SslConfigs.SSL_KEYSTORE_TYPE_CONFIG,
             SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG,
             SslConfigs.SSL_KEYSTORE_PASSWORD_CONFIG,

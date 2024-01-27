@@ -57,11 +57,8 @@ spotless {
 allprojects {
 
   repositories {
-    mavenLocal()
     mavenCentral()
     maven { url  "https://linkedin.jfrog.io/artifactory/zookeeper" }
-    maven { url  "https://linkedin.jfrog.io/artifactory/ktls-jni" }
-
   }
 
   dependencyUpdates {
@@ -1247,7 +1244,6 @@ project(':clients') {
     implementation libs.snappy
     implementation libs.slf4jApi
     implementation libs.conscrypt
-    implementation libs.ktls
 
     compileOnly libs.jacksonDatabind // for SASL/OAUTHBEARER bearer token parsing
     compileOnly libs.jacksonJDK8Datatypes

@@ -113,8 +113,6 @@ public abstract class SslSelectorTest extends SelectorTest {
         );
         sslServerConfigs.put(SecurityConfig.SECURITY_PROVIDERS_CONFIG, testProviderCreator.getClass().getName());
         sslServerConfigs.put(SslConfigs.SSL_CONTEXT_PROVIDER_CLASS_CONFIG, SslConfigs.DEFAULT_SSL_CONTEXT_PROVIDER_CLASS);
-        sslServerConfigs.put(SslConfigs.SSL_KERNEL_OFFLOAD_ENABLE_CONFIG, false);
-        sslServerConfigs.put(SslConfigs.SSL_KERNEL_OFFLOAD_ENABLE_DOC, false);
         EchoServer server = new EchoServer(SecurityProtocol.SSL, sslServerConfigs);
         server.start();
         Time time = new MockTime();
@@ -373,7 +371,7 @@ public abstract class SslSelectorTest extends SelectorTest {
 
             public TestSslTransportLayer(String channelId, SelectionKey key, SSLEngine sslEngine,
                                          ChannelMetadataRegistry metadataRegistry) throws IOException {
-                super(channelId, key, sslEngine, metadataRegistry, false);
+                super(channelId, key, sslEngine, metadataRegistry);
                 transportLayers.put(channelId, this);
             }
 
