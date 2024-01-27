@@ -991,6 +991,7 @@ project(':core') {
     testImplementation libs.apachedsLdifPartition
     testImplementation libs.apachedsMavibotPartition
     testImplementation libs.apachedsJdbmPartition
+    testImplementation libs.kerbServerApiAll
     testImplementation libs.junitJupiter
     testImplementation libs.slf4jlog4j
     testImplementation libs.caffeine

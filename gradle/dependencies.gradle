@@ -89,7 +89,7 @@ else
 versions += [
   activation: "1.1.1",
   apacheda: "1.0.2",
-  apacheds: "2.0.0-M24",
+  apacheds: "2.0.0.AM27",
   argparse4j: "0.7.0",
   bcpkix: "1.75",
   caffeine: "2.9.3", // 3.x supports JDK 11 and above
@@ -234,6 +234,7 @@ libs += [
   kafkaStreams_34: "org.apache.kafka:kafka-streams:$versions.kafka_34",
   kafkaStreams_35: "org.apache.kafka:kafka-streams:$versions.kafka_35",
   kafkaStreams_36: "org.apache.kafka:kafka-streams:$versions.kafka_36",
+  kerbServerApiAll: "org.apache.kerby:kerb-simplekdc:2.0.2",
   log4j: "ch.qos.reload4j:reload4j:$versions.reload4j",
   lz4: "org.lz4:lz4-java:$versions.lz4",
   metrics: "com.yammer.metrics:metrics-core:$versions.metrics",
