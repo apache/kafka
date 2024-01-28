@@ -222,6 +222,10 @@ public class WorkerSinkTaskMockitoTest {
     public void testPause() {
         createTask(initialState);
 
+        workerTask.initialize(TASK_CONFIG);
+        workerTask.initializeAndStart();
+        verifyInitializeTask();
+
         expectTaskGetTopic();
         expectPollInitialAssignment()
                 .thenAnswer(expectConsumerPoll(1))
@@ -233,11 +237,7 @@ public class WorkerSinkTaskMockitoTest {
                 .thenThrow(new WakeupException())
                 .thenAnswer(expectConsumerPoll(1));
 
-        expectConversionAndTransformation(null, emptyHeaders());
-
-        workerTask.initialize(TASK_CONFIG);
-        workerTask.initializeAndStart();
-        verifyInitializeTask();
+        expectConversionAndTransformation(null, new RecordHeaders());
 
         workerTask.iteration(); // initial assignment
         verifyPollInitialAssignment();
@@ -273,7 +273,7 @@ public class WorkerSinkTaskMockitoTest {
         // Pause
         verify(statusListener).onPause(taskId);
         verify(consumer).pause(INITIAL_ASSIGNMENT);
-        verifyConsumerWakeup();
+        verify(consumer).wakeup();
 
         // Offset commit as requested when pausing; No records returned by consumer.poll()
         when(sinkTask.preCommit(anyMap())).thenReturn(Collections.emptyMap());
@@ -297,7 +297,7 @@ public class WorkerSinkTaskMockitoTest {
 
         // And unpause
         verify(statusListener).onResume(taskId);
-        verifyConsumerWakeup(2);
+        verify(consumer, times(2)).wakeup();
         INITIAL_ASSIGNMENT.forEach(tp -> {
             verify(consumer).resume(Collections.singleton(tp));
         });
@@ -308,15 +308,15 @@ public class WorkerSinkTaskMockitoTest {
     public void testShutdown() throws Exception {
         createTask(initialState);
 
+        workerTask.initialize(TASK_CONFIG);
+        workerTask.initializeAndStart();
+        verifyInitializeTask();
+
         expectTaskGetTopic();
         expectPollInitialAssignment()
                 .thenAnswer(expectConsumerPoll(1));
 
-        expectConversionAndTransformation(null, emptyHeaders());
-
-        workerTask.initialize(TASK_CONFIG);
-        workerTask.initializeAndStart();
-        verifyInitializeTask();
+        expectConversionAndTransformation(null, new RecordHeaders());
 
         workerTask.iteration();
         verifyPollInitialAssignment();
@@ -342,6 +342,10 @@ public class WorkerSinkTaskMockitoTest {
         RuntimeException exception = new RuntimeException("Revocation error");
         createTask(initialState);
 
+        workerTask.initialize(TASK_CONFIG);
+        workerTask.initializeAndStart();
+        verifyInitializeTask();
+
         expectPollInitialAssignment()
                 .thenAnswer((Answer<ConsumerRecords<byte[], byte[]>>) invocation -> {
                     rebalanceListener.getValue().onPartitionsLost(INITIAL_ASSIGNMENT);
@@ -349,10 +353,6 @@ public class WorkerSinkTaskMockitoTest {
                 });
 
         doThrow(exception).when(sinkTask).close(INITIAL_ASSIGNMENT);
-
-        workerTask.initialize(TASK_CONFIG);
-        workerTask.initializeAndStart();
-        verifyInitializeTask();
 
         workerTask.iteration();
         verifyPollInitialAssignment();
@@ -370,6 +370,10 @@ public class WorkerSinkTaskMockitoTest {
         RuntimeException exception = new RuntimeException("Revocation error");
         createTask(initialState);
 
+        workerTask.initialize(TASK_CONFIG);
+        workerTask.initializeAndStart();
+        verifyInitializeTask();
+
         expectPollInitialAssignment()
                 .thenAnswer((Answer<ConsumerRecords<byte[], byte[]>>) invocation -> {
                     rebalanceListener.getValue().onPartitionsRevoked(INITIAL_ASSIGNMENT);
@@ -377,10 +381,6 @@ public class WorkerSinkTaskMockitoTest {
                 });
 
         expectRebalanceRevocationError(exception);
-
-        workerTask.initialize(TASK_CONFIG);
-        workerTask.initializeAndStart();
-        verifyInitializeTask();
 
         workerTask.iteration();
         verifyPollInitialAssignment();
@@ -397,16 +397,16 @@ public class WorkerSinkTaskMockitoTest {
         RuntimeException exception = new RuntimeException("Assignment error");
         createTask(initialState);
 
+        workerTask.initialize(TASK_CONFIG);
+        workerTask.initializeAndStart();
+        verifyInitializeTask();
+
         expectPollInitialAssignment()
                 .thenAnswer((Answer<ConsumerRecords<byte[], byte[]>>) invocation -> {
                     rebalanceListener.getValue().onPartitionsRevoked(INITIAL_ASSIGNMENT);
                     rebalanceListener.getValue().onPartitionsAssigned(INITIAL_ASSIGNMENT);
                     return ConsumerRecords.empty();
                 });
-
-        workerTask.initialize(TASK_CONFIG);
-        workerTask.initializeAndStart();
-        verifyInitializeTask();
 
         workerTask.iteration();
         verifyPollInitialAssignment();
@@ -589,16 +589,8 @@ public class WorkerSinkTaskMockitoTest {
         verify(sinkTask).put(Collections.emptyList());
     }
 
-    private void verifyConsumerWakeup() {
-        verifyConsumerWakeup(1);
-    }
-
-    private void verifyConsumerWakeup(int times) {
-        verify(consumer, times(times)).wakeup();
-    }
-
     private Answer<ConsumerRecords<byte[], byte[]>> expectConsumerPoll(final int numMessages) {
-        return expectConsumerPoll(numMessages, RecordBatch.NO_TIMESTAMP, TimestampType.NO_TIMESTAMP_TYPE, emptyHeaders());
+        return expectConsumerPoll(numMessages, RecordBatch.NO_TIMESTAMP, TimestampType.NO_TIMESTAMP_TYPE, new RecordHeaders());
     }
 
     private Answer<ConsumerRecords<byte[], byte[]>> expectConsumerPoll(final int numMessages, final long timestamp, final TimestampType timestampType, Headers headers) {
@@ -670,57 +662,6 @@ public class WorkerSinkTaskMockitoTest {
         MetricGroup taskGroup = workerTask.taskMetricsGroup().metricGroup();
         String measured = metrics.currentMetricValueAsString(taskGroup, name);
         assertEquals(expected, measured);
-    }
-
-    private void printMetrics() {
-        System.out.println();
-        sinkMetricValue("sink-record-read-rate");
-        sinkMetricValue("sink-record-read-total");
-        sinkMetricValue("sink-record-send-rate");
-        sinkMetricValue("sink-record-send-total");
-        sinkMetricValue("sink-record-active-count");
-        sinkMetricValue("sink-record-active-count-max");
-        sinkMetricValue("sink-record-active-count-avg");
-        sinkMetricValue("partition-count");
-        sinkMetricValue("offset-commit-seq-no");
-        sinkMetricValue("offset-commit-completion-rate");
-        sinkMetricValue("offset-commit-completion-total");
-        sinkMetricValue("offset-commit-skip-rate");
-        sinkMetricValue("offset-commit-skip-total");
-        sinkMetricValue("put-batch-max-time-ms");
-        sinkMetricValue("put-batch-avg-time-ms");
-
-        taskMetricValue("status-unassigned");
-        taskMetricValue("status-running");
-        taskMetricValue("status-paused");
-        taskMetricValue("status-failed");
-        taskMetricValue("status-destroyed");
-        taskMetricValue("running-ratio");
-        taskMetricValue("pause-ratio");
-        taskMetricValue("offset-commit-max-time-ms");
-        taskMetricValue("offset-commit-avg-time-ms");
-        taskMetricValue("batch-size-max");
-        taskMetricValue("batch-size-avg");
-        taskMetricValue("offset-commit-failure-percentage");
-        taskMetricValue("offset-commit-success-percentage");
-    }
-
-    private double sinkMetricValue(String metricName) {
-        MetricGroup sinkTaskGroup = workerTask.sinkTaskMetricsGroup().metricGroup();
-        double value = metrics.currentMetricValueAsDouble(sinkTaskGroup, metricName);
-        System.out.println("** " + metricName + "=" + value);
-        return value;
-    }
-
-    private double taskMetricValue(String metricName) {
-        MetricGroup taskGroup = workerTask.taskMetricsGroup().metricGroup();
-        double value = metrics.currentMetricValueAsDouble(taskGroup, metricName);
-        System.out.println("** " + metricName + "=" + value);
-        return value;
-    }
-
-    private RecordHeaders emptyHeaders() {
-        return new RecordHeaders();
     }
 
     private abstract static class TestSinkTask extends SinkTask {
