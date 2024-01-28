@@ -1755,63 +1755,6 @@ public class WorkerSinkTaskTest {
         assertEquals(expected, measured);
     }
 
-    private void printMetrics() {
-        System.out.println();
-        sinkMetricValue("sink-record-read-rate");
-        sinkMetricValue("sink-record-read-total");
-        sinkMetricValue("sink-record-send-rate");
-        sinkMetricValue("sink-record-send-total");
-        sinkMetricValue("sink-record-active-count");
-        sinkMetricValue("sink-record-active-count-max");
-        sinkMetricValue("sink-record-active-count-avg");
-        sinkMetricValue("partition-count");
-        sinkMetricValue("offset-commit-seq-no");
-        sinkMetricValue("offset-commit-completion-rate");
-        sinkMetricValue("offset-commit-completion-total");
-        sinkMetricValue("offset-commit-skip-rate");
-        sinkMetricValue("offset-commit-skip-total");
-        sinkMetricValue("put-batch-max-time-ms");
-        sinkMetricValue("put-batch-avg-time-ms");
-
-        taskMetricValue("status-unassigned");
-        taskMetricValue("status-running");
-        taskMetricValue("status-paused");
-        taskMetricValue("status-failed");
-        taskMetricValue("status-destroyed");
-        taskMetricValue("running-ratio");
-        taskMetricValue("pause-ratio");
-        taskMetricValue("offset-commit-max-time-ms");
-        taskMetricValue("offset-commit-avg-time-ms");
-        taskMetricValue("batch-size-max");
-        taskMetricValue("batch-size-avg");
-        taskMetricValue("offset-commit-failure-percentage");
-        taskMetricValue("offset-commit-success-percentage");
-    }
-
-    private double sinkMetricValue(String metricName) {
-        MetricGroup sinkTaskGroup = workerTask.sinkTaskMetricsGroup().metricGroup();
-        double value = metrics.currentMetricValueAsDouble(sinkTaskGroup, metricName);
-        System.out.println("** " + metricName + "=" + value);
-        return value;
-    }
-
-    private double taskMetricValue(String metricName) {
-        MetricGroup taskGroup = workerTask.taskMetricsGroup().metricGroup();
-        double value = metrics.currentMetricValueAsDouble(taskGroup, metricName);
-        System.out.println("** " + metricName + "=" + value);
-        return value;
-    }
-
-
-    private void assertMetrics(int minimumPollCountExpected) {
-        MetricGroup sinkTaskGroup = workerTask.sinkTaskMetricsGroup().metricGroup();
-        MetricGroup taskGroup = workerTask.taskMetricsGroup().metricGroup();
-        double readRate = metrics.currentMetricValueAsDouble(sinkTaskGroup, "sink-record-read-rate");
-        double readTotal = metrics.currentMetricValueAsDouble(sinkTaskGroup, "sink-record-read-total");
-        double sendRate = metrics.currentMetricValueAsDouble(sinkTaskGroup, "sink-record-send-rate");
-        double sendTotal = metrics.currentMetricValueAsDouble(sinkTaskGroup, "sink-record-send-total");
-    }
-
     private RecordHeaders emptyHeaders() {
         return new RecordHeaders();
     }
