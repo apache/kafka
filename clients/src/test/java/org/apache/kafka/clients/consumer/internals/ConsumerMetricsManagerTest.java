@@ -16,9 +16,9 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
-import org.apache.kafka.clients.consumer.internals.metrics.AbstractConsumerMetrics;
-import org.apache.kafka.clients.consumer.internals.metrics.HeartbeatMetrics;
-import org.apache.kafka.clients.consumer.internals.metrics.RebalanceCallbackMetrics;
+import org.apache.kafka.clients.consumer.internals.metrics.AbstractConsumerMetricsManager;
+import org.apache.kafka.clients.consumer.internals.metrics.HeartbeatMetricsManager;
+import org.apache.kafka.clients.consumer.internals.metrics.RebalanceCallbackMetricsManager;
 import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.utils.MockTime;
@@ -27,19 +27,18 @@ import org.junit.jupiter.api.Test;
 
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.CONSUMER_METRICS_SUFFIX;
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.COORDINATOR_METRICS_SUFFIX;
-import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.FETCH_MANAGER_METRICS_SUFFIX;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
-public class ConsumerMetricsTest {
+public class ConsumerMetricsManagerTest {
     private Time time = new MockTime();
     private Metrics metrics = new Metrics(time);
 
     @Test
     public void testRebalanceCallbackMetrics() {
         // MBean: kafka.consumer:type=consumer-coordinator-metrics,client-id={clientId}
-        RebalanceCallbackMetrics rebalanceCallbackMetrics = new RebalanceCallbackMetrics(metrics);
+        RebalanceCallbackMetricsManager rebalanceCallbackMetricsManager = new RebalanceCallbackMetricsManager(metrics);
         String groupName = "consumer-coordinator-metrics";
         assertNotNull(getMetric("partition-revoked-latency-avg", groupName));
         assertNotNull(getMetric("partition-revoked-latency-max", groupName));
@@ -48,9 +47,9 @@ public class ConsumerMetricsTest {
         assertNotNull(getMetric("partition-lost-latency-avg", groupName));
         assertNotNull(getMetric("partition-lost-latency-max", groupName));
 
-        rebalanceCallbackMetrics.assignCallbackSensor.record(100);
-        rebalanceCallbackMetrics.revokeCallbackSensor.record(101);
-        rebalanceCallbackMetrics.loseCallbackSensor.record(102);
+        rebalanceCallbackMetricsManager.recordPartitionAssignLatency(100);
+        rebalanceCallbackMetricsManager.recordPartitionRevokeLatency(101);
+        rebalanceCallbackMetricsManager.recordPartitionLostLatency(102);
 
         assertEquals(101d, getMetric("partition-revoked-latency-avg", groupName).metricValue());
         assertEquals(101d, getMetric("partition-revoked-latency-max", groupName).metricValue());
@@ -63,15 +62,15 @@ public class ConsumerMetricsTest {
     @Test
     public void testHeartbeatMetrics() {
         // MBean: kafka.consumer:type=consumer-coordinator-metrics,client-id={clientId}
-        HeartbeatMetrics heartbeatMetrics = new HeartbeatMetrics(metrics);
+        HeartbeatMetricsManager heartbeatMetricsManager = new HeartbeatMetricsManager(metrics);
         String groupName = "consumer-coordinator-metrics";
         assertNotNull(getMetric("heartbeat-response-time-max", groupName));
         assertNotNull(getMetric("heartbeat-rate", groupName));
         assertNotNull(getMetric("heartbeat-total", groupName));
 
-        heartbeatMetrics.heartbeatSensor.record(100);
-        heartbeatMetrics.heartbeatSensor.record(100);
-        heartbeatMetrics.heartbeatSensor.record(100);
+        heartbeatMetricsManager.heartbeatSensor.record(100);
+        heartbeatMetricsManager.heartbeatSensor.record(100);
+        heartbeatMetricsManager.heartbeatSensor.record(100);
 
         assertEquals(100d, getMetric("heartbeat-response-time-max", groupName).metricValue());
         assertEquals(0.1d, (double) getMetric("heartbeat-rate", groupName).metricValue(), 0.01d);
@@ -81,28 +80,25 @@ public class ConsumerMetricsTest {
     @Test
     public void testMetricsGroupName() {
         // consumer-coordinator-metrics
-        NoopConsumerMetrics coordinatorMetrics = new NoopConsumerMetrics("customCoordinatorPrefix", AbstractConsumerMetrics.MetricGroupSuffix.COORDINATOR);
+        NoopConsumerMetrics coordinatorMetrics = new NoopConsumerMetrics(metrics, "customCoordinatorPrefix", AbstractConsumerMetricsManager.MetricGroupSuffix.COORDINATOR);
         assertEquals("customCoordinatorPrefix" + COORDINATOR_METRICS_SUFFIX, coordinatorMetrics.metricGroupName());
 
         // consumer-metrics
-        NoopConsumerMetrics consumerMetrics = new NoopConsumerMetrics("customConsumerPrefix", AbstractConsumerMetrics.MetricGroupSuffix.CONSUMER);
+        NoopConsumerMetrics consumerMetrics = new NoopConsumerMetrics(metrics, "customConsumerPrefix", AbstractConsumerMetricsManager.MetricGroupSuffix.CONSUMER);
         assertEquals("customConsumerPrefix" + CONSUMER_METRICS_SUFFIX, consumerMetrics.metricGroupName());
 
-        // consumer-fetch-manager-metrics
-        NoopConsumerMetrics fetchMetrics = new NoopConsumerMetrics("customFetchPrefix", AbstractConsumerMetrics.MetricGroupSuffix.FETCH_MANAGER);
-        assertEquals("customFetchPrefix" + FETCH_MANAGER_METRICS_SUFFIX, fetchMetrics.metricGroupName());
-
-        assertThrows(IllegalArgumentException.class, () -> new NoopConsumerMetrics(null,
-            AbstractConsumerMetrics.MetricGroupSuffix.CONSUMER));
+        assertThrows(IllegalArgumentException.class, () -> new NoopConsumerMetrics(metrics,
+                null,
+                AbstractConsumerMetricsManager.MetricGroupSuffix.CONSUMER));
     }
 
     private KafkaMetric getMetric(String metricName, String groupName) {
         return metrics.metrics().get(metrics.metricName(metricName, groupName));
     }
 
-    static class NoopConsumerMetrics extends AbstractConsumerMetrics {
-        public NoopConsumerMetrics(String prefix, MetricGroupSuffix suffix) {
-            super(prefix, suffix.toString());
+    static class NoopConsumerMetrics extends AbstractConsumerMetricsManager {
+        public NoopConsumerMetrics(Metrics metrics, String prefix, MetricGroupSuffix suffix) {
+            super(metrics, prefix, suffix);
         }
     }
 }

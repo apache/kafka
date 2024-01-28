@@ -23,12 +23,11 @@ import org.apache.kafka.clients.consumer.internals.events.ApplicationEventProces
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEventHandler;
 import org.apache.kafka.clients.consumer.internals.events.ErrorBackgroundEvent;
 import org.apache.kafka.clients.consumer.internals.events.GroupMetadataUpdateEvent;
-import org.apache.kafka.clients.consumer.internals.metrics.HeartbeatMetrics;
+import org.apache.kafka.clients.consumer.internals.metrics.HeartbeatMetricsManager;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
 import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatRequestData;
-import org.apache.kafka.common.metrics.Measurable;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.ConsumerGroupHeartbeatRequest;
@@ -44,7 +43,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.SortedSet;
 import java.util.TreeSet;
-import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 /**
@@ -112,7 +110,7 @@ public class HeartbeatRequestManager implements RequestManager {
      * sending heartbeat until the next poll.
      */
     private final Timer pollTimer;
-    private final HeartbeatMetrics heartbeatMetrics;
+    private final HeartbeatMetricsManager heartbeatMetricsManager;
 
     private GroupMetadataUpdateEvent previousGroupMetadataUpdateEvent = null;
 
@@ -124,7 +122,6 @@ public class HeartbeatRequestManager implements RequestManager {
         final SubscriptionState subscriptions,
         final MembershipManager membershipManager,
         final BackgroundEventHandler backgroundEventHandler,
-        final String metricGroupPrefix,
         final Metrics metrics) {
         this.coordinatorRequestManager = coordinatorRequestManager;
         this.logger = logContext.logger(getClass());
@@ -137,7 +134,7 @@ public class HeartbeatRequestManager implements RequestManager {
         this.heartbeatRequestState = new HeartbeatRequestState(logContext, time, 0, retryBackoffMs,
             retryBackoffMaxMs, maxPollIntervalMs);
         this.pollTimer = time.timer(maxPollIntervalMs);
-        this.heartbeatMetrics = createHeartbeatMetrics(metrics, metricGroupPrefix);
+        this.heartbeatMetricsManager = new HeartbeatMetricsManager(metrics);
     }
 
     // Visible for testing
@@ -150,7 +147,6 @@ public class HeartbeatRequestManager implements RequestManager {
         final HeartbeatState heartbeatState,
         final HeartbeatRequestState heartbeatRequestState,
         final BackgroundEventHandler backgroundEventHandler,
-        final String metricGroupPrefix,
         final Metrics metrics) {
         this.logger = logContext.logger(this.getClass());
         this.maxPollIntervalMs = config.getInt(CommonClientConfigs.MAX_POLL_INTERVAL_MS_CONFIG);
@@ -160,7 +156,7 @@ public class HeartbeatRequestManager implements RequestManager {
         this.membershipManager = membershipManager;
         this.backgroundEventHandler = backgroundEventHandler;
         this.pollTimer = timer;
-        this.heartbeatMetrics = createHeartbeatMetrics(metrics, metricGroupPrefix);
+        this.heartbeatMetricsManager = new HeartbeatMetricsManager(metrics);
     }
 
     /**
@@ -256,6 +252,7 @@ public class HeartbeatRequestManager implements RequestManager {
         NetworkClientDelegate.UnsentRequest request = makeHeartbeatRequest(ignoreResponse);
         heartbeatRequestState.onSendAttempt(currentTimeMs);
         membershipManager.onHeartbeatRequestSent();
+        heartbeatMetricsManager.recordHeartbeatSentMs(currentTimeMs);
         return request;
     }
 
@@ -268,7 +265,7 @@ public class HeartbeatRequestManager implements RequestManager {
         else
             return request.whenComplete((response, exception) -> {
                 if (response != null) {
-                    heartbeatMetrics.heartbeatSensor.record(response.requestLatencyMs());
+                    heartbeatMetricsManager.recordRequestLatency(response.requestLatencyMs());
                     onResponse((ConsumerGroupHeartbeatResponse) response.responseBody(), request.handler().completionTimeMs());
                 } else {
                     onFailure(exception, request.handler().completionTimeMs());
@@ -279,7 +276,7 @@ public class HeartbeatRequestManager implements RequestManager {
     private NetworkClientDelegate.UnsentRequest logResponse(final NetworkClientDelegate.UnsentRequest request) {
         return request.whenComplete((response, exception) -> {
             if (response != null) {
-                heartbeatMetrics.heartbeatSensor.record(response.requestLatencyMs());
+                heartbeatMetricsManager.recordRequestLatency(response.requestLatencyMs());
                 Errors error =
                     Errors.forCode(((ConsumerGroupHeartbeatResponse) response.responseBody()).data().errorCode());
                 if (error == Errors.NONE)
@@ -426,24 +423,6 @@ public class HeartbeatRequestManager implements RequestManager {
     private void handleFatalFailure(Throwable error) {
         backgroundEventHandler.add(new ErrorBackgroundEvent(error));
         membershipManager.transitionToFatal();
-    }
-
-    private HeartbeatMetrics createHeartbeatMetrics(Metrics metrics, String metricGroupPrefix) {
-        HeartbeatMetrics hbm = new HeartbeatMetrics(metrics);
-        Measurable lastHeartbeat = (config, now) -> {
-            final long lastHeartbeatSend = heartbeatRequestState.lastSentMs;
-            if (lastHeartbeatSend < 0L)
-                // if no heartbeat is ever triggered, just return -1.
-                return -1d;
-            else
-                return TimeUnit.SECONDS.convert(now - lastHeartbeatSend, TimeUnit.MILLISECONDS);
-        };
-        hbm.addMetric(
-            metrics,
-            "last-heartbeat-seconds-ago",
-            "The number of seconds since the last coordinator heartbeat was sent",
-            lastHeartbeat);
-        return hbm;
     }
 
     /**

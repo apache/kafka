@@ -67,7 +67,6 @@ public final class ConsumerUtils {
     public static final String CONSUMER_METRIC_GROUP_PREFIX = "consumer";
     public static final String COORDINATOR_METRICS_SUFFIX = "-coordinator-metrics";
     public static final String CONSUMER_METRICS_SUFFIX = "-metrics";
-    public static final String FETCH_MANAGER_METRICS_SUFFIX = "-fetch-manager-metrics";
 
     /**
      * A fixed, large enough value will suffice for max.

@@ -14,7 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.clients.consumer.internals;
+package org.apache.kafka.clients.consumer.internals.metrics;
 
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.metrics.Measurable;
@@ -26,20 +26,20 @@ import org.apache.kafka.common.metrics.stats.Max;
 
 import java.util.concurrent.TimeUnit;
 
-public class KafkaConsumerMetrics implements AutoCloseable {
+import static org.apache.kafka.clients.consumer.internals.metrics.AbstractConsumerMetricsManager.MetricGroupSuffix.CONSUMER;
+
+public class KafkaConsumerMetrics extends AbstractConsumerMetricsManager implements AutoCloseable {
     private final MetricName lastPollMetricName;
     private final Sensor timeBetweenPollSensor;
     private final Sensor pollIdleSensor;
     private final Sensor committedSensor;
     private final Sensor commitSyncSensor;
-    private final Metrics metrics;
     private long lastPollMs;
     private long pollStartMs;
     private long timeSinceLastPollMs;
 
     public KafkaConsumerMetrics(Metrics metrics, String metricGrpPrefix) {
-        this.metrics = metrics;
-        String metricGroupName = metricGrpPrefix + "-metrics";
+        super(metrics, metricGrpPrefix, CONSUMER);
         Measurable lastPoll = (mConfig, now) -> {
             if (lastPollMs == 0L)
                 // if no poll is ever triggered, just return -1.

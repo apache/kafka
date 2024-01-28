@@ -1079,7 +1079,6 @@ public class CommitRequestManagerTest {
                 retryBackoffMs,
                 retryBackoffMaxMs,
                 OptionalDouble.of(0),
-                consumerMetricGroupPrefix,
                 metrics));
     }
 
