@@ -1616,53 +1616,6 @@ public class WorkerSinkTaskTest {
         PowerMock.expectLastCall();
     }
 
-    private void expectRebalanceLossError(RuntimeException e) {
-        sinkTask.close(new HashSet<>(INITIAL_ASSIGNMENT));
-        EasyMock.expectLastCall().andThrow(e);
-
-        EasyMock.expect(consumer.poll(Duration.ofMillis(EasyMock.anyLong()))).andAnswer(
-            () -> {
-                rebalanceListener.getValue().onPartitionsLost(INITIAL_ASSIGNMENT);
-                return ConsumerRecords.empty();
-            });
-    }
-
-    private void expectRebalanceRevocationError(RuntimeException e) {
-        sinkTask.close(new HashSet<>(INITIAL_ASSIGNMENT));
-        EasyMock.expectLastCall().andThrow(e);
-
-        sinkTask.preCommit(EasyMock.anyObject());
-        EasyMock.expectLastCall().andReturn(Collections.emptyMap());
-
-        EasyMock.expect(consumer.poll(Duration.ofMillis(EasyMock.anyLong()))).andAnswer(
-            () -> {
-                rebalanceListener.getValue().onPartitionsRevoked(INITIAL_ASSIGNMENT);
-                return ConsumerRecords.empty();
-            });
-    }
-
-    private void expectRebalanceAssignmentError(RuntimeException e) {
-        sinkTask.close(INITIAL_ASSIGNMENT);
-        EasyMock.expectLastCall();
-
-        sinkTask.preCommit(EasyMock.anyObject());
-        EasyMock.expectLastCall().andReturn(Collections.emptyMap());
-
-        EasyMock.expect(consumer.position(TOPIC_PARTITION)).andReturn(FIRST_OFFSET);
-        EasyMock.expect(consumer.position(TOPIC_PARTITION2)).andReturn(FIRST_OFFSET);
-
-        sinkTask.open(INITIAL_ASSIGNMENT);
-        EasyMock.expectLastCall().andThrow(e);
-
-        EasyMock.expect(consumer.assignment()).andReturn(INITIAL_ASSIGNMENT).times(2);
-        EasyMock.expect(consumer.poll(Duration.ofMillis(EasyMock.anyLong()))).andAnswer(
-            () -> {
-                rebalanceListener.getValue().onPartitionsRevoked(INITIAL_ASSIGNMENT);
-                rebalanceListener.getValue().onPartitionsAssigned(INITIAL_ASSIGNMENT);
-                return ConsumerRecords.empty();
-            });
-    }
-
     private void expectPollInitialAssignment() {
         sinkTask.open(INITIAL_ASSIGNMENT);
         EasyMock.expectLastCall();
