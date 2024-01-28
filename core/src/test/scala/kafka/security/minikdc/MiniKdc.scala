@@ -114,20 +114,18 @@ class MiniKdc(config: Properties, workDir: File) extends Logging {
     kdc = new SimpleKdcServer(kdcConfig, new BackendConfig)
     kdc.setWorkDir(workDir)
 
-    // transport
-    val transport = config.getProperty(MiniKdc.Transport)
-    transport.trim match {
-      case "TCP" => kdc.setKdcTcpPort(port)
-      case "UDP" => kdc.setKdcUdpPort(port)
-      case _ => throw new IllegalArgumentException(s"Invalid transport: $transport")
-    }
-
     kdc.init()
     kdc.start()
-
-    // if using ephemeral port, update port number for binding
-    if (port == 0)
-      _port = if (kdc.getKdcTcpPort > 0) kdc.getKdcTcpPort else kdc.getKdcUdpPort
+    
+    if (port == 0) {
+      // if using ephemeral port, update port number for binding
+      val transport = config.getProperty(MiniKdc.Transport)
+      _port = transport.trim match {
+        case "TCP" => kdc.getKdcTcpPort
+        case "UDP" => kdc.getKdcUdpPort
+        case _ => throw new IllegalArgumentException(s"Invalid transport: $transport")
+      }
+    }
 
     info(s"MiniKdc listening at port: $port")
   }
