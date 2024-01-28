@@ -87,6 +87,7 @@ import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.atLeastOnce;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -314,11 +315,7 @@ public class WorkerSinkTaskMockitoTest {
 
         expectTaskGetTopic();
         expectPollInitialAssignment()
-                .thenAnswer(expectConsumerPoll(1))
-                .thenAnswer((Answer<ConsumerRecords<byte[], byte[]>>) invocation -> {
-                    rebalanceListener.getValue().onPartitionsRevoked(INITIAL_ASSIGNMENT);
-                    return null;
-                });
+                .thenAnswer(expectConsumerPoll(1));
 
         expectConversionAndTransformation(null, new RecordHeaders());
 
@@ -331,6 +328,11 @@ public class WorkerSinkTaskMockitoTest {
 
         workerTask.iteration();
         verify(sinkTask, times(2)).put(anyList());
+
+        doAnswer((Answer<ConsumerRecords<byte[], byte[]>>) invocation -> {
+            rebalanceListener.getValue().onPartitionsRevoked(INITIAL_ASSIGNMENT);
+            return null;
+        }).when(consumer).close();
 
         workerTask.stop();
         verify(consumer).wakeup();
