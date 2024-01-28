@@ -445,6 +445,10 @@ public class WorkerSinkTaskMockitoTest {
 
         INITIAL_ASSIGNMENT.forEach(tp -> when(consumer.position(tp)).thenReturn(FIRST_OFFSET));
 
+        workerTask.initialize(TASK_CONFIG);
+        workerTask.initializeAndStart();
+        verifyInitializeTask();
+
         when(consumer.poll(any(Duration.class)))
                 .thenAnswer((Answer<ConsumerRecords<byte[], byte[]>>) invocation -> {
                     rebalanceListener.getValue().onPartitionsAssigned(INITIAL_ASSIGNMENT);
@@ -471,10 +475,6 @@ public class WorkerSinkTaskMockitoTest {
         when(sinkTask.preCommit(offsets)).thenReturn(offsets);
 
         when(consumer.position(TOPIC_PARTITION3)).thenReturn(FIRST_OFFSET);
-
-        workerTask.initialize(TASK_CONFIG);
-        workerTask.initializeAndStart();
-        verifyInitializeTask();
 
         // First iteration--first call to poll, first consumer assignment
         workerTask.iteration();
