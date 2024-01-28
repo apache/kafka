@@ -315,11 +315,7 @@ public class WorkerSinkTaskMockitoTest {
 
         expectTaskGetTopic();
         expectPollInitialAssignment()
-                .thenAnswer(expectConsumerPoll(1))
-                .thenAnswer((Answer<ConsumerRecords<byte[], byte[]>>) invocation -> {
-                    rebalanceListener.getValue().onPartitionsRevoked(INITIAL_ASSIGNMENT);
-                    return null;
-                });
+                .thenAnswer(expectConsumerPoll(1));
 
         expectConversionAndTransformation(null, new RecordHeaders());
 
