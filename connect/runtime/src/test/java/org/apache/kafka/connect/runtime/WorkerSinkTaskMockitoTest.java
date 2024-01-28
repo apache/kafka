@@ -20,8 +20,10 @@ import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
+import org.apache.kafka.clients.consumer.MockConsumer;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetCommitCallback;
+import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.WakeupException;
@@ -354,28 +356,23 @@ public class WorkerSinkTaskMockitoTest {
         when(consumer.assignment()).thenReturn(INITIAL_ASSIGNMENT);
         INITIAL_ASSIGNMENT.forEach(tp -> when(consumer.position(tp)).thenReturn(FIRST_OFFSET));
 
-        when(consumer.poll(any(Duration.class)))
-                // Initial assignment
-                .thenAnswer((Answer<ConsumerRecords<byte[], byte[]>>) invocation -> {
-                    rebalanceListener.getValue().onPartitionsAssigned(INITIAL_ASSIGNMENT);
-                    return ConsumerRecords.empty();
-                })
+        workerTask.initialize(TASK_CONFIG);
+        workerTask.initializeAndStart();
+        verifyInitializeTask();
+
+        expectPollInitialAssignment()
                 // If a retriable exception is thrown, we should redeliver the same batch, pausing the consumer in the meantime
                 .thenAnswer(expectConsumerPoll(1))
                 // Retry delivery should succeed
                 .thenAnswer(expectConsumerPoll(0))
                 .thenAnswer(expectConsumerPoll(1))
                 .thenAnswer(expectConsumerPoll(0));
-        expectConversionAndTransformation(null, emptyHeaders());
+        expectConversionAndTransformation(null, new RecordHeaders());
 
         doAnswer(invocation -> null)
                 .doThrow(new RetriableException("retry"))
                 .doAnswer(invocation -> null)
                 .when(sinkTask).put(anyList());
-
-        workerTask.initialize(TASK_CONFIG);
-        workerTask.initializeAndStart();
-        verifyInitializeTask();
 
         workerTask.iteration();
         time.sleep(10000L);
@@ -661,6 +658,34 @@ public class WorkerSinkTaskMockitoTest {
         assertEquals(40, metrics.currentMetricValueAsDouble(group1.metricGroup(), "partition-count"), 0.001d);
         assertEquals(50, metrics.currentMetricValueAsDouble(group1.metricGroup(), "offset-commit-seq-no"), 0.001d);
         assertEquals(30, metrics.currentMetricValueAsDouble(group1.metricGroup(), "put-batch-max-time-ms"), 0.001d);
+    }
+
+    @Test
+    public void testPartitionCountInCaseOfPartitionRevocation() {
+        MockConsumer<byte[], byte[]> mockConsumer = new MockConsumer<>(OffsetResetStrategy.EARLIEST);
+        // Setting up Worker Sink Task to check metrics
+        workerTask = new WorkerSinkTask(
+                taskId, sinkTask, statusListener, TargetState.PAUSED, workerConfig, ClusterConfigState.EMPTY, metrics,
+                keyConverter, valueConverter, errorHandlingMetrics, headerConverter,
+                transformationChain, mockConsumer, pluginLoader, time,
+                RetryWithToleranceOperatorTest.noopOperator(), null, statusBackingStore, Collections::emptyList);
+        mockConsumer.updateBeginningOffsets(
+                new HashMap<TopicPartition, Long>() {{
+                    put(TOPIC_PARTITION, 0 * 1L);
+                    put(TOPIC_PARTITION2, 0 * 1L);
+                }}
+        );
+        workerTask.initialize(TASK_CONFIG);
+        workerTask.initializeAndStart();
+        // Initial Re-balance to assign INITIAL_ASSIGNMENT which is "TOPIC_PARTITION" and "TOPIC_PARTITION2"
+        mockConsumer.rebalance(INITIAL_ASSIGNMENT);
+        assertSinkMetricValue("partition-count", 2);
+        // Revoked "TOPIC_PARTITION" and second re-balance with "TOPIC_PARTITION2"
+        mockConsumer.rebalance(Collections.singleton(TOPIC_PARTITION2));
+        assertSinkMetricValue("partition-count", 1);
+        // Closing the Worker Sink Task which will update the partition count as 0.
+        workerTask.close();
+        assertSinkMetricValue("partition-count", 0);
     }
 
     private void expectRebalanceRevocationError(RuntimeException e) {

@@ -35,7 +35,6 @@ import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaAndValue;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.errors.RetriableException;
-import org.apache.kafka.clients.consumer.MockConsumer;
 import org.apache.kafka.connect.runtime.ConnectMetrics.MetricGroup;
 import org.apache.kafka.connect.runtime.errors.ErrorHandlingMetrics;
 import org.apache.kafka.connect.runtime.errors.ErrorReporter;
@@ -56,7 +55,6 @@ import org.easymock.Capture;
 import org.easymock.CaptureType;
 import org.easymock.EasyMock;
 import org.easymock.IExpectationSetters;
-import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -92,7 +90,6 @@ import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 import static java.util.Arrays.asList;
-import static java.util.Collections.singleton;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotEquals;
@@ -201,103 +198,6 @@ public class WorkerSinkTaskTest {
     @After
     public void tearDown() {
         if (metrics != null) metrics.stop();
-    }
-
-    @Test
-    public void testPollRedelivery() throws Exception {
-        createTask(initialState);
-
-        expectInitializeTask();
-        expectTaskGetTopic(true);
-        expectPollInitialAssignment();
-
-        // If a retriable exception is thrown, we should redeliver the same batch, pausing the consumer in the meantime
-        expectConsumerPoll(1);
-        expectConversionAndTransformation(1);
-        Capture<Collection<SinkRecord>> records = EasyMock.newCapture(CaptureType.ALL);
-        sinkTask.put(EasyMock.capture(records));
-        EasyMock.expectLastCall().andThrow(new RetriableException("retry"));
-        // Pause
-        EasyMock.expect(consumer.assignment()).andReturn(INITIAL_ASSIGNMENT);
-        consumer.pause(INITIAL_ASSIGNMENT);
-        PowerMock.expectLastCall();
-
-        // Retry delivery should succeed
-        expectConsumerPoll(0);
-        sinkTask.put(EasyMock.capture(records));
-        EasyMock.expectLastCall();
-        // And unpause
-        EasyMock.expect(consumer.assignment()).andReturn(INITIAL_ASSIGNMENT);
-        INITIAL_ASSIGNMENT.forEach(tp -> {
-            consumer.resume(singleton(tp));
-            PowerMock.expectLastCall();
-        });
-
-        // Expect commit
-        EasyMock.expect(consumer.assignment()).andReturn(INITIAL_ASSIGNMENT).times(2);
-        final Map<TopicPartition, OffsetAndMetadata> workerCurrentOffsets = new HashMap<>();
-        // Commit advance by one
-        workerCurrentOffsets.put(TOPIC_PARTITION, new OffsetAndMetadata(FIRST_OFFSET + 1));
-        // Nothing polled for this partition
-        workerCurrentOffsets.put(TOPIC_PARTITION2, new OffsetAndMetadata(FIRST_OFFSET));
-        EasyMock.expect(sinkTask.preCommit(workerCurrentOffsets)).andReturn(workerCurrentOffsets);
-        final Capture<OffsetCommitCallback> callback = EasyMock.newCapture();
-        consumer.commitAsync(EasyMock.eq(workerCurrentOffsets), EasyMock.capture(callback));
-        EasyMock.expectLastCall().andAnswer(() -> {
-            callback.getValue().onComplete(workerCurrentOffsets, null);
-            return null;
-        });
-        expectConsumerPoll(0);
-        sinkTask.put(EasyMock.eq(Collections.emptyList()));
-        EasyMock.expectLastCall();
-
-        PowerMock.replayAll();
-
-        workerTask.initialize(TASK_CONFIG);
-        workerTask.initializeAndStart();
-        workerTask.iteration();
-        time.sleep(10000L);
-
-        assertSinkMetricValue("partition-count", 2);
-        assertSinkMetricValue("sink-record-read-total", 0.0);
-        assertSinkMetricValue("sink-record-send-total", 0.0);
-        assertSinkMetricValue("sink-record-active-count", 0.0);
-        assertSinkMetricValue("sink-record-active-count-max", 0.0);
-        assertSinkMetricValue("sink-record-active-count-avg", 0.0);
-        assertSinkMetricValue("offset-commit-seq-no", 0.0);
-        assertSinkMetricValue("offset-commit-completion-rate", 0.0);
-        assertSinkMetricValue("offset-commit-completion-total", 0.0);
-        assertSinkMetricValue("offset-commit-skip-rate", 0.0);
-        assertSinkMetricValue("offset-commit-skip-total", 0.0);
-        assertTaskMetricValue("status", "running");
-        assertTaskMetricValue("running-ratio", 1.0);
-        assertTaskMetricValue("pause-ratio", 0.0);
-        assertTaskMetricValue("batch-size-max", 0.0);
-        assertTaskMetricValue("batch-size-avg", 0.0);
-        assertTaskMetricValue("offset-commit-max-time-ms", Double.NaN);
-        assertTaskMetricValue("offset-commit-failure-percentage", 0.0);
-        assertTaskMetricValue("offset-commit-success-percentage", 0.0);
-
-        workerTask.iteration();
-        workerTask.iteration();
-        time.sleep(30000L);
-
-        assertSinkMetricValue("sink-record-read-total", 1.0);
-        assertSinkMetricValue("sink-record-send-total", 1.0);
-        assertSinkMetricValue("sink-record-active-count", 1.0);
-        assertSinkMetricValue("sink-record-active-count-max", 1.0);
-        assertSinkMetricValue("sink-record-active-count-avg", 0.5);
-        assertTaskMetricValue("status", "running");
-        assertTaskMetricValue("running-ratio", 1.0);
-        assertTaskMetricValue("batch-size-max", 1.0);
-        assertTaskMetricValue("batch-size-avg", 0.5);
-        
-        sinkTaskContext.getValue().requestCommit();
-        time.sleep(10000L);
-        workerTask.iteration();
-        assertSinkMetricValue("offset-commit-completion-total", 1.0);
-
-        PowerMock.verifyAll();
     }
 
     @Test
@@ -1578,32 +1478,6 @@ public class WorkerSinkTaskTest {
         assertEquals("newtopic_" + TOPIC, record.topic());
 
         PowerMock.verifyAll();
-    }
-
-    @Test
-    public void testPartitionCountInCaseOfPartitionRevocation() {
-        MockConsumer<byte[], byte[]> mockConsumer = new MockConsumer<>(OffsetResetStrategy.EARLIEST);
-        // Setting up Worker Sink Task to check metrics
-        workerTask = new WorkerSinkTask(
-                taskId, sinkTask, statusListener, TargetState.PAUSED, workerConfig, ClusterConfigState.EMPTY, metrics,
-                keyConverter, valueConverter, errorHandlingMetrics, headerConverter,
-                transformationChain, mockConsumer, pluginLoader, time,
-                RetryWithToleranceOperatorTest.noopOperator(), null, statusBackingStore, Collections::emptyList);
-        mockConsumer.updateBeginningOffsets(new HashMap<TopicPartition, Long>() {{
-                put(TOPIC_PARTITION, 0 * 1L);
-                put(TOPIC_PARTITION2, 0 * 1L);
-            }});
-        workerTask.initialize(TASK_CONFIG);
-        workerTask.initializeAndStart();
-        // Initial Re-balance to assign INITIAL_ASSIGNMENT which is "TOPIC_PARTITION" and "TOPIC_PARTITION2"
-        mockConsumer.rebalance(INITIAL_ASSIGNMENT);
-        assertSinkMetricValue("partition-count", 2);
-        // Revoked "TOPIC_PARTITION" and second re-balance with "TOPIC_PARTITION2"
-        mockConsumer.rebalance(Collections.singleton(TOPIC_PARTITION2));
-        assertSinkMetricValue("partition-count", 1);
-        // Closing the Worker Sink Task which will update the partition count as 0.
-        workerTask.close();
-        assertSinkMetricValue("partition-count", 0);
     }
 
     private void expectInitializeTask() {
