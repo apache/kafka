@@ -188,12 +188,14 @@ class MiniKdc(config: Properties, workDir: File) extends Logging {
     */
   def createPrincipal(keytabFile: File, principals: String*): Unit = {
     try {
-      principals.foreach { principal =>
-        val generatedPassword = UUID.randomUUID.toString
-        kdc.getKadmin.addPrincipal(principal, generatedPassword)
+      val generatedPassword = UUID.randomUUID.toString
+      val principalWithRealms = principals.map { principal =>
+        val principalWithRealm = s"${principal}@${realm}"
+        kdc.getKadmin.addPrincipal(principalWithRealm, generatedPassword)
+        principalWithRealm
       }
 
-      kdc.getKadmin.exportKeytab(keytabFile, principals.toList.asJava)
+      kdc.getKadmin.exportKeytab(keytabFile, principalWithRealms.toList.asJava)
       info(s"Keytab file created at ${keytabFile.getAbsolutePath}")
     } catch {
       case e: KrbException =>
