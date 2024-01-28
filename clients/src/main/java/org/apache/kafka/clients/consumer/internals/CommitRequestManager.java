@@ -21,6 +21,7 @@ import org.apache.kafka.clients.consumer.CommitFailedException;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.RetriableCommitFailedException;
+import org.apache.kafka.clients.consumer.internals.metrics.OffsetCommitMetricsManager;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.DisconnectException;
@@ -31,11 +32,6 @@ import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.message.OffsetCommitRequestData;
 import org.apache.kafka.common.message.OffsetCommitResponseData;
 import org.apache.kafka.common.metrics.Metrics;
-import org.apache.kafka.common.metrics.Sensor;
-import org.apache.kafka.common.metrics.stats.Avg;
-import org.apache.kafka.common.metrics.stats.Max;
-import org.apache.kafka.common.metrics.stats.Meter;
-import org.apache.kafka.common.metrics.stats.WindowedCount;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.requests.OffsetCommitRequest;
@@ -64,8 +60,6 @@ import java.util.concurrent.CompletableFuture;
 import java.util.function.BiConsumer;
 import java.util.stream.Collectors;
 
-import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.CONSUMER_METRIC_GROUP_PREFIX;
-import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.COORDINATOR_METRICS_SUFFIX;
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.THROW_ON_FETCH_STABLE_OFFSET_UNSUPPORTED;
 import static org.apache.kafka.clients.consumer.internals.NetworkClientDelegate.PollResult.EMPTY;
 import static org.apache.kafka.common.protocol.Errors.COORDINATOR_LOAD_IN_PROGRESS;
@@ -85,7 +79,7 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
     private final boolean throwOnFetchStableOffsetUnsupported;
     final PendingRequests pendingRequests;
     private boolean closing = false;
-    private Sensor commitSensor;
+    private OffsetCommitMetricsManager offsetCommitMetricsManager;
 
     /**
      *  Latest member ID and epoch received via the {@link #onMemberEpochUpdated(Optional, Optional)},
@@ -114,7 +108,6 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
             config.getLong(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG),
             config.getLong(ConsumerConfig.RETRY_BACKOFF_MAX_MS_CONFIG),
             OptionalDouble.empty(),
-            CONSUMER_METRIC_GROUP_PREFIX,
             metrics);
     }
 
@@ -130,7 +123,6 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
         final long retryBackoffMs,
         final long retryBackoffMaxMs,
         final OptionalDouble jitter,
-        final String metricGroupPrefix,
         final Metrics metrics) {
         Objects.requireNonNull(coordinatorRequestManager, "Coordinator is needed upon committing offsets");
         this.logContext = logContext;
@@ -152,7 +144,7 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
         this.jitter = jitter;
         this.throwOnFetchStableOffsetUnsupported = config.getBoolean(THROW_ON_FETCH_STABLE_OFFSET_UNSUPPORTED);
         this.memberInfo = new MemberInfo();
-        this.commitSensor = addCommitSensor(metrics, metricGroupPrefix);
+        this.offsetCommitMetricsManager = new OffsetCommitMetricsManager(metrics);
     }
 
     /**
@@ -392,23 +384,6 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
         return new NetworkClientDelegate.PollResult(Long.MAX_VALUE, requests);
     }
 
-    private Sensor addCommitSensor(Metrics metrics, String metricGrpPrefix) {
-        String metricGrpName = metricGrpPrefix + COORDINATOR_METRICS_SUFFIX;
-        Sensor sensor = metrics.sensor("commit-latency");
-        sensor.add(metrics.metricName("commit-latency-avg",
-            metricGrpName,
-            "The average time taken for a commit request"), new Avg());
-        sensor.add(metrics.metricName("commit-latency-max",
-            metricGrpName,
-            "The max time taken for a commit request"), new Max());
-        sensor.add(new Meter(new WindowedCount(),
-            metrics.metricName("commit-rate", metricGrpName,
-                "The number of commit calls per second"),
-            metrics.metricName("commit-total", metricGrpName,
-                "The total number of commit calls")));
-        return sensor;
-    }
-
     private class OffsetCommitRequestState extends RetriableRequestState {
         private final Map<TopicPartition, OffsetAndMetadata> offsets;
         private final String groupId;
@@ -521,7 +496,7 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
         }
 
         public void onResponse(final ClientResponse response) {
-            commitSensor.record(response.requestLatencyMs());
+            offsetCommitMetricsManager.recordRequestLatency(response.requestLatencyMs());
             long currentTimeMs = response.receivedTimeMs();
             OffsetCommitResponse commitResponse = (OffsetCommitResponse) response.responseBody();
             Set<String> unauthorizedTopics = new HashSet<>();

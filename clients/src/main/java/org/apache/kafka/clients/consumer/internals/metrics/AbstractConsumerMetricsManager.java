@@ -22,9 +22,7 @@ import org.apache.kafka.common.metrics.stats.Meter;
 import org.apache.kafka.common.metrics.stats.WindowedCount;
 
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.CONSUMER_METRICS_SUFFIX;
-import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.CONSUMER_METRIC_GROUP_PREFIX;
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.COORDINATOR_METRICS_SUFFIX;
-import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.FETCH_MANAGER_METRICS_SUFFIX;
 
 /**
  * Base class for different consumer metrics to extend. This class helps to construct the logical group name from the
@@ -35,17 +33,16 @@ import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.FETCH_MA
  * <ul>
  *     <li><code>-coordinator-metrics</code>: {@link MetricGroupSuffix#COORDINATOR}</li>
  *     <li><code>-metrics</code>: {@link MetricGroupSuffix#CONSUMER}</li>
- *     <li><code>-fetch-manager-metrics</code>: {@link MetricGroupSuffix#FETCH_MANAGER}</li>
  * </ul>
  * </p>
  */
-public abstract class AbstractConsumerMetrics {
+public abstract class AbstractConsumerMetricsManager {
     protected final String metricGroupName;
+    final Metrics metrics;
 
     public enum MetricGroupSuffix {
         COORDINATOR(COORDINATOR_METRICS_SUFFIX),
-        CONSUMER(CONSUMER_METRICS_SUFFIX),
-        FETCH_MANAGER(FETCH_MANAGER_METRICS_SUFFIX);
+        CONSUMER(CONSUMER_METRICS_SUFFIX);
 
         private final String suffix;
 
@@ -59,15 +56,12 @@ public abstract class AbstractConsumerMetrics {
         }
     }
 
-    public AbstractConsumerMetrics(MetricGroupSuffix suffix) {
-        this(CONSUMER_METRIC_GROUP_PREFIX, suffix.toString());
-    }
-
-    public AbstractConsumerMetrics(String prefix, String suffix) {
+    public AbstractConsumerMetricsManager(Metrics metrics, String prefix, MetricGroupSuffix suffix) {
         if (suffix == null)
             throw new IllegalArgumentException("metric group suffix cannot be null");
         if (prefix == null)
             throw new IllegalArgumentException("metric group prefix cannot be null");
+        this.metrics = metrics;
         metricGroupName = prefix + suffix;
     }
 
@@ -85,8 +79,7 @@ public abstract class AbstractConsumerMetrics {
                 String.format("The total number of %s", descriptiveName)));
     }
 
-    public void addMetric(Metrics metrics,
-                          String metricName,
+    public void addMetric(String metricName,
                           String description,
                           Measurable measurable) {
         metrics.addMetric(
