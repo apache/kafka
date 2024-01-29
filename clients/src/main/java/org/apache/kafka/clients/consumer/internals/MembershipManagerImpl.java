@@ -26,6 +26,7 @@ import org.apache.kafka.clients.consumer.internals.events.CompletableBackgroundE
 import org.apache.kafka.clients.consumer.internals.events.ConsumerRebalanceListenerCallbackCompletedEvent;
 import org.apache.kafka.clients.consumer.internals.events.ConsumerRebalanceListenerCallbackNeededEvent;
 import org.apache.kafka.clients.consumer.internals.events.ErrorBackgroundEvent;
+import org.apache.kafka.clients.consumer.internals.metrics.RebalanceMetricsManager;
 import org.apache.kafka.common.ClusterResource;
 import org.apache.kafka.common.ClusterResourceListener;
 import org.apache.kafka.common.KafkaException;
@@ -33,6 +34,7 @@ import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatResponseData;
+import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.ConsumerGroupHeartbeatRequest;
 import org.apache.kafka.common.telemetry.internals.ClientTelemetryProvider;
@@ -277,6 +279,7 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
     private final BackgroundEventHandler backgroundEventHandler;
 
     private final Time time;
+    private final RebalanceMetricsManager metricsManager;
 
     public MembershipManagerImpl(String groupId,
                                  Optional<String> groupInstanceId,
@@ -288,7 +291,8 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
                                  LogContext logContext,
                                  Optional<ClientTelemetryReporter> clientTelemetryReporter,
                                  BackgroundEventHandler backgroundEventHandler,
-                                 Time time) {
+                                 Time time,
+                                 Metrics metrics) {
         this.groupId = groupId;
         this.state = MemberState.UNSUBSCRIBED;
         this.serverAssignor = serverAssignor;
@@ -306,6 +310,7 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
         this.rebalanceTimeoutMs = rebalanceTimeoutMs;
         this.backgroundEventHandler = backgroundEventHandler;
         this.time = time;
+        this.metricsManager = new RebalanceMetricsManager(metrics);
     }
 
     /**

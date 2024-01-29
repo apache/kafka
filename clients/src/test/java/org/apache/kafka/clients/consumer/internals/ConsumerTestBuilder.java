@@ -203,7 +203,8 @@ public class ConsumerTestBuilder implements Closeable {
                         logContext,
                         Optional.empty(),
                         backgroundEventHandler,
-                        time
+                        time,
+                        metrics
                 )
             );
             HeartbeatRequestManager.HeartbeatState heartbeatState = spy(new HeartbeatRequestManager.HeartbeatState(
