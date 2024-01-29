@@ -293,13 +293,39 @@ class MiniKdc(config: Properties, workDir: File) extends Logging {
   }
 
   /**
-   * Creates  multiple principals in the KDC and adds them to a keytab file.
-   *
-   * An exception will be thrown if the principal cannot be created.
-   *
-   * @param keytabFile keytab file to add the created principals
-   * @param principals principals to add to the KDC, do not include the domain.
-   */
+    * Creates a principal in the KDC with the specified user and password.
+    *
+    * An exception will be thrown if the principal cannot be created.
+    *
+    * @param principal principal name, do not include the domain.
+    * @param password  password.
+    */
+  private def createPrincipal(principal: String, password: String): Unit = {
+    val ldifContent =
+      s"""
+         |dn: uid=$principal,ou=users,dc=${orgName.toLowerCase(Locale.ENGLISH)},dc=${orgDomain.toLowerCase(Locale.ENGLISH)}
+         |objectClass: top
+         |objectClass: person
+         |objectClass: inetOrgPerson
+         |objectClass: krb5principal
+         |objectClass: krb5kdcentry
+         |cn: $principal
+         |sn: $principal
+         |uid: $principal
+         |userPassword: $password
+         |krb5PrincipalName: ${principal}@${realm}
+         |krb5KeyVersionNumber: 0""".stripMargin
+    addEntriesToDirectoryService(ldifContent)
+  }
+
+  /**
+    * Creates  multiple principals in the KDC and adds them to a keytab file.
+    *
+    * An exception will be thrown if the principal cannot be created.
+    *
+    * @param keytabFile keytab file to add the created principals
+    * @param principals principals to add to the KDC, do not include the domain.
+    */
   def createPrincipal(keytabFile: File, principals: String*): Unit = {
     val keytab = new Keytab
     try {
@@ -324,32 +350,6 @@ class MiniKdc(config: Properties, workDir: File) extends Logging {
         error("Error occurred while exporting keytab", e)
     }
     keytab.load(keytabFile)
-  }
-
-  /**
-   * Creates a principal in the KDC with the specified user and password.
-   *
-   * An exception will be thrown if the principal cannot be created.
-   *
-   * @param principal principal name, do not include the domain.
-   * @param password  password.
-   */
-  private def createPrincipal(principal: String, password: String): Unit = {
-    val ldifContent =
-      s"""
-         |dn: uid=$principal,ou=users,dc=${orgName.toLowerCase(Locale.ENGLISH)},dc=${orgDomain.toLowerCase(Locale.ENGLISH)}
-         |objectClass: top
-         |objectClass: person
-         |objectClass: inetOrgPerson
-         |objectClass: krb5principal
-         |objectClass: krb5kdcentry
-         |cn: $principal
-         |sn: $principal
-         |uid: $principal
-         |userPassword: $password
-         |krb5PrincipalName: ${principal}@${realm}
-         |krb5KeyVersionNumber: 0""".stripMargin
-    addEntriesToDirectoryService(ldifContent)
   }
 
   private def addEntriesToDirectoryService(ldifContent: String): Unit = {
@@ -440,11 +440,11 @@ object MiniKdc {
   )
 
   /**
-   * Convenience method that returns MiniKdc default configuration.
-   *
-   * The returned configuration is a copy, it can be customized before using
-   * it to create a MiniKdc.
-   */
+    * Convenience method that returns MiniKdc default configuration.
+    *
+    * The returned configuration is a copy, it can be customized before using
+    * it to create a MiniKdc.
+    */
   def createConfig: Properties = {
     val properties = new Properties
     DefaultConfig.foreach { case (k, v) => properties.setProperty(k, v) }
