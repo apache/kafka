@@ -27,18 +27,14 @@ import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.CONSUMER
 
 public class HeartbeatMetricsManager extends AbstractConsumerMetricsManager {
 
-    public final Sensor heartbeatSensor;
+    private final Sensor heartbeatSensor;
     private long lastHeartbeatMs = -1L;
 
     public HeartbeatMetricsManager(Metrics metrics) {
-        this(metrics, CONSUMER_METRIC_GROUP_PREFIX);
-    }
-
-    public HeartbeatMetricsManager(Metrics metrics, String prefix) {
-        super(metrics, prefix, MetricGroupSuffix.COORDINATOR);
+        super(metrics, CONSUMER_METRIC_GROUP_PREFIX, MetricGroupSuffix.COORDINATOR);
         heartbeatSensor = metrics.sensor("heartbeat-latency");
         heartbeatSensor.add(metrics.metricName("heartbeat-response-time-max",
-                        metricGroupName,
+                        metricGroupName(),
                         "The max time taken to receive a response to a heartbeat request"),
                 new Max());
         heartbeatSensor.add(createMeter(metrics,
@@ -59,8 +55,8 @@ public class HeartbeatMetricsManager extends AbstractConsumerMetricsManager {
                 lastHeartbeat);
     }
 
-    public void recordHeartbeatSentMs(long lastHeartbeatMs) {
-        this.lastHeartbeatMs = lastHeartbeatMs;
+    public void recordHeartbeatSentMs(long timeMs) {
+        lastHeartbeatMs = timeMs;
     }
 
     public void recordRequestLatency(long requestLatencyMs) {

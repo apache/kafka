@@ -37,7 +37,7 @@ import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.COORDINA
  * </p>
  */
 public abstract class AbstractConsumerMetricsManager {
-    protected final String metricGroupName;
+    private final String metricGroupName;
     final Metrics metrics;
 
     public enum MetricGroupSuffix {

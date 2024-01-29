@@ -539,7 +539,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             logContext,
             subscriptions,
             time,
-            new RebalanceCallbackMetricsManager(metrics, CONSUMER_METRIC_GROUP_PREFIX)
+            new RebalanceCallbackMetricsManager(metrics)
         );
         ApiVersions apiVersions = new ApiVersions();
         Supplier<NetworkClientDelegate> networkClientDelegateSupplier = () -> new NetworkClientDelegate(
