@@ -212,6 +212,7 @@ public class ClientMetricsManager implements AutoCloseable {
             } catch (Exception exception) {
                 clientMetricsStats.recordPluginErrorCount(clientInstanceId);
                 clientInstance.lastKnownError(Errors.INVALID_RECORD);
+                log.error("Error exporting client metrics to the plugin for client instance id: {}", clientInstanceId, exception);
                 return request.errorResponse(0, Errors.INVALID_RECORD);
             }
         }
