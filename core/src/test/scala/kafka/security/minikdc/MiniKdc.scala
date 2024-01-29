@@ -216,11 +216,7 @@ class MiniKdc(config: Properties, workDir: File) extends Logging {
     ldapServer = new LdapServer()
     ldapServer.setDirectoryService(ds)
     ldapServer.start()
-
-    println(ldapServer.getPort)
-    println(ldapServer.getKeystoreFile)
-    println(ldapServer.getSaslHost)
-    println("xxxx")
+    
     val backendConfig: Conf = new BackendConfig()
     backendConfig.setString("host", "127.0.0.1")
     backendConfig.setInt("port", ldapServer.getPort)
