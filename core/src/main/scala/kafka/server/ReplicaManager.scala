@@ -183,7 +183,7 @@ object HostedPartition {
   /**
    * This broker hosts the partition, but it is in an offline log directory.
    */
-  final case class Offline(topicId: Option[Uuid]) extends HostedPartition
+  final case class Offline(partition: Option[Partition]) extends HostedPartition
 }
 
 object ReplicaManager {
@@ -2544,7 +2544,7 @@ class ReplicaManager(val config: KafkaConfig,
   def markPartitionOffline(tp: TopicPartition): Unit = replicaStateChangeLock synchronized {
     allPartitions.get(tp) match {
       case HostedPartition.Online(partition) =>
-        allPartitions.put(tp, HostedPartition.Offline(partition.topicId))
+        allPartitions.put(tp, HostedPartition.Offline(Some(partition)))
         partition.markOffline()
       case _ =>
         allPartitions.put(tp, HostedPartition.Offline(None))
@@ -2761,8 +2761,8 @@ class ReplicaManager(val config: KafkaConfig,
                                           delta: TopicsDelta,
                                           topicId: Uuid): Option[(Partition, Boolean)] = {
     getPartition(tp) match {
-      case HostedPartition.Offline(offlineTopicId) =>
-        if (offlineTopicId.contains(topicId)) {
+      case HostedPartition.Offline(offlinePartition) =>
+        if (offlinePartition.flatMap(p => p.topicId).contains(topicId)) {
           stateChangeLogger.warn(s"Unable to bring up new local leader $tp " +
             s"with topic id $topicId because it resides in an offline log " +
             "directory.")
