@@ -197,8 +197,8 @@ class CoordinatorPartitionWriter[T](
       producerId = producerId,
       producerEpoch = producerEpoch,
       baseSequence = RecordBatch.NO_SEQUENCE,
-      requestLocal = RequestLocal.NoCaching,
-      callback = (error, _, verificationGuard) => {
+      callback = errorAndGuard => {
+        val (error, verificationGuard) = errorAndGuard
         if (error != Errors.NONE) {
           future.completeExceptionally(error.exception)
         } else {
