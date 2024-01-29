@@ -294,7 +294,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
             Duration.ofMillis(config.offsetCommitTimeoutMs),
             coordinator -> coordinator.consumerGroupHeartbeat(context, request)
         ).exceptionally(exception -> handleOperationException(
-            "ConsumerGroupHeartbeat",
+            "consumer-group-heartbeat",
             request,
             exception,
             (error, message) -> new ConsumerGroupHeartbeatResponseData()
@@ -336,7 +336,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
         ).exceptionally(exception -> {
             if (!responseFuture.isDone()) {
                 responseFuture.complete(handleOperationException(
-                    "JoinGroup",
+                    "classic-group-join",
                     request,
                     exception,
                     (error, __) -> new JoinGroupResponseData().setErrorCode(error.code())
@@ -379,7 +379,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
         ).exceptionally(exception -> {
             if (!responseFuture.isDone()) {
                 responseFuture.complete(handleOperationException(
-                    "SyncGroup",
+                    "classic-group-sync",
                     request,
                     exception,
                     (error, __) -> new SyncGroupResponseData().setErrorCode(error.code())
@@ -413,11 +413,12 @@ public class GroupCoordinatorService implements GroupCoordinator {
 
         // Using a read operation is okay here as we ignore the last committed offset in the snapshot registry.
         // This means we will read whatever is in the latest snapshot, which is how the old coordinator behaves.
-        return runtime.scheduleReadOperation("classic-group-heartbeat",
+        return runtime.scheduleReadOperation(
+            "classic-group-heartbeat",
             topicPartitionFor(request.groupId()),
             (coordinator, __) -> coordinator.classicGroupHeartbeat(context, request)
         ).exceptionally(exception -> handleOperationException(
-            "Heartbeat",
+            "classic-group-heartbeat",
             request,
             exception,
             (error, __) -> {
@@ -459,7 +460,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
             Duration.ofMillis(config.offsetCommitTimeoutMs),
             coordinator -> coordinator.classicGroupLeave(context, request)
         ).exceptionally(exception -> handleOperationException(
-            "LeaveGroup",
+            "classic-group-leave",
             request,
             exception,
             (error, __) -> {
@@ -523,7 +524,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
             .combineFutures(futures, ArrayList::new, List::addAll)
             .thenApply(groups -> new ListGroupsResponseData().setGroups(groups))
             .exceptionally(exception -> handleOperationException(
-                "ListGroups",
+                "list-groups",
                 request,
                 exception,
                 (error, __) -> new ListGroupsResponseData().setErrorCode(error.code())
@@ -569,7 +570,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
                     topicPartition,
                     (coordinator, lastCommittedOffset) -> coordinator.consumerGroupDescribe(groupIds, lastCommittedOffset)
                 ).exceptionally(exception -> handleOperationException(
-                    "ConsumerGroupDescribe",
+                    "consumer-group-describe",
                     groupList,
                     exception,
                     (error, __) -> ConsumerGroupDescribeRequest.getErrorDescribedGroupList(groupList, error)
@@ -622,7 +623,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
                     topicPartition,
                     (coordinator, lastCommittedOffset) -> coordinator.describeGroups(context, groupList, lastCommittedOffset)
                 ).exceptionally(exception -> handleOperationException(
-                    "DescribeGroups",
+                    "describe-groups",
                     groupList,
                     exception,
                     (error, __) -> DescribeGroupsRequest.getErrorDescribedGroupList(groupList, error)
@@ -677,7 +678,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
                     Duration.ofMillis(config.offsetCommitTimeoutMs),
                     coordinator -> coordinator.deleteGroups(context, groupList)
                 ).exceptionally(exception -> handleOperationException(
-                    "DeleteGroups",
+                    "delete-groups",
                     groupList,
                     exception,
                     (error, __) -> DeleteGroupsRequest.getErrorResultCollection(groupList, error)
@@ -824,7 +825,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
             Duration.ofMillis(config.offsetCommitTimeoutMs),
             coordinator -> coordinator.commitOffset(context, request)
         ).exceptionally(exception -> handleOperationException(
-            "OffsetCommitRequest",
+            "commit-offset",
             request,
             exception,
             (error, __) -> OffsetCommitRequest.getErrorResponse(request, error)
@@ -863,7 +864,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
             Duration.ofMillis(config.offsetCommitTimeoutMs),
             coordinator -> coordinator.commitTransactionalOffset(context, request)
         ).exceptionally(exception -> handleOperationException(
-            "TxnOffsetCommitRequest",
+            "txn-commit-offset",
             request,
             exception,
             (error, __) -> TxnOffsetCommitRequest.getErrorResponse(request, error)
@@ -897,7 +898,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
             Duration.ofMillis(config.offsetCommitTimeoutMs),
             coordinator -> coordinator.deleteOffsets(context, request)
         ).exceptionally(exception -> handleOperationException(
-            "OffsetDeleteRequest",
+            "delete-offsets",
             request,
             exception,
             (error, __) -> new OffsetDeleteResponseData().setErrorCode(error.code())
@@ -1058,46 +1059,46 @@ public class GroupCoordinatorService implements GroupCoordinator {
      * This is the handler commonly used by all the operations that requires to convert errors to
      * coordinator errors. The handler also handles and log unexpected errors.
      *
-     * @param requestName       The name of the request.
-     * @param request           The request itself for logging purposes.
+     * @param operationName     The name of the operation.
+     * @param operationInput    The operation's input for logging purposes.
      * @param exception         The exception to handle.
-     * @param responseBuilder   A function which takes an Errors and a String and returns
-     *                          the response. The String can be null. Note that the function
-     *                          could further transform the error depending on the context.
+     * @param handler           A function which takes an Errors and a String and returns the expected
+     *                          output. The String can be null. Note that the function could further
+     *                          transform the error depending on the context.
      * @return The response.
-     * @param <REQ> The type of the request.
-     * @param <RSP> The type of the response.
+     * @param <IN> The type of the input.
+     * @param <OUT> The type of the output.
      */
-    private <REQ, RSP> RSP handleOperationException(
-        String requestName,
-        REQ request,
+    private <IN, OUT> OUT handleOperationException(
+        String operationName,
+        IN operationInput,
         Throwable exception,
-        BiFunction<Errors, String, RSP> responseBuilder
+        BiFunction<Errors, String, OUT> handler
     ) {
         ApiError apiError = ApiError.fromThrowable(exception);
 
         switch (apiError.error()) {
             case UNKNOWN_SERVER_ERROR:
-                log.error("{} request {} hit an unexpected exception: {}.",
-                    requestName, request, exception.getMessage(), exception);
-                return responseBuilder.apply(Errors.UNKNOWN_SERVER_ERROR, null);
+                log.error("Operation {} with {} hit an unexpected exception: {}.",
+                    operationName, operationInput, exception.getMessage(), exception);
+                return handler.apply(Errors.UNKNOWN_SERVER_ERROR, null);
 
             case UNKNOWN_TOPIC_OR_PARTITION:
             case NOT_ENOUGH_REPLICAS:
             case REQUEST_TIMED_OUT:
-                return responseBuilder.apply(Errors.COORDINATOR_NOT_AVAILABLE, null);
+                return handler.apply(Errors.COORDINATOR_NOT_AVAILABLE, null);
 
             case NOT_LEADER_OR_FOLLOWER:
             case KAFKA_STORAGE_ERROR:
-                return responseBuilder.apply(Errors.NOT_COORDINATOR, null);
+                return handler.apply(Errors.NOT_COORDINATOR, null);
 
             case MESSAGE_TOO_LARGE:
             case RECORD_LIST_TOO_LARGE:
             case INVALID_FETCH_SIZE:
-                return responseBuilder.apply(Errors.UNKNOWN_SERVER_ERROR, null);
+                return handler.apply(Errors.UNKNOWN_SERVER_ERROR, null);
 
             default:
-                return responseBuilder.apply(apiError.error(), apiError.message());
+                return handler.apply(apiError.error(), apiError.message());
         }
     }
 }
