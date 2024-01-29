@@ -885,6 +885,22 @@ public class AsyncKafkaConsumerTest {
     }
 
     @Test
+    public void testNoInterceptorCommitSyncFailed() {
+        Properties props = requiredConsumerPropertiesAndGroupId("test-id");
+        props.setProperty(ConsumerConfig.INTERCEPTOR_CLASSES_CONFIG, MockConsumerInterceptor.class.getName());
+        props.setProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false");
+
+        consumer = newConsumer(props);
+        assertEquals(1, MockConsumerInterceptor.INIT_COUNT.get());
+        KafkaException expected = new KafkaException("Test exception");
+        completeCommitApplicationEventExceptionally(expected);
+
+        KafkaException actual = assertThrows(KafkaException.class, () -> consumer.commitSync(mockTopicPartitionOffset()));
+        assertEquals(expected, actual);
+        assertEquals(0, MockConsumerInterceptor.ON_COMMIT_COUNT.get());
+    }
+
+    @Test
     public void testInterceptorCommitAsync() {
         Properties props = requiredConsumerPropertiesAndGroupId("test-id");
         props.setProperty(ConsumerConfig.INTERCEPTOR_CLASSES_CONFIG, MockConsumerInterceptor.class.getName());
