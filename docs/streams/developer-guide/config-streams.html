@@ -258,10 +258,10 @@ streamsSettings.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 1);</code></pre>
             <td colspan="2">The maximum number of records to buffer per partition.</td>
             <td><code class="docutils literal"><span class="pre">1000</span></code></td>
           </tr>
-          <tr class="row-even"><td>cache.max.bytes</td>
+          <tr class="row-even"><td>statestore.cache.max.bytes</td>
             <td>Medium</td>
-            <td colspan="2">Maximum number of memory bytes to be used for record caches across all threads. Note that at the debug level you can use cache.size to monitor the actual size of the Kafka Streams cache.</td>
-            <td>10485760 bytes</td>
+            <td colspan="2">Maximum number of memory bytes to be used for record caches across all threads. Note that at the debug level you can use <code>cache.size</code> to monitor the actual size of the Kafka Streams cache.</td>
+            <td>10485760</td>
           </tr>
           <tr class="row-even"><td>cache.max.bytes.buffering (Deprecated. Use cache.max.bytes instead.)</td>
             <td>Medium</td>
@@ -1065,7 +1065,7 @@ streamsConfig.put(StreamsConfig.ROCKSDB_CONFIG_SETTER_CLASS_CONFIG, CustomRocksD
             Serde for the inner class of a windowed record. Must implement the org.apache.kafka.common.serialization.Serde interface.
           </p>
           <p>
-            Note that setting this config in KafkaStreams application would result in an error as it is meant to be used only from Plain consumer client.
+            Note that this config is only used by plain consumer/producer clients that set a windowed de/serializer type via configs. For Kafka Streams applications that deal with windowed types, you must pass in the inner serde type when you instantiate the windowed serde object for your topology.
           </p>
         </div></blockquote>
     </div>
