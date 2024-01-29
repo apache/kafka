@@ -206,9 +206,9 @@ public class ClientMetricsManager implements AutoCloseable {
         byte[] metrics = request.data().metrics();
         if (metrics != null && metrics.length > 0) {
             try {
-                long exportTimeStartMs = time.milliseconds();
+                long exportTimeStartMs = time.hiResClockMs();
                 receiverPlugin.exportMetrics(requestContext, request);
-                clientMetricsStats.recordPluginExport(clientInstanceId, time.milliseconds() - exportTimeStartMs);
+                clientMetricsStats.recordPluginExport(clientInstanceId, time.hiResClockMs() - exportTimeStartMs);
             } catch (Exception exception) {
                 clientMetricsStats.recordPluginErrorCount(clientInstanceId);
                 clientInstance.lastKnownError(Errors.INVALID_RECORD);
@@ -545,7 +545,7 @@ public class ClientMetricsManager implements AutoCloseable {
         ClientMetricsStats() {
             Measurable instanceCount = (config, now) -> clientInstanceCache.size();
             MetricName instanceCountMetric = metrics.metricName(INSTANCE_COUNT, GROUP_NAME,
-                "The current number of client metric instances being managed by the broker");
+                "The current number of client metrics instances being managed by the broker");
             metrics.addMetric(instanceCountMetric, instanceCount);
             registeredMetricNames.add(instanceCountMetric);
         }
@@ -617,6 +617,7 @@ public class ClientMetricsManager implements AutoCloseable {
             for (String name : sensorsName) {
                 metrics.removeSensor(name);
             }
+            sensorsName.clear();
         }
 
         private Meter createMeter(Metrics metrics, SampledStat stat, String name, Map<String, String> metricTags) {
