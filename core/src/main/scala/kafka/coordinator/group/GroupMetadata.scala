@@ -843,7 +843,7 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
   }
 
   def isInStates(states: collection.Set[String]): Boolean = {
-    states.contains(state.toString) || states.contains(state.toLowerCaseString)
+    states.contains(state.toLowerCaseString)
   }
 
   override def toString: String = {

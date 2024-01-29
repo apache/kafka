@@ -1036,7 +1036,7 @@ public class ConsumerGroupTest {
         ConsumerGroup group = new ConsumerGroup(snapshotRegistry, "group-foo", metricsShard);
         snapshotRegistry.getOrCreateSnapshot(0);
         assertTrue(group.isInStates(Collections.singleton("empty"), 0));
-        assertTrue(group.isInStates(Collections.singleton("Empty"), 0));
+        assertFalse(group.isInStates(Collections.singleton("Empty"), 0));
 
         group.updateMember(new ConsumerGroupMember.Builder("member1")
             .setSubscribedTopicNames(Collections.singletonList("foo"))

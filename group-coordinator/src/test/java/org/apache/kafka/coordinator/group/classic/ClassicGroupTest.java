@@ -1281,10 +1281,12 @@ public class ClassicGroupTest {
         assertTrue(group.isInStates(Collections.singleton("empty"), 0));
 
         group.transitionTo(PREPARING_REBALANCE);
-        assertTrue(group.isInStates(Collections.singleton("PreparingRebalance"), 0));
+        assertTrue(group.isInStates(Collections.singleton("preparingrebalance"), 0));
+        assertFalse(group.isInStates(Collections.singleton("PreparingRebalance"), 0));
+
 
         group.transitionTo(COMPLETING_REBALANCE);
-        assertTrue(group.isInStates(new HashSet<>(Arrays.asList("PreparingRebalance", "completingrebalance")), 0));
+        assertTrue(group.isInStates(new HashSet<>(Collections.singletonList("completingrebalance")), 0));
 
         group.transitionTo(STABLE);
         assertTrue(group.isInStates(Collections.singleton("stable"), 0));

@@ -9706,7 +9706,7 @@ public class GroupMetadataManagerTest {
             new ConsumerGroupDescribeResponseData.DescribedGroup()
                 .setGroupEpoch(epoch)
                 .setGroupId(consumerGroupIds.get(0))
-                .setGroupState("empty")
+                .setGroupState(ConsumerGroup.ConsumerGroupState.EMPTY.toString())
                 .setAssignorName("range"),
             new ConsumerGroupDescribeResponseData.DescribedGroup()
                 .setGroupEpoch(epoch)
@@ -9717,7 +9717,7 @@ public class GroupMetadataManagerTest {
                         new MetadataImageBuilder().build().topics()
                     )
                 ))
-                .setGroupState("assigning")
+                .setGroupState(ConsumerGroup.ConsumerGroupState.ASSIGNING.toString())
                 .setAssignorName("assignorName")
         );
         List<ConsumerGroupDescribeResponseData.DescribedGroup> actual = context.sendConsumerGroupDescribe(consumerGroupIds);
@@ -9796,7 +9796,7 @@ public class GroupMetadataManagerTest {
                 memberBuilder1.build().asConsumerGroupDescribeMember(new Assignment(Collections.emptyMap()), metadataImage.topics()),
                 memberBuilder2.build().asConsumerGroupDescribeMember(new Assignment(assignmentMap), metadataImage.topics())
             ))
-            .setGroupState("assigning")
+            .setGroupState(ConsumerGroup.ConsumerGroupState.ASSIGNING.toString())
             .setAssignorName("range")
             .setGroupEpoch(epoch + 2);
         expected = Collections.singletonList(

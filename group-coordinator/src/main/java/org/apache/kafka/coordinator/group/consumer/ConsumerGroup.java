@@ -60,20 +60,19 @@ import static org.apache.kafka.coordinator.group.consumer.ConsumerGroup.Consumer
 public class ConsumerGroup implements Group {
 
     public enum ConsumerGroupState {
-        EMPTY("empty"),
-        ASSIGNING("assigning"),
-        RECONCILING("reconciling"),
-        STABLE("stable"),
-        DEAD("dead");
+        EMPTY("Empty"),
+        ASSIGNING("Assigning"),
+        RECONCILING("Reconciling"),
+        STABLE("Stable"),
+        DEAD("Dead");
 
         private final String name;
 
-        private final String capitalizedName;
+        private final String lowerCaseName;
 
         ConsumerGroupState(String name) {
             this.name = name;
-            this.capitalizedName = name.substring(0, 1).toUpperCase(Locale.ROOT) +
-                name.substring(1);
+            this.lowerCaseName = name.toLowerCase(Locale.ROOT);
         }
 
         @Override
@@ -81,8 +80,8 @@ public class ConsumerGroup implements Group {
             return name;
         }
 
-        public String toCapitalizedString() {
-            return capitalizedName;
+        public String toLowerCaseString() {
+            return lowerCaseName;
         }
     }
 
@@ -748,17 +747,9 @@ public class ConsumerGroup implements Group {
         return Optional.of(new OffsetExpirationConditionImpl(offsetAndMetadata -> offsetAndMetadata.commitTimestampMs));
     }
 
-    /**
-     * @return The current state as a capitalized String with given committedOffset.
-     */
-    public String stateAsCapitalizedString(long committedOffset) {
-        return state.get(committedOffset).toCapitalizedString();
-    }
-
     @Override
     public boolean isInStates(Set<String> statesFilter, long committedOffset) {
-        return statesFilter.contains(this.stateAsCapitalizedString(committedOffset)) || statesFilter.contains(
-            this.stateAsString(committedOffset));
+        return statesFilter.contains(state.get(committedOffset).toLowerCaseString());
     }
 
     /**

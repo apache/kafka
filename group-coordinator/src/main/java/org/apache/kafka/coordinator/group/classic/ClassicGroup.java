@@ -956,18 +956,9 @@ public class ClassicGroup implements Group {
         return Optional.empty();
     }
 
-    /**
-     * The state of this group.
-     *
-     * @return The current state as a lowercase String.
-     */
-    public String stateAsLowerCaseString() {
-        return this.state.toLowerCaseString();
-    }
-
     @Override
     public boolean isInStates(Set<String> statesFilter, long committedOffset) {
-        return statesFilter.contains(this.stateAsLowerCaseString()) || statesFilter.contains(this.stateAsString());
+        return statesFilter.contains(state.toLowerCaseString());
     }
 
     /**

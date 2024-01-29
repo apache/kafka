@@ -138,7 +138,7 @@ public interface Group {
     /**
      * Returns true if the statesFilter contains the current state with given committedOffset.
      *
-     * @param statesFilter  The states to filter.
+     * @param statesFilter The states to filter, which must be lowercase.
      * @return true if the state includes, false otherwise.
      */
     boolean isInStates(Set<String> statesFilter, long committedOffset);
