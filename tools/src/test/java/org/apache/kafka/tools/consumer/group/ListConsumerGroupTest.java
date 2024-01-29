@@ -100,9 +100,16 @@ public class ListConsumerGroupTest extends ConsumerGroupCommandTest {
         result = ConsumerGroupCommand.consumerGroupStatesFromString("Dead,CompletingRebalance,");
         assertEquals(set(Arrays.asList(ConsumerGroupState.DEAD, ConsumerGroupState.COMPLETING_REBALANCE)), result);
 
-        assertThrows(IllegalArgumentException.class, () -> ConsumerGroupCommand.consumerGroupStatesFromString("bad, wrong"));
+        result = ConsumerGroupCommand.consumerGroupStatesFromString("stable");
+        assertEquals(set(Arrays.asList(ConsumerGroupState.STABLE)), result);
 
-        assertThrows(IllegalArgumentException.class, () -> ConsumerGroupCommand.consumerGroupStatesFromString("stable"));
+        result = ConsumerGroupCommand.consumerGroupStatesFromString("stable, assigning");
+        assertEquals(set(Arrays.asList(ConsumerGroupState.STABLE, ConsumerGroupState.ASSIGNING)), result);
+
+        result = ConsumerGroupCommand.consumerGroupStatesFromString("dead,reconciling,");
+        assertEquals(set(Arrays.asList(ConsumerGroupState.DEAD, ConsumerGroupState.RECONCILING)), result);
+
+        assertThrows(IllegalArgumentException.class, () -> ConsumerGroupCommand.consumerGroupStatesFromString("bad, wrong"));
 
         assertThrows(IllegalArgumentException.class, () -> ConsumerGroupCommand.consumerGroupStatesFromString("  bad, Stable"));
 
@@ -139,6 +146,15 @@ public class ListConsumerGroupTest extends ConsumerGroupCommandTest {
         TestUtils.waitForCondition(() -> {
             out[0] = kafka.utils.TestUtils.grabConsoleOutput(() -> {
                 ConsumerGroupCommand.main(cgcArgs3);
+                return null;
+            });
+            return out[0].contains("STATE") && out[0].contains(GROUP) && out[0].contains("Stable");
+        }, "Expected to find " + GROUP + " in state Stable and the header, but found " + out[0]);
+
+        String[] cgcArgs4 = new String[]{"--bootstrap-server", bootstrapServers(listenerName()), "--list", "--state", "stable"};
+        TestUtils.waitForCondition(() -> {
+            out[0] = kafka.utils.TestUtils.grabConsoleOutput(() -> {
+                ConsumerGroupCommand.main(cgcArgs4);
                 return null;
             });
             return out[0].contains("STATE") && out[0].contains(GROUP) && out[0].contains("Stable");
