@@ -111,10 +111,10 @@ public class KafkaConsumerMetrics extends AbstractConsumerMetricsManager impleme
 
     @Override
     public void close() {
-        metrics.removeMetric(lastPollMetricName);
-        metrics.removeSensor(timeBetweenPollSensor.name());
-        metrics.removeSensor(pollIdleSensor.name());
-        metrics.removeSensor(commitSyncSensor.name());
-        metrics.removeSensor(committedSensor.name());
+        metrics().removeMetric(lastPollMetricName);
+        metrics().removeSensor(timeBetweenPollSensor.name());
+        metrics().removeSensor(pollIdleSensor.name());
+        metrics().removeSensor(commitSyncSensor.name());
+        metrics().removeSensor(committedSensor.name());
     }
 }
