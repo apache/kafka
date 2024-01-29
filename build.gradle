@@ -986,11 +986,13 @@ project(':core') {
     testImplementation libs.apachedsCoreApi
     testImplementation libs.apachedsInterceptorKerberos
     testImplementation libs.apachedsProtocolShared
+    testImplementation libs.apachedsProtocolKerberos
     testImplementation libs.apachedsProtocolLdap
     testImplementation libs.apachedsLdifPartition
     testImplementation libs.apachedsMavibotPartition
     testImplementation libs.apachedsJdbmPartition
-    testImplementation libs.kerbServerApiAll
+    testImplementation libs.kerbSimpleKDC
+    testImplementation libs.kerbLdapBackend
     testImplementation libs.junitJupiter
     testImplementation libs.slf4jlog4j
     testImplementation libs.caffeine

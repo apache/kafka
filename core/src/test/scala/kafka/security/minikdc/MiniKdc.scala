@@ -24,13 +24,32 @@ import java.nio.file.Files
 import java.text.MessageFormat
 import java.util.{Locale, Properties, UUID}
 import kafka.utils.{CoreUtils, Exit, Logging}
-import org.apache.kerby.kerberos.kerb.keytab.Keytab
+import org.apache.commons.text.StringSubstitutor
+import org.apache.directory.api.ldap.model.ldif.LdifReader
+import org.apache.directory.server.core.DefaultDirectoryService
+import org.apache.directory.server.core.api.{DirectoryService, InstanceLayout}
+import org.apache.kerby.kerberos.kerb.`type`.KerberosTime
+import org.apache.kerby.kerberos.kerb.`type`.base.{EncryptionKey, PrincipalName}
+import org.apache.kerby.kerberos.kerb.keytab.{Keytab, KeytabEntry}
 
 import scala.jdk.CollectionConverters._
-import org.apache.kerby.kerberos.kerb.KrbException
+import org.apache.directory.api.ldap.model.entry.{DefaultEntry, Entry}
+import org.apache.directory.api.ldap.model.name.Dn
+import org.apache.directory.api.ldap.schema.extractor.impl.DefaultSchemaLdifExtractor
+import org.apache.directory.api.ldap.schema.loader.LdifSchemaLoader
+import org.apache.directory.api.ldap.schema.manager.impl.DefaultSchemaManager
+import org.apache.directory.server.constants.ServerDNConstants
+import org.apache.directory.server.core.api.schema.SchemaPartition
+import org.apache.directory.server.core.kerberos.KeyDerivationInterceptor
+import org.apache.directory.server.core.partition.impl.btree.jdbm.{JdbmIndex, JdbmPartition}
+import org.apache.directory.server.core.partition.ldif.LdifPartition
+import org.apache.directory.server.kerberos.shared.crypto.encryption.KerberosKeyFactory
+import org.apache.directory.server.ldap.LdapServer
+import org.apache.directory.server.xdbm.Index
 import org.apache.kerby.kerberos.kerb.identity.backend.BackendConfig
 import org.apache.kerby.kerberos.kerb.server.{KdcConfig, KdcConfigKey, SimpleKdcServer}
 import org.apache.kafka.common.utils.{Java, Utils}
+import org.apache.kerby.config.Conf
 
 /**
   * Mini KDC based on Apache Directory Server that can be embedded in tests or used from command line as a standalone
@@ -86,7 +105,9 @@ class MiniKdc(config: Properties, workDir: File) extends Logging {
   private val krb5conf = new File(workDir, "krb5.conf")
 
   private var _port = config.getProperty(MiniKdc.KdcPort).toInt
+  private var ds: DirectoryService = _
   private var kdc: SimpleKdcServer = _
+  private var ldapServer: LdapServer = _
   private var closed = false
 
   def port: Int = _port
@@ -98,11 +119,115 @@ class MiniKdc(config: Properties, workDir: File) extends Logging {
       throw new RuntimeException("KDC already started")
     if (closed)
       throw new RuntimeException("KDC is closed")
+    initDirectoryService()
     initKdcServer()
     initJvmKerberosConfig()
   }
 
+  private def initDirectoryService(): Unit = {
+    ds = new DefaultDirectoryService
+    ds.setInstanceLayout(new InstanceLayout(workDir))
+
+    // first load the schema
+    val instanceLayout = ds.getInstanceLayout
+    val schemaPartitionDirectory = new File(instanceLayout.getPartitionsDirectory, "schema")
+    val extractor = new DefaultSchemaLdifExtractor(instanceLayout.getPartitionsDirectory)
+    extractor.extractOrCopy
+
+    val loader = new LdifSchemaLoader(schemaPartitionDirectory)
+    val schemaManager = new DefaultSchemaManager(loader)
+    schemaManager.loadAllEnabled()
+    ds.setSchemaManager(schemaManager)
+    // Init the LdifPartition with schema
+    val schemaLdifPartition = new LdifPartition(schemaManager, ds.getDnFactory)
+    schemaLdifPartition.setPartitionPath(schemaPartitionDirectory.toURI)
+
+    // The schema partition
+    val schemaPartition = new SchemaPartition(schemaManager)
+    schemaPartition.setWrappedPartition(schemaLdifPartition)
+    ds.setSchemaPartition(schemaPartition)
+
+    val systemPartition = new JdbmPartition(ds.getSchemaManager, ds.getDnFactory)
+    systemPartition.setId("system")
+    systemPartition.setPartitionPath(new File(ds.getInstanceLayout.getPartitionsDirectory, systemPartition.getId).toURI)
+    systemPartition.setSuffixDn(new Dn(ServerDNConstants.SYSTEM_DN))
+    systemPartition.setSchemaManager(ds.getSchemaManager)
+    ds.setSystemPartition(systemPartition)
+
+    ds.getChangeLog.setEnabled(false)
+    ds.setDenormalizeOpAttrsEnabled(true)
+    ds.addLast(new KeyDerivationInterceptor)
+
+    // create one partition
+    val orgName = config.getProperty(MiniKdc.OrgName).toLowerCase(Locale.ENGLISH)
+    val orgDomain = config.getProperty(MiniKdc.OrgDomain).toLowerCase(Locale.ENGLISH)
+    val partition = new JdbmPartition(ds.getSchemaManager, ds.getDnFactory)
+    partition.setId(orgName)
+    partition.setPartitionPath(new File(ds.getInstanceLayout.getPartitionsDirectory, orgName).toURI)
+    val dn = new Dn(s"dc=$orgName,dc=$orgDomain")
+    partition.setSuffixDn(dn)
+    ds.addPartition(partition)
+
+    // indexes
+    val indexedAttributes = Set[Index[_, String]](
+      new JdbmIndex[Entry]("objectClass", false),
+      new JdbmIndex[Entry]("dc", false),
+      new JdbmIndex[Entry]("ou", false)
+    ).asJava
+    partition.setIndexedAttributes(indexedAttributes)
+
+    // And start the ds
+    ds.setInstanceId(config.getProperty(MiniKdc.Instance))
+    ds.setShutdownHookEnabled(false)
+    ds.startup()
+
+    // context entry, after ds.startup()
+    val entry = ds.newEntry(dn)
+    entry.add("objectClass", "top", "domain")
+    entry.add("dc", orgName)
+    ds.getAdminSession.add(entry)
+  }
+
   private def initKdcServer(): Unit = {
+    def addInitialEntriesToDirectoryService(bindAddress: String): Unit = {
+      val map = Map(
+        "0" -> orgName.toLowerCase(Locale.ENGLISH),
+        "1" -> orgDomain.toLowerCase(Locale.ENGLISH),
+        "2" -> orgName.toUpperCase(Locale.ENGLISH),
+        "3" -> orgDomain.toUpperCase(Locale.ENGLISH),
+        "4" -> bindAddress
+      )
+      val reader = new BufferedReader(new InputStreamReader(MiniKdc.getResourceAsStream("minikdc.ldiff")))
+      try {
+        var line: String = null
+        val builder = new StringBuilder
+        while ( {
+          line = reader.readLine();
+          line != null
+        })
+          builder.append(line).append("\n")
+        addEntriesToDirectoryService(StringSubstitutor.replace(builder, map.asJava))
+      }
+      finally CoreUtils.swallow(reader.close(), this)
+    }
+
+    val bindAddress = config.getProperty(MiniKdc.KdcBindAddress)
+    addInitialEntriesToDirectoryService(bindAddress)
+    ldapServer = new LdapServer()
+    ldapServer.setDirectoryService(ds)
+    ldapServer.start()
+
+    println(ldapServer.getPort)
+    println(ldapServer.getKeystoreFile)
+    println(ldapServer.getSaslHost)
+    println("xxxx")
+    val backendConfig: Conf = new BackendConfig()
+    backendConfig.setString("host", "127.0.0.1")
+    backendConfig.setInt("port", ldapServer.getPort)
+    backendConfig.setString("admin_dn", "uid=admin,ou=system")
+    backendConfig.setString("admin_pw", "secret")
+    backendConfig.setString("base_dn", "dc=example,dc=com")
+
     val kdcConfig = new KdcConfig()
     kdcConfig.setLong(KdcConfigKey.MAXIMUM_RENEWABLE_LIFETIME, config.getProperty(MiniKdc.MaxRenewableLifetime).toLong)
     kdcConfig.setLong(KdcConfigKey.MAXIMUM_TICKET_LIFETIME,
@@ -112,7 +237,7 @@ class MiniKdc(config: Properties, workDir: File) extends Logging {
     kdcConfig.setInt(KdcConfigKey.KDC_TCP_PORT, port)
     kdcConfig.setBoolean(KdcConfigKey.PA_ENC_TIMESTAMP_REQUIRED, false)
     kdcConfig.setString(KdcConfigKey.KDC_SERVICE_NAME, config.getProperty(MiniKdc.Instance))
-    kdc = new SimpleKdcServer(kdcConfig, new BackendConfig)
+    kdc = new SimpleKdcServer(kdcConfig, backendConfig.asInstanceOf[BackendConfig])
     kdc.setWorkDir(workDir)
 
     kdc.init()
@@ -172,12 +297,39 @@ class MiniKdc(config: Properties, workDir: File) extends Logging {
         System.clearProperty(MiniKdc.JavaSecurityKrb5Conf)
         System.clearProperty(MiniKdc.SunSecurityKrb5Debug)
 
-        try kdc.stop()
+        kdc.stop()
+        ldapServer.stop()
+        try ds.shutdown()
         catch {
-          case ex: Exception => error("Could not shutdown kdc server", ex)
+          case ex: Exception => error("Could not shutdown ApacheDS properly", ex)
         }
       }
     }
+  }
+
+  /**
+    * Creates a principal in the KDC with the specified user and password.
+    *
+    * An exception will be thrown if the principal cannot be created.
+    *
+    * @param principal principal name, do not include the domain.
+    * @param password  password.
+    */
+  private def createPrincipal(principal: String, password: String): Unit = {
+    val ldifContent = s"""
+         |dn: uid=$principal,ou=users,dc=${orgName.toLowerCase(Locale.ENGLISH)},dc=${orgDomain.toLowerCase(Locale.ENGLISH)}
+         |objectClass: top
+         |objectClass: person
+         |objectClass: inetOrgPerson
+         |objectClass: krb5principal
+         |objectClass: krb5kdcentry
+         |cn: $principal
+         |sn: $principal
+         |uid: $principal
+         |userPassword: $password
+         |krb5PrincipalName: ${principal}@${realm}
+         |krb5KeyVersionNumber: 0""".stripMargin
+    addEntriesToDirectoryService(ldifContent)
   }
 
   /**
@@ -189,21 +341,53 @@ class MiniKdc(config: Properties, workDir: File) extends Logging {
     * @param principals principals to add to the KDC, do not include the domain.
     */
   def createPrincipal(keytabFile: File, principals: String*): Unit = {
+//    val keytab = new Keytab
+//    try {
+//      val generatedPassword = UUID.randomUUID.toString
+//      val entries = principals.flatMap { principal =>
+//        val principalWithRealm = s"${principal}@${realm}"
+//        val timestamp = new KerberosTime
+//        createPrincipal(principal, generatedPassword)
+//        val krbIdentity = kdc.getKadmin.getPrincipal(principalWithRealm)
+//        val principalName = new PrincipalName(principalWithRealm)
+//        krbIdentity.getKeys
+//          .values()
+//          .stream()
+//          .map((key: EncryptionKey) => new KeytabEntry(principalName, timestamp, 1, key))
+//          .collect(Collectors.toList[KeytabEntry]).asScala
+//      }.toList
+//      info(s"Keytab file created at ${keytabFile.getAbsolutePath}")
+//      keytab.addKeytabEntries(entries.asJava)
+//    } catch {
+//      case e: KrbException =>
+//        error("Error occurred while exporting keytab", e)
+//    }
+//    keytab.load(keytabFile)
+    val generatedPassword = UUID.randomUUID.toString
     val keytab = new Keytab
-    try {
-      val generatedPassword = UUID.randomUUID.toString
-      val principalList = principals.map { principal =>
-        val principalWithRealm = s"${principal}@${realm}"
-        kdc.getKadmin.addPrincipal(principalWithRealm, generatedPassword)
-        principalWithRealm
-      }.toList
-      info(s"Keytab file created at ${keytabFile.getAbsolutePath}")
-      kdc.getKadmin.exportKeytab(keytabFile, principalList.asJava)
-    } catch {
-      case e: KrbException =>
-        error("Error occurred while exporting keytab", e)
+    val entries = principals.flatMap { principal =>
+      createPrincipal(principal, generatedPassword)
+      val principalWithRealm = s"${principal}@${realm}"
+      val timestamp = new KerberosTime
+      KerberosKeyFactory.getKerberosKeys(principalWithRealm, generatedPassword).asScala.values.map { encryptionKey =>
+        val keyVersion = encryptionKey.getKeyVersion
+        val principalName = new PrincipalName(principalWithRealm)
+        new KeytabEntry(principalName, timestamp, keyVersion, new EncryptionKey(
+          encryptionKey.getKeyType.getValue,
+          encryptionKey.getKeyValue))
+      }
     }
+    keytab.addKeytabEntries(entries.asJava)
+//    kdc.exportPrincipals(keytabFile)
     keytab.load(keytabFile)
+  }
+
+  private def addEntriesToDirectoryService(ldifContent: String): Unit = {
+    val reader = new LdifReader(new StringReader(ldifContent))
+    try {
+      for (ldifEntry <- reader.asScala)
+        ds.getAdminSession.add(new DefaultEntry(ds.getSchemaManager, ldifEntry.getEntry))
+    } finally CoreUtils.swallow(reader.close(), this)
   }
 }
 
@@ -214,7 +398,7 @@ object MiniKdc {
 
   def main(args: Array[String]): Unit = {
     args match {
-      case Array(workDirPath, configPath, keytabPath, principals@ _*) if principals.nonEmpty =>
+      case Array(workDirPath, configPath, keytabPath, principals@_*) if principals.nonEmpty =>
         val workDir = new File(workDirPath)
         if (!workDir.exists)
           throw new RuntimeException(s"Specified work directory does not exist: ${workDir.getAbsolutePath}")
