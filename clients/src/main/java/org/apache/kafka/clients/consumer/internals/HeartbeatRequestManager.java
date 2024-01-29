@@ -110,7 +110,7 @@ public class HeartbeatRequestManager implements RequestManager {
      * sending heartbeat until the next poll.
      */
     private final Timer pollTimer;
-    private final HeartbeatMetricsManager heartbeatMetricsManager;
+    private final HeartbeatMetricsManager metricsManager;
 
     private GroupMetadataUpdateEvent previousGroupMetadataUpdateEvent = null;
 
@@ -134,7 +134,7 @@ public class HeartbeatRequestManager implements RequestManager {
         this.heartbeatRequestState = new HeartbeatRequestState(logContext, time, 0, retryBackoffMs,
             retryBackoffMaxMs, maxPollIntervalMs);
         this.pollTimer = time.timer(maxPollIntervalMs);
-        this.heartbeatMetricsManager = new HeartbeatMetricsManager(metrics);
+        this.metricsManager = new HeartbeatMetricsManager(metrics);
     }
 
     // Visible for testing
@@ -156,7 +156,7 @@ public class HeartbeatRequestManager implements RequestManager {
         this.membershipManager = membershipManager;
         this.backgroundEventHandler = backgroundEventHandler;
         this.pollTimer = timer;
-        this.heartbeatMetricsManager = new HeartbeatMetricsManager(metrics);
+        this.metricsManager = new HeartbeatMetricsManager(metrics);
     }
 
     /**
@@ -252,7 +252,7 @@ public class HeartbeatRequestManager implements RequestManager {
         NetworkClientDelegate.UnsentRequest request = makeHeartbeatRequest(ignoreResponse);
         heartbeatRequestState.onSendAttempt(currentTimeMs);
         membershipManager.onHeartbeatRequestSent();
-        heartbeatMetricsManager.recordHeartbeatSentMs(currentTimeMs);
+        metricsManager.recordHeartbeatSentMs(currentTimeMs);
         return request;
     }
 
@@ -265,7 +265,7 @@ public class HeartbeatRequestManager implements RequestManager {
         else
             return request.whenComplete((response, exception) -> {
                 if (response != null) {
-                    heartbeatMetricsManager.recordRequestLatency(response.requestLatencyMs());
+                    metricsManager.recordRequestLatency(response.requestLatencyMs());
                     onResponse((ConsumerGroupHeartbeatResponse) response.responseBody(), request.handler().completionTimeMs());
                 } else {
                     onFailure(exception, request.handler().completionTimeMs());
@@ -276,7 +276,7 @@ public class HeartbeatRequestManager implements RequestManager {
     private NetworkClientDelegate.UnsentRequest logResponse(final NetworkClientDelegate.UnsentRequest request) {
         return request.whenComplete((response, exception) -> {
             if (response != null) {
-                heartbeatMetricsManager.recordRequestLatency(response.requestLatencyMs());
+                metricsManager.recordRequestLatency(response.requestLatencyMs());
                 Errors error =
                     Errors.forCode(((ConsumerGroupHeartbeatResponse) response.responseBody()).data().errorCode());
                 if (error == Errors.NONE)

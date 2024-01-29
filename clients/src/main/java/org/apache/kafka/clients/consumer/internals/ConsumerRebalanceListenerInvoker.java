@@ -41,16 +41,16 @@ public class ConsumerRebalanceListenerInvoker {
     private final Logger log;
     private final SubscriptionState subscriptions;
     private final Time time;
-    private final RebalanceCallbackMetricsManager metrics;
+    private final RebalanceCallbackMetricsManager metricsManager;
 
     ConsumerRebalanceListenerInvoker(LogContext logContext,
                                      SubscriptionState subscriptions,
                                      Time time,
-                                     RebalanceCallbackMetricsManager metrics) {
+                                     RebalanceCallbackMetricsManager metricsManager) {
         this.log = logContext.logger(getClass());
         this.subscriptions = subscriptions;
         this.time = time;
-        this.metrics = metrics;
+        this.metricsManager = metricsManager;
     }
 
     public Exception invokePartitionsAssigned(final SortedSet<TopicPartition> assignedPartitions) {
@@ -62,7 +62,7 @@ public class ConsumerRebalanceListenerInvoker {
             try {
                 final long startMs = time.milliseconds();
                 listener.get().onPartitionsAssigned(assignedPartitions);
-                metrics.recordPartitionAssignLatency(time.milliseconds() - startMs);
+                metricsManager.recordPartitionAssignLatency(time.milliseconds() - startMs);
             } catch (WakeupException | InterruptException e) {
                 throw e;
             } catch (Exception e) {
@@ -88,7 +88,7 @@ public class ConsumerRebalanceListenerInvoker {
             try {
                 final long startMs = time.milliseconds();
                 listener.get().onPartitionsRevoked(revokedPartitions);
-                metrics.recordPartitionRevokeLatency(time.milliseconds() - startMs);
+                metricsManager.recordPartitionRevokeLatency(time.milliseconds() - startMs);
             } catch (WakeupException | InterruptException e) {
                 throw e;
             } catch (Exception e) {
@@ -114,7 +114,7 @@ public class ConsumerRebalanceListenerInvoker {
             try {
                 final long startMs = time.milliseconds();
                 listener.get().onPartitionsLost(lostPartitions);
-                metrics.recordPartitionLostLatency(time.milliseconds() - startMs);
+                metricsManager.recordPartitionLostLatency(time.milliseconds() - startMs);
             } catch (WakeupException | InterruptException e) {
                 throw e;
             } catch (Exception e) {

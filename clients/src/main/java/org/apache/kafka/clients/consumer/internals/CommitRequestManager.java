@@ -81,7 +81,7 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
     private final boolean throwOnFetchStableOffsetUnsupported;
     final PendingRequests pendingRequests;
     private boolean closing = false;
-    private OffsetCommitMetricsManager offsetCommitMetricsManager;
+    private OffsetCommitMetricsManager metricsManager;
 
     /**
      *  Latest member ID and epoch received via the {@link #onMemberEpochUpdated(Optional, Optional)},
@@ -146,7 +146,7 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
         this.jitter = jitter;
         this.throwOnFetchStableOffsetUnsupported = config.getBoolean(THROW_ON_FETCH_STABLE_OFFSET_UNSUPPORTED);
         this.memberInfo = new MemberInfo();
-        this.offsetCommitMetricsManager = new OffsetCommitMetricsManager(metrics);
+        this.metricsManager = new OffsetCommitMetricsManager(metrics);
     }
 
     /**
@@ -481,7 +481,7 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
          */
         @Override
         public void onResponse(final ClientResponse response) {
-            offsetCommitMetricsManager.recordRequestLatency(response.requestLatencyMs());
+            metricsManager.recordRequestLatency(response.requestLatencyMs());
             long currentTimeMs = response.receivedTimeMs();
             OffsetCommitResponse commitResponse = (OffsetCommitResponse) response.responseBody();
             Set<String> unauthorizedTopics = new HashSet<>();
