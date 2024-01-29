@@ -301,20 +301,19 @@ class MiniKdc(config: Properties, workDir: File) extends Logging {
     * @param password  password.
     */
   private def createPrincipal(principal: String, password: String): Unit = {
-    val ldifContent =
-      s"""
-         |dn: uid=$principal,ou=users,dc=${orgName.toLowerCase(Locale.ENGLISH)},dc=${orgDomain.toLowerCase(Locale.ENGLISH)}
-         |objectClass: top
-         |objectClass: person
-         |objectClass: inetOrgPerson
-         |objectClass: krb5principal
-         |objectClass: krb5kdcentry
-         |cn: $principal
-         |sn: $principal
-         |uid: $principal
-         |userPassword: $password
-         |krb5PrincipalName: ${principal}@${realm}
-         |krb5KeyVersionNumber: 0""".stripMargin
+    val ldifContent = s"""
+      |dn: uid=$principal,ou=users,dc=${orgName.toLowerCase(Locale.ENGLISH)},dc=${orgDomain.toLowerCase(Locale.ENGLISH)}
+      |objectClass: top
+      |objectClass: person
+      |objectClass: inetOrgPerson
+      |objectClass: krb5principal
+      |objectClass: krb5kdcentry
+      |cn: $principal
+      |sn: $principal
+      |uid: $principal
+      |userPassword: $password
+      |krb5PrincipalName: ${principal}@${realm}
+      |krb5KeyVersionNumber: 0""".stripMargin
     addEntriesToDirectoryService(ldifContent)
   }
 
