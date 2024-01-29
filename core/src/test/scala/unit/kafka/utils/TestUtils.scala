@@ -1403,6 +1403,17 @@ object TestUtils extends Logging {
     assertEquals(0, threadCount, s"Found unexpected $threadCount NonDaemon threads=${nonDaemonThreads.map(t => t.getName).mkString(", ")}")
   }
 
+  // Some threads are closed, but the state didn't reflect in the JVM immediately, so add some wait time for it
+  def assertNoNonDaemonThreadsWithWaiting(threadNamePrefix: String, waitTimeMs: Long = 500L): Unit = {
+    var nonDemonThreads: mutable.Set[Thread] = mutable.Set.empty[Thread]
+    waitUntilTrue(() => {
+      nonDemonThreads = Thread.getAllStackTraces.keySet.asScala.filter { t =>
+        !t.isDaemon && t.isAlive && t.getName.startsWith(threadNamePrefix)
+      }
+      0 == nonDemonThreads.size
+    }, s"Found unexpected ${nonDemonThreads.size} NonDaemon threads=${nonDemonThreads.map(t => t.getName).mkString(", ")}", waitTimeMs)
+  }
+
   def numThreadsRunning(threadNamePrefix: String, isDaemon: Boolean): mutable.Set[Thread] = {
     Thread.getAllStackTraces.keySet.asScala.filter { t =>
       isDaemon && t.isAlive && t.getName.startsWith(threadNamePrefix)

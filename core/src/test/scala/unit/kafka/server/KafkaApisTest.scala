@@ -4277,13 +4277,13 @@ class KafkaApisTest extends Logging {
         Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false)))
     })
 
-    val fetchData = Map(tidp -> new FetchRequest.PartitionData(Uuid.ZERO_UUID, 0, 0, 1000,
+    val fetchData = Map(tidp -> new FetchRequest.PartitionData(topicId, 0, 0, 1000,
       Optional.empty())).asJava
-    val fetchDataBuilder = Map(tp -> new FetchRequest.PartitionData(Uuid.ZERO_UUID, 0, 0, 1000,
+    val fetchDataBuilder = Map(tp -> new FetchRequest.PartitionData(topicId, 0, 0, 1000,
       Optional.empty())).asJava
     val fetchMetadata = new JFetchMetadata(0, 0)
     val fetchContext = new FullFetchContext(time, new FetchSessionCache(1000, 100),
-      fetchMetadata, fetchData, false, false)
+      fetchMetadata, fetchData, true, false)
     when(fetchManager.newContext(
       any[Short],
       any[JFetchMetadata],
