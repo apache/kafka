@@ -404,7 +404,7 @@ public class ClientMetricsManager implements AutoCloseable {
         }
 
         if (request.data().subscriptionId() != clientInstance.subscriptionId()) {
-            clientMetricsStats.recordUnknownSubscriptionCount(clientInstance.clientInstanceId());
+            clientMetricsStats.recordUnknownSubscriptionCount();
             String msg = String.format("Unknown client subscription id for the client [%s]",
                 request.data().clientInstanceId());
             throw new UnknownSubscriptionIdException(msg);
@@ -534,14 +534,14 @@ public class ClientMetricsManager implements AutoCloseable {
         static final String PLUGIN_ERROR = "ClientMetricsPluginError";
         static final String PLUGIN_EXPORT_TIME = "ClientMetricsPluginExportTime";
 
-        // Names of sensors that are registered through client instances.
+        // Names of registered sensors either globally or per client instance.
         private final Set<String> sensorsName = ConcurrentHashMap.newKeySet();
         // List of metric names which are not specific to a client instance. Do not require thread
         // safe structure as it will be populated only in constructor.
         private final List<MetricName> registeredMetricNames = new ArrayList<>();
 
-        private final Set<String> instanceMetrics = Stream.of(UNKNOWN_SUBSCRIPTION_REQUEST,
-            THROTTLE, PLUGIN_EXPORT, PLUGIN_ERROR, PLUGIN_EXPORT_TIME).collect(Collectors.toSet());
+        private final Set<String> instanceMetrics = Stream.of(THROTTLE, PLUGIN_EXPORT, PLUGIN_ERROR,
+            PLUGIN_EXPORT_TIME).collect(Collectors.toSet());
 
         ClientMetricsStats() {
             Measurable instanceCount = (config, now) -> clientInstanceCache.size();
@@ -549,6 +549,12 @@ public class ClientMetricsManager implements AutoCloseable {
                 "The current number of client metrics instances being managed by the broker");
             metrics.addMetric(instanceCountMetric, instanceCount);
             registeredMetricNames.add(instanceCountMetric);
+
+            Sensor unknownSubscriptionRequestCountSensor = metrics.sensor(
+                ClientMetricsStats.UNKNOWN_SUBSCRIPTION_REQUEST);
+            unknownSubscriptionRequestCountSensor.add(createMeter(metrics, new WindowedCount(),
+                ClientMetricsStats.UNKNOWN_SUBSCRIPTION_REQUEST, Collections.emptyMap()));
+            sensorsName.add(unknownSubscriptionRequestCountSensor.name());
         }
 
         public void maybeAddClientInstanceMetrics(Uuid clientInstanceId) {
@@ -559,12 +565,6 @@ public class ClientMetricsManager implements AutoCloseable {
             }
 
             Map<String, String> tags = Collections.singletonMap(ClientMetricsConfigs.CLIENT_INSTANCE_ID, clientInstanceId.toString());
-
-            Sensor unknownSubscriptionRequestCountSensor = metrics.sensor(
-                ClientMetricsStats.UNKNOWN_SUBSCRIPTION_REQUEST + "-" + clientInstanceId);
-            unknownSubscriptionRequestCountSensor.add(createMeter(metrics, new WindowedCount(),
-                ClientMetricsStats.UNKNOWN_SUBSCRIPTION_REQUEST, tags));
-            sensorsName.add(unknownSubscriptionRequestCountSensor.name());
 
             Sensor throttleCount = metrics.sensor(ClientMetricsStats.THROTTLE + "-" + clientInstanceId);
             throttleCount.add(createMeter(metrics, new WindowedCount(), ClientMetricsStats.THROTTLE, tags));
@@ -586,8 +586,8 @@ public class ClientMetricsManager implements AutoCloseable {
             sensorsName.add(pluginExportTime.name());
         }
 
-        public void recordUnknownSubscriptionCount(Uuid clientInstanceId) {
-            record(UNKNOWN_SUBSCRIPTION_REQUEST, clientInstanceId);
+        public void recordUnknownSubscriptionCount() {
+            record(UNKNOWN_SUBSCRIPTION_REQUEST);
         }
 
         public void recordThrottleCount(Uuid clientInstanceId) {
@@ -629,12 +629,17 @@ public class ClientMetricsManager implements AutoCloseable {
             return new Meter(stat, rateMetricName, totalMetricName);
         }
 
+        private void record(String metricName) {
+            record(metricName, null, 1);
+        }
+
         private void record(String metricName, Uuid clientInstanceId) {
             record(metricName, clientInstanceId, 1);
         }
 
         private void record(String metricName, Uuid clientInstanceId, long value) {
-            Sensor sensor = metrics.getSensor(metricName + "-" + clientInstanceId);
+            String sensorName = clientInstanceId != null ? metricName + "-" + clientInstanceId : metricName;
+            Sensor sensor = metrics.getSensor(sensorName);
             if (sensor != null) {
                 sensor.record(value);
             }

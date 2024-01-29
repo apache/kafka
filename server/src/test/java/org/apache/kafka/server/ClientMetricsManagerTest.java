@@ -118,8 +118,9 @@ public class ClientMetricsManagerTest {
             assertEquals(split[1], subscriptionInfo.matchPattern().get(split[0]).pattern());
         });
         assertEquals(1, clientMetricsManager.subscriptionUpdateVersion());
-        // Validate metrics should have instance count metric and kafka metrics count registered i.e. 2 metrics.
-        assertEquals(2, kafkaMetrics.metrics().size());
+        // Validate metrics should have instance count metric, 2 unknown subscription count metrics
+        // and kafka metrics count registered i.e. 4 metrics.
+        assertEquals(4, kafkaMetrics.metrics().size());
         // Metrics should not have any instance while updating the subscriptions.
         assertEquals((double) 0, getMetric(ClientMetricsManager.ClientMetricsStats.INSTANCE_COUNT).metricValue());
     }
@@ -332,7 +333,7 @@ public class ClientMetricsManagerTest {
         // Create new client metrics manager which simulates a new server as it will not have any
         // last request information but request should succeed as subscription id should match
         // the one with new client instance.
-        kafkaMetrics = new Metrics();
+        Metrics kafkaMetrics = new Metrics();
         ClientMetricsManager newClientMetricsManager = new ClientMetricsManager(clientMetricsReceiverPlugin, 100, time, kafkaMetrics);
 
         PushTelemetryRequest pushRequest = new Builder(
@@ -355,7 +356,9 @@ public class ClientMetricsManagerTest {
 
         assertEquals(Errors.THROTTLING_QUOTA_EXCEEDED, response.error());
         // Should register 1 throttle metric.
-        assertEquals((double) 1, getMetric(ClientMetricsManager.ClientMetricsStats.THROTTLE + "Count").metricValue());
+        assertEquals((double) 1, getMetric(kafkaMetrics, ClientMetricsManager.ClientMetricsStats.THROTTLE + "Count").metricValue());
+        newClientMetricsManager.close();
+        kafkaMetrics.close();
     }
 
     @Test
@@ -563,7 +566,7 @@ public class ClientMetricsManagerTest {
         // Create new client metrics manager which simulates a new server as it will not have any
         // client instance information but request should succeed as subscription id should match
         // the one with new client instance.
-        kafkaMetrics = new Metrics();
+        Metrics kafkaMetrics = new Metrics();
         ClientMetricsManager newClientMetricsManager = new ClientMetricsManager(clientMetricsReceiverPlugin, 100, time, kafkaMetrics);
 
         PushTelemetryRequest request = new PushTelemetryRequest.Builder(
@@ -579,14 +582,16 @@ public class ClientMetricsManagerTest {
         // Validate metrics should have instance count metric, kafka metrics count and 5 sensors with 10 metrics
         // registered i.e. 12 metrics.
         assertEquals(12, kafkaMetrics.metrics().size());
-        assertEquals((double) 1, getMetric(ClientMetricsManager.ClientMetricsStats.INSTANCE_COUNT).metricValue());
-        assertEquals((double) 0, getMetric(ClientMetricsManager.ClientMetricsStats.UNKNOWN_SUBSCRIPTION_REQUEST + "Count").metricValue());
-        assertEquals((double) 0, getMetric(ClientMetricsManager.ClientMetricsStats.THROTTLE + "Count").metricValue());
+        assertEquals((double) 1, getMetric(kafkaMetrics, ClientMetricsManager.ClientMetricsStats.INSTANCE_COUNT).metricValue());
+        assertEquals((double) 0, getMetric(kafkaMetrics, ClientMetricsManager.ClientMetricsStats.UNKNOWN_SUBSCRIPTION_REQUEST + "Count").metricValue());
+        assertEquals((double) 0, getMetric(kafkaMetrics, ClientMetricsManager.ClientMetricsStats.THROTTLE + "Count").metricValue());
         // Should have 1 successful export and 0 error metrics.
-        assertEquals((double) 1, getMetric(ClientMetricsManager.ClientMetricsStats.PLUGIN_EXPORT + "Count").metricValue());
-        assertEquals((double) 0, getMetric(ClientMetricsManager.ClientMetricsStats.PLUGIN_ERROR + "Count").metricValue());
+        assertEquals((double) 1, getMetric(kafkaMetrics, ClientMetricsManager.ClientMetricsStats.PLUGIN_EXPORT + "Count").metricValue());
+        assertEquals((double) 0, getMetric(kafkaMetrics, ClientMetricsManager.ClientMetricsStats.PLUGIN_ERROR + "Count").metricValue());
         // Should not have default NaN value, must register actual export time metrics.
-        assertNotEquals(Double.NaN, getMetric(ClientMetricsManager.ClientMetricsStats.PLUGIN_EXPORT_TIME + "Max").metricValue());
+        assertNotEquals(Double.NaN, getMetric(kafkaMetrics, ClientMetricsManager.ClientMetricsStats.PLUGIN_EXPORT_TIME + "Max").metricValue());
+        newClientMetricsManager.close();
+        kafkaMetrics.close();
     }
 
     @Test
@@ -845,9 +850,9 @@ public class ClientMetricsManagerTest {
     }
 
     @Test
-    public void testPushTelemetryMetricsTooLarge() throws UnknownHostException {
-        kafkaMetrics = new Metrics();
-        clientMetricsManager = new ClientMetricsManager(clientMetricsReceiverPlugin, 1, time, kafkaMetrics);
+    public void testPushTelemetryMetricsTooLarge() throws Exception {
+        Metrics kafkaMetrics = new Metrics();
+        ClientMetricsManager clientMetricsManager = new ClientMetricsManager(clientMetricsReceiverPlugin, 1, time, kafkaMetrics);
 
         GetTelemetrySubscriptionsRequest subscriptionsRequest = new GetTelemetrySubscriptionsRequest.Builder(
             new GetTelemetrySubscriptionsRequestData(), true).build();
@@ -875,6 +880,8 @@ public class ClientMetricsManagerTest {
         assertEquals(Errors.TELEMETRY_TOO_LARGE, response.error());
         assertFalse(instance.terminating());
         assertEquals(Errors.TELEMETRY_TOO_LARGE, instance.lastKnownError());
+        clientMetricsManager.close();
+        kafkaMetrics.close();
     }
 
     @Test
@@ -898,7 +905,7 @@ public class ClientMetricsManagerTest {
         CountDownLatch lock = new CountDownLatch(2);
         List<PushTelemetryResponse> responses = Collections.synchronizedList(new ArrayList<>());
 
-        kafkaMetrics = new Metrics();
+        Metrics kafkaMetrics = new Metrics();
         ClientMetricsManager newClientMetricsManager = new ClientMetricsManager(clientMetricsReceiverPlugin, 100, time, kafkaMetrics);
 
         Thread thread = new Thread(() -> {
@@ -942,10 +949,12 @@ public class ClientMetricsManagerTest {
         // 1 request should fail with throttling error.
         assertEquals(1, throttlingErrorCount);
         // Metrics should report 1 export and 1 throttle error.
-        assertEquals((double) 1, getMetric(ClientMetricsManager.ClientMetricsStats.THROTTLE + "Count").metricValue());
-        assertEquals((double) 1, getMetric(ClientMetricsManager.ClientMetricsStats.PLUGIN_EXPORT + "Count").metricValue());
-        assertEquals((double) 0, getMetric(ClientMetricsManager.ClientMetricsStats.PLUGIN_ERROR + "Count").metricValue());
-        assertNotEquals(Double.NaN, getMetric(ClientMetricsManager.ClientMetricsStats.PLUGIN_EXPORT_TIME + "Max").metricValue());
+        assertEquals((double) 1, getMetric(kafkaMetrics, ClientMetricsManager.ClientMetricsStats.THROTTLE + "Count").metricValue());
+        assertEquals((double) 1, getMetric(kafkaMetrics, ClientMetricsManager.ClientMetricsStats.PLUGIN_EXPORT + "Count").metricValue());
+        assertEquals((double) 0, getMetric(kafkaMetrics, ClientMetricsManager.ClientMetricsStats.PLUGIN_ERROR + "Count").metricValue());
+        assertNotEquals(Double.NaN, getMetric(kafkaMetrics, ClientMetricsManager.ClientMetricsStats.PLUGIN_EXPORT_TIME + "Max").metricValue());
+        newClientMetricsManager.close();
+        kafkaMetrics.close();
     }
 
     @Test
@@ -1026,8 +1035,8 @@ public class ClientMetricsManagerTest {
         ClientMetricsReceiverPlugin receiverPlugin = Mockito.mock(ClientMetricsReceiverPlugin.class);
         Mockito.doThrow(new RuntimeException("test exception")).when(receiverPlugin).exportMetrics(Mockito.any(), Mockito.any());
 
-        kafkaMetrics = new Metrics();
-        clientMetricsManager = new ClientMetricsManager(receiverPlugin, 100, time, 100, kafkaMetrics);
+        Metrics kafkaMetrics = new Metrics();
+        ClientMetricsManager clientMetricsManager = new ClientMetricsManager(receiverPlugin, 100, time, 100, kafkaMetrics);
 
         clientMetricsManager.updateSubscription("sub-1", ClientMetricsTestUtils.defaultProperties());
         assertEquals(1, clientMetricsManager.subscriptions().size());
@@ -1055,12 +1064,14 @@ public class ClientMetricsManagerTest {
         assertFalse(instance.terminating());
         assertEquals(Errors.INVALID_RECORD, instance.lastKnownError());
         // Metrics should report 1 plugin export error and 0 successful export.
-        assertEquals((double) 0, getMetric(ClientMetricsManager.ClientMetricsStats.UNKNOWN_SUBSCRIPTION_REQUEST + "Count").metricValue());
-        assertEquals((double) 0, getMetric(ClientMetricsManager.ClientMetricsStats.THROTTLE + "Count").metricValue());
-        assertEquals((double) 0, getMetric(ClientMetricsManager.ClientMetricsStats.PLUGIN_EXPORT + "Count").metricValue());
-        assertEquals((double) 1, getMetric(ClientMetricsManager.ClientMetricsStats.PLUGIN_ERROR + "Count").metricValue());
+        assertEquals((double) 0, getMetric(kafkaMetrics, ClientMetricsManager.ClientMetricsStats.UNKNOWN_SUBSCRIPTION_REQUEST + "Count").metricValue());
+        assertEquals((double) 0, getMetric(kafkaMetrics, ClientMetricsManager.ClientMetricsStats.THROTTLE + "Count").metricValue());
+        assertEquals((double) 0, getMetric(kafkaMetrics, ClientMetricsManager.ClientMetricsStats.PLUGIN_EXPORT + "Count").metricValue());
+        assertEquals((double) 1, getMetric(kafkaMetrics, ClientMetricsManager.ClientMetricsStats.PLUGIN_ERROR + "Count").metricValue());
         // Should have default NaN value, must not register export time.
-        assertEquals(Double.NaN, getMetric(ClientMetricsManager.ClientMetricsStats.PLUGIN_EXPORT_TIME + "Max").metricValue());
+        assertEquals(Double.NaN, getMetric(kafkaMetrics, ClientMetricsManager.ClientMetricsStats.PLUGIN_EXPORT_TIME + "Max").metricValue());
+        clientMetricsManager.close();
+        kafkaMetrics.close();
     }
 
     @Test
@@ -1094,8 +1105,9 @@ public class ClientMetricsManagerTest {
                 Thread.sleep(50);
             }
         });
-        // Metrics for instance should be removed.
-        assertEquals(2, kafkaMetrics.metrics().size());
+        // Metrics for instance should be removed. Should have instance count metric, 2 unknown
+        // subscription count metrics and kafka metrics count registered i.e. 4 metrics.
+        assertEquals(4, kafkaMetrics.metrics().size());
         assertEquals((double) 0, getMetric(ClientMetricsManager.ClientMetricsStats.INSTANCE_COUNT).metricValue());
     }
 
@@ -1118,7 +1130,7 @@ public class ClientMetricsManagerTest {
         assertEquals(Errors.NONE, response2.error());
 
         // Metrics for both instances should exist.
-        assertEquals(22, kafkaMetrics.metrics().size());
+        assertEquals(20, kafkaMetrics.metrics().size());
         assertEquals((double) 2, getMetric(ClientMetricsManager.ClientMetricsStats.INSTANCE_COUNT).metricValue());
 
         assertNotNull(clientMetricsManager.clientInstance(response1.data().clientInstanceId()));
@@ -1136,8 +1148,9 @@ public class ClientMetricsManagerTest {
                 Thread.sleep(50);
             }
         });
-        // Metrics for both instances should be removed.
-        assertEquals(2, kafkaMetrics.metrics().size());
+        // Metrics for both instances should be removed. Should have instance count metric, 2 unknown
+        // subscription count metrics and kafka metrics count registered i.e. 4 metrics.
+        assertEquals(4, kafkaMetrics.metrics().size());
         assertEquals((double) 0, getMetric(ClientMetricsManager.ClientMetricsStats.INSTANCE_COUNT).metricValue());
     }
 
@@ -1183,6 +1196,10 @@ public class ClientMetricsManagerTest {
     }
 
     private KafkaMetric getMetric(String name) throws Exception {
+        return getMetric(kafkaMetrics, name);
+    }
+
+    private KafkaMetric getMetric(Metrics kafkaMetrics, String name) throws Exception {
         Optional<Entry<MetricName, KafkaMetric>> metric = kafkaMetrics.metrics().entrySet().stream()
             .filter(entry -> entry.getKey().name().equals(name))
             .findFirst();
