@@ -62,7 +62,7 @@ public class ConsumerRebalanceListenerInvoker {
             try {
                 final long startMs = time.milliseconds();
                 listener.get().onPartitionsAssigned(assignedPartitions);
-                metricsManager.recordPartitionAssignLatency(time.milliseconds() - startMs);
+                metricsManager.recordPartitionsAssignedLatency(time.milliseconds() - startMs);
             } catch (WakeupException | InterruptException e) {
                 throw e;
             } catch (Exception e) {
@@ -88,7 +88,7 @@ public class ConsumerRebalanceListenerInvoker {
             try {
                 final long startMs = time.milliseconds();
                 listener.get().onPartitionsRevoked(revokedPartitions);
-                metricsManager.recordPartitionRevokeLatency(time.milliseconds() - startMs);
+                metricsManager.recordPartitionsRevokedLatency(time.milliseconds() - startMs);
             } catch (WakeupException | InterruptException e) {
                 throw e;
             } catch (Exception e) {
@@ -114,7 +114,7 @@ public class ConsumerRebalanceListenerInvoker {
             try {
                 final long startMs = time.milliseconds();
                 listener.get().onPartitionsLost(lostPartitions);
-                metricsManager.recordPartitionLostLatency(time.milliseconds() - startMs);
+                metricsManager.recordPartitionsLostLatency(time.milliseconds() - startMs);
             } catch (WakeupException | InterruptException e) {
                 throw e;
             } catch (Exception e) {

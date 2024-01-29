@@ -47,9 +47,9 @@ public class ConsumerMetricsManagerTest {
         assertNotNull(getMetric("partition-lost-latency-avg", groupName));
         assertNotNull(getMetric("partition-lost-latency-max", groupName));
 
-        rebalanceCallbackMetricsManager.recordPartitionAssignLatency(100);
-        rebalanceCallbackMetricsManager.recordPartitionRevokeLatency(101);
-        rebalanceCallbackMetricsManager.recordPartitionLostLatency(102);
+        rebalanceCallbackMetricsManager.recordPartitionsAssignedLatency(100);
+        rebalanceCallbackMetricsManager.recordPartitionsRevokedLatency(101);
+        rebalanceCallbackMetricsManager.recordPartitionsLostLatency(102);
 
         assertEquals(101d, getMetric("partition-revoked-latency-avg", groupName).metricValue());
         assertEquals(101d, getMetric("partition-revoked-latency-max", groupName).metricValue());

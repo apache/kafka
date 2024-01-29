@@ -60,15 +60,15 @@ public class RebalanceCallbackMetricsManager extends AbstractConsumerMetricsMana
                 "The max time taken for a partition-lost rebalance listener callback"), new Max());
     }
 
-    public void recordPartitionRevokeLatency(long latencyMs) {
+    public void recordPartitionsRevokedLatency(long latencyMs) {
         partitionRevokeCallbackSensor.record(latencyMs);
     }
 
-    public void recordPartitionAssignLatency(long latencyMs) {
+    public void recordPartitionsAssignedLatency(long latencyMs) {
         partitionAssignCallbackSensor.record(latencyMs);
     }
 
-    public void recordPartitionLostLatency(long latencyMs) {
+    public void recordPartitionsLostLatency(long latencyMs) {
         partitionLostCallbackSensor.record(latencyMs);
     }
 }
