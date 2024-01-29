@@ -29,6 +29,7 @@ import org.apache.kafka.common.security.auth.KafkaPrincipalBuilder;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.security.authenticator.DefaultKafkaPrincipalBuilder;
 import org.apache.kafka.coordinator.group.OffsetConfig;
+import org.apache.kafka.coordinator.group.assignor.UniformAssignor;
 import org.apache.kafka.coordinator.transaction.TransactionLogConfig;
 import org.apache.kafka.coordinator.transaction.TransactionStateManagerConfig;
 import org.apache.kafka.raft.RaftConfig;
@@ -161,7 +162,10 @@ public class Defaults {
     public static final int CONSUMER_GROUP_MIN_HEARTBEAT_INTERVAL_MS = 5000;
     public static final int CONSUMER_GROUP_MAX_HEARTBEAT_INTERVAL_MS = 15000;
     public static final int CONSUMER_GROUP_MAX_SIZE = Integer.MAX_VALUE;
-    public static final List<String> CONSUMER_GROUP_ASSIGNORS = Collections.singletonList(RangeAssignor.class.getName());
+    public static final List<String> CONSUMER_GROUP_ASSIGNORS = Arrays.asList(
+        UniformAssignor.class.getName(),
+        RangeAssignor.class.getName()
+    );
 
     /** ********* Offset management configuration *********/
     public static final int OFFSET_METADATA_MAX_SIZE = OffsetConfig.DEFAULT_MAX_METADATA_SIZE;
