@@ -42,57 +42,50 @@ import org.apache.directory.api.ldap.schema.extractor.impl.DefaultSchemaLdifExtr
 import org.apache.directory.api.ldap.schema.loader.LdifSchemaLoader
 import org.apache.directory.api.ldap.schema.manager.impl.DefaultSchemaManager
 import org.apache.directory.server.constants.ServerDNConstants
-//import org.apache.directory.server.core.DefaultDirectoryService
-//import org.apache.directory.server.core.api.{DirectoryService, InstanceLayout}
 import org.apache.directory.server.core.api.schema.SchemaPartition
 import org.apache.directory.server.core.kerberos.KeyDerivationInterceptor
 import org.apache.directory.server.core.partition.impl.btree.jdbm.{JdbmIndex, JdbmPartition}
 import org.apache.directory.server.core.partition.ldif.LdifPartition
-//import org.apache.directory.server.kerberos.shared.crypto.encryption.KerberosKeyFactory
-//import org.apache.directory.server.protocol.shared.transport.{TcpTransport, UdpTransport}
 import org.apache.directory.server.xdbm.Index
-//import org.apache.directory.shared.kerberos.KerberosTime
 import org.apache.kerby.kerberos.kerb.KrbException
 import org.apache.kerby.kerberos.kerb.identity.backend.BackendConfig
 import org.apache.kerby.kerberos.kerb.server.{KdcConfig, KdcConfigKey, SimpleKdcServer}
 import org.apache.kafka.common.utils.{Java, Utils}
-//import org.apache.kerby.kerberos.kerb.keytab.{Keytab, KeytabEntry}
-//import org.apache.kerby.kerberos.kerb.server.replay.CacheService
 
 /**
- * Mini KDC based on Apache Directory Server that can be embedded in tests or used from command line as a standalone
- * KDC.
- *
- * MiniKdc sets 2 System properties when started and unsets them when stopped:
- *
- * - java.security.krb5.conf: set to the MiniKDC real/host/port
- * - sun.security.krb5.debug: set to the debug value provided in the configuration
- *
- * As a result of this, multiple MiniKdc instances should not be started concurrently in the same JVM.
- *
- * MiniKdc default configuration values are:
- *
- * - org.name=EXAMPLE (used to create the REALM)
- * - org.domain=COM (used to create the REALM)
- * - kdc.bind.address=localhost
- * - kdc.port=0 (ephemeral port)
- * - instance=DefaultKrbServer
- * - max.ticket.lifetime=86400000 (1 day)
- * - max.renewable.lifetime604800000 (7 days)
- * - transport=TCP
- * - debug=false
- *
- * The generated krb5.conf forces TCP connections.
- *
- * Acknowledgements: this class is derived from the MiniKdc class in the hadoop-minikdc project (git commit
- * d8d8ed35f00b15ee0f2f8aaf3fe7f7b42141286b).
- *
- * @constructor creates a new MiniKdc instance.
- * @param config  the MiniKdc configuration
- * @param workDir the working directory which will contain krb5.conf, Apache DS files and any other files needed by
- *                MiniKdc.
- * @throws Exception thrown if the MiniKdc could not be created.
- */
+  * Mini KDC based on Apache Directory Server that can be embedded in tests or used from command line as a standalone
+  * KDC.
+  *
+  * MiniKdc sets 2 System properties when started and unsets them when stopped:
+  *
+  * - java.security.krb5.conf: set to the MiniKDC real/host/port
+  * - sun.security.krb5.debug: set to the debug value provided in the configuration
+  *
+  * As a result of this, multiple MiniKdc instances should not be started concurrently in the same JVM.
+  *
+  * MiniKdc default configuration values are:
+  *
+  * - org.name=EXAMPLE (used to create the REALM)
+  * - org.domain=COM (used to create the REALM)
+  * - kdc.bind.address=localhost
+  * - kdc.port=0 (ephemeral port)
+  * - instance=DefaultKrbServer
+  * - max.ticket.lifetime=86400000 (1 day)
+  * - max.renewable.lifetime604800000 (7 days)
+  * - transport=TCP
+  * - debug=false
+  *
+  * The generated krb5.conf forces TCP connections.
+  *
+  * Acknowledgements: this class is derived from the MiniKdc class in the hadoop-minikdc project (git commit
+  * d8d8ed35f00b15ee0f2f8aaf3fe7f7b42141286b).
+  *
+  * @constructor creates a new MiniKdc instance.
+  * @param config  the MiniKdc configuration
+  * @param workDir the working directory which will contain krb5.conf, Apache DS files and any other files needed by
+  *                MiniKdc.
+  * @throws Exception thrown if the MiniKdc could not be created.
+  */
 class MiniKdc(config: Properties, workDir: File) extends Logging {
 
   if (!config.keySet.containsAll(MiniKdc.RequiredProperties.asJava)) {
