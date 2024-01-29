@@ -18,7 +18,7 @@
 package kafka.security.minikdc
 
 import java.util.Properties
-import kafka.utils.{JaasTestUtils, TestUtils}
+import kafka.utils.{TestUtils}
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.Assertions._
 
@@ -34,7 +34,7 @@ class MiniKdcTest {
     config.setProperty("org.domain", "COM")
     config.setProperty("max.renewable.lifetime", "604800000")
     config.setProperty("instance", "DefaultKrbServer")
-    val minikdc = MiniKdc.start(TestUtils.tempDir(), config, TestUtils.tempFile(), List(JaasTestUtils.KafkaServerPrincipalUnqualifiedName + "/localhost"))
+    val minikdc = MiniKdc.start(TestUtils.tempDir(), config, TestUtils.tempFile(), List("foo"))
     val running = System.getProperty(MiniKdc.JavaSecurityKrb5Conf) != null
     try {
       assertTrue(running, "MiniKdc stopped immediately; it should not have")
