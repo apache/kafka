@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.clients.consumer.internals.metrics;
 
+import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.Avg;
@@ -44,7 +45,9 @@ public class OffsetCommitMetricsManager extends AbstractConsumerMetricsManager {
                         "The total number of commit calls")));
     }
 
-    public void recordRequestLatency(long latencyMs) {
-        this.commitSensor.record(latencyMs);
+    public void recordRequestLatency(ClientResponse response) {
+        if (response == null)
+            return;
+        this.commitSensor.record(response.requestLatencyMs());
     }
 }

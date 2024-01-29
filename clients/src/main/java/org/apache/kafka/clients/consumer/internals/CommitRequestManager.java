@@ -470,7 +470,14 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
 
             OffsetCommitRequest.Builder builder = new OffsetCommitRequest.Builder(data);
 
-            return buildRequestWithResponseHandling(builder);
+            return recordCommitLatency(buildRequestWithResponseHandling(builder));
+        }
+
+        private NetworkClientDelegate.UnsentRequest recordCommitLatency(NetworkClientDelegate.UnsentRequest request) {
+            request.future().whenComplete(
+                    (r, e) -> metricsManager.recordRequestLatency(r)
+            );
+            return request;
         }
 
         /**
@@ -481,7 +488,6 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
          */
         @Override
         public void onResponse(final ClientResponse response) {
-            metricsManager.recordRequestLatency(response.requestLatencyMs());
             long currentTimeMs = response.receivedTimeMs();
             OffsetCommitResponse commitResponse = (OffsetCommitResponse) response.responseBody();
             Set<String> unauthorizedTopics = new HashSet<>();

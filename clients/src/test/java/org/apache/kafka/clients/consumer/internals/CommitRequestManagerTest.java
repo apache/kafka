@@ -134,7 +134,6 @@ public class CommitRequestManagerTest {
         Map<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>();
         offsets.put(new TopicPartition("t1", 0), new OffsetAndMetadata(0));
         commitRequestManger.addOffsetCommitRequest(offsets, Optional.empty(), false);
-        assertPoll(1, commitRequestManger);
     }
 
     @Test
@@ -154,6 +153,9 @@ public class CommitRequestManagerTest {
                 1,
                 (short) 1,
                 Errors.NONE)));
+
+        assertEquals(0.03, (double) getMetric("commit-rate").metricValue(), 0.01);
+        assertEquals(1.0, getMetric("commit-total").metricValue());
     }
 
     @Test
