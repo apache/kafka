@@ -1160,7 +1160,7 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
 
         // Invoke user call back.
         CompletableFuture<Void> result = invokeOnPartitionsAssignedCallback(addedPartitions);
-        result.whenComplete((error, callbackResult) -> {
+        result.whenComplete((callbackResult, error) -> {
             if (error == null) {
                 // Enable newly added partitions to start fetching and updating positions for them.
                 subscriptions.enablePartitionsAwaitingCallback(addedPartitions);
