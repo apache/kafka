@@ -303,6 +303,20 @@ subprojects {
           } else {
             apply plugin: 'com.github.johnrengelman.shadow'
             artifact shadowJar
+            // work around issue with 'shadow' to resolve runtime dependencies correctly. This requires
+            // any project relying on 'shadow' dependencies.
+            afterEvaluate {
+              pom.withXml { xml ->
+                def dependenciesNode = xml.asNode().appendNode('dependencies')
+                project.configurations.shadow.allDependencies.each {
+                  def dependencyNode = dependenciesNode.appendNode('dependency')
+                  dependencyNode.appendNode('groupId', it.group)
+                  dependencyNode.appendNode('artifactId', it.name)
+                  dependencyNode.appendNode('version', it.version)
+                  dependencyNode.appendNode('scope', 'runtime')
+                }
+              }
+            }
           }
 
           afterEvaluate {
