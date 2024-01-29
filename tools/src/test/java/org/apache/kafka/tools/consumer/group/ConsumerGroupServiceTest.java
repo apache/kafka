@@ -92,10 +92,10 @@ public class ConsumerGroupServiceTest {
         when(admin.listOffsets(offsetsArgMatcher(), any()))
                 .thenReturn(listOffsetsResult());
 
-        Tuple2<Optional<String>, Optional<Collection<PartitionAssignmentState>>> res = groupService.collectGroupOffsets(GROUP);
-        assertEquals(Optional.of("Stable"), res.v1);
-        assertTrue(res.v2.isPresent());
-        assertEquals(TOPIC_PARTITIONS.size(), res.v2.get().size());
+        Tuple2<Optional<String>, Optional<Collection<PartitionAssignmentState>>> statesAndAssignments = groupService.collectGroupOffsets(GROUP);
+        assertEquals(Optional.of("Stable"), statesAndAssignments.v1);
+        assertTrue(statesAndAssignments.v2.isPresent());
+        assertEquals(TOPIC_PARTITIONS.size(), statesAndAssignments.v2.get().size());
 
         verify(admin, times(1)).describeConsumerGroups(ArgumentMatchers.eq(Collections.singletonList(GROUP)), any());
         verify(admin, times(1)).listConsumerGroupOffsets(ArgumentMatchers.eq(listConsumerGroupOffsetsSpec()), any());
@@ -165,9 +165,9 @@ public class ConsumerGroupServiceTest {
         )).thenReturn(new ListOffsetsResult(endOffsets.entrySet().stream().filter(e -> unassignedTopicPartitions.contains(e.getKey()))
                 .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue))));
 
-        Tuple2<Optional<String>, Optional<Collection<PartitionAssignmentState>>> res = groupService.collectGroupOffsets(GROUP);
-        Optional<String> state = res.v1;
-        Optional<Collection<PartitionAssignmentState>> assignments = res.v2;
+        Tuple2<Optional<String>, Optional<Collection<PartitionAssignmentState>>> statesAndAssignments = groupService.collectGroupOffsets(GROUP);
+        Optional<String> state = statesAndAssignments.v1;
+        Optional<Collection<PartitionAssignmentState>> assignments = statesAndAssignments.v2;
 
         Map<TopicPartition, Optional<Long>> returnedOffsets = assignments.map(results ->
             results.stream().collect(Collectors.toMap(
