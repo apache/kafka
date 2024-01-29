@@ -333,6 +333,7 @@
 
     <subpackage name="consumer.group">
       <allow pkg="org.apache.kafka.tools"/>
+      <allow pkg="scala"/>
     </subpackage>
 
     <subpackage name="other">

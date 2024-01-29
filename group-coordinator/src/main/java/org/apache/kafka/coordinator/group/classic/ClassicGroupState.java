@@ -19,6 +19,7 @@ package org.apache.kafka.coordinator.group.classic;
 
 import java.util.Arrays;
 import java.util.HashSet;
+import java.util.Locale;
 import java.util.Set;
 
 /**
@@ -104,6 +105,7 @@ public enum ClassicGroupState {
     DEAD("Dead");
 
     private final String name;
+    private final String lowerCaseName;
     private Set<ClassicGroupState> validPreviousStates;
 
     static {
@@ -116,11 +118,16 @@ public enum ClassicGroupState {
 
     ClassicGroupState(String name) {
         this.name = name;
+        this.lowerCaseName = name.toLowerCase(Locale.ROOT);
     }
 
     @Override
     public String toString() {
         return name;
+    }
+
+    public String toLowerCaseString() {
+        return lowerCaseName;
     }
 
     private void addValidPreviousStates(ClassicGroupState... validPreviousStates) {
