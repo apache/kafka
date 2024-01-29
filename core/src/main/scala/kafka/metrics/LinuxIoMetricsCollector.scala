@@ -17,7 +17,7 @@
 
 package kafka.metrics
 
-import java.nio.file.{Files, Paths}
+import java.nio.file.{Files, Path, Paths}
 import org.apache.kafka.common.utils.Time
 import org.slf4j.Logger
 
@@ -29,10 +29,10 @@ import scala.jdk.CollectionConverters._
  */
 class LinuxIoMetricsCollector(procRoot: String, val time: Time, val logger: Logger) {
   import LinuxIoMetricsCollector._
-  var lastUpdateMs = -1L
-  var cachedReadBytes = 0L
-  var cachedWriteBytes = 0L
-  val path = Paths.get(procRoot, "self", "io")
+  var lastUpdateMs: Long = -1L
+  var cachedReadBytes:Long = 0L
+  var cachedWriteBytes:Long = 0L
+  val path: Path = Paths.get(procRoot, "self", "io")
 
   def readBytes(): Long = this.synchronized {
     val curMs = time.milliseconds()
@@ -64,7 +64,7 @@ class LinuxIoMetricsCollector(procRoot: String, val time: Time, val logger: Logg
    * write_bytes: 0
    * cancelled_write_bytes: 0
    */
-  def updateValues(now: Long): Boolean = this.synchronized {
+  private def updateValues(now: Long): Boolean = this.synchronized {
     try {
       cachedReadBytes = -1
       cachedWriteBytes = -1
@@ -79,10 +79,9 @@ class LinuxIoMetricsCollector(procRoot: String, val time: Time, val logger: Logg
       lastUpdateMs = now
       true
     } catch {
-      case t: Throwable => {
+      case t: Throwable =>
         logger.warn("Unable to update IO metrics", t)
         false
-      }
     }
   }
 
@@ -97,6 +96,6 @@ class LinuxIoMetricsCollector(procRoot: String, val time: Time, val logger: Logg
 }
 
 object LinuxIoMetricsCollector {
-  val READ_BYTES_PREFIX = "read_bytes: "
-  val WRITE_BYTES_PREFIX = "write_bytes: "
+  private val READ_BYTES_PREFIX = "read_bytes: "
+  private val WRITE_BYTES_PREFIX = "write_bytes: "
 }
