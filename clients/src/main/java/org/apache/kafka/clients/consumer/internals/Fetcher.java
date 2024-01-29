@@ -150,10 +150,19 @@ public class Fetcher<K, V> extends AbstractFetch {
      * be executed once the first time that any of the {@link #close()} methods are called. Subclasses can override
      * this method without the need for extra synchronization at the instance level.
      *
+     * <p/>
+     *
+     * <em>Note</em>: this method is <code>synchronized</code> to reinstitute the 3.5 behavior:
+     *
+     * <blockquote>
+     * Shared states (e.g. sessionHandlers) could be accessed by multiple threads (such as heartbeat thread), hence,
+     * it is necessary to acquire a lock on the fetcher instance before modifying the states.
+     * </blockquote>
+     *
      * @param timer Timer to enforce time limit
      */
     // Visible for testing
-    protected void closeInternal(Timer timer) {
+    protected synchronized void closeInternal(Timer timer) {
         // we do not need to re-enable wake-ups since we are closing already
         client.disableWakeups();
         maybeCloseFetchSessions(timer);

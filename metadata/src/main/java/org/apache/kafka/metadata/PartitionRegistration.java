@@ -200,7 +200,7 @@ public class PartitionRegistration {
             record.leaderEpoch(),
             record.partitionEpoch(),
             Replicas.toArray(record.eligibleLeaderReplicas()),
-            Replicas.toArray(record.lastKnownELR()));
+            Replicas.toArray(record.lastKnownElr()));
     }
 
     private PartitionRegistration(int[] replicas, Uuid[] directories, int[] isr, int[] removingReplicas,
@@ -255,7 +255,7 @@ public class PartitionRegistration {
         LeaderRecoveryState newLeaderRecoveryState = leaderRecoveryState.changeTo(record.leaderRecoveryState());
 
         int[] newElr = (record.eligibleLeaderReplicas() == null) ? elr : Replicas.toArray(record.eligibleLeaderReplicas());
-        int[] newLastKnownElr = (record.lastKnownELR() == null) ? lastKnownElr : Replicas.toArray(record.lastKnownELR());
+        int[] newLastKnownElr = (record.lastKnownElr() == null) ? lastKnownElr : Replicas.toArray(record.lastKnownElr());
         return new PartitionRegistration(newReplicas,
             defaultToMigrating(newDirectories, replicas.length),
             newIsr,
@@ -381,7 +381,7 @@ public class PartitionRegistration {
             // The following are tagged fields, we should only set them when there are some contents, in order to save
             // spaces.
             if (elr.length > 0) record.setEligibleLeaderReplicas(Replicas.toList(elr));
-            if (lastKnownElr.length > 0) record.setLastKnownELR(Replicas.toList(lastKnownElr));
+            if (lastKnownElr.length > 0) record.setLastKnownElr(Replicas.toList(lastKnownElr));
         }
         if (options.metadataVersion().isDirectoryAssignmentSupported()) {
             record.setDirectories(Uuid.toList(directories));

@@ -78,9 +78,9 @@ object ConfigCommand extends Logging {
 
   val BrokerDefaultEntityName = ""
   val BrokerLoggerConfigType = "broker-loggers"
-  val BrokerSupportedConfigTypes = ConfigType.ALL.asScala :+ BrokerLoggerConfigType :+ ConfigType.CLIENT_METRICS
-  val ZkSupportedConfigTypes = Seq(ConfigType.USER, ConfigType.BROKER)
-  val DefaultScramIterations = 4096
+  private val BrokerSupportedConfigTypes = ConfigType.ALL.asScala :+ BrokerLoggerConfigType :+ ConfigType.CLIENT_METRICS
+  private val ZkSupportedConfigTypes = Seq(ConfigType.USER, ConfigType.BROKER)
+  private val DefaultScramIterations = 4096
 
   def main(args: Array[String]): Unit = {
     try {
@@ -316,7 +316,7 @@ object ConfigCommand extends Logging {
     props.keySet.forEach { propsKey =>
       if (!propsKey.toString.matches("[a-zA-Z0-9._-]*")) {
         throw new IllegalArgumentException(
-          s"Invalid character found for config key: ${propsKey}"
+          s"Invalid character found for config key: $propsKey"
         )
       }
     }
@@ -684,7 +684,7 @@ object ConfigCommand extends Logging {
   }
 
   case class Entity(entityType: String, sanitizedName: Option[String]) {
-    val entityPath = sanitizedName match {
+    val entityPath: String = sanitizedName match {
       case Some(n) => entityType + "/" + n
       case None => entityType
     }
@@ -706,7 +706,7 @@ object ConfigCommand extends Logging {
   }
 
   case class ConfigEntity(root: Entity, child: Option[Entity]) {
-    val fullSanitizedName = root.sanitizedName.getOrElse("") + child.map(s => "/" + s.entityPath).getOrElse("")
+    val fullSanitizedName: String = root.sanitizedName.getOrElse("") + child.map(s => "/" + s.entityPath).getOrElse("")
 
     def getAllEntities(zkClient: KafkaZkClient) : Seq[ConfigEntity] = {
       // Describe option examples:
@@ -789,39 +789,39 @@ object ConfigCommand extends Logging {
 
   class ConfigCommandOptions(args: Array[String]) extends CommandDefaultOptions(args) {
 
-    val zkConnectOpt = parser.accepts("zookeeper", "DEPRECATED. The connection string for the zookeeper connection in the form host:port. " +
+    val zkConnectOpt: OptionSpec[String] = parser.accepts("zookeeper", "DEPRECATED. The connection string for the zookeeper connection in the form host:port. " +
       "Multiple URLS can be given to allow fail-over. Required when configuring SCRAM credentials for users or " +
       "dynamic broker configs when the relevant broker(s) are down. Not allowed otherwise.")
       .withRequiredArg
       .describedAs("urls")
       .ofType(classOf[String])
-    val bootstrapServerOpt = parser.accepts("bootstrap-server", "The Kafka servers to connect to.")
+    val bootstrapServerOpt: OptionSpec[String] = parser.accepts("bootstrap-server", "The Kafka servers to connect to.")
       .withRequiredArg
       .describedAs("server to connect to")
       .ofType(classOf[String])
-    val bootstrapControllerOpt = parser.accepts("bootstrap-controller", "The Kafka controllers to connect to.")
+    val bootstrapControllerOpt: OptionSpec[String] = parser.accepts("bootstrap-controller", "The Kafka controllers to connect to.")
       .withRequiredArg
       .describedAs("controller to connect to")
       .ofType(classOf[String])
-    val commandConfigOpt = parser.accepts("command-config", "Property file containing configs to be passed to Admin Client. " +
+    val commandConfigOpt: OptionSpec[String] = parser.accepts("command-config", "Property file containing configs to be passed to Admin Client. " +
       "This is used only with --bootstrap-server option for describing and altering broker configs.")
       .withRequiredArg
       .describedAs("command config property file")
       .ofType(classOf[String])
-    val alterOpt = parser.accepts("alter", "Alter the configuration for the entity.")
-    val describeOpt = parser.accepts("describe", "List configs for the given entity.")
-    val allOpt = parser.accepts("all", "List all configs for the given topic, broker, or broker-logger entity (includes static configuration when the entity type is brokers)")
+    val alterOpt: OptionSpecBuilder = parser.accepts("alter", "Alter the configuration for the entity.")
+    val describeOpt: OptionSpecBuilder = parser.accepts("describe", "List configs for the given entity.")
+    val allOpt: OptionSpecBuilder = parser.accepts("all", "List all configs for the given topic, broker, or broker-logger entity (includes static configuration when the entity type is brokers)")
 
-    val entityType = parser.accepts("entity-type", "Type of entity (topics/clients/users/brokers/broker-loggers/ips/client-metrics)")
+    val entityType: OptionSpec[String] = parser.accepts("entity-type", "Type of entity (topics/clients/users/brokers/broker-loggers/ips/client-metrics)")
       .withRequiredArg
       .ofType(classOf[String])
-    val entityName = parser.accepts("entity-name", "Name of entity (topic name/client id/user principal name/broker id/ip/client metrics)")
+    val entityName: OptionSpec[String] = parser.accepts("entity-name", "Name of entity (topic name/client id/user principal name/broker id/ip/client metrics)")
       .withRequiredArg
       .ofType(classOf[String])
-    val entityDefault = parser.accepts("entity-default", "Default entity name for clients/users/brokers/ips (applies to corresponding entity type in command line)")
+    private val entityDefault: OptionSpecBuilder = parser.accepts("entity-default", "Default entity name for clients/users/brokers/ips (applies to corresponding entity type in command line)")
 
-    val nl = System.getProperty("line.separator")
-    val addConfig = parser.accepts("add-config", "Key Value pairs of configs to add. Square brackets can be used to group values which contain commas: 'k1=v1,k2=[v1,v2,v2],k3=v3'. The following is a list of valid configurations: " +
+    val nl: String = System.getProperty("line.separator")
+    val addConfig: OptionSpec[String] = parser.accepts("add-config", "Key Value pairs of configs to add. Square brackets can be used to group values which contain commas: 'k1=v1,k2=[v1,v2,v2],k3=v3'. The following is a list of valid configurations: " +
       "For entity-type '" + ConfigType.TOPIC + "': " + LogConfig.configNames.asScala.map("\t" + _).mkString(nl, nl, nl) +
       "For entity-type '" + ConfigType.BROKER + "': " + DynamicConfig.Broker.names.asScala.toSeq.sorted.map("\t" + _).mkString(nl, nl, nl) +
       "For entity-type '" + ConfigType.USER + "': " + DynamicConfig.User.names.asScala.toSeq.sorted.map("\t" + _).mkString(nl, nl, nl) +
@@ -831,37 +831,37 @@ object ConfigCommand extends Logging {
       s"Entity types '${ConfigType.USER}' and '${ConfigType.CLIENT}' may be specified together to update config for clients of a specific user.")
       .withRequiredArg
       .ofType(classOf[String])
-    val addConfigFile = parser.accepts("add-config-file", "Path to a properties file with configs to add. See add-config for a list of valid configurations.")
+    val addConfigFile: OptionSpec[String] = parser.accepts("add-config-file", "Path to a properties file with configs to add. See add-config for a list of valid configurations.")
       .withRequiredArg
       .ofType(classOf[String])
-    val deleteConfig = parser.accepts("delete-config", "config keys to remove 'k1,k2'")
+    val deleteConfig: OptionSpec[String] = parser.accepts("delete-config", "config keys to remove 'k1,k2'")
       .withRequiredArg
       .ofType(classOf[String])
       .withValuesSeparatedBy(',')
-    val forceOpt = parser.accepts("force", "Suppress console prompts")
-    val topic = parser.accepts("topic", "The topic's name.")
+    val forceOpt: OptionSpecBuilder = parser.accepts("force", "Suppress console prompts")
+    val topic: OptionSpec[String] = parser.accepts("topic", "The topic's name.")
       .withRequiredArg
       .ofType(classOf[String])
-    val client = parser.accepts("client", "The client's ID.")
+    val client: OptionSpec[String] = parser.accepts("client", "The client's ID.")
       .withRequiredArg
       .ofType(classOf[String])
-    val clientDefaults = parser.accepts("client-defaults", "The config defaults for all clients.")
-    val user = parser.accepts("user", "The user's principal name.")
+    private val clientDefaults = parser.accepts("client-defaults", "The config defaults for all clients.")
+    val user: OptionSpec[String] = parser.accepts("user", "The user's principal name.")
       .withRequiredArg
       .ofType(classOf[String])
-    val userDefaults = parser.accepts("user-defaults", "The config defaults for all users.")
-    val broker = parser.accepts("broker", "The broker's ID.")
+    private val userDefaults = parser.accepts("user-defaults", "The config defaults for all users.")
+    val broker: OptionSpec[String] = parser.accepts("broker", "The broker's ID.")
       .withRequiredArg
       .ofType(classOf[String])
-    val brokerDefaults = parser.accepts("broker-defaults", "The config defaults for all brokers.")
-    val brokerLogger = parser.accepts("broker-logger", "The broker's ID for its logger config.")
+    private val brokerDefaults = parser.accepts("broker-defaults", "The config defaults for all brokers.")
+    private val brokerLogger = parser.accepts("broker-logger", "The broker's ID for its logger config.")
       .withRequiredArg
       .ofType(classOf[String])
-    val ipDefaults = parser.accepts("ip-defaults", "The config defaults for all IPs.")
-    val ip = parser.accepts("ip", "The IP address.")
+    private val ipDefaults = parser.accepts("ip-defaults", "The config defaults for all IPs.")
+    val ip: OptionSpec[String] = parser.accepts("ip", "The IP address.")
       .withRequiredArg
       .ofType(classOf[String])
-    val zkTlsConfigFile = parser.accepts("zk-tls-config-file",
+    val zkTlsConfigFile: OptionSpec[String] = parser.accepts("zk-tls-config-file",
       "Identifies the file where ZooKeeper client TLS connectivity properties are defined.  Any properties other than " +
         KafkaConfig.ZkSslConfigToSystemPropertyMap.keys.toList.sorted.mkString(", ") + " are ignored.")
       .withRequiredArg().describedAs("ZooKeeper TLS configuration").ofType(classOf[String])

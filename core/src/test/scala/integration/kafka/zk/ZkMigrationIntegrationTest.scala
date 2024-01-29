@@ -51,7 +51,7 @@ import org.apache.kafka.server.config.ConfigType
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertNotEquals, assertNotNull, assertTrue, fail}
 import org.junit.jupiter.api.{Assumptions, Timeout}
 import org.junit.jupiter.api.extension.ExtendWith
-import org.slf4j.LoggerFactory
+import org.slf4j.{Logger, LoggerFactory}
 
 import java.util
 import java.util.concurrent.{CompletableFuture, ExecutionException, TimeUnit}
@@ -93,7 +93,7 @@ object ZkMigrationIntegrationTest {
 @Timeout(300)
 class ZkMigrationIntegrationTest {
 
-  val log = LoggerFactory.getLogger(classOf[ZkMigrationIntegrationTest])
+  val log: Logger = LoggerFactory.getLogger(classOf[ZkMigrationIntegrationTest])
 
   class MetadataDeltaVerifier {
     val metadataDelta = new MetadataDelta(MetadataImage.EMPTY)
@@ -186,7 +186,7 @@ class ZkMigrationIntegrationTest {
       // Enable migration configs and restart brokers
       log.info("Restart brokers in migration mode")
       zkCluster.config().serverProperties().put(KafkaConfig.MigrationEnabledProp, "true")
-      zkCluster.config().serverProperties().put(RaftConfig.QUORUM_VOTERS_CONFIG, kraftCluster.quorumVotersConfig());
+      zkCluster.config().serverProperties().put(RaftConfig.QUORUM_VOTERS_CONFIG, kraftCluster.quorumVotersConfig())
       zkCluster.config().serverProperties().put(KafkaConfig.ControllerListenerNamesProp, "CONTROLLER")
       zkCluster.config().serverProperties().put(KafkaConfig.ListenerSecurityProtocolMapProp, "CONTROLLER:PLAINTEXT,EXTERNAL:PLAINTEXT,PLAINTEXT:PLAINTEXT")
       zkCluster.rollingBrokerRestart() // This would throw if authorizers weren't allowed
@@ -392,8 +392,8 @@ class ZkMigrationIntegrationTest {
         assertEquals(10, topicDescriptions("test-topic-3").partitions().size())
         topicDescriptions.foreach { case (topic, description) =>
           description.partitions().forEach(partition => {
-            assertEquals(3, partition.replicas().size(), s"Unexpected number of replicas for ${topic}-${partition.partition()}")
-            assertEquals(3, partition.isr().size(), s"Unexpected ISR for ${topic}-${partition.partition()}")
+            assertEquals(3, partition.replicas().size(), s"Unexpected number of replicas for $topic-${partition.partition()}")
+            assertEquals(3, partition.isr().size(), s"Unexpected ISR for $topic-${partition.partition()}")
           })
         }
 
@@ -473,9 +473,10 @@ class ZkMigrationIntegrationTest {
   @ClusterTemplate("zkClustersForAllMigrationVersions")
   def testDualWrite(zkCluster: ClusterInstance): Unit = {
     // Create a topic in ZK mode
+    val topicName = "test"
     var admin = zkCluster.createAdminClient()
     val newTopics = new util.ArrayList[NewTopic]()
-    newTopics.add(new NewTopic("test", 2, 3.toShort)
+    newTopics.add(new NewTopic(topicName, 2, 3.toShort)
       .configs(Map(TopicConfig.SEGMENT_BYTES_CONFIG -> "102400", TopicConfig.SEGMENT_MS_CONFIG -> "300000").asJava))
     val createTopicResult = admin.createTopics(newTopics)
     createTopicResult.all().get(60, TimeUnit.SECONDS)
@@ -483,7 +484,7 @@ class ZkMigrationIntegrationTest {
 
     // Verify the configs exist in ZK
     val zkClient = zkCluster.asInstanceOf[ZkClusterInstance].getUnderlying().zkClient
-    val propsBefore = zkClient.getEntityConfigs(ConfigType.TOPIC, "test")
+    val propsBefore = zkClient.getEntityConfigs(ConfigType.TOPIC, topicName)
     assertEquals("102400", propsBefore.getProperty(TopicConfig.SEGMENT_BYTES_CONFIG))
     assertEquals("300000", propsBefore.getProperty(TopicConfig.SEGMENT_MS_CONFIG))
 
@@ -610,8 +611,8 @@ class ZkMigrationIntegrationTest {
     new ClusterConfigProperty(key = "listener.security.protocol.map", value = "EXTERNAL:PLAINTEXT,PLAINTEXT:PLAINTEXT"),
   ))
   def testNewAndChangedTopicsInDualWrite(zkCluster: ClusterInstance): Unit = {
-    // Create a topic in ZK mode
-    val topicName = "test"
+    val topic1 = "test1"
+    val topic2 = "test2"
     var admin = zkCluster.createAdminClient()
     val zkClient = zkCluster.asInstanceOf[ZkClusterInstance].getUnderlying().zkClient
 
@@ -649,29 +650,30 @@ class ZkMigrationIntegrationTest {
         30000)
 
       // Alter the metadata
-      log.info("Create new topic with AdminClient")
       admin = zkCluster.createAdminClient()
-      val newTopics = new util.ArrayList[NewTopic]()
-      newTopics.add(new NewTopic(topicName, 2, 3.toShort))
-      val createTopicResult = admin.createTopics(newTopics)
-      createTopicResult.all().get(60, TimeUnit.SECONDS)
+      log.info(s"Create new topic $topic1 with AdminClient with some configs")
+      val topicConfigs = util.Collections.singletonMap("cleanup.policy", "compact")
+      createTopic(topic1, 2, 3.toShort, topicConfigs, admin)
+      verifyTopic(topic1, 2, 3.toShort, topicConfigs, admin, zkClient)
 
-      val existingPartitions = Seq(new TopicPartition(topicName, 0), new TopicPartition(topicName, 1))
-      // Verify the changes made to KRaft are seen in ZK
-      verifyTopicPartitionMetadata(topicName, existingPartitions, zkClient)
+      log.info(s"Create new topic $topic2 with AdminClient without configs")
+      val emptyTopicConfigs: util.Map[String, String] = util.Collections.emptyMap[String, String]
+      createTopic(topic2, 2, 3.toShort, emptyTopicConfigs, admin)
+      verifyTopic(topic2, 2, 3.toShort, emptyTopicConfigs, admin, zkClient)
 
       val newPartitionCount = 3
-      log.info("Create new partitions with AdminClient")
-      admin.createPartitions(Map(topicName -> NewPartitions.increaseTo(newPartitionCount)).asJava).all().get(60, TimeUnit.SECONDS)
-      val (topicDescOpt, _) = TestUtils.computeUntilTrue(topicDesc(topicName, admin))(td => {
+      log.info(s"Create new partitions with AdminClient to $topic1")
+      admin.createPartitions(Map(topic1 -> NewPartitions.increaseTo(newPartitionCount)).asJava).all().get(60, TimeUnit.SECONDS)
+      val (topicDescOpt, _) = TestUtils.computeUntilTrue(topicDesc(topic1, admin))(td => {
         td.isDefined && td.get.partitions().asScala.size == newPartitionCount
       })
       assertTrue(topicDescOpt.isDefined)
       val partitions = topicDescOpt.get.partitions().asScala
       assertEquals(newPartitionCount, partitions.size)
 
-      // Verify the changes seen in Zk.
-      verifyTopicPartitionMetadata(topicName, existingPartitions ++ Seq(new TopicPartition(topicName, 2)), zkClient)
+      // Verify the changes
+      verifyZKTopicPartitionMetadata(topic1, newPartitionCount, 3.toShort, zkClient)
+      verifyKRaftTopicPartitionMetadata(topic1, newPartitionCount, 3.toShort, admin)
     } finally {
       shutdownInSequence(zkCluster, kraftCluster)
     }
@@ -734,7 +736,7 @@ class ZkMigrationIntegrationTest {
       val topicPartition = new TopicPartition(topicName, 0)
 
       // Verify the changes made to KRaft are seen in ZK
-      verifyTopicPartitionMetadata(topicName, Seq(topicPartition), zkClient)
+      verifyZKTopicPartitionMetadata(topicName, 1, 3.toShort, zkClient)
 
       // Reassign replicas to brokers 1, 2, 3 and wait for reassignment to complete
       admin.alterPartitionReassignments(Collections.singletonMap(topicPartition,
@@ -757,16 +759,64 @@ class ZkMigrationIntegrationTest {
     }
   }
 
-  def verifyTopicPartitionMetadata(topicName: String, partitions: Seq[TopicPartition], zkClient: KafkaZkClient): Unit = {
+  def createTopic(topicName: String, numPartitions: Int, replicationFactor: Short, configs: util.Map[String, String], admin: Admin): Unit = {
+    val newTopic = new NewTopic(topicName, numPartitions, replicationFactor).configs(configs)
+    val createTopicResult = admin.createTopics(util.Collections.singletonList(newTopic))
+    createTopicResult.all.get(60, TimeUnit.SECONDS)
+
+    TestUtils.waitUntilTrue(() => {
+      admin.listTopics.names.get.contains(topicName)
+    }, s"Unable to find topic $topicName")
+  }
+
+  def verifyTopic(topicName: String, numPartitions: Int, replicationFactor: Short, configs: util.Map[String, String], admin: Admin, zkClient: KafkaZkClient): Unit = {
+    // Verify the changes are in ZK
+    verifyZKTopicPartitionMetadata(topicName, numPartitions, replicationFactor, zkClient)
+    verifyZKTopicConfigs(topicName, configs, zkClient)
+    // Verify the changes are in KRaft
+    verifyKRaftTopicPartitionMetadata(topicName, numPartitions, replicationFactor, admin)
+    verifyKRaftTopicConfigs(topicName, configs, admin)
+  }
+
+  def verifyKRaftTopicPartitionMetadata(topicName: String, numPartitions: Int, replicationFactor: Short, admin: Admin): Unit = {
+    val description = topicDesc(topicName, admin).get
+    assertEquals(numPartitions, description.partitions.size)
+    description.partitions.forEach { p =>
+      assertEquals(replicationFactor, p.isr.size)
+    }
+  }
+
+  def verifyKRaftTopicConfigs(topicName: String, configs: util.Map[String, String], admin: Admin): Unit = {
+    val configResource = new ConfigResource(ConfigResource.Type.TOPIC, topicName)
+    val entries = admin.describeConfigs(util.Collections.singletonList(configResource)).values.get(configResource).get.entries
+    val dynamicConfigs = entries.asScala.filter(configEntry => configEntry.source == ConfigEntry.ConfigSource.DYNAMIC_TOPIC_CONFIG).toList
+    assertEquals(configs.size, dynamicConfigs.size)
+    dynamicConfigs.foreach(c => assertEquals(configs.get(c.name), c.value))
+  }
+
+  def verifyZKTopicConfigs(topicName: String, configs: util.Map[String, String], zkClient: KafkaZkClient): Unit = {
+    TestUtils.waitUntilTrue(() => {
+      zkClient.pathExists(ConfigEntityZNode.path(ConfigType.TOPIC, topicName))
+    }, s"Unable to find ${ConfigEntityZNode.path(ConfigType.TOPIC, topicName)} in ZooKeeper")
+    val props = zkClient.getEntityConfigs(ConfigType.TOPIC, topicName)
+    assertEquals(configs.size, props.size)
+    configs.forEach { case (k, v) =>
+      assertEquals(v, props.get(k))
+    }
+  }
+
+  def verifyZKTopicPartitionMetadata(topicName: String, numPartitions: Int, replicationFactor: Short, zkClient: KafkaZkClient): Unit = {
+    val partitions = (0 until numPartitions).map(pId => new TopicPartition(topicName, pId))
     val (topicIdReplicaAssignment, success) = TestUtils.computeUntilTrue(
       zkClient.getReplicaAssignmentAndTopicIdForTopics(Set(topicName)).headOption) {
       x => x.exists(_.assignment.size == partitions.size)
     }
     assertTrue(success, "Unable to find topic metadata in Zk")
-    TestUtils.waitUntilTrue(() =>{
-      val lisrMap = zkClient.getTopicPartitionStates(partitions.toSeq)
+    TestUtils.waitUntilTrue(() => {
+      val lisrMap = zkClient.getTopicPartitionStates(partitions)
       lisrMap.size == partitions.size &&
         lisrMap.forall { case (tp, lisr) =>
+          lisr.leaderAndIsr.isr.size == replicationFactor &&
           lisr.leaderAndIsr.leader >= 0 &&
             topicIdReplicaAssignment.exists(_.assignment(tp).replicas == lisr.leaderAndIsr.isr)
         }
@@ -775,7 +825,7 @@ class ZkMigrationIntegrationTest {
 
   def topicDesc(topic: String, admin: Admin): Option[TopicDescription] = {
     try {
-      admin.describeTopics(util.Collections.singleton(topic)).allTopicNames().get().asScala.get(topic)
+      admin.describeTopics(util.Collections.singleton(topic)).allTopicNames.get.asScala.get(topic)
     } catch {
       case _: Throwable => None
     }

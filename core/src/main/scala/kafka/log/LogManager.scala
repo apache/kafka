@@ -292,7 +292,7 @@ class LogManager(logDirs: Seq[File],
           result += (logDir.getAbsolutePath -> directoryId)
         })
       } catch {
-        case e: NoSuchFileException =>
+        case _: NoSuchFileException =>
           info(s"No meta.properties file found in $logDir.")
          case e: IOException =>
           logDirFailureChannel.maybeAddOfflineLogDir(logDir.getAbsolutePath, s"Disk error while loading ID $logDir", e)
@@ -369,7 +369,7 @@ class LogManager(logDirs: Seq[File],
   }
 
   // factory class for naming the log recovery threads used in metrics
-  class LogRecoveryThreadFactory(val dirPath: String) extends ThreadFactory {
+   private class LogRecoveryThreadFactory(val dirPath: String) extends ThreadFactory {
     val threadNum = new AtomicInteger(0)
 
     override def newThread(runnable: Runnable): Thread = {
@@ -1325,7 +1325,7 @@ class LogManager(logDirs: Seq[File],
    * Delete any eligible logs. Return the number of segments deleted.
    * Only consider logs that are not compacted.
    */
-  def cleanupLogs(): Unit = {
+  private def cleanupLogs(): Unit = {
     debug("Beginning log cleanup...")
     var total = 0
     val startMs = time.milliseconds

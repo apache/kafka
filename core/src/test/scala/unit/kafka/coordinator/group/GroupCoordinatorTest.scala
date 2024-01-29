@@ -39,7 +39,7 @@ import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity
 import org.apache.kafka.coordinator.group.OffsetConfig
 import org.apache.kafka.server.util.timer.MockTimer
 import org.apache.kafka.server.util.{KafkaScheduler, MockTime}
-import org.apache.kafka.storage.internals.log.VerificationGuard
+import org.apache.kafka.storage.internals.log.{AppendOrigin, VerificationGuard}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.junit.jupiter.params.ParameterizedTest
@@ -3897,14 +3897,17 @@ class GroupCoordinatorTest {
 
     val capturedArgument: ArgumentCaptor[scala.collection.Map[TopicPartition, PartitionResponse] => Unit] = ArgumentCaptor.forClass(classOf[scala.collection.Map[TopicPartition, PartitionResponse] => Unit])
 
-    when(replicaManager.appendForGroup(anyLong,
+    when(replicaManager.appendRecords(anyLong,
       anyShort(),
+      internalTopicsAllowed = ArgumentMatchers.eq(true),
+      origin = ArgumentMatchers.eq(AppendOrigin.COORDINATOR),
       any[Map[TopicPartition, MemoryRecords]],
       capturedArgument.capture(),
       any[Option[ReentrantLock]],
+      any(),
       any(classOf[RequestLocal]),
-      any[Map[TopicPartition, VerificationGuard]],
-      any[ActionQueue]
+      any[ActionQueue],
+      any[Map[TopicPartition, VerificationGuard]]
     )).thenAnswer(_ => {
       capturedArgument.getValue.apply(
         Map(new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, groupPartitionId) ->
@@ -3930,14 +3933,17 @@ class GroupCoordinatorTest {
 
     val capturedArgument: ArgumentCaptor[scala.collection.Map[TopicPartition, PartitionResponse] => Unit] = ArgumentCaptor.forClass(classOf[scala.collection.Map[TopicPartition, PartitionResponse] => Unit])
 
-    when(replicaManager.appendForGroup(anyLong,
+    when(replicaManager.appendRecords(anyLong,
       anyShort(),
+      internalTopicsAllowed = ArgumentMatchers.eq(true),
+      origin = ArgumentMatchers.eq(AppendOrigin.COORDINATOR),
       any[Map[TopicPartition, MemoryRecords]],
       capturedArgument.capture(),
       any[Option[ReentrantLock]],
+      any(),
       any(classOf[RequestLocal]),
-      any[Map[TopicPartition, VerificationGuard]],
-      any[ActionQueue]
+      any[ActionQueue],
+      any[Map[TopicPartition, VerificationGuard]]
     )).thenAnswer(_ => {
         capturedArgument.getValue.apply(
           Map(new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, groupPartitionId) ->
@@ -4074,14 +4080,17 @@ class GroupCoordinatorTest {
 
     val capturedArgument: ArgumentCaptor[scala.collection.Map[TopicPartition, PartitionResponse] => Unit] = ArgumentCaptor.forClass(classOf[scala.collection.Map[TopicPartition, PartitionResponse] => Unit])
 
-    when(replicaManager.appendForGroup(anyLong,
+    when(replicaManager.appendRecords(anyLong,
       anyShort(),
+      internalTopicsAllowed = ArgumentMatchers.eq(true),
+      origin = ArgumentMatchers.eq(AppendOrigin.COORDINATOR),
       any[Map[TopicPartition, MemoryRecords]],
       capturedArgument.capture(),
       any[Option[ReentrantLock]],
+      any(),
       any(classOf[RequestLocal]),
-      any[Map[TopicPartition, VerificationGuard]],
-      any[ActionQueue]
+      any[ActionQueue],
+      any[Map[TopicPartition, VerificationGuard]]
     )).thenAnswer(_ => {
       capturedArgument.getValue.apply(
         Map(new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, groupPartitionId) ->
@@ -4117,14 +4126,17 @@ class GroupCoordinatorTest {
       ArgumentMatchers.eq(producerId), ArgumentMatchers.eq(producerEpoch), any(), any(), postVerificationCallback.capture())).thenAnswer(
       _ => postVerificationCallback.getValue()(verificationError, RequestLocal.NoCaching, VerificationGuard.SENTINEL)
     )
-    when(replicaManager.appendForGroup(anyLong,
+    when(replicaManager.appendRecords(anyLong,
       anyShort(),
+      internalTopicsAllowed = ArgumentMatchers.eq(true),
+      origin = ArgumentMatchers.eq(AppendOrigin.COORDINATOR),
       any[Map[TopicPartition, MemoryRecords]],
       capturedArgument.capture(),
       any[Option[ReentrantLock]],
+      any(),
       any(classOf[RequestLocal]),
-      any[Map[TopicPartition, VerificationGuard]],
-      any[ActionQueue]
+      any[ActionQueue],
+      any[Map[TopicPartition, VerificationGuard]]
     )).thenAnswer(_ => {
       capturedArgument.getValue.apply(
         Map(offsetTopicPartition ->
