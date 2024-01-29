@@ -1447,39 +1447,6 @@ public class WorkerSinkTaskTest {
         PowerMock.verifyAll();
     }
 
-    @Test
-    public void testOriginalTopicWithTopicMutatingTransformations() {
-        createTask(initialState);
-
-        expectInitializeTask();
-        expectTaskGetTopic(true);
-
-        expectPollInitialAssignment();
-
-        expectConsumerPoll(1);
-        expectConversionAndTransformation(1, "newtopic_");
-        Capture<Collection<SinkRecord>> recordCapture = EasyMock.newCapture();
-        sinkTask.put(EasyMock.capture(recordCapture));
-        EasyMock.expectLastCall();
-
-        PowerMock.replayAll();
-
-        workerTask.initialize(TASK_CONFIG);
-        workerTask.initializeAndStart();
-
-        workerTask.iteration(); // initial assignment
-
-        workerTask.iteration(); // first record delivered
-
-        assertTrue(recordCapture.hasCaptured());
-        assertEquals(1, recordCapture.getValue().size());
-        SinkRecord record = recordCapture.getValue().iterator().next();
-        assertEquals(TOPIC, record.originalTopic());
-        assertEquals("newtopic_" + TOPIC, record.topic());
-
-        PowerMock.verifyAll();
-    }
-
     private void expectInitializeTask() {
         consumer.subscribe(EasyMock.eq(asList(TOPIC)), EasyMock.capture(rebalanceListener));
         PowerMock.expectLastCall();
