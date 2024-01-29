@@ -53,6 +53,7 @@ import org.apache.kafka.connect.storage.ClusterConfigState;
 import org.apache.kafka.connect.storage.Converter;
 import org.apache.kafka.connect.storage.HeaderConverter;
 import org.apache.kafka.connect.storage.StatusBackingStore;
+import org.apache.kafka.connect.storage.StringConverter;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.junit.After;
 import org.junit.Before;
@@ -75,6 +76,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -659,6 +661,60 @@ public class WorkerSinkTaskMockitoTest {
         assertEquals(40, metrics.currentMetricValueAsDouble(group1.metricGroup(), "partition-count"), 0.001d);
         assertEquals(50, metrics.currentMetricValueAsDouble(group1.metricGroup(), "offset-commit-seq-no"), 0.001d);
         assertEquals(30, metrics.currentMetricValueAsDouble(group1.metricGroup(), "put-batch-max-time-ms"), 0.001d);
+    }
+
+    @Test
+    public void testHeadersWithCustomConverter() {
+        StringConverter stringConverter = new StringConverter();
+        SampleConverterWithHeaders testConverter = new SampleConverterWithHeaders();
+
+        createTask(initialState, stringConverter, testConverter, stringConverter);
+
+        workerTask.initialize(TASK_CONFIG);
+        workerTask.initializeAndStart();
+        verifyInitializeTask();
+
+        String keyA = "a";
+        String valueA = "Árvíztűrő tükörfúrógép";
+        Headers headersA = new RecordHeaders();
+        String encodingA = "latin2";
+        headersA.add("encoding", encodingA.getBytes());
+
+        String keyB = "b";
+        String valueB = "Тестовое сообщение";
+        Headers headersB = new RecordHeaders();
+        String encodingB = "koi8_r";
+        headersB.add("encoding", encodingB.getBytes());
+
+        expectPollInitialAssignment()
+                .thenAnswer((Answer<ConsumerRecords<byte[], byte[]>>) invocation -> {
+                    List<ConsumerRecord<byte[], byte[]>> records = Arrays.asList(
+                            new ConsumerRecord<>(TOPIC, PARTITION, FIRST_OFFSET + recordsReturnedTp1 + 1, RecordBatch.NO_TIMESTAMP, TimestampType.NO_TIMESTAMP_TYPE,
+                                    0, 0, keyA.getBytes(), valueA.getBytes(encodingA), headersA, Optional.empty()),
+                            new ConsumerRecord<>(TOPIC, PARTITION, FIRST_OFFSET + recordsReturnedTp1 + 2, RecordBatch.NO_TIMESTAMP, TimestampType.NO_TIMESTAMP_TYPE,
+                                    0, 0, keyB.getBytes(), valueB.getBytes(encodingB), headersB, Optional.empty())
+                    );
+                    return new ConsumerRecords<>(Collections.singletonMap(new TopicPartition(TOPIC, PARTITION), records));
+                });
+
+        expectTransformation(null);
+
+        workerTask.iteration(); // iter 1 -- initial assignment
+        workerTask.iteration(); // iter 2 -- deliver 1 record
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<Collection<SinkRecord>> records = ArgumentCaptor.forClass(Collection.class);
+        verify(sinkTask, times(2)).put(records.capture());
+
+        Iterator<SinkRecord> iterator = records.getValue().iterator();
+
+        SinkRecord recordA = iterator.next();
+        assertEquals(keyA, recordA.key());
+        assertEquals(valueA, recordA.value());
+
+        SinkRecord recordB = iterator.next();
+        assertEquals(keyB, recordB.key());
+        assertEquals(valueB, recordB.value());
     }
 
     @Test

@@ -49,7 +49,6 @@ import org.apache.kafka.connect.storage.ClusterConfigState;
 import org.apache.kafka.connect.storage.Converter;
 import org.apache.kafka.connect.storage.HeaderConverter;
 import org.apache.kafka.connect.storage.StatusBackingStore;
-import org.apache.kafka.connect.storage.StringConverter;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.easymock.Capture;
 import org.easymock.CaptureType;
@@ -73,7 +72,6 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -1388,61 +1386,6 @@ public class WorkerSinkTaskTest {
         workerTask.initializeAndStart();
         workerTask.iteration(); // iter 1 -- initial assignment
         workerTask.iteration(); // iter 2 -- deliver 1 record
-
-        PowerMock.verifyAll();
-    }
-
-    @Test
-    public void testHeadersWithCustomConverter() throws Exception {
-        StringConverter stringConverter = new StringConverter();
-        SampleConverterWithHeaders testConverter = new SampleConverterWithHeaders();
-
-        createTask(initialState, stringConverter, testConverter, stringConverter);
-
-        expectInitializeTask();
-        expectTaskGetTopic(true);
-        expectPollInitialAssignment();
-
-        String keyA = "a";
-        String valueA = "Árvíztűrő tükörfúrógép";
-        Headers headersA = new RecordHeaders();
-        String encodingA = "latin2";
-        headersA.add("encoding", encodingA.getBytes());
-
-        String keyB = "b";
-        String valueB = "Тестовое сообщение";
-        Headers headersB = new RecordHeaders();
-        String encodingB = "koi8_r";
-        headersB.add("encoding", encodingB.getBytes());
-
-        expectConsumerPoll(Arrays.asList(
-            new ConsumerRecord<>(TOPIC, PARTITION, FIRST_OFFSET + recordsReturnedTp1 + 1, RecordBatch.NO_TIMESTAMP, TimestampType.NO_TIMESTAMP_TYPE,
-                0, 0, keyA.getBytes(), valueA.getBytes(encodingA), headersA, Optional.empty()),
-            new ConsumerRecord<>(TOPIC, PARTITION, FIRST_OFFSET + recordsReturnedTp1 + 2, RecordBatch.NO_TIMESTAMP, TimestampType.NO_TIMESTAMP_TYPE,
-                0, 0, keyB.getBytes(), valueB.getBytes(encodingB), headersB, Optional.empty())
-        ));
-
-        expectTransformation(2, null);
-
-        Capture<Collection<SinkRecord>> records = EasyMock.newCapture(CaptureType.ALL);
-        sinkTask.put(EasyMock.capture(records));
-
-        PowerMock.replayAll();
-
-        workerTask.initialize(TASK_CONFIG);
-        workerTask.initializeAndStart();
-        workerTask.iteration(); // iter 1 -- initial assignment
-        workerTask.iteration(); // iter 2 -- deliver 1 record
-
-        Iterator<SinkRecord> iterator = records.getValue().iterator();
-
-        SinkRecord recordA = iterator.next();
-        assertEquals(keyA, recordA.key());
-        assertEquals(valueA, recordA.value());
-
-        SinkRecord recordB = iterator.next();
-        assertEquals(keyB, recordB.key());
-        assertEquals(valueB, recordB.value());
 
         PowerMock.verifyAll();
     }
