@@ -102,7 +102,7 @@ public class HeartbeatRequestManagerTest {
     private final int memberEpoch = 1;
     private BackgroundEventHandler backgroundEventHandler;
     private BlockingQueue<BackgroundEvent> backgroundEventQueue;
-    private Metrics metrics = new Metrics();
+    private Metrics metrics;
 
     @BeforeEach
     public void setUp() {
@@ -121,6 +121,7 @@ public class HeartbeatRequestManagerTest {
         subscriptions = testBuilder.subscriptions;
         membershipManager = testBuilder.membershipManager.orElseThrow(IllegalStateException::new);
         metadata = testBuilder.metadata;
+        metrics = new Metrics(time);
 
         when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(new Node(1, "localhost", 9999)));
     }
@@ -570,18 +571,19 @@ public class HeartbeatRequestManagerTest {
 
     @Test
     public void testHeartbeatMetrics() {
+        // setup
         coordinatorRequestManager = mock(CoordinatorRequestManager.class);
         membershipManager = mock(MembershipManager.class);
         heartbeatState = mock(HeartbeatRequestManager.HeartbeatState.class);
         time = new MockTime();
         metrics = new Metrics(time);
-        heartbeatRequestState = spy(new HeartbeatRequestManager.HeartbeatRequestState(
+        heartbeatRequestState = new HeartbeatRequestManager.HeartbeatRequestState(
             new LogContext(),
             time,
             0, // This initial interval should be 0 to ensure heartbeat on the clock
             retryBackoffMs,
             retryBackoffMaxMs,
-            0));
+            0);
         backgroundEventHandler = mock(BackgroundEventHandler.class);
         heartbeatRequestManager = createHeartbeatRequestManager(
             coordinatorRequestManager,
@@ -597,6 +599,7 @@ public class HeartbeatRequestManagerTest {
         assertNotNull(getMetric("heartbeat-total"));
         assertNotNull(getMetric("last-heartbeat-seconds-ago"));
 
+        // test poll
         assertHeartbeat(heartbeatRequestManager, 0);
         time.sleep(DEFAULT_HEARTBEAT_INTERVAL_MS);
         assertEquals(1.0, getMetric("heartbeat-total").metricValue());
