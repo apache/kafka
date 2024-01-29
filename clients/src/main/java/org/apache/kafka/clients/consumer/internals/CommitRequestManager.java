@@ -488,6 +488,7 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
          */
         @Override
         public void onResponse(final ClientResponse response) {
+            metricsManager.recordRequestLatency(response.requestLatencyMs());
             long currentTimeMs = response.receivedTimeMs();
             OffsetCommitResponse commitResponse = (OffsetCommitResponse) response.responseBody();
             Set<String> unauthorizedTopics = new HashSet<>();
