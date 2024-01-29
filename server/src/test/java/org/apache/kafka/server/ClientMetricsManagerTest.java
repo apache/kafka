@@ -42,6 +42,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.time.Duration;
 import java.util.List;
 import java.util.Properties;
 import java.util.Set;
@@ -51,7 +52,9 @@ import java.util.concurrent.TimeUnit;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class ClientMetricsManagerTest {
@@ -66,7 +69,7 @@ public class ClientMetricsManagerTest {
     public void setUp() {
         time = new MockTime();
         clientMetricsReceiverPlugin = new ClientMetricsReceiverPlugin();
-        clientMetricsManager = new ClientMetricsManager(clientMetricsReceiverPlugin, 100, time);
+        clientMetricsManager = new ClientMetricsManager(clientMetricsReceiverPlugin, 100, time, 100);
     }
 
     @Test
@@ -918,5 +921,107 @@ public class ClientMetricsManagerTest {
         }
         // 1 request should fail with throttling error.
         assertEquals(1, throttlingErrorCount);
+    }
+
+    @Test
+    public void testCacheEviction() throws UnknownHostException, InterruptedException {
+        Properties properties = new Properties();
+        properties.put("metrics", ClientMetricsConfigs.ALL_SUBSCRIBED_METRICS_CONFIG);
+        properties.put(ClientMetricsConfigs.PUSH_INTERVAL_MS, "100");
+        clientMetricsManager.updateSubscription("sub-1", properties);
+
+        GetTelemetrySubscriptionsRequest request = new GetTelemetrySubscriptionsRequest.Builder(
+            new GetTelemetrySubscriptionsRequestData(), true).build();
+
+        GetTelemetrySubscriptionsResponse response = clientMetricsManager.processGetTelemetrySubscriptionRequest(
+            request, ClientMetricsTestUtils.requestContext());
+        assertEquals(Errors.NONE, response.error());
+
+        assertNotNull(clientMetricsManager.clientInstance(response.data().clientInstanceId()));
+        assertEquals(1, clientMetricsManager.expirationTimer().size());
+        // Cache expiry should occur after 100 * 3 = 300 ms, wait for the eviction to happen.
+        // Force clocks to advance by 300 ms.
+        clientMetricsManager.expirationTimer().advanceClock(300);
+        assertTimeoutPreemptively(Duration.ofMillis(300), () -> {
+            // Validate that cache eviction happens and client instance is removed from cache.
+            while (clientMetricsManager.expirationTimer().size() != 0 ||
+                clientMetricsManager.clientInstance(response.data().clientInstanceId()) != null) {
+                // Wait for cache eviction to happen.
+                Thread.sleep(50);
+            }
+        });
+    }
+
+    @Test
+    public void testCacheEvictionWithMultipleClients() throws UnknownHostException, InterruptedException {
+        Properties properties = new Properties();
+        properties.put("metrics", ClientMetricsConfigs.ALL_SUBSCRIBED_METRICS_CONFIG);
+        properties.put(ClientMetricsConfigs.PUSH_INTERVAL_MS, "100");
+        clientMetricsManager.updateSubscription("sub-1", properties);
+
+        GetTelemetrySubscriptionsRequest request = new GetTelemetrySubscriptionsRequest.Builder(
+            new GetTelemetrySubscriptionsRequestData(), true).build();
+
+        GetTelemetrySubscriptionsResponse response1 = clientMetricsManager.processGetTelemetrySubscriptionRequest(
+            request, ClientMetricsTestUtils.requestContext());
+        assertEquals(Errors.NONE, response1.error());
+
+        GetTelemetrySubscriptionsResponse response2 = clientMetricsManager.processGetTelemetrySubscriptionRequest(
+            request, ClientMetricsTestUtils.requestContext());
+        assertEquals(Errors.NONE, response2.error());
+
+        assertNotNull(clientMetricsManager.clientInstance(response1.data().clientInstanceId()));
+        assertNotNull(clientMetricsManager.clientInstance(response2.data().clientInstanceId()));
+        assertEquals(2, clientMetricsManager.expirationTimer().size());
+        // Cache expiry should occur after 100 * 3 = 300 ms, wait for the eviction to happen.
+        // Force clocks to advance by 300 ms.
+        clientMetricsManager.expirationTimer().advanceClock(300);
+        assertTimeoutPreemptively(Duration.ofMillis(300), () -> {
+            // Validate that cache eviction happens and client instance is removed from cache.
+            while (clientMetricsManager.expirationTimer().size() != 0 ||
+                clientMetricsManager.clientInstance(response1.data().clientInstanceId()) != null ||
+                clientMetricsManager.clientInstance(response2.data().clientInstanceId()) != null) {
+                // Wait for cache eviction to happen.
+                Thread.sleep(50);
+            }
+        });
+    }
+
+    @Test
+    public void testCacheExpirationTaskCancelledOnInstanceUpdate() throws UnknownHostException {
+        GetTelemetrySubscriptionsRequest request = new GetTelemetrySubscriptionsRequest.Builder(
+            new GetTelemetrySubscriptionsRequestData(), true).build();
+
+        GetTelemetrySubscriptionsResponse response = clientMetricsManager.processGetTelemetrySubscriptionRequest(
+            request, ClientMetricsTestUtils.requestContext());
+        assertEquals(Errors.NONE, response.error());
+        Uuid clientInstanceId = response.data().clientInstanceId();
+        int subscriptionId = response.data().subscriptionId();
+
+        // Validate timer task in instance should not be null.
+        ClientMetricsInstance instance = clientMetricsManager.clientInstance(response.data().clientInstanceId());
+        assertNotNull(instance);
+        assertNotNull(instance.expirationTimerTask());
+
+        // Update subscription
+        clientMetricsManager.updateSubscription("sub-1", ClientMetricsTestUtils.defaultProperties());
+        assertEquals(1, clientMetricsManager.subscriptions().size());
+
+        request = new GetTelemetrySubscriptionsRequest.Builder(
+            new GetTelemetrySubscriptionsRequestData().setClientInstanceId(clientInstanceId), true).build();
+
+        response = clientMetricsManager.processGetTelemetrySubscriptionRequest(
+            request, ClientMetricsTestUtils.requestContext());
+        assertEquals(Errors.NONE, response.error());
+        assertTrue(subscriptionId != response.data().subscriptionId());
+
+        // Validate timer task in old instance should be null, as new client is created in cache and
+        // old client instance is removed from cache and respective timer task is cancelled.
+        assertNull(instance.expirationTimerTask());
+        // Validate new client instance is created in cache with updated expiration timer task.
+        instance = clientMetricsManager.clientInstance(response.data().clientInstanceId());
+        assertNotNull(instance);
+        assertNotNull(instance.expirationTimerTask());
+        assertEquals(1, clientMetricsManager.expirationTimer().size());
     }
 }

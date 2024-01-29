@@ -420,7 +420,7 @@ public abstract class TopicCommand {
     }
 
     public static class TopicService implements AutoCloseable {
-        private Admin adminClient;
+        private final Admin adminClient;
 
         public TopicService(Properties commandConfig, Optional<String> bootstrapServer) {
             this.adminClient = createAdminClient(commandConfig, bootstrapServer);

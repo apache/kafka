@@ -19,7 +19,7 @@ package kafka.coordinator.group
 
 import java.util.{Optional, OptionalInt}
 import kafka.common.OffsetAndMetadata
-import kafka.server.{DelayedOperationPurgatory, HostedPartition, KafkaConfig, ReplicaManager, RequestLocal}
+import kafka.server.{ActionQueue, DelayedOperationPurgatory, HostedPartition, KafkaConfig, ReplicaManager, RequestLocal}
 import kafka.utils._
 import org.apache.kafka.common.{TopicIdPartition, TopicPartition, Uuid}
 import org.apache.kafka.common.protocol.Errors
@@ -36,9 +36,10 @@ import org.apache.kafka.clients.consumer.internals.ConsumerProtocol
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity
+import org.apache.kafka.coordinator.group.OffsetConfig
 import org.apache.kafka.server.util.timer.MockTimer
 import org.apache.kafka.server.util.{KafkaScheduler, MockTime}
-import org.apache.kafka.storage.internals.log.VerificationGuard
+import org.apache.kafka.storage.internals.log.{AppendOrigin, VerificationGuard}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.junit.jupiter.params.ParameterizedTest
@@ -3816,7 +3817,7 @@ class GroupCoordinatorTest {
     val producerEpoch: Short = 3
 
     val offsets = Map(
-      tip -> OffsetAndMetadata(offset, "s" * (OffsetConfig.DefaultMaxMetadataSize + 1), 0)
+      tip -> OffsetAndMetadata(offset, "s" * (OffsetConfig.DEFAULT_MAX_METADATA_SIZE + 1), 0)
     )
 
     val commitOffsetResult = commitTransactionalOffsets(groupId, producerId, producerEpoch, offsets)
@@ -3896,12 +3897,16 @@ class GroupCoordinatorTest {
 
     val capturedArgument: ArgumentCaptor[scala.collection.Map[TopicPartition, PartitionResponse] => Unit] = ArgumentCaptor.forClass(classOf[scala.collection.Map[TopicPartition, PartitionResponse] => Unit])
 
-    when(replicaManager.appendForGroup(anyLong,
+    when(replicaManager.appendRecords(anyLong,
       anyShort(),
+      internalTopicsAllowed = ArgumentMatchers.eq(true),
+      origin = ArgumentMatchers.eq(AppendOrigin.COORDINATOR),
       any[Map[TopicPartition, MemoryRecords]],
       capturedArgument.capture(),
       any[Option[ReentrantLock]],
+      any(),
       any(classOf[RequestLocal]),
+      any[ActionQueue],
       any[Map[TopicPartition, VerificationGuard]]
     )).thenAnswer(_ => {
       capturedArgument.getValue.apply(
@@ -3928,12 +3933,16 @@ class GroupCoordinatorTest {
 
     val capturedArgument: ArgumentCaptor[scala.collection.Map[TopicPartition, PartitionResponse] => Unit] = ArgumentCaptor.forClass(classOf[scala.collection.Map[TopicPartition, PartitionResponse] => Unit])
 
-    when(replicaManager.appendForGroup(anyLong,
+    when(replicaManager.appendRecords(anyLong,
       anyShort(),
+      internalTopicsAllowed = ArgumentMatchers.eq(true),
+      origin = ArgumentMatchers.eq(AppendOrigin.COORDINATOR),
       any[Map[TopicPartition, MemoryRecords]],
       capturedArgument.capture(),
       any[Option[ReentrantLock]],
+      any(),
       any(classOf[RequestLocal]),
+      any[ActionQueue],
       any[Map[TopicPartition, VerificationGuard]]
     )).thenAnswer(_ => {
         capturedArgument.getValue.apply(
@@ -4071,12 +4080,16 @@ class GroupCoordinatorTest {
 
     val capturedArgument: ArgumentCaptor[scala.collection.Map[TopicPartition, PartitionResponse] => Unit] = ArgumentCaptor.forClass(classOf[scala.collection.Map[TopicPartition, PartitionResponse] => Unit])
 
-    when(replicaManager.appendForGroup(anyLong,
+    when(replicaManager.appendRecords(anyLong,
       anyShort(),
+      internalTopicsAllowed = ArgumentMatchers.eq(true),
+      origin = ArgumentMatchers.eq(AppendOrigin.COORDINATOR),
       any[Map[TopicPartition, MemoryRecords]],
       capturedArgument.capture(),
       any[Option[ReentrantLock]],
+      any(),
       any(classOf[RequestLocal]),
+      any[ActionQueue],
       any[Map[TopicPartition, VerificationGuard]]
     )).thenAnswer(_ => {
       capturedArgument.getValue.apply(
@@ -4113,12 +4126,16 @@ class GroupCoordinatorTest {
       ArgumentMatchers.eq(producerId), ArgumentMatchers.eq(producerEpoch), any(), any(), postVerificationCallback.capture())).thenAnswer(
       _ => postVerificationCallback.getValue()(verificationError, RequestLocal.NoCaching, VerificationGuard.SENTINEL)
     )
-    when(replicaManager.appendForGroup(anyLong,
+    when(replicaManager.appendRecords(anyLong,
       anyShort(),
+      internalTopicsAllowed = ArgumentMatchers.eq(true),
+      origin = ArgumentMatchers.eq(AppendOrigin.COORDINATOR),
       any[Map[TopicPartition, MemoryRecords]],
       capturedArgument.capture(),
       any[Option[ReentrantLock]],
+      any(),
       any(classOf[RequestLocal]),
+      any[ActionQueue],
       any[Map[TopicPartition, VerificationGuard]]
     )).thenAnswer(_ => {
       capturedArgument.getValue.apply(

@@ -169,7 +169,8 @@ class PlaintextConsumerTest extends BaseConsumerTest {
       startingTimestamp = startingTimestamp)
   }
 
-  // TODO: Enable this test when callback invocation is implemented for max.poll.interval.ms
+  // TODO: Enable this test for both protocols when the Jira tracking its failure (KAFKA-16008) is fixed. This
+  //       is done by setting the @MethodSource value to "getTestQuorumAndGroupProtocolParametersAll"
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
   @MethodSource(Array("getTestQuorumAndGroupProtocolParametersClassicGroupProtocolOnly"))
   def testMaxPollIntervalMs(quorum: String, groupProtocol: String): Unit = {
@@ -196,7 +197,8 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     assertEquals(1, listener.callsToRevoked)
   }
 
-  // TODO: Enable this test when callback invocation is implemented for max.poll.interval.ms
+  // TODO: Enable this test for both protocols when the Jira tracking its failure (KAFKA-16009) is fixed. This
+  //       is done by setting the @MethodSource value to "getTestQuorumAndGroupProtocolParametersAll"
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
   @MethodSource(Array("getTestQuorumAndGroupProtocolParametersClassicGroupProtocolOnly"))
   def testMaxPollIntervalMsDelayInRevocation(quorum: String, groupProtocol: String): Unit = {
@@ -263,7 +265,6 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     ensureNoRebalance(consumer, listener)
   }
 
-  // TODO: enable this test for the consumer group protocol when support for committing offsets on close is implemented.
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
   @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
   def testAutoCommitOnClose(quorum: String, groupProtocol: String): Unit = {
@@ -288,7 +289,8 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     assertEquals(500, anotherConsumer.committed(Set(tp2).asJava).get(tp2).offset)
   }
 
-  // TODO: enable this test for the consumer group protocol when support for committing offsets on close is implemented.
+  // TODO: Enable this test for both protocols when the Jira tracking its failure (KAFKA-16167) is fixed. This
+  //       is done by setting the @MethodSource value to "getTestQuorumAndGroupProtocolParametersAll"
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
   @MethodSource(Array("getTestQuorumAndGroupProtocolParametersClassicGroupProtocolOnly"))
   def testAutoCommitOnCloseAfterWakeup(quorum: String, groupProtocol: String): Unit = {
@@ -533,7 +535,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
   }
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersClassicGroupProtocolOnly"))
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
   def testExpandingTopicSubscriptions(quorum: String, groupProtocol: String): Unit = {
     val otherTopic = "other"
     val initialAssignment = Set(new TopicPartition(topic, 0), new TopicPartition(topic, 1))
@@ -548,7 +550,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
   }
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersClassicGroupProtocolOnly"))
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
   def testShrinkingTopicSubscriptions(quorum: String, groupProtocol: String): Unit = {
     val otherTopic = "other"
     createTopic(otherTopic, 2, brokerCount)
@@ -1264,9 +1266,8 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     }
   }
 
-  // TODO: HeartbeatState needs to be reset upon rejoining. Otherwise GC will treat it as bad request.
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersClassicGroupProtocolOnly"))
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
   def testMultiConsumerSessionTimeoutOnStopPolling(quorum: String, groupProtocol: String): Unit = {
     runMultiConsumerSessionTimeoutTest(false)
   }
@@ -1553,9 +1554,8 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     assertEquals(7, consumer.committed(Set(tp2).asJava).get(tp2).offset)
   }
 
-  // TODO: enable this test for the consumer group protocol when auto-commit support is implemented.
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersClassicGroupProtocolOnly"))
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
   def testAutoCommitOnRebalance(quorum: String, groupProtocol: String): Unit = {
     val topic2 = "topic2"
     createTopic(topic2, 2, brokerCount)
@@ -1595,7 +1595,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
   }
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersClassicGroupProtocolOnly"))
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
   def testPerPartitionLeadMetricsCleanUpWithSubscribe(quorum: String, groupProtocol: String): Unit = {
     val numMessages = 1000
     val topic2 = "topic2"
@@ -1635,7 +1635,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
   }
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersClassicGroupProtocolOnly"))
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
   def testPerPartitionLagMetricsCleanUpWithSubscribe(quorum: String, groupProtocol: String): Unit = {
     val numMessages = 1000
     val topic2 = "topic2"
@@ -2094,7 +2094,8 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     assertThrows(classOf[KafkaException], () => createConsumer(configOverrides = consumer1Config))
   }
 
-  // TODO: enable this test for the consumer group protocol when static membership is implemented.
+  // TODO: Enable this test for both protocols when the Jira tracking its failure (KAFKA-16152) is fixed. This
+  //       is done by setting the @MethodSource value to "getTestQuorumAndGroupProtocolParametersAll"
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
   @MethodSource(Array("getTestQuorumAndGroupProtocolParametersClassicGroupProtocolOnly"))
   def testStaticConsumerDetectsNewPartitionCreatedAfterRestart(quorum:String, groupProtocol: String): Unit = {

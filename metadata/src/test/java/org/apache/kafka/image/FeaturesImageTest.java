@@ -53,7 +53,7 @@ public class FeaturesImageTest {
         Map<String, Short> map1 = new HashMap<>();
         map1.put("foo", (short) 2);
         map1.put("bar", (short) 1);
-        IMAGE1 = new FeaturesImage(map1, MetadataVersion.latest(), ZkMigrationState.NONE);
+        IMAGE1 = new FeaturesImage(map1, MetadataVersion.latestTesting(), ZkMigrationState.NONE);
 
         DELTA1_RECORDS = new ArrayList<>();
         // change feature level
@@ -75,7 +75,7 @@ public class FeaturesImageTest {
         Map<String, Short> map2 = new HashMap<>();
         map2.put("foo", (short) 3);
         map2.put("baz", (short) 8);
-        IMAGE2 = new FeaturesImage(map2, MetadataVersion.latest(), ZkMigrationState.NONE);
+        IMAGE2 = new FeaturesImage(map2, MetadataVersion.latestTesting(), ZkMigrationState.NONE);
 
         DELTA2_RECORDS = new ArrayList<>();
         // remove all features
@@ -94,7 +94,7 @@ public class FeaturesImageTest {
         RecordTestUtils.replayAll(DELTA2, DELTA2_RECORDS);
 
         Map<String, Short> map3 = Collections.singletonMap("bar", (short) 1);
-        IMAGE3 = new FeaturesImage(map3, MetadataVersion.latest(), ZkMigrationState.NONE);
+        IMAGE3 = new FeaturesImage(map3, MetadataVersion.latestTesting(), ZkMigrationState.NONE);
     }
 
     @Test

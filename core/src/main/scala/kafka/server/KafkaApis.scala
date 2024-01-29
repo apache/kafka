@@ -22,20 +22,20 @@ import kafka.controller.ReplicaAssignment
 import kafka.coordinator.transaction.{InitProducerIdResult, TransactionCoordinator}
 import kafka.network.RequestChannel
 import kafka.server.QuotaFactory.{QuotaManagers, UnboundedQuota}
-import kafka.server.metadata.ConfigRepository
+import kafka.server.handlers.DescribeTopicPartitionsRequestHandler
+import kafka.server.metadata.{ConfigRepository, KRaftMetadataCache}
 import kafka.utils.Implicits._
 import kafka.utils.{CoreUtils, Logging}
 import org.apache.kafka.admin.AdminUtils
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType
 import org.apache.kafka.clients.admin.{AlterConfigOp, ConfigEntry, EndpointType}
-import org.apache.kafka.common.acl.AclOperation._
 import org.apache.kafka.common.acl.AclOperation
+import org.apache.kafka.common.acl.AclOperation._
 import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.errors._
 import org.apache.kafka.common.internals.Topic.{GROUP_METADATA_TOPIC_NAME, TRANSACTION_STATE_TOPIC_NAME, isInternal}
 import org.apache.kafka.common.internals.{FatalExitError, Topic}
-import org.apache.kafka.common.message.AddPartitionsToTxnResponseData.AddPartitionsToTxnResult
-import org.apache.kafka.common.message.AddPartitionsToTxnResponseData.AddPartitionsToTxnResultCollection
+import org.apache.kafka.common.message.AddPartitionsToTxnResponseData.{AddPartitionsToTxnResult, AddPartitionsToTxnResultCollection}
 import org.apache.kafka.common.message.AlterConfigsResponseData.AlterConfigsResourceResponse
 import org.apache.kafka.common.message.AlterPartitionReassignmentsResponseData.{ReassignablePartitionResponse, ReassignableTopicResponse}
 import org.apache.kafka.common.message.CreatePartitionsResponseData.CreatePartitionsTopicResult
@@ -79,8 +79,8 @@ import java.lang.{Long => JLong}
 import java.nio.ByteBuffer
 import java.time.Duration
 import java.util
-import java.util.concurrent.{CompletableFuture, ConcurrentHashMap}
 import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.{CompletableFuture, ConcurrentHashMap}
 import java.util.{Collections, Optional, OptionalInt}
 import scala.annotation.nowarn
 import scala.collection.mutable.ArrayBuffer
@@ -120,6 +120,11 @@ class KafkaApis(val requestChannel: RequestChannel,
   val requestHelper = new RequestHandlerHelper(requestChannel, quotas, time)
   val aclApis = new AclApis(authHelper, authorizer, requestHelper, "broker", config)
   val configManager = new ConfigAdminManager(brokerId, config, configRepository)
+  val describeTopicPartitionsRequestHandler : Option[DescribeTopicPartitionsRequestHandler] = metadataCache match {
+    case kRaftMetadataCache: KRaftMetadataCache =>
+      Some(new DescribeTopicPartitionsRequestHandler(kRaftMetadataCache, authHelper, config))
+    case _ => None
+  }
 
   def close(): Unit = {
     aclApis.close()
@@ -247,6 +252,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         case ApiKeys.DESCRIBE_QUORUM => forwardToControllerOrFail(request)
         case ApiKeys.CONSUMER_GROUP_HEARTBEAT => handleConsumerGroupHeartbeat(request).exceptionally(handleError)
         case ApiKeys.CONSUMER_GROUP_DESCRIBE => handleConsumerGroupDescribe(request).exceptionally(handleError)
+        case ApiKeys.DESCRIBE_TOPIC_PARTITIONS => handleDescribeTopicPartitionsRequest(request)
         case ApiKeys.GET_TELEMETRY_SUBSCRIPTIONS => handleGetTelemetrySubscriptionsRequest(request)
         case ApiKeys.PUSH_TELEMETRY => handlePushTelemetryRequest(request)
         case ApiKeys.LIST_CLIENT_METRICS_RESOURCES => handleListClientMetricsResources(request)
@@ -717,17 +723,15 @@ class KafkaApis(val requestChannel: RequestChannel,
       val internalTopicsAllowed = request.header.clientId == AdminUtils.ADMIN_CLIENT_ID
 
       // call the replica manager to append messages to the replicas
-      replicaManager.appendRecords(
+      replicaManager.handleProduceAppend(
         timeout = produceRequest.timeout.toLong,
         requiredAcks = produceRequest.acks,
         internalTopicsAllowed = internalTopicsAllowed,
-        origin = AppendOrigin.CLIENT,
+        transactionalId = produceRequest.transactionalId,
         entriesPerPartition = authorizedRequestInfo,
-        requestLocal = requestLocal,
         responseCallback = sendResponseCallback,
         recordValidationStatsCallback = processingStatsCallback,
-        transactionalId = produceRequest.transactionalId()
-      )
+        requestLocal = requestLocal)
 
       // if the request is put into the purgatory, it will have a held reference and hence cannot be garbage collected;
       // hence we clear its data here in order to let GC reclaim its memory since it is already appended to log
@@ -1304,7 +1308,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     val knownTopicNames = topicIds.flatMap(metadataCache.getTopicName)
 
     val unknownTopicIdsTopicMetadata = unknownTopicIds.map(topicId =>
-        metadataResponseTopic(Errors.UNKNOWN_TOPIC_ID, null, topicId, false, util.Collections.emptyList())).toSeq
+        metadataResponseTopic(Errors.UNKNOWN_TOPIC_ID, null, topicId, isInternal = false, util.Collections.emptyList())).toSeq
 
     val topics = if (metadataRequest.isAllTopics)
       metadataCache.getAllTopics()
@@ -1342,11 +1346,11 @@ class KafkaApis(val requestChannel: RequestChannel,
       else if (useTopicId) {
         // Topic IDs are not considered sensitive information, so returning TOPIC_AUTHORIZATION_FAILED is OK
         unauthorizedForDescribeTopics.map(topic =>
-          metadataResponseTopic(Errors.TOPIC_AUTHORIZATION_FAILED, null, metadataCache.getTopicId(topic), false, util.Collections.emptyList()))
+          metadataResponseTopic(Errors.TOPIC_AUTHORIZATION_FAILED, null, metadataCache.getTopicId(topic), isInternal = false, util.Collections.emptyList()))
       } else {
         // We should not return topicId when on unauthorized error, so we return zero uuid.
         unauthorizedForDescribeTopics.map(topic =>
-          metadataResponseTopic(Errors.TOPIC_AUTHORIZATION_FAILED, topic, Uuid.ZERO_UUID, false, util.Collections.emptyList()))
+          metadataResponseTopic(Errors.TOPIC_AUTHORIZATION_FAILED, topic, Uuid.ZERO_UUID, isInternal = false, util.Collections.emptyList()))
       }
 
     // In version 0, we returned an error when brokers with replicas were unavailable,
@@ -1407,6 +1411,22 @@ class KafkaApis(val requestChannel: RequestChannel,
          completeTopicMetadata.asJava,
          clusterAuthorizedOperations
       ))
+  }
+
+  def handleDescribeTopicPartitionsRequest(request: RequestChannel.Request): Unit = {
+    describeTopicPartitionsRequestHandler match {
+      case Some(handler) => {
+        val response = handler.handleDescribeTopicPartitionsRequest(request)
+        trace("Sending topic partitions metadata %s for correlation id %d to client %s".format(response.topics().asScala.mkString(","),
+          request.header.correlationId, request.header.clientId))
+
+        requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs => {
+          response.setThrottleTimeMs(requestThrottleMs)
+          new DescribeTopicPartitionsResponse(response)
+        })
+      }
+      case None => throw new InvalidRequestException("ZK cluster does not handle DescribeTopicPartitions request")
+    }
   }
 
   /**
@@ -1985,7 +2005,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       }
 
       val authorizedTopics = if (hasClusterAuthorization) {
-        allowedTopicNames.toSet
+        allowedTopicNames
       } else {
         authHelper.filterByAuthorized(request.context, CREATE, TOPIC, allowedTopicNames)(identity)
       }
@@ -2501,24 +2521,24 @@ class KafkaApis(val requestChannel: RequestChannel,
   def handleAddPartitionsToTxnRequest(request: RequestChannel.Request, requestLocal: RequestLocal): Unit = {
     ensureInterBrokerVersion(IBP_0_11_0_IV0)
     val addPartitionsToTxnRequest =
-      if (request.context.apiVersion() < 4) 
-        request.body[AddPartitionsToTxnRequest].normalizeRequest() 
-      else 
+      if (request.context.apiVersion() < 4)
+        request.body[AddPartitionsToTxnRequest].normalizeRequest()
+      else
         request.body[AddPartitionsToTxnRequest]
     val version = addPartitionsToTxnRequest.version
     val responses = new AddPartitionsToTxnResultCollection()
     val partitionsByTransaction = addPartitionsToTxnRequest.partitionsByTransaction()
-    
+
     // Newer versions of the request should only come from other brokers.
     if (version >= 4) authHelper.authorizeClusterOperation(request, CLUSTER_ACTION)
 
-    // V4 requests introduced batches of transactions. We need all transactions to be handled before sending the 
+    // V4 requests introduced batches of transactions. We need all transactions to be handled before sending the
     // response so there are a few differences in handling errors and sending responses.
     def createResponse(requestThrottleMs: Int): AbstractResponse = {
       if (version < 4) {
         // There will only be one response in data. Add it to the response data object.
         val data = new AddPartitionsToTxnResponseData()
-        responses.forEach { result => 
+        responses.forEach { result =>
           data.setResultsByTopicV3AndBelow(result.topicResults())
           data.setThrottleTimeMs(requestThrottleMs)
         }
@@ -2539,7 +2559,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       }
     }
 
-    txns.forEach { transaction => 
+    txns.forEach { transaction =>
       val transactionalId = transaction.transactionalId
 
       if (transactionalId == null)
@@ -2556,10 +2576,10 @@ class KafkaApis(val requestChannel: RequestChannel,
         val authorizedPartitions = mutable.Set[TopicPartition]()
 
         // Only request versions less than 4 need write authorization since they come from clients.
-        val authorizedTopics = 
-          if (version < 4) 
-            authHelper.filterByAuthorized(request.context, WRITE, TOPIC, partitionsToAdd.filterNot(tp => Topic.isInternal(tp.topic)))(_.topic) 
-          else 
+        val authorizedTopics =
+          if (version < 4)
+            authHelper.filterByAuthorized(request.context, WRITE, TOPIC, partitionsToAdd.filterNot(tp => Topic.isInternal(tp.topic)))(_.topic)
+          else
             partitionsToAdd.map(_.topic).toSet
         for (topicPartition <- partitionsToAdd) {
           if (!authorizedTopics.contains(topicPartition.topic))
@@ -3510,7 +3530,7 @@ class KafkaApis(val requestChannel: RequestChannel,
             new DescribeUserScramCredentialsResponse(result.setThrottleTimeMs(requestThrottleMs)))
         case RaftSupport(_, metadataCache) =>
           val result = metadataCache.describeScramCredentials(describeUserScramCredentialsRequest.data())
-          requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs => 
+          requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
             new DescribeUserScramCredentialsResponse(result.setThrottleTimeMs(requestThrottleMs)))
       }
     }

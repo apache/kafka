@@ -30,12 +30,14 @@ public interface CoordinatorPlayback<U> {
     /**
      * Applies the given record to this object.
      *
+     * @param offset        The offset of the record in the log.
      * @param producerId    The producer id.
      * @param producerEpoch The producer epoch.
      * @param record        A record.
      * @throws RuntimeException if the record can not be applied.
      */
     void replay(
+        long offset,
         long producerId,
         short producerEpoch,
         U record

@@ -74,6 +74,7 @@ import org.apache.kafka.metadata.properties.MetaProperties
 import org.apache.kafka.server.ControllerRequestCompletionHandler
 import org.apache.kafka.server.authorizer.{AuthorizableRequestContext, Authorizer => JAuthorizer}
 import org.apache.kafka.server.common.{ApiMessageAndVersion, MetadataVersion}
+import org.apache.kafka.server.config.Defaults
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.apache.kafka.server.util.MockTime
 import org.apache.kafka.storage.internals.log.{CleanerConfig, LogConfig, LogDirFailureChannel, ProducerStateManagerConfig}
@@ -917,7 +918,7 @@ object TestUtils extends Logging {
       Broker(b.id, Seq(EndPoint("localhost", 6667, listenerName, protocol)), if (b.rack.isPresent) Some(b.rack.get()) else None)
     }
     brokers.foreach(b => zkClient.registerBroker(BrokerInfo(Broker(b.id, b.endPoints, rack = b.rack),
-      MetadataVersion.latest, jmxPort = -1)))
+      MetadataVersion.latestTesting, jmxPort = -1)))
     brokers
   }
 
@@ -1402,6 +1403,17 @@ object TestUtils extends Logging {
     assertEquals(0, threadCount, s"Found unexpected $threadCount NonDaemon threads=${nonDaemonThreads.map(t => t.getName).mkString(", ")}")
   }
 
+  // Some threads are closed, but the state didn't reflect in the JVM immediately, so add some wait time for it
+  def assertNoNonDaemonThreadsWithWaiting(threadNamePrefix: String, waitTimeMs: Long = 500L): Unit = {
+    var nonDemonThreads: mutable.Set[Thread] = mutable.Set.empty[Thread]
+    waitUntilTrue(() => {
+      nonDemonThreads = Thread.getAllStackTraces.keySet.asScala.filter { t =>
+        !t.isDaemon && t.isAlive && t.getName.startsWith(threadNamePrefix)
+      }
+      0 == nonDemonThreads.size
+    }, s"Found unexpected ${nonDemonThreads.size} NonDaemon threads=${nonDemonThreads.map(t => t.getName).mkString(", ")}", waitTimeMs)
+  }
+
   def numThreadsRunning(threadNamePrefix: String, isDaemon: Boolean): mutable.Set[Thread] = {
     Thread.getAllStackTraces.keySet.asScala.filter { t =>
       isDaemon && t.isAlive && t.getName.startsWith(threadNamePrefix)
@@ -1443,7 +1455,7 @@ object TestUtils extends Logging {
                        configRepository: ConfigRepository = new MockConfigRepository,
                        cleanerConfig: CleanerConfig = new CleanerConfig(false),
                        time: MockTime = new MockTime(),
-                       interBrokerProtocolVersion: MetadataVersion = MetadataVersion.latest,
+                       interBrokerProtocolVersion: MetadataVersion = MetadataVersion.latestTesting,
                        recoveryThreadsPerDataDir: Int = 4,
                        transactionVerificationEnabled: Boolean = false,
                        log: Option[UnifiedLog] = None,
@@ -1459,8 +1471,8 @@ object TestUtils extends Logging {
                    flushStartOffsetCheckpointMs = 10000L,
                    retentionCheckMs = 1000L,
                    maxTransactionTimeoutMs = 5 * 60 * 1000,
-                   producerStateManagerConfig = new ProducerStateManagerConfig(kafka.server.Defaults.ProducerIdExpirationMs, transactionVerificationEnabled),
-                   producerIdExpirationCheckIntervalMs = kafka.server.Defaults.ProducerIdExpirationCheckIntervalMs,
+                   producerStateManagerConfig = new ProducerStateManagerConfig(Defaults.PRODUCER_ID_EXPIRATION_MS, transactionVerificationEnabled),
+                   producerIdExpirationCheckIntervalMs = Defaults.PRODUCER_ID_EXPIRATION_CHECK_INTERVAL_MS,
                    scheduler = time.scheduler,
                    time = time,
                    brokerTopicStats = new BrokerTopicStats,
@@ -2407,7 +2419,7 @@ object TestUtils extends Logging {
 
     RequestHeader.parse(envelopeBuffer)
 
-    val envelopeContext = new RequestContext(envelopeHeader, "1", InetAddress.getLocalHost,
+    val envelopeContext = new RequestContext(envelopeHeader, "1", InetAddress.getLocalHost, Optional.empty(),
       KafkaPrincipal.ANONYMOUS, listenerName, SecurityProtocol.PLAINTEXT, ClientInformation.EMPTY,
       fromPrivilegedListener, Optional.of(principalSerde))
 

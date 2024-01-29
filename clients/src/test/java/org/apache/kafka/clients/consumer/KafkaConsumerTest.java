@@ -2169,10 +2169,8 @@ public class KafkaConsumerTest {
         assertThrows(AuthenticationException.class, () -> consumer.committed(Collections.singleton(tp0)).get(tp0));
     }
 
-    // TODO: this test triggers a bug with the CONSUMER group protocol implementation.
-    //       The bug will be investigated and fixed so this test can use both group protocols.
     @ParameterizedTest
-    @EnumSource(value = GroupProtocol.class, names = "CLASSIC")
+    @EnumSource(value = GroupProtocol.class)
     public void testMeasureCommitSyncDurationOnFailure(GroupProtocol groupProtocol) {
         final KafkaConsumer<String, String> consumer
             = consumerWithPendingError(groupProtocol, new MockTime(Duration.ofSeconds(1).toMillis()));
@@ -3330,19 +3328,18 @@ public void testClosingConsumerUnregistersConsumerMetrics(GroupProtocol groupPro
         ClientTelemetryReporter clientTelemetryReporter = mock(ClientTelemetryReporter.class);
         clientTelemetryReporter.configure(any());
 
-        MockedStatic<CommonClientConfigs> mockedCommonClientConfigs = mockStatic(CommonClientConfigs.class, new CallsRealMethods());
-        mockedCommonClientConfigs.when(() -> CommonClientConfigs.telemetryReporter(anyString(), any())).thenReturn(Optional.of(clientTelemetryReporter));
+        try (MockedStatic<CommonClientConfigs> mockedCommonClientConfigs = mockStatic(CommonClientConfigs.class, new CallsRealMethods())) {
+            mockedCommonClientConfigs.when(() -> CommonClientConfigs.telemetryReporter(anyString(), any())).thenReturn(Optional.of(clientTelemetryReporter));
 
-        ClientTelemetrySender clientTelemetrySender = mock(ClientTelemetrySender.class);
-        Uuid expectedUuid = Uuid.randomUuid();
-        when(clientTelemetryReporter.telemetrySender()).thenReturn(clientTelemetrySender);
-        when(clientTelemetrySender.clientInstanceId(any())).thenReturn(Optional.of(expectedUuid));
+            ClientTelemetrySender clientTelemetrySender = mock(ClientTelemetrySender.class);
+            Uuid expectedUuid = Uuid.randomUuid();
+            when(clientTelemetryReporter.telemetrySender()).thenReturn(clientTelemetrySender);
+            when(clientTelemetrySender.clientInstanceId(any())).thenReturn(Optional.of(expectedUuid));
 
-        consumer = newConsumer(props, new StringDeserializer(), new StringDeserializer());
-        Uuid uuid = consumer.clientInstanceId(Duration.ofMillis(0));
-        assertEquals(expectedUuid, uuid);
-
-        mockedCommonClientConfigs.close();
+            consumer = newConsumer(props, new StringDeserializer(), new StringDeserializer());
+            Uuid uuid = consumer.clientInstanceId(Duration.ofMillis(0));
+            assertEquals(expectedUuid, uuid);
+        }
     }
 
     @ParameterizedTest

@@ -94,16 +94,16 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
 
   import TransactionCoordinator._
 
-  type InitProducerIdCallback = InitProducerIdResult => Unit
-  type AddPartitionsCallback = Errors => Unit
-  type VerifyPartitionsCallback = AddPartitionsToTxnResult => Unit
-  type EndTxnCallback = Errors => Unit
-  type ApiResult[T] = Either[Errors, T]
+  private type InitProducerIdCallback = InitProducerIdResult => Unit
+  private type AddPartitionsCallback = Errors => Unit
+  private type VerifyPartitionsCallback = AddPartitionsToTxnResult => Unit
+  private type EndTxnCallback = Errors => Unit
+  private type ApiResult[T] = Either[Errors, T]
 
   /* Active flag of the coordinator */
   private val isActive = new AtomicBoolean(false)
 
-  val producerIdManager = createProducerIdManager()
+  val producerIdManager: ProducerIdManager = createProducerIdManager()
 
   def handleInitProducerId(transactionalId: String,
                            transactionTimeoutMs: Int,

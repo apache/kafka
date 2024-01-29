@@ -465,7 +465,7 @@ class LogCleaner(initialConfig: CleanerConfig,
      * @param to The cleaned offset that is the first not cleaned offset to end
      * @param stats The statistics for this round of cleaning
      */
-    def recordStats(id: Int, name: String, from: Long, to: Long, stats: CleanerStats): Unit = {
+    private def recordStats(id: Int, name: String, from: Long, to: Long, stats: CleanerStats): Unit = {
       this.lastStats = stats
       def mb(bytes: Double) = bytes / (1024*1024)
       val message =
@@ -929,7 +929,7 @@ private[log] class Cleaner(val id: Int,
    *
    * @param maxLogMessageSize The maximum record size in bytes allowed
    */
-  def growBuffers(maxLogMessageSize: Int): Unit = {
+  private def growBuffers(maxLogMessageSize: Int): Unit = {
     val maxBufferSize = math.max(maxLogMessageSize, maxIoBufferSize)
     if(readBuffer.capacity >= maxBufferSize || writeBuffer.capacity >= maxBufferSize)
       throw new IllegalStateException("This log contains a message larger than maximum allowable size of %s.".format(maxBufferSize))
@@ -942,7 +942,7 @@ private[log] class Cleaner(val id: Int,
   /**
    * Restore the I/O buffer capacity to its original size
    */
-  def restoreBuffers(): Unit = {
+  private def restoreBuffers(): Unit = {
     if(this.readBuffer.capacity > this.ioBufferSize)
       this.readBuffer = ByteBuffer.allocate(this.ioBufferSize)
     if(this.writeBuffer.capacity > this.ioBufferSize)
@@ -1139,7 +1139,7 @@ private[log] class Cleaner(val id: Int,
 /**
   * A simple struct for collecting pre-clean stats
   */
-private class PreCleanStats() {
+private class PreCleanStats {
   var maxCompactionDelayMs = 0L
   var delayedPartitions = 0
   var cleanablePartitions = 0
@@ -1160,8 +1160,8 @@ private class PreCleanStats() {
  */
 private class CleanerStats(time: Time = Time.SYSTEM) {
   val startTime = time.milliseconds
-  var mapCompleteTime = -1L
-  var endTime = -1L
+  var mapCompleteTime: Long = -1L
+  var endTime: Long = -1L
   var bytesRead = 0L
   var bytesWritten = 0L
   var mapBytesRead = 0L
