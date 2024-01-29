@@ -159,10 +159,15 @@ public class OAuthBearerSaslServer implements SaslServer {
         }
         OAuthBearerToken token = callback.token();
         if (token == null) {
-            errorMessage = jsonErrorResponse(callback.errorStatus(), callback.errorScope(),
+            String returnedMessage = jsonErrorResponse(callback.errorStatus(), callback.errorScope(),
                     callback.errorOpenIDConfiguration());
+            if (!authorizationId.isEmpty()) {
+                errorMessage = String.format("The authorizationId {%s}: %s", authorizationId, returnedMessage);
+            } else {
+                errorMessage = returnedMessage;
+            }
             log.debug(errorMessage);
-            return errorMessage.getBytes(StandardCharsets.UTF_8);
+            return returnedMessage.getBytes(StandardCharsets.UTF_8);
         }
         /*
          * We support the client specifying an authorization ID as per the SASL
