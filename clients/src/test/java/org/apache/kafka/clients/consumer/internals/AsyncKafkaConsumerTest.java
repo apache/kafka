@@ -68,6 +68,7 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
+import org.apache.kafka.test.MockConsumerInterceptor;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.function.Executable;
@@ -150,24 +151,27 @@ public class AsyncKafkaConsumerTest {
         }
         consumer = null;
         Mockito.framework().clearInlineMocks();
+        MockConsumerInterceptor.resetCounters();
     }
 
     private AsyncKafkaConsumer<String, String> newConsumer() {
         final Properties props = requiredConsumerProperties();
         props.put(ConsumerConfig.GROUP_ID_CONFIG, "group-id");
-        final ConsumerConfig config = new ConsumerConfig(props);
-        return newConsumer(config);
+        return newConsumer(props);
     }
 
     private AsyncKafkaConsumer<String, String> newConsumerWithoutGroupId() {
         final Properties props = requiredConsumerProperties();
-        final ConsumerConfig config = new ConsumerConfig(props);
-        return newConsumer(config);
+        return newConsumer(props);
     }
 
     @SuppressWarnings("UnusedReturnValue")
     private AsyncKafkaConsumer<String, String> newConsumerWithEmptyGroupId() {
         final Properties props = requiredConsumerPropertiesAndGroupId("");
+        return newConsumer(props);
+    }
+
+    private AsyncKafkaConsumer<String, String> newConsumer(Properties props) {
         final ConsumerConfig config = new ConsumerConfig(props);
         return newConsumer(config);
     }
@@ -259,12 +263,13 @@ public class AsyncKafkaConsumerTest {
 
         Map<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>();
         offsets.put(new TopicPartition("my-topic", 1), new OffsetAndMetadata(200L));
-        completeCommitApplicationEventExceptionally();
+        completeCommitApplicationEventSuccessfully();
 
         MockCommitCallback callback = new MockCommitCallback();
         assertDoesNotThrow(() -> consumer.commitAsync(offsets, callback));
         forceCommitCallbackInvocation();
 
+        assertEquals(callback.invoked, 1);
         assertNull(callback.exception);
     }
 
@@ -441,11 +446,11 @@ public class AsyncKafkaConsumerTest {
         consumer = newConsumer();
         final String currentThread = Thread.currentThread().getName();
         MockCommitCallback callback = new MockCommitCallback();
-        completeCommitApplicationEventExceptionally();
+        completeCommitApplicationEventSuccessfully();
 
         assertDoesNotThrow(() -> consumer.commitAsync(new HashMap<>(), callback));
-        assertEquals(1, consumer.callbacks());
         forceCommitCallbackInvocation();
+        assertEquals(1, callback.invoked);
         assertEquals(currentThread, callback.completionThread);
     }
 
@@ -478,7 +483,7 @@ public class AsyncKafkaConsumerTest {
         HashMap<TopicPartition, OffsetAndMetadata> topicPartitionOffsets = new HashMap<>();
         topicPartitionOffsets.put(t0, new OffsetAndMetadata(10L, Optional.of(2), ""));
         topicPartitionOffsets.put(t1, new OffsetAndMetadata(20L, Optional.of(1), ""));
-        completeCommitApplicationEventExceptionally();
+        completeCommitApplicationEventSuccessfully();
 
         consumer.assign(Arrays.asList(t0, t1));
 
@@ -527,7 +532,7 @@ public class AsyncKafkaConsumerTest {
     public void testEnsurePollExecutedCommitAsyncCallbacks() {
         consumer = newConsumer();
         MockCommitCallback callback = new MockCommitCallback();
-        completeCommitApplicationEventExceptionally();
+        completeCommitApplicationEventSuccessfully();
         doReturn(Fetch.empty()).when(fetchCollector).collectFetch(any(FetchBuffer.class));
         completeFetchedCommittedOffsetApplicationEventSuccessfully(mkMap());
 
@@ -542,7 +547,7 @@ public class AsyncKafkaConsumerTest {
     public void testEnsureShutdownExecutedCommitAsyncCallbacks() {
         consumer = newConsumer();
         MockCommitCallback callback = new MockCommitCallback();
-        completeCommitApplicationEventExceptionally();
+        completeCommitApplicationEventSuccessfully();
         assertDoesNotThrow(() -> consumer.commitAsync(new HashMap<>(), callback));
         assertMockCommitCallbackInvoked(() -> consumer.close(),
             callback,
@@ -848,6 +853,86 @@ public class AsyncKafkaConsumerTest {
         assertNull(consumer.wakeupTrigger().getPendingTask());
     }
 
+    @Test
+    public void testInterceptorAutoCommitOnClose() {
+        Properties props = requiredConsumerPropertiesAndGroupId("test-id");
+        props.setProperty(ConsumerConfig.INTERCEPTOR_CLASSES_CONFIG, MockConsumerInterceptor.class.getName());
+        props.setProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "true");
+
+        consumer = newConsumer(props);
+        assertEquals(1, MockConsumerInterceptor.INIT_COUNT.get());
+        completeCommitApplicationEventSuccessfully();
+
+        consumer.close(Duration.ZERO);
+
+        assertEquals(1, MockConsumerInterceptor.ON_COMMIT_COUNT.get());
+        assertEquals(1, MockConsumerInterceptor.CLOSE_COUNT.get());
+    }
+
+    @Test
+    public void testInterceptorCommitSync() {
+        Properties props = requiredConsumerPropertiesAndGroupId("test-id");
+        props.setProperty(ConsumerConfig.INTERCEPTOR_CLASSES_CONFIG, MockConsumerInterceptor.class.getName());
+        props.setProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false");
+
+        consumer = newConsumer(props);
+        assertEquals(1, MockConsumerInterceptor.INIT_COUNT.get());
+        completeCommitApplicationEventSuccessfully();
+
+        consumer.commitSync(mockTopicPartitionOffset());
+
+        assertEquals(1, MockConsumerInterceptor.ON_COMMIT_COUNT.get());
+    }
+
+    @Test
+    public void testNoInterceptorCommitSyncFailed() {
+        Properties props = requiredConsumerPropertiesAndGroupId("test-id");
+        props.setProperty(ConsumerConfig.INTERCEPTOR_CLASSES_CONFIG, MockConsumerInterceptor.class.getName());
+        props.setProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false");
+
+        consumer = newConsumer(props);
+        assertEquals(1, MockConsumerInterceptor.INIT_COUNT.get());
+        KafkaException expected = new KafkaException("Test exception");
+        completeCommitApplicationEventExceptionally(expected);
+
+        KafkaException actual = assertThrows(KafkaException.class, () -> consumer.commitSync(mockTopicPartitionOffset()));
+        assertEquals(expected, actual);
+        assertEquals(0, MockConsumerInterceptor.ON_COMMIT_COUNT.get());
+    }
+
+    @Test
+    public void testInterceptorCommitAsync() {
+        Properties props = requiredConsumerPropertiesAndGroupId("test-id");
+        props.setProperty(ConsumerConfig.INTERCEPTOR_CLASSES_CONFIG, MockConsumerInterceptor.class.getName());
+        props.setProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false");
+
+        consumer = newConsumer(props);
+        assertEquals(1, MockConsumerInterceptor.INIT_COUNT.get());
+
+        completeCommitApplicationEventSuccessfully();
+        consumer.commitAsync(mockTopicPartitionOffset(), new MockCommitCallback());
+        assertEquals(0, MockConsumerInterceptor.ON_COMMIT_COUNT.get());
+
+        forceCommitCallbackInvocation();
+        assertEquals(1, MockConsumerInterceptor.ON_COMMIT_COUNT.get());
+    }
+
+    @Test
+    public void testNoInterceptorCommitAsyncFailed() {
+        Properties props = requiredConsumerPropertiesAndGroupId("test-id");
+        props.setProperty(ConsumerConfig.INTERCEPTOR_CLASSES_CONFIG, MockConsumerInterceptor.class.getName());
+        props.setProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false");
+
+        consumer = newConsumer(props);
+        assertEquals(1, MockConsumerInterceptor.INIT_COUNT.get());
+        completeCommitApplicationEventExceptionally(new KafkaException("Test exception"));
+
+        consumer.commitAsync(mockTopicPartitionOffset(), new MockCommitCallback());
+        assertEquals(0, MockConsumerInterceptor.ON_COMMIT_COUNT.get());
+
+        forceCommitCallbackInvocation();
+        assertEquals(0, MockConsumerInterceptor.ON_COMMIT_COUNT.get());
+    }
 
     @Test
     public void testRefreshCommittedOffsetsSuccess() {
@@ -1433,7 +1518,7 @@ public class AsyncKafkaConsumerTest {
         }).when(applicationEventHandler).add(ArgumentMatchers.isA(CommitApplicationEvent.class));
     }
 
-    private void completeCommitApplicationEventExceptionally() {
+    private void completeCommitApplicationEventSuccessfully() {
         doAnswer(invocation -> {
             CommitApplicationEvent event = invocation.getArgument(0);
             event.future().complete(null);
