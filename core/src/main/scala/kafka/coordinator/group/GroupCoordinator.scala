@@ -1114,8 +1114,10 @@ private[group] class GroupCoordinator(
       // if states is empty, return all groups
       val groups = if (states.isEmpty)
         groupManager.currentGroups
-      else
-        groupManager.currentGroups.filter(g => states.contains(g.summary.state))
+      else {
+        val caseInsensitiveStates = states.map(_.toLowerCase)
+        groupManager.currentGroups.filter(g => g.isInStates(caseInsensitiveStates))
+      }
       (errorCode, groups.map(_.overview).toList)
     }
   }

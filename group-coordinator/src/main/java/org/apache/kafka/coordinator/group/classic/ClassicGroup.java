@@ -956,6 +956,11 @@ public class ClassicGroup implements Group {
         return Optional.empty();
     }
 
+    @Override
+    public boolean isInStates(Set<String> statesFilter, long committedOffset) {
+        return statesFilter.contains(state.toLowerCaseString());
+    }
+
     /**
      * Verify the member id is up to date for static members. Return true if both conditions met:
      *   1. given member is a known static member to group
@@ -1213,7 +1218,7 @@ public class ClassicGroup implements Group {
 
     /**
      * Complete the join future.
-     * 
+     *
      * @param member    the member.
      * @param response  the join response to complete the future with.
      * @return true if a join future actually completes.
@@ -1233,7 +1238,7 @@ public class ClassicGroup implements Group {
 
     /**
      * Complete a member's sync future.
-     * 
+     *
      * @param member    the member.
      * @param response  the sync response to complete the future with.
      * @return true if a sync future actually completes.

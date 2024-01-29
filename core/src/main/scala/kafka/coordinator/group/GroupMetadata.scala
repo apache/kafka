@@ -35,6 +35,7 @@ import scala.jdk.CollectionConverters._
 
 private[group] sealed trait GroupState {
   val validPreviousStates: Set[GroupState]
+  val toLowerCaseString: String = toString.toLowerCase
 }
 
 /**
@@ -839,6 +840,10 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
     if (!targetState.validPreviousStates.contains(state))
       throw new IllegalStateException("Group %s should be in the %s states before moving to %s state. Instead it is in %s state"
         .format(groupId, targetState.validPreviousStates.mkString(","), targetState, state))
+  }
+
+  def isInStates(states: collection.Set[String]): Boolean = {
+    states.contains(state.toLowerCaseString)
   }
 
   override def toString: String = {
