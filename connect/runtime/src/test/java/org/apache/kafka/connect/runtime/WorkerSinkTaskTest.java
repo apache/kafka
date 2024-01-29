@@ -1364,32 +1364,6 @@ public class WorkerSinkTaskTest {
         PowerMock.verifyAll();
     }
 
-    @Test
-    public void testHeaders() throws Exception {
-        Headers headers = new RecordHeaders();
-        headers.add("header_key", "header_value".getBytes());
-
-        createTask(initialState);
-
-        expectInitializeTask();
-        expectTaskGetTopic(true);
-        expectPollInitialAssignment();
-
-        expectConsumerPoll(1, headers);
-        expectConversionAndTransformation(1, null, headers);
-        sinkTask.put(EasyMock.anyObject());
-        EasyMock.expectLastCall();
-
-        PowerMock.replayAll();
-
-        workerTask.initialize(TASK_CONFIG);
-        workerTask.initializeAndStart();
-        workerTask.iteration(); // iter 1 -- initial assignment
-        workerTask.iteration(); // iter 2 -- deliver 1 record
-
-        PowerMock.verifyAll();
-    }
-
     private void expectInitializeTask() {
         consumer.subscribe(EasyMock.eq(asList(TOPIC)), EasyMock.capture(rebalanceListener));
         PowerMock.expectLastCall();

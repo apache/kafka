@@ -664,6 +664,35 @@ public class WorkerSinkTaskMockitoTest {
     }
 
     @Test
+    public void testHeaders() {
+        createTask(initialState);
+
+        workerTask.initialize(TASK_CONFIG);
+        workerTask.initializeAndStart();
+        verifyInitializeTask();
+
+        Headers headers = new RecordHeaders();
+        headers.add("header_key", "header_value".getBytes());
+
+        expectPollInitialAssignment()
+                .thenAnswer(expectConsumerPoll(1, headers));
+
+        expectConversionAndTransformation(null, headers);
+
+        workerTask.iteration(); // iter 1 -- initial assignment
+        workerTask.iteration(); // iter 2 -- deliver 1 record
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<Collection<SinkRecord>> recordCapture = ArgumentCaptor.forClass(Collection.class);
+        verify(sinkTask, times(2)).put(recordCapture.capture());
+
+        assertEquals(1, recordCapture.getValue().size());
+        SinkRecord record = recordCapture.getValue().iterator().next();
+
+        assertEquals("header_value", record.headers().lastWithName("header_key").value());
+    }
+
+    @Test
     public void testHeadersWithCustomConverter() {
         StringConverter stringConverter = new StringConverter();
         SampleConverterWithHeaders testConverter = new SampleConverterWithHeaders();
@@ -810,6 +839,10 @@ public class WorkerSinkTaskMockitoTest {
 
     private Answer<ConsumerRecords<byte[], byte[]>> expectConsumerPoll(final int numMessages) {
         return expectConsumerPoll(numMessages, RecordBatch.NO_TIMESTAMP, TimestampType.NO_TIMESTAMP_TYPE, new RecordHeaders());
+    }
+
+    private Answer<ConsumerRecords<byte[], byte[]>> expectConsumerPoll(final int numMessages,  Headers headers) {
+        return expectConsumerPoll(numMessages, RecordBatch.NO_TIMESTAMP, TimestampType.NO_TIMESTAMP_TYPE, headers);
     }
 
     private Answer<ConsumerRecords<byte[], byte[]>> expectConsumerPoll(final int numMessages, final long timestamp, final TimestampType timestampType, Headers headers) {
