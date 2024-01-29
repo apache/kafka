@@ -470,14 +470,7 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
 
             OffsetCommitRequest.Builder builder = new OffsetCommitRequest.Builder(data);
 
-            return recordCommitLatency(buildRequestWithResponseHandling(builder));
-        }
-
-        private NetworkClientDelegate.UnsentRequest recordCommitLatency(NetworkClientDelegate.UnsentRequest request) {
-            request.future().whenComplete(
-                    (r, e) -> metricsManager.recordRequestLatency(r)
-            );
-            return request;
+            return buildRequestWithResponseHandling(builder);
         }
 
         /**
