@@ -312,6 +312,7 @@ public class MetadataLoaderTest {
                         setFeatureLevel(IBP_3_3_IV2.featureLevel()), (short) 0))));
             assertFalse(snapshotReader.closed);
             loader.handleLoadSnapshot(snapshotReader);
+            loader.time().sleep(100);
             loader.waitForAllEventsToBeHandled();
             assertTrue(snapshotReader.closed);
             publishers.get(0).firstPublish.get(1, TimeUnit.MINUTES);
@@ -378,6 +379,7 @@ public class MetadataLoaderTest {
             snapshotReader.setTime((MockTime) loader.time());
         }
         loader.handleLoadSnapshot(snapshotReader);
+        loader.time().sleep(100);
         loader.waitForAllEventsToBeHandled();
     }
 
@@ -474,6 +476,7 @@ public class MetadataLoaderTest {
                 )
             ).setTime(time);
             loader.handleCommit(batchReader);
+            time.sleep(100);
             loader.waitForAllEventsToBeHandled();
             assertTrue(batchReader.closed);
             assertEquals(300L, loader.lastAppliedOffset());
