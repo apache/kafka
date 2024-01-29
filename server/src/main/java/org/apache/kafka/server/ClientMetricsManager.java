@@ -540,8 +540,7 @@ public class ClientMetricsManager implements AutoCloseable {
         // safe structure as it will be populated only in constructor.
         private final List<MetricName> registeredMetricNames = new ArrayList<>();
 
-        private final Set<String> instanceMetrics = Stream.of(THROTTLE, PLUGIN_EXPORT, PLUGIN_ERROR,
-            PLUGIN_EXPORT_TIME).collect(Collectors.toSet());
+        private final Set<String> instanceSensors = Stream.of(THROTTLE, PLUGIN_EXPORT, PLUGIN_ERROR).collect(Collectors.toSet());
 
         ClientMetricsStats() {
             Measurable instanceCount = (config, now) -> clientInstanceCache.size();
@@ -570,20 +569,17 @@ public class ClientMetricsManager implements AutoCloseable {
             throttleCount.add(createMeter(metrics, new WindowedCount(), ClientMetricsStats.THROTTLE, tags));
             sensorsName.add(throttleCount.name());
 
-            Sensor pluginExportCount = metrics.sensor(ClientMetricsStats.PLUGIN_EXPORT + "-" + clientInstanceId);
-            pluginExportCount.add(createMeter(metrics, new WindowedCount(), ClientMetricsStats.PLUGIN_EXPORT, tags));
-            sensorsName.add(pluginExportCount.name());
+            Sensor pluginExport = metrics.sensor(ClientMetricsStats.PLUGIN_EXPORT + "-" + clientInstanceId);
+            pluginExport.add(createMeter(metrics, new WindowedCount(), ClientMetricsStats.PLUGIN_EXPORT, tags));
+            pluginExport.add(metrics.metricName(ClientMetricsStats.PLUGIN_EXPORT_TIME + "Avg",
+                ClientMetricsStats.GROUP_NAME, "Average time broker spent in invoking plugin exportMetrics call", tags), new Avg());
+            pluginExport.add(metrics.metricName(ClientMetricsStats.PLUGIN_EXPORT_TIME + "Max",
+                ClientMetricsStats.GROUP_NAME, "Maximum time broker spent in invoking plugin exportMetrics call", tags), new Max());
+            sensorsName.add(pluginExport.name());
 
             Sensor pluginErrorCount = metrics.sensor(ClientMetricsStats.PLUGIN_ERROR + "-" + clientInstanceId);
             pluginErrorCount.add(createMeter(metrics, new WindowedCount(), ClientMetricsStats.PLUGIN_ERROR, tags));
             sensorsName.add(pluginErrorCount.name());
-
-            Sensor pluginExportTime = metrics.sensor(ClientMetricsStats.PLUGIN_EXPORT_TIME + "-" + clientInstanceId);
-            pluginExportTime.add(metrics.metricName(ClientMetricsStats.PLUGIN_EXPORT_TIME + "Avg",
-                ClientMetricsStats.GROUP_NAME, "Average time broker spent in invoking plugin exportMetrics call", tags), new Avg());
-            pluginExportTime.add(metrics.metricName(ClientMetricsStats.PLUGIN_EXPORT_TIME + "Max",
-                ClientMetricsStats.GROUP_NAME, "Maximum time broker spent in invoking plugin exportMetrics call", tags), new Max());
-            sensorsName.add(pluginExportTime.name());
         }
 
         public void recordUnknownSubscriptionCount() {
@@ -595,8 +591,7 @@ public class ClientMetricsManager implements AutoCloseable {
         }
 
         public void recordPluginExport(Uuid clientInstanceId, long timeMs) {
-            record(PLUGIN_EXPORT, clientInstanceId);
-            record(PLUGIN_EXPORT_TIME, clientInstanceId, timeMs);
+            record(PLUGIN_EXPORT, clientInstanceId, timeMs);
         }
 
         public void recordPluginErrorCount(Uuid clientInstanceId) {
@@ -604,7 +599,7 @@ public class ClientMetricsManager implements AutoCloseable {
         }
 
         public void unregisterClientInstanceMetrics(Uuid clientInstanceId) {
-            for (String name : instanceMetrics) {
+            for (String name : instanceSensors) {
                 String sensorName = name + "-" + clientInstanceId;
                 metrics.removeSensor(sensorName);
                 sensorsName.remove(sensorName);

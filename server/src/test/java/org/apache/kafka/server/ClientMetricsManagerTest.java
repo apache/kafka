@@ -205,7 +205,7 @@ public class ClientMetricsManagerTest {
         ClientMetricsInstance instance = clientMetricsManager.clientInstance(response.data().clientInstanceId());
         assertNotNull(instance);
         assertEquals(Errors.NONE, instance.lastKnownError());
-        // Validate metrics should have instance count metric, kafka metrics count and 5 sensors with 10 metrics
+        // Validate metrics should have instance count metric, kafka metrics count and 4 sensors with 10 metrics
         // registered i.e. 12 metrics.
         assertEquals(12, kafkaMetrics.metrics().size());
         // Metrics should only have one instance.
@@ -542,7 +542,7 @@ public class ClientMetricsManagerTest {
         assertEquals(Errors.NONE, response.error());
         assertFalse(instance.terminating());
         assertEquals(Errors.NONE, instance.lastKnownError());
-        // Validate metrics should have instance count metric, kafka metrics count and 5 sensors with 10 metrics
+        // Validate metrics should have instance count metric, kafka metrics count and 4 sensors with 10 metrics
         // registered i.e. 12 metrics.
         assertEquals(12, kafkaMetrics.metrics().size());
         assertEquals((double) 1, getMetric(ClientMetricsManager.ClientMetricsStats.INSTANCE_COUNT).metricValue());
@@ -579,7 +579,7 @@ public class ClientMetricsManagerTest {
             request, ClientMetricsTestUtils.requestContext());
 
         assertEquals(Errors.NONE, response.error());
-        // Validate metrics should have instance count metric, kafka metrics count and 5 sensors with 10 metrics
+        // Validate metrics should have instance count metric, kafka metrics count and 4 sensors with 10 metrics
         // registered i.e. 12 metrics.
         assertEquals(12, kafkaMetrics.metrics().size());
         assertEquals((double) 1, getMetric(kafkaMetrics, ClientMetricsManager.ClientMetricsStats.INSTANCE_COUNT).metricValue());
