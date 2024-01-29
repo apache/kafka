@@ -140,4 +140,19 @@ public class ToolsUtils {
         });
         return duplicates;
     }
+
+    /**
+     * @param set Source set.
+     * @param toRemove Elements to remove.
+     * @return {@code set} copy without {@code toRemove} elements.
+     * @param <T> Element type.
+     */
+    @SuppressWarnings("unchecked")
+    public static <T> Set<T> minus(Set<T> set, T...toRemove) {
+        Set<T> res = new HashSet<>(set);
+        for (T t : toRemove)
+            res.remove(t);
+        return res;
+    }
+
 }

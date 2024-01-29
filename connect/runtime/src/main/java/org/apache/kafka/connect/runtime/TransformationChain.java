@@ -30,20 +30,21 @@ import java.util.StringJoiner;
 
 /**
  * Represents a chain of {@link Transformation}s to be applied to a {@link ConnectRecord} serially.
+ * @param <T> The type of record included in the {@link ProcessingContext} associated with each record
  * @param <R> The type of record (must be an implementation of {@link ConnectRecord})
  */
-public class TransformationChain<R extends ConnectRecord<R>> implements AutoCloseable {
+public class TransformationChain<T, R extends ConnectRecord<R>> implements AutoCloseable {
     private static final Logger log = LoggerFactory.getLogger(TransformationChain.class);
 
     private final List<TransformationStage<R>> transformationStages;
-    private final RetryWithToleranceOperator retryWithToleranceOperator;
+    private final RetryWithToleranceOperator<T> retryWithToleranceOperator;
 
-    public TransformationChain(List<TransformationStage<R>> transformationStages, RetryWithToleranceOperator retryWithToleranceOperator) {
+    public TransformationChain(List<TransformationStage<R>> transformationStages, RetryWithToleranceOperator<T> retryWithToleranceOperator) {
         this.transformationStages = transformationStages;
         this.retryWithToleranceOperator = retryWithToleranceOperator;
     }
 
-    public R apply(ProcessingContext<?> context, R record) {
+    public R apply(ProcessingContext<T> context, R record) {
         if (transformationStages.isEmpty()) return record;
 
         for (final TransformationStage<R> transformationStage : transformationStages) {
@@ -71,7 +72,7 @@ public class TransformationChain<R extends ConnectRecord<R>> implements AutoClos
     public boolean equals(Object o) {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
-        TransformationChain<?> that = (TransformationChain<?>) o;
+        TransformationChain<?, ?> that = (TransformationChain<?, ?>) o;
         return Objects.equals(transformationStages, that.transformationStages);
     }
 

@@ -230,6 +230,10 @@ public class TopicsImageTest {
         );
         assertEquals(
             new HashSet<>(Arrays.asList(new TopicPartition("baz", 0))),
+            changes.electedLeaders().keySet()
+        );
+        assertEquals(
+            new HashSet<>(Arrays.asList(new TopicPartition("baz", 0))),
             changes.leaders().keySet()
         );
         assertEquals(
@@ -281,6 +285,7 @@ public class TopicsImageTest {
 
         LocalReplicaChanges changes = delta.localChanges(localId);
         assertEquals(new HashSet<>(Arrays.asList(new TopicPartition("zoo", 0))), changes.deletes());
+        assertEquals(Collections.emptyMap(), changes.electedLeaders());
         assertEquals(Collections.emptyMap(), changes.leaders());
         assertEquals(Collections.emptyMap(), changes.followers());
 
@@ -288,6 +293,43 @@ public class TopicsImageTest {
         List<ApiMessageAndVersion> imageRecords = getImageRecords(image);
         imageRecords.addAll(topicRecords);
         testToImage(finalImage, Optional.of(imageRecords));
+    }
+
+    @Test
+    public void testUpdatedLeaders() {
+        int localId = 3;
+        Uuid zooId = Uuid.fromString("0hHJ3X5ZQ-CFfQ5xgpj90w");
+
+        List<TopicImage> topics = new ArrayList<>();
+        topics.add(
+            newTopicImage(
+                "zoo",
+                zooId,
+                newPartition(new int[] {localId, 1, 2})
+            )
+        );
+        TopicsImage image = new TopicsImage(newTopicsByIdMap(topics),
+            newTopicsByNameMap(topics));
+
+        List<ApiMessageAndVersion> topicRecords = new ArrayList<>();
+        topicRecords.add(
+            new ApiMessageAndVersion(
+                new PartitionChangeRecord().setTopicId(zooId).setPartitionId(0).setIsr(Arrays.asList(localId, 1)),
+                PARTITION_CHANGE_RECORD.highestSupportedVersion()
+            )
+        );
+
+        TopicsDelta delta = new TopicsDelta(image);
+        RecordTestUtils.replayAll(delta, topicRecords);
+
+        LocalReplicaChanges changes = delta.localChanges(localId);
+        assertEquals(Collections.emptySet(), changes.deletes());
+        assertEquals(Collections.emptyMap(), changes.electedLeaders());
+        assertEquals(
+            new HashSet<>(Arrays.asList(new TopicPartition("zoo", 0))),
+            changes.leaders().keySet()
+        );
+        assertEquals(Collections.emptyMap(), changes.followers());
     }
 
     @Test
@@ -379,6 +421,10 @@ public class TopicsImageTest {
         assertEquals(
             new HashSet<>(Arrays.asList(new TopicPartition("zoo", 2), new TopicPartition("zoo", 3))),
             changes.deletes()
+        );
+        assertEquals(
+            new HashSet<>(Arrays.asList(new TopicPartition("zoo", 0), new TopicPartition("zoo", 4))),
+            changes.electedLeaders().keySet()
         );
         assertEquals(
             new HashSet<>(Arrays.asList(new TopicPartition("zoo", 0), new TopicPartition("zoo", 4))),

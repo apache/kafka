@@ -1,10 +1,10 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * the License. You may obtain a copy of the License at
  *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
@@ -14,14 +14,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package org.apache.kafka.coordinator.transaction;
 
-package kafka.common
-
-/**
- * Indicates the BrokerMetadata stored in logDirs is not consistent across logDirs.
- */
-class InconsistentBrokerMetadataException(message: String, cause: Throwable) extends RuntimeException(message, cause) {
-  def this(message: String) = this(message, null)
-  def this(cause: Throwable) = this(null, cause)
-  def this() = this(null, null)
+public class TransactionLogConfig {
+    // Log-level config default values
+    public static final int DEFAULT_NUM_PARTITIONS = 50;
+    public static final int DEFAULT_SEGMENT_BYTES = 100 * 1024 * 1024;
+    public static final short DEFAULT_REPLICATION_FACTOR = 3;
+    public static final int DEFAULT_MIN_IN_SYNC_REPLICAS = 2;
+    public static final int DEFAULT_LOAD_BUFFER_SIZE = 5 * 1024 * 1024;
 }

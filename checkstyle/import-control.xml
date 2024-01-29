@@ -331,6 +331,11 @@
       <allow pkg="scala" />
     </subpackage>
 
+    <subpackage name="consumer.group">
+      <allow pkg="org.apache.kafka.tools"/>
+      <allow pkg="scala"/>
+    </subpackage>
+
     <subpackage name="other">
       <allow pkg="org.apache.kafka.tools.reassign"/>
       <allow pkg="kafka.log" />

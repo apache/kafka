@@ -130,6 +130,8 @@ import org.apache.kafka.common.message.DescribeProducersRequestData;
 import org.apache.kafka.common.message.DescribeProducersResponseData;
 import org.apache.kafka.common.message.DescribeQuorumRequestData;
 import org.apache.kafka.common.message.DescribeQuorumResponseData;
+import org.apache.kafka.common.message.DescribeTopicPartitionsRequestData;
+import org.apache.kafka.common.message.DescribeTopicPartitionsResponseData;
 import org.apache.kafka.common.message.DescribeTransactionsRequestData;
 import org.apache.kafka.common.message.DescribeTransactionsResponseData;
 import org.apache.kafka.common.message.DescribeUserScramCredentialsRequestData;
@@ -1077,6 +1079,7 @@ public class RequestResponseTest {
             case PUSH_TELEMETRY: return createPushTelemetryRequest(version);
             case ASSIGN_REPLICAS_TO_DIRS: return createAssignReplicasToDirsRequest(version);
             case LIST_CLIENT_METRICS_RESOURCES: return createListClientMetricsResourcesRequest(version);
+            case DESCRIBE_TOPIC_PARTITIONS: return createDescribeTopicPartitionsRequest(version);
             default: throw new IllegalArgumentException("Unknown API key " + apikey);
         }
     }
@@ -1158,6 +1161,7 @@ public class RequestResponseTest {
             case PUSH_TELEMETRY: return createPushTelemetryResponse();
             case ASSIGN_REPLICAS_TO_DIRS: return createAssignReplicasToDirsResponse();
             case LIST_CLIENT_METRICS_RESOURCES: return createListClientMetricsResourcesResponse();
+            case DESCRIBE_TOPIC_PARTITIONS: return createDescribeTopicPartitionsResponse();
             default: throw new IllegalArgumentException("Unknown API key " + apikey);
         }
     }
@@ -1249,6 +1253,41 @@ public class RequestResponseTest {
                                 ))
                 ));
         return new AssignReplicasToDirsResponse(data);
+    }
+
+    private DescribeTopicPartitionsRequest createDescribeTopicPartitionsRequest(short version) {
+        DescribeTopicPartitionsRequestData data = new DescribeTopicPartitionsRequestData()
+                .setTopics(Arrays.asList(new DescribeTopicPartitionsRequestData.TopicRequest().setName("foo")))
+                .setCursor(new DescribeTopicPartitionsRequestData.Cursor().setTopicName("foo").setPartitionIndex(1));
+        return new DescribeTopicPartitionsRequest.Builder(data).build(version);
+    }
+
+    private DescribeTopicPartitionsResponse createDescribeTopicPartitionsResponse() {
+        DescribeTopicPartitionsResponseData.DescribeTopicPartitionsResponseTopicCollection collection =
+                new DescribeTopicPartitionsResponseData.DescribeTopicPartitionsResponseTopicCollection();
+        collection.add(
+                new DescribeTopicPartitionsResponseData.DescribeTopicPartitionsResponseTopic()
+                        .setTopicId(Uuid.fromString("sKhZV8LnTA275KvByB9bVg"))
+                        .setErrorCode((short) 0)
+                        .setIsInternal(false)
+                        .setName("foo")
+                        .setTopicAuthorizedOperations(0)
+                        .setPartitions(Arrays.asList(
+                                new DescribeTopicPartitionsResponseData.DescribeTopicPartitionsResponsePartition()
+                                        .setErrorCode((short) 0)
+                                        .setIsrNodes(Arrays.asList(1))
+                                        .setPartitionIndex(1)
+                                        .setLeaderId(1)
+                                        .setReplicaNodes(Arrays.asList(1))
+                                        .setLeaderEpoch(0)
+                        ))
+        );
+        DescribeTopicPartitionsResponseData data = new DescribeTopicPartitionsResponseData()
+                .setTopics(collection)
+                .setNextCursor(
+                        new DescribeTopicPartitionsResponseData.Cursor().setTopicName("foo").setPartitionIndex(2)
+                );
+        return new DescribeTopicPartitionsResponse(data);
     }
 
     private ConsumerGroupHeartbeatRequest createConsumerGroupHeartbeatRequest(short version) {
