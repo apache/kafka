@@ -1062,10 +1062,10 @@ public class GroupCoordinatorService implements GroupCoordinator {
      * @param operationName     The name of the operation.
      * @param operationInput    The operation's input for logging purposes.
      * @param exception         The exception to handle.
-     * @param handler           A function which takes an Errors and a String and returns the expected
+     * @param handler           A function which takes an Errors and a String and builds the expected
      *                          output. The String can be null. Note that the function could further
      *                          transform the error depending on the context.
-     * @return The response.
+     * @return The output build by the handler.
      * @param <IN> The type of the input.
      * @param <OUT> The type of the output.
      */
