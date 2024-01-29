@@ -181,6 +181,26 @@ public class OffsetMetadataManagerTest {
             this.offsetMetadataManager = offsetMetadataManager;
         }
 
+        public Group getOrMaybeCreateGroup(
+            Group.GroupType groupType,
+            String groupId
+        ) {
+            switch (groupType) {
+                case CLASSIC:
+                    return groupMetadataManager.getOrMaybeCreateClassicGroup(
+                        groupId,
+                        true
+                    );
+                case CONSUMER:
+                    return groupMetadataManager.getOrMaybeCreateConsumerGroup(
+                        groupId,
+                        true
+                    );
+                default:
+                    throw new IllegalArgumentException("Invalid group type: " + groupType);
+            }
+        }
+
         public void commit() {
             long lastCommittedOffset = this.lastCommittedOffset;
             this.lastCommittedOffset = lastWrittenOffset;
@@ -412,7 +432,7 @@ public class OffsetMetadataManagerTest {
                     commitTimestamp,
                     OptionalLong.empty()
                 ),
-                MetadataVersion.latest()
+                MetadataVersion.latestTesting()
             ));
         }
 
@@ -461,6 +481,7 @@ public class OffsetMetadataManagerTest {
             switch (key.version()) {
                 case OffsetCommitKey.HIGHEST_SUPPORTED_VERSION:
                     offsetMetadataManager.replay(
+                        lastWrittenOffset,
                         producerId,
                         (OffsetCommitKey) key.message(),
                         (OffsetCommitValue) messageOrNull(value)
@@ -501,13 +522,11 @@ public class OffsetMetadataManagerTest {
 
             final OffsetDeleteResponseData.OffsetDeleteResponsePartitionCollection expectedResponsePartitionCollection =
                 new OffsetDeleteResponseData.OffsetDeleteResponsePartitionCollection();
-            if (hasOffset(groupId, topic, partition)) {
-                expectedResponsePartitionCollection.add(
-                    new OffsetDeleteResponseData.OffsetDeleteResponsePartition()
-                        .setPartitionIndex(partition)
-                        .setErrorCode(expectedError.code())
-                );
-            }
+            expectedResponsePartitionCollection.add(
+                new OffsetDeleteResponseData.OffsetDeleteResponsePartition()
+                    .setPartitionIndex(partition)
+                    .setErrorCode(expectedError.code())
+            );
 
             final OffsetDeleteResponseData.OffsetDeleteResponseTopicCollection expectedResponseTopicCollection =
                 new OffsetDeleteResponseData.OffsetDeleteResponseTopicCollection(Collections.singletonList(
@@ -538,7 +557,8 @@ public class OffsetMetadataManagerTest {
             String topic,
             int partition
         ) {
-            return offsetMetadataManager.offset(groupId, topic, partition) != null;
+            return offsetMetadataManager.hasCommittedOffset(groupId, topic, partition) ||
+                offsetMetadataManager.hasPendingTransactionalOffsets(groupId, topic, partition);
         }
     }
 
@@ -2281,6 +2301,7 @@ public class OffsetMetadataManagerTest {
         context.commitOffset("foo", "bar", 0, 100L, 0);
         group.setSubscribedTopics(Optional.of(Collections.emptySet()));
         context.testOffsetDeleteWith("foo", "bar", 0, Errors.NONE);
+        assertFalse(context.hasOffset("foo", "bar", 0));
     }
 
     @Test
@@ -2297,6 +2318,19 @@ public class OffsetMetadataManagerTest {
         context.testOffsetDeleteWith("foo", "bar1", 0, Errors.NONE);
         // Delete the offset from the topic that the group is subscribed to.
         context.testOffsetDeleteWith("foo", "bar", 0, Errors.GROUP_SUBSCRIBED_TO_TOPIC);
+    }
+
+    @Test
+    public void testGenericGroupOffsetDeleteWithPendingTransactionalOffsets() {
+        OffsetMetadataManagerTestContext context = new OffsetMetadataManagerTestContext.Builder().build();
+        ClassicGroup group = context.groupMetadataManager.getOrMaybeCreateClassicGroup(
+            "foo",
+            true
+        );
+        context.commitOffset(10L, "foo", "bar", 0, 100L, 0, context.time.milliseconds());
+        group.setSubscribedTopics(Optional.of(Collections.emptySet()));
+        context.testOffsetDeleteWith("foo", "bar", 0, Errors.NONE);
+        assertFalse(context.hasOffset("foo", "bar", 0));
     }
 
     @Test
@@ -2341,26 +2375,25 @@ public class OffsetMetadataManagerTest {
         context.testOffsetDeleteWith("foo", "bar", 0, Errors.GROUP_SUBSCRIBED_TO_TOPIC);
     }
 
+    @Test
+    public void testConsumerGroupOffsetDeleteWithPendingTransactionalOffsets() {
+        OffsetMetadataManagerTestContext context = new OffsetMetadataManagerTestContext.Builder().build();
+        ConsumerGroup group = context.groupMetadataManager.getOrMaybeCreateConsumerGroup(
+            "foo",
+            true
+        );
+        context.commitOffset(10L, "foo", "bar", 0, 100L, 0, context.time.milliseconds());
+        assertFalse(group.isSubscribedToTopic("bar"));
+        context.testOffsetDeleteWith("foo", "bar", 0, Errors.NONE);
+        assertFalse(context.hasOffset("foo", "bar", 0));
+    }
+
     @ParameterizedTest
     @EnumSource(Group.GroupType.class)
     public void testDeleteGroupAllOffsets(Group.GroupType groupType) {
         OffsetMetadataManagerTestContext context = new OffsetMetadataManagerTestContext.Builder().build();
-        switch (groupType) {
-            case CLASSIC:
-                context.groupMetadataManager.getOrMaybeCreateClassicGroup(
-                    "foo",
-                    true
-                );
-                break;
-            case CONSUMER:
-                context.groupMetadataManager.getOrMaybeCreateConsumerGroup(
-                    "foo",
-                    true
-                );
-                break;
-            default:
-                throw new IllegalArgumentException("Invalid group type: " + groupType);
-        }
+        context.getOrMaybeCreateGroup(groupType, "foo");
+
         context.commitOffset("foo", "bar-0", 0, 100L, 0);
         context.commitOffset("foo", "bar-0", 1, 100L, 0);
         context.commitOffset("foo", "bar-1", 0, 100L, 0);
@@ -2376,6 +2409,38 @@ public class OffsetMetadataManagerTest {
 
         assertEquals(expectedRecords, records);
         assertEquals(3, numDeleteOffsets);
+    }
+
+    @ParameterizedTest
+    @EnumSource(Group.GroupType.class)
+    public void testDeleteGroupAllOffsetsWithPendingTransactionalOffsets(Group.GroupType groupType) {
+        OffsetMetadataManagerTestContext context = new OffsetMetadataManagerTestContext.Builder().build();
+        context.getOrMaybeCreateGroup(groupType, "foo");
+
+        context.commitOffset("foo", "bar-0", 0, 100L, 0);
+        context.commitOffset("foo", "bar-0", 1, 100L, 0);
+        context.commitOffset("foo", "bar-1", 0, 100L, 0);
+
+        context.commitOffset(10L, "foo", "bar-1", 0, 101L, 0, context.time.milliseconds());
+        context.commitOffset(10L, "foo", "bar-2", 0, 100L, 0, context.time.milliseconds());
+
+        List<Record> expectedRecords = Arrays.asList(
+            RecordHelpers.newOffsetCommitTombstoneRecord("foo", "bar-1", 0),
+            RecordHelpers.newOffsetCommitTombstoneRecord("foo", "bar-0", 0),
+            RecordHelpers.newOffsetCommitTombstoneRecord("foo", "bar-0", 1),
+            RecordHelpers.newOffsetCommitTombstoneRecord("foo", "bar-2", 0)
+        );
+
+        List<Record> records = new ArrayList<>();
+        int numDeleteOffsets = context.deleteAllOffsets("foo", records);
+
+        assertEquals(expectedRecords, records);
+        assertEquals(4, numDeleteOffsets);
+
+        assertFalse(context.hasOffset("foo", "bar-0", 0));
+        assertFalse(context.hasOffset("foo", "bar-0", 1));
+        assertFalse(context.hasOffset("foo", "bar-1", 0));
+        assertFalse(context.hasOffset("foo", "bar-2", 0));
     }
 
     @Test
@@ -2480,6 +2545,34 @@ public class OffsetMetadataManagerTest {
         assertEquals(expectedRecords, records);
     }
 
+    @Test
+    public void testCleanupExpiredOffsetsWithPendingTransactionalOffsets() {
+        GroupMetadataManager groupMetadataManager = mock(GroupMetadataManager.class);
+        Group group = mock(Group.class);
+
+        OffsetMetadataManagerTestContext context = new OffsetMetadataManagerTestContext.Builder()
+            .withGroupMetadataManager(groupMetadataManager)
+            .withOffsetsRetentionMs(1000)
+            .build();
+
+        long commitTimestamp = context.time.milliseconds();
+
+        context.commitOffset("group-id", "foo", 0, 100L, 0, commitTimestamp);
+        context.commitOffset(10L, "group-id", "foo", 0, 101L, 0, commitTimestamp + 500);
+
+        context.time.sleep(1000);
+
+        when(groupMetadataManager.group("group-id")).thenReturn(group);
+        when(group.offsetExpirationCondition()).thenReturn(Optional.of(
+            new OffsetExpirationConditionImpl(offsetAndMetadata -> offsetAndMetadata.commitTimestampMs)));
+        when(group.isSubscribedToTopic("foo")).thenReturn(false);
+
+        // foo-0 should not be expired because it has a pending transactional offset commit.
+        List<Record> records = new ArrayList<>();
+        assertFalse(context.cleanupExpiredOffsets("group-id", records));
+        assertEquals(Collections.emptyList(), records);
+    }
+
     static private OffsetFetchResponseData.OffsetFetchResponsePartitions mkOffsetPartitionResponse(
         int partition,
         long offset,
@@ -2515,6 +2608,7 @@ public class OffsetMetadataManagerTest {
         OffsetMetadataManagerTestContext context = new OffsetMetadataManagerTestContext.Builder().build();
 
         verifyReplay(context, "foo", "bar", 0, new OffsetAndMetadata(
+            0L,
             100L,
             OptionalInt.empty(),
             "small",
@@ -2523,6 +2617,7 @@ public class OffsetMetadataManagerTest {
         ));
 
         verifyReplay(context, "foo", "bar", 0, new OffsetAndMetadata(
+            1L,
             200L,
             OptionalInt.of(10),
             "small",
@@ -2531,6 +2626,7 @@ public class OffsetMetadataManagerTest {
         ));
 
         verifyReplay(context, "foo", "bar", 1, new OffsetAndMetadata(
+            2L,
             200L,
             OptionalInt.of(10),
             "small",
@@ -2539,6 +2635,7 @@ public class OffsetMetadataManagerTest {
         ));
 
         verifyReplay(context, "foo", "bar", 1, new OffsetAndMetadata(
+            3L,
             300L,
             OptionalInt.of(10),
             "small",
@@ -2552,6 +2649,7 @@ public class OffsetMetadataManagerTest {
         OffsetMetadataManagerTestContext context = new OffsetMetadataManagerTestContext.Builder().build();
 
         verifyTransactionalReplay(context, 5, "foo", "bar", 0, new OffsetAndMetadata(
+            0L,
             100L,
             OptionalInt.empty(),
             "small",
@@ -2560,6 +2658,7 @@ public class OffsetMetadataManagerTest {
         ));
 
         verifyTransactionalReplay(context, 5, "foo", "bar", 1, new OffsetAndMetadata(
+            1L,
             101L,
             OptionalInt.empty(),
             "small",
@@ -2568,6 +2667,7 @@ public class OffsetMetadataManagerTest {
         ));
 
         verifyTransactionalReplay(context, 5, "bar", "zar", 0, new OffsetAndMetadata(
+            2L,
             100L,
             OptionalInt.empty(),
             "small",
@@ -2576,6 +2676,7 @@ public class OffsetMetadataManagerTest {
         ));
 
         verifyTransactionalReplay(context, 5, "bar", "zar", 1, new OffsetAndMetadata(
+            3L,
             101L,
             OptionalInt.empty(),
             "small",
@@ -2584,6 +2685,7 @@ public class OffsetMetadataManagerTest {
         ));
 
         verifyTransactionalReplay(context, 6, "foo", "bar", 2, new OffsetAndMetadata(
+            4L,
             102L,
             OptionalInt.empty(),
             "small",
@@ -2592,6 +2694,7 @@ public class OffsetMetadataManagerTest {
         ));
 
         verifyTransactionalReplay(context, 6, "foo", "bar", 3, new OffsetAndMetadata(
+            5L,
             102L,
             OptionalInt.empty(),
             "small",
@@ -2601,11 +2704,12 @@ public class OffsetMetadataManagerTest {
     }
 
     @Test
-    public void testReplayWithTombstone() {
+    public void testReplayWithTombstoneAndPendingTransactionalOffsets() {
         OffsetMetadataManagerTestContext context = new OffsetMetadataManagerTestContext.Builder().build();
 
-        // Verify replay adds the offset the map.
+        // Add the offsets.
         verifyReplay(context, "foo", "bar", 0, new OffsetAndMetadata(
+            0L,
             100L,
             OptionalInt.empty(),
             "small",
@@ -2613,23 +2717,59 @@ public class OffsetMetadataManagerTest {
             OptionalLong.empty()
         ));
 
-        // Create a tombstone record and replay it to delete the record.
+        verifyTransactionalReplay(context, 10L, "foo", "bar", 0, new OffsetAndMetadata(
+            1L,
+            100L,
+            OptionalInt.empty(),
+            "small",
+            context.time.milliseconds(),
+            OptionalLong.empty()
+        ));
+
+        verifyTransactionalReplay(context, 10L, "foo", "bar", 1, new OffsetAndMetadata(
+            2L,
+            100L,
+            OptionalInt.empty(),
+            "small",
+            context.time.milliseconds(),
+            OptionalLong.empty()
+        ));
+
+        // Delete the offsets.
         context.replay(RecordHelpers.newOffsetCommitTombstoneRecord(
             "foo",
             "bar",
             0
         ));
 
+        context.replay(RecordHelpers.newOffsetCommitTombstoneRecord(
+            "foo",
+            "bar",
+            1
+        ));
+
         // Verify that the offset is gone.
-        assertNull(context.offsetMetadataManager.offset("foo", "bar", 0));
+        assertFalse(context.hasOffset("foo", "bar", 0));
+        assertFalse(context.hasOffset("foo", "bar", 1));
     }
 
     @Test
     public void testReplayTransactionEndMarkerWithCommit() {
         OffsetMetadataManagerTestContext context = new OffsetMetadataManagerTestContext.Builder().build();
 
+        // Add regular offset commit.
+        verifyReplay(context, "foo", "bar", 0, new OffsetAndMetadata(
+            0L,
+            99L,
+            OptionalInt.empty(),
+            "small",
+            context.time.milliseconds(),
+            OptionalLong.empty()
+        ));
+
         // Add pending transactional commit for producer id 5.
         verifyTransactionalReplay(context, 5L, "foo", "bar", 0, new OffsetAndMetadata(
+            1L,
             100L,
             OptionalInt.empty(),
             "small",
@@ -2639,6 +2779,7 @@ public class OffsetMetadataManagerTest {
 
         // Add pending transactional commit for producer id 6.
         verifyTransactionalReplay(context, 6L, "foo", "bar", 1, new OffsetAndMetadata(
+            2L,
             200L,
             OptionalInt.empty(),
             "small",
@@ -2662,6 +2803,7 @@ public class OffsetMetadataManagerTest {
 
         // ... and added to the main offset storage.
         assertEquals(new OffsetAndMetadata(
+            1L,
             100L,
             OptionalInt.empty(),
             "small",
@@ -2689,6 +2831,101 @@ public class OffsetMetadataManagerTest {
             "bar",
             1
         ));
+    }
+
+    @Test
+    public void testReplayTransactionEndMarkerKeepsTheMostRecentCommittedOffset() {
+        OffsetMetadataManagerTestContext context = new OffsetMetadataManagerTestContext.Builder().build();
+
+        // Add pending transactional offset commit for producer id 5.
+        verifyTransactionalReplay(context, 5L, "foo", "bar", 0, new OffsetAndMetadata(
+            0L,
+            100L,
+            OptionalInt.empty(),
+            "small",
+            context.time.milliseconds(),
+            OptionalLong.empty()
+        ));
+
+        // Add regular offset commit.
+        verifyReplay(context, "foo", "bar", 0, new OffsetAndMetadata(
+            1L,
+            101L,
+            OptionalInt.empty(),
+            "small",
+            context.time.milliseconds(),
+            OptionalLong.empty()
+        ));
+
+        // Replaying an end marker to commit transaction of producer id 5.
+        context.replayEndTransactionMarker(5L, TransactionResult.COMMIT);
+
+        // The pending offset is removed...
+        assertNull(context.offsetMetadataManager.pendingTransactionalOffset(
+            5L,
+            "foo",
+            "bar",
+            0
+        ));
+
+        // ... but it is not added to the main storage because the regular
+        // committed offset is more recent.
+        assertEquals(new OffsetAndMetadata(
+            1L,
+            101L,
+            OptionalInt.empty(),
+            "small",
+            context.time.milliseconds(),
+            OptionalLong.empty()
+        ), context.offsetMetadataManager.offset(
+            "foo",
+            "bar",
+            0
+        ));
+    }
+
+    @Test
+    public void testOffsetCommitsNumberMetricWithTransactionalOffsets() {
+        OffsetMetadataManagerTestContext context = new OffsetMetadataManagerTestContext.Builder().build();
+
+        // Add pending transactional commit for producer id 4.
+        verifyTransactionalReplay(context, 4L, "foo", "bar", 0, new OffsetAndMetadata(
+            0L,
+            100L,
+            OptionalInt.empty(),
+            "small",
+            context.time.milliseconds(),
+            OptionalLong.empty()
+        ));
+
+        // Add pending transactional commit for producer id 5.
+        verifyTransactionalReplay(context, 5L, "foo", "bar", 0, new OffsetAndMetadata(
+            1L,
+            101L,
+            OptionalInt.empty(),
+            "small",
+            context.time.milliseconds(),
+            OptionalLong.empty()
+        ));
+
+        // Add pending transactional commit for producer id 6.
+        verifyTransactionalReplay(context, 6L, "foo", "bar", 1, new OffsetAndMetadata(
+            2L,
+            200L,
+            OptionalInt.empty(),
+            "small",
+            context.time.milliseconds(),
+            OptionalLong.empty()
+        ));
+
+        // Commit all the transactions.
+        context.replayEndTransactionMarker(4L, TransactionResult.COMMIT);
+        context.replayEndTransactionMarker(5L, TransactionResult.COMMIT);
+        context.replayEndTransactionMarker(6L, TransactionResult.COMMIT);
+
+        // Verify the sensor is called twice as we have only
+        // two partitions.
+        verify(context.metrics, times(2)).incrementNumOffsets();
     }
 
     @Test

@@ -320,7 +320,7 @@ public class PartitionRegistrationTest {
         if (metadataVersion.isElrSupported()) {
             expectRecord.
                 setEligibleLeaderReplicas(Arrays.asList(2, 3)).
-                setLastKnownELR(Arrays.asList(4));
+                setLastKnownElr(Arrays.asList(4));
         }
         if (metadataVersion.isDirectoryAssignmentSupported()) {
             expectRecord.setDirectories(Arrays.asList(

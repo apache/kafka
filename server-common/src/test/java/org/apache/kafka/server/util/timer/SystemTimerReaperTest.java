@@ -14,12 +14,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.coordinator.group.util;
+package org.apache.kafka.server.util.timer;
 
 import org.apache.kafka.common.errors.TimeoutException;
-import org.apache.kafka.server.util.timer.SystemTimer;
-import org.apache.kafka.server.util.timer.Timer;
-import org.apache.kafka.server.util.timer.TimerTask;
 import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.Test;
 

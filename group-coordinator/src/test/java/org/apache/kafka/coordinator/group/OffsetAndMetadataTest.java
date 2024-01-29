@@ -38,7 +38,7 @@ public class OffsetAndMetadataTest {
             OptionalLong.of(5678L)
         );
 
-        assertEquals(100L, offsetAndMetadata.offset);
+        assertEquals(100L, offsetAndMetadata.committedOffset);
         assertEquals(OptionalInt.of(10), offsetAndMetadata.leaderEpoch);
         assertEquals("metadata", offsetAndMetadata.metadata);
         assertEquals(1234L, offsetAndMetadata.commitTimestampMs);
@@ -55,24 +55,26 @@ public class OffsetAndMetadataTest {
             .setExpireTimestamp(-1L);
 
         assertEquals(new OffsetAndMetadata(
+            10L,
             100L,
             OptionalInt.empty(),
             "metadata",
             1234L,
             OptionalLong.empty()
-        ), OffsetAndMetadata.fromRecord(record));
+        ), OffsetAndMetadata.fromRecord(10L, record));
 
         record
             .setLeaderEpoch(12)
             .setExpireTimestamp(5678L);
 
         assertEquals(new OffsetAndMetadata(
+            11L,
             100L,
             OptionalInt.of(12),
             "metadata",
             1234L,
             OptionalLong.of(5678L)
-        ), OffsetAndMetadata.fromRecord(record));
+        ), OffsetAndMetadata.fromRecord(11L, record));
     }
 
     @Test

@@ -87,13 +87,7 @@
     ]},
     { "name": "Assignment", "versions": "0+", "fields": [
       { "name": "TopicPartitions", "type": "[]TopicPartitions", "versions": "0+",
-        "about": "The assigned topic-partitions to the member." },
-      { "name": "Error", "type": "int8", "versions": "0+",
-        "about": "The assigned error." },
-      { "name": "MetadataVersion", "type": "int32", "versions": "0+",
-        "about": "The assignor metadata version." },
-      { "name": "MetadataBytes", "type": "bytes", "versions": "0+",
-        "about": "The assignor metadata bytes." }
+        "about": "The assigned topic-partitions to the member." }
     ]}
   ]
 }
