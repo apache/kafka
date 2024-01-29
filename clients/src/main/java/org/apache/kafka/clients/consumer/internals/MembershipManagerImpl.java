@@ -209,18 +209,12 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
     private final Map<Uuid, String> assignedTopicNamesCache;
 
     /**
-     * Topic IDs received in the last target assignment. Items are added to this set every time a
-     * target assignment is received. This is where the member collects the assignment
+     * Topic IDs and partitions received in the last target assignment. Items are added to this set
+     * every time a target assignment is received. This is where the member collects the assignment
      * received from the broker, even though it may not be ready to fully reconcile due to missing
      * metadata.
      */
     private final Map<Uuid, SortedSet<Integer>> currentTargetAssignment;
-
-    /**
-     * This is a memoized version of the equality of currentAssignment and currentTargetAssignment,
-     * and needs to be kept up-to-date.
-     */
-    private boolean targetAssignmentReconciled;
 
     /**
      * If there is a reconciliation running (triggering commit, callbacks) for the
@@ -296,7 +290,6 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
         this.assignedTopicNamesCache = new HashMap<>();
         this.currentTargetAssignment = new HashMap<>();
         this.currentAssignment = new HashMap<>();
-        this.targetAssignmentReconciled = true;
         this.log = logContext.logger(MembershipManagerImpl.class);
         this.stateUpdatesListeners = new ArrayList<>();
         this.clientTelemetryReporter = clientTelemetryReporter;
@@ -409,7 +402,7 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
      */
     private void processAssignmentReceived(ConsumerGroupHeartbeatResponseData.Assignment assignment) {
         replaceTargetAssignmentWithNewAssignment(assignment);
-        if (!targetAssignmentReconciled) {
+        if (!targetAssignmentReconciled()) {
             // Transition the member to RECONCILING when receiving a new target
             // assignment from the broker, different from the current assignment. Note that the
             // reconciliation might not be triggered just yet because of missing metadata.
@@ -439,7 +432,6 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
         currentTargetAssignment.clear();
         assignment.topicPartitions().forEach(topicPartitions ->
             currentTargetAssignment.put(topicPartitions.topicId(), new TreeSet<>(topicPartitions.partitions())));
-        targetAssignmentReconciled = currentAssignment.equals(currentTargetAssignment);
     }
 
     /**
@@ -662,7 +654,6 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
                 ConsumerGroupHeartbeatRequest.LEAVE_GROUP_MEMBER_EPOCH;
         updateMemberEpoch(leaveEpoch);
         currentAssignment = new HashMap<>();
-        targetAssignmentReconciled = currentAssignment.equals(currentTargetAssignment);
         transitionTo(MemberState.LEAVING);
     }
 
@@ -733,7 +724,7 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
      * @return True if there are no assignments waiting to be resolved from metadata or reconciled.
      */
     private boolean targetAssignmentReconciled() {
-        return targetAssignmentReconciled;
+        return currentAssignment.equals(currentTargetAssignment);
     }
 
     @Override
@@ -757,14 +748,14 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
     /**
      * Reconcile the assignment that has been received from the server. If for some topics, the
      * topic ID cannot be matched to a topic name, a metadata update will be triggered and only
-     * the subset of topics that are resolvable will be reconciled. Reconcilation will trigger the
+     * the subset of topics that are resolvable will be reconciled. Reconciliation will trigger the
      * callbacks and update the subscription state. Note that only one reconciliation
      * can be in progress at a time. If there is already another one in progress when this is
      * triggered, it will be no-op, and the assignment will be reconciled on the next
      * reconciliation loop.
      */
     void reconcile() {
-        if (targetAssignmentReconciled) {
+        if (targetAssignmentReconciled()) {
             log.debug("Ignoring reconciliation attempt. Target assignment is equal to the " +
                     "current assignment.");
             return;
@@ -928,7 +919,6 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
             Uuid topicId = topicIdPartition.topicId();
             currentAssignment.computeIfAbsent(topicId, k -> new TreeSet<>()).add(topicIdPartition.partition());
         });
-        targetAssignmentReconciled = currentAssignment.equals(currentTargetAssignment);
     }
 
     /**
@@ -990,7 +980,7 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
         final HashMap<Uuid, SortedSet<Integer>> unresolved = new HashMap<>(currentTargetAssignment);
 
         // Try to resolve topic names from metadata cache or subscription cache, and move
-        // assignments from the "unresolved" collection, to the "readyToReconcile" one.
+        // assignments from the "unresolved" collection, to the "assignmentReadyToReconcile" one.
         Iterator<Map.Entry<Uuid, SortedSet<Integer>>> it = unresolved.entrySet().iterator();
         while (it.hasNext()) {
             Map.Entry<Uuid, SortedSet<Integer>> e = it.next();
@@ -1003,7 +993,7 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
                 topicPartitions.forEach(tp -> {
                     TopicIdPartition topicIdPartition = new TopicIdPartition(
                         topicId,
-                            new TopicPartition(resolvedTopicName, tp));
+                        new TopicPartition(resolvedTopicName, tp));
                     assignmentReadyToReconcile.add(topicIdPartition);
                 });
                 it.remove();
@@ -1249,7 +1239,6 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
     private void clearPendingAssignmentsAndLocalNamesCache() {
         currentTargetAssignment.clear();
         assignedTopicNamesCache.clear();
-        targetAssignmentReconciled = currentAssignment.equals(currentTargetAssignment);
     }
 
     private void resetEpoch() {
@@ -1296,22 +1285,21 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
 
     /**
      * @return Set of topic IDs received in a target assignment that have not been reconciled yet
-     * because topic names are not in metadata or reconciliation hasn't finished. Visible for testing.
+     * because topic names are not in metadata or reconciliation hasn't finished. Reconciliation
+     * hasn't finished for a topic if the currently active assignment has a different set of partitions
+     * for the topic than the target assignment.
+     *
+     * Visible for testing.
      */
     Set<Uuid> topicsAwaitingReconciliation() {
-        final HashSet<Uuid> topicSet = new HashSet<>();
-        currentTargetAssignment.forEach((x, y) -> {
-            if (!currentAssignment.containsKey(x)) {
-                topicSet.add(x);
-            }
-        });
-        return Collections.unmodifiableSet(topicSet);
+        return topicPartitionsAwaitingReconciliation().keySet();
     }
 
     /**
      * @return Map of topics partitions received in a target assignment that have not been
      * reconciled yet because topic names are not in metadata or reconciliation hasn't finished.
      * The value will always contain all partitions in the target assignment.
+     *
      * Visible for testing.
      */
     Map<Uuid, SortedSet<Integer>> topicPartitionsAwaitingReconciliation() {
@@ -1344,7 +1332,9 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
      */
     @Override
     public void onUpdate(ClusterResource clusterResource) {
-        reconcile();
+        if (state == MemberState.RECONCILING) {
+            reconcile();
+        }
     }
 
     /**
