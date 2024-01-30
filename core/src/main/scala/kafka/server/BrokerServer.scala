@@ -452,7 +452,9 @@ class BrokerServer(
           authorizer
         ),
         sharedServer.initialBrokerMetadataLoadFaultHandler,
-        sharedServer.metadataPublishingFaultHandler)
+        sharedServer.metadataPublishingFaultHandler,
+        lifecycleManager
+      )
       metadataPublishers.add(brokerMetadataPublisher)
 
       // Register parts of the broker that can be reconfigured via dynamic configs.  This needs to
