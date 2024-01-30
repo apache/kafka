@@ -312,6 +312,8 @@ class MiniKdc(config: Properties, workDir: File) extends Logging {
     * @param password  password.
     */
   private def createPrincipal(principal: String, password: String): Unit = {
+    ldapServer.setSaslPrincipal(s"${principal}@${realm}")
+    kdc.createPrincipal(principal, password)
     val ldifContent = s"""
          |dn: uid=$principal,ou=users,dc=${orgName.toLowerCase(Locale.ENGLISH)},dc=${orgDomain.toLowerCase(Locale.ENGLISH)}
          |objectClass: top
@@ -353,6 +355,7 @@ class MiniKdc(config: Properties, workDir: File) extends Logging {
     }
     keytab.addKeytabEntries(entries.asJava)
     keytab.store(keytabFile)
+    ldapServer.setKeystoreFile(keytabFile.getAbsolutePath)
   }
 
   private def addEntriesToDirectoryService(ldifContent: String): Unit = {
