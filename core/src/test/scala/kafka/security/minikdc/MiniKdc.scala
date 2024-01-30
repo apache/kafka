@@ -202,6 +202,7 @@ class MiniKdc(config: Properties, workDir: File) extends Logging {
       val generatedPassword = UUID.randomUUID.toString
       val entries = principals.flatMap { principal =>
         val principalWithRealm = s"${principal}@${realm}"
+        kdc.getKadmin.addPrincipal(principalWithRealm, generatedPassword)
         KerberosKeyFactory.getKerberosKeys(principalWithRealm, generatedPassword)
           .asScala.values
           .map { encryptionKey =>
@@ -214,8 +215,6 @@ class MiniKdc(config: Properties, workDir: File) extends Logging {
       }
       keytab.addKeytabEntries(entries.asJava)
       keytab.store(keytabFile)
-//      val byte = Files.readAllBytes(keytabFile.toPath)
-//      println(new String(byte))
       info(s"Keytab file created at ${keytabFile.getAbsolutePath}")
     } catch {
       case e: KrbException =>
