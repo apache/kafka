@@ -34,7 +34,7 @@ class StateChangeLogger(brokerId: Int, inControllerContext: Boolean, controllerE
   if (controllerEpoch.isDefined && !inControllerContext)
     throw new IllegalArgumentException("Controller epoch should only be defined if inControllerContext is true")
 
-  override lazy val logger = StateChangeLogger.logger
+  override lazy val logger: Logger = StateChangeLogger.logger
 
   locally {
     val prefix = if (inControllerContext) "Controller" else "Broker"

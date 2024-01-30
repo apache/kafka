@@ -20,6 +20,8 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.ConsumerGroupDescribeResponseData;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupCurrentMemberAssignmentValue;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupMemberMetadataValue;
+import org.apache.kafka.image.TopicImage;
+import org.apache.kafka.image.TopicsImage;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -552,15 +554,19 @@ public class ConsumerGroupMember {
      *
      * @return The ConsumerGroupMember mapped as ConsumerGroupDescribeResponseData.Member.
      */
-    public ConsumerGroupDescribeResponseData.Member asConsumerGroupDescribeMember(Assignment targetAssignment) {
+    public ConsumerGroupDescribeResponseData.Member asConsumerGroupDescribeMember(
+        Assignment targetAssignment,
+        TopicsImage topicsImage
+    ) {
         return new ConsumerGroupDescribeResponseData.Member()
             .setMemberEpoch(memberEpoch)
             .setMemberId(memberId)
             .setAssignment(new ConsumerGroupDescribeResponseData.Assignment()
-                .setTopicPartitions(topicPartitionsFromMap(assignedPartitions)))
+                .setTopicPartitions(topicPartitionsFromMap(assignedPartitions, topicsImage)))
             .setTargetAssignment(new ConsumerGroupDescribeResponseData.Assignment()
                 .setTopicPartitions(topicPartitionsFromMap(
-                    targetAssignment != null ? targetAssignment.partitions() : Collections.emptyMap()
+                    targetAssignment != null ? targetAssignment.partitions() : Collections.emptyMap(),
+                    topicsImage
                 )))
             .setClientHost(clientHost)
             .setClientId(clientId)
@@ -571,13 +577,32 @@ public class ConsumerGroupMember {
     }
 
     private static List<ConsumerGroupDescribeResponseData.TopicPartitions> topicPartitionsFromMap(
-        Map<Uuid, Set<Integer>> partitions
+        Map<Uuid, Set<Integer>> partitions,
+        TopicsImage topicsImage
     ) {
-        return partitions.entrySet().stream().map(
-            item -> new ConsumerGroupDescribeResponseData.TopicPartitions()
-                .setTopicId(item.getKey())
-                .setPartitions(new ArrayList<>(item.getValue()))
-        ).collect(Collectors.toList());
+        List<ConsumerGroupDescribeResponseData.TopicPartitions> topicPartitions = new ArrayList<>();
+        partitions.forEach((topicId, partitionSet) -> {
+            String topicName = lookupTopicNameById(topicId, topicsImage);
+            if (topicName != null) {
+                topicPartitions.add(new ConsumerGroupDescribeResponseData.TopicPartitions()
+                    .setTopicId(topicId)
+                    .setTopicName(topicName)
+                    .setPartitions(new ArrayList<>(partitionSet)));
+            }
+        });
+        return topicPartitions;
+    }
+
+    private static String lookupTopicNameById(
+        Uuid topicId,
+        TopicsImage topicsImage
+    ) {
+        TopicImage topicImage = topicsImage.getTopic(topicId);
+        if (topicImage != null) {
+            return topicImage.name();
+        } else {
+            return null;
+        }
     }
 
     @Override

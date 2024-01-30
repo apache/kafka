@@ -462,7 +462,8 @@ public class GroupMetadataManager {
     public List<ListGroupsResponseData.ListedGroup> listGroups(List<String> statesFilter, long committedOffset) {
         Stream<Group> groupStream = groups.values(committedOffset).stream();
         if (!statesFilter.isEmpty()) {
-            groupStream = groupStream.filter(group -> statesFilter.contains(group.stateAsString(committedOffset)));
+            Set<String> caseInsensitiveFilterSet = statesFilter.stream().map(String::toLowerCase).map(String::trim).collect(Collectors.toSet());
+            groupStream = groupStream.filter(group -> group.isInStates(caseInsensitiveFilterSet, committedOffset));
         }
         return groupStream.map(group -> group.asListedGroup(committedOffset)).collect(Collectors.toList());
     }
@@ -483,7 +484,11 @@ public class GroupMetadataManager {
         final List<ConsumerGroupDescribeResponseData.DescribedGroup> describedGroups = new ArrayList<>();
         groupIds.forEach(groupId -> {
             try {
-                describedGroups.add(consumerGroup(groupId, committedOffset).asDescribedGroup(committedOffset, defaultAssignor.name()));
+                describedGroups.add(consumerGroup(groupId, committedOffset).asDescribedGroup(
+                    committedOffset,
+                    defaultAssignor.name(),
+                    metadataImage.topics()
+                ));
             } catch (GroupIdNotFoundException exception) {
                 describedGroups.add(new ConsumerGroupDescribeResponseData.DescribedGroup()
                     .setGroupId(groupId)
@@ -3395,7 +3400,7 @@ public class GroupMetadataManager {
     /**
      * Remove a member from the group. Cancel member's heartbeat, and prepare rebalance
      * or complete the join phase if necessary.
-     * 
+     *
      * @param group     The classic group.
      * @param memberId  The member id.
      * @param reason    The reason for the LeaveGroup request.

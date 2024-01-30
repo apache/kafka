@@ -42,6 +42,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -59,21 +60,28 @@ import static org.apache.kafka.coordinator.group.consumer.ConsumerGroup.Consumer
 public class ConsumerGroup implements Group {
 
     public enum ConsumerGroupState {
-        EMPTY("empty"),
-        ASSIGNING("assigning"),
-        RECONCILING("reconciling"),
-        STABLE("stable"),
-        DEAD("dead");
+        EMPTY("Empty"),
+        ASSIGNING("Assigning"),
+        RECONCILING("Reconciling"),
+        STABLE("Stable"),
+        DEAD("Dead");
 
         private final String name;
 
+        private final String lowerCaseName;
+
         ConsumerGroupState(String name) {
             this.name = name;
+            this.lowerCaseName = name.toLowerCase(Locale.ROOT);
         }
 
         @Override
         public String toString() {
             return name;
+        }
+
+        public String toLowerCaseString() {
+            return lowerCaseName;
         }
     }
 
@@ -739,6 +747,11 @@ public class ConsumerGroup implements Group {
         return Optional.of(new OffsetExpirationConditionImpl(offsetAndMetadata -> offsetAndMetadata.commitTimestampMs));
     }
 
+    @Override
+    public boolean isInStates(Set<String> statesFilter, long committedOffset) {
+        return statesFilter.contains(state.get(committedOffset).toLowerCaseString());
+    }
+
     /**
      * Throws a StaleMemberEpochException if the received member epoch does not match
      * the expected member epoch.
@@ -963,7 +976,11 @@ public class ConsumerGroup implements Group {
         return value == null ? 1 : value + 1;
     }
 
-    public ConsumerGroupDescribeResponseData.DescribedGroup asDescribedGroup(long committedOffset, String defaultAssignor) {
+    public ConsumerGroupDescribeResponseData.DescribedGroup asDescribedGroup(
+        long committedOffset,
+        String defaultAssignor,
+        TopicsImage topicsImage
+    ) {
         ConsumerGroupDescribeResponseData.DescribedGroup describedGroup = new ConsumerGroupDescribeResponseData.DescribedGroup()
             .setGroupId(groupId)
             .setAssignorName(preferredServerAssignor(committedOffset).orElse(defaultAssignor))
@@ -972,7 +989,10 @@ public class ConsumerGroup implements Group {
             .setAssignmentEpoch(targetAssignmentEpoch.get(committedOffset));
         members.entrySet(committedOffset).forEach(
             entry -> describedGroup.members().add(
-                entry.getValue().asConsumerGroupDescribeMember(targetAssignment.get(entry.getValue().memberId(), committedOffset))
+                entry.getValue().asConsumerGroupDescribeMember(
+                    targetAssignment.get(entry.getValue().memberId(), committedOffset),
+                    topicsImage
+                )
             )
         );
         return describedGroup;
