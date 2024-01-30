@@ -21,9 +21,12 @@ import org.apache.kafka.coordinator.group.consumer.SubscribedTopicMetadata;
 import org.apache.kafka.coordinator.group.consumer.TopicMetadata;
 import org.junit.jupiter.api.Test;
 
+import javax.swing.text.html.Option;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -228,7 +231,6 @@ public class GeneralUniformAssignmentBuilderTest {
         assertAssignment(expectedAssignment, computedAssignment);
     }
 
-    //checked alreaddy
     @Test
     public void testFirstAssignmentThreeMembersThreeTopicsWithMemberAndPartitionRacks() {
         Map<Uuid, TopicMetadata> topicMetadata = new HashMap<>();
@@ -288,6 +290,621 @@ public class GeneralUniformAssignmentBuilderTest {
         ));
 
         assertAssignment(expectedAssignment, computedAssignment);
+    }
+
+    @Test
+    public void testRT1SMALLSETFirstAssignmentSixTopicsNineMembersWithMemberAndPartitionRacks() {
+        // 9 MEMBERS || 120 PARTITIONS || 6 TOPICS || RACK
+        Map<Uuid, TopicMetadata> topicMetadata = new HashMap<>();
+
+        // Create 6 topics, each with 20 partitions.
+        for (int i = 1; i <= 6; i++) {
+            Uuid topicUuid = Uuid.randomUuid();
+            String topicName = "topic" + i;
+            topicMetadata.put(topicUuid, new TopicMetadata(
+                topicUuid, topicName, 20, mkMapOfPartitionRacks(20)));
+        }
+
+        Map<String, AssignmentMemberSpec> members = new TreeMap<>();
+
+        // Create 9 members and distribute topics among them.
+        List<Uuid> topicUuids = new ArrayList<>(topicMetadata.keySet());
+        int topicIndex = 0;
+        for (int i = 1; i <= 9; i++) {
+            String memberName = "member" + i;
+            String rackName = "rack" + i;
+
+            // Assign two topics to each member, allowing for repetition.
+            List<Uuid> assignedTopics = new ArrayList<>();
+            for (int j = 0; j < 2; j++, topicIndex++) {
+                assignedTopics.add(topicUuids.get(topicIndex % topicUuids.size()));
+            }
+
+            members.put(memberName, new AssignmentMemberSpec(
+                Optional.empty(),
+                Optional.of(rackName),
+                assignedTopics,
+                Collections.emptyMap()));
+        }
+
+        AssignmentSpec assignmentSpec = new AssignmentSpec(members);
+        SubscribedTopicMetadata subscribedTopicMetadata = new SubscribedTopicMetadata(topicMetadata);
+
+        GroupAssignment computedAssignment = assignor.assign(assignmentSpec, subscribedTopicMetadata);
+    }
+
+    @Test
+    public void testRT1SMALLSETFirstAssignmentSixTopicsNineMembersNoRack() {
+        // 9 MEMBERS || 120 PARTITIONS || 6 TOPICS || NO RACK
+        Map<Uuid, TopicMetadata> topicMetadata = new HashMap<>();
+
+        // Create 6 topics, each with 20 partitions.
+        for (int i = 1; i <= 6; i++) {
+            Uuid topicUuid = Uuid.randomUuid();
+            String topicName = "topic" + i;
+            topicMetadata.put(topicUuid, new TopicMetadata(
+                topicUuid, topicName, 20, Collections.emptyMap()));
+        }
+
+        Map<String, AssignmentMemberSpec> members = new TreeMap<>();
+
+        // Create 9 members and distribute topics among them.
+        List<Uuid> topicUuids = new ArrayList<>(topicMetadata.keySet());
+        int topicIndex = 0;
+        for (int i = 1; i <= 9; i++) {
+            String memberName = "member" + i;
+
+            // Assign two topics to each member, allowing for repetition.
+            List<Uuid> assignedTopics = new ArrayList<>();
+            for (int j = 0; j < 2; j++, topicIndex++) {
+                assignedTopics.add(topicUuids.get(topicIndex % topicUuids.size()));
+            }
+
+            members.put(memberName, new AssignmentMemberSpec(
+                Optional.empty(),
+                Optional.empty(),
+                assignedTopics,
+                Collections.emptyMap()));
+        }
+
+        AssignmentSpec assignmentSpec = new AssignmentSpec(members);
+        SubscribedTopicMetadata subscribedTopicMetadata = new SubscribedTopicMetadata(topicMetadata);
+
+        GroupAssignment computedAssignment = assignor.assign(assignmentSpec, subscribedTopicMetadata);
+    }
+
+    @Test
+    public void testRT1LARGESETReAssignmentSixTopicsNineMembersNoRack() {
+        // 2K MEMBERS || 2K PARTITIONS || 50 TOPICS || NO RACK
+        // ADD 3 MEMBERS || ADD NEW TOPIC WITH 100 PARTITIONS AND UPDATE ALL MEMBER SUBSCRIPTIONS WITH THIS NEW TOPIC
+        Map<Uuid, TopicMetadata> topicMetadata = new HashMap<>();
+        List<Uuid> topicIds = new ArrayList<>();
+
+        // Create 50 topics with a total of 2000 partitions
+        int totalPartitions = 2000;
+        int partitionsPerTopic = totalPartitions / 50;
+        for (int i = 1; i <= 50; i++) {
+            Uuid topicUuid = Uuid.randomUuid();
+            String topicName = "topic" + i;
+            topicMetadata.put(topicUuid, new TopicMetadata(
+                topicUuid, topicName, partitionsPerTopic, Collections.emptyMap()));
+        }
+
+        Map<String, AssignmentMemberSpec> members = new TreeMap<>();
+
+        // Create 2000 consumers and distribute topics among them
+        List<Uuid> topicUuids = new ArrayList<>(topicMetadata.keySet());
+        int consumers = 2000;
+        int topicsPerConsumer = 50 / (consumers / topicUuids.size());
+
+        for (int i = 1; i <= consumers; i++) {
+            String memberName = "consumer" + i;
+            String rackName = "rack" + (i % 50);
+
+            // Distribute topics among consumers
+            List<Uuid> assignedTopics = new ArrayList<>();
+            for (int j = 0; j < topicsPerConsumer; j++) {
+                int topicIndex = (i + j * consumers / topicsPerConsumer) % topicUuids.size();
+                assignedTopics.add(topicUuids.get(topicIndex));
+            }
+
+            members.put(memberName, new AssignmentMemberSpec(
+                Optional.empty(),
+                Optional.empty(),
+                assignedTopics,
+                Collections.emptyMap()));
+        }
+
+        AssignmentSpec assignmentSpec = new AssignmentSpec(members);
+        SubscribedTopicMetadata subscribedTopicMetadata = new SubscribedTopicMetadata(topicMetadata);
+
+        GroupAssignment computedAssignment = assignor.assign(assignmentSpec, subscribedTopicMetadata);
+
+        // Update members with the initial assignment and subscribe them to the new topic
+        Uuid newTopicUuid = Uuid.randomUuid();
+        String newTopicName = "newTopic";
+        topicMetadata.put(newTopicUuid, new TopicMetadata(newTopicUuid, newTopicName, 100, Collections.emptyMap()));
+
+        for (Map.Entry<String, MemberAssignment> entry : computedAssignment.members().entrySet()) {
+            String memberId = entry.getKey();
+            MemberAssignment memberAssignment = entry.getValue();
+
+            Map<Uuid, Set<Integer>> currentAssignment = memberAssignment.targetPartitions();
+            List<Uuid> updatedSubscriptions = new ArrayList<>(members.get(memberId).subscribedTopicIds());
+            updatedSubscriptions.add(newTopicUuid);
+
+            members.put(memberId, new AssignmentMemberSpec(
+                Optional.empty(),
+                Optional.empty(),
+                updatedSubscriptions,
+                currentAssignment
+            ));
+        }
+
+        // Add 3 new members and subscribe them to all the topics.
+        for (int i = 1; i <= 3; i++) {
+            String newMemberId = "newMember" + i;
+            members.put(newMemberId, new AssignmentMemberSpec(
+                Optional.empty(),
+                Optional.empty(),
+                topicIds,
+                Collections.emptyMap()
+            ));
+        }
+
+        // Re-assign with updated members and topics
+        AssignmentSpec updatedAssignmentSpec = new AssignmentSpec(members);
+        SubscribedTopicMetadata updatedSubscribedTopicMetadata = new SubscribedTopicMetadata(topicMetadata);
+
+        GroupAssignment rebalancedAssignment = assignor.assign(updatedAssignmentSpec, updatedSubscribedTopicMetadata);
+    }
+
+    @Test
+    public void testRT1LARGESETReAssignmentSixTopicsNineMembersYesRack() {
+        // 2K MEMBERS || 2K PARTITIONS || 50 TOPICS || RACK
+        // ADD 3 MEMBERS || ADD NEW TOPIC WITH 100 PARTITIONS AND UPDATE ALL MEMBER SUBSCRIPTIONS WITH THIS NEW TOPIC
+        Map<Uuid, TopicMetadata> topicMetadata = new HashMap<>();
+        List<Uuid> topicIds = new ArrayList<>();
+
+        // Create 50 topics with a total of 2000 partitions
+        int totalPartitions = 2000;
+        int partitionsPerTopic = totalPartitions / 50;
+        for (int i = 1; i <= 50; i++) {
+            Uuid topicUuid = Uuid.randomUuid();
+            String topicName = "topic" + i;
+            topicMetadata.put(topicUuid, new TopicMetadata(
+                topicUuid, topicName, partitionsPerTopic, mkMapOfPartitionRacks(partitionsPerTopic)));
+        }
+
+        Map<String, AssignmentMemberSpec> members = new TreeMap<>();
+
+        // Create 2000 consumers and distribute topics among them
+        List<Uuid> topicUuids = new ArrayList<>(topicMetadata.keySet());
+        int consumers = 2000;
+        int topicsPerConsumer = 50 / (consumers / topicUuids.size());
+
+        for (int i = 1; i <= consumers; i++) {
+            String memberName = "consumer" + i;
+            String rackName = "rack" + (i % 50);
+
+            // Distribute topics among consumers
+            List<Uuid> assignedTopics = new ArrayList<>();
+            for (int j = 0; j < topicsPerConsumer; j++) {
+                int topicIndex = (i + j * consumers / topicsPerConsumer) % topicUuids.size();
+                assignedTopics.add(topicUuids.get(topicIndex));
+            }
+
+            members.put(memberName, new AssignmentMemberSpec(
+                Optional.empty(),
+                Optional.of(rackName),
+                assignedTopics,
+                Collections.emptyMap()));
+        }
+
+        AssignmentSpec assignmentSpec = new AssignmentSpec(members);
+        SubscribedTopicMetadata subscribedTopicMetadata = new SubscribedTopicMetadata(topicMetadata);
+
+        GroupAssignment computedAssignment = assignor.assign(assignmentSpec, subscribedTopicMetadata);
+
+        // Update members with the initial assignment and subscribe them to the new topic
+        Uuid newTopicUuid = Uuid.randomUuid();
+        String newTopicName = "newTopic";
+        topicMetadata.put(newTopicUuid, new TopicMetadata(newTopicUuid, newTopicName, 100, Collections.emptyMap()));
+
+        for (Map.Entry<String, MemberAssignment> entry : computedAssignment.members().entrySet()) {
+            String memberId = entry.getKey();
+            MemberAssignment memberAssignment = entry.getValue();
+
+            Map<Uuid, Set<Integer>> currentAssignment = memberAssignment.targetPartitions();
+            List<Uuid> updatedSubscriptions = new ArrayList<>(members.get(memberId).subscribedTopicIds());
+            Optional<String> rackId = members.get(memberId).rackId();
+            updatedSubscriptions.add(newTopicUuid);
+
+            members.put(memberId, new AssignmentMemberSpec(
+                Optional.empty(),
+                rackId,
+                updatedSubscriptions,
+                currentAssignment
+            ));
+        }
+
+        // Add 3 new members and subscribe them to all the topics.
+        for (int i = 1; i <= 3; i++) {
+            String newMemberId = "newMember" + i;
+            String rackName = "rack" + (i % 50);
+            members.put(newMemberId, new AssignmentMemberSpec(
+                Optional.empty(),
+                Optional.of(rackName),
+                topicIds,
+                Collections.emptyMap()
+            ));
+        }
+
+        // Re-assign with updated members and topics
+        AssignmentSpec updatedAssignmentSpec = new AssignmentSpec(members);
+        SubscribedTopicMetadata updatedSubscribedTopicMetadata = new SubscribedTopicMetadata(topicMetadata);
+
+        GroupAssignment rebalancedAssignment = assignor.assign(updatedAssignmentSpec, updatedSubscribedTopicMetadata);
+    }
+
+    @Test
+    public void testRT1LARGESETReAssignment2k2k500TopicsYesRack() {
+        // 2K MEMBERS || 2K PARTITIONS || 500 TOPICS || RACK
+        // ADD 3 MEMBERS || ADD NEW TOPIC WITH 100 PARTITIONS AND UPDATE ALL MEMBER SUBSCRIPTIONS WITH THIS NEW TOPIC
+        Map<Uuid, TopicMetadata> topicMetadata = new HashMap<>();
+        List<Uuid> topicIds = new ArrayList<>();
+
+        // Create 500 topics with a total of 2000 partitions
+        int totalPartitions = 2000;
+        int partitionsPerTopic = totalPartitions / 500;
+        for (int i = 1; i <= 500; i++) {
+            Uuid topicUuid = Uuid.randomUuid();
+            String topicName = "topic" + i;
+            topicMetadata.put(topicUuid, new TopicMetadata(
+                topicUuid, topicName, partitionsPerTopic, mkMapOfPartitionRacks(partitionsPerTopic)));
+        }
+
+        Map<String, AssignmentMemberSpec> members = new TreeMap<>();
+
+        // Create 2000 consumers and distribute topics among them
+        List<Uuid> topicUuids = new ArrayList<>(topicMetadata.keySet());
+        int consumers = 2000;
+        int topicsPerConsumer = 500 / (consumers / topicUuids.size());
+
+        for (int i = 1; i <= consumers; i++) {
+            String memberName = "consumer" + i;
+            String rackName = "rack" + (i % 50);
+
+            // Distribute topics among consumers
+            List<Uuid> assignedTopics = new ArrayList<>();
+            for (int j = 0; j < topicsPerConsumer; j++) {
+                int topicIndex = (i + j * consumers / topicsPerConsumer) % topicUuids.size();
+                assignedTopics.add(topicUuids.get(topicIndex));
+            }
+
+            members.put(memberName, new AssignmentMemberSpec(
+                Optional.empty(),
+                Optional.of(rackName),
+                assignedTopics,
+                Collections.emptyMap()));
+        }
+
+        AssignmentSpec assignmentSpec = new AssignmentSpec(members);
+        SubscribedTopicMetadata subscribedTopicMetadata = new SubscribedTopicMetadata(topicMetadata);
+
+        GroupAssignment computedAssignment = assignor.assign(assignmentSpec, subscribedTopicMetadata);
+
+        // Update members with the initial assignment and subscribe them to the new topic
+        Uuid newTopicUuid = Uuid.randomUuid();
+        String newTopicName = "newTopic";
+        topicMetadata.put(newTopicUuid, new TopicMetadata(newTopicUuid, newTopicName, 100, Collections.emptyMap()));
+
+        for (Map.Entry<String, MemberAssignment> entry : computedAssignment.members().entrySet()) {
+            String memberId = entry.getKey();
+            MemberAssignment memberAssignment = entry.getValue();
+
+            Map<Uuid, Set<Integer>> currentAssignment = memberAssignment.targetPartitions();
+            List<Uuid> updatedSubscriptions = new ArrayList<>(members.get(memberId).subscribedTopicIds());
+            Optional<String> rackId = members.get(memberId).rackId();
+            updatedSubscriptions.add(newTopicUuid);
+
+            members.put(memberId, new AssignmentMemberSpec(
+                Optional.empty(),
+                rackId,
+                updatedSubscriptions,
+                currentAssignment
+            ));
+        }
+
+        // Add 3 new members and subscribe them to all the topics.
+        for (int i = 1; i <= 3; i++) {
+            String newMemberId = "newMember" + i;
+            String rackName = "rack" + (i % 50);
+            members.put(newMemberId, new AssignmentMemberSpec(
+                Optional.empty(),
+                Optional.of(rackName),
+                topicIds,
+                Collections.emptyMap()
+            ));
+        }
+
+        // Re-assign with updated members and topics
+        AssignmentSpec updatedAssignmentSpec = new AssignmentSpec(members);
+        SubscribedTopicMetadata updatedSubscribedTopicMetadata = new SubscribedTopicMetadata(topicMetadata);
+
+        GroupAssignment rebalancedAssignment = assignor.assign(updatedAssignmentSpec, updatedSubscribedTopicMetadata);
+    }
+
+    @Test
+    public void testRT1LARGESETReAssignment2k2k500TopicsNoRack() {
+        // 2K MEMBERS || 2K PARTITIONS || 500 TOPICS || NO RACK
+        // ADD 3 MEMBERS || ADD NEW TOPIC WITH 100 PARTITIONS AND UPDATE ALL MEMBER SUBSCRIPTIONS WITH THIS NEW TOPIC
+        Map<Uuid, TopicMetadata> topicMetadata = new HashMap<>();
+        List<Uuid> topicIds = new ArrayList<>();
+
+        // Create 500 topics with 2000 partitions each
+
+        int partitionsPerTopic = 2000;
+        for (int i = 1; i <= 500; i++) {
+            Uuid topicUuid = Uuid.randomUuid();
+            topicIds.add(topicUuid);
+            String topicName = "topic" + i;
+            topicMetadata.put(topicUuid, new TopicMetadata(
+                topicUuid, topicName, partitionsPerTopic, Collections.emptyMap()));
+        }
+
+        Map<String, AssignmentMemberSpec> members = new TreeMap<>();
+
+        // Create 2000 consumers and distribute topics among them
+        List<Uuid> topicUuids = new ArrayList<>(topicMetadata.keySet());
+        int consumers = 2000;
+
+        for (int i = 1; i <= consumers; i++) {
+            String memberName = "consumer" + i;
+
+            // Distribute topics among consumers
+            List<Uuid> assignedTopics = new ArrayList<>();
+            if ( i == consumers - 1) {
+                assignedTopics.add(topicUuids.get(0));
+                assignedTopics.add(topicUuids.get(1));
+            } else {
+                assignedTopics = topicUuids;
+            }
+
+            members.put(memberName, new AssignmentMemberSpec(
+                Optional.empty(),
+                Optional.empty(),
+                assignedTopics,
+                Collections.emptyMap()));
+        }
+
+        AssignmentSpec assignmentSpec = new AssignmentSpec(members);
+        SubscribedTopicMetadata subscribedTopicMetadata = new SubscribedTopicMetadata(topicMetadata);
+
+        GroupAssignment computedAssignment = assignor.assign(assignmentSpec, subscribedTopicMetadata);
+
+        // Update members with the initial assignment and subscribe them to the new topic
+        Uuid newTopicUuid = Uuid.randomUuid();
+        String newTopicName = "newTopic";
+        topicMetadata.put(newTopicUuid, new TopicMetadata(newTopicUuid, newTopicName, 100, Collections.emptyMap()));
+
+        for (Map.Entry<String, MemberAssignment> entry : computedAssignment.members().entrySet()) {
+            String memberId = entry.getKey();
+            MemberAssignment memberAssignment = entry.getValue();
+
+            Map<Uuid, Set<Integer>> currentAssignment = memberAssignment.targetPartitions();
+            List<Uuid> updatedSubscriptions = new ArrayList<>(members.get(memberId).subscribedTopicIds());
+            updatedSubscriptions.add(newTopicUuid);
+
+            members.put(memberId, new AssignmentMemberSpec(
+                Optional.empty(),
+                Optional.empty(),
+                updatedSubscriptions,
+                currentAssignment
+            ));
+        }
+
+        // Add 3 new members and subscribe them to all the topics.
+        for (int i = 1; i <= 3; i++) {
+            String newMemberId = "newMember" + i;
+            String rackName = "rack" + (i % 50);
+            members.put(newMemberId, new AssignmentMemberSpec(
+                Optional.empty(),
+                Optional.of(rackName),
+                topicIds,
+                Collections.emptyMap()
+            ));
+        }
+
+        // Re-assign with updated members and topics
+        AssignmentSpec updatedAssignmentSpec = new AssignmentSpec(members);
+        SubscribedTopicMetadata updatedSubscribedTopicMetadata = new SubscribedTopicMetadata(topicMetadata);
+
+        GroupAssignment rebalancedAssignment = assignor.assign(updatedAssignmentSpec, updatedSubscribedTopicMetadata);
+    }
+
+    @Test
+    public void testRT1LARGESETFiftyTopicsTwoThousandPartitionsTwoThousandConsumers() {
+        // 2k MEMBERS || 2k PARTITIONS || 50 TOPICS || RACK
+        Map<Uuid, TopicMetadata> topicMetadata = new HashMap<>();
+
+        // Create 50 topics with a total of 2000 partitions
+        int totalPartitions = 2000;
+        int partitionsPerTopic = totalPartitions / 50;
+        for (int i = 1; i <= 50; i++) {
+            Uuid topicUuid = Uuid.randomUuid();
+            String topicName = "topic" + i;
+            topicMetadata.put(topicUuid, new TopicMetadata(
+                topicUuid, topicName, partitionsPerTopic, mkMapOfPartitionRacks(partitionsPerTopic)));
+        }
+
+        Map<String, AssignmentMemberSpec> members = new TreeMap<>();
+
+        // Create 2000 consumers and distribute topics among them
+        List<Uuid> topicUuids = new ArrayList<>(topicMetadata.keySet());
+        int consumers = 2000;
+        int topicsPerConsumer = 50 / (consumers / topicUuids.size());
+
+        for (int i = 1; i <= consumers; i++) {
+            String memberName = "consumer" + i;
+            String rackName = "rack" + (i % 50);
+
+            // Distribute topics among consumers
+            List<Uuid> assignedTopics = new ArrayList<>();
+            for (int j = 0; j < topicsPerConsumer; j++) {
+                int topicIndex = (i + j * consumers / topicsPerConsumer) % topicUuids.size();
+                assignedTopics.add(topicUuids.get(topicIndex));
+            }
+
+            members.put(memberName, new AssignmentMemberSpec(
+                Optional.empty(),
+                Optional.of(rackName),
+                assignedTopics,
+                Collections.emptyMap()));
+        }
+
+        AssignmentSpec assignmentSpec = new AssignmentSpec(members);
+        SubscribedTopicMetadata subscribedTopicMetadata = new SubscribedTopicMetadata(topicMetadata);
+
+        GroupAssignment computedAssignment = assignor.assign(assignmentSpec, subscribedTopicMetadata);
+    }
+
+    @Test
+    public void testRT1LARGESETFiftyTopicsTwoThousandPartitionsTwoThousandConsumersNoRack() {
+        // 2k MEMBERS || 2k PARTITIONS || 50 TOPICS || NO RACK
+        Map<Uuid, TopicMetadata> topicMetadata = new HashMap<>();
+
+        // Create 50 topics with a total of 2000 partitions
+        int totalPartitions = 2000;
+        int partitionsPerTopic = totalPartitions / 50;
+        for (int i = 1; i <= 50; i++) {
+            Uuid topicUuid = Uuid.randomUuid();
+            String topicName = "topic" + i;
+            topicMetadata.put(topicUuid, new TopicMetadata(
+                topicUuid, topicName, partitionsPerTopic, Collections.emptyMap()));
+        }
+
+        Map<String, AssignmentMemberSpec> members = new TreeMap<>();
+
+        // Create 2000 consumers and distribute topics among them
+        List<Uuid> topicUuids = new ArrayList<>(topicMetadata.keySet());
+        int consumers = 2000;
+        int topicsPerConsumer = 50 / (consumers / topicUuids.size());
+
+        for (int i = 1; i <= consumers; i++) {
+            String memberName = "consumer" + i;
+            String rackName = "rack" + (i % 50);
+
+            // Distribute topics among consumers
+            List<Uuid> assignedTopics = new ArrayList<>();
+            for (int j = 0; j < topicsPerConsumer; j++) {
+                int topicIndex = (i + j * consumers / topicsPerConsumer) % topicUuids.size();
+                assignedTopics.add(topicUuids.get(topicIndex));
+            }
+
+            members.put(memberName, new AssignmentMemberSpec(
+                Optional.empty(),
+                Optional.empty(),
+                assignedTopics,
+                Collections.emptyMap()));
+        }
+
+        AssignmentSpec assignmentSpec = new AssignmentSpec(members);
+        SubscribedTopicMetadata subscribedTopicMetadata = new SubscribedTopicMetadata(topicMetadata);
+
+        GroupAssignment computedAssignment = assignor.assign(assignmentSpec, subscribedTopicMetadata);
+    }
+
+    @Test
+    public void testRT1LARGESETFiveHundoTopicsTwoThousandPartitionsTwoThousandConsumers() {
+        // 2k MEMBERS || 2k PARTITIONS || 500 TOPICS || RACK
+        Map<Uuid, TopicMetadata> topicMetadata = new HashMap<>();
+
+        // Create 500 topics with a total of 2000 partitions
+        int totalPartitions = 2000;
+        int partitionsPerTopic = totalPartitions / 500;
+        for (int i = 1; i <= 500; i++) {
+            Uuid topicUuid = Uuid.randomUuid();
+            String topicName = "topic" + i;
+            topicMetadata.put(topicUuid, new TopicMetadata(
+                topicUuid, topicName, partitionsPerTopic, mkMapOfPartitionRacks(partitionsPerTopic)));
+        }
+
+        Map<String, AssignmentMemberSpec> members = new TreeMap<>();
+
+        // Create 2000 consumers and distribute topics among them
+        List<Uuid> topicUuids = new ArrayList<>(topicMetadata.keySet());
+        int consumers = 2000;
+        int topicsPerConsumer = 500 / (consumers / topicUuids.size());
+
+        for (int i = 1; i <= consumers; i++) {
+            String memberName = "consumer" + i;
+            String rackName = "rack" + (i % 50);
+
+            // Distribute topics among consumers
+            List<Uuid> assignedTopics = new ArrayList<>();
+            for (int j = 0; j < topicsPerConsumer; j++) {
+                int topicIndex = (i + j * consumers / topicsPerConsumer) % topicUuids.size();
+                assignedTopics.add(topicUuids.get(topicIndex));
+            }
+
+            members.put(memberName, new AssignmentMemberSpec(
+                Optional.empty(),
+                Optional.of(rackName),
+                assignedTopics,
+                Collections.emptyMap()));
+        }
+
+        AssignmentSpec assignmentSpec = new AssignmentSpec(members);
+        SubscribedTopicMetadata subscribedTopicMetadata = new SubscribedTopicMetadata(topicMetadata);
+
+        GroupAssignment computedAssignment = assignor.assign(assignmentSpec, subscribedTopicMetadata);
+    }
+
+    @Test
+    public void testRT1LARGESETFiveHundoTopicsTwoThousandPartitionsTwoThousandConsumersNoRack() {
+        // 2k MEMBERS || 2k PARTITIONS || 500 TOPICS || NO RACK
+        Map<Uuid, TopicMetadata> topicMetadata = new HashMap<>();
+
+        // Create 500 topics with a total of 2000 partitions
+        int totalPartitions = 2000;
+        int partitionsPerTopic = totalPartitions / 500;
+        for (int i = 1; i <= 500; i++) {
+            Uuid topicUuid = Uuid.randomUuid();
+            String topicName = "topic" + i;
+            topicMetadata.put(topicUuid, new TopicMetadata(
+                topicUuid, topicName, partitionsPerTopic, Collections.emptyMap()));
+        }
+
+        Map<String, AssignmentMemberSpec> members = new TreeMap<>();
+
+        // Create 2000 consumers and distribute topics among them
+        List<Uuid> topicUuids = new ArrayList<>(topicMetadata.keySet());
+        int consumers = 2000;
+        int topicsPerConsumer = 500 / (consumers / topicUuids.size());
+
+        for (int i = 1; i <= consumers; i++) {
+            String memberName = "consumer" + i;
+            String rackName = "rack" + (i % 50);
+
+            // Distribute topics among consumers
+            List<Uuid> assignedTopics = new ArrayList<>();
+            for (int j = 0; j < topicsPerConsumer; j++) {
+                int topicIndex = (i + j * consumers / topicsPerConsumer) % topicUuids.size();
+                assignedTopics.add(topicUuids.get(topicIndex));
+            }
+
+            members.put(memberName, new AssignmentMemberSpec(
+                Optional.empty(),
+                Optional.empty(),
+                assignedTopics,
+                Collections.emptyMap()));
+        }
+
+        AssignmentSpec assignmentSpec = new AssignmentSpec(members);
+        SubscribedTopicMetadata subscribedTopicMetadata = new SubscribedTopicMetadata(topicMetadata);
+
+        GroupAssignment computedAssignment = assignor.assign(assignmentSpec, subscribedTopicMetadata);
     }
 
     @Test
