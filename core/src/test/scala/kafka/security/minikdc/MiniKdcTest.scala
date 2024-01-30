@@ -30,7 +30,7 @@ class MiniKdcTest {
     config.setProperty("transport", "TCP");
     config.setProperty("max.ticket.lifetime", "86400000")
     config.setProperty("org.name", "Example")
-    config.setProperty("kdc.port", "0")
+    config.setProperty("kdc.port", "8080")
     config.setProperty("org.domain", "COM")
     config.setProperty("max.renewable.lifetime", "604800000")
     config.setProperty("instance", "DefaultKrbServer")
