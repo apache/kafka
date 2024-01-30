@@ -20,7 +20,6 @@ import org.apache.kafka.common.config.types.Password;
 
 import java.security.GeneralSecurityException;
 import java.util.Base64;
-import java.util.Optional;
 
 public interface PasswordEncoder {
 
@@ -33,6 +32,22 @@ public interface PasswordEncoder {
     String ENCRYPTED_PASSWORD = "encryptedPassword";
     String PASSWORD_LENGTH = "passwordLength";
 
+    /**
+     * A password encoder that does not modify the given password. This is used in KRaft mode only.
+     */
+    PasswordEncoder NOOP = new PasswordEncoder() {
+
+        @Override
+        public String encode(Password password) {
+            return password.value();
+        }
+
+        @Override
+        public Password decode(String encodedPassword) {
+            return new Password(encodedPassword);
+        }
+    };
+
     static byte[] base64Decode(String encoded) {
         return Base64.getDecoder().decode(encoded);
     }
@@ -42,15 +57,11 @@ public interface PasswordEncoder {
     }
 
     static EncryptingPasswordEncoder encrypting(Password secret,
-                   Optional<String> keyFactoryAlgorithm,
+                   String keyFactoryAlgorithm,
                    String cipherAlgorithm,
                    int keyLength,
                    int iterations) {
         return new EncryptingPasswordEncoder(secret, keyFactoryAlgorithm, cipherAlgorithm, keyLength, iterations);
-    }
-
-    static NoOpPasswordEncoder noop() {
-        return new NoOpPasswordEncoder();
     }
 
     String encode(Password password) throws GeneralSecurityException;

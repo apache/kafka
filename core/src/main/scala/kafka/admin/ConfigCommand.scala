@@ -19,7 +19,7 @@ package kafka.admin
 
 import java.nio.charset.StandardCharsets
 import java.util.concurrent.TimeUnit
-import java.util.{Collections, Optional, Properties}
+import java.util.{Collections, Properties}
 import joptsimple._
 import kafka.server.{DynamicBrokerConfig, DynamicConfig, KafkaConfig}
 import kafka.server.DynamicConfig.QuotaConfigs
@@ -216,7 +216,7 @@ object ConfigCommand extends Logging {
     val encoderSecret = encoderConfigs.getOrElse(PasswordEncoderConfigs.SECRET,
       throw new IllegalArgumentException("Password encoder secret not specified"))
     PasswordEncoder.encrypting(new Password(encoderSecret),
-      Optional.empty(),
+      null,
       encoderConfigs.getOrElse(PasswordEncoderConfigs.CIPHER_ALGORITHM, PasswordEncoderConfigs.DEFAULT_CIPHER_ALGORITHM),
       encoderConfigs.get(PasswordEncoderConfigs.KEY_LENGTH).map(_.toInt).getOrElse(PasswordEncoderConfigs.DEFAULT_KEY_LENGTH),
       encoderConfigs.get(PasswordEncoderConfigs.ITERATIONS).map(_.toInt).getOrElse(PasswordEncoderConfigs.DEFAULT_ITERATIONS))

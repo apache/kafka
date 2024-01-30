@@ -58,7 +58,6 @@ import java.util
 import java.util.concurrent.{CompletableFuture, ExecutionException, TimeUnit}
 import java.util.{Collections, Optional, Properties, UUID}
 import scala.collection.Seq
-import scala.compat.java8.OptionConverters.RichOptionForJava8
 import scala.jdk.CollectionConverters._
 
 object ZkMigrationIntegrationTest {
@@ -141,7 +140,7 @@ class ZkMigrationIntegrationTest {
 
     val underlying = clusterInstance.asInstanceOf[ZkClusterInstance].getUnderlying()
     val zkClient = underlying.zkClient
-    val migrationClient = ZkMigrationClient(zkClient, PasswordEncoder.noop())
+    val migrationClient = ZkMigrationClient(zkClient, PasswordEncoder.NOOP)
     val verifier = new MetadataDeltaVerifier()
     migrationClient.readAllMetadata(batch => verifier.accept(batch), _ => { })
     verifier.verify { image =>
@@ -244,11 +243,11 @@ class ZkMigrationIntegrationTest {
     val zkConfigEncoder = kafkaConfig.passwordEncoderSecret match {
       case Some(secret) =>
         PasswordEncoder.encrypting(secret,
-          kafkaConfig.passwordEncoderKeyFactoryAlgorithm.asJava,
+          kafkaConfig.passwordEncoderKeyFactoryAlgorithm,
           kafkaConfig.passwordEncoderCipherAlgorithm,
           kafkaConfig.passwordEncoderKeyLength,
           kafkaConfig.passwordEncoderIterations)
-      case None => PasswordEncoder.noop()
+      case None => PasswordEncoder.NOOP
     }
 
     val migrationClient = ZkMigrationClient(zkClient, zkConfigEncoder)

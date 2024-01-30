@@ -31,7 +31,6 @@ import java.security.SecureRandom;
 import java.security.spec.InvalidKeySpecException;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Optional;
 import java.util.stream.Collectors;
 
 /**
@@ -43,7 +42,7 @@ public class EncryptingPasswordEncoder implements PasswordEncoder {
     private final SecureRandom secureRandom = new SecureRandom();
 
     private final Password secret;
-    private final Optional<String> keyFactoryAlgorithm;
+    private final String keyFactoryAlgorithm;
     private final String cipherAlgorithm;
     private final int keyLength;
     private final int iterations;
@@ -62,7 +61,7 @@ public class EncryptingPasswordEncoder implements PasswordEncoder {
      */
     public EncryptingPasswordEncoder(
             Password secret,
-            Optional<String> keyFactoryAlgorithm,
+            String keyFactoryAlgorithm,
             String cipherAlgorithm,
             int keyLength,
             int iterations) {
@@ -101,7 +100,7 @@ public class EncryptingPasswordEncoder implements PasswordEncoder {
     @Override
     public Password decode(String encodedPassword) throws GeneralSecurityException {
         Map<String, String> params = Csv.parseCsvMap(encodedPassword);
-        Optional<String> keyFactoryAlg = Optional.ofNullable(params.get(PasswordEncoder.KEY_FACTORY_ALGORITHM));
+        String keyFactoryAlg = params.get(PasswordEncoder.KEY_FACTORY_ALGORITHM);
         String cipherAlg = params.get(PasswordEncoder.CIPHER_ALGORITHM);
         int keyLength = Integer.parseInt(params.get(PasswordEncoder.KEY_LENGTH));
         byte[] salt = PasswordEncoder.base64Decode(params.get(PasswordEncoder.SALT));
@@ -123,9 +122,9 @@ public class EncryptingPasswordEncoder implements PasswordEncoder {
         }
     }
 
-    private SecretKeyFactory secretKeyFactory(Optional<String> keyFactoryAlg) throws NoSuchAlgorithmException {
-        if (keyFactoryAlg.isPresent()) {
-            return SecretKeyFactory.getInstance(keyFactoryAlg.get());
+    private SecretKeyFactory secretKeyFactory(String keyFactoryAlg) throws NoSuchAlgorithmException {
+        if (keyFactoryAlg != null) {
+            return SecretKeyFactory.getInstance(keyFactoryAlg);
         } else {
             try {
                 return SecretKeyFactory.getInstance("PBKDF2WithHmacSHA512");

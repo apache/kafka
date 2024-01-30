@@ -77,7 +77,6 @@ import scala.collection._
 import scala.collection.mutable.ArrayBuffer
 import scala.jdk.CollectionConverters._
 import scala.collection.Seq
-import scala.compat.java8.OptionConverters.RichOptionForJava8
 
 object DynamicBrokerReconfigurationTest {
   val Plain = "PLAIN"
@@ -1627,7 +1626,7 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
   private def createPasswordEncoder(config: KafkaConfig, secret: Option[Password]): PasswordEncoder = {
     val encoderSecret = secret.getOrElse(throw new IllegalStateException("Password encoder secret not configured"))
     PasswordEncoder.encrypting(encoderSecret,
-      config.passwordEncoderKeyFactoryAlgorithm.asJava,
+      config.passwordEncoderKeyFactoryAlgorithm,
       config.passwordEncoderCipherAlgorithm,
       config.passwordEncoderKeyLength,
       config.passwordEncoderIterations)

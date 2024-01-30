@@ -1875,7 +1875,7 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
   def passwordEncoderSecret = Option(getPassword(KafkaConfig.PasswordEncoderSecretProp))
   def passwordEncoderOldSecret = Option(getPassword(KafkaConfig.PasswordEncoderOldSecretProp))
   def passwordEncoderCipherAlgorithm = getString(KafkaConfig.PasswordEncoderCipherAlgorithmProp)
-  def passwordEncoderKeyFactoryAlgorithm = Option(getString(KafkaConfig.PasswordEncoderKeyFactoryAlgorithmProp))
+  def passwordEncoderKeyFactoryAlgorithm = getString(KafkaConfig.PasswordEncoderKeyFactoryAlgorithmProp)
   def passwordEncoderKeyLength = getInt(KafkaConfig.PasswordEncoderKeyLengthProp)
   def passwordEncoderIterations = getInt(KafkaConfig.PasswordEncoderIterationsProp)
 

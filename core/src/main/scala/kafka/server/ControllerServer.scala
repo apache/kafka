@@ -282,11 +282,11 @@ class ControllerServer(
         val zkClient = KafkaZkClient.createZkClient("KRaft Migration", time, config, KafkaServer.zkClientConfigFromKafkaConfig(config))
         val zkConfigEncoder = config.passwordEncoderSecret match {
           case Some(secret) => PasswordEncoder.encrypting(secret,
-            config.passwordEncoderKeyFactoryAlgorithm.asJava,
+            config.passwordEncoderKeyFactoryAlgorithm,
             config.passwordEncoderCipherAlgorithm,
             config.passwordEncoderKeyLength,
             config.passwordEncoderIterations)
-          case None => PasswordEncoder.noop()
+          case None => PasswordEncoder.NOOP
         }
         val migrationClient = ZkMigrationClient(zkClient, zkConfigEncoder)
         val propagator: LegacyPropagator = new MigrationPropagator(config.nodeId, config)

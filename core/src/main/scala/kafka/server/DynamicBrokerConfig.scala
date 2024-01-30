@@ -45,7 +45,6 @@ import org.apache.kafka.storage.internals.log.{LogConfig, ProducerStateManagerCo
 
 import scala.annotation.nowarn
 import scala.collection._
-import scala.compat.java8.OptionConverters.RichOptionForJava8
 import scala.jdk.CollectionConverters._
 
 /**
@@ -225,7 +224,7 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
   private val dynamicConfigPasswordEncoder = if (kafkaConfig.processRoles.isEmpty) {
     maybeCreatePasswordEncoder(kafkaConfig.passwordEncoderSecret)
   } else {
-    Some(PasswordEncoder.noop())
+    Some(PasswordEncoder.NOOP)
   }
 
   private[server] def initialize(zkClientOpt: Option[KafkaZkClient], clientMetricsReceiverPluginOpt: Option[ClientMetricsReceiverPlugin]): Unit = {
@@ -383,7 +382,7 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
   private def maybeCreatePasswordEncoder(secret: Option[Password]): Option[PasswordEncoder] = {
    secret.map { secret =>
      PasswordEncoder.encrypting(secret,
-        kafkaConfig.passwordEncoderKeyFactoryAlgorithm.asJava,
+        kafkaConfig.passwordEncoderKeyFactoryAlgorithm,
         kafkaConfig.passwordEncoderCipherAlgorithm,
         kafkaConfig.passwordEncoderKeyLength,
         kafkaConfig.passwordEncoderIterations)

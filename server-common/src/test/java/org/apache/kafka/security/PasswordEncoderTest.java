@@ -25,7 +25,6 @@ import org.junit.jupiter.api.Test;
 
 import java.security.GeneralSecurityException;
 import java.util.Map;
-import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -36,7 +35,7 @@ class PasswordEncoderTest {
     @Test
     public void testEncodeDecode() throws GeneralSecurityException {
         PasswordEncoder encoder = PasswordEncoder.encrypting(new Password("password-encoder-secret"),
-                Optional.empty(),
+                null,
                 PasswordEncoderConfigs.DEFAULT_CIPHER_ALGORITHM,
                 PasswordEncoderConfigs.DEFAULT_KEY_LENGTH,
                 PasswordEncoderConfigs.DEFAULT_ITERATIONS);
@@ -61,7 +60,7 @@ class PasswordEncoderTest {
     @Test
     public void testEncoderConfigChange() throws GeneralSecurityException {
         PasswordEncoder encoder = PasswordEncoder.encrypting(new Password("password-encoder-secret"),
-                Optional.of("PBKDF2WithHmacSHA1"),
+                "PBKDF2WithHmacSHA1",
                 "DES/CBC/PKCS5Padding",
                 64,
                 1024);
@@ -75,7 +74,7 @@ class PasswordEncoderTest {
 
         // Test that decoding works even if PasswordEncoder algorithm, iterations etc. are altered
         PasswordEncoder decoder = PasswordEncoder.encrypting(new Password("password-encoder-secret"),
-                Optional.of("PBKDF2WithHmacSHA1"),
+                "PBKDF2WithHmacSHA1",
                 "AES/CBC/PKCS5Padding",
                 128,
                 2048);
@@ -83,7 +82,7 @@ class PasswordEncoderTest {
 
         // Test that decoding fails if secret is altered
         PasswordEncoder decoder2 = PasswordEncoder.encrypting(new Password("secret-2"),
-                Optional.of("PBKDF2WithHmacSHA1"),
+                "PBKDF2WithHmacSHA1",
                 "AES/CBC/PKCS5Padding",
                 128,
                 1024);
@@ -92,18 +91,18 @@ class PasswordEncoderTest {
 
     @Test
     public void  testEncodeDecodeAlgorithms() throws GeneralSecurityException {
-        verifyEncodeDecode(Optional.empty(), "DES/CBC/PKCS5Padding", 64);
-        verifyEncodeDecode(Optional.empty(), "DESede/CBC/PKCS5Padding", 192);
-        verifyEncodeDecode(Optional.empty(), "AES/CBC/PKCS5Padding", 128);
-        verifyEncodeDecode(Optional.empty(), "AES/CFB/PKCS5Padding", 128);
-        verifyEncodeDecode(Optional.empty(), "AES/OFB/PKCS5Padding", 128);
-        verifyEncodeDecode(Optional.of("PBKDF2WithHmacSHA1"), PasswordEncoderConfigs.DEFAULT_CIPHER_ALGORITHM, 128);
-        verifyEncodeDecode(Optional.empty(), "AES/GCM/NoPadding", 128);
-        verifyEncodeDecode(Optional.of("PBKDF2WithHmacSHA256"), PasswordEncoderConfigs.DEFAULT_CIPHER_ALGORITHM, 128);
-        verifyEncodeDecode(Optional.of("PBKDF2WithHmacSHA512"), PasswordEncoderConfigs.DEFAULT_CIPHER_ALGORITHM, 128);
+        verifyEncodeDecode(null, "DES/CBC/PKCS5Padding", 64);
+        verifyEncodeDecode(null, "DESede/CBC/PKCS5Padding", 192);
+        verifyEncodeDecode(null, "AES/CBC/PKCS5Padding", 128);
+        verifyEncodeDecode(null, "AES/CFB/PKCS5Padding", 128);
+        verifyEncodeDecode(null, "AES/OFB/PKCS5Padding", 128);
+        verifyEncodeDecode("PBKDF2WithHmacSHA1", PasswordEncoderConfigs.DEFAULT_CIPHER_ALGORITHM, 128);
+        verifyEncodeDecode(null, "AES/GCM/NoPadding", 128);
+        verifyEncodeDecode("PBKDF2WithHmacSHA256", PasswordEncoderConfigs.DEFAULT_CIPHER_ALGORITHM, 128);
+        verifyEncodeDecode("PBKDF2WithHmacSHA512", PasswordEncoderConfigs.DEFAULT_CIPHER_ALGORITHM, 128);
     }
 
-    private void verifyEncodeDecode(Optional<String> keyFactoryAlg, String cipherAlg, int keyLength) throws GeneralSecurityException {
+    private void verifyEncodeDecode(String keyFactoryAlg, String cipherAlg, int keyLength) throws GeneralSecurityException {
         PasswordEncoder encoder = PasswordEncoder.encrypting(new Password("password-encoder-secret"),
                 keyFactoryAlg,
                 cipherAlg,
