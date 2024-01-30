@@ -923,8 +923,8 @@ public class OffsetMetadataManager {
             .add(tp.partition())
         );
 
-        Consumer<Offsets> delete = offsets -> {
-            offsets.offsetsByGroup.forEach((groupId, topicOffsets) -> {
+        Consumer<Offsets> delete = offsetsToClean -> {
+            offsetsToClean.offsetsByGroup.forEach((groupId, topicOffsets) -> {
                 topicOffsets.forEach((topic, partitionOffsets) -> {
                     if (partitionsByTopic.containsKey(topic)) {
                         partitionsByTopic.get(topic).forEach(partition -> {
