@@ -2861,17 +2861,4 @@ class ReplicaManager(val config: KafkaConfig,
       if partitionDirectoryId != topicPartitionActualDirectoryId
     } directoryEventHandler.handleAssignment(new common.TopicIdPartition(partition.topicId, partition.partition()), topicPartitionActualDirectoryId, () => ())
   }
-
-  def deleteStrayReplicas(topicPartitions: Iterable[TopicPartition]): Unit = {
-    stopPartitions(topicPartitions.map(tp => StopPartition(tp, true)).toSet).forKeyValue { (topicPartition, exception) =>
-      exception match {
-        case e: KafkaStorageException =>
-          stateChangeLogger.error(s"Unable to delete stray replica $topicPartition because " +
-            s"the local replica for the partition is in an offline log directory: ${e.getMessage}.")
-        case e: Throwable =>
-          stateChangeLogger.error(s"Unable to delete stray replica $topicPartition because " +
-            s"we got an unexpected ${e.getClass.getName} exception: ${e.getMessage}", e)
-      }
-    }
-  }
 }
