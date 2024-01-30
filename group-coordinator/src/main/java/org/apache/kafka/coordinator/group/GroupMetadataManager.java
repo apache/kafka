@@ -468,12 +468,13 @@ public class GroupMetadataManager {
         Set<String> typesFilter,
         long committedOffset
     ) {
+        // Converts each state filter string to lower case for a case-insensitive comparison.
         Set<String> caseInsensitiveFilterSet = statesFilter.stream()
             .map(String::toLowerCase)
             .map(String::trim)
             .collect(Collectors.toSet());
 
-        // Converts each string to a value in the GroupType enum while being case-insensitive.
+        // Converts each type filter string to a value in the GroupType enum while being case-insensitive.
         Set<Group.GroupType> enumTypesFilter = typesFilter.stream()
             .map(Group.GroupType::parse)
             .collect(Collectors.toSet());
