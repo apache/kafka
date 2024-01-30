@@ -24,13 +24,16 @@ import java.nio.file.Files
 import java.text.MessageFormat
 import java.util.{Locale, Properties, UUID}
 import kafka.utils.{CoreUtils, Exit, Logging}
-import org.apache.commons.text.StringSubstitutor
+import org.apache.directory.server.kerberos.shared.crypto.encryption.KerberosKeyFactory
 
 import scala.jdk.CollectionConverters._
 import org.apache.kerby.kerberos.kerb.KrbException
 import org.apache.kerby.kerberos.kerb.identity.backend.BackendConfig
 import org.apache.kerby.kerberos.kerb.server.{KdcConfig, KdcConfigKey, SimpleKdcServer}
 import org.apache.kafka.common.utils.{Java, Utils}
+import org.apache.kerby.kerberos.kerb.`type`.KerberosTime
+import org.apache.kerby.kerberos.kerb.`type`.base.{EncryptionKey, PrincipalName}
+import org.apache.kerby.kerberos.kerb.keytab.{Keytab, KeytabEntry}
 /**
   * Mini KDC based on Apache Directory Server that can be embedded in tests or used from command line as a standalone
   * KDC.
@@ -101,51 +104,7 @@ class MiniKdc(config: Properties, workDir: File) extends Logging {
     initJvmKerberosConfig()
   }
 
-  private def addInitialEntriesToDirectoryService(bindAddress: String): Unit = {
-    val map = Map(
-      "0" -> orgName.toLowerCase(Locale.ENGLISH),
-      "1" -> orgDomain.toLowerCase(Locale.ENGLISH),
-      "2" -> orgName.toUpperCase(Locale.ENGLISH),
-      "3" -> orgDomain.toUpperCase(Locale.ENGLISH),
-      "4" -> bindAddress
-        )
-    val reader = new BufferedReader(new InputStreamReader(MiniKdc.getResourceAsStream("minikdc.ldiff")))
-    try {
-      var line: String = null
-      val builder = new StringBuilder
-      while ( {
-        line = reader.readLine();
-        line != null
-      })
-        builder.append(line).append("\n")
-//      addEntriesToDirectoryService(StringSubstitutor.replace(builder, map.asJava))
-    } finally CoreUtils.swallow(reader.close(), this)
-  }
-
   private def initKdcServer(): Unit = {
-//    def addInitialEntriesToDirectoryService(bindAddress: String): Unit = {
-//      val map = Map(
-//        "0" -> orgName.toLowerCase(Locale.ENGLISH),
-//        "1" -> orgDomain.toLowerCase(Locale.ENGLISH),
-//        "2" -> orgName.toUpperCase(Locale.ENGLISH),
-//        "3" -> orgDomain.toUpperCase(Locale.ENGLISH),
-//        "4" -> bindAddress
-//      )
-//      val reader = new BufferedReader(new InputStreamReader(MiniKdc.getResourceAsStream("minikdc.ldiff")))
-//      try {
-//        var line: String = null
-//        val builder = new StringBuilder
-//        while ( {
-//          line = reader.readLine();
-//          line != null
-//        })
-//          builder.append(line).append("\n")
-//        addEntriesToDirectoryService(StringSubstitutor.replace(builder, map.asJava))
-//      } finally CoreUtils.swallow(reader.close(), this)
-//    }
-
-
-
     val kdcConfig = new KdcConfig()
     kdcConfig.setLong(KdcConfigKey.MAXIMUM_RENEWABLE_LIFETIME, config.getProperty(MiniKdc.MaxRenewableLifetime).toLong)
     kdcConfig.setLong(KdcConfigKey.MAXIMUM_TICKET_LIFETIME,
@@ -155,7 +114,6 @@ class MiniKdc(config: Properties, workDir: File) extends Logging {
     kdcConfig.setInt(KdcConfigKey.KDC_TCP_PORT, port)
     kdcConfig.setBoolean(KdcConfigKey.PA_ENC_TIMESTAMP_REQUIRED, false)
     kdcConfig.setString(KdcConfigKey.KDC_SERVICE_NAME, config.getProperty(MiniKdc.Instance))
-//    val bindAddress = config.getProperty(MiniKdc.KdcBindAddress)
     kdc = new SimpleKdcServer(kdcConfig, new BackendConfig)
     kdc.setWorkDir(workDir)
 
@@ -197,32 +155,6 @@ class MiniKdc(config: Properties, workDir: File) extends Logging {
     Files.write(krb5conf.toPath, output.getBytes(StandardCharsets.UTF_8))
   }
 
-//  /**
-//   * Creates a principal in the KDC with the specified user and password.
-//   *
-//   * An exception will be thrown if the principal cannot be created.
-//   *
-//   * @param principal principal name, do not include the domain.
-//   * @param password  password.
-//   */
-//  private def createPrincipal(principal: String, password: String): Unit = {
-//    val ldifContent =
-//      s"""
-//         |dn: uid=$principal,ou=users,dc=${orgName.toLowerCase(Locale.ENGLISH)},dc=${orgDomain.toLowerCase(Locale.ENGLISH)}
-//         |objectClass: top
-//         |objectClass: person
-//         |objectClass: inetOrgPerson
-//         |objectClass: krb5principal
-//         |objectClass: krb5kdcentry
-//         |cn: $principal
-//         |sn: $principal
-//         |uid: $principal
-//         |userPassword: $password
-//         |krb5PrincipalName: ${principal}@${realm}
-//         |krb5KeyVersionNumber: 0""".stripMargin
-//    addEntriesToDirectoryService(ldifContent)
-//  }
-
   private def refreshJvmKerberosConfig(): Unit = {
     val klass =
       if (Java.isIbmJdk && !Java.isIbmJdkSemeru)
@@ -259,18 +191,24 @@ class MiniKdc(config: Properties, workDir: File) extends Logging {
     */
   def createPrincipal(keytabFile: File, principals: String*): Unit = {
     try {
+      val keytab = new Keytab
       val generatedPassword = UUID.randomUUID.toString
-      val principalWithRealms = principals.map { principal =>
+      val entries = principals.flatMap { principal =>
         val principalWithRealm = s"${principal}@${realm}"
-        kdc.getKadmin.addPrincipal(principalWithRealm, generatedPassword)
-        principalWithRealm
+        KerberosKeyFactory.getKerberosKeys(principalWithRealm, generatedPassword)
+          .asScala.values
+          .map { encryptionKey =>
+            val keyVersion = encryptionKey.getKeyVersion
+            val timestamp = new KerberosTime()
+            val principalName = new PrincipalName(principalWithRealm)
+            val key = new EncryptionKey(encryptionKey.getKeyType.getValue, encryptionKey.getKeyValue)
+            new KeytabEntry(principalName, timestamp, keyVersion, key)
+          }
       }
-      val fw = new FileWriter(keytabFile)
-      val writer = new BufferedWriter(fw)
-      writer.write(1233)
-      writer.close()
-
-      kdc.getKadmin.exportKeytab(keytabFile, principalWithRealms.toList.asJava)
+      keytab.addKeytabEntries(entries.asJava)
+      keytab.store(keytabFile)
+      val byte = Files.readAllBytes(keytabFile.toPath)
+      println(new String(byte))
       info(s"Keytab file created at ${keytabFile.getAbsolutePath}")
     } catch {
       case e: KrbException =>
