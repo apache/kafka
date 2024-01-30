@@ -32,7 +32,7 @@ import org.apache.kerby.kerberos.kerb.identity.backend.BackendConfig
 import org.apache.kerby.kerberos.kerb.server.{KdcConfig, KdcConfigKey, SimpleKdcServer}
 import org.apache.kafka.common.utils.{Java, Utils}
 import org.apache.kerby.kerberos.kerb.`type`.KerberosTime
-import org.apache.kerby.kerberos.kerb.`type`.base.{EncryptionKey, PrincipalName}
+import org.apache.kerby.kerberos.kerb.`type`.base.{EncryptionKey, NameType, PrincipalName}
 import org.apache.kerby.kerberos.kerb.keytab.{Keytab, KeytabEntry}
 /**
   * Mini KDC based on Apache Directory Server that can be embedded in tests or used from command line as a standalone
@@ -200,7 +200,7 @@ class MiniKdc(config: Properties, workDir: File) extends Logging {
           .map { encryptionKey =>
             val keyVersion = encryptionKey.getKeyVersion
             val timestamp = new KerberosTime()
-            val principalName = new PrincipalName(principalWithRealm)
+            val principalName = new PrincipalName(principalWithRealm, NameType.NT_PRINCIPAL)
             val key = new EncryptionKey(encryptionKey.getKeyType.getValue, encryptionKey.getKeyValue)
             new KeytabEntry(principalName, timestamp, keyVersion, key)
           }
