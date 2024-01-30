@@ -17,6 +17,7 @@
 package org.apache.kafka.raft;
 
 import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.server.common.ProcessRole;
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
@@ -35,10 +36,10 @@ public class RaftConfigTest {
         properties.setProperty(RaftConfig.QUORUM_VOTERS_CONFIG, "2@localhost:9092,3@localhost:9093,4@localhost:9094");
         RaftConfig config = new RaftConfig(properties);
         assertEquals(2, config.nodeId());
-        assertEquals(new HashSet<>(Arrays.asList("ControllerRole")), config.processRoles());
+        assertEquals(new HashSet<>(Arrays.asList(ProcessRole.ControllerRole)), config.processRoles());
         assertEquals(new HashSet<>(Arrays.asList(2, 3, 4)), config.quorumVoterIds());
     }
-    
+
     @Test
     void shouldParseCorrectConfigurationWithControllerAndBrokerRoles() {
         Properties properties = new Properties();
@@ -47,10 +48,10 @@ public class RaftConfigTest {
         properties.setProperty(RaftConfig.QUORUM_VOTERS_CONFIG, "2@localhost:9092,3@localhost:9093,4@localhost:9094");
         RaftConfig config = new RaftConfig(properties);
         assertEquals(2, config.nodeId());
-        assertEquals(new HashSet<>(Arrays.asList("BrokerRole", "ControllerRole")), config.processRoles());
+        assertEquals(new HashSet<>(Arrays.asList(ProcessRole.BrokerRole, ProcessRole.ControllerRole)), config.processRoles());
         assertEquals(new HashSet<>(Arrays.asList(2, 3, 4)), config.quorumVoterIds());
     }
-    
+
     @Test
     void shouldParseCorrectConfigurationWithBrokerRole() {
         Properties properties = new Properties();
@@ -59,10 +60,10 @@ public class RaftConfigTest {
         properties.setProperty(RaftConfig.QUORUM_VOTERS_CONFIG, "2@localhost:9092,3@localhost:9093,4@localhost:9094");
         RaftConfig config = new RaftConfig(properties);
         assertEquals(5, config.nodeId());
-        assertEquals(new HashSet<>(Arrays.asList("BrokerRole")), config.processRoles());
+        assertEquals(new HashSet<>(Arrays.asList(ProcessRole.BrokerRole)), config.processRoles());
         assertEquals(new HashSet<>(Arrays.asList(2, 3, 4)), config.quorumVoterIds());
     }
-    
+
     @Test
     void shouldFailWithUnknownProcessRole() {
         Properties properties = new Properties();

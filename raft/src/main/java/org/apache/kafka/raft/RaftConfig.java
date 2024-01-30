@@ -22,6 +22,7 @@ import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.server.common.ProcessRole;
 
 import java.net.InetSocketAddress;
 import java.util.Collections;
@@ -109,7 +110,7 @@ public class RaftConfig {
     private final int fetchTimeoutMs;
     private final int appendLingerMs;
     private final Map<Integer, AddressSpec> voterConnections;
-    private final Set<String> processRoles;
+    private final Set<ProcessRole> processRoles;
     private final int nodeId;
 
     public interface AddressSpec {
@@ -193,7 +194,7 @@ public class RaftConfig {
         this.fetchTimeoutMs = fetchTimeoutMs;
         this.appendLingerMs = appendLingerMs;
         this.nodeId = nodeId;
-        this.processRoles = parseProcessRoles(processRoles, this.voterConnections, this.nodeId);
+        this.processRoles = parseProcessRoles(processRoles);
     }
 
     public int requestTimeoutMs() {
@@ -220,7 +221,7 @@ public class RaftConfig {
         return appendLingerMs;
     }
     
-    public Set<String> processRoles() { 
+    public Set<ProcessRole> processRoles() { 
         return processRoles;
     }
     
@@ -294,15 +295,15 @@ public class RaftConfig {
             .collect(Collectors.toList());
     }
 
-    private static Set<String> parseProcessRoles(List<String> processRoles, Map<Integer, AddressSpec> voterConnections, int nodeId) {
-        Set<String> distinctRoles = new HashSet<>();
+    public static Set<ProcessRole> parseProcessRoles(List<String> processRoles) {
+        Set<ProcessRole> distinctRoles = new HashSet<>();
         for (String role : processRoles) {
             switch (role) {
                 case "broker":
-                    distinctRoles.add("BrokerRole");
+                    distinctRoles.add(ProcessRole.BrokerRole);
                     break;
                 case "controller":
-                    distinctRoles.add("ControllerRole");
+                    distinctRoles.add(ProcessRole.ControllerRole);
                     break;
                 default:
                     throw new ConfigException("Unknown process role '" + role + "'" +
