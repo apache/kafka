@@ -216,7 +216,7 @@ class MiniKdc(config: Properties, workDir: File) extends Logging {
     ldapServer = new LdapServer()
     ldapServer.setDirectoryService(ds)
     ldapServer.start()
-    
+
     val backendConfig: Conf = new BackendConfig()
     backendConfig.setString("host", "127.0.0.1")
     backendConfig.setInt("port", ldapServer.getPort)
@@ -337,28 +337,6 @@ class MiniKdc(config: Properties, workDir: File) extends Logging {
     * @param principals principals to add to the KDC, do not include the domain.
     */
   def createPrincipal(keytabFile: File, principals: String*): Unit = {
-//    val keytab = new Keytab
-//    try {
-//      val generatedPassword = UUID.randomUUID.toString
-//      val entries = principals.flatMap { principal =>
-//        val principalWithRealm = s"${principal}@${realm}"
-//        val timestamp = new KerberosTime
-//        createPrincipal(principal, generatedPassword)
-//        val krbIdentity = kdc.getKadmin.getPrincipal(principalWithRealm)
-//        val principalName = new PrincipalName(principalWithRealm)
-//        krbIdentity.getKeys
-//          .values()
-//          .stream()
-//          .map((key: EncryptionKey) => new KeytabEntry(principalName, timestamp, 1, key))
-//          .collect(Collectors.toList[KeytabEntry]).asScala
-//      }.toList
-//      info(s"Keytab file created at ${keytabFile.getAbsolutePath}")
-//      keytab.addKeytabEntries(entries.asJava)
-//    } catch {
-//      case e: KrbException =>
-//        error("Error occurred while exporting keytab", e)
-//    }
-//    keytab.load(keytabFile)
     val generatedPassword = UUID.randomUUID.toString
     val keytab = new Keytab
     val entries = principals.flatMap { principal =>
@@ -374,8 +352,7 @@ class MiniKdc(config: Properties, workDir: File) extends Logging {
       }
     }
     keytab.addKeytabEntries(entries.asJava)
-//    kdc.exportPrincipals(keytabFile)
-    keytab.load(keytabFile)
+    keytab.store(keytabFile)
   }
 
   private def addEntriesToDirectoryService(ldifContent: String): Unit = {
