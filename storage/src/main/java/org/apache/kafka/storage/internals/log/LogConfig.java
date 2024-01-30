@@ -241,7 +241,9 @@ public class LogConfig extends AbstractConfig {
         LOG_DIR_PROP,
         LOG_DIRS_PROP,
         METADATA_LOG_DIR_PROP,
-        INTER_BROKER_PROTOCOL_VERSION_PROP
+        INTER_BROKER_PROTOCOL_VERSION_PROP,
+        UNSTABLE_API_VERSIONS_ENABLE_PROP,
+        UNSTABLE_METADATA_VERSIONS_ENABLE_PROP
     ));
 
     public static final String LEADER_REPLICATION_THROTTLED_REPLICAS_DOC = "A list of replicas for which log replication should be throttled on " +
@@ -570,15 +572,6 @@ public class LogConfig extends AbstractConfig {
         } else {
             return logDirs().get(0);
         }
-    }
-
-    public Optional<String> interBrokerProtocolVersion() {
-        String originalIBP = (String) originals().get(LogConfig.INTER_BROKER_PROTOCOL_VERSION_PROP);
-        return originalIBP != null ? Optional.of(originalIBP) : Optional.empty();
-    }
-
-    public Boolean unstableMetadataVersionsEnabled() {
-        return unstableMetadataVersionsEnabled;
     }
 
     /**

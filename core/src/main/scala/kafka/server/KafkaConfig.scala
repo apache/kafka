@@ -41,9 +41,8 @@ import org.apache.kafka.coordinator.group.assignor.PartitionAssignor
 import org.apache.kafka.raft.RaftConfig
 import org.apache.kafka.security.authorizer.AuthorizerUtils
 import org.apache.kafka.security.PasswordEncoderConfigs
-import org.apache.kafka.server.ProcessRole
 import org.apache.kafka.server.authorizer.Authorizer
-import org.apache.kafka.server.common.{MetadataVersion, MetadataVersionValidator}
+import org.apache.kafka.server.common.{MetadataVersion, MetadataVersionValidator, ProcessRole}
 import org.apache.kafka.server.common.MetadataVersion._
 import org.apache.kafka.server.config.{Defaults, ServerTopicConfigSynonyms}
 import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig
@@ -1510,22 +1509,7 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
 
   val elrEnabled: Boolean = getBoolean(KafkaConfig.ElrEnabledProp)
 
-  private def parseProcessRoles(): Set[ProcessRole] = {
-    val roles = getList(KafkaConfig.ProcessRolesProp).asScala.map {
-      case "broker" => ProcessRole.BrokerRole
-      case "controller" => ProcessRole.ControllerRole
-      case role => throw new ConfigException(s"Unknown process role '$role'" +
-        " (only 'broker' and 'controller' are allowed roles)")
-    }
-
-    val distinctRoles: Set[ProcessRole] = roles.toSet
-
-    if (distinctRoles.size != roles.size) {
-      throw new ConfigException(s"Duplicate role names found in `${KafkaConfig.ProcessRolesProp}`: $roles")
-    }
-
-    distinctRoles
-  }
+  private def parseProcessRoles(): Set[ProcessRole] = RaftConfig.parseProcessRoles(getList(KafkaConfig.ProcessRolesProp)).asScala.toSet
 
   def isKRaftCombinedMode: Boolean = {
     processRoles == Set(ProcessRole.BrokerRole, ProcessRole.ControllerRole)

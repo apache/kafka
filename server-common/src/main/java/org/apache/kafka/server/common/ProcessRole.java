@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.server;
+package org.apache.kafka.server.common;
 
 public enum ProcessRole {
     BrokerRole("broker"),
