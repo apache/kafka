@@ -32,8 +32,9 @@ import org.apache.kerby.kerberos.kerb.identity.backend.BackendConfig
 import org.apache.kerby.kerberos.kerb.server.{KdcConfig, KdcConfigKey, SimpleKdcServer}
 import org.apache.kafka.common.utils.{Java, Utils}
 import org.apache.kerby.kerberos.kerb.`type`.KerberosTime
-import org.apache.kerby.kerberos.kerb.`type`.base.{EncryptionKey, NameType, PrincipalName}
+import org.apache.kerby.kerberos.kerb.`type`.base.{EncryptionKey, PrincipalName}
 import org.apache.kerby.kerberos.kerb.keytab.{Keytab, KeytabEntry}
+import org.apache.kerby.util.NetworkUtil
 /**
   * Mini KDC based on Apache Directory Server that can be embedded in tests or used from command line as a standalone
   * KDC.
@@ -110,25 +111,31 @@ class MiniKdc(config: Properties, workDir: File) extends Logging {
     kdcConfig.setLong(KdcConfigKey.MAXIMUM_TICKET_LIFETIME,
       config.getProperty(MiniKdc.MaxTicketLifetime).toLong)
     kdcConfig.setString(KdcConfigKey.KDC_REALM, realm)
-    kdcConfig.setString(KdcConfigKey.KDC_HOST, host.toLowerCase(Locale.ENGLISH))
+    kdcConfig.setString(KdcConfigKey.KDC_HOST, host)
     kdcConfig.setInt(KdcConfigKey.KDC_TCP_PORT, port)
     kdcConfig.setBoolean(KdcConfigKey.PA_ENC_TIMESTAMP_REQUIRED, false)
     kdcConfig.setString(KdcConfigKey.KDC_SERVICE_NAME, config.getProperty(MiniKdc.Instance))
     kdc = new SimpleKdcServer(kdcConfig, new BackendConfig)
     kdc.setWorkDir(workDir)
+    val transport = config.getProperty(MiniKdc.Transport)
+
+    if (port == 0)
+      _port = NetworkUtil.getServerPort
+
+    transport.trim match {
+      case "TCP" =>
+        kdc.setKdcTcpPort(port)
+        kdc.setAllowUdp(false)
+        kdc.setAllowTcp(true)
+      case "UDP" =>
+        kdc.setKdcUdpPort(port)
+        kdc.setAllowTcp(false)
+        kdc.setAllowUdp(true)
+      case _ => throw new IllegalArgumentException(s"Invalid transport: $transport")
+    }
 
     kdc.init()
     kdc.start()
-    
-    if (port == 0) {
-      // if using ephemeral port, update port number for binding
-      val transport = config.getProperty(MiniKdc.Transport)
-      _port = transport.trim match {
-        case "TCP" => kdc.getKdcTcpPort
-        case "UDP" => kdc.getKdcUdpPort
-        case _ => throw new IllegalArgumentException(s"Invalid transport: $transport")
-      }
-    }
 
     info(s"MiniKdc listening at port: $port")
   }
@@ -200,15 +207,15 @@ class MiniKdc(config: Properties, workDir: File) extends Logging {
           .map { encryptionKey =>
             val keyVersion = encryptionKey.getKeyVersion
             val timestamp = new KerberosTime()
-            val principalName = new PrincipalName(principalWithRealm, NameType.NT_PRINCIPAL)
+            val principalName = new PrincipalName(principalWithRealm)
             val key = new EncryptionKey(encryptionKey.getKeyType.getValue, encryptionKey.getKeyValue)
             new KeytabEntry(principalName, timestamp, keyVersion, key)
           }
       }
       keytab.addKeytabEntries(entries.asJava)
       keytab.store(keytabFile)
-      val byte = Files.readAllBytes(keytabFile.toPath)
-      println(new String(byte))
+//      val byte = Files.readAllBytes(keytabFile.toPath)
+//      println(new String(byte))
       info(s"Keytab file created at ${keytabFile.getAbsolutePath}")
     } catch {
       case e: KrbException =>
