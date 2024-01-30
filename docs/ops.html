@@ -4045,7 +4045,7 @@ listeners=CONTROLLER://:9093
             <li>
               On each broker, remove the <code>zookeeper.metadata.migration.enable</code>,
               <code>controller.listener.names</code>, and <code>controller.quorum.voters</code>
-              configurations, and replace <code>node.id</code> with <code>broker.id</code>.
+              configurations.
               Then perform a rolling restart of all brokers.
             </li>
             <li>
@@ -4054,7 +4054,7 @@ listeners=CONTROLLER://:9093
           </ul>
         </td>
         <td>
-          It is important to perform the <code>zookeeper-shell.sh</code> step quickly, to minimize the amount of
+          It is important to perform the <code>zookeeper-shell.sh</code> step quickly together with rolling at least one broker, to minimize the amount of
           time that the cluster lacks a controller.
         </td>
       </tr>
@@ -4090,7 +4090,7 @@ listeners=CONTROLLER://:9093
         <td>
           <ul>
             <li>
-              It is important to perform the <code>zookeeper-shell.sh</code> step <b>quickly</b>, to minimize the amount of
+              It is important to perform the <code>zookeeper-shell.sh</code> step <b>quickly</b> together with rolling at least one broker, to minimize the amount of
               time that the cluster lacks a controller.
             </li>
             <li>
