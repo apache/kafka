@@ -241,7 +241,9 @@ public class LogConfig extends AbstractConfig {
         LOG_DIR_PROP,
         LOG_DIRS_PROP,
         METADATA_LOG_DIR_PROP,
-        INTER_BROKER_PROTOCOL_VERSION_PROP
+        INTER_BROKER_PROTOCOL_VERSION_PROP,
+        UNSTABLE_API_VERSIONS_ENABLE_PROP,
+        UNSTABLE_METADATA_VERSIONS_ENABLE_PROP
     ));
 
     public static final String LEADER_REPLICATION_THROTTLED_REPLICAS_DOC = "A list of replicas for which log replication should be throttled on " +
