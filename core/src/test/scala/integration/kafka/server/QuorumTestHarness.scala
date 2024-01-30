@@ -178,7 +178,7 @@ abstract class QuorumTestHarness extends Logging {
   protected def metadataVersion: MetadataVersion = MetadataVersion.latestTesting()
 
   private var testInfo: TestInfo = _
-  private var implementation: QuorumImplementation = _
+  protected var implementation: QuorumImplementation = _
 
   val bootstrapRecords: ListBuffer[ApiMessageAndVersion] = ListBuffer()
 
@@ -310,11 +310,16 @@ abstract class QuorumTestHarness extends Logging {
   def optionalMetadataRecords: Option[ArrayBuffer[ApiMessageAndVersion]] = None
 
   private def newKRaftQuorum(testInfo: TestInfo): KRaftQuorumImplementation = {
+    newKRaftQuorum(new Properties())
+  }
+
+  protected def newKRaftQuorum(overridingProps: Properties): KRaftQuorumImplementation = {
     val propsList = kraftControllerConfigs()
     if (propsList.size != 1) {
       throw new RuntimeException("Only one KRaft controller is supported for now.")
     }
     val props = propsList(0)
+    props.putAll(overridingProps)
     props.setProperty(KafkaConfig.ServerMaxStartupTimeMsProp, TimeUnit.MINUTES.toMillis(10).toString)
     props.setProperty(KafkaConfig.ProcessRolesProp, "controller")
     props.setProperty(KafkaConfig.UnstableMetadataVersionsEnableProp, "true")
