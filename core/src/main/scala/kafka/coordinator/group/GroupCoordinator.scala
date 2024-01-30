@@ -1112,13 +1112,16 @@ private[group] class GroupCoordinator(
     } else {
       val errorCode = if (groupManager.isLoading) Errors.COORDINATOR_LOAD_IN_PROGRESS else Errors.NONE
 
+      // Convert state filter strings to lower case and group type strings to the corresponding enum type.
+      // This is done to ensure a case-insensitive comparison.
+      val caseInsensitiveStates = states.map(_.toLowerCase)
+      val enumTypesFilter: Set[Group.GroupType] = groupTypes.map(Group.GroupType.parse)
+
       // Filter groups based on states and groupTypes. If either is empty, it won't filter on that criterion.
       // While using the old group coordinator, all groups are considered classic groups by default.
       // An empty list is returned for any other type filter.
-      val enumTypesFilter: Set[Group.GroupType] = groupTypes.map(Group.GroupType.parse)
-
       val groups = groupManager.currentGroups.filter { g =>
-        states.isEmpty || g.isInStates(states.map(_.toLowerCase)) &&
+        states.isEmpty || g.isInStates(caseInsensitiveStates) &&
           (enumTypesFilter.isEmpty || enumTypesFilter.contains(Group.GroupType.CLASSIC))
       }
       (errorCode, groups.map(_.overview).toList)
