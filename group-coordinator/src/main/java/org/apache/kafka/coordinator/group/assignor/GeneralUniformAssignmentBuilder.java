@@ -164,7 +164,6 @@ public class GeneralUniformAssignmentBuilder extends AbstractUniformAssignmentBu
      */
     @Override
     protected GroupAssignment buildAssignment() {
-        long startTime = System.currentTimeMillis();
         if (subscribedTopicIds.isEmpty()) {
             LOG.info("The subscription list is empty, returning an empty assignment");
             return new GroupAssignment(Collections.emptyMap());
@@ -178,13 +177,6 @@ public class GeneralUniformAssignmentBuilder extends AbstractUniformAssignmentBu
         unassignedPartitionsAssignment();
 
         balance();
-
-        long endTime = System.currentTimeMillis();
-
-        // Calculate the time taken
-        long timeElapsed = endTime - startTime;
-
-        System.out.println("Execution time in milliseconds: " + timeElapsed);
 
         return new GroupAssignment(targetAssignment);
     }
