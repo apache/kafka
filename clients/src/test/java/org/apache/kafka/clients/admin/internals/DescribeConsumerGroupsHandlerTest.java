@@ -31,9 +31,9 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.Iterator;
+import java.util.LinkedHashSet;
 import java.util.Optional;
 import java.util.Set;
-import java.util.stream.Collectors;
 
 import org.apache.kafka.clients.admin.ConsumerGroupDescription;
 import org.apache.kafka.clients.admin.MemberAssignment;
@@ -70,13 +70,19 @@ public class DescribeConsumerGroupsHandlerTest {
     private final LogContext logContext = new LogContext();
     private final String groupId1 = "group-id1";
     private final String groupId2 = "group-id2";
-    private final Set<String> groupIds = new HashSet<>(Arrays.asList(groupId1, groupId2));
-    private final Set<CoordinatorKey> keys = groupIds.stream()
-            .map(CoordinatorKey::byGroupId)
-            .collect(Collectors.toSet());
+    private final Set<String> groupIds = new LinkedHashSet<>(Arrays.asList(
+        groupId1,
+        groupId2
+    ));
+    private final Set<CoordinatorKey> keys = new LinkedHashSet<>(Arrays.asList(
+        CoordinatorKey.byGroupId(groupId1),
+        CoordinatorKey.byGroupId(groupId2)
+    ));
     private final Node coordinator = new Node(1, "host", 1234);
     private final Set<TopicPartition> tps = new HashSet<>(Arrays.asList(
-            new TopicPartition("foo", 0), new TopicPartition("bar",  1)));
+        new TopicPartition("foo", 0),
+        new TopicPartition("bar",  1)
+    ));
 
     @ParameterizedTest
     @ValueSource(booleans = {true, false})

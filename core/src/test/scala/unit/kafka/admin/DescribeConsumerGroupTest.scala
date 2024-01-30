@@ -285,7 +285,12 @@ class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
     createOffsetsTopic()
 
     // run one consumer in the group consuming from a single-partition topic
-    addConsumerGroupExecutor(numConsumers = 1, groupProtocol = groupProtocol)
+    addConsumerGroupExecutor(
+      numConsumers = 1,
+      groupProtocol = groupProtocol,
+      // This is only effective when new protocol is used.
+      remoteAssignor = Some("range")
+    )
     val cgcArgs = Array("--bootstrap-server", bootstrapServers(), "--describe", "--group", group)
     val service = getConsumerGroupService(cgcArgs)
 
