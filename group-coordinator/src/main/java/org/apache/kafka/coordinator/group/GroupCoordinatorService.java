@@ -1065,9 +1065,9 @@ public class GroupCoordinatorService implements GroupCoordinator {
      * @param handler           A function which takes an Errors and a String and builds the expected
      *                          output. The String can be null. Note that the function could further
      *                          transform the error depending on the context.
-     * @return The output build by the handler.
-     * @param <IN> The type of the input.
-     * @param <OUT> The type of the output.
+     * @return The output built by the handler.
+     * @param <IN> The type of the operation input. It must be a toString'able object.
+     * @param <OUT> The type of the value returned by handler.
      */
     private <IN, OUT> OUT handleOperationException(
         String operationName,
