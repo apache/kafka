@@ -2742,7 +2742,7 @@ public class WorkerTest {
                         TargetState.STARTED
                 ));
 
-                ArgumentCaptor<Throwable> failureCaptor = ArgumentCaptor.captor();
+                ArgumentCaptor<Throwable> failureCaptor = ArgumentCaptor.forClass(Throwable.class);
                 verify(taskStatusListener, times(1)).onFailure(eq(TASK_ID), failureCaptor.capture());
                 assertTrue(
                         "Expected task start exception to be TooManyTasksException, but was "
