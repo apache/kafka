@@ -254,13 +254,9 @@ public class DeleteConsumerGroupsTest extends ConsumerGroupCommandTest {
             () -> Objects.equals(service.collectGroupState(GROUP).state(), "Empty"),
             "The group did not become empty as expected.");
 
-        String[] cgcArgs2 = new String[cgcArgs.length + 2];
+        cgcArgs = new String[]{"--bootstrap-server", bootstrapServers(listenerName()), "--delete", "--group", GROUP, "--group", missingGroup};
 
-        System.arraycopy(cgcArgs, 0, cgcArgs2, 0, cgcArgs.length);
-        cgcArgs2[cgcArgs2.length - 2] = "--group";
-        cgcArgs2[cgcArgs2.length - 1] = missingGroup;
-
-        ConsumerGroupCommand.ConsumerGroupService service2 = getConsumerGroupService(cgcArgs2);
+        ConsumerGroupCommand.ConsumerGroupService service2 = getConsumerGroupService(cgcArgs);
 
         String output = kafka.utils.TestUtils.grabConsoleOutput(() -> {
             service2.deleteGroups();
@@ -293,13 +289,9 @@ public class DeleteConsumerGroupsTest extends ConsumerGroupCommandTest {
             () -> Objects.equals(service.collectGroupState(GROUP).state(), "Empty"),
             "The group did not become empty as expected.");
 
-        String[] cgcArgs2 = new String[cgcArgs.length + 2];
+        cgcArgs = new String[]{"--bootstrap-server", bootstrapServers(listenerName()), "--delete", "--group", GROUP, "--group", missingGroup};
 
-        System.arraycopy(cgcArgs, 0, cgcArgs2, 0, cgcArgs.length);
-        cgcArgs2[cgcArgs2.length - 2] = "--group";
-        cgcArgs2[cgcArgs2.length - 1] = missingGroup;
-
-        ConsumerGroupCommand.ConsumerGroupService service2 = getConsumerGroupService(cgcArgs2);
+        ConsumerGroupCommand.ConsumerGroupService service2 = getConsumerGroupService(cgcArgs);
         scala.collection.Map<String, Throwable> result = service2.deleteGroups();
         assertTrue(result.size() == 2 &&
                 result.contains(GROUP) && result.get(GROUP).get() == null &&

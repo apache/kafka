@@ -28,6 +28,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -43,11 +44,11 @@ public class ListConsumerGroupTest extends ConsumerGroupCommandTest {
         String[] cgcArgs = new String[]{"--bootstrap-server", bootstrapServers(listenerName()), "--list"};
         ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(cgcArgs);
         scala.collection.Set<String> expectedGroups = set(Arrays.asList(GROUP, simpleGroup));
-        final scala.collection.Set[] foundGroups = new scala.collection.Set[1];
+        final AtomicReference<scala.collection.Set> foundGroups = new AtomicReference<>();
         TestUtils.waitForCondition(() -> {
-            foundGroups[0] = service.listConsumerGroups().toSet();
-            return Objects.equals(expectedGroups, foundGroups[0]);
-        }, "Expected --list to show groups " + expectedGroups + ", but found " + foundGroups[0] + ".");
+            foundGroups.set(service.listConsumerGroups().toSet());
+            return Objects.equals(expectedGroups, foundGroups.get());
+        }, "Expected --list to show groups " + expectedGroups + ", but found " + foundGroups.get() + ".");
     }
 
     @ParameterizedTest
@@ -71,21 +72,21 @@ public class ListConsumerGroupTest extends ConsumerGroupCommandTest {
             new ConsumerGroupListing(simpleGroup, true, Optional.of(ConsumerGroupState.EMPTY)),
             new ConsumerGroupListing(GROUP, false, Optional.of(ConsumerGroupState.STABLE))));
 
-        final scala.collection.Set[] foundListing = new scala.collection.Set[1];
+        final AtomicReference<scala.collection.Set> foundListing = new AtomicReference<>();
         TestUtils.waitForCondition(() -> {
-            foundListing[0] = service.listConsumerGroupsWithState(set(Arrays.asList(ConsumerGroupState.values()))).toSet();
-            return Objects.equals(expectedListing, foundListing[0]);
-        }, "Expected to show groups " + expectedListing + ", but found " + foundListing[0]);
+            foundListing.set(service.listConsumerGroupsWithState(set(Arrays.asList(ConsumerGroupState.values()))).toSet());
+            return Objects.equals(expectedListing, foundListing.get());
+        }, "Expected to show groups " + expectedListing + ", but found " + foundListing.get());
 
         scala.collection.Set<ConsumerGroupListing> expectedListingStable = set(Collections.singleton(
             new ConsumerGroupListing(GROUP, false, Optional.of(ConsumerGroupState.STABLE))));
 
-        foundListing[0] = null;
+        foundListing.set(null);
 
         TestUtils.waitForCondition(() -> {
-            foundListing[0] = service.listConsumerGroupsWithState(set(Collections.singleton(ConsumerGroupState.STABLE))).toSet();
-            return Objects.equals(expectedListingStable, foundListing[0]);
-        }, "Expected to show groups " + expectedListingStable + ", but found " + foundListing[0]);
+            foundListing.set(service.listConsumerGroupsWithState(set(Collections.singleton(ConsumerGroupState.STABLE))).toSet());
+            return Objects.equals(expectedListingStable, foundListing.get());
+        }, "Expected to show groups " + expectedListingStable + ", but found " + foundListing.get());
     }
 
     @ParameterizedTest
@@ -122,42 +123,42 @@ public class ListConsumerGroupTest extends ConsumerGroupCommandTest {
         String simpleGroup = "simple-group";
         addSimpleGroupExecutor(simpleGroup);
         addConsumerGroupExecutor(1);
-        final String[] out = {""};
+        final AtomicReference<String> out = new AtomicReference<>("");
 
         String[] cgcArgs1 = new String[]{"--bootstrap-server", bootstrapServers(listenerName()), "--list"};
         TestUtils.waitForCondition(() -> {
-            out[0] = kafka.utils.TestUtils.grabConsoleOutput(() -> {
+            out.set(kafka.utils.TestUtils.grabConsoleOutput(() -> {
                 ConsumerGroupCommand.main(cgcArgs1);
                 return null;
-            });
-            return !out[0].contains("STATE") && out[0].contains(simpleGroup) && out[0].contains(GROUP);
-        }, "Expected to find " + simpleGroup + ", " + GROUP + " and no header, but found " + out[0]);
+            }));
+            return !out.get().contains("STATE") && out.get().contains(simpleGroup) && out.get().contains(GROUP);
+        }, "Expected to find " + simpleGroup + ", " + GROUP + " and no header, but found " + out.get());
 
         String[] cgcArgs2 = new String[]{"--bootstrap-server", bootstrapServers(listenerName()), "--list", "--state"};
         TestUtils.waitForCondition(() -> {
-            out[0] = kafka.utils.TestUtils.grabConsoleOutput(() -> {
+            out.set(kafka.utils.TestUtils.grabConsoleOutput(() -> {
                 ConsumerGroupCommand.main(cgcArgs2);
                 return null;
-            });
-            return out[0].contains("STATE") && out[0].contains(simpleGroup) && out[0].contains(GROUP);
-        }, "Expected to find " + simpleGroup + ", " + GROUP + " and the header, but found " + out[0]);
+            }));
+            return out.get().contains("STATE") && out.get().contains(simpleGroup) && out.get().contains(GROUP);
+        }, "Expected to find " + simpleGroup + ", " + GROUP + " and the header, but found " + out.get());
 
         String[] cgcArgs3 = new String[]{"--bootstrap-server", bootstrapServers(listenerName()), "--list", "--state", "Stable"};
         TestUtils.waitForCondition(() -> {
-            out[0] = kafka.utils.TestUtils.grabConsoleOutput(() -> {
+            out.set(kafka.utils.TestUtils.grabConsoleOutput(() -> {
                 ConsumerGroupCommand.main(cgcArgs3);
                 return null;
-            });
-            return out[0].contains("STATE") && out[0].contains(GROUP) && out[0].contains("Stable");
-        }, "Expected to find " + GROUP + " in state Stable and the header, but found " + out[0]);
+            }));
+            return out.get().contains("STATE") && out.get().contains(GROUP) && out.get().contains("Stable");
+        }, "Expected to find " + GROUP + " in state Stable and the header, but found " + out.get());
 
         String[] cgcArgs4 = new String[]{"--bootstrap-server", bootstrapServers(listenerName()), "--list", "--state", "stable"};
         TestUtils.waitForCondition(() -> {
-            out[0] = kafka.utils.TestUtils.grabConsoleOutput(() -> {
+            out.set(kafka.utils.TestUtils.grabConsoleOutput(() -> {
                 ConsumerGroupCommand.main(cgcArgs4);
                 return null;
-            });
-            return out[0].contains("STATE") && out[0].contains(GROUP) && out[0].contains("Stable");
-        }, "Expected to find " + GROUP + " in state Stable and the header, but found " + out[0]);
+            }));
+            return out.get().contains("STATE") && out.get().contains(GROUP) && out.get().contains("Stable");
+        }, "Expected to find " + GROUP + " in state Stable and the header, but found " + out.get());
     }
 }
