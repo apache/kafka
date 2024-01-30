@@ -62,6 +62,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
+import java.util.stream.Stream;
 
 import static org.apache.kafka.connect.runtime.ConnectorConfig.CONNECTOR_CLASS_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.TASKS_MAX_CONFIG;
@@ -446,7 +447,17 @@ public class BlockingConnectorTest {
                 try {
                     t.join(30_000);
                     if (t.isAlive()) {
-                        log.warn("Thread {} failed to finish in time", t);
+                        log.warn(
+                                "Thread {} failed to finish in time; current stack trace:\n{}",
+                                t,
+                                Stream.of(t.getStackTrace())
+                                        .map(s -> String.format(
+                                                "\t%s.%s:%d",
+                                                s.getClassName(),
+                                                s.getMethodName(),
+                                                s.getLineNumber()
+                                        )).collect(Collectors.joining("\n"))
+                        );
                     }
                 } catch (InterruptedException e) {
                     throw new RuntimeException("Interrupted while waiting for blocked thread " + t + " to finish");
