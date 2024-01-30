@@ -782,7 +782,7 @@ public class BlockingConnectorTest {
 
         @Override
         public List<Map<String, String>> taskConfigs(int maxTasks) {
-            return IntStream.rangeClosed(0, maxTasks)
+            return IntStream.range(0, maxTasks)
                 .mapToObj(i -> new HashMap<>(props))
                 .collect(Collectors.toList());
         }
