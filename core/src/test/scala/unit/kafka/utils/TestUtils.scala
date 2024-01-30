@@ -137,7 +137,18 @@ object TestUtils extends Logging {
     val parentFile = new File(parent)
     parentFile.mkdirs()
 
-    JTestUtils.tempDirectory(parentFile.toPath, null)
+    val result = JTestUtils.tempDirectory(parentFile.toPath, null)
+
+    parentFile.deleteOnExit()
+    Exit.addShutdownHook("delete-temp-log-dir-on-exit", {
+      try {
+        Utils.delete(parentFile)
+      } catch {
+        case e: IOException => error(s"Error deleting ${parentFile.getAbsolutePath}", e)
+      }
+    })
+
+    result
   }
 
   /**
