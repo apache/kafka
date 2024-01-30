@@ -1121,7 +1121,7 @@ private[group] class GroupCoordinator(
       // While using the old group coordinator, all groups are considered classic groups by default.
       // An empty list is returned for any other type filter.
       val groups = groupManager.currentGroups.filter { g =>
-        states.isEmpty || g.isInStates(caseInsensitiveStates) &&
+        (states.isEmpty || g.isInStates(caseInsensitiveStates)) &&
           (enumTypesFilter.isEmpty || enumTypesFilter.contains(Group.GroupType.CLASSIC))
       }
       (errorCode, groups.map(_.overview).toList)
