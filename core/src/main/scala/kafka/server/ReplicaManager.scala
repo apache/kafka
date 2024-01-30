@@ -883,8 +883,9 @@ class ReplicaManager(val config: KafkaConfig,
       transactionalId,
       transactionalProducerInfo.head._1,
       transactionalProducerInfo.head._2,
-      // Wrap the callback to be handled on an arbitrary request handler
-      // thread when transaction verification is complete.
+      // Wrap the callback to be handled on an arbitrary request handler thread
+      // when transaction verification is complete. The request local passed in
+      // is only used when the callback is executed immediately.
       KafkaRequestHandler.wrapAsyncCallback(
         postVerificationCallback,
         requestLocal

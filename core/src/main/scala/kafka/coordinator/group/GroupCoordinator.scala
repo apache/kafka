@@ -935,8 +935,9 @@ private[group] class GroupCoordinator(
           producerId,
           producerEpoch,
           RecordBatch.NO_SEQUENCE,
-          // Wrap the callback to be handled on an arbitrary request handler
-          // thread when transaction verification is complete.
+          // Wrap the callback to be handled on an arbitrary request handler thread
+          // when transaction verification is complete. The request local passed in
+          // is only used when the callback is executed immediately.
           KafkaRequestHandler.wrapAsyncCallback(
             postVerificationCallback,
             requestLocal
