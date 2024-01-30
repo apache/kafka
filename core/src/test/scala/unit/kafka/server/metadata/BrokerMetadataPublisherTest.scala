@@ -318,7 +318,6 @@ class BrokerMetadataPublisherTest {
 
   @Test
   def testMetadataVersionUpdateToIBP_3_7_IV2OrAboveTriggersBrokerReRegistration(): Unit = {
-    // When
     val config = KafkaConfig.fromProps(TestUtils.createBrokerConfig(0, ""))
     val metadataCache = new KRaftMetadataCache(0)
     val logManager = mock(classOf[LogManager])
@@ -344,8 +343,8 @@ class BrokerMetadataPublisherTest {
       brokerLifecycleManager,
     )
 
-    val image = MetadataImage.EMPTY
-    val delta = new MetadataDelta.Builder()
+    var image = MetadataImage.EMPTY
+    var delta = new MetadataDelta.Builder()
       .setImage(image)
       .build()
 
@@ -353,8 +352,9 @@ class BrokerMetadataPublisherTest {
     delta.replay(new FeatureLevelRecord().
       setName(MetadataVersion.FEATURE_NAME).
       setFeatureLevel(MetadataVersion.IBP_3_6_IV2.featureLevel()))
+    var newImage = delta.apply(new MetadataProvenance(100, 4, 2000))
 
-    metadataPublisher.onMetadataUpdate(delta, image,
+    metadataPublisher.onMetadataUpdate(delta, newImage,
       LogDeltaManifest.newBuilder()
         .provenance(MetadataProvenance.EMPTY)
         .leaderAndEpoch(LeaderAndEpoch.UNKNOWN)
@@ -367,11 +367,16 @@ class BrokerMetadataPublisherTest {
     verifyNoInteractions(brokerLifecycleManager)
 
     // We then upgrade to IBP_3_7_IV2
+    image = newImage
+    delta = new MetadataDelta.Builder()
+      .setImage(image)
+      .build()
     delta.replay(new FeatureLevelRecord().
       setName(MetadataVersion.FEATURE_NAME).
       setFeatureLevel(MetadataVersion.IBP_3_7_IV2.featureLevel()))
+    newImage = delta.apply(new MetadataProvenance(100, 4, 2000))
 
-    metadataPublisher.onMetadataUpdate(delta, image,
+    metadataPublisher.onMetadataUpdate(delta, newImage,
       LogDeltaManifest.newBuilder()
         .provenance(MetadataProvenance.EMPTY)
         .leaderAndEpoch(LeaderAndEpoch.UNKNOWN)
@@ -385,11 +390,16 @@ class BrokerMetadataPublisherTest {
     clearInvocations(brokerLifecycleManager)
 
     // Finally upgrade to IBP_3_8_IV0
+    image = newImage
+    delta = new MetadataDelta.Builder()
+      .setImage(image)
+      .build()
     delta.replay(new FeatureLevelRecord().
       setName(MetadataVersion.FEATURE_NAME).
       setFeatureLevel(MetadataVersion.IBP_3_8_IV0.featureLevel()))
+    newImage = delta.apply(new MetadataProvenance(200, 4, 3000))
 
-    metadataPublisher.onMetadataUpdate(delta, image,
+    metadataPublisher.onMetadataUpdate(delta, newImage,
       LogDeltaManifest.newBuilder()
         .provenance(MetadataProvenance.EMPTY)
         .leaderAndEpoch(LeaderAndEpoch.UNKNOWN)
@@ -399,6 +409,8 @@ class BrokerMetadataPublisherTest {
         .build());
 
     // This should NOT trigger broker reregistration
-    verify(brokerLifecycleManager, times(0))
+    verify(brokerLifecycleManager, times(0)).handleKraftJBODMetadataVersionUpdate()
+
+    metadataPublisher.close()
   }
 }

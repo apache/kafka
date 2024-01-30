@@ -103,7 +103,6 @@ class BrokerMetadataPublisher(
     manifest: LoaderManifest
   ): Unit = {
     val highestOffsetAndEpoch = newImage.highestOffsetAndEpoch()
-    val currentMetadataVersion = metadataCache.metadataVersion()
 
     val deltaName = if (_firstPublish) {
       s"initial MetadataDelta up to ${highestOffsetAndEpoch.offset}"
@@ -133,9 +132,13 @@ class BrokerMetadataPublisher(
       Option(delta.featuresDelta()).foreach { featuresDelta =>
         featuresDelta.metadataVersionChange().ifPresent{ metadataVersion =>
           info(s"Updating metadata.version to ${metadataVersion.featureLevel()} at offset $highestOffsetAndEpoch.")
+          val currentMetadataVersion = delta.image().features().metadataVersion()
           if (currentMetadataVersion.isLessThan(MetadataVersion.IBP_3_7_IV2) && metadataVersion.isAtLeast(MetadataVersion.IBP_3_7_IV2)) {
-            info("Resending BrokerRegistration with existing incarnation-id to inform the " +
-              "controller about log directories in the broker following metadata update")
+            info(
+              s"""Resending BrokerRegistration with existing incarnation-id to inform the
+                 |controller about log directories in the broker following metadata update:
+                 |previousMetadataVersion: ${delta.image().features().metadataVersion()}
+                 |newMetadataVersion: $metadataVersion""".stripMargin.linesIterator.mkString(" ").trim)
             brokerLifecycleManager.handleKraftJBODMetadataVersionUpdate()
           }
         }
