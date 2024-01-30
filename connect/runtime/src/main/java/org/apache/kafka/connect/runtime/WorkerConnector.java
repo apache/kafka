@@ -141,6 +141,7 @@ public class WorkerConnector implements Runnable {
         synchronized (this) {
             if (this.externalFailure != null)
                 return;
+            log.error("{} Connector has failed", this, cause);
             this.externalFailure = cause;
             notify();
         }
