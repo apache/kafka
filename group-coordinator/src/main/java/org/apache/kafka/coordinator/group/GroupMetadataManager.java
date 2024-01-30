@@ -455,8 +455,10 @@ public class GroupMetadataManager {
      *
      * @param statesFilter      The states of the groups we want to list.
      *                          If empty, all groups are returned with their state.
+     *                          If invalid, no groups are returned.
      * @param typesFilter       The types of the groups we want to list.
      *                          If empty, all groups are returned with their type.
+     *                          If invalid, no groups are returned.
      * @param committedOffset   A specified committed offset corresponding to this shard.
      *
      * @return A list containing the ListGroupsResponseData.ListedGroup

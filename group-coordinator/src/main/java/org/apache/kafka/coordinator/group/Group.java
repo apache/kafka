@@ -21,8 +21,11 @@ import org.apache.kafka.common.message.ListGroupsResponseData;
 
 import java.util.Arrays;
 import java.util.List;
+import java.util.Locale;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 /**
@@ -31,7 +34,8 @@ import java.util.stream.Collectors;
 public interface Group {
     enum GroupType {
         CONSUMER("consumer"),
-        CLASSIC("classic");
+        CLASSIC("classic"),
+        UNKNOWN("unknown");
 
         private final String name;
 
@@ -44,27 +48,22 @@ public interface Group {
             return name;
         }
 
+        private final static Map<String, GroupType> NAME_TO_ENUM = Arrays.stream(values())
+            .collect(Collectors.toMap(type -> type.name.toLowerCase(Locale.ROOT), Function.identity()));
+
         /**
          * Parse a string into the corresponding {@code GroupType} enum value, in a case-insensitive manner.
          *
-         * @return The {{@link GroupType}} according to the string passed.
-         *
-         * @throws IllegalArgumentException If the input string does not match any {@code GroupType}.
+         * @return The {{@link GroupType}} according to the string passed. Unknown group type is returned if
+         * the string doesn't correspond to a valid group type.
          */
-        public static GroupType parse(String typeString) {
-            for (GroupType type : GroupType.values()) {
-                if (type.name.equalsIgnoreCase(typeString)) {
-                    return type;
-                }
+        public static GroupType parse(String name) {
+            if (name == null) {
+                return UNKNOWN;
             }
+            GroupType type = NAME_TO_ENUM.get(name.toLowerCase(Locale.ROOT));
 
-            String validTypes = Arrays.stream(GroupType.values())
-                .map(Enum::toString)
-                .collect(Collectors.joining(", "));
-
-            throw new IllegalArgumentException("Found an invalid GroupType: " + typeString +
-                ". The valid group types are " + validTypes + "."
-            );
+            return type == null ? UNKNOWN : type;
         }
     }
 

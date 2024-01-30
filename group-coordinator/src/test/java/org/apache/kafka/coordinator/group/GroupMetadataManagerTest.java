@@ -9639,9 +9639,9 @@ public class GroupMetadataManagerTest {
 
         assertEquals(expectAllGroupMap, actualAllGroupMap);
 
-        // List group with case insensitive ‘empty’
+        // List group with case-insensitive ‘empty’.
         actualAllGroupMap =
-            context.sendListGroups(Collections.singletonList("empty"))
+            context.sendListGroups(Collections.singletonList("empty"), Collections.emptyList())
                 .stream().collect(Collectors.toMap(ListGroupsResponseData.ListedGroup::groupId, Function.identity()));
 
         assertEquals(expectAllGroupMap, actualAllGroupMap);
@@ -9701,18 +9701,32 @@ public class GroupMetadataManagerTest {
 
         assertEquals(expectAllGroupMap, actualAllGroupMap);
 
-        actualAllGroupMap = context.sendListGroups(Arrays.asList("empty", "Assigning")).stream()
+        actualAllGroupMap = context.sendListGroups(Arrays.asList("empty", "Assigning"), Collections.emptyList()).stream()
             .collect(Collectors.toMap(ListGroupsResponseData.ListedGroup::groupId, Function.identity()));
         expectAllGroupMap = Stream.of(
             new ListGroupsResponseData.ListedGroup()
                 .setGroupId(classicGroup.groupId())
-                .setProtocolType(classicGroupType)
+                .setProtocolType(Group.GroupType.CLASSIC.toString())
                 .setGroupState(EMPTY.toString()),
             new ListGroupsResponseData.ListedGroup()
                 .setGroupId(consumerGroupId)
                 .setProtocolType(ConsumerProtocol.PROTOCOL_TYPE)
                 .setGroupState(ConsumerGroup.ConsumerGroupState.ASSIGNING.toString())
         ).collect(Collectors.toMap(ListGroupsResponseData.ListedGroup::groupId, Function.identity()));
+
+        assertEquals(expectAllGroupMap, actualAllGroupMap);
+
+        // Test list group response with no group state filter and with invalid group type filter .
+        actualAllGroupMap = context.sendListGroups(Collections.emptyList(), Collections.singletonList("Invalid")).stream()
+            .collect(Collectors.toMap(ListGroupsResponseData.ListedGroup::groupId, Function.identity()));
+        expectAllGroupMap = Collections.emptyMap();
+
+        assertEquals(expectAllGroupMap, actualAllGroupMap);
+
+        // Test list group response with invalid group state filter and with no group type filter .
+        actualAllGroupMap = context.sendListGroups(Collections.singletonList("Invalid"), Collections.emptyList()).stream()
+            .collect(Collectors.toMap(ListGroupsResponseData.ListedGroup::groupId, Function.identity()));
+        expectAllGroupMap = Collections.emptyMap();
 
         assertEquals(expectAllGroupMap, actualAllGroupMap);
     }

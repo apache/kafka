@@ -3385,17 +3385,22 @@ class GroupCoordinatorTest {
     assertEquals(Errors.NONE, error2)
     assertEquals(0, groups2.size)
 
-    // When no group type filter is specified, all groups are returned with classic group type.
-    val (error3, groups3) = groupCoordinator.handleListGroups(Set(), Set())
+    // No groups are returned when an incorrect group type is passed.
+    val (error3, groups3) = groupCoordinator.handleListGroups(Set(), Set("Invalid"))
     assertEquals(Errors.NONE, error3)
-    assertEquals(1, groups3.size)
-    assertEquals(GroupOverview("groupId", "consumer", Stable.toString, "classic"), groups3.head)
+    assertEquals(0, groups3.size)
 
-    // Check that group type is case-insensitive.
-    val (error4, groups4) = groupCoordinator.handleListGroups(Set(), Set("Classic"))
+    // When no group type filter is specified, all groups are returned with classic group type.
+    val (error4, groups4) = groupCoordinator.handleListGroups(Set(), Set())
     assertEquals(Errors.NONE, error4)
     assertEquals(1, groups4.size)
     assertEquals(GroupOverview("groupId", "consumer", Stable.toString, "classic"), groups4.head)
+
+    // Check that group type is case-insensitive.
+    val (error5, groups5) = groupCoordinator.handleListGroups(Set(), Set("Classic"))
+    assertEquals(Errors.NONE, error5)
+    assertEquals(1, groups5.size)
+    assertEquals(GroupOverview("groupId", "consumer", Stable.toString, "classic"), groups5.head)
   }
 
   @Test
