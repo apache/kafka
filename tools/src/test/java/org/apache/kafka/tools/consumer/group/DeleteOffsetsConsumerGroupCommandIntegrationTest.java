@@ -30,13 +30,15 @@ import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.server.config.Defaults;
-import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.Collections;
 import java.util.Properties;
 import java.util.concurrent.ExecutionException;
 
 import static org.apache.kafka.test.TestUtils.DEFAULT_MAX_WAIT_MS;
+import static org.apache.kafka.tools.ToolsTestUtils.TEST_WITH_PARAMETERIZED_QUORUM_NAME;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
@@ -50,7 +52,8 @@ public class DeleteOffsetsConsumerGroupCommandIntegrationTest extends ConsumerGr
         };
     }
 
-    @Test
+    @ParameterizedTest(name = TEST_WITH_PARAMETERIZED_QUORUM_NAME)
+    @ValueSource(strings = {"zk", "kraft"})
     public void testDeleteOffsetsNonExistingGroup() {
         String group = "missing.group";
         String topic = "foo:1";
@@ -60,42 +63,50 @@ public class DeleteOffsetsConsumerGroupCommandIntegrationTest extends ConsumerGr
         assertEquals(Errors.GROUP_ID_NOT_FOUND, res._1);
     }
 
-    @Test
+    @ParameterizedTest(name = TEST_WITH_PARAMETERIZED_QUORUM_NAME)
+    @ValueSource(strings = {"zk", "kraft"})
     public void testDeleteOffsetsOfStableConsumerGroupWithTopicPartition() {
         testWithStableConsumerGroup(TOPIC, 0, 0, Errors.GROUP_SUBSCRIBED_TO_TOPIC);
     }
 
-    @Test
+    @ParameterizedTest(name = TEST_WITH_PARAMETERIZED_QUORUM_NAME)
+    @ValueSource(strings = {"zk", "kraft"})
     public void testDeleteOffsetsOfStableConsumerGroupWithTopicOnly() {
         testWithStableConsumerGroup(TOPIC, -1, 0, Errors.GROUP_SUBSCRIBED_TO_TOPIC);
     }
 
-    @Test
+    @ParameterizedTest(name = TEST_WITH_PARAMETERIZED_QUORUM_NAME)
+    @ValueSource(strings = {"zk", "kraft"})
     public void testDeleteOffsetsOfStableConsumerGroupWithUnknownTopicPartition() {
         testWithStableConsumerGroup("foobar", 0, 0, Errors.UNKNOWN_TOPIC_OR_PARTITION);
     }
 
-    @Test
+    @ParameterizedTest(name = TEST_WITH_PARAMETERIZED_QUORUM_NAME)
+    @ValueSource(strings = {"zk", "kraft"})
     public void testDeleteOffsetsOfStableConsumerGroupWithUnknownTopicOnly() {
         testWithStableConsumerGroup("foobar", -1, -1, Errors.UNKNOWN_TOPIC_OR_PARTITION);
     }
 
-    @Test
+    @ParameterizedTest(name = TEST_WITH_PARAMETERIZED_QUORUM_NAME)
+    @ValueSource(strings = {"zk", "kraft"})
     public void testDeleteOffsetsOfEmptyConsumerGroupWithTopicPartition() {
         testWithEmptyConsumerGroup(TOPIC, 0, 0, Errors.NONE);
     }
 
-    @Test
+    @ParameterizedTest(name = TEST_WITH_PARAMETERIZED_QUORUM_NAME)
+    @ValueSource(strings = {"zk", "kraft"})
     public void testDeleteOffsetsOfEmptyConsumerGroupWithTopicOnly() {
         testWithEmptyConsumerGroup(TOPIC, -1, 0, Errors.NONE);
     }
 
-    @Test
+    @ParameterizedTest(name = TEST_WITH_PARAMETERIZED_QUORUM_NAME)
+    @ValueSource(strings = {"zk", "kraft"})
     public void testDeleteOffsetsOfEmptyConsumerGroupWithUnknownTopicPartition() {
         testWithEmptyConsumerGroup("foobar", 0, 0, Errors.UNKNOWN_TOPIC_OR_PARTITION);
     }
 
-    @Test
+    @ParameterizedTest(name = TEST_WITH_PARAMETERIZED_QUORUM_NAME)
+    @ValueSource(strings = {"zk", "kraft"})
     public void testDeleteOffsetsOfEmptyConsumerGroupWithUnknownTopicOnly() {
         testWithEmptyConsumerGroup("foobar", -1, -1, Errors.UNKNOWN_TOPIC_OR_PARTITION);
     }
