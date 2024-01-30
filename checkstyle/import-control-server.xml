@@ -57,6 +57,7 @@
 
   <!-- utilities and reusable classes from server-common -->
   <allow pkg="org.apache.kafka.queue" />
+  <allow pkg="org.apache.kafka.security" />
   <allow pkg="org.apache.kafka.server.common" />
   <allow pkg="org.apache.kafka.server.metrics" />
   <allow pkg="org.apache.kafka.server.util" />
