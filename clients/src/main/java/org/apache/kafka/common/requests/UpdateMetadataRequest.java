@@ -149,7 +149,7 @@ public class UpdateMetadataRequest extends AbstractControlRequest {
 
     private final UpdateMetadataRequestData data;
 
-    UpdateMetadataRequest(UpdateMetadataRequestData data, short version) {
+    public UpdateMetadataRequest(UpdateMetadataRequestData data, short version) {
         super(ApiKeys.UPDATE_METADATA, version);
         this.data = data;
         // Do this from the constructor to make it thread-safe (even though it's only needed when some methods are called)

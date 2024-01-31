@@ -2707,9 +2707,16 @@ class ReplicaManagerTest {
       createHostedLogs("hosted-stray", numLogs = 10, replicaManager).toSet
       createStrayLogs(10, logManager)
 
-      val allReplicasFromLISR = Set(new TopicPartition("hosted-topic", 0), new TopicPartition("hosted-topic", 1))
+      val allReplicasFromLISR = Set(
+        new TopicPartition("hosted-topic", 0),
+        new TopicPartition("hosted-topic", 1)
+      ).map(p => new TopicIdPartition(new Uuid(p.topic().hashCode, p.topic().hashCode), p))
 
-      replicaManager.updateStrayLogs(replicaManager.findStrayPartitionsFromLeaderAndIsr(allReplicasFromLISR))
+      replicaManager.updateStrayLogs(
+        LogManager.findStrayReplicas(
+          config.nodeId,
+          LogManagerTest.createLeaderAndIsrRequestForStrayDetection(allReplicasFromLISR),
+          logManager.allLogs))
 
       assertEquals(validLogs, logManager.allLogs.toSet)
       assertEquals(validLogs.size, replicaManager.partitionCount.value)
@@ -2736,7 +2743,7 @@ class ReplicaManagerTest {
       val topicPartition = new TopicPartition(name, i)
       val partition = replicaManager.createPartition(topicPartition)
       partition.createLogIfNotExists(isNew = true, isFutureReplica = false,
-        new LazyOffsetCheckpoints(replicaManager.highWatermarkCheckpoints), topicId = None)
+        new LazyOffsetCheckpoints(replicaManager.highWatermarkCheckpoints), topicId = Some(new Uuid(name.hashCode, name.hashCode)))
       partition.log.get
     }
   }
