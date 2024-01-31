@@ -302,10 +302,6 @@ class ZkMetadataCache(
     }.toMap
   }
 
-  def getNonExistingTopics(topics: Set[String]): Set[String] = {
-    topics.diff(metadataSnapshot.partitionStates.keySet)
-  }
-
   override def hasAliveBroker(brokerId: Int): Boolean = metadataSnapshot.aliveBrokers.contains(brokerId)
 
   override def getAliveBrokers(): Iterable[BrokerMetadata] = {
