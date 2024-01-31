@@ -152,6 +152,7 @@ public class BlockingConnectorTest {
         connect.stop();
         // unblock everything so that we don't leak threads after each test run
         Block.reset();
+        Block.join();
     }
 
     @Test
@@ -448,6 +449,14 @@ public class BlockingConnectorTest {
             resetAwaitBlockLatch();
             BLOCK_LATCHES.forEach(CountDownLatch::countDown);
             BLOCK_LATCHES.clear();
+        }
+
+        /**
+         * {@link Thread#join(long millis) Await} the termination of all threads that have been
+         * intentionally blocked either since the last invocation of this method or, if this method
+         * has never been invoked, all threads that have ever been blocked.
+         */
+        public static synchronized void join() {
             BLOCKED_THREADS.forEach(t -> {
                 try {
                     t.join(30_000);
