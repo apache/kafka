@@ -1853,7 +1853,7 @@ public class TaskManager {
 
         final long deltaBytes = Math.max(0, uncommittedBytes - lastUncommittedBytes);
 
-        final boolean needsCommit =  uncommittedBytes + deltaBytes > maxUncommittedStateBytes;
+        final boolean needsCommit = uncommittedBytes + deltaBytes > maxUncommittedStateBytes;
         if (needsCommit) {
             log.debug(
                     "Needs commit because we will exceed max uncommitted bytes before next commit. max: {}, last: {}, current: {}, delta: {}",
