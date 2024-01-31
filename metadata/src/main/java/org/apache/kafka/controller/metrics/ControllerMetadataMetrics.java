@@ -20,7 +20,9 @@ package org.apache.kafka.controller.metrics;
 import com.yammer.metrics.core.Gauge;
 import com.yammer.metrics.core.MetricName;
 import com.yammer.metrics.core.MetricsRegistry;
+import org.apache.kafka.metadata.migration.ZkMigrationState;
 import org.apache.kafka.server.metrics.KafkaYammerMetrics;
+import org.apache.kafka.server.metrics.MetadataTypeMetric;
 
 import java.util.Arrays;
 import java.util.Optional;
@@ -53,6 +55,8 @@ public final class ControllerMetadataMetrics implements AutoCloseable {
         "KafkaController", "MetadataErrorCount");
     private final static MetricName ZK_MIGRATION_STATE = getMetricName(
         "KafkaController", "ZkMigrationState");
+    private final static MetricName METADATA_TYPE = getMetricName(
+        "KafkaController", MetadataTypeMetric.METRIC_NAME);
 
     private final Optional<MetricsRegistry> registry;
     private final AtomicInteger fencedBrokerCount = new AtomicInteger(0);
@@ -120,11 +124,16 @@ public final class ControllerMetadataMetrics implements AutoCloseable {
                 return (int) zkMigrationState();
             }
         }));
-
         registry.ifPresent(r -> r.newGauge(MIGRATING_ZK_BROKER_COUNT, new Gauge<Integer>() {
             @Override
             public Integer value() {
                 return migratingZkBrokerCount();
+            }
+        }));
+        registry.ifPresent(r -> r.newGauge(METADATA_TYPE, new Gauge<Integer>() {
+            @Override
+            public Integer value() {
+                return metadataType();
             }
         }));
 
@@ -230,6 +239,15 @@ public final class ControllerMetadataMetrics implements AutoCloseable {
         return zkMigrationState.byteValue();
     }
 
+    public int metadataType() {
+        // If the ZK migration state is 1 (Migration), the controller is in dual-write mode.
+        if (zkMigrationState.byteValue() == ZkMigrationState.MIGRATION.value()) {
+            return MetadataTypeMetric.DUAL_WRITE;
+        } else {
+            return MetadataTypeMetric.KRAFT;
+        }
+    }
+
     @Override
     public void close() {
         registry.ifPresent(r -> Arrays.asList(
@@ -241,7 +259,8 @@ public final class ControllerMetadataMetrics implements AutoCloseable {
             OFFLINE_PARTITION_COUNT,
             PREFERRED_REPLICA_IMBALANCE_COUNT,
             METADATA_ERROR_COUNT,
-            ZK_MIGRATION_STATE
+            ZK_MIGRATION_STATE,
+            METADATA_TYPE
         ).forEach(r::removeMetric));
     }
 
