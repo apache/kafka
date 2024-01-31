@@ -597,8 +597,7 @@ public class MembershipManagerImplTest {
         assertEquals(MemberState.RECONCILING, membershipManager.state());
         assertEquals(Collections.singleton(topicId2), membershipManager.topicsAwaitingReconciliation());
         verify(metadata).requestUpdate(anyBoolean());
-        clearInvocations(membershipManager);
-        clearInvocations(commitRequestManager);
+        clearInvocations(membershipManager, commitRequestManager);
 
         // Metadata discovered for topic2. Should trigger reconciliation to complete the assignment,
         // with membership manager entering ACKNOWLEDGING state.
@@ -611,7 +610,7 @@ public class MembershipManagerImplTest {
 
         membershipManager.onUpdate(null);
 
-        verifyReconciliationTriggeredAndCompleted(membershipManager,  Arrays.asList(topicId1Partition0, topicId2Partition0));
+        verifyReconciliationTriggeredAndCompleted(membershipManager, Arrays.asList(topicId1Partition0, topicId2Partition0));
     }
 
     @Test
