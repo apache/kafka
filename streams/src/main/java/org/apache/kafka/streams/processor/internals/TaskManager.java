@@ -1843,8 +1843,8 @@ public class TaskManager {
     }
 
     boolean needsCommit(final boolean updateDelta) {
-        if (maxUncommittedStateBytes < 0) {
-            // if our transaction buffers are unbounded, we never need to force an early commit
+        final boolean transactionBuffersAreUnbounded = maxUncommittedStateBytes < 0;
+        if (transactionBuffersAreUnbounded) {
             return false;
         }
 
