@@ -112,16 +112,14 @@ class MiniKdc(config: Properties, workDir: File) extends Logging {
       config.getProperty(MiniKdc.MaxTicketLifetime).toLong)
     kdcConfig.setString(KdcConfigKey.KDC_REALM, realm)
     kdcConfig.setString(KdcConfigKey.KDC_HOST, host)
-    kdcConfig.setInt(KdcConfigKey.KDC_TCP_PORT, port)
     kdcConfig.setBoolean(KdcConfigKey.PA_ENC_TIMESTAMP_REQUIRED, false)
     kdcConfig.setString(KdcConfigKey.KDC_SERVICE_NAME, config.getProperty(MiniKdc.Instance))
     kdc = new SimpleKdcServer(kdcConfig, new BackendConfig)
     kdc.setWorkDir(workDir)
-    val transport = config.getProperty(MiniKdc.Transport)
-
     if (port == 0)
       _port = NetworkUtil.getServerPort
 
+    val transport = config.getProperty(MiniKdc.Transport)
     transport.trim match {
       case "TCP" =>
         kdc.setKdcTcpPort(port)
