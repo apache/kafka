@@ -98,8 +98,10 @@ public class DescribeConsumerGroupsHandler implements AdminApiHandler<Coordinato
 
     @Override
     public Collection<RequestAndKeys<CoordinatorKey>> buildRequest(int coordinatorId, Set<CoordinatorKey> keys) {
-        Set<CoordinatorKey> newConsumerGroups = new HashSet<>();
-        Set<CoordinatorKey> oldConsumerGroups = new HashSet<>();
+        Set<CoordinatorKey> newConsumerGroupKeys = new HashSet<>();
+        Set<CoordinatorKey> oldConsumerGroupKeys = new HashSet<>();
+        List<String> newConsumerGroupIds = new ArrayList<>();
+        List<String> oldConsumerGroupIds = new ArrayList<>();
 
         keys.forEach(key -> {
             if (key.type != FindCoordinatorRequest.CoordinatorType.GROUP) {
@@ -110,25 +112,27 @@ public class DescribeConsumerGroupsHandler implements AdminApiHandler<Coordinato
             // By default, we always try using the new consumer group describe API.
             // If it fails, we fail back to using the classic group API.
             if (useClassicGroupApi.contains(key.idValue)) {
-                oldConsumerGroups.add(key);
+                oldConsumerGroupKeys.add(key);
+                oldConsumerGroupIds.add(key.idValue);
             } else {
-                newConsumerGroups.add(key);
+                newConsumerGroupKeys.add(key);
+                newConsumerGroupIds.add(key.idValue);
             }
         });
 
         List<RequestAndKeys<CoordinatorKey>> requests = new ArrayList<>();
-        if (!newConsumerGroups.isEmpty()) {
+        if (!newConsumerGroupKeys.isEmpty()) {
             ConsumerGroupDescribeRequestData data = new ConsumerGroupDescribeRequestData()
-                .setGroupIds(newConsumerGroups.stream().map(key -> key.idValue).collect(Collectors.toList()))
+                .setGroupIds(newConsumerGroupIds)
                 .setIncludeAuthorizedOperations(includeAuthorizedOperations);
-            requests.add(new RequestAndKeys<>(new ConsumerGroupDescribeRequest.Builder(data), newConsumerGroups));
+            requests.add(new RequestAndKeys<>(new ConsumerGroupDescribeRequest.Builder(data), newConsumerGroupKeys));
         }
 
-        if (!oldConsumerGroups.isEmpty()) {
+        if (!oldConsumerGroupKeys.isEmpty()) {
             DescribeGroupsRequestData data = new DescribeGroupsRequestData()
-                .setGroups(oldConsumerGroups.stream().map(key -> key.idValue).collect(Collectors.toList()))
+                .setGroups(oldConsumerGroupIds)
                 .setIncludeAuthorizedOperations(includeAuthorizedOperations);
-            requests.add(new RequestAndKeys<>(new DescribeGroupsRequest.Builder(data), oldConsumerGroups));
+            requests.add(new RequestAndKeys<>(new DescribeGroupsRequest.Builder(data), oldConsumerGroupKeys));
         }
 
         return requests;
