@@ -19,24 +19,28 @@ package kafka.server.epoch
 
 import kafka.log.UnifiedLog
 import kafka.server.KafkaConfig._
-import kafka.server.{KafkaConfig, KafkaServer, QuorumTestHarness}
+import kafka.server.{KafkaBroker, KafkaConfig, KafkaServer, QuorumTestHarness}
 import kafka.tools.DumpLogSegments
-import kafka.utils.TestUtils._
-import kafka.utils.{CoreUtils, Logging, TestUtils}
+import kafka.utils.{CoreUtils, Logging, TestInfoUtils, TestUtils}
 import org.apache.kafka.clients.consumer.{Consumer, ConsumerConfig, KafkaConsumer}
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.record.RecordBatch
+import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.serialization.ByteArrayDeserializer
 import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.storage.internals.epoch.LeaderEpochFileCache
 import org.apache.kafka.storage.internals.log.EpochEntry
 import org.apache.kafka.storage.internals.checkpoint.CleanShutdownFileHandler
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
-import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo}
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.ValueSource
 
 import java.io.{File, RandomAccessFile}
 import java.util.{Collections, Properties}
+import scala.collection.Seq
 import scala.jdk.CollectionConverters._
 
 /**
@@ -53,7 +57,7 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends QuorumTestHarness wit
   val topic = "topic1"
   val msg = new Array[Byte](1000)
   val msgBigger = new Array[Byte](10000)
-  var brokers: Seq[KafkaServer] = _
+  var brokers: Seq[KafkaBroker] = _
   var producer: KafkaProducer[Array[Byte], Array[Byte]] = _
   var consumer: Consumer[Array[Byte], Array[Byte]] = _
 
@@ -69,14 +73,16 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends QuorumTestHarness wit
     super.tearDown()
   }
 
-  @Test
-  def shouldFollowLeaderEpochBasicWorkflow(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def shouldFollowLeaderEpochBasicWorkflow(quorum: String): Unit = {
 
     //Given 2 brokers
     brokers = (100 to 101).map(createBrokerForId(_))
 
     //A single partition topic with 2 replicas
-    TestUtils.createTopic(zkClient, topic, Map(0 -> Seq(100, 101)), brokers)
+    createTopic(topic, Map(0 -> Seq(100, 101)), brokers)
+
     producer = createProducer
     val tp = new TopicPartition(topic, 0)
 
@@ -130,15 +136,17 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends QuorumTestHarness wit
     assertEquals(java.util.Arrays.asList(new EpochEntry(0, 0), new EpochEntry(1, 1), new EpochEntry(2, 2)), epochCache(follower).epochEntries)
   }
 
-  @Test
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
   def shouldNotAllowDivergentLogs(): Unit = {
     //Given two brokers
-    brokers = (100 to 101).map { id => createServer(fromProps(createBrokerConfig(id, zkConnect))) }
+    val brokers = (100 to 101).map { id => TestUtils.createServer(fromProps(createBrokerConfig(id))) }
     val broker100 = brokers(0)
     val broker101 = brokers(1)
 
     //A single partition topic with 2 replicas
-    TestUtils.createTopic(zkClient, topic, Map(0 -> Seq(100, 101)), brokers)
+    createTopic(topic, Map(0 -> Seq(100, 101)), brokers)
+
     producer = createProducer
 
     //Write 10 messages (ensure they are not batched so we can truncate in the middle below)
@@ -178,14 +186,15 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends QuorumTestHarness wit
   }
 
   //We can reproduce the pre-KIP-101 failure of this test by setting KafkaConfig.InterBrokerProtocolVersionProp = IBP_0_11_0_IV1
-  @Test
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
   def offsetsShouldNotGoBackwards(): Unit = {
 
     //Given two brokers
-    brokers = (100 to 101).map(createBrokerForId(_))
+    val brokers = (100 to 101).map(createBrokerForId(_))
 
     //A single partition topic with 2 replicas
-    TestUtils.createTopic(zkClient, topic, Map(0 -> Seq(100, 101)), brokers)
+    createTopic(topic, Map(0 -> Seq(100, 101)), brokers)
     producer = createBufferingProducer
 
     //Write 100 messages
@@ -253,15 +262,16 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends QuorumTestHarness wit
     * Unlike the tests above, this test doesn't fail prior to the Leader Epoch Change. I was unable to find a deterministic
     * method for recreating the fast leader change bug.
     */
-  @Test
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
   def shouldSurviveFastLeaderChange(): Unit = {
     val tp = new TopicPartition(topic, 0)
 
     //Given 2 brokers
-    brokers = (100 to 101).map(createBrokerForId(_))
+    val brokers = (100 to 101).map(createBrokerForId(_))
 
     //A single partition topic with 2 replicas
-    TestUtils.createTopic(zkClient, topic, Map(0 -> Seq(100, 101)), brokers)
+    createTopic(topic, Map(0 -> Seq(100, 101)), brokers)
     producer = createProducer
 
     //Kick off with a single record
@@ -270,23 +280,22 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends QuorumTestHarness wit
 
     //Now invoke the fast leader change bug
     (0 until 5).foreach { i =>
-      val leaderId = zkClient.getLeaderForPartition(new TopicPartition(topic, 0)).get
-      val leader = brokers.filter(_.config.brokerId == leaderId)(0)
-      val follower = brokers.filter(_.config.brokerId != leaderId)(0)
+      val leaderServer = leader
+      val followerServer = follower
 
       producer.send(new ProducerRecord(topic, 0, null, msg)).get
       messagesWritten += 1
 
       //As soon as it replicates, bounce the follower
-      bounce(follower)
+      bounce(followerServer)
 
-      log(leader, follower)
+      log(leaderServer, followerServer)
       awaitISR(tp)
 
       //Then bounce the leader
-      bounce(leader)
+      bounce(leaderServer)
 
-      log(leader, follower)
+      log(leaderServer, followerServer)
       awaitISR(tp)
 
       //Ensure no data was lost
@@ -294,22 +303,23 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends QuorumTestHarness wit
     }
   }
 
-  @Test
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
   def logsShouldNotDivergeOnUncleanLeaderElections(): Unit = {
 
     // Given two brokers, unclean leader election is enabled
-    brokers = (100 to 101).map(createBrokerForId(_, enableUncleanLeaderElection = true))
+    val brokers = (100 to 101).map(createBrokerForId(_, enableUncleanLeaderElection = true))
 
     // A single partition topic with 2 replicas, min.isr = 1
-    TestUtils.createTopic(zkClient, topic, Map(0 -> Seq(100, 101)), brokers,
-      CoreUtils.propsWith((KafkaConfig.MinInSyncReplicasProp, "1")))
+    createTopic(topic, Map(0 -> Seq(100, 101)), brokers, CoreUtils.propsWith((KafkaConfig.MinInSyncReplicasProp, "1")))
 
-    producer = TestUtils.createProducer(plaintextBootstrapServers(brokers), acks = 1)
+    producer = TestUtils.createProducer(TestUtils.plaintextBootstrapServers(brokers), acks = 1)
 
     // Write one message while both brokers are up
     (0 until 1).foreach { i =>
       producer.send(new ProducerRecord(topic, 0, null, msg))
-      producer.flush()}
+      producer.flush()
+    }
 
     // Since we use producer with acks = 1, make sure that logs match for the first epoch
     waitForLogsToMatch(brokers(0), brokers(1))
@@ -320,26 +330,28 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends QuorumTestHarness wit
     //Write 1 message
     (0 until 1).foreach { i =>
       producer.send(new ProducerRecord(topic, 0, null, msg))
-      producer.flush()}
+      producer.flush()
+    }
 
     brokers(1).shutdown()
     brokers(0).startup()
 
     //Bounce the producer (this is required, probably because the broker port changes on restart?)
     producer.close()
-    producer = TestUtils.createProducer(plaintextBootstrapServers(brokers), acks = 1)
+    producer = TestUtils.createProducer(TestUtils.plaintextBootstrapServers(brokers), acks = 1)
 
     //Write 3 messages
     (0 until 3).foreach { i =>
       producer.send(new ProducerRecord(topic, 0, null, msgBigger))
-      producer.flush()}
+      producer.flush()
+    }
 
     brokers(0).shutdown()
     brokers(1).startup()
 
     //Bounce the producer (this is required, probably because the broker port changes on restart?)
     producer.close()
-    producer = TestUtils.createProducer(plaintextBootstrapServers(brokers), acks = 1)
+    producer = TestUtils.createProducer(TestUtils.plaintextBootstrapServers(brokers), acks = 1)
 
     //Write 1 message
     (0 until 1).foreach { i =>
@@ -351,7 +363,7 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends QuorumTestHarness wit
 
     //Bounce the producer (this is required, probably because the broker port changes on restart?)
     producer.close()
-    producer = TestUtils.createProducer(plaintextBootstrapServers(brokers), acks = 1)
+    producer = TestUtils.createProducer(TestUtils.plaintextBootstrapServers(brokers), acks = 1)
 
     //Write 2 messages
     (0 until 2).foreach { i =>
@@ -370,18 +382,21 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends QuorumTestHarness wit
         .records.batches().asScala.toSeq
       batches.map(_.checksum)
     }
+
     assertTrue(crcSeq(brokers(0)) == crcSeq(brokers(1)),
-               s"Logs on Broker 100 and Broker 101 should match")
+      s"Logs on Broker 100 and Broker 101 should match")
   }
 
-  private def log(leader: KafkaServer, follower: KafkaServer): Unit = {
+  private def log(leader: KafkaBroker, follower: KafkaBroker): Unit = {
     info(s"Bounce complete for follower ${follower.config.brokerId}")
     info(s"Leader: leo${leader.config.brokerId}: " + getLog(leader, 0).logEndOffset + " cache: " + epochCache(leader).epochEntries)
     info(s"Follower: leo${follower.config.brokerId}: " + getLog(follower, 0).logEndOffset + " cache: " + epochCache(follower).epochEntries)
   }
 
   private def waitForLogsToMatch(b1: KafkaServer, b2: KafkaServer, partition: Int = 0): Unit = {
-    TestUtils.waitUntilTrue(() => {getLog(b1, partition).logEndOffset == getLog(b2, partition).logEndOffset}, "Logs didn't match.")
+    TestUtils.waitUntilTrue(() => {
+      getLog(b1, partition).logEndOffset == getLog(b2, partition).logEndOffset
+    }, "Logs didn't match.")
   }
 
   private def printSegments(): Unit = {
@@ -393,7 +408,7 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends QuorumTestHarness wit
 
   private def startConsumer(): Consumer[Array[Byte], Array[Byte]] = {
     val consumerConfig = new Properties()
-    consumerConfig.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, plaintextBootstrapServers(brokers))
+    consumerConfig.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, TestUtils.plaintextBootstrapServers(brokers))
     consumerConfig.put(ConsumerConfig.FETCH_MAX_BYTES_CONFIG, String.valueOf(getLogFile(brokers(1), 0).length() * 2))
     consumerConfig.put(ConsumerConfig.MAX_PARTITION_FETCH_BYTES_CONFIG, String.valueOf(getLogFile(brokers(1), 0).length() * 2))
     consumer = new KafkaConsumer(consumerConfig, new ByteArrayDeserializer, new ByteArrayDeserializer)
@@ -410,33 +425,33 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends QuorumTestHarness wit
   }
 
   private def createBufferingProducer: KafkaProducer[Array[Byte], Array[Byte]] = {
-    TestUtils.createProducer(plaintextBootstrapServers(brokers),
+    TestUtils.createProducer(TestUtils.plaintextBootstrapServers(brokers),
       acks = -1,
       lingerMs = 10000,
       batchSize = msg.length * 1000,
       compressionType = "snappy")
   }
 
-  private def getLogFile(broker: KafkaServer, partition: Int): File = {
+  private def getLogFile(broker: KafkaBroker, partition: Int): File = {
     val log: UnifiedLog = getLog(broker, partition)
     log.flush(false)
     log.dir.listFiles.filter(_.getName.endsWith(".log"))(0)
   }
 
-  private def getLog(broker: KafkaServer, partition: Int): UnifiedLog = {
+  private def getLog(broker: KafkaBroker, partition: Int): UnifiedLog = {
     broker.logManager.getLog(new TopicPartition(topic, partition)).orNull
   }
 
-  private def bounce(follower: KafkaServer): Unit = {
+  private def bounce(follower: KafkaBroker): Unit = {
     follower.shutdown()
     follower.startup()
     producer.close()
     producer = createProducer //TODO not sure why we need to recreate the producer, but it doesn't reconnect if we don't
   }
 
-  private def epochCache(broker: KafkaServer): LeaderEpochFileCache = getLog(broker, 0).leaderEpochCache.get
+  private def epochCache(broker: KafkaBroker): LeaderEpochFileCache = getLog(broker, 0).leaderEpochCache.get
 
-  private def latestRecord(leader: KafkaServer, offset: Int = -1, partition: Int = 0): RecordBatch = {
+  private def latestRecord(leader: KafkaBroker, offset: Int = -1, partition: Int = 0): RecordBatch = {
     getLog(leader, partition).activeSegment.read(0, Integer.MAX_VALUE)
       .records.batches().asScala.toSeq.last
   }
@@ -448,25 +463,105 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends QuorumTestHarness wit
   }
 
   private def createProducer: KafkaProducer[Array[Byte], Array[Byte]] = {
-    TestUtils.createProducer(plaintextBootstrapServers(brokers), acks = -1)
+    TestUtils.createProducer(TestUtils.plaintextBootstrapServers(brokers), acks = -1)
   }
 
-  private def leader: KafkaServer = {
+  private def leader: KafkaBroker = {
     assertEquals(2, brokers.size)
-    val leaderId = zkClient.getLeaderForPartition(new TopicPartition(topic, 0)).get
-    brokers.filter(_.config.brokerId == leaderId).head
+    TestUtils.resource(TestUtils.createAdminClient(brokers = brokers, listenerName = listenerName)) {
+      adminClient =>
+        val leader = adminClient.describeTopics(Collections.singletonList(topic))
+          .topicNameValues()
+          .values().stream()
+          .map(future => future.get())
+          .flatMap(value => value.partitions().stream())
+          .map(partition => partition.leader())
+          .findFirst().get()
+
+        brokers.filter(_.config.brokerId == leader.id()).head
+    }
   }
 
-  private def follower: KafkaServer = {
+  private def follower: KafkaBroker = {
     assertEquals(2, brokers.size)
-    val leader = zkClient.getLeaderForPartition(new TopicPartition(topic, 0)).get
-    brokers.filter(_.config.brokerId != leader).head
+    TestUtils.resource(TestUtils.createAdminClient(brokers = brokers, listenerName = listenerName)) {
+      adminClient =>
+        val leader = adminClient.describeTopics(Collections.singletonList(topic))
+          .topicNameValues()
+          .values().stream()
+          .map(future => future.get())
+          .flatMap(value => value.partitions().stream())
+          .map(partition => partition.leader())
+          .findFirst().get()
+        brokers.filter(_.config.brokerId != leader.id()).head
+    }
   }
 
   private def createBrokerForId(id: Int, enableUncleanLeaderElection: Boolean = false): KafkaServer = {
-    val config = createBrokerConfig(id, zkConnect)
+    val config = createBrokerConfig(id)
     TestUtils.setIbpAndMessageFormatVersions(config, metadataVersion)
     config.setProperty(KafkaConfig.UncleanLeaderElectionEnableProp, enableUncleanLeaderElection.toString)
-    createServer(fromProps(config))
+    if (isKRaftTest()) {
+      TestUtils.createKRaftServer(fromProps(config))
+    } else {
+      TestUtils.createServer(fromProps(config))
+    }
+  }
+
+  private def createBrokerConfig(id: Int): Properties = {
+    if (isKRaftTest()) {
+      val props = TestUtils.createBrokerConfig(id, zkConnect)
+      props.setProperty(KafkaConfig.ProcessRolesProp, "broker")
+      props.setProperty(KafkaConfig.ControllerListenerNamesProp, "CONTROLLER")
+      props
+    } else {
+      val props = TestUtils.createBrokerConfig(id, zkConnect)
+      // Configure control plane listener to make sure we have separate listeners from client,
+      // in order to avoid returning Envelope API version.
+      props.setProperty(KafkaConfig.ControlPlaneListenerNameProp, "CONTROLLER")
+      props.setProperty(KafkaConfig.ListenerSecurityProtocolMapProp, "CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT")
+      props.setProperty("listeners", "PLAINTEXT://localhost:0,CONTROLLER://localhost:0")
+      props.setProperty(KafkaConfig.AdvertisedListenersProp, "PLAINTEXT://localhost:0,CONTROLLER://localhost:0")
+      props.setProperty(KafkaConfig.UnstableApiVersionsEnableProp, "true")
+      props
+    }
+  }
+
+  protected def securityProtocol: SecurityProtocol = SecurityProtocol.PLAINTEXT
+
+  protected def listenerName: ListenerName = ListenerName.forSecurityProtocol(securityProtocol)
+
+  /**
+   * Create a topic.
+   * Wait until the leader is elected and the metadata is propagated to all brokers.
+   * Return the leader for each partition.
+   */
+  def createTopic(
+                   topic: String,
+                   partitionReplicaAssignment: collection.Map[Int, Seq[Int]],
+                   brokers: Seq[KafkaBroker],
+                   topicConfig: Properties = new Properties,
+                   adminClientConfig: Properties = new Properties
+                 ): scala.collection.immutable.Map[Int, Int] = {
+    if (isKRaftTest()) {
+      TestUtils.resource(TestUtils.createAdminClient(brokers, listenerName, adminClientConfig)) { admin =>
+        TestUtils.createTopicWithAdmin(
+          admin = admin,
+          topic = topic,
+          brokers = brokers,
+          controllers = controllerServers,
+          replicaAssignment = partitionReplicaAssignment,
+          topicConfig = topicConfig
+        )
+      }
+    } else {
+      TestUtils.createTopic(
+        zkClient = zkClient,
+        topic = topic,
+        partitionReplicaAssignment = partitionReplicaAssignment,
+        servers = brokers,
+        topicConfig = topicConfig
+      )
+    }
   }
 }
