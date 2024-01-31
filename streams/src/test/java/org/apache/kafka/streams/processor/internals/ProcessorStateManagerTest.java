@@ -55,6 +55,7 @@ import java.io.FileWriter;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
@@ -1119,6 +1120,35 @@ public class ProcessorStateManagerTest {
         assertFalse(persistentCheckpoint.getFile().exists());
 
         assertEquals(persistentCheckpoint.getCheckpointedPosition(), Position.emptyPosition());
+    }
+
+    @Test
+    public void shouldHaveZeroUncommittedRecordsIfNoStores() {
+        final ProcessorStateManager stateManager = getStateManager(Task.TaskType.ACTIVE);
+        assertEquals(0L, stateManager.approximateNumUncommittedBytes());
+    }
+
+    @Test
+    public void shouldHaveZeroUncommittedBytesIfStoresHaveNone() {
+        final ProcessorStateManager stateManager = getStateManager(Task.TaskType.ACTIVE);
+        stateManager.registerStateStores(Arrays.asList(persistentStore, persistentStoreTwo, nonPersistentStore), context);
+        stateManager.registerStore(persistentStore, noopStateRestoreCallback, null);
+        stateManager.registerStore(persistentStoreTwo, noopStateRestoreCallback, null);
+        stateManager.registerStore(nonPersistentStore, noopStateRestoreCallback, null);
+        assertEquals(0L, stateManager.approximateNumUncommittedBytes());
+    }
+
+    @Test
+    public void shouldSumUncommittedBytesOfStores() {
+        final ProcessorStateManager stateManager = getStateManager(Task.TaskType.ACTIVE);
+        stateManager.registerStateStores(Arrays.asList(persistentStore, persistentStoreTwo, nonPersistentStore), context);
+        stateManager.registerStore(persistentStore, noopStateRestoreCallback, null);
+        stateManager.registerStore(persistentStoreTwo, noopStateRestoreCallback, null);
+        stateManager.registerStore(nonPersistentStore, noopStateRestoreCallback, null);
+        persistentStore.uncommittedBytes = 100;
+        persistentStoreTwo.uncommittedBytes = 250;
+        nonPersistentStore.uncommittedBytes = 10;
+        assertEquals(360L, stateManager.approximateNumUncommittedBytes());
     }
 
     public static class StateStorePositionCommit implements CommitCallback {

@@ -44,6 +44,7 @@ public class MockKeyValueStore implements KeyValueStore<Object, Object> {
     public boolean closed = true;
     public final ArrayList<Integer> keys = new ArrayList<>();
     public final ArrayList<byte[]> values = new ArrayList<>();
+    public long uncommittedBytes = 0;
 
     public MockKeyValueStore(final String name,
                              final boolean persistent) {
@@ -145,5 +146,10 @@ public class MockKeyValueStore implements KeyValueStore<Object, Object> {
     @Override
     public long approximateNumEntries() {
         return 0;
+    }
+
+    @Override
+    public long approximateNumUncommittedBytes() {
+        return uncommittedBytes;
     }
 }
