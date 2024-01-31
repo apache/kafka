@@ -1092,6 +1092,34 @@ public class GlobalStateManagerImplTest {
         assertThat(time.milliseconds() - startTime, equalTo(331_100L));
     }
 
+    @Test
+    public void shouldHaveZeroUncommittedBytesWhenThereAreNoStores() {
+        assertEquals(0L, stateManager.approximateNumUncommittedBytes());
+    }
+
+    @Test
+    public void shouldHaveZeroUncommittedBytesWhenStoresHaveNone() {
+        initializeConsumer(0, 0, t1, t2, t3, t4);
+        processorContext.setStateManger(stateManager);
+        stateManager.initialize();
+        assertEquals(store1, stateManager.getGlobalStore(storeName1));
+        assertEquals(store2, stateManager.getGlobalStore(storeName2));
+        assertEquals(store3, stateManager.getGlobalStore(storeName3));
+        assertEquals(store4, stateManager.getGlobalStore(storeName4));
+        assertEquals(0L, stateManager.approximateNumUncommittedBytes());
+    }
+
+    @Test
+    public void shouldSumUncommittedBytesOfStores() {
+        initializeConsumer(0, 0, t1, t2, t3, t4);
+        processorContext.setStateManger(stateManager);
+        stateManager.initialize();
+        store1.uncommittedBytes = 100;
+        store2.uncommittedBytes = 250;
+        store3.uncommittedBytes = 10;
+        assertEquals(360L, stateManager.approximateNumUncommittedBytes());
+    }
+
     private void writeCorruptCheckpoint() throws IOException {
         final File checkpointFile = new File(stateManager.baseDir(), StateManagerUtil.CHECKPOINT_FILE_NAME);
         try (final OutputStream stream = Files.newOutputStream(checkpointFile.toPath())) {
