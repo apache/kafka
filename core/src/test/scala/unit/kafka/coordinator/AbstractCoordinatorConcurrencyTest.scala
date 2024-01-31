@@ -200,11 +200,10 @@ object AbstractCoordinatorConcurrencyTest {
       producerId: Long,
       producerEpoch: Short,
       baseSequence: Int,
-      requestLocal: RequestLocal,
-      callback: (Errors, RequestLocal, VerificationGuard) => Unit
+      callback: ((Errors, VerificationGuard)) => Unit
     ): Unit = {
       // Skip verification
-      callback(Errors.NONE, requestLocal, VerificationGuard.SENTINEL)
+      callback((Errors.NONE, VerificationGuard.SENTINEL))
     }
 
     override def tryCompleteActions(): Unit = watchKeys.map(producePurgatory.checkAndComplete)

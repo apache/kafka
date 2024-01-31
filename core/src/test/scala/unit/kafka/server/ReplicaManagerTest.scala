@@ -3071,9 +3071,8 @@ class ReplicaManagerTest {
                                                             producerEpoch: Short,
                                                             baseSequence: Int = 0): CallbackResult[Either[Errors, VerificationGuard]] = {
     val result = new CallbackResult[Either[Errors, VerificationGuard]]()
-    def postVerificationCallback(error: Errors,
-                                 requestLocal: RequestLocal,
-                                 verificationGuard: VerificationGuard): Unit = {
+    def postVerificationCallback(errorAndGuard: (Errors, VerificationGuard)): Unit = {
+      val (error, verificationGuard) = errorAndGuard
       val errorOrGuard = if (error != Errors.NONE) Left(error) else Right(verificationGuard)
       result.fire(errorOrGuard)
     }
@@ -3084,7 +3083,6 @@ class ReplicaManagerTest {
       producerId,
       producerEpoch,
       baseSequence,
-      RequestLocal.NoCaching,
       postVerificationCallback
     )
     result
