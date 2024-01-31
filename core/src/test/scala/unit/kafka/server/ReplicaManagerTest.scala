@@ -144,7 +144,7 @@ class ReplicaManagerTest {
     metrics.close()
     // validate that the shutdown is working correctly by ensuring no lingering threads.
     // assert at the very end otherwise the other tear down steps will not be performed
-    TestUtils.assertNoNonDaemonThreads(this.getClass.getName)
+    TestUtils.assertNoNonDaemonThreadsWithWaiting(this.getClass.getName)
   }
 
   @Test
@@ -4381,6 +4381,9 @@ class ReplicaManagerTest {
 
   private def setupMockLog(path: String): UnifiedLog = {
     val mockLog = mock(classOf[UnifiedLog])
+    val partitionDir = new File(path, s"$topic-0")
+    partitionDir.mkdir()
+    when(mockLog.dir).thenReturn(partitionDir)
     when(mockLog.parentDir).thenReturn(path)
     when(mockLog.topicId).thenReturn(Some(topicId))
     when(mockLog.topicPartition).thenReturn(new TopicPartition(topic, 0))

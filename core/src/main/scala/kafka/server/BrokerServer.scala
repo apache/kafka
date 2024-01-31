@@ -235,7 +235,7 @@ class BrokerServer(
       )
       clientToControllerChannelManager.start()
       forwardingManager = new ForwardingManagerImpl(clientToControllerChannelManager)
-      clientMetricsManager = new ClientMetricsManager(clientMetricsReceiverPlugin, config.clientTelemetryMaxBytes, time)
+      clientMetricsManager = new ClientMetricsManager(clientMetricsReceiverPlugin, config.clientTelemetryMaxBytes, time, metrics)
 
       val apiVersionManager = ApiVersionManager(
         ListenerType.BROKER,
@@ -452,7 +452,9 @@ class BrokerServer(
           authorizer
         ),
         sharedServer.initialBrokerMetadataLoadFaultHandler,
-        sharedServer.metadataPublishingFaultHandler)
+        sharedServer.metadataPublishingFaultHandler,
+        lifecycleManager
+      )
       metadataPublishers.add(brokerMetadataPublisher)
 
       // Register parts of the broker that can be reconfigured via dynamic configs.  This needs to

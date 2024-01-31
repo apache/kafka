@@ -9633,6 +9633,13 @@ public class GroupMetadataManagerTest {
 
         assertEquals(expectAllGroupMap, actualAllGroupMap);
 
+        // List group with case insensitive ‘empty’
+        actualAllGroupMap =
+            context.sendListGroups(Collections.singletonList("empty"))
+                .stream().collect(Collectors.toMap(ListGroupsResponseData.ListedGroup::groupId, Function.identity()));
+
+        assertEquals(expectAllGroupMap, actualAllGroupMap);
+
         context.commit();
         actualAllGroupMap = context.sendListGroups(Collections.emptyList()).stream()
             .collect(Collectors.toMap(ListGroupsResponseData.ListedGroup::groupId, Function.identity()));
@@ -9660,6 +9667,21 @@ public class GroupMetadataManagerTest {
         ).collect(Collectors.toMap(ListGroupsResponseData.ListedGroup::groupId, Function.identity()));
 
         assertEquals(expectAllGroupMap, actualAllGroupMap);
+
+        actualAllGroupMap = context.sendListGroups(Arrays.asList("empty", "Assigning")).stream()
+            .collect(Collectors.toMap(ListGroupsResponseData.ListedGroup::groupId, Function.identity()));
+        expectAllGroupMap = Stream.of(
+            new ListGroupsResponseData.ListedGroup()
+                .setGroupId(classicGroup.groupId())
+                .setProtocolType(classicGroupType)
+                .setGroupState(EMPTY.toString()),
+            new ListGroupsResponseData.ListedGroup()
+                .setGroupId(consumerGroupId)
+                .setProtocolType(ConsumerProtocol.PROTOCOL_TYPE)
+                .setGroupState(ConsumerGroup.ConsumerGroupState.ASSIGNING.toString())
+        ).collect(Collectors.toMap(ListGroupsResponseData.ListedGroup::groupId, Function.identity()));
+
+        assertEquals(expectAllGroupMap, actualAllGroupMap);
     }
 
     @Test
@@ -9684,7 +9706,7 @@ public class GroupMetadataManagerTest {
             new ConsumerGroupDescribeResponseData.DescribedGroup()
                 .setGroupEpoch(epoch)
                 .setGroupId(consumerGroupIds.get(0))
-                .setGroupState("empty")
+                .setGroupState(ConsumerGroup.ConsumerGroupState.EMPTY.toString())
                 .setAssignorName("range"),
             new ConsumerGroupDescribeResponseData.DescribedGroup()
                 .setGroupEpoch(epoch)
@@ -9695,7 +9717,7 @@ public class GroupMetadataManagerTest {
                         new MetadataImageBuilder().build().topics()
                     )
                 ))
-                .setGroupState("assigning")
+                .setGroupState(ConsumerGroup.ConsumerGroupState.ASSIGNING.toString())
                 .setAssignorName("assignorName")
         );
         List<ConsumerGroupDescribeResponseData.DescribedGroup> actual = context.sendConsumerGroupDescribe(consumerGroupIds);
@@ -9774,7 +9796,7 @@ public class GroupMetadataManagerTest {
                 memberBuilder1.build().asConsumerGroupDescribeMember(new Assignment(Collections.emptyMap()), metadataImage.topics()),
                 memberBuilder2.build().asConsumerGroupDescribeMember(new Assignment(assignmentMap), metadataImage.topics())
             ))
-            .setGroupState("assigning")
+            .setGroupState(ConsumerGroup.ConsumerGroupState.ASSIGNING.toString())
             .setAssignorName("range")
             .setGroupEpoch(epoch + 2);
         expected = Collections.singletonList(

@@ -105,6 +105,7 @@ public class RequestManagers implements Closeable {
      * Creates a {@link Supplier} for deferred creation during invocation by
      * {@link ConsumerNetworkThread}.
      */
+    @SuppressWarnings({"checkstyle:ParameterNumber"})
     public static Supplier<RequestManagers> supplier(final Time time,
                                                      final LogContext logContext,
                                                      final BackgroundEventHandler backgroundEventHandler,
@@ -117,7 +118,9 @@ public class RequestManagers implements Closeable {
                                                      final FetchMetricsManager fetchMetricsManager,
                                                      final Supplier<NetworkClientDelegate> networkClientDelegateSupplier,
                                                      final Optional<ClientTelemetryReporter> clientTelemetryReporter,
-                                                     final Metrics metrics) {
+                                                     final Metrics metrics,
+                                                     final OffsetCommitCallbackInvoker offsetCommitCallbackInvoker
+                                                     ) {
         return new CachedSupplier<RequestManagers>() {
             @Override
             protected RequestManagers create() {
@@ -167,6 +170,7 @@ public class RequestManagers implements Closeable {
                             subscriptions,
                             config,
                             coordinator,
+                            offsetCommitCallbackInvoker,
                             groupRebalanceConfig.groupId,
                             groupRebalanceConfig.groupInstanceId,
                             metrics);
