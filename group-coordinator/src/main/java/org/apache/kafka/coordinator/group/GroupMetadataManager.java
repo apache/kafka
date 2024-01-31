@@ -726,6 +726,9 @@ public class GroupMetadataManager {
                     ClassicGroup classicGroup = (ClassicGroup) group;
                     metrics.onClassicGroupStateTransition(classicGroup.currentState(), null);
                     break;
+                default:
+                    log.warn("Unexpected group type detected while removing groups: " + group.type());
+                    break;
             }
         }
     }
@@ -1818,6 +1821,10 @@ public class GroupMetadataManager {
                             " (size " + classicGroup.size() + ") is over capacity " + classicGroupMaxSize +
                             ". Rebalancing in order to give a chance for consumers to commit offsets");
                     }
+                    break;
+
+                default:
+                    log.warn("Unexpected group type detected while loading: " + group.type());
                     break;
             }
         });
