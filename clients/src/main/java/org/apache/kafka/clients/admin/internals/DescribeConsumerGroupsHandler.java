@@ -62,7 +62,7 @@ public class DescribeConsumerGroupsHandler implements AdminApiHandler<Coordinato
     private final boolean includeAuthorizedOperations;
     private final Logger log;
     private final AdminApiLookupStrategy<CoordinatorKey> lookupStrategy;
-    private final Map<String, Boolean> useClassicGroupApi;
+    private final Set<String> useClassicGroupApi;
 
     public DescribeConsumerGroupsHandler(
         boolean includeAuthorizedOperations,
@@ -71,7 +71,7 @@ public class DescribeConsumerGroupsHandler implements AdminApiHandler<Coordinato
         this.includeAuthorizedOperations = includeAuthorizedOperations;
         this.log = logContext.logger(DescribeConsumerGroupsHandler.class);
         this.lookupStrategy = new CoordinatorStrategy(CoordinatorType.GROUP, logContext);
-        this.useClassicGroupApi = new HashMap<>();
+        this.useClassicGroupApi = new HashSet<>();
     }
 
     private static Set<CoordinatorKey> buildKeySet(Collection<String> groupIds) {
@@ -107,10 +107,9 @@ public class DescribeConsumerGroupsHandler implements AdminApiHandler<Coordinato
                     " when building `DescribeGroups` request");
             }
 
-            // Be default, we always try with using the new consumer group
-            // describe API. If it fails, we fail back to using the classic
-            // group API.
-            if (useClassicGroupApi.getOrDefault(key.idValue, false)) {
+            // By default, we always try using the new consumer group describe API.
+            // If it fails, we fail back to using the classic group API.
+            if (useClassicGroupApi.contains(key.idValue)) {
                 oldConsumerGroups.add(key);
             } else {
                 newConsumerGroups.add(key);
@@ -175,8 +174,7 @@ public class DescribeConsumerGroupsHandler implements AdminApiHandler<Coordinato
         Map<CoordinatorKey, Throwable> errors = new HashMap<>();
 
         keys.forEach(key -> {
-            Boolean prev = useClassicGroupApi.put(key.idValue, true);
-            if (prev != null && prev) {
+            if (!useClassicGroupApi.add(key.idValue)) {
                 // We already tried with the classic group API so we need to fail now.
                 errors.put(key, exception);
             }
@@ -313,50 +311,54 @@ public class DescribeConsumerGroupsHandler implements AdminApiHandler<Coordinato
         Set<CoordinatorKey> groupsToUnmap,
         boolean isConsumerGroupResponse
     ) {
+        String apiName = isConsumerGroupResponse ? "ConsumerGroupDescribe" : "DescribeGroups";
+
         switch (error) {
             case GROUP_AUTHORIZATION_FAILED:
-                log.debug("`DescribeGroups` request for group id {} failed due to error {}.", groupId.idValue, error);
+                log.debug("`{}` request for group id {} failed due to error {}.", apiName, groupId.idValue, error);
                 failed.put(groupId, error.exception(errorMsg));
                 break;
 
             case COORDINATOR_LOAD_IN_PROGRESS:
                 // If the coordinator is in the middle of loading, then we just need to retry
-                log.debug("`DescribeGroups` request for group id {} failed because the coordinator " +
-                    "is still in the process of loading state. Will retry.", groupId.idValue);
+                log.debug("`{}` request for group id {} failed because the coordinator " +
+                    "is still in the process of loading state. Will retry.", apiName, groupId.idValue);
                 break;
 
             case COORDINATOR_NOT_AVAILABLE:
             case NOT_COORDINATOR:
                 // If the coordinator is unavailable or there was a coordinator change, then we unmap
                 // the key so that we retry the `FindCoordinator` request
-                log.debug("`DescribeGroups` request for group id {} returned error {}. " +
-                    "Will attempt to find the coordinator again and retry.", groupId.idValue, error);
+                log.debug("`{}` request for group id {} returned error {}. " +
+                    "Will attempt to find the coordinator again and retry.", apiName, groupId.idValue, error);
                 groupsToUnmap.add(groupId);
                 break;
 
             case UNSUPPORTED_VERSION:
                 if (isConsumerGroupResponse) {
-                    log.debug("`DescribeGroups` request for group id {} failed because the API is not " +
-                        "supported. Will retry with old API.", groupId.idValue);
-                    useClassicGroupApi.put(groupId.idValue, true);
+                    log.debug("`{}` request for group id {} failed because the API is not " +
+                        "supported. Will retry with `DescribeGroups` API.", apiName, groupId.idValue);
+                    useClassicGroupApi.add(groupId.idValue);
                 } else {
+                    log.error("`{}` request for group id {} because the `ConsumerGroupDescribe` API is not supported.",
+                        apiName, groupId.idValue);
                     failed.put(groupId, error.exception(errorMsg));
                 }
                 break;
 
             case GROUP_ID_NOT_FOUND:
                 if (isConsumerGroupResponse) {
-                    log.debug("`DescribeGroups` request for group id {} failed because the group is not " +
-                        "a new consumer group. Will retry with old API.", groupId.idValue);
-                    useClassicGroupApi.put(groupId.idValue, true);
+                    log.debug("`{}` request for group id {} failed because the group is not " +
+                        "a new consumer group. Will retry with `DescribeGroups` API.", apiName, groupId.idValue);
+                    useClassicGroupApi.add(groupId.idValue);
                 } else {
-                    log.error("`DescribeGroups` request for group id {} because the group does not exist.", groupId.idValue);
+                    log.error("`{}` request for group id {} because the group does not exist.", apiName, groupId.idValue);
                     failed.put(groupId, error.exception(errorMsg));
                 }
                 break;
 
             default:
-                log.error("`DescribeGroups` request for group id {} failed due to unexpected error {}.", groupId.idValue, error);
+                log.error("`{}` request for group id {} failed due to unexpected error {}.", apiName, groupId.idValue, error);
                 failed.put(groupId, error.exception(errorMsg));
         }
     }

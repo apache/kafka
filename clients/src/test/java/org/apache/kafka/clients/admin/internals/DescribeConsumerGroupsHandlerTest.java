@@ -86,7 +86,7 @@ public class DescribeConsumerGroupsHandlerTest {
 
     @ParameterizedTest
     @ValueSource(booleans = {true, false})
-    public void testBuildRequest(boolean includeAuthorizedOperations) {
+    public void testBuildRequestWithMultipleGroupTypes(boolean includeAuthorizedOperations) {
         DescribeConsumerGroupsHandler handler = new DescribeConsumerGroupsHandler(includeAuthorizedOperations, logContext);
 
         // Build request for the two groups. It should return one request for
