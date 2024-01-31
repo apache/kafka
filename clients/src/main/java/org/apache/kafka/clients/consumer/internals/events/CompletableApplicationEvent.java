@@ -17,6 +17,7 @@
 package org.apache.kafka.clients.consumer.internals.events;
 
 import org.apache.kafka.clients.consumer.internals.ConsumerUtils;
+import org.apache.kafka.clients.consumer.internals.RelaxedCompletableFuture;
 import org.apache.kafka.common.utils.Timer;
 
 import java.util.Objects;
@@ -30,19 +31,19 @@ import java.util.concurrent.CompletableFuture;
  */
 public abstract class CompletableApplicationEvent<T> extends ApplicationEvent implements CompletableEvent<T> {
 
-    private final CompletableFuture<T> future;
+    private final RelaxedCompletableFuture<T> future;
     private final Timer timer;
     private final long deadlineMs;
 
     protected CompletableApplicationEvent(Type type, Timer timer) {
         super(type);
-        this.future = new CompletableFuture<>();
+        this.future = new RelaxedCompletableFuture<>();
         this.timer = timer;
         this.deadlineMs = timer.remainingMs() + timer.currentTimeMs();
     }
 
     @Override
-    public CompletableFuture<T> future() {
+    public RelaxedCompletableFuture<T> future() {
         return future;
     }
 

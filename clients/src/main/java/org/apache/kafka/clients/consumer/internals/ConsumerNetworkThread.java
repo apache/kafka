@@ -128,7 +128,7 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
         // Process the events—if any—that were produced by the application thread. It is possible that when processing
         // an event generates an error. In such cases, the processor will log an exception, but we do not want those
         // errors to be propagated to the caller.
-        applicationEventProcessor.process();
+        List<RelaxedCompletableFuture<?>> futures = applicationEventProcessor.process();
 
         final long currentTimeMs = time.milliseconds();
         final long pollWaitTimeMs = requestManagers.entries().stream()
@@ -144,6 +144,8 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
                 .map(Optional::get)
                 .map(rm -> rm.maximumTimeToWait(currentTimeMs))
                 .reduce(Long.MAX_VALUE, Math::min);
+
+        futures.forEach(RelaxedCompletableFuture::attempted);
     }
 
     /**

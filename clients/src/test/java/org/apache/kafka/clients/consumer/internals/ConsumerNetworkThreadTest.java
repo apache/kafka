@@ -288,7 +288,7 @@ public class ConsumerNetworkThreadTest {
         prepareOffsetCommitRequest(new HashMap<>(), Errors.NONE, false);
         CompletableApplicationEvent<Void> event1 = spy(new CommitApplicationEvent(Collections.emptyMap(), timer, false));
         ApplicationEvent event2 = new CommitApplicationEvent(Collections.emptyMap(), timer, false);
-        CompletableFuture<Void> future = new CompletableFuture<>();
+        RelaxedCompletableFuture<Void> future = new RelaxedCompletableFuture<>();
         when(event1.future()).thenReturn(future);
         applicationEventsQueue.add(event1);
         applicationEventsQueue.add(event2);

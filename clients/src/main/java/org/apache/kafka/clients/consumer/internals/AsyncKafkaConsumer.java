@@ -180,7 +180,6 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
          * could occur when processing the events. In such cases, the processor will take a reference to the first
          * error, continue to process the remaining events, and then throw the first error that occurred.
          */
-        @Override
         public boolean process() {
             AtomicReference<KafkaException> firstError = new AtomicReference<>();
 
@@ -1471,7 +1470,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                 log.info("Unsubscribing all topics or patterns and assigned partitions");
 
                 try {
-                    processBackgroundEvents(backgroundEventProcessor, unsubscribeApplicationEvent.future(), timer);
+                    processBackgroundEvents(unsubscribeApplicationEvent.future(), timer);
                     log.info("Unsubscribed all topics or patterns and assigned partitions");
                 } catch (TimeoutException e) {
                     log.error("Failed while waiting for the unsubscribe event to complete");
@@ -1808,20 +1807,17 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
      * execution of the rebalancing logic. The rebalancing logic cannot complete until the
      * {@link ConsumerRebalanceListener} callback is performed.
      *
-     * @param eventProcessor Event processor that contains the queue of events to process
      * @param future         Event that contains a {@link CompletableFuture}; it is on this future that the
      *                       application thread will wait for completion
      * @param timer          Overall timer that bounds how long to wait for the event to complete
      * @return {@code true} if the event completed within the timeout, {@code false} otherwise
      */
     // Visible for testing
-    <T> T processBackgroundEvents(EventProcessor<?> eventProcessor,
-                                  Future<T> future,
-                                  Timer timer) {
+    <T> T processBackgroundEvents(Future<T> future, Timer timer) {
         log.trace("Will wait up to {} ms for future {} to complete", timer.remainingMs(), future);
 
         do {
-            boolean hadEvents = eventProcessor.process();
+            boolean hadEvents = backgroundEventProcessor.process();
 
             try {
                 if (future.isDone()) {
