@@ -1,5 +1,6 @@
 package org.apache.kafka.clients.consumer.internals.metrics;
 
+import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.metrics.Measurable;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
@@ -13,73 +14,61 @@ import org.apache.kafka.common.metrics.stats.WindowedCount;
 import java.util.concurrent.TimeUnit;
 
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.CONSUMER_METRIC_GROUP_PREFIX;
+import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.COORDINATOR_METRICS_SUFFIX;
 
-public class RebalanceMetricsManager extends AbstractConsumerMetricsManager {
-    private long lastRebalanceEndMs;
+public class RebalanceMetricsManager {
     private final Sensor successfulRebalanceSensor;
     private final Sensor failedRebalanceSensor;
-    
-    public RebalanceMetricsManager(Metrics metrics) {
-        super(metrics, CONSUMER_METRIC_GROUP_PREFIX, MetricGroupSuffix.COORDINATOR);
-        this.successfulRebalanceSensor = metrics.sensor("rebalance-latency");
-        this.successfulRebalanceSensor.add(metrics.metricName("rebalance-latency-avg",
-            metricGroupName(),
-            "The average time taken for a group to complete a successful rebalance, which may be composed of " +
-                "several failed re-trials until it succeeded"), new Avg());
-        this.successfulRebalanceSensor.add(metrics.metricName("rebalance-latency-max",
-            metricGroupName(),
-            "The max time taken for a group to complete a successful rebalance, which may be composed of " +
-                "several failed re-trials until it succeeded"), new Max());
-        this.successfulRebalanceSensor.add(metrics.metricName("rebalance-latency-total",
-                metricGroupName(),
-                "The total number of milliseconds this consumer has spent in successful rebalances since creation"),
-            new CumulativeSum());
-        this.successfulRebalanceSensor.add(
-            metrics.metricName("rebalance-total",
-                metricGroupName(),
-                "The total number of successful rebalance events, each event is composed of " +
-                    "several failed re-trials until it succeeded"),
-            new CumulativeCount()
-        );
-        this.successfulRebalanceSensor.add(
-            metrics.metricName(
-                "rebalance-rate-per-hour",
-                metricGroupName(),
-                "The number of successful rebalance events per hour, each event is composed of " +
-                    "several failed re-trials until it succeeded"),
-            new Rate(TimeUnit.HOURS, new WindowedCount())
-        );
+    private final String metricGroupName;
 
-        this.failedRebalanceSensor = metrics.sensor("failed-rebalance");
-        this.failedRebalanceSensor.add(
-            metrics.metricName("failed-rebalance-total",
-                metricGroupName(),
-                "The total number of failed rebalance events"),
-            new CumulativeCount()
-        );
-        this.failedRebalanceSensor.add(
-            metrics.metricName(
-                "failed-rebalance-rate-per-hour",
-                metricGroupName(),
-                "The number of failed rebalance events per hour"),
-            new Rate(TimeUnit.HOURS, new WindowedCount())
-        );
+    private final MetricName rebalanceLatencyAvg;
+    private final MetricName rebalanceLatencyMax;
+    private final MetricName rebalanceLatencyTotal;
+    private final MetricName rebalanceTotal;
+    private final MetricName rebalanceRatePerHour;
+    private final MetricName lastRebalanceSecondsAgo;
+    private long lastRebalanceEndMs = -1l;
+
+    public RebalanceMetricsManager(Metrics metrics) {
+        metricGroupName = CONSUMER_METRIC_GROUP_PREFIX + COORDINATOR_METRICS_SUFFIX;
+
+        rebalanceLatencyAvg = createMetric(metrics, "rebalance-latency-avg",
+            "The average time taken for a group to complete a rebalance");
+        rebalanceLatencyMax = createMetric(metrics, "rebalance-latency-max",
+            "The max time taken for a group to complete a rebalance");
+        rebalanceLatencyTotal = createMetric(metrics, "rebalance-latency-total",
+            "The total number of milliseconds spent in rebalances");
+        rebalanceTotal = createMetric(metrics, "rebalance-total",
+            "The total number of rebalance events");
+        rebalanceRatePerHour = createMetric(metrics, "rebalance-rate-per-hour",
+            "The number of rebalance events per hour");
+
+        successfulRebalanceSensor = createRebalanceSensor(metrics, "rebalance");
+        failedRebalanceSensor = createRebalanceSensor(metrics, "failed-rebalance");
 
         Measurable lastRebalance = (config, now) -> {
             if (lastRebalanceEndMs == -1L)
-                // if no rebalance is ever triggered, we just return -1.
                 return -1d;
             else
                 return TimeUnit.SECONDS.convert(now - lastRebalanceEndMs, TimeUnit.MILLISECONDS);
         };
-        addMetric(
+        lastRebalanceSecondsAgo = createMetric(metrics,
             "last-rebalance-seconds-ago",
-            "The number of seconds since the last successful rebalance event",
-            lastRebalance
-        );
+            "The number of seconds since the last rebalance event");
+        metrics.addMetric(lastRebalanceSecondsAgo, lastRebalance);
     }
 
-    public void recordRebalanceCompleted(long timeMs) {
-        lastRebalanceEndMs = timeMs;
+    private Sensor createRebalanceSensor(Metrics metrics, String sensorNamePrefix) {
+        Sensor sensor = metrics.sensor(sensorNamePrefix + "-latency");
+        sensor.add(rebalanceLatencyAvg, new Avg());
+        sensor.add(rebalanceLatencyMax, new Max());
+        sensor.add(rebalanceLatencyTotal, new CumulativeSum());
+        sensor.add(rebalanceTotal, new CumulativeCount());
+        sensor.add(rebalanceRatePerHour, new Rate(TimeUnit.HOURS, new WindowedCount()));
+        return sensor;
+    }
+
+    private MetricName createMetric(Metrics metrics, String name, String description) {
+        return metrics.metricName(name, metricGroupName, description);
     }
 }
