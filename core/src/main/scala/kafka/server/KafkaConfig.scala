@@ -1277,9 +1277,9 @@ object KafkaConfig {
 
       /** Internal Configurations **/
       // This indicates whether unreleased APIs should be advertised by this node.
-      .defineInternal(UnstableApiVersionsEnableProp, BOOLEAN, false, HIGH)
+      .defineInternal(LogConfig.UNSTABLE_API_VERSIONS_ENABLE_PROP, BOOLEAN, LogConfig.DEFAULT_UNSTABLE_API_VERSIONS_ENABLE, HIGH)
       // This indicates whether unreleased MetadataVersions should be enabled on this node.
-      .defineInternal(UnstableMetadataVersionsEnableProp, BOOLEAN, false, HIGH)
+      .defineInternal(LogConfig.UNSTABLE_METADATA_VERSIONS_ENABLE_PROP, BOOLEAN, LogConfig.DEFAULT_UNSTABLE_METADATA_VERSIONS_ENABLE, HIGH)
   }
 
   /** ********* Remote Log Management Configuration *********/
