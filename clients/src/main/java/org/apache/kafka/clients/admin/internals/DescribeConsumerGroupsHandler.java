@@ -344,7 +344,7 @@ public class DescribeConsumerGroupsHandler implements AdminApiHandler<Coordinato
                         "supported. Will retry with `DescribeGroups` API.", apiName, groupId.idValue);
                     useClassicGroupApi.add(groupId.idValue);
                 } else {
-                    log.error("`{}` request for group id {} because the `ConsumerGroupDescribe` API is not supported.",
+                    log.error("`{}` request for group id {} failed because the `ConsumerGroupDescribe` API is not supported.",
                         apiName, groupId.idValue);
                     failed.put(groupId, error.exception(errorMsg));
                 }
@@ -356,7 +356,7 @@ public class DescribeConsumerGroupsHandler implements AdminApiHandler<Coordinato
                         "a new consumer group. Will retry with `DescribeGroups` API.", apiName, groupId.idValue);
                     useClassicGroupApi.add(groupId.idValue);
                 } else {
-                    log.error("`{}` request for group id {} because the group does not exist.", apiName, groupId.idValue);
+                    log.error("`{}` request for group id {} failed because the group does not exist.", apiName, groupId.idValue);
                     failed.put(groupId, error.exception(errorMsg));
                 }
                 break;
