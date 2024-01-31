@@ -16,20 +16,9 @@
  */
 package org.apache.kafka.coordinator.group;
 
-import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.TopicConfig;
-import org.apache.kafka.common.errors.CoordinatorLoadInProgressException;
-import org.apache.kafka.common.errors.InvalidFetchSizeException;
-import org.apache.kafka.common.errors.KafkaStorageException;
 import org.apache.kafka.common.errors.NotCoordinatorException;
-import org.apache.kafka.common.errors.NotEnoughReplicasException;
-import org.apache.kafka.common.errors.NotLeaderOrFollowerException;
-import org.apache.kafka.common.errors.RecordBatchTooLargeException;
-import org.apache.kafka.common.errors.RecordTooLargeException;
-import org.apache.kafka.common.errors.UnknownMemberIdException;
-import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
-import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.internals.Topic;
 import org.apache.kafka.common.message.ConsumerGroupDescribeResponseData;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatRequestData;
@@ -55,6 +44,7 @@ import org.apache.kafka.common.message.SyncGroupResponseData;
 import org.apache.kafka.common.message.TxnOffsetCommitRequestData;
 import org.apache.kafka.common.message.TxnOffsetCommitResponseData;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.requests.ApiError;
 import org.apache.kafka.common.requests.DescribeGroupsRequest;
 import org.apache.kafka.common.requests.DeleteGroupsRequest;
 import org.apache.kafka.common.requests.ConsumerGroupDescribeRequest;
@@ -92,8 +82,9 @@ import java.util.OptionalInt;
 import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.BiFunction;
 import java.util.function.IntSupplier;
 import java.util.stream.Collectors;
 
@@ -302,31 +293,14 @@ public class GroupCoordinatorService implements GroupCoordinator {
             topicPartitionFor(request.groupId()),
             Duration.ofMillis(config.offsetCommitTimeoutMs),
             coordinator -> coordinator.consumerGroupHeartbeat(context, request)
-        ).exceptionally(exception -> {
-            if (exception instanceof UnknownTopicOrPartitionException ||
-                exception instanceof NotEnoughReplicasException ||
-                exception instanceof TimeoutException) {
-                return new ConsumerGroupHeartbeatResponseData()
-                    .setErrorCode(Errors.COORDINATOR_NOT_AVAILABLE.code());
-            }
-
-            if (exception instanceof NotLeaderOrFollowerException ||
-                exception instanceof KafkaStorageException) {
-                return new ConsumerGroupHeartbeatResponseData()
-                    .setErrorCode(Errors.NOT_COORDINATOR.code());
-            }
-
-            if (exception instanceof RecordTooLargeException ||
-                exception instanceof RecordBatchTooLargeException ||
-                exception instanceof InvalidFetchSizeException) {
-                return new ConsumerGroupHeartbeatResponseData()
-                    .setErrorCode(Errors.UNKNOWN_SERVER_ERROR.code());
-            }
-
-            return new ConsumerGroupHeartbeatResponseData()
-                .setErrorCode(Errors.forException(exception).code())
-                .setErrorMessage(exception.getMessage());
-        });
+        ).exceptionally(exception -> handleOperationException(
+            "consumer-group-heartbeat",
+            request,
+            exception,
+            (error, message) -> new ConsumerGroupHeartbeatResponseData()
+                .setErrorCode(error.code())
+                .setErrorMessage(message)
+        ));
     }
 
     /**
@@ -360,14 +334,13 @@ public class GroupCoordinatorService implements GroupCoordinator {
             Duration.ofMillis(config.offsetCommitTimeoutMs),
             coordinator -> coordinator.classicGroupJoin(context, request, responseFuture)
         ).exceptionally(exception -> {
-            if (!(exception instanceof KafkaException)) {
-                log.error("JoinGroup request {} hit an unexpected exception: {}",
-                    request, exception.getMessage());
-            }
-            
             if (!responseFuture.isDone()) {
-                responseFuture.complete(new JoinGroupResponseData()
-                    .setErrorCode(Errors.forException(exception).code()));
+                responseFuture.complete(handleOperationException(
+                    "classic-group-join",
+                    request,
+                    exception,
+                    (error, __) -> new JoinGroupResponseData().setErrorCode(error.code())
+                ));
             }
             return null;
         });
@@ -404,14 +377,13 @@ public class GroupCoordinatorService implements GroupCoordinator {
             Duration.ofMillis(config.offsetCommitTimeoutMs),
             coordinator -> coordinator.classicGroupSync(context, request, responseFuture)
         ).exceptionally(exception -> {
-            if (!(exception instanceof KafkaException)) {
-                log.error("SyncGroup request {} hit an unexpected exception: {}",
-                    request, exception.getMessage());
-            }
-
             if (!responseFuture.isDone()) {
-                responseFuture.complete(new SyncGroupResponseData()
-                    .setErrorCode(Errors.forException(exception).code()));
+                responseFuture.complete(handleOperationException(
+                    "classic-group-sync",
+                    request,
+                    exception,
+                    (error, __) -> new SyncGroupResponseData().setErrorCode(error.code())
+                ));
             }
             return null;
         });
@@ -441,24 +413,25 @@ public class GroupCoordinatorService implements GroupCoordinator {
 
         // Using a read operation is okay here as we ignore the last committed offset in the snapshot registry.
         // This means we will read whatever is in the latest snapshot, which is how the old coordinator behaves.
-        return runtime.scheduleReadOperation("classic-group-heartbeat",
+        return runtime.scheduleReadOperation(
+            "classic-group-heartbeat",
             topicPartitionFor(request.groupId()),
             (coordinator, __) -> coordinator.classicGroupHeartbeat(context, request)
-        ).exceptionally(exception -> {
-            if (!(exception instanceof KafkaException)) {
-                log.error("Heartbeat request {} hit an unexpected exception: {}",
-                    request, exception.getMessage());
+        ).exceptionally(exception -> handleOperationException(
+            "classic-group-heartbeat",
+            request,
+            exception,
+            (error, __) -> {
+                if (error == Errors.COORDINATOR_LOAD_IN_PROGRESS) {
+                    // The group is still loading, so blindly respond
+                    return new HeartbeatResponseData()
+                        .setErrorCode(Errors.NONE.code());
+                } else {
+                    return new HeartbeatResponseData()
+                        .setErrorCode(error.code());
+                }
             }
-
-            if (exception instanceof CoordinatorLoadInProgressException) {
-                // The group is still loading, so blindly respond
-                return new HeartbeatResponseData()
-                    .setErrorCode(Errors.NONE.code());
-            }
-
-            return new HeartbeatResponseData()
-                .setErrorCode(Errors.forException(exception).code());
-        });
+        ));
     }
 
     /**
@@ -486,28 +459,27 @@ public class GroupCoordinatorService implements GroupCoordinator {
             topicPartitionFor(request.groupId()),
             Duration.ofMillis(config.offsetCommitTimeoutMs),
             coordinator -> coordinator.classicGroupLeave(context, request)
-        ).exceptionally(exception -> {
-            if (!(exception instanceof KafkaException)) {
-                log.error("LeaveGroup request {} hit an unexpected exception: {}",
-                    request, exception.getMessage());
+        ).exceptionally(exception -> handleOperationException(
+            "classic-group-leave",
+            request,
+            exception,
+            (error, __) -> {
+                if (error == Errors.UNKNOWN_MEMBER_ID) {
+                    // Group was not found.
+                    List<LeaveGroupResponseData.MemberResponse> memberResponses = request.members().stream()
+                         .map(member -> new LeaveGroupResponseData.MemberResponse()
+                             .setMemberId(member.memberId())
+                             .setGroupInstanceId(member.groupInstanceId())
+                             .setErrorCode(Errors.UNKNOWN_MEMBER_ID.code()))
+                         .collect(Collectors.toList());
+                    return new LeaveGroupResponseData()
+                        .setMembers(memberResponses);
+                } else {
+                    return new LeaveGroupResponseData()
+                        .setErrorCode(error.code());
+                }
             }
-
-            if (exception instanceof UnknownMemberIdException) {
-                // Group was not found.
-                List<LeaveGroupResponseData.MemberResponse> memberResponses = request.members().stream()
-                    .map(member -> new LeaveGroupResponseData.MemberResponse()
-                        .setMemberId(member.memberId())
-                        .setGroupInstanceId(member.groupInstanceId())
-                        .setErrorCode(Errors.UNKNOWN_MEMBER_ID.code()))
-                    .collect(Collectors.toList());
-
-                return new LeaveGroupResponseData()
-                    .setMembers(memberResponses);
-            }
-
-            return new LeaveGroupResponseData()
-                .setErrorCode(Errors.forException(exception).code());
-        });
+        ));
     }
 
     /**
@@ -524,37 +496,39 @@ public class GroupCoordinatorService implements GroupCoordinator {
             );
         }
 
-        final CompletableFuture<ListGroupsResponseData> future = new CompletableFuture<>();
-        final List<ListGroupsResponseData.ListedGroup> results = new ArrayList<>();
         final Set<TopicPartition> existingPartitionSet = runtime.partitions();
-        final AtomicInteger cnt = new AtomicInteger(existingPartitionSet.size());
 
         if (existingPartitionSet.isEmpty()) {
             return CompletableFuture.completedFuture(new ListGroupsResponseData());
         }
 
+        final List<CompletableFuture<List<ListGroupsResponseData.ListedGroup>>> futures =
+            new ArrayList<>();
+
         for (TopicPartition tp : existingPartitionSet) {
-            runtime.scheduleReadOperation(
+            futures.add(runtime.scheduleReadOperation(
                 "list-groups",
                 tp,
                 (coordinator, lastCommittedOffset) -> coordinator.listGroups(request.statesFilter(), lastCommittedOffset)
-            ).handle((groups, exception) -> {
-                if (exception == null) {
-                    synchronized (results) {
-                        results.addAll(groups);
-                    }
+            ).exceptionally(exception -> {
+                exception = Errors.maybeUnwrapException(exception);
+                if (exception instanceof NotCoordinatorException) {
+                    return Collections.emptyList();
                 } else {
-                    if (!(exception instanceof NotCoordinatorException)) {
-                        future.complete(new ListGroupsResponseData().setErrorCode(Errors.forException(exception).code()));
-                    }
+                    throw new CompletionException(exception);
                 }
-                if (cnt.decrementAndGet() == 0) {
-                    future.complete(new ListGroupsResponseData().setGroups(results));
-                }
-                return null;
-            });
+            }));
         }
-        return future;
+
+        return FutureUtils
+            .combineFutures(futures, ArrayList::new, List::addAll)
+            .thenApply(groups -> new ListGroupsResponseData().setGroups(groups))
+            .exceptionally(exception -> handleOperationException(
+                "list-groups",
+                request,
+                exception,
+                (error, __) -> new ListGroupsResponseData().setErrorCode(error.code())
+            ));
     }
 
     /**
@@ -595,27 +569,17 @@ public class GroupCoordinatorService implements GroupCoordinator {
                     "consumer-group-describe",
                     topicPartition,
                     (coordinator, lastCommittedOffset) -> coordinator.consumerGroupDescribe(groupIds, lastCommittedOffset)
-                ).exceptionally(exception -> {
-                    if (!(exception instanceof KafkaException)) {
-                        log.error("ConsumerGroupDescribe request {} hit an unexpected exception: {}.",
-                            groupList, exception.getMessage());
-                    }
-
-                    return ConsumerGroupDescribeRequest.getErrorDescribedGroupList(
-                        groupList,
-                        Errors.forException(exception)
-                    );
-                });
+                ).exceptionally(exception -> handleOperationException(
+                    "consumer-group-describe",
+                    groupList,
+                    exception,
+                    (error, __) -> ConsumerGroupDescribeRequest.getErrorDescribedGroupList(groupList, error)
+                ));
 
             futures.add(future);
         });
 
-        final CompletableFuture<Void> allFutures = CompletableFuture.allOf(futures.toArray(new CompletableFuture[0]));
-        return allFutures.thenApply(v -> {
-            final List<ConsumerGroupDescribeResponseData.DescribedGroup> res = new ArrayList<>();
-            futures.forEach(future -> res.addAll(future.join()));
-            return res;
-        });
+        return FutureUtils.combineFutures(futures, ArrayList::new, List::addAll);
     }
 
     /**
@@ -658,27 +622,17 @@ public class GroupCoordinatorService implements GroupCoordinator {
                     "describe-groups",
                     topicPartition,
                     (coordinator, lastCommittedOffset) -> coordinator.describeGroups(context, groupList, lastCommittedOffset)
-                ).exceptionally(exception -> {
-                    if (!(exception instanceof KafkaException)) {
-                        log.error("DescribeGroups request {} hit an unexpected exception: {}",
-                            groupList, exception.getMessage());
-                    }
-
-                    return DescribeGroupsRequest.getErrorDescribedGroupList(
-                        groupList,
-                        Errors.forException(exception)
-                    );
-                });
+                ).exceptionally(exception -> handleOperationException(
+                    "describe-groups",
+                    groupList,
+                    exception,
+                    (error, __) -> DescribeGroupsRequest.getErrorDescribedGroupList(groupList, error)
+                ));
 
             futures.add(future);
         });
 
-        final CompletableFuture<Void> allFutures = CompletableFuture.allOf(futures.toArray(new CompletableFuture[0]));
-        return allFutures.thenApply(v -> {
-            final List<DescribeGroupsResponseData.DescribedGroup> res = new ArrayList<>();
-            futures.forEach(future -> res.addAll(future.join()));
-            return res;
-        });
+        return FutureUtils.combineFutures(futures, ArrayList::new, List::addAll);
     }
 
     /**
@@ -723,25 +677,20 @@ public class GroupCoordinatorService implements GroupCoordinator {
                     topicPartition,
                     Duration.ofMillis(config.offsetCommitTimeoutMs),
                     coordinator -> coordinator.deleteGroups(context, groupList)
-                ).exceptionally(exception ->
-                    DeleteGroupsRequest.getErrorResultCollection(groupList, normalizeException(exception))
-                );
+                ).exceptionally(exception -> handleOperationException(
+                    "delete-groups",
+                    groupList,
+                    exception,
+                    (error, __) -> DeleteGroupsRequest.getErrorResultCollection(groupList, error)
+                ));
 
             futures.add(future);
         });
 
-        final CompletableFuture<Void> allFutures = CompletableFuture.allOf(futures.toArray(new CompletableFuture[0]));
-        return allFutures.thenApply(__ -> {
-            final DeleteGroupsResponseData.DeletableGroupResultCollection res = new DeleteGroupsResponseData.DeletableGroupResultCollection();
-            futures.forEach(future ->
-                // We don't use res.addAll(future.join()) because DeletableGroupResultCollection is an ImplicitLinkedHashMultiCollection,
-                // which has requirements for adding elements (see ImplicitLinkedHashCollection.java#add).
-                future.join().forEach(result ->
-                    res.add(result.duplicate())
-                )
-            );
-            return res;
-        });
+        return FutureUtils.combineFutures(futures, DeleteGroupsResponseData.DeletableGroupResultCollection::new,
+            // We don't use res.addAll(future.join()) because DeletableGroupResultCollection is an ImplicitLinkedHashMultiCollection,
+            // which has requirements for adding elements (see ImplicitLinkedHashCollection.java#add).
+            (accumulator, newResults) -> newResults.forEach(result -> accumulator.add(result.duplicate())));
     }
 
     /**
@@ -875,9 +824,12 @@ public class GroupCoordinatorService implements GroupCoordinator {
             topicPartitionFor(request.groupId()),
             Duration.ofMillis(config.offsetCommitTimeoutMs),
             coordinator -> coordinator.commitOffset(context, request)
-        ).exceptionally(exception ->
-            OffsetCommitRequest.getErrorResponse(request, normalizeException(exception))
-        );
+        ).exceptionally(exception -> handleOperationException(
+            "commit-offset",
+            request,
+            exception,
+            (error, __) -> OffsetCommitRequest.getErrorResponse(request, error)
+        ));
     }
 
     /**
@@ -911,9 +863,12 @@ public class GroupCoordinatorService implements GroupCoordinator {
             request.producerEpoch(),
             Duration.ofMillis(config.offsetCommitTimeoutMs),
             coordinator -> coordinator.commitTransactionalOffset(context, request)
-        ).exceptionally(exception ->
-            TxnOffsetCommitRequest.getErrorResponse(request, normalizeException(exception))
-        );
+        ).exceptionally(exception -> handleOperationException(
+            "txn-commit-offset",
+            request,
+            exception,
+            (error, __) -> TxnOffsetCommitRequest.getErrorResponse(request, error)
+        ));
     }
 
     /**
@@ -942,10 +897,12 @@ public class GroupCoordinatorService implements GroupCoordinator {
             topicPartitionFor(request.groupId()),
             Duration.ofMillis(config.offsetCommitTimeoutMs),
             coordinator -> coordinator.deleteOffsets(context, request)
-        ).exceptionally(exception ->
-            new OffsetDeleteResponseData()
-                .setErrorCode(normalizeException(exception).code())
-        );
+        ).exceptionally(exception -> handleOperationException(
+            "delete-offsets",
+            request,
+            exception,
+            (error, __) -> new OffsetDeleteResponseData().setErrorCode(error.code())
+        ));
     }
 
     /**
@@ -1099,29 +1056,49 @@ public class GroupCoordinatorService implements GroupCoordinator {
     }
 
     /**
-     * Handles the exception in the scheduleWriteOperation.
-     * @return The Errors instance associated with the given exception.
+     * This is the handler commonly used by all the operations that requires to convert errors to
+     * coordinator errors. The handler also handles and log unexpected errors.
+     *
+     * @param operationName     The name of the operation.
+     * @param operationInput    The operation's input for logging purposes.
+     * @param exception         The exception to handle.
+     * @param handler           A function which takes an Errors and a String and builds the expected
+     *                          output. The String can be null. Note that the function could further
+     *                          transform the error depending on the context.
+     * @return The output built by the handler.
+     * @param <IN> The type of the operation input. It must be a toString'able object.
+     * @param <OUT> The type of the value returned by handler.
      */
-    private static Errors normalizeException(Throwable exception) {
-        exception = Errors.maybeUnwrapException(exception);
+    private <IN, OUT> OUT handleOperationException(
+        String operationName,
+        IN operationInput,
+        Throwable exception,
+        BiFunction<Errors, String, OUT> handler
+    ) {
+        ApiError apiError = ApiError.fromThrowable(exception);
 
-        if (exception instanceof UnknownTopicOrPartitionException ||
-            exception instanceof NotEnoughReplicasException ||
-            exception instanceof TimeoutException) {
-            return Errors.COORDINATOR_NOT_AVAILABLE;
+        switch (apiError.error()) {
+            case UNKNOWN_SERVER_ERROR:
+                log.error("Operation {} with {} hit an unexpected exception: {}.",
+                    operationName, operationInput, exception.getMessage(), exception);
+                return handler.apply(Errors.UNKNOWN_SERVER_ERROR, null);
+
+            case UNKNOWN_TOPIC_OR_PARTITION:
+            case NOT_ENOUGH_REPLICAS:
+            case REQUEST_TIMED_OUT:
+                return handler.apply(Errors.COORDINATOR_NOT_AVAILABLE, null);
+
+            case NOT_LEADER_OR_FOLLOWER:
+            case KAFKA_STORAGE_ERROR:
+                return handler.apply(Errors.NOT_COORDINATOR, null);
+
+            case MESSAGE_TOO_LARGE:
+            case RECORD_LIST_TOO_LARGE:
+            case INVALID_FETCH_SIZE:
+                return handler.apply(Errors.UNKNOWN_SERVER_ERROR, null);
+
+            default:
+                return handler.apply(apiError.error(), apiError.message());
         }
-
-        if (exception instanceof NotLeaderOrFollowerException ||
-            exception instanceof KafkaStorageException) {
-            return Errors.NOT_COORDINATOR;
-        }
-
-        if (exception instanceof RecordTooLargeException ||
-            exception instanceof RecordBatchTooLargeException ||
-            exception instanceof InvalidFetchSizeException) {
-            return Errors.UNKNOWN_SERVER_ERROR;
-        }
-
-        return Errors.forException(exception);
     }
 }

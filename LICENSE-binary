@@ -238,7 +238,7 @@ jetty-servlet-9.4.53.v20231009
 jetty-servlets-9.4.53.v20231009
 jetty-util-9.4.53.v20231009
 jetty-util-ajax-9.4.53.v20231009
-jose4j-0.9.3
+jose4j-0.9.4
 lz4-java-1.8.0
 maven-artifact-3.8.8
 metrics-core-4.1.12.1

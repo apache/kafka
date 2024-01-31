@@ -19,10 +19,12 @@ package org.apache.kafka.server.util;
 import org.apache.kafka.common.utils.Time;
 import org.slf4j.Logger;
 
+import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeoutException;
 import java.util.function.BiConsumer;
+import java.util.function.Supplier;
 
 
 public class FutureUtils {
@@ -99,5 +101,28 @@ public class FutureUtils {
         CompletableFuture<T> future = new CompletableFuture<>();
         future.completeExceptionally(ex);
         return future;
+    }
+
+    /**
+     * Given a list of CompletableFutures returns a single CompletableFuture combining them.
+     *
+     * @param futures       The list of futures.
+     * @param init          The function to init the accumulator.
+     * @param add           The function to accumulate the results. The function
+     *                      takes the accumulator as a first argument and the new
+     *                      results as a second argument.
+     * @return A new CompletableFuture.
+     */
+    public static <T> CompletableFuture<T> combineFutures(
+        List<CompletableFuture<T>> futures,
+        Supplier<T> init,
+        BiConsumer<T, T> add
+    ) {
+        final CompletableFuture<Void> allFutures = CompletableFuture.allOf(futures.toArray(new CompletableFuture[0]));
+        return allFutures.thenApply(v -> {
+            final T res = init.get();
+            futures.forEach(future -> add.accept(res, future.join()));
+            return res;
+        });
     }
 }
