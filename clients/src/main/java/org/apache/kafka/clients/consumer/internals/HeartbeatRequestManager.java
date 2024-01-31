@@ -110,9 +110,12 @@ public class HeartbeatRequestManager implements RequestManager {
      * sending heartbeat until the next poll.
      */
     private final Timer pollTimer;
-    private final HeartbeatMetricsManager metricsManager;
-
     private GroupMetadataUpdateEvent previousGroupMetadataUpdateEvent = null;
+
+    /**
+     * Holding the heartbeat sensor to measure heartbeat timing and response latency
+     */
+    private final HeartbeatMetricsManager metricsManager;
 
     public HeartbeatRequestManager(
         final LogContext logContext,

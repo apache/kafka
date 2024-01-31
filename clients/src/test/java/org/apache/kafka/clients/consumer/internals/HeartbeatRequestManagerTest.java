@@ -56,6 +56,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.Properties;
+import java.util.Random;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.TimeUnit;
 
@@ -65,8 +66,6 @@ import static org.apache.kafka.clients.consumer.internals.ConsumerTestBuilder.DE
 import static org.apache.kafka.clients.consumer.internals.ConsumerTestBuilder.DEFAULT_REMOTE_ASSIGNOR;
 import static org.apache.kafka.clients.consumer.internals.ConsumerTestBuilder.DEFAULT_RETRY_BACKOFF_MAX_MS;
 import static org.apache.kafka.clients.consumer.internals.ConsumerTestBuilder.DEFAULT_RETRY_BACKOFF_MS;
-import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.CONSUMER_METRIC_GROUP_PREFIX;
-import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.COORDINATOR_METRICS_SUFFIX;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -86,7 +85,7 @@ public class HeartbeatRequestManagerTest {
     private int maxPollIntervalMs = DEFAULT_MAX_POLL_INTERVAL_MS;
     private long retryBackoffMaxMs = DEFAULT_RETRY_BACKOFF_MAX_MS;
     private static final String DEFAULT_GROUP_ID = "groupId";
-    private String metricGroupPrefix = CONSUMER_METRIC_GROUP_PREFIX;
+    private String consumerMetricsGroupName = "consumer-coordinator-metrics";
 
     private ConsumerTestBuilder testBuilder;
     private Time time;
@@ -601,15 +600,19 @@ public class HeartbeatRequestManagerTest {
 
         // test poll
         assertHeartbeat(heartbeatRequestManager, 0);
-        time.sleep(DEFAULT_HEARTBEAT_INTERVAL_MS);
+        time.sleep(heartbeatIntervalMs);
         assertEquals(1.0, getMetric("heartbeat-total").metricValue());
         assertEquals((double) TimeUnit.MILLISECONDS.toSeconds(heartbeatIntervalMs), getMetric("last-heartbeat-seconds-ago").metricValue());
 
-        assertHeartbeat(heartbeatRequestManager, DEFAULT_HEARTBEAT_INTERVAL_MS);
+        assertHeartbeat(heartbeatRequestManager, heartbeatIntervalMs);
         assertEquals(0.06d, (double) getMetric("heartbeat-rate").metricValue(), 0.005d);
         assertEquals(2.0, getMetric("heartbeat-total").metricValue());
-        time.sleep(DEFAULT_HEARTBEAT_INTERVAL_MS);
-        assertEquals((double) TimeUnit.MILLISECONDS.toSeconds(heartbeatIntervalMs), getMetric("last-heartbeat-seconds-ago").metricValue());
+
+        // Randomly sleep for some time
+        Random rand = new Random();
+        int randomSleepS = rand.nextInt(11);
+        time.sleep(randomSleepS * 1000);
+        assertEquals((double) randomSleepS, getMetric("last-heartbeat-seconds-ago").metricValue());
     }
 
     private void assertHeartbeat(HeartbeatRequestManager hrm, int nextPollMs) {
@@ -722,7 +725,7 @@ public class HeartbeatRequestManagerTest {
     }
 
     private KafkaMetric getMetric(final String name) {
-        return metrics.metrics().get(metrics.metricName(name, metricGroupPrefix + COORDINATOR_METRICS_SUFFIX));
+        return metrics.metrics().get(metrics.metricName(name, consumerMetricsGroupName));
     }
 
     private HeartbeatRequestManager createHeartbeatRequestManager(

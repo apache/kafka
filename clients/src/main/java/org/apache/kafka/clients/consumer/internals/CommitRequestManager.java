@@ -82,7 +82,7 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
     private final boolean throwOnFetchStableOffsetUnsupported;
     final PendingRequests pendingRequests;
     private boolean closing = false;
-    private OffsetCommitMetricsManager metricsManager;
+    private final OffsetCommitMetricsManager metricsManager;
 
     /**
      *  Latest member ID and epoch received via the {@link #onMemberEpochUpdated(Optional, Optional)},
