@@ -873,7 +873,7 @@ public class GroupCoordinatorServiceTest {
                 ArgumentMatchers.eq("list-groups"),
                 ArgumentMatchers.eq(new TopicPartition("__consumer_offsets", i)),
                 ArgumentMatchers.any()
-            )).thenReturn(new CompletableFuture<>());
+            )).thenReturn(CompletableFuture.completedFuture(Collections.emptyList()));
         }
 
         when(runtime.scheduleReadOperation(
