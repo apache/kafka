@@ -787,8 +787,9 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
             return;
         }
 
-        // Resolve metadata for target assignment
-        SortedSet<TopicIdPartition> assignedTopicIdPartitions = resolveMetadataForTargetAssignment();
+        // Find the subset of the target assignment that can be resolved to topic names, and trigger a metadata update
+        // if some topic IDs are not resolvable.
+        SortedSet<TopicIdPartition> assignedTopicIdPartitions = findResolvableAssignmentAndTriggerMetadataUpdate();
 
         SortedSet<TopicPartition> ownedPartitions = new TreeSet<>(TOPIC_PARTITION_COMPARATOR);
         ownedPartitions.addAll(subscriptions.assignedPartitions());
@@ -980,7 +981,7 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
     }
 
     /**
-     * Build set of TopicPartition (topic name and partition id) from the target assignment
+     * Build set of TopicIdPartition (topic ID, topic name and partition id) from the target assignment
      * received from the broker (topic IDs and list of partitions).
      *
      * <p>
@@ -996,7 +997,7 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
      *     </li>
      * </ol>
      */
-    private SortedSet<TopicIdPartition> resolveMetadataForTargetAssignment() {
+    private SortedSet<TopicIdPartition> findResolvableAssignmentAndTriggerMetadataUpdate() {
         final SortedSet<TopicIdPartition> assignmentReadyToReconcile = new TreeSet<>(TOPIC_ID_PARTITION_COMPARATOR);
         final HashMap<Uuid, SortedSet<Integer>> unresolved = new HashMap<>(currentTargetAssignment);
 
@@ -1011,12 +1012,9 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
             Optional<String> nameFromMetadata = findTopicNameInGlobalOrLocalCache(topicId);
             nameFromMetadata.ifPresent(resolvedTopicName -> {
                 // Name resolved, so assignment is ready for reconciliation.
-                topicPartitions.forEach(tp -> {
-                    TopicIdPartition topicIdPartition = new TopicIdPartition(
-                        topicId,
-                        new TopicPartition(resolvedTopicName, tp));
-                    assignmentReadyToReconcile.add(topicIdPartition);
-                });
+                topicPartitions.forEach(tp ->
+                    assignmentReadyToReconcile.add(new TopicIdPartition(topicId, tp, resolvedTopicName))
+                );
                 it.remove();
             });
         }
@@ -1336,15 +1334,21 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
     /**
      * @return Map of topics partitions received in a target assignment that have not been
      * reconciled yet because topic names are not in metadata or reconciliation hasn't finished.
-     * The value will always contain all partitions in the target assignment.
+     * The values in the map are the sets of partitions contained in the target assignment but
+     * missing from the currently reconciled assignment, for each topic.
      *
      * Visible for testing.
      */
     Map<Uuid, SortedSet<Integer>> topicPartitionsAwaitingReconciliation() {
         final Map<Uuid, SortedSet<Integer>> topicPartitionMap = new HashMap<>();
-        currentTargetAssignment.forEach((x, y) -> {
-            if (!currentAssignment.containsKey(x) || !currentAssignment.get(x).equals(y)) {
-                topicPartitionMap.put(x, y);
+        currentTargetAssignment.forEach((topicId, targetPartitions) -> {
+            final SortedSet<Integer> reconciledPartitions = currentAssignment.get(topicId);
+            if (!targetPartitions.equals(reconciledPartitions)) {
+                final TreeSet<Integer> missingPartitions = new TreeSet<>(targetPartitions);
+                if (reconciledPartitions != null) {
+                    missingPartitions.removeAll(reconciledPartitions);
+                }
+                topicPartitionMap.put(topicId, missingPartitions);
             }
         });
         return Collections.unmodifiableMap(topicPartitionMap);
