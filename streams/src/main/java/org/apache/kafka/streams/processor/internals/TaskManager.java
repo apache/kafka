@@ -101,6 +101,7 @@ public class TaskManager {
     private final StateUpdater stateUpdater;
     private final DefaultTaskManager schedulingTaskManager;
     private final long maxUncommittedStateBytes;
+    private long lastUncommittedBytes = 0L;
 
     TaskManager(final Time time,
                 final ChangelogReader changelogReader,
@@ -1841,9 +1842,6 @@ public class TaskManager {
         }
     }
 
-    // track the size of the transaction buffer on each iteration to predict when it will be exceeded in advance
-    private long lastUncommittedBytes = 0L;
-
     boolean needsCommit(final boolean updateDelta) {
         if (maxUncommittedStateBytes < 0) {
             // if our transaction buffers are unbounded, we never need to force an early commit
@@ -1855,7 +1853,7 @@ public class TaskManager {
 
         final long deltaBytes = Math.max(0, uncommittedBytes - lastUncommittedBytes);
 
-        final boolean needsCommit =  maxUncommittedStateBytes > -1 && uncommittedBytes + deltaBytes > maxUncommittedStateBytes;
+        final boolean needsCommit =  uncommittedBytes + deltaBytes > maxUncommittedStateBytes;
         if (needsCommit) {
             log.debug(
                     "Needs commit because we will exceed max uncommitted bytes before next commit. max: {}, last: {}, current: {}, delta: {}",
