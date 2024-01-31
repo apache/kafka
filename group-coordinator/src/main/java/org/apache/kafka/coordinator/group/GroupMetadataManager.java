@@ -89,7 +89,6 @@ import org.apache.kafka.coordinator.group.runtime.CoordinatorTimer;
 import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.image.TopicImage;
-import org.apache.kafka.image.TopicsImage;
 import org.apache.kafka.timeline.SnapshotRegistry;
 import org.apache.kafka.timeline.TimelineHashMap;
 import org.apache.kafka.timeline.TimelineHashSet;
@@ -1350,6 +1349,10 @@ public class GroupMetadataManager {
         timer.schedule(key, consumerGroupSessionTimeoutMs, TimeUnit.MILLISECONDS, true, () -> {
             try {
                 ConsumerGroup group = getOrMaybeCreateConsumerGroup(groupId, false);
+                if (group.isPendingMember(memberId)) {
+                    // TODO: remove the pending member, need a new record type?
+                    return EMPTY_RESULT;
+                }
                 ConsumerGroupMember member = group.getOrMaybeCreateMember(memberId, false);
                 log.info("[GroupId {}] Member {} fenced from the group because its session expired.",
                     groupId, memberId);
@@ -3480,6 +3483,7 @@ public class GroupMetadataManager {
         ConsumerGroupMember member,
         JoinGroupRequestData.JoinGroupRequestProtocolCollection protocols
     ) {
+        boolean hasMatchedGenerationId = false;
         for (JoinGroupRequestData.JoinGroupRequestProtocol protocol : protocols) {
             final ByteBuffer buffer = ByteBuffer.wrap(protocol.metadata());
             ConsumerProtocol.deserializeVersion(buffer);
@@ -3488,15 +3492,20 @@ public class GroupMetadataManager {
             // If the generation id is provided, it must match the member epoch.
             if (!generationId.isPresent() || generationId.get() == member.memberEpoch()) {
                 // TODO: need a list of all available server assignors
+                hasMatchedGenerationId = true;
                 if (UniformAssignor.UNIFORM_ASSIGNOR_NAME.equals(protocol.name())
                     || RangeAssignor.RANGE_ASSIGNOR_NAME.equals(protocol.name())) {
                     return protocol;
                 }
             }
         }
-        throw new FencedMemberEpochException("The JoinGroup request doesn't have a matched generation id from a " +
-            "protocol supported by the server assignors with the epoch of the member known by the group coordinator (" +
-            member.memberEpoch() + ").");
+
+        // TODO: throw the exceptions supported by the old consumer
+        if (!hasMatchedGenerationId) {
+            throw Errors.ILLEGAL_GENERATION.exception();
+        } else {
+            throw Errors.INCONSISTENT_GROUP_PROTOCOL.exception();
+        }
     }
 
     private List<ConsumerGroupHeartbeatRequestData.TopicPartitions> transitionToConsumerGroupHeartbeatTopicPartitions(
@@ -3515,6 +3524,13 @@ public class GroupMetadataManager {
                 .setTopicId(topicImage.id())
                 .setPartitions(item.getValue());
         }).collect(Collectors.toList());
+    }
+
+    private void throwIfIsPendingMember(ConsumerGroup group, String memberId, String instanceId) {
+        if (group.isPendingMember(memberId)) {
+            throw new IllegalStateException("Received unexpected JoinGroup with groupInstanceId=" +
+                instanceId + " for pending member with memberId=" + memberId);
+        }
     }
 
     public CoordinatorResult<Void, Record> upgradeGroupJoin(
@@ -3557,6 +3573,8 @@ public class GroupMetadataManager {
                 log.info("Dynamic member with unknown member id joins group {}. " +
                         "Created a new member id {} and requesting the member to rejoin with this id.",
                     group.groupId(), memberId);
+                group.addPendingMember(memberId);
+                scheduleConsumerGroupSessionTimeout(groupId, memberId);
 
                 responseFuture.complete(new JoinGroupResponseData()
                     .setMemberId(memberId)
@@ -3564,13 +3582,15 @@ public class GroupMetadataManager {
                 );
                 return EMPTY_RESULT;
             } else {
+                newMemberCreated = !group.hasMemberId(memberId) && !group.isPendingMember(memberId);
                 member = group.getOrMaybeCreateMember(memberId, true);
-                newMemberCreated = !group.members().containsKey(memberId);
                 log.info("[GroupId {}] Member {} joins the consumer group.", groupId, memberId);
                 updatedMemberBuilder = new ConsumerGroupMember.Builder(member);
             }
         } else {
+            throwIfIsPendingMember(group, memberId, instanceId);
             member = group.staticMember(instanceId);
+
             // A new static member joins or the existing static member rejoins.
             if (isUnknownMember) {
                 newMemberCreated = true;
@@ -3605,8 +3625,8 @@ public class GroupMetadataManager {
         // changed, and persisted by writing a ConsumerGroupMetadataValue record to the partition.
         final JoinGroupRequestProtocol protocol = throwIfProtocolUnmatched(member, request.protocols());
         final ByteBuffer buffer = ByteBuffer.wrap(protocol.metadata());
-        ConsumerProtocol.deserializeVersion(buffer);
-        final ConsumerPartitionAssignor.Subscription subscription = ConsumerProtocol.deserializeSubscription(buffer, (short) 0);
+        final short embeddedProtocolVersion = ConsumerProtocol.deserializeVersion(buffer);
+        final ConsumerPartitionAssignor.Subscription subscription = ConsumerProtocol.deserializeSubscription(buffer, embeddedProtocolVersion);
         final List<ConsumerGroupHeartbeatRequestData.TopicPartitions> ownedTopicPartitions =
             transitionToConsumerGroupHeartbeatTopicPartitions(subscription.ownedPartitions());
 
@@ -3618,6 +3638,7 @@ public class GroupMetadataManager {
             .maybeUpdateSubscribedTopicNames(Optional.ofNullable(subscription.topics()))
             .setClientId(context.clientId())
             .setClientHost(context.clientAddress.toString())
+            .setEmbeddedProtocolVersion(embeddedProtocolVersion) // TODO: update in replay
             .build();
 
         boolean bumpGroupEpoch = false;
@@ -3755,7 +3776,7 @@ public class GroupMetadataManager {
         return new CoordinatorResult<>(records, null);
     }
 
-    private byte[] createSyncGroupResponseAssignment(Map<Uuid, Set<Integer>> assignedPartitions) {
+    private byte[] createSyncGroupResponseAssignment(Map<Uuid, Set<Integer>> assignedPartitions, short deserializeVersion) {
         final List<TopicPartition> partitions = new ArrayList<>();
         assignedPartitions.entrySet().forEach(item -> {
             TopicImage topicImage = metadataImage.topics().getTopic(item.getKey());
@@ -3766,7 +3787,10 @@ public class GroupMetadataManager {
                 new TopicPartition(topicImage.name(), partition)).collect(Collectors.toList()));
         });
 
-        final ByteBuffer byteBuffer = ConsumerProtocol.serializeAssignment(new ConsumerPartitionAssignor.Assignment(partitions)); // TODO: assignment version?
+        final ByteBuffer byteBuffer = ConsumerProtocol.serializeAssignment(
+            new ConsumerPartitionAssignor.Assignment(partitions),
+            deserializeVersion
+        );
         byte[] res = new byte[byteBuffer.remaining()];
         byteBuffer.get(res);
         return res;
@@ -3777,28 +3801,23 @@ public class GroupMetadataManager {
         SyncGroupRequestData request,
         CompletableFuture<SyncGroupResponseData> responseFuture
     ) {
-        String groupId = request.groupId();
-        String memberId = request.memberId();
-        ConsumerGroup group;
-        try {
-            group = getOrMaybeCreateConsumerGroup(groupId, false);
-        } catch (Throwable t) {
-            responseFuture.complete(new SyncGroupResponseData()
-                .setErrorCode(Errors.forException(t).code())
-            );
-            return EMPTY_RESULT;
+        final String groupId = request.groupId();
+        final String memberId = request.memberId();
+        final String instanceId = request.groupInstanceId();
+        final ConsumerGroup group = getOrMaybeCreateConsumerGroup(groupId, false);
+        final ConsumerGroupMember member = group.getOrMaybeCreateMember(memberId, false);
+
+        if (instanceId != null) {
+            throwIfInstanceIdIsFenced(group.staticMember(instanceId), groupId, memberId, instanceId);
         }
 
         // TODO:
         // 1) member id exists, instance id exists and matches member id
         // 2) generation id and protocol match
-        // 3) group state is not empty or dead?
-
-        ConsumerGroupMember member = group.getOrMaybeCreateMember(memberId, false);
         responseFuture.complete(new SyncGroupResponseData()
             .setProtocolType(ConsumerProtocol.PROTOCOL_TYPE)
             .setProtocolName(group.preferredServerAssignor().orElse(null))
-            .setAssignment(createSyncGroupResponseAssignment(member.assignedPartitions())));
+            .setAssignment(createSyncGroupResponseAssignment(member.assignedPartitions(), member.embeddedProtocolVersion())));
 
         return EMPTY_RESULT;
     }
@@ -3809,14 +3828,16 @@ public class GroupMetadataManager {
     ) {
         final String groupId = request.groupId();
         final String memberId = request.memberId();
+        final String instanceId = request.groupInstanceId();
+        final ConsumerGroup group = getOrMaybeCreateConsumerGroup(groupId, false);
+        final ConsumerGroupMember member = group.getOrMaybeCreateMember(memberId, false);
 
-        ConsumerGroup group = getOrMaybeCreateConsumerGroup(groupId, false);
-        ConsumerGroupMember member = group.getOrMaybeCreateMember(memberId, false);
-
+        if (instanceId != null) {
+            throwIfInstanceIdIsFenced(group.staticMember(instanceId), groupId, memberId, instanceId);
+        }
         // TODO:
         // 1) member id exists, instance id exists and matches member id
         // 2) generation id and protocol match
-        // 3) group state is not empty or dead?
 
         scheduleConsumerGroupSessionTimeout(groupId, memberId);
 
@@ -3824,8 +3845,73 @@ public class GroupMetadataManager {
             !member.partitionsPendingRevocation().isEmpty() ||
             !member.partitionsPendingAssignment().isEmpty()) {
             new HeartbeatResponseData().setErrorCode(Errors.REBALANCE_IN_PROGRESS.code());
+            // TODO: set join group timeout
         }
         return new HeartbeatResponseData();
+    }
+
+    public CoordinatorResult<LeaveGroupResponseData, Record> upgradeGroupLeave(
+        RequestContext context,
+        LeaveGroupRequestData request
+    ) throws UnknownMemberIdException, GroupIdNotFoundException {
+        String groupId = request.groupId();
+        ConsumerGroup group = getOrMaybeCreateConsumerGroup(groupId, false);
+        List<MemberResponse> memberResponses = new ArrayList<>();
+
+        List<Record> records = new ArrayList<>();
+        for (MemberIdentity memberIdentity: request.members()) {
+            String memberId = memberIdentity.memberId();
+            String instanceId = memberIdentity.groupInstanceId();
+
+            if (UNKNOWN_MEMBER_ID.equals(memberId)) {
+                if (instanceId != null && group.staticMemberId(instanceId) != null) {
+                    ConsumerGroupMember member = group.getOrMaybeCreateMember(memberId, false);
+                    log.info("[GroupId {}] Static Member {} with instance id {} left the consumer group.",
+                        group.groupId(), memberId, instanceId);
+                    records.addAll(consumerGroupFenceMember(group, member));
+                    memberResponses.add(
+                        new MemberResponse()
+                            .setMemberId(memberId)
+                            .setGroupInstanceId(instanceId)
+                    );
+                } else {
+                    memberResponses.add(
+                        new MemberResponse()
+                            .setMemberId(memberId)
+                            .setGroupInstanceId(instanceId)
+                            .setErrorCode(Errors.UNKNOWN_MEMBER_ID.code())
+                    );
+                }
+            } else if (group.isPendingMember(memberId)) {
+                group.removePendingMember(memberId);
+                cancelTimers(group.groupId(), memberId);
+                memberResponses.add(
+                    new MemberResponse()
+                        .setMemberId(memberId)
+                        .setGroupInstanceId(instanceId)
+                );
+            } else {
+                ConsumerGroupMember member;
+                if (instanceId == null) {
+                    member = group.getOrMaybeCreateMember(memberId, false);
+                    log.info("[GroupId {}] Member {} left the consumer group.", groupId, memberId);
+                } else {
+                    member = group.staticMember(instanceId);
+                    throwIfStaticMemberIsUnknown(member, instanceId);
+                    throwIfInstanceIdIsFenced(member, groupId, memberId, instanceId);
+                    log.info("[GroupId {}] Static Member {} with instance id {} left the consumer group.",
+                        group.groupId(), memberId, instanceId);
+                }
+                records.addAll(consumerGroupFenceMember(group, member));
+                memberResponses.add(
+                    new MemberResponse()
+                        .setMemberId(memberId)
+                        .setGroupInstanceId(instanceId)
+                );
+            }
+        }
+
+        return new CoordinatorResult<>(records, new LeaveGroupResponseData().setMembers(memberResponses));
     }
 
     /**

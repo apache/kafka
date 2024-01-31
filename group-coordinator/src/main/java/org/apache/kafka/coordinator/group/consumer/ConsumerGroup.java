@@ -161,6 +161,12 @@ public class ConsumerGroup implements Group {
     private final GroupCoordinatorMetricsShard metrics;
 
     /**
+     * Members who have yet to (re)join the group
+     * during the join group phase.
+     */
+    private final Set<String> pendingJoinMembers = new HashSet<>();
+
+    /**
      * The metadata refresh deadline. It consists of a timestamp in milliseconds together with
      * the group epoch at the time of setting it. The metadata refresh time is considered as a
      * soft state (read that it is not stored in a timeline data structure). It is like this
@@ -314,6 +320,7 @@ public class ConsumerGroup implements Group {
             }
             member = new ConsumerGroupMember.Builder(memberId).build();
             members.put(memberId, member);
+            pendingJoinMembers.remove(memberId);
         }
 
         return member;
@@ -983,5 +990,54 @@ public class ConsumerGroup implements Group {
             )
         );
         return describedGroup;
+    }
+
+    /**
+     * Add a pending member.
+     *
+     * @param memberId the member id.
+     * @return true if the group did not already have the pending member,
+     *         false otherwise.
+     */
+    public boolean addPendingMember(String memberId) {
+        if (hasMemberId(memberId)) {
+            throw new IllegalStateException("Attempt to add pending member " + memberId +
+                " which is already a stable member of the group.");
+        }
+        return pendingJoinMembers.add(memberId);
+    }
+
+    /**
+     * Remove a pending member.
+     *
+     * @param memberId the member id.
+     * @return true if the group had the pending member to delete, false otherwise.
+     */
+    public boolean removePendingMember(String memberId) {
+        if (hasMemberId(memberId)) {
+            throw new IllegalStateException("Attempt to remove pending member " + memberId +
+                " which is already a stable member of the group.");
+        }
+        return pendingJoinMembers.remove(memberId);
+    }
+
+    /**
+     * To identify whether the given member id is part of this group.
+     *
+     * @param memberId the given member id.
+     * @return true if the member is part of this group, false otherwise.
+     */
+    public boolean hasMemberId(String memberId) {
+        return members.containsKey(memberId);
+    }
+
+    /**
+     * Check whether a member has joined the group.
+     *
+     * @param memberId the member id.
+     * @return true if the member has yet to join, false otherwise.
+     */
+    public boolean isPendingMember(String memberId) {
+        return pendingJoinMembers.contains(memberId);
     }
 }
