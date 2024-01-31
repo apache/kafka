@@ -727,7 +727,7 @@ public class GroupMetadataManager {
                     metrics.onClassicGroupStateTransition(classicGroup.currentState(), null);
                     break;
                 default:
-                    log.warn("Unexpected group type detected while removing groups: " + group.type());
+                    log.warn("Removed group {} with an unknown group type {}. " + groupId, group.type());
                     break;
             }
         }
@@ -1824,7 +1824,7 @@ public class GroupMetadataManager {
                     break;
 
                 default:
-                    log.warn("Unexpected group type detected while loading: " + group.type());
+                    log.warn("Loaded group {} with an unknown group type {}. " + groupId, group.type());
                     break;
             }
         });
