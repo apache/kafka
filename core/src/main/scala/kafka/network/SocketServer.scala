@@ -621,7 +621,7 @@ private[kafka] abstract class Acceptor(val socketServer: SocketServer,
   private val blockedPercentMeter = metricsGroup.newMeter(blockedPercentMeterMetricName,"blocked time", TimeUnit.NANOSECONDS)
   private var currentProcessorIndex = 0
   private[network] val throttledSockets = new mutable.PriorityQueue[DelayedCloseSocket]()
-  private var started = false
+  private val started = new AtomicBoolean()
   private[network] val startedFuture = new CompletableFuture[Void]()
 
   val thread = KafkaThread.nonDaemon(
@@ -642,7 +642,7 @@ private[kafka] abstract class Acceptor(val socketServer: SocketServer,
       debug(s"Starting acceptor thread for listener ${endPoint.listenerName}")
       thread.start()
       startedFuture.complete(null)
-      started = true
+      started.set(true)
     } catch {
       case e: ClosedChannelException =>
         debug(s"Refusing to start acceptor for ${endPoint.listenerName} since the acceptor has already been shut down.")
@@ -679,7 +679,7 @@ private[kafka] abstract class Acceptor(val socketServer: SocketServer,
   def close(): Unit = {
     beginShutdown()
     thread.join()
-    if (!started) {
+    if (!started.get) {
       closeAll()
     }
     synchronized {
@@ -857,7 +857,7 @@ private[kafka] abstract class Acceptor(val socketServer: SocketServer,
       listenerProcessors += processor
       requestChannel.addProcessor(processor)
 
-      if (started) {
+      if (started.get) {
         processor.start()
       }
     }
@@ -927,7 +927,7 @@ private[kafka] class Processor(
   private val metricsGroup = new KafkaMetricsGroup(this.getClass)
 
   val shouldRun = new AtomicBoolean(true)
-  private var started = false
+  private val started = new AtomicBoolean()
 
   val thread = KafkaThread.nonDaemon(threadName, this)
 
@@ -1365,8 +1365,9 @@ private[kafka] class Processor(
     Option(selector.channel(connectionId))
 
   def start(): Unit = {
-    thread.start()
-    started = true;
+    if (!started.getAndSet(true)) {
+      thread.start()
+    }
   }
 
   /**
@@ -1384,7 +1385,7 @@ private[kafka] class Processor(
     try {
       beginShutdown()
       thread.join()
-      if (!started) {
+      if (!started.get) {
         CoreUtils.swallow(closeAll(), this, Level.ERROR)
       }
     } finally {
