@@ -73,6 +73,7 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
     private final Optional<AutoCommitState> autoCommitState;
     private final CoordinatorRequestManager coordinatorRequestManager;
     private final OffsetCommitCallbackInvoker offsetCommitCallbackInvoker;
+    private final OffsetCommitMetricsManager metricsManager;
     private final long retryBackoffMs;
     private final String groupId;
     private final Optional<String> groupInstanceId;
@@ -82,7 +83,6 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
     private final boolean throwOnFetchStableOffsetUnsupported;
     final PendingRequests pendingRequests;
     private boolean closing = false;
-    private final OffsetCommitMetricsManager metricsManager;
 
     /**
      *  Latest member ID and epoch received via the {@link #onMemberEpochUpdated(Optional, Optional)},

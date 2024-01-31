@@ -75,7 +75,6 @@ import static org.apache.kafka.clients.consumer.ConsumerConfig.VALUE_DESERIALIZE
 import static org.apache.kafka.clients.consumer.internals.ConsumerTestBuilder.DEFAULT_GROUP_ID;
 import static org.apache.kafka.clients.consumer.internals.ConsumerTestBuilder.DEFAULT_GROUP_INSTANCE_ID;
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.CONSUMER_METRIC_GROUP_PREFIX;
-import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.COORDINATOR_METRICS_SUFFIX;
 import static org.apache.kafka.test.TestUtils.assertFutureThrows;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -94,7 +93,7 @@ public class CommitRequestManagerTest {
     private long retryBackoffMs = 100;
     private long retryBackoffMaxMs = 1000;
     private String consumerMetricGroupPrefix = CONSUMER_METRIC_GROUP_PREFIX;
-    private String consumerMetricGroupName = consumerMetricGroupPrefix + COORDINATOR_METRICS_SUFFIX;
+    private static final String CONSUMER_COORDINATOR_METRICS = "consumer-coordinator-metrics";
     private Node mockedNode = new Node(1, "host1", 9092);
     private SubscriptionState subscriptionState;
     private LogContext logContext;
@@ -139,6 +138,7 @@ public class CommitRequestManagerTest {
         Map<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>();
         offsets.put(new TopicPartition("t1", 0), new OffsetAndMetadata(0));
         commitRequestManger.addOffsetCommitRequest(offsets, Optional.empty(), false);
+        assertPoll(1, commitRequestManger);
     }
 
     @Test
@@ -1247,6 +1247,6 @@ public class CommitRequestManagerTest {
     private KafkaMetric getMetric(String name) {
         return metrics.metrics().get(metrics.metricName(
             name,
-            consumerMetricGroupName));
+            CONSUMER_COORDINATOR_METRICS));
     }
 }

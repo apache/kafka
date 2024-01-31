@@ -85,7 +85,7 @@ public class HeartbeatRequestManagerTest {
     private int maxPollIntervalMs = DEFAULT_MAX_POLL_INTERVAL_MS;
     private long retryBackoffMaxMs = DEFAULT_RETRY_BACKOFF_MAX_MS;
     private static final String DEFAULT_GROUP_ID = "groupId";
-    private String consumerMetricsGroupName = "consumer-coordinator-metrics";
+    private static final String CONSUMER_COORDINATOR_METRICS = "consumer-coordinator-metrics";
 
     private ConsumerTestBuilder testBuilder;
     private Time time;
@@ -725,7 +725,7 @@ public class HeartbeatRequestManagerTest {
     }
 
     private KafkaMetric getMetric(final String name) {
-        return metrics.metrics().get(metrics.metricName(name, consumerMetricsGroupName));
+        return metrics.metrics().get(metrics.metricName(name, CONSUMER_COORDINATOR_METRICS));
     }
 
     private HeartbeatRequestManager createHeartbeatRequestManager(
