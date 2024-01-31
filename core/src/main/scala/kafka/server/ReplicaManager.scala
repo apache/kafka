@@ -2586,7 +2586,7 @@ class ReplicaManager(val config: KafkaConfig,
     // retrieve the UUID here because logManager.handleLogDirFailure handler removes it
     val uuid = logManager.directoryId(dir)
     logManager.handleLogDirFailure(dir)
-    if (dir == new File(config.metadataLogDir).getAbsolutePath && (zkClient.isEmpty || config.migrationEnabled)) {
+    if (dir == new File(config.metadataLogDir).getAbsolutePath && (config.processRoles.nonEmpty || config.migrationEnabled)) {
       fatal(s"Shutdown broker because the metadata log dir $dir has failed")
       Exit.halt(1)
     }
