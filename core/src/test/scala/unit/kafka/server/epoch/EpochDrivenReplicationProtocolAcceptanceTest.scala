@@ -138,7 +138,7 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends QuorumTestHarness wit
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
-  def shouldNotAllowDivergentLogs(): Unit = {
+  def shouldNotAllowDivergentLogs(quorum: String): Unit = {
     //Given two brokers
     val brokers = (100 to 101).map { id => TestUtils.createServer(fromProps(createBrokerConfig(id))) }
     val broker100 = brokers(0)
@@ -188,7 +188,7 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends QuorumTestHarness wit
   //We can reproduce the pre-KIP-101 failure of this test by setting KafkaConfig.InterBrokerProtocolVersionProp = IBP_0_11_0_IV1
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
-  def offsetsShouldNotGoBackwards(): Unit = {
+  def offsetsShouldNotGoBackwards(quorum: String): Unit = {
 
     //Given two brokers
     val brokers = (100 to 101).map(createBrokerForId(_))
@@ -264,7 +264,7 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends QuorumTestHarness wit
     */
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
-  def shouldSurviveFastLeaderChange(): Unit = {
+  def shouldSurviveFastLeaderChange(quorum: String): Unit = {
     val tp = new TopicPartition(topic, 0)
 
     //Given 2 brokers
