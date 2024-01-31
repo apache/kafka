@@ -116,6 +116,7 @@ class MiniKdc(config: Properties, workDir: File) extends Logging {
     kdcConfig.setString(KdcConfigKey.KDC_SERVICE_NAME, config.getProperty(MiniKdc.Instance))
     kdc = new SimpleKdcServer(kdcConfig, new BackendConfig)
     kdc.setWorkDir(workDir)
+    // if using ephemeral port, update port number for binding
     if (port == 0)
       _port = NetworkUtil.getServerPort
 
