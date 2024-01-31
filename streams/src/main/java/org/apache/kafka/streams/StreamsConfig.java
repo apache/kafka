@@ -506,8 +506,7 @@ public class StreamsConfig extends AbstractConfig {
 
     public static final String STATESTORE_UNCOMMITTED_MAX_BYTES_CONFIG = "statestore.uncommitted.max.bytes";
     public static final String STATESTORE_UNCOMMITTED_MAX_BYTES_DOC = "Maximum number of memory bytes to be used to buffer uncommitted state-store records. " +
-            "If this limit is exceeded, a task commit will be requested. No limit: -1. " +
-            "Note: if this is too high or unbounded, it's possible for RocksDB to trigger out-of-memory errors.";
+            "If this limit is exceeded, a task commit will be requested. No limit: -1. ";
 
     /** {@code client.id} */
     @SuppressWarnings("WeakerAccess")
