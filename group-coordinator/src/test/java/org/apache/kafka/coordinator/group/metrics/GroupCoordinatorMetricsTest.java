@@ -74,23 +74,23 @@ public class GroupCoordinatorMetricsTest {
             metrics.metricName(
                 "consumer-group-count",
                 GroupCoordinatorMetrics.METRICS_GROUP,
-                Collections.singletonMap("state", "empty")),
+                Collections.singletonMap("state", ConsumerGroupState.EMPTY.toString())),
             metrics.metricName(
                 "consumer-group-count",
                 GroupCoordinatorMetrics.METRICS_GROUP,
-                Collections.singletonMap("state", "assigning")),
+                Collections.singletonMap("state", ConsumerGroupState.ASSIGNING.toString())),
             metrics.metricName(
                 "consumer-group-count",
                 GroupCoordinatorMetrics.METRICS_GROUP,
-                Collections.singletonMap("state", "reconciling")),
+                Collections.singletonMap("state", ConsumerGroupState.RECONCILING.toString())),
             metrics.metricName(
                 "consumer-group-count",
                 GroupCoordinatorMetrics.METRICS_GROUP,
-                Collections.singletonMap("state", "stable")),
+                Collections.singletonMap("state", ConsumerGroupState.STABLE.toString())),
             metrics.metricName(
                 "consumer-group-count",
                 GroupCoordinatorMetrics.METRICS_GROUP,
-                Collections.singletonMap("state", "dead"))
+                Collections.singletonMap("state", ConsumerGroupState.DEAD.toString()))
         ));
 
         try {

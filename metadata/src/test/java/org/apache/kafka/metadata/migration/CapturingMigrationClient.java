@@ -139,14 +139,18 @@ class CapturingMigrationClient implements MigrationClient {
 
     @Override
     public ZkMigrationLeadershipState claimControllerLeadership(ZkMigrationLeadershipState state) {
-        this.state = state;
-        return state;
+        if (state.zkControllerEpochZkVersion() == ZkMigrationLeadershipState.UNKNOWN_ZK_VERSION) {
+            this.state = state.withZkController(0, 0);
+        } else {
+            this.state = state.withZkController(state.zkControllerEpoch() + 1, state.zkControllerEpochZkVersion() + 1);
+        }
+        return this.state;
     }
 
     @Override
     public ZkMigrationLeadershipState releaseControllerLeadership(ZkMigrationLeadershipState state) {
-        this.state = state;
-        return state;
+        this.state = state.withUnknownZkController();
+        return this.state;
     }
 
 
