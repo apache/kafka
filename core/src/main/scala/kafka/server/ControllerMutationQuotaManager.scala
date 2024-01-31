@@ -17,7 +17,6 @@
 package kafka.server
 
 import kafka.network.RequestChannel
-import kafka.network.RequestChannel.Session
 import org.apache.kafka.common.MetricName
 import org.apache.kafka.common.errors.ThrottlingQuotaExceededException
 import org.apache.kafka.common.metrics.Metrics
@@ -27,6 +26,7 @@ import org.apache.kafka.common.metrics.stats.Rate
 import org.apache.kafka.common.metrics.stats.TokenBucket
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.utils.Time
+import org.apache.kafka.network.Session
 import org.apache.kafka.server.quota.ClientQuotaCallback
 import org.apache.kafka.server.config.ClientQuotaManagerConfig
 

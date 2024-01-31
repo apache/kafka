@@ -17,12 +17,12 @@
 package kafka.server
 
 import java.net.InetAddress
-import kafka.network.RequestChannel.Session
 import kafka.server.QuotaType._
 import org.apache.kafka.common.metrics.Quota
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.utils.Sanitizer
 import org.apache.kafka.server.config.{ClientQuotaManagerConfig, ConfigEntityName}
+import org.apache.kafka.network.Session
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
 
@@ -143,7 +143,7 @@ class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
 
   private def checkQuota(quotaManager: ClientQuotaManager, user: String, clientId: String, expectedBound: Long, value: Int, expectThrottle: Boolean): Unit = {
     assertEquals(expectedBound.toDouble, quotaManager.quota(user, clientId).bound, 0.0)
-    val session = Session(new KafkaPrincipal(KafkaPrincipal.USER_TYPE, user), InetAddress.getLocalHost)
+    val session = new Session(new KafkaPrincipal(KafkaPrincipal.USER_TYPE, user), InetAddress.getLocalHost)
     val expectedMaxValueInQuotaWindow =
       if (expectedBound < Long.MaxValue) config.quotaWindowSizeSeconds * (config.numQuotaSamples - 1) * expectedBound.toDouble
       else Double.MaxValue
@@ -161,7 +161,7 @@ class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
     val numFullQuotaWindows = 3   // 3 seconds window (vs. 10 seconds default)
     val nonDefaultConfig = new ClientQuotaManagerConfig(numFullQuotaWindows + 1)
     val clientQuotaManager = new ClientQuotaManager(nonDefaultConfig, metrics, Fetch, time, "")
-    val userSession = Session(new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "userA"), InetAddress.getLocalHost)
+    val userSession = new Session(new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "userA"), InetAddress.getLocalHost)
 
     try {
       // no quota set

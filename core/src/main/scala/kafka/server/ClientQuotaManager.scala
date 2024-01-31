@@ -21,7 +21,6 @@ import java.util.concurrent.{ConcurrentHashMap, DelayQueue, TimeUnit}
 import java.util.concurrent.locks.ReentrantReadWriteLock
 
 import kafka.network.RequestChannel
-import kafka.network.RequestChannel._
 import kafka.server.ClientQuotaManager._
 import kafka.utils.{Logging, QuotaUtils}
 import org.apache.kafka.common.{Cluster, MetricName}
@@ -33,6 +32,7 @@ import org.apache.kafka.common.utils.{Sanitizer, Time}
 import org.apache.kafka.server.config.{ConfigEntityName, ClientQuotaManagerConfig}
 import org.apache.kafka.server.quota.{ClientQuotaCallback, ClientQuotaEntity, ClientQuotaType}
 import org.apache.kafka.server.util.ShutdownableThread
+import org.apache.kafka.network.Session
 
 import scala.jdk.CollectionConverters._
 
