@@ -123,6 +123,8 @@ public final class RecordsSnapshotReader<T> implements SnapshotReader<T> {
      * Returns the next non-control Batch
      */
     private Optional<Batch<T>> nextBatch() {
+        // TODO: Should this return control records? It may need to return control record if I decide to use
+        // this type in the internal KRaft listener. Another option is to use the RecordsIterator directly.
         while (iterator.hasNext()) {
             Batch<T> batch = iterator.next();
 
@@ -130,8 +132,10 @@ public final class RecordsSnapshotReader<T> implements SnapshotReader<T> {
                 // This must be the first batch which is expected to be a control batch with one record for
                 // the snapshot header.
                 if (batch.controlRecords().isEmpty()) {
-                    throw new IllegalStateException("First batch is not a control batch with at least one record");
-                } else if (!ControlRecordType.SNAPSHOT_HEADER.equals(batch.controlRecords().get(0).type())) {
+                    throw new IllegalStateException(
+                        "First batch is not a control batch with at least one record"
+                    );
+                } else if (ControlRecordType.SNAPSHOT_HEADER != batch.controlRecords().get(0).type()) {
                     throw new IllegalStateException(
                         String.format(
                             "First control record is not a snapshot header (%s)",

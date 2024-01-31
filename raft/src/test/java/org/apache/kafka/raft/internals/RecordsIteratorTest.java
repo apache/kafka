@@ -34,16 +34,23 @@ import net.jqwik.api.ForAll;
 import net.jqwik.api.Property;
 import org.apache.kafka.common.errors.CorruptRecordException;
 import org.apache.kafka.common.memory.MemoryPool;
+import org.apache.kafka.common.message.KRaftVersionRecord;
 import org.apache.kafka.common.message.LeaderChangeMessage;
 import org.apache.kafka.common.message.SnapshotFooterRecord;
 import org.apache.kafka.common.message.SnapshotHeaderRecord;
+import org.apache.kafka.common.message.VotersRecord;
 import org.apache.kafka.common.protocol.ApiMessage;
+import org.apache.kafka.common.protocol.MessageUtil;
 import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.ControlRecordType;
+import org.apache.kafka.common.record.ControlRecordUtils;
 import org.apache.kafka.common.record.DefaultRecordBatch;
 import org.apache.kafka.common.record.FileRecords;
 import org.apache.kafka.common.record.MemoryRecords;
+import org.apache.kafka.common.record.MemoryRecordsBuilder;
+import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.record.Records;
+import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.utils.BufferSupplier;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.raft.Batch;
@@ -193,23 +200,13 @@ public final class RecordsIteratorTest {
     }
 
     @ParameterizedTest
-    @EnumSource(value = ControlRecordType.class, names = {"LEADER_CHANGE", "SNAPSHOT_HEADER", "SNAPSHOT_FOOTER"})
+    @EnumSource(
+        value = ControlRecordType.class,
+        names = {"LEADER_CHANGE", "SNAPSHOT_HEADER", "SNAPSHOT_FOOTER", "KRAFT_VERSION", "VOTERS"}
+    )
     void testWithAllSupportedControlRecords(ControlRecordType type) {
         MemoryRecords records = buildControlRecords(type);
-        final ApiMessage expectedMessage;
-        switch (type) {
-            case LEADER_CHANGE:
-                expectedMessage = new LeaderChangeMessage();
-                break;
-            case SNAPSHOT_HEADER:
-                expectedMessage = new SnapshotHeaderRecord();
-                break;
-            case SNAPSHOT_FOOTER:
-                expectedMessage = new SnapshotFooterRecord();
-                break;
-            default:
-                throw new RuntimeException("Should not happen. Poorly configured test");
-        }
+        ApiMessage expectedMessage = defaultControlRecord(type);
 
         try (RecordsIterator<String> iterator = createIterator(records, BufferSupplier.NO_CACHING, true)) {
             assertTrue(iterator.hasNext());
@@ -226,7 +223,7 @@ public final class RecordsIteratorTest {
         // If this test fails then it means that ControlRecordType was changed. Please review the
         // implementation for RecordsIterator to see if it needs to be updated based on the changes
         // to ControlRecordType.
-        assertEquals(6, ControlRecordType.values().length);
+        assertEquals(8, ControlRecordType.values().length);
     }
 
     private void testIterator(
@@ -308,40 +305,33 @@ public final class RecordsIteratorTest {
     }
 
     public static MemoryRecords buildControlRecords(ControlRecordType type) {
-        final MemoryRecords records;
-        switch (type) {
-            case LEADER_CHANGE:
-                records = MemoryRecords.withLeaderChangeMessage(
-                    0,
-                    0,
-                    1,
-                    ByteBuffer.allocate(128),
-                    new LeaderChangeMessage()
-                );
-                break;
-            case SNAPSHOT_HEADER:
-                records = MemoryRecords.withSnapshotHeaderRecord(
-                    0,
-                    0,
-                    1,
-                    ByteBuffer.allocate(128),
-                    new SnapshotHeaderRecord()
-                );
-                break;
-            case SNAPSHOT_FOOTER:
-                records = MemoryRecords.withSnapshotFooterRecord(
-                    0,
-                    0,
-                    1,
-                    ByteBuffer.allocate(128),
-                    new SnapshotFooterRecord()
-                );
-                break;
-            default:
-                throw new RuntimeException(String.format("Control record type %s is not supported", type));
+        ByteBuffer buffer = ByteBuffer.allocate(128);
+
+        try (MemoryRecordsBuilder builder = new MemoryRecordsBuilder(
+                buffer,
+                RecordBatch.CURRENT_MAGIC_VALUE,
+                CompressionType.NONE,
+                TimestampType.CREATE_TIME,
+                0, // initialOffset
+                0, // timestamp
+                RecordBatch.NO_PRODUCER_ID,
+                RecordBatch.NO_PRODUCER_EPOCH,
+                RecordBatch.NO_SEQUENCE,
+                false,
+                true,
+                1, // leaderEpoch
+                buffer.capacity()
+            )
+        ) {
+            builder.appendControlRecord(
+                0,
+                type,
+                MessageUtil.toByteBuffer(defaultControlRecord(type), defaultControlRecordVersion(type))
+            );
         }
 
-        return records;
+        buffer.flip();
+        return MemoryRecords.readableRecords(buffer);
     }
 
     public static MemoryRecords buildRecords(
@@ -413,6 +403,40 @@ public final class RecordsIteratorTest {
 
         static <T> TestBatch<T> from(Batch<T> batch) {
             return new TestBatch<>(batch.baseOffset(), batch.epoch(), batch.appendTimestamp(), batch.records());
+        }
+    }
+
+    private static ApiMessage defaultControlRecord(ControlRecordType type) {
+        switch (type) {
+            case LEADER_CHANGE:
+                return new LeaderChangeMessage();
+            case SNAPSHOT_HEADER:
+                return new SnapshotHeaderRecord();
+            case SNAPSHOT_FOOTER:
+                return new SnapshotFooterRecord();
+            case KRAFT_VERSION:
+                return new KRaftVersionRecord();
+            case VOTERS:
+                return new VotersRecord();
+            default:
+                throw new RuntimeException("Should not happen. Poorly configured test");
+        }
+    }
+
+    private static short defaultControlRecordVersion(ControlRecordType type) {
+        switch (type) {
+            case LEADER_CHANGE:
+                return ControlRecordUtils.LEADER_CHANGE_CURRENT_VERSION;
+            case SNAPSHOT_HEADER:
+                return ControlRecordUtils.SNAPSHOT_HEADER_CURRENT_VERSION;
+            case SNAPSHOT_FOOTER:
+                return ControlRecordUtils.SNAPSHOT_FOOTER_CURRENT_VERSION;
+            case KRAFT_VERSION:
+                return ControlRecordUtils.KRAFT_VERSION_CURRENT_VERSION;
+            case VOTERS:
+                return ControlRecordUtils.VOTERS_CURRENT_VERSION;
+            default:
+                throw new RuntimeException("Should not happen. Poorly configured test");
         }
     }
 }

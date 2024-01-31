@@ -215,7 +215,7 @@ public class BatchAccumulator<T> implements Closeable {
      *        batch that will be appended. The memory records returned must contain one
      *        control batch and that control batch have one record.
      */
-    private void appendControlMessage(Function<ByteBuffer, MemoryRecords> valueCreator) {
+    private void appendControlMessages(Function<ByteBuffer, MemoryRecords> valueCreator) {
         appendLock.lock();
         try {
             ByteBuffer buffer = memoryPool.tryAllocate(256);
@@ -256,7 +256,7 @@ public class BatchAccumulator<T> implements Closeable {
         LeaderChangeMessage leaderChangeMessage,
         long currentTimestamp
     ) {
-        appendControlMessage(buffer -> MemoryRecords.withLeaderChangeMessage(
+        appendControlMessages(buffer -> MemoryRecords.withLeaderChangeMessage(
             this.nextOffset,
             currentTimestamp,
             this.epoch,
@@ -277,7 +277,7 @@ public class BatchAccumulator<T> implements Closeable {
         SnapshotHeaderRecord snapshotHeaderRecord,
         long currentTimestamp
     ) {
-        appendControlMessage(buffer -> MemoryRecords.withSnapshotHeaderRecord(
+        appendControlMessages(buffer -> MemoryRecords.withSnapshotHeaderRecord(
             this.nextOffset,
             currentTimestamp,
             this.epoch,
@@ -297,7 +297,7 @@ public class BatchAccumulator<T> implements Closeable {
         SnapshotFooterRecord snapshotFooterRecord,
         long currentTimestamp
     ) {
-        appendControlMessage(buffer -> MemoryRecords.withSnapshotFooterRecord(
+        appendControlMessages(buffer -> MemoryRecords.withSnapshotFooterRecord(
             this.nextOffset,
             currentTimestamp,
             this.epoch,

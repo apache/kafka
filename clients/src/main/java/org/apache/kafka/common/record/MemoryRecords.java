@@ -18,9 +18,11 @@ package org.apache.kafka.common.record;
 
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.CorruptRecordException;
+import org.apache.kafka.common.message.KRaftVersionRecord;
 import org.apache.kafka.common.message.LeaderChangeMessage;
-import org.apache.kafka.common.message.SnapshotHeaderRecord;
 import org.apache.kafka.common.message.SnapshotFooterRecord;
+import org.apache.kafka.common.message.SnapshotHeaderRecord;
+import org.apache.kafka.common.message.VotersRecord;
 import org.apache.kafka.common.network.TransferableChannel;
 import org.apache.kafka.common.record.MemoryRecords.RecordFilter.BatchRetention;
 import org.apache.kafka.common.record.MemoryRecords.RecordFilter.BatchRetentionResult;
@@ -154,7 +156,7 @@ public class MemoryRecords extends AbstractRecords {
 
     /**
      * Note: This method is also used to convert the first timestamp of the batch (which is usually the timestamp of the first record)
-     * to the delete horizon of the tombstones or txn markers which are present in the batch. 
+     * to the delete horizon of the tombstones or txn markers which are present in the batch.
      */
     private static FilterResult filterTo(TopicPartition partition, Iterable<MutableRecordBatch> batches,
                                          RecordFilter filter, ByteBuffer destinationBuffer, int maxRecordBatchSize,
@@ -805,6 +807,64 @@ public class MemoryRecords extends AbstractRecords {
             false, true, leaderEpoch, buffer.capacity())
         ) {
             builder.appendSnapshotFooterMessage(timestamp, snapshotFooterRecord);
+        }
+    }
+
+    public static MemoryRecords withKRaftVersionRecord(
+        long initialOffset,
+        long timestamp,
+        int leaderEpoch,
+        ByteBuffer buffer,
+        KRaftVersionRecord kraftVersionRecord
+    ) {
+        writeKRaftVersionRecord(buffer, initialOffset, timestamp, leaderEpoch, kraftVersionRecord);
+        buffer.flip();
+        return MemoryRecords.readableRecords(buffer);
+    }
+
+    private static void writeKRaftVersionRecord(
+        ByteBuffer buffer,
+        long initialOffset,
+        long timestamp,
+        int leaderEpoch,
+        KRaftVersionRecord kraftVersionRecord
+    ) {
+        try (MemoryRecordsBuilder builder = new MemoryRecordsBuilder(
+            buffer, RecordBatch.CURRENT_MAGIC_VALUE, CompressionType.NONE,
+            TimestampType.CREATE_TIME, initialOffset, timestamp,
+            RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, RecordBatch.NO_SEQUENCE,
+            false, true, leaderEpoch, buffer.capacity())
+        ) {
+            builder.appendKRaftVersionMessage(timestamp, kraftVersionRecord);
+        }
+    }
+
+    public static MemoryRecords withVotersRecord(
+        long initialOffset,
+        long timestamp,
+        int leaderEpoch,
+        ByteBuffer buffer,
+        VotersRecord votersRecord
+    ) {
+        writeVotersRecord(buffer, initialOffset, timestamp, leaderEpoch, votersRecord);
+        buffer.flip();
+        return MemoryRecords.readableRecords(buffer);
+    }
+
+    private static void writeVotersRecord(
+        ByteBuffer buffer,
+        long initialOffset,
+        long timestamp,
+        int leaderEpoch,
+        VotersRecord votersRecord
+    ) {
+        try (MemoryRecordsBuilder builder = new MemoryRecordsBuilder(
+            buffer, RecordBatch.CURRENT_MAGIC_VALUE, CompressionType.NONE,
+            TimestampType.CREATE_TIME, initialOffset, timestamp,
+            RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, RecordBatch.NO_SEQUENCE,
+            false, true, leaderEpoch, buffer.capacity())
+        ) {
+            builder.appendVotersMessage(timestamp, votersRecord);
         }
     }
 }

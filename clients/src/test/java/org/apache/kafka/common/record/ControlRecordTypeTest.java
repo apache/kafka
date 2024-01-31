@@ -45,4 +45,58 @@ public class ControlRecordTypeTest {
         assertEquals(ControlRecordType.ABORT, type);
     }
 
+    @Test
+    public void testLeaderChange() {
+        ByteBuffer buffer = ByteBuffer.allocate(32);
+        buffer.putShort(ControlRecordType.CURRENT_CONTROL_RECORD_KEY_VERSION);
+        buffer.putShort((short) 2);
+        buffer.flip();
+
+        ControlRecordType type = ControlRecordType.parse(buffer);
+        assertEquals(ControlRecordType.LEADER_CHANGE, type);
+    }
+
+    @Test
+    public void testSnapshotHeader() {
+        ByteBuffer buffer = ByteBuffer.allocate(32);
+        buffer.putShort(ControlRecordType.CURRENT_CONTROL_RECORD_KEY_VERSION);
+        buffer.putShort((short) 3);
+        buffer.flip();
+
+        ControlRecordType type = ControlRecordType.parse(buffer);
+        assertEquals(ControlRecordType.SNAPSHOT_HEADER, type);
+    }
+
+    @Test
+    public void testSnapshotFooter() {
+        ByteBuffer buffer = ByteBuffer.allocate(32);
+        buffer.putShort(ControlRecordType.CURRENT_CONTROL_RECORD_KEY_VERSION);
+        buffer.putShort((short) 4);
+        buffer.flip();
+
+        ControlRecordType type = ControlRecordType.parse(buffer);
+        assertEquals(ControlRecordType.SNAPSHOT_FOOTER, type);
+    }
+
+    @Test
+    public void testKRaftVersion() {
+        ByteBuffer buffer = ByteBuffer.allocate(32);
+        buffer.putShort(ControlRecordType.CURRENT_CONTROL_RECORD_KEY_VERSION);
+        buffer.putShort((short) 5);
+        buffer.flip();
+
+        ControlRecordType type = ControlRecordType.parse(buffer);
+        assertEquals(ControlRecordType.KRAFT_VERSION, type);
+    }
+
+    @Test
+    public void testVoters() {
+        ByteBuffer buffer = ByteBuffer.allocate(32);
+        buffer.putShort(ControlRecordType.CURRENT_CONTROL_RECORD_KEY_VERSION);
+        buffer.putShort((short) 6);
+        buffer.flip();
+
+        ControlRecordType type = ControlRecordType.parse(buffer);
+        assertEquals(ControlRecordType.VOTERS, type);
+    }
 }
