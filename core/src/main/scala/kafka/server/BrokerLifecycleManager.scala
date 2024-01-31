@@ -244,6 +244,19 @@ class BrokerLifecycleManager(
     eventQueue.append(new OfflineDirEvent(directory))
   }
 
+  def handleKraftJBODMetadataVersionUpdate(): Unit = {
+    eventQueue.append(new KraftJBODMetadataVersionUpdateEvent())
+  }
+
+  private class KraftJBODMetadataVersionUpdateEvent extends EventQueue.Event {
+    override def run(): Unit = {
+      if (!isZkBroker) {
+        registered = false
+        scheduleNextCommunicationImmediately()
+      }
+    }
+  }
+
   def brokerEpoch: Long = _brokerEpoch
 
   def state: BrokerState = _state

@@ -916,10 +916,10 @@ private[group] class GroupCoordinator(
         val offsetTopicPartition = new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, partitionFor(group.groupId))
 
         def postVerificationCallback(
-          error: Errors,
           newRequestLocal: RequestLocal,
-          verificationGuard: VerificationGuard
+          errorAndGuard: (Errors, VerificationGuard)
         ): Unit = {
+          val (error, verificationGuard) = errorAndGuard
           if (error != Errors.NONE) {
             val finalError = GroupMetadataManager.maybeConvertOffsetCommitError(error)
             responseCallback(offsetMetadata.map { case (k, _) => k -> finalError })
@@ -935,8 +935,13 @@ private[group] class GroupCoordinator(
           producerId,
           producerEpoch,
           RecordBatch.NO_SEQUENCE,
-          requestLocal,
-          postVerificationCallback
+          // Wrap the callback to be handled on an arbitrary request handler thread
+          // when transaction verification is complete. The request local passed in
+          // is only used when the callback is executed immediately.
+          KafkaRequestHandler.wrapAsyncCallback(
+            postVerificationCallback,
+            requestLocal
+          )
         )
     }
   }
@@ -1114,8 +1119,10 @@ private[group] class GroupCoordinator(
       // if states is empty, return all groups
       val groups = if (states.isEmpty)
         groupManager.currentGroups
-      else
-        groupManager.currentGroups.filter(g => states.contains(g.summary.state))
+      else {
+        val caseInsensitiveStates = states.map(_.toLowerCase)
+        groupManager.currentGroups.filter(g => g.isInStates(caseInsensitiveStates))
+      }
       (errorCode, groups.map(_.overview).toList)
     }
   }

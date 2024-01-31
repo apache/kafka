@@ -283,8 +283,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     // to keep from repeatedly scanning subscriptions in poll(), cache the result during metadata updates
     private boolean cachedSubscriptionHasAllFetchPositions;
     private final WakeupTrigger wakeupTrigger = new WakeupTrigger();
-    private boolean isFenced = false;
-    private final OffsetCommitCallbackInvoker invoker = new OffsetCommitCallbackInvoker();
+    private final OffsetCommitCallbackInvoker offsetCommitCallbackInvoker;
 
     // currentThread holds the threadId of the current thread accessing the AsyncKafkaConsumer
     // and is used to prevent multithreaded access
@@ -366,6 +365,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                     metrics,
                     fetchMetricsManager,
                     clientTelemetryReporter.map(ClientTelemetryReporter::telemetrySender).orElse(null));
+            this.offsetCommitCallbackInvoker = new OffsetCommitCallbackInvoker(interceptors);
             final Supplier<RequestManagers> requestManagersSupplier = RequestManagers.supplier(time,
                     logContext,
                     backgroundEventHandler,
@@ -378,7 +378,8 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                     fetchMetricsManager,
                     networkClientDelegateSupplier,
                     clientTelemetryReporter,
-                    metrics);
+                    metrics,
+                    offsetCommitCallbackInvoker);
             final Supplier<ApplicationEventProcessor> applicationEventProcessorSupplier = ApplicationEventProcessor.supplier(logContext,
                     metadata,
                     applicationEventQueue,
@@ -483,6 +484,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         this.kafkaConsumerMetrics = new KafkaConsumerMetrics(metrics, "consumer");
         this.clientTelemetryReporter = Optional.empty();
         this.autoCommitEnabled = autoCommitEnabled;
+        this.offsetCommitCallbackInvoker = new OffsetCommitCallbackInvoker(interceptors);
     }
 
     AsyncKafkaConsumer(LogContext logContext,
@@ -547,6 +549,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             logContext,
             client
         );
+        this.offsetCommitCallbackInvoker = new OffsetCommitCallbackInvoker(interceptors);
         Supplier<RequestManagers> requestManagersSupplier = RequestManagers.supplier(
             time,
             logContext,
@@ -560,7 +563,9 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             fetchMetricsManager,
             networkClientDelegateSupplier,
             clientTelemetryReporter,
-            metrics);
+            metrics,
+            offsetCommitCallbackInvoker
+        );
         Supplier<ApplicationEventProcessor> applicationEventProcessorSupplier = ApplicationEventProcessor.supplier(
                 logContext,
                 metadata,
@@ -753,6 +758,11 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             // waiting for a response.
             CompletableFuture<Void> future = commit(offsets, false, Optional.empty());
             future.whenComplete((r, t) -> {
+
+                if (t == null) {
+                    offsetCommitCallbackInvoker.enqueueInterceptorInvocation(offsets);
+                }
+
                 if (callback == null) {
                     if (t != null) {
                         log.error("Offset commit with offsets {} failed", offsets, t);
@@ -760,7 +770,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                     return;
                 }
 
-                invoker.submit(new OffsetCommitCallbackTask(callback, offsets, (Exception) t));
+                offsetCommitCallbackInvoker.enqueueUserCallbackInvocation(callback, offsets, (Exception) t);
             });
         } finally {
             release();
@@ -1221,6 +1231,8 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         closeTimer.update();
         if (applicationEventHandler != null)
             closeQuietly(() -> applicationEventHandler.close(Duration.ofMillis(closeTimer.remainingMs())), "Failed shutting down network thread", firstException);
+        swallow(log, Level.ERROR, "Failed invoking asynchronous commit callback.", this::maybeInvokeCommitCallbacks,
+            firstException);
         closeTimer.update();
         closeQuietly(interceptors, "consumer interceptors", firstException);
         closeQuietly(kafkaConsumerMetrics, "kafka consumer metrics", firstException);
@@ -1244,7 +1256,6 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
      * 1. autocommit offsets
      * 2. revoke all partitions
      * 3. if partition revocation completes successfully, send leave group
-     * 4. invoke all async commit callbacks if there is any
      */
     void prepareShutdown(final Timer timer, final AtomicReference<Throwable> firstException) {
         if (!groupMetadata.isPresent())
@@ -1257,8 +1268,6 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                 applicationEventHandler.addAndGet(new LeaveOnCloseApplicationEvent(), timer);
             },
             "Failed to send leaveGroup heartbeat with a timeout(ms)=" + timer.timeoutMs(), firstException);
-        swallow(log, Level.ERROR, "Failed invoking asynchronous commit callback.", this::maybeInvokeCommitCallbacks,
-            firstException);
     }
 
     // Visible for testing
@@ -1338,6 +1347,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             // gets a successful response or non-retriable error.
             CompletableFuture<Void> commitFuture = commit(offsets, true, Optional.of(timeout.toMillis()));
             ConsumerUtils.getResult(commitFuture, requestTimer);
+            interceptors.onCommit(offsets);
         } finally {
             wakeupTrigger.clearTask();
             kafkaConsumerMetrics.recordCommitSync(time.nanoseconds() - commitStart);
@@ -1883,7 +1893,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     }
 
     private void maybeThrowFencedInstanceException() {
-        if (isFenced) {
+        if (offsetCommitCallbackInvoker.hasFencedException()) {
             String groupInstanceId = "unknown";
             if (!groupMetadata.isPresent()) {
                 log.error("No group metadata found although a group ID was provided. This is a bug!");
@@ -1897,14 +1907,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     }
 
     private void maybeInvokeCommitCallbacks() {
-        if (callbacks() > 0) {
-            invoker.executeCallbacks();
-        }
-    }
-
-    // Visible for testing
-    int callbacks() {
-        return invoker.callbackQueue.size();
+        offsetCommitCallbackInvoker.executeCallbacks();
     }
 
     // Visible for testing
@@ -1912,50 +1915,4 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         return subscriptions;
     }
 
-    /**
-     * Utility class that helps the application thread to invoke user registered {@link OffsetCommitCallback}. This is
-     * achieved by having the background thread register a {@link OffsetCommitCallbackTask} to the invoker upon the
-     * future completion, and execute the callbacks when user polls/commits/closes the consumer.
-     */
-    private class OffsetCommitCallbackInvoker {
-        // Thread-safe queue to store callbacks
-        private final BlockingQueue<OffsetCommitCallbackTask> callbackQueue = new LinkedBlockingQueue<>();
-
-        public void submit(final OffsetCommitCallbackTask callback) {
-            try {
-                callbackQueue.offer(callback);
-            } catch (Exception e) {
-                log.error("Unexpected error encountered when adding offset commit callback to the invocation queue", e);
-            }
-        }
-
-        public void executeCallbacks() {
-            while (!callbackQueue.isEmpty()) {
-                OffsetCommitCallbackTask callback = callbackQueue.poll();
-                if (callback != null) {
-                    callback.invoke();
-                }
-            }
-        }
-    }
-
-    private class OffsetCommitCallbackTask {
-        private final Map<TopicPartition, OffsetAndMetadata> offsets;
-        private final Exception exception;
-        private final OffsetCommitCallback callback;
-
-        public OffsetCommitCallbackTask(final OffsetCommitCallback callback,
-                                        final Map<TopicPartition, OffsetAndMetadata> offsets,
-                                        final Exception e) {
-            this.offsets = offsets;
-            this.exception = e;
-            this.callback = callback;
-        }
-
-        public void invoke() {
-            if (exception instanceof FencedInstanceIdException)
-                isFenced = true;
-            callback.onComplete(offsets, exception);
-        }
-    }
 }

@@ -506,6 +506,33 @@ object TestUtils extends Logging {
     }.toMap
   }
 
+  def increasePartitions[B <: KafkaBroker](admin: Admin,
+                                              topic: String,
+                                              totalPartitionCount: Int,
+                                              brokersToValidate: Seq[B]
+                                            ): Unit = {
+
+    try {
+      val newPartitionSet: Map[String, NewPartitions] = Map.apply(topic -> NewPartitions.increaseTo(totalPartitionCount))
+      admin.createPartitions(newPartitionSet.asJava)
+    } catch {
+      case e: ExecutionException =>
+        throw e
+    }
+
+    if (brokersToValidate.size > 0) {
+      // wait until we've propagated all partitions metadata to all brokers
+      val allPartitionsMetadata = waitForAllPartitionsMetadata(brokersToValidate, topic, totalPartitionCount)
+
+      (0 until totalPartitionCount - 1).map { i =>
+        i -> allPartitionsMetadata.get(new TopicPartition(topic, i)).map(_.leader()).getOrElse(
+          throw new IllegalStateException(s"Cannot get the partition leader for topic: $topic, partition: $i in server metadata cache"))
+      }.toMap
+    } else {
+      Map.empty
+    }
+  }
+
   def describeTopic(
     admin: Admin,
     topic: String
@@ -1401,6 +1428,17 @@ object TestUtils extends Logging {
     }
     val threadCount = nonDaemonThreads.size
     assertEquals(0, threadCount, s"Found unexpected $threadCount NonDaemon threads=${nonDaemonThreads.map(t => t.getName).mkString(", ")}")
+  }
+
+  // Some threads are closed, but the state didn't reflect in the JVM immediately, so add some wait time for it
+  def assertNoNonDaemonThreadsWithWaiting(threadNamePrefix: String, waitTimeMs: Long = 500L): Unit = {
+    var nonDemonThreads: mutable.Set[Thread] = mutable.Set.empty[Thread]
+    waitUntilTrue(() => {
+      nonDemonThreads = Thread.getAllStackTraces.keySet.asScala.filter { t =>
+        !t.isDaemon && t.isAlive && t.getName.startsWith(threadNamePrefix)
+      }
+      0 == nonDemonThreads.size
+    }, s"Found unexpected ${nonDemonThreads.size} NonDaemon threads=${nonDemonThreads.map(t => t.getName).mkString(", ")}", waitTimeMs)
   }
 
   def numThreadsRunning(threadNamePrefix: String, isDaemon: Boolean): mutable.Set[Thread] = {

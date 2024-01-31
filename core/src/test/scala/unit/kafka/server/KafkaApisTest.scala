@@ -2479,14 +2479,12 @@ class KafkaApisTest extends Logging {
         .build(version.toShort)
       val request = buildRequest(produceRequest)
 
-      when(replicaManager.appendRecords(anyLong,
+      when(replicaManager.handleProduceAppend(anyLong,
         anyShort,
         ArgumentMatchers.eq(false),
-        ArgumentMatchers.eq(AppendOrigin.CLIENT),
+        any(),
         any(),
         responseCallback.capture(),
-        any(),
-        any(),
         any(),
         any(),
         any()
@@ -2542,14 +2540,12 @@ class KafkaApisTest extends Logging {
         .build(version.toShort)
       val request = buildRequest(produceRequest)
 
-      when(replicaManager.appendRecords(anyLong,
+      when(replicaManager.handleProduceAppend(anyLong,
         anyShort,
         ArgumentMatchers.eq(false),
-        ArgumentMatchers.eq(AppendOrigin.CLIENT),
+        any(),
         any(),
         responseCallback.capture(),
-        any(),
-        any(),
         any(),
         any(),
         any())
@@ -2608,14 +2604,12 @@ class KafkaApisTest extends Logging {
         .build(version.toShort)
       val request = buildRequest(produceRequest)
 
-      when(replicaManager.appendRecords(anyLong,
+      when(replicaManager.handleProduceAppend(anyLong,
         anyShort,
         ArgumentMatchers.eq(false),
-        ArgumentMatchers.eq(AppendOrigin.CLIENT),
+        any(),
         any(),
         responseCallback.capture(),
-        any(),
-        any(),
         any(),
         any(),
         any())
@@ -2673,14 +2667,12 @@ class KafkaApisTest extends Logging {
         .build(version.toShort)
       val request = buildRequest(produceRequest)
 
-      when(replicaManager.appendRecords(anyLong,
+      when(replicaManager.handleProduceAppend(anyLong,
         anyShort,
         ArgumentMatchers.eq(false),
-        ArgumentMatchers.eq(AppendOrigin.CLIENT),
+        any(),
         any(),
         responseCallback.capture(),
-        any(),
-        any(),
         any(),
         any(),
         any())
@@ -2722,8 +2714,6 @@ class KafkaApisTest extends Logging {
 
       reset(replicaManager, clientQuotaManager, clientRequestQuotaManager, requestChannel, txnCoordinator)
 
-      val responseCallback: ArgumentCaptor[Map[TopicPartition, PartitionResponse] => Unit] = ArgumentCaptor.forClass(classOf[Map[TopicPartition, PartitionResponse] => Unit])
-
       val tp = new TopicPartition("topic", 0)
 
       val produceRequest = ProduceRequest.forCurrentMagic(new ProduceRequestData()
@@ -2744,16 +2734,14 @@ class KafkaApisTest extends Logging {
       try {
         kafkaApis.handleProduceRequest(request, RequestLocal.withThreadConfinedCaching)
 
-        verify(replicaManager).appendRecords(anyLong,
+        verify(replicaManager).handleProduceAppend(anyLong,
           anyShort,
           ArgumentMatchers.eq(false),
-          ArgumentMatchers.eq(AppendOrigin.CLIENT),
-          any(),
-          responseCallback.capture(),
-          any(),
-          any(),
-          any(),
           ArgumentMatchers.eq(transactionalId),
+          any(),
+          any(),
+          any(),
+          any(),
           any())
       } finally {
         kafkaApis.close()
@@ -4289,13 +4277,13 @@ class KafkaApisTest extends Logging {
         Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false)))
     })
 
-    val fetchData = Map(tidp -> new FetchRequest.PartitionData(Uuid.ZERO_UUID, 0, 0, 1000,
+    val fetchData = Map(tidp -> new FetchRequest.PartitionData(topicId, 0, 0, 1000,
       Optional.empty())).asJava
-    val fetchDataBuilder = Map(tp -> new FetchRequest.PartitionData(Uuid.ZERO_UUID, 0, 0, 1000,
+    val fetchDataBuilder = Map(tp -> new FetchRequest.PartitionData(topicId, 0, 0, 1000,
       Optional.empty())).asJava
     val fetchMetadata = new JFetchMetadata(0, 0)
     val fetchContext = new FullFetchContext(time, new FetchSessionCache(1000, 100),
-      fetchMetadata, fetchData, false, false)
+      fetchMetadata, fetchData, true, false)
     when(fetchManager.newContext(
       any[Short],
       any[JFetchMetadata],
