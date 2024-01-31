@@ -1103,10 +1103,10 @@ public class TaskManager {
             for (final Task task : commitNeededActiveTasks) {
                 if (!dirtyTasks.contains(task)) {
                     try {
-                        // we only enforce a checkpoint if the transaction buffers are full
-                        // to avoid unnecessary flushing of stores under EOS
-                        final boolean enforceCheckpoint = maxUncommittedStateBytes > -1 && tasks.approximateUncommittedStateBytes() >= maxUncommittedStateBytes;
-                        task.postCommit(enforceCheckpoint);
+                        // for non-revoking active tasks, we should not enforce checkpoint
+                        // since if it is EOS enabled, no checkpoint should be written while
+                        // the task is in RUNNING tate
+                        task.postCommit(false);
                     } catch (final RuntimeException e) {
                         log.error("Exception caught while post-committing task " + task.id(), e);
                         maybeSetFirstException(false, maybeWrapTaskException(e, task.id()), firstException);
