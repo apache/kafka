@@ -457,6 +457,11 @@ public class OffsetsApiIntegrationTest {
         connect.assertions().assertConnectorAndAtLeastNumTasksAreRunning(connectorName, 1,
                 "Connector tasks did not start in time.");
 
+        // Make sure the tasks' consumers have had a chance to actually form a group
+        // (otherwise, the reset request will succeed because there won't be any active consumers)
+        verifyExpectedSinkConnectorOffsets(connectorName, topic, 1, NUM_RECORDS_PER_PARTITION,
+                "Sink connector consumer group offsets should catch up to the topic end offsets");
+
         connect.stopConnector(connectorName);
 
         // Try to delete the offsets for the single topic partition
@@ -801,6 +806,11 @@ public class OffsetsApiIntegrationTest {
         connect.configureConnector(connectorName, connectorConfigs);
         connect.assertions().assertConnectorAndAtLeastNumTasksAreRunning(connectorName, 1,
                 "Connector tasks did not start in time.");
+
+        // Make sure the tasks' consumers have had a chance to actually form a group
+        // (otherwise, the reset request will succeed because there won't be any active consumers)
+        verifyExpectedSinkConnectorOffsets(connectorName, topic, 1, NUM_RECORDS_PER_PARTITION,
+                "Sink connector consumer group offsets should catch up to the topic end offsets");
 
         verifyExpectedSinkConnectorOffsets(connectorName, topic, 1, NUM_RECORDS_PER_PARTITION,
                 "Sink connector consumer group offsets should catch up to the topic end offsets");
