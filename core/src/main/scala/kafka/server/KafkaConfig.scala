@@ -40,15 +40,17 @@ import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.coordinator.group.Group.GroupType
 import org.apache.kafka.coordinator.group.assignor.PartitionAssignor
 import org.apache.kafka.raft.RaftConfig
+import org.apache.kafka.security.PasswordEncoderConfigs
 import org.apache.kafka.server.ProcessRole
 import org.apache.kafka.server.authorizer.Authorizer
 import org.apache.kafka.server.common.{MetadataVersion, MetadataVersionValidator}
 import org.apache.kafka.server.common.MetadataVersion._
 import org.apache.kafka.server.config.{Defaults, ServerTopicConfigSynonyms}
-import org.apache.kafka.storage.internals.log.{LogConfig, ProducerStateManagerConfig}
-import org.apache.kafka.storage.internals.log.LogConfig.MessageFormatVersion
 import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig
 import org.apache.kafka.server.record.BrokerCompressionType
+import org.apache.kafka.server.util.Csv
+import org.apache.kafka.storage.internals.log.{LogConfig, ProducerStateManagerConfig}
+import org.apache.kafka.storage.internals.log.LogConfig.MessageFormatVersion
 import org.apache.zookeeper.client.ZKClientConfig
 
 import scala.annotation.nowarn
@@ -435,12 +437,12 @@ object KafkaConfig {
   val DelegationTokenExpiryCheckIntervalMsProp = "delegation.token.expiry.check.interval.ms"
 
   /** ********* Password encryption configuration for dynamic configs *********/
-  val PasswordEncoderSecretProp = "password.encoder.secret"
-  val PasswordEncoderOldSecretProp = "password.encoder.old.secret"
-  val PasswordEncoderKeyFactoryAlgorithmProp = "password.encoder.keyfactory.algorithm"
-  val PasswordEncoderCipherAlgorithmProp = "password.encoder.cipher.algorithm"
-  val PasswordEncoderKeyLengthProp =  "password.encoder.key.length"
-  val PasswordEncoderIterationsProp =  "password.encoder.iterations"
+  val PasswordEncoderSecretProp = PasswordEncoderConfigs.SECRET
+  val PasswordEncoderOldSecretProp = PasswordEncoderConfigs.OLD_SECRET
+  val PasswordEncoderKeyFactoryAlgorithmProp = PasswordEncoderConfigs.KEYFACTORY_ALGORITHM
+  val PasswordEncoderCipherAlgorithmProp = PasswordEncoderConfigs.CIPHER_ALGORITHM
+  val PasswordEncoderKeyLengthProp = PasswordEncoderConfigs.KEY_LENGTH
+  val PasswordEncoderIterationsProp = PasswordEncoderConfigs.ITERATIONS
 
   /** Internal Configurations **/
   val UnstableApiVersionsEnableProp = "unstable.api.versions.enable"
@@ -1873,7 +1875,7 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
   def passwordEncoderSecret = Option(getPassword(KafkaConfig.PasswordEncoderSecretProp))
   def passwordEncoderOldSecret = Option(getPassword(KafkaConfig.PasswordEncoderOldSecretProp))
   def passwordEncoderCipherAlgorithm = getString(KafkaConfig.PasswordEncoderCipherAlgorithmProp)
-  def passwordEncoderKeyFactoryAlgorithm = Option(getString(KafkaConfig.PasswordEncoderKeyFactoryAlgorithmProp))
+  def passwordEncoderKeyFactoryAlgorithm = getString(KafkaConfig.PasswordEncoderKeyFactoryAlgorithmProp)
   def passwordEncoderKeyLength = getInt(KafkaConfig.PasswordEncoderKeyLengthProp)
   def passwordEncoderIterations = getInt(KafkaConfig.PasswordEncoderIterationsProp)
 
@@ -1935,7 +1937,7 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
 
   private def getMap(propName: String, propValue: String): Map[String, String] = {
     try {
-      CoreUtils.parseCsvMap(propValue)
+      Csv.parseCsvMap(propValue).asScala
     } catch {
       case e: Exception => throw new IllegalArgumentException("Error parsing configuration property '%s': %s".format(propName, e.getMessage))
     }
