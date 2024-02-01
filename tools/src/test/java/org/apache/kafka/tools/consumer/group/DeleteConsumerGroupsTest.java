@@ -18,6 +18,7 @@ package org.apache.kafka.tools.consumer.group;
 
 import joptsimple.OptionException;
 import kafka.admin.ConsumerGroupCommand;
+import org.apache.kafka.clients.consumer.GroupProtocol;
 import org.apache.kafka.clients.consumer.RangeAssignor;
 import org.apache.kafka.common.errors.GroupIdNotFoundException;
 import org.apache.kafka.common.errors.GroupNotEmptyException;
@@ -165,7 +166,7 @@ public class DeleteConsumerGroupsTest extends ConsumerGroupCommandTest {
         // Create 3 groups with 1 consumer per each
         Map<String, ConsumerGroupExecutor> groups = IntStream.rangeClosed(1, 3).mapToObj(i -> GROUP + i).collect(Collectors.toMap(
             Function.identity(),
-            group -> addConsumerGroupExecutor(1, TOPIC, group, RangeAssignor.class.getName(), Optional.empty(), false)
+            group -> addConsumerGroupExecutor(1, TOPIC, group, RangeAssignor.class.getName(), Optional.empty(), Optional.empty(), false, GroupProtocol.CLASSIC.name)
         ));
 
         String[] cgcArgs = new String[]{"--bootstrap-server", bootstrapServers(listenerName()), "--delete", "--all-groups"};
