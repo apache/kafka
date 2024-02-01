@@ -467,6 +467,41 @@ public class CommitRequestManagerTest {
     }
 
     @Test
+    public void testAutoCommitEmptyOffsetsDoesNotGenerateRequest() {
+        CommitRequestManager commitRequestManger = create(true, 100);
+        time.sleep(100);
+        commitRequestManger.updateAutoCommitTimer(time.milliseconds());
+        CompletableFuture<Void> result = commitRequestManger.maybeAutoCommitAllConsumedAsync();
+
+        assertTrue(commitRequestManger.pendingRequests.unsentOffsetCommits.isEmpty());
+        assertTrue(result.isDone());
+        assertFalse(result.isCompletedExceptionally());
+    }
+
+    @Test
+    public void testAutoCommitEmptyDoesNotLeaveInflightRequestFlagOn() {
+        TopicPartition t1p = new TopicPartition("topic1", 0);
+        subscriptionState.assignFromUser(singleton(t1p));
+        CommitRequestManager commitRequestManger = create(true, 100);
+
+        // Auto-commit of empty offsets
+        time.sleep(100);
+        commitRequestManger.updateAutoCommitTimer(time.milliseconds());
+        CompletableFuture<Void> result = commitRequestManger.maybeAutoCommitAllConsumedAsync();
+        assertTrue(result.isDone());
+        assertFalse(result.isCompletedExceptionally());
+
+        // Next auto-commit consumed offsets (not empty). Should generate a request, ensuring
+        // that the previous auto-commit of empty did not leave the inflight request flag on
+        subscriptionState.seek(t1p, 100);
+        time.sleep(100);
+        commitRequestManger.updateAutoCommitTimer(time.milliseconds());
+        result = commitRequestManger.maybeAutoCommitAllConsumedAsync();
+        assertFalse(commitRequestManger.pendingRequests.unsentOffsetCommits.isEmpty());
+        assertFalse(result.isDone());
+    }
+
+    @Test
     public void testOffsetFetchRequestEnsureDuplicatedRequestSucceed() {
         CommitRequestManager commitRequestManger = create(true, 100);
         when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(mockedNode));

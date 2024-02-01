@@ -20,7 +20,7 @@ package kafka.admin
 import java.util.Properties
 import joptsimple._
 import joptsimple.util.EnumConverter
-import kafka.security.authorizer.{AclAuthorizer, AclEntry, AuthorizerUtils}
+import kafka.security.authorizer.{AclAuthorizer, AclEntry}
 import kafka.server.KafkaConfig
 import kafka.utils._
 import org.apache.kafka.clients.admin.{Admin, AdminClientConfig}
@@ -31,6 +31,7 @@ import org.apache.kafka.common.resource.{PatternType, ResourcePattern, ResourceP
 import org.apache.kafka.common.security.JaasUtils
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.utils.{Utils, SecurityUtils => JSecurityUtils}
+import org.apache.kafka.security.authorizer.AuthorizerUtils
 import org.apache.kafka.server.authorizer.Authorizer
 import org.apache.kafka.server.util.{CommandDefaultOptions, CommandLineUtils}
 

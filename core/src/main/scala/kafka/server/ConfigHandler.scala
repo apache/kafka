@@ -128,7 +128,7 @@ class TopicConfigHandler(private val replicaManager: ReplicaManager,
   }
 
   @nowarn("cat=deprecation")
-  def excludedConfigs(topic: String, topicConfig: Properties): Set[String] = {
+  private def excludedConfigs(topic: String, topicConfig: Properties): Set[String] = {
     // Verify message format version
     Option(topicConfig.getProperty(TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG)).flatMap { versionString =>
       val messageFormatVersion = new MessageFormatVersion(versionString, kafkaConfig.interBrokerProtocolVersion.version)
