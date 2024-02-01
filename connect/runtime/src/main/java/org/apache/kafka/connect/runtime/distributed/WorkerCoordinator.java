@@ -267,6 +267,18 @@ public class WorkerCoordinator extends AbstractCoordinator implements Closeable 
         return JoinGroupRequest.UNKNOWN_MEMBER_ID;
     }
 
+    @Override
+    protected void handlePollTimeoutExpiry() {
+        log.warn("worker poll timeout has expired. This means the time between subsequent calls to poll() " +
+            "in DistributedHerder tick() method was longer than the configured rebalance.timeout.ms. " +
+            "If you see this happening consistently, then it can be addressed by either adding more workers " +
+            "to the connect cluster or by increasing the rebalance.timeout.ms configuration value. Please note that " +
+            "rebalance.timeout.ms also controls the maximum allowed time for each worker to join the group once a " +
+            "rebalance has begun so the set value should not be very high");
+
+        maybeLeaveGroup("worker poll timeout has expired.");
+    }
+
     /**
      * Return the current generation. The generation refers to this worker's knowledge with
      * respect to which generation is the latest one and, therefore, this information is local.

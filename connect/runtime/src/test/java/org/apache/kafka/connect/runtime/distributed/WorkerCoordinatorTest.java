@@ -35,11 +35,13 @@ import org.apache.kafka.common.requests.SyncGroupRequest;
 import org.apache.kafka.common.requests.SyncGroupResponse;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.common.utils.LogCaptureAppender;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.runtime.TargetState;
 import org.apache.kafka.connect.storage.ClusterConfigState;
 import org.apache.kafka.connect.storage.KafkaConfigBackingStore;
 import org.apache.kafka.connect.util.ConnectorTaskId;
+import org.apache.kafka.test.TestUtils;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Rule;
@@ -52,6 +54,7 @@ import org.mockito.junit.MockitoRule;
 import org.mockito.quality.Strictness;
 
 import java.nio.ByteBuffer;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -93,9 +96,9 @@ public class WorkerCoordinatorTest {
     private final ConnectorTaskId taskId3x0 = new ConnectorTaskId(connectorId3, 0);
 
     private final String groupId = "test-group";
-    private final int sessionTimeoutMs = 10;
+    private final int sessionTimeoutMs = 30;
     private final int rebalanceTimeoutMs = 60;
-    private final int heartbeatIntervalMs = 2;
+    private final int heartbeatIntervalMs = 7;
     private final long retryBackoffMs = 100;
     private final long retryBackoffMaxMs = 1000;
     private MockTime time;
@@ -531,6 +534,47 @@ public class WorkerCoordinatorTest {
             () -> coordinator.onLeaderElected("leader", EAGER.protocol(), Collections.emptyList(), true));
 
         verify(configStorage).snapshot();
+    }
+
+    @Test
+    public void testPollTimeoutExpiry() throws InterruptedException {
+
+        when(configStorage.snapshot()).thenReturn(configState1);
+
+        client.prepareResponse(FindCoordinatorResponse.prepareResponse(Errors.NONE, groupId, node));
+        coordinator.ensureCoordinatorReady(time.timer(Long.MAX_VALUE));
+
+        client.prepareResponse(joinGroupFollowerResponse(1, "member", "leader", Errors.NONE));
+        client.prepareResponse(syncGroupResponse(ConnectProtocol.Assignment.NO_ERROR, "leader", configState1.offset(), Collections.emptyList(),
+            Collections.singletonList(taskId1x0), Errors.NONE));
+        client.prepareResponse(FindCoordinatorResponse.prepareResponse(Errors.NONE, groupId, node));
+        coordinator.ensureCoordinatorReady(time.timer(Long.MAX_VALUE));
+        client.prepareResponse(FindCoordinatorResponse.prepareResponse(Errors.NONE, groupId, node));
+        client.prepareResponse(FindCoordinatorResponse.prepareResponse(Errors.NONE, groupId, node));
+
+        client.prepareResponse(joinGroupFollowerResponse(1, "member", "leader", Errors.NONE));
+        client.prepareResponse(syncGroupResponse(ConnectProtocol.Assignment.NO_ERROR, "leader", configState1.offset(), Collections.emptyList(),
+            Collections.singletonList(taskId1x0), Errors.NONE));
+
+        try (LogCaptureAppender logCaptureAppender = LogCaptureAppender.createAndRegister(WorkerCoordinator.class)) {
+            coordinator.ensureActiveGroup();
+            coordinator.poll(0, () -> {
+                return null;
+            });
+
+            long now = time.milliseconds();
+            // We keep the heartbeat thread running behind the scenes and poll frequently so that eventually
+            // the time goes past now + rebalanceTimeoutMs which triggers poll timeout expiry.
+            TestUtils.waitForCondition(() -> {
+                time.sleep(heartbeatIntervalMs - 1);
+                return time.milliseconds() > now + rebalanceTimeoutMs;
+            }, Duration.ofMinutes(1).toMillis(), "Coordinator did not poll for rebalance.timeout.ms");
+            coordinator.poll(0, () -> {
+                return null;
+            });
+            assertTrue(logCaptureAppender.getEvents().stream().anyMatch(e -> e.getLevel().equals("WARN")));
+            assertTrue(logCaptureAppender.getEvents().stream().anyMatch(e -> e.getMessage().startsWith("worker poll timeout has expired")));
+        }
     }
 
     private JoinGroupResponse joinGroupLeaderResponse(int generationId, String memberId,

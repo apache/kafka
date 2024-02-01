@@ -3239,6 +3239,26 @@ public class DistributedHerderTest {
     }
 
     @Test
+    public void testPollTimeoutExpiry() {
+        connectProtocolVersion = CONNECT_PROTOCOL_V1;
+        when(member.memberId()).thenReturn("member");
+        when(member.currentProtocolVersion()).thenReturn(connectProtocolVersion);
+
+        herder.tick();
+
+        // Assign a connector to this worker, and have it start it.
+        // Let's assume it takes a long time to start the connector which makes the poll timeout to expire
+        expectRebalance(Collections.emptyList(), Collections.emptyList(), ConnectProtocol.Assignment.NO_ERROR, 1, singletonList(CONN1), Collections.emptyList(), 0);
+        expectConfigRefreshAndSnapshot(SNAPSHOT);
+        ArgumentCaptor<Callback<TargetState>> onFirstStart = ArgumentCaptor.forClass(Callback.class);
+        doAnswer(invocation -> {
+            time.sleep(61000);
+            onFirstStart.getValue().onCompletion(null, TargetState.STARTED);
+            return true;
+        }).when(worker).startConnector(eq(CONN1), eq(CONN1_CONFIG), any(), eq(herder), eq(TargetState.STARTED), onFirstStart.capture());
+    }
+
+    @Test
     public void shouldThrowWhenStartAndStopExecutorThrowsRejectedExecutionExceptionAndHerderNotStopping() {
         when(member.memberId()).thenReturn("leader");
         when(member.currentProtocolVersion()).thenReturn(CONNECT_PROTOCOL_V0);
