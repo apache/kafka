@@ -40,7 +40,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
-public class LeaderAndIsrRequest extends AbstractControlRequest {
+public final class LeaderAndIsrRequest extends AbstractControlRequest {
 
     public static class Builder extends AbstractControlRequest.Builder<LeaderAndIsrRequest> {
 
