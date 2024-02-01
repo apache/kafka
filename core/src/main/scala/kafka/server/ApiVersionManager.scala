@@ -25,6 +25,7 @@ import org.apache.kafka.common.requests.ApiVersionsResponse
 import org.apache.kafka.server.ClientMetricsManager
 import org.apache.kafka.server.common.Features
 
+import scala.collection.mutable
 import scala.jdk.CollectionConverters._
 
 trait ApiVersionManager {
@@ -138,7 +139,7 @@ class DefaultApiVersionManager(
   val clientMetricsManager: Option[ClientMetricsManager] = None
 ) extends ApiVersionManager {
 
-  val enabledApis = ApiKeys.apisForListener(listenerType).asScala
+  val enabledApis: mutable.Set[ApiKeys] = ApiKeys.apisForListener(listenerType).asScala
 
   override def apiVersionResponse(throttleTimeMs: Int): ApiVersionsResponse = {
     val supportedFeatures = brokerFeatures.supportedFeatures
