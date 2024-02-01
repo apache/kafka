@@ -2751,7 +2751,7 @@ class ReplicaManagerTest {
   private def createStrayLogs(numLogs: Int, logManager: LogManager): Seq[UnifiedLog] = {
     val name = "stray"
     for (i <- 0 until numLogs)
-      yield logManager.getOrCreateLog(new TopicPartition(name, i), topicId = None)
+      yield logManager.getOrCreateLog(new TopicPartition(name, i), topicId = Some(new Uuid(name.hashCode, name.hashCode)))
   }
 
   private def sendProducerAppend(
