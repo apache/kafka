@@ -21,10 +21,10 @@ import java.nio.charset.StandardCharsets
 import java.util.concurrent.TimeUnit
 import java.util.{Collections, Properties}
 import joptsimple._
-import kafka.server.DynamicConfig.QuotaConfigs
 import kafka.server.{DynamicBrokerConfig, DynamicConfig, KafkaConfig}
-import kafka.utils.{Exit, Logging, PasswordEncoder}
+import kafka.server.DynamicConfig.QuotaConfigs
 import kafka.utils.Implicits._
+import kafka.utils.{Exit, Logging}
 import kafka.zk.{AdminZkClient, KafkaZkClient}
 import org.apache.kafka.clients.admin.{Admin, AlterClientQuotasOptions, AlterConfigOp, AlterConfigsOptions, ConfigEntry, DescribeClusterOptions, DescribeConfigsOptions, ListTopicsOptions, ScramCredentialInfo, UserScramCredentialDeletion, UserScramCredentialUpsertion, Config => JConfig, ScramMechanism => PublicScramMechanism}
 import org.apache.kafka.common.config.{ConfigResource, TopicConfig}
@@ -35,7 +35,8 @@ import org.apache.kafka.common.quota.{ClientQuotaAlteration, ClientQuotaEntity, 
 import org.apache.kafka.common.security.JaasUtils
 import org.apache.kafka.common.security.scram.internals.{ScramCredentialUtils, ScramFormatter, ScramMechanism}
 import org.apache.kafka.common.utils.{Sanitizer, Time, Utils}
-import org.apache.kafka.server.config.{ConfigEntityName, ConfigType, Defaults}
+import org.apache.kafka.server.config.{ConfigEntityName, ConfigType}
+import org.apache.kafka.security.{PasswordEncoder, PasswordEncoderConfigs}
 import org.apache.kafka.server.util.{CommandDefaultOptions, CommandLineUtils}
 import org.apache.kafka.storage.internals.log.LogConfig
 import org.apache.zookeeper.client.ZKClientConfig
@@ -211,19 +212,19 @@ object ConfigCommand extends Logging {
   }
 
   private[admin] def createPasswordEncoder(encoderConfigs: Map[String, String]): PasswordEncoder = {
-    encoderConfigs.get(KafkaConfig.PasswordEncoderSecretProp)
-    val encoderSecret = encoderConfigs.getOrElse(KafkaConfig.PasswordEncoderSecretProp,
+    encoderConfigs.get(PasswordEncoderConfigs.SECRET)
+    val encoderSecret = encoderConfigs.getOrElse(PasswordEncoderConfigs.SECRET,
       throw new IllegalArgumentException("Password encoder secret not specified"))
     PasswordEncoder.encrypting(new Password(encoderSecret),
-      None,
-      encoderConfigs.getOrElse(KafkaConfig.PasswordEncoderCipherAlgorithmProp, Defaults.PASSWORD_ENCODER_CIPHER_ALGORITHM),
-      encoderConfigs.get(KafkaConfig.PasswordEncoderKeyLengthProp).map(_.toInt).getOrElse(Defaults.PASSWORD_ENCODER_KEY_LENGTH),
-      encoderConfigs.get(KafkaConfig.PasswordEncoderIterationsProp).map(_.toInt).getOrElse(Defaults.PASSWORD_ENCODER_ITERATIONS))
+      null,
+      encoderConfigs.getOrElse(PasswordEncoderConfigs.CIPHER_ALGORITHM, PasswordEncoderConfigs.DEFAULT_CIPHER_ALGORITHM),
+      encoderConfigs.get(PasswordEncoderConfigs.KEY_LENGTH).map(_.toInt).getOrElse(PasswordEncoderConfigs.DEFAULT_KEY_LENGTH),
+      encoderConfigs.get(PasswordEncoderConfigs.ITERATIONS).map(_.toInt).getOrElse(PasswordEncoderConfigs.DEFAULT_ITERATIONS))
   }
 
   /**
    * Pre-process broker configs provided to convert them to persistent format.
-   * Password configs are encrypted using the secret `KafkaConfig.PasswordEncoderSecretProp`.
+   * Password configs are encrypted using the secret `PasswordEncoderConfigs.SECRET`.
    * The secret is removed from `configsToBeAdded` and will not be persisted in ZooKeeper.
    */
   private def preProcessBrokerConfigs(configsToBeAdded: Properties, perBrokerConfig: Boolean): Unit = {
@@ -238,8 +239,8 @@ object ConfigCommand extends Logging {
     DynamicBrokerConfig.validateConfigs(configsToBeAdded, perBrokerConfig)
     val passwordConfigs = configsToBeAdded.asScala.keySet.filter(DynamicBrokerConfig.isPasswordConfig)
     if (passwordConfigs.nonEmpty) {
-      require(passwordEncoderConfigs.containsKey(KafkaConfig.PasswordEncoderSecretProp),
-        s"${KafkaConfig.PasswordEncoderSecretProp} must be specified to update $passwordConfigs." +
+      require(passwordEncoderConfigs.containsKey(PasswordEncoderConfigs.SECRET),
+        s"${PasswordEncoderConfigs.SECRET} must be specified to update $passwordConfigs." +
           " Other password encoder configs like cipher algorithm and iterations may also be specified" +
           " to override the default encoding parameters. Password encoder configs will not be persisted" +
           " in ZooKeeper."

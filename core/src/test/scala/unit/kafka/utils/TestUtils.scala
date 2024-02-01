@@ -506,6 +506,33 @@ object TestUtils extends Logging {
     }.toMap
   }
 
+  def increasePartitions[B <: KafkaBroker](admin: Admin,
+                                              topic: String,
+                                              totalPartitionCount: Int,
+                                              brokersToValidate: Seq[B]
+                                            ): Unit = {
+
+    try {
+      val newPartitionSet: Map[String, NewPartitions] = Map.apply(topic -> NewPartitions.increaseTo(totalPartitionCount))
+      admin.createPartitions(newPartitionSet.asJava)
+    } catch {
+      case e: ExecutionException =>
+        throw e
+    }
+
+    if (brokersToValidate.size > 0) {
+      // wait until we've propagated all partitions metadata to all brokers
+      val allPartitionsMetadata = waitForAllPartitionsMetadata(brokersToValidate, topic, totalPartitionCount)
+
+      (0 until totalPartitionCount - 1).map { i =>
+        i -> allPartitionsMetadata.get(new TopicPartition(topic, i)).map(_.leader()).getOrElse(
+          throw new IllegalStateException(s"Cannot get the partition leader for topic: $topic, partition: $i in server metadata cache"))
+      }.toMap
+    } else {
+      Map.empty
+    }
+  }
+
   def describeTopic(
     admin: Admin,
     topic: String
@@ -1330,6 +1357,22 @@ object TestUtils extends Logging {
       s"Did not observe leader change for partition $tp after $timeout ms", waitTimeMs = timeout)
 
     newLeaderExists.get
+  }
+
+  def getLeaderIdForPartition[B <: KafkaBroker](
+      brokers: Seq[B],
+      tp: TopicPartition,
+      timeout: Long = JTestUtils.DEFAULT_MAX_WAIT_MS): Int = {
+    def leaderExists: Option[Int] = {
+      brokers.find { broker =>
+          broker.replicaManager.onlinePartition(tp).exists(_.leaderLogIfLocal.isDefined)
+      }.map(_.config.brokerId)
+    }
+
+    waitUntilTrue(() => leaderExists.isDefined,
+      s"Did not find a leader for partition $tp after $timeout ms", waitTimeMs = timeout)
+
+    leaderExists.get
   }
 
   def waitUntilLeaderIsKnown[B <: KafkaBroker](

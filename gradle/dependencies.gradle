@@ -117,7 +117,7 @@ versions += [
   jaxrs: "2.1.1",
   jfreechart: "1.0.0",
   jopt: "5.0.4",
-  jose4j: "0.9.3",
+  jose4j: "0.9.4",
   junit: "5.10.0",
   jqwik: "1.7.4",
   kafka_0100: "0.10.0.1",

@@ -208,22 +208,12 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
     private final Map<Uuid, String> assignedTopicNamesCache;
 
     /**
-     * Topic IDs received in a target assignment for which we haven't found topic names yet.
-     * Items are added to this set every time a target assignment is received. Items are removed
-     * when metadata is found for the topic. This is where the member collects all assignments
-     * received from the broker, even though they may not be ready to reconcile due to missing
+     * Topic IDs and partitions received in the last target assignment. Items are added to this set
+     * every time a target assignment is received. This is where the member collects the assignment
+     * received from the broker, even though it may not be ready to fully reconcile due to missing
      * metadata.
      */
-    private final Map<Uuid, SortedSet<Integer>> assignmentUnresolved;
-
-    /**
-     * Assignment received for which topic names have been resolved, so it's ready to be
-     * reconciled. Items are added to this set when received in a target assignment (if metadata
-     * available), or when a metadata update is received. This is where the member keeps all the
-     * assignment ready to reconcile, even though the reconciliation might need to wait if there
-     * is already another on in process.
-     */
-    private final SortedSet<TopicIdPartition> assignmentReadyToReconcile;
+    private final Map<Uuid, SortedSet<Integer>> currentTargetAssignment;
 
     /**
      * If there is a reconciliation running (triggering commit, callbacks) for the
@@ -297,8 +287,7 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
         this.commitRequestManager = commitRequestManager;
         this.metadata = metadata;
         this.assignedTopicNamesCache = new HashMap<>();
-        this.assignmentUnresolved = new HashMap<>();
-        this.assignmentReadyToReconcile = new TreeSet<>(TOPIC_ID_PARTITION_COMPARATOR);
+        this.currentTargetAssignment = new HashMap<>();
         this.currentAssignment = new HashMap<>();
         this.log = logContext.logger(MembershipManagerImpl.class);
         this.stateUpdatesListeners = new ArrayList<>();
@@ -397,7 +386,7 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
             }
             processAssignmentReceived(assignment);
 
-        } else if (allPendingAssignmentsReconciled()) {
+        } else if (targetAssignmentReconciled()) {
             transitionTo(MemberState.STABLE);
         }
     }
@@ -411,20 +400,18 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
      * @param assignment Assignment received from the broker.
      */
     private void processAssignmentReceived(ConsumerGroupHeartbeatResponseData.Assignment assignment) {
-        replaceUnresolvedAssignmentWithNewAssignment(assignment);
-        if (!assignmentUnresolved.equals(currentAssignment)) {
+        replaceTargetAssignmentWithNewAssignment(assignment);
+        if (!targetAssignmentReconciled()) {
             // Transition the member to RECONCILING when receiving a new target
             // assignment from the broker, different from the current assignment. Note that the
             // reconciliation might not be triggered just yet because of missing metadata.
             transitionTo(MemberState.RECONCILING);
-            assignmentReadyToReconcile.clear();
-            resolveMetadataForUnresolvedAssignment();
             reconcile();
         } else {
             // Same assignment received, nothing to reconcile.
             log.debug("Target assignment {} received from the broker is equals to the member " +
                     "current assignment {}. Nothing to reconcile.",
-                assignmentUnresolved, currentAssignment);
+                currentTargetAssignment, currentAssignment);
             // Make sure we transition the member back to STABLE if it was RECONCILING (ex.
             // member was RECONCILING unresolved assignments that were just removed by the
             // broker), or JOINING (member joining received empty assignment).
@@ -435,23 +422,15 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
     }
 
     /**
-     * Overwrite collection of unresolved topic Ids with the new target assignment. This will
-     * effectively achieve the following:
-     *
-     *    - all topics received in assignment will try to be resolved to find their topic names
-     *
-     *    - any topic received in a previous assignment that was still unresolved, and that is
-     *    not included in the assignment anymore, will be removed from the unresolved collection.
-     *    This should be the case when a topic is sent in an assignment, deleted right after, and
-     *    removed from the assignment the next time a broker sends one to the member.
+     * Overwrite the target assignment with the new target assignment.
      *
      * @param assignment Target assignment received from the broker.
      */
-    private void replaceUnresolvedAssignmentWithNewAssignment(
+    private void replaceTargetAssignmentWithNewAssignment(
             ConsumerGroupHeartbeatResponseData.Assignment assignment) {
-        assignmentUnresolved.clear();
+        currentTargetAssignment.clear();
         assignment.topicPartitions().forEach(topicPartitions ->
-            assignmentUnresolved.put(topicPartitions.topicId(), new TreeSet<>(topicPartitions.partitions())));
+            currentTargetAssignment.put(topicPartitions.topicId(), new TreeSet<>(topicPartitions.partitions())));
     }
 
     /**
@@ -731,7 +710,7 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
         }
 
         if (state == MemberState.ACKNOWLEDGING) {
-            if (allPendingAssignmentsReconciled()) {
+            if (targetAssignmentReconciled()) {
                 transitionTo(MemberState.STABLE);
             } else {
                 log.debug("Member {} with epoch {} transitioned to {} after a heartbeat was sent " +
@@ -765,8 +744,8 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
     /**
      * @return True if there are no assignments waiting to be resolved from metadata or reconciled.
      */
-    private boolean allPendingAssignmentsReconciled() {
-        return assignmentUnresolved.isEmpty() && assignmentReadyToReconcile.isEmpty();
+    private boolean targetAssignmentReconciled() {
+        return currentAssignment.equals(currentTargetAssignment);
     }
 
     @Override
@@ -788,23 +767,29 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
     }
 
     /**
-     * Reconcile the assignment that has been received from the server and for which topic names
-     * are resolved, kept in the {@link #assignmentReadyToReconcile}. This will commit if needed,
-     * trigger the callbacks and update the subscription state. Note that only one reconciliation
+     * Reconcile the assignment that has been received from the server. If for some topics, the
+     * topic ID cannot be matched to a topic name, a metadata update will be triggered and only
+     * the subset of topics that are resolvable will be reconciled. Reconciliation will trigger the
+     * callbacks and update the subscription state. Note that only one reconciliation
      * can be in progress at a time. If there is already another one in progress when this is
      * triggered, it will be no-op, and the assignment will be reconciled on the next
      * reconciliation loop.
      */
-    boolean reconcile() {
+    void reconcile() {
+        if (targetAssignmentReconciled()) {
+            log.debug("Ignoring reconciliation attempt. Target assignment is equal to the " +
+                    "current assignment.");
+            return;
+        }
         if (reconciliationInProgress) {
             log.debug("Ignoring reconciliation attempt. Another reconciliation is already in progress. Assignment " +
-                    assignmentReadyToReconcile + " will be handled in the next reconciliation loop.");
-            return false;
+                currentTargetAssignment + " will be handled in the next reconciliation loop.");
+            return;
         }
 
-        // Make copy of the assignment to reconcile as it could change as new assignments or metadata updates are received
-        SortedSet<TopicIdPartition> assignedTopicIdPartitions = new TreeSet<>(TOPIC_ID_PARTITION_COMPARATOR);
-        assignedTopicIdPartitions.addAll(assignmentReadyToReconcile);
+        // Find the subset of the target assignment that can be resolved to topic names, and trigger a metadata update
+        // if some topic IDs are not resolvable.
+        SortedSet<TopicIdPartition> assignedTopicIdPartitions = findResolvableAssignmentAndTriggerMetadataUpdate();
 
         SortedSet<TopicPartition> ownedPartitions = new TreeSet<>(TOPIC_PARTITION_COMPARATOR);
         ownedPartitions.addAll(subscriptions.assignedPartitions());
@@ -824,7 +809,7 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
         if (sameAssignmentReceived) {
             log.debug("Ignoring reconciliation attempt. Target assignment ready to reconcile {} " +
                     "is equal to the member current assignment {}.", assignedTopicPartitions, ownedPartitions);
-            return false;
+            return;
         }
 
         markReconciliationInProgress();
@@ -877,8 +862,6 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
 
             revokeAndAssign(assignedTopicIdPartitions, revokedPartitions, addedPartitions);
         });
-
-        return true;
     }
 
     long getExpirationTimeForTimeout(final long timeoutMs) {
@@ -942,11 +925,6 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
                 if (state == MemberState.RECONCILING && !memberHasRejoined) {
                     // Make assignment effective on the broker by transitioning to send acknowledge.
                     transitionTo(MemberState.ACKNOWLEDGING);
-
-                    // Indicate that we completed reconciling a subset of the assignment ready to
-                    // reconcile (new assignments might have been received or discovered in
-                    // metadata).
-                    assignmentReadyToReconcile.removeAll(assignedTopicIdPartitions);
                 } else {
                     String reason = interruptedReconciliationErrorMessage();
                     log.error("Interrupting reconciliation after partitions assigned callback " +
@@ -1003,7 +981,7 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
     }
 
     /**
-     * Build set of TopicPartition (topic name and partition id) from the target assignment
+     * Build set of TopicIdPartition (topic ID, topic name and partition id) from the target assignment
      * received from the broker (topic IDs and list of partitions).
      *
      * <p>
@@ -1019,11 +997,13 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
      *     </li>
      * </ol>
      */
-    private void resolveMetadataForUnresolvedAssignment() {
-        assignmentReadyToReconcile.clear();
+    private SortedSet<TopicIdPartition> findResolvableAssignmentAndTriggerMetadataUpdate() {
+        final SortedSet<TopicIdPartition> assignmentReadyToReconcile = new TreeSet<>(TOPIC_ID_PARTITION_COMPARATOR);
+        final HashMap<Uuid, SortedSet<Integer>> unresolved = new HashMap<>(currentTargetAssignment);
+
         // Try to resolve topic names from metadata cache or subscription cache, and move
-        // assignments from the "unresolved" collection, to the "readyToReconcile" one.
-        Iterator<Map.Entry<Uuid, SortedSet<Integer>>> it = assignmentUnresolved.entrySet().iterator();
+        // assignments from the "unresolved" collection, to the "assignmentReadyToReconcile" one.
+        Iterator<Map.Entry<Uuid, SortedSet<Integer>>> it = unresolved.entrySet().iterator();
         while (it.hasNext()) {
             Map.Entry<Uuid, SortedSet<Integer>> e = it.next();
             Uuid topicId = e.getKey();
@@ -1032,17 +1012,21 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
             Optional<String> nameFromMetadata = findTopicNameInGlobalOrLocalCache(topicId);
             nameFromMetadata.ifPresent(resolvedTopicName -> {
                 // Name resolved, so assignment is ready for reconciliation.
-                addToAssignmentReadyToReconcile(topicId, resolvedTopicName, topicPartitions);
+                topicPartitions.forEach(tp ->
+                    assignmentReadyToReconcile.add(new TopicIdPartition(topicId, tp, resolvedTopicName))
+                );
                 it.remove();
             });
         }
 
-        if (!assignmentUnresolved.isEmpty()) {
+        if (!unresolved.isEmpty()) {
             log.debug("Topic Ids {} received in target assignment were not found in metadata and " +
                     "are not currently assigned. Requesting a metadata update now to resolve " +
-                    "topic names.", assignmentUnresolved.keySet());
+                    "topic names.", unresolved.keySet());
             metadata.requestUpdate(true);
         }
+
+        return assignmentReadyToReconcile;
     }
 
     /**
@@ -1065,20 +1049,6 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
             String nameFromSubscriptionCache = assignedTopicNamesCache.getOrDefault(topicId, null);
             return Optional.ofNullable(nameFromSubscriptionCache);
         }
-    }
-
-    /**
-     * Build a TopicPartition for each of the partitions included in the heartbeat topicPartitions,
-     * and using the given topic name. Add the created TopicPartition to the
-     * {@link #assignmentReadyToReconcile}.
-     */
-    private void addToAssignmentReadyToReconcile(Uuid topicId, String topicName, SortedSet<Integer> topicPartitions) {
-        topicPartitions.forEach(tp -> {
-            TopicIdPartition topicIdPartition = new TopicIdPartition(
-                    topicId,
-                    new TopicPartition(topicName, tp));
-            assignmentReadyToReconcile.add(topicIdPartition);
-        });
     }
 
     /**
@@ -1303,8 +1273,7 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
      * or the next reconciliation loop). Remove all elements from the topic names cache.
      */
     private void clearPendingAssignmentsAndLocalNamesCache() {
-        assignmentUnresolved.clear();
-        assignmentReadyToReconcile.clear();
+        currentTargetAssignment.clear();
         assignedTopicNamesCache.clear();
     }
 
@@ -1350,21 +1319,39 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
         return this.currentAssignment;
     }
 
-
     /**
      * @return Set of topic IDs received in a target assignment that have not been reconciled yet
-     * because topic names are not in metadata. Visible for testing.
+     * because topic names are not in metadata or reconciliation hasn't finished. Reconciliation
+     * hasn't finished for a topic if the currently active assignment has a different set of partitions
+     * for the topic than the target assignment.
+     *
+     * Visible for testing.
      */
-    Set<Uuid> topicsWaitingForMetadata() {
-        return Collections.unmodifiableSet(assignmentUnresolved.keySet());
+    Set<Uuid> topicsAwaitingReconciliation() {
+        return topicPartitionsAwaitingReconciliation().keySet();
     }
 
     /**
-     * @return Topic partitions received in a target assignment that have been resolved in
-     * metadata and are ready to be reconciled. Visible for testing.
+     * @return Map of topics partitions received in a target assignment that have not been
+     * reconciled yet because topic names are not in metadata or reconciliation hasn't finished.
+     * The values in the map are the sets of partitions contained in the target assignment but
+     * missing from the currently reconciled assignment, for each topic.
+     *
+     * Visible for testing.
      */
-    Set<TopicIdPartition> assignmentReadyToReconcile() {
-        return Collections.unmodifiableSet(assignmentReadyToReconcile);
+    Map<Uuid, SortedSet<Integer>> topicPartitionsAwaitingReconciliation() {
+        final Map<Uuid, SortedSet<Integer>> topicPartitionMap = new HashMap<>();
+        currentTargetAssignment.forEach((topicId, targetPartitions) -> {
+            final SortedSet<Integer> reconciledPartitions = currentAssignment.get(topicId);
+            if (!targetPartitions.equals(reconciledPartitions)) {
+                final TreeSet<Integer> missingPartitions = new TreeSet<>(targetPartitions);
+                if (reconciledPartitions != null) {
+                    missingPartitions.removeAll(reconciledPartitions);
+                }
+                topicPartitionMap.put(topicId, missingPartitions);
+            }
+        });
+        return Collections.unmodifiableMap(topicPartitionMap);
     }
 
     /**
@@ -1379,7 +1366,7 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
      * When cluster metadata is updated, try to resolve topic names for topic IDs received in
      * assignment that hasn't been resolved yet.
      * <ul>
-     *     <li>Try to find topic names for all unresolved assignments</li>
+     *     <li>Try to find topic names for all assignments</li>
      *     <li>Add discovered topic names to the local topic names cache</li>
      *     <li>If any topics are resolved, trigger a reconciliation process</li>
      *     <li>If some topics still remain unresolved, request another metadata update</li>
@@ -1387,8 +1374,7 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
      */
     @Override
     public void onUpdate(ClusterResource clusterResource) {
-        resolveMetadataForUnresolvedAssignment();
-        if (!assignmentReadyToReconcile.isEmpty()) {
+        if (state == MemberState.RECONCILING) {
             reconcile();
         }
     }
