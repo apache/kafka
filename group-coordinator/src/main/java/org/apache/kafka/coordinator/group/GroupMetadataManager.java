@@ -3756,7 +3756,7 @@ public class GroupMetadataManager {
                         updatedMember.rebalanceTimeoutMs(),
                         updatedMember.memberEpoch()
                     );
-                } else {
+                } else { // TODO: scheduleConsumerGroupAssignmentTimeout
                     cancelConsumerGroupRevocationTimeout(groupId, memberId);
                 }
             }
@@ -3842,8 +3842,7 @@ public class GroupMetadataManager {
         scheduleConsumerGroupSessionTimeout(groupId, memberId);
 
         if (group.groupEpoch() > member.memberEpoch() ||
-            !member.partitionsPendingRevocation().isEmpty() ||
-            !member.partitionsPendingAssignment().isEmpty()) {
+            !member.partitionsPendingRevocation().isEmpty() /*TODO: check if all partitions are revoked*/) {
             new HeartbeatResponseData().setErrorCode(Errors.REBALANCE_IN_PROGRESS.code());
             // TODO: set join group timeout
         }
