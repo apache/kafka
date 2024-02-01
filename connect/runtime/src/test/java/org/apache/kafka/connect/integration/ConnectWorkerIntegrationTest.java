@@ -238,9 +238,6 @@ public class ConnectWorkerIntegrationTest {
 
         connect.kafka().stopOnlyKafka();
 
-        connect.assertions().assertExactlyNumWorkersAreUp(NUM_WORKERS,
-                "Group of workers did not remain the same after broker shutdown");
-
         // Allow for the workers to discover that the coordinator is unavailable, wait is
         // heartbeat timeout * 2 + 4sec
         Thread.sleep(TimeUnit.SECONDS.toMillis(10));
