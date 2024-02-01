@@ -25,6 +25,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.function.BiConsumer;
 
 public interface StateUpdater {
 
@@ -94,7 +95,8 @@ public interface StateUpdater {
      *
      * @param taskId ID of the task to remove
      */
-    CompletableFuture<Task> remove(final TaskId taskId);
+    CompletableFuture<Task> remove(final TaskId taskId,
+                                   final BiConsumer<? super Task, ? super Throwable> action);
 
     /**
      * Wakes up the state updater if it is currently dormant, to check if a paused task should be resumed.

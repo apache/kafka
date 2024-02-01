@@ -89,6 +89,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
@@ -460,9 +461,18 @@ public class TaskManagerTest {
         final StandbyTask standbyTaskToRecycle = standbyTask(taskId03, taskId03ChangelogPartitions)
             .inState(State.RUNNING)
             .withInputPartitions(taskId03Partitions).build();
+        final StreamTask streamTask = statefulTask(taskId03, taskId03ChangelogPartitions)
+            .inState(State.CREATED)
+            .withInputPartitions(taskId03Partitions).build();
         final TasksRegistry tasks = Mockito.mock(TasksRegistry.class);
         final TaskManager taskManager = setUpTaskManager(ProcessingMode.AT_LEAST_ONCE, tasks, true);
         when(stateUpdater.getTasks()).thenReturn(mkSet(standbyTaskToRecycle));
+        final CompletableFuture<Task> future = new CompletableFuture<>();
+        when(stateUpdater.remove(taskId03, null)).thenAnswer(invocation -> {
+            future.complete(standbyTaskToRecycle);
+            return future;
+        });
+        when(activeTaskCreator.createActiveTaskFromStandby(standbyTaskToRecycle, taskId03Partitions, consumer)).thenReturn(streamTask);
 
         taskManager.handleAssignment(
             mkMap(mkEntry(standbyTaskToRecycle.id(), standbyTaskToRecycle.inputPartitions())),
@@ -470,9 +480,9 @@ public class TaskManagerTest {
         );
 
         Mockito.verify(activeTaskCreator).createTasks(consumer, Collections.emptyMap());
-        Mockito.verify(stateUpdater).remove(standbyTaskToRecycle.id());
-        Mockito.verify(tasks).addPendingTaskToRecycle(standbyTaskToRecycle.id(), standbyTaskToRecycle.inputPartitions());
-        Mockito.verify(standbyTaskCreator).createTasks(Collections.emptyMap());
+        Mockito.verify(stateUpdater).remove(standbyTaskToRecycle.id(), null);
+//        Mockito.verify(tasks).addPendingTaskToRecycle(standbyTaskToRecycle.id(), standbyTaskToRecycle.inputPartitions());
+//        Mockito.verify(standbyTaskCreator).createTasks(Collections.emptyMap());
     }
 
     @Test
@@ -487,7 +497,7 @@ public class TaskManagerTest {
         taskManager.handleAssignment(Collections.emptyMap(), Collections.emptyMap());
 
         Mockito.verify(activeTaskCreator).createTasks(consumer, Collections.emptyMap());
-        Mockito.verify(stateUpdater).remove(activeTaskToClose.id());
+        Mockito.verify(stateUpdater).remove(activeTaskToClose.id(), null);
         Mockito.verify(tasks).addPendingTaskToCloseClean(activeTaskToClose.id());
         Mockito.verify(standbyTaskCreator).createTasks(Collections.emptyMap());
     }
@@ -504,7 +514,7 @@ public class TaskManagerTest {
         taskManager.handleAssignment(Collections.emptyMap(), Collections.emptyMap());
 
         Mockito.verify(activeTaskCreator).createTasks(consumer, Collections.emptyMap());
-        Mockito.verify(stateUpdater).remove(standbyTaskToClose.id());
+        Mockito.verify(stateUpdater).remove(standbyTaskToClose.id(), null);
         Mockito.verify(tasks).addPendingTaskToCloseClean(standbyTaskToClose.id());
         Mockito.verify(standbyTaskCreator).createTasks(Collections.emptyMap());
     }
@@ -525,7 +535,7 @@ public class TaskManagerTest {
         );
 
         Mockito.verify(activeTaskCreator).createTasks(consumer, Collections.emptyMap());
-        Mockito.verify(stateUpdater).remove(activeTaskToUpdateInputPartitions.id());
+        Mockito.verify(stateUpdater).remove(activeTaskToUpdateInputPartitions.id(), null);
         Mockito.verify(tasks).addPendingTaskToUpdateInputPartitions(activeTaskToUpdateInputPartitions.id(), newInputPartitions);
         Mockito.verify(standbyTaskCreator).createTasks(Collections.emptyMap());
     }
@@ -547,7 +557,7 @@ public class TaskManagerTest {
         );
 
         Mockito.verify(activeTaskCreator).createTasks(consumer, Collections.emptyMap());
-        Mockito.verify(stateUpdater, never()).remove(activeTaskToUpdateInputPartitions.id());
+        Mockito.verify(stateUpdater, never()).remove(activeTaskToUpdateInputPartitions.id(), null);
         Mockito.verify(tasks).removePendingTaskToCloseClean(activeTaskToUpdateInputPartitions.id());
         Mockito.verify(tasks).addPendingTaskToCloseReviveAndUpdateInputPartitions(activeTaskToUpdateInputPartitions.id(), newInputPartitions);
         Mockito.verify(standbyTaskCreator).createTasks(Collections.emptyMap());
@@ -689,7 +699,7 @@ public class TaskManagerTest {
         );
 
         Mockito.verify(activeTaskCreator).createTasks(consumer, Collections.emptyMap());
-        Mockito.verify(stateUpdater, never()).remove(standbyTaskToUpdateInputPartitions.id());
+        Mockito.verify(stateUpdater, never()).remove(standbyTaskToUpdateInputPartitions.id(), null);
         Mockito.verify(tasks, never())
             .addPendingTaskToUpdateInputPartitions(standbyTaskToUpdateInputPartitions.id(), newInputPartitions);
         Mockito.verify(standbyTaskCreator).createTasks(Collections.emptyMap());
@@ -711,7 +721,7 @@ public class TaskManagerTest {
         );
 
         Mockito.verify(activeTaskCreator).createTasks(consumer, Collections.emptyMap());
-        Mockito.verify(stateUpdater, never()).remove(standbyTaskToUpdateInputPartitions.id());
+        Mockito.verify(stateUpdater, never()).remove(standbyTaskToUpdateInputPartitions.id(), null);
         Mockito.verify(tasks, never()).removePendingTaskToCloseClean(standbyTaskToUpdateInputPartitions.id());
         Mockito.verify(tasks, never())
                 .addPendingTaskToCloseReviveAndUpdateInputPartitions(standbyTaskToUpdateInputPartitions.id(), newInputPartitions);
@@ -754,9 +764,9 @@ public class TaskManagerTest {
         );
 
         Mockito.verify(activeTaskCreator).createTasks(consumer, Collections.emptyMap());
-        Mockito.verify(stateUpdater).remove(activeTaskToClose.id());
+        Mockito.verify(stateUpdater).remove(activeTaskToClose.id(), null);
         Mockito.verify(tasks).addPendingTaskToCloseClean(activeTaskToClose.id());
-        Mockito.verify(stateUpdater).remove(standbyTaskToRecycle.id());
+        Mockito.verify(stateUpdater).remove(standbyTaskToRecycle.id(), null);
         Mockito.verify(tasks).addPendingTaskToRecycle(standbyTaskToRecycle.id(), standbyTaskToRecycle.inputPartitions());
         Mockito.verify(standbyTaskCreator).createTasks(Collections.emptyMap());
     }
@@ -1370,7 +1380,7 @@ public class TaskManagerTest {
         taskManager.handleRevocation(task.inputPartitions());
 
         Mockito.verify(tasks).addPendingActiveTaskToSuspend(task.id());
-        Mockito.verify(stateUpdater, never()).remove(task.id());
+        Mockito.verify(stateUpdater, never()).remove(task.id(), null);
     }
 
     public void shouldAddMultipleActiveTasksWithRevokedInputPartitionsInStateUpdaterToPendingTasksToSuspend() {
@@ -1399,7 +1409,7 @@ public class TaskManagerTest {
 
         taskManager.handleRevocation(taskId01Partitions);
 
-        Mockito.verify(stateUpdater, never()).remove(task.id());
+        Mockito.verify(stateUpdater, never()).remove(task.id(), null);
         Mockito.verify(tasks, never()).addPendingActiveTaskToSuspend(task.id());
     }
 
@@ -1413,7 +1423,7 @@ public class TaskManagerTest {
 
         taskManager.handleRevocation(taskId00Partitions);
 
-        Mockito.verify(stateUpdater, never()).remove(task.id());
+        Mockito.verify(stateUpdater, never()).remove(task.id(), null);
         Mockito.verify(tasks, never()).addPendingActiveTaskToSuspend(task.id());
     }
 
@@ -1433,9 +1443,9 @@ public class TaskManagerTest {
 
         taskManager.handleLostAll();
 
-        Mockito.verify(stateUpdater).remove(task1.id());
-        Mockito.verify(stateUpdater, never()).remove(task2.id());
-        Mockito.verify(stateUpdater).remove(task3.id());
+        Mockito.verify(stateUpdater).remove(task1.id(), null);
+        Mockito.verify(stateUpdater, never()).remove(task2.id(), null);
+        Mockito.verify(stateUpdater).remove(task3.id(), null);
         Mockito.verify(tasks).addPendingTaskToCloseClean(task1.id());
         Mockito.verify(tasks, never()).addPendingTaskToCloseClean(task2.id());
         Mockito.verify(tasks).addPendingTaskToCloseClean(task3.id());

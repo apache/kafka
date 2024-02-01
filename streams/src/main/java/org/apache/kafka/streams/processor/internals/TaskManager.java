@@ -579,16 +579,15 @@ public class TaskManager {
                 final Set<TopicPartition> inputPartitions = activeTasksToCreate.get(taskId);
                 if (task.isActive()) {
                     if (!task.inputPartitions().equals(inputPartitions)) {
-                        final CompletableFuture<Task> future = stateUpdater.remove(taskId);
-                        future.whenComplete(
-                            (removedTask, exception) ->
-                                tasksToUpdateInputPartitions.put(removedTask, inputPartitions)
+                        final CompletableFuture<Task> future = stateUpdater.remove(
+                            taskId,
+                            (removedTask, exception) -> tasksToUpdateInputPartitions.put(removedTask, inputPartitions)
                         );
                         futures.add(future);
                     }
                 } else {
-                    final CompletableFuture<Task> future = stateUpdater.remove(taskId);
-                    future.whenComplete(
+                    final CompletableFuture<Task> future = stateUpdater.remove(
+                        taskId,
                         (removedTask, exception) -> tasksToRecycle.put(removedTask, inputPartitions)
                     );
                     futures.add(future);
@@ -597,16 +596,16 @@ public class TaskManager {
             } else if (standbyTasksToCreate.containsKey(taskId)) {
                 final Set<TopicPartition> inputPartitions = standbyTasksToCreate.get(taskId);
                 if (task.isActive()) {
-                    final CompletableFuture<Task> future = stateUpdater.remove(taskId);
-                    future.whenComplete(
+                    final CompletableFuture<Task> future = stateUpdater.remove(
+                        taskId,
                         (removedTask, exception) -> tasksToRecycle.put(removedTask, inputPartitions)
                     );
                     futures.add(future);
                 }
                 standbyTasksToCreate.remove(taskId);
             } else {
-                final CompletableFuture<Task> future = stateUpdater.remove(taskId);
-                future.whenComplete(
+                final CompletableFuture<Task> future = stateUpdater.remove(
+                    taskId,
                     (removedTask, exception) -> tasksToCloseClean.add(removedTask)
                 );
                 futures.add(future);
@@ -630,12 +629,12 @@ public class TaskManager {
 
     private void removeTaskToRecycleFromStateUpdater(final TaskId taskId,
                                                      final Set<TopicPartition> inputPartitions) {
-        stateUpdater.remove(taskId);
+        stateUpdater.remove(taskId, null);
         tasks.addPendingTaskToRecycle(taskId, inputPartitions);
     }
 
     private void removeUnusedTaskFromStateUpdater(final TaskId taskId) {
-        stateUpdater.remove(taskId);
+        stateUpdater.remove(taskId, null);
         tasks.addPendingTaskToCloseClean(taskId);
     }
 
@@ -1230,8 +1229,8 @@ public class TaskManager {
             final Set<Task> tasksToCloseClean = new HashSet<>();
             for (final Task restoringTask : stateUpdater.getTasks()) {
                 if (restoringTask.isActive()) {
-                    final CompletableFuture<Task> future = stateUpdater.remove(restoringTask.id());
-                    future.whenComplete(
+                    final CompletableFuture<Task> future = stateUpdater.remove(
+                        restoringTask.id(),
                         (removedTask, exception) -> tasksToCloseClean.add(removedTask)
                     );
                     futures.add(future);

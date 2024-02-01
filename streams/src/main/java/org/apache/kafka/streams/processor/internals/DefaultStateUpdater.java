@@ -61,6 +61,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
+import java.util.function.BiConsumer;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -488,7 +489,7 @@ public class DefaultStateUpdater implements StateUpdater {
                     transitToUpdateStandbysIfOnlyStandbysLeft();
                 }
                 log.info((task.isActive() ? "Active" : "Standby")
-                    + " task " + task.id() + " was removed from the updating tasks and added to the removed tasks.");
+                    + " task " + task.id() + " was removed from the updating tasks.");
                 future.complete(task);
             } else if (pausedTasks.containsKey(taskId)) {
                 task = pausedTasks.get(taskId);
@@ -497,7 +498,7 @@ public class DefaultStateUpdater implements StateUpdater {
                 removedTasks.add(task);
                 pausedTasks.remove(taskId);
                 log.info((task.isActive() ? "Active" : "Standby")
-                    + " task " + task.id() + " was removed from the paused tasks and added to the removed tasks.");
+                    + " task " + task.id() + " was removed from the paused tasks.");
                 future.complete(task);
             } else {
                 restoredActiveTasksLock.lock();
@@ -764,8 +765,10 @@ public class DefaultStateUpdater implements StateUpdater {
     }
 
     @Override
-    public CompletableFuture<Task> remove(final TaskId taskId) {
+    public CompletableFuture<Task> remove(final TaskId taskId,
+                                          final BiConsumer<? super Task, ? super Throwable> action) {
         final CompletableFuture<Task> future = new CompletableFuture<>();
+        future.whenComplete(action);
         tasksAndActionsLock.lock();
         try {
             tasksAndActions.add(TaskAndAction.createRemoveTask(taskId, future));

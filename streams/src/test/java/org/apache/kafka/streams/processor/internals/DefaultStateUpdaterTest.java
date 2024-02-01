@@ -150,7 +150,7 @@ class DefaultStateUpdaterTest {
         final StandbyTask standbyTask = standbyTask(TASK_0_2, mkSet(TOPIC_PARTITION_C_0)).inState(State.RUNNING).build();
         stateUpdater.add(statelessTask);
         stateUpdater.add(statefulTask);
-        stateUpdater.remove(TASK_1_1);
+        stateUpdater.remove(TASK_1_1, null);
         stateUpdater.add(standbyTask);
         verifyRemovedTasks();
 
@@ -433,7 +433,7 @@ class DefaultStateUpdaterTest {
             .thenReturn(false);
         stateUpdater.start();
         stateUpdater.add(task);
-        stateUpdater.remove(task.id());
+        stateUpdater.remove(task.id(), null);
         verifyRestoredActiveTasks();
         verifyUpdatingTasks();
         verifyExceptionsAndFailedTasks();
@@ -707,8 +707,8 @@ class DefaultStateUpdaterTest {
         stateUpdater.add(standbyTask);
         verifyUpdatingTasks(activeTask1, activeTask2, standbyTask);
 
-        stateUpdater.remove(activeTask1.id());
-        stateUpdater.remove(activeTask2.id());
+        stateUpdater.remove(activeTask1.id(), null);
+        stateUpdater.remove(activeTask2.id(), null);
 
         verifyRemovedTasks(activeTask1, activeTask2);
         final InOrder orderVerifier = inOrder(changelogReader);
@@ -727,7 +727,7 @@ class DefaultStateUpdaterTest {
         stateUpdater.add(standbyTask2);
         verifyUpdatingTasks(standbyTask1, standbyTask2);
 
-        stateUpdater.remove(standbyTask2.id());
+        stateUpdater.remove(standbyTask2.id(), null);
 
         verifyRemovedTasks(standbyTask2);
         verify(changelogReader).transitToUpdateStandby();
@@ -751,7 +751,7 @@ class DefaultStateUpdaterTest {
         stateUpdater.start();
         stateUpdater.add(task);
 
-        stateUpdater.remove(task.id());
+        stateUpdater.remove(task.id(), null);
 
         verifyRemovedTasks(task);
         verifyCheckpointTasks(true, task);
@@ -777,8 +777,8 @@ class DefaultStateUpdaterTest {
         verifyRemovedTasks();
         verifyUpdatingTasks();
 
-        stateUpdater.remove(task1.id());
-        stateUpdater.remove(task2.id());
+        stateUpdater.remove(task1.id(), null);
+        stateUpdater.remove(task2.id(), null);
 
         verifyRemovedTasks(task1, task2);
         verifyPausedTasks();
@@ -808,7 +808,7 @@ class DefaultStateUpdaterTest {
         stateUpdater.add(task);
         verifyRestoredActiveTasks(task);
 
-        stateUpdater.remove(task.id());
+        stateUpdater.remove(task.id(), null);
 
         verifyRestoredActiveTasks();
         verifyUpdatingTasks();
@@ -878,8 +878,8 @@ class DefaultStateUpdaterTest {
         final ExceptionAndTask expectedExceptionAndTask = new ExceptionAndTask(task, streamsException);
         verifyExceptionsAndFailedTasks(expectedExceptionAndTask);
 
-        stateUpdater.remove(task.id());
-        stateUpdater.remove(controlTask.id());
+        stateUpdater.remove(task.id(), null);
+        stateUpdater.remove(controlTask.id(), null);
 
         verifyRemovedTasks(controlTask);
         verifyPausedTasks();
@@ -1047,7 +1047,7 @@ class DefaultStateUpdaterTest {
         stateUpdater.start();
         stateUpdater.add(task);
 
-        stateUpdater.remove(task.id());
+        stateUpdater.remove(task.id(), null);
 
         verifyRemovedTasks(task);
         verifyCheckpointTasks(true, task);
@@ -1162,7 +1162,7 @@ class DefaultStateUpdaterTest {
         verifyUpdatingTasks(task);
         verifyExceptionsAndFailedTasks();
 
-        stateUpdater.remove(task.id());
+        stateUpdater.remove(task.id(), null);
 
         verifyRemovedTasks(task);
         verifyUpdatingTasks();
@@ -1216,7 +1216,7 @@ class DefaultStateUpdaterTest {
 
         final StreamTask task1 = statefulTask(TASK_0_0, mkSet(TOPIC_PARTITION_B_0)).inState(State.RESTORING).build();
         stateUpdater.add(task1);
-        stateUpdater.remove(task1.id());
+        stateUpdater.remove(task1.id(), null);
 
         verifyDrainingRemovedTasks(task1);
 
@@ -1224,11 +1224,11 @@ class DefaultStateUpdaterTest {
         final StreamTask task3 = statefulTask(TASK_1_0, mkSet(TOPIC_PARTITION_A_0)).inState(State.RESTORING).build();
         final StreamTask task4 = statefulTask(TASK_0_2, mkSet(TOPIC_PARTITION_D_0)).inState(State.RESTORING).build();
         stateUpdater.add(task2);
-        stateUpdater.remove(task2.id());
+        stateUpdater.remove(task2.id(), null);
         stateUpdater.add(task3);
-        stateUpdater.remove(task3.id());
+        stateUpdater.remove(task3.id(), null);
         stateUpdater.add(task4);
-        stateUpdater.remove(task4.id());
+        stateUpdater.remove(task4.id(), null);
 
         verifyDrainingRemovedTasks(task2, task3, task4);
     }
@@ -1473,7 +1473,7 @@ class DefaultStateUpdaterTest {
         stateUpdater.add(activeTask1);
         stateUpdater.add(standbyTask1);
         stateUpdater.add(standbyTask2);
-        stateUpdater.remove(TASK_0_0);
+        stateUpdater.remove(TASK_0_0, null);
         stateUpdater.add(activeTask2);
         stateUpdater.add(standbyTask3);
 
@@ -1563,9 +1563,9 @@ class DefaultStateUpdaterTest {
         stateUpdater.add(standbyTask1);
         stateUpdater.add(activeTask);
         stateUpdater.add(standbyTask2);
-        stateUpdater.remove(standbyTask1.id());
-        stateUpdater.remove(standbyTask2.id());
-        stateUpdater.remove(activeTask.id());
+        stateUpdater.remove(standbyTask1.id(), null);
+        stateUpdater.remove(standbyTask2.id(), null);
+        stateUpdater.remove(activeTask.id(), null);
         verifyRemovedTasks(activeTask, standbyTask1, standbyTask2);
 
         verifyGetTasks(mkSet(activeTask), mkSet(standbyTask1, standbyTask2));
