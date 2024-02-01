@@ -55,13 +55,16 @@ import org.slf4j.Logger;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.OptionalLong;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Consumer;
 
 import static org.apache.kafka.common.requests.OffsetFetchResponse.INVALID_OFFSET;
 import static org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetrics.OFFSET_DELETIONS_SENSOR_NAME;
@@ -901,6 +904,45 @@ public class OffsetMetadataManager {
 
         // We don't want to remove the group if there are ongoing transactions.
         return allOffsetsExpired.get() && !openTransactionsByGroup.containsKey(groupId);
+    }
+
+    /**
+     * Remove offsets of the partitions that have been deleted.
+     *
+     * @param topicPartitions   The partitions that have been deleted.
+     * @return The list of tombstones (offset commit) to append.
+     */
+    public List<Record> onPartitionsDeleted(
+        List<TopicPartition> topicPartitions
+    ) {
+        List<Record> records = new ArrayList<>();
+
+        Map<String, List<Integer>> partitionsByTopic = new HashMap<>();
+        topicPartitions.forEach(tp -> partitionsByTopic
+            .computeIfAbsent(tp.topic(), __ -> new ArrayList<>())
+            .add(tp.partition())
+        );
+
+        Consumer<Offsets> delete = offsetsToClean -> {
+            offsetsToClean.offsetsByGroup.forEach((groupId, topicOffsets) -> {
+                topicOffsets.forEach((topic, partitionOffsets) -> {
+                    if (partitionsByTopic.containsKey(topic)) {
+                        partitionsByTopic.get(topic).forEach(partition -> {
+                            if (partitionOffsets.containsKey(partition)) {
+                                appendOffsetCommitTombstone(groupId, topic, partition, records);
+                            }
+                        });
+                    }
+                });
+            });
+        };
+
+        // Delete the partitions from the main storage.
+        delete.accept(offsets);
+        // Delete the partitions from the pending transactional offsets.
+        pendingTransactionalOffsets.forEach((__, offsets) -> delete.accept(offsets));
+
+        return records;
     }
 
     /**
