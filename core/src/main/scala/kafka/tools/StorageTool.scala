@@ -28,7 +28,7 @@ import net.sourceforge.argparse4j.inf.Namespace
 import org.apache.kafka.common.Uuid
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.metadata.bootstrap.{BootstrapDirectory, BootstrapMetadata}
-import org.apache.kafka.server.common.{ApiMessageAndVersion, MetadataVersion}
+import org.apache.kafka.server.common.{ApiMessageAndVersion, MetadataVersion, TransactionVersion}
 import org.apache.kafka.common.metadata.FeatureLevelRecord
 import org.apache.kafka.common.metadata.UserScramCredentialRecord
 import org.apache.kafka.common.security.scram.internals.ScramMechanism
@@ -85,7 +85,10 @@ object StorageTool extends Logging {
               metadataRecords.append(new ApiMessageAndVersion(record, 0.toShort))
             }
           })
-          val bootstrapMetadata = buildBootstrapMetadata(metadataVersion, Some(metadataRecords), "format command")
+          // Add transactionalVersion to metadata records
+          val transactionVersion = getTransactionVersion(namespace,
+            Option(config.get.originals.get(KafkaConfig.InterBrokerProtocolVersionProp)).map(_.toString))
+          val bootstrapMetadata = buildBootstrapMetadata(metadataVersion, transactionVersion, Some(metadataRecords), "format command")
           val ignoreFormatted = namespace.getBoolean("ignore_formatted")
           if (!configToSelfManagedMode(config.get)) {
             throw new TerseFailure("The kafka configuration file appears to be for " +
@@ -164,6 +167,20 @@ object StorageTool extends Logging {
 
     Option(namespace.getString("release_version"))
       .map(ver => MetadataVersion.fromVersionString(ver))
+      .getOrElse(defaultValue)
+  }
+
+  def getTransactionVersion(
+    namespace: Namespace,
+    defaultVersionString: Option[String]
+  ): TransactionVersion = {
+    val defaultValue = defaultVersionString match {
+      case Some(versionString) => TransactionVersion.fromVersionString(versionString)
+      case None => TransactionVersion.LATEST_PRODUCTION
+    }
+
+    Option(namespace.getString("release_version"))
+      .map(ver => TransactionVersion.fromVersionString(ver))
       .getOrElse(defaultValue)
   }
 
@@ -369,13 +386,18 @@ object StorageTool extends Logging {
   }
 
   def buildBootstrapMetadata(metadataVersion: MetadataVersion,
+                             transactionVersion: TransactionVersion,
                              metadataOptionalArguments: Option[ArrayBuffer[ApiMessageAndVersion]],
                              source: String): BootstrapMetadata = {
 
     val metadataRecords = new util.ArrayList[ApiMessageAndVersion]
     metadataRecords.add(new ApiMessageAndVersion(new FeatureLevelRecord().
                         setName(MetadataVersion.FEATURE_NAME).
-                        setFeatureLevel(metadataVersion.featureLevel()), 0.toShort));
+                        setFeatureLevel(metadataVersion.featureLevel()), 0.toShort))
+
+    metadataRecords.add(new ApiMessageAndVersion(new FeatureLevelRecord().
+      setName(TransactionVersion.FEATURE_NAME).
+      setFeatureLevel(transactionVersion.featureLevel()), 0.toShort))
 
     metadataOptionalArguments.foreach { metadataArguments =>
       for (record <- metadataArguments) metadataRecords.add(record)
@@ -409,9 +431,10 @@ object StorageTool extends Logging {
     directories: Seq[String],
     metaProperties: MetaProperties,
     metadataVersion: MetadataVersion,
+    transactionVersion: TransactionVersion,
     ignoreFormatted: Boolean
   ): Int = {
-    val bootstrapMetadata = buildBootstrapMetadata(metadataVersion, None, "format command")
+    val bootstrapMetadata = buildBootstrapMetadata(metadataVersion, transactionVersion, None, "format command")
     formatCommand(stream, directories, metaProperties, bootstrapMetadata, metadataVersion, ignoreFormatted)
   }
 

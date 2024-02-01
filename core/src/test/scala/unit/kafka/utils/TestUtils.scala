@@ -73,7 +73,7 @@ import org.apache.kafka.controller.QuorumController
 import org.apache.kafka.metadata.properties.MetaProperties
 import org.apache.kafka.server.ControllerRequestCompletionHandler
 import org.apache.kafka.server.authorizer.{AuthorizableRequestContext, Authorizer => JAuthorizer}
-import org.apache.kafka.server.common.{ApiMessageAndVersion, MetadataVersion}
+import org.apache.kafka.server.common.{ApiMessageAndVersion, MetadataVersion, TransactionVersion}
 import org.apache.kafka.server.config.Defaults
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.apache.kafka.server.util.MockTime
@@ -1419,13 +1419,14 @@ object TestUtils extends Logging {
     directories: immutable.Seq[String],
     metaProperties: MetaProperties,
     metadataVersion: MetadataVersion,
+    transactionVersion: TransactionVersion,
     optionalMetadataRecords: Option[ArrayBuffer[ApiMessageAndVersion]]
   ): Unit = {
     val stream = new ByteArrayOutputStream()
     var out: PrintStream = null
     try {
       out = new PrintStream(stream)
-      val bootstrapMetadata = StorageTool.buildBootstrapMetadata(metadataVersion, optionalMetadataRecords, "format command")
+      val bootstrapMetadata = StorageTool.buildBootstrapMetadata(metadataVersion, transactionVersion, optionalMetadataRecords, "format command")
       if (StorageTool.formatCommand(out, directories, metaProperties, bootstrapMetadata, metadataVersion, ignoreFormatted = false) != 0) {
         throw new RuntimeException(stream.toString())
       }

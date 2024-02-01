@@ -54,6 +54,10 @@ public final class Features {
         return version;
     }
 
+    public TransactionVersion transactionVersion() {
+        return TransactionVersion.fromFeatureLevel(finalizedFeatures.getOrDefault(TransactionVersion.FEATURE_NAME, (short) 0));
+    }
+
     public Map<String, Short> finalizedFeatures() {
         return finalizedFeatures;
     }

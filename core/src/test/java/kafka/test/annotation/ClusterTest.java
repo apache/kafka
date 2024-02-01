@@ -19,6 +19,7 @@ package kafka.test.annotation;
 
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.server.common.MetadataVersion;
+import org.apache.kafka.server.common.TransactionVersion;
 import org.junit.jupiter.api.TestTemplate;
 
 import java.lang.annotation.Documented;
@@ -42,5 +43,6 @@ public @interface ClusterTest {
     SecurityProtocol securityProtocol() default SecurityProtocol.PLAINTEXT;
     String listener() default "";
     MetadataVersion metadataVersion() default MetadataVersion.IBP_3_8_IV0;
+    TransactionVersion transactionVersion() default TransactionVersion.TV_2;
     ClusterConfigProperty[] serverProperties() default {};
 }

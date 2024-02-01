@@ -36,7 +36,7 @@ import org.apache.kafka.common.metadata.FeatureLevelRecord
 import org.apache.kafka.metadata.properties.MetaPropertiesEnsemble.VerificationFlag.{REQUIRE_AT_LEAST_ONE_VALID, REQUIRE_METADATA_LOG_DIR}
 import org.apache.kafka.metadata.properties.{MetaProperties, MetaPropertiesEnsemble, MetaPropertiesVersion}
 import org.apache.kafka.raft.RaftConfig.{AddressSpec, InetAddressSpec}
-import org.apache.kafka.server.common.{ApiMessageAndVersion, MetadataVersion}
+import org.apache.kafka.server.common.{ApiMessageAndVersion, MetadataVersion, TransactionVersion}
 import org.apache.kafka.server.fault.{FaultHandler, MockFaultHandler}
 import org.apache.zookeeper.client.ZKClientConfig
 import org.apache.zookeeper.{WatchedEvent, Watcher, ZooKeeper}
@@ -176,6 +176,8 @@ abstract class QuorumTestHarness extends Logging {
   }
 
   protected def metadataVersion: MetadataVersion = MetadataVersion.latestTesting()
+
+  protected def transactionVersion: TransactionVersion = TransactionVersion.latestTesting()
 
   private var testInfo: TestInfo = _
   private var implementation: QuorumImplementation = _
@@ -328,7 +330,7 @@ abstract class QuorumTestHarness extends Logging {
       setClusterId(Uuid.randomUuid().toString).
       setNodeId(nodeId).
       build()
-    TestUtils.formatDirectories(immutable.Seq(metadataDir.getAbsolutePath), metaProperties, metadataVersion, optionalMetadataRecords)
+    TestUtils.formatDirectories(immutable.Seq(metadataDir.getAbsolutePath), metaProperties, metadataVersion, transactionVersion, optionalMetadataRecords)
 
     val metadataRecords = new util.ArrayList[ApiMessageAndVersion]
     metadataRecords.add(new ApiMessageAndVersion(new FeatureLevelRecord().

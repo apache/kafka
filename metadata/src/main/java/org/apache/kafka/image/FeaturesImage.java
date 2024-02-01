@@ -23,6 +23,7 @@ import org.apache.kafka.image.writer.ImageWriter;
 import org.apache.kafka.image.writer.ImageWriterOptions;
 import org.apache.kafka.metadata.migration.ZkMigrationState;
 import org.apache.kafka.server.common.MetadataVersion;
+import org.apache.kafka.server.common.TransactionVersion;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -70,6 +71,10 @@ public final class FeaturesImage {
 
     public MetadataVersion metadataVersion() {
         return metadataVersion;
+    }
+
+    public TransactionVersion transactionVersion() {
+        return TransactionVersion.fromFeatureLevel(finalizedVersions.getOrDefault(TransactionVersion.FEATURE_NAME, (short) 0));
     }
 
     public Map<String, Short> finalizedVersions() {

@@ -28,7 +28,7 @@ import kafka.utils.Exit
 import kafka.utils.TestUtils
 import org.apache.commons.io.output.NullOutputStream
 import org.apache.kafka.common.utils.Utils
-import org.apache.kafka.server.common.MetadataVersion
+import org.apache.kafka.server.common.{MetadataVersion, TransactionVersion}
 import org.apache.kafka.common.metadata.UserScramCredentialRecord
 import org.apache.kafka.metadata.properties.{MetaProperties, MetaPropertiesEnsemble, MetaPropertiesVersion, PropertiesUtils}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertThrows, assertTrue}
@@ -173,7 +173,7 @@ Found problem:
         setNodeId(2).
         build()
       val stream = new ByteArrayOutputStream()
-      val bootstrapMetadata = StorageTool.buildBootstrapMetadata(MetadataVersion.latestTesting(), None, "test format command")
+      val bootstrapMetadata = StorageTool.buildBootstrapMetadata(MetadataVersion.latestTesting(), TransactionVersion.latestTesting(), None, "test format command")
       assertEquals(0, StorageTool.
         formatCommand(new PrintStream(stream), Seq(tempDir.toString), metaProperties, bootstrapMetadata, MetadataVersion.latestTesting(), ignoreFormatted = false))
       assertTrue(stream.toString().startsWith("Formatting %s".format(tempDir)))
@@ -379,7 +379,7 @@ Found problem:
         setNodeId(2).
         build()
       val bootstrapMetadata = StorageTool.
-        buildBootstrapMetadata(MetadataVersion.latestTesting(), None, "test format command")
+        buildBootstrapMetadata(MetadataVersion.latestTesting(), TransactionVersion.latestTesting(), None, "test format command")
       assertEquals(0, StorageTool.
         formatCommand(new PrintStream(NullOutputStream.NULL_OUTPUT_STREAM), Seq(tempDir.toString), metaProperties, bootstrapMetadata, MetadataVersion.latestTesting(), ignoreFormatted = false))
 
