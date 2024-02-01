@@ -36,7 +36,7 @@ import org.apache.kafka.common.message.IncrementalAlterConfigsResponseData.{Alte
 import org.apache.kafka.common.protocol.Errors.{INVALID_REQUEST, UNKNOWN_SERVER_ERROR}
 import org.apache.kafka.common.requests.ApiError
 import org.apache.kafka.common.resource.{Resource, ResourceType}
-import org.slf4j.LoggerFactory
+import org.slf4j.{Logger, LoggerFactory}
 
 import scala.collection.{Map, Seq}
 import scala.jdk.CollectionConverters._
@@ -74,10 +74,10 @@ import scala.jdk.CollectionConverters._
  * forwarding is not active, then both steps are done on the same broker.)
  *
  * In KRaft mode, the active controller performs its own configuration validation step in
- * {@link kafka.server.ControllerConfigurationValidator}. This is mainly important for
+ * [[kafka.server.ControllerConfigurationValidator]]. This is mainly important for
  * TOPIC resources, since we already validated changes to BROKER resources on the
  * forwarding broker. The KRaft controller is also responsible for enforcing the configured
- * {@link org.apache.kafka.server.policy.AlterConfigPolicy}.
+ * [[org.apache.kafka.server.policy.AlterConfigPolicy]].
  */
 class ConfigAdminManager(nodeId: Int,
                          conf: KafkaConfig,
@@ -130,7 +130,7 @@ class ConfigAdminManager(nodeId: Int,
               nullUpdates.add(config.name())
             }
           }
-          if (!nullUpdates.isEmpty()) {
+          if (!nullUpdates.isEmpty) {
             throw new InvalidRequestException("Null value not supported for : " +
               String.join(", ", nullUpdates))
           }
@@ -154,18 +154,17 @@ class ConfigAdminManager(nodeId: Int,
               throw new InvalidRequestException(s"Unknown resource type ${resource.resourceType().toInt}")
           }
         } catch {
-          case t: Throwable => {
+          case t: Throwable =>
             val err = ApiError.fromThrowable(t)
-            info(s"Error preprocessing incrementalAlterConfigs request on ${configResource}", t)
+            info(s"Error preprocessing incrementalAlterConfigs request on $configResource", t)
             results.put(resource, err)
-          }
         }
       }
     })
     results
   }
 
-  def validateBrokerConfigChange(
+  private def validateBrokerConfigChange(
     resource: IAlterConfigsResource,
     configResource: ConfigResource
   ): Unit = {
@@ -173,7 +172,7 @@ class ConfigAdminManager(nodeId: Int,
     val persistentProps = configRepository.config(configResource)
     val configProps = conf.dynamicConfig.fromPersistentProps(persistentProps, perBrokerConfig)
     val alterConfigOps = resource.configs().asScala.map {
-      case config =>
+      config =>
         val opType = AlterConfigOp.OpType.forId(config.configOperation())
         if (opType == null) {
           throw new InvalidRequestException(s"Unknown operations type ${config.configOperation}")
@@ -184,12 +183,12 @@ class ConfigAdminManager(nodeId: Int,
     try {
       validateBrokerConfigChange(configProps, configResource)
     } catch {
-      case t: Throwable => error(s"validation of configProps ${configProps} for ${configResource} failed with exception", t)
+      case t: Throwable => error(s"validation of configProps $configProps for $configResource failed with exception", t)
         throw t
     }
   }
 
-  def validateBrokerConfigChange(
+  private def validateBrokerConfigChange(
     props: Properties,
     configResource: ConfigResource
   ): Unit = {
@@ -238,7 +237,7 @@ class ConfigAdminManager(nodeId: Int,
               nullUpdates.add(config.name())
             }
           }
-          if (!nullUpdates.isEmpty()) {
+          if (!nullUpdates.isEmpty) {
             throw new InvalidRequestException("Null value not supported for : " +
               String.join(", ", nullUpdates))
           }
@@ -256,18 +255,17 @@ class ConfigAdminManager(nodeId: Int,
               throw new InvalidRequestException(s"Unknown resource type ${resource.resourceType().toInt}")
           }
         } catch {
-          case t: Throwable => {
+          case t: Throwable =>
             val err = ApiError.fromThrowable(t)
-            info(s"Error preprocessing alterConfigs request on ${configResource}: ${err}")
+            info(s"Error preprocessing alterConfigs request on $configResource: $err")
             results.put(resource, err)
-          }
         }
       }
     })
     results
   }
 
-  def validateBrokerConfigChange(
+  private def validateBrokerConfigChange(
     resource: LAlterConfigsResource,
     configResource: ConfigResource
   ): Unit = {
@@ -284,13 +282,13 @@ class ConfigAdminManager(nodeId: Int,
         throw new InvalidRequestException(s"Node id must be an integer, but it is: $name")
     }
     if (id != nodeId) {
-      throw new InvalidRequestException(s"Unexpected broker id, expected ${nodeId}, but received ${name}")
+      throw new InvalidRequestException(s"Unexpected broker id, expected $nodeId, but received $name")
     }
   }
 }
 
 object ConfigAdminManager {
-  val log = LoggerFactory.getLogger(classOf[ConfigAdminManager])
+  val log: Logger = LoggerFactory.getLogger(classOf[ConfigAdminManager])
 
   /**
    * Copy the incremental configs request data without any already-processed elements.
@@ -340,15 +338,13 @@ object ConfigAdminManager {
     persistentResponses: IncrementalAlterConfigsResponseData
   ): IncrementalAlterConfigsResponseData = {
     val response = new IncrementalAlterConfigsResponseData()
-    val responsesByResource = persistentResponses.responses().iterator().asScala.map {
-      case r => (r.resourceName(), r.resourceType()) -> new ApiError(r.errorCode(), r.errorMessage())
-    }.toMap
+    val responsesByResource = persistentResponses.responses().iterator().asScala.map(r => (r.resourceName(), r.resourceType()) -> new ApiError(r.errorCode(), r.errorMessage())).toMap
     original.resources().forEach(r => {
       val err = Option(preprocessingResponses.get(r)) match {
         case None =>
           responsesByResource.get((r.resourceName(), r.resourceType())) match {
             case None => log.error("The controller returned fewer results than we " +
-              s"expected. No response found for ${r}.")
+              s"expected. No response found for $r.")
               new ApiError(UNKNOWN_SERVER_ERROR)
             case Some(err) => err
           }
@@ -369,15 +365,13 @@ object ConfigAdminManager {
     persistentResponses: AlterConfigsResponseData
   ): AlterConfigsResponseData = {
     val response = new AlterConfigsResponseData()
-    val responsesByResource = persistentResponses.responses().iterator().asScala.map {
-      case r => (r.resourceName(), r.resourceType()) -> new ApiError(r.errorCode(), r.errorMessage())
-    }.toMap
+    val responsesByResource = persistentResponses.responses().iterator().asScala.map(r => (r.resourceName(), r.resourceType()) -> new ApiError(r.errorCode(), r.errorMessage())).toMap
     original.resources().forEach(r => {
       val err = Option(preprocessingResponses.get(r)) match {
         case None =>
           responsesByResource.get((r.resourceName(), r.resourceType())) match {
             case None => log.error("The controller returned fewer results than we " +
-              s"expected. No response found for ${r}.")
+              s"expected. No response found for $r.")
               new ApiError(UNKNOWN_SERVER_ERROR)
             case Some(err) => err
           }
@@ -396,7 +390,7 @@ object ConfigAdminManager {
     iterable: Iterable[T]
   ): Boolean = {
     val previous = new util.HashSet[T]()
-    !iterable.forall(previous.add(_))
+    !iterable.forall(previous.add)
   }
 
   /**
@@ -439,7 +433,7 @@ object ConfigAdminManager {
       alterConfigOp.opType() match {
         case OpType.SET => configProps.setProperty(alterConfigOp.configEntry.name, alterConfigOp.configEntry.value)
         case OpType.DELETE => configProps.remove(alterConfigOp.configEntry.name)
-        case OpType.APPEND => {
+        case OpType.APPEND =>
           if (!listType(alterConfigOp.configEntry.name, configKeys))
             throw new InvalidConfigurationException(s"Config value append is not allowed for config key: ${alterConfigOp.configEntry.name}")
           val oldValueList = Option(configProps.getProperty(alterConfigOp.configEntry.name))
@@ -450,8 +444,7 @@ object ConfigAdminManager {
           val appendingValueList = alterConfigOp.configEntry.value.split(",").toList.filter(value => !oldValueList.contains(value))
           val newValueList = oldValueList ::: appendingValueList
           configProps.setProperty(alterConfigOp.configEntry.name, newValueList.mkString(","))
-        }
-        case OpType.SUBTRACT => {
+        case OpType.SUBTRACT =>
           if (!listType(alterConfigOp.configEntry.name, configKeys))
             throw new InvalidConfigurationException(s"Config value subtract is not allowed for config key: ${alterConfigOp.configEntry.name}")
           val oldValueList = Option(configProps.getProperty(alterConfigOp.configEntry.name))
@@ -460,7 +453,6 @@ object ConfigAdminManager {
             .split(",").toList
           val newValueList = oldValueList.diff(alterConfigOp.configEntry.value.split(",").toList)
           configProps.setProperty(alterConfigOp.configEntry.name, newValueList.mkString(","))
-        }
       }
     }
   }
