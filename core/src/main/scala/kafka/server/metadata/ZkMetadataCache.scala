@@ -69,7 +69,7 @@ object ZkMetadataCache {
     currentMetadata: MetadataSnapshot,
     requestControllerEpoch: Int,
     requestTopicStates: util.List[UpdateMetadataTopicState],
-    handleLogMessage: String => (),
+    handleLogMessage: String => Unit,
   ): util.List[UpdateMetadataTopicState] = {
     val topicIdToNewState = new util.HashMap[Uuid, UpdateMetadataTopicState]()
     requestTopicStates.forEach(state => topicIdToNewState.put(state.topicId(), state))
