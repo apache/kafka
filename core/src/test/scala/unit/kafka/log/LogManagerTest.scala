@@ -1280,8 +1280,17 @@ object LogManagerTest {
   }
 
   def createLeaderAndIsrRequestForStrayDetection(
-    partitions: Iterable[TopicIdPartition]
+    partitions: Iterable[TopicIdPartition],
+    leaders: Iterable[Int] = Seq(),
   ): LeaderAndIsrRequest = {
+    val nextLeaderIter = leaders.iterator
+    def nextLeader(): Int = {
+      if (nextLeaderIter.hasNext) {
+        nextLeaderIter.next()
+      } else {
+        3
+      }
+    }
     val data = new LeaderAndIsrRequestData().
       setControllerId(1000).
       setIsKRaftController(true).
@@ -1296,7 +1305,7 @@ object LogManagerTest {
         setTopicName(partition.topic()).
         setPartitionIndex(partition.partition()).
         setControllerEpoch(123).
-        setLeader(3).
+        setLeader(nextLeader()).
         setLeaderEpoch(456).
         setIsr(java.util.Arrays.asList(3, 4, 5)).
         setReplicas(java.util.Arrays.asList(3, 4, 5)).

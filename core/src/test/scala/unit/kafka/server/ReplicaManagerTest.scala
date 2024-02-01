@@ -6370,6 +6370,102 @@ class ReplicaManagerTest {
       replicaManager.shutdown(checkpointHW = false)
     }
   }
+
+  val foo0 = new TopicIdPartition(Uuid.fromString("Sl08ZXU2QW6uF5hIoSzc8w"), new TopicPartition("foo", 0))
+  val foo1 = new TopicIdPartition(Uuid.fromString("Sl08ZXU2QW6uF5hIoSzc8w"), new TopicPartition("foo", 1))
+  val newFoo0 = new TopicIdPartition(Uuid.fromString("JRCmVxWxQamFs4S8NXYufg"), new TopicPartition("foo", 0))
+  val bar0 = new TopicIdPartition(Uuid.fromString("69O438ZkTSeqqclTtZO2KA"), new TopicPartition("bar", 0))
+
+  def setupReplicaManagerForKRaftMigrationTest(): ReplicaManager = {
+    setupReplicaManagerWithMockedPurgatories(
+      brokerId = 3,
+      timer = new MockTimer(time),
+      aliveBrokerIds = Seq(0, 1, 2),
+      propsModifier = props => {
+        props.setProperty(KafkaConfig.MigrationEnabledProp, "true")
+        props.setProperty(KafkaConfig.QuorumVotersProp, "1000@localhost:9093")
+        props.setProperty(KafkaConfig.ControllerListenerNamesProp, "CONTROLLER")
+        props.setProperty(KafkaConfig.ListenerSecurityProtocolMapProp, "CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT")
+      },
+      defaultTopicRemoteLogStorageEnable = false)
+  }
+
+  def verifyPartitionIsOnlineAndHasId(
+    replicaManager: ReplicaManager,
+    topicIdPartition: TopicIdPartition
+  ): Unit = {
+    val partition = replicaManager.getPartition(topicIdPartition.topicPartition())
+    assertTrue(partition.isInstanceOf[HostedPartition.Online],
+      s"Expected ${topicIdPartition} to be in state: HostedPartition.Online. But was in state: ${partition}")
+    val hostedPartition = partition.asInstanceOf[HostedPartition.Online]
+    assertTrue(hostedPartition.partition.log.isDefined,
+      s"Expected ${topicIdPartition} to have a log set in ReplicaManager, but it did not.")
+    assertTrue(hostedPartition.partition.log.get.topicId.isDefined,
+      s"Expected the log for ${topicIdPartition} to topic ID set in LogManager, but it did not.")
+    assertEquals(topicIdPartition.topicId(), hostedPartition.partition.log.get.topicId.get)
+    assertEquals(topicIdPartition.topicPartition(), hostedPartition.partition.topicPartition)
+  }
+
+  def verifyPartitionIsOffline(
+    replicaManager: ReplicaManager,
+    topicIdPartition: TopicIdPartition
+  ): Unit = {
+    val partition = replicaManager.getPartition(topicIdPartition.topicPartition())
+    assertEquals(HostedPartition.None, partition, s"Expected ${topicIdPartition} to be offline, but it was: ${partition}")
+  }
+
+  @Test
+  def testFullLairDuringKRaftMigration(): Unit = {
+    val replicaManager = setupReplicaManagerForKRaftMigrationTest()
+    try {
+      val becomeLeaderRequest = LogManagerTest.createLeaderAndIsrRequestForStrayDetection(
+        Seq(foo0, foo1, bar0), Seq(3, 4, 3))
+      replicaManager.becomeLeaderOrFollower(1, becomeLeaderRequest, (_, _) => ())
+      verifyPartitionIsOnlineAndHasId(replicaManager, foo0)
+      verifyPartitionIsOnlineAndHasId(replicaManager, foo1)
+      verifyPartitionIsOnlineAndHasId(replicaManager, bar0)
+    } finally {
+      replicaManager.shutdown(checkpointHW = false)
+    }
+  }
+
+  @Test
+  def testFullLairDuringKRaftMigrationRemovesOld(): Unit = {
+    val replicaManager = setupReplicaManagerForKRaftMigrationTest()
+    try {
+      val becomeLeaderRequest1 = LogManagerTest.createLeaderAndIsrRequestForStrayDetection(
+        Seq(foo0, foo1, bar0), Seq(3, 4, 3))
+      replicaManager.becomeLeaderOrFollower(1, becomeLeaderRequest1, (_, _) => ())
+      val becomeLeaderRequest2 = LogManagerTest.createLeaderAndIsrRequestForStrayDetection(
+        Seq(bar0), Seq(3, 4, 3))
+      replicaManager.becomeLeaderOrFollower(2, becomeLeaderRequest2, (_, _) => ())
+
+      verifyPartitionIsOffline(replicaManager, foo0)
+      verifyPartitionIsOffline(replicaManager, foo1)
+      verifyPartitionIsOnlineAndHasId(replicaManager, bar0)
+    } finally {
+      replicaManager.shutdown(checkpointHW = false)
+    }
+  }
+
+  @Test
+  def testFullLairDuringKRaftMigrationWithTopicRecreations(): Unit = {
+    val replicaManager = setupReplicaManagerForKRaftMigrationTest()
+    try {
+      val becomeLeaderRequest1 = LogManagerTest.createLeaderAndIsrRequestForStrayDetection(
+        Seq(foo0, foo1, bar0), Seq(3, 4, 3))
+      replicaManager.becomeLeaderOrFollower(1, becomeLeaderRequest1, (_, _) => ())
+      val becomeLeaderRequest2 = LogManagerTest.createLeaderAndIsrRequestForStrayDetection(
+        Seq(newFoo0, bar0), Seq(3, 4, 3))
+      replicaManager.becomeLeaderOrFollower(2, becomeLeaderRequest2, (_, _) => ())
+
+      verifyPartitionIsOnlineAndHasId(replicaManager, newFoo0)
+      verifyPartitionIsOffline(replicaManager, foo1)
+      verifyPartitionIsOnlineAndHasId(replicaManager, bar0)
+    } finally {
+      replicaManager.shutdown(checkpointHW = false)
+    }
+  }
 }
 
 class MockReplicaSelector extends ReplicaSelector {
