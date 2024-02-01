@@ -249,6 +249,8 @@ public class ConsumerGroupCommand {
                     break;
                 case "PreparingRebalance":
                 case "CompletingRebalance":
+                case "Assigning":
+                case "Reconciling":
                     System.err.println("\nWarning: Consumer group '" + group + "' is rebalancing.");
                     break;
                 case "Stable":

@@ -16,10 +16,13 @@
  */
 package org.apache.kafka.tools.consumer.group;
 
+import kafka.api.BaseConsumerTest;
 import kafka.server.KafkaConfig;
 import kafka.utils.TestUtils;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.consumer.Consumer;
+import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.consumer.GroupProtocol;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.consumer.RangeAssignor;
 import org.apache.kafka.common.TopicPartition;
@@ -29,6 +32,7 @@ import org.apache.kafka.tools.consumer.group.ConsumerGroupCommand.ConsumerGroupS
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.TestInfo;
+import org.junit.jupiter.params.provider.Arguments;
 import scala.collection.JavaConverters;
 import scala.collection.Seq;
 
@@ -38,6 +42,7 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
@@ -47,6 +52,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
+import java.util.stream.Stream;
 
 public class ConsumerGroupCommandTest extends kafka.integration.KafkaServerTestHarness {
     public static final String TOPIC = "foo";
@@ -79,6 +85,10 @@ public class ConsumerGroupCommandTest extends kafka.integration.KafkaServerTestH
             0,
             false
         ).foreach(props -> {
+            if (isNewGroupCoordinatorEnabled()) {
+                props.setProperty(KafkaConfig.NewGroupCoordinatorEnableProp(), "true");
+            }
+
             cfgs.add(KafkaConfig.fromProps(props));
             return null;
         });
@@ -132,17 +142,29 @@ public class ConsumerGroupCommandTest extends kafka.integration.KafkaServerTestH
     }
 
     ConsumerGroupExecutor addConsumerGroupExecutor(int numConsumers) {
-        return addConsumerGroupExecutor(numConsumers, TOPIC, GROUP, RangeAssignor.class.getName(), Optional.empty(), false);
+        return addConsumerGroupExecutor(numConsumers, TOPIC, GROUP, RangeAssignor.class.getName(), Optional.empty(), Optional.empty(), false, GroupProtocol.CLASSIC.name);
+    }
+
+    ConsumerGroupExecutor addConsumerGroupExecutor(int numConsumers, String groupProtocol) {
+        return addConsumerGroupExecutor(numConsumers, TOPIC, GROUP, RangeAssignor.class.getName(), Optional.empty(), Optional.empty(), false, groupProtocol);
+    }
+
+    ConsumerGroupExecutor addConsumerGroupExecutor(int numConsumers, String groupProtocol, Optional<String> remoteAssignor) {
+        return addConsumerGroupExecutor(numConsumers, TOPIC, GROUP, RangeAssignor.class.getName(), remoteAssignor, Optional.empty(), false, groupProtocol);
     }
 
     ConsumerGroupExecutor addConsumerGroupExecutor(int numConsumers, String topic, String group) {
-        return addConsumerGroupExecutor(numConsumers, topic, group, RangeAssignor.class.getName(), Optional.empty(), false);
+        return addConsumerGroupExecutor(numConsumers, topic, group, RangeAssignor.class.getName(), Optional.empty(), Optional.empty(), false, GroupProtocol.CLASSIC.name);
     }
 
-    ConsumerGroupExecutor addConsumerGroupExecutor(int numConsumers, String topic, String group, String strategy,
-                                                   Optional<Properties> customPropsOpt, boolean syncCommit) {
-        ConsumerGroupExecutor executor = new ConsumerGroupExecutor(bootstrapServers(listenerName()), numConsumers, group,
-            topic, strategy, customPropsOpt, syncCommit);
+    ConsumerGroupExecutor addConsumerGroupExecutor(int numConsumers, String topic, String group, String groupProtocol) {
+        return addConsumerGroupExecutor(numConsumers, topic, group, RangeAssignor.class.getName(), Optional.empty(), Optional.empty(), false, groupProtocol);
+    }
+
+    ConsumerGroupExecutor addConsumerGroupExecutor(int numConsumers, String topic, String group, String strategy, Optional<String> remoteAssignor,
+                                                   Optional<Properties> customPropsOpt, boolean syncCommit, String groupProtocol) {
+        ConsumerGroupExecutor executor = new ConsumerGroupExecutor(bootstrapServers(listenerName()), numConsumers, group, groupProtocol,
+            topic, strategy, remoteAssignor, customPropsOpt, syncCommit);
         addExecutor(executor);
         return executor;
     }
@@ -220,20 +242,29 @@ public class ConsumerGroupCommandTest extends kafka.integration.KafkaServerTestH
 
     class ConsumerRunnable extends AbstractConsumerRunnable {
         final String topic;
+        final String groupProtocol;
         final String strategy;
+        final Optional<String> remoteAssignor;
 
-        public ConsumerRunnable(String broker, String groupId, String topic, String strategy,
-                                Optional<Properties> customPropsOpt, boolean syncCommit) {
+        public ConsumerRunnable(String broker, String groupId, String groupProtocol, String topic, String strategy,
+                                Optional<String> remoteAssignor, Optional<Properties> customPropsOpt, boolean syncCommit) {
             super(broker, groupId, customPropsOpt, syncCommit);
 
             this.topic = topic;
+            this.groupProtocol = groupProtocol;
             this.strategy = strategy;
+            this.remoteAssignor = remoteAssignor;
         }
 
         @Override
         void configure(Properties props) {
             super.configure(props);
-            props.put("partition.assignment.strategy", strategy);
+            props.put(ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol);
+            if (groupProtocol.toUpperCase(Locale.ROOT).equals(GroupProtocol.CONSUMER.toString())) {
+                remoteAssignor.ifPresent(assignor -> props.put(ConsumerConfig.GROUP_REMOTE_ASSIGNOR_CONFIG, assignor));
+            } else {
+                props.put("partition.assignment.strategy", strategy);
+            }
         }
 
         @Override
@@ -284,11 +315,11 @@ public class ConsumerGroupCommandTest extends kafka.integration.KafkaServerTestH
     }
 
     class ConsumerGroupExecutor extends AbstractConsumerGroupExecutor {
-        public ConsumerGroupExecutor(String broker, int numConsumers, String groupId, String topic, String strategy,
-                                     Optional<Properties> customPropsOpt, boolean syncCommit) {
+        public ConsumerGroupExecutor(String broker, int numConsumers, String groupId, String groupProtocol, String topic, String strategy,
+                                     Optional<String> remoteAssignor, Optional<Properties> customPropsOpt, boolean syncCommit) {
             super(numConsumers);
             IntStream.rangeClosed(1, numConsumers).forEach(i -> {
-                ConsumerRunnable th = new ConsumerRunnable(broker, groupId, topic, strategy, customPropsOpt, syncCommit);
+                ConsumerRunnable th = new ConsumerRunnable(broker, groupId, groupProtocol, topic, strategy, remoteAssignor, customPropsOpt, syncCommit);
                 th.configure();
                 submit(th);
             });
@@ -303,6 +334,11 @@ public class ConsumerGroupCommandTest extends kafka.integration.KafkaServerTestH
             th.configure();
             submit(th);
         }
+    }
+
+
+    public static Stream<Arguments> getTestQuorumAndGroupProtocolParametersAll() {
+        return BaseConsumerTest.getTestQuorumAndGroupProtocolParametersAll();
     }
 
     @SuppressWarnings({"deprecation"})

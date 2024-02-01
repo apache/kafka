@@ -46,6 +46,8 @@ public class ToolsTestUtils {
     /** @see TestInfoUtils#TestWithParameterizedQuorumName()  */
     public static final String TEST_WITH_PARAMETERIZED_QUORUM_NAME = "{displayName}.{argumentsWithNames}";
 
+    public static final String TEST_WITH_PARAMETERIZED_QUORUM_AND_GROUP_PROTOCOL_NAMES = "{displayName}.quorum={0}.groupProtocol={1}";
+
     private static int randomPort = 0;
 
     public static String captureStandardOut(Runnable runnable) {

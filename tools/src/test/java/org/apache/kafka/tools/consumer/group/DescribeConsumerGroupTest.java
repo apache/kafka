@@ -26,7 +26,9 @@ import org.apache.kafka.test.TestUtils;
 import org.apache.kafka.tools.ToolsTestUtils;
 import org.apache.kafka.tools.Tuple2;
 import org.apache.kafka.tools.consumer.group.ConsumerGroupCommand.ConsumerGroupService;
-import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -44,6 +46,8 @@ import java.util.stream.Collectors;
 
 import static org.apache.kafka.test.TestUtils.DEFAULT_MAX_WAIT_MS;
 import static org.apache.kafka.test.TestUtils.RANDOM;
+import static org.apache.kafka.tools.ToolsTestUtils.TEST_WITH_PARAMETERIZED_QUORUM_AND_GROUP_PROTOCOL_NAMES;
+import static org.apache.kafka.tools.ToolsTestUtils.TEST_WITH_PARAMETERIZED_QUORUM_NAME;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -65,9 +69,10 @@ public class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
         DESCRIBE_TYPES = describeTypes.toArray(new String[0][0]);
     }
 
-    @Test
-    public void testDescribeNonExistingGroup() {
-        kafka.utils.TestUtils.createOffsetsTopic(zkClient(), servers());
+    @ParameterizedTest(name = TEST_WITH_PARAMETERIZED_QUORUM_AND_GROUP_PROTOCOL_NAMES)
+    @MethodSource({"getTestQuorumAndGroupProtocolParametersAll"})
+    public void testDescribeNonExistingGroup(String quorum, String groupProtocol) {
+        createOffsetsTopic(listenerName(), new Properties());
         String missingGroup = "missing.group";
 
         for (String[] describeType : DESCRIBE_TYPES) {
@@ -82,8 +87,9 @@ public class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
         }
     }
 
-    @Test
-    public void testDescribeWithMultipleSubActions() {
+    @ParameterizedTest(name = TEST_WITH_PARAMETERIZED_QUORUM_NAME)
+    @ValueSource(strings = {"zk", "kraft"})
+    public void testDescribeWithMultipleSubActions(String quorum) {
         AtomicInteger exitStatus = new AtomicInteger(0);
         AtomicReference<String> exitMessage = new AtomicReference<>("");
         Exit.setExitProcedure((status, err) -> {
@@ -103,8 +109,9 @@ public class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
         assertTrue(exitMessage.get().contains("Option [describe] takes at most one of these options"));
     }
 
-    @Test
-    public void testDescribeWithStateValue() {
+    @ParameterizedTest(name = TEST_WITH_PARAMETERIZED_QUORUM_NAME)
+    @ValueSource(strings = {"zk", "kraft"})
+    public void testDescribeWithStateValue(String quorum) {
         AtomicInteger exitStatus = new AtomicInteger(0);
         AtomicReference<String> exitMessage = new AtomicReference<>("");
         Exit.setExitProcedure((status, err) -> {
@@ -124,13 +131,14 @@ public class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
         assertTrue(exitMessage.get().contains("Option [describe] does not take a value for [state]"));
     }
 
-    @Test
-    public void testDescribeOffsetsOfNonExistingGroup() throws Exception {
+    @ParameterizedTest(name = TEST_WITH_PARAMETERIZED_QUORUM_AND_GROUP_PROTOCOL_NAMES)
+    @MethodSource({"getTestQuorumAndGroupProtocolParametersAll"})
+    public void testDescribeOffsetsOfNonExistingGroup(String quorum, String groupProtocol) throws Exception {
         String group = "missing.group";
-        kafka.utils.TestUtils.createOffsetsTopic(zkClient(), servers());
+        createOffsetsTopic(listenerName(), new Properties());
 
         // run one consumer in the group consuming from a single-partition topic
-        addConsumerGroupExecutor(1);
+        addConsumerGroupExecutor(1, groupProtocol);
         // note the group to be queried is a different (non-existing) group
         String[] cgcArgs = new String[]{"--bootstrap-server", bootstrapServers(listenerName()), "--describe", "--group", group};
         ConsumerGroupService service = getConsumerGroupService(cgcArgs);
@@ -140,13 +148,14 @@ public class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
             "Expected the state to be 'Dead', with no members in the group '" + group + "'.");
     }
 
-    @Test
-    public void testDescribeMembersOfNonExistingGroup() throws Exception {
+    @ParameterizedTest(name = TEST_WITH_PARAMETERIZED_QUORUM_AND_GROUP_PROTOCOL_NAMES)
+    @MethodSource({"getTestQuorumAndGroupProtocolParametersAll"})
+    public void testDescribeMembersOfNonExistingGroup(String quorum, String groupProtocol) throws Exception {
         String group = "missing.group";
-        kafka.utils.TestUtils.createOffsetsTopic(zkClient(), servers());
+        createOffsetsTopic(listenerName(), new Properties());
 
         // run one consumer in the group consuming from a single-partition topic
-        addConsumerGroupExecutor(1);
+        addConsumerGroupExecutor(1, groupProtocol);
         // note the group to be queried is a different (non-existing) group
         String[] cgcArgs = new String[]{"--bootstrap-server", bootstrapServers(listenerName()), "--describe", "--group", group};
         ConsumerGroupService service = getConsumerGroupService(cgcArgs);
@@ -160,32 +169,34 @@ public class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
             "Expected the state to be 'Dead', with no members in the group '" + group + "' (verbose option).");
     }
 
-    @Test
-    public void testDescribeStateOfNonExistingGroup() throws Exception {
+    @ParameterizedTest(name = TEST_WITH_PARAMETERIZED_QUORUM_AND_GROUP_PROTOCOL_NAMES)
+    @MethodSource({"getTestQuorumAndGroupProtocolParametersAll"})
+    public void testDescribeStateOfNonExistingGroup(String quorum, String groupProtocol) throws Exception {
         String group = "missing.group";
-        kafka.utils.TestUtils.createOffsetsTopic(zkClient(), servers());
+        createOffsetsTopic(listenerName(), new Properties());
 
         // run one consumer in the group consuming from a single-partition topic
-        addConsumerGroupExecutor(1);
+        addConsumerGroupExecutor(1, groupProtocol);
         // note the group to be queried is a different (non-existing) group
         String[] cgcArgs = new String[]{"--bootstrap-server", bootstrapServers(listenerName()), "--describe", "--group", group};
         ConsumerGroupService service = getConsumerGroupService(cgcArgs);
 
         GroupState state = service.collectGroupState(group);
         assertTrue(Objects.equals(state.state, "Dead") && state.numMembers == 0 &&
-                state.coordinator != null && !servers().filter(s -> s.config().brokerId() == state.coordinator.id()).isEmpty(),
+                state.coordinator != null && !brokers().filter(s -> s.config().brokerId() == state.coordinator.id()).isEmpty(),
             "Expected the state to be 'Dead', with no members in the group '" + group + "'."
         );
     }
 
-    @Test
-    public void testDescribeExistingGroup() throws Exception {
-        kafka.utils.TestUtils.createOffsetsTopic(zkClient(), servers());
+    @ParameterizedTest(name = TEST_WITH_PARAMETERIZED_QUORUM_AND_GROUP_PROTOCOL_NAMES)
+    @MethodSource({"getTestQuorumAndGroupProtocolParametersAll"})
+    public void testDescribeExistingGroup(String quorum, String groupProtocol) throws Exception {
+        createOffsetsTopic(listenerName(), new Properties());
 
         for (String[] describeType : DESCRIBE_TYPES) {
             String group = GROUP + String.join("", describeType);
             // run one consumer in the group consuming from a single-partition topic
-            addConsumerGroupExecutor(1, TOPIC, group);
+            addConsumerGroupExecutor(1, TOPIC, group, groupProtocol);
             List<String> cgcArgs = new ArrayList<>(Arrays.asList("--bootstrap-server", bootstrapServers(listenerName()), "--describe", "--group", group));
             cgcArgs.addAll(Arrays.asList(describeType));
             ConsumerGroupService service = getConsumerGroupService(cgcArgs.toArray(new String[0]));
@@ -197,16 +208,17 @@ public class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
         }
     }
 
-    @Test
-    public void testDescribeExistingGroups() throws Exception {
-        kafka.utils.TestUtils.createOffsetsTopic(zkClient(), servers());
+    @ParameterizedTest(name = TEST_WITH_PARAMETERIZED_QUORUM_AND_GROUP_PROTOCOL_NAMES)
+    @MethodSource({"getTestQuorumAndGroupProtocolParametersAll"})
+    public void testDescribeExistingGroups(String quorum, String groupProtocol) throws Exception {
+        createOffsetsTopic(listenerName(), new Properties());
 
         // Create N single-threaded consumer groups from a single-partition topic
         List<String> groups = new ArrayList<>();
 
         for (String[] describeType : DESCRIBE_TYPES) {
             String group = GROUP + String.join("", describeType);
-            addConsumerGroupExecutor(1, TOPIC, group);
+            addConsumerGroupExecutor(1, TOPIC, group, groupProtocol);
             groups.addAll(Arrays.asList("--group", group));
         }
 
@@ -226,14 +238,15 @@ public class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
         }
     }
 
-    @Test
-    public void testDescribeAllExistingGroups() throws Exception {
-        kafka.utils.TestUtils.createOffsetsTopic(zkClient(), servers());
+    @ParameterizedTest(name = TEST_WITH_PARAMETERIZED_QUORUM_AND_GROUP_PROTOCOL_NAMES)
+    @MethodSource({"getTestQuorumAndGroupProtocolParametersAll"})
+    public void testDescribeAllExistingGroups(String quorum, String groupProtocol) throws Exception {
+        createOffsetsTopic(listenerName(), new Properties());
 
         // Create N single-threaded consumer groups from a single-partition topic
         for (String[] describeType : DESCRIBE_TYPES) {
             String group = GROUP + String.join("", describeType);
-            addConsumerGroupExecutor(1, TOPIC, group);
+            addConsumerGroupExecutor(1, TOPIC, group, groupProtocol);
         }
 
         int expectedNumLines = DESCRIBE_TYPES.length * 2;
@@ -251,12 +264,13 @@ public class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
         }
     }
 
-    @Test
-    public void testDescribeOffsetsOfExistingGroup() throws Exception {
-        kafka.utils.TestUtils.createOffsetsTopic(zkClient(), servers());
+    @ParameterizedTest(name = TEST_WITH_PARAMETERIZED_QUORUM_AND_GROUP_PROTOCOL_NAMES)
+    @MethodSource({"getTestQuorumAndGroupProtocolParametersAll"})
+    public void testDescribeOffsetsOfExistingGroup(String quorum, String groupProtocol) throws Exception {
+        createOffsetsTopic(listenerName(), new Properties());
 
         // run one consumer in the group consuming from a single-partition topic
-        addConsumerGroupExecutor(1);
+        addConsumerGroupExecutor(1, groupProtocol);
 
         String[] cgcArgs = new String[]{"--bootstrap-server", bootstrapServers(listenerName()), "--describe", "--group", GROUP};
         ConsumerGroupService service = getConsumerGroupService(cgcArgs);
@@ -277,12 +291,13 @@ public class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
         }, "Expected a 'Stable' group status, rows and valid values for consumer id / client id / host columns in describe results for group " + GROUP + ".");
     }
 
-    @Test
-    public void testDescribeMembersOfExistingGroup() throws Exception {
-        kafka.utils.TestUtils.createOffsetsTopic(zkClient(), servers());
+    @ParameterizedTest(name = TEST_WITH_PARAMETERIZED_QUORUM_AND_GROUP_PROTOCOL_NAMES)
+    @MethodSource({"getTestQuorumAndGroupProtocolParametersAll"})
+    public void testDescribeMembersOfExistingGroup(String quorum, String groupProtocol) throws Exception {
+        createOffsetsTopic(listenerName(), new Properties());
 
         // run one consumer in the group consuming from a single-partition topic
-        addConsumerGroupExecutor(1);
+        addConsumerGroupExecutor(1, groupProtocol);
         String[] cgcArgs = new String[]{"--bootstrap-server", bootstrapServers(listenerName()), "--describe", "--group", GROUP};
         ConsumerGroupService service = getConsumerGroupService(cgcArgs);
 
@@ -311,12 +326,18 @@ public class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
         }
     }
 
-    @Test
-    public void testDescribeStateOfExistingGroup() throws Exception {
-        kafka.utils.TestUtils.createOffsetsTopic(zkClient(), servers());
+    @ParameterizedTest(name = TEST_WITH_PARAMETERIZED_QUORUM_AND_GROUP_PROTOCOL_NAMES)
+    @MethodSource({"getTestQuorumAndGroupProtocolParametersAll"})
+    public void testDescribeStateOfExistingGroup(String quorum, String groupProtocol) throws Exception {
+        createOffsetsTopic(listenerName(), new Properties());
 
         // run one consumer in the group consuming from a single-partition topic
-        addConsumerGroupExecutor(1);
+        addConsumerGroupExecutor(
+            1,
+            groupProtocol,
+            // This is only effective when new protocol is used.
+            Optional.of("range")
+        );
         String[] cgcArgs = new String[]{"--bootstrap-server", bootstrapServers(listenerName()), "--describe", "--group", GROUP};
         ConsumerGroupService service = getConsumerGroupService(cgcArgs);
 
@@ -326,16 +347,24 @@ public class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
                 state.numMembers == 1 &&
                 Objects.equals(state.assignmentStrategy, "range") &&
                 state.coordinator != null &&
-                servers().count(s -> s.config().brokerId() == state.coordinator.id()) > 0;
+                brokers().count(s -> s.config().brokerId() == state.coordinator.id()) > 0;
         }, "Expected a 'Stable' group status, with one member and round robin assignment strategy for group " + GROUP + ".");
     }
 
-    @Test
-    public void testDescribeStateOfExistingGroupWithRoundRobinAssignor() throws Exception {
-        kafka.utils.TestUtils.createOffsetsTopic(zkClient(), servers());
+    @ParameterizedTest(name = TEST_WITH_PARAMETERIZED_QUORUM_AND_GROUP_PROTOCOL_NAMES)
+    @MethodSource({"getTestQuorumAndGroupProtocolParametersAll"})
+    public void testDescribeStateOfExistingGroupWithNonDefaultAssignor(String quorum, String groupProtocol) throws Exception {
+        createOffsetsTopic(listenerName(), new Properties());
 
         // run one consumer in the group consuming from a single-partition topic
-        addConsumerGroupExecutor(1, TOPIC, GROUP, RoundRobinAssignor.class.getName(), Optional.empty(), false);
+        String expectedName;
+        if (groupProtocol.equals("consumer")) {
+            addConsumerGroupExecutor(1, groupProtocol, Optional.of("range"));
+            expectedName = "range";
+        } else {
+            addConsumerGroupExecutor(1, TOPIC, GROUP, RoundRobinAssignor.class.getName(), Optional.empty(), Optional.empty(), false, groupProtocol);
+            expectedName = "roundrobin";
+        }
         String[] cgcArgs = new String[]{"--bootstrap-server", bootstrapServers(listenerName()), "--describe", "--group", GROUP};
         ConsumerGroupService service = getConsumerGroupService(cgcArgs);
 
@@ -343,20 +372,21 @@ public class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
             GroupState state = service.collectGroupState(GROUP);
             return Objects.equals(state.state, "Stable") &&
                 state.numMembers == 1 &&
-                Objects.equals(state.assignmentStrategy, "roundrobin") &&
+                Objects.equals(state.assignmentStrategy, expectedName) &&
                 state.coordinator != null &&
-                servers().count(s -> s.config().brokerId() == state.coordinator.id()) > 0;
-        }, "Expected a 'Stable' group status, with one member and round robin assignment strategy for group " + GROUP + ".");
+                brokers().count(s -> s.config().brokerId() == state.coordinator.id()) > 0;
+        }, "Expected a 'Stable' group status, with one member and " + expectedName + " assignment strategy for group " + GROUP + ".");
     }
 
-    @Test
-    public void testDescribeExistingGroupWithNoMembers() throws Exception {
-        kafka.utils.TestUtils.createOffsetsTopic(zkClient(), servers());
+    @ParameterizedTest(name = TEST_WITH_PARAMETERIZED_QUORUM_AND_GROUP_PROTOCOL_NAMES)
+    @MethodSource({"getTestQuorumAndGroupProtocolParametersAll"})
+    public void testDescribeExistingGroupWithNoMembers(String quorum, String groupProtocol) throws Exception {
+        createOffsetsTopic(listenerName(), new Properties());
 
         for (String[] describeType : DESCRIBE_TYPES) {
             String group = GROUP + String.join("", describeType);
             // run one consumer in the group consuming from a single-partition topic
-            ConsumerGroupExecutor executor = addConsumerGroupExecutor(1, TOPIC, group);
+            ConsumerGroupExecutor executor = addConsumerGroupExecutor(1, TOPIC, group, groupProtocol);
             List<String> cgcArgs = new ArrayList<>(Arrays.asList("--bootstrap-server", bootstrapServers(listenerName()), "--describe", "--group", group));
             cgcArgs.addAll(Arrays.asList(describeType));
             ConsumerGroupService service = getConsumerGroupService(cgcArgs.toArray(new String[0]));
@@ -374,12 +404,13 @@ public class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
         }
     }
 
-    @Test
-    public void testDescribeOffsetsOfExistingGroupWithNoMembers() throws Exception {
-        kafka.utils.TestUtils.createOffsetsTopic(zkClient(), servers());
+    @ParameterizedTest(name = TEST_WITH_PARAMETERIZED_QUORUM_AND_GROUP_PROTOCOL_NAMES)
+    @MethodSource({"getTestQuorumAndGroupProtocolParametersAll"})
+    public void testDescribeOffsetsOfExistingGroupWithNoMembers(String quorum, String groupProtocol) throws Exception {
+        createOffsetsTopic(listenerName(), new Properties());
 
         // run one consumer in the group consuming from a single-partition topic
-        ConsumerGroupExecutor executor = addConsumerGroupExecutor(1);
+        ConsumerGroupExecutor executor = addConsumerGroupExecutor(1, TOPIC, GROUP, RangeAssignor.class.getName(), Optional.empty(), Optional.empty(), true, groupProtocol);
 
         String[] cgcArgs = new String[]{"--bootstrap-server", bootstrapServers(listenerName()), "--describe", "--group", GROUP};
         ConsumerGroupService service = getConsumerGroupService(cgcArgs);
@@ -387,7 +418,7 @@ public class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
         TestUtils.waitForCondition(() -> {
             Tuple2<Optional<String>, Optional<Collection<PartitionAssignmentState>>> res = service.collectGroupOffsets(GROUP);
             return res.v1.map(s -> s.contains("Stable")).orElse(false)
-                && res.v2.map(c -> c.stream().anyMatch(state -> Objects.equals(state.group, GROUP))).orElse(false);
+                && res.v2.map(c -> c.stream().anyMatch(assignment -> Objects.equals(assignment.group, GROUP) && assignment.offset.isPresent())).orElse(false);
         }, "Expected the group to initially become stable, and to find group in assignments after initial offset commit.");
 
         // stop the consumer so the group has no active member anymore
@@ -420,12 +451,13 @@ public class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
         assertTrue(res.v2, "Expected no active member in describe group results, state: " + res.v1.v1 + ", assignments: " + res.v1.v2);
     }
 
-    @Test
-    public void testDescribeMembersOfExistingGroupWithNoMembers() throws Exception {
-        kafka.utils.TestUtils.createOffsetsTopic(zkClient(), servers());
+    @ParameterizedTest(name = TEST_WITH_PARAMETERIZED_QUORUM_AND_GROUP_PROTOCOL_NAMES)
+    @MethodSource({"getTestQuorumAndGroupProtocolParametersAll"})
+    public void testDescribeMembersOfExistingGroupWithNoMembers(String quorum, String groupProtocol) throws Exception {
+        createOffsetsTopic(listenerName(), new Properties());
 
         // run one consumer in the group consuming from a single-partition topic
-        ConsumerGroupExecutor executor = addConsumerGroupExecutor(1);
+        ConsumerGroupExecutor executor = addConsumerGroupExecutor(1, groupProtocol);
 
         String[] cgcArgs = new String[]{"--bootstrap-server", bootstrapServers(listenerName()), "--describe", "--group", GROUP};
         ConsumerGroupService service = getConsumerGroupService(cgcArgs);
@@ -445,12 +477,13 @@ public class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
         }, "Expected no member in describe group members results for group '" + GROUP + "'");
     }
 
-    @Test
-    public void testDescribeStateOfExistingGroupWithNoMembers() throws Exception {
-        kafka.utils.TestUtils.createOffsetsTopic(zkClient(), servers());
+    @ParameterizedTest(name = TEST_WITH_PARAMETERIZED_QUORUM_AND_GROUP_PROTOCOL_NAMES)
+    @MethodSource({"getTestQuorumAndGroupProtocolParametersAll"})
+    public void testDescribeStateOfExistingGroupWithNoMembers(String quorum, String groupProtocol) throws Exception {
+        createOffsetsTopic(listenerName(), new Properties());
 
         // run one consumer in the group consuming from a single-partition topic
-        ConsumerGroupExecutor executor = addConsumerGroupExecutor(1);
+        ConsumerGroupExecutor executor = addConsumerGroupExecutor(1, groupProtocol);
 
         String[] cgcArgs = new String[]{"--bootstrap-server", bootstrapServers(listenerName()), "--describe", "--group", GROUP};
         ConsumerGroupService service = getConsumerGroupService(cgcArgs);
@@ -460,7 +493,7 @@ public class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
             return Objects.equals(state.state, "Stable") &&
                 state.numMembers == 1 &&
                 state.coordinator != null &&
-                servers().count(s -> s.config().brokerId() == state.coordinator.id()) > 0;
+                brokers().count(s -> s.config().brokerId() == state.coordinator.id()) > 0;
         }, "Expected the group '" + GROUP + "' to initially become stable, and have a single member.");
 
         // stop the consumer so the group has no active member anymore
@@ -468,18 +501,19 @@ public class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
 
         TestUtils.waitForCondition(() -> {
             GroupState state = service.collectGroupState(GROUP);
-            return Objects.equals(state.state, "Empty") && state.numMembers == 0 && Objects.equals(state.assignmentStrategy, "");
+            return Objects.equals(state.state, "Empty") && state.numMembers == 0;
         }, "Expected the group '" + GROUP + "' to become empty after the only member leaving.");
     }
 
-    @Test
-    public void testDescribeWithConsumersWithoutAssignedPartitions() throws Exception {
-        kafka.utils.TestUtils.createOffsetsTopic(zkClient(), servers());
+    @ParameterizedTest(name = TEST_WITH_PARAMETERIZED_QUORUM_AND_GROUP_PROTOCOL_NAMES)
+    @MethodSource({"getTestQuorumAndGroupProtocolParametersAll"})
+    public void testDescribeWithConsumersWithoutAssignedPartitions(String quorum, String groupProtocol) throws Exception {
+        createOffsetsTopic(listenerName(), new Properties());
 
         for (String[] describeType : DESCRIBE_TYPES) {
             String group = GROUP + String.join("", describeType);
             // run two consumers in the group consuming from a single-partition topic
-            addConsumerGroupExecutor(2, TOPIC, group);
+            addConsumerGroupExecutor(2, TOPIC, group, groupProtocol);
             List<String> cgcArgs = new ArrayList<>(Arrays.asList("--bootstrap-server", bootstrapServers(listenerName()), "--describe", "--group", group));
             cgcArgs.addAll(Arrays.asList(describeType));
             ConsumerGroupService service = getConsumerGroupService(cgcArgs.toArray(new String[0]));
@@ -492,12 +526,13 @@ public class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
         }
     }
 
-    @Test
-    public void testDescribeOffsetsWithConsumersWithoutAssignedPartitions() throws Exception {
-        kafka.utils.TestUtils.createOffsetsTopic(zkClient(), servers());
+    @ParameterizedTest(name = TEST_WITH_PARAMETERIZED_QUORUM_AND_GROUP_PROTOCOL_NAMES)
+    @MethodSource({"getTestQuorumAndGroupProtocolParametersAll"})
+    public void testDescribeOffsetsWithConsumersWithoutAssignedPartitions(String quorum, String groupProtocol) throws Exception {
+        createOffsetsTopic(listenerName(), new Properties());
 
         // run two consumers in the group consuming from a single-partition topic
-        addConsumerGroupExecutor(2);
+        addConsumerGroupExecutor(2, groupProtocol);
 
         String[] cgcArgs = new String[]{"--bootstrap-server", bootstrapServers(listenerName()), "--describe", "--group", GROUP};
         ConsumerGroupService service = getConsumerGroupService(cgcArgs);
@@ -511,12 +546,13 @@ public class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
         }, "Expected rows for consumers with no assigned partitions in describe group results");
     }
 
-    @Test
-    public void testDescribeMembersWithConsumersWithoutAssignedPartitions() throws Exception {
-        kafka.utils.TestUtils.createOffsetsTopic(zkClient(), servers());
+    @ParameterizedTest(name = TEST_WITH_PARAMETERIZED_QUORUM_AND_GROUP_PROTOCOL_NAMES)
+    @MethodSource({"getTestQuorumAndGroupProtocolParametersAll"})
+    public void testDescribeMembersWithConsumersWithoutAssignedPartitions(String quorum, String groupProtocol) throws Exception {
+        createOffsetsTopic(listenerName(), new Properties());
 
         // run two consumers in the group consuming from a single-partition topic
-        addConsumerGroupExecutor(2);
+        addConsumerGroupExecutor(2, groupProtocol);
 
         String[] cgcArgs = new String[]{"--bootstrap-server", bootstrapServers(listenerName()), "--describe", "--group", GROUP};
         ConsumerGroupService service = getConsumerGroupService(cgcArgs);
@@ -537,12 +573,13 @@ public class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
             "Expected additional columns in verbose version of describe members");
     }
 
-    @Test
-    public void testDescribeStateWithConsumersWithoutAssignedPartitions() throws Exception {
-        kafka.utils.TestUtils.createOffsetsTopic(zkClient(), servers());
+    @ParameterizedTest(name = TEST_WITH_PARAMETERIZED_QUORUM_AND_GROUP_PROTOCOL_NAMES)
+    @MethodSource({"getTestQuorumAndGroupProtocolParametersAll"})
+    public void testDescribeStateWithConsumersWithoutAssignedPartitions(String quorum, String groupProtocol) throws Exception {
+        createOffsetsTopic(listenerName(), new Properties());
 
         // run two consumers in the group consuming from a single-partition topic
-        addConsumerGroupExecutor(2);
+        addConsumerGroupExecutor(2, groupProtocol);
 
         String[] cgcArgs = new String[]{"--bootstrap-server", bootstrapServers(listenerName()), "--describe", "--group", GROUP};
         ConsumerGroupService service = getConsumerGroupService(cgcArgs);
@@ -553,16 +590,17 @@ public class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
         }, "Expected two consumers in describe group results");
     }
 
-    @Test
-    public void testDescribeWithMultiPartitionTopicAndMultipleConsumers() throws Exception {
-        kafka.utils.TestUtils.createOffsetsTopic(zkClient(), servers());
+    @ParameterizedTest(name = TEST_WITH_PARAMETERIZED_QUORUM_AND_GROUP_PROTOCOL_NAMES)
+    @MethodSource({"getTestQuorumAndGroupProtocolParametersAll"})
+    public void testDescribeWithMultiPartitionTopicAndMultipleConsumers(String quorum, String groupProtocol) throws Exception {
+        createOffsetsTopic(listenerName(), new Properties());
         String topic2 = "foo2";
         createTopic(topic2, 2, 1, new Properties(), listenerName(), new Properties());
 
         for (String[] describeType : DESCRIBE_TYPES) {
             String group = GROUP + String.join("", describeType);
             // run two consumers in the group consuming from a two-partition topic
-            addConsumerGroupExecutor(2, topic2, group);
+            addConsumerGroupExecutor(2, topic2, group, groupProtocol);
             List<String> cgcArgs = new ArrayList<>(Arrays.asList("--bootstrap-server", bootstrapServers(listenerName()), "--describe", "--group", group));
             cgcArgs.addAll(Arrays.asList(describeType));
             ConsumerGroupService service = getConsumerGroupService(cgcArgs.toArray(new String[0]));
@@ -575,14 +613,15 @@ public class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
         }
     }
 
-    @Test
-    public void testDescribeOffsetsWithMultiPartitionTopicAndMultipleConsumers() throws Exception {
-        kafka.utils.TestUtils.createOffsetsTopic(zkClient(), servers());
+    @ParameterizedTest(name = TEST_WITH_PARAMETERIZED_QUORUM_AND_GROUP_PROTOCOL_NAMES)
+    @MethodSource({"getTestQuorumAndGroupProtocolParametersAll"})
+    public void testDescribeOffsetsWithMultiPartitionTopicAndMultipleConsumers(String quorum, String groupProtocol) throws Exception {
+        createOffsetsTopic(listenerName(), new Properties());
         String topic2 = "foo2";
         createTopic(topic2, 2, 1, new Properties(), listenerName(), new Properties());
 
         // run two consumers in the group consuming from a two-partition topic
-        addConsumerGroupExecutor(2, topic2, GROUP);
+        addConsumerGroupExecutor(2, topic2, GROUP, groupProtocol);
 
         String[] cgcArgs = new String[]{"--bootstrap-server", bootstrapServers(listenerName()), "--describe", "--group", GROUP};
         ConsumerGroupService service = getConsumerGroupService(cgcArgs);
@@ -597,14 +636,15 @@ public class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
         }, "Expected two rows (one row per consumer) in describe group results.");
     }
 
-    @Test
-    public void testDescribeMembersWithMultiPartitionTopicAndMultipleConsumers() throws Exception {
-        kafka.utils.TestUtils.createOffsetsTopic(zkClient(), servers());
+    @ParameterizedTest(name = TEST_WITH_PARAMETERIZED_QUORUM_AND_GROUP_PROTOCOL_NAMES)
+    @MethodSource({"getTestQuorumAndGroupProtocolParametersAll"})
+    public void testDescribeMembersWithMultiPartitionTopicAndMultipleConsumers(String quorum, String groupProtocol) throws Exception {
+        createOffsetsTopic(listenerName(), new Properties());
         String topic2 = "foo2";
         createTopic(topic2, 2, 1, new Properties(), listenerName(), new Properties());
 
         // run two consumers in the group consuming from a two-partition topic
-        addConsumerGroupExecutor(2, topic2, GROUP);
+        addConsumerGroupExecutor(2, topic2, GROUP, groupProtocol);
 
         String[] cgcArgs = new String[]{"--bootstrap-server", bootstrapServers(listenerName()), "--describe", "--group", GROUP};
         ConsumerGroupService service = getConsumerGroupService(cgcArgs);
@@ -623,14 +663,15 @@ public class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
             "Expected additional columns in verbose version of describe members");
     }
 
-    @Test
-    public void testDescribeStateWithMultiPartitionTopicAndMultipleConsumers() throws Exception {
-        kafka.utils.TestUtils.createOffsetsTopic(zkClient(), servers());
+    @ParameterizedTest(name = TEST_WITH_PARAMETERIZED_QUORUM_AND_GROUP_PROTOCOL_NAMES)
+    @MethodSource({"getTestQuorumAndGroupProtocolParametersAll"})
+    public void testDescribeStateWithMultiPartitionTopicAndMultipleConsumers(String quorum, String groupProtocol) throws Exception {
+        createOffsetsTopic(listenerName(), new Properties());
         String topic2 = "foo2";
         createTopic(topic2, 2, 1, new Properties(), listenerName(), new Properties());
 
         // run two consumers in the group consuming from a two-partition topic
-        addConsumerGroupExecutor(2, topic2, GROUP);
+        addConsumerGroupExecutor(2, topic2, GROUP, groupProtocol);
 
         String[] cgcArgs = new String[]{"--bootstrap-server", bootstrapServers(listenerName()), "--describe", "--group", GROUP};
         ConsumerGroupService service = getConsumerGroupService(cgcArgs);
@@ -641,11 +682,12 @@ public class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
         }, "Expected a stable group with two members in describe group state result.");
     }
 
-    @Test
-    public void testDescribeSimpleConsumerGroup() throws Exception {
+    @ParameterizedTest(name = TEST_WITH_PARAMETERIZED_QUORUM_NAME)
+    @ValueSource(strings = {"zk", "kraft", "kraft+kip848"})
+    public void testDescribeSimpleConsumerGroup(String quorum) throws Exception {
         // Ensure that the offsets of consumers which don't use group management are still displayed
 
-        kafka.utils.TestUtils.createOffsetsTopic(zkClient(), servers());
+        createOffsetsTopic(listenerName(), new Properties());
         String topic2 = "foo2";
         createTopic(topic2, 2, 1, new Properties(), listenerName(), new Properties());
         addSimpleGroupExecutor(Arrays.asList(new TopicPartition(topic2, 0), new TopicPartition(topic2, 1)), GROUP);
@@ -660,15 +702,16 @@ public class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
         }, "Expected a stable group with two members in describe group state result.");
     }
 
-    @Test
-    public void testDescribeGroupWithShortInitializationTimeout() {
+    @ParameterizedTest(name = TEST_WITH_PARAMETERIZED_QUORUM_AND_GROUP_PROTOCOL_NAMES)
+    @MethodSource({"getTestQuorumAndGroupProtocolParametersAll"})
+    public void testDescribeGroupWithShortInitializationTimeout(String quorum, String groupProtocol) {
         // Let creation of the offsets topic happen during group initialization to ensure that initialization doesn't
         // complete before the timeout expires
 
         String[] describeType = DESCRIBE_TYPES[RANDOM.nextInt(DESCRIBE_TYPES.length)];
         String group = GROUP + String.join("", describeType);
         // run one consumer in the group consuming from a single-partition topic
-        addConsumerGroupExecutor(1);
+        addConsumerGroupExecutor(1, groupProtocol);
         // set the group initialization timeout too low for the group to stabilize
         List<String> cgcArgs = new ArrayList<>(Arrays.asList("--bootstrap-server", bootstrapServers(listenerName()), "--describe", "--timeout", "1", "--group", group));
         cgcArgs.addAll(Arrays.asList(describeType));
@@ -685,13 +728,14 @@ public class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
         assertEquals(TimeoutException.class, e.getCause().getClass());
     }
 
-    @Test
-    public void testDescribeGroupOffsetsWithShortInitializationTimeout() {
+    @ParameterizedTest(name = TEST_WITH_PARAMETERIZED_QUORUM_AND_GROUP_PROTOCOL_NAMES)
+    @MethodSource({"getTestQuorumAndGroupProtocolParametersAll"})
+    public void testDescribeGroupOffsetsWithShortInitializationTimeout(String quorum, String groupProtocol) {
         // Let creation of the offsets topic happen during group initialization to ensure that initialization doesn't
         // complete before the timeout expires
 
         // run one consumer in the group consuming from a single-partition topic
-        addConsumerGroupExecutor(1);
+        addConsumerGroupExecutor(1, groupProtocol);
 
         // set the group initialization timeout too low for the group to stabilize
         String[] cgcArgs = new String[]{"--bootstrap-server", bootstrapServers(listenerName()), "--describe", "--group", GROUP, "--timeout", "1"};
@@ -701,13 +745,14 @@ public class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
         assertEquals(TimeoutException.class, e.getCause().getClass());
     }
 
-    @Test
-    public void testDescribeGroupMembersWithShortInitializationTimeout() {
+    @ParameterizedTest(name = TEST_WITH_PARAMETERIZED_QUORUM_AND_GROUP_PROTOCOL_NAMES)
+    @MethodSource({"getTestQuorumAndGroupProtocolParametersAll"})
+    public void testDescribeGroupMembersWithShortInitializationTimeout(String quorum, String groupProtocol) {
         // Let creation of the offsets topic happen during group initialization to ensure that initialization doesn't
         // complete before the timeout expires
 
         // run one consumer in the group consuming from a single-partition topic
-        addConsumerGroupExecutor(1);
+        addConsumerGroupExecutor(1, groupProtocol);
 
         // set the group initialization timeout too low for the group to stabilize
         String[] cgcArgs = new String[]{"--bootstrap-server", bootstrapServers(listenerName()), "--describe", "--group", GROUP, "--timeout", "1"};
@@ -719,13 +764,14 @@ public class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
         assertEquals(TimeoutException.class, e.getCause().getClass());
     }
 
-    @Test
-    public void testDescribeGroupStateWithShortInitializationTimeout() {
+    @ParameterizedTest(name = TEST_WITH_PARAMETERIZED_QUORUM_AND_GROUP_PROTOCOL_NAMES)
+    @MethodSource({"getTestQuorumAndGroupProtocolParametersAll"})
+    public void testDescribeGroupStateWithShortInitializationTimeout(String quorum, String groupProtocol) {
         // Let creation of the offsets topic happen during group initialization to ensure that initialization doesn't
         // complete before the timeout expires
 
         // run one consumer in the group consuming from a single-partition topic
-        addConsumerGroupExecutor(1);
+        addConsumerGroupExecutor(1, groupProtocol);
 
         // set the group initialization timeout too low for the group to stabilize
         String[] cgcArgs = new String[]{"--bootstrap-server", bootstrapServers(listenerName()), "--describe", "--group", GROUP, "--timeout", "1"};
@@ -735,21 +781,23 @@ public class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
         assertEquals(TimeoutException.class, e.getCause().getClass());
     }
 
-    @Test
-    public void testDescribeWithUnrecognizedNewConsumerOption() {
+    @ParameterizedTest(name = TEST_WITH_PARAMETERIZED_QUORUM_NAME)
+    @ValueSource(strings = {"zk", "kraft"})
+    public void testDescribeWithUnrecognizedNewConsumerOption(String quorum) {
         String[] cgcArgs = new String[]{"--new-consumer", "--bootstrap-server", bootstrapServers(listenerName()), "--describe", "--group", GROUP};
         assertThrows(joptsimple.OptionException.class, () -> getConsumerGroupService(cgcArgs));
     }
 
-    @Test
-    public void testDescribeNonOffsetCommitGroup() throws Exception {
-        kafka.utils.TestUtils.createOffsetsTopic(zkClient(), servers());
+    @ParameterizedTest(name = TEST_WITH_PARAMETERIZED_QUORUM_AND_GROUP_PROTOCOL_NAMES)
+    @MethodSource({"getTestQuorumAndGroupProtocolParametersAll"})
+    public void testDescribeNonOffsetCommitGroup(String quorum, String groupProtocol) throws Exception {
+        createOffsetsTopic(listenerName(), new Properties());
 
         Properties customProps = new Properties();
         // create a consumer group that never commits offsets
         customProps.setProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false");
         // run one consumer in the group consuming from a single-partition topic
-        addConsumerGroupExecutor(1, TOPIC, GROUP, RangeAssignor.class.getName(), Optional.of(customProps), false);
+        addConsumerGroupExecutor(1, TOPIC, GROUP, RangeAssignor.class.getName(), Optional.empty(), Optional.of(customProps), false, groupProtocol);
 
         String[] cgcArgs = new String[]{"--bootstrap-server", bootstrapServers(listenerName()), "--describe", "--group", GROUP};
         ConsumerGroupService service = getConsumerGroupService(cgcArgs);
