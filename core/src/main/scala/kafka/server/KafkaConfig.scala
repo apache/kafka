@@ -166,6 +166,7 @@ object KafkaConfig {
 
   /** ZK to KRaft Migration configs */
   val MigrationEnabledProp = "zookeeper.metadata.migration.enable"
+  val MigrationMetadataMinBatchSizeProp = "zookeeper.metadata.migration.min.batch.size"
 
   /** Enable eligible leader replicas configs */
   val ElrEnabledProp = "eligible.leader.replicas.enable"
@@ -1029,6 +1030,8 @@ object KafkaConfig {
       .defineInternal(ServerMaxStartupTimeMsProp, LONG, Defaults.SERVER_MAX_STARTUP_TIME_MS, atLeast(0), MEDIUM, ServerMaxStartupTimeMsDoc)
       .define(MigrationEnabledProp, BOOLEAN, false, HIGH, "Enable ZK to KRaft migration")
       .define(ElrEnabledProp, BOOLEAN, false, HIGH, "Enable the Eligible leader replicas")
+      .defineInternal(MigrationMetadataMinBatchSizeProp, INT, Defaults.MIGRATION_METADATA_MIN_BATCH_SIZE, atLeast(1),
+        MEDIUM, "Soft minimum batch size to use when migrating metadata from ZooKeeper to KRaft")
 
       /************* Authorizer Configuration ***********/
       .define(AuthorizerClassNameProp, STRING, Defaults.AUTHORIZER_CLASS_NAME, new ConfigDef.NonNullValidator(), LOW, AuthorizerClassNameDoc)
@@ -1538,6 +1541,7 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
   def usesSelfManagedQuorum: Boolean = processRoles.nonEmpty
 
   val migrationEnabled: Boolean = getBoolean(KafkaConfig.MigrationEnabledProp)
+  val migrationMetadataMinBatchSize: Int = getInt(KafkaConfig.MigrationMetadataMinBatchSizeProp)
 
   val elrEnabled: Boolean = getBoolean(KafkaConfig.ElrEnabledProp)
 
