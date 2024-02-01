@@ -46,7 +46,7 @@ import org.slf4j.LoggerFactory;
 /**
  * Consumer that dumps messages to standard out.
  */
-class ConsoleConsumer {
+public class ConsoleConsumer {
 
     private static final Logger LOG = LoggerFactory.getLogger(ConsoleConsumer.class);
     private static final CountDownLatch SHUTDOWN_LATCH = new CountDownLatch(1);
@@ -66,7 +66,8 @@ class ConsoleConsumer {
         }
     }
 
-    static void run(ConsoleConsumerOptions opts) {
+    public static void run(ConsoleConsumerOptions opts) {
+        messageCount = 0;
         long timeoutMs = opts.timeoutMs() >= 0 ? opts.timeoutMs() : Long.MAX_VALUE;
         Consumer<byte[], byte[]> consumer = new KafkaConsumer<>(opts.consumerProps(), new ByteArrayDeserializer(), new ByteArrayDeserializer());
         ConsumerWrapper consumerWrapper = opts.partitionArg().isPresent()

@@ -41,7 +41,7 @@ import java.util.Random;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-public class ConsoleConsumerOptions extends CommandDefaultOptions {
+public final class ConsoleConsumerOptions extends CommandDefaultOptions {
 
     private static final Random RANDOM = new Random();
 

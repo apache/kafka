@@ -27,6 +27,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 
@@ -139,7 +140,7 @@ public class DefaultMessageFormatterTest {
 
         @Override
         public String deserialize(String topic, byte[] data) {
-            return new String(data, StandardCharsets.UTF_8).toUpperCase();
+            return new String(data, StandardCharsets.UTF_8).toUpperCase(Locale.ROOT);
         }
     }
 }
