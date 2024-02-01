@@ -20,6 +20,7 @@ import kafka.api.LeaderAndIsr
 import kafka.cluster.Broker
 import kafka.server.metadata.{KRaftMetadataCache, MetadataSnapshot, ZkMetadataCache}
 import org.apache.kafka.common.message.DescribeTopicPartitionsResponseData.DescribeTopicPartitionsResponsePartition
+import org.apache.kafka.common.message.UpdateMetadataRequestData
 import org.apache.kafka.common.message.UpdateMetadataRequestData.{UpdateMetadataBroker, UpdateMetadataEndpoint, UpdateMetadataPartitionState, UpdateMetadataTopicState}
 import org.apache.kafka.common.metadata.RegisterBrokerRecord.{BrokerEndpoint, BrokerEndpointCollection}
 import org.apache.kafka.common.metadata._
@@ -1435,6 +1436,92 @@ class MetadataCacheTest {
             setPartitionStates(Seq(newBarPart0, newBarPart1, newBarPart2).asJava)
         ).asJava
       )
+    )
+  }
+
+  @Test
+  def testUpdateZkMetadataCacheViaHybridUMR(): Unit = {
+    val cache = MetadataCache.zkMetadataCache(1, MetadataVersion.latestTesting())
+    cache.updateMetadata(123, createFullUMR(Seq(
+      new UpdateMetadataTopicState().
+        setTopicName(fooTopicName).
+        setTopicId(fooTopicId).
+        setPartitionStates(Seq(oldFooPart0, oldFooPart1).asJava),
+      new UpdateMetadataTopicState().
+        setTopicName(barTopicName).
+        setTopicId(barTopicId).
+        setPartitionStates(Seq(oldBarPart0, oldBarPart1).asJava),
+    )))
+    checkCacheContents(cache, Map(
+      fooTopicId -> Seq(oldFooPart0, oldFooPart1),
+      barTopicId -> Seq(oldBarPart0, oldBarPart1),
+    ))
+  }
+
+  @Test
+  def testUpdateZkMetadataCacheWithRecreatedTopic(): Unit = {
+    val cache = MetadataCache.zkMetadataCache(1, MetadataVersion.latestTesting())
+    cache.updateMetadata(123, createFullUMR(Seq(
+      new UpdateMetadataTopicState().
+        setTopicName(fooTopicName).
+        setTopicId(fooTopicId).
+        setPartitionStates(Seq(oldFooPart0, oldFooPart1).asJava),
+      new UpdateMetadataTopicState().
+        setTopicName(barTopicName).
+        setTopicId(barTopicId).
+        setPartitionStates(Seq(oldBarPart0, oldBarPart1).asJava),
+    )))
+    cache.updateMetadata(124, createFullUMR(Seq(
+      new UpdateMetadataTopicState().
+        setTopicName(fooTopicName).
+        setTopicId(fooTopicId).
+        setPartitionStates(Seq(newFooPart0, newFooPart1).asJava),
+      new UpdateMetadataTopicState().
+        setTopicName(barTopicName).
+        setTopicId(barTopicId).
+        setPartitionStates(Seq(oldBarPart0, oldBarPart1).asJava),
+    )))
+    checkCacheContents(cache, Map(
+      fooTopicId -> Seq(newFooPart0, newFooPart1),
+      barTopicId -> Seq(oldBarPart0, oldBarPart1),
+    ))
+  }
+
+  def createFullUMR(
+    topicStates: Seq[UpdateMetadataTopicState]
+  ): UpdateMetadataRequest = {
+    val data = new UpdateMetadataRequestData().
+      setControllerId(0).
+      setIsKRaftController(true).
+      setControllerEpoch(123).
+      setBrokerEpoch(456).
+      setTopicStates(topicStates.asJava)
+    new UpdateMetadataRequest(data, 8.toShort)
+  }
+
+  def checkCacheContents(
+    cache: ZkMetadataCache,
+    expected: Map[Uuid, Iterable[UpdateMetadataPartitionState]],
+  ): Unit = {
+    val expectedTopics = new util.HashMap[String, Uuid]
+    val expectedIds = new util.HashMap[Uuid, String]
+    val expectedParts = new util.HashMap[String, util.Set[TopicPartition]]
+    expected.foreach {
+      case (id, states) =>
+        states.foreach {
+          case state =>
+            expectedTopics.put(state.topicName(), id)
+            expectedIds.put(id, state.topicName())
+            expectedParts.computeIfAbsent(state.topicName(),
+              _ => new util.HashSet[TopicPartition]()).
+              add(new TopicPartition(state.topicName(), state.partitionIndex()))
+        }
+    }
+    assertEquals(expectedTopics, cache.topicNamesToIds())
+    assertEquals(expectedIds, cache.topicIdsToNames())
+    cache.getAllTopics().foreach(topic =>
+      assertEquals(expectedParts.getOrDefault(topic, Collections.emptySet()),
+        cache.getTopicPartitions(topic).asJava)
     )
   }
 }
