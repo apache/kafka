@@ -4907,7 +4907,7 @@ class ReplicaManagerTest {
   @Test
   def testGetOrCreatePartition(): Unit = {
     val brokerId = 0
-    val replicaManager = setupReplicaManagerWithMockedPurgatories(new MockTimer(time), brokerId)
+    val replicaManager = setupReplicaManagerWithMockedPurgatories(new MockTimer(time), brokerId, shouldMockLog = true)
     try {
       val foo0 = new TopicPartition("foo", 0)
       val emptyDelta = new TopicsDelta(TopicsImage.EMPTY)
@@ -4922,6 +4922,13 @@ class ReplicaManagerTest {
       val (barPart, barNew) = replicaManager.getOrCreatePartition(bar1, emptyDelta, BAR_UUID).get
       assertTrue(barNew)
       assertEquals(bar1, barPart.topicPartition)
+
+      val mockLog = mock(classOf[UnifiedLog])
+      when(replicaManager.logManager.getLog(bar1)).thenReturn(Some(mockLog))
+      when(mockLog.topicId).thenReturn(Some(BAR_UUID))
+      replicaManager.markPartitionOffline(bar1)
+
+      assertTrue(replicaManager.getOrCreatePartition(bar1, emptyDelta, BAR_UUID).isEmpty)
     } finally {
       replicaManager.shutdown(checkpointHW = false)
     }
