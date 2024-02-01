@@ -66,20 +66,20 @@ class ConsoleConsumer {
         }
     }
 
-    static void run(ConsoleConsumerOptions conf) {
-        long timeoutMs = conf.timeoutMs() >= 0 ? conf.timeoutMs() : Long.MAX_VALUE;
-        Consumer<byte[], byte[]> consumer = new KafkaConsumer<>(conf.consumerProps(), new ByteArrayDeserializer(), new ByteArrayDeserializer());
-        ConsumerWrapper consumerWrapper = conf.partitionArg().isPresent()
-            ? new ConsumerWrapper(Optional.of(conf.topicArg()), conf.partitionArg(), OptionalLong.of(conf.offsetArg()), Optional.empty(), consumer, timeoutMs)
-            : new ConsumerWrapper(Optional.of(conf.topicArg()), OptionalInt.empty(), OptionalLong.empty(), Optional.ofNullable(conf.includedTopicsArg()), consumer, timeoutMs);
+    static void run(ConsoleConsumerOptions opts) {
+        long timeoutMs = opts.timeoutMs() >= 0 ? opts.timeoutMs() : Long.MAX_VALUE;
+        Consumer<byte[], byte[]> consumer = new KafkaConsumer<>(opts.consumerProps(), new ByteArrayDeserializer(), new ByteArrayDeserializer());
+        ConsumerWrapper consumerWrapper = opts.partitionArg().isPresent()
+            ? new ConsumerWrapper(Optional.of(opts.topicArg()), opts.partitionArg(), OptionalLong.of(opts.offsetArg()), Optional.empty(), consumer, timeoutMs)
+            : new ConsumerWrapper(Optional.of(opts.topicArg()), OptionalInt.empty(), OptionalLong.empty(), Optional.ofNullable(opts.includedTopicsArg()), consumer, timeoutMs);
 
-        addShutdownHook(consumerWrapper, conf);
+        addShutdownHook(consumerWrapper, opts);
 
         try {
-            process(conf.maxMessages(), conf.formatter(), consumerWrapper, System.out, conf.skipMessageOnError());
+            process(opts.maxMessages(), opts.formatter(), consumerWrapper, System.out, opts.skipMessageOnError());
         } finally {
             consumerWrapper.cleanup();
-            conf.formatter().close();
+            opts.formatter().close();
             reportRecordCount();
 
             SHUTDOWN_LATCH.countDown();

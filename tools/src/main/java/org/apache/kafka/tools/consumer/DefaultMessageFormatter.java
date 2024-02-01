@@ -47,9 +47,9 @@ class DefaultMessageFormatter implements MessageFormatter {
     private byte[] headersSeparator = utfBytes(",");
     private byte[] nullLiteral = utfBytes("null");
 
-    private Optional<Deserializer<?>> keyDeserializer;
-    private Optional<Deserializer<?>> valueDeserializer;
-    private Optional<Deserializer<?>> headersDeserializer;
+    private Optional<Deserializer<?>> keyDeserializer = Optional.empty();
+    private Optional<Deserializer<?>> valueDeserializer = Optional.empty();
+    private Optional<Deserializer<?>> headersDeserializer = Optional.empty();
 
     @Override
     public void configure(Map<String, ?> configs) {
