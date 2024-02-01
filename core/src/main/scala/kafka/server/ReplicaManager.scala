@@ -1890,7 +1890,11 @@ class ReplicaManager(val config: KafkaConfig,
             leaderAndIsrRequest.isKRaftController &&
             leaderAndIsrRequest.requestType() == AbstractControlRequest.Type.FULL)
           {
-            updateStrayLogs(LogManager.findStrayReplicas(localBrokerId, leaderAndIsrRequest, logManager.allLogs))
+            val strays = LogManager.findStrayReplicas(localBrokerId, leaderAndIsrRequest, logManager.allLogs)
+            stateChangeLogger.info(s"While handling full LeaderAndIsr request from KRaft " +
+              s"controller $controllerId with correlation id $correlationId, found ${strays.size} " +
+              "stray partition(s).")
+            updateStrayLogs(strays)
           }
 
           val responseMap = new mutable.HashMap[TopicPartition, Errors]
