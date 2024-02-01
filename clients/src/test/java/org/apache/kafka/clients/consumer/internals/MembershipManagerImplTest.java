@@ -1384,6 +1384,61 @@ public class MembershipManagerImplTest {
     }
 
     @Test
+    public void testAddedPartitionsTemporarilyDisabledAwaitingOnPartitionsAssignedCallback() {
+        MembershipManagerImpl membershipManager = createMembershipManagerJoiningGroup();
+        String topicName = "topic1";
+        ConsumerRebalanceListenerInvoker invoker = consumerRebalanceListenerInvoker();
+        int partitionOwned = 0;
+        int partitionAdded = 1;
+        SortedSet<TopicPartition> assignedPartitions = topicPartitions(topicName, partitionOwned,
+            partitionAdded);
+        SortedSet<TopicPartition> addedPartitions = topicPartitions(topicName, partitionAdded);
+        mockPartitionOwnedAndNewPartitionAdded(topicName, partitionOwned, partitionAdded,
+            new CounterConsumerRebalanceListener(), membershipManager);
+
+        verify(subscriptionState).assignFromSubscribedAwaitingCallback(assignedPartitions, addedPartitions);
+
+        performCallback(
+            membershipManager,
+            invoker,
+            ConsumerRebalanceListenerMethodName.ON_PARTITIONS_ASSIGNED,
+            addedPartitions,
+            true
+        );
+
+        verify(subscriptionState).enablePartitionsAwaitingCallback(addedPartitions);
+    }
+
+    @Test
+    public void testAddedPartitionsNotEnabledAfterFailedOnPartitionsAssignedCallback() {
+        MembershipManagerImpl membershipManager = createMembershipManagerJoiningGroup();
+        String topicName = "topic1";
+        ConsumerRebalanceListenerInvoker invoker = consumerRebalanceListenerInvoker();
+        int partitionOwned = 0;
+        int partitionAdded = 1;
+        SortedSet<TopicPartition> assignedPartitions = topicPartitions(topicName, partitionOwned,
+            partitionAdded);
+        SortedSet<TopicPartition> addedPartitions = topicPartitions(topicName, partitionAdded);
+        CounterConsumerRebalanceListener listener =
+            new CounterConsumerRebalanceListener(Optional.empty(),
+                Optional.of(new RuntimeException("onPartitionsAssigned failed!")),
+                Optional.empty());
+        mockPartitionOwnedAndNewPartitionAdded(topicName, partitionOwned, partitionAdded,
+            listener, membershipManager);
+
+        verify(subscriptionState).assignFromSubscribedAwaitingCallback(assignedPartitions, addedPartitions);
+
+        performCallback(
+            membershipManager,
+            invoker,
+            ConsumerRebalanceListenerMethodName.ON_PARTITIONS_ASSIGNED,
+            addedPartitions,
+            true
+        );
+        verify(subscriptionState, never()).enablePartitionsAwaitingCallback(any());
+    }
+
+    @Test
     public void testOnPartitionsLostNoError() {
         MembershipManagerImpl membershipManager = createMemberInStableState();
         String topicName = "topic1";
@@ -1399,6 +1454,23 @@ public class MembershipManagerImplTest {
         Uuid topicId = Uuid.randomUuid();
         mockOwnedPartition(membershipManager, topicId, topicName);
         testOnPartitionsLost(Optional.of(new KafkaException("Intentional error for test")));
+    }
+
+    private void mockPartitionOwnedAndNewPartitionAdded(String topicName,
+                                                        int partitionOwned,
+                                                        int partitionAdded,
+                                                        CounterConsumerRebalanceListener listener,
+                                                        MembershipManagerImpl membershipManager) {
+        Uuid topicId = Uuid.randomUuid();
+        TopicPartition owned = new TopicPartition(topicName, partitionOwned);
+        when(subscriptionState.assignedPartitions()).thenReturn(Collections.singleton(owned));
+        membershipManager.updateCurrentAssignment(Collections.singleton(new TopicIdPartition(topicId, owned)));
+        when(metadata.topicNames()).thenReturn(Collections.singletonMap(topicId, topicName));
+        when(subscriptionState.hasAutoAssignedPartitions()).thenReturn(true);
+        when(subscriptionState.rebalanceListener()).thenReturn(Optional.ofNullable(listener));
+
+        // Receive assignment adding a new partition
+        receiveAssignment(topicId, Arrays.asList(partitionOwned, partitionAdded), membershipManager);
     }
 
     private void testOnPartitionsLost(Optional<RuntimeException> lostError) {
