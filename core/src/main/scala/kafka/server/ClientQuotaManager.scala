@@ -21,7 +21,6 @@ import java.util.concurrent.{ConcurrentHashMap, DelayQueue, TimeUnit}
 import java.util.concurrent.locks.ReentrantReadWriteLock
 
 import kafka.network.RequestChannel
-import kafka.network.RequestChannel._
 import kafka.server.ClientQuotaManager._
 import kafka.utils.{Logging, QuotaUtils}
 import org.apache.kafka.common.{Cluster, MetricName}
@@ -33,6 +32,7 @@ import org.apache.kafka.common.utils.{Sanitizer, Time}
 import org.apache.kafka.server.config.{ConfigEntityName, ClientQuotaManagerConfig}
 import org.apache.kafka.server.quota.{ClientQuotaCallback, ClientQuotaEntity, ClientQuotaType}
 import org.apache.kafka.server.util.ShutdownableThread
+import org.apache.kafka.network.Session
 
 import scala.jdk.CollectionConverters._
 
@@ -56,9 +56,9 @@ object ClientQuotaManager {
   // Purge sensors after 1 hour of inactivity
   val InactiveSensorExpirationTimeSeconds = 3600
 
-  val DefaultClientIdQuotaEntity = KafkaQuotaEntity(None, Some(DefaultClientIdEntity))
-  val DefaultUserQuotaEntity = KafkaQuotaEntity(Some(DefaultUserEntity), None)
-  val DefaultUserClientIdQuotaEntity = KafkaQuotaEntity(Some(DefaultUserEntity), Some(DefaultClientIdEntity))
+  val DefaultClientIdQuotaEntity: KafkaQuotaEntity = KafkaQuotaEntity(None, Some(DefaultClientIdEntity))
+  val DefaultUserQuotaEntity: KafkaQuotaEntity = KafkaQuotaEntity(Some(DefaultUserEntity), None)
+  val DefaultUserClientIdQuotaEntity: KafkaQuotaEntity = KafkaQuotaEntity(Some(DefaultUserEntity), Some(DefaultClientIdEntity))
 
   sealed trait BaseUserEntity extends ClientQuotaEntity.ConfigEntity
 
@@ -534,7 +534,7 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
     throttledChannelReaper.awaitShutdown()
   }
 
-  class DefaultQuotaCallback extends ClientQuotaCallback {
+  private class DefaultQuotaCallback extends ClientQuotaCallback {
     private val overriddenQuotas = new ConcurrentHashMap[ClientQuotaEntity, Quota]()
 
     override def configure(configs: util.Map[String, _]): Unit = {}

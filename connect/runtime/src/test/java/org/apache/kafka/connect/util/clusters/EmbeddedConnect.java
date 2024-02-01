@@ -32,7 +32,6 @@ import org.apache.kafka.connect.runtime.rest.entities.ConnectorOffsets;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorStateInfo;
 import org.apache.kafka.connect.runtime.rest.entities.CreateConnectorRequest;
 import org.apache.kafka.connect.runtime.rest.entities.LoggerLevel;
-import org.apache.kafka.connect.runtime.rest.entities.ServerInfo;
 import org.apache.kafka.connect.runtime.rest.entities.TaskInfo;
 import org.apache.kafka.connect.runtime.rest.errors.ConnectRestException;
 import org.apache.kafka.connect.util.SinkUtils;
@@ -959,15 +958,22 @@ abstract class EmbeddedConnect {
      * @return the list of handles of the online workers
      */
     public Set<WorkerHandle> activeWorkers() {
-        ObjectMapper mapper = new ObjectMapper();
         return workers().stream()
                 .filter(w -> {
                     try {
-                        mapper.readerFor(ServerInfo.class)
-                                .readValue(responseToString(requestGet(w.url().toString())));
-                        return true;
-                    } catch (ConnectException | IOException e) {
+                        String endpoint = w.url().resolve("/connectors/liveness-check").toString();
+                        Response response = requestGet(endpoint);
+                        boolean live = response.getStatus() == Response.Status.NOT_FOUND.getStatusCode()
+                                || response.getStatus() == Response.Status.OK.getStatusCode();
+                        if (live) {
+                            return true;
+                        } else {
+                            log.warn("Worker failed liveness probe. Response: {}", response);
+                            return false;
+                        }
+                    } catch (Exception e) {
                         // Worker failed to respond. Consider it's offline
+                        log.warn("Failed to contact worker during liveness check", e);
                         return false;
                     }
                 })

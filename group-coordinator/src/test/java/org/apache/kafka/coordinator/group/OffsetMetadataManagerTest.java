@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.coordinator.group;
 
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.CoordinatorNotAvailableException;
 import org.apache.kafka.common.errors.GroupIdNotFoundException;
@@ -69,6 +70,7 @@ import java.net.InetAddress;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.OptionalInt;
@@ -272,6 +274,14 @@ public class OffsetMetadataManagerTest {
             ));
 
             return result;
+        }
+
+        public List<Record> deletePartitions(
+            List<TopicPartition> topicPartitions
+        ) {
+            List<Record> records = offsetMetadataManager.onPartitionsDeleted(topicPartitions);
+            records.forEach(this::replay);
+            return records;
         }
 
         public CoordinatorResult<OffsetDeleteResponseData, Record> deleteOffsets(
@@ -3048,6 +3058,53 @@ public class OffsetMetadataManagerTest {
         );
 
         verify(context.metrics).record(OFFSET_DELETIONS_SENSOR_NAME, 2);
+    }
+
+    @Test
+    public void testOnPartitionsDeleted() {
+        OffsetMetadataManagerTestContext context = new OffsetMetadataManagerTestContext.Builder().build();
+
+        // Commit offsets.
+        context.commitOffset("grp-0", "foo", 1, 100, 1, context.time.milliseconds());
+        context.commitOffset("grp-0", "foo", 2, 200, 1, context.time.milliseconds());
+        context.commitOffset("grp-0", "foo", 3, 300, 1, context.time.milliseconds());
+
+        context.commitOffset("grp-1", "bar", 1, 100, 1, context.time.milliseconds());
+        context.commitOffset("grp-1", "bar", 2, 200, 1, context.time.milliseconds());
+        context.commitOffset("grp-1", "bar", 3, 300, 1, context.time.milliseconds());
+
+        context.commitOffset(100L, "grp-2", "foo", 1, 100, 1, context.time.milliseconds());
+        context.commitOffset(100L, "grp-2", "foo", 2, 200, 1, context.time.milliseconds());
+        context.commitOffset(100L, "grp-2", "foo", 3, 300, 1, context.time.milliseconds());
+
+        // Delete partitions.
+        List<Record> records = context.deletePartitions(Arrays.asList(
+            new TopicPartition("foo", 1),
+            new TopicPartition("foo", 2),
+            new TopicPartition("foo", 3),
+            new TopicPartition("bar", 1)
+        ));
+
+        // Verify.
+        List<Record> expectedRecords = Arrays.asList(
+            RecordHelpers.newOffsetCommitTombstoneRecord("grp-0", "foo", 1),
+            RecordHelpers.newOffsetCommitTombstoneRecord("grp-0", "foo", 2),
+            RecordHelpers.newOffsetCommitTombstoneRecord("grp-0", "foo", 3),
+            RecordHelpers.newOffsetCommitTombstoneRecord("grp-1", "bar", 1),
+            RecordHelpers.newOffsetCommitTombstoneRecord("grp-2", "foo", 1),
+            RecordHelpers.newOffsetCommitTombstoneRecord("grp-2", "foo", 2),
+            RecordHelpers.newOffsetCommitTombstoneRecord("grp-2", "foo", 3)
+        );
+
+        assertEquals(new HashSet<>(expectedRecords), new HashSet<>(records));
+
+        assertFalse(context.hasOffset("grp-0", "foo", 1));
+        assertFalse(context.hasOffset("grp-0", "foo", 2));
+        assertFalse(context.hasOffset("grp-0", "foo", 3));
+        assertFalse(context.hasOffset("grp-1", "bar", 1));
+        assertFalse(context.hasOffset("grp-2", "foo", 1));
+        assertFalse(context.hasOffset("grp-2", "foo", 2));
+        assertFalse(context.hasOffset("grp-2", "foo", 3));
     }
 
     private void verifyReplay(

@@ -239,7 +239,7 @@ object ConsumerGroupCommand extends Logging {
             printError(s"Consumer group '$group' does not exist.")
           case Some("Empty") =>
             Console.err.println(s"\nConsumer group '$group' has no active members.")
-          case Some("PreparingRebalance") | Some("CompletingRebalance") =>
+          case Some("PreparingRebalance") | Some("CompletingRebalance") | Some("Assigning") | Some("Reconciling") =>
             Console.err.println(s"\nWarning: Consumer group '$group' is rebalancing.")
           case Some("Stable") =>
           case other =>
