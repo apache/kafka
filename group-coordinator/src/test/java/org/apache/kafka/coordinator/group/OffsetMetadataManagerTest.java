@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.coordinator.group;
 
+import org.apache.kafka.common.GroupType;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.CoordinatorNotAvailableException;
 import org.apache.kafka.common.errors.GroupIdNotFoundException;
@@ -2389,7 +2390,7 @@ public class OffsetMetadataManagerTest {
     }
 
     @ParameterizedTest
-    @EnumSource(Group.GroupType.class)
+    @EnumSource(value = Group.GroupType.class, names = {"CLASSIC", "CONSUMER"})
     public void testDeleteGroupAllOffsets(Group.GroupType groupType) {
         OffsetMetadataManagerTestContext context = new OffsetMetadataManagerTestContext.Builder().build();
         context.getOrMaybeCreateGroup(groupType, "foo");
@@ -2412,7 +2413,7 @@ public class OffsetMetadataManagerTest {
     }
 
     @ParameterizedTest
-    @EnumSource(Group.GroupType.class)
+    @EnumSource(value = Group.GroupType.class, names = {"CLASSIC", "CONSUMER"})
     public void testDeleteGroupAllOffsetsWithPendingTransactionalOffsets(Group.GroupType groupType) {
         OffsetMetadataManagerTestContext context = new OffsetMetadataManagerTestContext.Builder().build();
         context.getOrMaybeCreateGroup(groupType, "foo");
