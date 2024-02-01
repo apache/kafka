@@ -32,6 +32,9 @@ import javax.security.sasl.SaslServerFactory;
 
 import org.apache.kafka.common.errors.SaslAuthenticationException;
 import org.apache.kafka.common.security.plain.PlainAuthenticateCallback;
+import org.apache.kafka.common.utils.Utils;
+
+import static org.apache.kafka.common.utils.Utils.USERNAME_MAX_LEN;
 
 /**
  * Simple SaslServer implementation for SASL/PLAIN. In order to make this implementation
@@ -93,7 +96,7 @@ public class PlainSaslServer implements SaslServer {
             throw new SaslAuthenticationException("Authentication failed: username not specified");
         }
         if (password.isEmpty()) {
-            throw new SaslAuthenticationException(String.format("Authentication failed: password not specified for user {%s}", username));
+            throw new SaslAuthenticationException(String.format("Authentication failed: password not specified for user {%s}", Utils.sanitizeString(username, USERNAME_MAX_LEN)));
         }
 
         NameCallback nameCallback = new NameCallback("username", username);
@@ -101,12 +104,13 @@ public class PlainSaslServer implements SaslServer {
         try {
             callbackHandler.handle(new Callback[]{nameCallback, authenticateCallback});
         } catch (Throwable e) {
-            throw new SaslAuthenticationException(String.format("Authentication failed: credentials for user could not be verified for user {%s}", username), e);
+            throw new SaslAuthenticationException(String.format("Authentication failed: credentials for user could not be verified for user {%s}", Utils.sanitizeString(username, USERNAME_MAX_LEN)), e);
         }
         if (!authenticateCallback.authenticated())
-            throw new SaslAuthenticationException(String.format("Authentication failed: Invalid username or password for user {%s}", username));
+            throw new SaslAuthenticationException(String.format("Authentication failed: Invalid username or password for user {%s}", Utils.sanitizeString(username, USERNAME_MAX_LEN)));
         if (!authorizationIdFromClient.isEmpty() && !authorizationIdFromClient.equals(username))
-            throw new SaslAuthenticationException(String.format("Authentication failed: Client requested an authorization id {%s} that is different from username {%s}", authorizationIdFromClient, username));
+            throw new SaslAuthenticationException(String.format("Authentication failed: Client requested an authorization id {%s} that is different from username {%s}",
+                    Utils.sanitizeString(authorizationIdFromClient, USERNAME_MAX_LEN), Utils.sanitizeString(username, USERNAME_MAX_LEN)));
 
         this.authorizationId = username;
 

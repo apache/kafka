@@ -47,6 +47,8 @@ import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import static org.apache.kafka.common.utils.Utils.USERNAME_MAX_LEN;
+
 /**
  * SaslServer implementation for SASL/SCRAM. This server is configured with a callback
  * handler for integration with a credential manager. Kafka brokers provide callbacks
@@ -116,7 +118,7 @@ public class ScramSaslServer implements SaslServer {
                             credentialCallback = tokenCallback;
                             callbackHandler.handle(new Callback[]{nameCallback, tokenCallback});
                             if (tokenCallback.tokenOwner() == null)
-                                throw new SaslException("Token Authentication failed: Invalid tokenId : " + username);
+                                throw new SaslException("Token Authentication failed: Invalid tokenId : " + Utils.sanitizeString(username, USERNAME_MAX_LEN));
                             this.authorizationId = tokenCallback.tokenOwner();
                             this.tokenExpiryTimestamp = tokenCallback.tokenExpiryTimestamp();
                         } else {
@@ -127,10 +129,11 @@ public class ScramSaslServer implements SaslServer {
                         }
                         this.scramCredential = credentialCallback.scramCredential();
                         if (scramCredential == null)
-                            throw new SaslException(String.format("Authentication failed: Invalid user {%s} credentials", username));
+                            throw new SaslException(String.format("Authentication failed: Invalid user {%s} credentials", Utils.sanitizeString(username, USERNAME_MAX_LEN)));
                         String authorizationIdFromClient = clientFirstMessage.authorizationId();
                         if (!authorizationIdFromClient.isEmpty() && !authorizationIdFromClient.equals(username))
-                            throw new SaslAuthenticationException(String.format("Authentication failed: Client requested an authorization id {%s} that is different from username {%s}", authorizationIdFromClient, username));
+                            throw new SaslAuthenticationException(String.format("Authentication failed: Client requested an authorization id {%s} that is different from username {%s}",
+                                    Utils.sanitizeString(authorizationIdFromClient, USERNAME_MAX_LEN), Utils.sanitizeString(username, USERNAME_MAX_LEN)));
 
                         if (scramCredential.iterations() < mechanism.minIterations())
                             throw new SaslException("Iterations " + scramCredential.iterations() +  " is less than the minimum " + mechanism.minIterations() + " for " + mechanism);
@@ -143,7 +146,7 @@ public class ScramSaslServer implements SaslServer {
                     } catch (SaslException | AuthenticationException e) {
                         throw e;
                     } catch (Throwable e) {
-                        throw new SaslException("Authentication failed: Credentials could not be obtained" + (username == null ? "" : " for user " + username), e);
+                        throw new SaslException("Authentication failed: Credentials could not be obtained" + (username == null ? "" : " for user " + Utils.sanitizeString(username, USERNAME_MAX_LEN)), e);
                     }
 
                 case RECEIVE_CLIENT_FINAL_MESSAGE:
@@ -157,7 +160,7 @@ public class ScramSaslServer implements SaslServer {
                         setState(State.COMPLETE);
                         return serverFinalMessage.toBytes();
                     } catch (InvalidKeyException e) {
-                        throw new SaslException("Authentication failed: Invalid client final message" + (username == null ? "" : " for user " + username), e);
+                        throw new SaslException("Authentication failed: Invalid client final message" + (username == null ? "" : " for user " + Utils.sanitizeString(username, USERNAME_MAX_LEN)), e);
                     }
 
                 default:
@@ -228,9 +231,9 @@ public class ScramSaslServer implements SaslServer {
             byte[] clientSignature = formatter.clientSignature(expectedStoredKey, clientFirstMessage, serverFirstMessage, clientFinalMessage);
             byte[] computedStoredKey = formatter.storedKey(clientSignature, clientFinalMessage.proof());
             if (!MessageDigest.isEqual(computedStoredKey, expectedStoredKey))
-                throw new SaslException("Invalid client credentials" + (username == null ? "" : " for user " + username));
+                throw new SaslException("Invalid client credentials" + (username == null ? "" : " for user " + Utils.sanitizeString(username, USERNAME_MAX_LEN)));
         } catch (InvalidKeyException e) {
-            throw new SaslException("Sasl client verification failed" + (username == null ? "" : " for user " + username), e);
+            throw new SaslException("Sasl client verification failed" + (username == null ? "" : " for user " + Utils.sanitizeString(username, USERNAME_MAX_LEN)), e);
         }
     }
 

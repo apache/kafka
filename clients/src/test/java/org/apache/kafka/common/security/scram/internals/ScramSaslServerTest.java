@@ -28,6 +28,7 @@ import org.apache.kafka.common.security.token.delegation.internals.DelegationTok
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -35,6 +36,7 @@ public class ScramSaslServerTest {
 
     private static final String USER_A = "userA";
     private static final String USER_B = "userB";
+    private static final String LONG_USER_C = "userCcccccccccccccccccccccc";
 
     private ScramMechanism mechanism;
     private ScramFormatter formatter;
@@ -65,7 +67,8 @@ public class ScramSaslServerTest {
 
     @Test
     public void authorizationIdNotEqualsAuthenticationId() {
-        assertThrows(SaslAuthenticationException.class, () -> saslServer.evaluateResponse(clientFirstMessage(USER_A, USER_B)));
+        Throwable t = assertThrows(SaslAuthenticationException.class, () -> saslServer.evaluateResponse(clientFirstMessage(USER_A, LONG_USER_C)));
+        assertEquals("Authentication failed: Client requested an authorization id {userCccccccccccccccc...} that is different from username {userA}", t.getMessage());
     }
 
     private byte[] clientFirstMessage(String userName, String authorizationId) {
