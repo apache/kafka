@@ -86,12 +86,6 @@ def tryStreamsArchetype() {
   }
 }
 
-def buildNightly() {
-    // Trigger the job at 10 AM
-    def currentHour = currentBuild.rawBuild.getTimeInMillis() / 1000 / 60 / 60 % 24
-    return currentHour == 10
-}
-
 pipeline {
   agent none
   
@@ -193,7 +187,7 @@ pipeline {
             SCALA_VERSION=2.13
           }
           when {
-            expression { buildNightly() }
+            cron('@daily')
           }
           steps {
             doValidation()
