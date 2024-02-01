@@ -1309,6 +1309,18 @@ class MetadataCacheTest {
     )
   }
 
+  def transformKRaftControllerFullMetadataRequest(
+    currentMetadata: MetadataSnapshot,
+    requestControllerEpoch: Int,
+    requestTopicStates: util.List[UpdateMetadataTopicState],
+  ): (util.List[UpdateMetadataTopicState], util.List[String]) = {
+
+    val logs = new util.ArrayList[String]
+    val results = ZkMetadataCache.transformKRaftControllerFullMetadataRequest(
+      currentMetadata, requestControllerEpoch, requestTopicStates, log => logs.add(log))
+    (results, logs)
+  }
+
   @Test
   def transformUMRWithNoChanges(): Unit = {
     assertEquals((Seq(
@@ -1322,7 +1334,7 @@ class MetadataCacheTest {
           setPartitionStates(Seq(newBarPart0, newBarPart1, newBarPart2).asJava)
       ).asJava,
       List[String]().asJava),
-      ZkMetadataCache.transformKRaftControllerFullMetadataRequest(prevSnapshot,
+      transformKRaftControllerFullMetadataRequest(prevSnapshot,
         newRequestControllerEpoch,
         Seq(
           new UpdateMetadataTopicState().
@@ -1353,7 +1365,7 @@ class MetadataCacheTest {
       List[String](
         "Removing topic bar with ID 97FBD1g4QyyNNZNY94bkRA from the metadata cache since the full UMR did not include it.",
       ).asJava),
-      ZkMetadataCache.transformKRaftControllerFullMetadataRequest(prevSnapshot,
+      transformKRaftControllerFullMetadataRequest(prevSnapshot,
         newRequestControllerEpoch,
         Seq(
           new UpdateMetadataTopicState().
@@ -1384,7 +1396,7 @@ class MetadataCacheTest {
       List[String](
         "Removing topic bar with ID 97FBD1g4QyyNNZNY94bkRA from the metadata cache since the full UMR did not include it.",
       ).asJava),
-      ZkMetadataCache.transformKRaftControllerFullMetadataRequest(prevSnapshot,
+      transformKRaftControllerFullMetadataRequest(prevSnapshot,
         newRequestControllerEpoch,
         Seq(
           new UpdateMetadataTopicState().
@@ -1423,7 +1435,7 @@ class MetadataCacheTest {
         "Error: topic foo appeared in currentMetadata.topicNames, but not in currentMetadata.partitionStates.",
         "Error: topic bar appeared in currentMetadata.topicNames, but not in currentMetadata.partitionStates.",
       ).asJava),
-      ZkMetadataCache.transformKRaftControllerFullMetadataRequest(buggySnapshot,
+      transformKRaftControllerFullMetadataRequest(buggySnapshot,
         newRequestControllerEpoch,
         Seq(
           new UpdateMetadataTopicState().

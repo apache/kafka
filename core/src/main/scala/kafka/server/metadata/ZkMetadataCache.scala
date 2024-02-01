@@ -69,53 +69,57 @@ object ZkMetadataCache {
     currentMetadata: MetadataSnapshot,
     requestControllerEpoch: Int,
     requestTopicStates: util.List[UpdateMetadataTopicState],
-  ): (util.List[UpdateMetadataTopicState], util.List[String]) = {
+    handleLogMessage: String => (),
+  ): util.List[UpdateMetadataTopicState] = {
     val topicIdToNewState = new util.HashMap[Uuid, UpdateMetadataTopicState]()
     requestTopicStates.forEach(state => topicIdToNewState.put(state.topicId(), state))
-    val logMessages = new util.ArrayList[String]
     val newRequestTopicStates = new util.ArrayList[UpdateMetadataTopicState]()
     currentMetadata.topicNames.forKeyValue((id, name) => {
-      Option(topicIdToNewState.get(id)) match {
-        case None =>
-          currentMetadata.partitionStates.get(name) match {
-            case None => logMessages.add(s"Error: topic ${name} appeared in currentMetadata.topicNames, " +
-              "but not in currentMetadata.partitionStates.")
-            case Some(oldPartitionStates) =>
-              logMessages.add(s"Removing topic ${name} with ID ${id} from the metadata cache since " +
-                "the full UMR did not include it.")
-              newRequestTopicStates.add(createDeletionEntries(name,
-                id,
-                oldPartitionStates.values,
-                requestControllerEpoch))
-          }
-        case Some(newTopicState) =>
-          val indexToState = new util.HashMap[Integer, UpdateMetadataPartitionState]
-          newTopicState.partitionStates().forEach(part => indexToState.put(part.partitionIndex, part))
-          currentMetadata.partitionStates.get(name) match {
-            case None => logMessages.add(s"Error: topic ${name} appeared in currentMetadata.topicNames, " +
-              "but not in currentMetadata.partitionStates.")
-            case Some(oldPartitionStates) =>
-              oldPartitionStates.foreach(state => indexToState.remove(state._1.toInt))
-              if (!indexToState.isEmpty) {
-                logMessages.add(s"Removing ${indexToState.size()} partition(s) from topic ${name} with " +
-                  s"ID ${id} from the metadata cache since the full UMR did not include them.")
+      try {
+        Option(topicIdToNewState.get(id)) match {
+          case None =>
+            currentMetadata.partitionStates.get(name) match {
+              case None => handleLogMessage(s"Error: topic ${name} appeared in currentMetadata.topicNames, " +
+                "but not in currentMetadata.partitionStates.")
+              case Some(curPartitionStates) =>
+                handleLogMessage(s"Removing topic ${name} with ID ${id} from the metadata cache since " +
+                  "the full UMR did not include it.")
                 newRequestTopicStates.add(createDeletionEntries(name,
                   id,
-                  indexToState.values().asScala,
+                  curPartitionStates.values,
                   requestControllerEpoch))
-              }
-          }
+            }
+          case Some(newTopicState) =>
+            val indexToState = new util.HashMap[Integer, UpdateMetadataPartitionState]
+            newTopicState.partitionStates().forEach(part => indexToState.put(part.partitionIndex, part))
+            currentMetadata.partitionStates.get(name) match {
+              case None => handleLogMessage(s"Error: topic ${name} appeared in currentMetadata.topicNames, " +
+                "but not in currentMetadata.partitionStates.")
+              case Some(curPartitionStates) =>
+                curPartitionStates.foreach(state => indexToState.remove(state._1.toInt))
+                if (!indexToState.isEmpty) {
+                  handleLogMessage(s"Removing ${indexToState.size()} partition(s) from topic ${name} with " +
+                    s"ID ${id} from the metadata cache since the full UMR did not include them.")
+                  newRequestTopicStates.add(createDeletionEntries(name,
+                    id,
+                    indexToState.values().asScala,
+                    requestControllerEpoch))
+                }
+            }
+        }
+      } catch {
+        case e: Exception => handleLogMessage(s"Error: ${e}")
       }
     })
     if (newRequestTopicStates.isEmpty) {
       // If the output is the same as the input, optimize by just returning the input.
-      (requestTopicStates, logMessages)
+      requestTopicStates
     } else {
       // If the output has some new entries, they should all appear at the beginning. This will
       // ensure that the old stuff is cleared out before the new stuff is added. We will need a
       // new list for this, of course.
       newRequestTopicStates.addAll(requestTopicStates)
-      (newRequestTopicStates, logMessages)
+      newRequestTopicStates
     }
   }
 
@@ -495,31 +499,29 @@ class ZkMetadataCache(
           // updated list of topic info. This ensures that UpdateMetadataRequest.normalize is called
           // on the new, updated topic data. Note that we don't mutate the old request object; it may
           // be used elsewhere.
-          val (newTopicStates, logs) = ZkMetadataCache.transformKRaftControllerFullMetadataRequest(
+          val newTopicStates = ZkMetadataCache.transformKRaftControllerFullMetadataRequest(
             metadataSnapshot,
             updateMetadataRequest.controllerEpoch(),
-            updateMetadataRequest.topicStates())
-          val oldData = updateMetadataRequest.data()
+            updateMetadataRequest.topicStates(),
+            logMessage => if (logMessage.startsWith("Error")) {
+              stateChangeLogger.error(logMessage)
+            } else {
+              stateChangeLogger.info(logMessage)
+            })
 
           // It would be nice if we could call duplicate() here, but we don't want to copy the
           // old topicStates array. That would be quite costly, and we're not going to use it anyway.
           // Instead, we copy each field that we need.
+          val originalRequestData = updateMetadataRequest.data()
           val newData = new UpdateMetadataRequestData().
-            setControllerId(oldData.controllerId()).
-            setIsKRaftController(oldData.isKRaftController).
-            setType(oldData.`type`()).
-            setControllerEpoch(oldData.controllerEpoch()).
-            setBrokerEpoch(oldData.brokerEpoch()).
+            setControllerId(originalRequestData.controllerId()).
+            setIsKRaftController(originalRequestData.isKRaftController).
+            setType(originalRequestData.`type`()).
+            setControllerEpoch(originalRequestData.controllerEpoch()).
+            setBrokerEpoch(originalRequestData.brokerEpoch()).
             setTopicStates(newTopicStates).
-            setLiveBrokers(oldData.liveBrokers())
+            setLiveBrokers(originalRequestData.liveBrokers())
           updateMetadataRequest = new UpdateMetadataRequest(newData, updateMetadataRequest.version())
-          logs.forEach(log => {
-            if (log.startsWith("Error")) {
-              stateChangeLogger.error(log)
-            } else {
-              stateChangeLogger.info(log)
-            }
-          })
         }
       }
 
