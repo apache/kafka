@@ -71,4 +71,18 @@ public class RebalanceMetricsManager {
     private MetricName createMetric(Metrics metrics, String name, String description) {
         return metrics.metricName(name, metricGroupName, description);
     }
+
+    public void recordRebalanceStarted(long nowMs) {
+        // record rebalance started
+    }
+
+    public void recordRebalanceEnded(long nowMs) {
+        lastRebalanceEndMs = nowMs;
+        // record rebalance nowMs - rebalanceStartMs
+    }
+
+    public void maybeRecordRebalanceFailed() {
+        // if last rebalance started != -1L
+        failedRebalanceSensor.record();
+    }
 }

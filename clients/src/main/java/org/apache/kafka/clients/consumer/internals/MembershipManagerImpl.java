@@ -371,6 +371,7 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
     @Override
     public void onHeartbeatResponseReceived(ConsumerGroupHeartbeatResponseData response) {
         if (response.errorCode() != Errors.NONE.code()) {
+            metricsManager.maybeRecordRebalanceFailed();
             String errorMessage = String.format(
                     "Unexpected error in Heartbeat response. Expected no error, but received: %s",
                     Errors.forCode(response.errorCode())
@@ -416,6 +417,7 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
      * @param assignment Assignment received from the broker.
      */
     private void processAssignmentReceived(ConsumerGroupHeartbeatResponseData.Assignment assignment) {
+        metricsManager.recordRebalanceStarted(time.milliseconds());
         replaceUnresolvedAssignmentWithNewAssignment(assignment);
         if (!assignmentUnresolved.equals(currentAssignment)) {
             // Transition the member to RECONCILING when receiving a new target
@@ -945,6 +947,7 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
             } else {
                 boolean memberHasRejoined = memberEpochOnReconciliationStart != memberEpoch;
                 if (state == MemberState.RECONCILING && !memberHasRejoined) {
+                    metricsManager.recordRebalanceEnded(time.milliseconds());
                     // Make assignment effective on the broker by transitioning to send acknowledge.
                     transitionTo(MemberState.ACKNOWLEDGING);
 
