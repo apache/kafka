@@ -210,7 +210,7 @@ class ConsoleConsumer(KafkaPathResolverMixin, JmxMixin, BackgroundThreadService)
 
         # LoggingMessageFormatter was introduced after 0.9
         if node.version > LATEST_0_9:
-            cmd += " --formatter kafka.tools.LoggingMessageFormatter"
+            cmd += " --formatter org.apache.kafka.tools.consumer.LoggingMessageFormatter"
 
         if self.enable_systest_events:
             # enable systest events is only available in 0.10.0 and later
