@@ -453,8 +453,8 @@ public class ConsumerGroupTest {
         // Test case insensitivity.
         assertEquals(Group.GroupType.parse("Consumer"), Group.GroupType.CONSUMER);
 
-        // Test with an invalid string.
-        assertThrows(IllegalArgumentException.class, () -> Group.GroupType.parse("invalidType"));
+        // Test with invalid group type.
+        assertEquals(Group.GroupType.parse("Invalid"), Group.GroupType.UNKNOWN);
     }
 
     @Test

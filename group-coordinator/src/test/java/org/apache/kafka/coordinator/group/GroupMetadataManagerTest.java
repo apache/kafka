@@ -9707,11 +9707,13 @@ public class GroupMetadataManagerTest {
             new ListGroupsResponseData.ListedGroup()
                 .setGroupId(classicGroup.groupId())
                 .setProtocolType(Group.GroupType.CLASSIC.toString())
-                .setGroupState(EMPTY.toString()),
+                .setGroupState(EMPTY.toString())
+                .setGroupType(Group.GroupType.CLASSIC.toString()),
             new ListGroupsResponseData.ListedGroup()
                 .setGroupId(consumerGroupId)
                 .setProtocolType(ConsumerProtocol.PROTOCOL_TYPE)
                 .setGroupState(ConsumerGroup.ConsumerGroupState.ASSIGNING.toString())
+                .setGroupType(Group.GroupType.CONSUMER.toString())
         ).collect(Collectors.toMap(ListGroupsResponseData.ListedGroup::groupId, Function.identity()));
 
         assertEquals(expectAllGroupMap, actualAllGroupMap);
