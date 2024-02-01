@@ -958,7 +958,6 @@ abstract class EmbeddedConnect {
      * @return the list of handles of the online workers
      */
     public Set<WorkerHandle> activeWorkers() {
-        ObjectMapper mapper = new ObjectMapper();
         return workers().stream()
                 .filter(w -> {
                     try {
