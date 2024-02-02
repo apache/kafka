@@ -45,6 +45,7 @@ public class GlobalStateUpdateTask implements GlobalStateMaintainer {
     private final Map<String, RecordDeserializer> deserializers = new HashMap<>();
     private final GlobalStateManager stateMgr;
     private final DeserializationExceptionHandler deserializationExceptionHandler;
+    private Map<TopicPartition, Long> offsetSnapshotSinceLastFlush = new HashMap<>();
 
     public GlobalStateUpdateTask(final LogContext logContext,
                                  final ProcessorTopology topology,
@@ -122,7 +123,6 @@ public class GlobalStateUpdateTask implements GlobalStateMaintainer {
         // but in practice this shouldn't happen for global state update tasks, since the stores are not
         // logged and there are no downstream operators after global stores.
         stateMgr.flush();
-        stateMgr.updateChangelogOffsets(offsets);
         stateMgr.checkpoint();
     }
 
@@ -150,5 +150,13 @@ public class GlobalStateUpdateTask implements GlobalStateMaintainer {
         }
     }
 
+    @Override
+    public void maybeCheckpoint() {
+        stateMgr.updateChangelogOffsets(offsets);
+        if (StateManagerUtil.checkpointNeeded(false, offsetSnapshotSinceLastFlush, offsets)) {
+            flushState();
+            offsetSnapshotSinceLastFlush = new HashMap<>(offsets);
+        }
+    }
 
 }

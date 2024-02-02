@@ -46,8 +46,6 @@ import java.util.Set;
 
 import static java.util.Arrays.asList;
 import static org.apache.kafka.streams.processor.internals.testutil.ConsumerRecordUtil.record;
-import static org.hamcrest.CoreMatchers.equalTo;
-import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
@@ -71,7 +69,7 @@ public class GlobalStateTaskTest {
     private final MockProcessorNode<?, ?, ?, ?> processorTwo = new MockProcessorNode<>();
 
     private final Map<TopicPartition, Long> offsets = new HashMap<>();
-    private File testDirectory = TestUtils.tempDirectory("global-store");
+    private final File testDirectory = TestUtils.tempDirectory("global-store");
     private final NoOpProcessorContext context = new NoOpProcessorContext();
 
     private ProcessorTopology topology;
@@ -213,25 +211,51 @@ public class GlobalStateTaskTest {
 
 
     @Test
-    public void shouldFlushStateManagerWithOffsets() {
-        final Map<TopicPartition, Long> expectedOffsets = new HashMap<>();
-        expectedOffsets.put(t1, 52L);
-        expectedOffsets.put(t2, 100L);
+    public void shouldFlushStateManagerOnFlushState() {
         globalStateTask.initialize();
         globalStateTask.update(record(topic1, 1, 51, "foo".getBytes(), "foo".getBytes()));
         globalStateTask.flushState();
-        assertEquals(expectedOffsets, stateMgr.changelogOffsets());
+        assertTrue(stateMgr.flushed);
+        assertTrue(stateMgr.checkpointWritten);
     }
 
     @Test
-    public void shouldCheckpointOffsetsWhenStateIsFlushed() {
-        final Map<TopicPartition, Long> expectedOffsets = new HashMap<>();
-        expectedOffsets.put(t1, 102L);
-        expectedOffsets.put(t2, 100L);
+    public void shouldCheckpointOffsetsOnFlushState() {
         globalStateTask.initialize();
         globalStateTask.update(record(topic1, 1, 101, "foo".getBytes(), "foo".getBytes()));
         globalStateTask.flushState();
-        assertThat(stateMgr.changelogOffsets(), equalTo(expectedOffsets));
+        assertTrue(stateMgr.flushed);
+        assertTrue(stateMgr.checkpointWritten);
+    }
+
+    @Test
+    public void shouldNotCheckpointIfSnapshotNotChangedMuch() {
+        final Map<TopicPartition, Long> expectedOffsets = new HashMap<>();
+        expectedOffsets.put(t1, 9001L);
+        expectedOffsets.put(t2, 100L);
+
+        globalStateTask.initialize();
+        globalStateTask.update(record(topic1, 1, 9000L, "foo".getBytes(), "foo".getBytes()));
+        globalStateTask.maybeCheckpoint();
+
+        assertEquals(stateMgr.changelogOffsets(), expectedOffsets);
+        assertFalse(stateMgr.flushed);
+        assertFalse(stateMgr.checkpointWritten);
+    }
+
+    @Test
+    public void shouldCheckpointIfSnapshotMuchChanged() {
+        final Map<TopicPartition, Long> expectedOffsets = new HashMap<>();
+        expectedOffsets.put(t1, 10001L);
+        expectedOffsets.put(t2, 100L);
+
+        globalStateTask.initialize();
+        globalStateTask.update(record(topic1, 1, 10000L, "foo".getBytes(), "foo".getBytes()));
+        globalStateTask.maybeCheckpoint();
+
+        assertEquals(stateMgr.changelogOffsets(), expectedOffsets);
+        assertTrue(stateMgr.flushed);
+        assertTrue(stateMgr.checkpointWritten);
     }
 
     @Test
