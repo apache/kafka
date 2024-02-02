@@ -213,21 +213,6 @@ object TestUtils extends Logging {
     server
   }
 
-  def createKRaftServer(config: KafkaConfig, time: Time = Time.SYSTEM, startup: Boolean = true) = {
-    val server = new KafkaRaftServer(config, time)
-    if (startup) server.startup()
-    server
-
-    new SharedServer(
-      config,
-      metaPropsEnsemble,
-      time,
-      metrics,
-      controllerQuorumVotersFuture,
-      new StandardFaultHandlerFactory(),
-    )
-  }
-
   def boundPort(broker: KafkaBroker, securityProtocol: SecurityProtocol = SecurityProtocol.PLAINTEXT): Int =
     broker.boundPort(ListenerName.forSecurityProtocol(securityProtocol))
 

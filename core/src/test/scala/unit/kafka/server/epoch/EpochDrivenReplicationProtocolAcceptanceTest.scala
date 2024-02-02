@@ -19,7 +19,7 @@ package kafka.server.epoch
 
 import kafka.log.UnifiedLog
 import kafka.server.KafkaConfig._
-import kafka.server.{KafkaBroker, KafkaConfig, KafkaServer, QuorumTestHarness}
+import kafka.server.{KafkaBroker, KafkaConfig, QuorumTestHarness}
 import kafka.tools.DumpLogSegments
 import kafka.utils.{CoreUtils, Logging, TestInfoUtils, TestUtils}
 import org.apache.kafka.clients.consumer.{Consumer, ConsumerConfig, KafkaConsumer}
@@ -140,7 +140,7 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends QuorumTestHarness wit
   @ValueSource(strings = Array("zk", "kraft"))
   def shouldNotAllowDivergentLogs(quorum: String): Unit = {
     //Given two brokers
-    val brokers = (100 to 101).map { id => TestUtils.createServer(fromProps(createBrokerConfig(id))) }
+    val brokers = (100 to 101).map(createBrokerForId(_))
     val broker100 = brokers(0)
     val broker101 = brokers(1)
 
@@ -377,7 +377,7 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends QuorumTestHarness wit
     waitForLogsToMatch(brokers(0), brokers(1))
     printSegments()
 
-    def crcSeq(broker: KafkaServer, partition: Int = 0): Seq[Long] = {
+    def crcSeq(broker: KafkaBroker, partition: Int = 0): Seq[Long] = {
       val batches = getLog(broker, partition).activeSegment.read(0, Integer.MAX_VALUE)
         .records.batches().asScala.toSeq
       batches.map(_.checksum)
@@ -393,7 +393,7 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends QuorumTestHarness wit
     info(s"Follower: leo${follower.config.brokerId}: " + getLog(follower, 0).logEndOffset + " cache: " + epochCache(follower).epochEntries)
   }
 
-  private def waitForLogsToMatch(b1: KafkaServer, b2: KafkaServer, partition: Int = 0): Unit = {
+  private def waitForLogsToMatch(b1: KafkaBroker, b2: KafkaBroker, partition: Int = 0): Unit = {
     TestUtils.waitUntilTrue(() => {
       getLog(b1, partition).logEndOffset == getLog(b2, partition).logEndOffset
     }, "Logs didn't match.")
@@ -417,7 +417,7 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends QuorumTestHarness wit
     consumer
   }
 
-  private def deleteMessagesFromLogFile(bytes: Long, broker: KafkaServer, partitionId: Int): Unit = {
+  private def deleteMessagesFromLogFile(bytes: Long, broker: KafkaBroker, partitionId: Int): Unit = {
     val logFile = getLogFile(broker, partitionId)
     val writable = new RandomAccessFile(logFile, "rwd")
     writable.setLength(logFile.length() - bytes)
@@ -497,33 +497,14 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends QuorumTestHarness wit
     }
   }
 
-  private def createBrokerForId(id: Int, enableUncleanLeaderElection: Boolean = false): KafkaServer = {
-    val config = createBrokerConfig(id)
+  private def createBrokerForId(id: Int, enableUncleanLeaderElection: Boolean = false): KafkaBroker = {
+    val config = TestUtils.createBrokerConfig(id, zkConnectOrNull)
     TestUtils.setIbpAndMessageFormatVersions(config, metadataVersion)
     config.setProperty(KafkaConfig.UncleanLeaderElectionEnableProp, enableUncleanLeaderElection.toString)
     if (isKRaftTest()) {
-      TestUtils.createKRaftServer(fromProps(config))
+      createBroker(fromProps(config))
     } else {
       TestUtils.createServer(fromProps(config))
-    }
-  }
-
-  private def createBrokerConfig(id: Int): Properties = {
-    if (isKRaftTest()) {
-      val props = TestUtils.createBrokerConfig(id, zkConnect)
-      props.setProperty(KafkaConfig.ProcessRolesProp, "broker")
-      props.setProperty(KafkaConfig.ControllerListenerNamesProp, "CONTROLLER")
-      props
-    } else {
-      val props = TestUtils.createBrokerConfig(id, zkConnect)
-      // Configure control plane listener to make sure we have separate listeners from client,
-      // in order to avoid returning Envelope API version.
-      props.setProperty(KafkaConfig.ControlPlaneListenerNameProp, "CONTROLLER")
-      props.setProperty(KafkaConfig.ListenerSecurityProtocolMapProp, "CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT")
-      props.setProperty("listeners", "PLAINTEXT://localhost:0,CONTROLLER://localhost:0")
-      props.setProperty(KafkaConfig.AdvertisedListenersProp, "PLAINTEXT://localhost:0,CONTROLLER://localhost:0")
-      props.setProperty(KafkaConfig.UnstableApiVersionsEnableProp, "true")
-      props
     }
   }
 
