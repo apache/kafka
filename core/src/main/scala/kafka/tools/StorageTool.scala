@@ -37,8 +37,7 @@ import org.apache.kafka.metadata.properties.MetaPropertiesEnsemble.VerificationF
 import org.apache.kafka.metadata.properties.{MetaProperties, MetaPropertiesEnsemble, MetaPropertiesVersion, PropertiesUtils}
 
 import java.util
-import java.util.Base64
-import java.util.Optional
+import java.util.{Base64, Collections, Optional}
 import scala.collection.mutable
 import scala.jdk.CollectionConverters._
 import scala.collection.mutable.ArrayBuffer
@@ -85,9 +84,13 @@ object StorageTool extends Logging {
               metadataRecords.append(new ApiMessageAndVersion(record, 0.toShort))
             }
           })
-          // Add transactionalVersion to metadata records
-          val transactionVersion = getTransactionVersion(namespace,
-            Option(config.get.originals.get(KafkaConfig.InterBrokerProtocolVersionProp)).map(_.toString))
+          val features = parseFeatures(namespace)
+          // Add transactionalVersion to metadata records. If it is not in the feature map, check version-default is used or just use default.
+          val transactionVersion =
+            if (features.contains(TransactionVersion.FEATURE_NAME))
+              TransactionVersion.fromFeatureLevel(features(TransactionVersion.FEATURE_NAME))
+            else
+              getTransactionVersionFromRelease(namespace, Option(MetadataVersion.LATEST_PRODUCTION.shortVersion()))
           val bootstrapMetadata = buildBootstrapMetadata(metadataVersion, transactionVersion, Some(metadataRecords), "format command")
           val ignoreFormatted = namespace.getBoolean("ignore_formatted")
           if (!configToSelfManagedMode(config.get)) {
@@ -143,8 +146,28 @@ object StorageTool extends Logging {
     formatParser.addArgument("--release-version", "-r").
       action(store()).
       help(s"A KRaft release version to use for the initial metadata version. The minimum is 3.0, the default is ${MetadataVersion.LATEST_PRODUCTION.version()}")
+    formatParser.addArgument("--version-default", "-vd").
+      action(store()).
+      help(s"A Kafka release version used to determine the default for all cluster features. The minimum is 3.0, the default is ${MetadataVersion.LATEST_PRODUCTION.shortVersion()}")
+    formatParser.addArgument("--features", "-f").
+      action(append()).
+      help(s"A list of features and desired versions e.g `transaction.version=1 kraft.version=2`")
 
     parser.parseArgsOrFail(args)
+  }
+
+  def parseFeatures(namespace: Namespace): Map[String, Short] = {
+    val features = mutable.Map[String, Short]()
+    val featuresList = Option(namespace.getList("features")).getOrElse(Collections.emptyList[String])
+      featuresList.forEach(feature => {
+        val parts = feature.split("=")
+        try {
+          features.put(parts(0), parts(1).toShort)
+        } catch {
+          case _: NumberFormatException => throw new IllegalArgumentException(parts(1) + " is not a valid feature version. Only numbers are accepted.")
+        }
+      })
+    features.toMap
   }
 
   def configToLogDirectories(config: KafkaConfig): Seq[String] = {
@@ -170,7 +193,7 @@ object StorageTool extends Logging {
       .getOrElse(defaultValue)
   }
 
-  def getTransactionVersion(
+  def getTransactionVersionFromRelease(
     namespace: Namespace,
     defaultVersionString: Option[String]
   ): TransactionVersion = {
@@ -179,7 +202,7 @@ object StorageTool extends Logging {
       case None => TransactionVersion.LATEST_PRODUCTION
     }
 
-    Option(namespace.getString("release_version"))
+    Option(namespace.getString("version_default"))
       .map(ver => TransactionVersion.fromVersionString(ver))
       .getOrElse(defaultValue)
   }

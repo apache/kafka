@@ -124,14 +124,12 @@ public enum TransactionVersion {
 
 
     /**
-     * Return an `TransactionVersion` instance for `versionString`, which can be in a variety of formats (e.g. "0.8.0", "0.8.0.x",
-     * "0.10.0", "0.10.0-IV1"). `IllegalArgumentException` is thrown if `versionString` cannot be mapped to an `TransactionVersion`.
-     * Note that 'misconfigured' values such as "1.0.1" will be parsed to `IBP_1_0_IV0` as we ignore anything after the first
-     * two digits for versions that don't start with "0."
+     * Return an `TransactionVersion` instance for `versionString`, which should be passed in the form of a
+     * kafka release. Some examples are 3.3, 3.6, 4.0. Patch releases (3.5.1) wil be ignored.
      */
     public static TransactionVersion fromVersionString(String versionString) {
-        String[] versionSegments = versionString.split(Pattern.quote("-"))[0].split(Pattern.quote("."));
-        int numSegments = (versionString.startsWith("0.")) ? 3 : 2;
+        String[] versionSegments = versionString.split(Pattern.quote("."));
+        int numSegments = 2;
         String key;
         if (numSegments >= versionSegments.length) {
             key = versionString;
