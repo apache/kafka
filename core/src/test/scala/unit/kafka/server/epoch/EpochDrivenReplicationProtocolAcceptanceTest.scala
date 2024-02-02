@@ -308,7 +308,7 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends QuorumTestHarness wit
   def logsShouldNotDivergeOnUncleanLeaderElections(): Unit = {
 
     // Given two brokers, unclean leader election is enabled
-    val brokers = (100 to 101).map(createBrokerForId(_, enableUncleanLeaderElection = true))
+    brokers = (100 to 101).map(createBrokerForId(_, enableUncleanLeaderElection = true))
 
     // A single partition topic with 2 replicas, min.isr = 1
     createTopic(topic, Map(0 -> Seq(100, 101)), brokers, CoreUtils.propsWith((KafkaConfig.MinInSyncReplicasProp, "1")))
