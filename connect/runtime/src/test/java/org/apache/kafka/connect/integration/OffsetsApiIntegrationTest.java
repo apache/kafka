@@ -812,9 +812,6 @@ public class OffsetsApiIntegrationTest {
         verifyExpectedSinkConnectorOffsets(connectorName, topic, 1, NUM_RECORDS_PER_PARTITION,
                 "Sink connector consumer group offsets should catch up to the topic end offsets");
 
-        verifyExpectedSinkConnectorOffsets(connectorName, topic, 1, NUM_RECORDS_PER_PARTITION,
-                "Sink connector consumer group offsets should catch up to the topic end offsets");
-
         connect.stopConnector(connectorName);
 
         // Try to reset the offsets
