@@ -267,11 +267,13 @@ public class HeartbeatRequestManager implements RequestManager {
             return logResponse(request);
         else
             return request.whenComplete((response, exception) -> {
+                long completionTimeMs = request.handler().completionTimeMs();
+                heartbeatRequestState.updateLastReceivedTime(completionTimeMs);
                 if (response != null) {
                     metricsManager.recordRequestLatency(response.requestLatencyMs());
-                    onResponse((ConsumerGroupHeartbeatResponse) response.responseBody(), request.handler().completionTimeMs());
+                    onResponse((ConsumerGroupHeartbeatResponse) response.responseBody(), completionTimeMs);
                 } else {
-                    onFailure(exception, request.handler().completionTimeMs());
+                    onFailure(exception, completionTimeMs);
                 }
             });
     }
