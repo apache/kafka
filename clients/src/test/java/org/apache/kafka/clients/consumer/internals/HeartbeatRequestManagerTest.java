@@ -465,6 +465,13 @@ public class HeartbeatRequestManagerTest {
                 }
                 break;
         }
+
+        if (!isFatal) {
+            // Make sure a next heartbeat is sent for all non-fatal errors (to retry or rejoin)
+            time.sleep(DEFAULT_HEARTBEAT_INTERVAL_MS);
+            result = heartbeatRequestManager.poll(time.milliseconds());
+            assertEquals(1, result.unsentRequests.size());
+        }
     }
 
     @Test
