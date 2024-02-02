@@ -589,6 +589,23 @@ public class GroupCoordinatorShard implements CoordinatorShard<Record> {
         );
     }
 
+    /**
+     * Remove offsets of the partitions that have been deleted.
+     *
+     * @param topicPartitions   The partitions that have been deleted.
+     * @return The list of tombstones (offset commit) to append.
+     */
+    public CoordinatorResult<Void, Record> onPartitionsDeleted(
+        List<TopicPartition> topicPartitions
+    ) {
+        final long startTimeMs = time.milliseconds();
+        final List<Record> records = offsetMetadataManager.onPartitionsDeleted(topicPartitions);
+
+        log.info("Generated {} tombstone records in {} milliseconds while deleting offsets for partitions {}.",
+            records.size(), time.milliseconds() - startTimeMs, topicPartitions);
+
+        return new CoordinatorResult<>(records);
+    }
 
     /**
      * The coordinator has been loaded. This is used to apply any

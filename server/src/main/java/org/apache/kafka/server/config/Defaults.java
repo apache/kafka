@@ -74,6 +74,7 @@ public class Defaults {
     /** ********* KRaft mode configs *********/
     public static final int EMPTY_NODE_ID = -1;
     public static final long SERVER_MAX_STARTUP_TIME_MS = Long.MAX_VALUE;
+    public static final int MIGRATION_METADATA_MIN_BATCH_SIZE = 200;
 
     /** ********* Authorizer Configuration *********/
     public static final String AUTHORIZER_CLASS_NAME = "";

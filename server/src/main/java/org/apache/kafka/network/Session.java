@@ -14,16 +14,21 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.clients.consumer.internals.metrics;
+package org.apache.kafka.network;
 
-import java.util.Optional;
+import org.apache.kafka.common.security.auth.KafkaPrincipal;
+import org.apache.kafka.common.utils.Sanitizer;
 
-import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.CONSUMER_METRIC_GROUP_PREFIX;
-import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.COORDINATOR_METRICS_SUFFIX;
+import java.net.InetAddress;
 
-public abstract class AbstractConsumerMetrics {
-    protected String groupMetricsName = CONSUMER_METRIC_GROUP_PREFIX + COORDINATOR_METRICS_SUFFIX;
-    public AbstractConsumerMetrics(Optional<String> grpMetricsPrefix) {
-        grpMetricsPrefix.ifPresent(s -> this.groupMetricsName = s + COORDINATOR_METRICS_SUFFIX);
+public class Session {
+    public final KafkaPrincipal principal;
+    public final InetAddress clientAddress;
+    public final String sanitizedUser;
+
+    public Session(KafkaPrincipal principal, InetAddress clientAddress) {
+        this.principal = principal;
+        this.clientAddress = clientAddress;
+        this.sanitizedUser = Sanitizer.sanitize(principal.getName());
     }
 }

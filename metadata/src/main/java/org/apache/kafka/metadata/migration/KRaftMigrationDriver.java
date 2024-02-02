@@ -90,8 +90,6 @@ public class KRaftMigrationDriver implements MetadataPublisher {
      */
     final static int METADATA_COMMIT_MAX_WAIT_MS = 300_000;
 
-    final static int MIGRATION_MIN_BATCH_SIZE = 1_000;
-
     private final Time time;
     private final Logger log;
     private final int nodeId;
@@ -110,6 +108,7 @@ public class KRaftMigrationDriver implements MetadataPublisher {
      * MetadataPublisher with MetadataLoader.
      */
     private final Consumer<MetadataPublisher> initialZkLoadHandler;
+    private final int minBatchSize;
     private volatile MigrationDriverState migrationState;
     private volatile ZkMigrationLeadershipState migrationLeadershipState;
     private volatile MetadataImage image;
@@ -125,6 +124,7 @@ public class KRaftMigrationDriver implements MetadataPublisher {
         QuorumFeatures quorumFeatures,
         KafkaConfigSchema configSchema,
         QuorumControllerMetrics controllerMetrics,
+        int minBatchSize,
         Time time
     ) {
         this.nodeId = nodeId;
@@ -146,6 +146,7 @@ public class KRaftMigrationDriver implements MetadataPublisher {
         this.quorumFeatures = quorumFeatures;
         this.zkMetadataWriter = new KRaftMigrationZkWriter(zkMigrationClient);
         this.recordRedactor = new RecordRedactor(configSchema);
+        this.minBatchSize = minBatchSize;
     }
 
     public static Builder newBuilder() {
@@ -680,7 +681,7 @@ public class KRaftMigrationDriver implements MetadataPublisher {
                 // This will cause readAllMetadata to throw since this batch consumer is called directly from readAllMetadata
                 throw new RuntimeException(e);
             }
-        }, MIGRATION_MIN_BATCH_SIZE);
+        }, minBatchSize);
     }
 
     class MigrateMetadataEvent extends MigrationEvent {
@@ -854,6 +855,7 @@ public class KRaftMigrationDriver implements MetadataPublisher {
         private QuorumFeatures quorumFeatures;
         private KafkaConfigSchema configSchema;
         private QuorumControllerMetrics controllerMetrics;
+        private Integer minBatchSize;
         private Time time;
 
         public Builder setNodeId(int nodeId) {
@@ -906,6 +908,11 @@ public class KRaftMigrationDriver implements MetadataPublisher {
             return this;
         }
 
+        public Builder setMinMigrationBatchSize(int minBatchSize) {
+            this.minBatchSize = minBatchSize;
+            return this;
+        }
+
         public KRaftMigrationDriver build() {
             if (nodeId == null) {
                 throw new IllegalStateException("You must specify the node ID of this controller.");
@@ -934,6 +941,9 @@ public class KRaftMigrationDriver implements MetadataPublisher {
             if (time == null) {
                 throw new IllegalStateException("You must specify the Time.");
             }
+            if (minBatchSize == null) {
+                minBatchSize = 200;
+            }
             return new KRaftMigrationDriver(
                 nodeId,
                 zkRecordConsumer,
@@ -944,6 +954,7 @@ public class KRaftMigrationDriver implements MetadataPublisher {
                 quorumFeatures,
                 configSchema,
                 controllerMetrics,
+                minBatchSize,
                 time
             );
         }

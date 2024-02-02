@@ -800,6 +800,9 @@ class ReplicaManager(val config: KafkaConfig,
    * @param requestLocal                  container for the stateful instances scoped to this request -- this must correspond to the
    *                                      thread calling this method
    * @param actionQueue                   the action queue to use. ReplicaManager#defaultActionQueue is used by default.
+   *
+   * The responseCallback is wrapped so that it is scheduled on a request handler thread. There, it should be called with
+   * that request handler thread's thread local and not the one supplied to this method.
    */
   def handleProduceAppend(timeout: Long,
                           requiredAcks: Short,
@@ -813,19 +816,19 @@ class ReplicaManager(val config: KafkaConfig,
 
     val transactionalProducerInfo = mutable.HashSet[(Long, Short)]()
     val topicPartitionBatchInfo = mutable.Map[TopicPartition, Int]()
-    entriesPerPartition.foreach { case (topicPartition, records) =>
+    entriesPerPartition.forKeyValue { (topicPartition, records) =>
       // Produce requests (only requests that require verification) should only have one batch per partition in "batches" but check all just to be safe.
       val transactionalBatches = records.batches.asScala.filter(batch => batch.hasProducerId && batch.isTransactional)
       transactionalBatches.foreach(batch => transactionalProducerInfo.add(batch.producerId, batch.producerEpoch))
-      if (!transactionalBatches.isEmpty) topicPartitionBatchInfo.put(topicPartition, records.firstBatch.baseSequence)
+      if (transactionalBatches.nonEmpty) topicPartitionBatchInfo.put(topicPartition, records.firstBatch.baseSequence)
     }
     if (transactionalProducerInfo.size > 1) {
       throw new InvalidPidMappingException("Transactional records contained more than one producer ID")
     }
 
-    def postVerificationCallback(preAppendErrors: Map[TopicPartition, Errors],
-                                 newRequestLocal: RequestLocal,
-                                 verificationGuards: Map[TopicPartition, VerificationGuard]): Unit = {
+    def postVerificationCallback(newRequestLocal: RequestLocal,
+                                 results: (Map[TopicPartition, Errors], Map[TopicPartition, VerificationGuard])): Unit = {
+      val (preAppendErrors, verificationGuards) = results
       val errorResults = preAppendErrors.map {
         case (topicPartition, error) =>
           // translate transaction coordinator errors to known producer response errors
@@ -868,12 +871,26 @@ class ReplicaManager(val config: KafkaConfig,
     }
 
     if (transactionalProducerInfo.size < 1) {
-      postVerificationCallback(Map.empty[TopicPartition, Errors], requestLocal, Map.empty[TopicPartition, VerificationGuard])
+      postVerificationCallback(
+        requestLocal,
+        (Map.empty[TopicPartition, Errors], Map.empty[TopicPartition, VerificationGuard])
+      )
       return
     }
 
-    maybeStartTransactionVerificationForPartitions(topicPartitionBatchInfo, transactionalId,
-      transactionalProducerInfo.head._1, transactionalProducerInfo.head._2, requestLocal, postVerificationCallback)
+    maybeStartTransactionVerificationForPartitions(
+      topicPartitionBatchInfo,
+      transactionalId,
+      transactionalProducerInfo.head._1,
+      transactionalProducerInfo.head._2,
+      // Wrap the callback to be handled on an arbitrary request handler thread
+      // when transaction verification is complete. The request local passed in
+      // is only used when the callback is executed immediately.
+      KafkaRequestHandler.wrapAsyncCallback(
+        postVerificationCallback,
+        requestLocal
+      )
+    )
   }
 
   private def buildProducePartitionStatus(
@@ -968,8 +985,6 @@ class ReplicaManager(val config: KafkaConfig,
    * @param producerId      the producer id for the producer writing to the transaction
    * @param producerEpoch   the epoch of the producer writing to the transaction
    * @param baseSequence    the base sequence of the first record in the batch we are trying to append
-   * @param requestLocal    container for the stateful instances scoped to this request -- this must correspond to the
-   *                        thread calling this method
    * @param callback        the method to execute once the verification is either completed or returns an error
    *
    * When the verification returns, the callback will be supplied the error if it exists or Errors.NONE.
@@ -982,16 +997,14 @@ class ReplicaManager(val config: KafkaConfig,
     producerId: Long,
     producerEpoch: Short,
     baseSequence: Int,
-    requestLocal: RequestLocal,
-    callback: (Errors, RequestLocal, VerificationGuard) => Unit
+    callback: ((Errors, VerificationGuard)) => Unit
   ): Unit = {
-    def generalizedCallback(preAppendErrors: Map[TopicPartition, Errors],
-                            newRequestLocal: RequestLocal,
-                            verificationGuards: Map[TopicPartition, VerificationGuard]): Unit = {
-      callback(
+    def generalizedCallback(results: (Map[TopicPartition, Errors], Map[TopicPartition, VerificationGuard])): Unit = {
+      val (preAppendErrors, verificationGuards) = results
+      callback((
         preAppendErrors.getOrElse(topicPartition, Errors.NONE),
-        newRequestLocal,
-        verificationGuards.getOrElse(topicPartition, VerificationGuard.SENTINEL))
+        verificationGuards.getOrElse(topicPartition, VerificationGuard.SENTINEL)
+      ))
     }
 
     maybeStartTransactionVerificationForPartitions(
@@ -999,7 +1012,6 @@ class ReplicaManager(val config: KafkaConfig,
       transactionalId,
       producerId,
       producerEpoch,
-      requestLocal,
       generalizedCallback
     )
   }
@@ -1010,31 +1022,26 @@ class ReplicaManager(val config: KafkaConfig,
    * @param transactionalId          the transactional id for the transaction
    * @param producerId               the producer id for the producer writing to the transaction
    * @param producerEpoch            the epoch of the producer writing to the transaction
-   * @param requestLocal             container for the stateful instances scoped to this request -- this must correspond to the
-   *                                 thread calling this method
    * @param callback                 the method to execute once the verification is either completed or returns an error
    *
    * When the verification returns, the callback will be supplied the errors per topic partition if there were errors.
    * The callback will also be supplied the verification guards per partition if they exist. It is possible to have an
    * error and a verification guard for a topic partition if the topic partition was unable to be verified by the transaction
-   * coordinator. Transaction coordinator errors are mapped to append-friendly errors. The callback is wrapped so that it
-   * is scheduled on a request handler thread. There, it should be called with that request handler thread's thread local and
-   * not the one supplied to this method.
+   * coordinator. Transaction coordinator errors are mapped to append-friendly errors.
    */
   private def maybeStartTransactionVerificationForPartitions(
     topicPartitionBatchInfo: Map[TopicPartition, Int],
     transactionalId: String,
     producerId: Long,
     producerEpoch: Short,
-    requestLocal: RequestLocal,
-    callback: (Map[TopicPartition, Errors], RequestLocal, Map[TopicPartition, VerificationGuard]) => Unit
+    callback: ((Map[TopicPartition, Errors], Map[TopicPartition, VerificationGuard])) => Unit
   ): Unit = {
     // Skip verification if the request is not transactional or transaction verification is disabled.
     if (transactionalId == null ||
       !config.transactionPartitionVerificationEnable
       || addPartitionsToTxnManager.isEmpty
     ) {
-      callback(Map.empty[TopicPartition, Errors], requestLocal, Map.empty[TopicPartition, VerificationGuard])
+      callback((Map.empty[TopicPartition, Errors], Map.empty[TopicPartition, VerificationGuard]))
       return
     }
 
@@ -1058,29 +1065,22 @@ class ReplicaManager(val config: KafkaConfig,
 
     // No partitions require verification.
     if (verificationGuards.isEmpty) {
-      callback(errors.toMap, requestLocal, Map.empty[TopicPartition, VerificationGuard])
+      callback((errors.toMap, Map.empty[TopicPartition, VerificationGuard]))
       return
     }
 
     def invokeCallback(
-      requestLocal: RequestLocal,
       verificationErrors: Map[TopicPartition, Errors]
     ): Unit = {
-      callback(errors ++ verificationErrors, requestLocal, verificationGuards.toMap)
+      callback((errors ++ verificationErrors, verificationGuards.toMap))
     }
-
-    // Wrap the callback to be handled on an arbitrary request handler thread when transaction verification is complete.
-    val verificationCallback = KafkaRequestHandler.wrapAsyncCallback(
-      invokeCallback,
-      requestLocal
-    )
 
     addPartitionsToTxnManager.foreach(_.verifyTransaction(
       transactionalId = transactionalId,
       producerId = producerId,
       producerEpoch = producerEpoch,
       topicPartitions = verificationGuards.keys.toSeq,
-      callback = verificationCallback
+      callback = invokeCallback
     ))
 
   }

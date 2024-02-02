@@ -62,6 +62,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
+import java.util.stream.Stream;
 
 import static org.apache.kafka.connect.runtime.ConnectorConfig.CONNECTOR_CLASS_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.TASKS_MAX_CONFIG;
@@ -138,11 +139,6 @@ public class BlockingConnectorTest {
                 NUM_WORKERS,
                 "Initial group of workers did not start in time"
         );
-
-        try (Response response = connect.requestGet(connect.endpointForResource("connectors/nonexistent"))) {
-            // hack: make sure the worker is actually up (has joined the cluster, created and read to the end of internal topics, etc.)
-            assertEquals(404, response.getStatus());
-        }
     }
 
     @After
@@ -151,6 +147,7 @@ public class BlockingConnectorTest {
         connect.stop();
         // unblock everything so that we don't leak threads after each test run
         Block.reset();
+        Block.join();
     }
 
     @Test
@@ -447,11 +444,29 @@ public class BlockingConnectorTest {
             resetAwaitBlockLatch();
             BLOCK_LATCHES.forEach(CountDownLatch::countDown);
             BLOCK_LATCHES.clear();
+        }
+
+        /**
+         * {@link Thread#join(long millis) Await} the termination of all threads that have been
+         * intentionally blocked either since the last invocation of this method or, if this method
+         * has never been invoked, all threads that have ever been blocked.
+         */
+        public static synchronized void join() {
             BLOCKED_THREADS.forEach(t -> {
                 try {
                     t.join(30_000);
                     if (t.isAlive()) {
-                        log.warn("Thread {} failed to finish in time", t);
+                        log.warn(
+                                "Thread {} failed to finish in time; current stack trace:\n{}",
+                                t,
+                                Stream.of(t.getStackTrace())
+                                        .map(s -> String.format(
+                                                "\t%s.%s:%d",
+                                                s.getClassName(),
+                                                s.getMethodName(),
+                                                s.getLineNumber()
+                                        )).collect(Collectors.joining("\n"))
+                        );
                     }
                 } catch (InterruptedException e) {
                     throw new RuntimeException("Interrupted while waiting for blocked thread " + t + " to finish");
@@ -782,7 +797,7 @@ public class BlockingConnectorTest {
 
         @Override
         public List<Map<String, String>> taskConfigs(int maxTasks) {
-            return IntStream.rangeClosed(0, maxTasks)
+            return IntStream.range(0, maxTasks)
                 .mapToObj(i -> new HashMap<>(props))
                 .collect(Collectors.toList());
         }

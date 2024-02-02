@@ -18,7 +18,7 @@
  limitations under the License.
 -->
 
-<import-control pkg="org.apache.kafka.server">
+<import-control pkg="org.apache.kafka">
 
   <!-- THINK HARD ABOUT THE LAYERING OF THE PROJECT BEFORE CHANGING THIS FILE -->
 
@@ -77,9 +77,17 @@
   <allow pkg="org.apache.kafka.common" />
   <allow pkg="org.apache.kafka.raft" />
 
-  <subpackage name="metrics">
-    <allow class="org.apache.kafka.server.authorizer.AuthorizableRequestContext" />
-    <allow pkg="org.apache.kafka.server.telemetry" />
+  <subpackage name="server">
+    <subpackage name="metrics">
+      <allow class="org.apache.kafka.server.authorizer.AuthorizableRequestContext" />
+      <allow pkg="org.apache.kafka.server.telemetry" />
+    </subpackage>
+  </subpackage>
+
+  <subpackage name="security">
+    <allow pkg="org.apache.kafka.common.resource" />
+    <allow pkg="org.apache.kafka.network" />
+    <allow pkg="org.apache.kafka.server.authorizer" />
   </subpackage>
 
 </import-control>
