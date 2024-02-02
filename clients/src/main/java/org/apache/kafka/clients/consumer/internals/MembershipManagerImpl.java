@@ -27,6 +27,7 @@ import org.apache.kafka.clients.consumer.internals.events.CompletableBackgroundE
 import org.apache.kafka.clients.consumer.internals.events.ConsumerRebalanceListenerCallbackCompletedEvent;
 import org.apache.kafka.clients.consumer.internals.events.ConsumerRebalanceListenerCallbackNeededEvent;
 import org.apache.kafka.clients.consumer.internals.events.ErrorBackgroundEvent;
+import org.apache.kafka.clients.consumer.internals.metrics.RebalanceMetricsManager;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
@@ -263,6 +264,10 @@ public class MembershipManagerImpl implements MembershipManager {
      * when the timer is reset, only when it completes releasing its assignment.
      */
     private CompletableFuture<Void> staleMemberAssignmentRelease;
+    /*
+     * Holding onto rebalance metric sensors. This module records success and failure of rebalance events.
+     */
+    private final RebalanceMetricsManager metricsManager;
 
     private final Time time;
 
@@ -284,7 +289,8 @@ public class MembershipManagerImpl implements MembershipManager {
                                  LogContext logContext,
                                  Optional<ClientTelemetryReporter> clientTelemetryReporter,
                                  BackgroundEventHandler backgroundEventHandler,
-                                 Time time) {
+                                 Time time,
+                                 RebalanceMetricsManager metricsManager) {
         this.groupId = groupId;
         this.state = MemberState.UNSUBSCRIBED;
         this.serverAssignor = serverAssignor;
@@ -301,6 +307,7 @@ public class MembershipManagerImpl implements MembershipManager {
         this.rebalanceTimeoutMs = rebalanceTimeoutMs;
         this.backgroundEventHandler = backgroundEventHandler;
         this.time = time;
+        this.metricsManager = metricsManager;
     }
 
     /**
@@ -355,7 +362,9 @@ public class MembershipManagerImpl implements MembershipManager {
      */
     @Override
     public void onHeartbeatResponseReceived(ConsumerGroupHeartbeatResponseData response) {
+        System.out.println("heartbeat response:" + response);
         if (response.errorCode() != Errors.NONE.code()) {
+            metricsManager.maybeRecordRebalanceFailed();
             String errorMessage = String.format(
                     "Unexpected error in Heartbeat response. Expected no error, but received: %s",
                     Errors.forCode(response.errorCode())
@@ -389,6 +398,7 @@ public class MembershipManagerImpl implements MembershipManager {
         ConsumerGroupHeartbeatResponseData.Assignment assignment = response.assignment();
 
         if (assignment != null) {
+            System.out.println("reciving some assignment");
             if (!state.canHandleNewAssignment()) {
                 // New assignment received but member is in a state where it cannot take new
                 // assignments (ex. preparing to leave the group)
@@ -422,6 +432,8 @@ public class MembershipManagerImpl implements MembershipManager {
      * @param assignment Assignment received from the broker.
      */
     private void processAssignmentReceived(ConsumerGroupHeartbeatResponseData.Assignment assignment) {
+        System.out.println("rebalance started:" + time.milliseconds());
+        metricsManager.recordRebalanceStarted(time.milliseconds());
         replaceTargetAssignmentWithNewAssignment(assignment);
         if (!targetAssignmentReconciled()) {
             // Transition the member to RECONCILING when receiving a new target
@@ -507,6 +519,7 @@ public class MembershipManagerImpl implements MembershipManager {
      */
     @Override
     public void transitionToFatal() {
+        metricsManager.maybeRecordRebalanceFailed();
         MemberState previousState = state;
         transitionTo(MemberState.FATAL);
         log.error("Member {} with epoch {} transitioned to {} state", memberId, memberEpoch, MemberState.FATAL);
@@ -987,6 +1000,7 @@ public class MembershipManagerImpl implements MembershipManager {
                     // Reschedule the auto commit starting from now that the member has a new assignment.
                     commitRequestManager.resetAutoCommitTimer();
 
+                    metricsManager.recordRebalanceEnded(time.milliseconds());
                     // Make assignment effective on the broker by transitioning to send acknowledge.
                     transitionTo(MemberState.ACKNOWLEDGING);
                 } else {

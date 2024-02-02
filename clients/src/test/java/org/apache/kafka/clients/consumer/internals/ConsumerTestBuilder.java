@@ -195,21 +195,7 @@ public class ConsumerTestBuilder implements Closeable {
                     gi.groupId,
                     gi.groupInstanceId,
                     metrics));
-            MembershipManager mm = spy(
-                    new MembershipManagerImpl(
-                        gi.groupId,
-                        gi.groupInstanceId,
-                        groupRebalanceConfig.rebalanceTimeoutMs,
-                        gi.serverAssignor,
-                        subscriptions,
-                        commit,
-                        metadata,
-                        logContext,
-                        Optional.empty(),
-                        backgroundEventHandler,
-                        time
-                )
-            );
+            MembershipManager mm = mock(MembershipManagerImpl.class);
             HeartbeatRequestManager.HeartbeatState heartbeatState = spy(new HeartbeatRequestManager.HeartbeatState(
                     subscriptions,
                     mm,
