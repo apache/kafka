@@ -20,7 +20,7 @@ import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEventHandler;
 import org.apache.kafka.clients.consumer.internals.events.ConsumerRebalanceListenerCallbackCompletedEvent;
 import org.apache.kafka.clients.consumer.internals.events.ConsumerRebalanceListenerCallbackNeededEvent;
-import org.apache.kafka.clients.consumer.internals.metrics.RebalanceCallbackMetrics;
+import org.apache.kafka.clients.consumer.internals.metrics.RebalanceCallbackMetricsManager;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
@@ -1517,7 +1517,7 @@ public class MembershipManagerImplTest {
                 new LogContext(),
                 subscriptionState,
                 new MockTime(1),
-                new RebalanceCallbackMetrics(new Metrics())
+                new RebalanceCallbackMetricsManager(new Metrics())
         );
     }
 
