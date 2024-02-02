@@ -18,6 +18,7 @@ package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
 import org.apache.kafka.test.InternalMockProcessorContext;
@@ -28,6 +29,7 @@ import org.junit.Before;
 import org.junit.Test;
 
 import java.io.File;
+import java.nio.ByteBuffer;
 import java.nio.file.Files;
 import java.text.SimpleDateFormat;
 import java.util.Date;
@@ -335,6 +337,23 @@ public class KeyValueSegmentsTest {
             final File newSegment = new File(storeDirectoryPath + File.separator + storeName + "." + segmentId * (RETENTION_PERIOD / (NUM_SEGMENTS - 1)));
             assertTrue(newSegment.exists());
         }
+    }
+
+    @Test
+    public void shouldHaveNoUncommittedBytesWhenNoSegmentsAreOpen() {
+        assertTrue(segments.allSegments(true).isEmpty());
+        assertEquals(0L, segments.approximateNumUncommittedBytes());
+    }
+
+    @Test
+    public void shouldSumUncommittedBytesOfOpenSegments() {
+        final Segment segment1 = segments.getOrCreateSegment(0, context);
+        final Segment segment2 = segments.getOrCreateSegment(1, context);
+        segment1.put(Bytes.wrap("foo".getBytes()), ByteBuffer.allocate(8).putLong(100).array());
+        segment1.put(Bytes.wrap("bar".getBytes()), ByteBuffer.allocate(8).putLong(200).array());
+
+        // segments are currently unbuffered, this test expectation should be updated when segments start using the transaction buffer
+        assertEquals(0L, segments.approximateNumUncommittedBytes());
     }
 
     @Test
