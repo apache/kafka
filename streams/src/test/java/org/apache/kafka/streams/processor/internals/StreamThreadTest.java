@@ -167,6 +167,7 @@ import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.atMostOnce;
+import static org.mockito.Mockito.clearInvocations;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.lenient;
@@ -1096,15 +1097,28 @@ public class StreamThreadTest {
         final TopologyMetadata topologyMetadata = new TopologyMetadata(internalTopologyBuilder, config);
         topologyMetadata.buildAndRewriteTopology();
         thread = buildStreamThread(consumer, taskManager, config, topologyMetadata);
+
+        // initial commit because no commit since start of application
+        when(taskManager.needsCommit(anyBoolean())).thenReturn(false);
         thread.setNow(mockTime.milliseconds());
         thread.maybeCommit();
+        verify(taskManager).commit(mkSet(runningTask));
 
+        // early commit requested, despite interval not having passed
+        clearInvocations(taskManager);
         when(taskManager.needsCommit(anyBoolean())).thenReturn(true);
-        mockTime.sleep(commitInterval - 10L);
+        mockTime.sleep(commitInterval - 20L);
         thread.setNow(mockTime.milliseconds());
         thread.maybeCommit();
+        verify(taskManager).commit(mkSet(runningTask));
 
-        verify(taskManager, times(2)).commit(mkSet(runningTask));
+        // no commit because interval has not passed and no early commit requested
+        clearInvocations(taskManager);
+        when(taskManager.needsCommit(anyBoolean())).thenReturn(false);
+        mockTime.sleep(10L);
+        thread.setNow(mockTime.milliseconds());
+        thread.maybeCommit();
+        verify(taskManager, times(0)).commit(mkSet(runningTask));
     }
 
     @Test
