@@ -23,10 +23,12 @@ import org.apache.kafka.clients.consumer.internals.events.ApplicationEventProces
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEventHandler;
 import org.apache.kafka.clients.consumer.internals.events.ErrorBackgroundEvent;
 import org.apache.kafka.clients.consumer.internals.events.GroupMetadataUpdateEvent;
+import org.apache.kafka.clients.consumer.internals.metrics.HeartbeatMetricsManager;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
 import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatRequestData;
+import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.ConsumerGroupHeartbeatRequest;
 import org.apache.kafka.common.requests.ConsumerGroupHeartbeatResponse;
@@ -108,8 +110,12 @@ public class HeartbeatRequestManager implements RequestManager {
      * sending heartbeat until the next poll.
      */
     private final Timer pollTimer;
-
     private GroupMetadataUpdateEvent previousGroupMetadataUpdateEvent = null;
+
+    /**
+     * Holding the heartbeat sensor to measure heartbeat timing and response latency
+     */
+    private final HeartbeatMetricsManager metricsManager;
 
     public HeartbeatRequestManager(
         final LogContext logContext,
@@ -118,7 +124,8 @@ public class HeartbeatRequestManager implements RequestManager {
         final CoordinatorRequestManager coordinatorRequestManager,
         final SubscriptionState subscriptions,
         final MembershipManager membershipManager,
-        final BackgroundEventHandler backgroundEventHandler) {
+        final BackgroundEventHandler backgroundEventHandler,
+        final Metrics metrics) {
         this.coordinatorRequestManager = coordinatorRequestManager;
         this.logger = logContext.logger(getClass());
         this.membershipManager = membershipManager;
@@ -130,6 +137,7 @@ public class HeartbeatRequestManager implements RequestManager {
         this.heartbeatRequestState = new HeartbeatRequestState(logContext, time, 0, retryBackoffMs,
             retryBackoffMaxMs, maxPollIntervalMs);
         this.pollTimer = time.timer(maxPollIntervalMs);
+        this.metricsManager = new HeartbeatMetricsManager(metrics);
     }
 
     // Visible for testing
@@ -141,7 +149,8 @@ public class HeartbeatRequestManager implements RequestManager {
         final MembershipManager membershipManager,
         final HeartbeatState heartbeatState,
         final HeartbeatRequestState heartbeatRequestState,
-        final BackgroundEventHandler backgroundEventHandler) {
+        final BackgroundEventHandler backgroundEventHandler,
+        final Metrics metrics) {
         this.logger = logContext.logger(this.getClass());
         this.maxPollIntervalMs = config.getInt(CommonClientConfigs.MAX_POLL_INTERVAL_MS_CONFIG);
         this.coordinatorRequestManager = coordinatorRequestManager;
@@ -150,6 +159,7 @@ public class HeartbeatRequestManager implements RequestManager {
         this.membershipManager = membershipManager;
         this.backgroundEventHandler = backgroundEventHandler;
         this.pollTimer = timer;
+        this.metricsManager = new HeartbeatMetricsManager(metrics);
     }
 
     /**
@@ -245,6 +255,7 @@ public class HeartbeatRequestManager implements RequestManager {
         NetworkClientDelegate.UnsentRequest request = makeHeartbeatRequest(ignoreResponse);
         heartbeatRequestState.onSendAttempt(currentTimeMs);
         membershipManager.onHeartbeatRequestSent();
+        metricsManager.recordHeartbeatSentMs(currentTimeMs);
         return request;
     }
 
@@ -257,6 +268,7 @@ public class HeartbeatRequestManager implements RequestManager {
         else
             return request.whenComplete((response, exception) -> {
                 if (response != null) {
+                    metricsManager.recordRequestLatency(response.requestLatencyMs());
                     onResponse((ConsumerGroupHeartbeatResponse) response.responseBody(), request.handler().completionTimeMs());
                 } else {
                     onFailure(exception, request.handler().completionTimeMs());
@@ -267,6 +279,7 @@ public class HeartbeatRequestManager implements RequestManager {
     private NetworkClientDelegate.UnsentRequest logResponse(final NetworkClientDelegate.UnsentRequest request) {
         return request.whenComplete((response, exception) -> {
             if (response != null) {
+                metricsManager.recordRequestLatency(response.requestLatencyMs());
                 Errors error =
                     Errors.forCode(((ConsumerGroupHeartbeatResponse) response.responseBody()).data().errorCode());
                 if (error == Errors.NONE)
