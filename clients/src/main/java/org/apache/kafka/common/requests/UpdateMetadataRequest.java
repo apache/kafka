@@ -41,7 +41,7 @@ import java.util.Map;
 
 import static java.util.Collections.singletonList;
 
-public class UpdateMetadataRequest extends AbstractControlRequest {
+public final class UpdateMetadataRequest extends AbstractControlRequest {
 
     public static class Builder extends AbstractControlRequest.Builder<UpdateMetadataRequest> {
         private final List<UpdateMetadataPartitionState> partitionStates;
