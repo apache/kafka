@@ -1130,8 +1130,8 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
 
         // Invoke user call back.
         CompletableFuture<Void> result = invokeOnPartitionsAssignedCallback(addedPartitions);
-        result.whenComplete((error, callbackResult) -> {
-            if (error == null) {
+        result.whenComplete((__, exception) -> {
+            if (exception == null) {
                 // Enable newly added partitions to start fetching and updating positions for them.
                 subscriptions.enablePartitionsAwaitingCallback(addedPartitions);
             } else {
@@ -1141,7 +1141,7 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
                 if (!addedPartitions.isEmpty()) {
                     log.warn("Leaving newly assigned partitions {} marked as non-fetchable and not " +
                             "requiring initializing positions after onPartitionsAssigned callback failed.",
-                        addedPartitions, error);
+                        addedPartitions, exception);
                 }
             }
         });
