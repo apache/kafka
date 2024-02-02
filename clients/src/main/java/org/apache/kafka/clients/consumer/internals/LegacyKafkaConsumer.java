@@ -497,12 +497,12 @@ public class LegacyKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
 
     @Override
     public void subscribe(SubscriptionPattern pattern, ConsumerRebalanceListener callback) {
-
+        log.warn("Operation not supported in new consumer group protocol");
     }
 
     @Override
     public void subscribe(SubscriptionPattern pattern) {
-
+        log.warn("Operation not supported in new consumer group protocol");
     }
 
     /**

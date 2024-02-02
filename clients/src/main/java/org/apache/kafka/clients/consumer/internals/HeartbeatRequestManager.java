@@ -18,6 +18,7 @@ package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.consumer.SubscriptionPattern;
 import org.apache.kafka.clients.consumer.internals.NetworkClientDelegate.PollResult;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEventProcessor;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEventHandler;
@@ -535,7 +536,11 @@ public class HeartbeatRequestManager implements RequestManager {
                 }
             } else {
                 // SubscribedTopicRegex - only sent if has changed since the last heartbeat
-                //                      - not supported yet
+                String subscriptionRegex = this.subscriptions.subscriptionPattern().pattern();
+                if (!subscriptionRegex.equals(sentFields.subscribedTopicRegex)) {
+                    data.setSubscribedTopicRegex(subscriptionRegex);
+                    sentFields.subscribedTopicRegex = subscriptionRegex;
+                }
             }
 
             // ServerAssignor - only sent if has changed since the last heartbeat
@@ -578,6 +583,7 @@ public class HeartbeatRequestManager implements RequestManager {
             private String instanceId = null;
             private int rebalanceTimeoutMs = -1;
             private TreeSet<String> subscribedTopicNames = null;
+            private String subscribedTopicRegex = null;
             private String serverAssignor = null;
             private TreeSet<String> topicPartitions = null;
 

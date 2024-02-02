@@ -85,7 +85,7 @@ public class SubscriptionState {
     /* the pattern user has requested */
     private Pattern subscribedPattern;
 
-    /* we should rename this to something more specific */
+    /* RE2J compatible regex */
     private SubscriptionPattern subscriptionPattern;
 
     /* the list of topics the user has requested */
@@ -317,6 +317,7 @@ public class SubscriptionState {
         this.groupSubscription = Collections.emptySet();
         this.assignment.clear();
         this.subscribedPattern = null;
+        this.subscriptionPattern = null;
         this.subscriptionType = SubscriptionType.NONE;
         this.assignmentId++;
     }
