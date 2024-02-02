@@ -140,7 +140,7 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends QuorumTestHarness wit
   @ValueSource(strings = Array("zk", "kraft"))
   def shouldNotAllowDivergentLogs(quorum: String): Unit = {
     //Given two brokers
-    val brokers = (100 to 101).map(createBrokerForId(_))
+    brokers = (100 to 101).map(createBrokerForId(_))
     val broker100 = brokers(0)
     val broker101 = brokers(1)
 
@@ -191,7 +191,7 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends QuorumTestHarness wit
   def offsetsShouldNotGoBackwards(quorum: String): Unit = {
 
     //Given two brokers
-    val brokers = (100 to 101).map(createBrokerForId(_))
+    brokers = (100 to 101).map(createBrokerForId(_))
 
     //A single partition topic with 2 replicas
     createTopic(topic, Map(0 -> Seq(100, 101)), brokers)
@@ -268,7 +268,7 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends QuorumTestHarness wit
     val tp = new TopicPartition(topic, 0)
 
     //Given 2 brokers
-    val brokers = (100 to 101).map(createBrokerForId(_))
+    brokers = (100 to 101).map(createBrokerForId(_))
 
     //A single partition topic with 2 replicas
     createTopic(topic, Map(0 -> Seq(100, 101)), brokers)
@@ -501,11 +501,7 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends QuorumTestHarness wit
     val config = TestUtils.createBrokerConfig(id, zkConnectOrNull)
     TestUtils.setIbpAndMessageFormatVersions(config, metadataVersion)
     config.setProperty(KafkaConfig.UncleanLeaderElectionEnableProp, enableUncleanLeaderElection.toString)
-    if (isKRaftTest()) {
-      createBroker(fromProps(config))
-    } else {
-      TestUtils.createServer(fromProps(config))
-    }
+    createBroker(fromProps(config))
   }
 
   protected def securityProtocol: SecurityProtocol = SecurityProtocol.PLAINTEXT
