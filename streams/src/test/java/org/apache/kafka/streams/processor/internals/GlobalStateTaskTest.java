@@ -211,49 +211,55 @@ public class GlobalStateTaskTest {
 
 
     @Test
-    public void shouldFlushStateManagerOnFlushState() {
+    public void shouldFlushStateManagerWithOffsets() {
+        final Map<TopicPartition, Long> expectedOffsets = new HashMap<>();
+        expectedOffsets.put(t1, 52L);
+        expectedOffsets.put(t2, 100L);
+
         globalStateTask.initialize();
         globalStateTask.update(record(topic1, 1, 51, "foo".getBytes(), "foo".getBytes()));
         globalStateTask.flushState();
+
+        assertEquals(expectedOffsets, stateMgr.changelogOffsets());
         assertTrue(stateMgr.flushed);
-        assertTrue(stateMgr.checkpointWritten);
     }
 
     @Test
-    public void shouldCheckpointOffsetsOnFlushState() {
+    public void shouldCheckpointOffsetsWhenStateIsFlushed() {
+        final Map<TopicPartition, Long> expectedOffsets = new HashMap<>();
+        expectedOffsets.put(t1, 102L);
+        expectedOffsets.put(t2, 100L);
+
         globalStateTask.initialize();
         globalStateTask.update(record(topic1, 1, 101, "foo".getBytes(), "foo".getBytes()));
         globalStateTask.flushState();
-        assertTrue(stateMgr.flushed);
+
+        assertEquals(expectedOffsets, stateMgr.changelogOffsets());
         assertTrue(stateMgr.checkpointWritten);
     }
 
     @Test
-    public void shouldNotCheckpointIfSnapshotNotChangedMuch() {
-        final Map<TopicPartition, Long> expectedOffsets = new HashMap<>();
-        expectedOffsets.put(t1, 9001L);
-        expectedOffsets.put(t2, 100L);
-
+    public void shouldNotCheckpointIfNotReceivedEnoughRecords() {
         globalStateTask.initialize();
         globalStateTask.update(record(topic1, 1, 9000L, "foo".getBytes(), "foo".getBytes()));
         globalStateTask.maybeCheckpoint();
 
-        assertEquals(stateMgr.changelogOffsets(), expectedOffsets);
+        assertEquals(offsets, stateMgr.changelogOffsets());
         assertFalse(stateMgr.flushed);
         assertFalse(stateMgr.checkpointWritten);
     }
 
     @Test
-    public void shouldCheckpointIfSnapshotMuchChanged() {
+    public void shouldCheckpointIfReceivedEnoughRecords() {
         final Map<TopicPartition, Long> expectedOffsets = new HashMap<>();
-        expectedOffsets.put(t1, 10001L);
+        expectedOffsets.put(t1, 10051L); // t1 advanced with 10.001 records
         expectedOffsets.put(t2, 100L);
 
         globalStateTask.initialize();
-        globalStateTask.update(record(topic1, 1, 10000L, "foo".getBytes(), "foo".getBytes()));
+        globalStateTask.update(record(topic1, 1, 10050L, "foo".getBytes(), "foo".getBytes()));
         globalStateTask.maybeCheckpoint();
 
-        assertEquals(stateMgr.changelogOffsets(), expectedOffsets);
+        assertEquals(expectedOffsets, stateMgr.changelogOffsets());
         assertTrue(stateMgr.flushed);
         assertTrue(stateMgr.checkpointWritten);
     }
