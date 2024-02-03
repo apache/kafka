@@ -30,16 +30,18 @@ import org.apache.kafka.common.utils.{LogContext, SystemTime}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData.{OffsetForLeaderPartition, OffsetForLeaderTopic, OffsetForLeaderTopicCollection}
 import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.EpochEndOffset
+import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.ApiKeys
 import org.apache.kafka.common.requests.{OffsetsForLeaderEpochRequest, OffsetsForLeaderEpochResponse}
 import org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.UNDEFINED_EPOCH_OFFSET
+import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 
 import scala.jdk.CollectionConverters._
-import scala.collection.Map
+import scala.collection.{Map, Seq}
 import scala.collection.mutable.ListBuffer
 
 class LeaderEpochIntegrationTest extends QuorumTestHarness with Logging {
@@ -69,7 +71,7 @@ class LeaderEpochIntegrationTest extends QuorumTestHarness with Logging {
 
     // Given two topics with replication of a single partition
     for (topic <- List(topic1, topic2)) {
-      createTopicWithAssignment(topic, Map(0 -> Seq(0, 1)), brokers, zkClientOrNull, controllerServers)
+      createTopic(topic, Map(0 -> Seq(0, 1)))
     }
 
     // When we send four messages
@@ -103,10 +105,10 @@ class LeaderEpochIntegrationTest extends QuorumTestHarness with Logging {
     brokers ++= (100 to 102).map { id => createBroker(fromProps(createBrokerConfig(id, zkConnectOrNull))) }
 
     val assignment1 = Map(0 -> Seq(100), 1 -> Seq(101))
-    createTopicWithAssignment(topic1, assignment1, brokers, zkClientOrNull, controllerServers)
+    createTopic(topic1, assignment1)
 
     val assignment2 = Map(0 -> Seq(100))
-    createTopicWithAssignment(topic2, assignment2, brokers, zkClientOrNull, controllerServers)
+    createTopic(topic2, assignment2)
 
     //Send messages equally to the two partitions, then half as many to a third
     producer = createProducer(plaintextBootstrapServers(brokers), acks = -1)
@@ -148,7 +150,9 @@ class LeaderEpochIntegrationTest extends QuorumTestHarness with Logging {
   def shouldIncreaseLeaderEpochBetweenLeaderRestarts(quorum: String): Unit = {
     //Setup: we are only interested in the single partition on broker 101
     brokers += createBroker(fromProps(createBrokerConfig(100, zkConnectOrNull)))
-    if (!isKRaftTest()) {
+    if (isKRaftTest()) {
+      assertEquals(controllerServer.config.nodeId, TestUtils.waitUntilLeaderElected(controllerServer))
+    } else {
       assertEquals(100, TestUtils.waitUntilControllerElected(zkClient))
     }
 
@@ -156,7 +160,7 @@ class LeaderEpochIntegrationTest extends QuorumTestHarness with Logging {
 
     def leo() = brokers(1).replicaManager.localLog(tp).get.logEndOffset
 
-    createTopicWithAssignment(tp.topic, Map(tp.partition -> Seq(101)), brokers, zkClientOrNull, controllerServers)
+    createTopic(tp.topic, Map(tp.partition -> Seq(101)))
     producer = createProducer(plaintextBootstrapServers(brokers), acks = -1)
 
     //1. Given a single message
@@ -279,6 +283,18 @@ class LeaderEpochIntegrationTest extends QuorumTestHarness with Logging {
         testMessageList2.map(m => new ProducerRecord(topic2, m, m))
     records.map(producer.send).foreach(_.get)
     producer.close()
+  }
+
+  private def createTopic(topic: String, partitionReplicaAssignment: collection.Map[Int, Seq[Int]]): Unit = {
+    resource(createAdminClient(brokers, ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT))) { admin =>
+      TestUtils.createTopicWithAdmin(
+        admin = admin,
+        topic = topic,
+        replicaAssignment = partitionReplicaAssignment,
+        brokers = brokers,
+        controllers = controllerServers
+      )
+    }
   }
 
   /**
