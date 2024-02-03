@@ -829,6 +829,34 @@ public class WorkerSinkTaskMockitoTest {
     }
 
     @Test
+    public void testMissingTimestampPropagation() {
+        createTask(initialState);
+        expectTaskGetTopic();
+
+        workerTask.initialize(TASK_CONFIG);
+        workerTask.initializeAndStart();
+        verifyInitializeTask();
+
+        expectPollInitialAssignment()
+                .thenAnswer(expectConsumerPoll(1, RecordBatch.NO_TIMESTAMP, TimestampType.CREATE_TIME, new RecordHeaders()));
+
+        expectConversionAndTransformation(null, new RecordHeaders());
+
+        workerTask.iteration(); // iter 1 -- initial assignment
+        workerTask.iteration(); // iter 2 -- deliver 1 record
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<Collection<SinkRecord>> records = ArgumentCaptor.forClass(Collection.class);
+        verify(sinkTask, times(2)).put(records.capture());
+
+        SinkRecord record = records.getValue().iterator().next();
+
+        // we expect null for missing timestamp, the sentinel value of Record.NO_TIMESTAMP is Kafka's API
+        assertNull(record.timestamp());
+        assertEquals(TimestampType.CREATE_TIME, record.timestampType());
+    }
+
+    @Test
     public void testTimestampPropagation() {
         final Long timestamp = System.currentTimeMillis();
         final TimestampType timestampType = TimestampType.CREATE_TIME;
