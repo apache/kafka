@@ -1632,12 +1632,6 @@ public class WorkerSinkTaskTest {
         EasyMock.expectLastCall();
     }
 
-    private void expectConsumerWakeup() {
-        consumer.wakeup();
-        EasyMock.expectLastCall();
-        EasyMock.expect(consumer.poll(Duration.ofMillis(EasyMock.anyLong()))).andThrow(new WakeupException());
-    }
-
     private void expectConsumerPoll(final int numMessages) {
         expectConsumerPoll(numMessages, RecordBatch.NO_TIMESTAMP, TimestampType.NO_TIMESTAMP_TYPE, emptyHeaders());
     }
