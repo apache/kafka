@@ -391,7 +391,8 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                     applicationEventQueue,
                     applicationEventProcessorSupplier,
                     networkClientDelegateSupplier,
-                    requestManagersSupplier);
+                    requestManagersSupplier,
+                    backgroundEventHandler);
 
             ConsumerRebalanceListenerInvoker rebalanceListenerInvoker = new ConsumerRebalanceListenerInvoker(
                     logContext,
@@ -578,7 +579,8 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                 applicationEventQueue,
                 applicationEventProcessorSupplier,
                 networkClientDelegateSupplier,
-                requestManagersSupplier);
+                requestManagersSupplier,
+                backgroundEventHandler);
         this.backgroundEventProcessor = new BackgroundEventProcessor(
                 logContext,
                 backgroundEventQueue,
@@ -596,7 +598,8 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             final BlockingQueue<ApplicationEvent> applicationEventQueue,
             final Supplier<ApplicationEventProcessor> applicationEventProcessorSupplier,
             final Supplier<NetworkClientDelegate> networkClientDelegateSupplier,
-            final Supplier<RequestManagers> requestManagersSupplier
+            final Supplier<RequestManagers> requestManagersSupplier,
+            final BackgroundEventHandler backgroundEventHandler
         );
 
     }
