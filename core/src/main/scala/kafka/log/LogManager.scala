@@ -137,6 +137,9 @@ class LogManager(logDirs: Seq[File],
 
   private val preferredLogDirs = new ConcurrentHashMap[TopicPartition, String]()
 
+  def hasOfflineLogDirs(): Boolean = offlineLogDirs.nonEmpty
+  def onlineLogDirId(uuid: Uuid): Boolean = directoryIds.exists(_._2 == uuid)
+
   private def offlineLogDirs: Iterable[File] = {
     val logDirsSet = mutable.Set[File]() ++= logDirs
     _liveLogDirs.forEach(dir => logDirsSet -= dir)

@@ -4811,8 +4811,15 @@ class ReplicaManagerTest {
       )
 
       replicaManager.becomeLeaderOrFollower(0, request, (_, _) => ())
-
-      assertEquals(HostedPartition.Offline, replicaManager.getPartition(topicPartition))
+      val hostedPartition = replicaManager.getPartition(topicPartition)
+      assertEquals(
+        classOf[HostedPartition.Offline],
+        hostedPartition.getClass
+      )
+      assertEquals(
+        request.topicIds().get(topicPartition.topic()),
+        hostedPartition.asInstanceOf[HostedPartition.Offline].partition.flatMap(p => p.topicId).get
+      )
     } finally {
       replicaManager.shutdown(checkpointHW = false)
     }
@@ -4908,7 +4915,7 @@ class ReplicaManagerTest {
   @Test
   def testGetOrCreatePartition(): Unit = {
     val brokerId = 0
-    val replicaManager = setupReplicaManagerWithMockedPurgatories(new MockTimer(time), brokerId)
+    val replicaManager = setupReplicaManagerWithMockedPurgatories(new MockTimer(time), brokerId, shouldMockLog = true)
     try {
       val foo0 = new TopicPartition("foo", 0)
       val emptyDelta = new TopicsDelta(TopicsImage.EMPTY)
@@ -4920,7 +4927,16 @@ class ReplicaManagerTest {
       assertTrue(fooPart eq fooPart2)
       val bar1 = new TopicPartition("bar", 1)
       replicaManager.markPartitionOffline(bar1)
-      assertEquals(None, replicaManager.getOrCreatePartition(bar1, emptyDelta, BAR_UUID))
+      val (barPart, barNew) = replicaManager.getOrCreatePartition(bar1, emptyDelta, BAR_UUID).get
+      assertTrue(barNew)
+      assertEquals(bar1, barPart.topicPartition)
+
+      val mockLog = mock(classOf[UnifiedLog])
+      when(replicaManager.logManager.getLog(bar1)).thenReturn(Some(mockLog))
+      when(mockLog.topicId).thenReturn(Some(BAR_UUID))
+      replicaManager.markPartitionOffline(bar1)
+
+      assertTrue(replicaManager.getOrCreatePartition(bar1, emptyDelta, BAR_UUID).isEmpty)
     } finally {
       replicaManager.shutdown(checkpointHW = false)
     }
@@ -5571,7 +5587,15 @@ class ReplicaManagerTest {
       replicaManager.applyDelta(topicsDelta, leaderMetadataImage)
       verifyRLMOnLeadershipChange(Collections.emptySet(), Collections.emptySet())
 
-      assertEquals(HostedPartition.Offline, replicaManager.getPartition(topicPartition))
+      val hostedPartition = replicaManager.getPartition(topicPartition)
+      assertEquals(
+        classOf[HostedPartition.Offline],
+        hostedPartition.getClass
+      )
+      assertEquals(
+        FOO_UUID,
+        hostedPartition.asInstanceOf[HostedPartition.Offline].partition.flatMap(p => p.topicId).get
+      )
     } finally {
       replicaManager.shutdown(checkpointHW = false)
     }
