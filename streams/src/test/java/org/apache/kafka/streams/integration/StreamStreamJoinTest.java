@@ -50,6 +50,7 @@ public class StreamStreamJoinTest {
     private TestInputTopic<String, String> left;
     private TestInputTopic<String, String> right;
     private TestOutputTopic<String, String> out;
+    private static final String KEY = "k";
 
     @BeforeEach
     void beforeEach() {
@@ -64,12 +65,12 @@ public class StreamStreamJoinTest {
             .leftJoin(rightStream, JOINER, ofTimeDifferenceAndGrace(Duration.ofMillis(2), Duration.ofMillis(0)))
             .to(OUT);
         initTopology();
-        left.pipeInput("k", "A", 100);
-        right.pipeInput("k", "a",  101);
-        left.pipeInput("k", "X", 0);
+        left.pipeInput(KEY, "A", 100);
+        right.pipeInput(KEY, "a",  101);
+        left.pipeInput(KEY, "X", 0);
         assertEquals(
             Arrays.asList(
-                new KeyValue<>("k", "A|a")
+                new KeyValue<>(KEY, "A|a")
             ),
             out.readKeyValuesToList()
         );
