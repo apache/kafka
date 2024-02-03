@@ -157,7 +157,6 @@ public class WorkerSinkTaskTest {
     @Mock
     private ErrorHandlingMetrics errorHandlingMetrics;
     private Capture<ConsumerRebalanceListener> rebalanceListener = EasyMock.newCapture();
-    private Capture<Pattern> topicsRegex = EasyMock.newCapture();
 
     private long recordsReturnedTp1;
     private long recordsReturnedTp3;
@@ -1327,39 +1326,6 @@ public class WorkerSinkTaskTest {
 
         assertEquals(timestamp, record.timestamp());
         assertEquals(timestampType, record.timestampType());
-
-        PowerMock.verifyAll();
-    }
-
-    @Test
-    public void testTopicsRegex() {
-        Map<String, String> props = new HashMap<>(TASK_PROPS);
-        props.remove("topics");
-        props.put("topics.regex", "te.*");
-        TaskConfig taskConfig = new TaskConfig(props);
-
-        createTask(TargetState.PAUSED);
-
-        consumer.subscribe(EasyMock.capture(topicsRegex), EasyMock.capture(rebalanceListener));
-        PowerMock.expectLastCall();
-
-        sinkTask.initialize(EasyMock.capture(sinkTaskContext));
-        PowerMock.expectLastCall();
-        sinkTask.start(props);
-        PowerMock.expectLastCall();
-
-        expectPollInitialAssignment();
-
-        EasyMock.expect(consumer.assignment()).andReturn(INITIAL_ASSIGNMENT);
-        consumer.pause(INITIAL_ASSIGNMENT);
-        PowerMock.expectLastCall();
-
-        PowerMock.replayAll();
-
-        workerTask.initialize(taskConfig);
-        workerTask.initializeAndStart();
-        workerTask.iteration();
-        time.sleep(10000L);
 
         PowerMock.verifyAll();
     }

@@ -82,6 +82,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.function.Supplier;
+import java.util.regex.Pattern;
 
 import static java.util.Arrays.asList;
 import static java.util.Collections.singleton;
@@ -661,6 +662,32 @@ public class WorkerSinkTaskMockitoTest {
         assertEquals(40, metrics.currentMetricValueAsDouble(group1.metricGroup(), "partition-count"), 0.001d);
         assertEquals(50, metrics.currentMetricValueAsDouble(group1.metricGroup(), "offset-commit-seq-no"), 0.001d);
         assertEquals(30, metrics.currentMetricValueAsDouble(group1.metricGroup(), "put-batch-max-time-ms"), 0.001d);
+    }
+
+    @Test
+    public void testTopicsRegex() {
+        Map<String, String> props = new HashMap<>(TASK_PROPS);
+        props.remove("topics");
+        props.put("topics.regex", "te.*");
+        TaskConfig taskConfig = new TaskConfig(props);
+
+        createTask(TargetState.PAUSED);
+
+        workerTask.initialize(taskConfig);
+        workerTask.initializeAndStart();
+
+        ArgumentCaptor<Pattern> topicsRegex = ArgumentCaptor.forClass(Pattern.class);
+
+        verify(consumer).subscribe(topicsRegex.capture(), rebalanceListener.capture());
+        verify(sinkTask).initialize(sinkTaskContext.capture());
+        verify(sinkTask).start(props);
+
+        expectPollInitialAssignment();
+
+        workerTask.iteration();
+        time.sleep(10000L);
+
+        verify(consumer).pause(INITIAL_ASSIGNMENT);
     }
 
     @Test
