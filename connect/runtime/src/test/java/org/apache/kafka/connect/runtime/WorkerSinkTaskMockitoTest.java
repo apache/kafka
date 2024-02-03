@@ -829,6 +829,32 @@ public class WorkerSinkTaskMockitoTest {
     }
 
     @Test
+    public void testTopicsRegex() {
+        Map<String, String> props = new HashMap<>(TASK_PROPS);
+        props.remove("topics");
+        props.put("topics.regex", "te.*");
+        TaskConfig taskConfig = new TaskConfig(props);
+
+        createTask(TargetState.PAUSED);
+
+        workerTask.initialize(taskConfig);
+        workerTask.initializeAndStart();
+
+        ArgumentCaptor<Pattern> topicsRegex = ArgumentCaptor.forClass(Pattern.class);
+
+        verify(consumer).subscribe(topicsRegex.capture(), rebalanceListener.capture());
+        verify(sinkTask).initialize(sinkTaskContext.capture());
+        verify(sinkTask).start(props);
+
+        expectPollInitialAssignment();
+
+        workerTask.iteration();
+        time.sleep(10000L);
+
+        verify(consumer).pause(INITIAL_ASSIGNMENT);
+    }
+
+    @Test
     public void testHeaders() {
         createTask(initialState);
 
