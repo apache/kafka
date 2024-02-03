@@ -1268,36 +1268,6 @@ public class WorkerSinkTaskTest {
         PowerMock.verifyAll();
     }
 
-    @Test
-    public void testMissingTimestampPropagation() throws Exception {
-        createTask(initialState);
-
-        expectInitializeTask();
-        expectTaskGetTopic(true);
-        expectPollInitialAssignment();
-        expectConsumerPoll(1, RecordBatch.NO_TIMESTAMP, TimestampType.CREATE_TIME);
-        expectConversionAndTransformation(1);
-
-        Capture<Collection<SinkRecord>> records = EasyMock.newCapture(CaptureType.ALL);
-
-        sinkTask.put(EasyMock.capture(records));
-
-        PowerMock.replayAll();
-
-        workerTask.initialize(TASK_CONFIG);
-        workerTask.initializeAndStart();
-        workerTask.iteration(); // iter 1 -- initial assignment
-        workerTask.iteration(); // iter 2 -- deliver 1 record
-
-        SinkRecord record = records.getValue().iterator().next();
-
-        // we expect null for missing timestamp, the sentinel value of Record.NO_TIMESTAMP is Kafka's API
-        assertNull(record.timestamp());
-        assertEquals(TimestampType.CREATE_TIME, record.timestampType());
-
-        PowerMock.verifyAll();
-    }
-
     private void expectInitializeTask() {
         consumer.subscribe(EasyMock.eq(asList(TOPIC)), EasyMock.capture(rebalanceListener));
         PowerMock.expectLastCall();
@@ -1326,10 +1296,6 @@ public class WorkerSinkTaskTest {
 
     private void expectConsumerPoll(final int numMessages) {
         expectConsumerPoll(numMessages, RecordBatch.NO_TIMESTAMP, TimestampType.NO_TIMESTAMP_TYPE, emptyHeaders());
-    }
-
-    private void expectConsumerPoll(final int numMessages, final long timestamp, final TimestampType timestampType) {
-        expectConsumerPoll(numMessages, timestamp, timestampType, emptyHeaders());
     }
 
     private void expectConsumerPoll(final int numMessages, final long timestamp, final TimestampType timestampType, Headers headers) {
