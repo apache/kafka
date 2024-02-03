@@ -131,11 +131,7 @@ class ServerGenerateBrokerIdTest extends QuorumTestHarness {
     servers = Seq(server1)
     server1.shutdown()
     server1 = new KafkaServer(config2, threadNamePrefix = Option(this.getClass.getName)) // user specified broker id
-    try {
-      server1.startup()
-    } catch {
-      case _: kafka.common.InconsistentBrokerIdException => //success
-    }
+    server1.startup()
     server1.shutdown()
     TestUtils.assertNoNonDaemonThreads(this.getClass.getName)
   }

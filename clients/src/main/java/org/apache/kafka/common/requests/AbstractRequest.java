@@ -324,6 +324,8 @@ public abstract class AbstractRequest implements AbstractRequestResponse {
                 return AssignReplicasToDirsRequest.parse(buffer, apiVersion);
             case LIST_CLIENT_METRICS_RESOURCES:
                 return ListClientMetricsResourcesRequest.parse(buffer, apiVersion);
+            case DESCRIBE_TOPIC_PARTITIONS:
+                return DescribeTopicPartitionsRequest.parse(buffer, apiVersion);
             default:
                 throw new AssertionError(String.format("ApiKey %s is not currently handled in `parseRequest`, the " +
                         "code should be updated to do so.", apiKey));

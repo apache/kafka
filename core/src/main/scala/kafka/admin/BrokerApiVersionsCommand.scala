@@ -22,6 +22,7 @@ import java.io.IOException
 import java.util.Properties
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.{ConcurrentLinkedQueue, TimeUnit}
+import joptsimple.OptionSpec
 import kafka.utils.Implicits._
 import kafka.utils.Logging
 import org.apache.kafka.common.utils.Utils
@@ -61,8 +62,8 @@ object BrokerApiVersionsCommand {
     val brokerMap = adminClient.listAllBrokerVersionInfo()
     brokerMap.forKeyValue { (broker, versionInfoOrError) =>
       versionInfoOrError match {
-        case Success(v) => out.print(s"${broker} -> ${v.toString(true)}\n")
-        case Failure(v) => out.print(s"${broker} -> ERROR: ${v}\n")
+        case Success(v) => out.print(s"$broker -> ${v.toString(true)}\n")
+        case Failure(v) => out.print(s"$broker -> ERROR: $v\n")
       }
     }
     adminClient.close()
@@ -77,22 +78,22 @@ object BrokerApiVersionsCommand {
     AdminClient.create(props)
   }
 
-  class BrokerVersionCommandOptions(args: Array[String]) extends CommandDefaultOptions(args) {
-    val BootstrapServerDoc = "REQUIRED: The server to connect to."
-    val CommandConfigDoc = "A property file containing configs to be passed to Admin Client."
+  private class BrokerVersionCommandOptions(args: Array[String]) extends CommandDefaultOptions(args) {
+    private val BootstrapServerDoc = "REQUIRED: The server to connect to."
+    private val CommandConfigDoc = "A property file containing configs to be passed to Admin Client."
 
-    val commandConfigOpt = parser.accepts("command-config", CommandConfigDoc)
+    val commandConfigOpt: OptionSpec[String] = parser.accepts("command-config", CommandConfigDoc)
                                  .withRequiredArg
                                  .describedAs("command config property file")
                                  .ofType(classOf[String])
-    val bootstrapServerOpt = parser.accepts("bootstrap-server", BootstrapServerDoc)
+    val bootstrapServerOpt: OptionSpec[String] = parser.accepts("bootstrap-server", BootstrapServerDoc)
                                    .withRequiredArg
                                    .describedAs("server(s) to use for bootstrapping")
                                    .ofType(classOf[String])
     options = parser.parse(args : _*)
     checkArgs()
 
-    def checkArgs(): Unit = {
+    private def checkArgs(): Unit = {
       CommandLineUtils.maybePrintHelpOrVersion(this, "This tool helps to retrieve broker version information.")
       // check required args
       CommandLineUtils.checkRequiredArgs(parser, options, bootstrapServerOpt)
@@ -105,10 +106,10 @@ object BrokerApiVersionsCommand {
                             val client: ConsumerNetworkClient,
                             val bootstrapBrokers: List[Node]) extends Logging {
 
-    @volatile var running = true
-    val pendingFutures = new ConcurrentLinkedQueue[RequestFuture[ClientResponse]]()
+    @volatile private var running = true
+    private val pendingFutures = new ConcurrentLinkedQueue[RequestFuture[ClientResponse]]()
 
-    val networkThread = new KafkaThread("admin-client-network-thread", () => {
+    private val networkThread = new KafkaThread("admin-client-network-thread", () => {
       try {
         while (running)
           client.poll(time.timer(Long.MaxValue))
@@ -200,17 +201,17 @@ object BrokerApiVersionsCommand {
   }
 
   private object AdminClient {
-    val DefaultConnectionMaxIdleMs = 9 * 60 * 1000
-    val DefaultRequestTimeoutMs = 5000
-    val DefaultMaxInFlightRequestsPerConnection = 100
-    val DefaultReconnectBackoffMs = 50
-    val DefaultReconnectBackoffMax = 50
-    val DefaultSendBufferBytes = 128 * 1024
-    val DefaultReceiveBufferBytes = 32 * 1024
-    val DefaultRetryBackoffMs = 100
+    private val DefaultConnectionMaxIdleMs = 9 * 60 * 1000
+    private val DefaultRequestTimeoutMs = 5000
+    private val DefaultMaxInFlightRequestsPerConnection = 100
+    private val DefaultReconnectBackoffMs = 50
+    private val DefaultReconnectBackoffMax = 50
+    private val DefaultSendBufferBytes = 128 * 1024
+    private val DefaultReceiveBufferBytes = 32 * 1024
+    private val DefaultRetryBackoffMs = 100
 
-    val AdminClientIdSequence = new AtomicInteger(1)
-    val AdminConfigDef = {
+    private val AdminClientIdSequence = new AtomicInteger(1)
+    private val AdminConfigDef = {
       val config = new ConfigDef()
         .define(
           CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG,

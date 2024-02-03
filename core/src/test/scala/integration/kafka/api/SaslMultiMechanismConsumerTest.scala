@@ -13,9 +13,11 @@
 package kafka.api
 
 import kafka.server.KafkaConfig
-import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo, Timeout}
-import kafka.utils.{JaasTestUtils, TestUtils}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo, Timeout}
+import kafka.utils.{JaasTestUtils, TestInfoUtils, TestUtils}
 import org.apache.kafka.common.security.auth.SecurityProtocol
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.ValueSource
 
 import scala.jdk.CollectionConverters._
 
@@ -42,8 +44,9 @@ class SaslMultiMechanismConsumerTest extends BaseConsumerTest with SaslSetup {
     closeSasl()
   }
 
-  @Test
-  def testMultipleBrokerMechanisms(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testMultipleBrokerMechanisms(quorum: String): Unit = {
     val plainSaslProducer = createProducer()
     val plainSaslConsumer = createConsumer()
 

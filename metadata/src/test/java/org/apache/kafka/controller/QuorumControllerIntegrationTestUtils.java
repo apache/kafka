@@ -54,7 +54,7 @@ public class QuorumControllerIntegrationTestUtils {
     private final static Logger log = LoggerFactory.getLogger(QuorumControllerIntegrationTestUtils.class);
 
     BrokerRegistrationRequestData.FeatureCollection brokerFeatures() {
-        return brokerFeatures(MetadataVersion.MINIMUM_KRAFT_VERSION, MetadataVersion.latest());
+        return brokerFeatures(MetadataVersion.MINIMUM_KRAFT_VERSION, MetadataVersion.latestTesting());
     }
 
     /**
@@ -94,7 +94,7 @@ public class QuorumControllerIntegrationTestUtils {
                     .setBrokerId(brokerId)
                     .setRack(null)
                     .setClusterId(controller.clusterId())
-                    .setFeatures(brokerFeatures(MetadataVersion.IBP_3_0_IV1, MetadataVersion.latest()))
+                    .setFeatures(brokerFeatures(MetadataVersion.IBP_3_0_IV1, MetadataVersion.latestTesting()))
                     .setIncarnationId(Uuid.fromString("kxAT73dKQsitIedpiPtwB" + brokerId))
                     .setLogDirs(Collections.singletonList(
                         Uuid.fromString("TESTBROKER" + Integer.toString(100000 + brokerId).substring(1) + "DIRAAAA")

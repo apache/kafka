@@ -36,7 +36,7 @@ import scala.concurrent.{Await, ExecutionContext, ExecutionContextExecutorServic
 
 class CoreUtilsTest extends Logging {
 
-  val clusterIdPattern = Pattern.compile("[a-zA-Z0-9_\\-]+")
+  val clusterIdPattern: Pattern = Pattern.compile("[a-zA-Z0-9_\\-]+")
 
   @Test
   def testSwallow(): Unit = {
@@ -71,41 +71,6 @@ class CoreUtilsTest extends Logging {
     assertTrue(emptyListFromNullString!=null)
     assertTrue(emptyStringList.equals(emptyListFromNullString))
     assertTrue(emptyStringList.equals(emptyList))
-  }
-
-  @Test
-  def testCsvMap(): Unit = {
-    val emptyString: String = ""
-    val emptyMap = CoreUtils.parseCsvMap(emptyString)
-    val emptyStringMap = Map.empty[String, String]
-    assertTrue(emptyMap != null)
-    assertTrue(emptyStringMap.equals(emptyStringMap))
-
-    val kvPairsIpV6: String = "a:b:c:v,a:b:c:v"
-    val ipv6Map = CoreUtils.parseCsvMap(kvPairsIpV6)
-    for (m <- ipv6Map) {
-      assertTrue(m._1.equals("a:b:c"))
-      assertTrue(m._2.equals("v"))
-    }
-
-    val singleEntry:String = "key:value"
-    val singleMap = CoreUtils.parseCsvMap(singleEntry)
-    val value = singleMap.getOrElse("key", 0)
-    assertTrue(value.equals("value"))
-
-    val kvPairsIpV4: String = "192.168.2.1/30:allow, 192.168.2.1/30:allow"
-    val ipv4Map = CoreUtils.parseCsvMap(kvPairsIpV4)
-    for (m <- ipv4Map) {
-      assertTrue(m._1.equals("192.168.2.1/30"))
-      assertTrue(m._2.equals("allow"))
-    }
-
-    val kvPairsSpaces: String = "key:value      , key:   value"
-    val spaceMap = CoreUtils.parseCsvMap(kvPairsSpaces)
-    for (m <- spaceMap) {
-      assertTrue(m._1.equals("key"))
-      assertTrue(m._2.equals("value"))
-    }
   }
 
   @Test

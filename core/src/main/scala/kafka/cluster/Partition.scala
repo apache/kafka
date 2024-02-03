@@ -207,8 +207,8 @@ case class PendingExpandIsr(
   sentLeaderAndIsr: LeaderAndIsr,
   lastCommittedState: CommittedPartitionState
 ) extends PendingPartitionChange {
-  val isr = lastCommittedState.isr
-  val maximalIsr = isr + newInSyncReplicaId
+  val isr: Set[Int] = lastCommittedState.isr
+  val maximalIsr: Set[Int] = isr + newInSyncReplicaId
   val isInflight = true
 
   def notifyListener(alterPartitionListener: AlterPartitionListener): Unit = {
@@ -229,8 +229,8 @@ case class PendingShrinkIsr(
   sentLeaderAndIsr: LeaderAndIsr,
   lastCommittedState: CommittedPartitionState
 ) extends PendingPartitionChange  {
-  val isr = lastCommittedState.isr
-  val maximalIsr = isr
+  val isr: Set[Int] = lastCommittedState.isr
+  val maximalIsr: Set[Int] = isr
   val isInflight = true
 
   def notifyListener(alterPartitionListener: AlterPartitionListener): Unit = {
@@ -250,7 +250,7 @@ case class CommittedPartitionState(
   isr: Set[Int],
   leaderRecoveryState: LeaderRecoveryState
 ) extends PartitionState {
-  val maximalIsr = isr
+  val maximalIsr: Set[Int] = isr
   val isInflight = false
 
   override def toString: String = {
@@ -1802,7 +1802,7 @@ class Partition(val topicPartition: TopicPartition,
       } else {
         val replica = remoteReplicasMap.get(brokerId)
         val brokerEpoch = if (replica == null) Option.empty else replica.stateSnapshot.brokerEpoch
-        if (!brokerEpoch.isDefined) {
+        if (brokerEpoch.isEmpty) {
           // There are two cases where the broker epoch can be missing:
           // 1. During ISR expansion, we already held lock for the partition and did the broker epoch check, so the new
           //   ISR replica should have a valid broker epoch. Then, the missing broker epoch can only happen to the

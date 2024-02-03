@@ -32,6 +32,7 @@ import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.record.RecordBatch
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.utils.Time
+import org.apache.kafka.coordinator.group.OffsetConfig
 import org.apache.kafka.server.record.BrokerCompressionType
 import org.apache.kafka.storage.internals.log.VerificationGuard
 
@@ -915,10 +916,10 @@ private[group] class GroupCoordinator(
         val offsetTopicPartition = new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, partitionFor(group.groupId))
 
         def postVerificationCallback(
-          error: Errors,
           newRequestLocal: RequestLocal,
-          verificationGuard: VerificationGuard
+          errorAndGuard: (Errors, VerificationGuard)
         ): Unit = {
+          val (error, verificationGuard) = errorAndGuard
           if (error != Errors.NONE) {
             val finalError = GroupMetadataManager.maybeConvertOffsetCommitError(error)
             responseCallback(offsetMetadata.map { case (k, _) => k -> finalError })
@@ -934,8 +935,13 @@ private[group] class GroupCoordinator(
           producerId,
           producerEpoch,
           RecordBatch.NO_SEQUENCE,
-          requestLocal,
-          postVerificationCallback
+          // Wrap the callback to be handled on an arbitrary request handler thread
+          // when transaction verification is complete. The request local passed in
+          // is only used when the callback is executed immediately.
+          KafkaRequestHandler.wrapAsyncCallback(
+            postVerificationCallback,
+            requestLocal
+          )
         )
     }
   }
@@ -1113,8 +1119,10 @@ private[group] class GroupCoordinator(
       // if states is empty, return all groups
       val groups = if (states.isEmpty)
         groupManager.currentGroups
-      else
-        groupManager.currentGroups.filter(g => states.contains(g.summary.state))
+      else {
+        val caseInsensitiveStates = states.map(_.toLowerCase)
+        groupManager.currentGroups.filter(g => g.isInStates(caseInsensitiveStates))
+      }
       (errorCode, groups.map(_.overview).toList)
     }
   }
@@ -1751,17 +1759,17 @@ object GroupCoordinator {
     GroupCoordinator(config, replicaManager, heartbeatPurgatory, rebalancePurgatory, time, metrics)
   }
 
-  private[group] def offsetConfig(config: KafkaConfig) = OffsetConfig(
-    maxMetadataSize = config.offsetMetadataMaxSize,
-    loadBufferSize = config.offsetsLoadBufferSize,
-    offsetsRetentionMs = config.offsetsRetentionMinutes * 60L * 1000L,
-    offsetsRetentionCheckIntervalMs = config.offsetsRetentionCheckIntervalMs,
-    offsetsTopicNumPartitions = config.offsetsTopicPartitions,
-    offsetsTopicSegmentBytes = config.offsetsTopicSegmentBytes,
-    offsetsTopicReplicationFactor = config.offsetsTopicReplicationFactor,
-    offsetsTopicCompressionType = config.offsetsTopicCompressionType,
-    offsetCommitTimeoutMs = config.offsetCommitTimeoutMs,
-    offsetCommitRequiredAcks = config.offsetCommitRequiredAcks
+  private[group] def offsetConfig(config: KafkaConfig) = new OffsetConfig(
+    config.offsetMetadataMaxSize,
+    config.offsetsLoadBufferSize,
+    config.offsetsRetentionMinutes * 60L * 1000L,
+    config.offsetsRetentionCheckIntervalMs,
+    config.offsetsTopicPartitions,
+    config.offsetsTopicSegmentBytes,
+    config.offsetsTopicReplicationFactor,
+    config.offsetsTopicCompressionType,
+    config.offsetCommitTimeoutMs,
+    config.offsetCommitRequiredAcks
   )
 
   private[group] def apply(

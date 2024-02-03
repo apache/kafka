@@ -685,7 +685,7 @@ public class SubscriptionState {
     }
 
     public synchronized Set<TopicPartition> initializingPartitions() {
-        return collectPartitions(state -> state.fetchState.equals(FetchStates.INITIALIZING));
+        return collectPartitions(state -> state.fetchState.equals(FetchStates.INITIALIZING) && !state.pendingOnAssignedCallback);
     }
 
     private Set<TopicPartition> collectPartitions(Predicate<TopicPartitionState> filter) {
@@ -749,6 +749,38 @@ public class SubscriptionState {
         tps.forEach(tp -> assignedState(tp).markPendingRevocation());
     }
 
+    // Visible for testing
+    synchronized void markPendingOnAssignedCallback(Collection<TopicPartition> tps,
+                                                    boolean pendingOnAssignedCallback) {
+        tps.forEach(tp -> assignedState(tp).markPendingOnAssignedCallback(pendingOnAssignedCallback));
+    }
+
+    /**
+     * Change the assignment to the specified partitions returned from the coordinator and mark
+     * them as awaiting onPartitionsAssigned callback. This will ensure that the partitions are
+     * included in the assignment, but are not fetchable or initialize positions while the
+     * callback runs. This is expected to be used by the async consumer.
+     *
+     * @param fullAssignment  Full collection of partitions assigned. Includes previously owned
+     *                        and newly added partitions.
+     * @param addedPartitions Subset of the fullAssignment containing the added partitions. These
+     *                        are not fetchable until the onPartitionsAssigned callback completes.
+     */
+    public synchronized void assignFromSubscribedAwaitingCallback(Collection<TopicPartition> fullAssignment,
+                                                                  Collection<TopicPartition> addedPartitions) {
+        assignFromSubscribed(fullAssignment);
+        markPendingOnAssignedCallback(addedPartitions, true);
+    }
+
+    /**
+     * Enable fetching and updating positions for the given partitions that were added to the
+     * assignment, but waiting for the onPartitionsAssigned callback to complete. This is
+     * expected to be used by the async consumer.
+     */
+    public synchronized void enablePartitionsAwaitingCallback(Collection<TopicPartition> partitions) {
+        markPendingOnAssignedCallback(partitions, false);
+    }
+
     public synchronized void resume(TopicPartition tp) {
         assignedState(tp).resume();
     }
@@ -781,6 +813,7 @@ public class SubscriptionState {
         private Long lastStableOffset;
         private boolean paused;  // whether this partition has been paused by the user
         private boolean pendingRevocation;
+        private boolean pendingOnAssignedCallback;
         private OffsetResetStrategy resetStrategy;  // the strategy to use if the offset needs resetting
         private Long nextRetryTimeMs;
         private Integer preferredReadReplica;
@@ -790,6 +823,7 @@ public class SubscriptionState {
         TopicPartitionState() {
             this.paused = false;
             this.pendingRevocation = false;
+            this.pendingOnAssignedCallback = false;
             this.endOffsetRequested = false;
             this.fetchState = FetchStates.INITIALIZING;
             this.position = null;
@@ -983,12 +1017,16 @@ public class SubscriptionState {
             this.pendingRevocation = true;
         }
 
+        private void markPendingOnAssignedCallback(boolean pendingOnAssignedCallback) {
+            this.pendingOnAssignedCallback = pendingOnAssignedCallback;
+        }
+
         private void resume() {
             this.paused = false;
         }
 
         private boolean isFetchable() {
-            return !paused && !pendingRevocation && hasValidPosition();
+            return !paused && !pendingRevocation && !pendingOnAssignedCallback && hasValidPosition();
         }
 
         private void highWatermark(Long highWatermark) {

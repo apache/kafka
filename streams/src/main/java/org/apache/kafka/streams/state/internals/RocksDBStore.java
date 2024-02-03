@@ -309,8 +309,7 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
         allDescriptors.addAll(extraDescriptors);
 
         try {
-            final Options options = new Options(dbOptions, defaultColumnFamilyDescriptor.getOptions());
-            final List<byte[]> allExisting = RocksDB.listColumnFamilies(options, absolutePath);
+            final List<byte[]> allExisting = RocksDB.listColumnFamilies(userSpecifiedOptions, absolutePath);
 
             final List<ColumnFamilyDescriptor> existingDescriptors = new LinkedList<>();
             existingDescriptors.add(defaultColumnFamilyDescriptor);
@@ -345,10 +344,10 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
         while (existing + created < allDescriptors.size()) {
             final ColumnFamilyHandle existingHandle = existing < existingColumnFamilyHandles.size() ? existingColumnFamilyHandles.get(existing) : null;
             final ColumnFamilyHandle createdHandle = created < createdColumnFamilyHandles.size() ? createdColumnFamilyHandles.get(created) : null;
-            if (existingHandle != null && Arrays.equals(existingHandle.getDescriptor().getName(), allDescriptors.get(existing + created).getName())) {
+            if (existingHandle != null && Arrays.equals(existingHandle.getName(), allDescriptors.get(existing + created).getName())) {
                 columnFamilies.add(existingHandle);
                 existing++;
-            } else if (createdHandle != null && Arrays.equals(createdHandle.getDescriptor().getName(), allDescriptors.get(existing + created).getName())) {
+            } else if (createdHandle != null && Arrays.equals(createdHandle.getName(), allDescriptors.get(existing + created).getName())) {
                 columnFamilies.add(createdHandle);
                 created++;
             } else {

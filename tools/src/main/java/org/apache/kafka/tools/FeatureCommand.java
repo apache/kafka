@@ -244,7 +244,7 @@ public class FeatureCommand {
             } catch (Throwable e) {
                 throw new TerseException("Unsupported metadata version " + metadata +
                         ". Supported metadata versions are " + metadataVersionsToString(
-                        MetadataVersion.MINIMUM_BOOTSTRAP_VERSION, MetadataVersion.latest()));
+                        MetadataVersion.MINIMUM_BOOTSTRAP_VERSION, MetadataVersion.latestProduction()));
             }
             updates.put(MetadataVersion.FEATURE_NAME, new FeatureUpdate(version.featureLevel(), upgradeType));
         }

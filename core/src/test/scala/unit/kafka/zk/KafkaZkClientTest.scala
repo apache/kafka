@@ -813,7 +813,7 @@ class KafkaZkClientTest extends QuorumTestHarness {
         Seq(new EndPoint(host, port, ListenerName.forSecurityProtocol(securityProtocol), securityProtocol)),
         rack = rack,
         features = features),
-      MetadataVersion.latest, jmxPort = port + 10)
+      MetadataVersion.latestTesting, jmxPort = port + 10)
 
   @Test
   def testRegisterBrokerInfo(): Unit = {

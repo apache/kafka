@@ -101,6 +101,10 @@ public class LeaderState<T> implements EpochState {
      * @return the remainingMs before the checkQuorumTimer expired
      */
     public long timeUntilCheckQuorumExpires(long currentTimeMs) {
+        // if there's only 1 voter, it should never get expired.
+        if (voterStates.size() == 1) {
+            return Long.MAX_VALUE;
+        }
         checkQuorumTimer.update(currentTimeMs);
         long remainingMs = checkQuorumTimer.remainingMs();
         if (remainingMs == 0) {

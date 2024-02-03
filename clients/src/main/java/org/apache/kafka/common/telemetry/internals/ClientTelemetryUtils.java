@@ -23,10 +23,17 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.metrics.MetricsContext;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.CompressionType;
+import org.apache.kafka.common.record.RecordBatch;
+import org.apache.kafka.common.utils.BufferSupplier;
+import org.apache.kafka.common.utils.ByteBufferOutputStream;
+import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.nio.ByteBuffer;
 import java.time.Duration;
 import java.util.ArrayList;
@@ -175,16 +182,40 @@ public class ClientTelemetryUtils {
     }
 
     public static CompressionType preferredCompressionType(List<CompressionType> acceptedCompressionTypes) {
-        // TODO: Support compression in client telemetry.
+        if (acceptedCompressionTypes != null && !acceptedCompressionTypes.isEmpty()) {
+            // Broker is providing the compression types in order of preference. Grab the
+            // first one.
+            return acceptedCompressionTypes.get(0);
+        }
         return CompressionType.NONE;
     }
 
-    public static ByteBuffer compress(byte[] raw, CompressionType compressionType) {
-        // TODO: Support compression in client telemetry.
-        if (compressionType == CompressionType.NONE) {
-            return ByteBuffer.wrap(raw);
-        } else {
-            throw new UnsupportedOperationException("Compression is not supported");
+    public static byte[] compress(byte[] raw, CompressionType compressionType) throws IOException {
+        try (ByteBufferOutputStream compressedOut = new ByteBufferOutputStream(512)) {
+            try (OutputStream out = compressionType.wrapForOutput(compressedOut, RecordBatch.CURRENT_MAGIC_VALUE)) {
+                out.write(raw);
+                out.flush();
+            }
+            compressedOut.buffer().flip();
+            return Utils.toArray(compressedOut.buffer());
+        }
+    }
+
+    public static ByteBuffer decompress(byte[] metrics, CompressionType compressionType) {
+        ByteBuffer data = ByteBuffer.wrap(metrics);
+        try (InputStream in = compressionType.wrapForInput(data, RecordBatch.CURRENT_MAGIC_VALUE, BufferSupplier.create());
+            ByteArrayOutputStream out = new ByteArrayOutputStream()) {
+
+            byte[] bytes = new byte[data.capacity() * 2];
+            int nRead;
+            while ((nRead = in.read(bytes, 0, bytes.length)) != -1) {
+                out.write(bytes, 0, nRead);
+            }
+
+            out.flush();
+            return ByteBuffer.wrap(out.toByteArray());
+        } catch (IOException e) {
+            throw new KafkaException("Failed to decompress metrics data", e);
         }
     }
 
