@@ -605,6 +605,46 @@ public class WorkerSinkTaskMockitoTest {
         verify(sinkTask, times(4)).put(Collections.emptyList());
     }
 
+    @SuppressWarnings("unchecked")
+    @Test
+    public void testTaskCancelPreventsFinalOffsetCommit() {
+        createTask(initialState);
+
+        workerTask.initialize(TASK_CONFIG);
+        workerTask.initializeAndStart();
+        verifyInitializeTask();
+
+        expectTaskGetTopic();
+        expectPollInitialAssignment()
+                // Put one message through the task to get some offsets to commit
+                .thenAnswer(expectConsumerPoll(1))
+                // the second put will return after the task is stopped and cancelled (asynchronously)
+                .thenAnswer(expectConsumerPoll(1));
+
+        expectConversionAndTransformation(null, new RecordHeaders());
+
+        doAnswer(invocation -> null)
+                .doAnswer(invocation -> {
+                    workerTask.stop();
+                    workerTask.cancel();
+                    return null;
+                })
+                .when(sinkTask).put(anyList());
+
+        // task performs normal steps in advance of committing offsets
+        final Map<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>();
+        offsets.put(TOPIC_PARTITION, new OffsetAndMetadata(FIRST_OFFSET + 2));
+        offsets.put(TOPIC_PARTITION2, new OffsetAndMetadata(FIRST_OFFSET));
+        when(sinkTask.preCommit(offsets)).thenReturn(offsets);
+
+        workerTask.execute();
+
+        // stop wakes up the consumer
+        verify(consumer).wakeup();
+
+        verify(sinkTask).close(any(Collection.class));
+    }
+
     @Test
     public void testDeliveryWithMutatingTransform() {
         createTask(initialState);
