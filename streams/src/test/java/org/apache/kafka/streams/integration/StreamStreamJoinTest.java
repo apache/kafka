@@ -71,6 +71,7 @@ public class StreamStreamJoinTest {
         assertEquals(
             Arrays.asList(
                 new KeyValue<>(KEY, "A|a")
+                //This test currently fails, the X record is also emitted, why?
             ),
             out.readKeyValuesToList()
         );
