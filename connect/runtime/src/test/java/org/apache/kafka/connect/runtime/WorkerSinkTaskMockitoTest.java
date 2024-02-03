@@ -669,7 +669,4 @@ public class WorkerSinkTaskMockitoTest {
         String measured = metrics.currentMetricValueAsString(taskGroup, name);
         assertEquals(expected, measured);
     }
-
-    private abstract static class TestSinkTask extends SinkTask {
-    }
 }
