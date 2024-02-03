@@ -84,7 +84,6 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
 import java.util.function.Supplier;
-import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 import static java.util.Arrays.asList;
@@ -1299,37 +1298,6 @@ public class WorkerSinkTaskTest {
         PowerMock.verifyAll();
     }
 
-    @Test
-    public void testTimestampPropagation() throws Exception {
-        final Long timestamp = System.currentTimeMillis();
-        final TimestampType timestampType = TimestampType.CREATE_TIME;
-
-        createTask(initialState);
-
-        expectInitializeTask();
-        expectTaskGetTopic(true);
-        expectPollInitialAssignment();
-        expectConsumerPoll(1, timestamp, timestampType);
-        expectConversionAndTransformation(1);
-
-        Capture<Collection<SinkRecord>> records = EasyMock.newCapture(CaptureType.ALL);
-        sinkTask.put(EasyMock.capture(records));
-
-        PowerMock.replayAll();
-
-        workerTask.initialize(TASK_CONFIG);
-        workerTask.initializeAndStart();
-        workerTask.iteration(); // iter 1 -- initial assignment
-        workerTask.iteration(); // iter 2 -- deliver 1 record
-
-        SinkRecord record = records.getValue().iterator().next();
-
-        assertEquals(timestamp, record.timestamp());
-        assertEquals(timestampType, record.timestampType());
-
-        PowerMock.verifyAll();
-    }
-
     private void expectInitializeTask() {
         consumer.subscribe(EasyMock.eq(asList(TOPIC)), EasyMock.capture(rebalanceListener));
         PowerMock.expectLastCall();
@@ -1360,10 +1328,6 @@ public class WorkerSinkTaskTest {
         expectConsumerPoll(numMessages, RecordBatch.NO_TIMESTAMP, TimestampType.NO_TIMESTAMP_TYPE, emptyHeaders());
     }
 
-    private void expectConsumerPoll(final int numMessages, Headers headers) {
-        expectConsumerPoll(numMessages, RecordBatch.NO_TIMESTAMP, TimestampType.NO_TIMESTAMP_TYPE, headers);
-    }
-
     private void expectConsumerPoll(final int numMessages, final long timestamp, final TimestampType timestampType) {
         expectConsumerPoll(numMessages, timestamp, timestampType, emptyHeaders());
     }
@@ -1382,15 +1346,6 @@ public class WorkerSinkTaskTest {
                                 Collections.emptyMap()
                 );
             });
-    }
-
-    private void expectConsumerPoll(List<ConsumerRecord<byte[], byte[]>> records) {
-        EasyMock.expect(consumer.poll(Duration.ofMillis(EasyMock.anyLong()))).andAnswer(
-            () -> new ConsumerRecords<>(
-                records.isEmpty() ?
-                    Collections.emptyMap() :
-                    Collections.singletonMap(new TopicPartition(TOPIC, PARTITION), records)
-            ));
     }
 
     private void expectConversionAndTransformation(final int numMessages) {

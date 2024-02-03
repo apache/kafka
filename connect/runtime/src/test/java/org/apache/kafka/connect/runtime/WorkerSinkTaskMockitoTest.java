@@ -665,6 +665,36 @@ public class WorkerSinkTaskMockitoTest {
     }
 
     @Test
+    public void testTimestampPropagation() {
+        final Long timestamp = System.currentTimeMillis();
+        final TimestampType timestampType = TimestampType.CREATE_TIME;
+
+        createTask(initialState);
+        expectTaskGetTopic();
+
+        workerTask.initialize(TASK_CONFIG);
+        workerTask.initializeAndStart();
+        verifyInitializeTask();
+
+        expectPollInitialAssignment()
+                .thenAnswer(expectConsumerPoll(1, timestamp, timestampType, new RecordHeaders()));
+
+        expectConversionAndTransformation(null, new RecordHeaders());
+
+        workerTask.iteration(); // iter 1 -- initial assignment
+        workerTask.iteration(); // iter 2 -- deliver 1 record
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<Collection<SinkRecord>> records = ArgumentCaptor.forClass(Collection.class);
+        verify(sinkTask, times(2)).put(records.capture());
+
+        SinkRecord record = records.getValue().iterator().next();
+
+        assertEquals(timestamp, record.timestamp());
+        assertEquals(timestampType, record.timestampType());
+    }
+
+    @Test
     public void testTopicsRegex() {
         Map<String, String> props = new HashMap<>(TASK_PROPS);
         props.remove("topics");
