@@ -604,6 +604,59 @@ public class WorkerSinkTaskMockitoTest {
     }
 
     @Test
+    public void testPreCommit() {
+        createTask(initialState);
+
+        workerTask.initialize(TASK_CONFIG);
+        workerTask.initializeAndStart();
+        verifyInitializeTask();
+
+        expectTaskGetTopic();
+        expectPollInitialAssignment()
+                .thenAnswer(expectConsumerPoll(2))
+                .thenAnswer(expectConsumerPoll(0));
+        expectConversionAndTransformation(null, new RecordHeaders());
+
+        workerTask.iteration(); // iter 1 -- initial assignment
+
+        final Map<TopicPartition, OffsetAndMetadata> workerStartingOffsets = new HashMap<>();
+        workerStartingOffsets.put(TOPIC_PARTITION, new OffsetAndMetadata(FIRST_OFFSET));
+        workerStartingOffsets.put(TOPIC_PARTITION2, new OffsetAndMetadata(FIRST_OFFSET));
+
+        assertEquals(workerStartingOffsets, workerTask.currentOffsets());
+
+        final Map<TopicPartition, OffsetAndMetadata> workerCurrentOffsets = new HashMap<>();
+        workerCurrentOffsets.put(TOPIC_PARTITION, new OffsetAndMetadata(FIRST_OFFSET + 2));
+        workerCurrentOffsets.put(TOPIC_PARTITION2, new OffsetAndMetadata(FIRST_OFFSET));
+
+        final Map<TopicPartition, OffsetAndMetadata> taskOffsets = new HashMap<>();
+        taskOffsets.put(TOPIC_PARTITION, new OffsetAndMetadata(FIRST_OFFSET + 1)); // act like FIRST_OFFSET+2 has not yet been flushed by the task
+        taskOffsets.put(TOPIC_PARTITION2, new OffsetAndMetadata(FIRST_OFFSET + 1)); // should be ignored because > current offset
+        taskOffsets.put(new TopicPartition(TOPIC, 3), new OffsetAndMetadata(FIRST_OFFSET)); // should be ignored because this partition is not assigned
+
+        when(sinkTask.preCommit(workerCurrentOffsets)).thenReturn(taskOffsets);
+
+        workerTask.iteration(); // iter 2 -- deliver 2 records
+
+        final Map<TopicPartition, OffsetAndMetadata> committableOffsets = new HashMap<>();
+        committableOffsets.put(TOPIC_PARTITION, new OffsetAndMetadata(FIRST_OFFSET + 1));
+        committableOffsets.put(TOPIC_PARTITION2, new OffsetAndMetadata(FIRST_OFFSET));
+
+        assertEquals(workerCurrentOffsets, workerTask.currentOffsets());
+        assertEquals(workerStartingOffsets, workerTask.lastCommittedOffsets());
+
+        sinkTaskContext.getValue().requestCommit();
+        workerTask.iteration(); // iter 3 -- commit
+
+        // Expect extra invalid topic partition to be filtered, which causes the consumer assignment to be logged
+        ArgumentCaptor<OffsetCommitCallback> callback = ArgumentCaptor.forClass(OffsetCommitCallback.class);
+        verify(consumer).commitAsync(eq(committableOffsets), callback.capture());
+        callback.getValue().onComplete(committableOffsets, null);
+
+        assertEquals(committableOffsets, workerTask.lastCommittedOffsets());
+    }
+
+    @Test
     public void testPreCommitFailure() {
         createTask(initialState);
 
