@@ -21,6 +21,7 @@ import org.apache.kafka.clients.GroupRebalanceConfig;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEventHandler;
 import org.apache.kafka.common.internals.IdempotentCloser;
+import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.telemetry.internals.ClientTelemetryReporter;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
@@ -33,9 +34,8 @@ import java.util.List;
 import java.util.Optional;
 import java.util.function.Supplier;
 
-import static org.apache.kafka.common.utils.Utils.closeQuietly;
-
 import static java.util.Objects.requireNonNull;
+import static org.apache.kafka.common.utils.Utils.closeQuietly;
 
 /**
  * {@code RequestManagers} provides a means to pass around the set of {@link RequestManager} instances in the system.
@@ -105,6 +105,7 @@ public class RequestManagers implements Closeable {
      * Creates a {@link Supplier} for deferred creation during invocation by
      * {@link ConsumerNetworkThread}.
      */
+    @SuppressWarnings({"checkstyle:ParameterNumber"})
     public static Supplier<RequestManagers> supplier(final Time time,
                                                      final LogContext logContext,
                                                      final BackgroundEventHandler backgroundEventHandler,
@@ -116,7 +117,10 @@ public class RequestManagers implements Closeable {
                                                      final ApiVersions apiVersions,
                                                      final FetchMetricsManager fetchMetricsManager,
                                                      final Supplier<NetworkClientDelegate> networkClientDelegateSupplier,
-                                                     final Optional<ClientTelemetryReporter> clientTelemetryReporter) {
+                                                     final Optional<ClientTelemetryReporter> clientTelemetryReporter,
+                                                     final Metrics metrics,
+                                                     final OffsetCommitCallbackInvoker offsetCommitCallbackInvoker
+                                                     ) {
         return new CachedSupplier<RequestManagers>() {
             @Override
             protected RequestManagers create() {
@@ -166,8 +170,10 @@ public class RequestManagers implements Closeable {
                             subscriptions,
                             config,
                             coordinator,
+                            offsetCommitCallbackInvoker,
                             groupRebalanceConfig.groupId,
-                            groupRebalanceConfig.groupInstanceId);
+                            groupRebalanceConfig.groupInstanceId,
+                            metrics);
                     membershipManager = new MembershipManagerImpl(
                             groupRebalanceConfig.groupId,
                             groupRebalanceConfig.groupInstanceId,
@@ -178,7 +184,8 @@ public class RequestManagers implements Closeable {
                             metadata,
                             logContext,
                             clientTelemetryReporter,
-                            backgroundEventHandler);
+                            backgroundEventHandler,
+                            time);
                     membershipManager.registerStateListener(commit);
                     heartbeatRequestManager = new HeartbeatRequestManager(
                             logContext,
@@ -187,7 +194,8 @@ public class RequestManagers implements Closeable {
                             coordinator,
                             subscriptions,
                             membershipManager,
-                            backgroundEventHandler);
+                            backgroundEventHandler,
+                            metrics);
                 }
 
                 return new RequestManagers(

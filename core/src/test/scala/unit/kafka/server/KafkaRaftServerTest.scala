@@ -83,7 +83,7 @@ class KafkaRaftServerTest {
   private def invokeLoadMetaProperties(
     metaProperties: MetaProperties,
     configProperties: Properties,
-    metadataVersion: Option[MetadataVersion] = Some(MetadataVersion.latest())
+    metadataVersion: Option[MetadataVersion] = Some(MetadataVersion.latestTesting())
   ): (MetaPropertiesEnsemble, BootstrapMetadata) = {
     val tempLogDir = TestUtils.tempDirectory()
     try {
@@ -178,7 +178,7 @@ class KafkaRaftServerTest {
       setNodeId(nodeId).
       build())
 
-    writeBootstrapMetadata(validDir, MetadataVersion.latest())
+    writeBootstrapMetadata(validDir, MetadataVersion.latestTesting())
 
     // Use a regular file as an invalid log dir to trigger an IO error
     val invalidDir = TestUtils.tempFile("blah")
@@ -314,6 +314,6 @@ class KafkaRaftServerTest {
     assertEquals(metaProperties, metaPropertiesEnsemble.logDirProps().values().iterator().next())
     assertTrue(metaPropertiesEnsemble.errorLogDirs().isEmpty())
     assertTrue(metaPropertiesEnsemble.emptyLogDirs().isEmpty())
-    assertEquals(bootstrapMetadata.metadataVersion(), MetadataVersion.latest())
+    assertEquals(bootstrapMetadata.metadataVersion(), MetadataVersion.latestProduction())
   }
 }

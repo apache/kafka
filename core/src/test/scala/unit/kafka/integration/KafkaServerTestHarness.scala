@@ -17,26 +17,25 @@
 
 package kafka.integration
 
-import java.io.File
-import java.util
-import java.util.Arrays
-import kafka.server.QuorumTestHarness
 import kafka.server._
 import kafka.utils.TestUtils
-import org.apache.kafka.common.security.auth.SecurityProtocol
-import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo}
-
-import scala.collection.{Seq, mutable}
-import scala.jdk.CollectionConverters._
-import java.util.Properties
 import kafka.utils.TestUtils.{createAdminClient, resource}
 import org.apache.kafka.common.acl.AccessControlEntry
-import org.apache.kafka.common.{KafkaException, Uuid}
 import org.apache.kafka.common.network.ListenerName
+import org.apache.kafka.common.quota.{ClientQuotaAlteration, ClientQuotaEntity}
 import org.apache.kafka.common.resource.ResourcePattern
+import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.security.scram.ScramCredential
 import org.apache.kafka.common.utils.Time
+import org.apache.kafka.common.{KafkaException, Uuid}
 import org.apache.kafka.controller.ControllerRequestContextUtil.ANONYMOUS_CONTEXT
+import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo}
+
+import java.io.File
+import java.util
+import java.util.{Arrays, Collections, Properties}
+import scala.collection.{Seq, mutable}
+import scala.jdk.CollectionConverters._
 
 /**
  * A test harness that brings up some number of broker nodes
@@ -383,6 +382,22 @@ abstract class KafkaServerTestHarness extends QuorumTestHarness {
         aliveBrokers,
         controllerServer
       )
+    }
+  }
+
+  def changeClientIdConfig(sanitizedClientId: String, configs: Properties): Unit = {
+    if (isKRaftTest()) {
+      resource(createAdminClient(brokers, listenerName)) {
+        admin => {
+          admin.alterClientQuotas(Collections.singleton(
+            new ClientQuotaAlteration(
+              new ClientQuotaEntity(Map(ClientQuotaEntity.CLIENT_ID -> (if (sanitizedClientId == "<default>") null else sanitizedClientId)).asJava),
+              configs.asScala.map { case (key, value) => new ClientQuotaAlteration.Op(key, value.toDouble) }.toList.asJava))).all().get()
+        }
+      }
+    }
+    else {
+      adminZkClient.changeClientIdConfig(sanitizedClientId, configs)
     }
   }
 }

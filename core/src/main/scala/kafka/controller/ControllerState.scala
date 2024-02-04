@@ -47,7 +47,7 @@ object ControllerState {
     def value = 2
     // The LeaderElectionRateAndTimeMs metric existed before `ControllerState` was introduced and we keep the name
     // for backwards compatibility. The alternative would be to have the same metric under two different names.
-    override def rateAndTimeMetricName = Some("LeaderElectionRateAndTimeMs")
+    override def rateAndTimeMetricName: Option[String] = Some("LeaderElectionRateAndTimeMs")
   }
 
   case object TopicChange extends ControllerState {

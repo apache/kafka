@@ -27,7 +27,7 @@ import scala.collection.{immutable, mutable}
 
 
 object TransactionState {
-  val AllStates = Set(
+  val AllStates: Set[TransactionState] = Set(
     Empty,
     Ongoing,
     PrepareCommit,

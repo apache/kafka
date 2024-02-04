@@ -585,7 +585,7 @@ private[log] object LogCleanerManager extends Logging {
     TimeSinceLastRunMsMetricName
   )
 
-  def isCompactAndDelete(log: UnifiedLog): Boolean = {
+  private def isCompactAndDelete(log: UnifiedLog): Boolean = {
     log.config.compact && log.config.delete
   }
 
@@ -593,7 +593,7 @@ private[log] object LogCleanerManager extends Logging {
     * get max delay between the time when log is required to be compacted as determined
     * by maxCompactionLagMs and the current time.
     */
-  def maxCompactionDelay(log: UnifiedLog, firstDirtyOffset: Long, now: Long) : Long = {
+  private def maxCompactionDelay(log: UnifiedLog, firstDirtyOffset: Long, now: Long) : Long = {
     val dirtyNonActiveSegments = log.nonActiveLogSegmentsFrom(firstDirtyOffset)
     val firstBatchTimestamps = log.getFirstBatchTimestampForSegments(dirtyNonActiveSegments).stream.filter(_ > 0)
 

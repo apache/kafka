@@ -227,14 +227,14 @@ public class GroupCoordinatorMetricsShardTest {
         assertGaugeValue(metrics, metrics.metricName("group-count", "group-coordinator-metrics",
             Collections.singletonMap("protocol", "consumer")), 4);
         assertGaugeValue(metrics, metrics.metricName("consumer-group-count", "group-coordinator-metrics",
-            Collections.singletonMap("state", "empty")), 0);
+            Collections.singletonMap("state", ConsumerGroup.ConsumerGroupState.EMPTY.toString())), 0);
         assertGaugeValue(metrics, metrics.metricName("consumer-group-count", "group-coordinator-metrics",
-            Collections.singletonMap("state", "assigning")), 1);
+            Collections.singletonMap("state", ConsumerGroup.ConsumerGroupState.ASSIGNING.toString())), 1);
         assertGaugeValue(metrics, metrics.metricName("consumer-group-count", "group-coordinator-metrics",
-            Collections.singletonMap("state", "reconciling")), 1);
+            Collections.singletonMap("state", ConsumerGroup.ConsumerGroupState.RECONCILING.toString())), 1);
         assertGaugeValue(metrics, metrics.metricName("consumer-group-count", "group-coordinator-metrics",
-            Collections.singletonMap("state", "stable")), 2);
+            Collections.singletonMap("state", ConsumerGroup.ConsumerGroupState.STABLE.toString())), 2);
         assertGaugeValue(metrics, metrics.metricName("consumer-group-count", "group-coordinator-metrics",
-            Collections.singletonMap("state", "dead")), 0);
+            Collections.singletonMap("state", ConsumerGroup.ConsumerGroupState.DEAD.toString())), 0);
     }
 }

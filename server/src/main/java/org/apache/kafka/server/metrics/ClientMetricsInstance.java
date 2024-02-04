@@ -18,6 +18,7 @@ package org.apache.kafka.server.metrics;
 
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.server.util.timer.TimerTask;
 
 import java.util.Objects;
 import java.util.Set;
@@ -38,6 +39,7 @@ public class ClientMetricsInstance {
     private long lastPushRequestTimestamp;
     private volatile boolean terminating;
     private volatile Errors lastKnownError;
+    private TimerTask expirationTimerTask;
 
     public ClientMetricsInstance(Uuid clientInstanceId, ClientMetricsInstanceMetadata instanceMetadata,
         int subscriptionId, int subscriptionVersion, Set<String> metrics, int pushIntervalMs) {
@@ -91,6 +93,11 @@ public class ClientMetricsInstance {
         this.lastKnownError = lastKnownError;
     }
 
+    // Visible for testing
+    public synchronized TimerTask expirationTimerTask() {
+        return expirationTimerTask;
+    }
+
     public synchronized boolean maybeUpdateGetRequestTimestamp(long currentTime) {
         long lastRequestTimestamp = Math.max(lastGetRequestTimestamp, lastPushRequestTimestamp);
         long timeElapsedSinceLastMsg = currentTime - lastRequestTimestamp;
@@ -119,5 +126,17 @@ public class ClientMetricsInstance {
             lastPushRequestTimestamp = currentTime;
         }
         return canAccept;
+    }
+
+    public synchronized void cancelExpirationTimerTask() {
+        if (expirationTimerTask != null) {
+            expirationTimerTask.cancel();
+            expirationTimerTask = null;
+        }
+    }
+
+    public synchronized void updateExpirationTimerTask(TimerTask timerTask) {
+        cancelExpirationTimerTask();
+        expirationTimerTask = timerTask;
     }
 }

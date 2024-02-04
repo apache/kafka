@@ -589,6 +589,23 @@ public class GroupCoordinatorShard implements CoordinatorShard<Record> {
         );
     }
 
+    /**
+     * Remove offsets of the partitions that have been deleted.
+     *
+     * @param topicPartitions   The partitions that have been deleted.
+     * @return The list of tombstones (offset commit) to append.
+     */
+    public CoordinatorResult<Void, Record> onPartitionsDeleted(
+        List<TopicPartition> topicPartitions
+    ) {
+        final long startTimeMs = time.milliseconds();
+        final List<Record> records = offsetMetadataManager.onPartitionsDeleted(topicPartitions);
+
+        log.info("Generated {} tombstone records in {} milliseconds while deleting offsets for partitions {}.",
+            records.size(), time.milliseconds() - startTimeMs, topicPartitions);
+
+        return new CoordinatorResult<>(records);
+    }
 
     /**
      * The coordinator has been loaded. This is used to apply any
@@ -639,6 +656,7 @@ public class GroupCoordinatorShard implements CoordinatorShard<Record> {
     /**
      * Replays the Record to update the hard state of the group coordinator.
      *
+     * @param offset        The offset of the record in the log.
      * @param producerId    The producer id.
      * @param producerEpoch The producer epoch.
      * @param record        The record to apply to the state machine.
@@ -646,6 +664,7 @@ public class GroupCoordinatorShard implements CoordinatorShard<Record> {
      */
     @Override
     public void replay(
+        long offset,
         long producerId,
         short producerEpoch,
         Record record
@@ -657,6 +676,7 @@ public class GroupCoordinatorShard implements CoordinatorShard<Record> {
             case 0:
             case 1:
                 offsetMetadataManager.replay(
+                    offset,
                     producerId,
                     (OffsetCommitKey) key.message(),
                     (OffsetCommitValue) messageOrNull(value)

@@ -251,4 +251,36 @@ class BrokerLifecycleManagerTest {
 
     manager.close()
   }
+
+  @Test
+  def testKraftJBODMetadataVersionUpdateEvent(): Unit = {
+    val context = new RegistrationTestContext(configProperties)
+    val manager = new BrokerLifecycleManager(context.config, context.time, "successful-registration-", isZkBroker = false, Set(Uuid.fromString("gCpDJgRlS2CBCpxoP2VMsQ")))
+    val controllerNode = new Node(3000, "localhost", 8021)
+    context.controllerNodeProvider.node.set(controllerNode)
+    manager.start(() => context.highestMetadataOffset.get(),
+      context.mockChannelManager, context.clusterId, context.advertisedListeners,
+      Collections.emptyMap(), OptionalLong.of(10L))
+    TestUtils.retry(60000) {
+      assertEquals(1, context.mockChannelManager.unsentQueue.size)
+      assertEquals(10L, context.mockChannelManager.unsentQueue.getFirst.request.build().asInstanceOf[BrokerRegistrationRequest].data().previousBrokerEpoch())
+    }
+    context.mockClient.prepareResponseFrom(new BrokerRegistrationResponse(
+      new BrokerRegistrationResponseData().setBrokerEpoch(1000)), controllerNode)
+    TestUtils.retry(10000) {
+      context.poll()
+      assertEquals(1000L, manager.brokerEpoch)
+    }
+
+    manager.handleKraftJBODMetadataVersionUpdate()
+    context.mockClient.prepareResponseFrom(new BrokerRegistrationResponse(
+      new BrokerRegistrationResponseData().setBrokerEpoch(1200)), controllerNode)
+    TestUtils.retry(60000) {
+      context.time.sleep(100)
+      context.poll()
+      manager.eventQueue.wakeup()
+      assertEquals(1200, manager.brokerEpoch)
+    }
+    manager.close()
+  }
 }

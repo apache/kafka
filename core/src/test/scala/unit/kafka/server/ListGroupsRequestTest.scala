@@ -146,7 +146,7 @@ class ListGroupsRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBa
       // We need v4 or newer to request groups by states.
       if (version >= 4) {
         assertEquals(
-          if (useNewProtocol) List(response4) else List.empty,
+          if (useNewProtocol) List(response4, response1) else List(response1),
           listGroups(
             statesFilter = List(ConsumerGroupState.STABLE.toString),
             version = version.toShort
@@ -165,7 +165,7 @@ class ListGroupsRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBa
         )
 
         assertEquals(
-          if (useNewProtocol) List(response1, response3, response6).toSet else List(response1, response3).toSet,
+          if (useNewProtocol) List(response4, response1, response3, response6).toSet else List(response1, response3).toSet,
           listGroups(
             statesFilter = List(
               ClassicGroupState.STABLE.toString,

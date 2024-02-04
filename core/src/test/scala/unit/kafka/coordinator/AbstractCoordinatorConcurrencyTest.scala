@@ -200,25 +200,13 @@ object AbstractCoordinatorConcurrencyTest {
       producerId: Long,
       producerEpoch: Short,
       baseSequence: Int,
-      requestLocal: RequestLocal,
-      callback: (Errors, RequestLocal, VerificationGuard) => Unit
+      callback: ((Errors, VerificationGuard)) => Unit
     ): Unit = {
       // Skip verification
-      callback(Errors.NONE, requestLocal, VerificationGuard.SENTINEL)
+      callback((Errors.NONE, VerificationGuard.SENTINEL))
     }
 
     override def tryCompleteActions(): Unit = watchKeys.map(producePurgatory.checkAndComplete)
-
-    override def appendForGroup(timeout: Long,
-                                requiredAcks: Short,
-                                entriesPerPartition: Map[TopicPartition, MemoryRecords],
-                                responseCallback: Map[TopicPartition, PartitionResponse] => Unit,
-                                delayedProduceLock: Option[Lock] = None,
-                                requestLocal: RequestLocal = RequestLocal.NoCaching,
-                                verificationGuards: Map[TopicPartition, VerificationGuard] = Map.empty): Unit = {
-      appendRecords(timeout, requiredAcks, true, AppendOrigin.COORDINATOR, entriesPerPartition, responseCallback,
-        delayedProduceLock, requestLocal = requestLocal)
-    }
 
     override def appendRecords(timeout: Long,
                                requiredAcks: Short,
@@ -229,8 +217,8 @@ object AbstractCoordinatorConcurrencyTest {
                                delayedProduceLock: Option[Lock] = None,
                                processingStatsCallback: Map[TopicPartition, RecordValidationStats] => Unit = _ => (),
                                requestLocal: RequestLocal = RequestLocal.NoCaching,
-                               transactionalId: String = null,
-                               actionQueue: ActionQueue = null): Unit = {
+                               actionQueue: ActionQueue = null,
+                               verificationGuards: Map[TopicPartition, VerificationGuard] = Map.empty): Unit = {
 
       if (entriesPerPartition.isEmpty)
         return

@@ -165,11 +165,9 @@ public class ProcessorStateManager implements StateManager {
 
     private static final String STATE_CHANGELOG_TOPIC_SUFFIX = "-changelog";
 
-    private Logger log;
-    private String logPrefix;
+    private final String logPrefix;
 
     private final TaskId taskId;
-    private Task.State taskState;
     private final boolean eosEnabled;
     private final ChangelogRegister changelogReader;
     private final Collection<TopicPartition> sourcePartitions;
@@ -181,9 +179,11 @@ public class ProcessorStateManager implements StateManager {
 
     private final File baseDir;
     private final OffsetCheckpoint checkpointFile;
+    private final boolean stateUpdaterEnabled;
 
     private TaskType taskType;
-    private final boolean stateUpdaterEnabled;
+    private Logger log;
+    private Task.State taskState;
 
     public static String storeChangelogTopic(final String prefix, final String storeName, final String namedTopology) {
         if (namedTopology == null) {

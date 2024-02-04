@@ -104,15 +104,12 @@ class Tasks implements TasksRegistry {
 
     @Override
     public Set<TopicPartition> removePendingTaskToRecycle(final TaskId taskId) {
-        if (containsTaskIdWithAction(taskId, Action.RECYCLE)) {
-            return pendingUpdateActions.remove(taskId).getInputPartitions();
-        }
-        return null;
+        return removePendingUpdateActionWithInputPartitions(taskId, Action.RECYCLE);
     }
 
     @Override
     public void addPendingTaskToRecycle(final TaskId taskId, final Set<TopicPartition> inputPartitions) {
-        pendingUpdateActions.put(taskId, PendingUpdateAction.createRecycleTask(inputPartitions));
+        updatePendingUpdateAction(taskId, PendingUpdateAction.createRecycleTask(inputPartitions));
     }
 
     @Override
@@ -122,70 +119,79 @@ class Tasks implements TasksRegistry {
 
     @Override
     public Set<TopicPartition> removePendingTaskToCloseReviveAndUpdateInputPartitions(final TaskId taskId) {
-        if (containsTaskIdWithAction(taskId, Action.CLOSE_REVIVE_AND_UPDATE_INPUT_PARTITIONS)) {
-            return pendingUpdateActions.remove(taskId).getInputPartitions();
-        }
-        return null;
+        return removePendingUpdateActionWithInputPartitions(taskId, Action.CLOSE_REVIVE_AND_UPDATE_INPUT_PARTITIONS);
     }
 
     @Override
     public void addPendingTaskToCloseReviveAndUpdateInputPartitions(final TaskId taskId, final Set<TopicPartition> inputPartitions) {
-        pendingUpdateActions.put(taskId, PendingUpdateAction.createCloseReviveAndUpdateInputPartition(inputPartitions));
+        updatePendingUpdateAction(taskId, PendingUpdateAction.createCloseReviveAndUpdateInputPartition(inputPartitions));
     }
 
     @Override
     public Set<TopicPartition> removePendingTaskToUpdateInputPartitions(final TaskId taskId) {
-        if (containsTaskIdWithAction(taskId, Action.UPDATE_INPUT_PARTITIONS)) {
-            return pendingUpdateActions.remove(taskId).getInputPartitions();
-        }
-        return null;
+        return removePendingUpdateActionWithInputPartitions(taskId, Action.UPDATE_INPUT_PARTITIONS);
     }
 
     @Override
     public void addPendingTaskToUpdateInputPartitions(final TaskId taskId, final Set<TopicPartition> inputPartitions) {
-        pendingUpdateActions.put(taskId, PendingUpdateAction.createUpdateInputPartition(inputPartitions));
+        updatePendingUpdateAction(taskId, PendingUpdateAction.createUpdateInputPartition(inputPartitions));
     }
 
     @Override
     public boolean removePendingTaskToAddBack(final TaskId taskId) {
-        if (containsTaskIdWithAction(taskId, Action.ADD_BACK)) {
-            pendingUpdateActions.remove(taskId);
-            return true;
-        }
-        return false;
+        return removePendingUpdateAction(taskId, Action.ADD_BACK);
     }
 
     @Override
     public void addPendingTaskToAddBack(final TaskId taskId) {
-        pendingUpdateActions.put(taskId, PendingUpdateAction.createAddBack());
+        updatePendingUpdateAction(taskId, PendingUpdateAction.createAddBack());
     }
 
     @Override
     public boolean removePendingTaskToCloseClean(final TaskId taskId) {
-        if (containsTaskIdWithAction(taskId, Action.CLOSE_CLEAN)) {
-            pendingUpdateActions.remove(taskId);
-            return true;
-        }
-        return false;
+        return removePendingUpdateAction(taskId, Action.CLOSE_CLEAN);
     }
 
     @Override
     public void addPendingTaskToCloseClean(final TaskId taskId) {
-        pendingUpdateActions.put(taskId, PendingUpdateAction.createCloseClean());
+        updatePendingUpdateAction(taskId, PendingUpdateAction.createCloseClean());
     }
 
     @Override
     public boolean removePendingActiveTaskToSuspend(final TaskId taskId) {
-        if (containsTaskIdWithAction(taskId, Action.SUSPEND)) {
-            pendingUpdateActions.remove(taskId);
+        return removePendingUpdateAction(taskId, Action.SUSPEND);
+    }
+
+    @Override
+    public void addPendingActiveTaskToSuspend(final TaskId taskId) {
+        updatePendingUpdateAction(taskId, PendingUpdateAction.createSuspend());
+    }
+
+    private Set<TopicPartition> removePendingUpdateActionWithInputPartitions(final TaskId taskId, final Action action) {
+        if (containsTaskIdWithAction(taskId, action)) {
+            final PendingUpdateAction pendingUpdateAction = pendingUpdateActions.remove(taskId);
+            log.info("Removing pending update action {} for task {}", taskId, pendingUpdateAction);
+            return pendingUpdateAction.getInputPartitions();
+        }
+        return null;
+    }
+
+    private boolean removePendingUpdateAction(final TaskId taskId, final Action action) {
+        if (containsTaskIdWithAction(taskId, action)) {
+            log.info("Removing pending update action {} for task {}", taskId, pendingUpdateActions.remove(taskId));
             return true;
         }
         return false;
     }
 
-    @Override
-    public void addPendingActiveTaskToSuspend(final TaskId taskId) {
-        pendingUpdateActions.put(taskId, PendingUpdateAction.createSuspend());
+    private void updatePendingUpdateAction(final TaskId taskId, final PendingUpdateAction newAction) {
+        if (pendingUpdateActions.containsKey(taskId)) {
+            log.info("Adding pending update action {} for task {}, previous action was {}",
+                newAction, taskId, pendingUpdateActions.get(taskId));
+        } else {
+            log.info("Adding pending update action {} for task {}, no previous action", newAction, taskId);
+        }
+        pendingUpdateActions.put(taskId, newAction);
     }
 
     private boolean containsTaskIdWithAction(final TaskId taskId, final Action action) {

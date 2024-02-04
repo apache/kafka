@@ -44,9 +44,9 @@ final class ClusterConnectionStates {
     private final Map<String, NodeConnectionState> nodeState;
     private final Logger log;
     private final HostResolver hostResolver;
-    private Set<String> connectingNodes;
-    private ExponentialBackoff reconnectBackoff;
-    private ExponentialBackoff connectionSetupTimeout;
+    private final Set<String> connectingNodes;
+    private final ExponentialBackoff reconnectBackoff;
+    private final ExponentialBackoff connectionSetupTimeout;
 
     public ClusterConnectionStates(long reconnectBackoffMs, long reconnectBackoffMaxMs,
                                    long connectionSetupTimeoutMs, long connectionSetupTimeoutMaxMs,
@@ -464,6 +464,9 @@ final class ClusterConnectionStates {
      * The state of our connection to a node.
      */
     private static class NodeConnectionState {
+        private final String host;
+        private final HostResolver hostResolver;
+        private final Logger log;
 
         ConnectionState state;
         AuthenticationException authenticationException;
@@ -476,10 +479,7 @@ final class ClusterConnectionStates {
         long throttleUntilTimeMs;
         private List<InetAddress> addresses;
         private int addressIndex;
-        private final String host;
-        private final HostResolver hostResolver;
         private InetAddress lastAttemptedAddress;
-        private Logger log;
 
         private NodeConnectionState(ConnectionState state, long lastConnectAttemptMs, long reconnectBackoffMs,
                 long connectionSetupTimeoutMs, String host, HostResolver hostResolver, Logger log) {

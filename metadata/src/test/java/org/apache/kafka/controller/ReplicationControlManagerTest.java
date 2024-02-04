@@ -166,7 +166,7 @@ public class ReplicationControlManagerTest {
     private static class ReplicationControlTestContext {
         private static class Builder {
             private Optional<CreateTopicPolicy> createTopicPolicy = Optional.empty();
-            private MetadataVersion metadataVersion = MetadataVersion.latest();
+            private MetadataVersion metadataVersion = MetadataVersion.latestTesting();
             private MockTime mockTime = new MockTime();
             private boolean isElrEnabled = false;
 
@@ -1623,7 +1623,7 @@ public class ReplicationControlManagerTest {
     @ParameterizedTest
     @ApiKeyVersionsSource(apiKey = ApiKeys.ALTER_PARTITION)
     public void testReassignPartitions(short version) throws Exception {
-        MetadataVersion metadataVersion = MetadataVersion.latest();
+        MetadataVersion metadataVersion = MetadataVersion.latestTesting();
         ReplicationControlTestContext ctx = new ReplicationControlTestContext.Builder()
                 .setMetadataVersion(metadataVersion)
                 .build();
@@ -1699,7 +1699,7 @@ public class ReplicationControlManagerTest {
                 )).
                 setLeader(3).
                 setRemovingReplicas(Collections.emptyList()).
-                setAddingReplicas(Collections.emptyList()), MetadataVersion.latest().partitionChangeRecordVersion())),
+                setAddingReplicas(Collections.emptyList()), MetadataVersion.latestTesting().partitionChangeRecordVersion())),
             new AlterPartitionReassignmentsResponseData().setErrorMessage(null).setResponses(asList(
                 new ReassignableTopicResponse().setName("foo").setPartitions(asList(
                     new ReassignablePartitionResponse().setPartitionIndex(0).
@@ -1960,7 +1960,7 @@ public class ReplicationControlManagerTest {
 
     @Test
     public void testCancelReassignPartitions() throws Exception {
-        MetadataVersion metadataVersion = MetadataVersion.latest();
+        MetadataVersion metadataVersion = MetadataVersion.latestTesting();
         ReplicationControlTestContext ctx = new ReplicationControlTestContext.Builder()
                 .setMetadataVersion(metadataVersion)
                 .build();
@@ -2094,7 +2094,7 @@ public class ReplicationControlManagerTest {
                             Uuid.fromString("TESTBROKER00004DIRAAAA")
                     )).
                     setRemovingReplicas(null).
-                    setAddingReplicas(Collections.emptyList()), MetadataVersion.latest().partitionChangeRecordVersion())),
+                    setAddingReplicas(Collections.emptyList()), MetadataVersion.latestTesting().partitionChangeRecordVersion())),
             new AlterPartitionReassignmentsResponseData().setErrorMessage(null).setResponses(asList(
                 new ReassignableTopicResponse().setName("foo").setPartitions(asList(
                     new ReassignablePartitionResponse().setPartitionIndex(0).
@@ -2435,13 +2435,13 @@ public class ReplicationControlManagerTest {
                         setPartitionId(0).
                         setTopicId(fooId).
                         setLeader(1),
-                    MetadataVersion.latest().partitionChangeRecordVersion()),
+                    MetadataVersion.latestTesting().partitionChangeRecordVersion()),
                 new ApiMessageAndVersion(
                     new PartitionChangeRecord().
                         setPartitionId(2).
                         setTopicId(fooId).
                         setLeader(0),
-                    MetadataVersion.latest().partitionChangeRecordVersion())),
+                    MetadataVersion.latestTesting().partitionChangeRecordVersion())),
             election2Result.records());
     }
 
@@ -2484,7 +2484,7 @@ public class ReplicationControlManagerTest {
             .setPartitionId(0)
             .setTopicId(fooId)
             .setLeader(1);
-        assertEquals(asList(new ApiMessageAndVersion(expectedChangeRecord, MetadataVersion.latest().partitionChangeRecordVersion())), balanceResult.records());
+        assertEquals(asList(new ApiMessageAndVersion(expectedChangeRecord, MetadataVersion.latestTesting().partitionChangeRecordVersion())), balanceResult.records());
         assertTrue(replication.arePartitionLeadersImbalanced());
         assertFalse(balanceResult.response());
 
@@ -2516,7 +2516,7 @@ public class ReplicationControlManagerTest {
             .setPartitionId(2)
             .setTopicId(fooId)
             .setLeader(0);
-        assertEquals(asList(new ApiMessageAndVersion(expectedChangeRecord, MetadataVersion.latest().partitionChangeRecordVersion())), balanceResult.records());
+        assertEquals(asList(new ApiMessageAndVersion(expectedChangeRecord, MetadataVersion.latestTesting().partitionChangeRecordVersion())), balanceResult.records());
         assertFalse(replication.arePartitionLeadersImbalanced());
         assertFalse(balanceResult.response());
     }
