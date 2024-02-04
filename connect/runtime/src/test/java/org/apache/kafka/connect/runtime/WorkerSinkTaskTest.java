@@ -663,51 +663,6 @@ public class WorkerSinkTaskTest {
         PowerMock.verifyAll();
     }
 
-    @Test
-    public void testPreCommitFailure() throws Exception {
-        createTask(initialState);
-
-        expectInitializeTask();
-        expectTaskGetTopic(true);
-        EasyMock.expect(consumer.assignment()).andStubReturn(INITIAL_ASSIGNMENT);
-
-        // iter 1
-        expectPollInitialAssignment();
-
-        // iter 2
-        expectConsumerPoll(2);
-        expectConversionAndTransformation(2);
-        sinkTask.put(EasyMock.anyObject());
-        EasyMock.expectLastCall();
-
-        // iter 3
-        final Map<TopicPartition, OffsetAndMetadata> workerCurrentOffsets = new HashMap<>();
-        workerCurrentOffsets.put(TOPIC_PARTITION, new OffsetAndMetadata(FIRST_OFFSET + 2));
-        workerCurrentOffsets.put(TOPIC_PARTITION2, new OffsetAndMetadata(FIRST_OFFSET));
-        sinkTask.preCommit(workerCurrentOffsets);
-        EasyMock.expectLastCall().andThrow(new ConnectException("Failed to flush"));
-
-        consumer.seek(TOPIC_PARTITION, FIRST_OFFSET);
-        EasyMock.expectLastCall();
-        consumer.seek(TOPIC_PARTITION2, FIRST_OFFSET);
-        EasyMock.expectLastCall();
-
-        expectConsumerPoll(0);
-        sinkTask.put(EasyMock.eq(Collections.emptyList()));
-        EasyMock.expectLastCall();
-
-        PowerMock.replayAll();
-
-        workerTask.initialize(TASK_CONFIG);
-        workerTask.initializeAndStart();
-        workerTask.iteration(); // iter 1 -- initial assignment
-        workerTask.iteration(); // iter 2 -- deliver 2 records
-        sinkTaskContext.getValue().requestCommit();
-        workerTask.iteration(); // iter 3 -- commit
-
-        PowerMock.verifyAll();
-    }
-
     // Test that the commitTimeoutMs timestamp is correctly computed and checked in WorkerSinkTask.iteration()
     // when there is a long running commit in process. See KAFKA-4942 for more information.
     @Test
