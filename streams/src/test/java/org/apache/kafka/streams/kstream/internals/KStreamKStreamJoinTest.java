@@ -816,10 +816,12 @@ public class KStreamKStreamJoinTest {
         stream1 = builder.stream(topic1, consumed);
         stream2 = builder.stream(topic2, consumed);
 
+        final Duration timeDifference = ofMillis(100L);
+        final Duration grace = ofMillis(104);
         joined = stream1.join(
             stream2,
             MockValueJoiner.TOSTRING_JOINER,
-            JoinWindows.ofTimeDifferenceWithNoGrace(ofMillis(100L)),
+            JoinWindows.ofTimeDifferenceAndGrace(timeDifference, grace),
             StreamJoined.with(Serdes.Integer(), Serdes.String(), Serdes.String())
         );
         joined.process(supplier);
@@ -1363,6 +1365,16 @@ public class KStreamKStreamJoinTest {
                 new KeyValueTimestamp<>(2, "L2+l2", 2002L),
                 new KeyValueTimestamp<>(3, "L3+l3", 2003L)
             );
+
+            //push two items with timestamp at grace edge; this should produce one join item, M0 is 'too late'
+            final long currentStreamTime = 2104;
+            final long lowerBound = currentStreamTime - timeDifference.toMillis() - grace.toMillis();
+            inputTopic1.pipeInput(0, "M0", lowerBound - 1);
+            inputTopic1.pipeInput(1, "M1", lowerBound + 1);
+
+            processor.checkAndClearProcessResult(
+                new KeyValueTimestamp<>(1, "M1+l1", 2001L)
+            );
         }
     }
 
@@ -1382,7 +1394,7 @@ public class KStreamKStreamJoinTest {
         joined = stream1.join(
             stream2,
             MockValueJoiner.TOSTRING_JOINER,
-            JoinWindows.ofTimeDifferenceWithNoGrace(ofMillis(0)).after(ofMillis(100)),
+            JoinWindows.ofTimeDifferenceAndGrace(ofMillis(0), ofMillis(4)).after(ofMillis(100)),
             StreamJoined.with(Serdes.Integer(),
                 Serdes.String(),
                 Serdes.String())
@@ -1651,7 +1663,7 @@ public class KStreamKStreamJoinTest {
         joined = stream1.join(
             stream2,
             MockValueJoiner.TOSTRING_JOINER,
-            JoinWindows.ofTimeDifferenceWithNoGrace(ofMillis(0)).before(ofMillis(100)),
+            JoinWindows.ofTimeDifferenceAndGrace(ofMillis(0), ofMillis(4)).before(ofMillis(100)),
             StreamJoined.with(Serdes.Integer(), Serdes.String(), Serdes.String())
         );
         joined.process(supplier);

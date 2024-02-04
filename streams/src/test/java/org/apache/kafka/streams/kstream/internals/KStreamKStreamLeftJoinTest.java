@@ -887,10 +887,12 @@ public class KStreamKStreamLeftJoinTest {
         stream1 = builder.stream(topic1, consumed);
         stream2 = builder.stream(topic2, consumed);
 
+        final Duration grace = ofMillis(200);
+        final Duration timeDifference = ofMillis(100);
         joined = stream1.leftJoin(
             stream2,
             MockValueJoiner.TOSTRING_JOINER,
-            JoinWindows.ofTimeDifferenceWithNoGrace(ofMillis(100)),
+            JoinWindows.ofTimeDifferenceAndGrace(timeDifference, grace),
             StreamJoined.with(Serdes.Integer(), Serdes.String(), Serdes.String())
         );
         joined.process(supplier);
@@ -932,7 +934,21 @@ public class KStreamKStreamLeftJoinTest {
                 new KeyValueTimestamp<>(1, "A1+a1", 0L)
             );
             testUpperWindowBound(expectedKeys, driver, processor);
-            testLowerWindowBound(expectedKeys, driver, processor);
+            testLowerWindowBound(expectedKeys, driver, processor, timeDifference, grace);
+            // push a dummy record to produce all left-join non-joined items
+            inputTopic1.pipeInput(0, "dummy", Long.MAX_VALUE - 20_000L);
+            processor.checkAndClearProcessResult(
+                new KeyValueTimestamp<>(0, "C0+null", 1101L),
+                new KeyValueTimestamp<>(0, "D0+null", 1102L),
+                new KeyValueTimestamp<>(1, "D1+null", 1102L),
+                new KeyValueTimestamp<>(0, "E0+null", 1103L),
+                new KeyValueTimestamp<>(1, "E1+null", 1103L),
+                new KeyValueTimestamp<>(2, "E2+null", 1103L),
+                new KeyValueTimestamp<>(0, "F0+null", 1104L),
+                new KeyValueTimestamp<>(1, "F1+null", 1104L),
+                new KeyValueTimestamp<>(2, "F2+null", 1104L),
+                new KeyValueTimestamp<>(3, "F3+null", 1104L)
+            );
         }
     }
 
@@ -1125,27 +1141,13 @@ public class KStreamKStreamLeftJoinTest {
             inputTopic1.pipeInput(expectedKey, "F" + expectedKey, time);
         }
         processor.checkAndClearProcessResult();
-
-        // push a dummy record to produce all left-join non-joined items
-        time += 301L;
-        inputTopic1.pipeInput(0, "dummy", time);
-        processor.checkAndClearProcessResult(
-            new KeyValueTimestamp<>(0, "C0+null", 1101L),
-            new KeyValueTimestamp<>(0, "D0+null", 1102L),
-            new KeyValueTimestamp<>(1, "D1+null", 1102L),
-            new KeyValueTimestamp<>(0, "E0+null", 1103L),
-            new KeyValueTimestamp<>(1, "E1+null", 1103L),
-            new KeyValueTimestamp<>(2, "E2+null", 1103L),
-            new KeyValueTimestamp<>(0, "F0+null", 1104L),
-            new KeyValueTimestamp<>(1, "F1+null", 1104L),
-            new KeyValueTimestamp<>(2, "F2+null", 1104L),
-            new KeyValueTimestamp<>(3, "F3+null", 1104L)
-        );
     }
 
     private void testLowerWindowBound(final int[] expectedKeys,
                                       final TopologyTestDriver driver,
-                                      final MockApiProcessor<Integer, String, Void, Void> processor) {
+                                      final MockApiProcessor<Integer, String, Void, Void> processor,
+                                      final Duration timeDifference,
+                                      final Duration grace) {
         long time;
         final TestInputTopic<Integer, String> inputTopic1 = driver.createInputTopic(topic1, new IntegerSerializer(), new StringSerializer());
 
@@ -1314,9 +1316,13 @@ public class KStreamKStreamLeftJoinTest {
             new KeyValueTimestamp<>(3, "K3+b3", 1003L)
         );
 
-        // push a dummy record that should expire non-joined items; it should produce only the dummy+null record because
-        // all previous late records were emitted immediately
-        inputTopic1.pipeInput(0, "dummy", time + 300L);
-        processor.checkAndClearProcessResult(new KeyValueTimestamp<>(0, "dummy+null", 1203L));
+        final long currentStreamTime = 1104;
+        final long lowerBound = currentStreamTime - timeDifference.toMillis() - grace.toMillis();
+        //push two items with timestamp at grace edge; this should produce one left-join item, L0 is 'too late'
+        inputTopic1.pipeInput(0, "L" + 0, lowerBound - 1);
+        inputTopic1.pipeInput(1, "L" + 1, lowerBound);
+        processor.checkAndClearProcessResult(
+            new KeyValueTimestamp<>(1, "L1+null", lowerBound)
+        );
     }
 }
