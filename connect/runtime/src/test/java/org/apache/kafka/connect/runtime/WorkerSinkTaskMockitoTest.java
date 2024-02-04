@@ -36,6 +36,7 @@ import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaAndValue;
+import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.errors.RetriableException;
 import org.apache.kafka.connect.runtime.ConnectMetrics.MetricGroup;
 import org.apache.kafka.connect.runtime.WorkerSinkTask.SinkTaskMetricsGroup;
@@ -90,6 +91,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 import static org.mockito.ArgumentMatchers.any;
@@ -599,6 +601,49 @@ public class WorkerSinkTaskMockitoTest {
         verify(sinkTask).close(singleton(TOPIC_PARTITION3));
         verify(sinkTask).open(singleton(TOPIC_PARTITION));
         verify(sinkTask, times(4)).put(Collections.emptyList());
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    public void testSuppressCloseErrors() {
+        createTask(initialState);
+
+        workerTask.initialize(TASK_CONFIG);
+        workerTask.initializeAndStart();
+        verifyInitializeTask();
+
+        expectTaskGetTopic();
+        expectPollInitialAssignment()
+                // Put one message through the task to get some offsets to commit
+                .thenAnswer(expectConsumerPoll(1))
+                .thenAnswer(expectConsumerPoll(1));
+
+        expectConversionAndTransformation(null, new RecordHeaders());
+
+        Throwable putException = new RuntimeException();
+        Throwable closeException = new RuntimeException();
+
+        doAnswer(invocation -> null)
+                // Throw an exception on the next put to trigger shutdown behavior
+                // This exception is the true "cause" of the failure
+                .doThrow(putException)
+                .when(sinkTask).put(anyList());
+
+        // Throw another exception while closing the task's assignment
+        doThrow(closeException).when(sinkTask).close(any(Collection.class));
+
+        when(sinkTask.preCommit(anyMap())).thenReturn(Collections.emptyMap());
+
+        workerTask.initialize(TASK_CONFIG);
+        workerTask.initializeAndStart();
+        try {
+            workerTask.execute();
+            fail("workerTask.execute should have thrown an exception");
+        } catch (ConnectException e) {
+            assertSame("Exception from put should be the cause", putException, e.getCause());
+            assertTrue("Exception from close should be suppressed", e.getSuppressed().length > 0);
+            assertSame(closeException, e.getSuppressed()[0]);
+        }
     }
 
     @SuppressWarnings("unchecked")

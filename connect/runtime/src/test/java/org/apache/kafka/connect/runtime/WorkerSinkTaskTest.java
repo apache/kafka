@@ -902,50 +902,6 @@ public class WorkerSinkTaskTest {
         }
     }
 
-    @Test
-    public void testSuppressCloseErrors() throws Exception {
-        createTask(initialState);
-        expectInitializeTask();
-        expectTaskGetTopic(true);
-
-        expectPollInitialAssignment();
-
-        // Put one message through the task to get some offsets to commit
-        expectConsumerPoll(1);
-        expectConversionAndTransformation(1);
-        sinkTask.put(EasyMock.anyObject());
-        PowerMock.expectLastCall().andVoid();
-
-        // Throw an exception on the next put to trigger shutdown behavior
-        // This exception is the true "cause" of the failure
-        expectConsumerPoll(1);
-        expectConversionAndTransformation(1);
-        Throwable putException = new RuntimeException();
-        sinkTask.put(EasyMock.anyObject());
-        PowerMock.expectLastCall().andThrow(putException);
-
-        // Throw another exception while closing the task's assignment
-        EasyMock.expect(sinkTask.preCommit(EasyMock.anyObject()))
-            .andStubReturn(Collections.emptyMap());
-        Throwable closeException = new RuntimeException();
-        sinkTask.close(EasyMock.anyObject());
-        PowerMock.expectLastCall().andThrow(closeException);
-
-        PowerMock.replayAll();
-
-        workerTask.initialize(TASK_CONFIG);
-        workerTask.initializeAndStart();
-        try {
-            workerTask.execute();
-            fail("workerTask.execute should have thrown an exception");
-        } catch (ConnectException e) {
-            PowerMock.verifyAll();
-            assertSame("Exception from put should be the cause", putException, e.getCause());
-            assertTrue("Exception from close should be suppressed", e.getSuppressed().length > 0);
-            assertSame(closeException, e.getSuppressed()[0]);
-        }
-    }
-
     // Verify that when commitAsync is called but the supplied callback is not called by the consumer before a
     // rebalance occurs, the async callback does not reset the last committed offset from the rebalance.
     // See KAFKA-5731 for more information.
