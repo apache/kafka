@@ -24,11 +24,15 @@ import kafka.tools.DumpLogSegments
 import kafka.utils.{CoreUtils, Logging, TestInfoUtils, TestUtils}
 import org.apache.kafka.clients.consumer.{Consumer, ConsumerConfig, KafkaConsumer}
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
-import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.{TopicPartition, Uuid}
+import org.apache.kafka.common.message.BrokerRegistrationRequestData
+import org.apache.kafka.common.message.BrokerRegistrationRequestData.{Listener, ListenerCollection}
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.record.RecordBatch
 import org.apache.kafka.common.security.auth.SecurityProtocol
+import org.apache.kafka.common.security.auth.SecurityProtocol.PLAINTEXT
 import org.apache.kafka.common.serialization.ByteArrayDeserializer
+import org.apache.kafka.controller.ControllerRequestContextUtil
 import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.storage.internals.epoch.LeaderEpochFileCache
 import org.apache.kafka.storage.internals.log.EpochEntry
@@ -39,8 +43,6 @@ import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 
 import java.io.{File, RandomAccessFile}
-import java.util.concurrent.CompletableFuture
-//import java.util.concurrent.CompletableFuture
 import java.util.{Collections, Properties}
 import scala.collection.Seq
 import scala.jdk.CollectionConverters._
@@ -83,7 +85,13 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends QuorumTestHarness wit
   def shouldFollowLeaderEpochBasicWorkflow(quorum: String): Unit = {
 
     //Given 2 brokers
-    brokers = createBrokerForIds(ids = 100 to 101)
+    brokers = Seq(createBrokerForId(100))
+    if (isKRaftTest()) {
+      registerBroker(101)
+    } else {
+      brokers = Seq(brokers, Seq(createBrokerForId(101))).flatten
+    }
+
     //A single partition topic with 2 replicas
     createTopic(topic, Map(0 -> Seq(100, 101)), brokers)
 
@@ -500,37 +508,31 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends QuorumTestHarness wit
     }
   }
 
-  private def createBrokerForIds(ids: Seq[Int],
-                                 enableUncleanLeaderElection: Boolean = false): Seq[KafkaBroker] = {
-//    val quorumVoters = ids.map(id => s"${id}@localhost:0")
-    val future = ids.map( id => {
-      val config = createConfigForId(id, enableUncleanLeaderElection)
-      if (isKRaftTest()) {
-//        config.setProperty(KafkaConfig.QuorumVotersProp, quorumVoters.mkString(","))
-//        config.setProperty(KafkaConfig.ProcessRolesProp, "broker,controller")
-//        config.setProperty(KafkaConfig.ListenersProp, config.getProperty(KafkaConfig.ListenersProp)
-//          + ",CONTROLLER://localhost:0")
-      }
-      CompletableFuture.supplyAsync(() => createBroker(fromProps(config), startup = false))
-    })
-    future.map( f => {
-      val broker = f.get()
-      broker.startup()
-      broker
-    })
-  }
-
-  private def createConfigForId(id: Int,
-                                enableUncleanLeaderElection: Boolean): Properties = {
-    val config = TestUtils.createBrokerConfig(id, zkConnectOrNull)
-    TestUtils.setIbpAndMessageFormatVersions(config, metadataVersion)
-    config.setProperty(KafkaConfig.UncleanLeaderElectionEnableProp, enableUncleanLeaderElection.toString)
-    config
-  }
+//  private def createBrokerForIds(ids: Seq[Int],
+//                                 enableUncleanLeaderElection: Boolean = false): Seq[KafkaBroker] = {
+////    val quorumVoters = ids.map(id => s"${id}@localhost:0")
+//    val future = ids.map( id => {
+//      val config = createConfigForId(id, enableUncleanLeaderElection)
+//      if (isKRaftTest()) {
+////        config.setProperty(KafkaConfig.QuorumVotersProp, quorumVoters.mkString(","))
+////        config.setProperty(KafkaConfig.ProcessRolesProp, "broker,controller")
+////        config.setProperty(KafkaConfig.ListenersProp, config.getProperty(KafkaConfig.ListenersProp)
+////          + ",CONTROLLER://localhost:0")
+//      }
+//      CompletableFuture.supplyAsync(() => createBroker(fromProps(config), startup = false))
+//    })
+//    future.map( f => {
+//      val broker = f.get()
+//      broker.startup()
+//      broker
+//    })
+//  }
 
   private def createBrokerForId(id: Int,
                                 enableUncleanLeaderElection: Boolean = false): KafkaBroker = {
-    val config = createConfigForId(id, enableUncleanLeaderElection)
+    val config = TestUtils.createBrokerConfig(id, zkConnectOrNull)
+    TestUtils.setIbpAndMessageFormatVersions(config, metadataVersion)
+    config.setProperty(KafkaConfig.UncleanLeaderElectionEnableProp, enableUncleanLeaderElection.toString)
     createBroker(fromProps(config))
   }
 
@@ -547,6 +549,7 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends QuorumTestHarness wit
                    adminClientConfig: Properties = new Properties
                  ): scala.collection.immutable.Map[Int, Int] = {
     if (isKRaftTest()) {
+
       TestUtils.resource(TestUtils.createAdminClient(brokers, listenerName, adminClientConfig)) { admin =>
         TestUtils.createTopicWithAdmin(
           admin = admin,
@@ -566,5 +569,25 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends QuorumTestHarness wit
         topicConfig = topicConfig
       )
     }
+  }
+
+  private def registerBroker(id: Int): Unit = {
+    val listeners = new ListenerCollection()
+    listeners.add(new Listener().setName(PLAINTEXT.name).setHost("localhost").setPort(9092 + id))
+    val features = new BrokerRegistrationRequestData.FeatureCollection()
+    features.add(new BrokerRegistrationRequestData.Feature()
+      .setName(MetadataVersion.FEATURE_NAME)
+      .setMinSupportedVersion(MetadataVersion.IBP_3_0_IV1.featureLevel())
+      .setMaxSupportedVersion(MetadataVersion.IBP_3_8_IV0.featureLevel()))
+    controllerServer.controller.registerBroker(
+      ControllerRequestContextUtil.ANONYMOUS_CONTEXT,
+      new BrokerRegistrationRequestData()
+        .setBrokerId(id)
+        .setClusterId(controllerServer.clusterId)
+        .setIncarnationId(Uuid.randomUuid())
+        .setListeners(listeners)
+        .setLogDirs(Collections.singletonList(Uuid.randomUuid()))
+        .setFeatures(features)
+    ).get()
   }
 }
