@@ -603,6 +603,45 @@ public class WorkerSinkTaskMockitoTest {
         verify(sinkTask, times(4)).put(Collections.emptyList());
     }
 
+    @Test
+    public void testIgnoredCommit() {
+        createTask(initialState);
+
+        workerTask.initialize(TASK_CONFIG);
+        workerTask.initializeAndStart();
+        verifyInitializeTask();
+
+        expectTaskGetTopic();
+        // iter 1
+        expectPollInitialAssignment()
+                // iter 2
+                .thenAnswer(expectConsumerPoll(1))
+                // no actual consumer.commit() triggered
+                .thenAnswer(expectConsumerPoll(0));
+
+        expectConversionAndTransformation(null, new RecordHeaders());
+
+        workerTask.iteration(); // iter 1 -- initial assignment
+
+        final Map<TopicPartition, OffsetAndMetadata> workerStartingOffsets = new HashMap<>();
+        workerStartingOffsets.put(TOPIC_PARTITION, new OffsetAndMetadata(FIRST_OFFSET));
+        workerStartingOffsets.put(TOPIC_PARTITION2, new OffsetAndMetadata(FIRST_OFFSET));
+
+        assertEquals(workerStartingOffsets, workerTask.currentOffsets());
+        assertEquals(workerStartingOffsets, workerTask.lastCommittedOffsets());
+
+        workerTask.iteration(); // iter 2 -- deliver 2 records
+
+        final Map<TopicPartition, OffsetAndMetadata> workerCurrentOffsets = new HashMap<>();
+        workerCurrentOffsets.put(TOPIC_PARTITION, new OffsetAndMetadata(FIRST_OFFSET + 1));
+        workerCurrentOffsets.put(TOPIC_PARTITION2, new OffsetAndMetadata(FIRST_OFFSET));
+
+        when(sinkTask.preCommit(workerCurrentOffsets)).thenReturn(workerStartingOffsets);
+
+        sinkTaskContext.getValue().requestCommit();
+        workerTask.iteration(); // iter 3 -- commit
+    }
+
     @SuppressWarnings("unchecked")
     @Test
     public void testSinkTasksHandleCloseErrors() {

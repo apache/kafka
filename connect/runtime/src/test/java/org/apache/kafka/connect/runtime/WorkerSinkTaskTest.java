@@ -708,57 +708,6 @@ public class WorkerSinkTaskTest {
         PowerMock.verifyAll();
     }
 
-    @Test
-    public void testIgnoredCommit() throws Exception {
-        createTask(initialState);
-
-        expectInitializeTask();
-        expectTaskGetTopic(true);
-
-        // iter 1
-        expectPollInitialAssignment();
-
-        // iter 2
-        expectConsumerPoll(1);
-        expectConversionAndTransformation(1);
-        sinkTask.put(EasyMock.anyObject());
-        EasyMock.expectLastCall();
-
-        final Map<TopicPartition, OffsetAndMetadata> workerStartingOffsets = new HashMap<>();
-        workerStartingOffsets.put(TOPIC_PARTITION, new OffsetAndMetadata(FIRST_OFFSET));
-        workerStartingOffsets.put(TOPIC_PARTITION2, new OffsetAndMetadata(FIRST_OFFSET));
-
-        final Map<TopicPartition, OffsetAndMetadata> workerCurrentOffsets = new HashMap<>();
-        workerCurrentOffsets.put(TOPIC_PARTITION, new OffsetAndMetadata(FIRST_OFFSET + 1));
-        workerCurrentOffsets.put(TOPIC_PARTITION2, new OffsetAndMetadata(FIRST_OFFSET));
-
-        EasyMock.expect(consumer.assignment()).andReturn(INITIAL_ASSIGNMENT).times(2);
-
-        // iter 3
-        sinkTask.preCommit(workerCurrentOffsets);
-        EasyMock.expectLastCall().andReturn(workerStartingOffsets);
-        // no actual consumer.commit() triggered
-        expectConsumerPoll(0);
-        sinkTask.put(EasyMock.anyObject());
-        EasyMock.expectLastCall();
-
-        PowerMock.replayAll();
-
-        workerTask.initialize(TASK_CONFIG);
-        workerTask.initializeAndStart();
-        workerTask.iteration(); // iter 1 -- initial assignment
-
-        assertEquals(workerStartingOffsets, Whitebox.<Map<TopicPartition, OffsetAndMetadata>>getInternalState(workerTask, "currentOffsets"));
-        assertEquals(workerStartingOffsets, Whitebox.<Map<TopicPartition, OffsetAndMetadata>>getInternalState(workerTask, "lastCommittedOffsets"));
-
-        workerTask.iteration(); // iter 2 -- deliver 2 records
-
-        sinkTaskContext.getValue().requestCommit();
-        workerTask.iteration(); // iter 3 -- commit
-
-        PowerMock.verifyAll();
-    }
-
     // Test that the commitTimeoutMs timestamp is correctly computed and checked in WorkerSinkTask.iteration()
     // when there is a long running commit in process. See KAFKA-4942 for more information.
     @Test
