@@ -61,6 +61,9 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends QuorumTestHarness wit
   var producer: KafkaProducer[Array[Byte], Array[Byte]] = _
   var consumer: Consumer[Array[Byte], Array[Byte]] = _
 
+  private def securityProtocol: SecurityProtocol = SecurityProtocol.PLAINTEXT
+  private def listenerName: ListenerName = ListenerName.forSecurityProtocol(securityProtocol)
+
   @BeforeEach
   override def setUp(testInfo: TestInfo): Unit = {
     super.setUp(testInfo)
@@ -78,7 +81,7 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends QuorumTestHarness wit
   def shouldFollowLeaderEpochBasicWorkflow(quorum: String): Unit = {
 
     //Given 2 brokers
-    brokers = (100 to 101).map(createBrokerForId(_))
+    brokers = createBrokerForIds(ids = 100 to 101)
 
     //A single partition topic with 2 replicas
     createTopic(topic, Map(0 -> Seq(100, 101)), brokers)
@@ -477,7 +480,6 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends QuorumTestHarness wit
           .flatMap(value => value.partitions().stream())
           .map(partition => partition.leader())
           .findFirst().get()
-
         brokers.filter(_.config.brokerId == leader.id()).head
     }
   }
@@ -497,16 +499,29 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends QuorumTestHarness wit
     }
   }
 
-  private def createBrokerForId(id: Int, enableUncleanLeaderElection: Boolean = false): KafkaBroker = {
+  private def createBrokerForIds(ids: Seq[Int],
+                                 enableUncleanLeaderElection: Boolean = false): Seq[KafkaBroker] = {
+    val quorumVoters = ids.map(id => s"${id}@localhost:0")
+    ids.map( id => {
+      val config = createConfigForId(id, enableUncleanLeaderElection)
+      config.setProperty(KafkaConfig.QuorumVotersProp, quorumVoters.mkString(","))
+      createBroker(fromProps(config))
+    })
+  }
+
+  private def createConfigForId(id: Int,
+                                enableUncleanLeaderElection: Boolean): Properties = {
     val config = TestUtils.createBrokerConfig(id, zkConnectOrNull)
     TestUtils.setIbpAndMessageFormatVersions(config, metadataVersion)
     config.setProperty(KafkaConfig.UncleanLeaderElectionEnableProp, enableUncleanLeaderElection.toString)
-    createBroker(fromProps(config))
+    config
   }
 
-  protected def securityProtocol: SecurityProtocol = SecurityProtocol.PLAINTEXT
-
-  protected def listenerName: ListenerName = ListenerName.forSecurityProtocol(securityProtocol)
+  private def createBrokerForId(id: Int,
+                                enableUncleanLeaderElection: Boolean = false): KafkaBroker = {
+    val config = createConfigForId(id, enableUncleanLeaderElection)
+    createBroker(fromProps(config))
+  }
 
   /**
    * Create a topic.
