@@ -437,60 +437,6 @@ public class WorkerSinkTaskTest {
         PowerMock.verifyAll();
     }
 
-    @Test
-    public void testWakeupNotThrownDuringShutdown() throws Exception {
-        createTask(initialState);
-
-        expectInitializeTask();
-        expectTaskGetTopic(true);
-        expectPollInitialAssignment();
-
-        expectConsumerPoll(1);
-        expectConversionAndTransformation(1);
-        sinkTask.put(EasyMock.anyObject());
-        EasyMock.expectLastCall();
-
-        EasyMock.expect(consumer.poll(Duration.ofMillis(EasyMock.anyLong()))).andAnswer(() -> {
-            // stop the task during its second iteration
-            workerTask.stop();
-            return new ConsumerRecords<>(Collections.emptyMap());
-        });
-        consumer.wakeup();
-        EasyMock.expectLastCall();
-
-        sinkTask.put(EasyMock.eq(Collections.emptyList()));
-        EasyMock.expectLastCall();
-
-        EasyMock.expect(consumer.assignment()).andReturn(INITIAL_ASSIGNMENT).times(1);
-
-        final Map<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>();
-        offsets.put(TOPIC_PARTITION, new OffsetAndMetadata(FIRST_OFFSET + 1));
-        offsets.put(TOPIC_PARTITION2, new OffsetAndMetadata(FIRST_OFFSET));
-        sinkTask.preCommit(offsets);
-        EasyMock.expectLastCall().andReturn(offsets);
-
-        sinkTask.close(EasyMock.anyObject());
-        PowerMock.expectLastCall();
-
-        // fail the first time
-        consumer.commitSync(EasyMock.eq(offsets));
-        EasyMock.expectLastCall().andThrow(new WakeupException());
-
-        // and succeed the second time
-        consumer.commitSync(EasyMock.eq(offsets));
-        EasyMock.expectLastCall();
-
-        PowerMock.replayAll();
-
-        workerTask.initialize(TASK_CONFIG);
-        workerTask.initializeAndStart();
-        workerTask.execute();
-
-        assertEquals(0, workerTask.commitFailures());
-
-        PowerMock.verifyAll();
-    }
-
     // Test that the commitTimeoutMs timestamp is correctly computed and checked in WorkerSinkTask.iteration()
     // when there is a long running commit in process. See KAFKA-4942 for more information.
     @Test

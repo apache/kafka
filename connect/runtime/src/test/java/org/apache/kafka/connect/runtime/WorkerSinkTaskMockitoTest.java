@@ -604,6 +604,43 @@ public class WorkerSinkTaskMockitoTest {
     }
 
     @Test
+    @SuppressWarnings("unchecked")
+    public void testWakeupNotThrownDuringShutdown() {
+        createTask(initialState);
+
+        workerTask.initialize(TASK_CONFIG);
+        workerTask.initializeAndStart();
+        verifyInitializeTask();
+
+        expectTaskGetTopic();
+        expectPollInitialAssignment()
+                .thenAnswer(expectConsumerPoll(1))
+                .thenAnswer(invocation -> {
+                    // stop the task during its second iteration
+                    workerTask.stop();
+                    return new ConsumerRecords<>(Collections.emptyMap());
+                });
+        expectConversionAndTransformation(null, new RecordHeaders());
+
+        final Map<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>();
+        offsets.put(TOPIC_PARTITION, new OffsetAndMetadata(FIRST_OFFSET + 1));
+        offsets.put(TOPIC_PARTITION2, new OffsetAndMetadata(FIRST_OFFSET));
+        when(sinkTask.preCommit(offsets)).thenReturn(offsets);
+
+        // fail the first time
+        doThrow(new WakeupException())
+                // and succeed the second time
+                .doAnswer(invocation -> null)
+                .when(consumer).commitSync(eq(offsets));
+
+        workerTask.execute();
+
+        assertEquals(0, workerTask.commitFailures());
+        verify(consumer).wakeup();
+        verify(sinkTask).close(any(Collection.class));
+    }
+
+    @Test
     public void testRequestCommit() {
         createTask(initialState);
 
