@@ -39,6 +39,8 @@ import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 
 import java.io.{File, RandomAccessFile}
+import java.util.concurrent.CompletableFuture
+//import java.util.concurrent.CompletableFuture
 import java.util.{Collections, Properties}
 import scala.collection.Seq
 import scala.jdk.CollectionConverters._
@@ -82,7 +84,6 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends QuorumTestHarness wit
 
     //Given 2 brokers
     brokers = createBrokerForIds(ids = 100 to 101)
-
     //A single partition topic with 2 replicas
     createTopic(topic, Map(0 -> Seq(100, 101)), brokers)
 
@@ -501,11 +502,21 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends QuorumTestHarness wit
 
   private def createBrokerForIds(ids: Seq[Int],
                                  enableUncleanLeaderElection: Boolean = false): Seq[KafkaBroker] = {
-    val quorumVoters = ids.map(id => s"${id}@localhost:0")
-    ids.map( id => {
+//    val quorumVoters = ids.map(id => s"${id}@localhost:0")
+    val future = ids.map( id => {
       val config = createConfigForId(id, enableUncleanLeaderElection)
-      config.setProperty(KafkaConfig.QuorumVotersProp, quorumVoters.mkString(","))
-      createBroker(fromProps(config))
+      if (isKRaftTest()) {
+//        config.setProperty(KafkaConfig.QuorumVotersProp, quorumVoters.mkString(","))
+//        config.setProperty(KafkaConfig.ProcessRolesProp, "broker,controller")
+//        config.setProperty(KafkaConfig.ListenersProp, config.getProperty(KafkaConfig.ListenersProp)
+//          + ",CONTROLLER://localhost:0")
+      }
+      CompletableFuture.supplyAsync(() => createBroker(fromProps(config), startup = false))
+    })
+    future.map( f => {
+      val broker = f.get()
+      broker.startup()
+      broker
     })
   }
 
