@@ -23,7 +23,6 @@ import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetCommitCallback;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeaders;
@@ -347,92 +346,6 @@ public class WorkerSinkTaskTest {
         // Fifth iteration--task-requested offset commit with failure in SinkTask::preCommit
         sinkTaskContext.getValue().requestCommit();
         workerTask.iteration();
-
-        PowerMock.verifyAll();
-    }
-
-    @Test
-    public void testWakeupInCommitSyncCausesRetry() throws Exception {
-        createTask(initialState);
-
-        expectInitializeTask();
-        expectTaskGetTopic(true);
-        expectPollInitialAssignment();
-
-        expectConsumerPoll(1);
-        expectConversionAndTransformation(1);
-        sinkTask.put(EasyMock.anyObject());
-        EasyMock.expectLastCall();
-
-        final Map<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>();
-        offsets.put(TOPIC_PARTITION, new OffsetAndMetadata(FIRST_OFFSET + 1));
-        offsets.put(TOPIC_PARTITION2, new OffsetAndMetadata(FIRST_OFFSET));
-        sinkTask.preCommit(offsets);
-        EasyMock.expectLastCall().andReturn(offsets);
-
-        // first one raises wakeup
-        consumer.commitSync(EasyMock.<Map<TopicPartition, OffsetAndMetadata>>anyObject());
-        EasyMock.expectLastCall().andThrow(new WakeupException());
-
-        // we should retry and complete the commit
-        consumer.commitSync(EasyMock.<Map<TopicPartition, OffsetAndMetadata>>anyObject());
-        EasyMock.expectLastCall();
-
-        sinkTask.close(INITIAL_ASSIGNMENT);
-        EasyMock.expectLastCall();
-
-        INITIAL_ASSIGNMENT.forEach(tp -> EasyMock.expect(consumer.position(tp)).andReturn(FIRST_OFFSET));
-
-        sinkTask.open(INITIAL_ASSIGNMENT);
-        EasyMock.expectLastCall();
-
-        EasyMock.expect(consumer.assignment()).andReturn(INITIAL_ASSIGNMENT).times(5);
-        EasyMock.expect(consumer.poll(Duration.ofMillis(EasyMock.anyLong()))).andAnswer(
-            () -> {
-                rebalanceListener.getValue().onPartitionsRevoked(INITIAL_ASSIGNMENT);
-                rebalanceListener.getValue().onPartitionsAssigned(INITIAL_ASSIGNMENT);
-                return ConsumerRecords.empty();
-            });
-
-        INITIAL_ASSIGNMENT.forEach(tp -> {
-            consumer.resume(Collections.singleton(tp));
-            EasyMock.expectLastCall();
-        });
-
-        statusListener.onResume(taskId);
-        EasyMock.expectLastCall();
-
-        PowerMock.replayAll();
-
-        workerTask.initialize(TASK_CONFIG);
-        time.sleep(30000L);
-        workerTask.initializeAndStart();
-        time.sleep(30000L);
-
-        workerTask.iteration(); // poll for initial assignment
-        time.sleep(30000L);
-        workerTask.iteration(); // first record delivered
-        workerTask.iteration(); // now rebalance with the wakeup triggered
-        time.sleep(30000L);
-
-        assertSinkMetricValue("partition-count", 2);
-        assertSinkMetricValue("sink-record-read-total", 1.0);
-        assertSinkMetricValue("sink-record-send-total", 1.0);
-        assertSinkMetricValue("sink-record-active-count", 0.0);
-        assertSinkMetricValue("sink-record-active-count-max", 1.0);
-        assertSinkMetricValue("sink-record-active-count-avg", 0.33333);
-        assertSinkMetricValue("offset-commit-seq-no", 1.0);
-        assertSinkMetricValue("offset-commit-completion-total", 1.0);
-        assertSinkMetricValue("offset-commit-skip-total", 0.0);
-        assertTaskMetricValue("status", "running");
-        assertTaskMetricValue("running-ratio", 1.0);
-        assertTaskMetricValue("pause-ratio", 0.0);
-        assertTaskMetricValue("batch-size-max", 1.0);
-        assertTaskMetricValue("batch-size-avg", 1.0);
-        assertTaskMetricValue("offset-commit-max-time-ms", 0.0);
-        assertTaskMetricValue("offset-commit-avg-time-ms", 0.0);
-        assertTaskMetricValue("offset-commit-failure-percentage", 0.0);
-        assertTaskMetricValue("offset-commit-success-percentage", 1.0);
 
         PowerMock.verifyAll();
     }

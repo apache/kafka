@@ -604,6 +604,74 @@ public class WorkerSinkTaskMockitoTest {
     }
 
     @Test
+    public void testWakeupInCommitSyncCausesRetry() {
+        createTask(initialState);
+
+        workerTask.initialize(TASK_CONFIG);
+        time.sleep(30000L);
+        workerTask.initializeAndStart();
+        time.sleep(30000L);
+        verifyInitializeTask();
+
+        expectTaskGetTopic();
+        expectPollInitialAssignment()
+                .thenAnswer(expectConsumerPoll(1))
+                .thenAnswer(invocation -> {
+                    rebalanceListener.getValue().onPartitionsRevoked(INITIAL_ASSIGNMENT);
+                    rebalanceListener.getValue().onPartitionsAssigned(INITIAL_ASSIGNMENT);
+                    return ConsumerRecords.empty();
+                });
+        expectConversionAndTransformation(null, new RecordHeaders());
+
+        workerTask.iteration(); // poll for initial assignment
+        time.sleep(30000L);
+
+        final Map<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>();
+        offsets.put(TOPIC_PARTITION, new OffsetAndMetadata(FIRST_OFFSET + 1));
+        offsets.put(TOPIC_PARTITION2, new OffsetAndMetadata(FIRST_OFFSET));
+        when(sinkTask.preCommit(offsets)).thenReturn(offsets);
+
+        // first one raises wakeup
+        doThrow(new WakeupException())
+                // and succeed the second time
+                .doAnswer(invocation -> null)
+                .when(consumer).commitSync(eq(offsets));
+
+        workerTask.iteration(); // first record delivered
+
+        workerTask.iteration(); // now rebalance with the wakeup triggered
+        time.sleep(30000L);
+
+        verify(sinkTask).close(INITIAL_ASSIGNMENT);
+        verify(sinkTask, times(2)).open(INITIAL_ASSIGNMENT);
+
+        INITIAL_ASSIGNMENT.forEach(tp -> {
+            verify(consumer).resume(Collections.singleton(tp));
+        });
+
+        verify(statusListener).onResume(taskId);
+
+        assertSinkMetricValue("partition-count", 2);
+        assertSinkMetricValue("sink-record-read-total", 1.0);
+        assertSinkMetricValue("sink-record-send-total", 1.0);
+        assertSinkMetricValue("sink-record-active-count", 0.0);
+        assertSinkMetricValue("sink-record-active-count-max", 1.0);
+        assertSinkMetricValue("sink-record-active-count-avg", 0.33333);
+        assertSinkMetricValue("offset-commit-seq-no", 1.0);
+        assertSinkMetricValue("offset-commit-completion-total", 1.0);
+        assertSinkMetricValue("offset-commit-skip-total", 0.0);
+        assertTaskMetricValue("status", "running");
+        assertTaskMetricValue("running-ratio", 1.0);
+        assertTaskMetricValue("pause-ratio", 0.0);
+        assertTaskMetricValue("batch-size-max", 1.0);
+        assertTaskMetricValue("batch-size-avg", 1.0);
+        assertTaskMetricValue("offset-commit-max-time-ms", 0.0);
+        assertTaskMetricValue("offset-commit-avg-time-ms", 0.0);
+        assertTaskMetricValue("offset-commit-failure-percentage", 0.0);
+        assertTaskMetricValue("offset-commit-success-percentage", 1.0);
+    }
+
+    @Test
     @SuppressWarnings("unchecked")
     public void testWakeupNotThrownDuringShutdown() {
         createTask(initialState);
