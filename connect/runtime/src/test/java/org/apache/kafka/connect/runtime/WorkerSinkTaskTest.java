@@ -88,9 +88,7 @@ import static java.util.Arrays.asList;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotEquals;
-import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
 
 @RunWith(PowerMockRunner.class)
 @PrepareForTest(WorkerSinkTask.class)
@@ -854,52 +852,6 @@ public class WorkerSinkTaskTest {
         assertEquals(workerCurrentOffsets, Whitebox.<Map<TopicPartition, OffsetAndMetadata>>getInternalState(workerTask, "lastCommittedOffsets"));
 
         PowerMock.verifyAll();
-    }
-
-    @Test
-    public void testSinkTasksHandleCloseErrors() throws Exception {
-        createTask(initialState);
-        expectInitializeTask();
-        expectTaskGetTopic(true);
-
-        expectPollInitialAssignment();
-
-        // Put one message through the task to get some offsets to commit
-        expectConsumerPoll(1);
-        expectConversionAndTransformation(1);
-        sinkTask.put(EasyMock.anyObject());
-        PowerMock.expectLastCall().andVoid();
-
-        // Stop the task during the next put
-        expectConsumerPoll(1);
-        expectConversionAndTransformation(1);
-        sinkTask.put(EasyMock.anyObject());
-        PowerMock.expectLastCall().andAnswer(() -> {
-            workerTask.stop();
-            return null;
-        });
-
-        consumer.wakeup();
-        PowerMock.expectLastCall();
-
-        // Throw another exception while closing the task's assignment
-        EasyMock.expect(sinkTask.preCommit(EasyMock.anyObject()))
-            .andStubReturn(Collections.emptyMap());
-        Throwable closeException = new RuntimeException();
-        sinkTask.close(EasyMock.anyObject());
-        PowerMock.expectLastCall().andThrow(closeException);
-
-        PowerMock.replayAll();
-
-        workerTask.initialize(TASK_CONFIG);
-        workerTask.initializeAndStart();
-        try {
-            workerTask.execute();
-            fail("workerTask.execute should have thrown an exception");
-        } catch (RuntimeException e) {
-            PowerMock.verifyAll();
-            assertSame("Exception from close should propagate as-is", closeException, e);
-        }
     }
 
     // Verify that when commitAsync is called but the supplied callback is not called by the consumer before a

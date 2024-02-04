@@ -605,6 +605,93 @@ public class WorkerSinkTaskMockitoTest {
 
     @SuppressWarnings("unchecked")
     @Test
+    public void testSinkTasksHandleCloseErrors() {
+        createTask(initialState);
+
+        workerTask.initialize(TASK_CONFIG);
+        workerTask.initializeAndStart();
+        verifyInitializeTask();
+
+        expectTaskGetTopic();
+        expectPollInitialAssignment()
+                // Put one message through the task to get some offsets to commit
+                .thenAnswer(expectConsumerPoll(1))
+                .thenAnswer(expectConsumerPoll(1));
+
+        expectConversionAndTransformation(null, new RecordHeaders());
+
+        doAnswer(invocation -> null)
+                // Throw an exception on the next put to trigger shutdown behavior
+                // This exception is the true "cause" of the failure
+                .doAnswer(invocation -> {
+                    workerTask.stop();
+                    return null;
+                })
+                .when(sinkTask).put(anyList());
+
+        Throwable closeException = new RuntimeException();
+        when(sinkTask.preCommit(anyMap())).thenReturn(Collections.emptyMap());
+
+        // Throw another exception while closing the task's assignment
+        doThrow(closeException).when(sinkTask).close(any(Collection.class));
+
+        try {
+            workerTask.execute();
+            fail("workerTask.execute should have thrown an exception");
+        } catch (RuntimeException e) {
+            assertSame("Exception from close should propagate as-is", closeException, e);
+        }
+
+        verify(consumer).wakeup();
+
+        /*
+//        createTask(initialState);
+//        expectInitializeTask();
+//        expectTaskGetTopic(true);
+//
+//        expectPollInitialAssignment();
+//
+        // Put one message through the task to get some offsets to commit
+//        expectConsumerPoll(1);
+//        expectConversionAndTransformation(1);
+//        sinkTask.put(EasyMock.anyObject());
+//        PowerMock.expectLastCall().andVoid();
+
+        // Stop the task during the next put
+//        expectConsumerPoll(1);
+//        expectConversionAndTransformation(1);
+//        sinkTask.put(EasyMock.anyObject());
+//        PowerMock.expectLastCall().andAnswer(() -> {
+//            workerTask.stop();
+//            return null;
+//        });
+
+//        consumer.wakeup();
+//        PowerMock.expectLastCall();
+
+        // Throw another exception while closing the task's assignment
+//        EasyMock.expect(sinkTask.preCommit(EasyMock.anyObject()))
+//            .andStubReturn(Collections.emptyMap());
+//        Throwable closeException = new RuntimeException();
+//        sinkTask.close(EasyMock.anyObject());
+//        PowerMock.expectLastCall().andThrow(closeException);
+
+//        PowerMock.replayAll();
+//
+//        workerTask.initialize(TASK_CONFIG);
+//        workerTask.initializeAndStart();
+//        try {
+//            workerTask.execute();
+//            fail("workerTask.execute should have thrown an exception");
+//        } catch (RuntimeException e) {
+//            PowerMock.verifyAll();
+//            assertSame("Exception from close should propagate as-is", closeException, e);
+//        }
+         */
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
     public void testSuppressCloseErrors() {
         createTask(initialState);
 
@@ -629,10 +716,10 @@ public class WorkerSinkTaskMockitoTest {
                 .doThrow(putException)
                 .when(sinkTask).put(anyList());
 
+        when(sinkTask.preCommit(anyMap())).thenReturn(Collections.emptyMap());
+
         // Throw another exception while closing the task's assignment
         doThrow(closeException).when(sinkTask).close(any(Collection.class));
-
-        when(sinkTask.preCommit(anyMap())).thenReturn(Collections.emptyMap());
 
         workerTask.initialize(TASK_CONFIG);
         workerTask.initializeAndStart();
