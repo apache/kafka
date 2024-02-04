@@ -771,10 +771,12 @@ public class KStreamKStreamOuterJoinTest {
         stream1 = builder.stream(topic1, consumed);
         stream2 = builder.stream(topic2, consumed);
 
+        final Duration timeDifference = ofMillis(100);
+        final Duration grace = ofMillis(500);
         joined = stream1.outerJoin(
             stream2,
             MockValueJoiner.TOSTRING_JOINER,
-            JoinWindows.ofTimeDifferenceWithNoGrace(ofMillis(100)),
+            JoinWindows.ofTimeDifferenceAndGrace(timeDifference, grace),
             StreamJoined.with(Serdes.Integer(), Serdes.String(), Serdes.String())
         );
         joined.process(supplier);
@@ -817,7 +819,21 @@ public class KStreamKStreamOuterJoinTest {
             );
 
             testUpperWindowBound(expectedKeys, driver, processor);
-            testLowerWindowBound(expectedKeys, driver, processor);
+            testLowerWindowBound(expectedKeys, driver, processor, timeDifference, grace);
+            // push a dummy record to produce all left-join non-joined items
+            inputTopic1.pipeInput(0, "dummy",  Long.MAX_VALUE - 20_000L);
+            processor.checkAndClearProcessResult(
+                new KeyValueTimestamp<>(0, "C0+null", 1101L),
+                new KeyValueTimestamp<>(0, "D0+null", 1102L),
+                new KeyValueTimestamp<>(1, "D1+null", 1102L),
+                new KeyValueTimestamp<>(0, "E0+null", 1103L),
+                new KeyValueTimestamp<>(1, "E1+null", 1103L),
+                new KeyValueTimestamp<>(2, "E2+null", 1103L),
+                new KeyValueTimestamp<>(0, "F0+null", 1104L),
+                new KeyValueTimestamp<>(1, "F1+null", 1104L),
+                new KeyValueTimestamp<>(2, "F2+null", 1104L),
+                new KeyValueTimestamp<>(3, "F3+null", 1104L)
+            );
         }
     }
 
@@ -1216,29 +1232,16 @@ public class KStreamKStreamOuterJoinTest {
             inputTopic1.pipeInput(expectedKey, "F" + expectedKey, time);
         }
         processor.checkAndClearProcessResult();
-
-        // push a dummy record to produce all left-join non-joined items
-        time += 301L;
-        inputTopic1.pipeInput(0, "dummy", time);
-        processor.checkAndClearProcessResult(
-            new KeyValueTimestamp<>(0, "C0+null", 1101L),
-            new KeyValueTimestamp<>(0, "D0+null", 1102L),
-            new KeyValueTimestamp<>(1, "D1+null", 1102L),
-            new KeyValueTimestamp<>(0, "E0+null", 1103L),
-            new KeyValueTimestamp<>(1, "E1+null", 1103L),
-            new KeyValueTimestamp<>(2, "E2+null", 1103L),
-            new KeyValueTimestamp<>(0, "F0+null", 1104L),
-            new KeyValueTimestamp<>(1, "F1+null", 1104L),
-            new KeyValueTimestamp<>(2, "F2+null", 1104L),
-            new KeyValueTimestamp<>(3, "F3+null", 1104L)
-        );
     }
 
     private void testLowerWindowBound(final int[] expectedKeys,
                                       final TopologyTestDriver driver,
-                                      final MockApiProcessor<Integer, String, Void, Void> processor) {
+                                      final MockApiProcessor<Integer, String, Void, Void> processor,
+                                      final Duration timeDifference,
+                                      final Duration grace) {
         long time;
         final TestInputTopic<Integer, String> inputTopic1 = driver.createInputTopic(topic1, new IntegerSerializer(), new StringSerializer());
+        final TestInputTopic<Integer, String> inputTopic2 = driver.createInputTopic(topic2, new IntegerSerializer(), new StringSerializer());
 
         // push four items with smaller timestamp (before the window) to the primary stream; this should produce four left-join and no full-join items
         // w1 = { 0:A0 (ts: 0), 1:A1 (ts: 0),
@@ -1405,11 +1408,22 @@ public class KStreamKStreamOuterJoinTest {
             new KeyValueTimestamp<>(3, "K3+b3", 1003L)
         );
 
-        // push a dummy record to verify there are no expired records to produce
-        // dummy window is behind the max. stream time seen (1205 used in testUpperWindowBound)
-        inputTopic1.pipeInput(0, "dummy", time + 200L);
+        final long currentStreamTime = 1104;
+        final long lowerBound = currentStreamTime - timeDifference.toMillis() - grace.toMillis();
+        //push two items with timestamp at grace edge; this should produce one outer-join item, L0 is 'too late'
+        inputTopic1.pipeInput(0, "L" + 0, lowerBound - 1);
+        inputTopic1.pipeInput(1, "L" + 1, lowerBound);
         processor.checkAndClearProcessResult(
-            new KeyValueTimestamp<>(0, "dummy+null", 1103L)
+            new KeyValueTimestamp<>(1, "L1+null", lowerBound)
+        );
+
+        //push three items with timestamp at grace edge; this should produce two outer-join item, c0 is 'too late'
+        inputTopic2.pipeInput(0, "c" + 0, lowerBound - 1);
+        inputTopic2.pipeInput(1, "c" + 1, lowerBound);
+        inputTopic2.pipeInput(2, "c" + 2, lowerBound);
+        processor.checkAndClearProcessResult(
+            new KeyValueTimestamp<>(1, "L1+c1", lowerBound),
+            new KeyValueTimestamp<>(2, "null+c2", lowerBound)
         );
     }
 
