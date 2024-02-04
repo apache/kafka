@@ -183,7 +183,7 @@ object HostedPartition {
   /**
    * This broker hosts the partition, but it is in an offline log directory.
    */
-  final object Offline extends HostedPartition
+  final case class Offline(partition: Option[Partition]) extends HostedPartition
 }
 
 object ReplicaManager {
@@ -398,13 +398,13 @@ class ReplicaManager(val config: KafkaConfig,
   private def maybeRemoveTopicMetrics(topic: String): Unit = {
     val topicHasNonOfflinePartition = allPartitions.values.exists {
       case online: HostedPartition.Online => topic == online.partition.topic
-      case HostedPartition.None | HostedPartition.Offline => false
+      case HostedPartition.None | HostedPartition.Offline(_) => false
     }
     if (!topicHasNonOfflinePartition) // nothing online or deferred
       brokerTopicStats.removeMetrics(topic)
   }
 
-  private[server] def updateStrayLogs(strayPartitions: Set[TopicPartition]): Unit = {
+  private[server] def updateStrayLogs(strayPartitions: Iterable[TopicPartition]): Unit = {
     if (strayPartitions.isEmpty) {
       return
     }
@@ -438,11 +438,6 @@ class ReplicaManager(val config: KafkaConfig,
       error(s"Failed to delete stray partition $topicPartition due to " +
         s"${e.getClass.getName} exception: ${e.getMessage}")
     })
-  }
-
-  // Find logs which exist on the broker, but aren't present in the full LISR
-  private[server] def findStrayPartitionsFromLeaderAndIsr(partitionsFromRequest: Set[TopicPartition]): Set[TopicPartition] = {
-    logManager.allLogs.map(_.topicPartition).filterNot(partitionsFromRequest.contains).toSet
   }
 
   protected def completeDelayedFetchOrProduceRequests(topicPartition: TopicPartition): Unit = {
@@ -514,7 +509,7 @@ class ReplicaManager(val config: KafkaConfig,
           val deletePartition = partitionState.deletePartition()
 
           getPartition(topicPartition) match {
-            case HostedPartition.Offline =>
+            case HostedPartition.Offline(_) =>
               stateChangeLogger.warn(s"Ignoring StopReplica request (delete=$deletePartition) from " +
                 s"controller $controllerId with correlation id $correlationId " +
                 s"epoch $controllerEpoch for partition $topicPartition as the local replica for the " +
@@ -664,7 +659,7 @@ class ReplicaManager(val config: KafkaConfig,
   }
 
   private def offlinePartitionCount: Int = {
-    allPartitions.values.iterator.count(_ == HostedPartition.Offline)
+    allPartitions.values.iterator.count(_.getClass == HostedPartition.Offline.getClass)
   }
 
   def getPartitionOrException(topicPartition: TopicPartition): Partition = {
@@ -684,7 +679,7 @@ class ReplicaManager(val config: KafkaConfig,
       case HostedPartition.Online(partition) =>
         Right(partition)
 
-      case HostedPartition.Offline =>
+      case HostedPartition.Offline(_) =>
         Left(Errors.KAFKA_STORAGE_ERROR)
 
       case HostedPartition.None if metadataCache.contains(topicPartition) =>
@@ -1166,7 +1161,7 @@ class ReplicaManager(val config: KafkaConfig,
                 replicaAlterLogDirsManager.removeFetcherForPartitions(Set(topicPartition))
                 partition.removeFutureLocalReplica()
               }
-            case HostedPartition.Offline =>
+            case HostedPartition.Offline(_) =>
               throw new KafkaStorageException(s"Partition $topicPartition is offline")
 
             case HostedPartition.None => // Do nothing
@@ -1884,6 +1879,24 @@ class ReplicaManager(val config: KafkaConfig,
             s"Latest known controller epoch is $controllerEpoch")
           leaderAndIsrRequest.getErrorResponse(0, Errors.STALE_CONTROLLER_EPOCH.exception)
         } else {
+          // In migration mode, reconcile missed topic deletions when handling full LISR from KRaft controller.
+          // LISR "type" field was previously unspecified (0), so if we see it set to Full (2), then we know the
+          // request came from a KRaft controller.
+          //
+          // Note that we have to do this first, before anything else, since topics may be recreated with the same
+          // name, but a different ID. And in that case, we need to move aside the old version of those topics
+          // (with the obsolete topic ID) before doing anything else.
+          if (config.migrationEnabled &&
+            leaderAndIsrRequest.isKRaftController &&
+            leaderAndIsrRequest.requestType() == AbstractControlRequest.Type.FULL)
+          {
+            val strays = LogManager.findStrayReplicas(localBrokerId, leaderAndIsrRequest, logManager.allLogs)
+            stateChangeLogger.info(s"While handling full LeaderAndIsr request from KRaft " +
+              s"controller $controllerId with correlation id $correlationId, found ${strays.size} " +
+              "stray partition(s).")
+            updateStrayLogs(strays)
+          }
+
           val responseMap = new mutable.HashMap[TopicPartition, Errors]
           controllerEpoch = leaderAndIsrRequest.controllerEpoch
 
@@ -1898,7 +1911,7 @@ class ReplicaManager(val config: KafkaConfig,
             val topicPartition = new TopicPartition(partitionState.topicName, partitionState.partitionIndex)
             allTopicPartitionsInRequest += topicPartition
             val partitionOpt = getPartition(topicPartition) match {
-              case HostedPartition.Offline =>
+              case HostedPartition.Offline(_) =>
                 stateChangeLogger.warn(s"Ignoring LeaderAndIsr request from " +
                   s"controller $controllerId with correlation id $correlationId " +
                   s"epoch $controllerEpoch for partition $topicPartition as the local replica for the " +
@@ -2004,17 +2017,6 @@ class ReplicaManager(val config: KafkaConfig,
           // We initialize highwatermark thread after the first LeaderAndIsr request. This ensures that all the partitions
           // have been completely populated before starting the checkpointing there by avoiding weird race conditions
           startHighWatermarkCheckPointThread()
-
-          // In migration mode, reconcile missed topic deletions when handling full LISR from KRaft controller.
-          // LISR "type" field was previously unspecified (0), so if we see it set to Full (2), then we know the
-          // request came from a KRaft controller.
-          if (
-            config.migrationEnabled &&
-            leaderAndIsrRequest.isKRaftController &&
-            leaderAndIsrRequest.requestType() == AbstractControlRequest.Type.FULL
-          ) {
-            updateStrayLogs(findStrayPartitionsFromLeaderAndIsr(allTopicPartitionsInRequest))
-          }
 
           maybeAddLogDirFetchers(partitions, highWatermarkCheckpoints, topicIdFromRequest)
 
@@ -2409,10 +2411,12 @@ class ReplicaManager(val config: KafkaConfig,
   }
 
   def markPartitionOffline(tp: TopicPartition): Unit = replicaStateChangeLock synchronized {
-    allPartitions.put(tp, HostedPartition.Offline) match {
+    allPartitions.get(tp) match {
       case HostedPartition.Online(partition) =>
+        allPartitions.put(tp, HostedPartition.Offline(Some(partition)))
         partition.markOffline()
-      case _ => // Nothing
+      case _ =>
+        allPartitions.put(tp, HostedPartition.Offline(None))
     }
   }
 
@@ -2453,7 +2457,7 @@ class ReplicaManager(val config: KafkaConfig,
     // retrieve the UUID here because logManager.handleLogDirFailure handler removes it
     val uuid = logManager.directoryId(dir)
     logManager.handleLogDirFailure(dir)
-    if (dir == config.metadataLogDir) {
+    if (dir == new File(config.metadataLogDir).getAbsolutePath && (config.processRoles.nonEmpty || config.migrationEnabled)) {
       fatal(s"Shutdown broker because the metadata log dir $dir has failed")
       Exit.halt(1)
     }
@@ -2549,7 +2553,7 @@ class ReplicaManager(val config: KafkaConfig,
               offsetForLeaderPartition.leaderEpoch,
               fetchOnlyFromLeader = true)
 
-          case HostedPartition.Offline =>
+          case HostedPartition.Offline(_) =>
             new EpochEndOffset()
               .setPartition(offsetForLeaderPartition.partition)
               .setErrorCode(Errors.KAFKA_STORAGE_ERROR.code)
@@ -2626,11 +2630,20 @@ class ReplicaManager(val config: KafkaConfig,
                                           delta: TopicsDelta,
                                           topicId: Uuid): Option[(Partition, Boolean)] = {
     getPartition(tp) match {
-      case HostedPartition.Offline =>
-        stateChangeLogger.warn(s"Unable to bring up new local leader $tp " +
-          s"with topic id $topicId because it resides in an offline log " +
-          "directory.")
-        None
+      case HostedPartition.Offline(offlinePartition) =>
+        if (offlinePartition.flatMap(p => p.topicId).contains(topicId)) {
+          stateChangeLogger.warn(s"Unable to bring up new local leader $tp " +
+            s"with topic id $topicId because it resides in an offline log " +
+            "directory.")
+          None
+        } else {
+          stateChangeLogger.info(s"Creating new partition $tp with topic id " + s"$topicId." +
+            s"A topic with the same name but different id exists but it resides in an offline log " +
+            s"directory.")
+          val partition = Partition(tp, time, this)
+          allPartitions.put(tp, HostedPartition.Online(partition))
+          Some(partition, true)
+        }
 
       case HostedPartition.Online(partition) =>
         if (partition.topicId.exists(_ != topicId)) {

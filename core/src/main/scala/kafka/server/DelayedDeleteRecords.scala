@@ -84,7 +84,7 @@ class DelayedDeleteRecords(delayMs: Long,
                 (false, Errors.NOT_LEADER_OR_FOLLOWER, DeleteRecordsResponse.INVALID_LOW_WATERMARK)
             }
 
-          case HostedPartition.Offline =>
+          case HostedPartition.Offline(_) =>
             (false, Errors.KAFKA_STORAGE_ERROR, DeleteRecordsResponse.INVALID_LOW_WATERMARK)
 
           case HostedPartition.None =>
