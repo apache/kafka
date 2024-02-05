@@ -106,7 +106,7 @@ public class ConsumerGroupListing {
     /**
      * The type of the consumer group.
      *
-     * @return An Optional containing the type if available.
+     * @return An Optional containing the type, if available.
      */
     public Optional<GroupType> groupType() {
         return groupType;
@@ -114,12 +114,12 @@ public class ConsumerGroupListing {
 
     @Override
     public String toString() {
-        return "ConsumerGroupListing{" +
+        return "(" +
             "groupId='" + groupId + '\'' +
             ", isSimpleConsumerGroup=" + isSimpleConsumerGroup +
             ", state=" + state +
             ", groupType=" + groupType +
-            '}';
+            ')';
     }
 
     @Override
