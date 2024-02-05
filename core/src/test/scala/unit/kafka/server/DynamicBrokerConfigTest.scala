@@ -436,16 +436,27 @@ class DynamicBrokerConfigTest {
   @Test
   def testDynamicListenerConfig(): Unit = {
     val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 9092)
-    val oldConfig =  KafkaConfig.fromProps(props)
+    val oldConfig = KafkaConfig.fromProps(props)
     val kafkaServer: KafkaServer = mock(classOf[kafka.server.KafkaServer])
     when(kafkaServer.config).thenReturn(oldConfig)
 
     props.put(KafkaConfig.ListenersProp, "PLAINTEXT://hostname:9092,SASL_PLAINTEXT://hostname:9093")
-    new DynamicListenerConfig(kafkaServer).validateReconfiguration(KafkaConfig(props))
+    val dynamicListenerConfig = new DynamicListenerConfig(kafkaServer)
+    dynamicListenerConfig.validateReconfiguration(KafkaConfig(props))
+
+    val server = mock(classOf[SocketServer])
+    when(kafkaServer.socketServer).thenReturn(server)
+    doNothing().when(server).removeListeners(any())
+    doNothing().when(server).addListeners(any())
+    val kafkaController = mock(classOf[KafkaController])
+    when(kafkaServer.kafkaController).thenReturn(kafkaController)
+    doNothing().when(kafkaController).updateBrokerInfo(any())
+    props.put(KafkaConfig.ListenersProp, "PLAINTEXT://hostname:9093")
+    val newConfig = KafkaConfig.fromProps(props)
+    dynamicListenerConfig.reconfigure(oldConfig, newConfig)
 
     // it is illegal to update non-reconfiguable configs of existent listeners
     props.put("listener.name.plaintext.you.should.not.pass", "failure")
-    val dynamicListenerConfig = new DynamicListenerConfig(kafkaServer)
     assertThrows(classOf[ConfigException], () => dynamicListenerConfig.validateReconfiguration(KafkaConfig(props)))
   }
 
