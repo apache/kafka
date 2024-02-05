@@ -93,7 +93,7 @@ public class ConsoleConsumer {
                 consumer.wakeup();
                 SHUTDOWN_LATCH.await();
             } catch (Throwable t) {
-                LOG.error("Exception while running shutdown hook " + t.getMessage());
+                LOG.error("Exception while running shutdown hook: ", t);
             }
             if (conf.enableSystestEventsLogging()) {
                 System.out.println("shutdown_complete");

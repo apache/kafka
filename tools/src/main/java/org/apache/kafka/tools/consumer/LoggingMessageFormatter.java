@@ -40,10 +40,10 @@ class LoggingMessageFormatter implements MessageFormatter {
     public void writeTo(ConsumerRecord<byte[], byte[]> consumerRecord, PrintStream output) {
         defaultWriter.writeTo(consumerRecord, output);
         String timestamp = consumerRecord.timestampType() != TimestampType.NO_TIMESTAMP_TYPE
-                ? consumerRecord.timestampType() + ":" + consumerRecord.timestamp() + " "
+                ? consumerRecord.timestampType() + ":" + consumerRecord.timestamp() + ", "
                 : "";
-        String key = consumerRecord.key() == null ? "null" : new String(consumerRecord.key(), StandardCharsets.UTF_8);
-        String value = consumerRecord.value() == null ? "null" : new String(consumerRecord.value(), StandardCharsets.UTF_8);
-        LOG.info(timestamp + key + " " + value);
+        String key = "key:" + (consumerRecord.key() == null ? "null " : new String(consumerRecord.key(), StandardCharsets.UTF_8) + ", ");
+        String value = "value:" + (consumerRecord.value() == null ? "null" : new String(consumerRecord.value(), StandardCharsets.UTF_8));
+        LOG.info(timestamp + key + value);
     }
 }
