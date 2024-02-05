@@ -661,7 +661,7 @@ class ZkAdminManager(val config: KafkaConfig,
     val exactUser = wantExact(userComponent)
     val exactClientId = wantExact(clientIdComponent)
 
-    def wantExcluded(component: Option[ClientQuotaFilterComponent]): Boolean = strict && !component.isDefined
+    def wantExcluded(component: Option[ClientQuotaFilterComponent]): Boolean = strict && component.isEmpty
     val excludeUser = wantExcluded(userComponent)
     val excludeClientId = wantExcluded(clientIdComponent)
 
@@ -803,7 +803,7 @@ class ZkAdminManager(val config: KafkaConfig,
   private val attemptToDescribeUserThatDoesNotExist = "Attempt to describe a user credential that does not exist"
 
   def describeUserScramCredentials(users: Option[Seq[String]]): DescribeUserScramCredentialsResponseData = {
-    val describingAllUsers = !users.isDefined || users.get.isEmpty
+    val describingAllUsers = users.isEmpty || users.get.isEmpty
     val retval = new DescribeUserScramCredentialsResponseData()
     val userResults = mutable.Map[String, DescribeUserScramCredentialsResponseData.DescribeUserScramCredentialsResult]()
 
