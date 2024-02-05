@@ -1842,7 +1842,7 @@ public class TaskManager {
         }
     }
 
-    boolean needsCommit(final boolean updateDelta) {
+    boolean transactionBuffersExceedCapacity(final boolean predictNextCycle) {
         final boolean transactionBuffersAreUnbounded = maxUncommittedStateBytes < 0;
         if (transactionBuffersAreUnbounded) {
             return false;
@@ -1860,7 +1860,7 @@ public class TaskManager {
                 maxUncommittedStateBytes, lastUncommittedBytes, uncommittedBytes, deltaBytes
             );
         }
-        if (updateDelta) {
+        if (predictNextCycle) {
             lastUncommittedBytes = uncommittedBytes;
         }
         return needsCommit;
