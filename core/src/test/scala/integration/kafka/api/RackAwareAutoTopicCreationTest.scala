@@ -17,15 +17,21 @@
 package kafka.api
 
 import java.util.Properties
-
-import kafka.admin.{RackAwareMode, RackAwareTest}
+import kafka.admin.RackAwareTest
 import kafka.integration.KafkaServerTestHarness
 import kafka.server.KafkaConfig
-import kafka.utils.TestUtils
+import kafka.utils.{TestInfoUtils, TestUtils}
+import org.apache.kafka.clients.admin.Admin
 import org.apache.kafka.clients.producer.ProducerRecord
+import org.apache.kafka.common.network.ListenerName
+import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo}
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.ValueSource
+
 import scala.collection.Map
+import scala.jdk.CollectionConverters.ListHasAsScala
 
 class RackAwareAutoTopicCreationTest extends KafkaServerTestHarness with RackAwareTest {
   val numServers = 4
@@ -34,16 +40,31 @@ class RackAwareAutoTopicCreationTest extends KafkaServerTestHarness with RackAwa
   val overridingProps = new Properties()
   overridingProps.put(KafkaConfig.NumPartitionsProp, numPartitions.toString)
   overridingProps.put(KafkaConfig.DefaultReplicationFactorProp, replicationFactor.toString)
+//  overridingProps.put(KafkaConfig)
+  var admin: Admin = _
 
   def generateConfigs =
     (0 until numServers) map { node =>
-      TestUtils.createBrokerConfig(node, zkConnect, enableControlledShutdown = false, rack = Some((node / 2).toString))
+      TestUtils.createBrokerConfig(node, zkConnectOrNull, enableControlledShutdown = false, rack = Some((node / 2).toString))
     } map (KafkaConfig.fromProps(_, overridingProps))
 
   private val topic = "topic"
 
-  @Test
-  def testAutoCreateTopic(): Unit = {
+  @BeforeEach
+  override def setUp(testInfo: TestInfo): Unit = {
+    super.setUp(testInfo)
+    admin = TestUtils.createAdminClient(brokers, ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT))
+  }
+
+  @AfterEach
+  override def tearDown(): Unit = {
+    if (admin != null) admin.close()
+    super.tearDown()
+  }
+
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testAutoCreateTopic(quorum: String): Unit = {
     val producer = TestUtils.createProducer(bootstrapServers())
     try {
       // Send a message to auto-create the topic
@@ -51,15 +72,19 @@ class RackAwareAutoTopicCreationTest extends KafkaServerTestHarness with RackAwa
       assertEquals(0L, producer.send(record).get.offset, "Should have offset 0")
 
       // double check that the topic is created with leader elected
-      TestUtils.waitUntilLeaderIsElectedOrChanged(zkClient, topic, 0)
-      val assignment = zkClient.getReplicaAssignmentForTopics(Set(topic)).map { case (topicPartition, replicas) =>
-        topicPartition.partition -> replicas
-      }
-      val brokerMetadatas = adminZkClient.getBrokerMetadatas(RackAwareMode.Enforced)
+      TestUtils.waitUntilLeaderIsElectedOrChangedWithAdmin(admin, topic, 0)
+      val assignment = getReplicaAssignment(topic)
+      val brokerMetadatas = brokers.head.metadataCache.getAliveBrokers()
       val expectedMap = Map(0 -> "0", 1 -> "0", 2 -> "1", 3 -> "1")
       assertEquals(expectedMap, brokerMetadatas.map(b => b.id -> b.rack.get).toMap)
       checkReplicaDistribution(assignment, expectedMap, numServers, numPartitions, replicationFactor)
     } finally producer.close()
+  }
+
+  private def getReplicaAssignment(topic: String): Map[Int, Seq[Int]] = {
+    TestUtils.describeTopic(admin, topic).partitions.asScala.map { partition =>
+        partition.partition -> partition.replicas.asScala.map(_.id).toSeq
+    }.toMap
   }
 }
 
