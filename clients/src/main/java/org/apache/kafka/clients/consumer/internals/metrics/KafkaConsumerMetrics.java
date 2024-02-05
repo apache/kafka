@@ -14,7 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.clients.consumer.internals;
+package org.apache.kafka.clients.consumer.internals.metrics;
 
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.metrics.Measurable;
@@ -26,20 +26,22 @@ import org.apache.kafka.common.metrics.stats.Max;
 
 import java.util.concurrent.TimeUnit;
 
+import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.CONSUMER_METRICS_SUFFIX;
+
 public class KafkaConsumerMetrics implements AutoCloseable {
+    private final Metrics metrics;
     private final MetricName lastPollMetricName;
     private final Sensor timeBetweenPollSensor;
     private final Sensor pollIdleSensor;
     private final Sensor committedSensor;
     private final Sensor commitSyncSensor;
-    private final Metrics metrics;
     private long lastPollMs;
     private long pollStartMs;
     private long timeSinceLastPollMs;
 
     public KafkaConsumerMetrics(Metrics metrics, String metricGrpPrefix) {
         this.metrics = metrics;
-        String metricGroupName = metricGrpPrefix + "-metrics";
+        final String metricGroupName = metricGrpPrefix + CONSUMER_METRICS_SUFFIX;
         Measurable lastPoll = (mConfig, now) -> {
             if (lastPollMs == 0L)
                 // if no poll is ever triggered, just return -1.
@@ -48,7 +50,7 @@ public class KafkaConsumerMetrics implements AutoCloseable {
                 return TimeUnit.SECONDS.convert(now - lastPollMs, TimeUnit.MILLISECONDS);
         };
         this.lastPollMetricName = metrics.metricName("last-poll-seconds-ago",
-                metricGroupName, "The number of seconds since the last poll() invocation.");
+            metricGroupName, "The number of seconds since the last poll() invocation.");
         metrics.addMetric(lastPollMetricName, lastPoll);
 
         this.timeBetweenPollSensor = metrics.sensor("time-between-poll");
