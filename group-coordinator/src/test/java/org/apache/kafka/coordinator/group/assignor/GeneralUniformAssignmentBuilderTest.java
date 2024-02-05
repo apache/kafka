@@ -21,7 +21,6 @@ import org.apache.kafka.coordinator.group.consumer.SubscribedTopicMetadata;
 import org.apache.kafka.coordinator.group.consumer.TopicMetadata;
 import org.junit.jupiter.api.Test;
 
-import javax.swing.text.html.Option;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -312,7 +311,7 @@ public class GeneralUniformAssignmentBuilderTest {
         int topicIndex = 0;
         for (int i = 1; i <= 9; i++) {
             String memberName = "member" + i;
-            String rackName = "rack" + i;
+            String rackName = "rack" + i % 4;
 
             // Assign two topics to each member, allowing for repetition.
             List<Uuid> assignedTopics = new ArrayList<>();
@@ -707,10 +706,10 @@ public class GeneralUniformAssignmentBuilderTest {
         // Add 3 new members and subscribe them to all the topics.
         for (int i = 1; i <= 3; i++) {
             String newMemberId = "newMember" + i;
-            String rackName = "rack" + (i % 50);
+
             members.put(newMemberId, new AssignmentMemberSpec(
                 Optional.empty(),
-                Optional.of(rackName),
+                Optional.empty(),
                 topicIds,
                 Collections.emptyMap()
             ));
@@ -1348,7 +1347,7 @@ public class GeneralUniformAssignmentBuilderTest {
 
         Map<Uuid, Set<Integer>> currentAssignmentForA = new TreeMap<>(mkAssignment(
             mkTopicAssignment(topic1Uuid, 0, 2),
-            mkTopicAssignment(topic2Uuid, 0)
+            mkTopicAssignment(topic2Uuid, 0, 2)
         ));
         members.put(memberA, new AssignmentMemberSpec(
             Optional.empty(),
@@ -1358,7 +1357,7 @@ public class GeneralUniformAssignmentBuilderTest {
         ));
 
         Map<Uuid, Set<Integer>> currentAssignmentForB = new TreeMap<>(mkAssignment(
-            mkTopicAssignment(topic1Uuid, 1),
+            mkTopicAssignment(topic1Uuid,  0, 1),
             mkTopicAssignment(topic2Uuid, 1, 2)
         ));
         members.put(memberB, new AssignmentMemberSpec(
@@ -1392,7 +1391,7 @@ public class GeneralUniformAssignmentBuilderTest {
         expectedAssignment.put(memberC, mkAssignment(
             mkTopicAssignment(topic2Uuid, 0, 3, 4, 6)
         ));
-
+        System.out.println("Computed Assignment is" + computedAssignment);
         assertAssignment(expectedAssignment, computedAssignment);
     }
 
