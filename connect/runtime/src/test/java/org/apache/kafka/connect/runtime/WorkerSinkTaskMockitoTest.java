@@ -82,6 +82,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.regex.Pattern;
@@ -1082,6 +1086,82 @@ public class WorkerSinkTaskMockitoTest {
 
         sinkTaskContext.getValue().requestCommit();
         workerTask.iteration(); // iter 3 -- commit
+    }
+
+    // Test that the commitTimeoutMs timestamp is correctly computed and checked in WorkerSinkTask.iteration()
+    // when there is a long running commit in process. See KAFKA-4942 for more information.
+    @Test
+    public void testLongRunningCommitWithoutTimeout() throws InterruptedException {
+        createTask(initialState);
+
+        workerTask.initialize(TASK_CONFIG);
+        workerTask.initializeAndStart();
+        verifyInitializeTask();
+
+        expectTaskGetTopic();
+        expectPollInitialAssignment()
+                .thenAnswer(expectConsumerPoll(1))
+                // no actual consumer.commit() triggered
+                .thenAnswer(expectConsumerPoll(0));
+        expectConversionAndTransformation(null, new RecordHeaders());
+
+        final Map<TopicPartition, OffsetAndMetadata> workerStartingOffsets = new HashMap<>();
+        workerStartingOffsets.put(TOPIC_PARTITION, new OffsetAndMetadata(FIRST_OFFSET));
+        workerStartingOffsets.put(TOPIC_PARTITION2, new OffsetAndMetadata(FIRST_OFFSET));
+
+        workerTask.iteration(); // iter 1 -- initial assignment
+        assertEquals(workerStartingOffsets, workerTask.currentOffsets());
+        assertEquals(workerStartingOffsets, workerTask.lastCommittedOffsets());
+
+        time.sleep(WorkerConfig.OFFSET_COMMIT_TIMEOUT_MS_DEFAULT);
+        workerTask.iteration(); // iter 2 -- deliver 2 records
+
+        final Map<TopicPartition, OffsetAndMetadata> workerCurrentOffsets = new HashMap<>();
+        workerCurrentOffsets.put(TOPIC_PARTITION, new OffsetAndMetadata(FIRST_OFFSET + 1));
+        workerCurrentOffsets.put(TOPIC_PARTITION2, new OffsetAndMetadata(FIRST_OFFSET));
+
+        // iter 3 - note that we return the current offset to indicate they should be committed
+        when(sinkTask.preCommit(workerCurrentOffsets)).thenReturn(workerCurrentOffsets);
+
+        // We need to delay the result of trying to commit offsets to Kafka via the consumer.commitAsync
+        // method. We do this so that we can test that we do not erroneously mark a commit as timed out
+        // while it is still running and under time. To fake this for tests we have the commit run in a
+        // separate thread and wait for a latch which we control back in the main thread.
+        final ExecutorService executor = Executors.newSingleThreadExecutor();
+        final CountDownLatch latch = new CountDownLatch(1);
+
+        doAnswer(invocation -> {
+            @SuppressWarnings("unchecked")
+            final Map<TopicPartition, OffsetAndMetadata> offsets = invocation.getArgument(0);
+            @SuppressWarnings("unchecked")
+            final OffsetCommitCallback callback = invocation.getArgument(1);
+
+            executor.execute(() -> {
+                try {
+                    latch.await();
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                }
+
+                callback.onComplete(offsets, null);
+            });
+
+            return null;
+        }).when(consumer).commitAsync(eq(workerCurrentOffsets), any(OffsetCommitCallback.class));
+
+        sinkTaskContext.getValue().requestCommit();
+        workerTask.iteration(); // iter 3 -- commit in progress
+
+        // Make sure the "committing" flag didn't immediately get flipped back to false due to an incorrect timeout
+        assertTrue("Expected worker to be in the process of committing offsets", workerTask.isCommitting());
+
+        // Let the async commit finish and wait for it to end
+        latch.countDown();
+        executor.shutdown();
+        executor.awaitTermination(30, TimeUnit.SECONDS);
+
+        assertEquals(workerCurrentOffsets, workerTask.currentOffsets());
+        assertEquals(workerCurrentOffsets, workerTask.lastCommittedOffsets());
     }
 
     @SuppressWarnings("unchecked")
