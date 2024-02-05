@@ -163,7 +163,6 @@ import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.atMostOnce;
@@ -1092,21 +1091,21 @@ public class StreamThreadTest {
         when(consumerGroupMetadata.groupInstanceId()).thenReturn(Optional.empty());
         final Task runningTask = mock(Task.class);
         final TaskManager taskManager = mockTaskManagerCommit(runningTask, 2);
-        when(taskManager.transactionBuffersExceedCapacity(anyBoolean())).thenReturn(false);
+        when(taskManager.transactionBuffersWillExceedCapacity()).thenReturn(false);
 
         final TopologyMetadata topologyMetadata = new TopologyMetadata(internalTopologyBuilder, config);
         topologyMetadata.buildAndRewriteTopology();
         thread = buildStreamThread(consumer, taskManager, config, topologyMetadata);
 
         // initial commit because no commit since start of application
-        when(taskManager.transactionBuffersExceedCapacity(anyBoolean())).thenReturn(false);
+        when(taskManager.transactionBuffersWillExceedCapacity()).thenReturn(false);
         thread.setNow(mockTime.milliseconds());
         thread.maybeCommit();
         verify(taskManager).commit(mkSet(runningTask));
 
         // early commit requested, despite interval not having passed
         clearInvocations(taskManager);
-        when(taskManager.transactionBuffersExceedCapacity(anyBoolean())).thenReturn(true);
+        when(taskManager.transactionBuffersWillExceedCapacity()).thenReturn(true);
         mockTime.sleep(commitInterval - 20L);
         thread.setNow(mockTime.milliseconds());
         thread.maybeCommit();
@@ -1114,7 +1113,7 @@ public class StreamThreadTest {
 
         // no commit because interval has not passed and no early commit requested
         clearInvocations(taskManager);
-        when(taskManager.transactionBuffersExceedCapacity(anyBoolean())).thenReturn(false);
+        when(taskManager.transactionBuffersWillExceedCapacity()).thenReturn(false);
         mockTime.sleep(10L);
         thread.setNow(mockTime.milliseconds());
         thread.maybeCommit();

@@ -1842,7 +1842,13 @@ public class TaskManager {
         }
     }
 
-    boolean transactionBuffersExceedCapacity(final boolean predictNextCycle) {
+    private boolean transactionBuffersExceedCapacity = false;
+
+    boolean transactionBuffersExceedCapacity() {
+        return transactionBuffersExceedCapacity;
+    }
+
+    boolean transactionBuffersWillExceedCapacity() {
         final boolean transactionBuffersAreUnbounded = maxUncommittedStateBytes < 0;
         if (transactionBuffersAreUnbounded) {
             return false;
@@ -1860,9 +1866,9 @@ public class TaskManager {
                 maxUncommittedStateBytes, lastUncommittedBytes, uncommittedBytes, deltaBytes
             );
         }
-        if (predictNextCycle) {
-            lastUncommittedBytes = uncommittedBytes;
-        }
+
+        transactionBuffersExceedCapacity = needsCommit;
+        lastUncommittedBytes = uncommittedBytes;
         return needsCommit;
     }
 
