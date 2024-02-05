@@ -34,6 +34,7 @@ import org.apache.kafka.common.errors.ProducerFencedException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.UnknownProducerIdException;
 import org.apache.kafka.common.header.internals.RecordHeaders;
+import org.apache.kafka.common.utils.LogCaptureAppender;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.KafkaClientSupplier;
@@ -55,6 +56,7 @@ import java.util.UUID;
 
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
+import static org.hamcrest.CoreMatchers.hasItem;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.closeTo;
 import static org.hamcrest.Matchers.equalTo;
@@ -1051,6 +1053,21 @@ public class StreamsProducerTest {
     @Test
     public void shouldSwallowExceptionOnEosAbortTxInvalidEpoch() {
         testSwallowExceptionOnEosAbortTx(new InvalidProducerEpochException("KABOOM!"));
+    }
+
+    @Test
+    public void shouldSwallowIllegalStateExceptionOnEosAbortTxInvalidStateTransition() {
+        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(StreamsProducer.class)) {
+            appender.setClassLoggerToTrace(StreamsProducer.class);
+
+            // cf https://issues.apache.org/jira/browse/KAFKA-16221
+            testSwallowExceptionOnEosAbortTx(new IllegalStateException("foobar Invalid transition attempted from state FATAL_ERROR to state ABORTABLE_ERROR"));
+
+            assertThat(
+                appender.getMessages(),
+                hasItem("test Swallowing producer internal state transition error (cf https://issues.apache.org/jira/browse/KAFKA-16221)")
+            );
+        }
     }
 
     private void testSwallowExceptionOnEosAbortTx(final RuntimeException exception) {
