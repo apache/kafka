@@ -32,7 +32,6 @@ import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaAndValue;
-import org.apache.kafka.connect.errors.RetriableException;
 import org.apache.kafka.connect.runtime.ConnectMetrics.MetricGroup;
 import org.apache.kafka.connect.runtime.errors.ErrorHandlingMetrics;
 import org.apache.kafka.connect.runtime.errors.ErrorReporter;
@@ -78,9 +77,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.function.Function;
 import java.util.function.Supplier;
-import java.util.stream.Collectors;
 
 import static java.util.Arrays.asList;
 import static org.junit.Assert.assertEquals;
@@ -184,85 +181,6 @@ public class WorkerSinkTaskTest {
     @After
     public void tearDown() {
         if (metrics != null) metrics.stop();
-    }
-
-    @Test
-    public void testPollRedeliveryWithConsumerRebalance() throws Exception {
-        createTask(initialState);
-
-        expectInitializeTask();
-        expectTaskGetTopic(true);
-        expectPollInitialAssignment();
-
-        // If a retriable exception is thrown, we should redeliver the same batch, pausing the consumer in the meantime
-        expectConsumerPoll(1);
-        expectConversionAndTransformation(1);
-        sinkTask.put(EasyMock.anyObject());
-        EasyMock.expectLastCall().andThrow(new RetriableException("retry"));
-        // Pause
-        EasyMock.expect(consumer.assignment()).andReturn(INITIAL_ASSIGNMENT);
-        consumer.pause(INITIAL_ASSIGNMENT);
-        PowerMock.expectLastCall();
-
-        // Empty consumer poll (all partitions are paused) with rebalance; one new partition is assigned
-        EasyMock.expect(consumer.poll(Duration.ofMillis(EasyMock.anyLong()))).andAnswer(
-            () -> {
-                rebalanceListener.getValue().onPartitionsRevoked(Collections.emptySet());
-                rebalanceListener.getValue().onPartitionsAssigned(Collections.singleton(TOPIC_PARTITION3));
-                return ConsumerRecords.empty();
-            });
-        Set<TopicPartition> newAssignment = new HashSet<>(Arrays.asList(TOPIC_PARTITION, TOPIC_PARTITION2, TOPIC_PARTITION3));
-        EasyMock.expect(consumer.assignment()).andReturn(newAssignment).times(3);
-        EasyMock.expect(consumer.position(TOPIC_PARTITION3)).andReturn(FIRST_OFFSET);
-        sinkTask.open(Collections.singleton(TOPIC_PARTITION3));
-        EasyMock.expectLastCall();
-        // All partitions are re-paused in order to pause any newly-assigned partitions so that redelivery efforts can continue
-        consumer.pause(newAssignment);
-        EasyMock.expectLastCall();
-        sinkTask.put(EasyMock.anyObject());
-        EasyMock.expectLastCall().andThrow(new RetriableException("retry"));
-
-        // Next delivery attempt fails again
-        expectConsumerPoll(0);
-        sinkTask.put(EasyMock.anyObject());
-        EasyMock.expectLastCall().andThrow(new RetriableException("retry"));
-
-        // Non-empty consumer poll; all initially-assigned partitions are revoked in rebalance, and new partitions are allowed to resume
-        ConsumerRecord<byte[], byte[]> newRecord = new ConsumerRecord<>(TOPIC, PARTITION3, FIRST_OFFSET, RAW_KEY, RAW_VALUE);
-        EasyMock.expect(consumer.poll(Duration.ofMillis(EasyMock.anyLong()))).andAnswer(
-            () -> {
-                rebalanceListener.getValue().onPartitionsRevoked(INITIAL_ASSIGNMENT);
-                rebalanceListener.getValue().onPartitionsAssigned(Collections.emptyList());
-                return new ConsumerRecords<>(Collections.singletonMap(TOPIC_PARTITION3, Collections.singletonList(newRecord)));
-            });
-        newAssignment = Collections.singleton(TOPIC_PARTITION3);
-        EasyMock.expect(consumer.assignment()).andReturn(new HashSet<>(newAssignment)).times(3);
-        final Map<TopicPartition, OffsetAndMetadata> offsets = INITIAL_ASSIGNMENT.stream()
-                .collect(Collectors.toMap(Function.identity(), tp -> new OffsetAndMetadata(FIRST_OFFSET)));
-        sinkTask.preCommit(offsets);
-        EasyMock.expectLastCall().andReturn(offsets);
-        sinkTask.close(INITIAL_ASSIGNMENT);
-        EasyMock.expectLastCall();
-        // All partitions are resumed, as all previously paused-for-redelivery partitions were revoked
-        newAssignment.forEach(tp -> {
-            consumer.resume(Collections.singleton(tp));
-            EasyMock.expectLastCall();
-        });
-        expectConversionAndTransformation(1);
-        sinkTask.put(EasyMock.anyObject());
-        EasyMock.expectLastCall();
-
-        PowerMock.replayAll();
-
-        workerTask.initialize(TASK_CONFIG);
-        workerTask.initializeAndStart();
-        workerTask.iteration();
-        workerTask.iteration();
-        workerTask.iteration();
-        workerTask.iteration();
-        workerTask.iteration();
-
-        PowerMock.verifyAll();
     }
 
     // Test that the commitTimeoutMs timestamp is correctly computed and checked in WorkerSinkTask.iteration()

@@ -82,8 +82,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 import static java.util.Arrays.asList;
 import static java.util.Collections.singleton;
@@ -447,6 +449,85 @@ public class WorkerSinkTaskMockitoTest {
 
         verify(sinkTask, times(4)).put(anyList());
         assertSinkMetricValue("offset-commit-completion-total", 1.0);
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    public void testPollRedeliveryWithConsumerRebalance() {
+        createTask(initialState);
+        expectTaskGetTopic();
+
+        workerTask.initialize(TASK_CONFIG);
+        workerTask.initializeAndStart();
+        verifyInitializeTask();
+
+        Set<TopicPartition> newAssignment = new HashSet<>(Arrays.asList(TOPIC_PARTITION, TOPIC_PARTITION2, TOPIC_PARTITION3));
+
+        when(consumer.assignment())
+                .thenReturn(INITIAL_ASSIGNMENT, INITIAL_ASSIGNMENT, INITIAL_ASSIGNMENT)
+                .thenReturn(newAssignment, newAssignment, newAssignment)
+                .thenReturn(Collections.singleton(TOPIC_PARTITION3),
+                        Collections.singleton(TOPIC_PARTITION3),
+                        Collections.singleton(TOPIC_PARTITION3));
+
+        INITIAL_ASSIGNMENT.forEach(tp -> when(consumer.position(tp)).thenReturn(FIRST_OFFSET));
+        when(consumer.position(TOPIC_PARTITION3)).thenReturn(FIRST_OFFSET);
+
+        when(consumer.poll(any(Duration.class)))
+                .thenAnswer((Answer<ConsumerRecords<byte[], byte[]>>) invocation -> {
+                    rebalanceListener.getValue().onPartitionsAssigned(INITIAL_ASSIGNMENT);
+                    return ConsumerRecords.empty();
+                })
+                .thenAnswer(expectConsumerPoll(1))
+                // Empty consumer poll (all partitions are paused) with rebalance; one new partition is assigned
+                .thenAnswer(invocation -> {
+                    rebalanceListener.getValue().onPartitionsRevoked(Collections.emptySet());
+                    rebalanceListener.getValue().onPartitionsAssigned(Collections.singleton(TOPIC_PARTITION3));
+                    return ConsumerRecords.empty();
+                })
+                .thenAnswer(expectConsumerPoll(0))
+                // Non-empty consumer poll; all initially-assigned partitions are revoked in rebalance, and new partitions are allowed to resume
+                .thenAnswer(invocation -> {
+                    ConsumerRecord<byte[], byte[]> newRecord = new ConsumerRecord<>(TOPIC, PARTITION3, FIRST_OFFSET, RAW_KEY, RAW_VALUE);
+
+                    rebalanceListener.getValue().onPartitionsRevoked(INITIAL_ASSIGNMENT);
+                    rebalanceListener.getValue().onPartitionsAssigned(Collections.emptyList());
+                    return new ConsumerRecords<>(Collections.singletonMap(TOPIC_PARTITION3, Collections.singletonList(newRecord)));
+                });
+        expectConversionAndTransformation(null, new RecordHeaders());
+
+        // If a retriable exception is thrown, we should redeliver the same batch, pausing the consumer in the meantime
+        doThrow(new RetriableException("retry"))
+                .doThrow(new RetriableException("retry"))
+                .doThrow(new RetriableException("retry"))
+                .doThrow(new RetriableException("retry"))
+                .when(sinkTask).put(any(Collection.class));
+
+        workerTask.iteration();
+        verify(consumer).pause(INITIAL_ASSIGNMENT);
+
+        // Pause
+        workerTask.iteration();
+
+        workerTask.iteration();
+        verify(sinkTask).open(Collections.singleton(TOPIC_PARTITION3));
+        // All partitions are re-paused in order to pause any newly-assigned partitions so that redelivery efforts can continue
+        verify(consumer).pause(newAssignment);
+
+        workerTask.iteration();
+
+        final Map<TopicPartition, OffsetAndMetadata> offsets = INITIAL_ASSIGNMENT.stream()
+                .collect(Collectors.toMap(Function.identity(), tp -> new OffsetAndMetadata(FIRST_OFFSET)));
+        when(sinkTask.preCommit(offsets)).thenReturn(offsets);
+        newAssignment = Collections.singleton(TOPIC_PARTITION3);
+
+        workerTask.iteration();
+        verify(sinkTask).close(INITIAL_ASSIGNMENT);
+
+        // All partitions are resumed, as all previously paused-for-redelivery partitions were revoked
+        newAssignment.forEach(tp -> {
+            verify(consumer).resume(Collections.singleton(tp));
+        });
     }
 
     @Test
