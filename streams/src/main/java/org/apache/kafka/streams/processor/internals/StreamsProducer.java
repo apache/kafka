@@ -343,6 +343,19 @@ public class StreamsProducer {
                 // something else (e.g. task corrupted) we can still ignore the exception here
                 // since transaction already got aborted by brokers/transactional-coordinator if this happens
                 log.debug("Encountered {} while aborting the transaction; this is expected and hence swallowed", error.getMessage());
+            } catch (final IllegalStateException maybeSwallow) {
+                // cf https://issues.apache.org/jira/browse/KAFKA-16221
+                // this is a hotfix for 3.7 release to just detect this edge case and swallow the exception
+                // a proper fix would skip calling `abortTransaction` to begin with
+                final String errorMessage = maybeSwallow.getMessage();
+                if (errorMessage == null || !errorMessage.endsWith("Invalid transition attempted from state FATAL_ERROR to state ABORTABLE_ERROR")) {
+                    // if we don't hit the edge case, we rethrow as always
+                    throw new StreamsException(
+                        formatException("Error encounter trying to abort a transaction"),
+                        maybeSwallow
+                    );
+                }
+                log.trace("Swallowing producer internal state transition error (cf https://issues.apache.org/jira/browse/KAFKA-16221)", maybeSwallow);
             } catch (final KafkaException error) {
                 throw new StreamsException(
                     formatException("Error encounter trying to abort a transaction"),
