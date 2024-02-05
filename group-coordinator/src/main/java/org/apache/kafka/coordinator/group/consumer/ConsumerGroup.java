@@ -230,7 +230,8 @@ public class ConsumerGroup implements Group {
         return new ListGroupsResponseData.ListedGroup()
             .setGroupId(groupId)
             .setProtocolType(ConsumerProtocol.PROTOCOL_TYPE)
-            .setGroupState(state.get(committedOffset).toString());
+            .setGroupState(state.get(committedOffset).toString())
+            .setGroupType(type().toString());
     }
 
     /**

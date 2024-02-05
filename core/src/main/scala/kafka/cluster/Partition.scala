@@ -874,7 +874,13 @@ class Partition(val topicPartition: TopicPartition,
   private def createLogInAssignedDirectoryId(partitionState: LeaderAndIsrPartitionState, highWatermarkCheckpoints: OffsetCheckpoints, topicId: Option[Uuid], targetLogDirectoryId: Option[Uuid]): Unit = {
     targetLogDirectoryId match {
       case Some(directoryId) =>
-        createLogIfNotExists(directoryId == DirectoryId.UNASSIGNED, isFutureReplica = false, highWatermarkCheckpoints, topicId, targetLogDirectoryId)
+        if (logManager.onlineLogDirId(directoryId) || !logManager.hasOfflineLogDirs() || directoryId == DirectoryId.UNASSIGNED) {
+          createLogIfNotExists(partitionState.isNew, isFutureReplica = false, highWatermarkCheckpoints, topicId, targetLogDirectoryId)
+        } else {
+          warn(s"Skipping creation of log because there are potentially offline log " +
+            s"directories and log may already exist there. directoryId=$directoryId, " +
+            s"topicId=$topicId, targetLogDirectoryId=$targetLogDirectoryId")
+        }
 
       case None =>
         createLogIfNotExists(partitionState.isNew, isFutureReplica = false, highWatermarkCheckpoints, topicId)
