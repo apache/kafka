@@ -151,7 +151,7 @@ class LeaderEpochIntegrationTest extends QuorumTestHarness with Logging {
     //Setup: we are only interested in the single partition on broker 101
     brokers += createBroker(fromProps(createBrokerConfig(100, zkConnectOrNull)))
     if (isKRaftTest()) {
-      assertEquals(controllerServer.config.nodeId, TestUtils.waitUntilLeaderElected(controllerServer))
+      assertEquals(controllerServer.config.nodeId, TestUtils.waitUntilQuorumLeaderElected(controllerServer))
     } else {
       assertEquals(100, TestUtils.waitUntilControllerElected(zkClient))
     }
