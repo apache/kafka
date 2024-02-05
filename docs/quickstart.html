@@ -233,7 +233,7 @@ This is my second event</code></pre>
             Edit the <code class="language-bash">config/connect-standalone.properties</code> file, add or change the <code>plugin.path</code> configuration property match the following, and save the file:
         </p>
 
-        <pre class="line-numbers"><code class="language-bash">$ echo "plugin.path=libs/connect-file-{{fullDotVersion}}.jar"</code></pre>
+        <pre class="line-numbers"><code class="language-bash">$ echo "plugin.path=libs/connect-file-{{fullDotVersion}}.jar &gt;&gt; config/connect-standalone.properties"</code></pre>
 
         <p>
             Then, start by creating some seed data to test with:
