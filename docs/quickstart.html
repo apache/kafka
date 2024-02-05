@@ -152,7 +152,7 @@ $ bin/kafka-server-start.sh config/server.properties</code></pre>
 
         <pre class="line-numbers"><code class="language-bash">$ bin/kafka-topics.sh --describe --topic quickstart-events --bootstrap-server localhost:9092
 Topic: quickstart-events        TopicId: NPmZHyhbR9y00wMglMH2sg PartitionCount: 1       ReplicationFactor: 1	Configs:
-    Topic: quickstart-events Partition: 0    Leader: 0   Replicas: 0 Isr: 0</code></pre>
+Topic: quickstart-events Partition: 0    Leader: 0   Replicas: 0 Isr: 0</code></pre>
     </div>
 
     <div class="quickstart-step">
@@ -173,8 +173,8 @@ Topic: quickstart-events        TopicId: NPmZHyhbR9y00wMglMH2sg PartitionCount: 
         </p>
 
         <pre class="line-numbers"><code class="language-bash">$ bin/kafka-console-producer.sh --topic quickstart-events --bootstrap-server localhost:9092
-This is my first event
-This is my second event</code></pre>
+&gt;This is my first event
+&gt;This is my second event</code></pre>
 
         <p>
             You can stop the producer client with <code>Ctrl-C</code> at any time.
@@ -233,19 +233,16 @@ This is my second event</code></pre>
             Edit the <code class="language-bash">config/connect-standalone.properties</code> file, add or change the <code>plugin.path</code> configuration property match the following, and save the file:
         </p>
 
-        <pre class="brush: bash;">
-&gt; echo "plugin.path=libs/connect-file-{{fullDotVersion}}.jar"</pre>
+        <pre class="line-numbers"><code class="language-bash">$ echo "plugin.path=libs/connect-file-{{fullDotVersion}}.jar &gt;&gt; config/connect-standalone.properties"</code></pre>
 
         <p>
             Then, start by creating some seed data to test with:
         </p>
 
-        <pre class="brush: bash;">
-&gt; echo -e "foo\nbar" > test.txt</pre>
+        <pre class="line-numbers"><code class="language-bash">$ echo -e "foo\nbar" &gt; test.txt</code></pre>
         Or on Windows:
-        <pre class="brush: bash;">
-&gt; echo foo> test.txt
-&gt; echo bar>> test.txt</pre>
+        <pre class="line-numbers"><code class="language-bash">$ echo foo&gt; test.txt
+$ echo bar&gt;&gt; test.txt</code></pre>
 
         <p>
             Next, we'll start two connectors running in <i>standalone</i> mode, which means they run in a single, local, dedicated
@@ -255,8 +252,7 @@ This is my second event</code></pre>
             class to instantiate, and any other configuration required by the connector.
         </p>
 
-        <pre class="brush: bash;">
-&gt; bin/connect-standalone.sh config/connect-standalone.properties config/connect-file-source.properties config/connect-file-sink.properties</pre>
+        <pre class="line-numbers"><code class="language-bash">$ bin/connect-standalone.sh config/connect-standalone.properties config/connect-file-source.properties config/connect-file-sink.properties</code></pre>
 
         <p>
             These sample configuration files, included with Kafka, use the default local cluster configuration you started earlier
@@ -273,10 +269,9 @@ This is my second event</code></pre>
         </p>
 
 
-        <pre class="brush: bash;">
-&gt; more test.sink.txt
+        <pre class="line-numbers"><code class="language-bash">$ more test.sink.txt
 foo
-bar</pre>
+bar</code></pre>
 
         <p>
             Note that the data is being stored in the Kafka topic <code>connect-test</code>, so we can also run a console consumer to see the
@@ -284,16 +279,14 @@ bar</pre>
         </p>
 
 
-        <pre class="brush: bash;">
-&gt; bin/kafka-console-consumer.sh --bootstrap-server localhost:9092 --topic connect-test --from-beginning
+        <pre class="line-numbers"><code class="language-bash">$ bin/kafka-console-consumer.sh --bootstrap-server localhost:9092 --topic connect-test --from-beginning
 {"schema":{"type":"string","optional":false},"payload":"foo"}
 {"schema":{"type":"string","optional":false},"payload":"bar"}
-...</pre>
+&hellip;</code></pre>
 
         <p>The connectors continue to process data, so we can add data to the file and see it move through the pipeline:</p>
 
-        <pre class="brush: bash;">
-&gt; echo Another line>> test.txt</pre>
+        <pre class="line-numbers"><code class="language-bash">$ echo Another line&gt;&gt; test.txt</code></pre>
 
         <p>You should see the line appear in the console consumer output and in the sink file.</p>
 
@@ -318,7 +311,7 @@ bar</pre>
 
         <p>To give you a first taste, here's how one would implement the popular <code>WordCount</code> algorithm:</p>
 
-        <pre class="line-numbers"><code class="language-bash">KStream&lt;String, String&gt; textLines = builder.stream("quickstart-events");
+        <pre class="line-numbers"><code class="language-java">KStream&lt;String, String&gt; textLines = builder.stream("quickstart-events");
 
 KTable&lt;String, Long&gt; wordCounts = textLines
             .flatMapValues(line -&gt; Arrays.asList(line.toLowerCase().split(" ")))
