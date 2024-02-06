@@ -99,6 +99,7 @@ import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
+import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -452,22 +453,46 @@ public class GroupMetadataManager {
     /**
      * Get the Group List.
      *
-     * @param statesFilter The states of the groups we want to list.
-     *                     If empty all groups are returned with their state.
-     * @param committedOffset A specified committed offset corresponding to this shard
+     * @param statesFilter      The states of the groups we want to list.
+     *                          If empty, all groups are returned with their state.
+     *                          If invalid, no groups are returned.
+     * @param typesFilter       The types of the groups we want to list.
+     *                          If empty, all groups are returned with their type.
+     *                          If invalid, no groups are returned.
+     * @param committedOffset   A specified committed offset corresponding to this shard.
      *
      * @return A list containing the ListGroupsResponseData.ListedGroup
      */
+    public List<ListGroupsResponseData.ListedGroup> listGroups(
+        Set<String> statesFilter,
+        Set<String> typesFilter,
+        long committedOffset
+    ) {
+        // Converts each state filter string to lower case for a case-insensitive comparison.
+        Set<String> caseInsensitiveFilterSet = statesFilter.stream()
+            .map(String::toLowerCase)
+            .map(String::trim)
+            .collect(Collectors.toSet());
 
-    public List<ListGroupsResponseData.ListedGroup> listGroups(List<String> statesFilter, long committedOffset) {
+        // Converts each type filter string to a value in the GroupType enum while being case-insensitive.
+        Set<Group.GroupType> enumTypesFilter = typesFilter.stream()
+            .map(Group.GroupType::parse)
+            .collect(Collectors.toSet());
+
+        Predicate<Group> combinedFilter = group -> {
+            boolean stateCheck = statesFilter.isEmpty() || group.isInStates(caseInsensitiveFilterSet, committedOffset);
+            boolean typeCheck = enumTypesFilter.isEmpty() || enumTypesFilter.contains(group.type());
+
+            return stateCheck && typeCheck;
+        };
+
         Stream<Group> groupStream = groups.values(committedOffset).stream();
-        if (!statesFilter.isEmpty()) {
-            Set<String> caseInsensitiveFilterSet = statesFilter.stream().map(String::toLowerCase).map(String::trim).collect(Collectors.toSet());
-            groupStream = groupStream.filter(group -> group.isInStates(caseInsensitiveFilterSet, committedOffset));
-        }
-        return groupStream.map(group -> group.asListedGroup(committedOffset)).collect(Collectors.toList());
-    }
 
+        return groupStream
+            .filter(combinedFilter)
+            .map(group -> group.asListedGroup(committedOffset))
+            .collect(Collectors.toList());
+    }
 
     /**
      * Handles a ConsumerGroupDescribe request.
@@ -700,6 +725,9 @@ public class GroupMetadataManager {
                 case CLASSIC:
                     ClassicGroup classicGroup = (ClassicGroup) group;
                     metrics.onClassicGroupStateTransition(classicGroup.currentState(), null);
+                    break;
+                default:
+                    log.warn("Removed group {} with an unknown group type {}.", groupId, group.type());
                     break;
             }
         }
@@ -1793,6 +1821,10 @@ public class GroupMetadataManager {
                             " (size " + classicGroup.size() + ") is over capacity " + classicGroupMaxSize +
                             ". Rebalancing in order to give a chance for consumers to commit offsets");
                     }
+                    break;
+
+                default:
+                    log.warn("Loaded group {} with an unknown group type {}.", groupId, group.type());
                     break;
             }
         });
