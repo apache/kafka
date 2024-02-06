@@ -438,7 +438,10 @@ public class InternalStreamsBuilder implements InternalNameProvider {
         if (currentNode instanceof StreamStreamJoinNode && currentNode.parentNodes().size() == 1) {
             final StreamStreamJoinNode joinNode = (StreamStreamJoinNode) currentNode;
             // Remove JoinOtherWindowed node
-            final GraphNode parent = joinNode.parentNodes().stream().findFirst().get();
+            final GraphNode parent = joinNode.parentNodes().stream()
+                    .findFirst()
+                    .orElseThrow(() ->
+                    new IllegalStateException("Parent node is not found. Ensure proper graph construction."));
             GraphNode left = null, right = null;
             for (final GraphNode child: parent.children()) {
                 if (child instanceof WindowedStreamProcessorNode && child.buildPriority() < joinNode.buildPriority()) {
