@@ -42,9 +42,9 @@ import org.apache.kafka.storage.internals.log.{LogConfig, ProducerStateManagerCo
 import org.apache.kafka.test.MockMetricsReporter
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
-import org.mockito.ArgumentMatchers.anyString
+import org.mockito.ArgumentMatchers.{any, anyString}
 import org.mockito.{ArgumentCaptor, ArgumentMatchers, Mockito}
-import org.mockito.Mockito.{mock, when}
+import org.mockito.Mockito.{doNothing, mock, when}
 
 import scala.annotation.nowarn
 import scala.jdk.CollectionConverters._
