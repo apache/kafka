@@ -30,6 +30,7 @@ import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.errors.StreamsException;
+import org.apache.kafka.streams.processor.CommitCallback;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.TimestampedBytesStore;
@@ -46,6 +47,8 @@ import org.junit.Test;
 import java.io.File;
 import java.io.IOException;
 import java.io.OutputStream;
+import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.time.Duration;
 import java.util.ArrayList;
@@ -72,6 +75,7 @@ import static org.hamcrest.CoreMatchers.instanceOf;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
@@ -81,19 +85,24 @@ public class GlobalStateManagerImplTest {
 
     private final MockTime time = new MockTime();
     private final TheStateRestoreCallback stateRestoreCallback = new TheStateRestoreCallback();
+    private final CommitCallback commitCallback = () -> {};
     private final MockStateRestoreListener stateRestoreListener = new MockStateRestoreListener();
     private final String storeName1 = "t1-store";
     private final String storeName2 = "t2-store";
     private final String storeName3 = "t3-store";
     private final String storeName4 = "t4-store";
+    private final String storeName5 = "t5-store";
+    private final String storeName6 = "t6-store";
     private final TopicPartition t1 = new TopicPartition("t1", 1);
     private final TopicPartition t2 = new TopicPartition("t2", 1);
     private final TopicPartition t3 = new TopicPartition("t3", 1);
     private final TopicPartition t4 = new TopicPartition("t4", 1);
+    private final TopicPartition t5 = new TopicPartition("t5", 1);
+    private final TopicPartition t6 = new TopicPartition("t6", 1);
     private GlobalStateManagerImpl stateManager;
     private StateDirectory stateDirectory;
     private StreamsConfig streamsConfig;
-    private NoOpReadOnlyStore<Object, Object> store1, store2, store3, store4;
+    private NoOpReadOnlyStore<Object, Object> store1, store2, store3, store4, store5, store6;
     private MockConsumer<byte[], byte[]> consumer;
     private File checkpointFile;
     private ProcessorTopology topology;
@@ -118,13 +127,19 @@ public class GlobalStateManagerImplTest {
         storeToTopic.put(storeName2, t2.topic());
         storeToTopic.put(storeName3, t3.topic());
         storeToTopic.put(storeName4, t4.topic());
+        storeToTopic.put(storeName5, t5.topic());
+        storeToTopic.put(storeName6, t6.topic());
+
 
         store1 = new NoOpReadOnlyStore<>(storeName1, true);
         store2 = new ConverterStore<>(storeName2, true);
         store3 = new NoOpReadOnlyStore<>(storeName3);
         store4 = new NoOpReadOnlyStore<>(storeName4);
+        store5 = new NoOpReadOnlyStore<>(storeName5);
+        store6 = new NoOpReadOnlyStore<>(storeName6);
 
-        topology = withGlobalStores(asList(store1, store2, store3, store4), storeToTopic);
+
+        topology = withGlobalStores(asList(store1, store2, store3, store4, store5), storeToTopic);
 
         streamsConfig = new StreamsConfig(new Properties() {
             {
@@ -1092,6 +1107,55 @@ public class GlobalStateManagerImplTest {
         assertThat(time.milliseconds() - startTime, equalTo(331_100L));
     }
 
+    @Test
+    public void shouldNotThrowStreamsExceptionWhenRestoringWithLogAndContinueExceptionHandler() {
+        final HashMap<TopicPartition, Long> startOffsets = new HashMap<>();
+        startOffsets.put(t5, 1L);
+        final HashMap<TopicPartition, Long> endOffsets = new HashMap<>();
+        endOffsets.put(t5, 3L);
+        consumer.updatePartitions(t5.topic(), Collections.singletonList(new PartitionInfo(t5.topic(), t5.partition(), null, null, null)));
+        consumer.assign(Collections.singletonList(t5));
+        consumer.updateEndOffsets(endOffsets);
+        consumer.updateBeginningOffsets(startOffsets);
+        final byte[] specialString = "specialKey".getBytes(StandardCharsets.UTF_8);
+        final byte[] longValue = longToBytes(1);
+
+        consumer.addRecord(new ConsumerRecord<>(t5.topic(), t5.partition(), 1, longValue, longValue));
+        consumer.addRecord(new ConsumerRecord<>(t5.topic(), t5.partition(), 2, specialString, specialString));
+        consumer.addRecord(new ConsumerRecord<>(t5.topic(), t5.partition(), 3, longValue, longValue));
+
+        stateManager.initialize();
+        stateManager.registerStore(store5, stateRestoreCallback, commitCallback);
+
+        assertEquals(2, stateRestoreCallback.restored.size());
+
+    }
+
+    @Test
+    public void shouldProcessTombstoneRecords() {
+        final HashMap<TopicPartition, Long> startOffsets = new HashMap<>();
+        startOffsets.put(t5, 1L);
+        final HashMap<TopicPartition, Long> endOffsets = new HashMap<>();
+        endOffsets.put(t5, 3L);
+        consumer.updatePartitions(t5.topic(), Collections.singletonList(new PartitionInfo(t5.topic(), t5.partition(), null, null, null)));
+        consumer.assign(Collections.singletonList(t5));
+        consumer.updateEndOffsets(endOffsets);
+        consumer.updateBeginningOffsets(startOffsets);
+        final byte[] specialString = "specialKey".getBytes(StandardCharsets.UTF_8);
+        final byte[] longValue = longToBytes(1);
+
+        consumer.addRecord(new ConsumerRecord<>(t5.topic(), t5.partition(), 1, longValue, longValue));
+        consumer.addRecord(new ConsumerRecord<>(t5.topic(), t5.partition(), 2, specialString, specialString));
+        consumer.addRecord(new ConsumerRecord<>(t5.topic(), t5.partition(), 3, longValue, null));
+
+        stateManager.initialize();
+        stateManager.registerStore(store5, stateRestoreCallback, commitCallback);
+
+        assertEquals(2, stateRestoreCallback.restored.size());
+        assertNull(store5.get(1L));
+
+    }
+
     private void writeCorruptCheckpoint() throws IOException {
         final File checkpointFile = new File(stateManager.baseDir(), StateManagerUtil.CHECKPOINT_FILE_NAME);
         try (final OutputStream stream = Files.newOutputStream(checkpointFile.toPath())) {
@@ -1139,4 +1203,9 @@ public class GlobalStateManagerImplTest {
         }
     }
 
+    private static byte[] longToBytes(final long data) {
+        final ByteBuffer conversionBuffer = ByteBuffer.allocate(Long.BYTES);
+        conversionBuffer.putLong(0, data);
+        return conversionBuffer.array();
+    }
 }
