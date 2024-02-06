@@ -169,6 +169,9 @@ public class Defaults {
         RangeAssignor.class.getName()
     );
 
+    /** Share Group Configs **/
+    public static final boolean SHARE_GROUP_ENABLE = false;
+
     /** ********* Offset management configuration *********/
     public static final int OFFSET_METADATA_MAX_SIZE = OffsetConfig.DEFAULT_MAX_METADATA_SIZE;
     public static final int OFFSETS_LOAD_BUFFER_SIZE = OffsetConfig.DEFAULT_LOAD_BUFFER_SIZE;

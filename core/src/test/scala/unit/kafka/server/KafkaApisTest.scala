@@ -7274,4 +7274,86 @@ class KafkaApisTest extends Logging {
     val expectedResponse = new ListClientMetricsResourcesResponseData().setErrorCode(Errors.UNKNOWN_SERVER_ERROR.code)
     assertEquals(expectedResponse, response.data)
   }
+
+  @Test
+  def testShareGroupHeartbeatReturnsUnsupportedVersion(): Unit = {
+    val shareGroupHeartbeatRequest = new ShareGroupHeartbeatRequestData().setGroupId("group")
+
+    val requestChannelRequest = buildRequest(new ShareGroupHeartbeatRequest.Builder(shareGroupHeartbeatRequest, true).build())
+    metadataCache = MetadataCache.kRaftMetadataCache(brokerId)
+    kafkaApis = createKafkaApis(raftSupport = true)
+    kafkaApis.handle(requestChannelRequest, RequestLocal.NoCaching)
+
+    val expectedHeartbeatResponse = new ShareGroupHeartbeatResponseData()
+      .setErrorCode(Errors.UNSUPPORTED_VERSION.code)
+    val response = verifyNoThrottling[ShareGroupHeartbeatResponse](requestChannelRequest)
+    assertEquals(expectedHeartbeatResponse, response.data)
+  }
+
+  /*
+  TODO: Once ShareGroupHeartBeatAPI is supported in group coordinator, uncomment the test below
+            (lines 7285 - 7309) and remove the test verifying INVALID_CONFIG exception (lines 7312 - 7326)
+  @Test
+  def testShareGroupHeartbeatRequest(): Unit = {
+    val shareGroupHeartbeatRequest = new ShareGroupHeartbeatRequestData().setGroupId("group")
+
+    val requestChannelRequest = buildRequest(new ShareGroupHeartbeatRequest.Builder(shareGroupHeartbeatRequest, true).build())
+
+    val future = new CompletableFuture[ShareGroupHeartbeatResponseData]()
+    when(groupCoordinator.shareGroupHeartbeat(
+      requestChannelRequest.context,
+      shareGroupHeartbeatRequest
+    )).thenReturn(future)
+    metadataCache = MetadataCache.kRaftMetadataCache(brokerId)
+    kafkaApis = createKafkaApis(
+      overrideProperties = Map(KafkaConfig.ShareGroupEnableProp -> "true"),
+      raftSupport = true
+    )
+    kafkaApis.handle(requestChannelRequest, RequestLocal.NoCaching)
+
+    val shareGroupHeartbeatResponse = new ShareGroupHeartbeatResponseData()
+      .setMemberId("member")
+
+    future.complete(shareGroupHeartbeatResponse)
+    val response = verifyNoThrottling[ShareGroupHeartbeatResponse](requestChannelRequest)
+    assertEquals(shareGroupHeartbeatResponse, response.data)
+  }
+   */
+
+  @Test
+  def testShareGroupHeartbeatRequest(): Unit = {
+    val shareGroupHeartbeatRequest = new ShareGroupHeartbeatRequestData().setGroupId("group")
+
+    val requestChannelRequest = buildRequest(new ShareGroupHeartbeatRequest.Builder(shareGroupHeartbeatRequest, true).build())
+    metadataCache = MetadataCache.kRaftMetadataCache(brokerId)
+    kafkaApis = createKafkaApis(
+      overrideProperties = Map(KafkaConfig.ShareGroupEnableProp -> "true"),
+      raftSupport = true
+    )
+    kafkaApis.handle(requestChannelRequest, RequestLocal.NoCaching)
+    val expectedHeartbeatResponse = new ShareGroupHeartbeatResponseData().setErrorCode(Errors.UNSUPPORTED_VERSION.code)
+    val response = verifyNoThrottling[ShareGroupHeartbeatResponse](requestChannelRequest)
+    assertEquals(expectedHeartbeatResponse, response.data)
+  }
+
+  @Test
+  def testShareGroupHeartbeatRequestAuthorizationFailed(): Unit = {
+    val shareGroupHeartbeatRequest = new ShareGroupHeartbeatRequestData().setGroupId("group")
+
+    val requestChannelRequest = buildRequest(new ShareGroupHeartbeatRequest.Builder(shareGroupHeartbeatRequest, true).build())
+
+    val authorizer: Authorizer = mock(classOf[Authorizer])
+    when(authorizer.authorize(any[RequestContext], any[util.List[Action]]))
+      .thenReturn(Seq(AuthorizationResult.DENIED).asJava)
+    metadataCache = MetadataCache.kRaftMetadataCache(brokerId)
+    kafkaApis = createKafkaApis(
+      overrideProperties = Map(KafkaConfig.ShareGroupEnableProp -> "true"),
+      authorizer = Some(authorizer),
+      raftSupport = true
+    )
+    kafkaApis.handle(requestChannelRequest, RequestLocal.NoCaching)
+
+    val response = verifyNoThrottling[ShareGroupHeartbeatResponse](requestChannelRequest)
+    assertEquals(Errors.GROUP_AUTHORIZATION_FAILED.code, response.data.errorCode)
+  }
 }

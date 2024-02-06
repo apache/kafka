@@ -256,6 +256,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         case ApiKeys.GET_TELEMETRY_SUBSCRIPTIONS => handleGetTelemetrySubscriptionsRequest(request)
         case ApiKeys.PUSH_TELEMETRY => handlePushTelemetryRequest(request)
         case ApiKeys.LIST_CLIENT_METRICS_RESOURCES => handleListClientMetricsResources(request)
+        case ApiKeys.SHARE_GROUP_HEARTBEAT => handleShareGroupHeartbeat(request).exceptionally(handleError)
         case _ => throw new IllegalStateException(s"No handler for request api key ${request.header.apiKey}")
       }
     } catch {
@@ -3801,6 +3802,38 @@ class KafkaApis(val requestChannel: RequestChannel,
           requestHelper.sendMaybeThrottle(request, new ConsumerGroupHeartbeatResponse(response))
         }
       }
+    }
+  }
+
+  def handleShareGroupHeartbeat(request: RequestChannel.Request): CompletableFuture[Unit] = {
+    val shareGroupHeartbeatRequest = request.body[ShareGroupHeartbeatRequest]
+
+    if (!config.isShareGroupEnabled) {
+      // The API is not supported when the configuration `group.share.enable` has not been set explicitly
+      requestHelper.sendMaybeThrottle(request, shareGroupHeartbeatRequest.getErrorResponse(Errors.UNSUPPORTED_VERSION.exception))
+      CompletableFuture.completedFuture[Unit](())
+    } else if (!authHelper.authorize(request.context, READ, GROUP, shareGroupHeartbeatRequest.data.groupId)) {
+      requestHelper.sendMaybeThrottle(request, shareGroupHeartbeatRequest.getErrorResponse(Errors.GROUP_AUTHORIZATION_FAILED.exception))
+      CompletableFuture.completedFuture[Unit](())
+    } else {
+      /* TODO: Once ShareGroupHeartBeatAPI is supported in group coordinator, uncomment the code below
+          (lines 3821 - 3833) and remove the part sending INVALID_CONFIG exception (lines 3835, 3836)
+      groupCoordinator.shareGroupHeartbeat(
+        request.context,
+        shareGroupHeartbeatRequest.data,
+      ).handle[Unit] { (response, exception) =>
+
+        info(s"*** SHARE GROUP HEARTBEAT RESPONSE *** + ${response}")
+
+        if (exception != null) {
+          requestHelper.sendMaybeThrottle(request, shareGroupHeartbeatRequest.getErrorResponse(exception))
+        } else {
+          requestHelper.sendMaybeThrottle(request, new ShareGroupHeartbeatResponse(response))
+        }
+      }
+       */
+      requestHelper.sendMaybeThrottle(request, shareGroupHeartbeatRequest.getErrorResponse(Errors.UNSUPPORTED_VERSION.exception))
+      CompletableFuture.completedFuture[Unit](())
     }
   }
 

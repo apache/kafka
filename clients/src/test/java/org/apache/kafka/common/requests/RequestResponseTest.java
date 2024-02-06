@@ -209,6 +209,8 @@ import org.apache.kafka.common.message.SaslAuthenticateRequestData;
 import org.apache.kafka.common.message.SaslAuthenticateResponseData;
 import org.apache.kafka.common.message.SaslHandshakeRequestData;
 import org.apache.kafka.common.message.SaslHandshakeResponseData;
+import org.apache.kafka.common.message.ShareGroupHeartbeatRequestData;
+import org.apache.kafka.common.message.ShareGroupHeartbeatResponseData;
 import org.apache.kafka.common.message.StopReplicaRequestData.StopReplicaPartitionState;
 import org.apache.kafka.common.message.StopReplicaRequestData.StopReplicaTopicState;
 import org.apache.kafka.common.message.StopReplicaResponseData;
@@ -1080,6 +1082,7 @@ public class RequestResponseTest {
             case ASSIGN_REPLICAS_TO_DIRS: return createAssignReplicasToDirsRequest(version);
             case LIST_CLIENT_METRICS_RESOURCES: return createListClientMetricsResourcesRequest(version);
             case DESCRIBE_TOPIC_PARTITIONS: return createDescribeTopicPartitionsRequest(version);
+            case SHARE_GROUP_HEARTBEAT: return createShareGroupHeartbeatRequest(version);
             default: throw new IllegalArgumentException("Unknown API key " + apikey);
         }
     }
@@ -1162,6 +1165,7 @@ public class RequestResponseTest {
             case ASSIGN_REPLICAS_TO_DIRS: return createAssignReplicasToDirsResponse();
             case LIST_CLIENT_METRICS_RESOURCES: return createListClientMetricsResourcesResponse();
             case DESCRIBE_TOPIC_PARTITIONS: return createDescribeTopicPartitionsResponse();
+            case SHARE_GROUP_HEARTBEAT: return createShareGroupHeartbeatResponse();
             default: throw new IllegalArgumentException("Unknown API key " + apikey);
         }
     }
@@ -1327,6 +1331,37 @@ public class RequestResponseTest {
                 ))
             );
         return new ConsumerGroupHeartbeatResponse(data);
+    }
+
+    private ShareGroupHeartbeatRequest createShareGroupHeartbeatRequest(short version) {
+        ShareGroupHeartbeatRequestData data = new ShareGroupHeartbeatRequestData()
+                .setGroupId("group")
+                .setMemberId("memberid")
+                .setMemberEpoch(10)
+                .setRebalanceTimeoutMs(60000)
+                .setRackId("rackid")
+                .setSubscribedTopicNames(Arrays.asList("foo", "bar"));
+        return new ShareGroupHeartbeatRequest.Builder(data).build(version);
+    }
+//
+    private ShareGroupHeartbeatResponse createShareGroupHeartbeatResponse() {
+        ShareGroupHeartbeatResponseData data = new ShareGroupHeartbeatResponseData()
+                .setErrorCode(Errors.NONE.code())
+                .setThrottleTimeMs(1000)
+                .setMemberId("memberid")
+                .setMemberEpoch(11)
+                .setAssignment(new ShareGroupHeartbeatResponseData.Assignment()
+                        .setError((byte) 0)
+                        .setAssignedTopicPartitions(Arrays.asList(
+                                new ShareGroupHeartbeatResponseData.TopicPartitions()
+                                        .setTopicId(Uuid.randomUuid())
+                                        .setPartitions(Arrays.asList(0, 1, 2)),
+                                new ShareGroupHeartbeatResponseData.TopicPartitions()
+                                        .setTopicId(Uuid.randomUuid())
+                                        .setPartitions(Arrays.asList(3, 4, 5))
+                        ))
+                );
+        return new ShareGroupHeartbeatResponse(data);
     }
 
     private ControllerRegistrationRequest createControllerRegistrationRequest(short version) {
