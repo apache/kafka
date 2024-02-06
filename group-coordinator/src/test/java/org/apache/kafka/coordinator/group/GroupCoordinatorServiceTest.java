@@ -49,6 +49,8 @@ import org.apache.kafka.common.message.OffsetFetchRequestData;
 import org.apache.kafka.common.message.OffsetFetchResponseData;
 import org.apache.kafka.common.message.LeaveGroupRequestData;
 import org.apache.kafka.common.message.LeaveGroupResponseData;
+import org.apache.kafka.common.message.ShareGroupHeartbeatRequestData;
+import org.apache.kafka.common.message.ShareGroupHeartbeatResponseData;
 import org.apache.kafka.common.message.SyncGroupRequestData;
 import org.apache.kafka.common.message.SyncGroupResponseData;
 import org.apache.kafka.common.message.TxnOffsetCommitRequestData;
@@ -209,7 +211,7 @@ public class GroupCoordinatorServiceTest {
         assertEquals(new ConsumerGroupHeartbeatResponseData(), future.get(5, TimeUnit.SECONDS));
     }
 
-    private static Stream<Arguments> testConsumerGroupHeartbeatWithExceptionSource() {
+    private static Stream<Arguments> testGroupHeartbeatWithExceptionSource() {
         return Stream.of(
             Arguments.arguments(new UnknownTopicOrPartitionException(), Errors.COORDINATOR_NOT_AVAILABLE.code(), null),
             Arguments.arguments(new NotEnoughReplicasException(), Errors.COORDINATOR_NOT_AVAILABLE.code(), null),
@@ -224,7 +226,7 @@ public class GroupCoordinatorServiceTest {
     }
 
     @ParameterizedTest
-    @MethodSource("testConsumerGroupHeartbeatWithExceptionSource")
+    @MethodSource("testGroupHeartbeatWithExceptionSource")
     public void testConsumerGroupHeartbeatWithException(
         Throwable exception,
         short expectedErrorCode,
@@ -1595,7 +1597,7 @@ public class GroupCoordinatorServiceTest {
     }
 
     @ParameterizedTest
-    @MethodSource("testConsumerGroupHeartbeatWithExceptionSource")
+    @MethodSource("testGroupHeartbeatWithExceptionSource")
     public void testDeleteOffsetsWithException(
         Throwable exception,
         short expectedErrorCode
@@ -1743,7 +1745,7 @@ public class GroupCoordinatorServiceTest {
     }
 
     @ParameterizedTest
-    @MethodSource("testConsumerGroupHeartbeatWithExceptionSource")
+    @MethodSource("testGroupHeartbeatWithExceptionSource")
     public void testDeleteGroupsWithException(
         Throwable exception,
         short expectedErrorCode
@@ -2129,5 +2131,98 @@ public class GroupCoordinatorServiceTest {
             Collections.singletonList(new TopicPartition("foo", 0)),
             BufferSupplier.NO_CACHING
         ));
+    }
+
+    @Test
+    public void testShareGroupHeartbeatWhenNotStarted() throws ExecutionException, InterruptedException {
+        CoordinatorRuntime<GroupCoordinatorShard, Record> runtime = mockRuntime();
+        GroupCoordinatorService service = new GroupCoordinatorService(
+            new LogContext(),
+            createConfig(),
+            runtime,
+            new GroupCoordinatorMetrics()
+        );
+
+        ShareGroupHeartbeatRequestData request = new ShareGroupHeartbeatRequestData()
+            .setGroupId("foo");
+
+        CompletableFuture<ShareGroupHeartbeatResponseData> future = service.shareGroupHeartbeat(
+            requestContext(ApiKeys.SHARE_GROUP_HEARTBEAT),
+            request
+        );
+
+        assertEquals(new ShareGroupHeartbeatResponseData().setErrorCode(Errors.COORDINATOR_NOT_AVAILABLE.code()), future.get());
+    }
+
+    @Test
+    public void testShareGroupHeartbeat() throws ExecutionException, InterruptedException, TimeoutException {
+        CoordinatorRuntime<GroupCoordinatorShard, Record> runtime = mockRuntime();
+        GroupCoordinatorService service = new GroupCoordinatorService(
+            new LogContext(),
+            createConfig(),
+            runtime,
+            new GroupCoordinatorMetrics()
+        );
+
+        ShareGroupHeartbeatRequestData request = new ShareGroupHeartbeatRequestData()
+            .setGroupId("foo");
+
+        service.startup(() -> 1);
+
+        when(runtime.scheduleWriteOperation(
+            ArgumentMatchers.eq("share-group-heartbeat"),
+            ArgumentMatchers.eq(new TopicPartition("__consumer_offsets", 0)),
+            ArgumentMatchers.eq(Duration.ofMillis(5000)),
+            ArgumentMatchers.any()
+        )).thenReturn(CompletableFuture.completedFuture(
+            new ShareGroupHeartbeatResponseData()
+        ));
+
+        CompletableFuture<ShareGroupHeartbeatResponseData> future = service.shareGroupHeartbeat(
+            requestContext(ApiKeys.SHARE_GROUP_HEARTBEAT),
+            request
+        );
+
+        assertEquals(new ShareGroupHeartbeatResponseData(), future.get(5, TimeUnit.SECONDS));
+    }
+
+    @ParameterizedTest
+    @MethodSource("testGroupHeartbeatWithExceptionSource")
+    public void testShareGroupHeartbeatWithException(
+        Throwable exception,
+        short expectedErrorCode,
+        String expectedErrorMessage
+    ) throws ExecutionException, InterruptedException, TimeoutException {
+        CoordinatorRuntime<GroupCoordinatorShard, Record> runtime = mockRuntime();
+        GroupCoordinatorService service = new GroupCoordinatorService(
+            new LogContext(),
+            createConfig(),
+            runtime,
+            new GroupCoordinatorMetrics()
+        );
+
+        ShareGroupHeartbeatRequestData request = new ShareGroupHeartbeatRequestData()
+            .setGroupId("foo");
+
+        service.startup(() -> 1);
+
+        when(runtime.scheduleWriteOperation(
+            ArgumentMatchers.eq("share-group-heartbeat"),
+            ArgumentMatchers.eq(new TopicPartition("__consumer_offsets", 0)),
+            ArgumentMatchers.eq(Duration.ofMillis(5000)),
+            ArgumentMatchers.any()
+        )).thenReturn(FutureUtils.failedFuture(exception));
+
+        CompletableFuture<ShareGroupHeartbeatResponseData> future = service.shareGroupHeartbeat(
+            requestContext(ApiKeys.SHARE_GROUP_HEARTBEAT),
+            request
+        );
+
+        assertEquals(
+            new ShareGroupHeartbeatResponseData()
+                .setErrorCode(expectedErrorCode)
+                .setErrorMessage(expectedErrorMessage),
+            future.get(5, TimeUnit.SECONDS)
+        );
     }
 }

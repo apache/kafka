@@ -35,6 +35,8 @@ import org.apache.kafka.common.message.OffsetDeleteRequestData;
 import org.apache.kafka.common.message.OffsetDeleteResponseData;
 import org.apache.kafka.common.message.OffsetFetchRequestData;
 import org.apache.kafka.common.message.OffsetFetchResponseData;
+import org.apache.kafka.common.message.ShareGroupHeartbeatRequestData;
+import org.apache.kafka.common.message.ShareGroupHeartbeatResponseData;
 import org.apache.kafka.common.message.SyncGroupRequestData;
 import org.apache.kafka.common.message.SyncGroupResponseData;
 import org.apache.kafka.common.errors.ApiException;
@@ -304,6 +306,22 @@ public class GroupCoordinatorShard implements CoordinatorShard<Record> {
         ConsumerGroupHeartbeatRequestData request
     ) {
         return groupMetadataManager.consumerGroupHeartbeat(context, request);
+    }
+
+    /**
+     * Handles a ShareGroupHeartbeat request.
+     *
+     * @param context The request context.
+     * @param request The actual ShareGroupHeartbeat request.
+     *
+     * @return A Result containing the ShareGroupHeartbeat response and
+     *         a list of records to update the state machine.
+     */
+    public CoordinatorResult<ShareGroupHeartbeatResponseData, Record> shareGroupHeartbeat(
+            RequestContext context,
+            ShareGroupHeartbeatRequestData request
+    ) {
+        return groupMetadataManager.shareGroupHeartbeat(context, request);
     }
 
     /**

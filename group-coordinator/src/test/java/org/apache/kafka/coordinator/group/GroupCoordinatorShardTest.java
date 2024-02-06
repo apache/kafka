@@ -22,6 +22,8 @@ import org.apache.kafka.common.message.ConsumerGroupHeartbeatResponseData;
 import org.apache.kafka.common.message.DeleteGroupsResponseData;
 import org.apache.kafka.common.message.OffsetCommitRequestData;
 import org.apache.kafka.common.message.OffsetCommitResponseData;
+import org.apache.kafka.common.message.ShareGroupHeartbeatRequestData;
+import org.apache.kafka.common.message.ShareGroupHeartbeatResponseData;
 import org.apache.kafka.common.message.TxnOffsetCommitRequestData;
 import org.apache.kafka.common.message.TxnOffsetCommitResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
@@ -1055,5 +1057,37 @@ public class GroupCoordinatorShardTest {
 
         assertEquals(records, result.records());
         assertNull(result.response());
+    }
+
+    @Test
+    public void testShareGroupHeartbeat() {
+        GroupMetadataManager groupMetadataManager = mock(GroupMetadataManager.class);
+        OffsetMetadataManager offsetMetadataManager = mock(OffsetMetadataManager.class);
+        CoordinatorMetrics coordinatorMetrics = mock(CoordinatorMetrics.class);
+        CoordinatorMetricsShard metricsShard = mock(CoordinatorMetricsShard.class);
+        GroupCoordinatorShard coordinator = new GroupCoordinatorShard(
+            new LogContext(),
+            groupMetadataManager,
+            offsetMetadataManager,
+            Time.SYSTEM,
+            new MockCoordinatorTimer<>(Time.SYSTEM),
+            mock(GroupCoordinatorConfig.class),
+            coordinatorMetrics,
+            metricsShard
+        );
+
+        RequestContext context = requestContext(ApiKeys.SHARE_GROUP_HEARTBEAT);
+        ShareGroupHeartbeatRequestData request = new ShareGroupHeartbeatRequestData();
+        CoordinatorResult<ShareGroupHeartbeatResponseData, Record> result = new CoordinatorResult<>(
+            Collections.emptyList(),
+            new ShareGroupHeartbeatResponseData()
+        );
+
+        when(groupMetadataManager.shareGroupHeartbeat(
+            context,
+            request
+        )).thenReturn(result);
+
+        assertEquals(result, coordinator.shareGroupHeartbeat(context, request));
     }
 }
