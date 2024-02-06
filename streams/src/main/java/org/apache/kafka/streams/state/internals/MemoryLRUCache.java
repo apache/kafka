@@ -27,6 +27,7 @@ import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.internals.ChangelogRecordDeserializationHelper;
 import org.apache.kafka.streams.processor.internals.RecordBatchingStateRestoreCallback;
 import org.apache.kafka.streams.query.Position;
+import org.apache.kafka.streams.query.internals.SynchronizedPosition;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 
@@ -41,7 +42,7 @@ import static org.apache.kafka.streams.StreamsConfig.InternalConfig.IQ_CONSISTEN
  * An in-memory LRU cache store based on HashSet and HashMap.
  */
 public class MemoryLRUCache implements KeyValueStore<Bytes, byte[]> {
-    private final Position position = Position.emptyPosition();
+    private final SynchronizedPosition position = SynchronizedPosition.emptyPosition();
 
     public interface EldestEntryRemovalListener {
         void apply(Bytes key, byte[] value);
@@ -108,13 +109,18 @@ public class MemoryLRUCache implements KeyValueStore<Bytes, byte[]> {
             root,
             (RecordBatchingStateRestoreCallback) records -> {
                 restoring = true;
-                for (final ConsumerRecord<byte[], byte[]> record : records) {
-                    put(Bytes.wrap(record.key()), record.value());
-                    ChangelogRecordDeserializationHelper.applyChecksAndUpdatePosition(
-                        record,
-                        consistencyEnabled,
-                        position
-                    );
+                position.lock();
+                try {
+                    for (final ConsumerRecord<byte[], byte[]> record : records) {
+                        put(Bytes.wrap(record.key()), record.value());
+                        ChangelogRecordDeserializationHelper.applyChecksAndUpdatePosition(
+                            record,
+                            consistencyEnabled,
+                            position
+                        );
+                    }
+                } finally {
+                    position.unlock();
                 }
                 restoring = false;
             }
@@ -147,12 +153,17 @@ public class MemoryLRUCache implements KeyValueStore<Bytes, byte[]> {
     @Override
     public synchronized void put(final Bytes key, final byte[] value) {
         Objects.requireNonNull(key);
-        if (value == null) {
-            delete(key);
-        } else {
-            this.map.put(key, value);
+        position.lock();
+        try {
+            if (value == null) {
+                delete(key);
+            } else {
+                this.map.put(key, value);
+            }
+            StoreQueryUtils.updatePosition(position, context);
+        } finally {
+            position.unlock();
         }
-        StoreQueryUtils.updatePosition(position, context);
     }
 
     @Override
@@ -175,8 +186,13 @@ public class MemoryLRUCache implements KeyValueStore<Bytes, byte[]> {
     @Override
     public synchronized byte[] delete(final Bytes key) {
         Objects.requireNonNull(key);
-        StoreQueryUtils.updatePosition(position, context);
-        return this.map.remove(key);
+        position.lock();
+        try {
+            StoreQueryUtils.updatePosition(position, context);
+            return this.map.remove(key);
+        } finally {
+            position.unlock();
+        }
     }
 
     /**

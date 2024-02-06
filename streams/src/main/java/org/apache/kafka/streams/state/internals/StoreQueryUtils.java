@@ -38,6 +38,7 @@ import org.apache.kafka.streams.query.ResultOrder;
 import org.apache.kafka.streams.query.VersionedKeyQuery;
 import org.apache.kafka.streams.query.WindowKeyQuery;
 import org.apache.kafka.streams.query.WindowRangeQuery;
+import org.apache.kafka.streams.query.internals.SynchronizedPosition;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.SessionStore;
@@ -117,7 +118,7 @@ public final class StoreQueryUtils {
         final PositionBound positionBound,
         final QueryConfig config,
         final StateStore store,
-        final Position position,
+        final SynchronizedPosition position,
         final StateStoreContext context
     ) {
 
@@ -125,28 +126,33 @@ public final class StoreQueryUtils {
         final QueryResult<R> result;
 
         final QueryHandler handler = QUERY_HANDLER_MAP.get(query.getClass());
-        if (handler == null) {
-            result = QueryResult.forUnknownQueryType(query, store);
-        } else if (context == null || !isPermitted(position, positionBound, context.taskId().partition())) {
-            result = QueryResult.notUpToBound(
-                position,
-                positionBound,
-                context == null ? null : context.taskId().partition()
-            );
-        } else {
-            result = (QueryResult<R>) handler.apply(
-                query,
-                positionBound,
-                config,
-                store
-            );
+        position.lock();
+        try {
+            if (handler == null) {
+                result = QueryResult.forUnknownQueryType(query, store);
+            } else if (context == null || !isPermitted(position, positionBound, context.taskId().partition())) {
+                result = QueryResult.notUpToBound(
+                    position,
+                    positionBound,
+                    context == null ? null : context.taskId().partition()
+                );
+            } else {
+                result = (QueryResult<R>) handler.apply(
+                    query,
+                    positionBound,
+                    config,
+                    store
+                );
+            }
+            if (config.isCollectExecutionInfo()) {
+                result.addExecutionInfo(
+                    "Handled in " + store.getClass() + " in " + (System.nanoTime() - start) + "ns"
+                );
+            }
+            result.setPosition(position.copy());
+        } finally {
+            position.unlock();
         }
-        if (config.isCollectExecutionInfo()) {
-            result.addExecutionInfo(
-                "Handled in " + store.getClass() + " in " + (System.nanoTime() - start) + "ns"
-            );
-        }
-        result.setPosition(position.copy());
         return result;
     }
 
@@ -458,7 +464,7 @@ public final class StoreQueryUtils {
         }
     }
 
-    public static Position readPositionFromCheckpoint(final OffsetCheckpoint checkpointFile) {
+    public static SynchronizedPosition readPositionFromCheckpoint(final OffsetCheckpoint checkpointFile) {
         try {
             return topicPartitionMapToPosition(checkpointFile.read());
         } catch (final IOException e) {
@@ -479,14 +485,14 @@ public final class StoreQueryUtils {
         return topicPartitions;
     }
 
-    private static Position topicPartitionMapToPosition(final Map<TopicPartition, Long> topicPartitions) {
+    private static SynchronizedPosition topicPartitionMapToPosition(final Map<TopicPartition, Long> topicPartitions) {
         final Map<String, Map<Integer, Long>> pos = new HashMap<>();
         for (final Entry<TopicPartition, Long> e : topicPartitions.entrySet()) {
             pos
                 .computeIfAbsent(e.getKey().topic(), t -> new HashMap<>())
                 .put(e.getKey().partition(), e.getValue());
         }
-        return Position.fromMap(pos);
+        return SynchronizedPosition.fromMap(pos);
     }
 
     private static <R> String parseStoreException(final Exception e, final StateStore store, final Query<R> query) {

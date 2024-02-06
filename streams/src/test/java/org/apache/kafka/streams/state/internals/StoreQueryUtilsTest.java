@@ -24,6 +24,7 @@ import org.apache.kafka.streams.query.Position;
 import org.apache.kafka.streams.query.PositionBound;
 import org.apache.kafka.streams.query.QueryConfig;
 import org.apache.kafka.streams.query.QueryResult;
+import org.apache.kafka.streams.query.internals.SynchronizedPosition;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.junit.Test;
 import org.mockito.Mockito;
@@ -45,7 +46,7 @@ public class StoreQueryUtilsTest {
             PositionBound.at(position),
             new QueryConfig(false),
             store,
-            position,
+            (SynchronizedPosition) position,
             null
         );
         assertThat(queryResult.isFailure(), is(true));
@@ -70,7 +71,7 @@ public class StoreQueryUtilsTest {
             PositionBound.at(Position.emptyPosition().withComponent("topic", 0, 1)),
             new QueryConfig(false),
             store,
-            Position.emptyPosition().withComponent("topic", 0, 0),
+            (SynchronizedPosition) Position.emptyPosition().withComponent("topic", 0, 0),
             context
         );
 

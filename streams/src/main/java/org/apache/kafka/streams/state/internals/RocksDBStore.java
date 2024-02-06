@@ -36,6 +36,7 @@ import org.apache.kafka.streams.query.PositionBound;
 import org.apache.kafka.streams.query.Query;
 import org.apache.kafka.streams.query.QueryConfig;
 import org.apache.kafka.streams.query.QueryResult;
+import org.apache.kafka.streams.query.internals.SynchronizedPosition;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.RocksDBConfigSetter;
@@ -130,7 +131,7 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
 
     protected volatile boolean open = false;
     protected StateStoreContext context;
-    protected Position position;
+    protected SynchronizedPosition position;
     private OffsetCheckpoint positionCheckpoint;
 
     public RocksDBStore(final String name,
@@ -391,9 +392,14 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
                                  final byte[] value) {
         Objects.requireNonNull(key, "key cannot be null");
         validateStoreOpen();
-        cfAccessor.put(dbAccessor, key.get(), value);
 
-        StoreQueryUtils.updatePosition(position, context);
+        position.lock();
+        try {
+            cfAccessor.put(dbAccessor, key.get(), value);
+            StoreQueryUtils.updatePosition(position, context);
+        } finally {
+            position.unlock();
+        }
     }
 
     @Override
@@ -409,12 +415,15 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
 
     @Override
     public void putAll(final List<KeyValue<Bytes, byte[]>> entries) {
+        position.lock();
         try (final WriteBatch batch = new WriteBatch()) {
             cfAccessor.prepareBatch(entries, batch);
             write(batch);
             StoreQueryUtils.updatePosition(position, context);
         } catch (final RocksDBException e) {
             throw new ProcessorStateException("Error while batch writing to store " + name, e);
+        } finally {
+            position.unlock();
         }
     }
 
@@ -980,6 +989,7 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
     }
 
     void restoreBatch(final Collection<ConsumerRecord<byte[], byte[]>> records) {
+        position.lock();
         try (final WriteBatch batch = new WriteBatch()) {
             for (final ConsumerRecord<byte[], byte[]> record : records) {
                 ChangelogRecordDeserializationHelper.applyChecksAndUpdatePosition(
@@ -993,8 +1003,9 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
             write(batch);
         } catch (final RocksDBException e) {
             throw new ProcessorStateException("Error restoring batch to store " + name, e);
+        } finally {
+            position.unlock();
         }
-
     }
 
     // for testing

@@ -48,6 +48,7 @@ import org.apache.kafka.streams.query.Position;
 import org.apache.kafka.streams.query.QueryResult;
 import org.apache.kafka.streams.query.StateQueryRequest;
 import org.apache.kafka.streams.query.StateQueryResult;
+import org.apache.kafka.streams.query.internals.SynchronizedPosition;
 import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
@@ -314,33 +315,53 @@ public class IQv2IntegrationTest {
                     return new KeyValueStore<Bytes, byte[]>() {
                         private boolean open = false;
                         private Map<Bytes, byte[]> map = new HashMap<>();
-                        private Position position;
+                        private SynchronizedPosition position;
                         private StateStoreContext context;
 
                         @Override
                         public void put(final Bytes key, final byte[] value) {
-                            map.put(key, value);
-                            StoreQueryUtils.updatePosition(position,  context);
+                            position.lock();
+                            try {
+                                map.put(key, value);
+                                StoreQueryUtils.updatePosition(position, context);
+                            } finally {
+                                position.unlock();
+                            }
                         }
 
                         @Override
                         public byte[] putIfAbsent(final Bytes key, final byte[] value) {
-                            StoreQueryUtils.updatePosition(position,  context);
-                            return map.putIfAbsent(key, value);
+                            position.unlock();
+                            try {
+                                StoreQueryUtils.updatePosition(position, context);
+                                return map.putIfAbsent(key, value);
+                            } finally {
+                                position.unlock();
+                            }
                         }
 
                         @Override
                         public void putAll(final List<KeyValue<Bytes, byte[]>> entries) {
-                            StoreQueryUtils.updatePosition(position,  context);
-                            for (final KeyValue<Bytes, byte[]> entry : entries) {
-                                map.put(entry.key, entry.value);
+                            position.lock();
+                            try {
+                                StoreQueryUtils.updatePosition(position, context);
+                                for (final KeyValue<Bytes, byte[]> entry : entries) {
+                                    map.put(entry.key, entry.value);
+                                }
+                            } finally {
+                                position.unlock();
                             }
                         }
 
                         @Override
                         public byte[] delete(final Bytes key) {
-                            StoreQueryUtils.updatePosition(position,  context);
-                            return map.remove(key);
+                            position.lock();
+                            try {
+                                StoreQueryUtils.updatePosition(position, context);
+                                return map.remove(key);
+                            } finally {
+                                position.unlock();
+                            }
                         }
 
                         @Override
@@ -358,7 +379,7 @@ public class IQv2IntegrationTest {
                         public void init(final StateStoreContext context, final StateStore root) {
                             context.register(root, (key, value) -> put(Bytes.wrap(key), value));
                             this.open = true;
-                            this.position = Position.emptyPosition();
+                            this.position = SynchronizedPosition.emptyPosition();
                             this.context = context;
                         }
 

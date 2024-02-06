@@ -16,8 +16,8 @@
  */
 package org.apache.kafka.streams.query;
 
-
 import org.apache.kafka.common.annotation.InterfaceStability.Evolving;
+import org.apache.kafka.streams.query.internals.SynchronizedPosition;
 
 import java.util.Collections;
 import java.util.Map;
@@ -45,7 +45,7 @@ public class Position {
 
     private final ConcurrentHashMap<String, ConcurrentHashMap<Integer, Long>> position;
 
-    private Position(final ConcurrentHashMap<String, ConcurrentHashMap<Integer, Long>> position) {
+    protected Position(final ConcurrentHashMap<String, ConcurrentHashMap<Integer, Long>> position) {
         this.position = position;
     }
 
@@ -63,7 +63,7 @@ public class Position {
      * subsequent changes to the map or Position will not affect the other.
      */
     public static Position fromMap(final Map<String, ? extends Map<Integer, Long>> map) {
-        return new Position(deepCopy(map));
+        return new Position(SynchronizedPosition.deepCopy(map));
     }
 
     /**
@@ -89,7 +89,7 @@ public class Position {
      * Create a deep copy of the Position.
      */
     public Position copy() {
-        return new Position(deepCopy(position));
+        return new Position(SynchronizedPosition.deepCopy(position));
     }
 
     /**
@@ -132,20 +132,6 @@ public class Position {
     public Map<Integer, Long> getPartitionPositions(final String topic) {
         final ConcurrentHashMap<Integer, Long> bound = position.get(topic);
         return bound == null ? Collections.emptyMap() : Collections.unmodifiableMap(bound);
-    }
-
-    private static ConcurrentHashMap<String, ConcurrentHashMap<Integer, Long>> deepCopy(
-        final Map<String, ? extends Map<Integer, Long>> map) {
-        if (map == null) {
-            return new ConcurrentHashMap<>();
-        } else {
-            final ConcurrentHashMap<String, ConcurrentHashMap<Integer, Long>> copy =
-                new ConcurrentHashMap<>(map.size());
-            for (final Entry<String, ? extends Map<Integer, Long>> entry : map.entrySet()) {
-                copy.put(entry.getKey(), new ConcurrentHashMap<>(entry.getValue()));
-            }
-            return copy;
-        }
     }
 
     @Override

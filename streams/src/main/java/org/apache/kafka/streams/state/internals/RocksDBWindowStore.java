@@ -24,6 +24,7 @@ import org.apache.kafka.streams.query.PositionBound;
 import org.apache.kafka.streams.query.Query;
 import org.apache.kafka.streams.query.QueryConfig;
 import org.apache.kafka.streams.query.QueryResult;
+import org.apache.kafka.streams.query.internals.SynchronizedPosition;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.WindowStoreIterator;
@@ -131,7 +132,7 @@ public class RocksDBWindowStore
             positionBound,
             config,
             this,
-            getPosition(),
+            (SynchronizedPosition) getPosition(),
             stateStoreContext
         );
     }

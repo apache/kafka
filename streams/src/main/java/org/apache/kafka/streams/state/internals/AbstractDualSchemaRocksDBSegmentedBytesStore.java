@@ -32,6 +32,7 @@ import org.apache.kafka.streams.processor.internals.StoreToProcessorContextAdapt
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.processor.internals.metrics.TaskMetrics;
 import org.apache.kafka.streams.query.Position;
+import org.apache.kafka.streams.query.internals.SynchronizedPosition;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.rocksdb.RocksDBException;
 import org.rocksdb.WriteBatch;
@@ -60,7 +61,7 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStore<S extends Seg
     private Sensor expiredRecordSensor;
     protected long observedStreamTime = ConsumerRecord.NO_TIMESTAMP;
     protected boolean consistencyEnabled = false;
-    protected Position position;
+    protected SynchronizedPosition position;
     protected OffsetCheckpoint positionCheckpoint;
     private volatile boolean open;
 
@@ -193,17 +194,22 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStore<S extends Seg
             expiredRecordSensor.record(1.0d, context.currentSystemTimeMs());
             LOG.warn("Skipping record for expired segment.");
         } else {
-            StoreQueryUtils.updatePosition(position, stateStoreContext);
+            position.lock();
+            try {
+                StoreQueryUtils.updatePosition(position, stateStoreContext);
 
-            // Put to index first so that if put to base failed, when we iterate index, we will
-            // find no base value. If put to base first but putting to index fails, when we iterate
-            // index, we can't find the key but if we iterate over base store, we can find the key
-            // which lead to inconsistency.
-            if (hasIndex()) {
-                final KeyValue<Bytes, byte[]> indexKeyValue = getIndexKeyValue(rawBaseKey, value);
-                segment.put(indexKeyValue.key, indexKeyValue.value);
+                // Put to index first so that if put to base failed, when we iterate index, we will
+                // find no base value. If put to base first but putting to index fails, when we iterate
+                // index, we can't find the key but if we iterate over base store, we can find the key
+                // which lead to inconsistency.
+                if (hasIndex()) {
+                    final KeyValue<Bytes, byte[]> indexKeyValue = getIndexKeyValue(rawBaseKey, value);
+                    segment.put(indexKeyValue.key, indexKeyValue.value);
+                }
+                segment.put(rawBaseKey, value);
+            } finally {
+                position.unlock();
             }
-            segment.put(rawBaseKey, value);
         }
     }
 
