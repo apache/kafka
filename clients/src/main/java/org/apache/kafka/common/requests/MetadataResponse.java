@@ -174,7 +174,8 @@ public class MetadataResponse extends AbstractResponse {
                 metadata.leaderId.map(nodesById::get).orElse(null),
                 convertToNodeArray(metadata.replicaIds, nodesById),
                 convertToNodeArray(metadata.inSyncReplicaIds, nodesById),
-                convertToNodeArray(metadata.offlineReplicaIds, nodesById));
+                convertToNodeArray(metadata.offlineReplicaIds, nodesById),
+                metadata.leaderEpoch);
     }
 
     private static Node[] convertToNodeArray(List<Integer> replicaIds, Map<Integer, Node> nodesById) {

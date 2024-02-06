@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.common;
 
+import java.util.Optional;
+
 /**
  * This is used to describe per-partition state in the MetadataResponse.
  */
@@ -27,6 +29,8 @@ public class PartitionInfo {
     private final Node[] inSyncReplicas;
     private final Node[] offlineReplicas;
 
+    private final Optional<Integer> leaderEpoch;
+
     public PartitionInfo(String topic, int partition, Node leader, Node[] replicas, Node[] inSyncReplicas) {
         this(topic, partition, leader, replicas, inSyncReplicas, new Node[0]);
     }
@@ -37,12 +41,23 @@ public class PartitionInfo {
                          Node[] replicas,
                          Node[] inSyncReplicas,
                          Node[] offlineReplicas) {
+        this(topic, partition, leader, replicas, inSyncReplicas, offlineReplicas, Optional.empty());
+    }
+
+    public PartitionInfo(String topic,
+        int partition,
+        Node leader,
+        Node[] replicas,
+        Node[] inSyncReplicas,
+        Node[] offlineReplicas,
+        Optional<Integer> leaderEpoch) {
         this.topic = topic;
         this.partition = partition;
         this.leader = leader;
         this.replicas = replicas;
         this.inSyncReplicas = inSyncReplicas;
         this.offlineReplicas = offlineReplicas;
+        this.leaderEpoch = leaderEpoch;
     }
 
     /**
@@ -88,15 +103,23 @@ public class PartitionInfo {
         return offlineReplicas;
     }
 
+    /**
+     * The partition leader's epoch.
+     */
+    public Optional<Integer> leaderEpoch() {
+        return leaderEpoch;
+    }
+
     @Override
     public String toString() {
-        return String.format("Partition(topic = %s, partition = %d, leader = %s, replicas = %s, isr = %s, offlineReplicas = %s)",
+        return String.format("Partition(topic = %s, partition = %d, leader = %s, replicas = %s, isr = %s, offlineReplicas = %s, leaderEpoch = %s)",
                              topic,
                              partition,
                              leader == null ? "none" : leader.idString(),
                              formatNodeIds(replicas),
                              formatNodeIds(inSyncReplicas),
-                             formatNodeIds(offlineReplicas));
+                             formatNodeIds(offlineReplicas),
+                             leaderEpoch);
     }
 
     /* Extract the node ids from each item in the array and format for display */
