@@ -107,13 +107,6 @@ class RequestState {
     }
 
     /**
-     * Update the lastReceivedTime in milliseconds, indicating that a response has been received.
-     */
-    public void updateLastReceivedTime(final long lastReceivedMs) {
-        this.lastReceivedMs = lastReceivedMs;
-    }
-
-    /**
      * Callback invoked after a successful send. This resets the number of attempts
      * to 0, but the minimal backoff will still be enforced prior to allowing a new
      * send. To send immediately, use {@link #reset()}.
@@ -134,8 +127,16 @@ class RequestState {
      * @param currentTimeMs Current time in milliseconds
      */
     public void onFailedAttempt(final long currentTimeMs) {
+        onFailedAttempt(currentTimeMs, false);
+    }
+
+    public void onFailedAttempt(final long currentTimeMs, final boolean skipBackoff) {
         this.lastReceivedMs = currentTimeMs;
-        this.backoffMs = exponentialBackoff.backoff(numAttempts);
+        if (skipBackoff) {
+            this.backoffMs = 0;
+        } else {
+            this.backoffMs = exponentialBackoff.backoff(numAttempts);
+        }
         this.numAttempts++;
     }
 
