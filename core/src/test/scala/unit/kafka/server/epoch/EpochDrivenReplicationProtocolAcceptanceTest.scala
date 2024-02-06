@@ -21,7 +21,6 @@ import kafka.log.UnifiedLog
 import kafka.server.KafkaConfig._
 import kafka.server.{KafkaBroker, KafkaConfig, QuorumTestHarness}
 import kafka.tools.DumpLogSegments
-import kafka.utils.TestUtils.createBrokerConfig
 import kafka.utils.{CoreUtils, Logging, TestInfoUtils, TestUtils}
 import org.apache.kafka.clients.consumer.{Consumer, ConsumerConfig, KafkaConsumer}
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
@@ -39,7 +38,7 @@ import org.apache.kafka.storage.internals.epoch.LeaderEpochFileCache
 import org.apache.kafka.storage.internals.log.EpochEntry
 import org.apache.kafka.storage.internals.checkpoint.CleanShutdownFileHandler
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
-import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 
@@ -81,27 +80,14 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends QuorumTestHarness wit
     super.tearDown()
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("zk", "kraft"))
-  def shouldFollowLeaderEpochBasicWorkflow(quorum: String): Unit = {
+  @Test
+  def shouldFollowLeaderEpochBasicWorkflow(): Unit = {
 
     //Given 2 brokers
-    if (isKRaftTest()) {
-//      val broker1 = createBrokerForId(100)
-      registerBroker(100)
-      registerBroker(101)
-//      brokers = Seq(broker1)
-      //A single partition topic with 2 replicas
-      brokers = Seq(createBroker(fromProps(createBrokerConfig(100, zkConnectOrNull))))
-      brokers = brokers :+ createBroker(fromProps(createBrokerConfig(101, zkConnectOrNull)))
-      createTopic(topic, Map(0 -> Seq(100, 101)), brokers)
-    } else {
-      brokers = (100 to 101).map(createBrokerForId(_))
+    brokers = (100 to 101).map(createBrokerForId(_))
 
-      //A single partition topic with 2 replicas
-      createTopic(topic, Map(0 -> Seq(100, 101)), brokers)
-    }
-
+    //A single partition topic with 2 replicas
+    TestUtils.createTopic(zkClient, topic, Map(0 -> Seq(100, 101)), brokers)
     producer = createProducer
     val tp = new TopicPartition(topic, 0)
 
@@ -117,16 +103,12 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends QuorumTestHarness wit
     assertEquals(Collections.singletonList(new EpochEntry(0, 0)), epochCache(follower).epochEntries)
 
     //Bounce the follower
-    if (isKRaftTest()) {
-      brokerFor(101).quotaManagers.follower.upperBound
-    } else {
-      bounce(follower)
-    }
+    bounce(follower)
     awaitISR(tp)
 
     //Nothing happens yet as we haven't sent any new messages.
     assertEquals(java.util.Arrays.asList(new EpochEntry(0, 0), new EpochEntry(1, 1)), epochCache(leader).epochEntries)
-    assertEquals(java.util.Arrays.asList(new EpochEntry(0, 0)), epochCache(follower).epochEntries)
+    assertEquals(Collections.singletonList(new EpochEntry(0, 0)), epochCache(follower).epochEntries)
 
     //Send a message
     producer.send(new ProducerRecord(topic, 0, null, msg)).get
@@ -159,7 +141,6 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends QuorumTestHarness wit
     assertEquals(java.util.Arrays.asList(new EpochEntry(0, 0), new EpochEntry(1, 1), new EpochEntry(2, 2)), epochCache(follower).epochEntries)
   }
 
-  private def brokerFor(id: Int): KafkaBroker = brokers.filter(_.config.brokerId == id).head
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
@@ -564,26 +545,5 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends QuorumTestHarness wit
         topicConfig = topicConfig
       )
     }
-  }
-
-  private def registerBroker(id: Int): Unit = {
-    val listeners = new ListenerCollection()
-    listeners.add(new Listener().setName(PLAINTEXT.name).setHost("localhost").setPort(9092 + id))
-    val features = new BrokerRegistrationRequestData.FeatureCollection()
-    features.add(new BrokerRegistrationRequestData.Feature()
-      .setName(MetadataVersion.FEATURE_NAME)
-      .setMinSupportedVersion(MetadataVersion.IBP_3_0_IV1.featureLevel())
-      .setMaxSupportedVersion(MetadataVersion.IBP_3_8_IV0.featureLevel()))
-
-    controllerServer.controller.registerBroker(
-      ControllerRequestContextUtil.ANONYMOUS_CONTEXT,
-      new BrokerRegistrationRequestData()
-        .setBrokerId(id)
-        .setClusterId(controllerServer.clusterId)
-        .setIncarnationId(Uuid.randomUuid())
-        .setListeners(listeners)
-        .setLogDirs(Collections.singletonList(Uuid.randomUuid()))
-        .setFeatures(features)
-    ).get()
   }
 }
