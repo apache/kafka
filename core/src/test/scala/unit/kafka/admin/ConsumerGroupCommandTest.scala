@@ -31,7 +31,6 @@ import org.apache.kafka.common.{PartitionInfo, TopicPartition}
 import org.apache.kafka.common.errors.WakeupException
 import org.apache.kafka.common.serialization.StringDeserializer
 import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo}
-import org.junit.jupiter.params.provider.Arguments
 
 import scala.jdk.CollectionConverters._
 import scala.collection.mutable.ArrayBuffer
@@ -41,8 +40,6 @@ class ConsumerGroupCommandTest extends KafkaServerTestHarness {
 
   val topic = "foo"
   val group = "test.group"
-  val classicGroup = "classic.test.group"
-  val consumerGroup = "consumer.test.group"
 
   private var consumerGroupService: List[ConsumerGroupService] = List()
   private var consumerGroupExecutors: List[AbstractConsumerGroupExecutor] = List()

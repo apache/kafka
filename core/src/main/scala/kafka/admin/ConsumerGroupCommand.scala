@@ -199,26 +199,26 @@ object ConsumerGroupCommand extends Logging {
     }
 
     def listGroups(): Unit = {
-      val includeState = opts.options.has(opts.stateOpt)
       val includeType = opts.options.has(opts.typeOpt)
+      val includeState = opts.options.has(opts.stateOpt)
 
       val groupInfoMap = mutable.Map[String, (String, String)]()
 
       if (includeType || includeState) {
-        val states = getStateValues()
         val types = getTypeValues()
+        val states = getStateValues()
         val listings = {
-          listConsumerGroupsWithFilters(states, types)
+          listConsumerGroupsWithFilters(types, states)
         }
 
         listings.foreach { listing =>
           val groupId = listing.groupId
           val groupType = listing.groupType().orElse(GroupType.UNKNOWN).toString
           val state = listing.state().orElse(ConsumerGroupState.UNKNOWN).toString
-          groupInfoMap.update(groupId, (state, groupType))
+          groupInfoMap.update(groupId, (groupType, state))
         }
 
-        printGroupInfo(groupInfoMap, includeState, includeType)
+        printGroupInfo(groupInfoMap, includeType, includeState)
 
       } else {
         listConsumerGroups().foreach(println(_))
@@ -241,7 +241,7 @@ object ConsumerGroupCommand extends Logging {
         consumerGroupTypesFromString(typeValue)
     }
 
-    private def printGroupInfo(groupsAndInfo: Map[String, (String, String)], includeState: Boolean, includeType: Boolean): Unit = {
+    private def printGroupInfo(groupsAndInfo: Map[String, (String, String)], includeType: Boolean, includeState: Boolean): Unit = {
       val maxGroupLen: Int = groupsAndInfo.keys.foldLeft(15)((maxLen, groupId) => Math.max(maxLen, groupId.length))
       var header = "GROUP"
       var format = s"%-${maxGroupLen}s"
@@ -257,7 +257,7 @@ object ConsumerGroupCommand extends Logging {
 
       println(format.format(ArraySeq.unsafeWrapArray(header.split(" ")): _*))
 
-      groupsAndInfo.foreach { case (groupId, (state, groupType)) =>
+      groupsAndInfo.foreach { case (groupId, (groupType, state)) =>
         val info = List(groupId) ++ (if (includeType) List(groupType) else List()) ++ (if (includeState) List(state) else List())
         println(format.format(info: _*))
       }
@@ -269,7 +269,7 @@ object ConsumerGroupCommand extends Logging {
       listings.map(_.groupId).toList
     }
 
-    def listConsumerGroupsWithFilters(states: Set[ConsumerGroupState], types: Set[GroupType]): List[ConsumerGroupListing] = {
+    def listConsumerGroupsWithFilters(types: Set[GroupType], states: Set[ConsumerGroupState]): List[ConsumerGroupListing] = {
       val listConsumerGroupsOptions = withTimeoutMs(new ListConsumerGroupsOptions())
       listConsumerGroupsOptions
         .inStates(states.asJava)
@@ -1078,7 +1078,7 @@ object ConsumerGroupCommand extends Logging {
     private val TypeDoc = "When specified with '--list', it displays the types of all the groups. It can also be used to list groups with specific types." + nl +
       "Example: --bootstrap-server localhost:9092 --list --type classic,consumer" + nl +
       "This option may be used with the '--list' option only."
-    private val DeleteOffsetsDoc = "Delete offsets of consumer group. Supports one consumer group at the time, and multiple topics."git
+    private val DeleteOffsetsDoc = "Delete offsets of consumer group. Supports one consumer group at the time, and multiple topics."
 
     val bootstrapServerOpt: OptionSpec[String] = parser.accepts("bootstrap-server", BootstrapServerDoc)
                                    .withRequiredArg
@@ -1144,7 +1144,7 @@ object ConsumerGroupCommand extends Logging {
                          .availableIf(describeOpt, listOpt)
                          .withOptionalArg()
                          .ofType(classOf[String])
-    val typeOpt = parser.accepts("type", TypeDoc)
+    val typeOpt: OptionSpec[String] = parser.accepts("type", TypeDoc)
                         .availableIf(listOpt)
                         .withOptionalArg()
                         .ofType(classOf[String])

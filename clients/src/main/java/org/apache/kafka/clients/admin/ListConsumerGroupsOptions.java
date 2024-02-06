@@ -57,14 +57,14 @@ public class ListConsumerGroupsOptions extends AbstractOptions<ListConsumerGroup
     }
 
     /**
-     * Returns the list of States that are requested or empty if no states have been specified
+     * Returns the list of States that are requested or empty if no states have been specified.
      */
     public Set<ConsumerGroupState> states() {
         return states;
     }
 
     /**
-     * Returns the list of types that are requested or empty if no types have been specified
+     * Returns the list of group types that are requested or empty if no types have been specified.
      */
     public Set<GroupType> types() {
         return types;
