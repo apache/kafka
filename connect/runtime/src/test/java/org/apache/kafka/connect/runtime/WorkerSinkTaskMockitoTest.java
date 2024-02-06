@@ -624,6 +624,7 @@ public class WorkerSinkTaskMockitoTest {
         expectConversionAndTransformation(null, new RecordHeaders());
 
         doAnswer(invocation -> null)
+                .doAnswer(invocation -> null)
                 .doAnswer(invocation -> {
                     workerTask.stop();
                     workerTask.cancel();
