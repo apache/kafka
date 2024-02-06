@@ -626,20 +626,27 @@ public class KRaftMigrationZkWriter {
             .map(this::resourcePatternFromAcl)
             .collect(Collectors.toSet());
 
+        // This set holds resources that had ACL deletions (from AclsDelta#deleted) and did not have any other ACLs
+        Set<ResourcePattern> resourcesWithAllAclsDeleted = new HashSet<>(resourcesWithDeletedAcls);
+
         // Need to collect all ACLs for any changed resource pattern
         Map<ResourcePattern, List<AccessControlEntry>> aclsToWrite = new HashMap<>();
         image.acls().forEach((uuid, standardAcl) -> {
             ResourcePattern resourcePattern = resourcePatternFromAcl(standardAcl);
-            boolean removed = resourcesWithDeletedAcls.remove(resourcePattern);
+
+            // If we see an ACL for this resource in the image, we have to do an update instead of delete.
+            resourcesWithAllAclsDeleted.remove(resourcePattern);
+
             // If a resource pattern is present in the delta as a changed or deleted acl, need to include it
-            if (resourcesWithChangedAcls.contains(resourcePattern) || removed) {
+            if (resourcesWithChangedAcls.contains(resourcePattern) || resourcesWithDeletedAcls.contains(resourcePattern)) {
+                System.err.println(resourcePattern + " " + standardAcl);
                 aclsToWrite.computeIfAbsent(resourcePattern, __ -> new ArrayList<>()).add(
                     new AccessControlEntry(standardAcl.principal(), standardAcl.host(), standardAcl.operation(), standardAcl.permissionType())
                 );
             }
         });
 
-        resourcesWithDeletedAcls.forEach(deletedResource -> {
+        resourcesWithAllAclsDeleted.forEach(deletedResource -> {
             String name = "Deleting resource " + deletedResource + " which has no more ACLs";
             operationConsumer.accept(DELETE_ACL, name, migrationState ->
                 migrationClient.aclClient().deleteResource(deletedResource, migrationState));
