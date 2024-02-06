@@ -1752,7 +1752,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                 throw new IllegalArgumentException("Topic pattern to subscribe to cannot be " + (pattern == null ?
                     "null" : "empty"));
             throwIfNoAssignorsConfigured();
-            log.info("Subscribed to pattern: '{}'", pattern);
+            log.info("Subscribed to pattern: '{}'", pattern.pattern());
             subscriptions.subscribe(pattern, listener);
         } finally {
             release();
