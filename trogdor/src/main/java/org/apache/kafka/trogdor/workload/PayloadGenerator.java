@@ -37,7 +37,9 @@ import com.fasterxml.jackson.annotation.JsonTypeInfo;
     @JsonSubTypes.Type(value = NullPayloadGenerator.class, name = "null"),
     @JsonSubTypes.Type(value = RandomComponentPayloadGenerator.class, name = "randomComponent"),
     @JsonSubTypes.Type(value = TimestampRandomPayloadGenerator.class, name = "timestampRandom"),
-    @JsonSubTypes.Type(value = GaussianTimestampRandomPayloadGenerator.class, name = "gaussianTimestampRandom")
+    @JsonSubTypes.Type(value = TimestampConstantPayloadGenerator.class, name = "timestampConstant"),
+    @JsonSubTypes.Type(value = GaussianTimestampRandomPayloadGenerator.class, name = "gaussianTimestampRandom"),
+    @JsonSubTypes.Type(value = GaussianTimestampConstantPayloadGenerator.class, name = "gaussianTimestampConstant")
     })
 public interface PayloadGenerator {
     /**

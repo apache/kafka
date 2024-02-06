@@ -105,8 +105,8 @@ class MiniKdc(config: Properties, workDir: File) extends Logging {
   private val krb5conf = new File(workDir, "krb5.conf")
 
   private var _port = config.getProperty(MiniKdc.KdcPort).toInt
-  private var ds: DirectoryService = null
-  private var kdc: KdcServer = null
+  private var ds: DirectoryService = _
+  private var kdc: KdcServer = _
   private var closed = false
 
   def port: Int = _port
@@ -178,6 +178,7 @@ class MiniKdc(config: Properties, workDir: File) extends Logging {
 
     // And start the ds
     ds.setInstanceId(config.getProperty(MiniKdc.Instance))
+    ds.setShutdownHookEnabled(false)
     ds.startup()
 
     // context entry, after ds.startup()
@@ -261,7 +262,7 @@ class MiniKdc(config: Properties, workDir: File) extends Logging {
 
   private def refreshJvmKerberosConfig(): Unit = {
     val klass =
-      if (Java.isIbmJdk)
+      if (Java.isIbmJdk && !Java.isIbmJdkSemeru)
         Class.forName("com.ibm.security.krb5.internal.Config")
       else
         Class.forName("sun.security.krb5.Config")
@@ -274,6 +275,12 @@ class MiniKdc(config: Properties, workDir: File) extends Logging {
       if (kdc != null) {
         System.clearProperty(MiniKdc.JavaSecurityKrb5Conf)
         System.clearProperty(MiniKdc.SunSecurityKrb5Debug)
+
+        // Close kdc acceptors and wait for them to terminate, ensuring that sockets are closed before returning.
+        for (transport <- kdc.getTransports) {
+          val acceptor = transport.getAcceptor
+          if (acceptor != null) acceptor.dispose(true)
+        }
         kdc.stop()
         try ds.shutdown()
         catch {

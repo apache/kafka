@@ -16,19 +16,18 @@
  */
 package org.apache.kafka.streams.kstream.internals.graph;
 
-import org.apache.kafka.streams.kstream.internals.KTableValueGetterSupplier;
-import org.apache.kafka.streams.processor.api.ProcessorSupplier;
-import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
-import org.apache.kafka.streams.state.StoreBuilder;
-
 import java.util.Arrays;
 import java.util.Set;
 import java.util.stream.Stream;
+import org.apache.kafka.streams.kstream.internals.KTableValueGetterSupplier;
+import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
+import org.apache.kafka.streams.processor.internals.StoreFactory;
+import org.apache.kafka.streams.state.StoreBuilder;
 
 public class StatefulProcessorNode<K, V> extends ProcessorGraphNode<K, V> {
 
     private final String[] storeNames;
-    private final StoreBuilder<?> storeBuilder;
+    private final StoreFactory storeFactory;
 
     /**
      * Create a node representing a stateful processor, where the named stores have already been registered.
@@ -40,7 +39,7 @@ public class StatefulProcessorNode<K, V> extends ProcessorGraphNode<K, V> {
         final Stream<String> registeredStoreNames = preRegisteredStores.stream().map(StoreBuilder::name);
         final Stream<String> valueGetterStoreNames = valueGetterSuppliers.stream().flatMap(s -> Arrays.stream(s.storeNames()));
         storeNames = Stream.concat(registeredStoreNames, valueGetterStoreNames).toArray(String[]::new);
-        storeBuilder = null;
+        storeFactory = null;
     }
 
     /**
@@ -52,7 +51,7 @@ public class StatefulProcessorNode<K, V> extends ProcessorGraphNode<K, V> {
         super(nodeName, processorParameters);
 
         this.storeNames = storeNames;
-        this.storeBuilder = null;
+        this.storeFactory = null;
     }
 
 
@@ -62,51 +61,31 @@ public class StatefulProcessorNode<K, V> extends ProcessorGraphNode<K, V> {
      */
     public StatefulProcessorNode(final String nodeName,
                                  final ProcessorParameters<K, V, ?, ?> processorParameters,
-                                 final StoreBuilder<?> materializedKTableStoreBuilder) {
+                                 final StoreFactory materializedKTableStoreBuilder) {
         super(nodeName, processorParameters);
 
         this.storeNames = null;
-        this.storeBuilder = materializedKTableStoreBuilder;
+        this.storeFactory = materializedKTableStoreBuilder;
     }
 
     @Override
     public String toString() {
         return "StatefulProcessorNode{" +
             "storeNames=" + Arrays.toString(storeNames) +
-            ", storeBuilder=" + storeBuilder +
+            ", storeBuilder=" + storeFactory +
             "} " + super.toString();
     }
 
     @Override
     public void writeToTopology(final InternalTopologyBuilder topologyBuilder) {
-
-        final String processorName = processorParameters().processorName();
-        final ProcessorSupplier<K, V, ?, ?> processorSupplier = processorParameters().processorSupplier();
-
-        topologyBuilder.addProcessor(processorName, processorSupplier, parentNodeNames());
+        processorParameters().addProcessorTo(topologyBuilder, parentNodeNames());
 
         if (storeNames != null && storeNames.length > 0) {
-            topologyBuilder.connectProcessorAndStateStores(processorName, storeNames);
+            topologyBuilder.connectProcessorAndStateStores(processorParameters().processorName(), storeNames);
         }
 
-        if (storeBuilder != null) {
-            topologyBuilder.addStateStore(storeBuilder, processorName);
+        if (storeFactory != null) {
+            topologyBuilder.addStateStore(storeFactory, processorParameters().processorName());
         }
-
-        if (processorSupplier.stores() != null) {
-            for (final StoreBuilder<?> storeBuilder : processorSupplier.stores()) {
-                topologyBuilder.addStateStore(storeBuilder, processorName);
-            }
-        }
-
-        // temporary hack until KIP-478 is fully implemented
-        final org.apache.kafka.streams.processor.ProcessorSupplier<K, V> oldProcessorSupplier =
-            processorParameters().oldProcessorSupplier();
-        if (oldProcessorSupplier != null && oldProcessorSupplier.stores() != null) {
-            for (final StoreBuilder<?> storeBuilder : oldProcessorSupplier.stores()) {
-                topologyBuilder.addStateStore(storeBuilder, processorName);
-            }
-        }
-
     }
 }

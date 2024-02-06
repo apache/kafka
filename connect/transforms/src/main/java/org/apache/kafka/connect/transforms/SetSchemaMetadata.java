@@ -18,6 +18,8 @@ package org.apache.kafka.connect.transforms;
 
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.utils.AppInfoParser;
+import org.apache.kafka.connect.components.Versioned;
 import org.apache.kafka.connect.connector.ConnectRecord;
 import org.apache.kafka.connect.data.ConnectSchema;
 import org.apache.kafka.connect.data.Field;
@@ -31,7 +33,7 @@ import java.util.Map;
 
 import static org.apache.kafka.connect.transforms.util.Requirements.requireSchema;
 
-public abstract class SetSchemaMetadata<R extends ConnectRecord<R>> implements Transformation<R> {
+public abstract class SetSchemaMetadata<R extends ConnectRecord<R>> implements Transformation<R>, Versioned {
     private static final Logger log = LoggerFactory.getLogger(SetSchemaMetadata.class);
 
     public static final String OVERVIEW_DOC =
@@ -51,6 +53,11 @@ public abstract class SetSchemaMetadata<R extends ConnectRecord<R>> implements T
     private Integer schemaVersion;
 
     @Override
+    public String version() {
+        return AppInfoParser.getVersion();
+    }
+
+    @Override
     public void configure(Map<String, ?> configs) {
         final SimpleConfig config = new SimpleConfig(CONFIG_DEF, configs);
         schemaName = config.getString(ConfigName.SCHEMA_NAME);
@@ -63,7 +70,11 @@ public abstract class SetSchemaMetadata<R extends ConnectRecord<R>> implements T
 
     @Override
     public R apply(R record) {
+        final Object value = operatingValue(record);
         final Schema schema = operatingSchema(record);
+        if (value == null && schema == null) {
+            return record;
+        }
         requireSchema(schema, "updating schema metadata");
         final boolean isArray = schema.type() == Schema.Type.ARRAY;
         final boolean isMap = schema.type() == Schema.Type.MAP;
@@ -95,6 +106,8 @@ public abstract class SetSchemaMetadata<R extends ConnectRecord<R>> implements T
 
     protected abstract Schema operatingSchema(R record);
 
+    protected abstract Object operatingValue(R record);
+
     protected abstract R newRecord(R record, Schema updatedSchema);
 
     /**
@@ -104,6 +117,11 @@ public abstract class SetSchemaMetadata<R extends ConnectRecord<R>> implements T
         @Override
         protected Schema operatingSchema(R record) {
             return record.keySchema();
+        }
+
+        @Override
+        protected Object operatingValue(R record) {
+            return record.key();
         }
 
         @Override
@@ -120,6 +138,11 @@ public abstract class SetSchemaMetadata<R extends ConnectRecord<R>> implements T
         @Override
         protected Schema operatingSchema(R record) {
             return record.valueSchema();
+        }
+
+        @Override
+        protected Object operatingValue(R record) {
+            return record.value();
         }
 
         @Override

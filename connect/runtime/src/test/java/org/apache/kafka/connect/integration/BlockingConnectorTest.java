@@ -22,12 +22,13 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.Config;
 import org.apache.kafka.common.config.ConfigDef;
+import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.Timer;
 import org.apache.kafka.connect.connector.Connector;
 import org.apache.kafka.connect.connector.ConnectorContext;
 import org.apache.kafka.connect.connector.Task;
 import org.apache.kafka.connect.runtime.Worker;
 import org.apache.kafka.connect.runtime.rest.errors.ConnectRestException;
-import org.apache.kafka.connect.runtime.rest.resources.ConnectorsResource;
 import org.apache.kafka.connect.sink.SinkConnector;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.apache.kafka.connect.sink.SinkTask;
@@ -42,26 +43,35 @@ import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
+import org.junit.function.ThrowingRunnable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import javax.ws.rs.core.Response;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Properties;
+import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
+import java.util.stream.Stream;
 
 import static org.apache.kafka.connect.runtime.ConnectorConfig.CONNECTOR_CLASS_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.TASKS_MAX_CONFIG;
 import static org.apache.kafka.connect.runtime.SinkConnectorConfig.TOPICS_CONFIG;
-import static org.apache.kafka.test.TestUtils.waitForCondition;
+import static org.apache.kafka.connect.runtime.rest.RestServer.DEFAULT_REST_REQUEST_TIMEOUT_MS;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertThrows;
+import static org.junit.Assert.assertTrue;
 
 /**
  * Tests situations during which certain connector operations, such as start, validation,
@@ -77,9 +87,9 @@ public class BlockingConnectorTest {
     private static final String NORMAL_CONNECTOR_NAME = "normal-connector";
     private static final String TEST_TOPIC = "normal-topic";
     private static final int NUM_RECORDS_PRODUCED = 100;
-    private static final long CONNECT_WORKER_STARTUP_TIMEOUT = TimeUnit.SECONDS.toMillis(60);
-    private static final long RECORD_TRANSFER_DURATION_MS = TimeUnit.SECONDS.toMillis(30);
-    private static final long REST_REQUEST_TIMEOUT = Worker.CONNECTOR_GRACEFUL_SHUTDOWN_TIMEOUT_MS * 2;
+    private static final long CONNECTOR_BLOCK_TIMEOUT_MS = TimeUnit.SECONDS.toMillis(60);
+    private static final long RECORD_TRANSFER_TIMEOUT_MS = TimeUnit.SECONDS.toMillis(60);
+    private static final long REDUCED_REST_REQUEST_TIMEOUT = Worker.CONNECTOR_GRACEFUL_SHUTDOWN_TIMEOUT_MS * 2;
 
     private static final String CONNECTOR_INITIALIZE = "Connector::initialize";
     private static final String CONNECTOR_INITIALIZE_WITH_TASK_CONFIGS = "Connector::initializeWithTaskConfigs";
@@ -113,8 +123,6 @@ public class BlockingConnectorTest {
 
     @Before
     public void setup() throws Exception {
-        // Artificially reduce the REST request timeout so that these don't take forever
-        ConnectorsResource.setRequestTimeout(REST_REQUEST_TIMEOUT);
         // build a Connect cluster backed by Kafka and Zk
         connect = new EmbeddedConnectCluster.Builder()
                 .name("connect-cluster")
@@ -127,13 +135,9 @@ public class BlockingConnectorTest {
         // start the clusters
         connect.start();
 
-        // wait for the Connect REST API to become available. necessary because of the reduced REST
-        // request timeout; otherwise, we may get an unexpected 500 with our first real REST request
-        // if the worker is still getting on its feet.
-        waitForCondition(
-            () -> connect.requestGet(connect.endpointForResource("connectors/nonexistent")).getStatus() == 404,
-            CONNECT_WORKER_STARTUP_TIMEOUT,
-            "Worker did not complete startup in time"
+        connect.assertions().assertAtLeastNumWorkersAreUp(
+                NUM_WORKERS,
+                "Initial group of workers did not start in time"
         );
     }
 
@@ -141,14 +145,19 @@ public class BlockingConnectorTest {
     public void close() {
         // stop all Connect, Kafka and Zk threads.
         connect.stop();
-        ConnectorsResource.resetRequestTimeout();
-        Block.resetBlockLatch();
+        // unblock everything so that we don't leak threads after each test run
+        Block.reset();
+        Block.join();
     }
 
     @Test
     public void testBlockInConnectorValidate() throws Exception {
         log.info("Starting test testBlockInConnectorValidate");
-        assertThrows(ConnectRestException.class, () -> createConnectorWithBlock(ValidateBlockingConnector.class, CONNECTOR_VALIDATE));
+        assertRequestTimesOut(
+                "create connector that blocks during validation",
+                () -> createConnectorWithBlock(ValidateBlockingConnector.class, CONNECTOR_VALIDATE),
+                "The worker is currently performing multi-property validation for the connector"
+        );
         // Will NOT assert that connector has failed, since the request should fail before it's even created
 
         // Connector should already be blocked so this should return immediately, but check just to
@@ -162,7 +171,11 @@ public class BlockingConnectorTest {
     @Test
     public void testBlockInConnectorConfig() throws Exception {
         log.info("Starting test testBlockInConnectorConfig");
-        assertThrows(ConnectRestException.class, () -> createConnectorWithBlock(ConfigBlockingConnector.class, CONNECTOR_CONFIG));
+        assertRequestTimesOut(
+                "create connector that blocks while getting config",
+                () -> createConnectorWithBlock(ConfigBlockingConnector.class, CONNECTOR_CONFIG),
+                "The worker is currently retrieving the configuration definition from the connector"
+        );
         // Will NOT assert that connector has failed, since the request should fail before it's even created
 
         // Connector should already be blocked so this should return immediately, but check just to
@@ -181,6 +194,13 @@ public class BlockingConnectorTest {
 
         createNormalConnector();
         verifyNormalConnector();
+
+        // Try to restart the connector
+        assertRequestTimesOut(
+                "restart connector that blocks during initialize",
+                () -> connect.restartConnector(BLOCKING_CONNECTOR_NAME),
+                "The worker is currently starting the connector"
+        );
     }
 
     @Test
@@ -191,6 +211,13 @@ public class BlockingConnectorTest {
 
         createNormalConnector();
         verifyNormalConnector();
+
+        // Try to restart the connector
+        assertRequestTimesOut(
+                "restart connector that blocks during start",
+                () -> connect.restartConnector(BLOCKING_CONNECTOR_NAME),
+                "The worker is currently starting the connector"
+        );
     }
 
     @Test
@@ -328,18 +355,49 @@ public class BlockingConnectorTest {
 
     private void verifyNormalConnector() throws InterruptedException {
         waitForConnectorStart(NORMAL_CONNECTOR_NAME);
-        normalConnectorHandle.awaitRecords(RECORD_TRANSFER_DURATION_MS);
-        normalConnectorHandle.awaitCommits(RECORD_TRANSFER_DURATION_MS);
+        normalConnectorHandle.awaitRecords(RECORD_TRANSFER_TIMEOUT_MS);
+        normalConnectorHandle.awaitCommits(RECORD_TRANSFER_TIMEOUT_MS);
     }
 
-    private static class Block {
-        private static CountDownLatch blockLatch;
+    private void assertRequestTimesOut(String requestDescription, ThrowingRunnable request, String expectedTimeoutMessage) {
+        // Artificially reduce the REST request timeout so that these don't take 90 seconds
+        connect.requestTimeout(REDUCED_REST_REQUEST_TIMEOUT);
+        ConnectRestException exception = assertThrows(
+                "Should have failed to " + requestDescription,
+                ConnectRestException.class, request
+        );
+        assertEquals(
+                "Should have gotten 500 error from trying to " + requestDescription,
+                Response.Status.INTERNAL_SERVER_ERROR.getStatusCode(), exception.statusCode()
+        );
+        assertTrue(
+                "Should have gotten timeout message from trying to " + requestDescription
+                        + "; instead, message was: " + exception.getMessage(),
+                exception.getMessage().contains("Request timed out")
+        );
+        if (expectedTimeoutMessage != null) {
+            assertTrue(
+                    "Timeout error message '" + exception.getMessage() + "' does not match expected format",
+                    exception.getMessage().contains(expectedTimeoutMessage)
+            );
+        }
+        // Reset the REST request timeout so that other requests aren't impacted
+        connect.requestTimeout(DEFAULT_REST_REQUEST_TIMEOUT_MS);
+    }
+
+    public static class Block {
+        // All latches that blocking connectors/tasks are or will be waiting on during a test case
+        private static final Set<CountDownLatch> BLOCK_LATCHES = new HashSet<>();
+        // All threads that are or were at one point blocked
+        private static final Set<Thread> BLOCKED_THREADS = new HashSet<>();
+        // The latch that can be used to wait for a connector/task to reach the most-recently-registered blocking point
+        private static CountDownLatch awaitBlockLatch;
 
         private final String block;
 
         public static final String BLOCK_CONFIG = "block";
 
-        private static ConfigDef config() {
+        public static ConfigDef config() {
             return new ConfigDef()
                 .define(
                     BLOCK_CONFIG,
@@ -351,29 +409,89 @@ public class BlockingConnectorTest {
                 );
         }
 
-        public static void waitForBlock() throws InterruptedException {
+        /**
+         * {@link CountDownLatch#await() Wait} for the connector/task to reach the point in its lifecycle where
+         * it will block.
+         */
+        public static void waitForBlock() throws InterruptedException, TimeoutException {
+            Timer timer = Time.SYSTEM.timer(CONNECTOR_BLOCK_TIMEOUT_MS);
+
+            CountDownLatch awaitBlockLatch;
             synchronized (Block.class) {
-                if (blockLatch == null) {
-                    throw new IllegalArgumentException("No connector has been created yet");
+                while (Block.awaitBlockLatch == null) {
+                    timer.update();
+                    if (timer.isExpired()) {
+                        throw new TimeoutException("Timed out waiting for connector to block.");
+                    }
+                    Block.class.wait(timer.remainingMs());
                 }
+                awaitBlockLatch = Block.awaitBlockLatch;
             }
 
             log.debug("Waiting for connector to block");
-            blockLatch.await();
+            timer.update();
+            if (!awaitBlockLatch.await(timer.remainingMs(), TimeUnit.MILLISECONDS)) {
+                throw new TimeoutException("Timed out waiting for connector to block.");
+            }
             log.debug("Connector should now be blocked");
         }
 
-        // Note that there is only ever at most one global block latch at a time, which makes tests that
-        // use blocks in multiple places impossible. If necessary, this can be addressed in the future by
-        // adding support for multiple block latches at a time, possibly identifiable by a connector/task
-        // ID, the location of the expected block, or both.
-        public static void resetBlockLatch() {
-            synchronized (Block.class) {
-                if (blockLatch != null) {
-                    blockLatch.countDown();
-                    blockLatch = null;
+        /**
+         * {@link CountDownLatch#countDown() Release} any latches allocated over the course of a test
+         * to either await a connector/task reaching a blocking point, or cause a connector/task to block.
+         */
+        public static synchronized void reset() {
+            resetAwaitBlockLatch();
+            BLOCK_LATCHES.forEach(CountDownLatch::countDown);
+            BLOCK_LATCHES.clear();
+        }
+
+        /**
+         * {@link Thread#join(long millis) Await} the termination of all threads that have been
+         * intentionally blocked either since the last invocation of this method or, if this method
+         * has never been invoked, all threads that have ever been blocked.
+         */
+        public static synchronized void join() {
+            BLOCKED_THREADS.forEach(t -> {
+                try {
+                    t.join(30_000);
+                    if (t.isAlive()) {
+                        log.warn(
+                                "Thread {} failed to finish in time; current stack trace:\n{}",
+                                t,
+                                Stream.of(t.getStackTrace())
+                                        .map(s -> String.format(
+                                                "\t%s.%s:%d",
+                                                s.getClassName(),
+                                                s.getMethodName(),
+                                                s.getLineNumber()
+                                        )).collect(Collectors.joining("\n"))
+                        );
+                    }
+                } catch (InterruptedException e) {
+                    throw new RuntimeException("Interrupted while waiting for blocked thread " + t + " to finish");
                 }
+            });
+            BLOCKED_THREADS.clear();
+        }
+
+        // Note that there is only ever at most one global await-block latch at a time, which makes tests that
+        // use blocks in multiple places impossible. If necessary, this can be addressed in the future by
+        // adding support for multiple await-block latches at a time, possibly identifiable by a connector/task
+        // ID, the location of the expected block, or both.
+        private static synchronized void resetAwaitBlockLatch() {
+            if (awaitBlockLatch != null) {
+                awaitBlockLatch.countDown();
+                awaitBlockLatch = null;
             }
+        }
+
+        private static CountDownLatch newBlockLatch() {
+            CountDownLatch result = new CountDownLatch(1);
+            synchronized (Block.class) {
+                BLOCK_LATCHES.add(result);
+            }
+            return result;
         }
 
         public Block(Map<String, String> props) {
@@ -382,27 +500,35 @@ public class BlockingConnectorTest {
 
         public Block(String block) {
             this.block = block;
-            synchronized (Block.class) {
-                if (blockLatch != null) {
-                    blockLatch.countDown();
+            if (block != null) {
+                synchronized (Block.class) {
+                    resetAwaitBlockLatch();
+                    awaitBlockLatch = new CountDownLatch(1);
+                    Block.class.notify();
                 }
-                blockLatch = new CountDownLatch(1);
             }
-        }
-
-        public Map<String, String> taskConfig() {
-            return Collections.singletonMap(BLOCK_CONFIG, block);
         }
 
         public void maybeBlockOn(String block) {
             if (block.equals(this.block)) {
                 log.info("Will block on {}", block);
-                blockLatch.countDown();
+                CountDownLatch blockLatch;
+                synchronized (Block.class) {
+                    assertNotNull(
+                            "Block was reset prematurely",
+                            awaitBlockLatch
+                    );
+                    awaitBlockLatch.countDown();
+                    blockLatch = newBlockLatch();
+                    BLOCKED_THREADS.add(Thread.currentThread());
+                }
                 while (true) {
                     try {
-                        Thread.sleep(Long.MAX_VALUE);
+                        blockLatch.await();
+                        log.debug("Instructed to stop blocking; will resume normal execution");
+                        return;
                     } catch (InterruptedException e) {
-                        // No-op. Just keep blocking.
+                        log.debug("Interrupted while blocking; will continue blocking until instructed to stop");
                     }
                 }
             } else {
@@ -561,11 +687,6 @@ public class BlockingConnectorTest {
         }
 
         @Override
-        public Config validate(Map<String, String> connectorConfigs) {
-            return super.validate(connectorConfigs);
-        }
-
-        @Override
         public ConfigDef config() {
             return Block.config();
         }
@@ -676,18 +797,13 @@ public class BlockingConnectorTest {
 
         @Override
         public List<Map<String, String>> taskConfigs(int maxTasks) {
-            return IntStream.rangeClosed(0, maxTasks)
+            return IntStream.range(0, maxTasks)
                 .mapToObj(i -> new HashMap<>(props))
                 .collect(Collectors.toList());
         }
 
         @Override
         public void stop() {
-        }
-
-        @Override
-        public Config validate(Map<String, String> connectorConfigs) {
-            return super.validate(connectorConfigs);
         }
 
         @Override

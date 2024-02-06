@@ -21,16 +21,18 @@ import java.util.concurrent.{ConcurrentHashMap, DelayQueue, TimeUnit}
 import java.util.concurrent.locks.ReentrantReadWriteLock
 
 import kafka.network.RequestChannel
-import kafka.network.RequestChannel._
 import kafka.server.ClientQuotaManager._
-import kafka.utils.{Logging, QuotaUtils, ShutdownableThread}
+import kafka.utils.{Logging, QuotaUtils}
 import org.apache.kafka.common.{Cluster, MetricName}
 import org.apache.kafka.common.metrics._
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.metrics.stats.{Avg, CumulativeSum, Rate}
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.utils.{Sanitizer, Time}
+import org.apache.kafka.server.config.{ConfigEntityName, ClientQuotaManagerConfig}
 import org.apache.kafka.server.quota.{ClientQuotaCallback, ClientQuotaEntity, ClientQuotaType}
+import org.apache.kafka.server.util.ShutdownableThread
+import org.apache.kafka.network.Session
 
 import scala.jdk.CollectionConverters._
 
@@ -41,23 +43,6 @@ import scala.jdk.CollectionConverters._
  * @param throttleTimeSensor @Sensor that tracks the throttle time
  */
 case class ClientSensors(metricTags: Map[String, String], quotaSensor: Sensor, throttleTimeSensor: Sensor)
-
-/**
- * Configuration settings for quota management
- * @param numQuotaSamples The number of samples to retain in memory
- * @param quotaWindowSizeSeconds The time span of each sample
- *
- */
-case class ClientQuotaManagerConfig(numQuotaSamples: Int =
-                                        ClientQuotaManagerConfig.DefaultNumQuotaSamples,
-                                    quotaWindowSizeSeconds: Int =
-                                        ClientQuotaManagerConfig.DefaultQuotaWindowSizeSeconds)
-
-object ClientQuotaManagerConfig {
-  // Always have 10 whole windows + 1 current window
-  val DefaultNumQuotaSamples = 11
-  val DefaultQuotaWindowSizeSeconds = 1
-}
 
 object QuotaTypes {
   val NoQuotas = 0
@@ -71,9 +56,9 @@ object ClientQuotaManager {
   // Purge sensors after 1 hour of inactivity
   val InactiveSensorExpirationTimeSeconds = 3600
 
-  val DefaultClientIdQuotaEntity = KafkaQuotaEntity(None, Some(DefaultClientIdEntity))
-  val DefaultUserQuotaEntity = KafkaQuotaEntity(Some(DefaultUserEntity), None)
-  val DefaultUserClientIdQuotaEntity = KafkaQuotaEntity(Some(DefaultUserEntity), Some(DefaultClientIdEntity))
+  val DefaultClientIdQuotaEntity: KafkaQuotaEntity = KafkaQuotaEntity(None, Some(DefaultClientIdEntity))
+  val DefaultUserQuotaEntity: KafkaQuotaEntity = KafkaQuotaEntity(Some(DefaultUserEntity), None)
+  val DefaultUserClientIdQuotaEntity: KafkaQuotaEntity = KafkaQuotaEntity(Some(DefaultUserEntity), Some(DefaultClientIdEntity))
 
   sealed trait BaseUserEntity extends ClientQuotaEntity.ConfigEntity
 
@@ -91,13 +76,13 @@ object ClientQuotaManager {
 
   case object DefaultUserEntity extends BaseUserEntity {
     override def entityType: ClientQuotaEntity.ConfigEntityType = ClientQuotaEntity.ConfigEntityType.DEFAULT_USER
-    override def name: String = ConfigEntityName.Default
+    override def name: String = ConfigEntityName.DEFAULT
     override def toString: String = "default user"
   }
 
   case object DefaultClientIdEntity extends ClientQuotaEntity.ConfigEntity {
     override def entityType: ClientQuotaEntity.ConfigEntityType = ClientQuotaEntity.ConfigEntityType.DEFAULT_CLIENT_ID
-    override def name: String = ConfigEntityName.Default
+    override def name: String = ConfigEntityName.DEFAULT
     override def toString: String = "default client-id"
   }
 
@@ -108,7 +93,7 @@ object ClientQuotaManager {
 
     def sanitizedUser: String = userEntity.map {
       case entity: UserEntity => entity.sanitizedUser
-      case DefaultUserEntity => ConfigEntityName.Default
+      case DefaultUserEntity => ConfigEntityName.DEFAULT
     }.getOrElse("")
 
     def clientId: String = clientIdEntity.map(_.name).getOrElse("")
@@ -123,32 +108,6 @@ object ClientQuotaManager {
   object DefaultTags {
     val User = "user"
     val ClientId = "client-id"
-  }
-
-  /**
-   * This calculates the amount of time needed to bring the metric within quota
-   * assuming that no new metrics are recorded.
-   *
-   * Basically, if O is the observed rate and T is the target rate over a window of W, to bring O down to T,
-   * we need to add a delay of X to W such that O * W / (W + X) = T.
-   * Solving for X, we get X = (O - T)/T * W.
-   */
-  def throttleTime(e: QuotaViolationException, timeMs: Long): Long = {
-    val difference = e.value - e.bound
-    // Use the precise window used by the rate calculation
-    val throttleTimeMs = difference / e.bound * windowSize(e.metric, timeMs)
-    Math.round(throttleTimeMs)
-  }
-
-  private def windowSize(metric: KafkaMetric, timeMs: Long): Long =
-    measurableAsRate(metric.metricName, metric.measurable).windowSize(metric.config, timeMs)
-
-  // Casting to Rate because we only use Rate in Quota computation
-  private def measurableAsRate(name: MetricName, measurable: Measurable): Rate = {
-    measurable match {
-      case r: Rate => r
-      case _ => throw new IllegalArgumentException(s"Metric $name is not a Rate metric, value $measurable")
-    }
   }
 }
 
@@ -325,7 +284,7 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
    *
    * @param request client request
    * @param throttleTimeMs Duration in milliseconds for which the channel is to be muted.
-   * @param channelThrottlingCallback Callback for channel throttling
+   * @param throttleCallback Callback for channel throttling
    */
   def throttle(
     request: RequestChannel.Request,
@@ -433,12 +392,11 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
       .quota(new Quota(quotaLimit, true))
   }
 
-  protected def getOrCreateSensor(sensorName: String, metricName: MetricName): Sensor = {
+  protected def getOrCreateSensor(sensorName: String, expirationTimeSeconds: Long, registerMetrics: Sensor => Unit): Sensor = {
     sensorAccessor.getOrCreate(
       sensorName,
-      ClientQuotaManager.InactiveSensorExpirationTimeSeconds,
-      sensor => sensor.add(metricName, new Rate)
-    )
+      expirationTimeSeconds,
+      registerMetrics)
   }
 
   /**
@@ -461,11 +419,11 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
     lock.writeLock().lock()
     try {
       val userEntity = sanitizedUser.map {
-        case ConfigEntityName.Default => DefaultUserEntity
+        case ConfigEntityName.DEFAULT => DefaultUserEntity
         case user => UserEntity(user)
       }
       val clientIdEntity = sanitizedClientId.map {
-        case ConfigEntityName.Default => DefaultClientIdEntity
+        case ConfigEntityName.DEFAULT => DefaultClientIdEntity
         case _ => ClientIdEntity(clientId.getOrElse(throw new IllegalStateException("Client-id not provided")))
       }
       val quotaEntity = KafkaQuotaEntity(userEntity, clientIdEntity)
@@ -562,11 +520,21 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
       quotaMetricTags.asJava)
   }
 
-  def shutdown(): Unit = {
-    throttledChannelReaper.shutdown()
+  def initiateShutdown(): Unit = {
+    throttledChannelReaper.initiateShutdown()
+    // improve shutdown time by waking up any ShutdownableThread(s) blocked on poll by sending a no-op
+    delayQueue.add(new ThrottledChannel(time, 0, new ThrottleCallback {
+      override def startThrottling(): Unit = {}
+      override def endThrottling(): Unit = {}
+    }))
   }
 
-  class DefaultQuotaCallback extends ClientQuotaCallback {
+  def shutdown(): Unit = {
+    initiateShutdown()
+    throttledChannelReaper.awaitShutdown()
+  }
+
+  private class DefaultQuotaCallback extends ClientQuotaCallback {
     private val overriddenQuotas = new ConcurrentHashMap[ClientQuotaEntity, Quota]()
 
     override def configure(configs: util.Map[String, _]): Unit = {}
@@ -583,7 +551,7 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
       if (sanitizedUser != null && clientId != null) {
         val userEntity = Some(UserEntity(sanitizedUser))
         val clientIdEntity = Some(ClientIdEntity(clientId))
-        if (!sanitizedUser.isEmpty && !clientId.isEmpty) {
+        if (sanitizedUser.nonEmpty && clientId.nonEmpty) {
           // /config/users/<user>/clients/<client-id>
           quota = overriddenQuotas.get(KafkaQuotaEntity(userEntity, clientIdEntity))
           if (quota == null) {
@@ -598,14 +566,14 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
             // /config/users/<default>/clients/<default>
             quota = overriddenQuotas.get(DefaultUserClientIdQuotaEntity)
           }
-        } else if (!sanitizedUser.isEmpty) {
+        } else if (sanitizedUser.nonEmpty) {
           // /config/users/<user>
           quota = overriddenQuotas.get(KafkaQuotaEntity(userEntity, None))
           if (quota == null) {
             // /config/users/<default>
             quota = overriddenQuotas.get(DefaultUserQuotaEntity)
           }
-        } else if (!clientId.isEmpty) {
+        } else if (clientId.nonEmpty) {
           // /config/clients/<client-id>
           quota = overriddenQuotas.get(KafkaQuotaEntity(None, clientIdEntity))
           if (quota == null) {
@@ -668,7 +636,6 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
                     if (!overriddenQuotas.containsKey(DefaultUserQuotaEntity)) {
                       // 7) /config/clients/<client-id>
                       // 8) /config/clients/<default>
-                      // 9) static client-id quota
                       metricTags = ("", clientId)
                     }
                   }

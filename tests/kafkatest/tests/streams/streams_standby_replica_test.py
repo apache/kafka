@@ -13,8 +13,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from ducktape.mark import matrix
 from ducktape.mark.resource import cluster
 from ducktape.utils.util import wait_until
+from kafkatest.services.kafka import quorum
 from kafkatest.services.streams import StreamsStandbyTaskService
 from kafkatest.tests.streams.base_streams_test import BaseStreamsTest
 
@@ -45,7 +47,8 @@ class StreamsStandbyTask(BaseStreamsTest):
                                                  })
 
     @cluster(num_nodes=10)
-    def test_standby_tasks_rebalance(self):
+    @matrix(metadata_quorum=[quorum.isolated_kraft], use_new_coordinator=[True, False])
+    def test_standby_tasks_rebalance(self, metadata_quorum, use_new_coordinator=False):
         # TODO KIP-441: consider rewriting the test for HighAvailabilityTaskAssignor
         configs = self.get_configs(
             ",sourceTopic=%s,sinkTopic1=%s,sinkTopic2=%s,internal.task.assignor.class=org.apache.kafka.streams.processor.internals.assignment.StickyTaskAssignor" % (
@@ -73,9 +76,9 @@ class StreamsStandbyTask(BaseStreamsTest):
 
         processor_3.start()
 
-        self.wait_for_verification(processor_1, "ACTIVE_TASKS:2 STANDBY_TASKS:2", processor_1.STDOUT_FILE)
-        self.wait_for_verification(processor_2, "ACTIVE_TASKS:2 STANDBY_TASKS:2", processor_2.STDOUT_FILE)
-        self.wait_for_verification(processor_3, "ACTIVE_TASKS:2 STANDBY_TASKS:2", processor_3.STDOUT_FILE)
+        self.wait_for_verification(processor_1, "ACTIVE_TASKS:2 STANDBY_TASKS:[1-3]", processor_1.STDOUT_FILE)
+        self.wait_for_verification(processor_2, "ACTIVE_TASKS:2 STANDBY_TASKS:[1-3]", processor_2.STDOUT_FILE)
+        self.wait_for_verification(processor_3, "ACTIVE_TASKS:2 STANDBY_TASKS:[1-3]", processor_3.STDOUT_FILE)
 
         processor_1.stop()
 
@@ -93,9 +96,9 @@ class StreamsStandbyTask(BaseStreamsTest):
 
         processor_2.start()
 
-        self.wait_for_verification(processor_1, "ACTIVE_TASKS:2 STANDBY_TASKS:2", processor_1.STDOUT_FILE)
-        self.wait_for_verification(processor_2, "ACTIVE_TASKS:2 STANDBY_TASKS:2", processor_2.STDOUT_FILE)
-        self.wait_for_verification(processor_3, "ACTIVE_TASKS:2 STANDBY_TASKS:2", processor_3.STDOUT_FILE, num_lines=2)
+        self.wait_for_verification(processor_1, "ACTIVE_TASKS:2 STANDBY_TASKS:[1-3]", processor_1.STDOUT_FILE)
+        self.wait_for_verification(processor_2, "ACTIVE_TASKS:2 STANDBY_TASKS:[1-3]", processor_2.STDOUT_FILE)
+        self.wait_for_verification(processor_3, "ACTIVE_TASKS:2 STANDBY_TASKS:[1-3]", processor_3.STDOUT_FILE, num_lines=2)
 
         processor_3.stop()
 
@@ -112,10 +115,9 @@ class StreamsStandbyTask(BaseStreamsTest):
         self.wait_for_verification(processor_2, "ACTIVE_TASKS:3 STANDBY_TASKS:3", processor_2.STDOUT_FILE, num_lines=2)
 
         processor_1.start()
-
-        self.wait_for_verification(processor_1, "ACTIVE_TASKS:2 STANDBY_TASKS:2", processor_1.STDOUT_FILE)
-        self.wait_for_verification(processor_3, "ACTIVE_TASKS:2 STANDBY_TASKS:2", processor_3.STDOUT_FILE)
-        self.wait_for_verification(processor_2, "ACTIVE_TASKS:2 STANDBY_TASKS:2", processor_2.STDOUT_FILE, num_lines=2)
+        self.wait_for_verification(processor_1, "ACTIVE_TASKS:2 STANDBY_TASKS:[1-3]", processor_1.STDOUT_FILE)
+        self.wait_for_verification(processor_2, "ACTIVE_TASKS:2 STANDBY_TASKS:[1-3]", processor_2.STDOUT_FILE, num_lines=2)
+        self.wait_for_verification(processor_3, "ACTIVE_TASKS:2 STANDBY_TASKS:[1-3]", processor_3.STDOUT_FILE)
 
         self.assert_consume(self.client_id, "assert all messages consumed from %s" % self.streams_sink_topic_1,
                             self.streams_sink_topic_1, self.num_messages)

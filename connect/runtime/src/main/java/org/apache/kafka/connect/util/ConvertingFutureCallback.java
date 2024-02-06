@@ -25,6 +25,14 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
+/**
+ * An abstract implementation of {@link Callback} that also implements the {@link Future} interface. This allows for
+ * operations like waiting until the callback is completed via {@link #onCompletion(Throwable, Object)}. The result
+ * from the callback can be converted by concrete implementations of this class before being retrieved via
+ * {@link Future#get}.
+ * @param <U> the callback result type
+ * @param <T> the future result type obtained after converting the callback result
+ */
 public abstract class ConvertingFutureCallback<U, T> implements Callback<U>, Future<T> {
 
     private final Callback<T> underlying;
@@ -32,6 +40,7 @@ public abstract class ConvertingFutureCallback<U, T> implements Callback<U>, Fut
     private volatile T result = null;
     private volatile Throwable exception = null;
     private volatile boolean cancelled = false;
+    private volatile Stage currentStage = null;
 
     public ConvertingFutureCallback() {
         this(null);
@@ -102,9 +111,20 @@ public abstract class ConvertingFutureCallback<U, T> implements Callback<U>, Fut
     @Override
     public T get(long l, TimeUnit timeUnit)
             throws InterruptedException, ExecutionException, TimeoutException {
-        if (!finishedLatch.await(l, timeUnit))
-            throw new TimeoutException("Timed out waiting for future");
+        if (!finishedLatch.await(l, timeUnit)) {
+            Stage stage = currentStage;
+            if (stage != null) {
+                throw new StagedTimeoutException(stage);
+            } else {
+                throw new TimeoutException();
+            }
+        }
         return result();
+    }
+
+    @Override
+    public void recordStage(Stage stage) {
+        this.currentStage = stage;
     }
 
     private T result() throws ExecutionException {

@@ -25,7 +25,10 @@ import java.util.Set;
 
 /**
  * A provider of configuration data, which may optionally support subscriptions to configuration changes.
- * Implementations are required to safely support concurrent calls to any of the methods in this interface.
+ * <p>Implementations are required to safely support concurrent calls to any of the methods in this interface.
+ * <p>Kafka Connect discovers implementations of this interface using the Java {@link java.util.ServiceLoader} mechanism.
+ * To support this, implementations of this interface should also contain a service provider configuration file in
+ * {@code META-INF/services/org.apache.kafka.common.config.provider.ConfigProvider}.
  */
 public interface ConfigProvider extends Configurable, Closeable {
 

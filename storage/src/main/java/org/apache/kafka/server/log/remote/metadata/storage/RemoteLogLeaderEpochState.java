@@ -33,7 +33,7 @@ import java.util.concurrent.ConcurrentSkipListMap;
 
 /**
  * This class represents the in-memory state of segments associated with a leader epoch. This includes the mapping of offset to
- * segment ids and unreferenced segments which are not mapped to any offset but they exist in remote storage.
+ * segment ids and unreferenced segments which are not mapped to any offset, but they exist in remote storage.
  * <p>
  * This is used by {@link RemoteLogMetadataCache} to track the segments for each leader epoch.
  */
@@ -100,16 +100,28 @@ class RemoteLogLeaderEpochState {
 
     void handleSegmentWithCopySegmentFinishedState(Long startOffset, RemoteLogSegmentId remoteLogSegmentId,
                                                    Long leaderEpochEndOffset) {
+        // If there are duplicate segments uploaded due to leader-election, then mark them as unreferenced.
+        // Duplicate segments can be uploaded when the previous leader had tier-lags and the next leader uploads the
+        // segment for the same leader-epoch which is a super-set of previously uploaded segments.
+        // (eg)
+        // case-1: Duplicate segment
+        //      L0 uploaded segment S0 with offsets 0-100 and L1 uploaded segment S1 with offsets 0-200.
+        //      We will mark the segment S0 as duplicate and add it to unreferencedSegmentIds.
+        // case-2: Overlapping segments
+        //      L0 uploaded segment S0 with offsets 10-90 and L1 uploaded segment S1 with offsets 5-100, S2-101-200,
+        //      and so on. When the consumer request for segment with offset 95, it should get the segment S1 and not S0.
+        Map.Entry<Long, RemoteLogSegmentId> lastEntry = offsetToId.lastEntry();
+        while (lastEntry != null && lastEntry.getKey() >= startOffset && highestLogOffset <= leaderEpochEndOffset) {
+            offsetToId.remove(lastEntry.getKey());
+            unreferencedSegmentIds.add(lastEntry.getValue());
+            lastEntry = offsetToId.lastEntry();
+        }
+
         // Add the segment epochs mapping as the segment is copied successfully.
-        RemoteLogSegmentId oldEntry = offsetToId.put(startOffset, remoteLogSegmentId);
+        offsetToId.put(startOffset, remoteLogSegmentId);
 
         // Remove the metadata from unreferenced entries as it is successfully copied and added to the offset mapping.
         unreferencedSegmentIds.remove(remoteLogSegmentId);
-
-        // Add the old entry to unreferenced entries as the mapping is removed for the old entry.
-        if (oldEntry != null) {
-            unreferencedSegmentIds.add(oldEntry);
-        }
 
         // Update the highest offset entry for this leader epoch as we added a new mapping.
         if (highestLogOffset == null || leaderEpochEndOffset > highestLogOffset) {
@@ -117,8 +129,7 @@ class RemoteLogLeaderEpochState {
         }
     }
 
-    void handleSegmentWithDeleteSegmentStartedState(Long startOffset, RemoteLogSegmentId remoteLogSegmentId,
-                                                    Long leaderEpochEndOffset) {
+    void handleSegmentWithDeleteSegmentStartedState(Long startOffset, RemoteLogSegmentId remoteLogSegmentId) {
         // Remove the offset mappings as this segment is getting deleted.
         offsetToId.remove(startOffset, remoteLogSegmentId);
 
@@ -127,8 +138,7 @@ class RemoteLogLeaderEpochState {
         unreferencedSegmentIds.add(remoteLogSegmentId);
     }
 
-    void handleSegmentWithDeleteSegmentFinishedState(long startOffset, RemoteLogSegmentId remoteLogSegmentId,
-                                                     Long leaderEpochEndOffset) {
+    void handleSegmentWithDeleteSegmentFinishedState(RemoteLogSegmentId remoteLogSegmentId) {
         // It completely removes the tracking of this segment as it is considered as deleted.
         unreferencedSegmentIds.remove(remoteLogSegmentId);
     }
@@ -149,6 +159,14 @@ class RemoteLogLeaderEpochState {
         return entry == null ? null : entry.getValue();
     }
 
+    Collection<RemoteLogSegmentId> unreferencedSegmentIds() {
+        return Collections.unmodifiableCollection(unreferencedSegmentIds);
+    }
+
+    Collection<RemoteLogSegmentId> referencedSegmentIds() {
+        return Collections.unmodifiableCollection(offsetToId.values());
+    }
+
     /**
      * Action interface to act on remote log segment transition for the given {@link RemoteLogLeaderEpochState}.
      */
@@ -158,15 +176,15 @@ class RemoteLogLeaderEpochState {
         /**
          * Performs this operation with the given {@code remoteLogLeaderEpochState}.
          *
+         * @param leaderEpoch               leader epoch value
          * @param remoteLogLeaderEpochState In-memory state of the segments for a leader epoch.
          * @param startOffset               start offset of the segment.
          * @param segmentId                 segment id.
-         * @param leaderEpochEndOffset      end offset for the given leader epoch.
          */
-        void accept(RemoteLogLeaderEpochState remoteLogLeaderEpochState,
-                    Long startOffset,
-                    RemoteLogSegmentId segmentId,
-                    Long leaderEpochEndOffset);
+        void accept(int leaderEpoch,
+                    RemoteLogLeaderEpochState remoteLogLeaderEpochState,
+                    long startOffset,
+                    RemoteLogSegmentId segmentId);
     }
 
 }

@@ -91,7 +91,10 @@ public class Rate implements MeasurableStat {
         if (numFullWindows < minFullWindows)
             totalElapsedTimeMs += (minFullWindows - numFullWindows) * config.timeWindowMs();
 
-        return totalElapsedTimeMs;
+        // If window size is being calculated at the exact beginning of the window with no prior samples, the window size
+        // will result in a value of 0. Calculation of rate over a window is size 0 is undefined, hence, we assume the
+        // minimum window size to be at least 1ms.
+        return Math.max(totalElapsedTimeMs, 1);
     }
 
     @Override
@@ -100,12 +103,5 @@ public class Rate implements MeasurableStat {
             "unit=" + unit +
             ", stat=" + stat +
             ')';
-    }
-
-    /**
-     * @deprecated since 2.4 Use {@link WindowedSum} instead.
-     */
-    @Deprecated
-    public static class SampledTotal extends WindowedSum {
     }
 }

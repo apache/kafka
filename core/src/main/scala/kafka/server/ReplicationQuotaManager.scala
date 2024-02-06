@@ -22,7 +22,6 @@ import java.util.concurrent.locks.ReentrantReadWriteLock
 import scala.collection.Seq
 
 import kafka.server.Constants._
-import kafka.server.ReplicationQuotaManagerConfig._
 import kafka.utils.CoreUtils._
 import kafka.utils.Logging
 import org.apache.kafka.common.metrics._
@@ -30,27 +29,7 @@ import org.apache.kafka.common.metrics._
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.metrics.stats.SimpleRate
 import org.apache.kafka.common.utils.Time
-
-/**
-  * Configuration settings for quota management
-  *
-  * @param quotaBytesPerSecondDefault The default bytes per second quota allocated to internal replication
-  * @param numQuotaSamples            The number of samples to retain in memory
-  * @param quotaWindowSizeSeconds     The time span of each sample
-  *
-  */
-case class ReplicationQuotaManagerConfig(quotaBytesPerSecondDefault: Long = QuotaBytesPerSecondDefault,
-                                         numQuotaSamples: Int = DefaultNumQuotaSamples,
-                                         quotaWindowSizeSeconds: Int = DefaultQuotaWindowSizeSeconds)
-
-object ReplicationQuotaManagerConfig {
-  val QuotaBytesPerSecondDefault = Long.MaxValue
-  // Always have 10 whole windows + 1 current window
-  val DefaultNumQuotaSamples = 11
-  val DefaultQuotaWindowSizeSeconds = 1
-  // Purge sensors after 1 hour of inactivity
-  val InactiveSensorExpirationTimeSeconds = 3600
-}
+import org.apache.kafka.server.config.ReplicationQuotaManagerConfig
 
 trait ReplicaQuota {
   def record(value: Long): Unit
@@ -76,10 +55,10 @@ class ReplicationQuotaManager(val config: ReplicationQuotaManagerConfig,
                               private val time: Time) extends Logging with ReplicaQuota {
   private val lock = new ReentrantReadWriteLock()
   private val throttledPartitions = new ConcurrentHashMap[String, Seq[Int]]()
-  private var quota: Quota = null
+  private var quota: Quota = _
   private val sensorAccess = new SensorAccess(lock, metrics)
   private val rateMetricName = metrics.metricName("byte-rate", replicationType.toString,
-    s"Tracking byte-rate for ${replicationType}")
+    s"Tracking byte-rate for $replicationType")
 
   /**
     * Update the quota
@@ -193,7 +172,7 @@ class ReplicationQuotaManager(val config: ReplicationQuotaManagerConfig,
   private def sensor(): Sensor = {
     sensorAccess.getOrCreate(
       replicationType.toString,
-      InactiveSensorExpirationTimeSeconds,
+      ReplicationQuotaManagerConfig.INACTIVE_SENSOR_EXPIRATION_TIME_SECONDS,
       sensor => sensor.add(rateMetricName, new SimpleRate, getQuotaMetricConfig(quota))
     )
   }

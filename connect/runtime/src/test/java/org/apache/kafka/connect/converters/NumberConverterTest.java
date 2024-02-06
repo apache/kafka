@@ -17,6 +17,7 @@
 package org.apache.kafka.connect.converters;
 
 import org.apache.kafka.common.serialization.Serializer;
+import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaAndValue;
 import org.apache.kafka.connect.errors.DataException;
@@ -103,5 +104,10 @@ public abstract class NumberConverterTest<T extends Number> {
         SchemaAndValue data = converter.toConnectData(TOPIC, null);
         assertEquals(schema(), data.schema());
         assertNull(data.value());
+    }
+
+    @Test
+    public void testInheritedVersionRetrievedFromAppInfoParser() {
+        assertEquals(AppInfoParser.getVersion(), converter.version());
     }
 }

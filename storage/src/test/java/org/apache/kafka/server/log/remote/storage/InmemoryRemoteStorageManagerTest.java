@@ -21,7 +21,6 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.test.TestUtils;
-import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -36,7 +35,12 @@ import java.nio.file.Path;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Random;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class InmemoryRemoteStorageManagerTest {
     private static final Logger log = LoggerFactory.getLogger(InmemoryRemoteStorageManagerTest.class);
@@ -55,12 +59,12 @@ public class InmemoryRemoteStorageManagerTest {
 
         // Check that the segment data exists in in-memory RSM.
         boolean containsSegment = rsm.containsKey(InmemoryRemoteStorageManager.generateKeyForSegment(segmentMetadata));
-        Assertions.assertTrue(containsSegment);
+        assertTrue(containsSegment);
 
         // Check that the indexes exist in in-memory RSM.
         for (RemoteStorageManager.IndexType indexType : RemoteStorageManager.IndexType.values()) {
             boolean containsIndex = rsm.containsKey(InmemoryRemoteStorageManager.generateKeyForIndex(segmentMetadata, indexType));
-            Assertions.assertTrue(containsIndex);
+            assertTrue(containsIndex);
         }
     }
 
@@ -89,8 +93,9 @@ public class InmemoryRemoteStorageManagerTest {
         HashMap<RemoteStorageManager.IndexType, Path> expectedIndexToPaths = new HashMap<>();
         expectedIndexToPaths.put(RemoteStorageManager.IndexType.OFFSET, logSegmentData.offsetIndex());
         expectedIndexToPaths.put(RemoteStorageManager.IndexType.TIMESTAMP, logSegmentData.timeIndex());
-        expectedIndexToPaths.put(RemoteStorageManager.IndexType.TRANSACTION, logSegmentData.txnIndex());
         expectedIndexToPaths.put(RemoteStorageManager.IndexType.PRODUCER_SNAPSHOT, logSegmentData.producerSnapshotIndex());
+
+        logSegmentData.transactionIndex().ifPresent(txnIndex -> expectedIndexToPaths.put(RemoteStorageManager.IndexType.TRANSACTION, txnIndex));
 
         // Check all segment indexes exist for the copied segment.
         for (Map.Entry<RemoteStorageManager.IndexType, Path> entry : expectedIndexToPaths.entrySet()) {
@@ -105,7 +110,7 @@ public class InmemoryRemoteStorageManagerTest {
 
         try (InputStream leaderEpochIndexStream = rsm.fetchIndex(segmentMetadata, RemoteStorageManager.IndexType.LEADER_EPOCH)) {
             ByteBuffer leaderEpochIndex = logSegmentData.leaderEpochIndex();
-            Assertions.assertEquals(leaderEpochIndex,
+            assertEquals(leaderEpochIndex,
                     readAsByteBuffer(leaderEpochIndexStream, leaderEpochIndex.array().length));
         }
     }
@@ -155,7 +160,7 @@ public class InmemoryRemoteStorageManagerTest {
             Utils.readFully(segmentRangeStream, fetchedSegRangeBytes);
         }
         fetchedSegRangeBytes.rewind();
-        Assertions.assertEquals(expectedSegRangeBytes, fetchedSegRangeBytes);
+        assertEquals(expectedSegRangeBytes, fetchedSegRangeBytes);
     }
 
     @Test
@@ -169,11 +174,11 @@ public class InmemoryRemoteStorageManagerTest {
         rsm.copyLogSegmentData(remoteLogSegmentMetadata, logSegmentData);
 
         // Check fetch segments with invalid ranges like startPos < endPos
-        Assertions.assertThrows(Exception.class, () -> rsm.fetchLogSegment(remoteLogSegmentMetadata, 2, 1));
+        assertThrows(Exception.class, () -> rsm.fetchLogSegment(remoteLogSegmentMetadata, 2, 1));
 
         // Check fetch segments with invalid ranges like startPos or endPos as negative.
-        Assertions.assertThrows(Exception.class, () -> rsm.fetchLogSegment(remoteLogSegmentMetadata, -1, 0));
-        Assertions.assertThrows(Exception.class, () -> rsm.fetchLogSegment(remoteLogSegmentMetadata, -2, -1));
+        assertThrows(Exception.class, () -> rsm.fetchLogSegment(remoteLogSegmentMetadata, -1, 0));
+        assertThrows(Exception.class, () -> rsm.fetchLogSegment(remoteLogSegmentMetadata, -2, -1));
     }
 
     @Test
@@ -194,21 +199,21 @@ public class InmemoryRemoteStorageManagerTest {
         rsm.deleteLogSegmentData(segmentMetadata);
 
         // Check that the segment data does not exist.
-        Assertions.assertThrows(RemoteResourceNotFoundException.class, () -> rsm.fetchLogSegment(segmentMetadata, 0));
+        assertThrows(RemoteResourceNotFoundException.class, () -> rsm.fetchLogSegment(segmentMetadata, 0));
 
         // Check that the segment data does not exist for range.
-        Assertions.assertThrows(RemoteResourceNotFoundException.class, () -> rsm.fetchLogSegment(segmentMetadata, 0, 1));
+        assertThrows(RemoteResourceNotFoundException.class, () -> rsm.fetchLogSegment(segmentMetadata, 0, 1));
 
         // Check that all the indexes are not found.
         for (RemoteStorageManager.IndexType indexType : RemoteStorageManager.IndexType.values()) {
-            Assertions.assertThrows(RemoteResourceNotFoundException.class, () -> rsm.fetchIndex(segmentMetadata, indexType));
+            assertThrows(RemoteResourceNotFoundException.class, () -> rsm.fetchIndex(segmentMetadata, indexType));
         }
     }
 
     private void checkContentSame(InputStream segmentStream, Path path) throws IOException {
         byte[] segmentBytes = Files.readAllBytes(path);
         ByteBuffer byteBuffer = readAsByteBuffer(segmentStream, segmentBytes.length);
-        Assertions.assertEquals(ByteBuffer.wrap(segmentBytes), byteBuffer);
+        assertEquals(ByteBuffer.wrap(segmentBytes), byteBuffer);
     }
 
     private ByteBuffer readAsByteBuffer(InputStream segmentStream,
@@ -241,6 +246,6 @@ public class InmemoryRemoteStorageManagerTest {
         Files.write(producerSnapshotIndex, TestUtils.randomBytes(10));
 
         ByteBuffer leaderEpochIndex = ByteBuffer.wrap(TestUtils.randomBytes(10));
-        return new LogSegmentData(segment, offsetIndex, timeIndex, txnIndex, producerSnapshotIndex, leaderEpochIndex);
+        return new LogSegmentData(segment, offsetIndex, timeIndex, Optional.of(txnIndex), producerSnapshotIndex, leaderEpochIndex);
     }
 }

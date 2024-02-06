@@ -25,7 +25,7 @@ public interface ExpirationService {
      * the provided time limit expires.
      *
      * @param timeoutMs the duration in milliseconds before the future is completed exceptionally
-     * @param <T> arbitrary future type (the service must set no expectation on the this type)
+     * @param <T> arbitrary future type (the service must set no expectation on this type)
      * @return the completable future
      */
     <T> CompletableFuture<T> failAfter(long timeoutMs);

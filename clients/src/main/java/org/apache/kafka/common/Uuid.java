@@ -17,7 +17,13 @@
 package org.apache.kafka.common;
 
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Base64;
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
 
 /**
  * This class defines an immutable universally unique identifier (UUID). It represents a 128-bit value.
@@ -28,16 +34,28 @@ import java.util.Base64;
 public class Uuid implements Comparable<Uuid> {
 
     /**
+     * A reserved UUID. Will never be returned by the randomUuid method.
+     */
+    public static final Uuid ONE_UUID = new Uuid(0L, 1L);
+
+    /**
      * A UUID for the metadata topic in KRaft mode. Will never be returned by the randomUuid method.
      */
-    public static final Uuid METADATA_TOPIC_ID = new Uuid(0L, 1L);
-    private static final java.util.UUID METADATA_TOPIC_ID_INTERNAL = new java.util.UUID(0L, 1L);
+    public static final Uuid METADATA_TOPIC_ID = ONE_UUID;
 
     /**
      * A UUID that represents a null or empty UUID. Will never be returned by the randomUuid method.
      */
     public static final Uuid ZERO_UUID = new Uuid(0L, 0L);
-    private static final java.util.UUID ZERO_ID_INTERNAL = new java.util.UUID(0L, 0L);
+
+    /**
+     * The set of reserved UUIDs that will never be returned by the randomUuid method.
+     */
+    public static final Set<Uuid> RESERVED = Collections.unmodifiableSet(new HashSet<>(Arrays.asList(
+            METADATA_TOPIC_ID,
+            ZERO_UUID,
+            ONE_UUID
+    )));
 
     private final long mostSignificantBits;
     private final long leastSignificantBits;
@@ -51,15 +69,22 @@ public class Uuid implements Comparable<Uuid> {
         this.leastSignificantBits = leastSigBits;
     }
 
+    private static Uuid unsafeRandomUuid() {
+        java.util.UUID jUuid = java.util.UUID.randomUUID();
+        return new Uuid(jUuid.getMostSignificantBits(), jUuid.getLeastSignificantBits());
+    }
+
     /**
      * Static factory to retrieve a type 4 (pseudo randomly generated) UUID.
+     *
+     * This will not generate a UUID equal to 0, 1, or one whose string representation starts with a dash ("-")
      */
     public static Uuid randomUuid() {
-        java.util.UUID uuid = java.util.UUID.randomUUID();
-        while (uuid.equals(METADATA_TOPIC_ID_INTERNAL) || uuid.equals(ZERO_ID_INTERNAL)) {
-            uuid = java.util.UUID.randomUUID();
+        Uuid uuid = unsafeRandomUuid();
+        while (RESERVED.contains(uuid) || uuid.toString().startsWith("-")) {
+            uuid = unsafeRandomUuid();
         }
-        return new Uuid(uuid.getMostSignificantBits(), uuid.getLeastSignificantBits());
+        return uuid;
     }
 
     /**
@@ -145,5 +170,33 @@ public class Uuid implements Comparable<Uuid> {
         } else {
             return 0;
         }
+    }
+
+    /**
+     * Convert a list of Uuid to an array of Uuid.
+     *
+     * @param list          The input list
+     * @return              The output array
+     */
+    public static Uuid[] toArray(List<Uuid> list) {
+        if (list == null) return null;
+        Uuid[] array = new Uuid[list.size()];
+        for (int i = 0; i < list.size(); i++) {
+            array[i] = list.get(i);
+        }
+        return array;
+    }
+
+    /**
+     * Convert an array of Uuids to a list of Uuid.
+     *
+     * @param array         The input array
+     * @return              The output list
+     */
+    public static List<Uuid> toList(Uuid[] array) {
+        if (array == null) return null;
+        List<Uuid> list = new ArrayList<>(array.length);
+        list.addAll(Arrays.asList(array));
+        return list;
     }
 }

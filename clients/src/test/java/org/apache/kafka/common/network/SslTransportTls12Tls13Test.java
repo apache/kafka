@@ -80,7 +80,7 @@ public class SslTransportTls12Tls13Test {
         sslClientConfigs.put(SslConfigs.SSL_ENABLED_PROTOCOLS_CONFIG, Collections.singletonList("TLSv1.3"));
         sslClientConfigs.put(SslConfigs.SSL_CIPHER_SUITES_CONFIG, Collections.singletonList(cipherSuite));
 
-        checkAuthentiationFailed();
+        checkAuthenticationFailed();
     }
 
     /**
@@ -101,7 +101,7 @@ public class SslTransportTls12Tls13Test {
         sslClientConfigs.put(SslConfigs.SSL_PROTOCOL_CONFIG, "TLSv1.3");
         sslClientConfigs.put(SslConfigs.SSL_CIPHER_SUITES_CONFIG, Collections.singletonList(tls13CipherSuite));
 
-        checkAuthentiationFailed();
+        checkAuthenticationFailed();
     }
 
     /**
@@ -138,7 +138,7 @@ public class SslTransportTls12Tls13Test {
     }
 
     /** Checks connection failed using the specified {@code tlsVersion}. */
-    private void checkAuthentiationFailed() throws IOException, InterruptedException {
+    private void checkAuthenticationFailed() throws IOException, InterruptedException {
         sslClientConfigs.put(SslConfigs.SSL_ENABLED_PROTOCOLS_CONFIG, Arrays.asList("TLSv1.3"));
         createSelector(sslClientConfigs);
         InetSocketAddress addr = new InetSocketAddress("localhost", server.port());
@@ -160,6 +160,9 @@ public class SslTransportTls12Tls13Test {
         SslTransportLayerTest.TestSslChannelBuilder channelBuilder = new SslTransportLayerTest.TestSslChannelBuilder(Mode.CLIENT);
         channelBuilder.configureBufferSizes(null, null, null);
         channelBuilder.configure(sslClientConfigs);
+        if (this.selector != null) {
+            this.selector.close();
+        }
         this.selector = new Selector(100 * 5000, new Metrics(), TIME, "MetricGroup", channelBuilder, new LogContext());
     }
 }

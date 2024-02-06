@@ -16,12 +16,13 @@
 {
   "apiKey": 32,
   "type": "request",
-  "listeners": ["zkBroker", "broker"],
+  "listeners": ["zkBroker", "broker", "controller"],
   "name": "DescribeConfigsRequest",
   // Version 1 adds IncludeSynonyms.
   // Version 2 is the same as version 1.
   // Version 4 enables flexible versions.
   "validVersions": "0-4",
+  "deprecatedVersions": "0",
   "flexibleVersions": "4+",
   "fields": [
     { "name": "Resources", "type": "[]DescribeConfigsResource", "versions": "0+",

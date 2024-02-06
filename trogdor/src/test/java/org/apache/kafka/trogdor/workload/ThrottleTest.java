@@ -69,5 +69,5 @@ public class ThrottleTest {
         assertTrue(throttle.increment());
         assertEquals(200, time.milliseconds());
     }
-};
+}
 

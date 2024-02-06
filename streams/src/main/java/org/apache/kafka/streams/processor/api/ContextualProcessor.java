@@ -27,7 +27,7 @@ package org.apache.kafka.streams.processor.api;
  */
 public abstract class ContextualProcessor<KIn, VIn, KOut, VOut> implements Processor<KIn, VIn, KOut, VOut> {
 
-    protected ProcessorContext<KOut, VOut> context;
+    private ProcessorContext<KOut, VOut> context;
 
     protected ContextualProcessor() {}
 

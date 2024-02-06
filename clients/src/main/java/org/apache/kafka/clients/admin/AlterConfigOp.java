@@ -86,11 +86,11 @@ public class AlterConfigOp {
 
     public ConfigEntry configEntry() {
         return configEntry;
-    };
+    }
 
     public OpType opType() {
         return opType;
-    };
+    }
 
     @Override
     public boolean equals(final Object o) {

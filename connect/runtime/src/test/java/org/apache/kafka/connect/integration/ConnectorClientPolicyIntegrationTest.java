@@ -83,11 +83,28 @@ public class ConnectorClientPolicyIntegrationTest {
         assertPassCreateConnector("All", props);
     }
 
+    @Test
+    public void testCreateWithNoAllowedOverridesForNonePolicy() throws Exception {
+        // setup up props for the sink connector
+        Map<String, String> props = basicConnectorConfig();
+        assertPassCreateConnector("None", props);
+    }
+
+    @Test
+    public void testCreateWithAllowedOverridesForDefaultPolicy() throws Exception {
+        // setup up props for the sink connector
+        Map<String, String> props = basicConnectorConfig();
+        props.put(ConnectorConfig.CONNECTOR_CLIENT_CONSUMER_OVERRIDES_PREFIX + CommonClientConfigs.CLIENT_ID_CONFIG, "test");
+        assertPassCreateConnector(null, props);
+    }
+
     private EmbeddedConnectCluster connectClusterWithPolicy(String policy) throws InterruptedException {
         // setup Connect worker properties
         Map<String, String> workerProps = new HashMap<>();
         workerProps.put(OFFSET_COMMIT_INTERVAL_MS_CONFIG, String.valueOf(5_000));
-        workerProps.put(WorkerConfig.CONNECTOR_CLIENT_POLICY_CLASS_CONFIG, policy);
+        if (policy != null) {
+            workerProps.put(WorkerConfig.CONNECTOR_CLIENT_POLICY_CLASS_CONFIG, policy);
+        }
 
         // setup Kafka broker properties
         Properties exampleBrokerProps = new Properties();

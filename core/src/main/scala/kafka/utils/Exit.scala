@@ -45,7 +45,7 @@ object Exit {
     JExit.setHaltProcedure(functionToProcedure(haltProcedure))
 
   def setShutdownHookAdder(shutdownHookAdder: (String, => Unit) => Unit): Unit = {
-    JExit.setShutdownHookAdder((name, runnable) => shutdownHookAdder(name, runnable.run))
+    JExit.setShutdownHookAdder((name, runnable) => shutdownHookAdder(name, runnable.run()))
   }
 
   def resetExitProcedure(): Unit =

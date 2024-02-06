@@ -94,7 +94,7 @@ public class Selector implements Selectable, AutoCloseable {
         NOTIFY_ONLY(true),         // discard any outstanding receives, notify disconnect
         DISCARD_NO_NOTIFY(false);  // discard any outstanding receives, no disconnect notification
 
-        boolean notifyDisconnect;
+        final boolean notifyDisconnect;
 
         CloseMode(boolean notifyDisconnect) {
             this.notifyDisconnect = notifyDisconnect;
@@ -334,9 +334,10 @@ public class Selector implements Selectable, AutoCloseable {
     }
 
     private KafkaChannel buildAndAttachKafkaChannel(SocketChannel socketChannel, String id, SelectionKey key) throws IOException {
+        ChannelMetadataRegistry metadataRegistry = null;
         try {
-            KafkaChannel channel = channelBuilder.buildChannel(id, key, maxReceiveSize, memoryPool,
-                new SelectorChannelMetadataRegistry());
+            metadataRegistry = new SelectorChannelMetadataRegistry();
+            KafkaChannel channel = channelBuilder.buildChannel(id, key, maxReceiveSize, memoryPool, metadataRegistry);
             key.attach(channel);
             return channel;
         } catch (Exception e) {
@@ -345,6 +346,9 @@ public class Selector implements Selectable, AutoCloseable {
             } finally {
                 key.cancel();
             }
+            // Ideally, these resources are closed by the KafkaChannel but if the KafkaChannel is not created to an
+            // error, this builder should close the resources it has created instead.
+            Utils.closeQuietly(metadataRegistry, "metadataRegistry");
             throw new IOException("Channel could not be created for socket " + socketChannel, e);
         }
     }
@@ -399,7 +403,7 @@ public class Selector implements Selectable, AutoCloseable {
                 this.failedSends.add(connectionId);
                 close(channel, CloseMode.DISCARD_NO_NOTIFY);
                 if (!(e instanceof CancelledKeyException)) {
-                    log.error("Unexpected exception during send, closing connection {} and rethrowing exception {}",
+                    log.error("Unexpected exception during send, closing connection {} and rethrowing exception.",
                             connectionId, e);
                     throw e;
                 }
@@ -426,7 +430,7 @@ public class Selector implements Selectable, AutoCloseable {
      * buffers. If there are channels with buffered data that can by processed, we set "timeout" to 0 and process the data even
      * if there is no more data to read from the socket.
      *
-     * Atmost one entry is added to "completedReceives" for a channel in each poll. This is necessary to guarantee that
+     * At most one entry is added to "completedReceives" for a channel in each poll. This is necessary to guarantee that
      * requests from a channel are processed on the broker in the order they are sent. Since outstanding requests added
      * by SocketServer to the request queue may be processed by different request handler threads, requests on each
      * channel must be processed one-at-a-time to guarantee ordering.
@@ -464,7 +468,7 @@ public class Selector implements Selectable, AutoCloseable {
         long startSelect = time.nanoseconds();
         int numReadyKeys = select(timeout);
         long endSelect = time.nanoseconds();
-        this.sensors.selectTime.record(endSelect - startSelect, time.milliseconds());
+        this.sensors.selectTime.record(endSelect - startSelect, time.milliseconds(), false);
 
         if (numReadyKeys > 0 || !immediatelyConnectedKeys.isEmpty() || dataInBuffers) {
             Set<SelectionKey> readyKeys = this.nioSelector.selectedKeys();
@@ -479,7 +483,7 @@ public class Selector implements Selectable, AutoCloseable {
 
             // Poll from channels where the underlying socket has more data
             pollSelectionKeys(readyKeys, false, endSelect);
-            // Clear all selected keys so that they are included in the ready count for the next select
+            // Clear all selected keys so that they are excluded from the ready count for the next select
             readyKeys.clear();
 
             pollSelectionKeys(immediatelyConnectedKeys, true, endSelect);
@@ -489,7 +493,7 @@ public class Selector implements Selectable, AutoCloseable {
         }
 
         long endIo = time.nanoseconds();
-        this.sensors.ioTime.record(endIo - endSelect, time.milliseconds());
+        this.sensors.ioTime.record(endIo - endSelect, time.milliseconds(), false);
 
         // Close channels that were delayed and are now ready to be closed
         completeDelayedChannelClose(endIo);
@@ -601,7 +605,7 @@ public class Selector implements Selectable, AutoCloseable {
                     close(channel, CloseMode.GRACEFUL);
 
             } catch (Exception e) {
-                String desc = channel.socketDescription();
+                String desc = String.format("%s (channelId=%s)", channel.socketDescription(), channel.id());
                 if (e instanceof IOException) {
                     log.debug("Connection with {} disconnected", desc, e);
                 } else if (e instanceof AuthenticationException) {
@@ -757,6 +761,7 @@ public class Selector implements Selectable, AutoCloseable {
             explicitlyMutedChannels.remove(channel);
             if (channel.hasBytesBuffered()) {
                 keysWithBufferedRead.add(channel.selectionKey());
+                madeReadProgressLastPoll = true;
             }
         }
     }
@@ -845,7 +850,7 @@ public class Selector implements Selectable, AutoCloseable {
             boolean hasPending = false;
             if (!sendFailed)
                 hasPending = maybeReadFromClosingChannel(channel);
-            if (!hasPending || sendFailed) {
+            if (!hasPending) {
                 doClose(channel, true);
                 it.remove();
             }
@@ -1225,11 +1230,13 @@ public class Selector implements Selectable, AutoCloseable {
                     new WindowedCount(), "select", "times the I/O layer checked for new I/O to perform"));
             metricName = metrics.metricName("io-wait-time-ns-avg", metricGrpName, "The average length of time the I/O thread spent waiting for a socket ready for reads or writes in nanoseconds.", metricTags);
             this.selectTime.add(metricName, new Avg());
+            this.selectTime.add(createIOThreadRatioMeterLegacy(metrics, metricGrpName, metricTags, "io-wait", "waiting"));
             this.selectTime.add(createIOThreadRatioMeter(metrics, metricGrpName, metricTags, "io-wait", "waiting"));
 
             this.ioTime = sensor("io-time:" + tagsSuffix);
             metricName = metrics.metricName("io-time-ns-avg", metricGrpName, "The average length of time for I/O per select call in nanoseconds.", metricTags);
             this.ioTime.add(metricName, new Avg());
+            this.ioTime.add(createIOThreadRatioMeterLegacy(metrics, metricGrpName, metricTags, "io", "doing I/O"));
             this.ioTime.add(createIOThreadRatioMeter(metrics, metricGrpName, metricTags, "io", "doing I/O"));
 
             this.connectionsByCipher = new IntGaugeSuite<>(log, "sslCiphers", metrics,
@@ -1272,12 +1279,27 @@ public class Selector implements Selectable, AutoCloseable {
             return createMeter(metrics, groupName, metricTags, null, baseName, descriptiveName);
         }
 
-        private Meter createIOThreadRatioMeter(Metrics metrics, String groupName,  Map<String, String> metricTags,
+        /**
+         * This method generates `time-total` metrics but has a couple of deficiencies: no `-ns` suffix and no dash between basename
+         * and `time-toal` suffix.
+         * @deprecated use {{@link #createIOThreadRatioMeter(Metrics, String, Map, String, String)}} for new metrics instead
+         */
+        @Deprecated
+        private Meter createIOThreadRatioMeterLegacy(Metrics metrics, String groupName,  Map<String, String> metricTags,
                 String baseName, String action) {
             MetricName rateMetricName = metrics.metricName(baseName + "-ratio", groupName,
-                    String.format("The fraction of time the I/O thread spent %s", action), metricTags);
+                    String.format("*Deprecated* The fraction of time the I/O thread spent %s", action), metricTags);
             MetricName totalMetricName = metrics.metricName(baseName + "time-total", groupName,
-                    String.format("The total time the I/O thread spent %s", action), metricTags);
+                    String.format("*Deprecated* The total time the I/O thread spent %s", action), metricTags);
+            return new Meter(TimeUnit.NANOSECONDS, rateMetricName, totalMetricName);
+        }
+
+        private Meter createIOThreadRatioMeter(Metrics metrics, String groupName,  Map<String, String> metricTags,
+                                               String baseName, String action) {
+            MetricName rateMetricName = metrics.metricName(baseName + "-ratio", groupName,
+                String.format("The fraction of time the I/O thread spent %s", action), metricTags);
+            MetricName totalMetricName = metrics.metricName(baseName + "-time-ns-total", groupName,
+                String.format("The total time the I/O thread spent %s", action), metricTags);
             return new Meter(TimeUnit.NANOSECONDS, rateMetricName, totalMetricName);
         }
 
@@ -1327,7 +1349,7 @@ public class Selector implements Selectable, AutoCloseable {
         }
 
         public void recordBytesSent(String connectionId, long bytes, long currentTimeMs) {
-            this.bytesSent.record(bytes, currentTimeMs);
+            this.bytesSent.record(bytes, currentTimeMs, false);
             if (!connectionId.isEmpty()) {
                 String bytesSentName = "node-" + connectionId + ".bytes-sent";
                 Sensor bytesSent = this.metrics.getSensor(bytesSentName);
@@ -1337,7 +1359,7 @@ public class Selector implements Selectable, AutoCloseable {
         }
 
         public void recordCompletedSend(String connectionId, long totalBytes, long currentTimeMs) {
-            requestsSent.record(totalBytes, currentTimeMs);
+            requestsSent.record(totalBytes, currentTimeMs, false);
             if (!connectionId.isEmpty()) {
                 String nodeRequestName = "node-" + connectionId + ".requests-sent";
                 Sensor nodeRequest = this.metrics.getSensor(nodeRequestName);
@@ -1347,7 +1369,7 @@ public class Selector implements Selectable, AutoCloseable {
         }
 
         public void recordBytesReceived(String connectionId, long bytes, long currentTimeMs) {
-            this.bytesReceived.record(bytes, currentTimeMs);
+            this.bytesReceived.record(bytes, currentTimeMs, false);
             if (!connectionId.isEmpty()) {
                 String bytesReceivedName = "node-" + connectionId + ".bytes-received";
                 Sensor bytesReceived = this.metrics.getSensor(bytesReceivedName);
@@ -1357,7 +1379,7 @@ public class Selector implements Selectable, AutoCloseable {
         }
 
         public void recordCompletedReceive(String connectionId, long totalBytes, long currentTimeMs) {
-            responsesReceived.record(totalBytes, currentTimeMs);
+            responsesReceived.record(totalBytes, currentTimeMs, false);
             if (!connectionId.isEmpty()) {
                 String nodeRequestName = "node-" + connectionId + ".responses-received";
                 Sensor nodeRequest = this.metrics.getSensor(nodeRequestName);

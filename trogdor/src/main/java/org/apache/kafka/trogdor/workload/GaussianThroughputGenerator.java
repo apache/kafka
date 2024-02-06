@@ -25,21 +25,17 @@ import java.util.Random;
 /*
  * This throughput generator configures throughput with a gaussian normal distribution on a per-window basis. You can
  * specify how many windows to keep the throughput at the rate before changing. All traffic will follow a gaussian
- * distribution centered around `messagesPerSecondAverage` with a deviation of `messagesPerSecondDeviation`.
+ * distribution centered around `messagesPerWindowAverage` with a deviation of `messagesPerWindowDeviation`.
  *
  * The lower the window size, the smoother the traffic will be. Using a 100ms window offers no noticeable spikes in
  * traffic while still being long enough to avoid too much overhead.
- *
- * WARNING: Due to binary nature of throughput in terms of messages sent in a window, this does not work well for an
- * average throughput of less than 5 messages per window.  In cases where you want lower throughput, please adjust the
- * `windowSizeMs` accordingly.
  *
  * Here is an example spec:
  *
  * {
  *    "type": "gaussian",
- *    "messagesPerSecondAverage": 500,
- *    "messagesPerSecondDeviation": 50,
+ *    "messagesPerWindowAverage": 50,
+ *    "messagesPerWindowDeviation": 5,
  *    "windowsUntilRateChange": 100,
  *    "windowSizeMs": 100
  * }
@@ -56,10 +52,8 @@ import java.util.Random;
  */
 
 public class GaussianThroughputGenerator implements ThroughputGenerator {
-    private final int messagesPerSecondAverage;
-    private final int messagesPerSecondDeviation;
     private final int messagesPerWindowAverage;
-    private final int messagesPerWindowDeviation;
+    private final double messagesPerWindowDeviation;
     private final int windowsUntilRateChange;
     private final long windowSizeMs;
 
@@ -71,40 +65,41 @@ public class GaussianThroughputGenerator implements ThroughputGenerator {
     private int throttleMessages = 0;
 
     @JsonCreator
-    public GaussianThroughputGenerator(@JsonProperty("messagesPerSecondAverage") int messagesPerSecondAverage,
-                                       @JsonProperty("messagesPerSecondDeviation") int messagesPerSecondDeviation,
+    public GaussianThroughputGenerator(@JsonProperty("messagesPerWindowAverage") int messagesPerWindowAverage,
+                                       @JsonProperty("messagesPerWindowDeviation") double messagesPerWindowDeviation,
                                        @JsonProperty("windowsUntilRateChange") int windowsUntilRateChange,
                                        @JsonProperty("windowSizeMs") long windowSizeMs) {
-        // Calcualte the default values.
+        // Calculate the default values.
         if (windowSizeMs <= 0) {
             windowSizeMs = 100;
         }
         this.windowSizeMs = windowSizeMs;
-        this.messagesPerSecondAverage = messagesPerSecondAverage;
-        this.messagesPerSecondDeviation = messagesPerSecondDeviation;
+        this.messagesPerWindowAverage = messagesPerWindowAverage;
+        this.messagesPerWindowDeviation = messagesPerWindowDeviation;
         this.windowsUntilRateChange = windowsUntilRateChange;
 
-        // Take per-second calculations and convert them to per-window calculations.
-        messagesPerWindowAverage = (int) (messagesPerSecondAverage * windowSizeMs / 1000);
-        messagesPerWindowDeviation = (int) (messagesPerSecondDeviation * windowSizeMs / 1000);
-
-        // Calcualte the first window.
+        // Calculate the first window.
         calculateNextWindow(true);
     }
 
     @JsonProperty
-    public int messagesPerSecondAverage() {
-        return messagesPerSecondAverage;
+    public int messagesPerWindowAverage() {
+        return messagesPerWindowAverage;
     }
 
     @JsonProperty
-    public long messagesPerSecondDeviation() {
-        return messagesPerSecondDeviation;
+    public double messagesPerWindowDeviation() {
+        return messagesPerWindowDeviation;
     }
 
     @JsonProperty
     public long windowsUntilRateChange() {
         return windowsUntilRateChange;
+    }
+
+    @JsonProperty
+    public long windowSizeMs() {
+        return windowSizeMs;
     }
 
     private synchronized void calculateNextWindow(boolean force) {
@@ -127,7 +122,7 @@ public class GaussianThroughputGenerator implements ThroughputGenerator {
 
             // Calculate the number of messages allowed in this window using a normal distribution.
             // The formula is: Messages = Gaussian * Deviation + Average
-            throttleMessages = Math.max((int) (random.nextGaussian() * (double) messagesPerWindowDeviation) + messagesPerWindowAverage, 1);
+            throttleMessages = Math.max((int) (random.nextGaussian() * messagesPerWindowDeviation) + messagesPerWindowAverage, 1);
         }
         windowTracker += 1;
     }
@@ -146,7 +141,9 @@ public class GaussianThroughputGenerator implements ThroughputGenerator {
         if (messageTracker >= throttleMessages) {
 
             // Wait the difference in time between now and when the next window starts.
-            wait(nextWindowStarts - Time.SYSTEM.milliseconds());
+            while (nextWindowStarts > Time.SYSTEM.milliseconds()) {
+                wait(nextWindowStarts - Time.SYSTEM.milliseconds());
+            }
         }
     }
 }

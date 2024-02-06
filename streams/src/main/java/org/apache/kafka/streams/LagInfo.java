@@ -20,7 +20,7 @@ import java.util.Objects;
 
 /**
  * Encapsulates information about lag, at a store partition replica (active or standby). This information is constantly changing as the
- * tasks process records and thus, they should be treated as simply instantaenous measure of lag.
+ * tasks process records and thus, they should be treated as simply instantaneous measure of lag.
  */
 public class LagInfo {
 

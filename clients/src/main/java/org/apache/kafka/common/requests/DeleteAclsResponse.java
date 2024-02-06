@@ -60,7 +60,12 @@ public class DeleteAclsResponse extends AbstractResponse {
         return data.throttleTimeMs();
     }
 
-    public List<DeleteAclsResponseData.DeleteAclsFilterResult> filterResults() {
+    @Override
+    public void maybeSetThrottleTimeMs(int throttleTimeMs) {
+        data.setThrottleTimeMs(throttleTimeMs);
+    }
+
+    public final List<DeleteAclsResponseData.DeleteAclsFilterResult> filterResults() {
         return data.filterResults();
     }
 

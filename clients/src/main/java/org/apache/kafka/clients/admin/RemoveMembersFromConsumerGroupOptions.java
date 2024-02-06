@@ -32,7 +32,8 @@ import java.util.Set;
 @InterfaceStability.Evolving
 public class RemoveMembersFromConsumerGroupOptions extends AbstractOptions<RemoveMembersFromConsumerGroupOptions> {
 
-    private Set<MemberToRemove> members;
+    private final Set<MemberToRemove> members;
+    private String reason;
 
     public RemoveMembersFromConsumerGroupOptions(Collection<MemberToRemove> members) {
         if (members.isEmpty()) {
@@ -45,8 +46,19 @@ public class RemoveMembersFromConsumerGroupOptions extends AbstractOptions<Remov
         this.members = Collections.emptySet();
     }
 
+    /**
+     * Sets an optional reason.
+     */
+    public void reason(final String reason) {
+        this.reason = reason;
+    }
+
     public Set<MemberToRemove> members() {
         return members;
+    }
+
+    public String reason() {
+        return reason;
     }
 
     public boolean removeAll() {

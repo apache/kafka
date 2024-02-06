@@ -28,7 +28,7 @@ import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.utils.ByteBufferOutputStream;
 import org.apache.kafka.common.utils.ByteUtils;
-import org.apache.kafka.raft.RecordSerde;
+import org.apache.kafka.server.common.serialization.RecordSerde;
 
 import java.io.DataOutputStream;
 import java.nio.ByteBuffer;
@@ -52,7 +52,7 @@ public class BatchBuilder<T> {
     private final ByteBufferOutputStream batchOutput;
     private final DataOutputStreamWritable recordOutput;
     private final long baseOffset;
-    private final long logAppendTime;
+    private final long appendTime;
     private final boolean isControlBatch;
     private final int leaderEpoch;
     private final int initialPosition;
@@ -69,7 +69,7 @@ public class BatchBuilder<T> {
         RecordSerde<T> serde,
         CompressionType compressionType,
         long baseOffset,
-        long logAppendTime,
+        long appendTime,
         boolean isControlBatch,
         int leaderEpoch,
         int maxBytes
@@ -80,7 +80,7 @@ public class BatchBuilder<T> {
         this.compressionType = compressionType;
         this.baseOffset = baseOffset;
         this.nextOffset = baseOffset;
-        this.logAppendTime = logAppendTime;
+        this.appendTime = appendTime;
         this.isControlBatch = isControlBatch;
         this.initialPosition = batchOutput.position();
         this.leaderEpoch = leaderEpoch;
@@ -96,7 +96,7 @@ public class BatchBuilder<T> {
     }
 
     /**
-     * Append a record to this patch. The caller must first verify there is room for the batch
+     * Append a record to this batch. The caller must first verify there is room for the batch
      * using {@link #bytesNeeded(Collection, ObjectSerializationCache)}.
      *
      * @param record the record to append
@@ -128,7 +128,7 @@ public class BatchBuilder<T> {
      * Check whether the batch has enough room for all the record values.
      *
      * Returns an empty {@link OptionalInt} if the batch builder has room for this list of records.
-     * Otherwise it returns the expected number of bytes needed for a batch to contain these records.
+     * Otherwise, it returns the expected number of bytes needed for a batch to contain these records.
      *
      * @param records the records to use when checking for room
      * @param serializationCache serialization cache for computing sizes
@@ -142,7 +142,7 @@ public class BatchBuilder<T> {
         );
 
         if (!isOpenForAppends) {
-            return OptionalInt.of(batchHeaderSizeInBytes() + bytesNeeded);
+            return OptionalInt.of(Math.addExact(batchHeaderSizeInBytes(), bytesNeeded));
         }
 
         int approxUnusedSizeInBytes = maxBytes - approximateSizeInBytes();
@@ -157,7 +157,7 @@ public class BatchBuilder<T> {
             }
         }
 
-        return OptionalInt.of(batchHeaderSizeInBytes() + bytesNeeded);
+        return OptionalInt.of(Math.addExact(batchHeaderSizeInBytes(), bytesNeeded));
     }
 
     private int flushedSizeInBytes() {
@@ -217,7 +217,7 @@ public class BatchBuilder<T> {
     /**
      * Return the reference to the initial buffer passed through the constructor.
      * This is used in case the buffer needs to be returned to a pool (e.g.
-     * in {@link org.apache.kafka.common.memory.MemoryPool#release(ByteBuffer)}.
+     * in {@link org.apache.kafka.common.memory.MemoryPool#release(ByteBuffer)}).
      *
      * @return the initial buffer passed to the constructor
      */
@@ -249,13 +249,14 @@ public class BatchBuilder<T> {
             RecordBatch.MAGIC_VALUE_V2,
             compressionType,
             TimestampType.CREATE_TIME,
-            logAppendTime,
-            logAppendTime,
+            appendTime,
+            appendTime,
             RecordBatch.NO_PRODUCER_ID,
             RecordBatch.NO_PRODUCER_EPOCH,
             RecordBatch.NO_SEQUENCE,
             false,
             isControlBatch,
+            false,
             leaderEpoch,
             numRecords()
         );
@@ -327,7 +328,7 @@ public class BatchBuilder<T> {
             if (expectedNextOffset - baseOffset >= Integer.MAX_VALUE) {
                 throw new IllegalArgumentException(
                     String.format(
-                        "Adding %s records to a batch with base offset of %s and next offset of %s",
+                        "Adding %d records to a batch with base offset of %d and next offset of %d",
                         records.size(),
                         baseOffset,
                         expectedNextOffset

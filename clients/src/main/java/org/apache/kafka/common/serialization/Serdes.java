@@ -19,6 +19,7 @@ package org.apache.kafka.common.serialization;
 import org.apache.kafka.common.utils.Bytes;
 
 import java.nio.ByteBuffer;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -125,6 +126,33 @@ public class Serdes {
         }
     }
 
+    static public final class BooleanSerde extends WrapperSerde<Boolean> {
+        public BooleanSerde() {
+            super(new BooleanSerializer(), new BooleanDeserializer());
+        }
+    }
+
+    static public final class ListSerde<Inner> extends WrapperSerde<List<Inner>> {
+
+        final static int NULL_ENTRY_VALUE = -1;
+
+        enum SerializationStrategy {
+            CONSTANT_SIZE,
+            VARIABLE_SIZE;
+
+            public static final SerializationStrategy[] VALUES = SerializationStrategy.values();
+        }
+
+        public ListSerde() {
+            super(new ListSerializer<>(), new ListDeserializer<>());
+        }
+
+        public <L extends List<Inner>> ListSerde(Class<L> listClass, Serde<Inner> serde) {
+            super(new ListSerializer<>(serde.serializer()), new ListDeserializer<>(listClass, serde.deserializer()));
+        }
+
+    }
+
     @SuppressWarnings("unchecked")
     static public <T> Serde<T> serdeFrom(Class<T> type) {
         if (String.class.isAssignableFrom(type)) {
@@ -167,9 +195,13 @@ public class Serdes {
             return (Serde<T>) UUID();
         }
 
+        if (Boolean.class.isAssignableFrom(type)) {
+            return (Serde<T>) Boolean();
+        }
+
         // TODO: we can also serializes objects of type T using generic Java serialization by default
         throw new IllegalArgumentException("Unknown class for built-in serializer. Supported types are: " +
-            "String, Short, Integer, Long, Float, Double, ByteArray, ByteBuffer, Bytes, UUID");
+            "String, Short, Integer, Long, Float, Double, ByteArray, ByteBuffer, Bytes, UUID, Boolean");
     }
 
     /**
@@ -253,6 +285,13 @@ public class Serdes {
     }
 
     /**
+     * A serde for nullable {@code Boolean} type.
+     */
+    static public Serde<Boolean> Boolean() {
+        return new BooleanSerde();
+    }
+
+    /**
      * A serde for nullable {@code byte[]} type.
      */
     static public Serde<byte[]> ByteArray() {
@@ -265,4 +304,12 @@ public class Serdes {
     static public Serde<Void> Void() {
         return new VoidSerde();
     }
+
+    /*
+     * A serde for {@code List} type
+     */
+    static public <L extends List<Inner>, Inner> Serde<List<Inner>> ListSerde(Class<L> listClass, Serde<Inner> innerSerde) {
+        return new ListSerde<>(listClass, innerSerde);
+    }
+
 }

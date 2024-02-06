@@ -73,6 +73,11 @@ public class EndQuorumEpochResponse extends AbstractResponse {
         return DEFAULT_THROTTLE_TIME;
     }
 
+    @Override
+    public void maybeSetThrottleTimeMs(int throttleTimeMs) {
+        // Not supported by the response schema
+    }
+
     public static EndQuorumEpochResponseData singletonResponse(
         Errors topLevelError,
         TopicPartition topicPartition,

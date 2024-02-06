@@ -19,6 +19,7 @@ package org.apache.kafka.clients.admin.internals;
 import org.apache.kafka.clients.admin.DescribeProducersOptions;
 import org.apache.kafka.clients.admin.DescribeProducersResult.PartitionProducerState;
 import org.apache.kafka.clients.admin.internals.AdminApiHandler.ApiResult;
+import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.InvalidTopicException;
 import org.apache.kafka.common.errors.NotLeaderOrFollowerException;
@@ -39,6 +40,7 @@ import org.junit.jupiter.api.Test;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.OptionalInt;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -46,26 +48,23 @@ import java.util.stream.Collectors;
 import static java.util.Arrays.asList;
 import static java.util.Collections.emptyList;
 import static java.util.Collections.emptyMap;
-import static java.util.Collections.emptySet;
 import static java.util.Collections.singletonList;
 import static java.util.Collections.singletonMap;
 import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class DescribeProducersHandlerTest {
     private DescribeProducersHandler newHandler(
-        Set<TopicPartition> topicPartitions,
         DescribeProducersOptions options
     ) {
         return new DescribeProducersHandler(
-            topicPartitions,
             options,
             new LogContext()
         );
     }
+    
 
     @Test
     public void testBrokerIdSetInOptions() {
@@ -77,16 +76,13 @@ public class DescribeProducersHandlerTest {
         );
 
         DescribeProducersHandler handler = newHandler(
-            topicPartitions,
             new DescribeProducersOptions().brokerId(brokerId)
         );
 
-        AdminApiHandler.Keys<TopicPartition> keys = handler.initializeKeys();
-        assertEquals(emptySet(), keys.dynamicKeys);
-        assertNull(keys.lookupStrategy);
-
-        keys.staticKeys.forEach((topicPartition, mappedBrokerId) -> {
-            assertEquals(brokerId, mappedBrokerId, "Unexpected brokerId for " + topicPartition);
+        topicPartitions.forEach(topicPartition -> {
+            ApiRequestScope scope = handler.lookupStrategy().lookupScope(topicPartition);
+            assertEquals(OptionalInt.of(brokerId), scope.destinationBrokerId(),
+                "Unexpected brokerId for " + topicPartition);
         });
     }
 
@@ -99,14 +95,14 @@ public class DescribeProducersHandlerTest {
         );
 
         DescribeProducersHandler handler = newHandler(
-            topicPartitions,
             new DescribeProducersOptions()
         );
 
-        AdminApiHandler.Keys<TopicPartition> keys = handler.initializeKeys();
-        assertEquals(emptyMap(), keys.staticKeys);
-        assertTrue(keys.lookupStrategy instanceof PartitionLeaderStrategy);
-        assertEquals(topicPartitions, keys.dynamicKeys);
+        topicPartitions.forEach(topicPartition -> {
+            ApiRequestScope scope = handler.lookupStrategy().lookupScope(topicPartition);
+            assertEquals(OptionalInt.empty(), scope.destinationBrokerId(),
+                "Unexpected brokerId for " + topicPartition);
+        });
     }
 
     @Test
@@ -118,12 +114,11 @@ public class DescribeProducersHandlerTest {
         );
 
         DescribeProducersHandler handler = newHandler(
-            topicPartitions,
             new DescribeProducersOptions()
         );
 
         int brokerId = 3;
-        DescribeProducersRequest.Builder request = handler.buildRequest(brokerId, topicPartitions);
+        DescribeProducersRequest.Builder request = handler.buildBatchedRequest(brokerId, topicPartitions);
 
         List<DescribeProducersRequestData.TopicRequest> topics = request.data.topics();
 
@@ -197,16 +192,16 @@ public class DescribeProducersHandlerTest {
     public void testCompletedResult() {
         TopicPartition topicPartition = new TopicPartition("foo", 5);
         DescribeProducersOptions options = new DescribeProducersOptions().brokerId(1);
-        DescribeProducersHandler handler = newHandler(mkSet(topicPartition), options);
+        DescribeProducersHandler handler = newHandler(options);
 
-        int brokerId = 3;
         PartitionResponse partitionResponse = sampleProducerState(topicPartition);
         DescribeProducersResponse response = describeProducersResponse(
             singletonMap(topicPartition, partitionResponse)
         );
+        Node node = new Node(3, "host", 1);
 
         ApiResult<TopicPartition, PartitionProducerState> result =
-            handler.handleResponse(brokerId, mkSet(topicPartition), response);
+            handler.handleResponse(node, mkSet(topicPartition), response);
 
         assertEquals(mkSet(topicPartition), result.completedKeys.keySet());
         assertEquals(emptyMap(), result.failedKeys);
@@ -244,10 +239,10 @@ public class DescribeProducersHandlerTest {
         TopicPartition topicPartition,
         Errors error
     ) {
-        DescribeProducersHandler handler = newHandler(mkSet(topicPartition), options);
-        int brokerId = options.brokerId().orElse(3);
+        DescribeProducersHandler handler = newHandler(options);
         DescribeProducersResponse response = buildResponseWithError(topicPartition, error);
-        return handler.handleResponse(brokerId, mkSet(topicPartition), response);
+        Node node = new Node(options.brokerId().orElse(3), "host", 1);
+        return handler.handleResponse(node, mkSet(topicPartition), response);
     }
 
     private DescribeProducersResponse buildResponseWithError(

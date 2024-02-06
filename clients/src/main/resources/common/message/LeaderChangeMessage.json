@@ -19,6 +19,8 @@
   "validVersions": "0",
   "flexibleVersions": "0+",
   "fields": [
+    {"name": "Version", "type": "int16", "versions": "0+",
+      "about": "The version of the leader change message"},
     {"name": "LeaderId", "type": "int32", "versions": "0+", "entityType": "brokerId",
       "about": "The ID of the newly elected leader"},
     {"name": "Voters", "type": "[]Voter", "versions": "0+",

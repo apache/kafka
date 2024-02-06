@@ -22,9 +22,8 @@ import java.time.Duration
 import java.util
 import java.util.Collections
 
-import kafka.api
 import kafka.server.KafkaConfig
-import kafka.utils.TestUtils
+import kafka.utils.{EmptyTestInfo, TestUtils}
 import org.apache.kafka.clients.admin.NewTopic
 import org.apache.kafka.clients.consumer.ConsumerConfig
 import org.apache.kafka.clients.producer.{ProducerConfig, ProducerRecord}
@@ -41,28 +40,13 @@ class ConsumerTopicCreationTest {
   @MethodSource(Array("parameters"))
   def testAutoTopicCreation(brokerAutoTopicCreationEnable: JBoolean, consumerAllowAutoCreateTopics: JBoolean): Unit = {
     val testCase = new ConsumerTopicCreationTest.TestCase(brokerAutoTopicCreationEnable, consumerAllowAutoCreateTopics)
-    testCase.setUp()
+    testCase.setUp(new EmptyTestInfo())
     try testCase.test() finally testCase.tearDown()
   }
 
-  @ParameterizedTest
-  @MethodSource(Array("parameters"))
-  def testAutoTopicCreationWithForwarding(brokerAutoTopicCreationEnable: JBoolean, consumerAllowAutoCreateTopics: JBoolean): Unit = {
-    val testCase = new api.ConsumerTopicCreationTest.TestCaseWithForwarding(brokerAutoTopicCreationEnable, consumerAllowAutoCreateTopics)
-    testCase.setUp()
-    try testCase.test() finally testCase.tearDown()
-  }
 }
 
 object ConsumerTopicCreationTest {
-
-  private class TestCaseWithForwarding(brokerAutoTopicCreationEnable: JBoolean, consumerAllowAutoCreateTopics: JBoolean)
-    extends TestCase(brokerAutoTopicCreationEnable, consumerAllowAutoCreateTopics) {
-
-    override protected def brokerCount: Int = 3
-
-    override def enableForwarding: Boolean = true
-  }
 
   private class TestCase(brokerAutoTopicCreationEnable: JBoolean, consumerAllowAutoCreateTopics: JBoolean) extends IntegrationTestHarness {
     private val topic_1 = "topic-1"

@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.header.Headers;
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 
 import java.util.Objects;
@@ -31,7 +32,7 @@ class LRUCacheEntry {
 
 
     LRUCacheEntry(final byte[] value) {
-        this(value, null, false, -1, -1, -1, "");
+        this(value, new RecordHeaders(), false, -1, -1, -1, "");
     }
 
     LRUCacheEntry(final byte[] value,

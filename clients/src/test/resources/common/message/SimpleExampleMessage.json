@@ -50,9 +50,12 @@
       "fields": [
         { "name": "structId", "type": "string", "versions": "2+", "about": "String field in struct"}
     ]},
-    { "name":  "myCommonStruct", "type": "TestCommonStruct", "versions": "0+"},
-    { "name":  "myOtherCommonStruct", "type": "TestCommonStruct", "versions": "0+"},
-    { "name":  "myUint16", "type": "uint16", "versions": "1+", "default":  "33000" }
+    { "name": "taggedLongFlexibleVersionSubset", "type": "int64", "default": "0", "ignorable": true,
+      "taggedVersions": "2+", "tag": 9 },
+    { "name": "myCommonStruct", "type": "TestCommonStruct", "versions": "0+"},
+    { "name": "myOtherCommonStruct", "type": "TestCommonStruct", "versions": "0+"},
+    { "name": "myUint16", "type": "uint16", "versions": "1+", "default": "33000" },
+    { "name": "myUint32", "type": "uint32", "versions": "1+", "default": "1234567" }
   ],
   "commonStructs": [
     { "name": "TestCommonStruct", "versions": "0+", "fields": [

@@ -17,18 +17,17 @@
 package kafka.server
 
 import java.net.InetAddress
-
-import kafka.network.RequestChannel.Session
 import kafka.server.QuotaType._
 import org.apache.kafka.common.metrics.Quota
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.utils.Sanitizer
-
+import org.apache.kafka.server.config.{ClientQuotaManagerConfig, ConfigEntityName}
+import org.apache.kafka.network.Session
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
 
 class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
-  private val config = ClientQuotaManagerConfig()
+  private val config = new ClientQuotaManagerConfig()
 
   private def testQuotaParsing(config: ClientQuotaManagerConfig, client1: UserClient, client2: UserClient, randomClient: UserClient, defaultConfigClient: UserClient): Unit = {
     val clientQuotaManager = new ClientQuotaManager(config, metrics, Produce, time, "")
@@ -86,7 +85,7 @@ class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
     val client1 = UserClient("ANONYMOUS", "p1", None, Some("p1"))
     val client2 = UserClient("ANONYMOUS", "p2", None, Some("p2"))
     val randomClient = UserClient("ANONYMOUS", "random-client-id", None, None)
-    val defaultConfigClient = UserClient("", "", None, Some(ConfigEntityName.Default))
+    val defaultConfigClient = UserClient("", "", None, Some(ConfigEntityName.DEFAULT))
     testQuotaParsing(config, client1, client2, randomClient, defaultConfigClient)
   }
 
@@ -99,8 +98,8 @@ class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
     val client1 = UserClient("User1", "p1", Some("User1"), None)
     val client2 = UserClient("User2", "p2", Some("User2"), None)
     val randomClient = UserClient("RandomUser", "random-client-id", None, None)
-    val defaultConfigClient = UserClient("", "", Some(ConfigEntityName.Default), None)
-    val config = ClientQuotaManagerConfig()
+    val defaultConfigClient = UserClient("", "", Some(ConfigEntityName.DEFAULT), None)
+    val config = new ClientQuotaManagerConfig()
     testQuotaParsing(config, client1, client2, randomClient, defaultConfigClient)
   }
 
@@ -113,8 +112,8 @@ class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
     val client1 = UserClient("User1", "p1", Some("User1"), Some("p1"))
     val client2 = UserClient("User2", "p2", Some("User2"), Some("p2"))
     val randomClient = UserClient("RandomUser", "random-client-id", None, None)
-    val defaultConfigClient = UserClient("", "", Some(ConfigEntityName.Default), Some(ConfigEntityName.Default))
-    val config = ClientQuotaManagerConfig()
+    val defaultConfigClient = UserClient("", "", Some(ConfigEntityName.DEFAULT), Some(ConfigEntityName.DEFAULT))
+    val config = new ClientQuotaManagerConfig()
     testQuotaParsing(config, client1, client2, randomClient, defaultConfigClient)
   }
 
@@ -126,7 +125,7 @@ class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
     val client1 = UserClient("User1", "p1", Some("User1"), None)
     val client2 = UserClient("User2", "p2", Some("User2"), None)
     val randomClient = UserClient("RandomUser", "random-client-id", None, None)
-    val defaultConfigClient = UserClient("", "", Some(ConfigEntityName.Default), None)
+    val defaultConfigClient = UserClient("", "", Some(ConfigEntityName.DEFAULT), None)
     testQuotaParsing(config, client1, client2, randomClient, defaultConfigClient)
   }
 
@@ -138,13 +137,13 @@ class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
     val client1 = UserClient("User1", "p1", Some("User1"), Some("p1"))
     val client2 = UserClient("User2", "p2", Some("User2"), Some("p2"))
     val randomClient = UserClient("RandomUser", "random-client-id", None, None)
-    val defaultConfigClient = UserClient("", "", Some(ConfigEntityName.Default), Some(ConfigEntityName.Default))
+    val defaultConfigClient = UserClient("", "", Some(ConfigEntityName.DEFAULT), Some(ConfigEntityName.DEFAULT))
     testQuotaParsing(config, client1, client2, randomClient, defaultConfigClient)
   }
 
   private def checkQuota(quotaManager: ClientQuotaManager, user: String, clientId: String, expectedBound: Long, value: Int, expectThrottle: Boolean): Unit = {
     assertEquals(expectedBound.toDouble, quotaManager.quota(user, clientId).bound, 0.0)
-    val session = Session(new KafkaPrincipal(KafkaPrincipal.USER_TYPE, user), InetAddress.getLocalHost)
+    val session = new Session(new KafkaPrincipal(KafkaPrincipal.USER_TYPE, user), InetAddress.getLocalHost)
     val expectedMaxValueInQuotaWindow =
       if (expectedBound < Long.MaxValue) config.quotaWindowSizeSeconds * (config.numQuotaSamples - 1) * expectedBound.toDouble
       else Double.MaxValue
@@ -160,16 +159,16 @@ class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
   @Test
   def testGetMaxValueInQuotaWindowWithNonDefaultQuotaWindow(): Unit = {
     val numFullQuotaWindows = 3   // 3 seconds window (vs. 10 seconds default)
-    val nonDefaultConfig = ClientQuotaManagerConfig(numQuotaSamples = numFullQuotaWindows + 1)
+    val nonDefaultConfig = new ClientQuotaManagerConfig(numFullQuotaWindows + 1)
     val clientQuotaManager = new ClientQuotaManager(nonDefaultConfig, metrics, Fetch, time, "")
-    val userSession = Session(new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "userA"), InetAddress.getLocalHost)
+    val userSession = new Session(new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "userA"), InetAddress.getLocalHost)
 
     try {
       // no quota set
       assertEquals(Double.MaxValue, clientQuotaManager.getMaxValueInQuotaWindow(userSession, "client1"), 0.01)
 
       // Set default <user> quota config
-      clientQuotaManager.updateQuota(Some(ConfigEntityName.Default), None, None, Some(new Quota(10, true)))
+      clientQuotaManager.updateQuota(Some(ConfigEntityName.DEFAULT), None, None, Some(new Quota(10, true)))
       assertEquals(10 * numFullQuotaWindows, clientQuotaManager.getMaxValueInQuotaWindow(userSession, "client1"), 0.01)
     } finally {
       clientQuotaManager.shutdown()
@@ -179,7 +178,7 @@ class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
   @Test
   def testSetAndRemoveDefaultUserQuota(): Unit = {
     // quotaTypesEnabled will be QuotaTypes.NoQuotas initially
-    val clientQuotaManager = new ClientQuotaManager(ClientQuotaManagerConfig(),
+    val clientQuotaManager = new ClientQuotaManager(new ClientQuotaManagerConfig(),
       metrics, Produce, time, "")
 
     try {
@@ -187,11 +186,11 @@ class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
       checkQuota(clientQuotaManager, "userA", "client1", Long.MaxValue, 1000, false)
 
       // Set default <user> quota config
-      clientQuotaManager.updateQuota(Some(ConfigEntityName.Default), None, None, Some(new Quota(10, true)))
+      clientQuotaManager.updateQuota(Some(ConfigEntityName.DEFAULT), None, None, Some(new Quota(10, true)))
       checkQuota(clientQuotaManager, "userA", "client1", 10, 1000, true)
 
       // Remove default <user> quota config, back to no quotas
-      clientQuotaManager.updateQuota(Some(ConfigEntityName.Default), None, None, None)
+      clientQuotaManager.updateQuota(Some(ConfigEntityName.DEFAULT), None, None, None)
       checkQuota(clientQuotaManager, "userA", "client1", Long.MaxValue, 1000, false)
     } finally {
       clientQuotaManager.shutdown()
@@ -201,7 +200,7 @@ class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
   @Test
   def testSetAndRemoveUserQuota(): Unit = {
     // quotaTypesEnabled will be QuotaTypes.NoQuotas initially
-    val clientQuotaManager = new ClientQuotaManager(ClientQuotaManagerConfig(),
+    val clientQuotaManager = new ClientQuotaManager(new ClientQuotaManagerConfig(),
       metrics, Produce, time, "")
 
     try {
@@ -220,7 +219,7 @@ class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
   @Test
   def testSetAndRemoveUserClientQuota(): Unit = {
     // quotaTypesEnabled will be QuotaTypes.NoQuotas initially
-    val clientQuotaManager = new ClientQuotaManager(ClientQuotaManagerConfig(),
+    val clientQuotaManager = new ClientQuotaManager(new ClientQuotaManagerConfig(),
       metrics, Produce, time, "")
 
     try {
@@ -238,18 +237,18 @@ class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
 
   @Test
   def testQuotaConfigPrecedence(): Unit = {
-    val clientQuotaManager = new ClientQuotaManager(ClientQuotaManagerConfig(),
+    val clientQuotaManager = new ClientQuotaManager(new ClientQuotaManagerConfig(),
       metrics, Produce, time, "")
 
     try {
-      clientQuotaManager.updateQuota(Some(ConfigEntityName.Default), None, None, Some(new Quota(1000, true)))
-      clientQuotaManager.updateQuota(None, Some(ConfigEntityName.Default), Some(ConfigEntityName.Default), Some(new Quota(2000, true)))
-      clientQuotaManager.updateQuota(Some(ConfigEntityName.Default), Some(ConfigEntityName.Default), Some(ConfigEntityName.Default), Some(new Quota(3000, true)))
+      clientQuotaManager.updateQuota(Some(ConfigEntityName.DEFAULT), None, None, Some(new Quota(1000, true)))
+      clientQuotaManager.updateQuota(None, Some(ConfigEntityName.DEFAULT), Some(ConfigEntityName.DEFAULT), Some(new Quota(2000, true)))
+      clientQuotaManager.updateQuota(Some(ConfigEntityName.DEFAULT), Some(ConfigEntityName.DEFAULT), Some(ConfigEntityName.DEFAULT), Some(new Quota(3000, true)))
       clientQuotaManager.updateQuota(Some("userA"), None, None, Some(new Quota(4000, true)))
       clientQuotaManager.updateQuota(Some("userA"), Some("client1"), Some("client1"), Some(new Quota(5000, true)))
       clientQuotaManager.updateQuota(Some("userB"), None, None, Some(new Quota(6000, true)))
       clientQuotaManager.updateQuota(Some("userB"), Some("client1"), Some("client1"), Some(new Quota(7000, true)))
-      clientQuotaManager.updateQuota(Some("userB"), Some(ConfigEntityName.Default), Some(ConfigEntityName.Default), Some(new Quota(8000, true)))
+      clientQuotaManager.updateQuota(Some("userB"), Some(ConfigEntityName.DEFAULT), Some(ConfigEntityName.DEFAULT), Some(new Quota(8000, true)))
       clientQuotaManager.updateQuota(Some("userC"), None, None, Some(new Quota(10000, true)))
       clientQuotaManager.updateQuota(None, Some("client1"), Some("client1"), Some(new Quota(9000, true)))
 
@@ -267,14 +266,14 @@ class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
       checkQuota(clientQuotaManager, "userE", "client1", 3000, 2500, false)
 
       // Remove default <user, client> quota config, revert to <user> default
-      clientQuotaManager.updateQuota(Some(ConfigEntityName.Default), Some(ConfigEntityName.Default), Some(ConfigEntityName.Default), None)
+      clientQuotaManager.updateQuota(Some(ConfigEntityName.DEFAULT), Some(ConfigEntityName.DEFAULT), Some(ConfigEntityName.DEFAULT), None)
       checkQuota(clientQuotaManager, "userD", "client1", 1000, 0, false)    // Metrics tags changed, restart counter
       checkQuota(clientQuotaManager, "userE", "client4", 1000, 1500, true)
       checkQuota(clientQuotaManager, "userF", "client4", 1000, 800, false)  // Default <user> quota shared across clients of user
       checkQuota(clientQuotaManager, "userF", "client5", 1000, 800, true)
 
       // Remove default <user> quota config, revert to <client-id> default
-      clientQuotaManager.updateQuota(Some(ConfigEntityName.Default), None, None, None)
+      clientQuotaManager.updateQuota(Some(ConfigEntityName.DEFAULT), None, None, None)
       checkQuota(clientQuotaManager, "userF", "client4", 2000, 0, false)  // Default <client-id> quota shared across client-id of all users
       checkQuota(clientQuotaManager, "userF", "client5", 2000, 0, false)
       checkQuota(clientQuotaManager, "userF", "client5", 2000, 2500, true)
@@ -291,7 +290,7 @@ class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
       checkQuota(clientQuotaManager, "userA", "client6", 8000, 0, true)    // Throttled due to shared user quota
       clientQuotaManager.updateQuota(Some("userA"), Some("client6"), Some("client6"), Some(new Quota(11000, true)))
       checkQuota(clientQuotaManager, "userA", "client6", 11000, 8500, false)
-      clientQuotaManager.updateQuota(Some("userA"), Some(ConfigEntityName.Default), Some(ConfigEntityName.Default), Some(new Quota(12000, true)))
+      clientQuotaManager.updateQuota(Some("userA"), Some(ConfigEntityName.DEFAULT), Some(ConfigEntityName.DEFAULT), Some(new Quota(12000, true)))
       clientQuotaManager.updateQuota(Some("userA"), Some("client6"), Some("client6"), None)
       checkQuota(clientQuotaManager, "userA", "client6", 12000, 4000, true) // Throttled due to sum of new and earlier values
 
@@ -305,7 +304,7 @@ class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
     val clientQuotaManager = new ClientQuotaManager(config, metrics, Produce, time, "")
     val queueSizeMetric = metrics.metrics().get(metrics.metricName("queue-size", "Produce", ""))
     try {
-      clientQuotaManager.updateQuota(None, Some(ConfigEntityName.Default), Some(ConfigEntityName.Default),
+      clientQuotaManager.updateQuota(None, Some(ConfigEntityName.DEFAULT), Some(ConfigEntityName.DEFAULT),
         Some(new Quota(500, true)))
 
       // We have 10 second windows. Make sure that there is no quota violation
@@ -353,7 +352,7 @@ class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
   def testExpireThrottleTimeSensor(): Unit = {
     val clientQuotaManager = new ClientQuotaManager(config, metrics, Produce, time, "")
     try {
-      clientQuotaManager.updateQuota(None, Some(ConfigEntityName.Default), Some(ConfigEntityName.Default),
+      clientQuotaManager.updateQuota(None, Some(ConfigEntityName.DEFAULT), Some(ConfigEntityName.DEFAULT),
         Some(new Quota(500, true)))
 
       maybeRecord(clientQuotaManager, "ANONYMOUS", "client1", 100)
@@ -375,7 +374,7 @@ class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
   def testExpireQuotaSensors(): Unit = {
     val clientQuotaManager = new ClientQuotaManager(config, metrics, Produce, time, "")
     try {
-      clientQuotaManager.updateQuota(None, Some(ConfigEntityName.Default), Some(ConfigEntityName.Default),
+      clientQuotaManager.updateQuota(None, Some(ConfigEntityName.DEFAULT), Some(ConfigEntityName.DEFAULT),
         Some(new Quota(500, true)))
 
       maybeRecord(clientQuotaManager, "ANONYMOUS", "client1", 100)
@@ -402,7 +401,7 @@ class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
     val clientQuotaManager = new ClientQuotaManager(config, metrics, Produce, time, "")
     val clientId = "client@#$%"
     try {
-      clientQuotaManager.updateQuota(None, Some(ConfigEntityName.Default), Some(ConfigEntityName.Default),
+      clientQuotaManager.updateQuota(None, Some(ConfigEntityName.DEFAULT), Some(ConfigEntityName.DEFAULT),
         Some(new Quota(500, true)))
 
       maybeRecord(clientQuotaManager, "ANONYMOUS", clientId, 100)
@@ -418,10 +417,10 @@ class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
     }
   }
 
-  private case class UserClient(val user: String, val clientId: String, val configUser: Option[String] = None, val configClientId: Option[String] = None) {
+  private case class UserClient(user: String, clientId: String, configUser: Option[String] = None, configClientId: Option[String] = None) {
     // The class under test expects only sanitized client configs. We pass both the default value (which should not be
     // sanitized to ensure it remains unique) and non-default values, so we need to take care in generating the sanitized
     // client ID
-    def sanitizedConfigClientId = configClientId.map(x => if (x == ConfigEntityName.Default) ConfigEntityName.Default else Sanitizer.sanitize(x))
+    def sanitizedConfigClientId = configClientId.map(x => if (x == ConfigEntityName.DEFAULT) ConfigEntityName.DEFAULT else Sanitizer.sanitize(x))
   }
 }

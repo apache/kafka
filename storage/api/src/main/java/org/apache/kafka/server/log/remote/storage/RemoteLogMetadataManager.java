@@ -25,6 +25,7 @@ import java.util.Iterator;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
 
 /**
  * This interface provides storing and fetching remote log segment metadata with strongly consistent semantics.
@@ -35,25 +36,24 @@ import java.util.Set;
  * remote.log.metadata.manager.class.name is not configured.
  * </p>
  * <p>
- * <code>remote.log.metadata.manager.class.path</code> property is about the class path of the RemoteLogStorageManager
- * implementation. If specified, the RemoteLogStorageManager implementation and its dependent libraries will be loaded
+ * <code>remote.log.metadata.manager.class.path</code> property is about the class path of the RemoteLogMetadataManager
+ * implementation. If specified, the RemoteLogMetadataManager implementation and its dependent libraries will be loaded
  * by a dedicated classloader which searches this class path before the Kafka broker class path. The syntax of this
  * parameter is same with the standard Java class path string.
  * </p>
  * <p>
  * <code>remote.log.metadata.manager.listener.name</code> property is about listener name of the local broker to which
- * it should get connected if needed by RemoteLogMetadataManager implementation. When this is configured all other
- * required properties can be passed as properties with prefix of 'remote.log.metadata.manager.listener.
+ * it should get connected if needed by RemoteLogMetadataManager implementation.
  * </p>
- * "cluster.id", "broker.id" and all other properties prefixed with "remote.log.metadata." are passed when
- * {@link #configure(Map)} is invoked on this instance.
+ * "cluster.id", "broker.id" and all other properties prefixed with the config: "remote.log.metadata.manager.impl.prefix"
+ * (default value is "rlmm.config.") are passed when {@link #configure(Map)} is invoked on this instance.
  * <p>
  */
 @InterfaceStability.Evolving
 public interface RemoteLogMetadataManager extends Configurable, Closeable {
 
     /**
-     * Adds {@link RemoteLogSegmentMetadata} with the containing {@link RemoteLogSegmentId} into {@link RemoteLogMetadataManager}.
+     * This method is used to add {@link RemoteLogSegmentMetadata} asynchronously with the containing {@link RemoteLogSegmentId} into {@link RemoteLogMetadataManager}.
      * <p>
      * RemoteLogSegmentMetadata is identified by RemoteLogSegmentId and it should have the initial state which is {@link RemoteLogSegmentState#COPY_SEGMENT_STARTED}.
      * <p>
@@ -62,11 +62,12 @@ public interface RemoteLogMetadataManager extends Configurable, Closeable {
      * @param remoteLogSegmentMetadata metadata about the remote log segment.
      * @throws RemoteStorageException   if there are any storage related errors occurred.
      * @throws IllegalArgumentException if the given metadata instance does not have the state as {@link RemoteLogSegmentState#COPY_SEGMENT_STARTED}
+     * @return a CompletableFuture which will complete once this operation is finished.
      */
-    void addRemoteLogSegmentMetadata(RemoteLogSegmentMetadata remoteLogSegmentMetadata) throws RemoteStorageException;
+    CompletableFuture<Void> addRemoteLogSegmentMetadata(RemoteLogSegmentMetadata remoteLogSegmentMetadata) throws RemoteStorageException;
 
     /**
-     * This method is used to update the {@link RemoteLogSegmentMetadata}. Currently, it allows to update with the new
+     * This method is used to update the {@link RemoteLogSegmentMetadata} asynchronously. Currently, it allows to update with the new
      * state based on the life cycle of the segment. It can go through the below state transitions.
      * <p>
      * <pre>
@@ -104,8 +105,9 @@ public interface RemoteLogMetadataManager extends Configurable, Closeable {
      * @throws RemoteStorageException          if there are any storage related errors occurred.
      * @throws RemoteResourceNotFoundException when there are no resources associated with the given remoteLogSegmentMetadataUpdate.
      * @throws IllegalArgumentException        if the given metadata instance has the state as {@link RemoteLogSegmentState#COPY_SEGMENT_STARTED}
+     * @return a CompletableFuture which will complete once this operation is finished.
      */
-    void updateRemoteLogSegmentMetadata(RemoteLogSegmentMetadataUpdate remoteLogSegmentMetadataUpdate)
+    CompletableFuture<Void> updateRemoteLogSegmentMetadata(RemoteLogSegmentMetadataUpdate remoteLogSegmentMetadataUpdate)
             throws RemoteStorageException;
 
     /**
@@ -137,7 +139,7 @@ public interface RemoteLogMetadataManager extends Configurable, Closeable {
                                          int leaderEpoch) throws RemoteStorageException;
 
     /**
-     * This method is used to update the metadata about remote partition delete event. Currently, it allows updating the
+     * This method is used to update the metadata about remote partition delete event asynchronously. Currently, it allows updating the
      * state ({@link RemotePartitionDeleteState}) of a topic partition in remote metadata storage. Controller invokes
      * this method with {@link RemotePartitionDeleteMetadata} having state as {@link RemotePartitionDeleteState#DELETE_PARTITION_MARKED}.
      * So, remote partition removers can act on this event to clean the respective remote log segments of the partition.
@@ -153,8 +155,9 @@ public interface RemoteLogMetadataManager extends Configurable, Closeable {
      * @param remotePartitionDeleteMetadata update on delete state of a partition.
      * @throws RemoteStorageException          if there are any storage related errors occurred.
      * @throws RemoteResourceNotFoundException when there are no resources associated with the given remotePartitionDeleteMetadata.
+     * @return a CompletableFuture which will complete once this operation is finished.
      */
-    void putRemotePartitionDeleteMetadata(RemotePartitionDeleteMetadata remotePartitionDeleteMetadata)
+    CompletableFuture<Void> putRemotePartitionDeleteMetadata(RemotePartitionDeleteMetadata remotePartitionDeleteMetadata)
             throws RemoteStorageException;
 
     /**
@@ -197,4 +200,13 @@ public interface RemoteLogMetadataManager extends Configurable, Closeable {
      * @param partitions topic partitions that have been stopped.
      */
     void onStopPartitions(Set<TopicIdPartition> partitions);
+
+    /**
+     * Returns total size of the log for the given leader epoch in remote storage.
+     *
+     * @param topicIdPartition topic partition for which size needs to be calculated.
+     * @param leaderEpoch Size will only include segments belonging to this epoch.
+     * @return Total size of the log stored in remote storage in bytes.
+     */
+    long remoteLogSize(TopicIdPartition topicIdPartition, int leaderEpoch) throws RemoteStorageException;
 }

@@ -99,9 +99,10 @@ public class MergedSortedCacheKeyValueBytesStoreIteratorTest {
         final byte[][] bytes = {{0}, {1}};
         store.put(Bytes.wrap(bytes[0]), bytes[0]);
         cache.put(namespace, Bytes.wrap(bytes[1]), new LRUCacheEntry(null));
-        final MergedSortedCacheKeyValueBytesStoreIterator iterator = createIterator();
-        assertArrayEquals(bytes[0], iterator.next().key.get());
-        assertFalse(iterator.hasNext());
+        try (final MergedSortedCacheKeyValueBytesStoreIterator iterator = createIterator()) {
+            assertArrayEquals(bytes[0], iterator.next().key.get());
+            assertFalse(iterator.hasNext());
+        }
     }
 
     @Test
@@ -109,9 +110,10 @@ public class MergedSortedCacheKeyValueBytesStoreIteratorTest {
         final byte[][] bytes = {{0}, {1}};
         cache.put(namespace, Bytes.wrap(bytes[0]), new LRUCacheEntry(null));
         store.put(Bytes.wrap(bytes[1]), bytes[1]);
-        final MergedSortedCacheKeyValueBytesStoreIterator iterator = createIterator();
-        assertArrayEquals(bytes[1], iterator.next().key.get());
-        assertFalse(iterator.hasNext());
+        try (final MergedSortedCacheKeyValueBytesStoreIterator iterator = createIterator()) {
+            assertArrayEquals(bytes[1], iterator.next().key.get());
+            assertFalse(iterator.hasNext());
+        }
     }
 
     @Test
@@ -119,8 +121,9 @@ public class MergedSortedCacheKeyValueBytesStoreIteratorTest {
         final byte[][] bytes = {{0}};
         cache.put(namespace, Bytes.wrap(bytes[0]), new LRUCacheEntry(null));
         store.put(Bytes.wrap(bytes[0]), bytes[0]);
-        final MergedSortedCacheKeyValueBytesStoreIterator iterator = createIterator();
-        assertFalse(iterator.hasNext());
+        try (final MergedSortedCacheKeyValueBytesStoreIterator iterator = createIterator()) {
+            assertFalse(iterator.hasNext());
+        }
     }
 
     @Test
@@ -157,16 +160,16 @@ public class MergedSortedCacheKeyValueBytesStoreIteratorTest {
         cache.put(namespace, Bytes.wrap(bytes[8]), new LRUCacheEntry(null));
         cache.put(namespace, Bytes.wrap(bytes[11]), new LRUCacheEntry(null));
 
-        final MergedSortedCacheKeyValueBytesStoreIterator iterator = createIterator();
-        assertArrayEquals(bytes[0], iterator.next().key.get());
-        assertArrayEquals(bytes[4], iterator.next().key.get());
-        assertArrayEquals(bytes[5], iterator.next().key.get());
-        assertArrayEquals(bytes[6], iterator.next().key.get());
-        assertArrayEquals(bytes[7], iterator.next().key.get());
-        assertArrayEquals(bytes[9], iterator.next().key.get());
-        assertArrayEquals(bytes[10], iterator.next().key.get());
-        assertFalse(iterator.hasNext());
-
+        try (final MergedSortedCacheKeyValueBytesStoreIterator iterator = createIterator()) {
+            assertArrayEquals(bytes[0], iterator.next().key.get());
+            assertArrayEquals(bytes[4], iterator.next().key.get());
+            assertArrayEquals(bytes[5], iterator.next().key.get());
+            assertArrayEquals(bytes[6], iterator.next().key.get());
+            assertArrayEquals(bytes[7], iterator.next().key.get());
+            assertArrayEquals(bytes[9], iterator.next().key.get());
+            assertArrayEquals(bytes[10], iterator.next().key.get());
+            assertFalse(iterator.hasNext());
+        }
     }
 
     @Test

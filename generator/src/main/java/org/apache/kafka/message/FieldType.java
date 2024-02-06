@@ -122,6 +122,26 @@ public interface FieldType {
         }
     }
 
+    final class Uint32FieldType implements FieldType {
+        static final Uint32FieldType INSTANCE = new Uint32FieldType();
+        private static final String NAME = "uint32";
+
+        @Override
+        public String getBoxedJavaType(HeaderGenerator headerGenerator) {
+            return "Long";
+        }
+
+        @Override
+        public Optional<Integer> fixedLength() {
+            return Optional.of(4);
+        }
+
+        @Override
+        public String toString() {
+            return NAME;
+        }
+    }
+
     final class Int64FieldType implements FieldType {
         static final Int64FieldType INSTANCE = new Int64FieldType();
         private static final String NAME = "int64";
@@ -302,6 +322,11 @@ public interface FieldType {
             return true;
         }
 
+        @Override
+        public boolean canBeNullable() {
+            return true;
+        }
+
         public String typeName() {
             return type;
         }
@@ -369,6 +394,8 @@ public interface FieldType {
                 return Int16FieldType.INSTANCE;
             case Uint16FieldType.NAME:
                 return Uint16FieldType.INSTANCE;
+            case Uint32FieldType.NAME:
+                return Uint32FieldType.INSTANCE;
             case Int32FieldType.NAME:
                 return Int32FieldType.INSTANCE;
             case Int64FieldType.NAME:

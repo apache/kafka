@@ -17,7 +17,9 @@
 package org.apache.kafka.streams;
 
 import org.apache.kafka.streams.processor.TopicNameExtractor;
+import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.api.ProcessorSupplier;
+import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.StreamTask;
 
 import java.util.Set;
@@ -30,6 +32,7 @@ import java.util.regex.Pattern;
  * In contrast, two sub-topologies are not connected but can be linked to each other via topics, i.e., if one
  * sub-topology {@link Topology#addSink(String, String, String...) writes} into a topic and another sub-topology
  * {@link Topology#addSource(String, String...) reads} from the same topic.
+ * Message {@link ProcessorContext#forward(Record, String)} forwards} using custom Processors and Transformers are not considered in the topology graph.
  * <p>
  * When {@link KafkaStreams#start()} is called, different sub-topologies will be constructed and executed as independent
  * {@link StreamTask tasks}.
@@ -48,12 +51,14 @@ public interface TopologyDescription {
          * Internally assigned unique ID.
          * @return the ID of the sub-topology
          */
+        @SuppressWarnings("unused")
         int id();
 
         /**
          * All nodes of this sub-topology.
          * @return set of all nodes within the sub-topology
          */
+        @SuppressWarnings("unused")
         Set<Node> nodes();
     }
 
@@ -72,14 +77,17 @@ public interface TopologyDescription {
          * The source node reading from a "global" topic.
          * @return the "global" source node
          */
+        @SuppressWarnings("unused")
         Source source();
 
         /**
          * The processor node maintaining the global store.
          * @return the "global" processor node
          */
+        @SuppressWarnings("unused")
         Processor processor();
 
+        @SuppressWarnings("unused")
         int id();
     }
 
@@ -91,6 +99,7 @@ public interface TopologyDescription {
          * The name of the node. Will never be {@code null}.
          * @return the name of the node
          */
+        @SuppressWarnings("unused")
         String name();
         /**
          * The predecessors of this node within a sub-topology.
@@ -98,6 +107,7 @@ public interface TopologyDescription {
          * Will never be {@code null}.
          * @return set of all predecessors
          */
+        @SuppressWarnings("unused")
         Set<Node> predecessors();
         /**
          * The successor of this node within a sub-topology.
@@ -105,6 +115,7 @@ public interface TopologyDescription {
          * Will never be {@code null}.
          * @return set of all successor
          */
+        @SuppressWarnings("unused")
         Set<Node> successors();
     }
 
@@ -113,24 +124,19 @@ public interface TopologyDescription {
      * A source node of a topology.
      */
     interface Source extends Node {
-        /**
-         * The topic names this source node is reading from.
-         * @return comma separated list of topic names or pattern (as String)
-         * @deprecated use {@link #topicSet()} or {@link #topicPattern()} instead
-         */
-        @Deprecated
-        String topics();
 
         /**
          * The topic names this source node is reading from.
          * @return a set of topic names
          */
+        @SuppressWarnings("unused")
         Set<String> topicSet();
 
         /**
          * The pattern used to match topic names that is reading from.
          * @return the pattern used to match topic names
          */
+        @SuppressWarnings("unused")
         Pattern topicPattern();
     }
 
@@ -142,6 +148,7 @@ public interface TopologyDescription {
          * The names of all connected stores.
          * @return set of store names
          */
+        @SuppressWarnings("unused")
         Set<String> stores();
     }
 
@@ -154,6 +161,7 @@ public interface TopologyDescription {
          * Could be {@code null} if the topic name can only be dynamically determined based on {@link TopicNameExtractor}
          * @return a topic name
          */
+        @SuppressWarnings("unused")
         String topic();
 
         /**
@@ -161,19 +169,22 @@ public interface TopologyDescription {
          * Could be {@code null} if the topic name is not dynamically determined.
          * @return the {@link TopicNameExtractor} class used get the topic name
          */
-        TopicNameExtractor topicNameExtractor();
+        @SuppressWarnings("unused")
+        TopicNameExtractor<?, ?> topicNameExtractor();
     }
 
     /**
      * All sub-topologies of the represented topology.
      * @return set of all sub-topologies
      */
+    @SuppressWarnings("unused")
     Set<Subtopology> subtopologies();
 
     /**
      * All global stores of the represented topology.
      * @return set of all global stores
      */
+    @SuppressWarnings("unused")
     Set<GlobalStore> globalStores();
 
 }

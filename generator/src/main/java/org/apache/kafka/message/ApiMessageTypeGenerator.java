@@ -154,9 +154,15 @@ public final class ApiMessageTypeGenerator implements TypeClassGenerator {
         buffer.printf("%n");
         generateAccessor("lowestSupportedVersion", "short");
         buffer.printf("%n");
-        generateAccessor("highestSupportedVersion", "short");
+        generateHighestSupportedVersion();
+        buffer.printf("%n");
+        generateAccessor("lowestDeprecatedVersion", "short");
+        buffer.printf("%n");
+        generateAccessor("highestDeprecatedVersion", "short");
         buffer.printf("%n");
         generateAccessor("listeners", "EnumSet<ListenerType>");
+        buffer.printf("%n");
+        generateAccessor("latestVersionUnstable", "boolean");
         buffer.printf("%n");
         generateAccessor("apiKey", "short");
         buffer.printf("%n");
@@ -210,7 +216,7 @@ public final class ApiMessageTypeGenerator implements TypeClassGenerator {
                     .collect(Collectors.toList());
             }
 
-            buffer.printf("%s(\"%s\", (short) %d, %s, %s, (short) %d, (short) %d, %s)%s%n",
+            buffer.printf("%s(\"%s\", (short) %d, %s, %s, (short) %d, (short) %d, (short) %d, (short) %d, %s, %s)%s%n",
                 MessageGenerator.toSnakeCase(name).toUpperCase(Locale.ROOT),
                 MessageGenerator.capitalizeFirst(name),
                 entry.getKey(),
@@ -218,7 +224,10 @@ public final class ApiMessageTypeGenerator implements TypeClassGenerator {
                 apiData.responseSchema(),
                 apiData.requestSpec.struct().versions().lowest(),
                 apiData.requestSpec.struct().versions().highest(),
+                apiData.requestSpec.struct().deprecatedVersions().lowest(),
+                apiData.requestSpec.struct().deprecatedVersions().highest(),
                 generateListenerTypeEnumSet(listeners),
+                apiData.requestSpec.latestVersionUnstable(),
                 (numProcessed == apis.size()) ? ";" : ",");
         }
     }
@@ -230,7 +239,10 @@ public final class ApiMessageTypeGenerator implements TypeClassGenerator {
         buffer.printf("private final Schema[] responseSchemas;%n");
         buffer.printf("private final short lowestSupportedVersion;%n");
         buffer.printf("private final short highestSupportedVersion;%n");
+        buffer.printf("private final short lowestDeprecatedVersion;%n");
+        buffer.printf("private final short highestDeprecatedVersion;%n");
         buffer.printf("private final EnumSet<ListenerType> listeners;%n");
+        buffer.printf("private final boolean latestVersionUnstable;%n");
         headerGenerator.addImport(MessageGenerator.SCHEMA_CLASS);
         headerGenerator.addImport(MessageGenerator.ENUM_SET_CLASS);
     }
@@ -239,7 +251,8 @@ public final class ApiMessageTypeGenerator implements TypeClassGenerator {
         buffer.printf("ApiMessageType(String name, short apiKey, " +
             "Schema[] requestSchemas, Schema[] responseSchemas, " +
             "short lowestSupportedVersion, short highestSupportedVersion, " +
-            "EnumSet<ListenerType> listeners) {%n");
+            "short lowestDeprecatedVersion, short highestDeprecatedVersion, " +
+            "EnumSet<ListenerType> listeners, boolean latestVersionUnstable) {%n");
         buffer.incrementIndent();
         buffer.printf("this.name = name;%n");
         buffer.printf("this.apiKey = apiKey;%n");
@@ -247,7 +260,10 @@ public final class ApiMessageTypeGenerator implements TypeClassGenerator {
         buffer.printf("this.responseSchemas = responseSchemas;%n");
         buffer.printf("this.lowestSupportedVersion = lowestSupportedVersion;%n");
         buffer.printf("this.highestSupportedVersion = highestSupportedVersion;%n");
+        buffer.printf("this.lowestDeprecatedVersion = lowestDeprecatedVersion;%n");
+        buffer.printf("this.highestDeprecatedVersion = highestDeprecatedVersion;%n");
         buffer.printf("this.listeners = listeners;%n");
+        buffer.printf("this.latestVersionUnstable = latestVersionUnstable;%n");
         buffer.decrementIndent();
         buffer.printf("}%n");
     }
@@ -399,6 +415,23 @@ public final class ApiMessageTypeGenerator implements TypeClassGenerator {
             RequestListenerType scope = listenerIter.next();
             buffer.printf("%s%s%n", scope.name(), listenerIter.hasNext() ? "," : ";");
         }
+        buffer.decrementIndent();
+        buffer.printf("}%n");
+    }
+
+    private void generateHighestSupportedVersion() {
+        buffer.printf("public short highestSupportedVersion(boolean enableUnstableLastVersion) {%n");
+        buffer.incrementIndent();
+        buffer.printf("if (!this.latestVersionUnstable || enableUnstableLastVersion) {%n");
+        buffer.incrementIndent();
+        buffer.printf("return this.highestSupportedVersion;%n");
+        buffer.decrementIndent();
+        buffer.printf("} else {%n");
+        buffer.incrementIndent();
+        buffer.printf("// A negative value means that the API has no enabled versions.%n");
+        buffer.printf("return (short) (this.highestSupportedVersion - 1);%n");
+        buffer.decrementIndent();
+        buffer.printf("}%n");
         buffer.decrementIndent();
         buffer.printf("}%n");
     }

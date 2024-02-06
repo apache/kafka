@@ -17,8 +17,8 @@
 package kafka.utils
 
 import java.util.concurrent.{CountDownLatch, TimeUnit}
-
 import org.apache.kafka.common.internals.FatalExitError
+import org.apache.kafka.server.util.ShutdownableThread
 import org.junit.jupiter.api.{AfterEach, Test}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 

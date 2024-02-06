@@ -22,7 +22,6 @@ import org.apache.kafka.connect.util.clusters.EmbeddedConnectCluster;
 import org.apache.kafka.test.IntegrationTest;
 import org.junit.After;
 import org.junit.Before;
-import org.junit.Ignore;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
@@ -207,8 +206,8 @@ public class RebalanceSourceConnectorsIntegrationTest {
         // delete connector
         connect.deleteConnector(CONNECTOR_NAME + 3);
 
-        connect.assertions().assertConnectorAndTasksAreStopped(CONNECTOR_NAME + 3,
-                "Connector tasks did not stop in time.");
+        connect.assertions().assertConnectorDoesNotExist(CONNECTOR_NAME + 3,
+                "Connector wasn't deleted in time.");
 
         waitForCondition(this::assertConnectorAndTasksAreUniqueAndBalanced,
                 WORKER_SETUP_DURATION_MS, "Connect and tasks are imbalanced between the workers.");
@@ -269,8 +268,6 @@ public class RebalanceSourceConnectorsIntegrationTest {
                 WORKER_SETUP_DURATION_MS, "Connect and tasks are imbalanced between the workers.");
     }
 
-    // should enable it after KAFKA-12495 fixed
-    @Ignore
     @Test
     public void testMultipleWorkersRejoining() throws Exception {
         // create test topic
@@ -357,10 +354,10 @@ public class RebalanceSourceConnectorsIntegrationTest {
             assertNotEquals("Found no tasks running!", maxTasks, 0);
             assertEquals("Connector assignments are not unique: " + connectors,
                     connectors.values().size(),
-                    connectors.values().stream().distinct().collect(Collectors.toList()).size());
+                    connectors.values().stream().distinct().count());
             assertEquals("Task assignments are not unique: " + tasks,
                     tasks.values().size(),
-                    tasks.values().stream().distinct().collect(Collectors.toList()).size());
+                    tasks.values().stream().distinct().count());
             assertTrue("Connectors are imbalanced: " + formatAssignment(connectors), maxConnectors - minConnectors < 2);
             assertTrue("Tasks are imbalanced: " + formatAssignment(tasks), maxTasks - minTasks < 2);
             return true;

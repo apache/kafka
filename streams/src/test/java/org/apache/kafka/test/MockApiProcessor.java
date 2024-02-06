@@ -22,6 +22,7 @@ import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.api.Record;
+import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 
 import java.time.Duration;
@@ -29,13 +30,14 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.is;
 
 public class MockApiProcessor<KIn, VIn, KOut, VOut> implements Processor<KIn, VIn, KOut, VOut> {
 
-    private final ArrayList<KeyValueTimestamp<KIn, VIn>> processed = new ArrayList<>();
+    private final ArrayList<Record<KIn, VIn>> processed = new ArrayList<>();
     private final Map<KIn, ValueAndTimestamp<VIn>> lastValueAndTimestampPerKey = new HashMap<>();
 
     private final ArrayList<Long> punctuatedStreamTime = new ArrayList<>();
@@ -83,7 +85,7 @@ public class MockApiProcessor<KIn, VIn, KOut, VOut> implements Processor<KIn, VI
             lastValueAndTimestampPerKey.remove(key);
         }
 
-        processed.add(keyValueTimestamp);
+        processed.add(record);
 
         if (commitRequested) {
             context.commit();
@@ -92,6 +94,20 @@ public class MockApiProcessor<KIn, VIn, KOut, VOut> implements Processor<KIn, VI
     }
 
     public void checkAndClearProcessResult(final KeyValueTimestamp<?, ?>... expected) {
+        assertThat("the number of outputs:" + processed, processed.size(), is(expected.length));
+        for (int i = 0; i < expected.length; i++) {
+            final Record<KIn, VIn> record = processed.get(i);
+            assertThat(
+                "output[" + i + "]:",
+                new KeyValueTimestamp<>(record.key(), record.value(), record.timestamp()),
+                is(expected[i])
+            );
+        }
+
+        processed.clear();
+    }
+
+    public void checkAndClearProcessedRecords(final Record<?, ?>... expected) {
         assertThat("the number of outputs:" + processed, processed.size(), is(expected.length));
         for (int i = 0; i < expected.length; i++) {
             assertThat("output[" + i + "]:", processed.get(i), is(expected[i]));
@@ -120,8 +136,17 @@ public class MockApiProcessor<KIn, VIn, KOut, VOut> implements Processor<KIn, VI
         processed.clear();
     }
 
+    public void addProcessorMetadata(final String key, final long value) {
+        if (context instanceof InternalProcessorContext) {
+            ((InternalProcessorContext<KOut, VOut>) context).addProcessorMetadataKeyValue(key, value);
+        }
+    }
+
     public ArrayList<KeyValueTimestamp<KIn, VIn>> processed() {
-        return processed;
+        return processed
+            .stream()
+            .map(r -> new KeyValueTimestamp<>(r.key(), r.value(), r.timestamp()))
+            .collect(Collectors.toCollection(ArrayList::new));
     }
 
     public Map<KIn, ValueAndTimestamp<VIn>> lastValueAndTimestampPerKey() {

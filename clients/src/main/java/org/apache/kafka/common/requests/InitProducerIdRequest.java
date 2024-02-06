@@ -27,7 +27,7 @@ import java.nio.ByteBuffer;
 
 public class InitProducerIdRequest extends AbstractRequest {
     public static class Builder extends AbstractRequest.Builder<InitProducerIdRequest> {
-        private final InitProducerIdRequestData data;
+        public final InitProducerIdRequestData data;
 
         public Builder(InitProducerIdRequestData data) {
             super(ApiKeys.INIT_PRODUCER_ID);

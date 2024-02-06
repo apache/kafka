@@ -62,8 +62,8 @@ public class StreamSourceNode<K, V> extends SourceGraphNode<K, V> {
     @Override
     public String toString() {
         return "StreamSourceNode{" +
-               "topicNames=" + topicNames() +
-               ", topicPattern=" + topicPattern() +
+               "topicNames=" + (topicNames().isPresent() ? topicNames().get() : null) +
+               ", topicPattern=" + (topicPattern().isPresent() ? topicPattern().get() : null) +
                ", consumedInternal=" + consumedInternal() +
                "} " + super.toString();
     }
@@ -71,21 +71,20 @@ public class StreamSourceNode<K, V> extends SourceGraphNode<K, V> {
     @Override
     public void writeToTopology(final InternalTopologyBuilder topologyBuilder) {
 
-        if (topicPattern() != null) {
+        if (topicPattern().isPresent()) {
             topologyBuilder.addSource(consumedInternal().offsetResetPolicy(),
                                       nodeName(),
                                       consumedInternal().timestampExtractor(),
                                       consumedInternal().keyDeserializer(),
                                       consumedInternal().valueDeserializer(),
-                                      topicPattern());
+                                      topicPattern().get());
         } else {
             topologyBuilder.addSource(consumedInternal().offsetResetPolicy(),
                                       nodeName(),
                                       consumedInternal().timestampExtractor(),
                                       consumedInternal().keyDeserializer(),
                                       consumedInternal().valueDeserializer(),
-                                      topicNames().toArray(new String[0]));
-
+                                      topicNames().get().toArray(new String[0]));
         }
     }
 

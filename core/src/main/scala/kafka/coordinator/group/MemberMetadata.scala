@@ -29,7 +29,7 @@ case class MemberSummary(memberId: String,
                          assignment: Array[Byte])
 
 private object MemberMetadata {
-  def plainProtocolSet(supportedProtocols: List[(String, Array[Byte])]) = supportedProtocols.map(_._1).toSet
+  def plainProtocolSet(supportedProtocols: List[(String, Array[Byte])]): Set[String] = supportedProtocols.map(_._1).toSet
 }
 
 /**
@@ -57,8 +57,8 @@ private[group] class MemberMetadata(var memberId: String,
                                     val groupInstanceId: Option[String],
                                     val clientId: String,
                                     val clientHost: String,
-                                    val rebalanceTimeoutMs: Int,
-                                    val sessionTimeoutMs: Int,
+                                    var rebalanceTimeoutMs: Int,
+                                    var sessionTimeoutMs: Int,
                                     val protocolType: String,
                                     var supportedProtocols: List[(String, Array[Byte])],
                                     var assignment: Array[Byte] = Array.empty[Byte]) {

@@ -16,10 +16,12 @@
  */
 package org.apache.kafka.connect.transforms;
 
+import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.connect.data.Field;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaBuilder;
 import org.apache.kafka.connect.data.Struct;
+import org.apache.kafka.connect.errors.DataException;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -31,6 +33,7 @@ import java.util.Map;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class SetSchemaMetadataTest {
     private final SetSchemaMetadata<SinkRecord> xform = new SetSchemaMetadata.Value<>();
@@ -102,6 +105,24 @@ public class SetSchemaMetadataTest {
     }
 
     @Test
+    public void valueSchemaRequired() {
+        final SinkRecord record = new SinkRecord("", 0, null, null, null, 42, 0);
+        assertThrows(DataException.class, () -> xform.apply(record));
+    }
+
+    @Test
+    public void ignoreRecordWithNullValue() {
+        final SinkRecord record = new SinkRecord("", 0, null, null, null, null, 0);
+
+        final SinkRecord updatedRecord = xform.apply(record);
+
+        assertNull(updatedRecord.key());
+        assertNull(updatedRecord.keySchema());
+        assertNull(updatedRecord.value());
+        assertNull(updatedRecord.valueSchema());
+    }
+
+    @Test
     public void updateSchemaOfStruct() {
         final String fieldName1 = "f1";
         final String fieldName2 = "f2";
@@ -135,6 +156,11 @@ public class SetSchemaMetadataTest {
     public void updateSchemaOfNull() {
         Object updatedValue = SetSchemaMetadata.updateSchemaIn(null, Schema.INT32_SCHEMA);
         assertNull(updatedValue);
+    }
+
+    @Test
+    public void testSchemaMetadataVersionRetrievedFromAppInfoParser() {
+        assertEquals(AppInfoParser.getVersion(), xform.version());
     }
 
     protected void assertMatchingSchema(Struct value, Schema schema) {

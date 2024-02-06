@@ -20,7 +20,7 @@ import java.util.concurrent.ConcurrentHashMap;
 
 public class CredentialCache {
 
-    private final ConcurrentHashMap<String, Cache<? extends Object>> cacheMap = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, Cache<?>> cacheMap = new ConcurrentHashMap<>();
 
     public <C> Cache<C> createCache(String mechanism, Class<C> credentialClass) {
         Cache<C> cache = new Cache<>(credentialClass);

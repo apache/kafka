@@ -154,6 +154,7 @@ public class Metrics implements Closeable {
      * @param enableExpiration true if the metrics instance can garbage collect inactive sensors, false otherwise
      * @param metricsContext The metricsContext to initialize metrics reporter with
      */
+    @SuppressWarnings("this-escape")
     public Metrics(MetricConfig defaultConfig, List<MetricsReporter> reporters, Time time, boolean enableExpiration,
                    MetricsContext metricsContext) {
         this.config = defaultConfig;
@@ -502,6 +503,7 @@ public class Metrics implements Closeable {
      *
      * @param metricName The name of the metric
      * @param metricValueProvider The metric value provider associated with this metric
+     * @throws IllegalArgumentException if a metric with same name already exists.
      */
     public void addMetric(MetricName metricName, MetricConfig config, MetricValueProvider<?> metricValueProvider) {
         KafkaMetric m = new KafkaMetric(new Object(),
@@ -509,7 +511,10 @@ public class Metrics implements Closeable {
                                         Objects.requireNonNull(metricValueProvider),
                                         config == null ? this.config : config,
                                         time);
-        registerMetric(m);
+        KafkaMetric existingMetric = registerMetric(m);
+        if (existingMetric != null) {
+            throw new IllegalArgumentException("A metric named '" + metricName + "' already exists, can't register another one.");
+        }
     }
 
     /**
@@ -522,6 +527,26 @@ public class Metrics implements Closeable {
      */
     public void addMetric(MetricName metricName, MetricValueProvider<?> metricValueProvider) {
         addMetric(metricName, null, metricValueProvider);
+    }
+
+    /**
+     * Create or get an existing metric to monitor an object that implements MetricValueProvider.
+     * This metric won't be associated with any sensor. This is a way to expose existing values as metrics.
+     * This method takes care of synchronisation while updating/accessing metrics by concurrent threads.
+     *
+     * @param metricName The name of the metric
+     * @param metricValueProvider The metric value provider associated with this metric
+     * @return Existing KafkaMetric if already registered or else a newly created one
+     */
+    public KafkaMetric addMetricIfAbsent(MetricName metricName, MetricConfig config, MetricValueProvider<?> metricValueProvider) {
+        KafkaMetric metric = new KafkaMetric(new Object(),
+                Objects.requireNonNull(metricName),
+                Objects.requireNonNull(metricValueProvider),
+                config == null ? this.config : config,
+                time);
+
+        KafkaMetric existingMetric = registerMetric(metric);
+        return existingMetric == null ? metric : existingMetric;
     }
 
     /**
@@ -563,11 +588,20 @@ public class Metrics implements Closeable {
         }
     }
 
-    synchronized void registerMetric(KafkaMetric metric) {
+    /**
+     * Register a metric if not present or return the already existing metric with the same name.
+     * When a metric is newly registered, this method returns null
+     *
+     * @param metric The KafkaMetric to register
+     * @return the existing metric with the same name or null
+     */
+    synchronized KafkaMetric registerMetric(KafkaMetric metric) {
         MetricName metricName = metric.metricName();
-        if (this.metrics.containsKey(metricName))
-            throw new IllegalArgumentException("A metric named '" + metricName + "' already exists, can't register another one.");
-        this.metrics.put(metricName, metric);
+        KafkaMetric existingMetric = this.metrics.putIfAbsent(metricName, metric);
+        if (existingMetric != null) {
+            return existingMetric;
+        }
+        // newly added metric
         for (MetricsReporter reporter : reporters) {
             try {
                 reporter.metricChange(metric);
@@ -576,6 +610,7 @@ public class Metrics implements Closeable {
             }
         }
         log.trace("Registered metric named {}", metricName);
+        return null;
     }
 
     /**
@@ -636,7 +671,7 @@ public class Metrics implements Closeable {
         
         if (!runtimeTagKeys.equals(templateTagKeys)) {
             throw new IllegalArgumentException("For '" + template.name() + "', runtime-defined metric tags do not match the tags in the template. "
-                    + "Runtime = " + runtimeTagKeys.toString() + " Template = " + templateTagKeys.toString());
+                    + "Runtime = " + runtimeTagKeys + " Template = " + templateTagKeys.toString());
         }
                 
         return this.metricName(template.name(), template.group(), template.description(), tags);

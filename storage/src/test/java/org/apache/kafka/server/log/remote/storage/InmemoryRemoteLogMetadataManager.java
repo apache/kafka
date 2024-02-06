@@ -28,6 +28,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -42,9 +43,13 @@ public class InmemoryRemoteLogMetadataManager implements RemoteLogMetadataManage
 
     private Map<TopicIdPartition, RemoteLogMetadataCache> idToRemoteLogMetadataCache = new ConcurrentHashMap<>();
 
+    private static final CompletableFuture<Void> COMPLETED_FUTURE = new CompletableFuture<>();
+    static {
+        COMPLETED_FUTURE.complete(null);
+    }
+
     @Override
-    public void addRemoteLogSegmentMetadata(RemoteLogSegmentMetadata remoteLogSegmentMetadata)
-            throws RemoteStorageException {
+    public CompletableFuture<Void> addRemoteLogSegmentMetadata(RemoteLogSegmentMetadata remoteLogSegmentMetadata) {
         log.debug("Adding remote log segment : [{}]", remoteLogSegmentMetadata);
         Objects.requireNonNull(remoteLogSegmentMetadata, "remoteLogSegmentMetadata can not be null");
 
@@ -53,16 +58,20 @@ public class InmemoryRemoteLogMetadataManager implements RemoteLogMetadataManage
         idToRemoteLogMetadataCache
                 .computeIfAbsent(remoteLogSegmentId.topicIdPartition(), id -> new RemoteLogMetadataCache())
                 .addCopyInProgressSegment(remoteLogSegmentMetadata);
+
+        return COMPLETED_FUTURE;
     }
 
     @Override
-    public void updateRemoteLogSegmentMetadata(RemoteLogSegmentMetadataUpdate metadataUpdate)
+    public CompletableFuture<Void> updateRemoteLogSegmentMetadata(RemoteLogSegmentMetadataUpdate metadataUpdate)
             throws RemoteStorageException {
         log.debug("Updating remote log segment: [{}]", metadataUpdate);
         Objects.requireNonNull(metadataUpdate, "metadataUpdate can not be null");
 
         getRemoteLogMetadataCache(metadataUpdate.remoteLogSegmentId().topicIdPartition())
                 .updateRemoteLogSegmentMetadata(metadataUpdate);
+
+        return COMPLETED_FUTURE;
     }
 
     private RemoteLogMetadataCache getRemoteLogMetadataCache(TopicIdPartition topicIdPartition)
@@ -94,8 +103,7 @@ public class InmemoryRemoteLogMetadataManager implements RemoteLogMetadataManage
     }
 
     @Override
-    public void putRemotePartitionDeleteMetadata(RemotePartitionDeleteMetadata remotePartitionDeleteMetadata)
-            throws RemoteStorageException {
+    public CompletableFuture<Void> putRemotePartitionDeleteMetadata(RemotePartitionDeleteMetadata remotePartitionDeleteMetadata) {
         log.debug("Adding delete state with: [{}]", remotePartitionDeleteMetadata);
         Objects.requireNonNull(remotePartitionDeleteMetadata, "remotePartitionDeleteMetadata can not be null");
 
@@ -115,6 +123,8 @@ public class InmemoryRemoteLogMetadataManager implements RemoteLogMetadataManage
             idToRemoteLogMetadataCache.remove(topicIdPartition);
             idToPartitionDeleteMetadata.remove(topicIdPartition);
         }
+
+        return COMPLETED_FUTURE;
     }
 
     @Override
@@ -144,6 +154,18 @@ public class InmemoryRemoteLogMetadataManager implements RemoteLogMetadataManage
     public void onStopPartitions(Set<TopicIdPartition> partitions) {
         // It is not applicable for this implementation. This will track the segments that are added/updated as part of
         // this instance. It does not depend upon stopped partitions.
+    }
+
+    @Override
+    public long remoteLogSize(TopicIdPartition topicIdPartition, int leaderEpoch) throws RemoteStorageException {
+        long remoteLogSize = 0L;
+        RemoteLogMetadataCache remoteLogMetadataCache = getRemoteLogMetadataCache(topicIdPartition);
+        Iterator<RemoteLogSegmentMetadata> remoteLogSegmentMetadataIterator = remoteLogMetadataCache.listAllRemoteLogSegments();
+        while (remoteLogSegmentMetadataIterator.hasNext()) {
+            RemoteLogSegmentMetadata remoteLogSegmentMetadata = remoteLogSegmentMetadataIterator.next();
+            remoteLogSize += remoteLogSegmentMetadata.segmentSizeInBytes();
+        }
+        return remoteLogSize;
     }
 
     @Override

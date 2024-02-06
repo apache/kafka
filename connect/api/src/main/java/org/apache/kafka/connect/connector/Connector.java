@@ -33,7 +33,7 @@ import java.util.Map;
  * or {@link org.apache.kafka.connect.sink.SinkConnector SinkConnector}.
  * </p>
  * <p>
- * Connectors have two primary tasks. First, given some configuration, they are responsible for
+ * Connectors have two primary roles. First, given some configuration, they are responsible for
  * creating configurations for a set of {@link Task}s that split up the data processing. For
  * example, a database Connector might create Tasks by dividing the set of tables evenly among
  * tasks. Second, they are responsible for monitoring inputs for changes that require
@@ -110,13 +110,13 @@ public abstract class Connector implements Versioned {
     }
 
     /**
-     * Returns the Task implementation for this Connector.
+     * Returns the {@link Task} implementation for this Connector.
      */
     public abstract Class<? extends Task> taskClass();
 
     /**
      * Returns a set of configurations for Tasks based on the current configuration,
-     * producing at most count configurations.
+     * producing at most {@code maxTasks} configurations.
      *
      * @param maxTasks maximum number of configurations to generate
      * @return configurations for Tasks
@@ -131,8 +131,8 @@ public abstract class Connector implements Versioned {
     /**
      * Validate the connector configuration values against configuration definitions.
      * @param connectorConfigs the provided configuration values
-     * @return List of Config, each Config contains the updated configuration information given
-     * the current configuration values.
+     * @return a parsed and validated {@link Config} containing any relevant validation errors with the raw
+     * {@code connectorConfigs} which should prevent this configuration from being used.
      */
     public Config validate(Map<String, String> connectorConfigs) {
         ConfigDef configDef = config();

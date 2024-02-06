@@ -61,4 +61,4 @@ public class StringFormatterTest {
                     Arrays.asList("lion", "1", "12345"),
                     Arrays.asList("manatee", "50", "1"))));
     }
-};
+}

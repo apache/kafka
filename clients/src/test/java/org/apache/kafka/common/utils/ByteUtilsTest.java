@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.utils;
 
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
 import java.io.ByteArrayInputStream;
@@ -23,13 +24,19 @@ import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.ByteBuffer;
+import java.util.function.Function;
+import java.util.function.IntFunction;
+import java.util.function.LongFunction;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class ByteUtilsTest {
+    private static final int MAX_LENGTH_VARINT = 5;
+    private static final int MAX_LENGTH_VARLONG = 10;
     private final byte x00 = 0x00;
     private final byte x01 = 0x01;
     private final byte x02 = 0x02;
@@ -239,8 +246,179 @@ public class ByteUtilsTest {
         assertDoubleSerde(Double.NEGATIVE_INFINITY, 0xFFF0000000000000L);
     }
 
+    @Test
+    @Disabled // Enable this when we change the implementation of UnsignedVarlong
+    public void testCorrectnessWriteUnsignedVarlong() {
+        // The old well-known implementation for writeVarlong.
+        LongFunction<ByteBuffer> simpleImplementation = (long value) -> {
+            ByteBuffer buffer = ByteBuffer.allocate(MAX_LENGTH_VARLONG);
+            while ((value & 0xffffffffffffff80L) != 0L) {
+                byte b = (byte) ((value & 0x7f) | 0x80);
+                buffer.put(b);
+                value >>>= 7;
+            }
+            buffer.put((byte) value);
+
+            return buffer;
+        };
+
+        // compare the full range of values
+        final ByteBuffer actual = ByteBuffer.allocate(MAX_LENGTH_VARLONG);
+        for (long i = 1; i < Long.MAX_VALUE && i >= 0; i = i << 1) {
+            ByteUtils.writeUnsignedVarlong(i, actual);
+            final ByteBuffer expected = simpleImplementation.apply(i);
+            assertArrayEquals(expected.array(), actual.array(), "Implementations do not match for number=" + i);
+            actual.clear();
+        }
+    }
+
+    @Test
+    public void testCorrectnessWriteUnsignedVarint() {
+        // The old well-known implementation for writeUnsignedVarint.
+        IntFunction<ByteBuffer> simpleImplementation = (int value) -> {
+            ByteBuffer buffer = ByteBuffer.allocate(MAX_LENGTH_VARINT);
+            while (true) {
+                if ((value & ~0x7F) == 0) {
+                    buffer.put((byte) value);
+                    break;
+                } else {
+                    buffer.put((byte) ((value & 0x7F) | 0x80));
+                    value >>>= 7;
+                }
+            }
+
+            return buffer;
+        };
+
+        // compare the full range of values
+        final ByteBuffer actual = ByteBuffer.allocate(MAX_LENGTH_VARINT);
+        for (int i = 0; i < Integer.MAX_VALUE && i >= 0; i += 13) {
+            ByteUtils.writeUnsignedVarint(i, actual);
+            final ByteBuffer expected = simpleImplementation.apply(i);
+            assertArrayEquals(expected.array(), actual.array(), "Implementations do not match for integer=" + i);
+            actual.clear();
+        }
+    }
+
+    @Test
+    public void testCorrectnessReadUnsignedVarint() {
+        // The old well-known implementation for readUnsignedVarint
+        Function<ByteBuffer, Integer> simpleImplementation = (ByteBuffer buffer) -> {
+            int value = 0;
+            int i = 0;
+            int b;
+            while (((b = buffer.get()) & 0x80) != 0) {
+                value |= (b & 0x7f) << i;
+                i += 7;
+                if (i > 28)
+                    throw new IllegalArgumentException("Invalid varint");
+            }
+            value |= b << i;
+            return value;
+        };
+
+        // compare the full range of values
+        final ByteBuffer testData = ByteBuffer.allocate(MAX_LENGTH_VARINT);
+        for (int i = 0; i < Integer.MAX_VALUE && i >= 0; i += 13) {
+            ByteUtils.writeUnsignedVarint(i, testData);
+            // prepare buffer for reading
+            testData.flip();
+            final int actual = ByteUtils.readUnsignedVarint(testData.duplicate());
+            final int expected = simpleImplementation.apply(testData);
+            assertEquals(expected, actual);
+            testData.clear();
+        }
+    }
+
+    @Test
+    @Disabled // Enable this when we change the implementation of UnsignedVarlong
+    public void testCorrectnessReadUnsignedVarlong() {
+        // The old well-known implementation for readUnsignedVarlong
+        Function<ByteBuffer, Long> simpleImplementation = (ByteBuffer buffer) -> {
+            long value = 0L;
+            int i = 0;
+            long b;
+            while (((b = buffer.get()) & 0x80) != 0) {
+                value |= (b & 0x7f) << i;
+                i += 7;
+                if (i > 63)
+                    throw new IllegalArgumentException();
+            }
+            value |= b << i;
+            return value;
+        };
+
+        // compare the full range of values
+        final ByteBuffer testData = ByteBuffer.allocate(MAX_LENGTH_VARLONG);
+        for (long i = 1; i < Long.MAX_VALUE && i >= 0; i = i << 1) {
+            ByteUtils.writeUnsignedVarlong(i, testData);
+            // prepare buffer for reading
+            testData.flip();
+            final long actual = ByteUtils.readUnsignedVarlong(testData.duplicate());
+            final long expected = simpleImplementation.apply(testData);
+            assertEquals(expected, actual);
+            testData.clear();
+        }
+    }
+
+    @Test
+    public void testSizeOfUnsignedVarint() {
+        // The old well-known implementation for sizeOfUnsignedVarint
+        IntFunction<Integer> simpleImplementation = (int value) -> {
+            int bytes = 1;
+            while ((value & 0xffffff80) != 0L) {
+                bytes += 1;
+                value >>>= 7;
+            }
+            return bytes;
+        };
+
+        // compare the full range of values
+        for (int i = 0; i < Integer.MAX_VALUE && i >= 0; i += 13) {
+            final int actual = ByteUtils.sizeOfUnsignedVarint(i);
+            final int expected = simpleImplementation.apply(i);
+            assertEquals(expected, actual);
+        }
+    }
+
+    @Test
+    public void testSizeOfVarlong() {
+        // The old well-known implementation for sizeOfVarlong
+        LongFunction<Integer> simpleImplementation = (long value) -> {
+            long v = (value << 1) ^ (value >> 63);
+            int bytes = 1;
+            while ((v & 0xffffffffffffff80L) != 0L) {
+                bytes += 1;
+                v >>>= 7;
+            }
+            return bytes;
+        };
+
+        for (long l = 1; l < Long.MAX_VALUE && l >= 0; l = l << 1) {
+            final int expected = simpleImplementation.apply(l);
+            final int actual = ByteUtils.sizeOfVarlong(l);
+            assertEquals(expected, actual);
+        }
+
+        // check zero as well
+        assertEquals(simpleImplementation.apply(0), ByteUtils.sizeOfVarlong(0));
+    }
+
+    @Test
+    public void testReadInt() {
+        int[] values = {
+            0, 1, -1, Byte.MAX_VALUE, Short.MAX_VALUE, 2 * Short.MAX_VALUE, Integer.MAX_VALUE / 2,
+            Integer.MIN_VALUE / 2, Integer.MAX_VALUE, Integer.MIN_VALUE, Integer.MAX_VALUE
+        };
+        ByteBuffer buffer = ByteBuffer.allocate(4 * values.length);
+        for (int i = 0; i < values.length; ++i) {
+            buffer.putInt(i * 4, values[i]);
+            assertEquals(values[i], ByteUtils.readIntBE(buffer.array(), i * 4), "Written value should match read value.");
+        }
+    }
+
     private void assertUnsignedVarintSerde(int value, byte[] expectedEncoding) throws IOException {
-        ByteBuffer buf = ByteBuffer.allocate(32);
+        ByteBuffer buf = ByteBuffer.allocate(MAX_LENGTH_VARINT);
         ByteUtils.writeUnsignedVarint(value, buf);
         buf.flip();
         assertArrayEquals(expectedEncoding, Utils.toArray(buf));
@@ -251,12 +429,12 @@ public class ByteUtilsTest {
         ByteUtils.writeUnsignedVarint(value, out);
         buf.flip();
         assertArrayEquals(expectedEncoding, Utils.toArray(buf));
-        DataInputStream in = new DataInputStream(new ByteBufferInputStream(buf));
+        InputStream in = new ByteBufferInputStream(buf);
         assertEquals(value, ByteUtils.readUnsignedVarint(in));
     }
 
     private void assertVarintSerde(int value, byte[] expectedEncoding) throws IOException {
-        ByteBuffer buf = ByteBuffer.allocate(32);
+        ByteBuffer buf = ByteBuffer.allocate(MAX_LENGTH_VARINT);
         ByteUtils.writeVarint(value, buf);
         buf.flip();
         assertArrayEquals(expectedEncoding, Utils.toArray(buf));
@@ -267,12 +445,12 @@ public class ByteUtilsTest {
         ByteUtils.writeVarint(value, out);
         buf.flip();
         assertArrayEquals(expectedEncoding, Utils.toArray(buf));
-        DataInputStream in = new DataInputStream(new ByteBufferInputStream(buf));
+        InputStream in = new ByteBufferInputStream(buf);
         assertEquals(value, ByteUtils.readVarint(in));
     }
 
     private void assertVarlongSerde(long value, byte[] expectedEncoding) throws IOException {
-        ByteBuffer buf = ByteBuffer.allocate(32);
+        ByteBuffer buf = ByteBuffer.allocate(MAX_LENGTH_VARLONG);
         ByteUtils.writeVarlong(value, buf);
         buf.flip();
         assertEquals(value, ByteUtils.readVarlong(buf.duplicate()));
@@ -283,7 +461,7 @@ public class ByteUtilsTest {
         ByteUtils.writeVarlong(value, out);
         buf.flip();
         assertArrayEquals(expectedEncoding, Utils.toArray(buf));
-        DataInputStream in = new DataInputStream(new ByteBufferInputStream(buf));
+        InputStream in = new ByteBufferInputStream(buf);
         assertEquals(value, ByteUtils.readVarlong(in));
     }
 

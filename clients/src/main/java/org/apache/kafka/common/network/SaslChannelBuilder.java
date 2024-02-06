@@ -87,17 +87,16 @@ public class SaslChannelBuilder implements ChannelBuilder, ListenerReconfigurabl
     private final Map<String, LoginManager> loginManagers;
     private final Map<String, Subject> subjects;
     private final Supplier<ApiVersionsResponse> apiVersionSupplier;
-
-    private SslFactory sslFactory;
-    private Map<String, ?> configs;
     private final String sslClientAuthOverride;
-
-    private KerberosShortNamer kerberosShortNamer;
-    private Map<String, AuthenticateCallbackHandler> saslCallbackHandlers;
-    private Map<String, Long> connectionsMaxReauthMsByMechanism;
+    private final Map<String, AuthenticateCallbackHandler> saslCallbackHandlers;
+    private final Map<String, Long> connectionsMaxReauthMsByMechanism;
     private final Time time;
     private final LogContext logContext;
     private final Logger log;
+
+    private SslFactory sslFactory;
+    private Map<String, ?> configs;
+    private KerberosShortNamer kerberosShortNamer;
 
     public SaslChannelBuilder(Mode mode,
                               Map<String, JaasContext> jaasContexts,
@@ -210,16 +209,18 @@ public class SaslChannelBuilder implements ChannelBuilder, ListenerReconfigurabl
     @Override
     public KafkaChannel buildChannel(String id, SelectionKey key, int maxReceiveSize,
                                      MemoryPool memoryPool, ChannelMetadataRegistry metadataRegistry) throws KafkaException {
+        TransportLayer transportLayer = null;
         try {
             SocketChannel socketChannel = (SocketChannel) key.channel();
             Socket socket = socketChannel.socket();
-            TransportLayer transportLayer = buildTransportLayer(id, key, socketChannel, metadataRegistry);
+            transportLayer = buildTransportLayer(id, key, socketChannel, metadataRegistry);
+            final TransportLayer finalTransportLayer = transportLayer;
             Supplier<Authenticator> authenticatorCreator;
             if (mode == Mode.SERVER) {
                 authenticatorCreator = () -> buildServerAuthenticator(configs,
                         Collections.unmodifiableMap(saslCallbackHandlers),
                         id,
-                        transportLayer,
+                        finalTransportLayer,
                         Collections.unmodifiableMap(subjects),
                         Collections.unmodifiableMap(connectionsMaxReauthMsByMechanism),
                         metadataRegistry);
@@ -230,13 +231,15 @@ public class SaslChannelBuilder implements ChannelBuilder, ListenerReconfigurabl
                         id,
                         socket.getInetAddress().getHostName(),
                         loginManager.serviceName(),
-                        transportLayer,
+                        finalTransportLayer,
                         subjects.get(clientSaslMechanism));
             }
             return new KafkaChannel(id, transportLayer, authenticatorCreator, maxReceiveSize,
                 memoryPool != null ? memoryPool : MemoryPool.NONE, metadataRegistry);
         } catch (Exception e) {
-            log.info("Failed to create channel due to ", e);
+            // Ideally these resources are closed by the KafkaChannel but this builder should close the resources instead
+            // if an error occurs due to which KafkaChannel is not created.
+            Utils.closeQuietly(transportLayer, "transport layer for channel Id: " + id);
             throw new KafkaException(e);
         }
     }

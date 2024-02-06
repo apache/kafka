@@ -17,6 +17,7 @@
 
 package org.apache.kafka.streams.state.internals;
 
+import java.util.Collection;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
@@ -24,24 +25,41 @@ import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.internals.TimeWindow;
 import org.apache.kafka.streams.state.StateSerdes;
+import org.apache.kafka.streams.state.internals.MergedSortedCacheWindowStoreKeyValueIterator.StoreKeyToWindowKey;
+import org.apache.kafka.streams.state.internals.MergedSortedCacheWindowStoreKeyValueIterator.WindowKeyToBytes;
+import org.apache.kafka.streams.state.internals.PrefixedWindowKeySchemas.KeyFirstWindowKeySchema;
+import org.apache.kafka.streams.state.internals.PrefixedWindowKeySchemas.TimeFirstWindowKeySchema;
 import org.apache.kafka.test.KeyValueIteratorStub;
+import org.junit.Before;
 import org.junit.Test;
 
 import java.util.Collections;
 import java.util.Iterator;
+import org.junit.runner.RunWith;
+import org.junit.runners.Parameterized;
+import org.junit.runners.Parameterized.Parameter;
 
+import static java.util.Arrays.asList;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
+@RunWith(Parameterized.class)
 public class MergedSortedCacheWrappedWindowStoreKeyValueIteratorTest {
+
+    @FunctionalInterface
+    private interface StoreKeySerializer<K> {
+        Bytes serialize(final Windowed<K> key, final int seq, final StateSerdes<K, ?> serdes);
+    }
+
     private static final SegmentedCacheFunction SINGLE_SEGMENT_CACHE_FUNCTION = new SegmentedCacheFunction(null, -1) {
         @Override
         public long segmentId(final Bytes key) {
             return 0;
         }
     };
+
     private static final int WINDOW_SIZE = 10;
 
     private final String storeKey = "a";
@@ -51,14 +69,61 @@ public class MergedSortedCacheWrappedWindowStoreKeyValueIteratorTest {
     private final Iterator<KeyValue<Windowed<Bytes>, byte[]>> storeKvs = Collections.singleton(
         KeyValue.pair(new Windowed<>(Bytes.wrap(storeKey.getBytes()), storeWindow), storeKey.getBytes())).iterator();
     private final TimeWindow cacheWindow = new TimeWindow(10, 20);
-    private final Iterator<KeyValue<Bytes, LRUCacheEntry>> cacheKvs = Collections.singleton(
-        KeyValue.pair(
-            SINGLE_SEGMENT_CACHE_FUNCTION.cacheKey(WindowKeySchema.toStoreKeyBinary(
-                    new Windowed<>(cacheKey, cacheWindow), 0, new StateSerdes<>("dummy", Serdes.String(), Serdes.ByteArray()))
-            ),
-            new LRUCacheEntry(cacheKey.getBytes())
-        )).iterator();
+    private Iterator<KeyValue<Bytes, LRUCacheEntry>> cacheKvs;
     final private Deserializer<String> deserializer = Serdes.String().deserializer();
+
+    private StoreKeySerializer<String> storeKeySerializer;
+    private StoreKeyToWindowKey storeKeyToWindowKey;
+    private WindowKeyToBytes windowKeyToBytes;
+
+    private enum SchemaType {
+        WINDOW_KEY_SCHEMA,
+        KEY_FIRST_SCHEMA,
+        TIME_FIRST_SCHEMA
+    }
+
+    @Parameter
+    public SchemaType schemaType;
+
+    @Parameterized.Parameters(name = "{0}")
+    public static Collection<Object[]> data() {
+        return asList(new Object[][] {
+            {SchemaType.WINDOW_KEY_SCHEMA},
+            {SchemaType.KEY_FIRST_SCHEMA},
+            {SchemaType.TIME_FIRST_SCHEMA},
+        });
+    }
+
+    @Before
+    public void setUp() {
+        switch (schemaType) {
+            case KEY_FIRST_SCHEMA:
+                storeKeySerializer = KeyFirstWindowKeySchema::toStoreKeyBinary;
+                storeKeyToWindowKey = KeyFirstWindowKeySchema::fromStoreKey;
+                windowKeyToBytes = KeyFirstWindowKeySchema::toStoreKeyBinary;
+                break;
+            case WINDOW_KEY_SCHEMA:
+                storeKeySerializer = WindowKeySchema::toStoreKeyBinary;
+                storeKeyToWindowKey = WindowKeySchema::fromStoreKey;
+                windowKeyToBytes = WindowKeySchema::toStoreKeyBinary;
+                break;
+            case TIME_FIRST_SCHEMA:
+                storeKeySerializer = TimeFirstWindowKeySchema::toStoreKeyBinary;
+                storeKeyToWindowKey = TimeFirstWindowKeySchema::fromStoreKey;
+                windowKeyToBytes = TimeFirstWindowKeySchema::toStoreKeyBinary;
+                break;
+            default:
+                throw new IllegalStateException("Unknown schemaType: " + schemaType);
+        }
+        cacheKvs = Collections.singleton(
+            KeyValue.pair(
+                SINGLE_SEGMENT_CACHE_FUNCTION.cacheKey(storeKeySerializer.serialize(
+                    new Windowed<>(cacheKey, cacheWindow), 0, new StateSerdes<>("dummy", Serdes.String(), Serdes.ByteArray()))
+                ),
+                new LRUCacheEntry(cacheKey.getBytes())
+            )
+        ).iterator();
+    }
 
     @Test
     public void shouldHaveNextFromStore() {
@@ -185,7 +250,9 @@ public class MergedSortedCacheWrappedWindowStoreKeyValueIteratorTest {
             new StateSerdes<>("name", Serdes.Bytes(), Serdes.ByteArray()),
             WINDOW_SIZE,
             SINGLE_SEGMENT_CACHE_FUNCTION,
-            forward
+            forward,
+            storeKeyToWindowKey,
+            windowKeyToBytes
         );
     }
 }

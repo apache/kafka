@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.processor.internals.assignment;
 
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.Task;
@@ -31,6 +32,10 @@ import static java.util.Arrays.asList;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkSet;
+import static org.apache.kafka.common.utils.Utils.mkSortedSet;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.EMPTY_CLIENT_TAGS;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.NAMED_TASK_T0_0_0;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.NAMED_TASK_T1_0_0;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.TASK_0_0;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.TASK_0_1;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.TASK_0_2;
@@ -41,14 +46,20 @@ import static org.apache.kafka.streams.processor.internals.assignment.Assignment
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.TP_1_0;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.TP_1_1;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.TP_1_2;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.UUID_1;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.UUID_2;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.UUID_3;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.hasActiveTasks;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.hasStandbyTasks;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.uuidForInt;
 import static org.apache.kafka.streams.processor.internals.assignment.SubscriptionInfo.UNKNOWN_OFFSET_SUM;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.empty;
 import static org.hamcrest.Matchers.is;
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 
@@ -62,6 +73,7 @@ public class ClientStateTest {
             mkSet(TASK_0_0, TASK_0_1),
             mkSet(TASK_0_2, TASK_0_3),
             mkMap(mkEntry(TASK_0_0, 5L), mkEntry(TASK_0_2, -1L)),
+            EMPTY_CLIENT_TAGS,
             4
         );
 
@@ -309,10 +321,29 @@ public class ClientStateTest {
     public void shouldAddTasksWithLatestOffsetToPrevActiveTasks() {
         final Map<TaskId, Long> taskOffsetSums = Collections.singletonMap(TASK_0_1, Task.LATEST_OFFSET);
         client.addPreviousTasksAndOffsetSums("c1", taskOffsetSums);
-        client.initializePrevTasks(Collections.emptyMap());
+        client.initializePrevTasks(Collections.emptyMap(), false);
         assertThat(client.prevActiveTasks(), equalTo(Collections.singleton(TASK_0_1)));
         assertThat(client.previousAssignedTasks(), equalTo(Collections.singleton(TASK_0_1)));
         assertTrue(client.prevStandbyTasks().isEmpty());
+    }
+
+    @Test
+    public void shouldThrowWhenSomeOwnedPartitionsAreNotRecognizedWhenInitializingPrevTasks() {
+        final Map<TopicPartition, TaskId> taskForPartitionMap = Collections.singletonMap(TP_0_1, TASK_0_1);
+        client.addOwnedPartitions(Collections.singleton(TP_0_0), "c1");
+        client.addPreviousTasksAndOffsetSums("c1", Collections.emptyMap());
+        assertThrows(IllegalStateException.class, () -> client.initializePrevTasks(taskForPartitionMap, false));
+    }
+
+    @Test
+    public void shouldFilterOutUnrecognizedPartitionsAndInitializePrevTasksWhenUsingNamedTopologies() {
+        final Map<TopicPartition, TaskId> taskForPartitionMap = Collections.singletonMap(TP_0_1, TASK_0_1);
+        client.addOwnedPartitions(Collections.singleton(TP_0_0), "c1");
+        client.addPreviousTasksAndOffsetSums("c1", Collections.emptyMap());
+        client.initializePrevTasks(taskForPartitionMap, true);
+        assertThat(client.prevActiveTasks().isEmpty(), is(true));
+        assertThat(client.previousAssignedTasks().isEmpty(), is(true));
+        assertThat(client.prevStandbyTasks().isEmpty(), is(true));
     }
 
     @Test
@@ -324,7 +355,7 @@ public class ClientStateTest {
         client.addPreviousTasksAndOffsetSums("c2", Collections.singletonMap(TASK_0_2, 0L));
         client.addPreviousTasksAndOffsetSums("c3", Collections.emptyMap());
 
-        client.initializePrevTasks(Collections.emptyMap());
+        client.initializePrevTasks(Collections.emptyMap(), false);
 
         assertThat(client.prevOwnedStatefulTasksByConsumer("c1"), equalTo(mkSet(TASK_0_0, TASK_0_1)));
         assertThat(client.prevOwnedStatefulTasksByConsumer("c2"), equalTo(mkSet(TASK_0_2)));
@@ -335,13 +366,15 @@ public class ClientStateTest {
     public void shouldReturnPreviousActiveStandbyTasksForConsumer() {
         client.addOwnedPartitions(mkSet(TP_0_1, TP_1_1), "c1");
         client.addOwnedPartitions(mkSet(TP_0_2, TP_1_2), "c2");
-        client.initializePrevTasks(mkMap(
+        client.initializePrevTasks(
+            mkMap(
                 mkEntry(TP_0_0, TASK_0_0),
                 mkEntry(TP_0_1, TASK_0_1),
                 mkEntry(TP_0_2, TASK_0_2),
                 mkEntry(TP_1_0, TASK_0_0),
                 mkEntry(TP_1_1, TASK_0_1),
-                mkEntry(TP_1_2, TASK_0_2))
+                mkEntry(TP_1_2, TASK_0_2)),
+            false
         );
 
         client.addPreviousTasksAndOffsetSums("c1", mkMap(
@@ -403,7 +436,7 @@ public class ClientStateTest {
             mkEntry(TASK_0_2, 100L)
         );
         client.addPreviousTasksAndOffsetSums("c1", taskOffsetSums);
-        client.initializePrevTasks(Collections.emptyMap());
+        client.initializePrevTasks(Collections.emptyMap(), false);
         assertThat(client.prevStandbyTasks(), equalTo(mkSet(TASK_0_1, TASK_0_2)));
         assertThat(client.previousAssignedTasks(), equalTo(mkSet(TASK_0_1, TASK_0_2)));
         assertTrue(client.prevActiveTasks().isEmpty());
@@ -424,6 +457,22 @@ public class ClientStateTest {
 
         assertThat(client.lagFor(TASK_0_1), equalTo(500L));
         assertThat(client.lagFor(TASK_0_2), equalTo(0L));
+    }
+
+    @Test
+    public void shouldNotTryToLookupTasksThatWerePreviouslyAssignedButNoLongerExist() {
+        final Map<TaskId, Long> clientReportedTaskEndOffsetSums = mkMap(
+            mkEntry(NAMED_TASK_T0_0_0, 500L),
+            mkEntry(NAMED_TASK_T1_0_0, 500L)
+            );
+        final Map<TaskId, Long> allTaskEndOffsetSumsComputedByAssignor = Collections.singletonMap(NAMED_TASK_T0_0_0, 500L);
+        client.addPreviousTasksAndOffsetSums("c1", clientReportedTaskEndOffsetSums);
+        client.computeTaskLags(null, allTaskEndOffsetSumsComputedByAssignor);
+
+        assertThrows(IllegalStateException.class, () -> client.lagFor(NAMED_TASK_T1_0_0));
+
+        client.assignActive(NAMED_TASK_T0_0_0);
+        assertThat(client.prevTasksByLag("c1"), equalTo(mkSortedSet(NAMED_TASK_T0_0_0)));
     }
 
     @Test
@@ -482,7 +531,7 @@ public class ClientStateTest {
     @Test
     public void shouldThrowIllegalStateExceptionIfAttemptingToInitializeNonEmptyPrevTaskSets() {
         client.addPreviousActiveTasks(Collections.singleton(TASK_0_1));
-        assertThrows(IllegalStateException.class, () -> client.initializePrevTasks(Collections.emptyMap()));
+        assertThrows(IllegalStateException.class, () -> client.initializePrevTasks(Collections.emptyMap(), false));
     }
 
     @Test
@@ -490,4 +539,35 @@ public class ClientStateTest {
         assertThrows(IllegalStateException.class, () -> client.assignActiveToConsumer(TASK_0_0, "c1"));
     }
 
+    @Test
+    public void shouldReturnClientTags() {
+        final Map<String, String> clientTags = mkMap(mkEntry("k1", "v1"));
+        assertEquals(clientTags, new ClientState(null, 0, clientTags).clientTags());
+    }
+
+    @Test
+    public void shouldReturnEmptyClientTagsMapByDefault() {
+        assertTrue(new ClientState().clientTags().isEmpty());
+    }
+
+    @Test
+    public void shouldSetProcessId() {
+        assertEquals(UUID_1, new ClientState(UUID_1, 1).processId());
+        assertEquals(UUID_2, new ClientState(UUID_2, mkMap()).processId());
+        assertEquals(UUID_3, new ClientState(UUID_3, 1, mkMap()).processId());
+        assertNull(new ClientState().processId());
+    }
+
+    @Test
+    public void shouldCopyState() {
+        final ClientState clientState = new ClientState(mkSet(new TaskId(0, 0)), mkSet(new TaskId(0, 1)), Collections.emptyMap(), EMPTY_CLIENT_TAGS, 1, uuidForInt(1));
+        final ClientState clientStateCopy = new ClientState(clientState);
+
+        assertEquals(clientStateCopy.processId(), clientState.processId());
+        assertEquals(clientStateCopy.capacity(), clientState.capacity());
+        assertEquals(clientStateCopy.prevActiveTasks(), clientStateCopy.prevActiveTasks());
+        assertEquals(clientStateCopy.prevStandbyTasks(), clientStateCopy.prevStandbyTasks());
+        assertThat(clientStateCopy.prevActiveTasks(), equalTo(clientState.prevActiveTasks()));
+        assertThat(clientStateCopy.prevStandbyTasks(), equalTo(clientState.prevStandbyTasks()));
+    }
 }

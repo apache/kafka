@@ -18,13 +18,13 @@ package org.apache.kafka.streams.kstream.internals.graph;
 
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
-import org.apache.kafka.streams.state.StoreBuilder;
+import org.apache.kafka.streams.processor.internals.StoreFactory;
 
 public class StateStoreNode<S extends StateStore> extends GraphNode {
 
-    protected final StoreBuilder<S> storeBuilder;
+    protected final StoreFactory storeBuilder;
 
-    public StateStoreNode(final StoreBuilder<S> storeBuilder) {
+    public StateStoreNode(final StoreFactory storeBuilder) {
         super(storeBuilder.name());
 
         this.storeBuilder = storeBuilder;
@@ -32,7 +32,6 @@ public class StateStoreNode<S extends StateStore> extends GraphNode {
 
     @Override
     public void writeToTopology(final InternalTopologyBuilder topologyBuilder) {
-
         topologyBuilder.addStateStore(storeBuilder);
     }
 

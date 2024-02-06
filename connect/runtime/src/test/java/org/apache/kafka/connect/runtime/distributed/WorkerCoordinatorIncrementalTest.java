@@ -26,6 +26,7 @@ import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.requests.RequestTestUtils;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.connect.storage.ClusterConfigState;
 import org.apache.kafka.connect.storage.KafkaConfigBackingStore;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.junit.After;
@@ -37,6 +38,7 @@ import org.junit.runners.Parameterized;
 import org.mockito.Mock;
 import org.mockito.junit.MockitoJUnit;
 import org.mockito.junit.MockitoRule;
+import org.mockito.quality.Strictness;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -71,7 +73,7 @@ import static org.mockito.Mockito.when;
 @RunWith(value = Parameterized.class)
 public class WorkerCoordinatorIncrementalTest {
     @Rule
-    public MockitoRule rule = MockitoJUnit.rule();
+    public MockitoRule rule = MockitoJUnit.rule().strictness(Strictness.STRICT_STUBS);
 
     private String connectorId1 = "connector1";
     private String connectorId2 = "connector2";
@@ -86,6 +88,7 @@ public class WorkerCoordinatorIncrementalTest {
     private int rebalanceTimeoutMs = 60;
     private int heartbeatIntervalMs = 2;
     private long retryBackoffMs = 100;
+    private long retryBackoffMaxMs = 1000;
     private int requestTimeoutMs = 1000;
     private MockTime time;
     private MockClient client;
@@ -134,7 +137,7 @@ public class WorkerCoordinatorIncrementalTest {
         LogContext loggerFactory = new LogContext();
 
         this.time = new MockTime();
-        this.metadata = new Metadata(0, Long.MAX_VALUE, loggerFactory, new ClusterResourceListeners());
+        this.metadata = new Metadata(0, 0, Long.MAX_VALUE, loggerFactory, new ClusterResourceListeners());
         this.client = new MockClient(time, metadata);
         this.client.updateMetadata(RequestTestUtils.metadataUpdateWith(1, Collections.singletonMap("topic", 1)));
         this.node = metadata.fetch().nodes().get(0);
@@ -160,6 +163,7 @@ public class WorkerCoordinatorIncrementalTest {
                                                         groupId,
                                                         Optional.empty(),
                                                         retryBackoffMs,
+                                                        retryBackoffMaxMs,
                                                         true);
         this.coordinator = new WorkerCoordinator(rebalanceConfig,
                                                  loggerFactory,
@@ -215,7 +219,7 @@ public class WorkerCoordinatorIncrementalTest {
                 CONNECT_PROTOCOL_V1, ExtendedAssignment.NO_ERROR, leaderId, leaderUrl, configState1.offset(),
                 Collections.singletonList(connectorId1), Arrays.asList(taskId1x0, taskId2x0),
                 Collections.emptyList(), Collections.emptyList(), 0);
-        ByteBuffer buf = IncrementalCooperativeConnectProtocol.serializeAssignment(assignment);
+        ByteBuffer buf = IncrementalCooperativeConnectProtocol.serializeAssignment(assignment, false);
         // Using onJoinComplete to register the protocol selection decided by the broker
         // coordinator as well as an existing previous assignment that the call to metadata will
         // include with v1 but not with v0
@@ -246,7 +250,7 @@ public class WorkerCoordinatorIncrementalTest {
                 CONNECT_PROTOCOL_V1, ExtendedAssignment.NO_ERROR, leaderId, leaderUrl, configState1.offset(),
                 Collections.singletonList(connectorId1), Arrays.asList(taskId1x0, taskId2x0),
                 Collections.emptyList(), Collections.emptyList(), 0);
-        ByteBuffer buf = IncrementalCooperativeConnectProtocol.serializeAssignment(assignment);
+        ByteBuffer buf = IncrementalCooperativeConnectProtocol.serializeAssignment(assignment, false);
         // Using onJoinComplete to register the protocol selection decided by the broker
         // coordinator as well as an existing previous assignment that the call to metadata will
         // include with v1 but not with v0
@@ -278,7 +282,7 @@ public class WorkerCoordinatorIncrementalTest {
         addJoinGroupResponseMember(responseMembers, leaderId, offset, null);
         addJoinGroupResponseMember(responseMembers, memberId, offset, null);
 
-        Map<String, ByteBuffer> result = coordinator.performAssignment(leaderId, compatibility.protocol(), responseMembers);
+        Map<String, ByteBuffer> result = coordinator.onLeaderElected(leaderId, compatibility.protocol(), responseMembers, false);
 
         ExtendedAssignment leaderAssignment = deserializeAssignment(result, leaderId);
         assertAssignment(leaderId, offset,
@@ -300,7 +304,7 @@ public class WorkerCoordinatorIncrementalTest {
         addJoinGroupResponseMember(responseMembers, memberId, offset, memberAssignment);
         addJoinGroupResponseMember(responseMembers, anotherMemberId, offset, null);
 
-        result = coordinator.performAssignment(leaderId, compatibility.protocol(), responseMembers);
+        result = coordinator.onLeaderElected(leaderId, compatibility.protocol(), responseMembers, false);
 
         //Equally distributing tasks across member
         leaderAssignment = deserializeAssignment(result, leaderId);
@@ -337,7 +341,7 @@ public class WorkerCoordinatorIncrementalTest {
         addJoinGroupResponseMember(responseMembers, memberId, offset, null);
         addJoinGroupResponseMember(responseMembers, anotherMemberId, offset, null);
 
-        Map<String, ByteBuffer> result = coordinator.performAssignment(leaderId, compatibility.protocol(), responseMembers);
+        Map<String, ByteBuffer> result = coordinator.onLeaderElected(leaderId, compatibility.protocol(), responseMembers, false);
 
         ExtendedAssignment leaderAssignment = deserializeAssignment(result, leaderId);
         assertAssignment(leaderId, offset,
@@ -366,7 +370,7 @@ public class WorkerCoordinatorIncrementalTest {
         addJoinGroupResponseMember(responseMembers, leaderId, offset, leaderAssignment);
         addJoinGroupResponseMember(responseMembers, memberId, offset, memberAssignment);
 
-        result = coordinator.performAssignment(leaderId, compatibility.protocol(), responseMembers);
+        result = coordinator.onLeaderElected(leaderId, compatibility.protocol(), responseMembers, false);
 
         leaderAssignment = deserializeAssignment(result, leaderId);
         assertAssignment(leaderId, offset,
@@ -386,7 +390,7 @@ public class WorkerCoordinatorIncrementalTest {
         time.sleep(rebalanceDelay);
 
         // A third rebalance before the delay expires won't change the assignments
-        result = coordinator.performAssignment(leaderId, compatibility.protocol(), responseMembers);
+        result = coordinator.onLeaderElected(leaderId, compatibility.protocol(), responseMembers, false);
 
         leaderAssignment = deserializeAssignment(result, leaderId);
         assertAssignment(leaderId, offset,
@@ -405,7 +409,7 @@ public class WorkerCoordinatorIncrementalTest {
         time.sleep(rebalanceDelay + 1);
 
         // A rebalance after the delay expires re-assigns the lost tasks
-        result = coordinator.performAssignment(leaderId, compatibility.protocol(), responseMembers);
+        result = coordinator.onLeaderElected(leaderId, compatibility.protocol(), responseMembers, false);
 
         leaderAssignment = deserializeAssignment(result, leaderId);
         assertAssignment(leaderId, offset,
@@ -435,7 +439,7 @@ public class WorkerCoordinatorIncrementalTest {
         addJoinGroupResponseMember(responseMembers, memberId, offset, null);
         addJoinGroupResponseMember(responseMembers, anotherMemberId, offset, null);
 
-        Map<String, ByteBuffer> result = coordinator.performAssignment(leaderId, compatibility.protocol(), responseMembers);
+        Map<String, ByteBuffer> result = coordinator.onLeaderElected(leaderId, compatibility.protocol(), responseMembers, false);
 
         ExtendedAssignment leaderAssignment = deserializeAssignment(result, leaderId);
         assertAssignment(leaderId, offset,
@@ -463,7 +467,7 @@ public class WorkerCoordinatorIncrementalTest {
         addJoinGroupResponseMember(responseMembers, leaderId, offset, leaderAssignment);
         addJoinGroupResponseMember(responseMembers, memberId, offset, memberAssignment);
 
-        result = coordinator.performAssignment(leaderId, compatibility.protocol(), responseMembers);
+        result = coordinator.onLeaderElected(leaderId, compatibility.protocol(), responseMembers, false);
 
         leaderAssignment = deserializeAssignment(result, leaderId);
         assertAssignment(leaderId, offset,
@@ -485,7 +489,7 @@ public class WorkerCoordinatorIncrementalTest {
         // A third rebalance before the delay expires won't change the assignments even if the
         // member returns in the meantime
         addJoinGroupResponseMember(responseMembers, anotherMemberId, offset, null);
-        result = coordinator.performAssignment(leaderId, compatibility.protocol(), responseMembers);
+        result = coordinator.onLeaderElected(leaderId, compatibility.protocol(), responseMembers, false);
 
         leaderAssignment = deserializeAssignment(result, leaderId);
         assertAssignment(leaderId, offset,
@@ -510,7 +514,7 @@ public class WorkerCoordinatorIncrementalTest {
 
         time.sleep(rebalanceDelay + 1);
 
-        result = coordinator.performAssignment(leaderId, compatibility.protocol(), responseMembers);
+        result = coordinator.onLeaderElected(leaderId, compatibility.protocol(), responseMembers, false);
 
         // A rebalance after the delay expires re-assigns the lost tasks to the returning member
         leaderAssignment = deserializeAssignment(result, leaderId);

@@ -16,23 +16,31 @@
  */
 package org.apache.kafka.connect.runtime.isolation;
 
+import org.reflections.util.ClasspathHelper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.lang.reflect.Modifier;
+import java.net.MalformedURLException;
+import java.net.URL;
 import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
+import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collection;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
+import java.util.LinkedHashSet;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.regex.Pattern;
@@ -142,6 +150,8 @@ public class PluginUtils {
             + "|common\\.config\\.provider\\.(?!ConfigProvider$).*"
             + ")$");
 
+    private static final Pattern COMMA_WITH_WHITESPACE = Pattern.compile("\\s*,\\s*");
+
     private static final DirectoryStream.Filter<Path> PLUGIN_PATH_FILTER = path ->
         Files.isDirectory(path) || isArchive(path) || isClassFile(path);
 
@@ -188,11 +198,43 @@ public class PluginUtils {
         return path.toString().toLowerCase(Locale.ROOT).endsWith(".class");
     }
 
-    public static List<Path> pluginLocations(Path topPath) throws IOException {
+    public static Set<Path> pluginLocations(String pluginPath, boolean failFast) {
+        if (pluginPath == null) {
+            return Collections.emptySet();
+        }
+        String[] pluginPathElements = COMMA_WITH_WHITESPACE.split(pluginPath.trim(), -1);
+        Set<Path> pluginLocations = new LinkedHashSet<>();
+        for (String path : pluginPathElements) {
+            try {
+                Path pluginPathElement = Paths.get(path).toAbsolutePath();
+                if (pluginPath.isEmpty()) {
+                    log.warn("Plugin path element is empty, evaluating to {}.", pluginPathElement);
+                }
+                if (!Files.exists(pluginPathElement)) {
+                    throw new FileNotFoundException(pluginPathElement.toString());
+                }
+                // Currently 'plugin.paths' property is a list of top-level directories
+                // containing plugins
+                if (Files.isDirectory(pluginPathElement)) {
+                    pluginLocations.addAll(pluginLocations(pluginPathElement));
+                } else if (isArchive(pluginPathElement)) {
+                    pluginLocations.add(pluginPathElement);
+                }
+            } catch (InvalidPathException | IOException e) {
+                if (failFast) {
+                    throw new RuntimeException(e);
+                }
+                log.error("Could not get listing for plugin path: {}. Ignoring.", path, e);
+            }
+        }
+        return pluginLocations;
+    }
+
+    private static List<Path> pluginLocations(Path pluginPathElement) throws IOException {
         List<Path> locations = new ArrayList<>();
         try (
                 DirectoryStream<Path> listing = Files.newDirectoryStream(
-                        topPath,
+                        pluginPathElement,
                         PLUGIN_PATH_FILTER
                 )
         ) {
@@ -297,6 +339,54 @@ public class PluginUtils {
         return Arrays.asList(archives.toArray(new Path[0]));
     }
 
+    public static Set<PluginSource> pluginSources(Set<Path> pluginLocations, ClassLoader classLoader, PluginClassLoaderFactory factory) {
+        Set<PluginSource> pluginSources = new LinkedHashSet<>();
+        for (Path pluginLocation : pluginLocations) {
+            try {
+                pluginSources.add(isolatedPluginSource(pluginLocation, classLoader, factory));
+            } catch (InvalidPathException | MalformedURLException e) {
+                log.error("Invalid path in plugin path: {}. Ignoring.", pluginLocation, e);
+            } catch (IOException e) {
+                log.error("Could not get listing for plugin path: {}. Ignoring.", pluginLocation, e);
+            }
+        }
+        pluginSources.add(classpathPluginSource(classLoader.getParent()));
+        return pluginSources;
+    }
+
+    public static PluginSource isolatedPluginSource(Path pluginLocation, ClassLoader parent, PluginClassLoaderFactory factory) throws IOException {
+        List<URL> pluginUrls = new ArrayList<>();
+        List<Path> paths = pluginUrls(pluginLocation);
+        // Infer the type of the source
+        PluginSource.Type type;
+        if (paths.size() == 1 && paths.get(0) == pluginLocation) {
+            if (PluginUtils.isArchive(pluginLocation)) {
+                type = PluginSource.Type.SINGLE_JAR;
+            } else {
+                type = PluginSource.Type.CLASS_HIERARCHY;
+            }
+        } else {
+            type = PluginSource.Type.MULTI_JAR;
+        }
+        for (Path path : paths) {
+            pluginUrls.add(path.toUri().toURL());
+        }
+        URL[] urls = pluginUrls.toArray(new URL[0]);
+        PluginClassLoader loader = factory.newPluginClassLoader(
+                pluginLocation.toUri().toURL(),
+                urls,
+                parent
+        );
+        return new PluginSource(pluginLocation, type, loader, urls);
+    }
+
+    public static PluginSource classpathPluginSource(ClassLoader classLoader) {
+        List<URL> parentUrls = new ArrayList<>();
+        parentUrls.addAll(ClasspathHelper.forJavaClassPath());
+        parentUrls.addAll(ClasspathHelper.forClassLoader(classLoader));
+        return new PluginSource(null, PluginSource.Type.CLASSPATH, classLoader, parentUrls.toArray(new URL[0]));
+    }
+
     /**
      * Return the simple class name of a plugin as {@code String}.
      *
@@ -319,36 +409,10 @@ public class PluginUtils {
         switch (plugin.type()) {
             case SOURCE:
             case SINK:
-            case CONNECTOR:
                 return prunePluginName(plugin, "Connector");
             default:
                 return prunePluginName(plugin, plugin.type().simpleName());
         }
-    }
-
-    /**
-     * Verify whether a given plugin's alias matches another alias in a collection of plugins.
-     *
-     * @param alias the plugin descriptor to test for alias matching.
-     * @param plugins the collection of plugins to test against.
-     * @param <U> the plugin type.
-     * @return false if a match was found in the collection, otherwise true.
-     */
-    public static <U> boolean isAliasUnique(
-            PluginDesc<U> alias,
-            Collection<PluginDesc<U>> plugins
-    ) {
-        boolean matched = false;
-        for (PluginDesc<U> plugin : plugins) {
-            if (simpleName(alias).equals(simpleName(plugin))
-                    || prunedName(alias).equals(prunedName(plugin))) {
-                if (matched) {
-                    return false;
-                }
-                matched = true;
-            }
-        }
-        return true;
     }
 
     private static String prunePluginName(PluginDesc<?> plugin, String suffix) {
@@ -358,6 +422,25 @@ public class PluginUtils {
             return simple.substring(0, pos);
         }
         return simple;
+    }
+
+    public static Map<String, String> computeAliases(PluginScanResult scanResult) {
+        Map<String, Set<String>> aliasCollisions = new HashMap<>();
+        scanResult.forEach(pluginDesc -> {
+            aliasCollisions.computeIfAbsent(simpleName(pluginDesc), ignored -> new HashSet<>()).add(pluginDesc.className());
+            aliasCollisions.computeIfAbsent(prunedName(pluginDesc), ignored -> new HashSet<>()).add(pluginDesc.className());
+        });
+        Map<String, String> aliases = new HashMap<>();
+        for (Map.Entry<String, Set<String>> entry : aliasCollisions.entrySet()) {
+            String alias = entry.getKey();
+            Set<String> classNames = entry.getValue();
+            if (classNames.size() == 1) {
+                aliases.put(alias, classNames.stream().findAny().get());
+            } else {
+                log.debug("Ignoring ambiguous alias '{}' since it refers to multiple distinct plugins {}", alias, classNames);
+            }
+        }
+        return aliases;
     }
 
     private static class DirectoryEntry {

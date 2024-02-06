@@ -23,41 +23,36 @@ import org.apache.kafka.streams.kstream.internals.KTableSource;
 import org.apache.kafka.streams.kstream.internals.MaterializedInternal;
 import org.apache.kafka.streams.kstream.internals.graph.TableSourceNode.TableSourceNodeBuilder;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
-import org.easymock.EasyMock;
 import org.junit.Test;
 import org.junit.runner.RunWith;
-import org.powermock.api.easymock.PowerMock;
-import org.powermock.core.classloader.annotations.PrepareForTest;
-import org.powermock.modules.junit4.PowerMockRunner;
+import org.mockito.Mock;
+import org.mockito.junit.MockitoJUnitRunner;
 
-@RunWith(PowerMockRunner.class)
-@PrepareForTest({InternalTopologyBuilder.class})
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+
+
+@RunWith(MockitoJUnitRunner.StrictStubs.class)
 public class TableSourceNodeTest {
 
     private static final String STORE_NAME = "store-name";
     private static final String TOPIC = "input-topic";
 
-    private final InternalTopologyBuilder topologyBuilder = PowerMock.createNiceMock(InternalTopologyBuilder.class);
+    @Mock
+    private InternalTopologyBuilder topologyBuilder;
 
     @Test
     public void shouldConnectStateStoreToInputTopicIfInputTopicIsUsedAsChangelog() {
         final boolean shouldReuseSourceTopicForChangelog = true;
-        topologyBuilder.connectSourceStoreAndTopic(STORE_NAME, TOPIC);
-        EasyMock.replay(topologyBuilder);
-
         buildTableSourceNode(shouldReuseSourceTopicForChangelog);
-
-        EasyMock.verify(topologyBuilder);
+        verify(topologyBuilder).connectSourceStoreAndTopic(STORE_NAME, TOPIC);
     }
 
     @Test
     public void shouldConnectStateStoreToChangelogTopic() {
         final boolean shouldReuseSourceTopicForChangelog = false;
-        EasyMock.replay(topologyBuilder);
-
         buildTableSourceNode(shouldReuseSourceTopicForChangelog);
-
-        EasyMock.verify(topologyBuilder);
+        verify(topologyBuilder, never()).connectSourceStoreAndTopic(STORE_NAME, TOPIC);
     }
 
     private void buildTableSourceNode(final boolean shouldReuseSourceTopicForChangelog) {

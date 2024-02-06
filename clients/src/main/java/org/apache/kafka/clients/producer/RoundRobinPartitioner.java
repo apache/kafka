@@ -51,8 +51,6 @@ public class RoundRobinPartitioner implements Partitioner {
      */
     @Override
     public int partition(String topic, Object key, byte[] keyBytes, Object value, byte[] valueBytes, Cluster cluster) {
-        List<PartitionInfo> partitions = cluster.partitionsForTopic(topic);
-        int numPartitions = partitions.size();
         int nextValue = nextValue(topic);
         List<PartitionInfo> availablePartitions = cluster.availablePartitionsForTopic(topic);
         if (!availablePartitions.isEmpty()) {
@@ -60,14 +58,13 @@ public class RoundRobinPartitioner implements Partitioner {
             return availablePartitions.get(part).partition();
         } else {
             // no partitions are available, give a non-available partition
+            int numPartitions = cluster.partitionsForTopic(topic).size();
             return Utils.toPositive(nextValue) % numPartitions;
         }
     }
 
     private int nextValue(String topic) {
-        AtomicInteger counter = topicCounterMap.computeIfAbsent(topic, k -> {
-            return new AtomicInteger(0);
-        });
+        AtomicInteger counter = topicCounterMap.computeIfAbsent(topic, k -> new AtomicInteger(0));
         return counter.getAndIncrement();
     }
 

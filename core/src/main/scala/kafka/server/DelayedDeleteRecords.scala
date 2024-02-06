@@ -20,12 +20,12 @@ package kafka.server
 
 import java.util.concurrent.TimeUnit
 
-import kafka.metrics.KafkaMetricsGroup
 import kafka.utils.Implicits._
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.message.DeleteRecordsResponseData
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.DeleteRecordsResponse
+import org.apache.kafka.server.metrics.KafkaMetricsGroup
 
 import scala.collection._
 
@@ -84,10 +84,7 @@ class DelayedDeleteRecords(delayMs: Long,
                 (false, Errors.NOT_LEADER_OR_FOLLOWER, DeleteRecordsResponse.INVALID_LOW_WATERMARK)
             }
 
-          case _: HostedPartition.Deferred =>
-            (false, Errors.UNKNOWN_TOPIC_OR_PARTITION, DeleteRecordsResponse.INVALID_LOW_WATERMARK)
-
-          case HostedPartition.Offline =>
+          case HostedPartition.Offline(_) =>
             (false, Errors.KAFKA_STORAGE_ERROR, DeleteRecordsResponse.INVALID_LOW_WATERMARK)
 
           case HostedPartition.None =>
@@ -125,12 +122,12 @@ class DelayedDeleteRecords(delayMs: Long,
   }
 }
 
-object DelayedDeleteRecordsMetrics extends KafkaMetricsGroup {
+object DelayedDeleteRecordsMetrics {
+  private val metricsGroup = new KafkaMetricsGroup(DelayedDeleteRecordsMetrics.getClass)
 
-  private val aggregateExpirationMeter = newMeter("ExpiresPerSec", "requests", TimeUnit.SECONDS)
+  private val aggregateExpirationMeter = metricsGroup.newMeter("ExpiresPerSec", "requests", TimeUnit.SECONDS)
 
   def recordExpiration(partition: TopicPartition): Unit = {
     aggregateExpirationMeter.mark()
   }
 }
-

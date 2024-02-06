@@ -158,8 +158,9 @@ final class InFlightRequests {
 
     private Boolean hasExpiredRequest(long now, Deque<NetworkClient.InFlightRequest> deque) {
         for (NetworkClient.InFlightRequest request : deque) {
-            long timeSinceSend = Math.max(0, now - request.sendTimeMs);
-            if (timeSinceSend > request.requestTimeoutMs)
+            // We exclude throttle time here because we want to ensure that we don't expire requests while
+            // they are throttled. The request timeout should take effect only after the throttle time has elapsed.
+            if (request.timeElapsedSinceSendMs(now) - request.throttleTimeMs() > request.requestTimeoutMs)
                 return true;
         }
         return false;
@@ -182,4 +183,8 @@ final class InFlightRequests {
         return nodeIds;
     }
 
+    void incrementThrottleTime(String nodeId, long throttleTimeMs) {
+        requests.getOrDefault(nodeId, new ArrayDeque<>()).
+                forEach(request -> request.incrementThrottleTime(throttleTimeMs));
+    }
 }

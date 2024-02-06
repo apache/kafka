@@ -35,6 +35,6 @@ object VersionInfo {
   }
 
   def getVersionString: String = {
-    s"${getVersion} (Commit:${getCommit})"
+    s"$getVersion (Commit:$getCommit)"
   }
 }

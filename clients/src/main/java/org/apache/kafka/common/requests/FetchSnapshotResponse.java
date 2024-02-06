@@ -62,6 +62,11 @@ final public class FetchSnapshotResponse extends AbstractResponse {
     }
 
     @Override
+    public void maybeSetThrottleTimeMs(int throttleTimeMs) {
+        data.setThrottleTimeMs(throttleTimeMs);
+    }
+
+    @Override
     public FetchSnapshotResponseData data() {
         return data;
     }
@@ -119,7 +124,7 @@ final public class FetchSnapshotResponse extends AbstractResponse {
             .stream()
             .filter(topic -> topic.name().equals(topicPartition.topic()))
             .flatMap(topic -> topic.partitions().stream())
-            .filter(parition -> parition.index() == topicPartition.partition())
+            .filter(partition -> partition.index() == topicPartition.partition())
             .findAny();
     }
 

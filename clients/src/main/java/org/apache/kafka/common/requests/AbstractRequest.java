@@ -37,8 +37,15 @@ public abstract class AbstractRequest implements AbstractRequestResponse {
         /**
          * Construct a new builder which allows any supported version
          */
+        public Builder(ApiKeys apiKey, boolean enableUnstableLastVersion) {
+            this(apiKey, apiKey.oldestVersion(), apiKey.latestVersion(enableUnstableLastVersion));
+        }
+
+        /**
+         * Construct a new builder which allows any supported and released version
+         */
         public Builder(ApiKeys apiKey) {
-            this(apiKey, apiKey.oldestVersion(), apiKey.latestVersion());
+            this(apiKey, false);
         }
 
         /**
@@ -279,8 +286,8 @@ public abstract class AbstractRequest implements AbstractRequestResponse {
                 return EndQuorumEpochRequest.parse(buffer, apiVersion);
             case DESCRIBE_QUORUM:
                 return DescribeQuorumRequest.parse(buffer, apiVersion);
-            case ALTER_ISR:
-                return AlterIsrRequest.parse(buffer, apiVersion);
+            case ALTER_PARTITION:
+                return AlterPartitionRequest.parse(buffer, apiVersion);
             case UPDATE_FEATURES:
                 return UpdateFeaturesRequest.parse(buffer, apiVersion);
             case ENVELOPE:
@@ -301,6 +308,24 @@ public abstract class AbstractRequest implements AbstractRequestResponse {
                 return DescribeTransactionsRequest.parse(buffer, apiVersion);
             case LIST_TRANSACTIONS:
                 return ListTransactionsRequest.parse(buffer, apiVersion);
+            case ALLOCATE_PRODUCER_IDS:
+                return AllocateProducerIdsRequest.parse(buffer, apiVersion);
+            case CONSUMER_GROUP_HEARTBEAT:
+                return ConsumerGroupHeartbeatRequest.parse(buffer, apiVersion);
+            case CONSUMER_GROUP_DESCRIBE:
+                return ConsumerGroupDescribeRequest.parse(buffer, apiVersion);
+            case CONTROLLER_REGISTRATION:
+                return ControllerRegistrationRequest.parse(buffer, apiVersion);
+            case GET_TELEMETRY_SUBSCRIPTIONS:
+                return GetTelemetrySubscriptionsRequest.parse(buffer, apiVersion);
+            case PUSH_TELEMETRY:
+                return PushTelemetryRequest.parse(buffer, apiVersion);
+            case ASSIGN_REPLICAS_TO_DIRS:
+                return AssignReplicasToDirsRequest.parse(buffer, apiVersion);
+            case LIST_CLIENT_METRICS_RESOURCES:
+                return ListClientMetricsResourcesRequest.parse(buffer, apiVersion);
+            case DESCRIBE_TOPIC_PARTITIONS:
+                return DescribeTopicPartitionsRequest.parse(buffer, apiVersion);
             default:
                 throw new AssertionError(String.format("ApiKey %s is not currently handled in `parseRequest`, the " +
                         "code should be updated to do so.", apiKey));

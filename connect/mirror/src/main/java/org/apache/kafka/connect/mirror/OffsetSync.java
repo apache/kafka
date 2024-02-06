@@ -39,9 +39,9 @@ public class OffsetSync {
             new Field(TOPIC_KEY, Type.STRING),
             new Field(PARTITION_KEY, Type.INT32));
 
-    private TopicPartition topicPartition;
-    private long upstreamOffset;
-    private long downstreamOffset;
+    private final TopicPartition topicPartition;
+    private final long upstreamOffset;
+    private final long downstreamOffset;
 
     public OffsetSync(TopicPartition topicPartition, long upstreamOffset, long downstreamOffset) {
         this.topicPartition = topicPartition;

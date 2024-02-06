@@ -16,14 +16,21 @@
 {
   "apiKey": 38,
   "type": "request",
-  "listeners": ["zkBroker"],
+  "listeners": ["zkBroker", "broker", "controller"],
   "name": "CreateDelegationTokenRequest",
   // Version 1 is the same as version 0.
   //
   // Version 2 is the first flexible version.
-  "validVersions": "0-2",
+  //
+  // Version 3 adds owner principal
+  "validVersions": "0-3",
+  "deprecatedVersions": "0",
   "flexibleVersions": "2+",
   "fields": [
+    { "name": "OwnerPrincipalType", "type": "string", "versions": "3+", "nullableVersions": "3+",
+      "about": "The principal type of the owner of the token. If it's null it defaults to the token request principal." },
+    { "name": "OwnerPrincipalName", "type": "string", "versions": "3+", "nullableVersions": "3+",
+      "about": "The principal name of the owner of the token. If it's null it defaults to the token request principal." },
     { "name": "Renewers", "type": "[]CreatableRenewers", "versions": "0+",
       "about": "A list of those who are allowed to renew this token before it expires.", "fields": [
       { "name": "PrincipalType", "type": "string", "versions": "0+",

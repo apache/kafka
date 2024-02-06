@@ -236,7 +236,7 @@ public class ExampleConnectIntegrationTest {
         try {
             ConnectorStateInfo info = connect.connectorStatus(CONNECTOR_NAME);
             return info != null && info.tasks().size() == NUM_TASKS
-                    && connectorHandle.tasks().stream().allMatch(th -> th.partitionsAssigned() == 1);
+                    && connectorHandle.tasks().stream().allMatch(th -> th.numPartitionsAssigned() == 1);
         } catch (Exception e) {
             // Log the exception and return that the partitions were not assigned
             log.error("Could not check connector state info.", e);

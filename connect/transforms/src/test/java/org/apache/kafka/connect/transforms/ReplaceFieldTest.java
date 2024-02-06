@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.connect.transforms;
 
+import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaBuilder;
 import org.apache.kafka.connect.data.Struct;
@@ -30,7 +31,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
 public class ReplaceFieldTest {
-    private ReplaceField<SinkRecord> xform = new ReplaceField.Value<>();
+    private final ReplaceField<SinkRecord> xform = new ReplaceField.Value<>();
 
     @AfterEach
     public void teardown() {
@@ -74,6 +75,7 @@ public class ReplaceFieldTest {
         assertEquals(schema, transformedRecord.valueSchema());
     }
 
+    @SuppressWarnings("unchecked")
     @Test
     public void schemaless() {
         final Map<String, String> props = new HashMap<>();
@@ -91,7 +93,7 @@ public class ReplaceFieldTest {
         final SinkRecord record = new SinkRecord("test", 0, null, null, null, value, 0);
         final SinkRecord transformedRecord = xform.apply(record);
 
-        final Map updatedValue = (Map) transformedRecord.value();
+        final Map<String, Object> updatedValue = (Map<String, Object>) transformedRecord.value();
         assertEquals(3, updatedValue.size());
         assertEquals(42, updatedValue.get("xyz"));
         assertEquals(true, updatedValue.get("bar"));
@@ -144,7 +146,7 @@ public class ReplaceFieldTest {
         assertNull(transformedRecord.valueSchema());
     }
 
-
+    @SuppressWarnings("unchecked")
     @Test
     public void testExcludeBackwardsCompatibility() {
         final Map<String, String> props = new HashMap<>();
@@ -162,10 +164,15 @@ public class ReplaceFieldTest {
         final SinkRecord record = new SinkRecord("test", 0, null, null, null, value, 0);
         final SinkRecord transformedRecord = xform.apply(record);
 
-        final Map updatedValue = (Map) transformedRecord.value();
+        final Map<String, Object> updatedValue = (Map<String, Object>) transformedRecord.value();
         assertEquals(3, updatedValue.size());
         assertEquals(42, updatedValue.get("xyz"));
         assertEquals(true, updatedValue.get("bar"));
         assertEquals("etc", updatedValue.get("etc"));
+    }
+
+    @Test
+    public void testReplaceFieldVersionRetrievedFromAppInfoParser() {
+        assertEquals(AppInfoParser.getVersion(), xform.version());
     }
 }

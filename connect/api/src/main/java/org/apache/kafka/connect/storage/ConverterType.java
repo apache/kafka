@@ -52,7 +52,7 @@ public enum ConverterType {
         return NAME_TO_TYPE.get(name.toLowerCase(Locale.getDefault()));
     }
 
-    private String name;
+    private final String name;
 
     ConverterType() {
         this.name = this.name().toLowerCase(Locale.ROOT);

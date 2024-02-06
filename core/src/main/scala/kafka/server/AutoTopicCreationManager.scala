@@ -20,9 +20,7 @@ package kafka.server
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicReference
 import java.util.{Collections, Properties}
-
 import kafka.controller.KafkaController
-import kafka.coordinator.group.GroupCoordinator
 import kafka.coordinator.transaction.TransactionCoordinator
 import kafka.utils.Logging
 import org.apache.kafka.clients.ClientResponse
@@ -34,8 +32,11 @@ import org.apache.kafka.common.message.CreateTopicsRequestData.{CreatableTopic, 
 import org.apache.kafka.common.message.MetadataResponseData.MetadataResponseTopic
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.{ApiError, CreateTopicsRequest, RequestContext, RequestHeader}
+import org.apache.kafka.coordinator.group.GroupCoordinator
+import org.apache.kafka.server.{ControllerRequestCompletionHandler, NodeToControllerChannelManager}
 
 import scala.collection.{Map, Seq, Set, mutable}
+import scala.compat.java8.OptionConverters._
 import scala.jdk.CollectionConverters._
 
 trait AutoTopicCreationManager {
@@ -50,15 +51,13 @@ trait AutoTopicCreationManager {
 object AutoTopicCreationManager {
 
   def apply(
-    config: KafkaConfig,
-    metadataCache: MetadataCache,
-    threadNamePrefix: Option[String],
-    channelManager: Option[BrokerToControllerChannelManager],
-    adminManager: Option[ZkAdminManager],
-    controller: Option[KafkaController],
-    groupCoordinator: GroupCoordinator,
-    txnCoordinator: TransactionCoordinator,
-  ): AutoTopicCreationManager = {
+   config: KafkaConfig,
+   channelManager: Option[NodeToControllerChannelManager],
+   adminManager: Option[ZkAdminManager],
+   controller: Option[KafkaController],
+   groupCoordinator: GroupCoordinator,
+   txnCoordinator: TransactionCoordinator,
+ ): AutoTopicCreationManager = {
     new DefaultAutoTopicCreationManager(config, channelManager, adminManager,
       controller, groupCoordinator, txnCoordinator)
   }
@@ -66,7 +65,7 @@ object AutoTopicCreationManager {
 
 class DefaultAutoTopicCreationManager(
   config: KafkaConfig,
-  channelManager: Option[BrokerToControllerChannelManager],
+  channelManager: Option[NodeToControllerChannelManager],
   adminManager: Option[ZkAdminManager],
   controller: Option[KafkaController],
   groupCoordinator: GroupCoordinator,
@@ -171,13 +170,19 @@ class DefaultAutoTopicCreationManager(
 
     val requestCompletionHandler = new ControllerRequestCompletionHandler {
       override def onTimeout(): Unit = {
-        debug(s"Auto topic creation timed out for ${creatableTopics.keys}.")
         clearInflightRequests(creatableTopics)
+        debug(s"Auto topic creation timed out for ${creatableTopics.keys}.")
       }
 
       override def onComplete(response: ClientResponse): Unit = {
-        debug(s"Auto topic creation completed for ${creatableTopics.keys} with response ${response.responseBody.toString}.")
         clearInflightRequests(creatableTopics)
+        if (response.authenticationException() != null) {
+          warn(s"Auto topic creation failed for ${creatableTopics.keys} with authentication exception")
+        } else if (response.versionMismatch() != null) {
+          warn(s"Auto topic creation failed for ${creatableTopics.keys} with invalid version exception")
+        } else {
+          debug(s"Auto topic creation completed for ${creatableTopics.keys} with response ${response.responseBody}.")
+        }
       }
     }
 
@@ -187,7 +192,7 @@ class DefaultAutoTopicCreationManager(
 
     val request = metadataRequestContext.map { context =>
       val requestVersion =
-        channelManager.controllerApiVersions() match {
+        channelManager.controllerApiVersions.asScala match {
           case None =>
             // We will rely on the Metadata request to be retried in the case
             // that the latest version is not usable by the controller.
@@ -231,7 +236,7 @@ class DefaultAutoTopicCreationManager(
           .setName(topic)
           .setNumPartitions(config.offsetsTopicPartitions)
           .setReplicationFactor(config.offsetsTopicReplicationFactor)
-          .setConfigs(convertToTopicConfigCollections(groupCoordinator.offsetsTopicConfigs))
+          .setConfigs(convertToTopicConfigCollections(groupCoordinator.groupMetadataTopicConfigs))
       case TRANSACTION_STATE_TOPIC_NAME =>
         new CreatableTopic()
           .setName(topic)

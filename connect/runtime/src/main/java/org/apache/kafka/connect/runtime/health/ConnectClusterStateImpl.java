@@ -72,13 +72,12 @@ public class ConnectClusterStateImpl implements ConnectClusterState {
             state.connector().trace()
         );
         Map<Integer, TaskState> taskStates = taskStates(state.tasks());
-        ConnectorHealth connectorHealth = new ConnectorHealth(
+        return new ConnectorHealth(
             connName,
             connectorState,
             taskStates,
             ConnectorType.valueOf(state.type().name())
         );
-        return connectorHealth;
     }
 
     @Override

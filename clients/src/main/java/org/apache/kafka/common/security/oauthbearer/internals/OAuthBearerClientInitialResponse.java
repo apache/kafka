@@ -41,7 +41,7 @@ public class OAuthBearerClientInitialResponse {
 
     private final String tokenValue;
     private final String authorizationId;
-    private SaslExtensions saslExtensions;
+    private final SaslExtensions saslExtensions;
 
     public static final Pattern EXTENSION_KEY_PATTERN = Pattern.compile(KEY);
     public static final Pattern EXTENSION_VALUE_PATTERN = Pattern.compile(VALUE);
@@ -108,7 +108,7 @@ public class OAuthBearerClientInitialResponse {
         this.tokenValue = Objects.requireNonNull(tokenValue, "token value must not be null");
         this.authorizationId = authorizationId == null ? "" : authorizationId;
         validateExtensions(extensions);
-        this.saslExtensions = extensions != null ? extensions : SaslExtensions.NO_SASL_EXTENSIONS;
+        this.saslExtensions = extensions != null ? extensions : SaslExtensions.empty();
     }
 
     /**

@@ -54,6 +54,11 @@ public class ListPartitionReassignmentsResponse extends AbstractResponse {
     }
 
     @Override
+    public void maybeSetThrottleTimeMs(int throttleTimeMs) {
+        data.setThrottleTimeMs(throttleTimeMs);
+    }
+
+    @Override
     public Map<Errors, Integer> errorCounts() {
         return errorCounts(Errors.forCode(data.errorCode()));
     }

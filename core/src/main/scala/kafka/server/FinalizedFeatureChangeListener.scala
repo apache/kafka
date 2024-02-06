@@ -17,12 +17,14 @@
 
 package kafka.server
 
-import java.util.concurrent.{CountDownLatch, LinkedBlockingQueue, TimeUnit}
+import kafka.server.metadata.{FeatureCacheUpdateException, ZkMetadataCache}
 
-import kafka.utils.{Logging, ShutdownableThread}
+import java.util.concurrent.{CountDownLatch, LinkedBlockingQueue, TimeUnit}
+import kafka.utils.Logging
 import kafka.zk.{FeatureZNode, FeatureZNodeStatus, KafkaZkClient, ZkVersion}
 import kafka.zookeeper.{StateChangeHandler, ZNodeChangeHandler}
 import org.apache.kafka.common.internals.FatalExitError
+import org.apache.kafka.server.util.ShutdownableThread
 
 import scala.concurrent.TimeoutException
 
@@ -32,10 +34,12 @@ import scala.concurrent.TimeoutException
  * to the latest features read from ZK. The cache updates are serialized through a single
  * notification processor thread.
  *
+ * This updates the features cached in ZkMetadataCache
+ *
  * @param finalizedFeatureCache   the finalized feature cache
  * @param zkClient                the Zookeeper client
  */
-class FinalizedFeatureChangeListener(private val finalizedFeatureCache: FinalizedFeatureCache,
+class FinalizedFeatureChangeListener(private val finalizedFeatureCache: ZkMetadataCache,
                                      private val zkClient: KafkaZkClient) extends Logging {
 
   /**
@@ -87,7 +91,7 @@ class FinalizedFeatureChangeListener(private val finalizedFeatureCache: Finalize
       //                                           a case.
       if (version == ZkVersion.UnknownVersion) {
         info(s"Feature ZK node at path: $featureZkNodePath does not exist")
-        finalizedFeatureCache.clear()
+        finalizedFeatureCache.clearFeatures()
       } else {
         var maybeFeatureZNode: Option[FeatureZNode] = Option.empty
         try {
@@ -95,17 +99,17 @@ class FinalizedFeatureChangeListener(private val finalizedFeatureCache: Finalize
         } catch {
           case e: IllegalArgumentException => {
             error(s"Unable to deserialize feature ZK node at path: $featureZkNodePath", e)
-            finalizedFeatureCache.clear()
+            finalizedFeatureCache.clearFeatures()
           }
         }
         maybeFeatureZNode.foreach(featureZNode => {
           featureZNode.status match {
             case FeatureZNodeStatus.Disabled => {
               info(s"Feature ZK node at path: $featureZkNodePath is in disabled status.")
-              finalizedFeatureCache.clear()
+              finalizedFeatureCache.clearFeatures()
             }
             case FeatureZNodeStatus.Enabled => {
-              finalizedFeatureCache.updateOrThrow(featureZNode.features, version)
+              finalizedFeatureCache.updateFeaturesOrThrow(featureZNode.features.toMap, version)
             }
             case _ => throw new IllegalStateException(s"Unexpected FeatureZNodeStatus found in $featureZNode")
           }
@@ -141,7 +145,10 @@ class FinalizedFeatureChangeListener(private val finalizedFeatureCache: Finalize
    *
    * @param name   name of the thread
    */
-  private class ChangeNotificationProcessorThread(name: String) extends ShutdownableThread(name = name) {
+  private class ChangeNotificationProcessorThread(name: String) extends ShutdownableThread(name) with Logging {
+
+    this.logIdent = logPrefix
+
     override def doWork(): Unit = {
       try {
         queue.take.updateLatestOrThrow()
@@ -153,10 +160,12 @@ class FinalizedFeatureChangeListener(private val finalizedFeatureCache: Finalize
           // safe to ignore the exception if the thread is being shutdown. We raise the exception
           // here again, because, it is ignored by ShutdownableThread if it is shutting down.
           throw ie
-        case e: Exception => {
-          error("Failed to process feature ZK node change event. The broker will eventually exit.", e)
+        case cacheUpdateException: FeatureCacheUpdateException =>
+          error("Failed to process feature ZK node change event. The broker will eventually exit.", cacheUpdateException)
           throw new FatalExitError(1)
-        }
+        case e: Exception =>
+          // do not exit for exceptions unrelated to cache change processing (e.g. ZK session expiration)
+          warn("Unexpected exception in feature ZK node change event processing; will continue processing.", e)
       }
     }
   }
@@ -242,7 +251,6 @@ class FinalizedFeatureChangeListener(private val finalizedFeatureCache: Finalize
     zkClient.unregisterZNodeChangeHandler(FeatureZNodeChangeHandler.path)
     queue.clear()
     thread.shutdown()
-    thread.join()
   }
 
   // For testing only.

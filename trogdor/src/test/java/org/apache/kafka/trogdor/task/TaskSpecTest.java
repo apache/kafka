@@ -45,4 +45,4 @@ public class TaskSpecTest {
         String outputJson = JsonUtil.toJsonString(spec);
         assertEquals(inputJson, outputJson);
     }
-};
+}

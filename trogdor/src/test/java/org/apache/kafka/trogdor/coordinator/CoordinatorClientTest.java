@@ -75,4 +75,4 @@ public class CoordinatorClientTest {
                     true,
                     JsonNodeFactory.instance.objectNode()), ZoneOffset.UTC));
     }
-};
+}

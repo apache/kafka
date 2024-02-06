@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.processor.ProcessorContext;
@@ -27,6 +28,8 @@ import org.apache.kafka.streams.state.SessionStore;
 import org.apache.kafka.streams.state.TimestampedKeyValueStore;
 import org.apache.kafka.streams.state.TimestampedWindowStore;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
+import org.apache.kafka.streams.state.VersionedKeyValueStore;
+import org.apache.kafka.streams.state.VersionedRecord;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.WindowStoreIterator;
 import org.apache.kafka.streams.state.internals.WrappedStateStore;
@@ -61,6 +64,8 @@ abstract class AbstractReadWriteDecorator<T extends StateStore, K, V> extends Wr
     static StateStore getReadWriteStore(final StateStore store) {
         if (store instanceof TimestampedKeyValueStore) {
             return new TimestampedKeyValueStoreReadWriteDecorator<>((TimestampedKeyValueStore<?, ?>) store);
+        } else if (store instanceof VersionedKeyValueStore) {
+            return new VersionedKeyValueStoreReadWriteDecorator<>((VersionedKeyValueStore<?, ?>) store);
         } else if (store instanceof KeyValueStore) {
             return new KeyValueStoreReadWriteDecorator<>((KeyValueStore<?, ?>) store);
         } else if (store instanceof TimestampedWindowStore) {
@@ -110,6 +115,12 @@ abstract class AbstractReadWriteDecorator<T extends StateStore, K, V> extends Wr
         }
 
         @Override
+        public <PS extends Serializer<P>, P> KeyValueIterator<K, V> prefixScan(final P prefix,
+                                                                               final PS prefixKeySerializer) {
+            return wrapped().prefixScan(prefix, prefixKeySerializer);
+        }
+
+        @Override
         public long approximateNumEntries() {
             return wrapped().approximateNumEntries();
         }
@@ -146,6 +157,35 @@ abstract class AbstractReadWriteDecorator<T extends StateStore, K, V> extends Wr
         }
     }
 
+    static class VersionedKeyValueStoreReadWriteDecorator<K, V>
+        extends AbstractReadWriteDecorator<VersionedKeyValueStore<K, V>, K, V>
+        implements VersionedKeyValueStore<K, V> {
+
+        VersionedKeyValueStoreReadWriteDecorator(final VersionedKeyValueStore<K, V> inner) {
+            super(inner);
+        }
+
+        @Override
+        public long put(final K key, final V value, final long timestamp) {
+            return wrapped().put(key, value, timestamp);
+        }
+
+        @Override
+        public VersionedRecord<V> delete(final K key, final long timestamp) {
+            return wrapped().delete(key, timestamp);
+        }
+
+        @Override
+        public VersionedRecord<V> get(final K key) {
+            return wrapped().get(key);
+        }
+
+        @Override
+        public VersionedRecord<V> get(final K key, final long asOfTimestamp) {
+            return wrapped().get(key, asOfTimestamp);
+        }
+    }
+
     static class WindowStoreReadWriteDecorator<K, V>
         extends AbstractReadWriteDecorator<WindowStore<K, V>, K, V>
         implements WindowStore<K, V> {
@@ -167,7 +207,6 @@ abstract class AbstractReadWriteDecorator<T extends StateStore, K, V> extends Wr
             return wrapped().fetch(key, time);
         }
 
-        @SuppressWarnings("deprecation") // note, this method must be kept if super#fetch(...) is removed
         @Override
         public WindowStoreIterator<V> fetch(final K key,
                                             final long timeFrom,
@@ -182,7 +221,6 @@ abstract class AbstractReadWriteDecorator<T extends StateStore, K, V> extends Wr
             return wrapped().backwardFetch(key, timeFrom, timeTo);
         }
 
-        @SuppressWarnings("deprecation") // note, this method must be kept if super#fetch(...) is removed
         @Override
         public KeyValueIterator<Windowed<K>, V> fetch(final K keyFrom,
                                                       final K keyTo,
@@ -199,7 +237,6 @@ abstract class AbstractReadWriteDecorator<T extends StateStore, K, V> extends Wr
             return wrapped().backwardFetch(keyFrom, keyTo, timeFrom, timeTo);
         }
 
-        @SuppressWarnings("deprecation") // note, this method must be kept if super#fetch(...) is removed
         @Override
         public KeyValueIterator<Windowed<K>, V> fetchAll(final long timeFrom,
                                                          final long timeTo) {
@@ -256,6 +293,12 @@ abstract class AbstractReadWriteDecorator<T extends StateStore, K, V> extends Wr
         }
 
         @Override
+        public KeyValueIterator<Windowed<K>, AGG> findSessions(final long earliestSessionEndTime,
+                                                               final long latestSessionEndTime) {
+            return wrapped().findSessions(earliestSessionEndTime, latestSessionEndTime);
+        }
+
+        @Override
         public void remove(final Windowed<K> sessionKey) {
             wrapped().remove(sessionKey);
         }
@@ -268,9 +311,9 @@ abstract class AbstractReadWriteDecorator<T extends StateStore, K, V> extends Wr
 
         @Override
         public AGG fetchSession(final K key,
-                                final long startTime,
-                                final long endTime) {
-            return wrapped().fetchSession(key, startTime, endTime);
+                                final long earliestSessionEndTime,
+                                final long latestSessionStartTime) {
+            return wrapped().fetchSession(key, earliestSessionEndTime, latestSessionStartTime);
         }
 
         @Override
@@ -279,9 +322,9 @@ abstract class AbstractReadWriteDecorator<T extends StateStore, K, V> extends Wr
         }
 
         @Override
-        public KeyValueIterator<Windowed<K>, AGG> fetch(final K from,
-                                                        final K to) {
-            return wrapped().fetch(from, to);
+        public KeyValueIterator<Windowed<K>, AGG> fetch(final K keyFrom,
+                                                        final K keyTo) {
+            return wrapped().fetch(keyFrom, keyTo);
         }
     }
 }

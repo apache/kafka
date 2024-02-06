@@ -73,7 +73,7 @@ import static net.sourceforge.argparse4j.impl.Arguments.storeTrue;
  *     See {@link org.apache.kafka.tools.VerifiableConsumer.PartitionsRevoked}</li>
  * <li>partitions_assigned: outputs the partitions assigned through {@link ConsumerRebalanceListener#onPartitionsAssigned(Collection)}
  *     See {@link org.apache.kafka.tools.VerifiableConsumer.PartitionsAssigned}.</li>
- * <li>records_consumed: contains a summary of records consumed in a single call to {@link KafkaConsumer#poll(long)}.
+ * <li>records_consumed: contains a summary of records consumed in a single call to {@link KafkaConsumer#poll(Duration)}.
  *     See {@link org.apache.kafka.tools.VerifiableConsumer.RecordsConsumed}.</li>
  * <li>record_data: contains the key, value, and offset of an individual consumed record (only included if verbose
  *     output is enabled). See {@link org.apache.kafka.tools.VerifiableConsumer.RecordData}.</li>
@@ -95,9 +95,8 @@ public class VerifiableConsumer implements Closeable, OffsetCommitCallback, Cons
     private final boolean useAsyncCommit;
     private final boolean verbose;
     private final int maxMessages;
+    private final CountDownLatch shutdownLatch = new CountDownLatch(1);
     private int consumedMessages = 0;
-
-    private CountDownLatch shutdownLatch = new CountDownLatch(1);
 
     public VerifiableConsumer(KafkaConsumer<String, String> consumer,
                               PrintStream out,

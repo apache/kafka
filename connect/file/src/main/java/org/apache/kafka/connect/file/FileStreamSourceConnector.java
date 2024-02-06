@@ -20,36 +20,40 @@ import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigDef.Importance;
 import org.apache.kafka.common.config.ConfigDef.Type;
-import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.connect.connector.Task;
+import org.apache.kafka.connect.errors.ConnectException;
+import org.apache.kafka.connect.source.ExactlyOnceSupport;
 import org.apache.kafka.connect.source.SourceConnector;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import static org.apache.kafka.connect.file.FileStreamSourceTask.FILENAME_FIELD;
+import static org.apache.kafka.connect.file.FileStreamSourceTask.POSITION_FIELD;
+
 /**
- * Very simple connector that works with the console. This connector supports both source and
- * sink modes via its 'mode' setting.
+ * Very simple source connector that works with stdin or a file.
  */
 public class FileStreamSourceConnector extends SourceConnector {
+
+    private static final Logger log = LoggerFactory.getLogger(FileStreamSourceConnector.class);
     public static final String TOPIC_CONFIG = "topic";
     public static final String FILE_CONFIG = "file";
     public static final String TASK_BATCH_SIZE_CONFIG = "batch.size";
 
     public static final int DEFAULT_TASK_BATCH_SIZE = 2000;
 
-    private static final ConfigDef CONFIG_DEF = new ConfigDef()
+    static final ConfigDef CONFIG_DEF = new ConfigDef()
         .define(FILE_CONFIG, Type.STRING, null, Importance.HIGH, "Source filename. If not specified, the standard input will be used")
-        .define(TOPIC_CONFIG, Type.LIST, Importance.HIGH, "The topic to publish data to")
+        .define(TOPIC_CONFIG, Type.STRING, ConfigDef.NO_DEFAULT_VALUE, new ConfigDef.NonEmptyString(), Importance.HIGH, "The topic to publish data to")
         .define(TASK_BATCH_SIZE_CONFIG, Type.INT, DEFAULT_TASK_BATCH_SIZE, Importance.LOW,
-                "The maximum number of records the Source task can read from file one time");
+                "The maximum number of records the source task can read from the file each time it is polled");
 
-    private String filename;
-    private String topic;
-    private int batchSize;
+    private Map<String, String> props;
 
     @Override
     public String version() {
@@ -58,14 +62,11 @@ public class FileStreamSourceConnector extends SourceConnector {
 
     @Override
     public void start(Map<String, String> props) {
-        AbstractConfig parsedConfig = new AbstractConfig(CONFIG_DEF, props);
-        filename = parsedConfig.getString(FILE_CONFIG);
-        List<String> topics = parsedConfig.getList(TOPIC_CONFIG);
-        if (topics.size() != 1) {
-            throw new ConfigException("'topic' in FileStreamSourceConnector configuration requires definition of a single topic");
-        }
-        topic = topics.get(0);
-        batchSize = parsedConfig.getInt(TASK_BATCH_SIZE_CONFIG);
+        this.props = props;
+        AbstractConfig config = new AbstractConfig(CONFIG_DEF, props);
+        String filename = config.getString(FILE_CONFIG);
+        filename = (filename == null || filename.isEmpty()) ? "standard input" : filename;
+        log.info("Starting file source connector reading from {}", filename);
     }
 
     @Override
@@ -77,12 +78,7 @@ public class FileStreamSourceConnector extends SourceConnector {
     public List<Map<String, String>> taskConfigs(int maxTasks) {
         ArrayList<Map<String, String>> configs = new ArrayList<>();
         // Only one input stream makes sense.
-        Map<String, String> config = new HashMap<>();
-        if (filename != null)
-            config.put(FILE_CONFIG, filename);
-        config.put(TOPIC_CONFIG, topic);
-        config.put(TASK_BATCH_SIZE_CONFIG, String.valueOf(batchSize));
-        configs.add(config);
+        configs.add(props);
         return configs;
     }
 
@@ -94,5 +90,65 @@ public class FileStreamSourceConnector extends SourceConnector {
     @Override
     public ConfigDef config() {
         return CONFIG_DEF;
+    }
+
+    @Override
+    public ExactlyOnceSupport exactlyOnceSupport(Map<String, String> props) {
+        AbstractConfig parsedConfig = new AbstractConfig(CONFIG_DEF, props);
+        String filename = parsedConfig.getString(FILE_CONFIG);
+        // We can provide exactly-once semantics if reading from a "real" file
+        // (as long as the file is only appended to over the lifetime of the connector)
+        // If we're reading from stdin, we can't provide exactly-once semantics
+        // since we don't even track offsets
+        return filename != null && !filename.isEmpty()
+                ? ExactlyOnceSupport.SUPPORTED
+                : ExactlyOnceSupport.UNSUPPORTED;
+    }
+
+    @Override
+    public boolean alterOffsets(Map<String, String> connectorConfig, Map<Map<String, ?>, Map<String, ?>> offsets) {
+        AbstractConfig config = new AbstractConfig(CONFIG_DEF, connectorConfig);
+        String filename = config.getString(FILE_CONFIG);
+        if (filename == null || filename.isEmpty()) {
+            throw new ConnectException("Offsets cannot be modified if the '" + FILE_CONFIG + "' configuration is unspecified. " +
+                    "This is because stdin is used for input and offsets are not tracked.");
+        }
+
+        // This connector makes use of a single source partition at a time which represents the file that it is configured to read from.
+        // However, there could also be source partitions from previous configurations of the connector.
+        for (Map.Entry<Map<String, ?>, Map<String, ?>> partitionOffset : offsets.entrySet()) {
+            Map<String, ?> offset = partitionOffset.getValue();
+            if (offset == null) {
+                // We allow tombstones for anything; if there's garbage in the offsets for the connector, we don't
+                // want to prevent users from being able to clean it up using the REST API
+                continue;
+            }
+
+            if (!offset.containsKey(POSITION_FIELD)) {
+                throw new ConnectException("Offset objects should either be null or contain the key '" + POSITION_FIELD + "'");
+            }
+
+            // The 'position' in the offset represents the position in the file's byte stream and should be a non-negative long value
+            if (!(offset.get(POSITION_FIELD) instanceof Long)) {
+                throw new ConnectException("The value for the '" + POSITION_FIELD + "' key in the offset is expected to be a Long value");
+            }
+
+            long offsetPosition = (Long) offset.get(POSITION_FIELD);
+            if (offsetPosition < 0) {
+                throw new ConnectException("The value for the '" + POSITION_FIELD + "' key in the offset should be a non-negative value");
+            }
+
+            Map<String, ?> partition = partitionOffset.getKey();
+            if (partition == null) {
+                throw new ConnectException("Partition objects cannot be null");
+            }
+
+            if (!partition.containsKey(FILENAME_FIELD)) {
+                throw new ConnectException("Partition objects should contain the key '" + FILENAME_FIELD + "'");
+            }
+        }
+
+        // Let the task check whether the actual value for the offset position is valid for the configured file on startup
+        return true;
     }
 }

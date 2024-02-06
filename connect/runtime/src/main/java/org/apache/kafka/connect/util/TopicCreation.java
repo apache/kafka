@@ -73,7 +73,7 @@ public class TopicCreation {
     }
 
     /**
-     * Check whether topic creation is enabled for this utility instance. This is state is set at
+     * Check whether topic creation is enabled for this utility instance. This state is set at
      * instantiation time and remains unchanged for the lifetime of every {@link TopicCreation}
      * object.
      *
@@ -118,7 +118,7 @@ public class TopicCreation {
 
     /**
      * Inform this utility instance that a topic has been created and its creation will no
-     * longer be required. After {@link #addTopic(String)} is called for a give {@param topic}
+     * longer be required. After this method is called for a given {@code topic},
      * any subsequent calls to {@link #isTopicCreationRequired} will return {@code false} for the
      * same topic.
      *
@@ -131,7 +131,7 @@ public class TopicCreation {
     }
 
     /**
-     * Get the first topic creation group that is configured to match the given {@param topic}
+     * Get the first topic creation group that is configured to match the given {@code topic}
      * name. If topic creation is enabled, any topic should match at least the default topic
      * creation group.
      *

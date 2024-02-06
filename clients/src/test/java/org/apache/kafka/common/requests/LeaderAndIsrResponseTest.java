@@ -48,7 +48,7 @@ public class LeaderAndIsrResponseTest {
             .setLeader(1)
             .setLeaderEpoch(10)
             .setIsr(Collections.singletonList(10))
-            .setZkVersion(20)
+            .setPartitionEpoch(20)
             .setReplicas(Collections.singletonList(10))
             .setIsNew(false));
         partitionStates.add(new LeaderAndIsrPartitionState()
@@ -58,7 +58,7 @@ public class LeaderAndIsrResponseTest {
             .setLeader(1)
             .setLeaderEpoch(10)
             .setIsr(Collections.singletonList(10))
-            .setZkVersion(20)
+            .setPartitionEpoch(20)
             .setReplicas(Collections.singletonList(10))
             .setIsNew(false));
         Map<String, Uuid> topicIds = Collections.singletonMap("foo", Uuid.randomUuid());

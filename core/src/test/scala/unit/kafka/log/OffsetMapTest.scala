@@ -18,8 +18,8 @@
 package kafka.log
 
 import java.nio._
-
 import kafka.utils.Exit
+import org.apache.kafka.storage.internals.log.SkimpyOffsetMap
 import org.junit.jupiter.api._
 import org.junit.jupiter.api.Assertions._
 
@@ -81,8 +81,8 @@ object OffsetMapTest {
     val load = args(1).toDouble
     val start = System.nanoTime
     val map = test.validateMap(size, load)
-    val ellapsedMs = (System.nanoTime - start) / 1000.0 / 1000.0
-    println(s"${map.size} entries in map of size ${map.slots} in $ellapsedMs ms")
+    val elapsedMs = (System.nanoTime - start) / 1000.0 / 1000.0
+    println(s"${map.size} entries in map of size ${map.slots} in $elapsedMs ms")
     println("Collision rate: %.1f%%".format(100*map.collisionRate))
   }
 }

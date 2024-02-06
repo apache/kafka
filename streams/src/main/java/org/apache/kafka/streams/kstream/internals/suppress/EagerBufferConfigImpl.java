@@ -28,15 +28,9 @@ public class EagerBufferConfigImpl extends BufferConfigInternal<Suppressed.Eager
     private final long maxBytes;
     private final Map<String, String> logConfig;
 
-    public EagerBufferConfigImpl(final long maxRecords, final long maxBytes) {
-        this.maxRecords = maxRecords;
-        this.maxBytes = maxBytes;
-        this.logConfig = Collections.emptyMap();
-    }
-
-    private EagerBufferConfigImpl(final long maxRecords,
-                                  final long maxBytes,
-                                  final Map<String, String> logConfig) {
+    public EagerBufferConfigImpl(final long maxRecords,
+                                 final long maxBytes,
+                                 final Map<String, String> logConfig) {
         this.maxRecords = maxRecords;
         this.maxBytes = maxBytes;
         this.logConfig = logConfig;
@@ -97,16 +91,20 @@ public class EagerBufferConfigImpl extends BufferConfigInternal<Suppressed.Eager
         }
         final EagerBufferConfigImpl that = (EagerBufferConfigImpl) o;
         return maxRecords == that.maxRecords &&
-            maxBytes == that.maxBytes;
+            maxBytes == that.maxBytes &&
+            Objects.equals(getLogConfig(), that.getLogConfig());
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(maxRecords, maxBytes);
+        return Objects.hash(maxRecords, maxBytes, getLogConfig());
     }
 
     @Override
     public String toString() {
-        return "EagerBufferConfigImpl{maxRecords=" + maxRecords + ", maxBytes=" + maxBytes + '}';
+        return "EagerBufferConfigImpl{maxRecords=" + maxRecords +
+                ", maxBytes=" + maxBytes +
+                ", logConfig=" + getLogConfig() +
+                "}";
     }
 }

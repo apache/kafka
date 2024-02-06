@@ -49,7 +49,7 @@ import static java.util.Collections.singleton;
  * with its own Kafka topic dead letter queue. By default, the topic name is not set, and if the
  * connector config doesn't specify one, this feature is disabled.
  */
-public class DeadLetterQueueReporter implements ErrorReporter {
+public class DeadLetterQueueReporter implements ErrorReporter<ConsumerRecord<byte[], byte[]>> {
 
     private static final Logger log = LoggerFactory.getLogger(DeadLetterQueueReporter.class);
 
@@ -72,7 +72,7 @@ public class DeadLetterQueueReporter implements ErrorReporter {
     private final ErrorHandlingMetrics errorHandlingMetrics;
     private final String dlqTopicName;
 
-    private KafkaProducer<byte[], byte[]> kafkaProducer;
+    private final KafkaProducer<byte[], byte[]> kafkaProducer;
 
     public static DeadLetterQueueReporter createAndSetup(Map<String, Object> adminProps,
                                                          ConnectorTaskId id,
@@ -121,20 +121,20 @@ public class DeadLetterQueueReporter implements ErrorReporter {
     /**
      * Write the raw records into a Kafka topic and return the producer future.
      *
-     * @param context processing context containing the raw record at {@link ProcessingContext#consumerRecord()}.
+     * @param context processing context containing the raw record at {@link ProcessingContext#original()}.
      * @return the future associated with the writing of this record; never null
      */
-    public Future<RecordMetadata> report(ProcessingContext context) {
+    public Future<RecordMetadata> report(ProcessingContext<ConsumerRecord<byte[], byte[]>> context) {
         if (dlqTopicName.isEmpty()) {
             return CompletableFuture.completedFuture(null);
         }
         errorHandlingMetrics.recordDeadLetterQueueProduceRequest();
 
-        ConsumerRecord<byte[], byte[]> originalMessage = context.consumerRecord();
-        if (originalMessage == null) {
+        if (context.original() == null) {
             errorHandlingMetrics.recordDeadLetterQueueProduceFailed();
             return CompletableFuture.completedFuture(null);
         }
+        ConsumerRecord<byte[], byte[]> originalMessage = context.original();
 
         ProducerRecord<byte[], byte[]> producerRecord;
         if (originalMessage.timestamp() == RecordBatch.NO_TIMESTAMP) {
@@ -158,12 +158,12 @@ public class DeadLetterQueueReporter implements ErrorReporter {
     }
 
     // Visible for testing
-    void populateContextHeaders(ProducerRecord<byte[], byte[]> producerRecord, ProcessingContext context) {
+    void populateContextHeaders(ProducerRecord<byte[], byte[]> producerRecord, ProcessingContext<ConsumerRecord<byte[], byte[]>> context) {
         Headers headers = producerRecord.headers();
-        if (context.consumerRecord() != null) {
-            headers.add(ERROR_HEADER_ORIG_TOPIC, toBytes(context.consumerRecord().topic()));
-            headers.add(ERROR_HEADER_ORIG_PARTITION, toBytes(context.consumerRecord().partition()));
-            headers.add(ERROR_HEADER_ORIG_OFFSET, toBytes(context.consumerRecord().offset()));
+        if (context.original() != null) {
+            headers.add(ERROR_HEADER_ORIG_TOPIC, toBytes(context.original().topic()));
+            headers.add(ERROR_HEADER_ORIG_PARTITION, toBytes(context.original().partition()));
+            headers.add(ERROR_HEADER_ORIG_OFFSET, toBytes(context.original().offset()));
         }
 
         headers.add(ERROR_HEADER_CONNECTOR_NAME, toBytes(connectorTaskId.connector()));

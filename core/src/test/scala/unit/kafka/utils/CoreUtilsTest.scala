@@ -23,7 +23,6 @@ import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.locks.ReentrantLock
 import java.nio.ByteBuffer
 import java.util.regex.Pattern
-
 import org.junit.jupiter.api.Assertions._
 import kafka.utils.CoreUtils.inLock
 import org.apache.kafka.common.KafkaException
@@ -32,86 +31,16 @@ import org.apache.kafka.common.utils.Utils
 import org.slf4j.event.Level
 
 import scala.jdk.CollectionConverters._
-import scala.collection.mutable
 import scala.concurrent.duration.Duration
-import scala.concurrent.{Await, ExecutionContext, Future}
+import scala.concurrent.{Await, ExecutionContext, ExecutionContextExecutorService, Future}
 
 class CoreUtilsTest extends Logging {
 
-  val clusterIdPattern = Pattern.compile("[a-zA-Z0-9_\\-]+")
+  val clusterIdPattern: Pattern = Pattern.compile("[a-zA-Z0-9_\\-]+")
 
   @Test
   def testSwallow(): Unit = {
     CoreUtils.swallow(throw new KafkaException("test"), this, Level.INFO)
-  }
-
-  @Test
-  def testTryAll(): Unit = {
-    case class TestException(key: String) extends Exception
-
-    val recorded = mutable.Map.empty[String, Either[TestException, String]]
-    def recordingFunction(v: Either[TestException, String]): Unit = {
-      val key = v match {
-        case Right(key) => key
-        case Left(e) => e.key
-      }
-      recorded(key) = v
-    }
-
-    CoreUtils.tryAll(Seq(
-      () => recordingFunction(Right("valid-0")),
-      () => recordingFunction(Left(new TestException("exception-1"))),
-      () => recordingFunction(Right("valid-2")),
-      () => recordingFunction(Left(new TestException("exception-3")))
-    ))
-    var expected = Map(
-      "valid-0" -> Right("valid-0"),
-      "exception-1" -> Left(TestException("exception-1")),
-      "valid-2" -> Right("valid-2"),
-      "exception-3" -> Left(TestException("exception-3"))
-    )
-    assertEquals(expected, recorded)
-
-    recorded.clear()
-    CoreUtils.tryAll(Seq(
-      () => recordingFunction(Right("valid-0")),
-      () => recordingFunction(Right("valid-1"))
-    ))
-    expected = Map(
-      "valid-0" -> Right("valid-0"),
-      "valid-1" -> Right("valid-1")
-    )
-    assertEquals(expected, recorded)
-
-    recorded.clear()
-    CoreUtils.tryAll(Seq(
-      () => recordingFunction(Left(new TestException("exception-0"))),
-      () => recordingFunction(Left(new TestException("exception-1")))
-    ))
-    expected = Map(
-      "exception-0" -> Left(TestException("exception-0")),
-      "exception-1" -> Left(TestException("exception-1"))
-    )
-    assertEquals(expected, recorded)
-  }
-
-  @Test
-  def testCircularIterator(): Unit = {
-    val l = List(1, 2)
-    val itl = CoreUtils.circularIterator(l)
-    assertEquals(1, itl.next())
-    assertEquals(2, itl.next())
-    assertEquals(1, itl.next())
-    assertEquals(2, itl.next())
-    assertFalse(itl.isEmpty)
-
-    val s = Set(1, 2)
-    val its = CoreUtils.circularIterator(s)
-    assertEquals(1, its.next())
-    assertEquals(2, its.next())
-    assertEquals(1, its.next())
-    assertEquals(2, its.next())
-    assertEquals(1, its.next())
   }
 
   @Test
@@ -132,24 +61,6 @@ class CoreUtilsTest extends Logging {
   }
 
   @Test
-  def testReplaceSuffix(): Unit = {
-    assertEquals("blah.foo.text", CoreUtils.replaceSuffix("blah.foo.txt", ".txt", ".text"))
-    assertEquals("blah.foo", CoreUtils.replaceSuffix("blah.foo.txt", ".txt", ""))
-    assertEquals("txt.txt", CoreUtils.replaceSuffix("txt.txt.txt", ".txt", ""))
-    assertEquals("foo.txt", CoreUtils.replaceSuffix("foo", "", ".txt"))
-  }
-
-  @Test
-  def testReadInt(): Unit = {
-    val values = Array(0, 1, -1, Byte.MaxValue, Short.MaxValue, 2 * Short.MaxValue, Int.MaxValue/2, Int.MinValue/2, Int.MaxValue, Int.MinValue, Int.MaxValue)
-    val buffer = ByteBuffer.allocate(4 * values.size)
-    for(i <- 0 until values.length) {
-      buffer.putInt(i*4, values(i))
-      assertEquals(values(i), CoreUtils.readInt(buffer.array, i*4), "Written value should match read value.")
-    }
-  }
-
-  @Test
   def testCsvList(): Unit = {
     val emptyString:String = ""
     val nullString:String = null
@@ -160,41 +71,6 @@ class CoreUtilsTest extends Logging {
     assertTrue(emptyListFromNullString!=null)
     assertTrue(emptyStringList.equals(emptyListFromNullString))
     assertTrue(emptyStringList.equals(emptyList))
-  }
-
-  @Test
-  def testCsvMap(): Unit = {
-    val emptyString: String = ""
-    val emptyMap = CoreUtils.parseCsvMap(emptyString)
-    val emptyStringMap = Map.empty[String, String]
-    assertTrue(emptyMap != null)
-    assertTrue(emptyStringMap.equals(emptyStringMap))
-
-    val kvPairsIpV6: String = "a:b:c:v,a:b:c:v"
-    val ipv6Map = CoreUtils.parseCsvMap(kvPairsIpV6)
-    for (m <- ipv6Map) {
-      assertTrue(m._1.equals("a:b:c"))
-      assertTrue(m._2.equals("v"))
-    }
-
-    val singleEntry:String = "key:value"
-    val singleMap = CoreUtils.parseCsvMap(singleEntry)
-    val value = singleMap.getOrElse("key", 0)
-    assertTrue(value.equals("value"))
-
-    val kvPairsIpV4: String = "192.168.2.1/30:allow, 192.168.2.1/30:allow"
-    val ipv4Map = CoreUtils.parseCsvMap(kvPairsIpV4)
-    for (m <- ipv4Map) {
-      assertTrue(m._1.equals("192.168.2.1/30"))
-      assertTrue(m._2.equals("allow"))
-    }
-
-    val kvPairsSpaces: String = "key:value      , key:   value"
-    val spaceMap = CoreUtils.parseCsvMap(kvPairsSpaces)
-    for (m <- spaceMap) {
-      assertTrue(m._1.equals("key"))
-      assertTrue(m._2.equals("value"))
-    }
   }
 
   @Test
@@ -239,9 +115,9 @@ class CoreUtilsTest extends Logging {
     val nThreads = 5
     val createdCount = new AtomicInteger
     val map = new ConcurrentHashMap[Int, AtomicInteger]().asScala
-    implicit val executionContext = ExecutionContext.fromExecutorService(Executors.newFixedThreadPool(nThreads))
+    implicit val executionContext: ExecutionContextExecutorService = ExecutionContext.fromExecutorService(Executors.newFixedThreadPool(nThreads))
     try {
-      Await.result(Future.traverse(1 to count) { i =>
+      Await.result(Future.traverse(1 to count) { _ =>
         Future {
           CoreUtils.atomicGetOrUpdate(map, 0, {
             createdCount.incrementAndGet

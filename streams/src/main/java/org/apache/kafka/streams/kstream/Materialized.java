@@ -19,6 +19,11 @@ package org.apache.kafka.streams.kstream;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.state.BuiltInDslStoreSuppliers;
+import org.apache.kafka.streams.state.DslKeyValueParams;
+import org.apache.kafka.streams.state.DslSessionParams;
+import org.apache.kafka.streams.state.DslStoreSuppliers;
+import org.apache.kafka.streams.state.DslWindowParams;
 import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.SessionBytesStoreSupplier;
@@ -64,6 +69,39 @@ public class Materialized<K, V, S extends StateStore> {
     protected boolean cachingEnabled = true;
     protected Map<String, String> topicConfig = new HashMap<>();
     protected Duration retention;
+    protected DslStoreSuppliers dslStoreSuppliers;
+
+    // the built-in state store types
+    public enum StoreType implements DslStoreSuppliers {
+        ROCKS_DB(BuiltInDslStoreSuppliers.ROCKS_DB),
+        IN_MEMORY(BuiltInDslStoreSuppliers.IN_MEMORY);
+
+        private final DslStoreSuppliers delegate;
+
+        StoreType(final DslStoreSuppliers delegate) {
+            this.delegate = delegate;
+        }
+
+        @Override
+        public void configure(final Map<String, ?> configs) {
+            delegate.configure(configs);
+        }
+
+        @Override
+        public KeyValueBytesStoreSupplier keyValueStore(final DslKeyValueParams params) {
+            return delegate.keyValueStore(params);
+        }
+
+        @Override
+        public WindowBytesStoreSupplier windowStore(final DslWindowParams params) {
+            return delegate.windowStore(params);
+        }
+
+        @Override
+        public SessionBytesStoreSupplier sessionStore(final DslSessionParams params) {
+            return delegate.sessionStore(params);
+        }
+    }
 
     private Materialized(final StoreSupplier<S> storeSupplier) {
         this.storeSupplier = storeSupplier;
@@ -71,6 +109,10 @@ public class Materialized<K, V, S extends StateStore> {
 
     private Materialized(final String storeName) {
         this.storeName = storeName;
+    }
+
+    private Materialized(final DslStoreSuppliers storeSuppliers) {
+        this.dslStoreSuppliers = storeSuppliers;
     }
 
     /**
@@ -86,6 +128,21 @@ public class Materialized<K, V, S extends StateStore> {
         this.cachingEnabled = materialized.cachingEnabled;
         this.topicConfig = materialized.topicConfig;
         this.retention = materialized.retention;
+        this.dslStoreSuppliers = materialized.dslStoreSuppliers;
+    }
+
+    /**
+     * Materialize a {@link StateStore} with the given {@link DslStoreSuppliers}.
+     *
+     * @param storeSuppliers  the type of the state store
+     * @param <K>             key type of the store
+     * @param <V>             value type of the store
+     * @param <S>             type of the {@link StateStore}
+     * @return a new {@link Materialized} instance with the given storeName
+     */
+    public static <K, V, S extends StateStore> Materialized<K, V, S> as(final DslStoreSuppliers storeSuppliers) {
+        Objects.requireNonNull(storeSuppliers, "store type can't be null");
+        return new Materialized<>(storeSuppliers);
     }
 
     /**
@@ -251,12 +308,28 @@ public class Materialized<K, V, S extends StateStore> {
      */
     public Materialized<K, V, S> withRetention(final Duration retention) throws IllegalArgumentException {
         final String msgPrefix = prepareMillisCheckFailMsgPrefix(retention, "retention");
-        final long retenationMs = validateMillisecondDuration(retention, msgPrefix);
+        final long retentionMs = validateMillisecondDuration(retention, msgPrefix);
 
-        if (retenationMs < 0) {
+        if (retentionMs < 0) {
             throw new IllegalArgumentException("Retention must not be negative.");
         }
         this.retention = retention;
+        return this;
+    }
+
+    /**
+     * Set the type of the materialized {@link StateStore}.
+     *
+     * @param storeSuppliers  the store type {@link StoreType} to use.
+     * @return itself
+     * @throws IllegalArgumentException if store supplier is also pre-configured
+     */
+    public Materialized<K, V, S> withStoreType(final DslStoreSuppliers storeSuppliers) throws IllegalArgumentException {
+        Objects.requireNonNull(storeSuppliers, "store type can't be null");
+        if (storeSupplier != null) {
+            throw new IllegalArgumentException("Cannot set store type when store supplier is pre-configured.");
+        }
+        this.dslStoreSuppliers = storeSuppliers;
         return this;
     }
 }

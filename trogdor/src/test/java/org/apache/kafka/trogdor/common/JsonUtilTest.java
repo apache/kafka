@@ -67,4 +67,4 @@ public class JsonUtilTest {
             Files.delete(tempFile.toPath());
         }
     }
-};
+}

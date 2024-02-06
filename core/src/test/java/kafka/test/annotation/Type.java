@@ -28,31 +28,38 @@ import java.util.function.Consumer;
  * The type of cluster config being requested. Used by {@link kafka.test.ClusterConfig} and the test annotations.
  */
 public enum Type {
-    RAFT {
+    KRAFT {
         @Override
-        public void invocationContexts(ClusterConfig config, Consumer<TestTemplateInvocationContext> invocationConsumer) {
-            invocationConsumer.accept(new RaftClusterInvocationContext(config.copyOf()));
+        public void invocationContexts(String baseDisplayName, ClusterConfig config, Consumer<TestTemplateInvocationContext> invocationConsumer) {
+            invocationConsumer.accept(new RaftClusterInvocationContext(baseDisplayName, config.copyOf(), false));
+        }
+    },
+    CO_KRAFT {
+        @Override
+        public void invocationContexts(String baseDisplayName, ClusterConfig config, Consumer<TestTemplateInvocationContext> invocationConsumer) {
+            invocationConsumer.accept(new RaftClusterInvocationContext(baseDisplayName, config.copyOf(), true));
         }
     },
     ZK {
         @Override
-        public void invocationContexts(ClusterConfig config, Consumer<TestTemplateInvocationContext> invocationConsumer) {
-            invocationConsumer.accept(new ZkClusterInvocationContext(config.copyOf()));
+        public void invocationContexts(String baseDisplayName, ClusterConfig config, Consumer<TestTemplateInvocationContext> invocationConsumer) {
+            invocationConsumer.accept(new ZkClusterInvocationContext(baseDisplayName, config.copyOf()));
         }
     },
-    BOTH {
+    ALL {
         @Override
-        public void invocationContexts(ClusterConfig config, Consumer<TestTemplateInvocationContext> invocationConsumer) {
-            invocationConsumer.accept(new RaftClusterInvocationContext(config.copyOf()));
-            invocationConsumer.accept(new ZkClusterInvocationContext(config.copyOf()));
+        public void invocationContexts(String baseDisplayName, ClusterConfig config, Consumer<TestTemplateInvocationContext> invocationConsumer) {
+            invocationConsumer.accept(new RaftClusterInvocationContext(baseDisplayName, config.copyOf(), false));
+            invocationConsumer.accept(new RaftClusterInvocationContext(baseDisplayName, config.copyOf(), true));
+            invocationConsumer.accept(new ZkClusterInvocationContext(baseDisplayName, config.copyOf()));
         }
     },
     DEFAULT {
         @Override
-        public void invocationContexts(ClusterConfig config, Consumer<TestTemplateInvocationContext> invocationConsumer) {
+        public void invocationContexts(String baseDisplayName, ClusterConfig config, Consumer<TestTemplateInvocationContext> invocationConsumer) {
             throw new UnsupportedOperationException("Cannot create invocation contexts for DEFAULT type");
         }
     };
 
-    public abstract void invocationContexts(ClusterConfig config, Consumer<TestTemplateInvocationContext> invocationConsumer);
+    public abstract void invocationContexts(String baseDisplayName, ClusterConfig config, Consumer<TestTemplateInvocationContext> invocationConsumer);
 }

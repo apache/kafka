@@ -21,8 +21,6 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 import org.apache.kafka.common.KafkaFuture;
-import org.apache.kafka.common.KafkaFuture.BaseFunction;
-import org.apache.kafka.common.KafkaFuture.BiConsumer;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
@@ -48,23 +46,19 @@ public class AlterConsumerGroupOffsetsResult {
     public KafkaFuture<Void> partitionResult(final TopicPartition partition) {
         final KafkaFutureImpl<Void> result = new KafkaFutureImpl<>();
 
-        this.future.whenComplete(new BiConsumer<Map<TopicPartition, Errors>, Throwable>() {
-            @Override
-            public void accept(final Map<TopicPartition, Errors> topicPartitions, final Throwable throwable) {
-                if (throwable != null) {
-                    result.completeExceptionally(throwable);
-                } else if (!topicPartitions.containsKey(partition)) {
-                    result.completeExceptionally(new IllegalArgumentException(
-                        "Alter offset for partition \"" + partition + "\" was not attempted"));
+        this.future.whenComplete((topicPartitions, throwable) -> {
+            if (throwable != null) {
+                result.completeExceptionally(throwable);
+            } else if (!topicPartitions.containsKey(partition)) {
+                result.completeExceptionally(new IllegalArgumentException(
+                    "Alter offset for partition \"" + partition + "\" was not attempted"));
+            } else {
+                final Errors error = topicPartitions.get(partition);
+                if (error == Errors.NONE) {
+                    result.complete(null);
                 } else {
-                    final Errors error = topicPartitions.get(partition);
-                    if (error == Errors.NONE) {
-                        result.complete(null);
-                    } else {
-                        result.completeExceptionally(error.exception());
-                    }
+                    result.completeExceptionally(error.exception());
                 }
-
             }
         });
 
@@ -75,22 +69,19 @@ public class AlterConsumerGroupOffsetsResult {
      * Return a future which succeeds if all the alter offsets succeed.
      */
     public KafkaFuture<Void> all() {
-        return this.future.thenApply(new BaseFunction<Map<TopicPartition, Errors>, Void>() {
-            @Override
-            public Void apply(final Map<TopicPartition, Errors> topicPartitionErrorsMap) {
-                List<TopicPartition> partitionsFailed = topicPartitionErrorsMap.entrySet()
-                        .stream()
-                        .filter(e -> e.getValue() != Errors.NONE)
-                        .map(Map.Entry::getKey)
-                        .collect(Collectors.toList());
-                for (Errors error : topicPartitionErrorsMap.values()) {
-                    if (error != Errors.NONE) {
-                        throw error.exception(
-                            "Failed altering consumer group offsets for the following partitions: " + partitionsFailed);
-                    }
+        return this.future.thenApply(topicPartitionErrorsMap ->  {
+            List<TopicPartition> partitionsFailed = topicPartitionErrorsMap.entrySet()
+                .stream()
+                .filter(e -> e.getValue() != Errors.NONE)
+                .map(Map.Entry::getKey)
+                .collect(Collectors.toList());
+            for (Errors error : topicPartitionErrorsMap.values()) {
+                if (error != Errors.NONE) {
+                    throw error.exception(
+                        "Failed altering consumer group offsets for the following partitions: " + partitionsFailed);
                 }
-                return null;
             }
+            return null;
         });
     }
 }

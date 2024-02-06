@@ -35,6 +35,8 @@ import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.security.GeneralSecurityException;
+import java.security.NoSuchAlgorithmException;
+import java.security.KeyStoreException;
 import java.security.Key;
 import java.security.KeyFactory;
 import java.security.KeyStore;
@@ -68,8 +70,9 @@ import javax.net.ssl.SSLContext;
 import javax.net.ssl.SSLEngine;
 import javax.net.ssl.SSLParameters;
 import javax.net.ssl.TrustManagerFactory;
+import javax.net.ssl.TrustManager;
 
-public final class DefaultSslEngineFactory implements SslEngineFactory {
+public class DefaultSslEngineFactory implements SslEngineFactory {
 
     private static final Logger log = LoggerFactory.getLogger(DefaultSslEngineFactory.class);
     public static final String PEM_TYPE = "PEM";
@@ -200,7 +203,6 @@ public final class DefaultSslEngineFactory implements SslEngineFactory {
                 case NONE:
                     break;
             }
-            sslEngine.setUseClientMode(false);
         } else {
             sslEngine.setUseClientMode(true);
             SSLParameters sslParams = sslEngine.getSSLParameters();
@@ -256,17 +258,22 @@ public final class DefaultSslEngineFactory implements SslEngineFactory {
             }
 
             String tmfAlgorithm = this.tmfAlgorithm != null ? this.tmfAlgorithm : TrustManagerFactory.getDefaultAlgorithm();
-            TrustManagerFactory tmf = TrustManagerFactory.getInstance(tmfAlgorithm);
-            KeyStore ts = truststore == null ? null : truststore.get();
-            tmf.init(ts);
+            TrustManager[] trustManagers = getTrustManagers(truststore, tmfAlgorithm);
 
-            sslContext.init(keyManagers, tmf.getTrustManagers(), this.secureRandomImplementation);
+            sslContext.init(keyManagers, trustManagers, this.secureRandomImplementation);
             log.debug("Created SSL context with keystore {}, truststore {}, provider {}.",
                     keystore, truststore, sslContext.getProvider().getName());
             return sslContext;
         } catch (Exception e) {
             throw new KafkaException(e);
         }
+    }
+
+    protected TrustManager[] getTrustManagers(SecurityStore truststore, String tmfAlgorithm) throws NoSuchAlgorithmException, KeyStoreException {
+        TrustManagerFactory tmf = TrustManagerFactory.getInstance(tmfAlgorithm);
+        KeyStore ts = truststore == null ? null : truststore.get();
+        tmf.init(ts);
+        return tmf.getTrustManagers();
     }
 
     // Visibility to override for testing
@@ -287,8 +294,6 @@ public final class DefaultSslEngineFactory implements SslEngineFactory {
         } else if (PEM_TYPE.equals(type) && path != null) {
             if (password != null)
                 throw new InvalidConfigurationException("SSL key store password cannot be specified with PEM format, only key password may be specified");
-            else if (keyPassword == null)
-                throw new InvalidConfigurationException("SSL PEM key store is specified, but key password is not specified.");
             else
                 return new FileBasedPemStore(path, keyPassword, true);
         } else if (path == null && password != null) {
@@ -324,7 +329,7 @@ public final class DefaultSslEngineFactory implements SslEngineFactory {
             return null;
     }
 
-    static interface SecurityStore {
+    interface SecurityStore {
         KeyStore get();
         char[] keyPassword();
         boolean modified();
@@ -480,7 +485,7 @@ public final class DefaultSslEngineFactory implements SslEngineFactory {
             } catch (InvalidConfigurationException e) {
                 throw e;
             } catch (Exception e) {
-                throw new InvalidConfigurationException("Invalid PEM keystore configs", e);
+                throw new InvalidConfigurationException("Invalid PEM truststore configs", e);
             }
         }
 

@@ -23,6 +23,7 @@ import java.time.Duration
 import java.util.{Collections, Properties}
 import java.util.concurrent.{CountDownLatch, Executors, TimeUnit}
 
+import javax.security.auth.login.LoginContext
 import kafka.api.{Both, IntegrationTestHarness, SaslSetup}
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.CommonClientConfigs
@@ -31,13 +32,12 @@ import org.apache.kafka.common.config.SaslConfigs
 import org.apache.kafka.common.errors.SaslAuthenticationException
 import org.apache.kafka.common.message.ApiMessageType.ListenerType
 import org.apache.kafka.common.network._
-import org.apache.kafka.common.requests.ApiVersionsResponse
 import org.apache.kafka.common.security.{JaasContext, TestSecurityConfig}
 import org.apache.kafka.common.security.auth.{Login, SecurityProtocol}
 import org.apache.kafka.common.security.kerberos.KerberosLogin
 import org.apache.kafka.common.utils.{LogContext, MockTime}
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo}
 
 import scala.jdk.CollectionConverters._
 
@@ -59,12 +59,12 @@ class GssapiAuthenticationTest extends IntegrationTestHarness with SaslSetup {
   private val failedAuthenticationDelayMs = 2000
 
   @BeforeEach
-  override def setUp(): Unit = {
+  override def setUp(testInfo: TestInfo): Unit = {
     TestableKerberosLogin.reset()
     startSasl(jaasSections(kafkaServerSaslMechanisms, Option(kafkaClientSaslMechanism), Both))
     serverConfig.put(KafkaConfig.SslClientAuthProp, "required")
     serverConfig.put(KafkaConfig.FailedAuthenticationDelayMsProp, failedAuthenticationDelayMs.toString)
-    super.setUp()
+    super.setUp(testInfo)
     serverAddr = new InetSocketAddress("localhost",
       servers.head.boundPort(ListenerName.forSecurityProtocol(SecurityProtocol.SASL_PLAINTEXT)))
 
@@ -102,6 +102,29 @@ class GssapiAuthenticationTest extends IntegrationTestHarness with SaslSetup {
   }
 
   /**
+   * Verifies that if login fails, subsequent re-login without failures works and clients
+   * are able to connect after the second re-login. Verifies that logout is performed only once
+   * since duplicate logouts without successful login results in NPE from Java 9 onwards.
+   */
+  @Test
+  def testLoginFailure(): Unit = {
+    val selector = createSelectorWithRelogin()
+    try {
+      val login = TestableKerberosLogin.instance
+      assertNotNull(login)
+      login.loginException = Some(new RuntimeException("Test exception to fail login"))
+      executor.submit(() => login.reLogin(), 0)
+      executor.submit(() => login.reLogin(), 0)
+
+      verifyRelogin(selector, login)
+      assertEquals(2, login.loginAttempts)
+      assertEquals(1, login.logoutAttempts)
+    } finally {
+      selector.close()
+    }
+  }
+
+  /**
    * Verifies that there are no authentication failures during Kerberos re-login. If authentication
    * is performed when credentials are unavailable between logout and login, we handle it as a
    * transient error and not an authentication failure so that clients may retry.
@@ -113,21 +136,24 @@ class GssapiAuthenticationTest extends IntegrationTestHarness with SaslSetup {
       val login = TestableKerberosLogin.instance
       assertNotNull(login)
       executor.submit(() => login.reLogin(), 0)
-
-      val node1 = "1"
-      selector.connect(node1, serverAddr, 1024, 1024)
-      login.logoutResumeLatch.countDown()
-      login.logoutCompleteLatch.await(15, TimeUnit.SECONDS)
-      assertFalse(pollUntilReadyOrDisconnected(selector, node1), "Authenticated during re-login")
-
-      login.reLoginResumeLatch.countDown()
-      login.reLoginCompleteLatch.await(15, TimeUnit.SECONDS)
-      val node2 = "2"
-      selector.connect(node2, serverAddr, 1024, 1024)
-      assertTrue(pollUntilReadyOrDisconnected(selector, node2), "Authenticated failed after re-login")
+      verifyRelogin(selector, login)
     } finally {
       selector.close()
     }
+  }
+
+  private def verifyRelogin(selector: Selector, login: TestableKerberosLogin): Unit = {
+    val node1 = "1"
+    selector.connect(node1, serverAddr, 1024, 1024)
+    login.logoutResumeLatch.countDown()
+    login.logoutCompleteLatch.await(15, TimeUnit.SECONDS)
+    assertFalse(pollUntilReadyOrDisconnected(selector, node1), "Authenticated during re-login")
+
+    login.reLoginResumeLatch.countDown()
+    login.reLoginCompleteLatch.await(15, TimeUnit.SECONDS)
+    val node2 = "2"
+    selector.connect(node2, serverAddr, 1024, 1024)
+    assertTrue(pollUntilReadyOrDisconnected(selector, node2), "Authenticated failed after re-login")
   }
 
   /**
@@ -221,6 +247,7 @@ class GssapiAuthenticationTest extends IntegrationTestHarness with SaslSetup {
         assertEquals(ChannelState.State.AUTHENTICATION_FAILED, disconnectState.state())
       disconnectState != null
     }, "Client not disconnected within timeout")
+    selector.close()
   }
 
   private def createSelector(): Selector = {
@@ -236,7 +263,7 @@ class GssapiAuthenticationTest extends IntegrationTestHarness with SaslSetup {
     val jaasContexts = Collections.singletonMap("GSSAPI", JaasContext.loadClientContext(config.values()))
     val channelBuilder = new SaslChannelBuilder(Mode.CLIENT, jaasContexts, securityProtocol,
       null, false, kafkaClientSaslMechanism, true, null, null, null, time, new LogContext(),
-      () => ApiVersionsResponse.defaultApiVersionsResponse(ListenerType.ZK_BROKER)) {
+      () => org.apache.kafka.test.TestUtils.defaultApiVersionsResponse(ListenerType.ZK_BROKER)) {
       override protected def defaultLoginClass(): Class[_ <: Login] = classOf[TestableKerberosLogin]
     }
     channelBuilder.configure(config.values())
@@ -256,6 +283,9 @@ class TestableKerberosLogin extends KerberosLogin {
   val logoutCompleteLatch = new CountDownLatch(1)
   val reLoginResumeLatch = new CountDownLatch(1)
   val reLoginCompleteLatch = new CountDownLatch(1)
+  @volatile var loginException: Option[RuntimeException] = None
+  @volatile var loginAttempts = 0
+  @volatile var logoutAttempts = 0
 
   assertNull(TestableKerberosLogin.instance)
   TestableKerberosLogin.instance = this
@@ -265,7 +295,17 @@ class TestableKerberosLogin extends KerberosLogin {
     reLoginCompleteLatch.countDown()
   }
 
+  override protected def login(loginContext: LoginContext): Unit = {
+    loginAttempts += 1
+    loginException.foreach { e =>
+      loginException = None
+      throw e
+    }
+    super.login(loginContext)
+  }
+
   override protected def logout(): Unit = {
+    logoutAttempts += 1
     logoutResumeLatch.await(15, TimeUnit.SECONDS)
     super.logout()
     logoutCompleteLatch.countDown()

@@ -133,14 +133,15 @@ public class ProduceRequest extends AbstractRequest {
             // this method may be called by different thread (see the comment on data)
             synchronized (this) {
                 if (partitionSizes == null) {
-                    partitionSizes = new HashMap<>();
+                    Map<TopicPartition, Integer> tmpPartitionSizes = new HashMap<>();
                     data.topicData().forEach(topicData ->
                         topicData.partitionData().forEach(partitionData ->
-                            partitionSizes.compute(new TopicPartition(topicData.name(), partitionData.index()),
+                            tmpPartitionSizes.compute(new TopicPartition(topicData.name(), partitionData.index()),
                                 (ignored, previousValue) ->
                                     partitionData.records().sizeInBytes() + (previousValue == null ? 0 : previousValue))
                         )
                     );
+                    partitionSizes = tmpPartitionSizes;
                 }
             }
         }
@@ -230,7 +231,7 @@ public class ProduceRequest extends AbstractRequest {
                 Iterator<? extends RecordBatch> iterator = records.batches().iterator();
                 if (!iterator.hasNext())
                     throw new InvalidRecordException("Produce requests with version " + version + " must have at least " +
-                            "one record batch");
+                            "one record batch per partition");
 
                 RecordBatch entry = iterator.next();
                 if (entry.magic() != RecordBatch.MAGIC_VALUE_V2)
@@ -243,7 +244,7 @@ public class ProduceRequest extends AbstractRequest {
 
                 if (iterator.hasNext())
                     throw new InvalidRecordException("Produce requests with version " + version + " are only allowed to " +
-                            "contain exactly one record batch");
+                            "contain exactly one record batch per partition");
             }
         }
 

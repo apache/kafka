@@ -16,12 +16,13 @@
   */
 package kafka.server.epoch
 
+import kafka.cluster.BrokerEndPoint
 import kafka.server.KafkaConfig._
-import kafka.server.{BlockingSend, KafkaServer, ReplicaFetcherBlockingSend}
+import kafka.server.{BlockingSend, KafkaServer, BrokerBlockingSender}
 import kafka.utils.Implicits._
 import kafka.utils.TestUtils._
 import kafka.utils.{Logging, TestUtils}
-import kafka.zk.ZooKeeperTestHarness
+import kafka.server.QuorumTestHarness
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.Errors._
@@ -42,7 +43,7 @@ import scala.jdk.CollectionConverters._
 import scala.collection.Map
 import scala.collection.mutable.ListBuffer
 
-class LeaderEpochIntegrationTest extends ZooKeeperTestHarness with Logging {
+class LeaderEpochIntegrationTest extends QuorumTestHarness with Logging {
   var brokers: ListBuffer[KafkaServer] = ListBuffer()
   val topic1 = "foo"
   val topic2 = "bar"
@@ -52,7 +53,7 @@ class LeaderEpochIntegrationTest extends ZooKeeperTestHarness with Logging {
   val t2p0 = new TopicPartition(topic2, 0)
   val t2p2 = new TopicPartition(topic2, 2)
   val tp = t1p0
-  var producer: KafkaProducer[Array[Byte], Array[Byte]] = null
+  var producer: KafkaProducer[Array[Byte], Array[Byte]] = _
 
   @AfterEach
   override def tearDown(): Unit = {
@@ -107,7 +108,7 @@ class LeaderEpochIntegrationTest extends ZooKeeperTestHarness with Logging {
     TestUtils.createTopic(zkClient, topic2, assignment2, brokers)
 
     //Send messages equally to the two partitions, then half as many to a third
-    producer = createProducer(getBrokerListStrFromServers(brokers), acks = -1)
+    producer = createProducer(plaintextBootstrapServers(brokers), acks = -1)
     (0 until 10).foreach { _ =>
       producer.send(new ProducerRecord(topic1, 0, null, "IHeartLogs".getBytes))
     }
@@ -124,6 +125,7 @@ class LeaderEpochIntegrationTest extends ZooKeeperTestHarness with Logging {
 
     //When
     val offsetsForEpochs = fetcher0.leaderOffsetsFor(epochsRequested)
+    fetcher0.close()
 
     //Then end offset should be correct
     assertEquals(10, offsetsForEpochs(t1p0).endOffset)
@@ -137,6 +139,7 @@ class LeaderEpochIntegrationTest extends ZooKeeperTestHarness with Logging {
     val fetcher1 = new TestFetcherThread(sender(from = brokers(2), to = brokers(1)))
     val offsetsForEpochs1 = fetcher1.leaderOffsetsFor(epochsRequested)
     assertEquals(20, offsetsForEpochs1(t1p1).endOffset)
+    fetcher1.close()
   }
 
   @Test
@@ -150,7 +153,7 @@ class LeaderEpochIntegrationTest extends ZooKeeperTestHarness with Logging {
     def leo() = brokers(1).replicaManager.localLog(tp).get.logEndOffset
 
     TestUtils.createTopic(zkClient, tp.topic, Map(tp.partition -> Seq(101)), brokers)
-    producer = createProducer(getBrokerListStrFromServers(brokers), acks = -1)
+    producer = createProducer(plaintextBootstrapServers(brokers), acks = -1)
 
     //1. Given a single message
     producer.send(new ProducerRecord(tp.topic, tp.partition, null, "IHeartLogs".getBytes)).get
@@ -167,6 +170,7 @@ class LeaderEpochIntegrationTest extends ZooKeeperTestHarness with Logging {
     brokers(1).startup()
 
     producer.send(new ProducerRecord(tp.topic, tp.partition, null, "IHeartLogs".getBytes)).get
+    fetcher.close()
     fetcher = new TestFetcherThread(sender(brokers(0), brokers(1)))
 
     //Then epoch 0 should still be the start offset of epoch 1
@@ -192,6 +196,7 @@ class LeaderEpochIntegrationTest extends ZooKeeperTestHarness with Logging {
     brokers(1).startup()
 
     producer.send(new ProducerRecord(tp.topic, tp.partition, null, "IHeartLogs".getBytes)).get
+    fetcher.close()
     fetcher = new TestFetcherThread(sender(brokers(0), brokers(1)))
 
     //Then Epoch 0 should still map to offset 1
@@ -206,6 +211,7 @@ class LeaderEpochIntegrationTest extends ZooKeeperTestHarness with Logging {
 
     //Adding some extra assertions here to save test setup.
     shouldSupportRequestsForEpochsNotOnTheLeader(fetcher)
+    fetcher.close()
   }
 
   //Appended onto the previous test to save on setup cost.
@@ -227,8 +233,10 @@ class LeaderEpochIntegrationTest extends ZooKeeperTestHarness with Logging {
   }
 
   private def sender(from: KafkaServer, to: KafkaServer): BlockingSend = {
-    val endPoint = from.metadataCache.getAliveBrokers.find(_.id == to.config.brokerId).get.brokerEndPoint(from.config.interBrokerListenerName)
-    new ReplicaFetcherBlockingSend(endPoint, from.config, new Metrics(), new SystemTime(), 42, "TestFetcher", new LogContext())
+    val node = from.metadataCache.getAliveBrokerNode(to.config.brokerId,
+      from.config.interBrokerListenerName).get
+    val endPoint = new BrokerEndPoint(node.id(), node.host(), node.port())
+    new BrokerBlockingSender(endPoint, from.config, new Metrics(), new SystemTime(), 42, "TestFetcher", new LogContext())
   }
 
   private def waitForEpochChangeTo(topic: String, partition: Int, epoch: Int): Unit = {
@@ -243,12 +251,11 @@ class LeaderEpochIntegrationTest extends ZooKeeperTestHarness with Logging {
       val tp = new TopicPartition(topic, 0)
       val leo = broker.getLogManager.getLog(tp).get.logEndOffset
       result = result && leo > 0 && brokers.forall { broker =>
-        broker.getLogManager.getLog(tp).get.logSegments.iterator.forall { segment =>
+        broker.getLogManager.getLog(tp).get.logSegments.stream.allMatch { segment =>
           if (segment.read(minOffset, Integer.MAX_VALUE) == null) {
             false
           } else {
-            segment.read(minOffset, Integer.MAX_VALUE)
-              .records.batches().iterator().asScala.forall(
+            segment.read(minOffset, Integer.MAX_VALUE).records.batches().iterator().asScala.forall(
               expectedLeaderEpoch == _.partitionLeaderEpoch()
             )
           }
@@ -261,7 +268,7 @@ class LeaderEpochIntegrationTest extends ZooKeeperTestHarness with Logging {
   private def sendFourMessagesToEachTopic() = {
     val testMessageList1 = List("test1", "test2", "test3", "test4")
     val testMessageList2 = List("test5", "test6", "test7", "test8")
-    val producer = TestUtils.createProducer(TestUtils.getBrokerListStrFromServers(brokers),
+    val producer = TestUtils.createProducer(plaintextBootstrapServers(brokers),
       keySerializer = new StringSerializer, valueSerializer = new StringSerializer)
     val records =
       testMessageList1.map(m => new ProducerRecord(topic1, m, m)) ++
@@ -297,5 +304,7 @@ class LeaderEpochIntegrationTest extends ZooKeeperTestHarness with Logging {
         }
       }.toMap
     }
+
+    def close(): Unit = sender.close()
   }
 }

@@ -66,19 +66,19 @@ public class MiniTrogdorCluster implements AutoCloseable {
 
         private static class NodeData {
             String hostname;
-            AgentRestResource agentRestResource = null;
-            JsonRestServer agentRestServer = null;
+            volatile AgentRestResource agentRestResource = null;
+            volatile JsonRestServer agentRestServer = null;
             int agentPort = 0;
 
-            JsonRestServer coordinatorRestServer = null;
+            volatile JsonRestServer coordinatorRestServer = null;
             int coordinatorPort = 0;
-            CoordinatorRestResource coordinatorRestResource = null;
+            volatile CoordinatorRestResource coordinatorRestResource = null;
 
-            Platform platform = null;
-            Agent agent = null;
-            Coordinator coordinator = null;
+            volatile Platform platform = null;
+            volatile Agent agent = null;
+            volatile Coordinator coordinator = null;
 
-            BasicNode node = null;
+            volatile BasicNode node = null;
         }
 
         public Builder() {
@@ -289,4 +289,4 @@ public class MiniTrogdorCluster implements AutoCloseable {
             coordinator.waitForShutdown();
         }
     }
-};
+}

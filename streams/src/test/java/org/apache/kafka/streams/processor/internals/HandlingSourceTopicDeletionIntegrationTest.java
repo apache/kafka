@@ -85,7 +85,7 @@ public class HandlingSourceTopicDeletionIntegrationTest {
         builder.stream(INPUT_TOPIC, Consumed.with(Serdes.Integer(), Serdes.String()))
             .to(OUTPUT_TOPIC, Produced.with(Serdes.Integer(), Serdes.String()));
 
-        final String safeTestName = safeUniqueTestName(getClass(), testName);
+        final String safeTestName = safeUniqueTestName(testName);
         final String appId = "app-" + safeTestName;
 
         final Properties streamsConfiguration = new Properties();

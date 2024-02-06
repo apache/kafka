@@ -18,22 +18,17 @@ package kafka.server
 
 import java.util
 import java.util.Properties
-
-import kafka.admin.{AdminOperationException, AdminUtils}
 import kafka.common.TopicAlreadyMarkedForDeletionException
-import kafka.log.LogConfig
-import kafka.utils.Log4jController
-import kafka.metrics.KafkaMetricsGroup
+import kafka.server.ConfigAdminManager.{prepareIncrementalConfigs, toLoggableProps}
 import kafka.server.DynamicConfig.QuotaConfigs
 import kafka.server.metadata.ZkConfigRepository
 import kafka.utils._
 import kafka.utils.Implicits._
 import kafka.zk.{AdminZkClient, KafkaZkClient}
+import org.apache.kafka.admin.AdminUtils
 import org.apache.kafka.clients.admin.{AlterConfigOp, ScramMechanism}
-import org.apache.kafka.clients.admin.AlterConfigOp.OpType
 import org.apache.kafka.common.Uuid
-import org.apache.kafka.common.config.ConfigDef.ConfigKey
-import org.apache.kafka.common.config.{ConfigDef, ConfigException, ConfigResource, LogLevelConfig}
+import org.apache.kafka.common.config.{ConfigDef, ConfigException, ConfigResource}
 import org.apache.kafka.common.errors.ThrottlingQuotaExceededException
 import org.apache.kafka.common.errors.{ApiException, InvalidConfigurationException, InvalidPartitionsException, InvalidReplicaAssignmentException, InvalidRequestException, ReassignmentInProgressException, TopicExistsException, UnknownTopicOrPartitionException, UnsupportedVersionException}
 import org.apache.kafka.common.message.AlterUserScramCredentialsResponseData.AlterUserScramCredentialsResult
@@ -52,19 +47,35 @@ import org.apache.kafka.common.requests.CreateTopicsRequest._
 import org.apache.kafka.common.requests.{AlterConfigsRequest, ApiError}
 import org.apache.kafka.common.security.scram.internals.{ScramCredentialUtils, ScramFormatter}
 import org.apache.kafka.common.utils.Sanitizer
+import org.apache.kafka.server.common.AdminOperationException
+import org.apache.kafka.server.config.{ConfigEntityName, ConfigType}
+import org.apache.kafka.storage.internals.log.LogConfig
 
 import scala.collection.{Map, mutable, _}
 import scala.jdk.CollectionConverters._
 
+object ZkAdminManager {
+  def clientQuotaPropsToDoubleMap(props: Map[String, String]): Map[String, Double] = {
+    props.map { case (key, value) =>
+      val doubleValue = try value.toDouble catch {
+        case _: NumberFormatException =>
+          throw new IllegalStateException(s"Unexpected client quota configuration value: $key -> $value")
+      }
+      key -> doubleValue
+    }
+  }
+}
+
+
 class ZkAdminManager(val config: KafkaConfig,
                      val metrics: Metrics,
                      val metadataCache: MetadataCache,
-                     val zkClient: KafkaZkClient) extends Logging with KafkaMetricsGroup {
+                     val zkClient: KafkaZkClient) extends Logging {
 
   this.logIdent = "[Admin Manager on Broker " + config.brokerId + "]: "
 
   private val topicPurgatory = DelayedOperationPurgatory[DelayedOperation]("topic", config.brokerId)
-  private val adminZkClient = new AdminZkClient(zkClient)
+  private val adminZkClient = new AdminZkClient(zkClient, Some(config))
   private val configHelper = new ConfigHelper(metadataCache, config, new ZkConfigRepository(adminZkClient))
 
   private val createTopicPolicy =
@@ -116,9 +127,9 @@ class ZkAdminManager(val config: KafkaConfig,
                                               configs: Properties,
                                               assignments: Map[Int, Seq[Int]]): Unit = {
     metadataAndConfigs.get(topicName).foreach { result =>
-      val logConfig = LogConfig.fromProps(LogConfig.extractLogConfigMap(config), configs)
+      val logConfig = LogConfig.fromProps(config.extractLogConfigMap, configs)
       val createEntry = configHelper.createTopicConfigEntry(logConfig, configs, includeSynonyms = false, includeDocumentation = false)(_, _)
-      val topicConfigs = logConfig.values.asScala.map { case (k, v) =>
+      val topicConfigs = configHelper.allConfigs(logConfig).map { case (k, v) =>
         val entry = createEntry(k, v)
         new CreatableTopicConfigs()
           .setName(k)
@@ -152,7 +163,7 @@ class ZkAdminManager(val config: KafkaConfig,
                    responseCallback: Map[String, ApiError] => Unit): Unit = {
 
     // 1. map over topics creating assignment and calling zookeeper
-    val brokers = metadataCache.getAliveBrokers.map { b => kafka.admin.BrokerMetadata(b.id, Option(b.rack)) }
+    val brokers = metadataCache.getAliveBrokers()
     val metadata = toCreate.values.map(topic =>
       try {
         if (metadataCache.contains(topic.name))
@@ -160,7 +171,7 @@ class ZkAdminManager(val config: KafkaConfig,
 
         val nullConfigs = topic.configs.asScala.filter(_.value == null).map(_.name)
         if (nullConfigs.nonEmpty)
-          throw new InvalidRequestException(s"Null value not supported for topic configs : ${nullConfigs.mkString(",")}")
+          throw new InvalidConfigurationException(s"Null value not supported for topic configs: ${nullConfigs.mkString(",")}")
 
         if ((topic.numPartitions != NO_NUM_PARTITIONS || topic.replicationFactor != NO_REPLICATION_FACTOR)
             && !topic.assignments().isEmpty) {
@@ -174,8 +185,8 @@ class ZkAdminManager(val config: KafkaConfig,
           defaultReplicationFactor else topic.replicationFactor
 
         val assignments = if (topic.assignments.isEmpty) {
-          AdminUtils.assignReplicasToBrokers(
-            brokers, resolvedNumPartitions, resolvedReplicationFactor)
+          CoreUtils.replicaToBrokerAssignmentAsScala(AdminUtils.assignReplicasToBrokers(
+            brokers.asJavaCollection, resolvedNumPartitions, resolvedReplicationFactor))
         } else {
           val assignments = new mutable.HashMap[Int, Seq[Int]]
           // Note: we don't check that replicaAssignment contains unknown brokers - unlike in add-partitions case,
@@ -292,7 +303,7 @@ class ZkAdminManager(val config: KafkaConfig,
     }
   }
 
-  def createPartitions(timeout: Int,
+  def createPartitions(timeoutMs: Int,
                        newPartitions: Seq[CreatePartitionsTopic],
                        validateOnly: Boolean,
                        controllerMutationQuota: ControllerMutationQuota,
@@ -369,7 +380,7 @@ class ZkAdminManager(val config: KafkaConfig,
     }
 
     // 2. if timeout <= 0, validateOnly or no topics can proceed return immediately
-    if (timeout <= 0 || validateOnly || !metadata.exists(_.error.is(Errors.NONE))) {
+    if (timeoutMs <= 0 || validateOnly || !metadata.exists(_.error.is(Errors.NONE))) {
       val results = metadata.map { createPartitionMetadata =>
         // ignore topics that already have errors
         if (createPartitionMetadata.error.isSuccess && !validateOnly) {
@@ -381,21 +392,17 @@ class ZkAdminManager(val config: KafkaConfig,
       callback(results)
     } else {
       // 3. else pass the assignments and errors to the delayed operation and set the keys
-      val delayedCreate = new DelayedCreatePartitions(timeout, metadata, this, callback)
+      val delayedCreate = new DelayedCreatePartitions(timeoutMs, metadata, this, callback)
       val delayedCreateKeys = newPartitions.map(createPartitionTopic => TopicKey(createPartitionTopic.name))
       // try to complete the request immediately, otherwise put it into the purgatory
       topicPurgatory.tryCompleteElseWatch(delayedCreate, delayedCreateKeys)
     }
   }
 
-    def alterConfigs(configs: Map[ConfigResource, AlterConfigsRequest.Config], validateOnly: Boolean): Map[ConfigResource, ApiError] = {
+  def alterConfigs(configs: Map[ConfigResource, AlterConfigsRequest.Config], validateOnly: Boolean): Map[ConfigResource, ApiError] = {
     configs.map { case (resource, config) =>
 
       try {
-        val nullUpdates = config.entries.asScala.filter(_.value == null).map(_.name)
-        if (nullUpdates.nonEmpty)
-          throw new InvalidRequestException(s"Null value not supported for : ${nullUpdates.mkString(",")}")
-
         val configEntriesMap = config.entries.asScala.map(entry => (entry.name, entry.value)).toMap
 
         val configProps = new Properties
@@ -413,10 +420,14 @@ class ZkAdminManager(val config: KafkaConfig,
         case e @ (_: ConfigException | _: IllegalArgumentException) =>
           val message = s"Invalid config value for resource $resource: ${e.getMessage}"
           info(message)
-          resource -> ApiError.fromThrowable(new InvalidRequestException(message, e))
+          resource -> ApiError.fromThrowable(new InvalidConfigurationException(message, e))
         case e: Throwable =>
+          val configProps = new Properties
+          config.entries.asScala.filter(_.value != null).foreach { configEntry =>
+            configProps.setProperty(configEntry.name, configEntry.value)
+          }
           // Log client errors at a lower level than unexpected exceptions
-          val message = s"Error processing alter configs request for resource $resource, config $config"
+          val message = s"Error processing alter configs request for resource $resource, config ${toLoggableProps(resource, configProps).mkString(",")}"
           if (e.isInstanceOf[ApiException])
             info(message, e)
           else
@@ -429,6 +440,10 @@ class ZkAdminManager(val config: KafkaConfig,
   private def alterTopicConfigs(resource: ConfigResource, validateOnly: Boolean,
                                 configProps: Properties, configEntriesMap: Map[String, String]): (ConfigResource, ApiError) = {
     val topic = resource.name
+    if (topic.isEmpty()) {
+      throw new InvalidRequestException("Default topic resources are not allowed.")
+    }
+
     if (!metadataCache.contains(topic))
       throw new UnknownTopicOrPartitionException(s"The topic '$topic' does not exist.")
 
@@ -464,29 +479,6 @@ class ZkAdminManager(val config: KafkaConfig,
     resource -> ApiError.NONE
   }
 
-  private def toLoggableProps(resource: ConfigResource, configProps: Properties): Map[String, String] = {
-    configProps.asScala.map {
-      case (key, value) => (key, KafkaConfig.loggableValue(resource.`type`, key, value))
-    }
-  }
-
-  private def alterLogLevelConfigs(alterConfigOps: Seq[AlterConfigOp]): Unit = {
-    alterConfigOps.foreach { alterConfigOp =>
-      val loggerName = alterConfigOp.configEntry().name()
-      val logLevel = alterConfigOp.configEntry().value()
-      alterConfigOp.opType() match {
-        case OpType.SET =>
-          info(s"Updating the log level of $loggerName to $logLevel")
-          Log4jController.logLevel(loggerName, logLevel)
-        case OpType.DELETE =>
-          info(s"Unset the log level of $loggerName")
-          Log4jController.unsetLogLevel(loggerName)
-        case _ => throw new IllegalArgumentException(
-          s"Log level cannot be changed for OpType: ${alterConfigOp.opType()}")
-      }
-    }
-  }
-
   private def getBrokerId(resource: ConfigResource) = {
     if (resource.name == null || resource.name.isEmpty)
       None
@@ -510,44 +502,28 @@ class ZkAdminManager(val config: KafkaConfig,
   def incrementalAlterConfigs(configs: Map[ConfigResource, Seq[AlterConfigOp]], validateOnly: Boolean): Map[ConfigResource, ApiError] = {
     configs.map { case (resource, alterConfigOps) =>
       try {
-        // throw InvalidRequestException if any duplicate keys
-        val duplicateKeys = alterConfigOps.groupBy(config => config.configEntry.name).filter { case (_, v) =>
-          v.size > 1
-        }.keySet
-        if (duplicateKeys.nonEmpty)
-          throw new InvalidRequestException(s"Error due to duplicate config keys : ${duplicateKeys.mkString(",")}")
-        val nullUpdates = alterConfigOps
-          .filter(entry => entry.configEntry.value == null && entry.opType() != OpType.DELETE)
-          .map(entry => s"${entry.opType}:${entry.configEntry.name}")
-        if (nullUpdates.nonEmpty)
-          throw new InvalidRequestException(s"Null value not supported for : ${nullUpdates.mkString(",")}")
-
         val configEntriesMap = alterConfigOps.map(entry => (entry.configEntry.name, entry.configEntry.value)).toMap
 
         resource.`type` match {
           case ConfigResource.Type.TOPIC =>
-            val configProps = adminZkClient.fetchEntityConfig(ConfigType.Topic, resource.name)
-            prepareIncrementalConfigs(alterConfigOps, configProps, LogConfig.configKeys)
+            if (resource.name.isEmpty) {
+              throw new InvalidRequestException("Default topic resources are not allowed.")
+            }
+            val configProps = adminZkClient.fetchEntityConfig(ConfigType.TOPIC, resource.name)
+            prepareIncrementalConfigs(alterConfigOps, configProps, LogConfig.configKeys.asScala)
             alterTopicConfigs(resource, validateOnly, configProps, configEntriesMap)
 
           case ConfigResource.Type.BROKER =>
             val brokerId = getBrokerId(resource)
             val perBrokerConfig = brokerId.nonEmpty
 
-            val persistentProps = if (perBrokerConfig) adminZkClient.fetchEntityConfig(ConfigType.Broker, brokerId.get.toString)
-            else adminZkClient.fetchEntityConfig(ConfigType.Broker, ConfigEntityName.Default)
+            val persistentProps = if (perBrokerConfig) adminZkClient.fetchEntityConfig(ConfigType.BROKER, brokerId.get.toString)
+            else adminZkClient.fetchEntityConfig(ConfigType.BROKER, ConfigEntityName.DEFAULT)
 
             val configProps = this.config.dynamicConfig.fromPersistentProps(persistentProps, perBrokerConfig)
             prepareIncrementalConfigs(alterConfigOps, configProps, KafkaConfig.configKeys)
             alterBrokerConfigs(resource, validateOnly, configProps, configEntriesMap)
 
-          case ConfigResource.Type.BROKER_LOGGER =>
-            getBrokerId(resource)
-            validateLogLevelConfigs(alterConfigOps)
-
-            if (!validateOnly)
-              alterLogLevelConfigs(alterConfigOps)
-            resource -> ApiError.NONE
           case resourceType =>
             throw new InvalidRequestException(s"AlterConfigs is only supported for topics and brokers, but resource type is $resourceType")
         }
@@ -555,7 +531,7 @@ class ZkAdminManager(val config: KafkaConfig,
         case e @ (_: ConfigException | _: IllegalArgumentException) =>
           val message = s"Invalid config value for resource $resource: ${e.getMessage}"
           info(message)
-          resource -> ApiError.fromThrowable(new InvalidRequestException(message, e))
+          resource -> ApiError.fromThrowable(new InvalidConfigurationException(message, e))
         case e: Throwable =>
           // Log client errors at a lower level than unexpected exceptions
           val message = s"Error processing alter configs request for resource $resource, config $alterConfigOps"
@@ -566,73 +542,6 @@ class ZkAdminManager(val config: KafkaConfig,
           resource -> ApiError.fromThrowable(e)
       }
     }.toMap
-  }
-
-  private def validateLogLevelConfigs(alterConfigOps: Seq[AlterConfigOp]): Unit = {
-    def validateLoggerNameExists(loggerName: String): Unit = {
-      if (!Log4jController.loggerExists(loggerName))
-        throw new ConfigException(s"Logger $loggerName does not exist!")
-    }
-
-    alterConfigOps.foreach { alterConfigOp =>
-      val loggerName = alterConfigOp.configEntry.name
-      alterConfigOp.opType() match {
-        case OpType.SET =>
-          validateLoggerNameExists(loggerName)
-          val logLevel = alterConfigOp.configEntry.value
-          if (!LogLevelConfig.VALID_LOG_LEVELS.contains(logLevel)) {
-            val validLevelsStr = LogLevelConfig.VALID_LOG_LEVELS.asScala.mkString(", ")
-            throw new ConfigException(
-              s"Cannot set the log level of $loggerName to $logLevel as it is not a supported log level. " +
-              s"Valid log levels are $validLevelsStr"
-            )
-          }
-        case OpType.DELETE =>
-          validateLoggerNameExists(loggerName)
-          if (loggerName == Log4jController.ROOT_LOGGER)
-            throw new InvalidRequestException(s"Removing the log level of the ${Log4jController.ROOT_LOGGER} logger is not allowed")
-        case OpType.APPEND => throw new InvalidRequestException(s"${OpType.APPEND} operation is not allowed for the ${ConfigResource.Type.BROKER_LOGGER} resource")
-        case OpType.SUBTRACT => throw new InvalidRequestException(s"${OpType.SUBTRACT} operation is not allowed for the ${ConfigResource.Type.BROKER_LOGGER} resource")
-      }
-    }
-  }
-
-  private def prepareIncrementalConfigs(alterConfigOps: Seq[AlterConfigOp], configProps: Properties, configKeys: Map[String, ConfigKey]): Unit = {
-
-    def listType(configName: String, configKeys: Map[String, ConfigKey]): Boolean = {
-      val configKey = configKeys(configName)
-      if (configKey == null)
-        throw new InvalidConfigurationException(s"Unknown topic config name: $configName")
-      configKey.`type` == ConfigDef.Type.LIST
-    }
-
-    alterConfigOps.foreach { alterConfigOp =>
-      val configPropName = alterConfigOp.configEntry.name
-      alterConfigOp.opType() match {
-        case OpType.SET => configProps.setProperty(alterConfigOp.configEntry.name, alterConfigOp.configEntry.value)
-        case OpType.DELETE => configProps.remove(alterConfigOp.configEntry.name)
-        case OpType.APPEND => {
-          if (!listType(alterConfigOp.configEntry.name, configKeys))
-            throw new InvalidRequestException(s"Config value append is not allowed for config key: ${alterConfigOp.configEntry.name}")
-          val oldValueList = Option(configProps.getProperty(alterConfigOp.configEntry.name))
-            .orElse(Option(ConfigDef.convertToString(configKeys(configPropName).defaultValue, ConfigDef.Type.LIST)))
-            .getOrElse("")
-            .split(",").toList
-          val newValueList = oldValueList ::: alterConfigOp.configEntry.value.split(",").toList
-          configProps.setProperty(alterConfigOp.configEntry.name, newValueList.mkString(","))
-        }
-        case OpType.SUBTRACT => {
-          if (!listType(alterConfigOp.configEntry.name, configKeys))
-            throw new InvalidRequestException(s"Config value subtract is not allowed for config key: ${alterConfigOp.configEntry.name}")
-          val oldValueList = Option(configProps.getProperty(alterConfigOp.configEntry.name))
-            .orElse(Option(ConfigDef.convertToString(configKeys(configPropName).defaultValue, ConfigDef.Type.LIST)))
-            .getOrElse("")
-            .split(",").toList
-          val newValueList = oldValueList.diff(alterConfigOp.configEntry.value.split(",").toList)
-          configProps.setProperty(alterConfigOp.configEntry.name, newValueList.mkString(","))
-        }
-      }
-    }
   }
 
   def shutdown(): Unit = {
@@ -650,13 +559,13 @@ class ZkAdminManager(val config: KafkaConfig,
 
   private def sanitizeEntityName(entityName: String): String =
     Option(entityName) match {
-      case None => ConfigEntityName.Default
+      case None => ConfigEntityName.DEFAULT
       case Some(name) => Sanitizer.sanitize(name)
     }
 
   private def desanitizeEntityName(sanitizedEntityName: String): String =
     sanitizedEntityName match {
-      case ConfigEntityName.Default => null
+      case ConfigEntityName.DEFAULT => null
       case name => Sanitizer.desanitize(name)
     }
 
@@ -740,16 +649,6 @@ class ZkAdminManager(val config: KafkaConfig,
 
   private def sanitized(name: Option[String]): String = name.map(n => sanitizeEntityName(n)).getOrElse("")
 
-  private def fromProps(props: Map[String, String]): Map[String, Double] = {
-    props.map { case (key, value) =>
-      val doubleValue = try value.toDouble catch {
-        case _: NumberFormatException =>
-          throw new IllegalStateException(s"Unexpected client quota configuration value: $key -> $value")
-      }
-      key -> doubleValue
-    }
-  }
-
   def handleDescribeClientQuotas(userComponent: Option[ClientQuotaFilterComponent],
     clientIdComponent: Option[ClientQuotaFilterComponent], strict: Boolean): Map[ClientQuotaEntity, Map[String, Double]] = {
 
@@ -767,18 +666,18 @@ class ZkAdminManager(val config: KafkaConfig,
     val excludeClientId = wantExcluded(clientIdComponent)
 
     val userEntries = if (exactUser && excludeClientId)
-      Map((Some(user.get), None) -> adminZkClient.fetchEntityConfig(ConfigType.User, sanitizedUser))
+      Map((Some(user.get), None) -> adminZkClient.fetchEntityConfig(ConfigType.USER, sanitizedUser))
     else if (!excludeUser && !exactClientId)
-      adminZkClient.fetchAllEntityConfigs(ConfigType.User).map { case (name, props) =>
+      adminZkClient.fetchAllEntityConfigs(ConfigType.USER).map { case (name, props) =>
         (Some(desanitizeEntityName(name)), None) -> props
       }
     else
       Map.empty
 
     val clientIdEntries = if (excludeUser && exactClientId)
-      Map((None, Some(clientId.get)) -> adminZkClient.fetchEntityConfig(ConfigType.Client, sanitizedClientId))
+      Map((None, Some(clientId.get)) -> adminZkClient.fetchEntityConfig(ConfigType.CLIENT, sanitizedClientId))
     else if (!exactUser && !excludeClientId)
-      adminZkClient.fetchAllEntityConfigs(ConfigType.Client).map { case (name, props) =>
+      adminZkClient.fetchAllEntityConfigs(ConfigType.CLIENT).map { case (name, props) =>
         (None, Some(desanitizeEntityName(name))) -> props
       }
     else
@@ -786,9 +685,9 @@ class ZkAdminManager(val config: KafkaConfig,
 
     val bothEntries = if (exactUser && exactClientId)
       Map((Some(user.get), Some(clientId.get)) ->
-        adminZkClient.fetchEntityConfig(ConfigType.User, s"${sanitizedUser}/clients/${sanitizedClientId}"))
+        adminZkClient.fetchEntityConfig(ConfigType.USER, s"${sanitizedUser}/clients/${sanitizedClientId}"))
     else if (!excludeUser && !excludeClientId)
-      adminZkClient.fetchAllChildEntityConfigs(ConfigType.User, ConfigType.Client).map { case (name, props) =>
+      adminZkClient.fetchAllChildEntityConfigs(ConfigType.USER, ConfigType.CLIENT).map { case (name, props) =>
         val components = name.split("/")
         if (components.size != 3 || components(1) != "clients")
           throw new IllegalArgumentException(s"Unexpected config path: ${name}")
@@ -800,17 +699,17 @@ class ZkAdminManager(val config: KafkaConfig,
     def matches(nameComponent: Option[ClientQuotaFilterComponent], name: Option[String]): Boolean = nameComponent match {
       case Some(component) =>
         toOption(component.`match`) match {
-          case Some(n) => name.exists(_ == n)
+          case Some(n) => name.contains(n)
           case None => name.isDefined
         }
       case None =>
-        !name.isDefined || !strict
+        name.isEmpty || !strict
     }
 
     (userEntries ++ clientIdEntries ++ bothEntries).flatMap { case ((u, c), p) =>
       val quotaProps = p.asScala.filter { case (key, _) => QuotaConfigs.isClientOrUserQuotaConfig(key) }
       if (quotaProps.nonEmpty && matches(userComponent, u) && matches(clientIdComponent, c))
-        Some(userClientIdToEntity(u, c) -> fromProps(quotaProps))
+        Some(userClientIdToEntity(u, c) -> ZkAdminManager.clientQuotaPropsToDoubleMap(quotaProps))
       else
         None
     }.toMap
@@ -821,9 +720,9 @@ class ZkAdminManager(val config: KafkaConfig,
     val exactIp = wantExact(ipComponent)
     val allIps = ipComponent.exists(_.`match` == null) || (ipComponent.isEmpty && !strict)
     val ipEntries = if (exactIp)
-      Map(Some(ip.get) -> adminZkClient.fetchEntityConfig(ConfigType.Ip, sanitized(ip)))
+      Map(Some(ip.get) -> adminZkClient.fetchEntityConfig(ConfigType.IP, sanitized(ip)))
     else if (allIps)
-      adminZkClient.fetchAllEntityConfigs(ConfigType.Ip).map { case (name, props) =>
+      adminZkClient.fetchAllEntityConfigs(ConfigType.IP).map { case (name, props) =>
         Some(desanitizeEntityName(name)) -> props
       }
     else
@@ -836,7 +735,7 @@ class ZkAdminManager(val config: KafkaConfig,
     ipEntries.flatMap { case (ip, props) =>
       val ipQuotaProps = props.asScala.filter { case (key, _) => DynamicConfig.Ip.names.contains(key) }
       if (ipQuotaProps.nonEmpty)
-        Some(ipToQuotaEntity(ip) -> fromProps(ipQuotaProps))
+        Some(ipToQuotaEntity(ip) -> ZkAdminManager.clientQuotaPropsToDoubleMap(ipQuotaProps))
       else
         None
     }
@@ -844,14 +743,14 @@ class ZkAdminManager(val config: KafkaConfig,
 
   def alterClientQuotas(entries: Seq[ClientQuotaAlteration], validateOnly: Boolean): Map[ClientQuotaEntity, ApiError] = {
     def alterEntityQuotas(entity: ClientQuotaEntity, ops: Iterable[ClientQuotaAlteration.Op]): Unit = {
-      val (path, configType, configKeys) = parseAndSanitizeQuotaEntity(entity) match {
-        case (Some(user), Some(clientId), None) => (user + "/clients/" + clientId, ConfigType.User, DynamicConfig.User.configKeys)
-        case (Some(user), None, None) => (user, ConfigType.User, DynamicConfig.User.configKeys)
-        case (None, Some(clientId), None) => (clientId, ConfigType.Client, DynamicConfig.Client.configKeys)
+      val (path, configType, configKeys, isUserClientId) = parseAndSanitizeQuotaEntity(entity) match {
+        case (Some(user), Some(clientId), None) => (user + "/clients/" + clientId, ConfigType.USER, DynamicConfig.User.configKeys, true)
+        case (Some(user), None, None) => (user, ConfigType.USER, DynamicConfig.User.configKeys, false)
+        case (None, Some(clientId), None) => (clientId, ConfigType.CLIENT, DynamicConfig.Client.configKeys, false)
         case (None, None, Some(ip)) =>
           if (!DynamicConfig.Ip.isValidIpEntity(ip))
             throw new InvalidRequestException(s"$ip is not a valid IP or resolvable host.")
-          (ip, ConfigType.Ip, DynamicConfig.Ip.configKeys)
+          (ip, ConfigType.IP, DynamicConfig.Ip.configKeys, false)
         case (_, _, Some(_)) => throw new InvalidRequestException(s"Invalid quota entity combination, " +
           s"IP entity should not be used with user/client ID entity.")
         case _ => throw new InvalidRequestException("Invalid client quota entity")
@@ -884,7 +783,7 @@ class ZkAdminManager(val config: KafkaConfig,
         }
       }
       if (!validateOnly)
-        adminZkClient.changeConfigs(configType, path, props)
+        adminZkClient.changeConfigs(configType, path, props, isUserClientId)
     }
     entries.map { entry =>
       val apiError = try {
@@ -949,8 +848,8 @@ class ZkAdminManager(val config: KafkaConfig,
 
     try {
       if (describingAllUsers)
-        adminZkClient.fetchAllEntityConfigs(ConfigType.User).foreach {
-          case (user, properties) => addToResultsIfHasScramCredential(user, properties) }
+        adminZkClient.fetchAllEntityConfigs(ConfigType.USER).foreach {
+          case (user, properties) => addToResultsIfHasScramCredential(Sanitizer.desanitize(user), properties) }
       else {
         // describing specific users
         val illegalUsers = users.get.filter(_.isEmpty).toSet
@@ -969,7 +868,7 @@ class ZkAdminManager(val config: KafkaConfig,
         val usersToSkip = illegalUsers ++ duplicatedUsers
         users.get.filterNot(usersToSkip.contains).foreach { user =>
           try {
-            val userConfigs = adminZkClient.fetchEntityConfig(ConfigType.User, Sanitizer.sanitize(user))
+            val userConfigs = adminZkClient.fetchEntityConfig(ConfigType.USER, Sanitizer.sanitize(user))
             addToResultsIfHasScramCredential(user, userConfigs, true)
           } catch {
             case e: Exception => {
@@ -1081,7 +980,7 @@ class ZkAdminManager(val config: KafkaConfig,
     def potentiallyValidUserMechanismPairs = initiallyValidUserMechanismPairs.filter(pair => !usersWithDuplicateUserMechanismPairs.contains(pair._1))
 
     val potentiallyValidUsers = potentiallyValidUserMechanismPairs.map(_._1).toSet
-    val configsByPotentiallyValidUser = potentiallyValidUsers.map(user => (user, adminZkClient.fetchEntityConfig(ConfigType.User, Sanitizer.sanitize(user)))).toMap
+    val configsByPotentiallyValidUser = potentiallyValidUsers.map(user => (user, adminZkClient.fetchEntityConfig(ConfigType.USER, Sanitizer.sanitize(user)))).toMap
 
     // check for deletion of a credential that does not exist
     val invalidDeletions = deletions.filter(deletion => potentiallyValidUsers.contains(deletion.name)).filter(deletion =>
@@ -1117,7 +1016,7 @@ class ZkAdminManager(val config: KafkaConfig,
     // now persist the properties we have prepared, again keeping track of whatever fails
     val usersFailedToPersist = usersToTryToAlter.filterNot(usersFailedToPrepareProperties.contains).map(user => {
       try {
-        adminZkClient.changeConfigs(ConfigType.User, Sanitizer.sanitize(user), configsByPotentiallyValidUser(user))
+        adminZkClient.changeConfigs(ConfigType.USER, Sanitizer.sanitize(user), configsByPotentiallyValidUser(user))
         (user) // success, 1 element, won't be matched
       } catch {
         case e: Exception =>

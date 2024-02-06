@@ -18,9 +18,9 @@
 package kafka.admin
 
 import java.util.Properties
-
-import kafka.server.Defaults
 import kafka.utils.TestUtils
+import kafka.utils.TestInfoUtils
+import org.apache.kafka.clients.consumer.Consumer
 import org.apache.kafka.clients.consumer.ConsumerConfig
 import org.apache.kafka.clients.consumer.KafkaConsumer
 import org.apache.kafka.clients.producer.KafkaProducer
@@ -31,22 +31,26 @@ import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.serialization.ByteArrayDeserializer
 import org.apache.kafka.common.serialization.ByteArraySerializer
 import org.apache.kafka.common.utils.Utils
-import org.junit.jupiter.api.Test
+import org.apache.kafka.server.config.Defaults
+
 import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.ValueSource
 
 class DeleteOffsetsConsumerGroupCommandIntegrationTest extends ConsumerGroupCommandTest {
 
   def getArgs(group: String, topic: String): Array[String] = {
     Array(
-      "--bootstrap-server", brokerList,
+      "--bootstrap-server", bootstrapServers(),
       "--delete-offsets",
       "--group", group,
       "--topic", topic
     )
   }
 
-  @Test
-  def testDeleteOffsetsNonExistingGroup(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testDeleteOffsetsNonExistingGroup(quorum: String): Unit = {
     val group = "missing.group"
     val topic = "foo:1"
     val service = getConsumerGroupService(getArgs(group, topic))
@@ -55,43 +59,51 @@ class DeleteOffsetsConsumerGroupCommandIntegrationTest extends ConsumerGroupComm
     assertEquals(Errors.GROUP_ID_NOT_FOUND, error)
   }
 
-  @Test
-  def testDeleteOffsetsOfStableConsumerGroupWithTopicPartition(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testDeleteOffsetsOfStableConsumerGroupWithTopicPartition(quorum: String): Unit = {
     testWithStableConsumerGroup(topic, 0, 0, Errors.GROUP_SUBSCRIBED_TO_TOPIC)
   }
 
-  @Test
-  def testDeleteOffsetsOfStableConsumerGroupWithTopicOnly(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testDeleteOffsetsOfStableConsumerGroupWithTopicOnly(quorum: String): Unit = {
     testWithStableConsumerGroup(topic, -1, 0, Errors.GROUP_SUBSCRIBED_TO_TOPIC)
   }
 
-  @Test
-  def testDeleteOffsetsOfStableConsumerGroupWithUnknownTopicPartition(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testDeleteOffsetsOfStableConsumerGroupWithUnknownTopicPartition(quorum: String): Unit = {
     testWithStableConsumerGroup("foobar", 0, 0, Errors.UNKNOWN_TOPIC_OR_PARTITION)
   }
 
-  @Test
-  def testDeleteOffsetsOfStableConsumerGroupWithUnknownTopicOnly(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testDeleteOffsetsOfStableConsumerGroupWithUnknownTopicOnly(quorum: String): Unit = {
     testWithStableConsumerGroup("foobar", -1, -1, Errors.UNKNOWN_TOPIC_OR_PARTITION)
   }
 
-  @Test
-  def testDeleteOffsetsOfEmptyConsumerGroupWithTopicPartition(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testDeleteOffsetsOfEmptyConsumerGroupWithTopicPartition(quorum: String): Unit = {
     testWithEmptyConsumerGroup(topic, 0, 0, Errors.NONE)
   }
 
-  @Test
-  def testDeleteOffsetsOfEmptyConsumerGroupWithTopicOnly(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testDeleteOffsetsOfEmptyConsumerGroupWithTopicOnly(quorum: String): Unit = {
     testWithEmptyConsumerGroup(topic, -1, 0, Errors.NONE)
   }
 
-  @Test
-  def testDeleteOffsetsOfEmptyConsumerGroupWithUnknownTopicPartition(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testDeleteOffsetsOfEmptyConsumerGroupWithUnknownTopicPartition(quorum: String): Unit = {
     testWithEmptyConsumerGroup("foobar", 0, 0, Errors.UNKNOWN_TOPIC_OR_PARTITION)
   }
 
-  @Test
-  def testDeleteOffsetsOfEmptyConsumerGroupWithUnknownTopicOnly(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testDeleteOffsetsOfEmptyConsumerGroupWithUnknownTopicOnly(quorum: String): Unit = {
     testWithEmptyConsumerGroup("foobar", -1, -1, Errors.UNKNOWN_TOPIC_OR_PARTITION)
   }
 
@@ -173,7 +185,7 @@ class DeleteOffsetsConsumerGroupCommandIntegrationTest extends ConsumerGroupComm
   }
 
   private def createProducer(config: Properties = new Properties()): KafkaProducer[Array[Byte], Array[Byte]] = {
-    config.putIfAbsent(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList)
+    config.putIfAbsent(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers())
     config.putIfAbsent(ProducerConfig.ACKS_CONFIG, "-1")
     config.putIfAbsent(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, classOf[ByteArraySerializer].getName)
     config.putIfAbsent(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, classOf[ByteArraySerializer].getName)
@@ -181,15 +193,15 @@ class DeleteOffsetsConsumerGroupCommandIntegrationTest extends ConsumerGroupComm
     new KafkaProducer(config)
   }
 
-  private def createConsumer(config: Properties = new Properties()): KafkaConsumer[Array[Byte], Array[Byte]] = {
-    config.putIfAbsent(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList)
+  private def createConsumer(config: Properties = new Properties()): Consumer[Array[Byte], Array[Byte]] = {
+    config.putIfAbsent(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers())
     config.putIfAbsent(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest")
     config.putIfAbsent(ConsumerConfig.GROUP_ID_CONFIG, group)
     config.putIfAbsent(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, classOf[ByteArrayDeserializer].getName)
     config.putIfAbsent(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, classOf[ByteArrayDeserializer].getName)
     // Increase timeouts to avoid having a rebalance during the test
     config.putIfAbsent(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, Integer.MAX_VALUE.toString)
-    config.putIfAbsent(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, Defaults.GroupMaxSessionTimeoutMs.toString)
+    config.putIfAbsent(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, Defaults.GROUP_MAX_SESSION_TIMEOUT_MS.toString)
 
     new KafkaConsumer(config)
   }

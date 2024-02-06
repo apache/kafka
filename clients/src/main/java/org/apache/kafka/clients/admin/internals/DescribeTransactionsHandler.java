@@ -18,6 +18,7 @@ package org.apache.kafka.clients.admin.internals;
 
 import org.apache.kafka.clients.admin.TransactionDescription;
 import org.apache.kafka.clients.admin.TransactionState;
+import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.TransactionalIdAuthorizationException;
 import org.apache.kafka.common.errors.TransactionalIdNotFoundException;
@@ -28,6 +29,7 @@ import org.apache.kafka.common.requests.AbstractResponse;
 import org.apache.kafka.common.requests.DescribeTransactionsRequest;
 import org.apache.kafka.common.requests.DescribeTransactionsResponse;
 import org.apache.kafka.common.requests.FindCoordinatorRequest;
+import org.apache.kafka.common.requests.FindCoordinatorRequest.CoordinatorType;
 import org.apache.kafka.common.utils.LogContext;
 import org.slf4j.Logger;
 
@@ -41,18 +43,21 @@ import java.util.OptionalLong;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-public class DescribeTransactionsHandler implements AdminApiHandler<CoordinatorKey, TransactionDescription> {
-    private final LogContext logContext;
+public class DescribeTransactionsHandler extends AdminApiHandler.Batched<CoordinatorKey, TransactionDescription> {
     private final Logger log;
-    private final Set<CoordinatorKey> keys;
+    private final AdminApiLookupStrategy<CoordinatorKey> lookupStrategy;
 
     public DescribeTransactionsHandler(
-        Collection<String> transactionalIds,
         LogContext logContext
     ) {
-        this.keys = buildKeySet(transactionalIds);
         this.log = logContext.logger(DescribeTransactionsHandler.class);
-        this.logContext = logContext;
+        this.lookupStrategy = new CoordinatorStrategy(CoordinatorType.TRANSACTION, logContext);
+    }
+
+    public static AdminApiFuture.SimpleAdminApiFuture<CoordinatorKey, TransactionDescription> newFuture(
+        Collection<String> transactionalIds
+    ) {
+        return AdminApiFuture.forKeys(buildKeySet(transactionalIds));
     }
 
     private static Set<CoordinatorKey> buildKeySet(Collection<String> transactionalIds) {
@@ -67,12 +72,12 @@ public class DescribeTransactionsHandler implements AdminApiHandler<CoordinatorK
     }
 
     @Override
-    public Keys<CoordinatorKey> initializeKeys() {
-        return Keys.dynamicMapped(keys, new CoordinatorStrategy(logContext));
+    public AdminApiLookupStrategy<CoordinatorKey> lookupStrategy() {
+        return lookupStrategy;
     }
 
     @Override
-    public DescribeTransactionsRequest.Builder buildRequest(
+    public DescribeTransactionsRequest.Builder buildBatchedRequest(
         int brokerId,
         Set<CoordinatorKey> keys
     ) {
@@ -90,7 +95,7 @@ public class DescribeTransactionsHandler implements AdminApiHandler<CoordinatorK
 
     @Override
     public ApiResult<CoordinatorKey, TransactionDescription> handleResponse(
-        int brokerId,
+        Node broker,
         Set<CoordinatorKey> keys,
         AbstractResponse abstractResponse
     ) {
@@ -119,7 +124,7 @@ public class DescribeTransactionsHandler implements AdminApiHandler<CoordinatorK
                 OptionalLong.of(transactionState.transactionStartTimeMs());
 
             completed.put(transactionalIdKey, new TransactionDescription(
-                brokerId,
+                broker.id(),
                 TransactionState.parse(transactionState.transactionState()),
                 transactionState.producerId(),
                 transactionState.producerEpoch(),

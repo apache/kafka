@@ -17,7 +17,7 @@ import os
 
 from kafkatest.services.performance import PerformanceService
 from kafkatest.services.security.security_config import SecurityConfig
-from kafkatest.version import DEV_BRANCH
+from kafkatest.version import get_version, V_3_4_0, DEV_BRANCH
 
 
 
@@ -50,6 +50,7 @@ class EndToEndLatencyService(PerformanceService):
                                                      root=EndToEndLatencyService.PERSISTENT_ROOT)
         self.kafka = kafka
         self.security_config = kafka.security_config.client_config()
+        self.version = ''
 
         security_protocol = self.security_config.security_protocol
 
@@ -73,6 +74,7 @@ class EndToEndLatencyService(PerformanceService):
 
     def start_cmd(self, node):
         args = self.args.copy()
+        self.version = get_version(node)
         args.update({
             'bootstrap_servers': self.kafka.bootstrap_servers(self.security_config.security_protocol),
             'config_file': EndToEndLatencyService.CONFIG_FILE,
@@ -124,4 +126,7 @@ class EndToEndLatencyService(PerformanceService):
         self.results[idx-1] = results
 
     def java_class_name(self):
-        return "kafka.tools.EndToEndLatency"
+        if self.version <= V_3_4_0:
+            return "kafka.tools.EndToEndLatency"
+        else:
+            return "org.apache.kafka.tools.EndToEndLatency"

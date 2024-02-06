@@ -17,18 +17,18 @@
 package kafka.raft
 
 import java.util.concurrent.CompletableFuture
-
-import kafka.utils.ShutdownableThread
-import kafka.utils.timer.{Timer, TimerTask}
 import org.apache.kafka.common.errors.TimeoutException
 import org.apache.kafka.raft.ExpirationService
+import org.apache.kafka.server.util.ShutdownableThread
+import org.apache.kafka.server.util.timer.{Timer, TimerTask}
 
 object TimingWheelExpirationService {
   private val WorkTimeoutMs: Long = 200L
 
-  class TimerTaskCompletableFuture[T](override val delayMs: Long) extends CompletableFuture[T] with TimerTask {
+  class TimerTaskCompletableFuture[T](delayMs: Long) extends TimerTask(delayMs) {
+    val future = new CompletableFuture[T]
     override def run(): Unit = {
-      completeExceptionally(new TimeoutException(
+      future.completeExceptionally(new TimeoutException(
         s"Future failed to be completed before timeout of $delayMs ms was reached"))
     }
   }
@@ -42,16 +42,15 @@ class TimingWheelExpirationService(timer: Timer) extends ExpirationService {
   expirationReaper.start()
 
   override def failAfter[T](timeoutMs: Long): CompletableFuture[T] = {
-    val future = new TimerTaskCompletableFuture[T](timeoutMs)
-    future.whenComplete { (_, _) =>
-      future.cancel()
+    val task = new TimerTaskCompletableFuture[T](timeoutMs)
+    task.future.whenComplete { (_, _) =>
+      task.cancel()
     }
-    timer.add(future)
-    future
+    timer.add(task)
+    task.future
   }
 
-  private class ExpiredOperationReaper extends ShutdownableThread(
-    name = "raft-expiration-reaper", isInterruptible = false) {
+  private class ExpiredOperationReaper extends ShutdownableThread("raft-expiration-reaper", false) {
 
     override def doWork(): Unit = {
       timer.advanceClock(WorkTimeoutMs)

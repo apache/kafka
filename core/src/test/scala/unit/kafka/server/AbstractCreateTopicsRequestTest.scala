@@ -26,7 +26,7 @@ import org.apache.kafka.common.message.CreateTopicsRequestData
 import org.apache.kafka.common.message.CreateTopicsRequestData._
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests._
-import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertNotNull, assertTrue}
+import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertNotEquals, assertNotNull, assertTrue}
 
 import scala.jdk.CollectionConverters._
 
@@ -92,7 +92,7 @@ abstract class AbstractCreateTopicsRequestTest extends BaseRequestTest {
   }
 
   protected def validateValidCreateTopicsRequests(request: CreateTopicsRequest): Unit = {
-    val response = sendCreateTopicRequest(request)
+    val response = sendCreateTopicRequest(request, adminSocketServer)
 
     assertFalse(response.errorCounts().keySet().asScala.exists(_.code() > 0),
       s"There should be no errors, found ${response.errorCounts().keySet().asScala.mkString(", ")},")
@@ -100,7 +100,7 @@ abstract class AbstractCreateTopicsRequestTest extends BaseRequestTest {
     request.data.topics.forEach { topic =>
       def verifyMetadata(socketServer: SocketServer) = {
         val metadata = sendMetadataRequest(
-          new MetadataRequest.Builder(List(topic.name()).asJava, false).build()).topicMetadata.asScala
+          new MetadataRequest.Builder(List(topic.name()).asJava, false).build(), socketServer).topicMetadata.asScala
         val metadataForTopic = metadata.filter(_.topic == topic.name()).head
 
         val partitions = if (!topic.assignments().isEmpty)
@@ -114,8 +114,8 @@ abstract class AbstractCreateTopicsRequestTest extends BaseRequestTest {
           topic.replicationFactor
 
         if (request.data.validateOnly) {
-          assertNotNull(metadataForTopic, s"Topic $topic should be created")
-          assertFalse(metadataForTopic.error == Errors.NONE, s"Error ${metadataForTopic.error} for topic $topic")
+          assertNotNull(metadataForTopic)
+          assertNotEquals(Errors.NONE, metadataForTopic.error, s"Topic $topic should not be created")
           assertTrue(metadataForTopic.partitionMetadata.isEmpty, "The topic should have no partitions")
         }
         else {
@@ -136,11 +136,13 @@ abstract class AbstractCreateTopicsRequestTest extends BaseRequestTest {
         }
       }
 
-      // Verify controller broker has the correct metadata
-      verifyMetadata(controllerSocketServer)
+      if (!isKRaftTest()) {
+        // Verify controller broker has the correct metadata
+        verifyMetadata(controllerSocketServer)
+      }
       if (!request.data.validateOnly) {
         // Wait until metadata is propagated and validate non-controller broker has the correct metadata
-        TestUtils.waitForPartitionMetadata(servers, topic.name(), 0)
+        TestUtils.waitForPartitionMetadata(brokers, topic.name(), 0)
       }
       verifyMetadata(notControllerSocketServer)
     }
@@ -152,7 +154,7 @@ abstract class AbstractCreateTopicsRequestTest extends BaseRequestTest {
   protected def validateErrorCreateTopicsRequests(request: CreateTopicsRequest,
                                                   expectedResponse: Map[String, ApiError],
                                                   checkErrorMessage: Boolean = true): Unit = {
-    val response = sendCreateTopicRequest(request)
+    val response = sendCreateTopicRequest(request, adminSocketServer)
     assertEquals(expectedResponse.size, response.data().topics().size, "The response size should match")
 
     expectedResponse.foreach { case (topicName, expectedError) =>
@@ -161,9 +163,9 @@ abstract class AbstractCreateTopicsRequestTest extends BaseRequestTest {
       if (actual == null) {
         throw new RuntimeException(s"No response data found for topic $topicName")
       }
-      assertEquals(expected.error.code(), actual.errorCode(), "The response error should match")
+      assertEquals(expected.error.code(), actual.errorCode(), "The response error code should match")
       if (checkErrorMessage) {
-        assertEquals(expected.message, actual.errorMessage())
+        assertEquals(expected.message, actual.errorMessage(), "The response error message should match")
       }
       // If no error validate topic exists
       if (expectedError.isSuccess && !request.data.validateOnly) {
@@ -173,19 +175,24 @@ abstract class AbstractCreateTopicsRequestTest extends BaseRequestTest {
   }
 
   protected def validateTopicExists(topic: String): Unit = {
-    TestUtils.waitForPartitionMetadata(servers, topic, 0)
+    TestUtils.waitForPartitionMetadata(brokers, topic, 0)
     val metadata = sendMetadataRequest(
       new MetadataRequest.Builder(List(topic).asJava, true).build()).topicMetadata.asScala
     assertTrue(metadata.exists(p => p.topic.equals(topic) && p.error == Errors.NONE), "The topic should be created")
   }
 
-  protected def sendCreateTopicRequest(request: CreateTopicsRequest,
-                                       socketServer: SocketServer = controllerSocketServer): CreateTopicsResponse = {
+  protected def sendCreateTopicRequest(
+    request: CreateTopicsRequest,
+    socketServer: SocketServer = controllerSocketServer
+  ): CreateTopicsResponse = {
     connectAndReceive[CreateTopicsResponse](request, socketServer)
   }
 
-  protected def sendMetadataRequest(request: MetadataRequest): MetadataResponse = {
-    connectAndReceive[MetadataResponse](request)
+  protected def sendMetadataRequest(
+    request: MetadataRequest,
+    socketServer: SocketServer = anySocketServer
+  ): MetadataResponse = {
+    connectAndReceive[MetadataResponse](request, socketServer)
   }
 
 }

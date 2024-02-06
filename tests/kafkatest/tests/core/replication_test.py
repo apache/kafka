@@ -65,16 +65,16 @@ def hard_bounce(test, broker_type):
 
         # Since this is a hard kill, we need to make sure the process is down and that
         # zookeeper has registered the loss by expiring the broker's session timeout.
-        # Or, for a Raft-based quorum, we simply wait at least 18 seconds (the default for broker.session.timeout.ms)
+        # Or, for a KRaft quorum, we simply wait at least 18 seconds (the default for broker.session.timeout.ms)
 
         gracePeriodSecs = 5
         if test.zk:
-            wait_until(lambda: len(test.kafka.pids(prev_broker_node)) == 0 and not test.kafka.is_registered(prev_broker_node),
+            wait_until(lambda: not test.kafka.pids(prev_broker_node) and not test.kafka.is_registered(prev_broker_node),
                        timeout_sec=test.kafka.zk_session_timeout + gracePeriodSecs,
                        err_msg="Failed to see timely deregistration of hard-killed broker %s" % str(prev_broker_node.account))
         else:
             brokerSessionTimeoutSecs = 18
-            wait_until(lambda: len(test.kafka.pids(prev_broker_node)) == 0,
+            wait_until(lambda: not test.kafka.pids(prev_broker_node),
                        timeout_sec=brokerSessionTimeoutSecs + gracePeriodSecs,
                        err_msg="Failed to see timely disappearance of process for hard-killed broker %s" % str(prev_broker_node.account))
             time.sleep(brokerSessionTimeoutSecs + gracePeriodSecs)
@@ -148,7 +148,7 @@ class ReplicationTest(EndToEndTest):
         These tests verify that replication provides simple durability guarantees by checking that data acked by
         brokers is still available for consumption in the face of various failure scenarios.
 
-        Setup: 1 zk/Raft-based controller, 3 kafka nodes, 1 topic with partitions=3, replication-factor=3, and min.insync.replicas=2
+        Setup: 1 zk/KRaft controller, 3 kafka nodes, 1 topic with partitions=3, replication-factor=3, and min.insync.replicas=2
 
             - Produce messages in the background
             - Consume messages in the background
@@ -158,7 +158,7 @@ class ReplicationTest(EndToEndTest):
         """
 
         if failure_mode == "controller" and metadata_quorum != quorum.zk:
-            raise Exception("There is no controller broker when using a Raft-based metadata quorum")
+            raise Exception("There is no controller broker when using KRaft metadata quorum")
         self.create_zookeeper_if_necessary()
         if self.zk:
             self.zk.start()

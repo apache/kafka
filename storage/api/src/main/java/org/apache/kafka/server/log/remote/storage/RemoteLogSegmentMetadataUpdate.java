@@ -16,9 +16,12 @@
  */
 package org.apache.kafka.server.log.remote.storage;
 
+import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.annotation.InterfaceStability;
+import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentMetadata.CustomMetadata;
 
 import java.util.Objects;
+import java.util.Optional;
 
 /**
  * It describes the metadata update about the log segment in the remote storage. This is currently used to update the
@@ -26,7 +29,7 @@ import java.util.Objects;
  * This also includes the timestamp of this event.
  */
 @InterfaceStability.Evolving
-public class RemoteLogSegmentMetadataUpdate {
+public class RemoteLogSegmentMetadataUpdate extends RemoteLogMetadata {
 
     /**
      * Universally unique remote log segment id.
@@ -34,9 +37,9 @@ public class RemoteLogSegmentMetadataUpdate {
     private final RemoteLogSegmentId remoteLogSegmentId;
 
     /**
-     * Epoch time in milli seconds at which this event is generated.
+     * Custom metadata.
      */
-    private final long eventTimestampMs;
+    private final Optional<CustomMetadata> customMetadata;
 
     /**
      * It indicates the state in which the action is executed on this segment.
@@ -44,22 +47,20 @@ public class RemoteLogSegmentMetadataUpdate {
     private final RemoteLogSegmentState state;
 
     /**
-     * Broker id from which this event is generated.
-     */
-    private final int brokerId;
-
-    /**
      * @param remoteLogSegmentId Universally unique remote log segment id.
      * @param eventTimestampMs   Epoch time in milli seconds at which the remote log segment is copied to the remote tier storage.
+     * @param customMetadata     Custom metadata.
      * @param state              State of the remote log segment.
      * @param brokerId           Broker id from which this event is generated.
      */
     public RemoteLogSegmentMetadataUpdate(RemoteLogSegmentId remoteLogSegmentId, long eventTimestampMs,
-                                          RemoteLogSegmentState state, int brokerId) {
+                                          Optional<CustomMetadata> customMetadata,
+                                          RemoteLogSegmentState state,
+                                          int brokerId) {
+        super(brokerId, eventTimestampMs);
         this.remoteLogSegmentId = Objects.requireNonNull(remoteLogSegmentId, "remoteLogSegmentId can not be null");
+        this.customMetadata = Objects.requireNonNull(customMetadata, "customMetadata can not be null");
         this.state = Objects.requireNonNull(state, "state can not be null");
-        this.brokerId = brokerId;
-        this.eventTimestampMs = eventTimestampMs;
     }
 
     /**
@@ -70,10 +71,10 @@ public class RemoteLogSegmentMetadataUpdate {
     }
 
     /**
-     * @return Epoch time in milli seconds at which this event is generated.
+     * @return Custom metadata.
      */
-    public long eventTimestampMs() {
-        return eventTimestampMs;
+    public Optional<CustomMetadata> customMetadata() {
+        return customMetadata;
     }
 
     /**
@@ -83,11 +84,9 @@ public class RemoteLogSegmentMetadataUpdate {
         return state;
     }
 
-    /**
-     * @return Broker id from which this event is generated.
-     */
-    public int brokerId() {
-        return brokerId;
+    @Override
+    public TopicIdPartition topicIdPartition() {
+        return remoteLogSegmentId.topicIdPartition();
     }
 
     @Override
@@ -99,24 +98,26 @@ public class RemoteLogSegmentMetadataUpdate {
             return false;
         }
         RemoteLogSegmentMetadataUpdate that = (RemoteLogSegmentMetadataUpdate) o;
-        return eventTimestampMs == that.eventTimestampMs &&
-               Objects.equals(remoteLogSegmentId, that.remoteLogSegmentId) &&
+        return Objects.equals(remoteLogSegmentId, that.remoteLogSegmentId) &&
+               Objects.equals(customMetadata, that.customMetadata) &&
                state == that.state &&
-               brokerId == that.brokerId;
+               eventTimestampMs() == that.eventTimestampMs() &&
+               brokerId() == that.brokerId();
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(remoteLogSegmentId, eventTimestampMs, state, brokerId);
+        return Objects.hash(remoteLogSegmentId, customMetadata, state, eventTimestampMs(), brokerId());
     }
 
     @Override
     public String toString() {
         return "RemoteLogSegmentMetadataUpdate{" +
                "remoteLogSegmentId=" + remoteLogSegmentId +
-               ", eventTimestampMs=" + eventTimestampMs +
+               ", customMetadata=" + customMetadata +
                ", state=" + state +
-               ", brokerId=" + brokerId +
+               ", eventTimestampMs=" + eventTimestampMs() +
+               ", brokerId=" + brokerId() +
                '}';
     }
 }

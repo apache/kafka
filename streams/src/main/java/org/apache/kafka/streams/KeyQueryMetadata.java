@@ -53,7 +53,7 @@ public class KeyQueryMetadata {
      * Get the active Kafka Streams instance for given key.
      *
      * @return active instance's {@link HostInfo}
-     * @deprecated Use {@link #activeHost()} instead.
+     * @deprecated since 2.7.0; use {@link #activeHost()} instead.
      */
     @Deprecated
     public HostInfo getActiveHost() {
@@ -64,7 +64,7 @@ public class KeyQueryMetadata {
      * Get the Kafka Streams instances that host the key as standbys.
      *
      * @return set of standby {@link HostInfo} or a empty set, if no standbys are configured
-     * @deprecated Use {@link #standbyHosts()} instead.
+     * @deprecated since 2.7.0; use {@link #standbyHosts()} instead.
      */
     @Deprecated
     public Set<HostInfo> getStandbyHosts() {
@@ -75,7 +75,7 @@ public class KeyQueryMetadata {
      * Get the store partition corresponding to the key.
      *
      * @return store partition number
-     * @deprecated Use {@link #partition()} instead.
+     * @deprecated since 2.7.0; use {@link #partition()} instead.
      */
     @Deprecated
     public int getPartition() {

@@ -56,7 +56,7 @@ import java.util.concurrent.TimeUnit;
 public class JsonRestServer {
     private static final Logger log = LoggerFactory.getLogger(JsonRestServer.class);
 
-    private static final long GRACEFUL_SHUTDOWN_TIMEOUT_MS = 100;
+    private static final long GRACEFUL_SHUTDOWN_TIMEOUT_MS = 10 * 1000;
 
     private final ScheduledExecutorService shutdownExecutor;
 
@@ -104,7 +104,7 @@ public class JsonRestServer {
         RequestLogHandler requestLogHandler = new RequestLogHandler();
         Slf4jRequestLogWriter slf4jRequestLogWriter = new Slf4jRequestLogWriter();
         slf4jRequestLogWriter.setLoggerName(JsonRestServer.class.getCanonicalName());
-        CustomRequestLog requestLog = new CustomRequestLog(slf4jRequestLogWriter, CustomRequestLog.EXTENDED_NCSA_FORMAT + " %msT");
+        CustomRequestLog requestLog = new CustomRequestLog(slf4jRequestLogWriter, CustomRequestLog.EXTENDED_NCSA_FORMAT + " %{ms}T");
         requestLogHandler.setRequestLog(requestLog);
 
         HandlerCollection handlers = new HandlerCollection();
@@ -142,9 +142,13 @@ public class JsonRestServer {
                 } catch (Exception e) {
                     log.error("Unable to stop REST server", e);
                 } finally {
-                    jettyServer.destroy();
+                    try {
+                        jettyServer.destroy();
+                    } catch (Exception e) {
+                        log.error("Unable to destroy REST server", e);
+                    }
+                    shutdownExecutor.shutdown();
                 }
-                shutdownExecutor.shutdown();
                 return null;
             });
         }

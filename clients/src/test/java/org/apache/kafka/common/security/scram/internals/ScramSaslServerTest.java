@@ -48,7 +48,7 @@ public class ScramSaslServerTest {
         credentialCache.put(USER_A, formatter.generateCredential("passwordA", 4096));
         credentialCache.put(USER_B, formatter.generateCredential("passwordB", 4096));
         ScramServerCallbackHandler callbackHandler = new ScramServerCallbackHandler(credentialCache, new DelegationTokenCache(ScramMechanism.mechanismNames()));
-        saslServer = new ScramSaslServer(mechanism, new HashMap<String, Object>(), callbackHandler);
+        saslServer = new ScramSaslServer(mechanism, new HashMap<>(), callbackHandler);
     }
 
     @Test
@@ -58,13 +58,13 @@ public class ScramSaslServerTest {
     }
 
     @Test
-    public void authorizatonIdEqualsAuthenticationId() throws Exception {
+    public void authorizationIdEqualsAuthenticationId() throws Exception {
         byte[] nextChallenge = saslServer.evaluateResponse(clientFirstMessage(USER_A, USER_A));
         assertTrue(nextChallenge.length > 0, "Next challenge is empty");
     }
 
     @Test
-    public void authorizatonIdNotEqualsAuthenticationId() {
+    public void authorizationIdNotEqualsAuthenticationId() {
         assertThrows(SaslAuthenticationException.class, () -> saslServer.evaluateResponse(clientFirstMessage(USER_A, USER_B)));
     }
 

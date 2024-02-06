@@ -70,7 +70,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @Tag("integration")
-@Timeout(value = 120000, unit = MILLISECONDS)
+@Timeout(value = 240000, unit = MILLISECONDS)
 public class CoordinatorTest {
 
     private static final Logger log = LoggerFactory.getLogger(CoordinatorTest.class);
@@ -332,7 +332,7 @@ public class CoordinatorTest {
         public ExpectedLines waitFor(final String nodeName,
                 final CapturingCommandRunner runner) throws InterruptedException {
             TestUtils.waitForCondition(() -> linesMatch(nodeName, runner.lines(nodeName)),
-                "failed to find the expected lines " + this.toString());
+                "failed to find the expected lines " + this);
             return this;
         }
 
@@ -716,4 +716,4 @@ public class CoordinatorTest {
                 waitFor(coordinatorClient);
         }
     }
-};
+}

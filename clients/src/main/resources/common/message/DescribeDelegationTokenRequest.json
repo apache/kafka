@@ -16,11 +16,13 @@
 {
   "apiKey": 41,
   "type": "request",
-  "listeners": ["zkBroker"],
+  "listeners": ["zkBroker", "broker", "controller"],
   "name": "DescribeDelegationTokenRequest",
   // Version 1 is the same as version 0.
   // Version 2 adds flexible version support
-  "validVersions": "0-2",
+  // Version 3 adds token requester into the response
+  "validVersions": "0-3",
+  "deprecatedVersions": "0",
   "flexibleVersions": "2+",
   "fields": [
     { "name": "Owners", "type": "[]DescribeDelegationTokenOwner", "versions": "0+", "nullableVersions": "0+",

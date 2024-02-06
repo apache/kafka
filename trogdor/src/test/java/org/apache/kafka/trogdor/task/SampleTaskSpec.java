@@ -58,4 +58,4 @@ public class SampleTaskSpec extends TaskSpec {
     public TaskWorker newTaskWorker(String id) {
         return new SampleTaskWorker(this);
     }
-};
+}

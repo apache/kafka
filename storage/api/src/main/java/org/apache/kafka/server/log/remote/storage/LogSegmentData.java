@@ -21,6 +21,7 @@ import org.apache.kafka.common.annotation.InterfaceStability;
 import java.nio.ByteBuffer;
 import java.nio.file.Path;
 import java.util.Objects;
+import java.util.Optional;
 
 /**
  * This represents all the required data and indexes for a specific log segment that needs to be stored in the remote
@@ -33,29 +34,30 @@ public class LogSegmentData {
     private final Path logSegment;
     private final Path offsetIndex;
     private final Path timeIndex;
-    private final Path txnIndex;
+    private final Optional<Path> transactionIndex;
     private final Path producerSnapshotIndex;
     private final ByteBuffer leaderEpochIndex;
 
     /**
      * Creates a LogSegmentData instance with data and indexes.
-     *  @param logSegment            actual log segment file
+     *
+     * @param logSegment            actual log segment file
      * @param offsetIndex           offset index file
      * @param timeIndex             time index file
-     * @param txnIndex              transaction index file
+     * @param transactionIndex      transaction index file, which can be null
      * @param producerSnapshotIndex producer snapshot until this segment
      * @param leaderEpochIndex      leader-epoch-index until this segment
      */
     public LogSegmentData(Path logSegment,
                           Path offsetIndex,
                           Path timeIndex,
-                          Path txnIndex,
+                          Optional<Path> transactionIndex,
                           Path producerSnapshotIndex,
                           ByteBuffer leaderEpochIndex) {
         this.logSegment = Objects.requireNonNull(logSegment, "logSegment can not be null");
         this.offsetIndex = Objects.requireNonNull(offsetIndex, "offsetIndex can not be null");
         this.timeIndex = Objects.requireNonNull(timeIndex, "timeIndex can not be null");
-        this.txnIndex = Objects.requireNonNull(txnIndex, "txnIndex can not be null");
+        this.transactionIndex = Objects.requireNonNull(transactionIndex, "transactionIndex can not be null");
         this.producerSnapshotIndex = Objects.requireNonNull(producerSnapshotIndex, "producerSnapshotIndex can not be null");
         this.leaderEpochIndex = Objects.requireNonNull(leaderEpochIndex, "leaderEpochIndex can not be null");
     }
@@ -82,10 +84,10 @@ public class LogSegmentData {
     }
 
     /**
-     * @return Transaction index file of this segment.
+     * @return Transaction index file of this segment if it exists.
      */
-    public Path txnIndex() {
-        return txnIndex;
+    public Optional<Path> transactionIndex() {
+        return transactionIndex;
     }
 
     /**
@@ -114,14 +116,14 @@ public class LogSegmentData {
         return Objects.equals(logSegment, that.logSegment) &&
                Objects.equals(offsetIndex, that.offsetIndex) &&
                Objects.equals(timeIndex, that.timeIndex) &&
-               Objects.equals(txnIndex, that.txnIndex) &&
+               Objects.equals(transactionIndex, that.transactionIndex) &&
                Objects.equals(producerSnapshotIndex, that.producerSnapshotIndex) &&
                Objects.equals(leaderEpochIndex, that.leaderEpochIndex);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(logSegment, offsetIndex, timeIndex, txnIndex, producerSnapshotIndex, leaderEpochIndex);
+        return Objects.hash(logSegment, offsetIndex, timeIndex, transactionIndex, producerSnapshotIndex, leaderEpochIndex);
     }
 
     @Override
@@ -130,7 +132,7 @@ public class LogSegmentData {
                "logSegment=" + logSegment +
                ", offsetIndex=" + offsetIndex +
                ", timeIndex=" + timeIndex +
-               ", txnIndex=" + txnIndex +
+               ", txnIndex=" + transactionIndex +
                ", producerSnapshotIndex=" + producerSnapshotIndex +
                ", leaderEpochIndex=" + leaderEpochIndex +
                '}';

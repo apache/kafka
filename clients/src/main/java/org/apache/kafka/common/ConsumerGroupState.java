@@ -18,6 +18,7 @@
 package org.apache.kafka.common;
 
 import java.util.Arrays;
+import java.util.Locale;
 import java.util.Map;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -31,10 +32,12 @@ public enum ConsumerGroupState {
     COMPLETING_REBALANCE("CompletingRebalance"),
     STABLE("Stable"),
     DEAD("Dead"),
-    EMPTY("Empty");
+    EMPTY("Empty"),
+    ASSIGNING("Assigning"),
+    RECONCILING("Reconciling");
 
     private final static Map<String, ConsumerGroupState> NAME_TO_ENUM = Arrays.stream(values())
-        .collect(Collectors.toMap(state -> state.name, Function.identity()));;
+        .collect(Collectors.toMap(state -> state.name.toUpperCase(Locale.ROOT), Function.identity()));
 
     private final String name;
 
@@ -43,10 +46,10 @@ public enum ConsumerGroupState {
     }
 
     /**
-     * Parse a string into a consumer group state.
+     * Case-insensitive consumer group state lookup by string name.
      */
     public static ConsumerGroupState parse(String name) {
-        ConsumerGroupState state = NAME_TO_ENUM.get(name);
+        ConsumerGroupState state = NAME_TO_ENUM.get(name.toUpperCase(Locale.ROOT));
         return state == null ? UNKNOWN : state;
     }
 

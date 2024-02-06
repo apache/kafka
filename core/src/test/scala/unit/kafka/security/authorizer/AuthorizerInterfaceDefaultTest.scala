@@ -18,26 +18,26 @@ package kafka.security.authorizer
 
 import java.util.concurrent.CompletionStage
 import java.{lang, util}
-
 import kafka.server.KafkaConfig
 import kafka.utils.TestUtils
-import kafka.zk.ZooKeeperTestHarness
+import kafka.server.QuorumTestHarness
 import kafka.zookeeper.ZooKeeperClient
 import org.apache.kafka.common.Endpoint
 import org.apache.kafka.common.acl._
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.server.authorizer._
-import org.junit.jupiter.api.{AfterEach, BeforeEach}
+import org.apache.zookeeper.client.ZKClientConfig
+import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo}
 
-class AuthorizerInterfaceDefaultTest extends ZooKeeperTestHarness with BaseAuthorizerTest {
+class AuthorizerInterfaceDefaultTest extends QuorumTestHarness with BaseAuthorizerTest {
 
   private val interfaceDefaultAuthorizer = new DelegateAuthorizer
 
   override def authorizer: Authorizer = interfaceDefaultAuthorizer
 
   @BeforeEach
-  override def setUp(): Unit = {
-    super.setUp()
+  override def setUp(testInfo: TestInfo): Unit = {
+    super.setUp(testInfo)
 
     // Increase maxUpdateRetries to avoid transient failures
     interfaceDefaultAuthorizer.authorizer.maxUpdateRetries = Int.MaxValue
@@ -49,7 +49,8 @@ class AuthorizerInterfaceDefaultTest extends ZooKeeperTestHarness with BaseAutho
     interfaceDefaultAuthorizer.authorizer.configure(config.originals)
 
     zooKeeperClient = new ZooKeeperClient(zkConnect, zkSessionTimeout, zkConnectionTimeout, zkMaxInFlightRequests,
-      Time.SYSTEM, "kafka.test", "AuthorizerInterfaceDefaultTest")
+      Time.SYSTEM, "kafka.test", "AuthorizerInterfaceDefaultTest", new ZKClientConfig,
+      "AuthorizerInterfaceDefaultTest")
   }
 
   @AfterEach
