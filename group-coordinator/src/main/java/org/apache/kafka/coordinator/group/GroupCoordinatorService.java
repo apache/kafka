@@ -510,7 +510,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
             futures.add(runtime.scheduleReadOperation(
                 "list-groups",
                 tp,
-                (coordinator, lastCommittedOffset) -> coordinator.listGroups(request.statesFilter(), lastCommittedOffset)
+                (coordinator, lastCommittedOffset) -> coordinator.listGroups(request.statesFilter(), request.typesFilter(), lastCommittedOffset)
             ).exceptionally(exception -> {
                 exception = Errors.maybeUnwrapException(exception);
                 if (exception instanceof NotCoordinatorException) {

@@ -77,7 +77,9 @@ import org.apache.kafka.timeline.SnapshotRegistry;
 import org.slf4j.Logger;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 
@@ -476,16 +478,25 @@ public class GroupCoordinatorShard implements CoordinatorShard<Record> {
     /**
      * Handles a ListGroups request.
      *
-     * @param statesFilter    The states of the groups we want to list.
-     *                        If empty all groups are returned with their state.
-     * @param committedOffset A specified committed offset corresponding to this shard
+     * @param statesFilter      The states of the groups we want to list.
+     *                          If empty, all groups are returned with their state.
+     *                          If invalid, no groups are returned.
+     * @param typesFilter       The types of the groups we want to list.
+     *                          If empty, all groups are returned with their type.
+     *                          If invalid, no groups are returned.
+     * @param committedOffset   A specified committed offset corresponding to this shard.
      * @return A list containing the ListGroupsResponseData.ListedGroup
      */
     public List<ListGroupsResponseData.ListedGroup> listGroups(
         List<String> statesFilter,
+        List<String> typesFilter,
         long committedOffset
     ) throws ApiException {
-        return groupMetadataManager.listGroups(statesFilter, committedOffset);
+
+        Set<String> statesFilterSet = new HashSet<>(statesFilter);
+        Set<String> typesFilterSet = new HashSet<>(typesFilter);
+
+        return groupMetadataManager.listGroups(statesFilterSet, typesFilterSet, committedOffset);
     }
 
     /**
