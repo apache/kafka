@@ -21,6 +21,7 @@ import kafka.log.UnifiedLog
 import kafka.server.KafkaConfig._
 import kafka.server.{KafkaBroker, KafkaConfig, QuorumTestHarness}
 import kafka.tools.DumpLogSegments
+import kafka.utils.TestUtils.createBrokerConfig
 import kafka.utils.{CoreUtils, Logging, TestInfoUtils, TestUtils}
 import org.apache.kafka.clients.consumer.{Consumer, ConsumerConfig, KafkaConsumer}
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
@@ -85,15 +86,21 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends QuorumTestHarness wit
   def shouldFollowLeaderEpochBasicWorkflow(quorum: String): Unit = {
 
     //Given 2 brokers
-    brokers = Seq(createBrokerForId(100))
     if (isKRaftTest()) {
+//      val broker1 = createBrokerForId(100)
+      registerBroker(100)
       registerBroker(101)
+//      brokers = Seq(broker1)
+      //A single partition topic with 2 replicas
+      brokers = Seq(createBroker(fromProps(createBrokerConfig(100, zkConnectOrNull))))
+      brokers = brokers :+ createBroker(fromProps(createBrokerConfig(101, zkConnectOrNull)))
+      createTopic(topic, Map(0 -> Seq(100, 101)), brokers)
     } else {
-      brokers = Seq(brokers, Seq(createBrokerForId(101))).flatten
-    }
+      brokers = (100 to 101).map(createBrokerForId(_))
 
-    //A single partition topic with 2 replicas
-    createTopic(topic, Map(0 -> Seq(100, 101)), brokers)
+      //A single partition topic with 2 replicas
+      createTopic(topic, Map(0 -> Seq(100, 101)), brokers)
+    }
 
     producer = createProducer
     val tp = new TopicPartition(topic, 0)
@@ -110,12 +117,16 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends QuorumTestHarness wit
     assertEquals(Collections.singletonList(new EpochEntry(0, 0)), epochCache(follower).epochEntries)
 
     //Bounce the follower
-    bounce(follower)
+    if (isKRaftTest()) {
+      brokerFor(101).quotaManagers.follower.upperBound
+    } else {
+      bounce(follower)
+    }
     awaitISR(tp)
 
     //Nothing happens yet as we haven't sent any new messages.
     assertEquals(java.util.Arrays.asList(new EpochEntry(0, 0), new EpochEntry(1, 1)), epochCache(leader).epochEntries)
-    assertEquals(Collections.singletonList(new EpochEntry(0, 0)), epochCache(follower).epochEntries)
+    assertEquals(java.util.Arrays.asList(new EpochEntry(0, 0)), epochCache(follower).epochEntries)
 
     //Send a message
     producer.send(new ProducerRecord(topic, 0, null, msg)).get
@@ -147,6 +158,8 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends QuorumTestHarness wit
     assertEquals(java.util.Arrays.asList(new EpochEntry(0, 0), new EpochEntry(1, 1), new EpochEntry(2, 2)), epochCache(leader).epochEntries)
     assertEquals(java.util.Arrays.asList(new EpochEntry(0, 0), new EpochEntry(1, 1), new EpochEntry(2, 2)), epochCache(follower).epochEntries)
   }
+
+  private def brokerFor(id: Int): KafkaBroker = brokers.filter(_.config.brokerId == id).head
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
@@ -504,36 +517,18 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends QuorumTestHarness wit
           .flatMap(value => value.partitions().stream())
           .map(partition => partition.leader())
           .findFirst().get()
+
         brokers.filter(_.config.brokerId != leader.id()).head
     }
   }
 
-//  private def createBrokerForIds(ids: Seq[Int],
-//                                 enableUncleanLeaderElection: Boolean = false): Seq[KafkaBroker] = {
-////    val quorumVoters = ids.map(id => s"${id}@localhost:0")
-//    val future = ids.map( id => {
-//      val config = createConfigForId(id, enableUncleanLeaderElection)
-//      if (isKRaftTest()) {
-////        config.setProperty(KafkaConfig.QuorumVotersProp, quorumVoters.mkString(","))
-////        config.setProperty(KafkaConfig.ProcessRolesProp, "broker,controller")
-////        config.setProperty(KafkaConfig.ListenersProp, config.getProperty(KafkaConfig.ListenersProp)
-////          + ",CONTROLLER://localhost:0")
-//      }
-//      CompletableFuture.supplyAsync(() => createBroker(fromProps(config), startup = false))
-//    })
-//    future.map( f => {
-//      val broker = f.get()
-//      broker.startup()
-//      broker
-//    })
-//  }
-
   private def createBrokerForId(id: Int,
-                                enableUncleanLeaderElection: Boolean = false): KafkaBroker = {
+                                enableUncleanLeaderElection: Boolean = false,
+                                startup: Boolean = true): KafkaBroker = {
     val config = TestUtils.createBrokerConfig(id, zkConnectOrNull)
     TestUtils.setIbpAndMessageFormatVersions(config, metadataVersion)
-    config.setProperty(KafkaConfig.UncleanLeaderElectionEnableProp, enableUncleanLeaderElection.toString)
-    createBroker(fromProps(config))
+//    config.setProperty(KafkaConfig.UncleanLeaderElectionEnableProp, enableUncleanLeaderElection.toString)
+    createBroker(fromProps(config), startup = startup)
   }
 
   /**
@@ -579,6 +574,7 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends QuorumTestHarness wit
       .setName(MetadataVersion.FEATURE_NAME)
       .setMinSupportedVersion(MetadataVersion.IBP_3_0_IV1.featureLevel())
       .setMaxSupportedVersion(MetadataVersion.IBP_3_8_IV0.featureLevel()))
+
     controllerServer.controller.registerBroker(
       ControllerRequestContextUtil.ANONYMOUS_CONTEXT,
       new BrokerRegistrationRequestData()
