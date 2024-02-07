@@ -42,6 +42,7 @@ import java.nio.channels.SelectionKey;
 import java.nio.channels.SocketChannel;
 import java.nio.channels.UnresolvedAddressException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
@@ -52,6 +53,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -950,6 +952,8 @@ public class Selector implements Selectable, AutoCloseable {
 
         if (idleExpiryManager != null)
             idleExpiryManager.remove(channel.id());
+
+        sensors.maybeUnregisterConnectionMetrics(channel.id());
     }
 
     private void doClose(KafkaChannel channel, boolean notifyDisconnect) {
@@ -1120,7 +1124,8 @@ public class Selector implements Selectable, AutoCloseable {
     class SelectorMetrics implements AutoCloseable {
         private final Metrics metrics;
         private final Map<String, String> metricTags;
-        private final boolean metricsPerConnection;
+        // Map from connection id to related sensors
+        private final Map<String, Set<Sensor>> connectionMetrics;
         private final String metricGrpName;
         private final String perConnectionMetricGrpName;
 
@@ -1149,7 +1154,11 @@ public class Selector implements Selectable, AutoCloseable {
         public SelectorMetrics(Metrics metrics, String metricGrpPrefix, Map<String, String> metricTags, boolean metricsPerConnection) {
             this.metrics = metrics;
             this.metricTags = metricTags;
-            this.metricsPerConnection = metricsPerConnection;
+            if (metricsPerConnection) {
+                this.connectionMetrics = new ConcurrentHashMap<>();
+            } else {
+                this.connectionMetrics = null;
+            }
             this.metricGrpName = metricGrpPrefix + "-metrics";
             this.perConnectionMetricGrpName = metricGrpPrefix + "-node-metrics";
             StringBuilder tagsSuffix = new StringBuilder();
@@ -1310,42 +1319,60 @@ public class Selector implements Selectable, AutoCloseable {
         }
 
         public void maybeRegisterConnectionMetrics(String connectionId) {
-            if (!connectionId.isEmpty() && metricsPerConnection) {
-                // if one sensor of the metrics has been registered for the connection,
-                // then all other sensors should have been registered; and vice versa
-                String nodeRequestName = "node-" + connectionId + ".requests-sent";
-                Sensor nodeRequest = this.metrics.getSensor(nodeRequestName);
-                if (nodeRequest == null) {
-                    Map<String, String> tags = new LinkedHashMap<>(metricTags);
-                    tags.put("node-id", "node-" + connectionId);
-
-                    nodeRequest = sensor(nodeRequestName);
-                    nodeRequest.add(createMeter(metrics, perConnectionMetricGrpName, tags, new WindowedCount(), "request", "requests sent"));
-                    MetricName metricName = metrics.metricName("request-size-avg", perConnectionMetricGrpName, "The average size of requests sent.", tags);
-                    nodeRequest.add(metricName, new Avg());
-                    metricName = metrics.metricName("request-size-max", perConnectionMetricGrpName, "The maximum size of any request sent.", tags);
-                    nodeRequest.add(metricName, new Max());
-
-                    String bytesSentName = "node-" + connectionId + ".bytes-sent";
-                    Sensor bytesSent = sensor(bytesSentName);
-                    bytesSent.add(createMeter(metrics, perConnectionMetricGrpName, tags, "outgoing-byte", "outgoing bytes"));
-
-                    String nodeResponseName = "node-" + connectionId + ".responses-received";
-                    Sensor nodeResponse = sensor(nodeResponseName);
-                    nodeResponse.add(createMeter(metrics, perConnectionMetricGrpName, tags, new WindowedCount(), "response", "responses received"));
-
-                    String bytesReceivedName = "node-" + connectionId + ".bytes-received";
-                    Sensor bytesReceive = sensor(bytesReceivedName);
-                    bytesReceive.add(createMeter(metrics, perConnectionMetricGrpName, tags, "incoming-byte", "incoming bytes"));
-
-                    String nodeTimeName = "node-" + connectionId + ".latency";
-                    Sensor nodeRequestTime = sensor(nodeTimeName);
-                    metricName = metrics.metricName("request-latency-avg", perConnectionMetricGrpName, tags);
-                    nodeRequestTime.add(metricName, new Avg());
-                    metricName = metrics.metricName("request-latency-max", perConnectionMetricGrpName, tags);
-                    nodeRequestTime.add(metricName, new Max());
-                }
+            if (!connectionId.isEmpty() && connectionMetrics != null) {
+                connectionMetrics.computeIfAbsent(connectionId, (key) -> {
+                    // key: connection id
+                    // value: set of sensors (currently null)
+                    return perConnectionSensors(key);
+                });
             }
+        }
+
+        public void maybeUnregisterConnectionMetrics(String connectionId) {
+            if (!connectionId.isEmpty() && connectionMetrics != null) {
+                connectionMetrics.computeIfPresent(connectionId, (key, value) -> {
+                    // key: connection id
+                    // value: set of sensors
+                    for (Sensor sensor : value) {
+                        metrics.removeSensor(sensor.name());
+                    }
+                    return null;
+                });
+            }
+        }
+
+        private Set<Sensor> perConnectionSensors(String connectionId) {
+            Map<String, String> tags = new LinkedHashMap<>(metricTags);
+            tags.put("node-id", "node-" + connectionId);
+
+            String nodeRequestName = "node-" + connectionId + ".requests-sent";
+            Sensor nodeRequest = sensor(nodeRequestName);
+            nodeRequest.add(createMeter(metrics, perConnectionMetricGrpName, tags, new WindowedCount(), "request", "requests sent"));
+            MetricName metricName = metrics.metricName("request-size-avg", perConnectionMetricGrpName, "The average size of requests sent.", tags);
+            nodeRequest.add(metricName, new Avg());
+            metricName = metrics.metricName("request-size-max", perConnectionMetricGrpName, "The maximum size of any request sent.", tags);
+            nodeRequest.add(metricName, new Max());
+
+            String bytesSentName = "node-" + connectionId + ".bytes-sent";
+            Sensor bytesSent = sensor(bytesSentName);
+            bytesSent.add(createMeter(metrics, perConnectionMetricGrpName, tags, "outgoing-byte", "outgoing bytes"));
+
+            String nodeResponseName = "node-" + connectionId + ".responses-received";
+            Sensor nodeResponse = sensor(nodeResponseName);
+            nodeResponse.add(createMeter(metrics, perConnectionMetricGrpName, tags, new WindowedCount(), "response", "responses received"));
+
+            String bytesReceivedName = "node-" + connectionId + ".bytes-received";
+            Sensor bytesReceive = sensor(bytesReceivedName);
+            bytesReceive.add(createMeter(metrics, perConnectionMetricGrpName, tags, "incoming-byte", "incoming bytes"));
+
+            String nodeTimeName = "node-" + connectionId + ".latency";
+            Sensor nodeRequestTime = sensor(nodeTimeName);
+            metricName = metrics.metricName("request-latency-avg", perConnectionMetricGrpName, tags);
+            nodeRequestTime.add(metricName, new Avg());
+            metricName = metrics.metricName("request-latency-max", perConnectionMetricGrpName, tags);
+            nodeRequestTime.add(metricName, new Max());
+
+            return new HashSet<>(Arrays.asList(nodeRequest, bytesSent, nodeResponse, bytesReceive, nodeRequestTime));
         }
 
         public void recordBytesSent(String connectionId, long bytes, long currentTimeMs) {
