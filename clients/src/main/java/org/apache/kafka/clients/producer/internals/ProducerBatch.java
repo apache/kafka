@@ -110,7 +110,8 @@ public final class ProducerBatch {
      * @param latestLeaderEpoch latest leader's epoch.
      */
     void maybeUpdateLeaderEpoch(Optional<Integer> latestLeaderEpoch) {
-        if (!currentLeaderEpoch.equals(latestLeaderEpoch)) {
+        if (latestLeaderEpoch.isPresent()
+            && (!currentLeaderEpoch.isPresent() || currentLeaderEpoch.get() < latestLeaderEpoch.get())) {
             log.trace("For {}, leader will be updated, currentLeaderEpoch: {}, attemptsWhenLeaderLastChanged:{}, latestLeaderEpoch: {}, current attempt: {}",
                 this, currentLeaderEpoch, attemptsWhenLeaderLastChanged, latestLeaderEpoch, attempts);
             attemptsWhenLeaderLastChanged = attempts();

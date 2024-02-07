@@ -312,6 +312,20 @@ public class ProducerBatchTest {
         assertFalse(batch.hasLeaderChangedForTheOngoingRetry(), "batch leader has not changed");
         assertEquals(batchLeaderEpoch, batch.currentLeaderEpoch().get());
         assertEquals(1, batch.attemptsWhenLeaderLastChanged());
+
+        // Attempt made to update batch leader-epoch to an older leader-epoch(100).
+        // Check batch leader-epoch remains unchanged as 101.
+        batch.maybeUpdateLeaderEpoch(Optional.of(batchLeaderEpoch - 1));
+        assertFalse(batch.hasLeaderChangedForTheOngoingRetry(), "batch leader has not changed");
+        assertEquals(batchLeaderEpoch, batch.currentLeaderEpoch().get());
+        assertEquals(1, batch.attemptsWhenLeaderLastChanged());
+
+        // Attempt made to update batch leader-epoch to an unknown leader(optional.empty())
+        // Check batch leader-epoch remains unchanged as 101.
+        batch.maybeUpdateLeaderEpoch(Optional.empty());
+        assertFalse(batch.hasLeaderChangedForTheOngoingRetry(), "batch leader has not changed");
+        assertEquals(batchLeaderEpoch, batch.currentLeaderEpoch().get());
+        assertEquals(1, batch.attemptsWhenLeaderLastChanged());
     }
 
     private void testCompleteExceptionally(
