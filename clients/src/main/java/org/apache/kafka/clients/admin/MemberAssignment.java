@@ -17,7 +17,6 @@
 package org.apache.kafka.clients.admin;
 
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.utils.Utils;
 
 import java.util.Collections;
 import java.util.HashSet;
@@ -34,10 +33,11 @@ public class MemberAssignment {
      * Creates an instance with the specified parameters.
      *
      * @param topicPartitions List of topic partitions
+     * @throws NullPointerException if topicPartitions is null
      */
     public MemberAssignment(Set<TopicPartition> topicPartitions) {
-        this.topicPartitions = topicPartitions == null ? Collections.<TopicPartition>emptySet() :
-            Collections.unmodifiableSet(new HashSet<>(topicPartitions));
+        Objects.requireNonNull(topicPartitions);
+        this.topicPartitions = Collections.unmodifiableSet(new HashSet<>(topicPartitions));
     }
 
     @Override
@@ -52,7 +52,7 @@ public class MemberAssignment {
 
     @Override
     public int hashCode() {
-        return topicPartitions != null ? topicPartitions.hashCode() : 0;
+        return topicPartitions.hashCode();
     }
 
     /**
@@ -64,6 +64,6 @@ public class MemberAssignment {
 
     @Override
     public String toString() {
-        return "(topicPartitions=" + Utils.join(topicPartitions, ",") + ")";
+        return "(topicPartitions=" + topicPartitions + ")";
     }
 }
