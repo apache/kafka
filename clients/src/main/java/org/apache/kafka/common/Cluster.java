@@ -278,19 +278,6 @@ public final class Cluster {
     }
 
     /**
-     * Get the current partition leader's epoch.
-     * @param topicPartition The topic and partition for which epoch is to be returned.
-     * @return The partition leader's epoch or optional.empty() if leader-epoch is unknown.
-     */
-    public Optional<Integer> leaderEpochFor(TopicPartition topicPartition) {
-        PartitionInfo info = partitionsByTopicPartition.get(topicPartition);
-        if (info == null)
-            return Optional.empty();
-        else
-            return info.leaderEpoch();
-    }
-
-    /**
      * Get the metadata for the specified partition
      * @param topicPartition The topic and partition to fetch info for
      * @return The metadata about the given topic and partition, or null if none is found

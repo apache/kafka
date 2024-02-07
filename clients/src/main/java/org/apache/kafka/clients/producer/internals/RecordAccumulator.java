@@ -699,7 +699,8 @@ public class RecordAccumulator {
             final int dequeSize;
             final boolean full;
 
-            Optional<Integer> leaderEpoch = cluster.leaderEpochFor(part);
+            PartitionInfo partitionInfo = cluster.partition(part);
+            Optional<Integer> leaderEpoch = (partitionInfo == null) ? Optional.empty() : partitionInfo.leaderEpoch();
 
             // This loop is especially hot with large partition counts. So -
 
@@ -887,8 +888,10 @@ public class RecordAccumulator {
             if (deque == null)
                 continue;
 
+            PartitionInfo partitionInfo = cluster.partition(tp);
+            Optional<Integer> leaderEpoch = (partitionInfo == null) ? Optional.empty() : partitionInfo.leaderEpoch();
+
             final ProducerBatch batch;
-            Optional<Integer> leaderEpoch = cluster.leaderEpochFor(tp);
             synchronized (deque) {
                 // invariant: !isMuted(tp,now) && deque != null
                 ProducerBatch first = deque.peekFirst();
