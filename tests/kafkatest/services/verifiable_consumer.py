@@ -21,7 +21,7 @@ from ducktape.services.background_thread import BackgroundThreadService
 from kafkatest.directory_layout.kafka_path import KafkaPathResolverMixin
 from kafkatest.services.kafka import TopicPartition
 from kafkatest.services.verifiable_client import VerifiableClientMixin
-from kafkatest.version import DEV_BRANCH, V_2_3_0, V_2_3_1, V_0_10_0_0
+from kafkatest.version import DEV_BRANCH, V_2_3_0, V_2_3_1, V_3_7_0, V_0_10_0_0
 
 
 class ConsumerState:
@@ -166,7 +166,7 @@ class VerifiableConsumer(KafkaPathResolverMixin, VerifiableClientMixin, Backgrou
         }
 
     def __init__(self, context, num_nodes, kafka, topic, group_id,
-                 static_membership=False, max_messages=-1, session_timeout_sec=30, enable_autocommit=False,
+                 group_protocol="classic", static_membership=False, max_messages=-1, session_timeout_sec=30, enable_autocommit=False,
                  assignment_strategy=None,
                  version=DEV_BRANCH, stop_timeout_sec=30, log_level="INFO", jaas_override_variables=None,
                  on_record_consumed=None, reset_policy="earliest", verify_offsets=True):
@@ -177,6 +177,7 @@ class VerifiableConsumer(KafkaPathResolverMixin, VerifiableClientMixin, Backgrou
         self.log_level = log_level
         self.kafka = kafka
         self.topic = topic
+        self.group_protocol = group_protocol
         self.group_id = group_id
         self.reset_policy = reset_policy
         self.static_membership = static_membership
@@ -311,6 +312,9 @@ class VerifiableConsumer(KafkaPathResolverMixin, VerifiableClientMixin, Backgrou
 
         if self.enable_autocommit:
             cmd += " --enable-autocommit "
+
+        if node.version >= V_3_7_0:
+            cmd += " --group-protocol %s" % self.group_protocol
 
         cmd += " --reset-policy %s --group-id %s --topic %s --broker-list %s --session-timeout %s" % \
                (self.reset_policy, self.group_id, self.topic,
