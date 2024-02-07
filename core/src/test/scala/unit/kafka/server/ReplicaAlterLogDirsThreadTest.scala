@@ -77,8 +77,10 @@ class ReplicaAlterLogDirsThreadTest {
 
     val replicaManager = Mockito.mock(classOf[ReplicaManager])
     val quotaManager = Mockito.mock(classOf[ReplicationQuotaManager])
+    val logManager = Mockito.mock(classOf[LogManager])
 
     when(replicaManager.futureLogExists(t1p0)).thenReturn(false)
+    when(replicaManager.logManager).thenReturn(logManager)
 
     val endPoint = new BrokerEndPoint(0, "localhost", 1000)
     val leader = new LocalLeaderEndPoint(endPoint, config, replicaManager, quotaManager)
@@ -107,6 +109,7 @@ class ReplicaAlterLogDirsThreadTest {
     val replicaManager = Mockito.mock(classOf[ReplicaManager])
     val quotaManager = Mockito.mock(classOf[ReplicationQuotaManager])
     val futureLog = Mockito.mock(classOf[UnifiedLog])
+    val logManager = Mockito.mock(classOf[LogManager])
 
     val leaderEpoch = 5
     val logEndOffset = 0
@@ -117,6 +120,7 @@ class ReplicaAlterLogDirsThreadTest {
     when(replicaManager.futureLogExists(t1p0)).thenReturn(true)
     when(replicaManager.onlinePartition(t1p0)).thenReturn(Some(partition))
     when(replicaManager.getPartitionOrException(t1p0)).thenReturn(partition)
+    when(replicaManager.logManager).thenReturn(logManager)
 
     when(quotaManager.isQuotaExceeded).thenReturn(false)
 
@@ -206,6 +210,7 @@ class ReplicaAlterLogDirsThreadTest {
     val replicaManager = Mockito.mock(classOf[ReplicaManager])
     val quotaManager = Mockito.mock(classOf[ReplicationQuotaManager])
     val futureLog = Mockito.mock(classOf[UnifiedLog])
+    val logManager = Mockito.mock(classOf[LogManager])
 
     val leaderEpoch = 5
     val logEndOffset = 0
@@ -216,6 +221,7 @@ class ReplicaAlterLogDirsThreadTest {
     when(replicaManager.futureLogExists(t1p0)).thenReturn(true)
     when(replicaManager.onlinePartition(t1p0)).thenReturn(Some(partition))
     when(replicaManager.getPartitionOrException(t1p0)).thenReturn(partition)
+    when(replicaManager.logManager).thenReturn(logManager)
 
     when(quotaManager.isQuotaExceeded).thenReturn(false)
 

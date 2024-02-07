@@ -155,10 +155,25 @@ class ReplicaAlterLogDirsThread(name: String,
       val filteredFetchStates = initialFetchStates.filter { case (tp, _) =>
         replicaMgr.futureLogExists(tp)
       }
+      filteredFetchStates.foreach { case (tp, _) =>
+        if (fetchState(tp).isEmpty)
+          replicaMgr.logManager.abortAndPauseCleaning(tp)
+      }
       super.addPartitions(filteredFetchStates)
     } finally {
       partitionMapLock.unlock()
     }
+  }
+
+  override def removePartitions(topicPartitions: Set[TopicPartition]): Map[TopicPartition, PartitionFetchState] = {
+    partitionMapLock.lockInterruptibly()
+    try {
+      val fetchStates = super.removePartitions(topicPartitions)
+      fetchStates.foreach { case (tp, _) =>
+        replicaMgr.logManager.resumeCleaning(tp)
+      }
+      fetchStates
+    } finally partitionMapLock.unlock()
   }
 
   override protected val isOffsetForLeaderEpochSupported: Boolean = true
