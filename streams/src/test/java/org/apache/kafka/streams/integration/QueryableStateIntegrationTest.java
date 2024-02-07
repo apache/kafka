@@ -761,7 +761,7 @@ public class QueryableStateIntegrationTest {
         final Predicate<String, Long> filterPredicate = (key, value) -> key.contains("kafka");
         final KTable<String, Long> t1 = builder.table(streamOne);
         final KTable<String, Long> t2 = t1.filter(filterPredicate, Materialized.as("queryFilter"));
-        t1.filterNot(filterPredicate, Materialized.as("queryFilterNot"));
+        t1.filter(filterPredicate.negate(), Materialized.as("queryFilterNot"));
         t2.toStream().to(outputTopic);
 
         kafkaStreams = new KafkaStreams(builder.build(), streamsConfiguration);
