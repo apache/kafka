@@ -69,8 +69,13 @@ public class JaasContext {
             throw new IllegalArgumentException("mechanism should not be null for SERVER");
         String listenerContextName = listenerName.value().toLowerCase(Locale.ROOT) + "." + GLOBAL_CONTEXT_NAME_SERVER;
         Password dynamicJaasConfig = (Password) configs.get(mechanism.toLowerCase(Locale.ROOT) + "." + SaslConfigs.SASL_JAAS_CONFIG);
-        if (dynamicJaasConfig == null && configs.get(SaslConfigs.SASL_JAAS_CONFIG) != null)
-            LOG.warn("Server config {} should be prefixed with SASL mechanism name, ignoring config", SaslConfigs.SASL_JAAS_CONFIG);
+        if (dynamicJaasConfig == null) {
+            if (configs.get(SaslConfigs.SASL_JAAS_CONFIG) != null)
+                LOG.warn("Server config {} should be prefixed with SASL mechanism name, ignoring config", SaslConfigs.SASL_JAAS_CONFIG);
+            else
+                LOG.debug("Kafka Server SASL property '" + SaslConfigs.SASL_JAAS_CONFIG + "' is not set, " +
+                        "using System property '" + JaasUtils.JAVA_LOGIN_CONFIG_PARAM + "'");
+        }
         return load(Type.SERVER, listenerContextName, GLOBAL_CONTEXT_NAME_SERVER, dynamicJaasConfig);
     }
 
