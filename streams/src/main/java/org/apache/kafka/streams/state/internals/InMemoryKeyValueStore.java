@@ -36,6 +36,7 @@ import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import java.util.function.BiFunction;
 
 import java.util.Iterator;
 import java.util.List;
@@ -183,6 +184,10 @@ public class InMemoryKeyValueStore implements KeyValueStore<Bytes, byte[]> {
     @Override
     public synchronized byte[] delete(final Bytes key) {
         return map.remove(key);
+    }
+    
+    public byte[] compute(final Bytes key, final BiFunction<Bytes, byte[], byte[]> remappingFunction) {
+        return map.compute(key, remappingFunction);
     }
 
     @Override
