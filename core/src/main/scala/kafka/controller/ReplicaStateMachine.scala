@@ -204,13 +204,17 @@ class ZkReplicaStateMachine(config: KafkaConfig,
                 controllerContext.updatePartitionFullReplicaAssignment(partition, newAssignment)
               }
             case _ =>
-              controllerContext.partitionLeadershipInfo(partition) match {
-                case Some(leaderIsrAndControllerEpoch) =>
-                  controllerBrokerRequestBatch.addLeaderAndIsrRequestForBrokers(Seq(replicaId),
-                    replica.topicPartition,
-                    leaderIsrAndControllerEpoch,
-                    controllerContext.partitionFullReplicaAssignment(partition), isNew = false)
-                case None =>
+              if (!controllerContext.isTopicQueuedUpForDeletion(partition.topic)) {
+                controllerContext.partitionLeadershipInfo(partition) match {
+                  case Some(leaderIsrAndControllerEpoch) =>
+                    controllerBrokerRequestBatch.addLeaderAndIsrRequestForBrokers(Seq(replicaId),
+                      replica.topicPartition,
+                      leaderIsrAndControllerEpoch,
+                      controllerContext.partitionFullReplicaAssignment(partition), isNew = false)
+                  case None =>
+                }
+              } else {
+                info(s"Replica $replicaId for partition $partition is in deleting state. Not adding it to the LeaderAndIsrRequest.")
               }
           }
           if (traceEnabled)

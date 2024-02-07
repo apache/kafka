@@ -387,6 +387,22 @@ class ReplicaStateMachineTest {
   }
 
   @Test
+  def testInvalidOnlineReplicaTransitionWithQueuedDeletion(): Unit = {
+    controllerContext.putReplicaState(replica, ReplicaDeletionIneligible)
+    controllerContext.updatePartitionFullReplicaAssignment(partition, ReplicaAssignment(Seq(brokerId)))
+    val leaderIsrAndControllerEpoch = LeaderIsrAndControllerEpoch(LeaderAndIsr(brokerId, List(brokerId)), controllerEpoch)
+    controllerContext.putPartitionLeadershipInfo(partition, leaderIsrAndControllerEpoch)
+    EasyMock.expect(mockControllerBrokerRequestBatch.newBatch())
+    EasyMock.expect(mockControllerBrokerRequestBatch.sendRequestsToBrokers(controllerEpoch))
+    EasyMock.replay(mockZkClient, mockControllerBrokerRequestBatch)
+    controllerContext.queueTopicDeletion(Set(replica.topic))
+    // we don't expect addLeaderAndIsrRequestForBrokers to be called for this partition
+    replicaStateMachine.handleStateChanges(replicas, OnlineReplica)
+    EasyMock.verify(mockZkClient, mockControllerBrokerRequestBatch)
+    assertEquals(OnlineReplica, replicaState(replica))
+  }
+
+    @Test
   def testInvalidReplicaDeletionIneligibleToReplicaDeletionStartedTransition(): Unit = {
     testInvalidTransition(ReplicaDeletionIneligible, ReplicaDeletionStarted)
   }
