@@ -557,7 +557,7 @@ class AclAuthorizer extends Authorizer with Logging {
     new AclSeqs(prefixed, wildcard, literal)
   }
 
-  private def matchingAclExists(operation: AclOperation,
+  protected def matchingAclExists(operation: AclOperation,
                                 resource: ResourcePattern,
                                 principal: KafkaPrincipal,
                                 host: String,
