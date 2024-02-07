@@ -7290,9 +7290,6 @@ class KafkaApisTest extends Logging {
     assertEquals(expectedHeartbeatResponse, response.data)
   }
 
-  /*
-  TODO: Once ShareGroupHeartBeatAPI is supported in group coordinator, uncomment the test below
-            (lines 7285 - 7309) and remove the test verifying INVALID_CONFIG exception (lines 7312 - 7326)
   @Test
   def testShareGroupHeartbeatRequest(): Unit = {
     val shareGroupHeartbeatRequest = new ShareGroupHeartbeatRequestData().setGroupId("group")
@@ -7317,23 +7314,6 @@ class KafkaApisTest extends Logging {
     future.complete(shareGroupHeartbeatResponse)
     val response = verifyNoThrottling[ShareGroupHeartbeatResponse](requestChannelRequest)
     assertEquals(shareGroupHeartbeatResponse, response.data)
-  }
-   */
-
-  @Test
-  def testShareGroupHeartbeatRequest(): Unit = {
-    val shareGroupHeartbeatRequest = new ShareGroupHeartbeatRequestData().setGroupId("group")
-
-    val requestChannelRequest = buildRequest(new ShareGroupHeartbeatRequest.Builder(shareGroupHeartbeatRequest, true).build())
-    metadataCache = MetadataCache.kRaftMetadataCache(brokerId)
-    kafkaApis = createKafkaApis(
-      overrideProperties = Map(KafkaConfig.ShareGroupEnableProp -> "true"),
-      raftSupport = true
-    )
-    kafkaApis.handle(requestChannelRequest, RequestLocal.NoCaching)
-    val expectedHeartbeatResponse = new ShareGroupHeartbeatResponseData().setErrorCode(Errors.UNSUPPORTED_VERSION.code)
-    val response = verifyNoThrottling[ShareGroupHeartbeatResponse](requestChannelRequest)
-    assertEquals(expectedHeartbeatResponse, response.data)
   }
 
   @Test

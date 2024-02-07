@@ -3816,14 +3816,10 @@ class KafkaApis(val requestChannel: RequestChannel,
       requestHelper.sendMaybeThrottle(request, shareGroupHeartbeatRequest.getErrorResponse(Errors.GROUP_AUTHORIZATION_FAILED.exception))
       CompletableFuture.completedFuture[Unit](())
     } else {
-      /* TODO: Once ShareGroupHeartBeatAPI is supported in group coordinator, uncomment the code below
-          (lines 3821 - 3833) and remove the part sending INVALID_CONFIG exception (lines 3835, 3836)
       groupCoordinator.shareGroupHeartbeat(
         request.context,
         shareGroupHeartbeatRequest.data,
       ).handle[Unit] { (response, exception) =>
-
-        info(s"*** SHARE GROUP HEARTBEAT RESPONSE *** + ${response}")
 
         if (exception != null) {
           requestHelper.sendMaybeThrottle(request, shareGroupHeartbeatRequest.getErrorResponse(exception))
@@ -3831,9 +3827,6 @@ class KafkaApis(val requestChannel: RequestChannel,
           requestHelper.sendMaybeThrottle(request, new ShareGroupHeartbeatResponse(response))
         }
       }
-       */
-      requestHelper.sendMaybeThrottle(request, shareGroupHeartbeatRequest.getErrorResponse(Errors.UNSUPPORTED_VERSION.exception))
-      CompletableFuture.completedFuture[Unit](())
     }
   }
 
