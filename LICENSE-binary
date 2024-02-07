@@ -212,7 +212,7 @@ commons-cli-1.4
 commons-collections-3.2.2
 commons-digester-2.1
 commons-io-2.11.0
-commons-lang3-3.8.1
+commons-lang3-3.12.0
 commons-logging-1.2
 commons-validator-1.7
 error_prone_annotations-2.10.0
@@ -223,6 +223,7 @@ jackson-dataformat-csv-2.16.0
 jackson-datatype-jdk8-2.16.0
 jackson-jaxrs-base-2.16.0
 jackson-jaxrs-json-provider-2.16.0
+jackson-module-afterburner-2.16.0
 jackson-module-jaxb-annotations-2.16.0
 jackson-module-scala_2.13-2.16.0
 jackson-module-scala_2.12-2.16.0
