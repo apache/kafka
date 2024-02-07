@@ -25,12 +25,10 @@ import org.apache.kafka.metadata.authorizer.StandardAclWithId;
 import org.apache.kafka.server.common.MetadataVersion;
 
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Optional;
-import java.util.Set;
 import java.util.stream.Collectors;
 
 
