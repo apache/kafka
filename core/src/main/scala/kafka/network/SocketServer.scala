@@ -87,9 +87,8 @@ class SocketServer(val config: KafkaConfig,
 
   protected val nodeId = config.brokerId
 
-  private val logContext = new LogContext(s"[SocketServer listenerType=${apiVersionManager.listenerType}, nodeId=$nodeId] ")
-
-  this.logIdent = logContext.logPrefix
+  private val logPrefix = s"SocketServer listenerType=${apiVersionManager.listenerType}, nodeId=$nodeId"
+  this.logIdent = s"[$logPrefix] "
 
   private val memoryPoolSensor = metrics.sensor("MemoryPoolUtilization")
   private val memoryPoolDepletedPercentMetricName = metrics.metricName("MemoryPoolAvgDepletedPercent", MetricsGroup)
@@ -266,13 +265,14 @@ class SocketServer(val config: KafkaConfig,
   }
 
   private def endpoints = config.listeners.map(l => l.listenerName -> l).toMap
+  private def endpointLogContext(endpoint: EndPoint): LogContext = new LogContext(s"[$logPrefix, listener=${endpoint.listenerName.value}] ")
 
   protected def createDataPlaneAcceptor(endPoint: EndPoint, isPrivilegedListener: Boolean, requestChannel: RequestChannel): DataPlaneAcceptor = {
-    new DataPlaneAcceptor(this, endPoint, config, nodeId, connectionQuotas, time, isPrivilegedListener, requestChannel, metrics, credentialProvider, logContext, memoryPool, apiVersionManager)
+    new DataPlaneAcceptor(this, endPoint, config, nodeId, connectionQuotas, time, isPrivilegedListener, requestChannel, metrics, credentialProvider, endpointLogContext(endPoint), memoryPool, apiVersionManager)
   }
 
   private def createControlPlaneAcceptor(endPoint: EndPoint, requestChannel: RequestChannel): ControlPlaneAcceptor = {
-    new ControlPlaneAcceptor(this, endPoint, config, nodeId, connectionQuotas, time, requestChannel, metrics, credentialProvider, logContext, memoryPool, apiVersionManager)
+    new ControlPlaneAcceptor(this, endPoint, config, nodeId, connectionQuotas, time, requestChannel, metrics, credentialProvider, endpointLogContext(endPoint), memoryPool, apiVersionManager)
   }
 
   /**
@@ -588,6 +588,7 @@ private[kafka] abstract class Acceptor(val socketServer: SocketServer,
   private val metricsGroup = new KafkaMetricsGroup(this.getClass)
 
   val shouldRun = new AtomicBoolean(true)
+  this.logIdent = logContext.logPrefix
 
   def metricPrefix(): String
   def threadPrefix(): String
@@ -923,6 +924,7 @@ private[kafka] class Processor(
   val shouldRun = new AtomicBoolean(true)
 
   val thread = KafkaThread.nonDaemon(threadName, this)
+  this.logIdent = logContext.logPrefix
 
   private object ConnectionId {
     def fromString(s: String): Option[ConnectionId] = s.split("-") match {
