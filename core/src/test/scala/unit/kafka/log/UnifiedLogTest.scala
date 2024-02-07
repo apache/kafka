@@ -2162,7 +2162,7 @@ class UnifiedLogTest {
       .thenReturn(Optional.empty[TimestampAndOffset]())
 
     assertEquals(None, log.fetchOffsetByTimestamp(0L, Some(remoteLogManager)))
-    assertEquals(Some(new TimestampAndOffset(ListOffsetsResponse.UNKNOWN_TIMESTAMP, 0, Optional.of(-1))),
+    assertEquals(Some(new TimestampAndOffset(ListOffsetsResponse.UNKNOWN_TIMESTAMP, 0, Optional.empty())),
       log.fetchOffsetByTimestamp(ListOffsetsRequest.EARLIEST_LOCAL_TIMESTAMP, Some(remoteLogManager)))
 
     val firstTimestamp = mockTime.milliseconds

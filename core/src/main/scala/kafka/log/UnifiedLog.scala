@@ -1301,11 +1301,13 @@ class UnifiedLog(@volatile var logStartOffset: Long,
       } else if (targetTimestamp == ListOffsetsRequest.EARLIEST_LOCAL_TIMESTAMP) {
         val curLocalLogStartOffset = localLogStartOffset()
 
-        var epochResult: Optional[Integer] = Optional.of(RecordBatch.NO_PARTITION_LEADER_EPOCH)
-        if (leaderEpochCache.isDefined) {
-          val epochOpt = leaderEpochCache.get.epochForOffset(curLocalLogStartOffset)
-          if (epochOpt.isPresent) epochResult = Optional.of(epochOpt.getAsInt)
-        }
+        val epochResult: Optional[Integer] =
+          if (leaderEpochCache.isDefined) {
+            val epochOpt = leaderEpochCache.get.epochForOffset(curLocalLogStartOffset)
+            if (epochOpt.isPresent) Optional.of(epochOpt.getAsInt) else Optional.empty()
+          } else {
+            Optional.empty()
+          }
 
         Some(new TimestampAndOffset(RecordBatch.NO_TIMESTAMP, curLocalLogStartOffset, epochResult))
       } else if (targetTimestamp == ListOffsetsRequest.LATEST_TIMESTAMP) {
@@ -1314,11 +1316,19 @@ class UnifiedLog(@volatile var logStartOffset: Long,
         if (remoteLogEnabled()) {
           val curHighestRemoteOffset = highestOffsetInRemoteStorage()
 
-          var epochResult: Optional[Integer] = Optional.of(RecordBatch.NO_PARTITION_LEADER_EPOCH)
-          if (leaderEpochCache.isDefined) {
-            val epochOpt = leaderEpochCache.get.epochForOffset(curHighestRemoteOffset)
-            if (epochOpt.isPresent) epochResult = Optional.of(epochOpt.getAsInt)
-          }
+          val epochResult: Optional[Integer] =
+            if (leaderEpochCache.isDefined) {
+              val epochOpt = leaderEpochCache.get.epochForOffset(curHighestRemoteOffset)
+              if (epochOpt.isPresent) {
+                Optional.of(epochOpt.getAsInt)
+              } else if (curHighestRemoteOffset == -1) {
+                Optional.of(RecordBatch.NO_PARTITION_LEADER_EPOCH)
+              } else {
+                Optional.empty()
+              }
+            } else {
+              Optional.empty()
+            }
 
           Some(new TimestampAndOffset(RecordBatch.NO_TIMESTAMP, curHighestRemoteOffset, epochResult))
         } else {
