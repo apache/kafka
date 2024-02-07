@@ -126,7 +126,7 @@ public class BatchBuilder<T> {
 
     /**
      * Check whether the batch has enough room for all the record values.
-     *
+     * <p>
      * Returns an empty {@link OptionalInt} if the batch builder has room for this list of records.
      * Otherwise, it returns the expected number of bytes needed for a batch to contain these records.
      *

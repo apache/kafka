@@ -59,7 +59,7 @@ public interface Records extends TransferableRecords {
      * Get the record batches. Note that the signature allows subclasses
      * to return a more specific batch type. This enables optimizations such as in-place offset
      * assignment (see for example {@link DefaultRecordBatch}), and partial reading of
-     * record data (see {@link FileLogInputStream.FileChannelRecordBatch#magic()}.
+     * record data (see {@link FileLogInputStream.FileChannelRecordBatch#magic()}).
      * @return An iterator over the record batches of the log
      */
     Iterable<? extends RecordBatch> batches();
@@ -87,7 +87,7 @@ public interface Records extends TransferableRecords {
 
     /**
      * Convert all batches in this buffer to the format passed as a parameter. Note that this requires
-     * deep iteration since all of the deep records must also be converted to the desired format.
+     * deep iteration since all the deep records must also be converted to the desired format.
      * @param toMagic The magic value to convert to
      * @param firstOffset The starting offset for returned records. This only impacts some cases. See
      *                    {@link RecordsUtil#downConvert(Iterable, byte, long, Time)} for an explanation.
