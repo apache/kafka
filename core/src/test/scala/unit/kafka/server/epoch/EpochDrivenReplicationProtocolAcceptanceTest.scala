@@ -280,13 +280,13 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends QuorumTestHarness wit
       //As soon as it replicates, bounce the follower
       bounce(follower)
 
-      log(leader, follower)
+      log(leader, follower, true)
       awaitISR(tp)
 
       //Then bounce the leader
       bounce(leader)
 
-      log(leader, follower)
+      log(leader, follower, false)
       awaitISR(tp)
 
       //Ensure no data was lost
@@ -374,8 +374,12 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends QuorumTestHarness wit
                s"Logs on Broker 100 and Broker 101 should match")
   }
 
-  private def log(leader: KafkaServer, follower: KafkaServer): Unit = {
-    info(s"Bounce complete for follower ${follower.config.brokerId}")
+  private def log(leader: KafkaServer, follower: KafkaServer, isFollower: Boolean): Unit = {
+    val (brokerState, brokerId) = if (isFollower)
+      ("follower", follower.config.brokerId)
+    else
+      ("leader", leader.config.brokerId)
+    info(s"Bounce complete for $brokerState $brokerId")
     info(s"Leader: leo${leader.config.brokerId}: " + getLog(leader, 0).logEndOffset + " cache: " + epochCache(leader).epochEntries)
     info(s"Follower: leo${follower.config.brokerId}: " + getLog(follower, 0).logEndOffset + " cache: " + epochCache(follower).epochEntries)
   }
