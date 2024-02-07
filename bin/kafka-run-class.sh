@@ -272,7 +272,7 @@ fi
 if [ -z "$JAVA_HOME" ]; then
   JAVA="java"
 else
-  JAVA="$JAVA_HOME/bin/java"
+  JAVA="\"$JAVA_HOME/bin/java\""
 fi
 
 # Memory options
