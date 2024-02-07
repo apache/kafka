@@ -1036,14 +1036,18 @@ class KafkaController(val config: KafkaConfig,
     }
   }
 
-  private def isReassignmentComplete(partition: TopicPartition, assignment: ReplicaAssignment): Boolean = {
+  private[controller] def isReassignmentComplete(partition: TopicPartition, assignment: ReplicaAssignment): Boolean = {
     if (!assignment.isBeingReassigned) {
       true
     } else {
       zkClient.getTopicPartitionStates(Seq(partition)).get(partition).exists { leaderIsrAndControllerEpoch =>
+        // Once the partition reassignment completed, the removing replicas would be stopped and replaced 
+        // by the adding replicas. And the adding replicas must be in-sync, removing replicas might not.
+        // The availability and durability would be same at least or better after completing reassignment, 
+        // so there is no need to wait all target replicas to be in-sync.
         val isr = leaderIsrAndControllerEpoch.leaderAndIsr.isr.toSet
-        val targetReplicas = assignment.targetReplicas.toSet
-        targetReplicas.subsetOf(isr)
+        val addingReplicas = assignment.addingReplicas.toSet
+        addingReplicas.subsetOf(isr)
       }
     }
   }
@@ -1930,7 +1934,7 @@ class KafkaController(val config: KafkaConfig,
     val reassignment = controllerContext.partitionFullReplicaAssignment(topicPartition)
     if (isReassignmentComplete(topicPartition, reassignment)) {
       // resume the partition reassignment process
-      info(s"Target replicas ${reassignment.targetReplicas} have all caught up with the leader for " +
+      info(s"Adding replicas ${reassignment.addingReplicas} have all caught up with the leader for " +
         s"reassigning partition $topicPartition")
       onPartitionReassignment(topicPartition, reassignment)
     }

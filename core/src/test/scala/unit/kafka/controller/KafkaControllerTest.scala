@@ -17,17 +17,19 @@
 
 package kafka.controller
 
+import kafka.api.LeaderAndIsr
 import kafka.server.metadata.ZkMetadataCache
 import kafka.server.{BrokerFeatures, DelegationTokenManager, KafkaConfig}
 import kafka.utils.TestUtils
 import kafka.zk.{BrokerInfo, KafkaZkClient}
+import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.server.metrics.KafkaMetricsGroup
 import org.apache.kafka.server.util.MockTime
 import org.junit.jupiter.api.{BeforeEach, Test}
 import org.mockito.ArgumentMatchers
 import org.mockito.ArgumentMatchers.{any, anyString}
-import org.mockito.Mockito.{mock, mockConstruction, times, verify, verifyNoMoreInteractions}
+import org.mockito.Mockito.{mock, mockConstruction, times, verify, verifyNoMoreInteractions, when}
 
 class KafkaControllerTest {
   var config: KafkaConfig = _
@@ -72,4 +74,31 @@ class KafkaControllerTest {
     }
   }
 
+  @Test
+  def testIsReassignmentComplete(): Unit = {
+    val topicPartition = new TopicPartition("foo", 0)
+    val mockLeaderAndIsr = LeaderAndIsr(leader = 1001, isr = List(1001, 3001, 4001))
+    val mockLeaderIsrAndControllerEpoch = LeaderIsrAndControllerEpoch(leaderAndIsr = mockLeaderAndIsr, controllerEpoch = 0)
+    val zkClient = mock(classOf[KafkaZkClient])
+    when(zkClient.getTopicPartitionStates(Seq(topicPartition)))
+      .thenReturn(Map(topicPartition -> mockLeaderIsrAndControllerEpoch))
+
+    val kafkaController = new KafkaController(
+      config = config,
+      zkClient = zkClient,
+      time = new MockTime(),
+      metrics = mock(classOf[Metrics]),
+      initialBrokerInfo = mock(classOf[BrokerInfo]),
+      initialBrokerEpoch = 0,
+      tokenManager = mock(classOf[DelegationTokenManager]),
+      brokerFeatures = mock(classOf[BrokerFeatures]),
+      featureCache = mock(classOf[ZkMetadataCache])
+    )
+    val replicaAssignment = ReplicaAssignment(replicas = List(1001, 2001, 4001, 3001),
+                                              addingReplicas = List(4001),
+                                              removingReplicas = List(3001))
+    assert(kafkaController.isReassignmentComplete(topicPartition, replicaAssignment))
+  }
+
 }
+
