@@ -166,7 +166,6 @@ public class MembershipManagerImplTest {
                 subscriptionState, commitRequestManager, metadata, logContext, Optional.empty(),
                 backgroundEventHandler, time);
         manager.transitionToJoining();
-        verify(metadata).addClusterUpdateListener(manager);
         clearInvocations(metadata);
 
         // Following joins should not register again.
@@ -177,7 +176,6 @@ public class MembershipManagerImplTest {
         manager.onHeartbeatRequestSent();
         assertEquals(MemberState.UNSUBSCRIBED, manager.state());
         manager.transitionToJoining();
-        verify(metadata, never()).addClusterUpdateListener(manager);
     }
 
     @Test
@@ -540,7 +538,6 @@ public class MembershipManagerImplTest {
         // Should not trigger a new reconciliation because there is one already in progress.
         final Map<Uuid, String> topic2Metadata = Collections.singletonMap(topicId2, topic2);
         mockTopicNameInMetadataCache(topic2Metadata, true);
-        membershipManager.onUpdate(null);
         assertEquals(Collections.singleton(topicId2), membershipManager.topicsAwaitingReconciliation());
         verifyReconciliationNotTriggered(membershipManager);
 
@@ -689,7 +686,6 @@ public class MembershipManagerImplTest {
         );
         when(metadata.topicNames()).thenReturn(fullTopicMetadata);
 
-        membershipManager.onUpdate(null);
         membershipManager.poll(time.milliseconds());
 
         verifyReconciliationTriggeredAndCompleted(membershipManager, Arrays.asList(topicId1Partition0, topicId2Partition0));
@@ -993,7 +989,6 @@ public class MembershipManagerImplTest {
         when(metadata.topicNames()).thenReturn(Collections.singletonMap(topicId, topicName));
         when(subscriptionState.hasAutoAssignedPartitions()).thenReturn(true);
         when(subscriptionState.rebalanceListener()).thenReturn(Optional.empty());
-        membershipManager.onUpdate(null);
 
         membershipManager.poll(time.milliseconds());
 
@@ -1226,8 +1221,7 @@ public class MembershipManagerImplTest {
         String topicName = "topic1";
         mockTopicNameInMetadataCache(Collections.singletonMap(topicId, topicName), true);
 
-        // When metadata is updated, the member should re-trigger reconciliation
-        membershipManager.onUpdate(null);
+        // When the next poll is run, the member should re-trigger reconciliation
         membershipManager.poll(time.milliseconds());
         List<TopicIdPartition> expectedAssignmentReconciled = topicIdPartitions(topicId, topicName, 0, 1);
         verifyReconciliationTriggeredAndCompleted(membershipManager, expectedAssignmentReconciled);
@@ -1253,10 +1247,9 @@ public class MembershipManagerImplTest {
         assertEquals(Collections.singleton(topicId), membershipManager.topicsAwaitingReconciliation());
         verify(metadata).requestUpdate(anyBoolean());
 
-        // Metadata update received, but still without the unresolved topic in it. Should keep
+        // Next poll is run, but metadata still without the unresolved topic in it. Should keep
         // the unresolved and request update again.
         when(metadata.topicNames()).thenReturn(Collections.emptyMap());
-        membershipManager.onUpdate(null);
         membershipManager.poll(time.milliseconds());
         verifyReconciliationNotTriggered(membershipManager);
         assertEquals(Collections.singleton(topicId), membershipManager.topicsAwaitingReconciliation());
@@ -1538,6 +1531,8 @@ public class MembershipManagerImplTest {
         mockPartitionOwnedAndNewPartitionAdded(topicName, partitionOwned, partitionAdded,
             new CounterConsumerRebalanceListener(), membershipManager);
 
+        membershipManager.poll(time.milliseconds());
+
         verify(subscriptionState).assignFromSubscribedAwaitingCallback(assignedPartitions, addedPartitions);
 
         performCallback(
@@ -1567,6 +1562,8 @@ public class MembershipManagerImplTest {
                 Optional.empty());
         mockPartitionOwnedAndNewPartitionAdded(topicName, partitionOwned, partitionAdded,
             listener, membershipManager);
+
+        membershipManager.poll(time.milliseconds());
 
         verify(subscriptionState).assignFromSubscribedAwaitingCallback(assignedPartitions, addedPartitions);
 

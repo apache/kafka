@@ -27,8 +27,6 @@ import org.apache.kafka.clients.consumer.internals.events.CompletableBackgroundE
 import org.apache.kafka.clients.consumer.internals.events.ConsumerRebalanceListenerCallbackCompletedEvent;
 import org.apache.kafka.clients.consumer.internals.events.ConsumerRebalanceListenerCallbackNeededEvent;
 import org.apache.kafka.clients.consumer.internals.events.ErrorBackgroundEvent;
-import org.apache.kafka.common.ClusterResource;
-import org.apache.kafka.common.ClusterResourceListener;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
@@ -113,7 +111,7 @@ import static org.apache.kafka.clients.consumer.internals.ConsumerRebalanceListe
  * the user if the callbacks fail. This manager is only concerned about the callbacks completion to
  * know that it can proceed with the reconciliation.
  */
-public class MembershipManagerImpl implements MembershipManager, ClusterResourceListener {
+public class MembershipManagerImpl implements MembershipManager {
 
     /**
      * TopicPartition comparator based on topic name and partition id.
@@ -216,15 +214,9 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
      */
     private final Map<Uuid, SortedSet<Integer>> currentTargetAssignment;
 
-    /**
-     * Set when we want to attempt reconciliation in the next poll. This is only used to avoid
-     * running reconciliation when metadata is incomplete, but no new information is available.
-     */
-    private boolean attemptReconciliation;
-
     /**     
      * If there is a reconciliation running (triggering commit, callbacks) for the
-     * assignmentReadyToReconcile. This will be true if {@link #reconcile()} has been triggered
+     * assignmentReadyToReconcile. This will be true if {@link #maybeReconcile()} has been triggered
      * after receiving a heartbeat response, or a metadata update.
      */
     private boolean reconciliationInProgress;
@@ -243,14 +235,6 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
      * member is not leaving.
      */
     private Optional<CompletableFuture<Void>> leaveGroupInProgress = Optional.empty();
-
-    /**
-     * True if the member has registered to be notified when the cluster metadata is updated.
-     * This is initially false, as the member that is not part of a consumer group does not
-     * require metadata updated. This becomes true the first time the member joins on the
-     * {@link #transitionToJoining()}
-     */
-    private boolean isRegisteredForMetadataUpdates;
 
     /**
      * Registered listeners that will be notified whenever the memberID/epoch gets updated (valid
@@ -295,7 +279,6 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
         this.metadata = metadata;
         this.assignedTopicNamesCache = new HashMap<>();
         this.currentTargetAssignment = new HashMap<>();
-        this.attemptReconciliation = false;
         this.currentAssignment = new HashMap<>();
         this.log = logContext.logger(MembershipManagerImpl.class);
         this.stateUpdatesListeners = new ArrayList<>();
@@ -414,7 +397,6 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
             // assignment from the broker, different from the current assignment. Note that the
             // reconciliation might not be triggered just yet because of missing metadata.
             transitionTo(MemberState.RECONCILING);
-            attemptReconciliation = true;
         } else {
             // Same assignment received, nothing to reconcile.
             log.debug("Target assignment {} received from the broker is equals to the member " +
@@ -575,18 +557,6 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
         resetEpoch();
         transitionTo(MemberState.JOINING);
         clearPendingAssignmentsAndLocalNamesCache();
-        registerForMetadataUpdates();
-    }
-
-    /**
-     * Register to get notified when the cluster metadata is updated, via the
-     * {@link #onUpdate(ClusterResource)}. Register only if the manager is not register already.
-     */
-    private void registerForMetadataUpdates() {
-        if (!isRegisteredForMetadataUpdates) {
-            this.metadata.addClusterUpdateListener(this);
-            isRegisteredForMetadataUpdates = true;
-        }
     }
 
     /**
@@ -778,12 +748,15 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
      * Reconcile the assignment that has been received from the server. If for some topics, the
      * topic ID cannot be matched to a topic name, a metadata update will be triggered and only
      * the subset of topics that are resolvable will be reconciled. Reconciliation will trigger the
-     * callbacks and update the subscription state. Note that only one reconciliation
-     * can be in progress at a time. If there is already another one in progress when this is
-     * triggered, it will be no-op, and the assignment will be reconciled on the next
-     * reconciliation loop.
+     * callbacks and update the subscription state.
+     *
+     * There are three conditions under which no reconciliation will be triggered:
+     *  - We have already reconciled the assignment (the target assignment is the same as the current assignment)
+     *  - Another reconciliation is already in progress
+     *  - There are topics that haven't been added to the current assignment yet, but all their topic IDs
+     *    are missing from the target assignment.
      */
-    void reconcile() {
+    void maybeReconcile() {
         if (targetAssignmentReconciled()) {
             log.debug("Ignoring reconciliation attempt. Target assignment is equal to the " +
                     "current assignment.");
@@ -794,7 +767,6 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
                 currentTargetAssignment + " will be handled in the next reconciliation loop.");
             return;
         }
-        attemptReconciliation = false;
 
         // Find the subset of the target assignment that can be resolved to topic names, and trigger a metadata update
         // if some topic IDs are not resolvable.
@@ -938,9 +910,6 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
                     String reason = interruptedReconciliationErrorMessage();
                     log.error("Interrupting reconciliation after partitions assigned callback " +
                         "completed. " + reason);
-                    if (memberHasRejoined) {
-                        attemptReconciliation = true;
-                    }
                 }
             }
         });
@@ -1368,25 +1337,10 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
 
     /**
      * @return If there is a reconciliation in process now. Note that reconciliation is triggered
-     * by a call to {@link #reconcile()}. Visible for testing.
+     * by a call to {@link #maybeReconcile()}. Visible for testing.
      */
     boolean reconciliationInProgress() {
         return reconciliationInProgress;
-    }
-
-    /**
-     * When cluster metadata is updated, it may contain new topic names that are required to
-     * completely reconcile the current target assignment.
-     *
-     * This method will make sure reconciliation is attempted on the next call of `poll`.
-     * If another reconciliation is currently in process, the first `poll` after that
-     * reconciliation will trigger the new reconciliation.
-     */
-    @Override
-    public void onUpdate(ClusterResource clusterResource) {
-        if (state == MemberState.RECONCILING) {
-            attemptReconciliation = true;
-        }
     }
 
     /**
@@ -1409,8 +1363,8 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
      */
     @Override
     public PollResult poll(final long currentTimeMs) {
-        if (state == MemberState.RECONCILING && attemptReconciliation) {
-            reconcile();
+        if (state == MemberState.RECONCILING) {
+            maybeReconcile();
         }
         return PollResult.EMPTY;
     }
