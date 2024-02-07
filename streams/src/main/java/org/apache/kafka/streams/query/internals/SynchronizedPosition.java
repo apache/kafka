@@ -74,6 +74,18 @@ public class SynchronizedPosition extends Position {
         return super.merge(other);
     }
 
+    // need to overwrite this to make Spotbugs happy
+    @Override
+    public boolean equals(final Object o) {
+        return super.equals(o);
+    }
+
+    // need to overwrite this to make Spotbugs happy
+    @Override
+    public int hashCode() {
+        return super.hashCode();
+    }
+
     private void verifyLock() {
         if (!lock.isLocked()) {
             throw new IllegalStateException("SynchronizedPosition must be locked before usage");
