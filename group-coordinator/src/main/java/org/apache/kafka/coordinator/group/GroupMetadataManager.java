@@ -57,12 +57,12 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.coordinator.group.assignor.PartitionAssignor;
 import org.apache.kafka.coordinator.group.assignor.PartitionAssignorException;
-import org.apache.kafka.coordinator.group.consumer.Assignment;
+import org.apache.kafka.coordinator.group.common.Assignment;
+import org.apache.kafka.coordinator.group.common.TopicMetadata;
 import org.apache.kafka.coordinator.group.consumer.ConsumerGroup;
 import org.apache.kafka.coordinator.group.consumer.ConsumerGroupMember;
 import org.apache.kafka.coordinator.group.consumer.CurrentAssignmentBuilder;
 import org.apache.kafka.coordinator.group.consumer.TargetAssignmentBuilder;
-import org.apache.kafka.coordinator.group.consumer.TopicMetadata;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupCurrentMemberAssignmentKey;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupCurrentMemberAssignmentValue;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupMemberMetadataKey;
@@ -883,22 +883,21 @@ public class GroupMetadataManager {
     }
 
     /**
-     * Checks whether the consumer group can accept a new member or not based on the
-     * max group size defined.
+     * Checks whether the group can accept a new member or not based on the max group size defined.
      *
-     * @param group     The consumer group.
+     * @param group     The group.
      * @param memberId  The member id.
      *
      * @throws GroupMaxSizeReachedException if the maximum capacity has been reached.
      */
-    private void throwIfConsumerGroupIsFull(
-        ConsumerGroup group,
+    private void throwIfGroupIsFull(
+        Group group,
         String memberId
     ) throws GroupMaxSizeReachedException {
-        // If the consumer group has reached its maximum capacity, the member is rejected if it is not
-        // already a member of the consumer group.
+        // If the group has reached its maximum capacity, the member is rejected if it is not
+        // already a member of the group.
         if (group.numMembers() >= consumerGroupMaxSize && (memberId.isEmpty() || !group.hasMember(memberId))) {
-            throw new GroupMaxSizeReachedException("The consumer group has reached its maximum capacity of "
+            throw new GroupMaxSizeReachedException("The group has reached its maximum capacity of "
                 + consumerGroupMaxSize + " members.");
         }
     }
@@ -1047,7 +1046,7 @@ public class GroupMetadataManager {
         // Get or create the consumer group.
         boolean createIfNotExists = memberEpoch == 0;
         final ConsumerGroup group = getOrMaybeCreateConsumerGroup(groupId, createIfNotExists);
-        throwIfConsumerGroupIsFull(group, memberId);
+        throwIfGroupIsFull(group, memberId);
 
         // Get or create the member.
         if (memberId.isEmpty()) memberId = Uuid.randomUuid().toString();
@@ -1926,10 +1925,10 @@ public class GroupMetadataManager {
                         rescheduleClassicGroupMemberHeartbeat(classicGroup, member);
                     });
 
-                    if (classicGroup.size() > classicGroupMaxSize) {
+                    if (classicGroup.numMembers() > classicGroupMaxSize) {
                         // In case the max size config has changed.
                         prepareRebalance(classicGroup, "Freshly-loaded group " + groupId +
-                            " (size " + classicGroup.size() + ") is over capacity " + classicGroupMaxSize +
+                            " (size " + classicGroup.numMembers() + ") is over capacity " + classicGroupMaxSize +
                             ". Rebalancing in order to give a chance for consumers to commit offsets");
                     }
                     break;
@@ -2508,7 +2507,7 @@ public class GroupMetadataManager {
 
             } else {
                 log.info("Stabilized group {} generation {} with {} members.",
-                    groupId, group.generationId(), group.size());
+                    groupId, group.generationId(), group.numMembers());
 
                 // Complete the awaiting join group response future for all the members after rebalancing
                 group.allMembers().forEach(member -> {
@@ -2577,7 +2576,7 @@ public class GroupMetadataManager {
                 memberId, group.groupId());
 
             return removePendingMemberAndUpdateClassicGroup(group, memberId);
-        } else if (!group.hasMemberId(memberId)) {
+        } else if (!group.hasMember(memberId)) {
             log.debug("Member {} has already been removed from the group.", memberId);
         } else {
             ClassicGroupMember member = group.member(memberId);
@@ -3030,14 +3029,14 @@ public class GroupMetadataManager {
                 //    if the max group size was reduced.
                 // 2) using the number of awaiting members allows to kick out the last rejoining
                 //    members of the group.
-                return (group.hasMemberId(memberId) && group.member(memberId).isAwaitingJoin()) ||
+                return (group.hasMember(memberId) && group.member(memberId).isAwaitingJoin()) ||
                     group.numAwaitingJoinResponse() < classicGroupMaxSize;
             case COMPLETING_REBALANCE:
             case STABLE:
                 // An existing member is accepted. New members are accepted up to the max group size.
                 // Note that the group size is used here. When the group transitions to CompletingRebalance,
                 // members who haven't rejoined are removed.
-                return group.hasMemberId(memberId) || group.size() < classicGroupMaxSize;
+                return group.hasMember(memberId) || group.numMembers() < classicGroupMaxSize;
             default:
                 throw new IllegalStateException("Unknown group state: " + group.stateAsString());
         }
@@ -3216,7 +3215,7 @@ public class GroupMetadataManager {
             if (group.isLeader(memberId)) {
                 log.info("Assignment received from leader {} for group {} for generation {}. " +
                     "The group has {} members, {} of which are static.",
-                    memberId, groupId, group.generationId(), group.size(), group.allStaticMemberIds().size());
+                    memberId, groupId, group.generationId(), group.numMembers(), group.allStaticMemberIds().size());
 
                 // Fill all members with corresponding member assignment. If the member assignment
                 // does not exist, fill with an empty assignment.

@@ -22,6 +22,10 @@ import org.apache.kafka.coordinator.group.assignor.AssignmentSpec;
 import org.apache.kafka.coordinator.group.assignor.GroupAssignment;
 import org.apache.kafka.coordinator.group.assignor.MemberAssignment;
 import org.apache.kafka.coordinator.group.assignor.PartitionAssignor;
+import org.apache.kafka.coordinator.group.common.Assignment;
+import org.apache.kafka.coordinator.group.common.SubscribedTopicMetadata;
+import org.apache.kafka.coordinator.group.common.TopicMetadata;
+import org.apache.kafka.coordinator.group.common.VersionedMetadata;
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;

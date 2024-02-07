@@ -961,7 +961,7 @@ public class OffsetMetadataManagerTest {
         List<MockCoordinatorTimer.ExpiredTimeout<Void, Record>> timeouts =
             context.sleep(5000 / 2);
         assertEquals(1, timeouts.size());
-        assertFalse(group.hasMemberId(member.memberId()));
+        assertFalse(group.hasMember(member.memberId()));
     }
 
     @Test

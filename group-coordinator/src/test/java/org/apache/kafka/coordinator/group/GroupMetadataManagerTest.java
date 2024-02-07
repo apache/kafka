@@ -72,10 +72,10 @@ import org.apache.kafka.coordinator.group.assignor.MemberAssignment;
 import org.apache.kafka.coordinator.group.assignor.PartitionAssignor;
 import org.apache.kafka.coordinator.group.assignor.PartitionAssignorException;
 import org.apache.kafka.coordinator.group.assignor.SubscribedTopicDescriber;
-import org.apache.kafka.coordinator.group.consumer.Assignment;
+import org.apache.kafka.coordinator.group.common.Assignment;
 import org.apache.kafka.coordinator.group.consumer.ConsumerGroup;
 import org.apache.kafka.coordinator.group.consumer.ConsumerGroupMember;
-import org.apache.kafka.coordinator.group.consumer.TopicMetadata;
+import org.apache.kafka.coordinator.group.common.TopicMetadata;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupCurrentMemberAssignmentKey;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupCurrentMemberAssignmentValue;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupMemberMetadataKey;
@@ -813,7 +813,7 @@ public class GroupMetadataManagerTest {
             assertEquals(Errors.NONE.code(), followerJoinResult.joinFuture.get().errorCode());
             assertEquals(1, leaderJoinResult.joinFuture.get().generationId());
             assertEquals(1, followerJoinResult.joinFuture.get().generationId());
-            assertEquals(2, group.size());
+            assertEquals(2, group.numMembers());
             assertEquals(1, group.generationId());
             assertTrue(group.isInState(COMPLETING_REBALANCE));
 
@@ -863,7 +863,7 @@ public class GroupMetadataManagerTest {
             assertEquals(Errors.NONE.code(), followerSyncResult.syncFuture.get().errorCode());
             assertTrue(group.isInState(STABLE));
 
-            assertEquals(2, group.size());
+            assertEquals(2, group.numMembers());
             assertEquals(1, group.generationId());
 
             return new RebalanceResult(
@@ -978,7 +978,7 @@ public class GroupMetadataManagerTest {
             assertTrue(followerJoinResult.records.isEmpty());
             assertFalse(followerJoinResult.joinFuture.isDone());
             assertTrue(group.isInState(PREPARING_REBALANCE));
-            assertEquals(2, group.size());
+            assertEquals(2, group.numMembers());
             assertEquals(1, group.numPendingJoinMembers());
 
             return new PendingMemberGroupResult(
@@ -1014,7 +1014,7 @@ public class GroupMetadataManagerTest {
             assertEquals(expectedRecords, timeouts.get(timeoutsSize - 1).result.records());
             assertNoOrEmptyResult(timeouts.subList(0, timeoutsSize - 1));
             assertTrue(group.isInState(EMPTY));
-            assertEquals(0, group.size());
+            assertEquals(0, group.numMembers());
         }
 
         public HeartbeatResponseData sendClassicGroupHeartbeat(
@@ -1133,7 +1133,7 @@ public class GroupMetadataManagerTest {
                 return null;
             }).collect(Collectors.toList());
 
-            assertEquals(numMembers, group.size());
+            assertEquals(numMembers, group.numMembers());
             assertTrue(group.isInState(COMPLETING_REBALANCE));
 
             return joinResponses;
@@ -4857,7 +4857,7 @@ public class GroupMetadataManagerTest {
         ClassicGroup group = context.groupMetadataManager.getOrMaybeCreateClassicGroup("group-id", false);
 
         assertTrue(group.isInState(PREPARING_REBALANCE));
-        assertEquals(2, group.size());
+        assertEquals(2, group.numMembers());
     }
 
     @Test
@@ -4956,7 +4956,7 @@ public class GroupMetadataManagerTest {
 
         List<String> memberIds = verifyClassicGroupJoinResponses(firstRoundJoinResults, 0, Errors.MEMBER_ID_REQUIRED);
         assertEquals(groupMaxSize + 1, memberIds.size());
-        assertEquals(0, group.size());
+        assertEquals(0, group.numMembers());
         assertTrue(group.isInState(EMPTY));
         assertEquals(groupMaxSize + 1, group.numPendingJoinMembers());
 
@@ -4976,7 +4976,7 @@ public class GroupMetadataManagerTest {
         assertNoOrEmptyResult(context.sleep(50));
 
         verifyClassicGroupJoinResponses(secondRoundJoinResults, groupMaxSize, Errors.GROUP_MAX_SIZE_REACHED);
-        assertEquals(groupMaxSize, group.size());
+        assertEquals(groupMaxSize, group.numMembers());
         assertEquals(0, group.numPendingJoinMembers());
         assertTrue(group.isInState(COMPLETING_REBALANCE));
 
@@ -5012,7 +5012,7 @@ public class GroupMetadataManagerTest {
             requiredKnownMemberId
         )).collect(Collectors.toList());
 
-        assertEquals(groupMaxSize, group.size());
+        assertEquals(groupMaxSize, group.numMembers());
         assertEquals(groupMaxSize, group.numAwaitingJoinResponse());
         assertTrue(group.isInState(PREPARING_REBALANCE));
 
@@ -5033,7 +5033,7 @@ public class GroupMetadataManagerTest {
         )).collect(Collectors.toList());
 
         verifyClassicGroupJoinResponses(secondRoundJoinResults, 10, Errors.GROUP_MAX_SIZE_REACHED);
-        assertEquals(groupMaxSize, group.size());
+        assertEquals(groupMaxSize, group.numMembers());
         assertEquals(0, group.numAwaitingJoinResponse());
         assertTrue(group.isInState(COMPLETING_REBALANCE));
     }
@@ -5064,7 +5064,7 @@ public class GroupMetadataManagerTest {
             .map(instanceId -> context.sendClassicGroupJoin(request.setGroupInstanceId(instanceId)))
             .collect(Collectors.toList());
 
-        assertEquals(groupMaxSize, group.size());
+        assertEquals(groupMaxSize, group.numMembers());
         assertEquals(groupMaxSize, group.numAwaitingJoinResponse());
         assertTrue(group.isInState(PREPARING_REBALANCE));
 
@@ -5087,7 +5087,7 @@ public class GroupMetadataManagerTest {
         )).collect(Collectors.toList());
 
         verifyClassicGroupJoinResponses(secondRoundJoinResults, groupMaxSize, Errors.GROUP_MAX_SIZE_REACHED);
-        assertEquals(groupMaxSize, group.size());
+        assertEquals(groupMaxSize, group.numMembers());
         assertEquals(0, group.numAwaitingJoinResponse());
         assertTrue(group.isInState(COMPLETING_REBALANCE));
     }
@@ -5114,7 +5114,7 @@ public class GroupMetadataManagerTest {
             .mapToObj(__ -> context.sendClassicGroupJoin(request, requiredKnownMemberId))
             .collect(Collectors.toList());
 
-        assertEquals(0, group.size());
+        assertEquals(0, group.numMembers());
         assertEquals(groupMaxSize + 1, group.numPendingJoinMembers());
         assertTrue(group.isInState(EMPTY));
 
@@ -5131,7 +5131,7 @@ public class GroupMetadataManagerTest {
             assertTrue(joinResult.records.isEmpty());
         });
 
-        assertEquals(groupMaxSize, group.size());
+        assertEquals(groupMaxSize, group.numMembers());
         assertEquals(groupMaxSize, group.numAwaitingJoinResponse());
         assertTrue(group.isInState(PREPARING_REBALANCE));
 
@@ -5150,7 +5150,7 @@ public class GroupMetadataManagerTest {
         assertNoOrEmptyResult(context.sleep(50));
 
         verifyClassicGroupJoinResponses(thirdRoundJoinResults, groupMaxSize, Errors.GROUP_MAX_SIZE_REACHED);
-        assertEquals(groupMaxSize, group.size());
+        assertEquals(groupMaxSize, group.numMembers());
         assertEquals(0, group.numAwaitingJoinResponse());
         assertTrue(group.isInState(COMPLETING_REBALANCE));
     }
@@ -5197,7 +5197,7 @@ public class GroupMetadataManagerTest {
                 .build()
         )).collect(Collectors.toList());
 
-        assertEquals(groupMaxSize, group.size());
+        assertEquals(groupMaxSize, group.numMembers());
         assertEquals(groupMaxSize, group.numAwaitingJoinResponse());
         assertTrue(group.isInState(PREPARING_REBALANCE));
 
@@ -5206,14 +5206,14 @@ public class GroupMetadataManagerTest {
 
         verifyClassicGroupJoinResponses(joinResults, groupMaxSize, Errors.GROUP_MAX_SIZE_REACHED);
 
-        assertEquals(groupMaxSize, group.size());
+        assertEquals(groupMaxSize, group.numMembers());
         assertTrue(group.isInState(COMPLETING_REBALANCE));
 
         memberIds.subList(groupMaxSize, groupMaxSize + 2)
-            .forEach(memberId -> assertFalse(group.hasMemberId(memberId)));
+            .forEach(memberId -> assertFalse(group.hasMember(memberId)));
 
         memberIds.subList(0, groupMaxSize)
-            .forEach(memberId -> assertTrue(group.hasMemberId(memberId)));
+            .forEach(memberId -> assertTrue(group.hasMember(memberId)));
     }
 
     @Test
@@ -5754,7 +5754,7 @@ public class GroupMetadataManagerTest {
         assertTrue(oldMemberJoinResult.records.isEmpty());
         assertFalse(oldMemberJoinResult.joinFuture.isDone());
         assertEquals(1, group.numAwaitingJoinResponse());
-        assertEquals(1, group.size());
+        assertEquals(1, group.numMembers());
 
         // Replace static member with new member id. Old member id should be fenced.
         JoinResult newMemberJoinResult = context.sendClassicGroupJoin(request);
@@ -5764,14 +5764,14 @@ public class GroupMetadataManagerTest {
         assertTrue(oldMemberJoinResult.joinFuture.isDone());
         assertEquals(Errors.FENCED_INSTANCE_ID.code(), oldMemberJoinResult.joinFuture.get().errorCode());
         assertEquals(1, group.numAwaitingJoinResponse());
-        assertEquals(1, group.size());
+        assertEquals(1, group.numMembers());
 
         // Complete join for new member.
         assertNoOrEmptyResult(context.sleep(context.classicGroupInitialRebalanceDelayMs));
         assertTrue(newMemberJoinResult.joinFuture.isDone());
         assertEquals(Errors.NONE.code(), newMemberJoinResult.joinFuture.get().errorCode());
         assertEquals(0, group.numAwaitingJoinResponse());
-        assertEquals(1, group.size());
+        assertEquals(1, group.numMembers());
     }
 
     @Test
@@ -5792,7 +5792,7 @@ public class GroupMetadataManagerTest {
         assertTrue(joinResult.records.isEmpty());
         assertTrue(joinResult.joinFuture.isDone());
         assertEquals(Errors.MEMBER_ID_REQUIRED.code(), joinResult.joinFuture.get().errorCode());
-        assertEquals(0, group.size());
+        assertEquals(0, group.numMembers());
         assertEquals(1, group.numPendingJoinMembers());
 
         // Advance clock by session timeout. Pending member should be removed from group as heartbeat expires.
@@ -5818,7 +5818,7 @@ public class GroupMetadataManagerTest {
 
         assertTrue(joinResult.records.isEmpty());
         assertFalse(joinResult.joinFuture.isDone());
-        assertEquals(1, group.size());
+        assertEquals(1, group.numMembers());
 
         String memberId = group.leaderOrNull();
         // Advance clock by new member join timeout. Member should be removed from group as heartbeat expires.
@@ -5835,7 +5835,7 @@ public class GroupMetadataManagerTest {
 
         assertTrue(joinResult.joinFuture.isDone());
         assertEquals(Errors.UNKNOWN_MEMBER_ID.code(), joinResult.joinFuture.get().errorCode());
-        assertEquals(0, group.size());
+        assertEquals(0, group.numMembers());
     }
 
     @Test
@@ -5854,7 +5854,7 @@ public class GroupMetadataManagerTest {
         assertEquals(Errors.NONE.code(), response.errorCode());
         String memberId = response.memberId();
 
-        assertTrue(group.hasMemberId(memberId));
+        assertTrue(group.hasMember(memberId));
 
         group.transitionTo(DEAD);
 
@@ -6005,7 +6005,7 @@ public class GroupMetadataManagerTest {
         assertEquals(Errors.NONE.code(), leaderJoinResult.joinFuture.get().errorCode());
         assertEquals(Errors.NONE.code(), memberJoinResult.joinFuture.get().errorCode());
         assertTrue(group.isInState(COMPLETING_REBALANCE));
-        assertEquals(2, group.size());
+        assertEquals(2, group.numMembers());
         assertEquals(2, group.generationId());
 
         group.transitionTo(STABLE);
@@ -6033,7 +6033,7 @@ public class GroupMetadataManagerTest {
         assertEquals(Errors.NONE.code(), memberJoinResult.joinFuture.get().errorCode());
         assertTrue(group.isInState(COMPLETING_REBALANCE));
         assertEquals(3, group.generationId());
-        assertEquals(2, group.size());
+        assertEquals(2, group.numMembers());
     }
 
     @Test
@@ -6066,7 +6066,7 @@ public class GroupMetadataManagerTest {
         assertTrue(leaderJoinResult.joinFuture.isDone());
         assertTrue(memberJoinResult.joinFuture.isDone());
         assertTrue(group.isInState(COMPLETING_REBALANCE));
-        assertEquals(2, group.size());
+        assertEquals(2, group.numMembers());
         assertEquals(2, group.generationId());
 
         String memberId = memberJoinResult.joinFuture.get().memberId();
@@ -6137,7 +6137,7 @@ public class GroupMetadataManagerTest {
 
         assertTrue(memberJoinResult.records.isEmpty());
         assertFalse(memberJoinResult.joinFuture.isDone());
-        assertEquals(2, group.size());
+        assertEquals(2, group.numMembers());
         assertTrue(group.isInState(PREPARING_REBALANCE));
 
         // Advance clock by rebalance timeout. This will expire the leader as it has not rejoined.
@@ -6145,8 +6145,8 @@ public class GroupMetadataManagerTest {
 
         assertTrue(memberJoinResult.joinFuture.isDone());
         assertEquals(Errors.NONE.code(), memberJoinResult.joinFuture.get().errorCode());
-        assertEquals(1, group.size());
-        assertTrue(group.hasMemberId(memberJoinResult.joinFuture.get().memberId()));
+        assertEquals(1, group.numMembers());
+        assertTrue(group.hasMember(memberJoinResult.joinFuture.get().memberId()));
         assertEquals(2, group.generationId());
     }
 
@@ -6215,7 +6215,7 @@ public class GroupMetadataManagerTest {
         assertTrue(secondMemberJoinResult.joinFuture.isDone());
         assertEquals(Errors.NONE.code(), firstMemberJoinResult.joinFuture.get().errorCode());
         assertEquals(Errors.NONE.code(), secondMemberJoinResult.joinFuture.get().errorCode());
-        assertEquals(2, group.size());
+        assertEquals(2, group.numMembers());
         assertEquals(2, group.generationId());
 
         String secondMemberId = secondMemberJoinResult.joinFuture.get().memberId();
@@ -6223,7 +6223,7 @@ public class GroupMetadataManagerTest {
         // Trigger a rebalance. No members rejoined.
         context.groupMetadataManager.prepareRebalance(group, "trigger rebalance");
 
-        assertEquals(2, group.size());
+        assertEquals(2, group.numMembers());
         assertTrue(group.isInState(PREPARING_REBALANCE));
         assertEquals(0, group.numAwaitingJoinResponse());
 
@@ -6235,7 +6235,7 @@ public class GroupMetadataManagerTest {
         assertEquals(10000, context.timer.timeout("join-group-id").deadlineMs - context.time.milliseconds());
 
         assertTrue(group.isInState(PREPARING_REBALANCE));
-        assertEquals(2, group.size());
+        assertEquals(2, group.numMembers());
         assertEquals(2, group.generationId());
 
         // Let first and second member rejoin. This should complete the join phase.
@@ -6248,7 +6248,7 @@ public class GroupMetadataManagerTest {
         assertTrue(firstMemberJoinResult.records.isEmpty());
         assertFalse(firstMemberJoinResult.joinFuture.isDone());
         assertTrue(group.isInState(PREPARING_REBALANCE));
-        assertEquals(2, group.size());
+        assertEquals(2, group.numMembers());
         assertEquals(2, group.generationId());
 
         secondMemberJoinResult = context.sendClassicGroupJoin(
@@ -6263,7 +6263,7 @@ public class GroupMetadataManagerTest {
         assertEquals(Errors.NONE.code(), firstMemberJoinResult.joinFuture.get().errorCode());
         assertEquals(Errors.NONE.code(), secondMemberJoinResult.joinFuture.get().errorCode());
         assertTrue(group.isInState(COMPLETING_REBALANCE));
-        assertEquals(2, group.size());
+        assertEquals(2, group.numMembers());
         assertEquals(3, group.generationId());
     }
 
@@ -6288,7 +6288,7 @@ public class GroupMetadataManagerTest {
         assertEquals(Errors.NONE.code(), response.errorCode());
         String oldMemberId = response.memberId();
 
-        assertEquals(1, group.size());
+        assertEquals(1, group.numMembers());
         assertEquals(1, group.generationId());
         assertTrue(group.isInState(COMPLETING_REBALANCE));
 
@@ -6349,7 +6349,7 @@ public class GroupMetadataManagerTest {
         assertEquals(4500, updatedMember.sessionTimeoutMs());
         assertEquals(protocols, updatedMember.supportedProtocols());
 
-        assertEquals(1, group.size());
+        assertEquals(1, group.numMembers());
         assertEquals(1, group.generationId());
         assertTrue(group.isInState(STABLE));
     }
@@ -6370,7 +6370,7 @@ public class GroupMetadataManagerTest {
 
         JoinGroupResponseData response = context.joinClassicGroupAndCompleteJoin(request, true, true);
         assertEquals(Errors.NONE.code(), response.errorCode());
-        assertEquals(1, group.size());
+        assertEquals(1, group.numMembers());
         assertEquals(1, group.generationId());
         assertTrue(group.isInState(COMPLETING_REBALANCE));
 
@@ -6385,7 +6385,7 @@ public class GroupMetadataManagerTest {
         assertTrue(joinResult.records.isEmpty());
         assertTrue(joinResult.joinFuture.isDone());
         assertEquals(Errors.NONE.code(), joinResult.joinFuture.get().errorCode());
-        assertEquals(1, group.size());
+        assertEquals(1, group.numMembers());
         assertEquals(2, group.generationId());
         assertTrue(group.isInState(COMPLETING_REBALANCE));
     }
@@ -6411,7 +6411,7 @@ public class GroupMetadataManagerTest {
 
         JoinGroupResponseData response = context.joinClassicGroupAndCompleteJoin(request, false, false);
         assertEquals(Errors.NONE.code(), response.errorCode());
-        assertEquals(1, group.size());
+        assertEquals(1, group.numMembers());
         assertEquals(1, group.generationId());
         assertTrue(group.isInState(COMPLETING_REBALANCE));
 
@@ -6463,7 +6463,7 @@ public class GroupMetadataManagerTest {
         assertEquals(4000, revertedMember.rebalanceTimeoutMs());
         assertEquals(3000, revertedMember.sessionTimeoutMs());
         assertEquals(protocols, revertedMember.supportedProtocols());
-        assertEquals(1, group.size());
+        assertEquals(1, group.numMembers());
         assertEquals(1, group.generationId());
         assertTrue(group.isInState(STABLE));
     }
@@ -6493,7 +6493,7 @@ public class GroupMetadataManagerTest {
         );
 
         assertEquals(Errors.NONE.code(), response.errorCode());
-        assertEquals(1, group.size());
+        assertEquals(1, group.numMembers());
         assertEquals(1, group.generationId());
         assertTrue(group.isInState(COMPLETING_REBALANCE));
 
@@ -6539,7 +6539,7 @@ public class GroupMetadataManagerTest {
         assertEquals(7000, newMember.rebalanceTimeoutMs());
         assertEquals(6000, newMember.sessionTimeoutMs());
         assertEquals(toProtocols("range", "roundrobin"), newMember.supportedProtocols());
-        assertEquals(1, group.size());
+        assertEquals(1, group.numMembers());
         assertEquals(1, group.generationId());
         assertTrue(group.isInState(STABLE));
     }
@@ -6560,7 +6560,7 @@ public class GroupMetadataManagerTest {
         JoinGroupResponseData response = context.joinClassicGroupAndCompleteJoin(request, true, true);
         assertEquals(Errors.NONE.code(), response.errorCode());
 
-        assertEquals(1, group.size());
+        assertEquals(1, group.numMembers());
         assertEquals(1, group.generationId());
         assertTrue(group.isInState(COMPLETING_REBALANCE));
 
@@ -6570,7 +6570,7 @@ public class GroupMetadataManagerTest {
         assertTrue(joinResult.records.isEmpty());
         assertTrue(joinResult.joinFuture.isDone());
         assertEquals(Errors.NONE.code(), joinResult.joinFuture.get().errorCode());
-        assertEquals(1, group.size());
+        assertEquals(1, group.numMembers());
         assertEquals(2, group.generationId());
         assertTrue(group.isInState(COMPLETING_REBALANCE));
     }
@@ -6632,11 +6632,11 @@ public class GroupMetadataManagerTest {
 
         assertTrue(syncResult.syncFuture.isDone());
         assertEquals(Errors.NONE.code(), syncResult.syncFuture.get().errorCode());
-        assertEquals(1, group.size());
+        assertEquals(1, group.numMembers());
 
         // Make sure the NewMemberTimeout is not still in effect, and the member is not kicked
         assertNoOrEmptyResult(context.sleep(context.classicGroupNewMemberJoinTimeoutMs));
-        assertEquals(1, group.size());
+        assertEquals(1, group.numMembers());
 
         // Member should be removed as heartbeat expires. The group is now empty.
         List<ExpiredTimeout<Void, Record>> timeouts = context.sleep(5000);
@@ -6659,7 +6659,7 @@ public class GroupMetadataManagerTest {
             assertEquals(expectedRecords, timeout.result.records());
         });
 
-        assertEquals(0, group.size());
+        assertEquals(0, group.numMembers());
         assertTrue(group.isInState(EMPTY));
     }
 
@@ -6896,8 +6896,8 @@ public class GroupMetadataManagerTest {
         assertTrue(duplicateFollowerJoinResult.joinFuture.isDone());
         assertTrue(group.isInState(COMPLETING_REBALANCE));
         assertEquals(3, group.generationId());
-        assertEquals(1, group.size());
-        assertTrue(group.hasMemberId(duplicateFollowerJoinResult.joinFuture.get().memberId()));
+        assertEquals(1, group.numMembers());
+        assertTrue(group.hasMember(duplicateFollowerJoinResult.joinFuture.get().memberId()));
         assertEquals(duplicateFollowerJoinResult.joinFuture.get().memberId(), duplicateFollowerJoinResult.joinFuture.get().leader());
     }
 
@@ -7167,7 +7167,7 @@ public class GroupMetadataManagerTest {
         JoinGroupResponseData joinResponse = context.joinClassicGroupAndCompleteJoin(request, true, true, 10000);
 
         // Follower's heartbeat expires as the leader rejoins.
-        assertFalse(group.hasMemberId(rebalanceResult.followerId));
+        assertFalse(group.hasMember(rebalanceResult.followerId));
 
         JoinGroupResponseData expectedResponse = new JoinGroupResponseData()
             .setErrorCode(Errors.NONE.code())
@@ -8527,8 +8527,8 @@ public class GroupMetadataManagerTest {
 
         assertTrue(followerSyncResult.syncFuture.isDone());
         assertEquals(Errors.REBALANCE_IN_PROGRESS.code(), followerSyncResult.syncFuture.get().errorCode());
-        assertEquals(1, group.size());
-        assertTrue(group.hasMemberId(followerId));
+        assertEquals(1, group.numMembers());
+        assertTrue(group.hasMember(followerId));
         assertTrue(group.isInState(PREPARING_REBALANCE));
     }
 
@@ -9086,7 +9086,7 @@ public class GroupMetadataManagerTest {
 
         assertTrue(otherJoinResult.joinFuture.isDone());
         assertEquals(Errors.NONE.code(), otherJoinResult.joinFuture.get().errorCode());
-        assertEquals(1, group.size());
+        assertEquals(1, group.numMembers());
         assertEquals(2, group.generationId());
         assertTrue(group.isInState(COMPLETING_REBALANCE));
     }
@@ -9162,7 +9162,7 @@ public class GroupMetadataManagerTest {
 
         assertTrue(secondMemberJoinResult.joinFuture.isDone());
         assertEquals(Errors.NONE.code(), secondMemberJoinResult.joinFuture.get().errorCode());
-        assertEquals(2, group.size());
+        assertEquals(2, group.numMembers());
         assertEquals(2, group.generationId());
         assertTrue(group.isInState(COMPLETING_REBALANCE));
 
@@ -9197,7 +9197,7 @@ public class GroupMetadataManagerTest {
 
             assertEquals(expectedError.code(), heartbeatResponse.errorCode());
         }
-        assertEquals(1, group.size());
+        assertEquals(1, group.numMembers());
         assertTrue(group.isInState(PREPARING_REBALANCE));
 
         JoinResult otherMemberRejoinResult = context.sendClassicGroupJoin(
@@ -9328,8 +9328,8 @@ public class GroupMetadataManagerTest {
 
         // At this point the second member should have been removed from pending list (session timeout),
         // and the group should be in Stable state with only the first member in it.
-        assertEquals(1, group.size());
-        assertTrue(group.hasMemberId(firstMemberId));
+        assertEquals(1, group.numMembers());
+        assertTrue(group.hasMember(firstMemberId));
         assertEquals(1, group.generationId());
         assertTrue(group.isInState(STABLE));
     }

@@ -17,6 +17,8 @@
 package org.apache.kafka.coordinator.group.consumer;
 
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.coordinator.group.common.SubscribedTopicMetadata;
+import org.apache.kafka.coordinator.group.common.TopicMetadata;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 

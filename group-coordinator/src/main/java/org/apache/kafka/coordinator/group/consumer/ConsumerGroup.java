@@ -29,6 +29,8 @@ import org.apache.kafka.coordinator.group.OffsetExpirationCondition;
 import org.apache.kafka.coordinator.group.OffsetExpirationConditionImpl;
 import org.apache.kafka.coordinator.group.Record;
 import org.apache.kafka.coordinator.group.RecordHelpers;
+import org.apache.kafka.coordinator.group.common.Assignment;
+import org.apache.kafka.coordinator.group.common.TopicMetadata;
 import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetricsShard;
 import org.apache.kafka.image.ClusterImage;
 import org.apache.kafka.image.TopicImage;
@@ -394,12 +396,9 @@ public class ConsumerGroup implements Group {
     }
 
     /**
-     * Returns true if the member exists.
-     *
-     * @param memberId The member id.
-     *
      * @return A boolean indicating whether the member exists or not.
      */
+    @Override
     public boolean hasMember(String memberId) {
         return members.containsKey(memberId);
     }
@@ -407,6 +406,7 @@ public class ConsumerGroup implements Group {
     /**
      * @return The number of members.
      */
+    @Override
     public int numMembers() {
         return members.size();
     }

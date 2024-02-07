@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.coordinator.group.consumer;
 
+import org.apache.kafka.coordinator.group.common.VersionedMetadata;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupMemberMetadataValue;
 import org.junit.jupiter.api.Test;
 

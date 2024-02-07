@@ -18,6 +18,7 @@ package org.apache.kafka.coordinator.group.consumer;
 
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatRequestData;
+import org.apache.kafka.coordinator.group.common.Assignment;
 
 import java.util.Collections;
 import java.util.HashMap;
