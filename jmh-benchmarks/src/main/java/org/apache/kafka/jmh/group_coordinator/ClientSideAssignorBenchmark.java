@@ -38,13 +38,13 @@ import static org.apache.kafka.clients.consumer.internals.AbstractStickyAssignor
 @OutputTimeUnit(TimeUnit.MILLISECONDS)
 public class ClientSideAssignorBenchmark {
 
-    @Param({"10"})
+    @Param({"200"})
+    private int partitionsPerTopicCount;
+
+    @Param({"100"})
     private int topicCount;
 
-    @Param({"8"})
-    private int partitionCount;
-
-    @Param({"10"})
+    @Param({"20"})
     private int memberCount;
 
     @Param({"false", "true"})
@@ -56,7 +56,7 @@ public class ClientSideAssignorBenchmark {
     @Param({"false", "true"})
     private boolean isRangeAssignor;
 
-    private Map<String, ConsumerPartitionAssignor.Subscription> subscriptions = new HashMap<>();
+    private final Map<String, ConsumerPartitionAssignor.Subscription> subscriptions = new HashMap<>();
     protected int numBrokerRacks = 4;
     protected int replicationFactor = 2;
     protected AbstractPartitionAssignor assignor;
@@ -69,7 +69,7 @@ public class ClientSideAssignorBenchmark {
         for (int i = 0; i < topicCount; i++) {
             String topicName = "topic" + i;
             topics.add(topicName);
-            this.partitionsPerTopic.put(topicName, partitionInfos(topicName, partitionCount));
+            this.partitionsPerTopic.put(topicName, partitionInfos(topicName, partitionsPerTopicCount));
         }
 
         addSubscriptions(topics);

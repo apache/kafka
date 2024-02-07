@@ -43,11 +43,11 @@ import java.util.concurrent.TimeUnit;
 @OutputTimeUnit(TimeUnit.MILLISECONDS)
 public class ServerSideAssignorBenchmark {
 
+    @Param({"8"})
+    private int partitionsPerTopicCount;
+
     @Param({"10"})
     private int topicCount;
-
-    @Param({"8"})
-    private int partitionCount;
 
     @Param({"10"})
     private int memberCount;
@@ -69,23 +69,20 @@ public class ServerSideAssignorBenchmark {
     @Setup(Level.Trial)
     public void setup() {
         Map<Uuid, TopicMetadata> topicMetadata = new HashMap<>();
-        List<Uuid> topicIds = new ArrayList<>();
 
         if (!isRackAware) {
             for (int i = 1; i <= topicCount; i++) {
                 Uuid topicUuid = Uuid.randomUuid();
-                topicIds.add(topicUuid);
                 String topicName = "topic" + i;
                 topicMetadata.put(topicUuid, new TopicMetadata(
-                    topicUuid, topicName, partitionCount, Collections.emptyMap()));
+                    topicUuid, topicName, partitionsPerTopicCount, Collections.emptyMap()));
             }
         } else {
             for (int i = 1; i <= topicCount; i++) {
                 Uuid topicUuid = Uuid.randomUuid();
-                topicIds.add(topicUuid);
                 String topicName = "topic" + i;
                 topicMetadata.put(topicUuid, new TopicMetadata(
-                    topicUuid, topicName, partitionCount, mkMapOfPartitionRacks(partitionCount)));
+                    topicUuid, topicName, partitionsPerTopicCount, mkMapOfPartitionRacks(partitionsPerTopicCount)));
             }
         }
 
