@@ -590,6 +590,13 @@ class ConsoleConsumerTest {
       new RecordHeaders(), Optional.empty[Integer])
     formatter.writeTo(record2, new PrintStream(out))
     assertEquals("CreateTime:123\tPartition:0\tOffset:123\tkey\tvalue\n", out.toString)
+
+    configs.put("print.topic", "true")
+    formatter.configure(configs)
+    out = new ByteArrayOutputStream()
+    formatter.writeTo(record, new PrintStream(out))
+    assertEquals("NO_TIMESTAMP\tPartition:0\tOffset:123\tTopic:topic\tkey\tvalue\n", out.toString)
+
     formatter.close()
   }
 

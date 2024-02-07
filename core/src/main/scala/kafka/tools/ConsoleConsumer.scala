@@ -236,6 +236,7 @@ object ConsoleConsumer extends Logging {
       | print.partition=true|false
       | print.headers=true|false
       | print.value=true|false
+      | print.topic=true|false
       | key.separator=<key.separator>
       | line.separator=<line.separator>
       | headers.separator=<line.separator>
@@ -498,6 +499,7 @@ class DefaultMessageFormatter extends MessageFormatter {
   var printPartition = false
   var printOffset = false
   var printHeaders = false
+  var printTopic = false
   var keySeparator = utfBytes("\t")
   var lineSeparator = utfBytes("\n")
   var headersSeparator = utfBytes(",")
@@ -514,6 +516,7 @@ class DefaultMessageFormatter extends MessageFormatter {
     getPropertyIfExists(configs, "print.partition", getBoolProperty).foreach(printPartition = _)
     getPropertyIfExists(configs, "print.headers", getBoolProperty).foreach(printHeaders = _)
     getPropertyIfExists(configs, "print.value", getBoolProperty).foreach(printValue = _)
+    getPropertyIfExists(configs, "print.topic", getBoolProperty).foreach(printTopic = _)
     getPropertyIfExists(configs, "key.separator", getByteProperty).foreach(keySeparator = _)
     getPropertyIfExists(configs, "line.separator", getByteProperty).foreach(lineSeparator = _)
     getPropertyIfExists(configs, "headers.separator", getByteProperty).foreach(headersSeparator = _)
@@ -548,20 +551,27 @@ class DefaultMessageFormatter extends MessageFormatter {
         output.write(utfBytes(s"$timestampType:$timestamp"))
       else
         output.write(utfBytes("NO_TIMESTAMP"))
-      writeSeparator(columnSeparator =  printOffset || printPartition || printHeaders || printKey || printValue)
+      writeSeparator(columnSeparator =  printOffset || printPartition || printTopic || printHeaders || printKey || printValue)
     }
 
     if (printPartition) {
       output.write(utfBytes("Partition:"))
       output.write(utfBytes(partition().toString))
-      writeSeparator(columnSeparator = printOffset || printHeaders || printKey || printValue)
+      writeSeparator(columnSeparator = printOffset || printTopic || printHeaders || printKey || printValue)
     }
 
     if (printOffset) {
       output.write(utfBytes("Offset:"))
       output.write(utfBytes(offset().toString))
+      writeSeparator(columnSeparator = printTopic || printHeaders || printKey || printValue)
+    }
+
+    if (printTopic) {
+      output.write(utfBytes("Topic:"))
+      output.write(utfBytes(topic()))
       writeSeparator(columnSeparator = printHeaders || printKey || printValue)
     }
+
 
     if (printHeaders) {
       val headersIt = headers().iterator.asScala
