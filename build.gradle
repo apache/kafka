@@ -114,6 +114,9 @@ ext {
   repo = file("$rootDir/.git").isDirectory() ? Grgit.open(currentDir: project.getRootDir()) : null
 
   commitId = determineCommitId()
+
+  // See README.md for this build option details and example of usage
+  checkstyleVersion = project.hasProperty('checkstyleVersion') ? checkstyleVersion : versions.checkstyle
 }
 
 allprojects {
@@ -691,7 +694,7 @@ subprojects {
   checkstyle {
     configDirectory = rootProject.layout.projectDirectory.dir("checkstyle")
     configProperties = checkstyleConfigProperties("import-control.xml")
-    toolVersion = versions.checkstyle
+    toolVersion = checkstyleVersion
   }
 
   configure(checkstyleMain) {
