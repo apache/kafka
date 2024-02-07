@@ -116,8 +116,6 @@ public final class TreeCommandHandler implements Commands.Handler {
     @Override
     public boolean equals(Object other) {
         if (!(other instanceof TreeCommandHandler)) return false;
-        TreeCommandHandler o = (TreeCommandHandler) other;
-        if (!Objects.equals(o.targets, targets)) return false;
-        return true;
+        return Objects.equals(((TreeCommandHandler) other).targets, targets);
     }
 }

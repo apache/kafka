@@ -88,7 +88,6 @@ public final class PwdCommandHandler implements Commands.Handler {
 
     @Override
     public boolean equals(Object other) {
-        if (!(other instanceof PwdCommandHandler)) return false;
-        return true;
+        return other instanceof PwdCommandHandler;
     }
 }

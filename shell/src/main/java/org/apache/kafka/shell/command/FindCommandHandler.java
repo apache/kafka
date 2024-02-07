@@ -126,8 +126,6 @@ public final class FindCommandHandler implements Commands.Handler {
     @Override
     public boolean equals(Object other) {
         if (!(other instanceof FindCommandHandler)) return false;
-        FindCommandHandler o = (FindCommandHandler) other;
-        if (!Objects.equals(o.paths, paths)) return false;
-        return true;
+        return Objects.equals(((FindCommandHandler) other).paths, paths);
     }
 }
