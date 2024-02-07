@@ -2677,7 +2677,7 @@ class ReplicaManager(val config: KafkaConfig,
             s"$topicId.")
         }
         // it's a partition that we don't know about yet, so create it and mark it online
-        val partition = Partition(tp, time, this)
+        val partition = Partition(new TopicIdPartition(topicId, tp), time, this)
         allPartitions.put(tp, HostedPartition.Online(partition))
         Some(partition, true)
     }
