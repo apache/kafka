@@ -116,6 +116,12 @@ ext {
   commitId = determineCommitId()
 }
 
+dependencyCheck {
+  suppressionFile = "${rootDir}/owaspSuppressions.xml"
+  failBuildOnCVSS = 4.0F
+  failOnError = false
+}
+
 allprojects {
 
   repositories {
