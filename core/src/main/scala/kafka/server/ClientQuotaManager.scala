@@ -580,6 +580,13 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
             // /config/clients/<default>
             quota = overriddenQuotas.get(DefaultClientIdQuotaEntity)
           }
+        } else {
+          // /config/users/<default>
+          quota = overriddenQuotas.get(DefaultUserQuotaEntity)
+          if (quota == null) {
+            // /config/clients/<default>
+            quota = overriddenQuotas.get(DefaultClientIdQuotaEntity)
+          }
         }
       }
       if (quota == null) null else quota.bound
@@ -604,7 +611,9 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
 
     override def quotaResetRequired(quotaType: ClientQuotaType): Boolean = false
 
-    def quotaMetricTags(sanitizedUser: String, clientId: String) : Map[String, String] = {
+    def quotaMetricTags(sanitizedUser: String, nullableClientId: String) : Map[String, String] = {
+      val clientId = Option(nullableClientId).getOrElse("") // null client id is treated as empty client id.
+
       val (userTag, clientIdTag) = quotaTypesEnabled match {
         case QuotaTypes.NoQuotas | QuotaTypes.ClientIdQuotaEnabled =>
           ("", clientId)
@@ -617,6 +626,7 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
           val clientIdEntity = Some(ClientIdEntity(clientId))
 
           var metricTags = (sanitizedUser, clientId)
+
           // 1) /config/users/<user>/clients/<client-id>
           if (!overriddenQuotas.containsKey(KafkaQuotaEntity(userEntity, clientIdEntity))) {
             // 2) /config/users/<user>/clients/<default>

@@ -71,6 +71,32 @@ class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
       throttleTimeMs = maybeRecord(clientQuotaManager, client1.user, client1.clientId, 1000 * config.numQuotaSamples)
       assertEquals(0, throttleTimeMs, s"throttleTimeMs should be 0. was $throttleTimeMs")
 
+      // Case 5: test clients with null or empty client id.
+      if (defaultConfigClient.configUser.isEmpty) {
+        // default client (with null or empty client id) should follow the default, overridden value.
+        assertEquals(4000L, clientQuotaManager.quota(defaultConfigClient.user, defaultConfigClient.clientId).bound, 0.0, "Should return the newly overridden value (4000)")
+        assertEquals(4000L, clientQuotaManager.quota(defaultConfigClient.user, null).bound, 0.0, "Should return the newly overridden value (4000)")
+      }
+      if (client1.user == "ANONYMOUS") {
+        // default client (with null or empty client id) should follow the default, overridden value.
+        assertEquals(4000L, clientQuotaManager.quota(client1.user, "").bound, 0.0, "Should return the overridden value (4000)")
+        assertEquals(4000L, clientQuotaManager.quota(client1.user, null).bound, 0.0, "Should return the overridden value (4000)")
+      } else {
+        // client1.user (with null or empty client id) should follow the user quota. (if user is 'ANONYMOUS', it should follow the default, overridden value.)
+        clientQuotaManager.updateQuota(client1.configUser, None, None, Some(new Quota(2500, true)))
+        assertEquals(2500L, clientQuotaManager.quota(client1.user, "").bound, 0.0, "Should return the newly overridden value (2500)")
+        assertEquals(2500L, clientQuotaManager.quota(client1.user, null).bound, 0.0, "Should return the newly overridden value (2500)")
+      }
+      if (client2.user == "ANONYMOUS") {
+        // default client (with null or empty client id) should follow the default, overridden value.
+        assertEquals(4000L, clientQuotaManager.quota(client2.user, "").bound, 0.0, "Should return the overridden value (4000)")
+        assertEquals(4000L, clientQuotaManager.quota(client2.user, null).bound, 0.0, "Should return the overridden value (4000)")
+      } else {
+        // client2.user (with null or empty client id) should follow the user quota. (if user is 'ANONYMOUS', it should follow the default, overridden value.)
+        clientQuotaManager.updateQuota(client2.configUser, None, None, Some(new Quota(4500, true)))
+        assertEquals(4500L, clientQuotaManager.quota(client2.user, "").bound, 0.0, "Should return the overridden value (4500)")
+        assertEquals(4500L, clientQuotaManager.quota(client2.user, null).bound, 0.0, "Should return the overridden value (4500)")
+      }
     } finally {
       clientQuotaManager.shutdown()
     }
