@@ -285,7 +285,9 @@ class DefaultAutoTopicCreationManager(
       val validationError: Option[Errors] = if (!isValidTopicName(topic)) {
         Some(Errors.INVALID_TOPIC_EXCEPTION)
       } else if (!inflightTopics.add(topic)) {
-        Some(Errors.UNKNOWN_TOPIC_OR_PARTITION)
+        assert (inflightTopics.contains(topic))
+        trace("topic: %s is in inflightTopics, it will be created later".format(topic))
+        Some(Errors.REPLICA_NOT_AVAILABLE)
       } else {
         None
       }
