@@ -24,6 +24,7 @@ import org.apache.kafka.common.errors.UnknownMemberIdException;
 import org.apache.kafka.common.message.ConsumerGroupDescribeResponseData;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.coordinator.group.Group;
 import org.apache.kafka.coordinator.group.GroupMetadataManagerTest;
 import org.apache.kafka.coordinator.group.OffsetAndMetadata;
 import org.apache.kafka.coordinator.group.OffsetExpirationCondition;
@@ -218,6 +219,112 @@ public class ConsumerGroupTest {
     }
 
     @Test
+    public void testUpdatingMemberUpdatesPartitionEpochWhenPartitionIsReassignedBeforeBeingRevoked() {
+        Uuid fooTopicId = Uuid.randomUuid();
+
+        ConsumerGroup consumerGroup = createConsumerGroup("foo");
+        ConsumerGroupMember member;
+
+        member = new ConsumerGroupMember.Builder("member")
+            .setMemberEpoch(10)
+            .setAssignedPartitions(Collections.emptyMap())
+            .setPartitionsPendingRevocation(mkAssignment(
+                mkTopicAssignment(fooTopicId, 1)))
+            .build();
+
+        consumerGroup.updateMember(member, metadataImage.topics());
+
+        assertEquals(10, consumerGroup.currentPartitionEpoch(fooTopicId, 1));
+
+        member = new ConsumerGroupMember.Builder(member)
+            .setMemberEpoch(11)
+            .setAssignedPartitions(mkAssignment(
+                mkTopicAssignment(fooTopicId, 1)))
+            .setPartitionsPendingRevocation(Collections.emptyMap())
+            .build();
+
+        consumerGroup.updateMember(member, metadataImage.topics());
+
+        assertEquals(11, consumerGroup.currentPartitionEpoch(fooTopicId, 1));
+    }
+
+    @Test
+    public void testUpdatingMemberUpdatesPartitionEpochWhenPartitionIsNotReleased() {
+        Uuid fooTopicId = Uuid.randomUuid();
+        ConsumerGroup consumerGroup = createConsumerGroup("foo");
+
+        ConsumerGroupMember m1 = new ConsumerGroupMember.Builder("m1")
+            .setMemberEpoch(10)
+            .setAssignedPartitions(mkAssignment(
+                mkTopicAssignment(fooTopicId, 1)))
+            .build();
+
+        consumerGroup.updateMember(m1, metadataImage.topics());
+
+        ConsumerGroupMember m2 = new ConsumerGroupMember.Builder("m2")
+            .setMemberEpoch(10)
+            .setAssignedPartitions(mkAssignment(
+                mkTopicAssignment(fooTopicId, 1)))
+            .build();
+
+        // m2 should not be able to acquire foo-1 because the partition is
+        // still owned by another member.
+        assertThrows(IllegalStateException.class, () -> consumerGroup.updateMember(m2, metadataImage.topics()));
+    }
+
+    @Test
+    public void testRemovePartitionEpochs() {
+        Uuid fooTopicId = Uuid.randomUuid();
+        ConsumerGroup consumerGroup = createConsumerGroup("foo");
+
+        // Removing should fail because there is no epoch set.
+        assertThrows(IllegalStateException.class, () -> consumerGroup.removePartitionEpochs(
+            mkAssignment(
+                mkTopicAssignment(fooTopicId, 1)
+            ),
+            10
+        ));
+
+        ConsumerGroupMember m1 = new ConsumerGroupMember.Builder("m1")
+            .setMemberEpoch(10)
+            .setAssignedPartitions(mkAssignment(
+                mkTopicAssignment(fooTopicId, 1)))
+            .build();
+
+        consumerGroup.updateMember(m1, metadataImage.topics());
+
+        // Removing should fail because the expected epoch is incorrect.
+        assertThrows(IllegalStateException.class, () -> consumerGroup.removePartitionEpochs(
+            mkAssignment(
+                mkTopicAssignment(fooTopicId, 1)
+            ),
+            11
+        ));
+    }
+
+    @Test
+    public void testAddPartitionEpochs() {
+        Uuid fooTopicId = Uuid.randomUuid();
+        ConsumerGroup consumerGroup = createConsumerGroup("foo");
+
+        consumerGroup.addPartitionEpochs(
+            mkAssignment(
+                mkTopicAssignment(fooTopicId, 1)
+            ),
+            10
+        );
+
+        // Changing the epoch should fail because the owner of the partition
+        // should remove it first.
+        assertThrows(IllegalStateException.class, () -> consumerGroup.addPartitionEpochs(
+            mkAssignment(
+                mkTopicAssignment(fooTopicId, 1)
+            ),
+            11
+        ));
+    }
+
+    @Test
     public void testDeletingMemberRemovesPartitionEpoch() {
         Uuid fooTopicId = Uuid.randomUuid();
         Uuid barTopicId = Uuid.randomUuid();
@@ -338,6 +445,18 @@ public class ConsumerGroupTest {
         consumerGroup.removeMember("member2", metadataImage.topics());
 
         assertEquals(ConsumerGroup.ConsumerGroupState.EMPTY, consumerGroup.state());
+    }
+
+    @Test
+    public void testGroupTypeFromString() {
+
+        assertEquals(Group.GroupType.parse("classic"), Group.GroupType.CLASSIC);
+
+        // Test case insensitivity.
+        assertEquals(Group.GroupType.parse("Consumer"), Group.GroupType.CONSUMER);
+
+        // Test with invalid group type.
+        assertEquals(Group.GroupType.parse("Invalid"), Group.GroupType.UNKNOWN);
     }
 
     @Test
@@ -978,7 +1097,8 @@ public class ConsumerGroupTest {
                 new ConsumerGroupDescribeResponseData.Member().setMemberId("member2")
                     .setSubscribedTopicRegex("")
             ));
-        ConsumerGroupDescribeResponseData.DescribedGroup actual = group.asDescribedGroup(1, "");
+        ConsumerGroupDescribeResponseData.DescribedGroup actual = group.asDescribedGroup(1, "",
+            new GroupMetadataManagerTest.MetadataImageBuilder().build().topics());
 
         assertEquals(expected, actual);
     }
@@ -1022,5 +1142,27 @@ public class ConsumerGroupTest {
 
         assertEquals(ConsumerGroup.ConsumerGroupState.EMPTY, consumerGroup.state());
         verify(metrics, times(1)).onConsumerGroupStateTransition(ConsumerGroup.ConsumerGroupState.STABLE, ConsumerGroup.ConsumerGroupState.EMPTY);
+    }
+
+    @Test
+    public void testIsInStatesCaseInsensitive() {
+        SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
+        GroupCoordinatorMetricsShard metricsShard = new GroupCoordinatorMetricsShard(
+            snapshotRegistry,
+            Collections.emptyMap(),
+            new TopicPartition("__consumer_offsets", 0)
+        );
+        ConsumerGroup group = new ConsumerGroup(snapshotRegistry, "group-foo", metricsShard);
+        snapshotRegistry.getOrCreateSnapshot(0);
+        assertTrue(group.isInStates(Collections.singleton("empty"), 0));
+        assertFalse(group.isInStates(Collections.singleton("Empty"), 0));
+
+        group.updateMember(new ConsumerGroupMember.Builder("member1")
+            .setSubscribedTopicNames(Collections.singletonList("foo"))
+            .build(), metadataImage.topics());
+        snapshotRegistry.getOrCreateSnapshot(1);
+        assertTrue(group.isInStates(Collections.singleton("empty"), 0));
+        assertTrue(group.isInStates(Collections.singleton("stable"), 1));
+        assertFalse(group.isInStates(Collections.singleton("empty"), 1));
     }
 }

@@ -53,7 +53,7 @@ if ( !versions.scala.contains('-') ) {
   versions["baseScala"] = versions.scala
 }
 
-// mockito 5.5 is required for Java 21 and mockito 5.x requires at least Java 11
+// mockito >= 5.5 is required for Java 21 and mockito 5.x requires at least Java 11
 // mockito 4.9 is required for Scala 2.12 as a workaround for compiler errors due to ambiguous reference to `Mockito.spy`
 // since Scala 2.12 support is going away soon, this is simpler than adjusting the code.
 // mockito 4.11 is used with Java 8 and Scala 2.13
@@ -61,7 +61,7 @@ String mockitoVersion
 if (scalaVersion == "2.12")
   mockitoVersion = "4.9.0"
 else if (JavaVersion.current().isCompatibleWith(JavaVersion.VERSION_11))
-  mockitoVersion = "5.5.0"
+  mockitoVersion = "5.8.0"
 else
   mockitoVersion = "4.11.0"
 
@@ -117,7 +117,7 @@ versions += [
   jaxrs: "2.1.1",
   jfreechart: "1.0.0",
   jopt: "5.0.4",
-  jose4j: "0.9.3",
+  jose4j: "0.9.4",
   junit: "5.10.0",
   jqwik: "1.7.4",
   kafka_0100: "0.10.0.1",
@@ -140,10 +140,10 @@ versions += [
   kafka_32: "3.2.3",
   kafka_33: "3.3.2",
   kafka_34: "3.4.1",
-  kafka_35: "3.5.1",
-  kafka_36: "3.6.0",
+  kafka_35: "3.5.2",
+  kafka_36: "3.6.1",
   lz4: "1.8.0",
-  mavenArtifact: "3.8.8",
+  mavenArtifact: "3.9.6",
   metrics: "2.2.0",
   netty: "4.1.100.Final",
   opentelemetryProto: "1.0.0-alpha",
@@ -164,7 +164,7 @@ versions += [
   spotbugs: "4.8.0",
   zinc: "1.9.2",
   zookeeper: "3.8.3",
-  zstd: "1.5.5-6"
+  zstd: "1.5.5-11"
 ]
 
 libs += [

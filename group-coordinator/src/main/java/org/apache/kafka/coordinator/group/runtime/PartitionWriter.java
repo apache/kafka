@@ -19,8 +19,10 @@ package org.apache.kafka.coordinator.group.runtime;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.requests.TransactionResult;
+import org.apache.kafka.storage.internals.log.VerificationGuard;
 
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
 
 /**
  * A simple interface to write records to Partitions/Logs. It contains the minimum
@@ -84,10 +86,11 @@ public interface PartitionWriter<T> {
      * Write records to the partitions. Records are written in one batch so
      * atomicity is guaranteed.
      *
-     * @param tp            The partition to write records to.
-     * @param producerId    The producer id.
-     * @param producerEpoch The producer epoch.
-     * @param records       The list of records. The records are written in a single batch.
+     * @param tp                The partition to write records to.
+     * @param producerId        The producer id.
+     * @param producerEpoch     The producer epoch.
+     * @param verificationGuard The verification guard.
+     * @param records           The list of records. The records are written in a single batch.
      * @return The log end offset right after the written records.
      * @throws KafkaException Any KafkaException caught during the write operation.
      */
@@ -95,6 +98,7 @@ public interface PartitionWriter<T> {
         TopicPartition tp,
         long producerId,
         short producerEpoch,
+        VerificationGuard verificationGuard,
         List<T> records
     ) throws KafkaException;
 
@@ -115,5 +119,24 @@ public interface PartitionWriter<T> {
         short producerEpoch,
         int coordinatorEpoch,
         TransactionResult result
+    ) throws KafkaException;
+
+    /**
+     * Verify the transaction.
+     *
+     * @param tp                The partition to write records to.
+     * @param transactionalId   The transactional id.
+     * @param producerId        The producer id.
+     * @param producerEpoch     The producer epoch.
+     * @return A future failed with any error encountered; or the {@link VerificationGuard}
+     *         if the transaction required verification and {@link VerificationGuard#SENTINEL}
+     *         if it did not.
+     * @throws KafkaException Any KafkaException caught during the operation.
+     */
+    CompletableFuture<VerificationGuard> maybeStartTransactionVerification(
+        TopicPartition tp,
+        String transactionalId,
+        long producerId,
+        short producerEpoch
     ) throws KafkaException;
 }

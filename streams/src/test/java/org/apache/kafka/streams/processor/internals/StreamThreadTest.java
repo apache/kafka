@@ -774,7 +774,7 @@ public class StreamThreadTest {
             mockTime
         );
 
-        when(consumer.poll(any())).thenReturn(ConsumerRecords.empty());
+        lenient().when(consumer.poll(any())).thenReturn(ConsumerRecords.empty());
         final ConsumerGroupMetadata consumerGroupMetadata = mock(ConsumerGroupMetadata.class);
         when(consumer.groupMetadata()).thenReturn(consumerGroupMetadata);
         when(consumerGroupMetadata.groupInstanceId()).thenReturn(Optional.empty());
@@ -3265,6 +3265,8 @@ public class StreamThreadTest {
         thread = setUpThread(streamsConfigProps);
         thread.setState(State.STARTING);
         thread.setState(State.PARTITIONS_ASSIGNED);
+        thread.updateThreadMetadata("metadata");
+        thread.setState(State.RUNNING);
 
         runOnce();
 

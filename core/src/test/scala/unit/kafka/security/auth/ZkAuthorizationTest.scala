@@ -137,7 +137,7 @@ class ZkAuthorizationTest extends QuorumTestHarness with Logging {
   private def createBrokerInfo(id: Int, host: String, port: Int, securityProtocol: SecurityProtocol,
                                rack: Option[String] = None): BrokerInfo =
     BrokerInfo(Broker(id, Seq(new EndPoint(host, port, ListenerName.forSecurityProtocol
-    (securityProtocol), securityProtocol)), rack = rack), MetadataVersion.latest, jmxPort = port + 10)
+    (securityProtocol), securityProtocol)), rack = rack), MetadataVersion.latestTesting, jmxPort = port + 10)
 
   private def newKafkaZkClient(connectionString: String, isSecure: Boolean) =
     KafkaZkClient(connectionString, isSecure, 6000, 6000, Int.MaxValue, Time.SYSTEM, "ZkAuthorizationTest",

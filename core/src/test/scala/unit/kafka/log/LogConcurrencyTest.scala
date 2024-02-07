@@ -24,6 +24,7 @@ import kafka.utils.TestUtils
 import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.record.SimpleRecord
 import org.apache.kafka.common.utils.{Time, Utils}
+import org.apache.kafka.server.config.Defaults
 import org.apache.kafka.server.util.KafkaScheduler
 import org.apache.kafka.storage.internals.log.{FetchIsolation, LogConfig, LogDirFailureChannel, ProducerStateManagerConfig}
 import org.junit.jupiter.api.Assertions._
@@ -151,8 +152,8 @@ class LogConcurrencyTest {
       brokerTopicStats = brokerTopicStats,
       time = Time.SYSTEM,
       maxTransactionTimeoutMs = 5 * 60 * 1000,
-      producerStateManagerConfig = new ProducerStateManagerConfig(kafka.server.Defaults.ProducerIdExpirationMs, false),
-      producerIdExpirationCheckIntervalMs = kafka.server.Defaults.ProducerIdExpirationCheckIntervalMs,
+      producerStateManagerConfig = new ProducerStateManagerConfig(Defaults.PRODUCER_ID_EXPIRATION_MS, false),
+      producerIdExpirationCheckIntervalMs = Defaults.PRODUCER_ID_EXPIRATION_CHECK_INTERVAL_MS,
       logDirFailureChannel = new LogDirFailureChannel(10),
       topicId = None,
       keepPartitionMetadataFile = true

@@ -22,6 +22,7 @@ import java.util.Collections
 import scala.collection._
 import scala.jdk.CollectionConverters._
 import kafka.utils.Implicits._
+import org.apache.kafka.server.util.Csv
 
 object VerifiableProperties {
   def apply(map: java.util.Map[String, AnyRef]): VerifiableProperties = {
@@ -186,7 +187,7 @@ class VerifiableProperties(val props: Properties) extends Logging {
    */
   def getMap(name: String, valid: String => Boolean = _ => true): Map[String, String] = {
     try {
-      val m = CoreUtils.parseCsvMap(getString(name, ""))
+      val m = Csv.parseCsvMap(getString(name, "")).asScala
       m.foreach {
         case(key, value) => 
           if(!valid(value))

@@ -17,11 +17,6 @@
 
 package org.apache.kafka.connect.transforms;
 
-import java.nio.ByteBuffer;
-import java.util.Arrays;
-import java.util.List;
-import java.util.concurrent.TimeUnit;
-
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.connect.data.Decimal;
@@ -38,10 +33,14 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
+import java.nio.ByteBuffer;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.Date;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -73,6 +72,7 @@ public class CastTest {
     @Test
     public void testConfigInvalidTargetType() {
         assertThrows(ConfigException.class, () -> xformKey.configure(Collections.singletonMap(Cast.SPEC_CONFIG, "foo:array")));
+        assertThrows(ConfigException.class, () -> xformKey.configure(Collections.singletonMap(Cast.SPEC_CONFIG, "array")));
     }
 
     @Test

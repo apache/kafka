@@ -148,7 +148,6 @@ import static org.apache.kafka.coordinator.group.classic.ClassicGroupState.PREPA
 import static org.apache.kafka.coordinator.group.classic.ClassicGroupState.STABLE;
 import static org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetrics.CLASSIC_GROUP_COMPLETED_REBALANCES_SENSOR_NAME;
 import static org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetrics.CONSUMER_GROUP_REBALANCES_SENSOR_NAME;
-import static org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetrics.CLASSIC_GROUP_REBALANCES_SENSOR_NAME;
 import static org.junit.jupiter.api.AssertionFailureBuilder.assertionFailure;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -638,7 +637,7 @@ public class GroupMetadataManagerTest {
                 .build());
 
             assertEquals(
-                Collections.singletonList(newGroupMetadataRecordWithCurrentState(group, MetadataVersion.latest())),
+                Collections.singletonList(newGroupMetadataRecordWithCurrentState(group, MetadataVersion.latestTesting())),
                 syncResult.records
             );
             // Simulate a successful write to the log.
@@ -842,7 +841,7 @@ public class GroupMetadataManagerTest {
             ));
             assertEquals(
                 Collections.singletonList(
-                    RecordHelpers.newGroupMetadataRecord(group, groupAssignment, MetadataVersion.latest())),
+                    RecordHelpers.newGroupMetadataRecord(group, groupAssignment, MetadataVersion.latestTesting())),
                 leaderSyncResult.records
             );
 
@@ -902,7 +901,7 @@ public class GroupMetadataManagerTest {
 
             // Now the group is stable, with the one member that joined above
             assertEquals(
-                Collections.singletonList(newGroupMetadataRecordWithCurrentState(group, MetadataVersion.latest())),
+                Collections.singletonList(newGroupMetadataRecordWithCurrentState(group, MetadataVersion.latestTesting())),
                 syncResult.records
             );
             // Simulate a successful write to log.
@@ -940,7 +939,7 @@ public class GroupMetadataManagerTest {
             syncResult = sendClassicGroupSync(syncRequest.setGenerationId(nextGenerationId));
 
             assertEquals(
-                Collections.singletonList(newGroupMetadataRecordWithCurrentState(group, MetadataVersion.latest())),
+                Collections.singletonList(newGroupMetadataRecordWithCurrentState(group, MetadataVersion.latestTesting())),
                 syncResult.records
             );
             // Simulate a successful write to log.
@@ -1004,7 +1003,7 @@ public class GroupMetadataManagerTest {
                     .setProtocolType("consumer")
                     .setProtocol(null)
                     .setCurrentStateTimestamp(time.milliseconds()),
-                MetadataVersion.latest()));
+                MetadataVersion.latestTesting()));
 
 
             Set<String> heartbeatKeys = timeouts.stream().map(timeout -> timeout.key).collect(Collectors.toSet());
@@ -1043,8 +1042,10 @@ public class GroupMetadataManagerTest {
             );
         }
 
-        public List<ListGroupsResponseData.ListedGroup> sendListGroups(List<String> statesFilter) {
-            return groupMetadataManager.listGroups(statesFilter, lastCommittedOffset);
+        public List<ListGroupsResponseData.ListedGroup> sendListGroups(List<String> statesFilter, List<String> typesFilter) {
+            Set<String> statesFilterSet = statesFilter.stream().collect(Collectors.toSet());
+            Set<String> typesFilterSet = typesFilter.stream().collect(Collectors.toSet());
+            return groupMetadataManager.listGroups(statesFilterSet, typesFilterSet, lastCommittedOffset);
         }
 
         public List<ConsumerGroupDescribeResponseData.DescribedGroup> sendConsumerGroupDescribe(List<String> groupIds) {
@@ -1262,6 +1263,12 @@ public class GroupMetadataManagerTest {
         // GroupId must be present in all requests.
         ex = assertThrows(InvalidRequestException.class, () -> context.consumerGroupHeartbeat(
             new ConsumerGroupHeartbeatRequestData()));
+        assertEquals("GroupId can't be empty.", ex.getMessage());
+
+        // GroupId can't be all whitespaces.
+        ex = assertThrows(InvalidRequestException.class, () -> context.consumerGroupHeartbeat(
+            new ConsumerGroupHeartbeatRequestData()
+                .setGroupId("   ")));
         assertEquals("GroupId can't be empty.", ex.getMessage());
 
         // RebalanceTimeoutMs must be present in the first request (epoch == 0).
@@ -2373,11 +2380,8 @@ public class GroupMetadataManagerTest {
             .setMemberEpoch(-2)
             .build();
 
-        List<Record> expectedRecords = Collections.singletonList(
-            RecordHelpers.newCurrentAssignmentRecord(groupId, member2UpdatedEpoch)
-        );
-
-        assertEquals(result.records(), expectedRecords);
+        assertEquals(1, result.records().size());
+        assertRecordEquals(result.records().get(0), RecordHelpers.newCurrentAssignmentRecord(groupId, member2UpdatedEpoch));
 
         // Member 2 rejoins the group with the same instance id.
         CoordinatorResult<ConsumerGroupHeartbeatResponseData, Record> rejoinResult = context.consumerGroupHeartbeat(
@@ -2525,11 +2529,9 @@ public class GroupMetadataManagerTest {
             .Builder(member2)
             .setMemberEpoch(LEAVE_GROUP_STATIC_MEMBER_EPOCH)
             .build();
-        List<Record> expectedRecords = Collections.singletonList(
-            RecordHelpers.newCurrentAssignmentRecord(groupId, member2UpdatedEpoch)
-        );
 
-        assertEquals(result.records(), expectedRecords);
+        assertEquals(1, result.records().size());
+        assertRecordEquals(result.records().get(0), RecordHelpers.newCurrentAssignmentRecord(groupId, member2UpdatedEpoch));
     }
 
     @Test
@@ -4933,7 +4935,7 @@ public class GroupMetadataManagerTest {
         ClassicGroup group = context.groupMetadataManager.getOrMaybeCreateClassicGroup("group-id", false);
 
         assertEquals(
-            Collections.singletonList(RecordHelpers.newEmptyGroupMetadataRecord(group, MetadataVersion.latest())),
+            Collections.singletonList(RecordHelpers.newEmptyGroupMetadataRecord(group, MetadataVersion.latestTesting())),
             joinResult.records
         );
     }
@@ -5007,7 +5009,7 @@ public class GroupMetadataManagerTest {
                 .setProtocolType("consumer")
                 .setProtocol("range")
                 .setCurrentStateTimestamp(context.time.milliseconds()),
-            MetadataVersion.latest());
+            MetadataVersion.latestTesting());
 
         context.replay(groupMetadataRecord);
         ClassicGroup group = context.groupMetadataManager.getOrMaybeCreateClassicGroup("group-id", false);
@@ -5071,7 +5073,7 @@ public class GroupMetadataManagerTest {
                 .setProtocolType("consumer")
                 .setProtocol("range")
                 .setCurrentStateTimestamp(context.time.milliseconds()),
-            MetadataVersion.latest());
+            MetadataVersion.latestTesting());
 
         context.replay(groupMetadataRecord);
         context.groupMetadataManager.onLoaded();
@@ -5111,7 +5113,7 @@ public class GroupMetadataManagerTest {
                 .setProtocolType("consumer")
                 .setProtocol("range")
                 .setCurrentStateTimestamp(context.time.milliseconds()),
-            MetadataVersion.latest());
+            MetadataVersion.latestTesting());
 
         context.replay(groupMetadataRecord);
         context.groupMetadataManager.onLoaded();
@@ -6050,7 +6052,7 @@ public class GroupMetadataManagerTest {
         timeouts.forEach(timeout -> {
             assertEquals(classicGroupHeartbeatKey("group-id", memberId), timeout.key);
             assertEquals(Collections.singletonList(
-                newGroupMetadataRecordWithCurrentState(group, MetadataVersion.latest())),
+                newGroupMetadataRecordWithCurrentState(group, MetadataVersion.latestTesting())),
                 timeout.result.records());
         });
 
@@ -6529,7 +6531,7 @@ public class GroupMetadataManagerTest {
         );
 
         assertEquals(
-            Collections.singletonList(newGroupMetadataRecordWithCurrentState(group, MetadataVersion.latest())),
+            Collections.singletonList(newGroupMetadataRecordWithCurrentState(group, MetadataVersion.latestTesting())),
             joinResult.records
         );
         assertFalse(joinResult.joinFuture.isDone());
@@ -6656,7 +6658,7 @@ public class GroupMetadataManagerTest {
         );
 
         assertEquals(
-            Collections.singletonList(newGroupMetadataRecordWithCurrentState(group, MetadataVersion.latest())),
+            Collections.singletonList(newGroupMetadataRecordWithCurrentState(group, MetadataVersion.latestTesting())),
             joinResult.records
         );
         assertFalse(joinResult.joinFuture.isDone());
@@ -6732,7 +6734,7 @@ public class GroupMetadataManagerTest {
             supportSkippingAssignment);
 
         assertEquals(
-            Collections.singletonList(newGroupMetadataRecordWithCurrentState(group, MetadataVersion.latest())),
+            Collections.singletonList(newGroupMetadataRecordWithCurrentState(group, MetadataVersion.latestTesting())),
             joinResult.records
         );
         assertFalse(joinResult.joinFuture.isDone());
@@ -6870,7 +6872,7 @@ public class GroupMetadataManagerTest {
                 .setProtocolType("consumer")
                 .setProtocol(null)
                 .setCurrentStateTimestamp(context.time.milliseconds()),
-            MetadataVersion.latest())
+            MetadataVersion.latestTesting())
         );
 
         assertEquals(1, timeouts.size());
@@ -7300,7 +7302,7 @@ public class GroupMetadataManagerTest {
         );
 
         assertEquals(
-            Collections.singletonList(newGroupMetadataRecordWithCurrentState(group, MetadataVersion.latest())),
+            Collections.singletonList(newGroupMetadataRecordWithCurrentState(group, MetadataVersion.latestTesting())),
             joinResult.records
         );
         // Simulate a successful write to the log.
@@ -7613,7 +7615,7 @@ public class GroupMetadataManagerTest {
         );
 
         assertEquals(
-            Collections.singletonList(newGroupMetadataRecordWithCurrentState(group, MetadataVersion.latest())),
+            Collections.singletonList(newGroupMetadataRecordWithCurrentState(group, MetadataVersion.latestTesting())),
             followerJoinResult.records
         );
         // Simulate a failed write to the log.
@@ -7670,7 +7672,7 @@ public class GroupMetadataManagerTest {
         leaderSyncResult.appendFuture.complete(null);
 
         assertEquals(
-            Collections.singletonList(newGroupMetadataRecordWithCurrentState(group, MetadataVersion.latest())),
+            Collections.singletonList(newGroupMetadataRecordWithCurrentState(group, MetadataVersion.latestTesting())),
             leaderSyncResult.records
         );
 
@@ -7720,7 +7722,7 @@ public class GroupMetadataManagerTest {
         );
 
         assertEquals(
-            Collections.singletonList(newGroupMetadataRecordWithCurrentState(group, MetadataVersion.latest())),
+            Collections.singletonList(newGroupMetadataRecordWithCurrentState(group, MetadataVersion.latestTesting())),
             followerJoinResult.records
         );
 
@@ -7932,7 +7934,7 @@ public class GroupMetadataManagerTest {
         );
 
         assertEquals(
-            Collections.singletonList(newGroupMetadataRecordWithCurrentState(group, MetadataVersion.latest())),
+            Collections.singletonList(newGroupMetadataRecordWithCurrentState(group, MetadataVersion.latestTesting())),
             followerJoinResult.records
         );
         // Simulate a successful write to log.
@@ -8139,7 +8141,7 @@ public class GroupMetadataManagerTest {
             );
 
             assertEquals(
-                Collections.singletonList(newGroupMetadataRecordWithCurrentState(group, MetadataVersion.latest())),
+                Collections.singletonList(newGroupMetadataRecordWithCurrentState(group, MetadataVersion.latestTesting())),
                 leaderJoinResult.records
             );
             // Simulate a successful write to log.
@@ -8920,7 +8922,7 @@ public class GroupMetadataManagerTest {
 
         assertEquals(
             Collections.singletonList(
-                RecordHelpers.newGroupMetadataRecord(group, updatedAssignment, MetadataVersion.latest())),
+                RecordHelpers.newGroupMetadataRecord(group, updatedAssignment, MetadataVersion.latestTesting())),
             syncResult.records
         );
 
@@ -9581,7 +9583,7 @@ public class GroupMetadataManagerTest {
         ExpiredTimeout<Void, Record> timeout = timeouts.get(0);
         assertEquals(classicGroupSyncKey("group-id"), timeout.key);
         assertEquals(
-            Collections.singletonList(newGroupMetadataRecordWithCurrentState(group, MetadataVersion.latest())),
+            Collections.singletonList(newGroupMetadataRecordWithCurrentState(group, MetadataVersion.latestTesting())),
             timeout.result.records()
         );
 
@@ -9737,7 +9739,7 @@ public class GroupMetadataManagerTest {
 
             if (response.memberId().equals(leaderId)) {
                 assertEquals(
-                    Collections.singletonList(newGroupMetadataRecordWithCurrentState(group, MetadataVersion.latest())),
+                    Collections.singletonList(newGroupMetadataRecordWithCurrentState(group, MetadataVersion.latestTesting())),
                     syncResult.records
                 );
 
@@ -9811,10 +9813,8 @@ public class GroupMetadataManagerTest {
     @Test
     public void testListGroups() {
         String consumerGroupId = "consumer-group-id";
-        String classicGroupId = "generic-group-id";
+        String classicGroupId = "classic-group-id";
         String memberId1 = Uuid.randomUuid().toString();
-        String classicGroupType = "generic";
-        Uuid fooTopicId = Uuid.randomUuid();
         String fooTopicName = "foo";
 
         MockPartitionAssignor assignor = new MockPartitionAssignor("range");
@@ -9822,16 +9822,18 @@ public class GroupMetadataManagerTest {
             .withAssignors(Collections.singletonList(assignor))
             .withConsumerGroup(new ConsumerGroupBuilder(consumerGroupId, 10))
             .build();
+
+        // Create one classic group record.
         context.replay(newGroupMetadataRecord(
             classicGroupId,
             new GroupMetadataValue()
                 .setMembers(Collections.emptyList())
                 .setGeneration(2)
                 .setLeader(null)
-                .setProtocolType(classicGroupType)
+                .setProtocolType("classic")
                 .setProtocol("range")
                 .setCurrentStateTimestamp(context.time.milliseconds()),
-            MetadataVersion.latest()));
+            MetadataVersion.latestTesting()));
         context.commit();
         ClassicGroup classicGroup = context.groupMetadataManager.getOrMaybeCreateClassicGroup(classicGroupId, false);
         context.replay(RecordHelpers.newMemberSubscriptionRecord(consumerGroupId, new ConsumerGroupMember.Builder(memberId1)
@@ -9839,48 +9841,117 @@ public class GroupMetadataManagerTest {
             .build()));
         context.replay(RecordHelpers.newGroupEpochRecord(consumerGroupId, 11));
 
+        // Test list group response without a group state or group type filter.
         Map<String, ListGroupsResponseData.ListedGroup> actualAllGroupMap =
-            context.sendListGroups(Collections.emptyList())
-                .stream().collect(Collectors.toMap(ListGroupsResponseData.ListedGroup::groupId, Function.identity()));
+            context.sendListGroups(Collections.emptyList(), Collections.emptyList()).stream()
+                .collect(Collectors.toMap(ListGroupsResponseData.ListedGroup::groupId, Function.identity()));
+
         Map<String, ListGroupsResponseData.ListedGroup> expectAllGroupMap =
             Stream.of(
                 new ListGroupsResponseData.ListedGroup()
                     .setGroupId(classicGroup.groupId())
-                    .setProtocolType(classicGroupType)
-                    .setGroupState(EMPTY.toString()),
+                    .setProtocolType("classic")
+                    .setGroupState(EMPTY.toString())
+                    .setGroupType(Group.GroupType.CLASSIC.toString()),
                 new ListGroupsResponseData.ListedGroup()
                     .setGroupId(consumerGroupId)
                     .setProtocolType(ConsumerProtocol.PROTOCOL_TYPE)
                     .setGroupState(ConsumerGroup.ConsumerGroupState.EMPTY.toString())
+                    .setGroupType(Group.GroupType.CONSUMER.toString())
             ).collect(Collectors.toMap(ListGroupsResponseData.ListedGroup::groupId, Function.identity()));
+
+        assertEquals(expectAllGroupMap, actualAllGroupMap);
+
+        // List group with case-insensitive ‘empty’.
+        actualAllGroupMap =
+            context.sendListGroups(Collections.singletonList("empty"), Collections.emptyList())
+                .stream().collect(Collectors.toMap(ListGroupsResponseData.ListedGroup::groupId, Function.identity()));
 
         assertEquals(expectAllGroupMap, actualAllGroupMap);
 
         context.commit();
-        actualAllGroupMap = context.sendListGroups(Collections.emptyList()).stream()
+
+        // Test list group response to check assigning state in the consumer group.
+        actualAllGroupMap = context.sendListGroups(Collections.singletonList("assigning"), Collections.emptyList()).stream()
             .collect(Collectors.toMap(ListGroupsResponseData.ListedGroup::groupId, Function.identity()));
         expectAllGroupMap =
             Stream.of(
                 new ListGroupsResponseData.ListedGroup()
-                    .setGroupId(classicGroup.groupId())
-                    .setProtocolType(classicGroupType)
-                    .setGroupState(EMPTY.toString()),
-                new ListGroupsResponseData.ListedGroup()
                     .setGroupId(consumerGroupId)
                     .setProtocolType(ConsumerProtocol.PROTOCOL_TYPE)
                     .setGroupState(ConsumerGroup.ConsumerGroupState.ASSIGNING.toString())
+                    .setGroupType(Group.GroupType.CONSUMER.toString())
             ).collect(Collectors.toMap(ListGroupsResponseData.ListedGroup::groupId, Function.identity()));
 
         assertEquals(expectAllGroupMap, actualAllGroupMap);
 
-        actualAllGroupMap = context.sendListGroups(Collections.singletonList("Empty")).stream()
+        // Test list group response with group state filter and no group type filter.
+        actualAllGroupMap = context.sendListGroups(Collections.singletonList("Empty"), Collections.emptyList()).stream()
             .collect(Collectors.toMap(ListGroupsResponseData.ListedGroup::groupId, Function.identity()));
         expectAllGroupMap = Stream.of(
             new ListGroupsResponseData.ListedGroup()
                 .setGroupId(classicGroup.groupId())
-                .setProtocolType(classicGroupType)
+                .setProtocolType("classic")
                 .setGroupState(EMPTY.toString())
+                .setGroupType(Group.GroupType.CLASSIC.toString())
         ).collect(Collectors.toMap(ListGroupsResponseData.ListedGroup::groupId, Function.identity()));
+
+        assertEquals(expectAllGroupMap, actualAllGroupMap);
+
+        // Test list group response with no group state filter and with group type filter.
+        actualAllGroupMap = context.sendListGroups(Collections.emptyList(), Collections.singletonList(Group.GroupType.CLASSIC.toString())).stream()
+            .collect(Collectors.toMap(ListGroupsResponseData.ListedGroup::groupId, Function.identity()));
+        expectAllGroupMap = Stream.of(
+            new ListGroupsResponseData.ListedGroup()
+                .setGroupId(classicGroup.groupId())
+                .setProtocolType("classic")
+                .setGroupState(EMPTY.toString())
+                .setGroupType(Group.GroupType.CLASSIC.toString())
+        ).collect(Collectors.toMap(ListGroupsResponseData.ListedGroup::groupId, Function.identity()));
+
+        assertEquals(expectAllGroupMap, actualAllGroupMap);
+
+        // Test list group response with no group state filter and with group type filter in a different case.
+        actualAllGroupMap = context.sendListGroups(Collections.emptyList(), Collections.singletonList("Consumer")).stream()
+            .collect(Collectors.toMap(ListGroupsResponseData.ListedGroup::groupId, Function.identity()));
+        expectAllGroupMap = Stream.of(
+            new ListGroupsResponseData.ListedGroup()
+                .setGroupId(consumerGroupId)
+                .setProtocolType(ConsumerProtocol.PROTOCOL_TYPE)
+                .setGroupState(ConsumerGroup.ConsumerGroupState.ASSIGNING.toString())
+                .setGroupType(Group.GroupType.CONSUMER.toString())
+        ).collect(Collectors.toMap(ListGroupsResponseData.ListedGroup::groupId, Function.identity()));
+
+        assertEquals(expectAllGroupMap, actualAllGroupMap);
+
+        actualAllGroupMap = context.sendListGroups(Arrays.asList("empty", "Assigning"), Collections.emptyList()).stream()
+            .collect(Collectors.toMap(ListGroupsResponseData.ListedGroup::groupId, Function.identity()));
+        expectAllGroupMap = Stream.of(
+            new ListGroupsResponseData.ListedGroup()
+                .setGroupId(classicGroup.groupId())
+                .setProtocolType(Group.GroupType.CLASSIC.toString())
+                .setGroupState(EMPTY.toString())
+                .setGroupType(Group.GroupType.CLASSIC.toString()),
+            new ListGroupsResponseData.ListedGroup()
+                .setGroupId(consumerGroupId)
+                .setProtocolType(ConsumerProtocol.PROTOCOL_TYPE)
+                .setGroupState(ConsumerGroup.ConsumerGroupState.ASSIGNING.toString())
+                .setGroupType(Group.GroupType.CONSUMER.toString())
+        ).collect(Collectors.toMap(ListGroupsResponseData.ListedGroup::groupId, Function.identity()));
+
+        assertEquals(expectAllGroupMap, actualAllGroupMap);
+
+        // Test list group response with no group state filter and with invalid group type filter .
+        actualAllGroupMap = context.sendListGroups(Collections.emptyList(), Collections.singletonList("Invalid")).stream()
+            .collect(Collectors.toMap(ListGroupsResponseData.ListedGroup::groupId, Function.identity()));
+        expectAllGroupMap = Collections.emptyMap();
+
+        assertEquals(expectAllGroupMap, actualAllGroupMap);
+
+        // Test list group response with invalid group state filter and with no group type filter .
+        actualAllGroupMap = context.sendListGroups(Collections.singletonList("Invalid"), Collections.emptyList()).stream()
+            .collect(Collectors.toMap(ListGroupsResponseData.ListedGroup::groupId, Function.identity()));
+        expectAllGroupMap = Collections.emptyMap();
 
         assertEquals(expectAllGroupMap, actualAllGroupMap);
     }
@@ -9907,15 +9978,18 @@ public class GroupMetadataManagerTest {
             new ConsumerGroupDescribeResponseData.DescribedGroup()
                 .setGroupEpoch(epoch)
                 .setGroupId(consumerGroupIds.get(0))
-                .setGroupState("empty")
+                .setGroupState(ConsumerGroup.ConsumerGroupState.EMPTY.toString())
                 .setAssignorName("range"),
             new ConsumerGroupDescribeResponseData.DescribedGroup()
                 .setGroupEpoch(epoch)
                 .setGroupId(consumerGroupIds.get(1))
                 .setMembers(Arrays.asList(
-                    memberBuilder.build().asConsumerGroupDescribeMember(new Assignment(Collections.emptyMap()))
+                    memberBuilder.build().asConsumerGroupDescribeMember(
+                        new Assignment(Collections.emptyMap()),
+                        new MetadataImageBuilder().build().topics()
+                    )
                 ))
-                .setGroupState("assigning")
+                .setGroupState(ConsumerGroup.ConsumerGroupState.ASSIGNING.toString())
                 .setAssignorName("assignorName")
         );
         List<ConsumerGroupDescribeResponseData.DescribedGroup> actual = context.sendConsumerGroupDescribe(consumerGroupIds);
@@ -9950,10 +10024,15 @@ public class GroupMetadataManagerTest {
         String memberId1 = "memberId1";
         String memberId2 = "memberId2";
         String topicName = "topicName";
+        Uuid topicId = Uuid.randomUuid();
+        MetadataImage metadataImage = new MetadataImageBuilder()
+            .addTopic(topicId, topicName, 3)
+            .build();
 
         MockPartitionAssignor assignor = new MockPartitionAssignor("range");
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
             .withAssignors(Collections.singletonList(assignor))
+            .withMetadataImage(metadataImage)
             .build();
 
         ConsumerGroupMember.Builder memberBuilder1 = new ConsumerGroupMember.Builder(memberId1)
@@ -9962,7 +10041,8 @@ public class GroupMetadataManagerTest {
         context.replay(RecordHelpers.newGroupEpochRecord(consumerGroupId, epoch + 1));
 
         Map<Uuid, Set<Integer>> assignmentMap = new HashMap<>();
-        assignmentMap.put(Uuid.randomUuid(), Collections.emptySet());
+        assignmentMap.put(topicId, Collections.emptySet());
+
         ConsumerGroupMember.Builder memberBuilder2 = new ConsumerGroupMember.Builder(memberId2);
         context.replay(RecordHelpers.newMemberSubscriptionRecord(consumerGroupId, memberBuilder2.build()));
         context.replay(RecordHelpers.newTargetAssignmentRecord(consumerGroupId, memberId2, assignmentMap));
@@ -9985,10 +10065,10 @@ public class GroupMetadataManagerTest {
         describedGroup = new ConsumerGroupDescribeResponseData.DescribedGroup()
             .setGroupId(consumerGroupId)
             .setMembers(Arrays.asList(
-                memberBuilder1.build().asConsumerGroupDescribeMember(new Assignment(Collections.emptyMap())),
-                memberBuilder2.build().asConsumerGroupDescribeMember(new Assignment(assignmentMap))
+                memberBuilder1.build().asConsumerGroupDescribeMember(new Assignment(Collections.emptyMap()), metadataImage.topics()),
+                memberBuilder2.build().asConsumerGroupDescribeMember(new Assignment(assignmentMap), metadataImage.topics())
             ))
-            .setGroupState("assigning")
+            .setGroupState(ConsumerGroup.ConsumerGroupState.ASSIGNING.toString())
             .setAssignorName("range")
             .setGroupEpoch(epoch + 2);
         expected = Collections.singletonList(
@@ -10018,7 +10098,7 @@ public class GroupMetadataManagerTest {
         context.replay(newGroupMetadataRecord(
             "group-id",
             groupMetadataValue,
-            MetadataVersion.latest()
+            MetadataVersion.latestTesting()
         ));
         context.verifyDescribeGroupsReturnsDeadGroup("group-id");
         context.commit();
@@ -10067,7 +10147,7 @@ public class GroupMetadataManagerTest {
         context.replay(newGroupMetadataRecord(
             "group-id",
             groupMetadataValue,
-            MetadataVersion.latest()
+            MetadataVersion.latestTesting()
         ));
         ClassicGroup group = context.groupMetadataManager.getOrMaybeCreateClassicGroup("group-id", false);
         context.groupMetadataManager.prepareRebalance(group, "trigger rebalance");
@@ -10488,7 +10568,7 @@ public class GroupMetadataManagerTest {
                 ))
         );
         assertEquals(
-            Collections.singletonList(newGroupMetadataRecordWithCurrentState(group, MetadataVersion.latest())),
+            Collections.singletonList(newGroupMetadataRecordWithCurrentState(group, MetadataVersion.latestTesting())),
             leaveResult.records()
         );
         // Simulate a successful write to the log.
@@ -10899,22 +10979,6 @@ public class GroupMetadataManagerTest {
             .build();
         context.joinClassicGroupAsDynamicMemberAndCompleteRebalance("group-id");
         verify(context.metrics).record(CLASSIC_GROUP_COMPLETED_REBALANCES_SENSOR_NAME);
-    }
-
-    @Test
-    public void testClassicGroupRebalanceSensor() throws Exception {
-        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
-            .build();
-        context.createClassicGroup("group-id");
-
-        context.joinClassicGroupAsDynamicMemberAndCompleteJoin(
-            new JoinGroupRequestBuilder()
-                .withGroupId("group-id")
-                .withMemberId(UNKNOWN_MEMBER_ID)
-                .withDefaultProtocolTypeAndProtocols()
-                .build()
-        );
-        verify(context.metrics).record(CLASSIC_GROUP_REBALANCES_SENSOR_NAME);
     }
 
     @Test
