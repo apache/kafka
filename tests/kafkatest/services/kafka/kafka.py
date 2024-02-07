@@ -1819,5 +1819,45 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         self.logger.debug(output)
         return output
 
+    def wait_until_rejoin_isr(self, topic, partitions, replication_factor, timeout_sec=60):
+        for partition in partitions:
+            wait_until(lambda: len(self.isr_idx_list(topic, partition)) == replication_factor, timeout_sec=timeout_sec,
+                    backoff_sec=1, err_msg="Replicas did not rejoin the ISR in a reasonable amount of time")
+
+    def replica_leader_epochs(self, node, topic, partition, end_offset):
+        """
+        Fetch the leader epoch history for a given partition replica
+        :param topic:
+        :param partition:
+        :return leader epochs:
+        """
+        path = next(node.account.ssh_capture("find %s* -regex '.*/%s-%s/leader-epoch-checkpoint'" % \
+             (KafkaService.DATA_LOG_DIR_PREFIX, topic, partition)))
+        output = list(node.account.ssh_capture("cat %s" % path))
+        epochs = {}
+        for line in output[2:]:
+            epoch, offset = line.split()
+            # After a leader election the leader will be stamped with the next offset
+            # but the followers will not be until a new message has been written.
+            # Therefore we strip off the final epoch if the offset matches the exclusive end offset
+            if end_offset != long(offset):
+                epochs[int(epoch)] = long(offset)
+        return epochs
+
+    def replica_leader_epochs_match(self, topic, partitions):
+        """
+        Assert that leader epoch lineages match between replicas
+        :param topic:
+        :param partitions:
+        :return:
+        """
+        for partition in partitions:
+            end_offset = long(self.get_offset_shell(topic, str(partition), 30000, 0, -1).split(':')[2])
+            isr = self.isr_idx_list(topic, partition)
+            epochs = [self.replica_leader_epochs(self.get_node(replica), topic, partition, end_offset) for replica in isr]
+            for e1 in epochs:
+                for e2 in epochs:
+                    assert e1 == e2, "leader epochs for %s-%d didn't match %s" % (topic, partition, str(epochs))
+
     def java_class_name(self):
         return "kafka.Kafka"
