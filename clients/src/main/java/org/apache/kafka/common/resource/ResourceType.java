@@ -33,48 +33,48 @@ public enum ResourceType {
      * Represents any ResourceType which this client cannot understand,
      * perhaps because this client is too old.
      */
-    UNKNOWN((byte) 0),
+    UNKNOWN(0),
 
     /**
      * In a filter, matches any ResourceType.
      */
-    ANY((byte) 1),
+    ANY(1),
 
     /**
      * A Kafka topic.
      */
-    TOPIC((byte) 2),
+    TOPIC(2),
 
     /**
      * A consumer group.
      */
-    GROUP((byte) 3),
+    GROUP(3),
 
     /**
      * The cluster as a whole.
      */
-    CLUSTER((byte) 4),
+    CLUSTER(4),
 
     /**
      * A transactional ID.
      */
-    TRANSACTIONAL_ID((byte) 5),
+    TRANSACTIONAL_ID(5),
 
     /**
      * A token ID.
      */
-    DELEGATION_TOKEN((byte) 6),
+    DELEGATION_TOKEN(6),
 
     /**
      * A user principal
      */
-    USER((byte) 7);
+    USER(7);
 
     private final static HashMap<Byte, ResourceType> CODE_TO_VALUE = new HashMap<>();
 
     static {
         for (ResourceType resourceType : ResourceType.values()) {
-            CODE_TO_VALUE.put(resourceType.code, resourceType);
+            CODE_TO_VALUE.put((byte) resourceType.code, resourceType);
         }
     }
 
@@ -104,9 +104,10 @@ public enum ResourceType {
         return resourceType;
     }
 
-    private final byte code;
+    //making this int since profiling showed miss alignement.
+    private final int code;
 
-    ResourceType(byte code) {
+    ResourceType(int code) {
         this.code = code;
     }
 
@@ -114,7 +115,7 @@ public enum ResourceType {
      * Return the code of this resource.
      */
     public byte code() {
-        return code;
+        return (byte) code;
     }
 
     /**
