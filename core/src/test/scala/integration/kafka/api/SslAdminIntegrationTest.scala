@@ -240,6 +240,19 @@ class SslAdminIntegrationTest extends SaslSslAdminIntegrationTest {
   private def blockedRequestThreads: List[Thread] = {
     val requestThreads = Thread.getAllStackTraces.keySet.asScala
       .filter(_.getName.contains("data-plane-kafka-request-handler"))
+    if (numRequestThreads != requestThreads.size) {
+      requestThreads.foreach(th => {
+        // Print the thread name and current state of thread.
+        System.out.println("Thread Name:" + th.getName)
+        System.out.println("Thread State:" + th.getState)
+        val trace = th.getStackTrace
+        for (el <- trace) {
+          println("\t" + el)
+        }
+        println()
+      })
+    }
+
     assertEquals(numRequestThreads, requestThreads.size)
     requestThreads.filter(_.getState == Thread.State.WAITING).toList
   }
