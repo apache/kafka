@@ -258,7 +258,7 @@ class LogManagerTest {
       invocation.callRealMethod().asInstanceOf[UnifiedLog]
       loadLogCalled = loadLogCalled + 1
     }.when(logManager).loadLog(any[File], any[Boolean], any[Map[TopicPartition, Long]], any[Map[TopicPartition, Long]],
-      any[LogConfig], any[Map[String, LogConfig]], any[ConcurrentMap[String, Int]])
+      any[LogConfig], any[Map[String, LogConfig]], any[ConcurrentMap[String, Int]], any)
 
     val t = new Thread() {
       override def run(): Unit = { logManager.startup(Set.empty) }
@@ -516,7 +516,7 @@ class LogManagerTest {
     val remoteIndexCache = new File(logDir, RemoteIndexCache.DIR_NAME)
     remoteIndexCache.mkdir()
     logManager = createLogManager(Seq(logDir))
-    logManager.loadLogs(logConfig, Map.empty)
+    logManager.loadLogs(logConfig, Map.empty, _ => false)
   }
 
   /**
@@ -949,7 +949,7 @@ class LogManagerTest {
         numRemainingSegments = mockMap)
 
     }.when(spyLogManager).loadLog(any[File], any[Boolean], any[Map[TopicPartition, Long]], any[Map[TopicPartition, Long]],
-      any[LogConfig], any[Map[String, LogConfig]], any[ConcurrentMap[String, Int]])
+      any[LogConfig], any[Map[String, LogConfig]], any[ConcurrentMap[String, Int]], any)
 
     // do nothing for removeLogRecoveryMetrics for metrics verification
     doNothing().when(spyLogManager).removeLogRecoveryMetrics()
@@ -1216,52 +1216,6 @@ class LogManagerTest {
   val quux0 = new TopicIdPartition(Uuid.fromString("YS9owjv5TG2OlsvBM0Qw6g"), new TopicPartition("quux", 0))
   val recreatedFoo0 = new TopicIdPartition(Uuid.fromString("_dOOzPe3TfiWV21Lh7Vmqg"), new TopicPartition("foo", 0))
   val recreatedFoo1 = new TopicIdPartition(Uuid.fromString("_dOOzPe3TfiWV21Lh7Vmqg"), new TopicPartition("foo", 1))
-
-  @Test
-  def testFindStrayReplicasInEmptyImage(): Unit = {
-    val image: TopicsImage  = topicsImage(Seq())
-    val onDisk = Seq(foo0, foo1, bar0, bar1, quux0)
-    val expected = onDisk.map(_.topicPartition()).toSet
-    assertEquals(expected,
-      LogManager.findStrayReplicas(0,
-        image, onDisk.map(mockLog(_)).toSet))
-  }
-
-  @Test
-  def testFindSomeStrayReplicasInImage(): Unit = {
-    val image: TopicsImage  = topicsImage(Seq(
-      topicImage(Map(
-        foo0 -> Seq(0, 1, 2),
-      )),
-      topicImage(Map(
-        bar0 -> Seq(0, 1, 2),
-        bar1 -> Seq(0, 1, 2),
-      ))
-    ))
-    val onDisk = Seq(foo0, foo1, bar0, bar1, quux0).map(mockLog(_))
-    val expected = Set(foo1, quux0).map(_.topicPartition)
-    assertEquals(expected,
-      LogManager.findStrayReplicas(0,
-        image, onDisk).toSet)
-  }
-
-  @Test
-  def testFindSomeStrayReplicasInImageWithRemoteReplicas(): Unit = {
-    val image: TopicsImage  = topicsImage(Seq(
-      topicImage(Map(
-        foo0 -> Seq(0, 1, 2),
-      )),
-      topicImage(Map(
-        bar0 -> Seq(1, 2, 3),
-        bar1 -> Seq(2, 3, 0),
-      ))
-    ))
-    val onDisk = Seq(foo0, bar0, bar1).map(mockLog(_))
-    val expected = Set(bar0).map(_.topicPartition)
-    assertEquals(expected,
-      LogManager.findStrayReplicas(0,
-        image, onDisk).toSet)
-  }
 
   @Test
   def testFindStrayReplicasInEmptyLAIR(): Unit = {
