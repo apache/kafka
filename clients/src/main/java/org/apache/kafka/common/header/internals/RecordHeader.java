@@ -40,7 +40,7 @@ public class RecordHeader implements Header {
         this.valueBuffer = valueBuffer;
     }
     
-    public String key() {
+    public synchronized String key() {
         if (key == null) {
             key = Utils.utf8(keyBuffer, keyBuffer.remaining());
             keyBuffer = null;
@@ -48,7 +48,7 @@ public class RecordHeader implements Header {
         return key;
     }
 
-    public byte[] value() {
+    public synchronized byte[] value() {
         if (value == null && valueBuffer != null) {
             value = Utils.toArray(valueBuffer);
             valueBuffer = null;
