@@ -28,7 +28,7 @@ import org.apache.kafka.common.utils.SecurityUtils
 import org.apache.kafka.image.{MetadataDelta, MetadataImage, MetadataProvenance}
 import org.apache.kafka.metadata.migration.KRaftMigrationZkWriter
 import org.apache.kafka.server.common.ApiMessageAndVersion
-import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
+import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue, fail}
 import org.junit.jupiter.api.Test
 
 import scala.collection.mutable
@@ -169,7 +169,7 @@ class ZkAclMigrationClientTest extends ZkMigrationTestHarness {
     val image = delta.apply(MetadataProvenance.EMPTY)
 
     // load snapshot to Zookeeper.
-    val kraftMigrationZkWriter = new KRaftMigrationZkWriter(migrationClient, _ => { })
+    val kraftMigrationZkWriter = new KRaftMigrationZkWriter(migrationClient, fail(_))
     kraftMigrationZkWriter.handleSnapshot(image, (_, _, operation) => { migrationState = operation.apply(migrationState) })
 
     // Verify the new ACLs in Zookeeper.
@@ -303,6 +303,7 @@ class ZkAclMigrationClientTest extends ZkMigrationTestHarness {
     assertEquals(4, zkClient.getVersionedAclsForResource(literalResource).acls.size)
     assertEquals(0, zkClient.getVersionedAclsForResource(prefixedResource).acls.size)
     assertEquals(0, zkClient.getVersionedAclsForResource(otherResource).acls.size)
+    assertEquals(0, errorLogs.size)
 
     val acl5 = acl(topicName, ResourceType.TOPIC, PatternType.PREFIXED, user("alice"))
     val acl6 = acl(topicName, ResourceType.TOPIC, PatternType.PREFIXED, user("bob"))
@@ -324,6 +325,7 @@ class ZkAclMigrationClientTest extends ZkMigrationTestHarness {
     assertEquals(3, zkClient.getVersionedAclsForResource(literalResource).acls.size)
     assertEquals(2, zkClient.getVersionedAclsForResource(prefixedResource).acls.size)
     assertEquals(2, zkClient.getVersionedAclsForResource(otherResource).acls.size)
+    assertEquals(0, errorLogs.size)
 
     // Delete and add ACL for literal resource, remove both prefixed ACLs, add another "other"
     val acl9 = acl(otherName, ResourceType.TOPIC, PatternType.LITERAL, user("eve"))
@@ -341,5 +343,6 @@ class ZkAclMigrationClientTest extends ZkMigrationTestHarness {
     assertEquals(3, zkClient.getVersionedAclsForResource(literalResource).acls.size)
     assertEquals(0, zkClient.getVersionedAclsForResource(prefixedResource).acls.size)
     assertEquals(3, zkClient.getVersionedAclsForResource(otherResource).acls.size)
+    assertEquals(0, errorLogs.size)
   }
 }
