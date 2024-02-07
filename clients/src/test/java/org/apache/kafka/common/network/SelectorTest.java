@@ -182,7 +182,7 @@ public class SelectorTest {
     @Test
     public void testNoRouteToHost() {
         assertThrows(IOException.class,
-            () -> selector.connect("0", new InetSocketAddress("some.invalid.hostname.foo.bar.local", server.port), BUFFER_SIZE, BUFFER_SIZE));
+            () -> selector.connect("0", new InetSocketAddress("some.invalid", server.port), BUFFER_SIZE, BUFFER_SIZE));
     }
 
     /**

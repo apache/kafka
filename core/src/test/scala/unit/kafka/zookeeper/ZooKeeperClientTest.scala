@@ -64,7 +64,7 @@ class ZooKeeperClientTest extends QuorumTestHarness {
   @Test
   def testUnresolvableConnectString(): Unit = {
     try {
-      newZooKeeperClient("some.invalid.hostname.foo.bar.local", connectionTimeoutMs = 10)
+      newZooKeeperClient("some.invalid", connectionTimeoutMs = 10)
     } catch {
       case e: ZooKeeperClientTimeoutException =>
         assertEquals(Set.empty, runningZkSendThreads,  "ZooKeeper client threads still running")
