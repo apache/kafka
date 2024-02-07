@@ -316,7 +316,7 @@ class ZkMigrationClientTest extends ZkMigrationTestHarness {
 
   @Test
   def testTopicAndBrokerConfigsMigrationWithSnapshots(): Unit = {
-    val kraftWriter = new KRaftMigrationZkWriter(migrationClient)
+    val kraftWriter = new KRaftMigrationZkWriter(migrationClient, fail(_))
 
     // Add add some topics and broker configs and create new image.
     val topicName = "testTopic"
