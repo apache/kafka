@@ -1021,12 +1021,13 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                         " specified in value.serializer", cce);
             }
 
+            setReadOnly(record.headers());
+
             // Try to calculate partition, but note that after this call it can be RecordMetadata.UNKNOWN_PARTITION,
             // which means that the RecordAccumulator would pick a partition using built-in logic (which may
             // take into account broker load, the amount of data produced to each partition, etc.).
-            int partition = partition(record, serializedKey, serializedValue, cluster);
+            int partition = partition(record, serializedKey, serializedValue, cluster, record.headers());
 
-            setReadOnly(record.headers());
             Header[] headers = record.headers().toArray();
 
             int serializedSize = AbstractRecords.estimateSizeInBytesUpperBound(apiVersions.maxUsableProduceMagic(),
@@ -1046,7 +1047,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             if (result.abortForNewBatch) {
                 int prevPartition = partition;
                 onNewBatch(record.topic(), cluster, prevPartition);
-                partition = partition(record, serializedKey, serializedValue, cluster);
+                partition = partition(record, serializedKey, serializedValue, cluster, record.headers());
                 if (log.isTraceEnabled()) {
                     log.trace("Retrying append due to new batch creation for topic {} partition {}. The old partition was {}", record.topic(), partition, prevPartition);
                 }
@@ -1416,13 +1417,13 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      * can be used (the partition is then calculated by built-in
      * partitioning logic).
      */
-    private int partition(ProducerRecord<K, V> record, byte[] serializedKey, byte[] serializedValue, Cluster cluster) {
+    private int partition(ProducerRecord<K, V> record, byte[] serializedKey, byte[] serializedValue, Cluster cluster, Headers headers) {
         if (record.partition() != null)
             return record.partition();
 
         if (partitioner != null) {
             int customPartition = partitioner.partition(
-                record.topic(), record.key(), serializedKey, record.value(), serializedValue, cluster);
+                record.topic(), record.key(), serializedKey, record.value(), serializedValue, cluster, headers);
             if (customPartition < 0) {
                 throw new IllegalArgumentException(String.format(
                     "The partitioner generated an invalid partition number: %d. Partition number should always be non-negative.", customPartition));
