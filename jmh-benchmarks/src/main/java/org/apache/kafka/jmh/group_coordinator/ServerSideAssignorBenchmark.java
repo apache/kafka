@@ -43,13 +43,13 @@ import java.util.concurrent.TimeUnit;
 @OutputTimeUnit(TimeUnit.MILLISECONDS)
 public class ServerSideAssignorBenchmark {
 
-    @Param({"100"})
+    @Param({"10"})
     private int topicCount;
 
-    @Param({"20"})
+    @Param({"8"})
     private int partitionCount;
 
-    @Param({"20"})
+    @Param({"10"})
     private int memberCount;
 
     @Param({"false", "true"})
