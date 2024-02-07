@@ -19,6 +19,7 @@ package org.apache.kafka.common.config;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.ConfigDef.Importance;
 import org.apache.kafka.common.config.ConfigDef.Type;
+import org.apache.kafka.common.config.provider.MockDependentConfigProvider;
 import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.common.metrics.FakeMetricsReporter;
 import org.apache.kafka.common.metrics.JmxReporter;
@@ -426,23 +427,64 @@ public class AbstractConfigTest {
     @Test
     public void testAutoConfigResolutionWithMultipleConfigProviders() {
         // Test Case: Valid Test Case With Multiple ConfigProviders as a separate variable
-        Properties providers = new Properties();
-        providers.put("config.providers", "file,vault");
-        providers.put("config.providers.file.class", MockFileConfigProvider.class.getName());
         String id = UUID.randomUUID().toString();
-        providers.put("config.providers.file.param.testId", id);
-        providers.put("config.providers.vault.class", MockVaultConfigProvider.class.getName());
         Properties props = new Properties();
+        props.put("config.providers", "file,vault");
+        props.put("config.providers.file.class", MockFileConfigProvider.class.getName());
+        props.put("config.providers.file.param.testId", id);
+        props.put("config.providers.vault.class", MockVaultConfigProvider.class.getName());
         props.put("sasl.kerberos.key", "${file:/usr/kerberos:key}");
         props.put("sasl.kerberos.password", "${file:/usr/kerberos:password}");
         props.put("sasl.truststore.key", "${vault:/usr/truststore:truststoreKey}");
         props.put("sasl.truststore.password", "${vault:/usr/truststore:truststorePassword}");
-        TestIndirectConfigResolution config = new TestIndirectConfigResolution(props, convertPropertiesToMap(providers));
+        TestIndirectConfigResolution config = new TestIndirectConfigResolution(props);
         assertEquals("testKey", config.originals().get("sasl.kerberos.key"));
         assertEquals("randomPassword", config.originals().get("sasl.kerberos.password"));
         assertEquals("testTruststoreKey", config.originals().get("sasl.truststore.key"));
         assertEquals("randomtruststorePassword", config.originals().get("sasl.truststore.password"));
         MockFileConfigProvider.assertClosed(id);
+    }
+
+    @Test
+    public void testAutoConfigResolutionWithMultipleConfigProvidersWhenSecondUsesVariablesFromFirst() {
+        Properties providers = new Properties();
+        providers.put("config.providers", "file,vault");
+        providers.put("config.providers.file.class", MockFileConfigProvider.class.getName());
+        String id = UUID.randomUUID().toString();
+        providers.put("config.providers.file.param.testId", id);
+        providers.put("config.providers.vault.class", MockDependentConfigProvider.class.getName());
+        // Use the password from the 'file' config provider in the configuration for the 'vault' config provider
+        providers.put("config.providers.vault.param.secret.key", "${file:/usr/kerberos:password}");
+        Properties props = new Properties();
+        props.put("sasl.kerberos.key", "${file:/usr/kerberos:key}");
+        props.put("sasl.kerberos.password", "${file:/usr/kerberos:password}");
+        props.put("sasl.truststore.key", "${vault:/usr/truststore:app.key}");
+        props.put("sasl.truststore.password", "${vault:/usr/truststore:app.password}");
+        TestIndirectConfigResolution config = new TestIndirectConfigResolution(props, convertPropertiesToMap(providers));
+        assertEquals("testKey", config.originals().get("sasl.kerberos.key"));
+        assertEquals("randomPassword", config.originals().get("sasl.kerberos.password"));
+        assertEquals("appKey", config.originals().get("sasl.truststore.key"));
+        assertEquals("appPassword", config.originals().get("sasl.truststore.password"));
+        MockFileConfigProvider.assertClosed(id);
+    }
+
+    @Test
+    public void testAutoConfigResolutionFailsWithMultipleConfigProvidersWhenFirstUsesVariablesFromSecond() {
+        Properties providers = new Properties();
+        providers.put("config.providers", "vault,file"); // wrong order
+        providers.put("config.providers.file.class", MockFileConfigProvider.class.getName());
+        String id = UUID.randomUUID().toString();
+        providers.put("config.providers.file.param.testId", id);
+        providers.put("config.providers.vault.class", MockDependentConfigProvider.class.getName());
+        // Use the password from the 'file' config provider in the configuration for the 'vault' config provider
+        providers.put("config.providers.vault.param.secret.key", "${file:/usr/kerberos:password}");
+        Properties props = new Properties();
+        props.put("sasl.kerberos.key", "${file:/usr/kerberos:key}");
+        props.put("sasl.kerberos.password", "${file:/usr/kerberos:password}");
+        props.put("sasl.truststore.key", "${vault:/usr/truststore:truststoreKey}");
+        props.put("sasl.truststore.password", "${vault:/usr/truststore:truststorePassword}");
+        RuntimeException e = assertThrows(RuntimeException.class, () -> new TestIndirectConfigResolution(props, convertPropertiesToMap(providers)));
+        assertTrue(e.getMessage().contains("expected 'secret.key=randomPassword', but found 'secret.key=${file:/usr/kerberos:password}'"));
     }
 
     @Test

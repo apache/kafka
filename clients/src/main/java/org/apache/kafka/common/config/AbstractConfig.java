@@ -28,6 +28,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -533,6 +534,7 @@ public class AbstractConfig {
             providerConfigString = extractPotentialVariables(configProviderProps);
             configProperties = configProviderProps;
         }
+        providerConfigString = new RecordingMap<>(providerConfigString);
         Map<String, ConfigProvider> providers = instantiateConfigProviders(providerConfigString, configProperties);
 
         if (!providers.isEmpty()) {
@@ -576,7 +578,7 @@ public class AbstractConfig {
             return Collections.emptyMap();
         }
 
-        Map<String, String> providerMap = new HashMap<>();
+        Map<String, String> providerMap = new LinkedHashMap<>(); // maintain order
 
         for (String provider : configProviders.split(",")) {
             String providerClass = providerClassProperty(provider);
@@ -591,7 +593,22 @@ public class AbstractConfig {
                 String prefix = CONFIG_PROVIDERS_CONFIG + "." + entry.getKey() + CONFIG_PROVIDERS_PARAM;
                 Map<String, ?> configProperties = configProviderProperties(prefix, providerConfigProperties);
                 ConfigProvider provider = Utils.newInstance(entry.getValue(), ConfigProvider.class);
-                provider.configure(configProperties);
+                Map<String, Object> resolvedOriginals = new HashMap<>(configProperties);
+
+                if (!configProviderInstances.isEmpty()) {
+                    // Try to resolve this config provider's properties using already-instantiated providers
+                    Map<String, String> configStringProps = extractPotentialVariables(configProperties);
+                    if (!configStringProps.isEmpty()) {
+                        // There is at least one string property that could be a variable
+                        ConfigTransformer configTransformer = new ConfigTransformer(configProviderInstances);
+                        ConfigTransformerResult result = configTransformer.transform(configStringProps);
+                        if (!result.data().isEmpty()) {
+                            resolvedOriginals.putAll(result.data());
+                        }
+                    }
+                }
+
+                provider.configure(new RecordingMap<>(resolvedOriginals, prefix, false)); // ignore unprefixed as used
                 configProviderInstances.put(entry.getKey(), provider);
             } catch (ClassNotFoundException e) {
                 log.error("Could not load config provider class " + entry.getValue(), e);
