@@ -257,6 +257,8 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     private final Serializer<V> valueSerializer;
     private final ProducerConfig producerConfig;
     private final long maxBlockTimeMs;
+    private final boolean includeWaitTimeOnMetadataInMaxBlockTime;
+    private final long maxWaitTimeMsOnMetadata;
     private final boolean partitionerIgnoreKeys;
     private final ProducerInterceptors<K, V> interceptors;
     private final ApiVersions apiVersions;
@@ -416,6 +418,8 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             this.compressionType = CompressionType.forName(config.getString(ProducerConfig.COMPRESSION_TYPE_CONFIG));
 
             this.maxBlockTimeMs = config.getLong(ProducerConfig.MAX_BLOCK_MS_CONFIG);
+            this.includeWaitTimeOnMetadataInMaxBlockTime = config.getBoolean(ProducerConfig.INCLUDE_WAIT_TIME_ON_METADATA_IN_MAX_BLOCK_TIME_CONFIG);
+            this.maxWaitTimeMsOnMetadata = config.getLong(ProducerConfig.MAX_WAIT_TIME_MS_ON_METADATA_CONFIG);
             int deliveryTimeoutMs = configureDeliveryTimeout(config, log);
 
             this.apiVersions = new ApiVersions();
@@ -503,6 +507,8 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
         this.totalMemorySize = config.getLong(ProducerConfig.BUFFER_MEMORY_CONFIG);
         this.compressionType = CompressionType.forName(config.getString(ProducerConfig.COMPRESSION_TYPE_CONFIG));
         this.maxBlockTimeMs = config.getLong(ProducerConfig.MAX_BLOCK_MS_CONFIG);
+        this.includeWaitTimeOnMetadataInMaxBlockTime = config.getBoolean(ProducerConfig.INCLUDE_WAIT_TIME_ON_METADATA_IN_MAX_BLOCK_TIME_CONFIG);
+        this.maxWaitTimeMsOnMetadata = config.getLong(ProducerConfig.MAX_WAIT_TIME_MS_ON_METADATA_CONFIG);
         this.partitionerIgnoreKeys = config.getBoolean(ProducerConfig.PARTITIONER_IGNORE_KEYS_CONFIG);
         this.apiVersions = new ApiVersions();
         this.transactionManager = transactionManager;
@@ -995,14 +1001,14 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             long nowMs = time.milliseconds();
             ClusterAndWaitTime clusterAndWaitTime;
             try {
-                clusterAndWaitTime = waitOnMetadata(record.topic(), record.partition(), nowMs, maxBlockTimeMs);
+                clusterAndWaitTime = waitOnMetadata(record.topic(), record.partition(), nowMs, this.includeWaitTimeOnMetadataInMaxBlockTime ? maxBlockTimeMs : this.maxWaitTimeMsOnMetadata);
             } catch (KafkaException e) {
                 if (metadata.isClosed())
                     throw new KafkaException("Producer closed while send in progress", e);
                 throw e;
             }
             nowMs += clusterAndWaitTime.waitedOnMetadataMs;
-            long remainingWaitMs = Math.max(0, maxBlockTimeMs - clusterAndWaitTime.waitedOnMetadataMs);
+            long remainingWaitMs = Math.max(0, this.includeWaitTimeOnMetadataInMaxBlockTime ? maxBlockTimeMs - clusterAndWaitTime.waitedOnMetadataMs : maxBlockTimeMs);
             Cluster cluster = clusterAndWaitTime.cluster;
             byte[] serializedKey;
             try {
