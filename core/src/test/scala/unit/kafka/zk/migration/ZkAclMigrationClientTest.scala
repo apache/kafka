@@ -169,7 +169,7 @@ class ZkAclMigrationClientTest extends ZkMigrationTestHarness {
     val image = delta.apply(MetadataProvenance.EMPTY)
 
     // load snapshot to Zookeeper.
-    val kraftMigrationZkWriter = new KRaftMigrationZkWriter(migrationClient)
+    val kraftMigrationZkWriter = new KRaftMigrationZkWriter(migrationClient, _ => { })
     kraftMigrationZkWriter.handleSnapshot(image, (_, _, operation) => { migrationState = operation.apply(migrationState) })
 
     // Verify the new ACLs in Zookeeper.
@@ -192,6 +192,8 @@ class ZkAclMigrationClientTest extends ZkMigrationTestHarness {
 
   @Test
   def testDeleteOneAclOfMany(): Unit = {
+    zkClient.createAclPaths()
+
     // Create some ACLs in Zookeeper.
     val name = "foo-" + Uuid.randomUuid()
     val resource = new ResourcePattern(ResourceType.TOPIC, name, PatternType.LITERAL)
@@ -199,11 +201,6 @@ class ZkAclMigrationClientTest extends ZkMigrationTestHarness {
     val username2 = "blah"
     val principal1 = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, username1)
     val principal2 = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, username2)
-    //val acl1Resource1 = new AclEntry(new AccessControlEntry(principal1.toString, WildcardHost, AclOperation.WRITE, AclPermissionType.ALLOW))
-    //val acl1Resource2 = new AclEntry(new AccessControlEntry(principal2.toString, WildcardHost, AclOperation.READ, AclPermissionType.ALLOW))
-
-    zkClient.createAclPaths()
-    //zkClient.createAclsForResourceIfNotExists(resource, Set(acl1Resource1, acl1Resource2))
 
     // Create a metadata image such that ACLs for one resource are update, one resource is deleted
     // one new resource is created in Zookeeper.
@@ -250,7 +247,8 @@ class ZkAclMigrationClientTest extends ZkMigrationTestHarness {
     val image = delta.apply(MetadataProvenance.EMPTY)
 
     // load snapshot to Zookeeper.
-    val kraftMigrationZkWriter = new KRaftMigrationZkWriter(migrationClient)
+    val errorLogs = mutable.Buffer[String]()
+    val kraftMigrationZkWriter = new KRaftMigrationZkWriter(migrationClient, errorLogs.append)
     kraftMigrationZkWriter.handleSnapshot(image, (_, _, operation) => {
       migrationState = operation.apply(migrationState)
     })
@@ -272,5 +270,33 @@ class ZkAclMigrationClientTest extends ZkMigrationTestHarness {
     // verify the other 2 ACLs are still in ZK
     val aclsInZk2 = zkClient.getVersionedAclsForResource(resource).acls
     assertEquals(2, aclsInZk2.size)
+    assertEquals(0, errorLogs.size)
+
+    // Add another resource
+    val acl1Resource4Id = Uuid.randomUuid()
+    val acl1Resource4Record = new AccessControlEntryRecord()
+      .setId(acl1Resource4Id)
+      .setHost("*")
+      .setOperation(AclOperation.READ.code())
+      .setPrincipal(principal2.toString)
+      .setPermissionType(AclPermissionType.DENY.code())
+      .setPatternType(PatternType.LITERAL.code())
+      .setResourceName(name)
+      .setResourceType(ResourceType.TOPIC.code()
+      )
+
+    delta2.replay(acl1Resource4Record)
+    val image3 = delta2.apply(MetadataProvenance.EMPTY)
+
+    // This is a contrived error case. In practice, we will never pass the same image as prev and current.
+    // The point of this is to exercise the case of a deleted ACL missing from the prev image.
+    kraftMigrationZkWriter.handleDelta(image3, image3, delta2, (_, _, operation) => {
+      migrationState = operation.apply(migrationState)
+    })
+
+    val aclsInZk3 = zkClient.getVersionedAclsForResource(resource).acls
+    assertEquals(3, aclsInZk3.size)
+    assertEquals(1, errorLogs.size)
+    assertEquals(s"Cannot delete ACL $acl1Resource3Id from ZK since it is missing from previous AclImage", errorLogs.head)
   }
 }

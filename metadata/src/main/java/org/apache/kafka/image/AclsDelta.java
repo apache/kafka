@@ -40,7 +40,6 @@ import java.util.stream.Collectors;
 public final class AclsDelta {
     private final AclsImage image;
     private final Map<Uuid, Optional<StandardAcl>> changes = new LinkedHashMap<>();
-    private final Set<StandardAcl> deleted = new HashSet<>();
 
     public AclsDelta(AclsImage image) {
         this.image = image;
@@ -54,15 +53,6 @@ public final class AclsDelta {
      */
     public Map<Uuid, Optional<StandardAcl>> changes() {
         return changes;
-    }
-
-    /**
-     * Return a Set of the ACLs which were deleted in this delta. This is used by the ZK migration components.
-     *
-     * @return Set of deleted ACLs
-     */
-    public Set<StandardAcl> deleted() {
-        return deleted;
     }
 
     void finishSnapshot() {
@@ -93,7 +83,6 @@ public final class AclsDelta {
     public void replay(RemoveAccessControlEntryRecord record) {
         if (image.acls().containsKey(record.id())) {
             changes.put(record.id(), Optional.empty());
-            deleted.add(image.acls().get(record.id()));
         } else if (changes.containsKey(record.id())) {
             changes.remove(record.id());
             // No need to track a ACL that was added and deleted within the same delta

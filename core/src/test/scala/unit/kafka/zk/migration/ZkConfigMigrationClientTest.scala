@@ -326,7 +326,7 @@ class ZkConfigMigrationClientTest extends ZkMigrationTestHarness {
     val image = delta.apply(MetadataProvenance.EMPTY)
 
     // load snapshot to Zookeeper.
-    val kraftMigrationZkWriter = new KRaftMigrationZkWriter(migrationClient)
+    val kraftMigrationZkWriter = new KRaftMigrationZkWriter(migrationClient, _ => { })
     kraftMigrationZkWriter.handleSnapshot(image, (_, _, operation) => {
       migrationState = operation.apply(migrationState)
     })
