@@ -29,6 +29,7 @@ import org.junit.jupiter.api.Timeout;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -137,8 +138,8 @@ public class GlobVisitorTest {
         InfoConsumer consumer = new InfoConsumer();
         GlobVisitor visitor = new GlobVisitor("..", consumer);
         visitor.accept(DATA);
-        assertEquals(Optional.of(Arrays.asList(
-            new MetadataNodeInfo(new String[0], DATA.root()))), consumer.infos);
+        assertEquals(Optional.of(Collections.singletonList(
+                new MetadataNodeInfo(new String[0], DATA.root()))), consumer.infos);
     }
 
     @Test
@@ -146,8 +147,8 @@ public class GlobVisitorTest {
         InfoConsumer consumer = new InfoConsumer();
         GlobVisitor visitor = new GlobVisitor("../..", consumer);
         visitor.accept(DATA);
-        assertEquals(Optional.of(Arrays.asList(
-            new MetadataNodeInfo(new String[0], DATA.root()))), consumer.infos);
+        assertEquals(Optional.of(Collections.singletonList(
+                new MetadataNodeInfo(new String[0], DATA.root()))), consumer.infos);
     }
 
     @Test
@@ -189,8 +190,8 @@ public class GlobVisitorTest {
         InfoConsumer consumer = new InfoConsumer();
         GlobVisitor visitor = new GlobVisitor("/a?pha", consumer);
         visitor.accept(DATA);
-        assertEquals(Optional.of(Arrays.asList(
-            new MetadataNodeInfo(new String[] {"alpha"},
-                DATA.root().child("alpha")))), consumer.infos);
+        assertEquals(Optional.of(Collections.singletonList(
+                new MetadataNodeInfo(new String[]{"alpha"},
+                        DATA.root().child("alpha")))), consumer.infos);
     }
 }
