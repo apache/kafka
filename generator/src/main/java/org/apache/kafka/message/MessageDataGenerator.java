@@ -1608,7 +1608,7 @@ public final class MessageDataGenerator implements MessageClassGenerator {
             buffer.printf("+ \"%s%s=\" + %s%n",
                 prefix, field.camelCaseName(), field.camelCaseName());
         } else if (field.type().isString()) {
-            buffer.printf("+ \"%s%s=\" + ((%s == null) ? \"null\" : \"'\" + %s.toString() + \"'\")%n",
+            buffer.printf("+ \"%s%s=\" + ((%s == null) ? \"null\" : \"'\" + %s + \"'\")%n",
                 prefix, field.camelCaseName(), field.camelCaseName(), field.camelCaseName());
         } else if (field.type().isBytes()) {
             if (field.zeroCopy()) {
