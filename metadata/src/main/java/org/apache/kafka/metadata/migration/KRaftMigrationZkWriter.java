@@ -617,7 +617,7 @@ public class KRaftMigrationZkWriter {
     }
 
     void handleAclsDelta(AclsImage prevImage, AclsImage image, AclsDelta delta, KRaftMigrationOperationConsumer operationConsumer) {
-        // Gather the list of resources that changed in this delta
+        // Need to collect all ACLs for any changed resource pattern
         Map<ResourcePattern, List<AccessControlEntry>> aclsToWrite = new HashMap<>();
         delta.changes().forEach((aclId, aclChange) -> {
             if (aclChange.isPresent()) {
@@ -635,7 +635,7 @@ public class KRaftMigrationZkWriter {
             }
         });
 
-        // Iterate through the image to collect any ACLs for these changed resources
+        // Iterate through the new image to collect any ACLs for these changed resources
         image.acls().forEach((uuid, standardAcl) -> {
             ResourcePattern resourcePattern = resourcePatternFromAcl(standardAcl);
             List<AccessControlEntry> entries = aclsToWrite.get(resourcePattern);

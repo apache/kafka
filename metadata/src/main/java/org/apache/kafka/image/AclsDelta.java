@@ -61,10 +61,6 @@ public final class AclsDelta {
         }
     }
 
-    public AclsImage image() {
-        return image;
-    }
-
     public void handleMetadataVersionChange(MetadataVersion newVersion) {
         // no-op
     }
