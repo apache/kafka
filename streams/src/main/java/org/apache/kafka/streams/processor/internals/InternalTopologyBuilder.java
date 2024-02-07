@@ -604,7 +604,7 @@ public class InternalTopologyBuilder {
             stateUpdateSupplier
         );
 
-        globalTopics.add(topic);
+        globalTopics.add(topic); // topics that are no longer change logs?
         nodeFactories.put(sourceName, new SourceNodeFactory<>(
             sourceName,
             topics,

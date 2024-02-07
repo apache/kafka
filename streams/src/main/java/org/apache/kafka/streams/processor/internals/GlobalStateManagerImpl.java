@@ -93,7 +93,7 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
                                   final Consumer<byte[], byte[]> globalConsumer,
                                   final StateDirectory stateDirectory,
                                   final StateRestoreListener stateRestoreListener,
-                                  final StreamsConfig config) {
+                                  final StreamsConfig config) { // add option to restore or not?
         this.time = time;
         this.topology = topology;
         baseDir = stateDirectory.globalStateDir();
@@ -231,7 +231,9 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
             )
         );
 
-        try {
+        globalConsumer.seekToBeginning(topicPartitions);
+
+        /*try {
             restoreState(
                 stateRestoreCallback,
                 topicPartitions,
@@ -241,7 +243,7 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
             );
         } finally {
             globalConsumer.unsubscribe();
-        }
+        }*/
     }
 
     private List<TopicPartition> topicPartitionsForStore(final StateStore store) {
@@ -289,7 +291,7 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
             final RecordBatchingStateRestoreCallback stateRestoreAdapter =
                 StateRestoreCallbackAdapter.adapt(stateRestoreCallback);
 
-            stateRestoreListener.onRestoreStart(topicPartition, storeName, offset, highWatermark);
+            stateRestoreListener.onRestoreStart(topicPartition, storeName, offset, highWatermark);//just end this early? then seek and continue?
             long restoreCount = 0L;
             final RecordDeserializer recordDeserializer = deserializers.get(topicPartition.topic());
 
@@ -309,10 +311,14 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
                 }
 
                 final List<ConsumerRecord<byte[], byte[]>> restoreRecords = new ArrayList<>();
+                ConsumerRecord<byte[], byte[]> deserializedRecord;
                 for (final ConsumerRecord<byte[], byte[]> record : records.records(topicPartition)) {
                     if (record.key() != null) {
-                        if (recordDeserializer != null && recordDeserializer.deserialize(globalProcessorContext, record) == null) {
-                            continue;
+                        if (recordDeserializer != null) {
+                            deserializedRecord = recordDeserializer.deserialize(globalProcessorContext, record);
+                            if (deserializedRecord == null) {
+                                continue;
+                            }
                         }
                         restoreRecords.add(recordConverter.convert(record));
                     }

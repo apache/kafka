@@ -229,7 +229,7 @@ public class InternalStreamsBuilder implements InternalNameProvider {
         final String sourceName = named.suffixWithOrElseGet(TABLE_SOURCE_SUFFIX, this, KStreamImpl.SOURCE_NAME);
         final String processorName = named.orElseGenerateWithPrefix(this, KTableImpl.SOURCE_NAME);
 
-        final GraphNode globalStoreNode = new GlobalStoreNode<>(
+        final GraphNode globalStoreNode = new GlobalStoreNode<>(// find restore path
             storeFactory,
             sourceName,
             topic,

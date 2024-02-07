@@ -138,9 +138,7 @@ public class GlobalStateManagerImplTest {
         store5 = new NoOpReadOnlyStore<>(storeName5);
         store6 = new NoOpReadOnlyStore<>(storeName6);
 
-
-        topology = withGlobalStores(asList(store1, store2, store3, store4, store5), storeToTopic);
-
+        topology = withGlobalStores(asList(store1, store2, store3, store4, store5, store6), storeToTopic);
         streamsConfig = new StreamsConfig(new Properties() {
             {
                 put(StreamsConfig.APPLICATION_ID_CONFIG, "appId");
@@ -1153,6 +1151,57 @@ public class GlobalStateManagerImplTest {
 
         assertEquals(2, stateRestoreCallback.restored.size());
         assertNull(store5.get(1L));
+    }
+
+    @Test
+    public void shouldThrowStreamsExceptionWhenRestoringWithLogAndFailExceptionHandler() {
+        final HashMap<TopicPartition, Long> startOffsets = new HashMap<>();
+        startOffsets.put(t5, 1L);
+        final HashMap<TopicPartition, Long> endOffsets = new HashMap<>();
+        endOffsets.put(t5, 3L);
+        consumer.updatePartitions(t5.topic(), Collections.singletonList(new PartitionInfo(t5.topic(), t5.partition(), null, null, null)));
+        consumer.assign(Collections.singletonList(t5));
+        consumer.updateEndOffsets(endOffsets);
+        consumer.updateBeginningOffsets(startOffsets);
+        final byte[] specialString = "specialKey".getBytes(StandardCharsets.UTF_8);
+        final byte[] longValue = longToBytes(1);
+
+        consumer.addRecord(new ConsumerRecord<>(t5.topic(), t5.partition(), 1, longValue, longValue));
+        consumer.addRecord(new ConsumerRecord<>(t5.topic(), t5.partition(), 2, specialString, specialString));
+        consumer.addRecord(new ConsumerRecord<>(t5.topic(), t5.partition(), 3, longValue, longValue));
+
+        stateManager.initialize();
+
+        try {
+            stateManager.registerStore(store5, stateRestoreCallback, commitCallback);
+            fail("Should not get here as LogAndFailExceptionHandler used");
+        } catch (final StreamsException e) {
+            //expected ok to ignore
+        }
+
+    }
+
+    @Test
+    public void shouldRestoreForChangelogTopics() {
+        final HashMap<TopicPartition, Long> startOffsets = new HashMap<>();
+        startOffsets.put(t6, 1L);
+        final HashMap<TopicPartition, Long> endOffsets = new HashMap<>();
+        endOffsets.put(t6, 3L);
+        consumer.updatePartitions(t6.topic(),
+            Collections.singletonList(new PartitionInfo(t6.topic(), t6.partition(), null, null, null)));
+        consumer.assign(Collections.singletonList(t6));
+        consumer.updateEndOffsets(endOffsets);
+        consumer.updateBeginningOffsets(startOffsets);
+        final byte[] specialString = "specialKey".getBytes(StandardCharsets.UTF_8);
+        final byte[] longValue = longToBytes(1);
+
+        consumer.addRecord(new ConsumerRecord<>(t6.topic(), t6.partition(), 1, longValue, longValue));
+        consumer.addRecord(new ConsumerRecord<>(t6.topic(), t6.partition(), 2, specialString, specialString));
+        consumer.addRecord(new ConsumerRecord<>(t6.topic(), t6.partition(), 3, longValue, longValue));
+
+        stateManager.initialize();
+        stateManager.registerStore(store6, stateRestoreCallback, commitCallback);
+        assertEquals(3, stateRestoreCallback.restored.size());
 
     }
 
