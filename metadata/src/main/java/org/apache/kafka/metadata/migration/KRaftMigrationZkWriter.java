@@ -21,6 +21,7 @@ import org.apache.kafka.clients.admin.ScramMechanism;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.acl.AccessControlEntry;
+import org.apache.kafka.common.acl.AclBinding;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.metadata.ClientQuotaRecord;
 import org.apache.kafka.common.quota.ClientQuotaEntity;
