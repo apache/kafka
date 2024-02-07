@@ -71,6 +71,10 @@ public abstract class AbstractLogin implements Login {
         return contextName;
     }
 
+    protected AuthenticateCallbackHandler loginCallbackHandler() {
+        return loginCallbackHandler;
+    }
+
     protected Configuration configuration() {
         return configuration;
     }

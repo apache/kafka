@@ -369,7 +369,7 @@ public class KerberosLogin extends AbstractLogin {
             }
             //login and also update the subject field of this instance to
             //have the new credentials (pass it to the LoginContext constructor)
-            loginContext = new LoginContext(contextName(), subject, null, configuration());
+            loginContext = new LoginContext(contextName(), subject, loginCallbackHandler(), configuration());
             log.info("Initiating re-login for {}", principal);
             login(loginContext);
         }
@@ -384,7 +384,7 @@ public class KerberosLogin extends AbstractLogin {
     protected void logout() throws LoginException {
         loginContext.logout();
     }
-
+    
     private long currentElapsedTime() {
         return time.hiResClockMs();
     }
