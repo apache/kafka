@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.server;
 
+import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.cache.Cache;
 import org.apache.kafka.common.cache.LRUCache;
@@ -28,6 +29,14 @@ import org.apache.kafka.common.errors.UnknownSubscriptionIdException;
 import org.apache.kafka.common.errors.UnsupportedCompressionTypeException;
 import org.apache.kafka.common.message.GetTelemetrySubscriptionsResponseData;
 import org.apache.kafka.common.message.PushTelemetryResponseData;
+import org.apache.kafka.common.metrics.Measurable;
+import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.metrics.Sensor;
+import org.apache.kafka.common.metrics.stats.Avg;
+import org.apache.kafka.common.metrics.stats.Max;
+import org.apache.kafka.common.metrics.stats.Meter;
+import org.apache.kafka.common.metrics.stats.SampledStat;
+import org.apache.kafka.common.metrics.stats.WindowedCount;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.requests.GetTelemetrySubscriptionsRequest;
@@ -41,11 +50,13 @@ import org.apache.kafka.server.metrics.ClientMetricsConfigs;
 import org.apache.kafka.server.metrics.ClientMetricsInstance;
 import org.apache.kafka.server.metrics.ClientMetricsInstanceMetadata;
 import org.apache.kafka.server.metrics.ClientMetricsReceiverPlugin;
+import org.apache.kafka.server.util.timer.SystemTimer;
+import org.apache.kafka.server.util.timer.SystemTimerReaper;
+import org.apache.kafka.server.util.timer.Timer;
+import org.apache.kafka.server.util.timer.TimerTask;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.Closeable;
-import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -59,36 +70,55 @@ import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 /**
  * Handles client telemetry metrics requests/responses, subscriptions and instance information.
  */
-public class ClientMetricsManager implements Closeable {
+public class ClientMetricsManager implements AutoCloseable {
 
     private static final Logger log = LoggerFactory.getLogger(ClientMetricsManager.class);
     private static final List<Byte> SUPPORTED_COMPRESSION_TYPES = Collections.unmodifiableList(
         Arrays.asList(CompressionType.ZSTD.id, CompressionType.LZ4.id, CompressionType.GZIP.id, CompressionType.SNAPPY.id));
     // Max cache size (16k active client connections per broker)
-    private static final int CM_CACHE_MAX_SIZE = 16384;
+    private static final int CACHE_MAX_SIZE = 16384;
+    private static final int DEFAULT_CACHE_EXPIRY_MS = 60 * 1000;
 
     private final ClientMetricsReceiverPlugin receiverPlugin;
     private final Cache<Uuid, ClientMetricsInstance> clientInstanceCache;
+    private final Timer expirationTimer;
     private final Map<String, SubscriptionInfo> subscriptionMap;
     private final int clientTelemetryMaxBytes;
     private final Time time;
+    private final int cacheExpiryMs;
+    private final AtomicLong lastCacheErrorLogMs;
+    private final Metrics metrics;
+    private final ClientMetricsStats clientMetricsStats;
 
     // The latest subscription version is used to determine if subscription has changed and needs
     // to re-evaluate the client instance subscription id as per changed subscriptions.
     private final AtomicInteger subscriptionUpdateVersion;
 
-    public ClientMetricsManager(ClientMetricsReceiverPlugin receiverPlugin, int clientTelemetryMaxBytes, Time time) {
+    public ClientMetricsManager(ClientMetricsReceiverPlugin receiverPlugin, int clientTelemetryMaxBytes, Time time, Metrics metrics) {
+        this(receiverPlugin, clientTelemetryMaxBytes, time, DEFAULT_CACHE_EXPIRY_MS, metrics);
+    }
+
+    // Visible for testing
+    ClientMetricsManager(ClientMetricsReceiverPlugin receiverPlugin, int clientTelemetryMaxBytes, Time time, int cacheExpiryMs, Metrics metrics) {
         this.receiverPlugin = receiverPlugin;
         this.subscriptionMap = new ConcurrentHashMap<>();
         this.subscriptionUpdateVersion = new AtomicInteger(0);
-        this.clientInstanceCache = new SynchronizedCache<>(new LRUCache<>(CM_CACHE_MAX_SIZE));
+        this.clientInstanceCache = new SynchronizedCache<>(new LRUCache<>(CACHE_MAX_SIZE));
+        this.expirationTimer = new SystemTimerReaper("client-metrics-reaper", new SystemTimer("client-metrics"));
         this.clientTelemetryMaxBytes = clientTelemetryMaxBytes;
         this.time = time;
+        this.cacheExpiryMs = cacheExpiryMs;
+        this.lastCacheErrorLogMs = new AtomicLong(0);
+        this.metrics = metrics;
+        this.clientMetricsStats = new ClientMetricsStats();
     }
 
     public Set<String> listClientMetricsResources() {
@@ -176,9 +206,13 @@ public class ClientMetricsManager implements Closeable {
         byte[] metrics = request.data().metrics();
         if (metrics != null && metrics.length > 0) {
             try {
+                long exportTimeStartMs = time.hiResClockMs();
                 receiverPlugin.exportMetrics(requestContext, request);
+                clientMetricsStats.recordPluginExport(clientInstanceId, time.hiResClockMs() - exportTimeStartMs);
             } catch (Exception exception) {
+                clientMetricsStats.recordPluginErrorCount(clientInstanceId);
                 clientInstance.lastKnownError(Errors.INVALID_RECORD);
+                log.error("Error exporting client metrics to the plugin for client instance id: {}", clientInstanceId, exception);
                 return request.errorResponse(0, Errors.INVALID_RECORD);
             }
         }
@@ -192,8 +226,10 @@ public class ClientMetricsManager implements Closeable {
     }
 
     @Override
-    public void close() throws IOException {
+    public void close() throws Exception {
         subscriptionMap.clear();
+        expirationTimer.close();
+        clientMetricsStats.unregisterMetrics();
     }
 
     private void updateClientSubscription(String subscriptionName, ClientMetricsConfigs configs) {
@@ -253,9 +289,17 @@ public class ClientMetricsManager implements Closeable {
                 if (clientInstance.subscriptionVersion() >= subscriptionUpdateVersion.get()) {
                     return clientInstance;
                 }
+                // Cancel the existing expiration timer task for the old client instance.
+                clientInstance.cancelExpirationTimerTask();
                 clientInstance = createClientInstanceAndUpdateCache(clientInstanceId, clientInstance.instanceMetadata());
             }
         }
+
+        // Update the expiration timer task for the client instance.
+        long expirationTimeMs = Math.max(cacheExpiryMs, clientInstance.pushIntervalMs() * 3);
+        TimerTask timerTask = new ExpirationTimerTask(clientInstanceId, expirationTimeMs);
+        clientInstance.updateExpirationTimerTask(timerTask);
+        expirationTimer.add(timerTask);
 
         return clientInstance;
     }
@@ -264,6 +308,9 @@ public class ClientMetricsManager implements Closeable {
         ClientMetricsInstanceMetadata instanceMetadata) {
 
         ClientMetricsInstance clientInstance = createClientInstance(clientInstanceId, instanceMetadata);
+        // Maybe add client metrics, if metrics not already added. Metrics might be already added
+        // if the client instance was evicted from the cache because of size limit.
+        clientMetricsStats.maybeAddClientInstanceMetrics(clientInstanceId);
         clientInstanceCache.put(clientInstanceId, clientInstance);
         return clientInstance;
     }
@@ -333,6 +380,7 @@ public class ClientMetricsManager implements Closeable {
 
         if (!clientInstance.maybeUpdateGetRequestTimestamp(timestamp) && (clientInstance.lastKnownError() != Errors.UNKNOWN_SUBSCRIPTION_ID
             || clientInstance.lastKnownError() != Errors.UNSUPPORTED_COMPRESSION_TYPE)) {
+            clientMetricsStats.recordThrottleCount(clientInstance.clientInstanceId());
             String msg = String.format("Request from the client [%s] arrived before the next push interval time",
                 request.data().clientInstanceId());
             throw new ThrottlingQuotaExceededException(msg);
@@ -349,12 +397,14 @@ public class ClientMetricsManager implements Closeable {
         }
 
         if (!clientInstance.maybeUpdatePushRequestTimestamp(timestamp) && !request.data().terminating()) {
+            clientMetricsStats.recordThrottleCount(clientInstance.clientInstanceId());
             String msg = String.format("Request from the client [%s] arrived before the next push interval time",
                 request.data().clientInstanceId());
             throw new ThrottlingQuotaExceededException(msg);
         }
 
         if (request.data().subscriptionId() != clientInstance.subscriptionId()) {
+            clientMetricsStats.recordUnknownSubscriptionCount();
             String msg = String.format("Unknown client subscription id for the client [%s]",
                 request.data().clientInstanceId());
             throw new UnknownSubscriptionIdException(msg);
@@ -402,6 +452,11 @@ public class ClientMetricsManager implements Closeable {
         return subscriptionUpdateVersion.get();
     }
 
+    // Visible for testing
+    Timer expirationTimer() {
+        return expirationTimer;
+    }
+
     public static class SubscriptionInfo {
 
         private final String name;
@@ -431,6 +486,158 @@ public class ClientMetricsManager implements Closeable {
 
         public Map<String, Pattern> matchPattern() {
             return matchPattern;
+        }
+    }
+
+    private final class ExpirationTimerTask extends TimerTask {
+
+        private static final long CACHE_ERROR_LOG_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
+
+        private final Uuid clientInstanceId;
+
+        private ExpirationTimerTask(Uuid clientInstanceId, long delayMs) {
+            super(delayMs);
+            this.clientInstanceId = clientInstanceId;
+        }
+
+        @Override
+        public void run() {
+            log.trace("Expiration timer task run for client instance id: {}, after delay ms: {}", clientInstanceId, delayMs);
+            clientMetricsStats.unregisterClientInstanceMetrics(clientInstanceId);
+            if (!clientInstanceCache.remove(clientInstanceId)) {
+                /*
+                 This can only happen if the client instance is removed from the cache by the LRU
+                 eviction policy before the expiration timer task is executed. Log a warning as broker
+                 cache is not able to hold all the client instances. Log only once every CACHE_ERROR_LOG_INTERVAL_MS
+                 to avoid flooding the logs.
+                */
+                long lastErrorMs = lastCacheErrorLogMs.get();
+                if (time.milliseconds() - lastErrorMs > CACHE_ERROR_LOG_INTERVAL_MS &&
+                    lastCacheErrorLogMs.compareAndSet(lastErrorMs, time.milliseconds())) {
+                    log.warn("Client metrics instance cache cannot find the client instance id: {}. The cache"
+                        + " must be at capacity, size: {} ", clientInstanceId, clientInstanceCache.size());
+                }
+            }
+        }
+    }
+
+    // Visible for testing
+    final class ClientMetricsStats {
+
+        private static final String GROUP_NAME = "ClientMetrics";
+
+        // Visible for testing
+        static final String INSTANCE_COUNT = "ClientMetricsInstanceCount";
+        static final String UNKNOWN_SUBSCRIPTION_REQUEST = "ClientMetricsUnknownSubscriptionRequest";
+        static final String THROTTLE = "ClientMetricsThrottle";
+        static final String PLUGIN_EXPORT = "ClientMetricsPluginExport";
+        static final String PLUGIN_ERROR = "ClientMetricsPluginError";
+        static final String PLUGIN_EXPORT_TIME = "ClientMetricsPluginExportTime";
+
+        // Names of registered sensors either globally or per client instance.
+        private final Set<String> sensorsName = ConcurrentHashMap.newKeySet();
+        // List of metric names which are not specific to a client instance. Do not require thread
+        // safe structure as it will be populated only in constructor.
+        private final List<MetricName> registeredMetricNames = new ArrayList<>();
+
+        private final Set<String> instanceSensors = Stream.of(THROTTLE, PLUGIN_EXPORT, PLUGIN_ERROR).collect(Collectors.toSet());
+
+        ClientMetricsStats() {
+            Measurable instanceCount = (config, now) -> clientInstanceCache.size();
+            MetricName instanceCountMetric = metrics.metricName(INSTANCE_COUNT, GROUP_NAME,
+                "The current number of client metrics instances being managed by the broker");
+            metrics.addMetric(instanceCountMetric, instanceCount);
+            registeredMetricNames.add(instanceCountMetric);
+
+            Sensor unknownSubscriptionRequestCountSensor = metrics.sensor(
+                ClientMetricsStats.UNKNOWN_SUBSCRIPTION_REQUEST);
+            unknownSubscriptionRequestCountSensor.add(createMeter(metrics, new WindowedCount(),
+                ClientMetricsStats.UNKNOWN_SUBSCRIPTION_REQUEST, Collections.emptyMap()));
+            sensorsName.add(unknownSubscriptionRequestCountSensor.name());
+        }
+
+        public void maybeAddClientInstanceMetrics(Uuid clientInstanceId) {
+            // If one sensor of the metrics has been registered for the client instance,
+            // then all other sensors should have been registered; and vice versa.
+            if (metrics.getSensor(PLUGIN_EXPORT + "-" + clientInstanceId) != null) {
+                return;
+            }
+
+            Map<String, String> tags = Collections.singletonMap(ClientMetricsConfigs.CLIENT_INSTANCE_ID, clientInstanceId.toString());
+
+            Sensor throttleCount = metrics.sensor(ClientMetricsStats.THROTTLE + "-" + clientInstanceId);
+            throttleCount.add(createMeter(metrics, new WindowedCount(), ClientMetricsStats.THROTTLE, tags));
+            sensorsName.add(throttleCount.name());
+
+            Sensor pluginExport = metrics.sensor(ClientMetricsStats.PLUGIN_EXPORT + "-" + clientInstanceId);
+            pluginExport.add(createMeter(metrics, new WindowedCount(), ClientMetricsStats.PLUGIN_EXPORT, tags));
+            pluginExport.add(metrics.metricName(ClientMetricsStats.PLUGIN_EXPORT_TIME + "Avg",
+                ClientMetricsStats.GROUP_NAME, "Average time broker spent in invoking plugin exportMetrics call", tags), new Avg());
+            pluginExport.add(metrics.metricName(ClientMetricsStats.PLUGIN_EXPORT_TIME + "Max",
+                ClientMetricsStats.GROUP_NAME, "Maximum time broker spent in invoking plugin exportMetrics call", tags), new Max());
+            sensorsName.add(pluginExport.name());
+
+            Sensor pluginErrorCount = metrics.sensor(ClientMetricsStats.PLUGIN_ERROR + "-" + clientInstanceId);
+            pluginErrorCount.add(createMeter(metrics, new WindowedCount(), ClientMetricsStats.PLUGIN_ERROR, tags));
+            sensorsName.add(pluginErrorCount.name());
+        }
+
+        public void recordUnknownSubscriptionCount() {
+            record(UNKNOWN_SUBSCRIPTION_REQUEST);
+        }
+
+        public void recordThrottleCount(Uuid clientInstanceId) {
+            record(THROTTLE, clientInstanceId);
+        }
+
+        public void recordPluginExport(Uuid clientInstanceId, long timeMs) {
+            record(PLUGIN_EXPORT, clientInstanceId, timeMs);
+        }
+
+        public void recordPluginErrorCount(Uuid clientInstanceId) {
+            record(PLUGIN_ERROR, clientInstanceId);
+        }
+
+        public void unregisterClientInstanceMetrics(Uuid clientInstanceId) {
+            for (String name : instanceSensors) {
+                String sensorName = name + "-" + clientInstanceId;
+                metrics.removeSensor(sensorName);
+                sensorsName.remove(sensorName);
+            }
+        }
+
+        public void unregisterMetrics() {
+            for (MetricName metricName : registeredMetricNames) {
+                metrics.removeMetric(metricName);
+            }
+            for (String name : sensorsName) {
+                metrics.removeSensor(name);
+            }
+            sensorsName.clear();
+        }
+
+        private Meter createMeter(Metrics metrics, SampledStat stat, String name, Map<String, String> metricTags) {
+            MetricName rateMetricName = metrics.metricName(name + "Rate", ClientMetricsStats.GROUP_NAME,
+                String.format("The number of %s per second", name), metricTags);
+            MetricName totalMetricName = metrics.metricName(name + "Count", ClientMetricsStats.GROUP_NAME,
+                String.format("The total number of %s", name), metricTags);
+            return new Meter(stat, rateMetricName, totalMetricName);
+        }
+
+        private void record(String metricName) {
+            record(metricName, null, 1);
+        }
+
+        private void record(String metricName, Uuid clientInstanceId) {
+            record(metricName, clientInstanceId, 1);
+        }
+
+        private void record(String metricName, Uuid clientInstanceId, long value) {
+            String sensorName = clientInstanceId != null ? metricName + "-" + clientInstanceId : metricName;
+            Sensor sensor = metrics.getSensor(sensorName);
+            if (sensor != null) {
+                sensor.record(value);
+            }
         }
     }
 }

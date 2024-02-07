@@ -18,12 +18,17 @@ package org.apache.kafka.connect.integration;
 
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.LogCaptureAppender;
+import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.errors.ConnectException;
+import org.apache.kafka.connect.json.JsonConverter;
+import org.apache.kafka.connect.json.JsonConverterConfig;
 import org.apache.kafka.connect.runtime.distributed.DistributedConfig;
 import org.apache.kafka.connect.runtime.rest.entities.CreateConnectorRequest;
 import org.apache.kafka.connect.runtime.rest.resources.ConnectorsResource;
 import org.apache.kafka.connect.runtime.rest.errors.ConnectRestException;
+import org.apache.kafka.connect.storage.KafkaConfigBackingStore;
 import org.apache.kafka.connect.storage.StringConverter;
+import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.apache.kafka.connect.util.clusters.EmbeddedConnectCluster;
 import org.apache.kafka.connect.util.clusters.WorkerHandle;
 import org.apache.kafka.test.IntegrationTest;
@@ -54,6 +59,7 @@ import static org.apache.kafka.connect.runtime.ConnectorConfig.CONNECTOR_CLASS_C
 import static org.apache.kafka.connect.runtime.ConnectorConfig.CONNECTOR_CLIENT_PRODUCER_OVERRIDES_PREFIX;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.KEY_CONVERTER_CLASS_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.TASKS_MAX_CONFIG;
+import static org.apache.kafka.connect.runtime.ConnectorConfig.TASKS_MAX_ENFORCE_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.VALUE_CONVERTER_CLASS_CONFIG;
 import static org.apache.kafka.connect.runtime.SinkConnectorConfig.TOPICS_CONFIG;
 import static org.apache.kafka.connect.runtime.TopicCreationConfig.DEFAULT_TOPIC_CREATION_PREFIX;
@@ -237,9 +243,6 @@ public class ConnectWorkerIntegrationTest {
         StartAndStopLatch stopLatch = connectorHandle.expectedStops(1, false);
 
         connect.kafka().stopOnlyKafka();
-
-        connect.assertions().assertExactlyNumWorkersAreUp(NUM_WORKERS,
-                "Group of workers did not remain the same after broker shutdown");
 
         // Allow for the workers to discover that the coordinator is unavailable, wait is
         // heartbeat timeout * 2 + 4sec
@@ -882,6 +885,159 @@ public class ConnectWorkerIntegrationTest {
                 }
         );
         connect.requestTimeout(DEFAULT_REST_REQUEST_TIMEOUT_MS);
+    }
+
+    /**
+     * Tests the logic around enforcement of the
+     * {@link org.apache.kafka.connect.runtime.ConnectorConfig#TASKS_MAX_CONFIG tasks.max}
+     * property and how it can be toggled via the
+     * {@link org.apache.kafka.connect.runtime.ConnectorConfig#TASKS_MAX_ENFORCE_CONFIG tasks.max.enforce}
+     * property, following the test plain laid out in
+     * <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-1004%3A+Enforce+tasks.max+property+in+Kafka+Connect#KIP1004:Enforcetasks.maxpropertyinKafkaConnect-TestPlan">KIP-1004</a>.
+     */
+    @Test
+    public void testTasksMaxEnforcement() throws Exception {
+        String configTopic = "tasks-max-enforcement-configs";
+        workerProps.put(CONFIG_TOPIC_CONFIG, configTopic);
+        connect = connectBuilder.build();
+        // start the clusters
+        connect.start();
+
+        connect.assertions().assertAtLeastNumWorkersAreUp(
+                NUM_WORKERS,
+                "Initial group of workers did not start in time."
+        );
+
+        Map<String, String> connectorProps = defaultSourceConnectorProps(TOPIC_NAME);
+        int maxTasks = 1;
+        connectorProps.put(TASKS_MAX_CONFIG, Integer.toString(maxTasks));
+        int numTasks = 2;
+        connectorProps.put(MonitorableSourceConnector.NUM_TASKS, Integer.toString(numTasks));
+        connect.configureConnector(CONNECTOR_NAME, connectorProps);
+
+        // A connector that generates excessive tasks will be failed with an expected error message
+        connect.assertions().assertConnectorIsFailedAndTasksHaveFailed(
+                CONNECTOR_NAME,
+                0,
+                "connector did not fail in time"
+        );
+
+        String expectedErrorSnippet = String.format(
+                "The connector %s has generated %d tasks, which is greater than %d, "
+                        + "the maximum number of tasks it is configured to create. ",
+                CONNECTOR_NAME,
+                numTasks,
+                maxTasks
+        );
+        String errorMessage = connect.connectorStatus(CONNECTOR_NAME).connector().trace();
+        assertThat(errorMessage, containsString(expectedErrorSnippet));
+
+        // Stop all workers in the cluster
+        connect.workers().forEach(connect::removeWorker);
+
+        // Publish a set of too many task configs to the config topic, to simulate
+        // an existing set of task configs that was written before the cluster was upgraded
+        try (JsonConverter converter = new JsonConverter()) {
+            converter.configure(
+                    Collections.singletonMap(JsonConverterConfig.SCHEMAS_ENABLE_CONFIG, "false"),
+                    false
+            );
+
+            for (int i = 0; i < numTasks; i++) {
+                Map<String, String> taskConfig = MonitorableSourceConnector.taskConfig(
+                        connectorProps,
+                        CONNECTOR_NAME,
+                        i
+                );
+                Struct wrappedTaskConfig = new Struct(KafkaConfigBackingStore.TASK_CONFIGURATION_V0)
+                        .put("properties", taskConfig);
+                String key = KafkaConfigBackingStore.TASK_KEY(new ConnectorTaskId(CONNECTOR_NAME, i));
+                byte[] value = converter.fromConnectData(
+                        configTopic,
+                        KafkaConfigBackingStore.TASK_CONFIGURATION_V0,
+                        wrappedTaskConfig
+                );
+                connect.kafka().produce(configTopic, key, new String(value));
+            }
+
+            Struct taskCommitMessage = new Struct(KafkaConfigBackingStore.CONNECTOR_TASKS_COMMIT_V0);
+            taskCommitMessage.put("tasks", numTasks);
+            String key = KafkaConfigBackingStore.COMMIT_TASKS_KEY(CONNECTOR_NAME);
+            byte[] value = converter.fromConnectData(
+                    configTopic,
+                    KafkaConfigBackingStore.CONNECTOR_TASKS_COMMIT_V0,
+                    taskCommitMessage
+            );
+            connect.kafka().produce(configTopic, key, new String(value));
+        }
+
+        // Restart all the workers in the cluster
+        for (int i = 0; i < NUM_WORKERS; i++)
+            connect.addWorker();
+
+        // An existing set of tasks that exceeds the tasks.max property
+        // will be failed with an expected error message
+        connect.assertions().assertConnectorIsFailedAndTasksHaveFailed(
+                CONNECTOR_NAME,
+                numTasks,
+                "connector and tasks did not fail in time"
+        );
+
+        connectorProps.put(TASKS_MAX_ENFORCE_CONFIG, "false");
+        connect.configureConnector(CONNECTOR_NAME, connectorProps);
+
+        // That same existing set of tasks will be allowed to run
+        // once the connector is reconfigured with tasks.max.enforce set to false
+        connect.assertions().assertConnectorAndExactlyNumTasksAreRunning(
+                CONNECTOR_NAME,
+                numTasks,
+                "connector and tasks did not start in time"
+        );
+
+        numTasks++;
+        connectorProps.put(MonitorableSourceConnector.NUM_TASKS, Integer.toString(numTasks));
+        connect.configureConnector(CONNECTOR_NAME, connectorProps);
+
+        // A connector will be allowed to generate excessive tasks when tasks.max.enforce is set to false
+        connect.assertions().assertConnectorAndExactlyNumTasksAreRunning(
+                CONNECTOR_NAME,
+                numTasks,
+                "connector and tasks did not start in time"
+        );
+
+        numTasks = maxTasks;
+        connectorProps.put(MonitorableSourceConnector.NUM_TASKS, Integer.toString(numTasks));
+        connectorProps.put(TASKS_MAX_ENFORCE_CONFIG, "true");
+        connect.configureConnector(CONNECTOR_NAME, connectorProps);
+
+        connect.assertions().assertConnectorAndExactlyNumTasksAreRunning(
+                CONNECTOR_NAME,
+                numTasks,
+                "connector and tasks did not start in time"
+        );
+
+        numTasks = maxTasks + 1;
+        connectorProps.put(MonitorableSourceConnector.NUM_TASKS, Integer.toString(numTasks));
+        connect.configureConnector(CONNECTOR_NAME, connectorProps);
+
+        // A connector that generates excessive tasks after being reconfigured will be failed, but its existing tasks will continue running
+        connect.assertions().assertConnectorIsFailedAndNumTasksAreRunning(
+                CONNECTOR_NAME,
+                maxTasks,
+                "connector did not fail in time, or tasks were incorrectly failed"
+        );
+
+        // Make sure that the tasks have had a chance to fail (i.e., that the worker has been given
+        // a chance to check on the number of tasks for the connector during task startup)
+        for (int i = 0; i < maxTasks; i++)
+            connect.restartTask(CONNECTOR_NAME, i);
+
+        // Verify one more time that none of the tasks have actually failed
+        connect.assertions().assertConnectorIsFailedAndNumTasksAreRunning(
+                CONNECTOR_NAME,
+                maxTasks,
+                "connector did not fail in time, or tasks were incorrectly failed"
+        );
     }
 
     private Map<String, String> defaultSourceConnectorProps(String topic) {

@@ -335,9 +335,11 @@ class GroupMetadataManager(brokerId: Int,
     verificationGuards: Map[TopicPartition, VerificationGuard] = Map.empty
   ): Unit = {
     // call replica manager to append the group message
-    replicaManager.appendForGroup(
+    replicaManager.appendRecords(
       timeout = config.offsetCommitTimeoutMs.toLong,
       requiredAcks = config.offsetCommitRequiredAcks,
+      internalTopicsAllowed = true,
+      origin = AppendOrigin.COORDINATOR,
       entriesPerPartition = records,
       delayedProduceLock = Some(group.lock),
       responseCallback = callback,

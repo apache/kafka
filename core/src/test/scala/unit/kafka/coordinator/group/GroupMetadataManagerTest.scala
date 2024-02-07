@@ -1176,11 +1176,14 @@ class GroupMetadataManagerTest {
     groupMetadataManager.storeGroup(group, Map.empty, callback)
     assertEquals(Some(expectedError), maybeError)
 
-    verify(replicaManager).appendForGroup(anyLong(),
+    verify(replicaManager).appendRecords(anyLong(),
       anyShort(),
       any(),
       any(),
+      any(),
+      any(),
       any[Option[ReentrantLock]],
+      any(),
       any(),
       any(),
       any())
@@ -1211,11 +1214,14 @@ class GroupMetadataManagerTest {
     groupMetadataManager.storeGroup(group, Map(memberId -> Array[Byte]()), callback)
     assertEquals(Some(Errors.NONE), maybeError)
 
-    verify(replicaManager).appendForGroup(anyLong(),
+    verify(replicaManager).appendRecords(anyLong(),
       anyShort(),
       any(),
       any(),
+      any(),
+      any(),
       any[Option[ReentrantLock]],
+      any(),
       any(),
       any(),
       any())
@@ -1285,11 +1291,14 @@ class GroupMetadataManagerTest {
     assertEquals(Errors.NONE, partitionResponse.error)
     assertEquals(offset, partitionResponse.offset)
 
-    verify(replicaManager).appendForGroup(anyLong(),
+    verify(replicaManager).appendRecords(anyLong(),
       anyShort(),
       any(),
       any(),
+      any(),
+      any(),
       any[Option[ReentrantLock]],
+      any(),
       any(),
       any(),
       any())
@@ -1326,14 +1335,17 @@ class GroupMetadataManagerTest {
     assertTrue(group.hasOffsets)
     assertTrue(group.allOffsets.isEmpty)
 
-    verify(replicaManager).appendForGroup(anyLong(),
+    verify(replicaManager).appendRecords(anyLong(),
       anyShort(),
+      any(),
+      any(),
       any[Map[TopicPartition, MemoryRecords]],
       capturedResponseCallback.capture(),
       any[Option[ReentrantLock]],
       any(),
-      ArgumentMatchers.eq(Map(offsetTopicPartition -> verificationGuard)),
-      any())
+      any(),
+      any(),
+      ArgumentMatchers.eq(Map(offsetTopicPartition -> verificationGuard)))
     verify(replicaManager).getMagic(any())
     capturedResponseCallback.getValue.apply(Map(groupTopicPartition ->
       new PartitionResponse(Errors.NONE, 0L, RecordBatch.NO_TIMESTAMP, 0L)))
@@ -1385,14 +1397,17 @@ class GroupMetadataManagerTest {
     assertFalse(group.hasOffsets)
     assertTrue(group.allOffsets.isEmpty)
 
-    verify(replicaManager).appendForGroup(anyLong(),
+    verify(replicaManager).appendRecords(anyLong(),
       anyShort(),
+      any(),
+      any(),
       any[Map[TopicPartition, MemoryRecords]],
       any(),
       any[Option[ReentrantLock]],
       any(),
-      ArgumentMatchers.eq(Map(offsetTopicPartition -> verificationGuard)),
-      any())
+      any(),
+      any(),
+      ArgumentMatchers.eq(Map(offsetTopicPartition -> verificationGuard)))
     verify(replicaManager).getMagic(any())
   }
 
@@ -1434,14 +1449,17 @@ class GroupMetadataManagerTest {
     assertFalse(group.hasOffsets)
     assertTrue(group.allOffsets.isEmpty)
 
-    verify(replicaManager).appendForGroup(anyLong(),
+    verify(replicaManager).appendRecords(anyLong(),
       anyShort(),
+      any(),
+      any(),
       any[Map[TopicPartition, MemoryRecords]],
       any(),
       any[Option[ReentrantLock]],
       any(),
-      ArgumentMatchers.eq(Map(offsetTopicPartition -> verificationGuard)),
-      any())
+      any(),
+      any(),
+      ArgumentMatchers.eq(Map(offsetTopicPartition -> verificationGuard)))
     verify(replicaManager).getMagic(any())
   }
 
@@ -1586,11 +1604,14 @@ class GroupMetadataManagerTest {
       cachedOffsets.get(topicIdPartitionFailed.topicPartition).map(_.offset)
     )
 
-    verify(replicaManager).appendForGroup(anyLong(),
+    verify(replicaManager).appendRecords(anyLong(),
       anyShort(),
+      any(),
+      any(),
       any[Map[TopicPartition, MemoryRecords]],
       any(),
       any[Option[ReentrantLock]],
+      any(),
       any(),
       any(),
       any())
@@ -1692,11 +1713,14 @@ class GroupMetadataManagerTest {
     assertEquals(Some(OffsetFetchResponse.INVALID_OFFSET), cachedOffsets.get(topicIdPartition1.topicPartition).map(_.offset))
     assertEquals(Some(offset), cachedOffsets.get(topicIdPartition2.topicPartition).map(_.offset))
 
-    verify(replicaManager).appendForGroup(anyLong(),
+    verify(replicaManager).appendRecords(anyLong(),
       anyShort(),
       any(),
       any(),
+      any(),
+      any(),
       any[Option[ReentrantLock]],
+      any(),
       any(),
       any(),
       any())
@@ -2800,11 +2824,14 @@ class GroupMetadataManagerTest {
 
   private def verifyAppendAndCaptureCallback(): ArgumentCaptor[Map[TopicPartition, PartitionResponse] => Unit] = {
     val capturedArgument: ArgumentCaptor[Map[TopicPartition, PartitionResponse] => Unit] = ArgumentCaptor.forClass(classOf[Map[TopicPartition, PartitionResponse] => Unit])
-    verify(replicaManager).appendForGroup(anyLong(),
+    verify(replicaManager).appendRecords(anyLong(),
       anyShort(),
+      any(),
+      any(),
       any[Map[TopicPartition, MemoryRecords]],
       capturedArgument.capture(),
       any[Option[ReentrantLock]],
+      any(),
       any(),
       any(),
       any())
@@ -2814,11 +2841,14 @@ class GroupMetadataManagerTest {
   private def expectAppendMessage(error: Errors): ArgumentCaptor[Map[TopicPartition, MemoryRecords]] = {
     val capturedCallback: ArgumentCaptor[Map[TopicPartition, PartitionResponse] => Unit] = ArgumentCaptor.forClass(classOf[Map[TopicPartition, PartitionResponse] => Unit])
     val capturedRecords: ArgumentCaptor[Map[TopicPartition, MemoryRecords]] = ArgumentCaptor.forClass(classOf[Map[TopicPartition, MemoryRecords]])
-    when(replicaManager.appendForGroup(anyLong(),
+    when(replicaManager.appendRecords(anyLong(),
       anyShort(),
+      any(),
+      any(),
       capturedRecords.capture(),
       capturedCallback.capture(),
       any[Option[ReentrantLock]],
+      any(),
       any(),
       any(),
       any()

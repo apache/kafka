@@ -29,7 +29,7 @@ case class MemberSummary(memberId: String,
                          assignment: Array[Byte])
 
 private object MemberMetadata {
-  def plainProtocolSet(supportedProtocols: List[(String, Array[Byte])]) = supportedProtocols.map(_._1).toSet
+  def plainProtocolSet(supportedProtocols: List[(String, Array[Byte])]): Set[String] = supportedProtocols.map(_._1).toSet
 }
 
 /**

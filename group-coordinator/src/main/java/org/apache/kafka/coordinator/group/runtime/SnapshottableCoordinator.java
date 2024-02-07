@@ -99,17 +99,19 @@ class SnapshottableCoordinator<S extends CoordinatorShard<U>, U> implements Coor
     /**
      * Replays the record onto the state machine.
      *
+     * @param offset        The offset of the record in the log.
      * @param producerId    The producer id.
      * @param producerEpoch The producer epoch.
      * @param record        A record.
      */
     @Override
     public synchronized void replay(
+        long offset,
         long producerId,
         short producerEpoch,
         U record
     ) {
-        coordinator.replay(producerId, producerEpoch, record);
+        coordinator.replay(offset, producerId, producerEpoch, record);
     }
 
     /**

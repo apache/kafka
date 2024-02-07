@@ -274,6 +274,7 @@ public class CoordinatorRuntimeTest {
 
         @Override
         public void replay(
+            long offset,
             long producerId,
             short producerEpoch,
             String record
@@ -1034,6 +1035,7 @@ public class CoordinatorRuntimeTest {
             new MockCoordinatorShard(snapshotRegistry, ctx.timer) {
                 @Override
                 public void replay(
+                    long offset,
                     long producerId,
                     short producerEpoch,
                     String record
@@ -1213,11 +1215,13 @@ public class CoordinatorRuntimeTest {
         // Verify that the coordinator got the records with the correct
         // producer id and producer epoch.
         verify(coordinator, times(1)).replay(
+            eq(0L),
             eq(100L),
             eq((short) 50),
             eq("record1")
         );
         verify(coordinator, times(1)).replay(
+            eq(1L),
             eq(100L),
             eq((short) 50),
             eq("record2")

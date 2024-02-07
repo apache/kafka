@@ -106,23 +106,23 @@ class BrokerLifecycleManager(
   /**
    * The broker incarnation ID.  This ID uniquely identifies each time we start the broker
    */
-  val incarnationId = Uuid.randomUuid()
+  val incarnationId: Uuid = Uuid.randomUuid()
 
   /**
    * A future which is completed just as soon as the broker has caught up with the latest
    * metadata offset for the first time.
    */
-  val initialCatchUpFuture = new CompletableFuture[Void]()
+  val initialCatchUpFuture: CompletableFuture[Void] = new CompletableFuture[Void]()
 
   /**
    * A future which is completed when the broker is unfenced for the first time.
    */
-  val initialUnfenceFuture = new CompletableFuture[Void]()
+  val initialUnfenceFuture: CompletableFuture[Void] = new CompletableFuture[Void]()
 
   /**
    * A future which is completed when controlled shutdown is done.
    */
-  val controlledShutdownFuture = new CompletableFuture[Void]()
+  val controlledShutdownFuture: CompletableFuture[Void] = new CompletableFuture[Void]()
 
   /**
    * The broker epoch, or -1 if the broker has not yet registered.  This variable can only
@@ -244,6 +244,19 @@ class BrokerLifecycleManager(
     eventQueue.append(new OfflineDirEvent(directory))
   }
 
+  def handleKraftJBODMetadataVersionUpdate(): Unit = {
+    eventQueue.append(new KraftJBODMetadataVersionUpdateEvent())
+  }
+
+  private class KraftJBODMetadataVersionUpdateEvent extends EventQueue.Event {
+    override def run(): Unit = {
+      if (!isZkBroker) {
+        registered = false
+        scheduleNextCommunicationImmediately()
+      }
+    }
+  }
+
   def brokerEpoch: Long = _brokerEpoch
 
   def state: BrokerState = _state
@@ -291,7 +304,7 @@ class BrokerLifecycleManager(
     eventQueue.close()
   }
 
-  private class SetReadyToUnfenceEvent() extends EventQueue.Event {
+  private class SetReadyToUnfenceEvent extends EventQueue.Event {
     override def run(): Unit = {
       readyToUnfence = true
       scheduleNextCommunicationImmediately()
@@ -345,7 +358,7 @@ class BrokerLifecycleManager(
         setMaxSupportedVersion(range.max()))
     }
     val sortedLogDirs = new util.ArrayList[Uuid]
-    logDirs.foreach(sortedLogDirs.add(_))
+    logDirs.foreach(sortedLogDirs.add)
     sortedLogDirs.sort(new Comparator[Uuid]() {
       override def compare(a: Uuid, b: Uuid): Int = a.compareTo(b)
     })
@@ -432,7 +445,7 @@ class BrokerLifecycleManager(
     _channelManager.sendRequest(new BrokerHeartbeatRequest.Builder(data), handler)
   }
 
-  private class BrokerHeartbeatResponseHandler() extends ControllerRequestCompletionHandler {
+  private class BrokerHeartbeatResponseHandler extends ControllerRequestCompletionHandler {
     override def onComplete(response: ClientResponse): Unit = {
       if (response.authenticationException() != null) {
         error(s"Unable to send broker heartbeat for $nodeId because of an " +

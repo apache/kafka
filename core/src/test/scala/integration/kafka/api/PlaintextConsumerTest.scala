@@ -1278,9 +1278,8 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     runMultiConsumerSessionTimeoutTest(true)
   }
 
-  // TODO: enable this test for the consumer group protocol when consumer interceptors are supported
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersClassicGroupProtocolOnly"))
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
   def testInterceptors(quorum: String, groupProtocol: String): Unit = {
     val appendStr = "mock"
     MockConsumerInterceptor.resetCounters()
@@ -1339,7 +1338,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     MockProducerInterceptor.resetCounters()
   }
 
-  // TODO: enable this test for the consumer group protocol when consumer interceptors are supported
+  // This is disabled for the the consumer group until KAFKA-16155 is resolved.
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
   @MethodSource(Array("getTestQuorumAndGroupProtocolParametersClassicGroupProtocolOnly"))
   def testAutoCommitIntercept(quorum: String, groupProtocol: String): Unit = {
@@ -1391,9 +1390,8 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     MockConsumerInterceptor.resetCounters()
   }
 
-  // TODO: enable this test for the consumer group protocol when consumer interceptors are supported
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersClassicGroupProtocolOnly"))
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
   def testInterceptorsWithWrongKeyValue(quorum: String, groupProtocol: String): Unit = {
     val appendStr = "mock"
     // create producer with interceptor that has different key and value types from the producer
@@ -1594,10 +1592,8 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     assertEquals(500, consumer.committed(Set(tp2).asJava).get(tp2).offset)
   }
 
-  // TODO: Enable this test for both protocols when the Jira tracking its failure (KAFKA-16151) is fixed. This
-  //       is done by setting the @MethodSource value to "getTestQuorumAndGroupProtocolParametersAll"
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersClassicGroupProtocolOnly"))
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
   def testPerPartitionLeadMetricsCleanUpWithSubscribe(quorum: String, groupProtocol: String): Unit = {
     val numMessages = 1000
     val topic2 = "topic2"
@@ -1636,10 +1632,8 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     assertNull(consumer.metrics.get(new MetricName("records-lead", "consumer-fetch-manager-metrics", "", tags2)))
   }
 
-  // TODO: Enable this test for both protocols when the Jira tracking its failure (KAFKA-16150) is fixed. This
-  //       is done by setting the @MethodSource value to "getTestQuorumAndGroupProtocolParametersAll"
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersClassicGroupProtocolOnly"))
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
   def testPerPartitionLagMetricsCleanUpWithSubscribe(quorum: String, groupProtocol: String): Unit = {
     val numMessages = 1000
     val topic2 = "topic2"
