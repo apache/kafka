@@ -2419,16 +2419,16 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
 
     val invalidLogLevelLogLevelEntries = Seq(
       new AlterConfigOp(new ConfigEntry("kafka.server.KafkaRequestHandler", LogLevelConfig.INFO_LOG_LEVEL), AlterConfigOp.OpType.SET), // valid
-      new AlterConfigOp(new ConfigEntry("kafka.network.SocketServer", "OFF"), AlterConfigOp.OpType.SET) // OFF is not a valid log level
+      new AlterConfigOp(new ConfigEntry("kafka.network.SocketServer", "NOTHING"), AlterConfigOp.OpType.SET) // NOTHING is not a valid log level
     ).asJavaCollection
-    assertTrue(assertThrows(classOf[ExecutionException], () => alterBrokerLoggers(invalidLogLevelLogLevelEntries)).getCause.isInstanceOf[InvalidRequestException])
+    assertTrue(assertThrows(classOf[ExecutionException], () => alterBrokerLoggers(invalidLogLevelLogLevelEntries)).getCause.isInstanceOf[InvalidConfigurationException])
     assertLogLevelDidNotChange()
 
     val invalidLoggerNameLogLevelEntries = Seq(
       new AlterConfigOp(new ConfigEntry("kafka.server.KafkaRequestHandler", LogLevelConfig.INFO_LOG_LEVEL), AlterConfigOp.OpType.SET), // valid
       new AlterConfigOp(new ConfigEntry("Some Other LogCleaner", LogLevelConfig.ERROR_LOG_LEVEL), AlterConfigOp.OpType.SET) // invalid logger name is not supported
     ).asJavaCollection
-    assertTrue(assertThrows(classOf[ExecutionException], () => alterBrokerLoggers(invalidLoggerNameLogLevelEntries)).getCause.isInstanceOf[InvalidRequestException])
+    assertTrue(assertThrows(classOf[ExecutionException], () => alterBrokerLoggers(invalidLoggerNameLogLevelEntries)).getCause.isInstanceOf[InvalidConfigurationException])
     assertLogLevelDidNotChange()
   }
 
