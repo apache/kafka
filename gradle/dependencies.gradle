@@ -53,7 +53,7 @@ if (hasProperty('streamsScalaVersion')) {
     versions["streamsScala"] = streamsScalaVersion
   }
 } else {
-  versions["streamsScala"] = defaultScala212Version
+  versions["streamsScala"] = versions["scala"]
 }
 
 /* Resolve base Scala version according to these patterns:
