@@ -17,10 +17,13 @@
 {
   "type": "data",
   "name": "ConsumerGroupMetadataValue",
-  "validVersions": "0",
+  // Version 1 adds Type field
+  "validVersions": "0-1",
   "flexibleVersions": "0+",
   "fields": [
     { "name": "Epoch", "versions": "0+", "type": "int32",
-      "about": "The group epoch." }
+      "about": "The group epoch." },
+    { "name": "Type", "type": "string", "versions": "1+", "nullableVersions": "1+",
+      "about": "The group type - null indicates consumer group." }
   ]
 }

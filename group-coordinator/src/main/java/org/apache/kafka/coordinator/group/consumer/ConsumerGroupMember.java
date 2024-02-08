@@ -18,6 +18,7 @@ package org.apache.kafka.coordinator.group.consumer;
 
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.ConsumerGroupDescribeResponseData;
+import org.apache.kafka.coordinator.group.GroupMember;
 import org.apache.kafka.coordinator.group.common.Assignment;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupCurrentMemberAssignmentValue;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupMemberMetadataValue;
@@ -41,7 +42,7 @@ import java.util.stream.Collectors;
  * within a consumer group. This class is immutable and is fully backed
  * by records stored in the __consumer_offsets topic.
  */
-public class ConsumerGroupMember {
+public class ConsumerGroupMember extends GroupMember {
     /**
      * A builder that facilitates the creation of a new member or the update of
      * an existing one.
@@ -269,78 +270,6 @@ public class ConsumerGroupMember {
         }
     }
 
-    /**
-     * The various states that a member can be in. For their definition,
-     * refer to the documentation of {{@link CurrentAssignmentBuilder}}.
-     */
-    public enum MemberState {
-        REVOKING("revoking"),
-        ASSIGNING("assigning"),
-        STABLE("stable");
-
-        private final String name;
-
-        MemberState(String name) {
-            this.name = name;
-        }
-
-        @Override
-        public String toString() {
-            return name;
-        }
-    }
-
-    /**
-     * The member id.
-     */
-    private final String memberId;
-
-    /**
-     * The current member epoch.
-     */
-    private final int memberEpoch;
-
-    /**
-     * The previous member epoch.
-     */
-    private final int previousMemberEpoch;
-
-    /**
-     * The next member epoch. This corresponds to the target
-     * assignment epoch used to compute the current assigned,
-     * revoking and assigning partitions.
-     */
-    private final int targetMemberEpoch;
-
-    /**
-     * The instance id provided by the member.
-     */
-    private final String instanceId;
-
-    /**
-     * The rack id provided by the member.
-     */
-    private final String rackId;
-
-    /**
-     * The rebalance timeout provided by the member.
-     */
-    private final int rebalanceTimeoutMs;
-
-    /**
-     * The client id reported by the member.
-     */
-    private final String clientId;
-
-    /**
-     * The host reported by the member.
-     */
-    private final String clientHost;
-
-    /**
-     * The list of subscriptions (topic names) configured by the member.
-     */
-    private final List<String> subscribedTopicNames;
 
     /**
      * The subscription pattern configured by the member.
@@ -356,16 +285,6 @@ public class ConsumerGroupMember {
      * The states of the client side assignors of the member.
      */
     private final List<ClientAssignor> clientAssignors;
-
-    /**
-     * The member state.
-     */
-    private final MemberState state;
-
-    /**
-     * The partitions assigned to this member.
-     */
-    private final Map<Uuid, Set<Integer>> assignedPartitions;
 
     /**
      * The partitions being revoked by this member.
@@ -418,76 +337,6 @@ public class ConsumerGroupMember {
     }
 
     /**
-     * @return The member id.
-     */
-    public String memberId() {
-        return memberId;
-    }
-
-    /**
-     * @return The current member epoch.
-     */
-    public int memberEpoch() {
-        return memberEpoch;
-    }
-
-    /**
-     * @return The previous member epoch.
-     */
-    public int previousMemberEpoch() {
-        return previousMemberEpoch;
-    }
-
-    /**
-     * @return The target member epoch.
-     */
-    public int targetMemberEpoch() {
-        return targetMemberEpoch;
-    }
-
-    /**
-     * @return The instance id.
-     */
-    public String instanceId() {
-        return instanceId;
-    }
-
-    /**
-     * @return The rack id.
-     */
-    public String rackId() {
-        return rackId;
-    }
-
-    /**
-     * @return The rebalance timeout in millis.
-     */
-    public int rebalanceTimeoutMs() {
-        return rebalanceTimeoutMs;
-    }
-
-    /**
-     * @return The client id.
-     */
-    public String clientId() {
-        return clientId;
-    }
-
-    /**
-     * @return The client host.
-     */
-    public String clientHost() {
-        return clientHost;
-    }
-
-    /**
-     * @return The list of subscribed topic names.
-     */
-    public List<String> subscribedTopicNames() {
-        return subscribedTopicNames;
-    }
-
-    /**
      * @return The regular expression based subscription.
      */
     public String subscribedTopicRegex() {
@@ -506,20 +355,6 @@ public class ConsumerGroupMember {
      */
     public List<ClientAssignor> clientAssignors() {
         return clientAssignors;
-    }
-
-    /**
-     * @return The current state.
-     */
-    public MemberState state() {
-        return state;
-    }
-
-    /**
-     * @return The set of assigned partitions.
-     */
-    public Map<Uuid, Set<Integer>> assignedPartitions() {
-        return assignedPartitions;
     }
 
     /**

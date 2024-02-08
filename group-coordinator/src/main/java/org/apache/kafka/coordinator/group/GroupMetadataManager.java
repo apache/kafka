@@ -55,14 +55,15 @@ import org.apache.kafka.common.requests.RequestContext;
 import org.apache.kafka.common.requests.ShareGroupHeartbeatRequest;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.coordinator.group.Group.GroupType;
 import org.apache.kafka.coordinator.group.assignor.PartitionAssignor;
 import org.apache.kafka.coordinator.group.assignor.PartitionAssignorException;
 import org.apache.kafka.coordinator.group.common.Assignment;
 import org.apache.kafka.coordinator.group.common.TopicMetadata;
 import org.apache.kafka.coordinator.group.consumer.ConsumerGroup;
 import org.apache.kafka.coordinator.group.consumer.ConsumerGroupMember;
-import org.apache.kafka.coordinator.group.consumer.CurrentAssignmentBuilder;
-import org.apache.kafka.coordinator.group.consumer.TargetAssignmentBuilder;
+import org.apache.kafka.coordinator.group.common.CurrentAssignmentBuilder;
+import org.apache.kafka.coordinator.group.common.TargetAssignmentBuilder;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupCurrentMemberAssignmentKey;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupCurrentMemberAssignmentValue;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupMemberMetadataKey;
@@ -83,6 +84,9 @@ import org.apache.kafka.coordinator.group.classic.ClassicGroupState;
 import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetricsShard;
 import org.apache.kafka.coordinator.group.runtime.CoordinatorResult;
 import org.apache.kafka.coordinator.group.runtime.CoordinatorTimer;
+import org.apache.kafka.coordinator.group.share.ShareGroup;
+import org.apache.kafka.coordinator.group.share.ShareGroupMember;
+import org.apache.kafka.coordinator.group.share.SimpleAssignor;
 import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.image.TopicImage;
@@ -115,6 +119,7 @@ import static org.apache.kafka.common.requests.ConsumerGroupHeartbeatRequest.LEA
 import static org.apache.kafka.common.requests.JoinGroupRequest.UNKNOWN_MEMBER_ID;
 import static org.apache.kafka.coordinator.group.Group.GroupType.CONSUMER;
 import static org.apache.kafka.coordinator.group.Group.GroupType.CLASSIC;
+import static org.apache.kafka.coordinator.group.Group.GroupType.SHARE;
 import static org.apache.kafka.coordinator.group.RecordHelpers.newCurrentAssignmentRecord;
 import static org.apache.kafka.coordinator.group.RecordHelpers.newCurrentAssignmentTombstoneRecord;
 import static org.apache.kafka.coordinator.group.RecordHelpers.newGroupEpochRecord;
@@ -149,6 +154,7 @@ public class GroupMetadataManager {
         private Time time = null;
         private CoordinatorTimer<Void, Record> timer = null;
         private List<PartitionAssignor> consumerGroupAssignors = null;
+        private PartitionAssignor shareGroupAssignor = null;
         private int consumerGroupMaxSize = Integer.MAX_VALUE;
         private int consumerGroupHeartbeatIntervalMs = 5000;
         private int consumerGroupMetadataRefreshIntervalMs = Integer.MAX_VALUE;
@@ -183,6 +189,11 @@ public class GroupMetadataManager {
 
         Builder withConsumerGroupAssignors(List<PartitionAssignor> consumerGroupAssignors) {
             this.consumerGroupAssignors = consumerGroupAssignors;
+            return this;
+        }
+
+        Builder withShareGroupAssignor(PartitionAssignor shareGroupAssignor) {
+            this.shareGroupAssignor = shareGroupAssignor;
             return this;
         }
 
@@ -251,6 +262,8 @@ public class GroupMetadataManager {
                 throw new IllegalArgumentException("Timer must be set.");
             if (consumerGroupAssignors == null || consumerGroupAssignors.isEmpty())
                 throw new IllegalArgumentException("Assignors must be set before building.");
+            if (shareGroupAssignor == null)
+                shareGroupAssignor = new SimpleAssignor();
             if (metrics == null)
                 throw new IllegalArgumentException("GroupCoordinatorMetricsShard must be set.");
 
@@ -261,6 +274,7 @@ public class GroupMetadataManager {
                 timer,
                 metrics,
                 consumerGroupAssignors,
+                shareGroupAssignor,
                 metadataImage,
                 consumerGroupMaxSize,
                 consumerGroupSessionTimeoutMs,
@@ -313,6 +327,11 @@ public class GroupMetadataManager {
      * The default assignor used.
      */
     private final PartitionAssignor defaultAssignor;
+
+    /**
+     * The assignor for share groups.
+     */
+    private final PartitionAssignor shareGroupAssignor;
 
     /**
      * The classic and consumer groups keyed by their name.
@@ -390,6 +409,7 @@ public class GroupMetadataManager {
         CoordinatorTimer<Void, Record> timer,
         GroupCoordinatorMetricsShard metrics,
         List<PartitionAssignor> assignors,
+        PartitionAssignor shareGroupAssignor,
         MetadataImage metadataImage,
         int consumerGroupMaxSize,
         int consumerGroupSessionTimeoutMs,
@@ -409,6 +429,7 @@ public class GroupMetadataManager {
         this.metrics = metrics;
         this.metadataImage = metadataImage;
         this.assignors = assignors.stream().collect(Collectors.toMap(PartitionAssignor::name, Function.identity()));
+        this.shareGroupAssignor = shareGroupAssignor;
         this.defaultAssignor = assignors.get(0);
         this.groups = new TimelineHashMap<>(snapshotRegistry, 0);
         this.groupsByTopics = new TimelineHashMap<>(snapshotRegistry, 0);
@@ -591,33 +612,73 @@ public class GroupMetadataManager {
      * @return A ConsumerGroup.
      * @throws GroupIdNotFoundException if the group does not exist and createIfNotExists is false or
      *                                  if the group is not a consumer group.
-     *
-     * Package private for testing.
      */
+    // Visible for testing
     ConsumerGroup getOrMaybeCreateConsumerGroup(
         String groupId,
         boolean createIfNotExists
     ) throws GroupIdNotFoundException {
+        return (ConsumerGroup) getOrMaybeCreateGroup(groupId, createIfNotExists, CONSUMER);
+    }
+
+    /**
+     * Gets or maybe creates a share group.
+     *
+     * @param groupId           The group id.
+     * @param createIfNotExists A boolean indicating whether the group should be
+     *                          created if it does not exist.
+     *
+     * @return A ShareGroup.
+     * @throws GroupIdNotFoundException if the group does not exist and createIfNotExists is false or
+     *                                  if the group is not a consumer group.
+     */
+    // Visible for testing
+    ShareGroup getOrMaybeCreateShareGroup(
+            String groupId,
+            boolean createIfNotExists
+    ) throws GroupIdNotFoundException {
+        return (ShareGroup) getOrMaybeCreateGroup(groupId, createIfNotExists, SHARE);
+    }
+
+    /**
+     * Gets or maybe create a group.
+     *
+     * @param groupId           The group id.
+     * @param createIfNotExists A boolean indicating whether the group should be
+     *                          created if it does not exist.
+     * @param groupType         The type of group.
+     *
+     * @return A Group.
+     * @throws GroupIdNotFoundException if the group does not exist and createIfNotExists is false or
+     *                                  if the group is not of required group type.
+     */
+    private Group getOrMaybeCreateGroup(
+        String groupId,
+        boolean createIfNotExists,
+        GroupType groupType
+    ) throws GroupIdNotFoundException {
         Group group = groups.get(groupId);
 
         if (group == null && !createIfNotExists) {
-            throw new GroupIdNotFoundException(String.format("Consumer group %s not found.", groupId));
+            throw new GroupIdNotFoundException(String.format("Group %s not found.", groupId));
         }
 
         if (group == null) {
-            ConsumerGroup consumerGroup = new ConsumerGroup(snapshotRegistry, groupId, metrics);
-            groups.put(groupId, consumerGroup);
-            metrics.onConsumerGroupStateTransition(null, consumerGroup.state());
-            return consumerGroup;
-        } else {
-            if (group.type() == CONSUMER) {
-                return (ConsumerGroup) group;
+            if (groupType == CONSUMER) {
+                group = new ConsumerGroup(snapshotRegistry, groupId, metrics);
+                metrics.onConsumerGroupStateTransition(null, ((ConsumerGroup) group).state());
+            } else if (groupType == SHARE) {
+                group = new ShareGroup(snapshotRegistry, groupId);
             } else {
-                // We don't support upgrading/downgrading between protocols at the moment so
-                // we throw an exception if a group exists with the wrong type.
-                throw new GroupIdNotFoundException(String.format("Group %s is not a consumer group.", groupId));
+                throw new IllegalArgumentException("Invalid group type: " + groupType);
             }
+            groups.put(groupId, group);
+        } else if (group.type() != groupType) {
+            // We don't support upgrading/downgrading between protocols at the moment so
+            // we throw an exception if a group exists with the wrong type.
+            throw new GroupIdNotFoundException(String.format("Group %s is not a %s group.", groupId, groupType));
         }
+        return group;
     }
 
     /**
@@ -932,6 +993,17 @@ public class GroupMetadataManager {
         }
     }
 
+    private void throwIfShareGroupMemberEpochIsInvalid(
+            ShareGroupMember member,
+            int receivedMemberEpoch
+    ) {
+        if (receivedMemberEpoch > member.memberEpoch()) {
+            throw new FencedMemberEpochException("The share group member has a greater member "
+                    + "epoch (" + receivedMemberEpoch + ") than the one known by the group coordinator ("
+                    + member.memberEpoch() + "). The member must abandon all its partitions and rejoin.");
+        }
+    }
+
     /**
      * Validates if the received instanceId has been released from the group
      *
@@ -997,6 +1069,23 @@ public class GroupMetadataManager {
     ) {
         return assignment.entrySet().stream()
             .map(keyValue -> new ConsumerGroupHeartbeatResponseData.TopicPartitions()
+                .setTopicId(keyValue.getKey())
+                .setPartitions(new ArrayList<>(keyValue.getValue())))
+            .collect(Collectors.toList());
+    }
+
+    private ShareGroupHeartbeatResponseData.Assignment createShareGroupResponseAssignment(
+        ShareGroupMember member
+    ) {
+        return new ShareGroupHeartbeatResponseData.Assignment()
+                .setAssignedTopicPartitions(fromShareGroupAssignmentMap(member.assignedPartitions()));
+    }
+
+    private List<ShareGroupHeartbeatResponseData.TopicPartitions> fromShareGroupAssignmentMap(
+        Map<Uuid, Set<Integer>> assignment
+    ) {
+        return assignment.entrySet().stream()
+            .map(keyValue -> new ShareGroupHeartbeatResponseData.TopicPartitions()
                 .setTopicId(keyValue.getKey())
                 .setPartitions(new ArrayList<>(keyValue.getValue())))
             .collect(Collectors.toList());
@@ -1201,7 +1290,7 @@ public class GroupMetadataManager {
         boolean assignmentUpdated = false;
         if (updatedMember.state() != ConsumerGroupMember.MemberState.STABLE || updatedMember.targetMemberEpoch() != targetAssignmentEpoch) {
             ConsumerGroupMember prevMember = updatedMember;
-            updatedMember = new CurrentAssignmentBuilder(updatedMember)
+            updatedMember = (ConsumerGroupMember) new CurrentAssignmentBuilder(updatedMember)
                 .withTargetAssignment(targetAssignmentEpoch, targetAssignment)
                 .withCurrentPartitionEpoch(group::currentPartitionEpoch)
                 .withOwnedTopicPartitions(ownedTopicPartitions)
@@ -1906,7 +1995,7 @@ public class GroupMetadataManager {
                     consumerGroup.members().forEach((memberId, member) -> {
                         log.debug("Loaded member {} in consumer group {}.", memberId, groupId);
                         scheduleConsumerGroupSessionTimeout(groupId, memberId);
-                        if (member.state() == ConsumerGroupMember.MemberState.REVOKING) {
+                        if (member.state() == GroupMember.MemberState.REVOKING) {
                             scheduleConsumerGroupRevocationTimeout(
                                 groupId,
                                 memberId,

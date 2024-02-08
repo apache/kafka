@@ -14,11 +14,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.coordinator.group.consumer;
+package org.apache.kafka.coordinator.group.common;
 
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatRequestData;
-import org.apache.kafka.coordinator.group.common.Assignment;
+import org.apache.kafka.coordinator.group.GroupMember;
+import org.apache.kafka.coordinator.group.consumer.ConsumerGroupMember;
+import org.apache.kafka.coordinator.group.share.ShareGroupMember;
 
 import java.util.Collections;
 import java.util.HashMap;
@@ -82,7 +84,7 @@ public class CurrentAssignmentBuilder {
     /**
      * The consumer group member which is reconciled.
      */
-    private final ConsumerGroupMember member;
+    private final GroupMember member;
 
     /**
      * The target assignment epoch.
@@ -112,7 +114,7 @@ public class CurrentAssignmentBuilder {
      *
      * @param member The consumer group member that must be reconciled.
      */
-    public CurrentAssignmentBuilder(ConsumerGroupMember member) {
+    public CurrentAssignmentBuilder(GroupMember member) {
         this.member = Objects.requireNonNull(member);
     }
 
@@ -165,30 +167,69 @@ public class CurrentAssignmentBuilder {
     }
 
     /**
+     * Builds the group member based on the current state and the target assignment.
+     *
+     * @return The group member.
+     */
+    public GroupMember build() {
+        if (member instanceof ConsumerGroupMember)
+            return buildConsumerGroupMember((ConsumerGroupMember) member);
+        else if (member instanceof ShareGroupMember)
+            return buildShareGroupMember((ShareGroupMember) member);
+        throw new IllegalStateException("Unknown member type: " + member.getClass());
+    }
+
+    /**
      * Builds the next state for the member or keep the current one if it
      * is not possible to move forward with the current state.
      *
      * @return A new ConsumerGroupMember or the current one.
      */
-    public ConsumerGroupMember build() {
+    private ConsumerGroupMember buildConsumerGroupMember(ConsumerGroupMember member) {
         // A new target assignment has been installed, we need to restart
         // the reconciliation loop from the beginning.
         if (targetAssignmentEpoch != member.targetMemberEpoch()) {
-            return transitionToNewTargetAssignmentState();
+            return transitionToNewTargetAssignmentState(member);
         }
 
         switch (member.state()) {
             // Check if the partitions have been revoked by the member.
             case REVOKING:
-                return maybeTransitionFromRevokingToAssigningOrStable();
+                return maybeTransitionFromRevokingToAssigningOrStable(member);
 
             // Check if pending partitions have been freed up.
             case ASSIGNING:
-                return maybeTransitionFromAssigningToAssigningOrStable();
+                return maybeTransitionFromAssigningToAssigningOrStable(member);
 
             // Nothing to do.
             case STABLE:
+                // Always be in state stable for ShareGroup
                 return member;
+        }
+
+        return member;
+    }
+
+    /**
+     * The state machine for share group has just one state: STABLE. This state means that the member
+     * has received all its assigned partitions. However, the member may still need to update its
+     * metadata to reflect the new target assignment.
+     *
+     * @param member The share group member to reconcile.
+     *
+     * @return A new ShareGroupMember.
+     */
+    private ShareGroupMember buildShareGroupMember(ShareGroupMember member) {
+        // A new target assignment has been installed, we need to restart
+        // the reconciliation loop from the beginning.
+        if (targetAssignmentEpoch != member.targetMemberEpoch()) {
+            // We transition to the target epoch. The transition to the new state is done
+            // when the member is updated.
+            return new ShareGroupMember.Builder(member)
+                .setAssignedPartitions(targetAssignment.partitions())
+                .setMemberEpoch(targetAssignmentEpoch)
+                .setTargetMemberEpoch(targetAssignmentEpoch)
+                .build();
         }
 
         return member;
@@ -201,7 +242,7 @@ public class CurrentAssignmentBuilder {
      *
      * @return A new ConsumerGroupMember.
      */
-    private ConsumerGroupMember transitionToNewTargetAssignmentState() {
+    private ConsumerGroupMember transitionToNewTargetAssignmentState(ConsumerGroupMember member) {
         Map<Uuid, Set<Integer>> newAssignedPartitions = new HashMap<>();
         Map<Uuid, Set<Integer>> newPartitionsPendingRevocation = new HashMap<>();
         Map<Uuid, Set<Integer>> newPartitionsPendingAssignment = new HashMap<>();
@@ -291,8 +332,8 @@ public class CurrentAssignmentBuilder {
      * @return A new ConsumerGroupMember with the new state or the current one
      *         if the member stays in the current state.
      */
-    private ConsumerGroupMember maybeTransitionFromRevokingToAssigningOrStable() {
-        if (member.partitionsPendingRevocation().isEmpty() || matchesAssignedPartitions(ownedTopicPartitions)) {
+    private ConsumerGroupMember maybeTransitionFromRevokingToAssigningOrStable(ConsumerGroupMember member) {
+        if (member.partitionsPendingRevocation().isEmpty() || matchesAssignedPartitions(ownedTopicPartitions, member)) {
             Map<Uuid, Set<Integer>> newAssignedPartitions = deepCopy(member.assignedPartitions());
             Map<Uuid, Set<Integer>> newPartitionsPendingAssignment = deepCopy(member.partitionsPendingAssignment());
 
@@ -327,7 +368,7 @@ public class CurrentAssignmentBuilder {
      * @return A new ConsumerGroupMember with the new state or the current one
      *         if the member stays in the current state.
      */
-    private ConsumerGroupMember maybeTransitionFromAssigningToAssigningOrStable() {
+    private ConsumerGroupMember maybeTransitionFromAssigningToAssigningOrStable(ConsumerGroupMember member) {
         Map<Uuid, Set<Integer>> newAssignedPartitions = deepCopy(member.assignedPartitions());
         Map<Uuid, Set<Integer>> newPartitionsPendingAssignment = deepCopy(member.partitionsPendingAssignment());
 
@@ -401,7 +442,8 @@ public class CurrentAssignmentBuilder {
      * @return A boolean indicating if the owned partitions matches the Assigned set.
      */
     private boolean matchesAssignedPartitions(
-        List<ConsumerGroupHeartbeatRequestData.TopicPartitions> ownedTopicPartitions
+        List<ConsumerGroupHeartbeatRequestData.TopicPartitions> ownedTopicPartitions,
+        ConsumerGroupMember member
     ) {
         if (ownedTopicPartitions == null) return false;
         if (ownedTopicPartitions.size() != member.assignedPartitions().size()) return false;

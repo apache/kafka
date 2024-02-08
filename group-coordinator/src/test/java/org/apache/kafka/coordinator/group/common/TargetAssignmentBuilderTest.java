@@ -14,18 +14,17 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.coordinator.group.consumer;
+package org.apache.kafka.coordinator.group.common;
 
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.coordinator.group.GroupMember;
 import org.apache.kafka.coordinator.group.assignor.AssignmentMemberSpec;
 import org.apache.kafka.coordinator.group.assignor.AssignmentSpec;
 import org.apache.kafka.coordinator.group.assignor.GroupAssignment;
 import org.apache.kafka.coordinator.group.assignor.MemberAssignment;
 import org.apache.kafka.coordinator.group.assignor.PartitionAssignor;
-import org.apache.kafka.coordinator.group.common.Assignment;
-import org.apache.kafka.coordinator.group.common.SubscribedTopicMetadata;
-import org.apache.kafka.coordinator.group.common.TopicMetadata;
-import org.apache.kafka.coordinator.group.common.VersionedMetadata;
+import org.apache.kafka.coordinator.group.consumer.ConsumerGroupMember;
+import org.apache.kafka.coordinator.group.consumer.ConsumerGroupMember.Builder;
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
@@ -42,7 +41,7 @@ import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkTopicAssig
 import static org.apache.kafka.coordinator.group.RecordHelpers.newTargetAssignmentEpochRecord;
 import static org.apache.kafka.coordinator.group.RecordHelpers.newTargetAssignmentRecord;
 import static org.apache.kafka.coordinator.group.RecordHelpersTest.mkMapOfPartitionRacks;
-import static org.apache.kafka.coordinator.group.consumer.TargetAssignmentBuilder.createAssignmentMemberSpec;
+import static org.apache.kafka.coordinator.group.common.TargetAssignmentBuilder.createAssignmentMemberSpec;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
@@ -56,9 +55,9 @@ public class TargetAssignmentBuilderTest {
         private final String groupId;
         private final int groupEpoch;
         private final PartitionAssignor assignor = mock(PartitionAssignor.class);
-        private final Map<String, ConsumerGroupMember> members = new HashMap<>();
+        private final Map<String, GroupMember> members = new HashMap<>();
         private final Map<String, TopicMetadata> subscriptionMetadata = new HashMap<>();
-        private final Map<String, ConsumerGroupMember> updatedMembers = new HashMap<>();
+        private final Map<String, GroupMember> updatedMembers = new HashMap<>();
         private final Map<String, Assignment> targetAssignment = new HashMap<>();
         private final Map<String, MemberAssignment> memberAssignments = new HashMap<>();
         private final Map<String, String> staticMembers = new HashMap<>();
@@ -85,7 +84,7 @@ public class TargetAssignmentBuilderTest {
             List<String> subscriptions,
             Map<Uuid, Set<Integer>> targetPartitions
         ) {
-            ConsumerGroupMember.Builder memberBuilder = new ConsumerGroupMember.Builder(memberId)
+            Builder memberBuilder = new Builder(memberId)
                 .setSubscribedTopicNames(subscriptions);
 
             if (instanceId != null) {
@@ -133,7 +132,7 @@ public class TargetAssignmentBuilderTest {
             Optional<String> instanceId,
             Optional<String> rackId
         ) {
-            ConsumerGroupMember existingMember = members.get(memberId);
+            ConsumerGroupMember existingMember = (ConsumerGroupMember) members.get(memberId);
             ConsumerGroupMember.Builder builder;
             if (existingMember != null) {
                 builder = new ConsumerGroupMember.Builder(existingMember);
@@ -189,7 +188,7 @@ public class TargetAssignmentBuilderTest {
                 if (updatedMemberOrNull == null) {
                     memberSpecs.remove(memberId);
                 } else {
-                    ConsumerGroupMember member = members.get(memberId);
+                    ConsumerGroupMember member = (ConsumerGroupMember) members.get(memberId);
                     Assignment assignment;
                     // A new static member joins and needs to replace an existing departed one.
                     if (member == null && staticMembers.containsKey(updatedMemberOrNull.instanceId())) {

@@ -25,6 +25,7 @@ import org.apache.kafka.common.message.ConsumerGroupDescribeResponseData;
 import org.apache.kafka.common.message.ListGroupsResponseData;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.coordinator.group.Group;
+import org.apache.kafka.coordinator.group.GroupMember;
 import org.apache.kafka.coordinator.group.OffsetExpirationCondition;
 import org.apache.kafka.coordinator.group.OffsetExpirationConditionImpl;
 import org.apache.kafka.coordinator.group.Record;
@@ -84,18 +85,6 @@ public class ConsumerGroup implements Group {
 
         public String toLowerCaseString() {
             return lowerCaseName;
-        }
-    }
-
-    public static class DeadlineAndEpoch {
-        static final DeadlineAndEpoch EMPTY = new DeadlineAndEpoch(0L, 0);
-
-        public final long deadlineMs;
-        public final int epoch;
-
-        DeadlineAndEpoch(long deadlineMs, int epoch) {
-            this.deadlineMs = deadlineMs;
-            this.epoch = epoch;
         }
     }
 
@@ -414,7 +403,7 @@ public class ConsumerGroup implements Group {
     /**
      * @return An immutable Map containing all the members keyed by their id.
      */
-    public Map<String, ConsumerGroupMember> members() {
+    public Map<String, GroupMember> members() {
         return Collections.unmodifiableMap(members);
     }
 

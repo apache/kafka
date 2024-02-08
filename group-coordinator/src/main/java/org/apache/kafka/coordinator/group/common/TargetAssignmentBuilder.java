@@ -14,9 +14,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.coordinator.group.consumer;
+package org.apache.kafka.coordinator.group.common;
 
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.coordinator.group.GroupMember;
 import org.apache.kafka.coordinator.group.Record;
 import org.apache.kafka.coordinator.group.assignor.AssignmentMemberSpec;
 import org.apache.kafka.coordinator.group.assignor.AssignmentSpec;
@@ -24,9 +25,6 @@ import org.apache.kafka.coordinator.group.assignor.GroupAssignment;
 import org.apache.kafka.coordinator.group.assignor.MemberAssignment;
 import org.apache.kafka.coordinator.group.assignor.PartitionAssignor;
 import org.apache.kafka.coordinator.group.assignor.PartitionAssignorException;
-import org.apache.kafka.coordinator.group.common.Assignment;
-import org.apache.kafka.coordinator.group.common.SubscribedTopicMetadata;
-import org.apache.kafka.coordinator.group.common.TopicMetadata;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -112,7 +110,7 @@ public class TargetAssignmentBuilder {
     /**
      * The members in the group.
      */
-    private Map<String, ConsumerGroupMember> members = Collections.emptyMap();
+    private Map<String, GroupMember> members = Collections.emptyMap();
 
     /**
      * The subscription metadata.
@@ -128,7 +126,7 @@ public class TargetAssignmentBuilder {
      * The members which have been updated or deleted. Deleted members
      * are signaled by a null value.
      */
-    private final Map<String, ConsumerGroupMember> updatedMembers = new HashMap<>();
+    private final Map<String, GroupMember> updatedMembers = new HashMap<>();
 
     /**
      * The static members in the group.
@@ -159,7 +157,7 @@ public class TargetAssignmentBuilder {
      * @return This object.
      */
     public TargetAssignmentBuilder withMembers(
-        Map<String, ConsumerGroupMember> members
+        Map<String, GroupMember> members
     ) {
         this.members = members;
         return this;
@@ -168,7 +166,7 @@ public class TargetAssignmentBuilder {
     /**
      * Adds all the existing static members.
      *
-     * @param staticMembers   The existing static members in the consumer group.
+     * @param staticMembers   The existing static members in the group.
      * @return This object.
      */
     public TargetAssignmentBuilder withStaticMembers(
@@ -214,7 +212,7 @@ public class TargetAssignmentBuilder {
      */
     public TargetAssignmentBuilder addOrUpdateMember(
         String memberId,
-        ConsumerGroupMember member
+        GroupMember member
     ) {
         this.updatedMembers.put(memberId, member);
         return this;
@@ -255,7 +253,7 @@ public class TargetAssignmentBuilder {
             if (updatedMemberOrNull == null) {
                 memberSpecs.remove(memberId);
             } else {
-                ConsumerGroupMember member = members.get(memberId);
+                GroupMember member = members.get(memberId);
                 Assignment assignment;
                 // A new static member joins and needs to replace an existing departed one.
                 if (member == null && staticMembers.containsKey(updatedMemberOrNull.instanceId())) {
@@ -336,7 +334,7 @@ public class TargetAssignmentBuilder {
     }
 
     public static AssignmentMemberSpec createAssignmentMemberSpec(
-        ConsumerGroupMember member,
+        GroupMember member,
         Assignment targetAssignment,
         Map<String, TopicMetadata> subscriptionMetadata
     ) {

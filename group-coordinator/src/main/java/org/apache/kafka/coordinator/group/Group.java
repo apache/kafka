@@ -68,6 +68,18 @@ public interface Group {
         }
     }
 
+     class DeadlineAndEpoch {
+        public static final DeadlineAndEpoch EMPTY = new DeadlineAndEpoch(0L, 0);
+
+        public final long deadlineMs;
+        public final int epoch;
+
+        public DeadlineAndEpoch(long deadlineMs, int epoch) {
+            this.deadlineMs = deadlineMs;
+            this.epoch = epoch;
+        }
+    }
+
     /**
      * @return The {{@link GroupType}}.
      */

@@ -14,11 +14,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.coordinator.group.consumer;
+package org.apache.kafka.coordinator.group.common;
 
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatRequestData;
-import org.apache.kafka.coordinator.group.common.Assignment;
+import org.apache.kafka.coordinator.group.GroupMember;
+import org.apache.kafka.coordinator.group.consumer.ConsumerGroupMember;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -51,19 +52,19 @@ public class CurrentAssignmentBuilderTest {
                 mkTopicAssignment(topicId2, 4, 5, 6)))
             .build();
 
-        assertEquals(ConsumerGroupMember.MemberState.STABLE, member.state());
+        assertEquals(GroupMember.MemberState.STABLE, member.state());
 
         Assignment targetAssignment = new Assignment(mkAssignment(
             mkTopicAssignment(topicId1, 3, 4, 5),
             mkTopicAssignment(topicId2, 6, 7, 8)
         ));
 
-        ConsumerGroupMember updatedMember = new CurrentAssignmentBuilder(member)
+        ConsumerGroupMember updatedMember = (ConsumerGroupMember) new CurrentAssignmentBuilder(member)
             .withTargetAssignment(11, targetAssignment)
             .withCurrentPartitionEpoch((topicId, partitionId) -> 10)
             .build();
 
-        assertEquals(ConsumerGroupMember.MemberState.REVOKING, updatedMember.state());
+        assertEquals(GroupMember.MemberState.REVOKING, updatedMember.state());
         assertEquals(10, updatedMember.previousMemberEpoch());
         assertEquals(10, updatedMember.memberEpoch());
         assertEquals(11, updatedMember.targetMemberEpoch());
@@ -86,7 +87,7 @@ public class CurrentAssignmentBuilderTest {
         Uuid topicId1 = Uuid.randomUuid();
         Uuid topicId2 = Uuid.randomUuid();
 
-        ConsumerGroupMember member = new ConsumerGroupMember.Builder("member")
+        GroupMember member = new ConsumerGroupMember.Builder("member")
             .setMemberEpoch(10)
             .setPreviousMemberEpoch(10)
             .setTargetMemberEpoch(10)
@@ -95,19 +96,19 @@ public class CurrentAssignmentBuilderTest {
                 mkTopicAssignment(topicId2, 4, 5, 6)))
             .build();
 
-        assertEquals(ConsumerGroupMember.MemberState.STABLE, member.state());
+        assertEquals(GroupMember.MemberState.STABLE, member.state());
 
         Assignment targetAssignment = new Assignment(mkAssignment(
             mkTopicAssignment(topicId1, 1, 2, 3, 4, 5),
             mkTopicAssignment(topicId2, 4, 5, 6, 7, 8)
         ));
 
-        ConsumerGroupMember updatedMember = new CurrentAssignmentBuilder(member)
+        GroupMember updatedMember = new CurrentAssignmentBuilder(member)
             .withTargetAssignment(11, targetAssignment)
             .withCurrentPartitionEpoch((topicId, partitionId) -> 10)
             .build();
 
-        assertEquals(ConsumerGroupMember.MemberState.ASSIGNING, updatedMember.state());
+        assertEquals(GroupMember.MemberState.ASSIGNING, updatedMember.state());
         assertEquals(10, updatedMember.previousMemberEpoch());
         assertEquals(11, updatedMember.memberEpoch());
         assertEquals(11, updatedMember.targetMemberEpoch());
@@ -115,11 +116,11 @@ public class CurrentAssignmentBuilderTest {
             mkTopicAssignment(topicId1, 1, 2, 3),
             mkTopicAssignment(topicId2, 4, 5, 6)
         ), updatedMember.assignedPartitions());
-        assertEquals(Collections.emptyMap(), updatedMember.partitionsPendingRevocation());
+        assertEquals(Collections.emptyMap(), ((ConsumerGroupMember) updatedMember).partitionsPendingRevocation());
         assertEquals(mkAssignment(
             mkTopicAssignment(topicId1, 4, 5),
             mkTopicAssignment(topicId2, 7, 8)
-        ), updatedMember.partitionsPendingAssignment());
+        ), ((ConsumerGroupMember) updatedMember).partitionsPendingAssignment());
     }
 
     @Test
@@ -127,7 +128,7 @@ public class CurrentAssignmentBuilderTest {
         Uuid topicId1 = Uuid.randomUuid();
         Uuid topicId2 = Uuid.randomUuid();
 
-        ConsumerGroupMember member = new ConsumerGroupMember.Builder("member")
+        GroupMember member = new ConsumerGroupMember.Builder("member")
             .setMemberEpoch(10)
             .setPreviousMemberEpoch(10)
             .setTargetMemberEpoch(10)
@@ -136,19 +137,19 @@ public class CurrentAssignmentBuilderTest {
                 mkTopicAssignment(topicId2, 4, 5, 6)))
             .build();
 
-        assertEquals(ConsumerGroupMember.MemberState.STABLE, member.state());
+        assertEquals(GroupMember.MemberState.STABLE, member.state());
 
         Assignment targetAssignment = new Assignment(mkAssignment(
             mkTopicAssignment(topicId1, 1, 2, 3),
             mkTopicAssignment(topicId2, 4, 5, 6)
         ));
 
-        ConsumerGroupMember updatedMember = new CurrentAssignmentBuilder(member)
+        GroupMember updatedMember = new CurrentAssignmentBuilder(member)
             .withTargetAssignment(11, targetAssignment)
             .withCurrentPartitionEpoch((topicId, partitionId) -> 10)
             .build();
 
-        assertEquals(ConsumerGroupMember.MemberState.STABLE, updatedMember.state());
+        assertEquals(GroupMember.MemberState.STABLE, updatedMember.state());
         assertEquals(10, updatedMember.previousMemberEpoch());
         assertEquals(11, updatedMember.memberEpoch());
         assertEquals(11, updatedMember.targetMemberEpoch());
@@ -156,8 +157,8 @@ public class CurrentAssignmentBuilderTest {
             mkTopicAssignment(topicId1, 1, 2, 3),
             mkTopicAssignment(topicId2, 4, 5, 6)
         ), updatedMember.assignedPartitions());
-        assertEquals(Collections.emptyMap(), updatedMember.partitionsPendingRevocation());
-        assertEquals(Collections.emptyMap(), updatedMember.partitionsPendingAssignment());
+        assertEquals(Collections.emptyMap(), ((ConsumerGroupMember) updatedMember).partitionsPendingRevocation());
+        assertEquals(Collections.emptyMap(), ((ConsumerGroupMember) updatedMember).partitionsPendingAssignment());
     }
 
     private static Stream<Arguments> ownedTopicPartitionsArguments() {
@@ -177,7 +178,7 @@ public class CurrentAssignmentBuilderTest {
         Uuid topicId1 = Uuid.randomUuid();
         Uuid topicId2 = Uuid.randomUuid();
 
-        ConsumerGroupMember member = new ConsumerGroupMember.Builder("member")
+        GroupMember member = new ConsumerGroupMember.Builder("member")
             .setMemberEpoch(10)
             .setPreviousMemberEpoch(10)
             .setTargetMemberEpoch(11)
@@ -192,20 +193,20 @@ public class CurrentAssignmentBuilderTest {
                 mkTopicAssignment(topicId2, 7, 8)))
             .build();
 
-        assertEquals(ConsumerGroupMember.MemberState.REVOKING, member.state());
+        assertEquals(GroupMember.MemberState.REVOKING, member.state());
 
         Assignment targetAssignment = new Assignment(mkAssignment(
             mkTopicAssignment(topicId1, 3, 4, 5),
             mkTopicAssignment(topicId2, 6, 7, 8)
         ));
 
-        ConsumerGroupMember updatedMember = new CurrentAssignmentBuilder(member)
+        GroupMember updatedMember = new CurrentAssignmentBuilder(member)
             .withTargetAssignment(11, targetAssignment)
             .withCurrentPartitionEpoch((topicId, partitionId) -> -1)
             .withOwnedTopicPartitions(ownedTopicPartitions)
             .build();
 
-        assertEquals(ConsumerGroupMember.MemberState.REVOKING, updatedMember.state());
+        assertEquals(GroupMember.MemberState.REVOKING, updatedMember.state());
         assertEquals(10, updatedMember.previousMemberEpoch());
         assertEquals(10, updatedMember.memberEpoch());
         assertEquals(11, updatedMember.targetMemberEpoch());
@@ -216,11 +217,11 @@ public class CurrentAssignmentBuilderTest {
         assertEquals(mkAssignment(
             mkTopicAssignment(topicId1, 1, 2),
             mkTopicAssignment(topicId2, 4, 5)
-        ), updatedMember.partitionsPendingRevocation());
+        ), ((ConsumerGroupMember) updatedMember).partitionsPendingRevocation());
         assertEquals(mkAssignment(
             mkTopicAssignment(topicId1, 4, 5),
             mkTopicAssignment(topicId2, 7, 8)
-        ), updatedMember.partitionsPendingAssignment());
+        ), ((ConsumerGroupMember) updatedMember).partitionsPendingAssignment());
     }
 
     @Test
@@ -228,7 +229,7 @@ public class CurrentAssignmentBuilderTest {
         Uuid topicId1 = Uuid.randomUuid();
         Uuid topicId2 = Uuid.randomUuid();
 
-        ConsumerGroupMember member = new ConsumerGroupMember.Builder("member")
+        GroupMember member = new ConsumerGroupMember.Builder("member")
             .setMemberEpoch(10)
             .setPreviousMemberEpoch(10)
             .setTargetMemberEpoch(11)
@@ -243,14 +244,14 @@ public class CurrentAssignmentBuilderTest {
                 mkTopicAssignment(topicId2, 7, 8)))
             .build();
 
-        assertEquals(ConsumerGroupMember.MemberState.REVOKING, member.state());
+        assertEquals(GroupMember.MemberState.REVOKING, member.state());
 
         Assignment targetAssignment = new Assignment(mkAssignment(
             mkTopicAssignment(topicId1, 3, 4, 5),
             mkTopicAssignment(topicId2, 6, 7, 8)
         ));
 
-        ConsumerGroupMember updatedMember = new CurrentAssignmentBuilder(member)
+        GroupMember updatedMember = new CurrentAssignmentBuilder(member)
             .withTargetAssignment(11, targetAssignment)
             .withCurrentPartitionEpoch((topicId, partitionId) -> 10)
             .withOwnedTopicPartitions(requestFromAssignment(mkAssignment(
@@ -258,7 +259,7 @@ public class CurrentAssignmentBuilderTest {
                 mkTopicAssignment(topicId2, 6))))
             .build();
 
-        assertEquals(ConsumerGroupMember.MemberState.ASSIGNING, updatedMember.state());
+        assertEquals(GroupMember.MemberState.ASSIGNING, updatedMember.state());
         assertEquals(10, updatedMember.previousMemberEpoch());
         assertEquals(11, updatedMember.memberEpoch());
         assertEquals(11, updatedMember.targetMemberEpoch());
@@ -266,11 +267,11 @@ public class CurrentAssignmentBuilderTest {
             mkTopicAssignment(topicId1, 3),
             mkTopicAssignment(topicId2, 6)
         ), updatedMember.assignedPartitions());
-        assertEquals(Collections.emptyMap(), updatedMember.partitionsPendingRevocation());
+        assertEquals(Collections.emptyMap(), ((ConsumerGroupMember) updatedMember).partitionsPendingRevocation());
         assertEquals(mkAssignment(
             mkTopicAssignment(topicId1, 4, 5),
             mkTopicAssignment(topicId2, 7, 8)
-        ), updatedMember.partitionsPendingAssignment());
+        ), ((ConsumerGroupMember) updatedMember).partitionsPendingAssignment());
     }
 
     @Test
@@ -278,7 +279,7 @@ public class CurrentAssignmentBuilderTest {
         Uuid topicId1 = Uuid.randomUuid();
         Uuid topicId2 = Uuid.randomUuid();
 
-        ConsumerGroupMember member = new ConsumerGroupMember.Builder("member")
+        GroupMember member = new ConsumerGroupMember.Builder("member")
             .setMemberEpoch(10)
             .setPreviousMemberEpoch(10)
             .setTargetMemberEpoch(11)
@@ -293,14 +294,14 @@ public class CurrentAssignmentBuilderTest {
                 mkTopicAssignment(topicId2, 7, 8)))
             .build();
 
-        assertEquals(ConsumerGroupMember.MemberState.REVOKING, member.state());
+        assertEquals(GroupMember.MemberState.REVOKING, member.state());
 
         Assignment targetAssignment = new Assignment(mkAssignment(
             mkTopicAssignment(topicId1, 3, 4, 5),
             mkTopicAssignment(topicId2, 6, 7, 8)
         ));
 
-        ConsumerGroupMember updatedMember = new CurrentAssignmentBuilder(member)
+        GroupMember updatedMember = new CurrentAssignmentBuilder(member)
             .withTargetAssignment(11, targetAssignment)
             .withCurrentPartitionEpoch((topicId, partitionId) -> -1)
             .withOwnedTopicPartitions(requestFromAssignment(mkAssignment(
@@ -308,7 +309,7 @@ public class CurrentAssignmentBuilderTest {
                 mkTopicAssignment(topicId2, 6))))
             .build();
 
-        assertEquals(ConsumerGroupMember.MemberState.STABLE, updatedMember.state());
+        assertEquals(GroupMember.MemberState.STABLE, updatedMember.state());
         assertEquals(10, updatedMember.previousMemberEpoch());
         assertEquals(11, updatedMember.memberEpoch());
         assertEquals(11, updatedMember.targetMemberEpoch());
@@ -316,8 +317,8 @@ public class CurrentAssignmentBuilderTest {
             mkTopicAssignment(topicId1, 3, 4, 5),
             mkTopicAssignment(topicId2, 6, 7, 8)
         ), updatedMember.assignedPartitions());
-        assertEquals(Collections.emptyMap(), updatedMember.partitionsPendingRevocation());
-        assertEquals(Collections.emptyMap(), updatedMember.partitionsPendingAssignment());
+        assertEquals(Collections.emptyMap(), ((ConsumerGroupMember) updatedMember).partitionsPendingRevocation());
+        assertEquals(Collections.emptyMap(), ((ConsumerGroupMember) updatedMember).partitionsPendingAssignment());
     }
 
     @Test
@@ -325,7 +326,7 @@ public class CurrentAssignmentBuilderTest {
         Uuid topicId1 = Uuid.randomUuid();
         Uuid topicId2 = Uuid.randomUuid();
 
-        ConsumerGroupMember member = new ConsumerGroupMember.Builder("member")
+        GroupMember member = new ConsumerGroupMember.Builder("member")
             .setMemberEpoch(10)
             .setPreviousMemberEpoch(10)
             .setTargetMemberEpoch(11)
@@ -340,7 +341,7 @@ public class CurrentAssignmentBuilderTest {
                 mkTopicAssignment(topicId2, 7, 8)))
             .build();
 
-        assertEquals(ConsumerGroupMember.MemberState.REVOKING, member.state());
+        assertEquals(GroupMember.MemberState.REVOKING, member.state());
 
         // A new target assignment is computed (epoch 12) before the partitions
         // pending revocation are revoked by the member and those partitions
@@ -351,12 +352,12 @@ public class CurrentAssignmentBuilderTest {
             mkTopicAssignment(topicId2, 4, 5, 6)
         ));
 
-        ConsumerGroupMember updatedMember = new CurrentAssignmentBuilder(member)
+        GroupMember updatedMember = new CurrentAssignmentBuilder(member)
             .withTargetAssignment(12, targetAssignment)
             .withCurrentPartitionEpoch((topicId, partitionId) -> -1)
             .build();
 
-        assertEquals(ConsumerGroupMember.MemberState.STABLE, updatedMember.state());
+        assertEquals(GroupMember.MemberState.STABLE, updatedMember.state());
         assertEquals(10, updatedMember.previousMemberEpoch());
         assertEquals(12, updatedMember.memberEpoch());
         assertEquals(12, updatedMember.targetMemberEpoch());
@@ -364,8 +365,8 @@ public class CurrentAssignmentBuilderTest {
             mkTopicAssignment(topicId1, 1, 2, 3),
             mkTopicAssignment(topicId2, 4, 5, 6)
         ), updatedMember.assignedPartitions());
-        assertEquals(Collections.emptyMap(), updatedMember.partitionsPendingRevocation());
-        assertEquals(Collections.emptyMap(), updatedMember.partitionsPendingAssignment());
+        assertEquals(Collections.emptyMap(), ((ConsumerGroupMember) updatedMember).partitionsPendingRevocation());
+        assertEquals(Collections.emptyMap(), ((ConsumerGroupMember) updatedMember).partitionsPendingAssignment());
     }
 
     @Test
@@ -373,7 +374,7 @@ public class CurrentAssignmentBuilderTest {
         Uuid topicId1 = Uuid.randomUuid();
         Uuid topicId2 = Uuid.randomUuid();
 
-        ConsumerGroupMember member = new ConsumerGroupMember.Builder("member")
+        GroupMember member = new ConsumerGroupMember.Builder("member")
             .setMemberEpoch(10)
             .setPreviousMemberEpoch(11)
             .setTargetMemberEpoch(11)
@@ -385,14 +386,14 @@ public class CurrentAssignmentBuilderTest {
                 mkTopicAssignment(topicId2, 7, 8)))
             .build();
 
-        assertEquals(ConsumerGroupMember.MemberState.ASSIGNING, member.state());
+        assertEquals(GroupMember.MemberState.ASSIGNING, member.state());
 
         Assignment targetAssignment = new Assignment(mkAssignment(
             mkTopicAssignment(topicId1, 3, 4, 5),
             mkTopicAssignment(topicId2, 6, 7, 8)
         ));
 
-        ConsumerGroupMember updatedMember = new CurrentAssignmentBuilder(member)
+        GroupMember updatedMember = new CurrentAssignmentBuilder(member)
             .withTargetAssignment(11, targetAssignment)
             .withCurrentPartitionEpoch((topicId, partitionId) -> {
                 if (topicId.equals(topicId1))
@@ -402,7 +403,7 @@ public class CurrentAssignmentBuilderTest {
             })
             .build();
 
-        assertEquals(ConsumerGroupMember.MemberState.ASSIGNING, updatedMember.state());
+        assertEquals(GroupMember.MemberState.ASSIGNING, updatedMember.state());
         assertEquals(10, updatedMember.previousMemberEpoch());
         assertEquals(11, updatedMember.memberEpoch());
         assertEquals(11, updatedMember.targetMemberEpoch());
@@ -410,10 +411,10 @@ public class CurrentAssignmentBuilderTest {
             mkTopicAssignment(topicId1, 3, 4, 5),
             mkTopicAssignment(topicId2, 6)
         ), updatedMember.assignedPartitions());
-        assertEquals(Collections.emptyMap(), updatedMember.partitionsPendingRevocation());
+        assertEquals(Collections.emptyMap(), ((ConsumerGroupMember) updatedMember).partitionsPendingRevocation());
         assertEquals(mkAssignment(
             mkTopicAssignment(topicId2, 7, 8)
-        ), updatedMember.partitionsPendingAssignment());
+        ), ((ConsumerGroupMember) updatedMember).partitionsPendingAssignment());
     }
 
     @Test
@@ -421,7 +422,7 @@ public class CurrentAssignmentBuilderTest {
         Uuid topicId1 = Uuid.randomUuid();
         Uuid topicId2 = Uuid.randomUuid();
 
-        ConsumerGroupMember member = new ConsumerGroupMember.Builder("member")
+        GroupMember member = new ConsumerGroupMember.Builder("member")
             .setMemberEpoch(10)
             .setPreviousMemberEpoch(11)
             .setTargetMemberEpoch(11)
@@ -433,19 +434,19 @@ public class CurrentAssignmentBuilderTest {
                 mkTopicAssignment(topicId2, 7, 8)))
             .build();
 
-        assertEquals(ConsumerGroupMember.MemberState.ASSIGNING, member.state());
+        assertEquals(GroupMember.MemberState.ASSIGNING, member.state());
 
         Assignment targetAssignment = new Assignment(mkAssignment(
             mkTopicAssignment(topicId1, 3, 4, 5),
             mkTopicAssignment(topicId2, 6, 7, 8)
         ));
 
-        ConsumerGroupMember updatedMember = new CurrentAssignmentBuilder(member)
+        GroupMember updatedMember = new CurrentAssignmentBuilder(member)
             .withTargetAssignment(11, targetAssignment)
             .withCurrentPartitionEpoch((topicId, partitionId) -> -1)
             .build();
 
-        assertEquals(ConsumerGroupMember.MemberState.STABLE, updatedMember.state());
+        assertEquals(GroupMember.MemberState.STABLE, updatedMember.state());
         assertEquals(10, updatedMember.previousMemberEpoch());
         assertEquals(11, updatedMember.memberEpoch());
         assertEquals(11, updatedMember.targetMemberEpoch());
@@ -453,8 +454,8 @@ public class CurrentAssignmentBuilderTest {
             mkTopicAssignment(topicId1, 3, 4, 5),
             mkTopicAssignment(topicId2, 6, 7, 8)
         ), updatedMember.assignedPartitions());
-        assertEquals(Collections.emptyMap(), updatedMember.partitionsPendingRevocation());
-        assertEquals(Collections.emptyMap(), updatedMember.partitionsPendingAssignment());
+        assertEquals(Collections.emptyMap(), ((ConsumerGroupMember) updatedMember).partitionsPendingRevocation());
+        assertEquals(Collections.emptyMap(), ((ConsumerGroupMember) updatedMember).partitionsPendingAssignment());
     }
 
     @Test
@@ -462,7 +463,7 @@ public class CurrentAssignmentBuilderTest {
         Uuid topicId1 = Uuid.randomUuid();
         Uuid topicId2 = Uuid.randomUuid();
 
-        ConsumerGroupMember member = new ConsumerGroupMember.Builder("member")
+        GroupMember member = new ConsumerGroupMember.Builder("member")
             .setMemberEpoch(11)
             .setPreviousMemberEpoch(11)
             .setTargetMemberEpoch(11)
@@ -471,19 +472,19 @@ public class CurrentAssignmentBuilderTest {
                 mkTopicAssignment(topicId2, 6, 7, 8)))
             .build();
 
-        assertEquals(ConsumerGroupMember.MemberState.STABLE, member.state());
+        assertEquals(GroupMember.MemberState.STABLE, member.state());
 
         Assignment targetAssignment = new Assignment(mkAssignment(
             mkTopicAssignment(topicId1, 3, 4, 5),
             mkTopicAssignment(topicId2, 6, 7, 8)
         ));
 
-        ConsumerGroupMember updatedMember = new CurrentAssignmentBuilder(member)
+        GroupMember updatedMember = new CurrentAssignmentBuilder(member)
             .withTargetAssignment(11, targetAssignment)
             .withCurrentPartitionEpoch((topicId, partitionId) -> -1)
             .build();
 
-        assertEquals(ConsumerGroupMember.MemberState.STABLE, updatedMember.state());
+        assertEquals(GroupMember.MemberState.STABLE, updatedMember.state());
         assertEquals(11, updatedMember.previousMemberEpoch());
         assertEquals(11, updatedMember.memberEpoch());
         assertEquals(11, updatedMember.targetMemberEpoch());
@@ -491,8 +492,8 @@ public class CurrentAssignmentBuilderTest {
             mkTopicAssignment(topicId1, 3, 4, 5),
             mkTopicAssignment(topicId2, 6, 7, 8)
         ), updatedMember.assignedPartitions());
-        assertEquals(Collections.emptyMap(), updatedMember.partitionsPendingRevocation());
-        assertEquals(Collections.emptyMap(), updatedMember.partitionsPendingAssignment());
+        assertEquals(Collections.emptyMap(), ((ConsumerGroupMember) updatedMember).partitionsPendingRevocation());
+        assertEquals(Collections.emptyMap(), ((ConsumerGroupMember) updatedMember).partitionsPendingAssignment());
     }
 
     @Test
@@ -500,7 +501,7 @@ public class CurrentAssignmentBuilderTest {
         Uuid topicId1 = Uuid.randomUuid();
         Uuid topicId2 = Uuid.randomUuid();
 
-        ConsumerGroupMember member = new ConsumerGroupMember.Builder("member")
+        GroupMember member = new ConsumerGroupMember.Builder("member")
             .setMemberEpoch(10)
             .setPreviousMemberEpoch(10)
             .setTargetMemberEpoch(11)
@@ -515,19 +516,19 @@ public class CurrentAssignmentBuilderTest {
                 mkTopicAssignment(topicId2, 7, 8)))
             .build();
 
-        assertEquals(ConsumerGroupMember.MemberState.REVOKING, member.state());
+        assertEquals(GroupMember.MemberState.REVOKING, member.state());
 
         Assignment targetAssignment = new Assignment(mkAssignment(
             mkTopicAssignment(topicId1, 6, 7, 8),
             mkTopicAssignment(topicId2, 9, 10, 11)
         ));
 
-        ConsumerGroupMember updatedMember = new CurrentAssignmentBuilder(member)
+        GroupMember updatedMember = new CurrentAssignmentBuilder(member)
             .withTargetAssignment(12, targetAssignment)
             .withCurrentPartitionEpoch((topicId, partitionId) -> -1)
             .build();
 
-        assertEquals(ConsumerGroupMember.MemberState.REVOKING, updatedMember.state());
+        assertEquals(GroupMember.MemberState.REVOKING, updatedMember.state());
         assertEquals(10, updatedMember.previousMemberEpoch());
         assertEquals(10, updatedMember.memberEpoch());
         assertEquals(12, updatedMember.targetMemberEpoch());
@@ -535,11 +536,11 @@ public class CurrentAssignmentBuilderTest {
         assertEquals(mkAssignment(
             mkTopicAssignment(topicId1, 1, 2, 3),
             mkTopicAssignment(topicId2, 4, 5, 6)
-        ), updatedMember.partitionsPendingRevocation());
+        ), ((ConsumerGroupMember) updatedMember).partitionsPendingRevocation());
         assertEquals(mkAssignment(
             mkTopicAssignment(topicId1, 6, 7, 8),
             mkTopicAssignment(topicId2, 9, 10, 11)
-        ), updatedMember.partitionsPendingAssignment());
+        ), ((ConsumerGroupMember) updatedMember).partitionsPendingAssignment());
     }
 
     private static List<ConsumerGroupHeartbeatRequestData.TopicPartitions> requestFromAssignment(

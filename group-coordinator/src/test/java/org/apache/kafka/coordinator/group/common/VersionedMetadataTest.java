@@ -14,9 +14,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.coordinator.group.consumer;
+package org.apache.kafka.coordinator.group.common;
 
-import org.apache.kafka.coordinator.group.common.VersionedMetadata;
 import org.junit.jupiter.api.Test;
 
 import java.nio.ByteBuffer;
