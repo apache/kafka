@@ -1218,6 +1218,47 @@ class LogManagerTest {
   val recreatedFoo1 = new TopicIdPartition(Uuid.fromString("_dOOzPe3TfiWV21Lh7Vmqg"), new TopicPartition("foo", 1))
 
   @Test
+  def testIsStrayKraftReplicaWithEmptyImage(): Unit = {
+    val image: TopicsImage = topicsImage(Seq())
+    val onDisk = Seq(foo0, foo1, bar0, bar1, quux0).map(mockLog(_))
+    assertTrue(onDisk.forall(log => LogManager.isStrayKraftReplica(0, image, log)))
+  }
+
+  @Test
+  def testIsStrayKraftReplicaInImage(): Unit = {
+    val image: TopicsImage = topicsImage(Seq(
+      topicImage(Map(
+        foo0 -> Seq(0, 1, 2),
+      )),
+      topicImage(Map(
+        bar0 -> Seq(0, 1, 2),
+        bar1 -> Seq(0, 1, 2),
+      ))
+    ))
+    val onDisk = Seq(foo0, foo1, bar0, bar1, quux0).map(mockLog(_))
+    val expectedStrays = Set(foo1, quux0).map(_.topicPartition())
+
+    onDisk.foreach(log => assertEquals(expectedStrays.contains(log.topicPartition), LogManager.isStrayKraftReplica(0, image, log)))
+  }
+
+  @Test
+  def testIsStrayKraftReplicaInImageWithRemoteReplicas(): Unit = {
+    val image: TopicsImage = topicsImage(Seq(
+      topicImage(Map(
+        foo0 -> Seq(0, 1, 2),
+      )),
+      topicImage(Map(
+        bar0 -> Seq(1, 2, 3),
+        bar1 -> Seq(2, 3, 0),
+      ))
+    ))
+    val onDisk = Seq(foo0, bar0, bar1).map(mockLog(_))
+    val expectedStrays = Set(bar0).map(_.topicPartition)
+
+    onDisk.foreach(log => assertEquals(expectedStrays.contains(log.topicPartition), LogManager.isStrayKraftReplica(0, image, log)))
+  }
+
+  @Test
   def testFindStrayReplicasInEmptyLAIR(): Unit = {
     val onDisk = Seq(foo0, foo1, bar0, bar1, baz0, baz1, baz2, quux0)
     val expected = onDisk.map(_.topicPartition()).toSet
