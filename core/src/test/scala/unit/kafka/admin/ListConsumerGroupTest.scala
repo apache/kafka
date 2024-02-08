@@ -23,7 +23,7 @@ import org.apache.kafka.clients.admin.ConsumerGroupListing
 import org.apache.kafka.common.{ConsumerGroupState, GroupType}
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.{CsvSource, MethodSource}
+import org.junit.jupiter.params.provider.MethodSource
 
 import java.util.Optional
 
@@ -34,6 +34,8 @@ class ListConsumerGroupTest extends ConsumerGroupCommandTest {
   def testListConsumerGroupsWithoutFilters(quorum: String, groupProtocol: String): Unit = {
     val simpleGroup = "simple-group"
     val protocolGroup = "protocol-group"
+
+    createOffsetsTopic()
 
     addSimpleGroupExecutor(group = simpleGroup)
     addConsumerGroupExecutor(numConsumers = 1)
@@ -66,7 +68,7 @@ class ListConsumerGroupTest extends ConsumerGroupCommandTest {
     val cgcArgs = Array("--bootstrap-server", bootstrapServers(), "--list", "--state")
     val service = getConsumerGroupService(cgcArgs)
 
-    val expectedListing = Set(
+    var expectedListing = Set(
       new ConsumerGroupListing(
         simpleGroup,
         true,
@@ -81,35 +83,32 @@ class ListConsumerGroupTest extends ConsumerGroupCommandTest {
       )
     )
 
-    var foundListing = Set.empty[ConsumerGroupListing]
-    TestUtils.waitUntilTrue(() => {
-      foundListing = service.listConsumerGroupsWithFilters(Set.empty, ConsumerGroupState.values.toSet).toSet
-      expectedListing == foundListing
-    }, s"Expected to show groups $expectedListing, but found $foundListing")
+    testWaitUntilTrue(Set.empty, ConsumerGroupState.values.toSet, expectedListing, service)
 
-    val expectedListingStable = Set.empty[ConsumerGroupListing]
+    expectedListing = Set(
+      new ConsumerGroupListing(
+        group,
+        false,
+        Optional.of(ConsumerGroupState.STABLE),
+        Optional.of(GroupType.CLASSIC)
+      )
+    )
 
-    foundListing = Set.empty[ConsumerGroupListing]
-    TestUtils.waitUntilTrue(() => {
-      foundListing = service.listConsumerGroupsWithFilters(Set.empty, Set(ConsumerGroupState.PREPARING_REBALANCE)).toSet
-      expectedListingStable == foundListing
-    }, s"Expected to show groups $expectedListingStable, but found $foundListing")
+    testWaitUntilTrue(Set.empty, Set(ConsumerGroupState.STABLE), expectedListing, service)
+
+    testWaitUntilTrue(Set.empty, Set(ConsumerGroupState.PREPARING_REBALANCE), Set.empty[ConsumerGroupListing], service)
   }
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
   @MethodSource(Array("getTestQuorumAndGroupProtocolParametersClassicGroupProtocolOnly"))
   def testListConsumerGroupsWithTypesClassicProtocol(quorum: String, groupProtocol: String): Unit = {
     val simpleGroup = "simple-group"
-    val protocolGroup = "protocol-group"
 
     addSimpleGroupExecutor(group = simpleGroup)
     addConsumerGroupExecutor(numConsumers = 1)
-    addConsumerGroupExecutor(numConsumers = 1, group = protocolGroup, groupProtocol = groupProtocol)
 
     val cgcArgs = Array("--bootstrap-server", bootstrapServers(), "--list", "--type")
     val service = getConsumerGroupService(cgcArgs)
-
-    val expectedListingStable = Set.empty[ConsumerGroupListing]
 
     val expectedListing = Set(
       new ConsumerGroupListing(
@@ -120,12 +119,6 @@ class ListConsumerGroupTest extends ConsumerGroupCommandTest {
       ),
       new ConsumerGroupListing(
         group,
-        false,
-        Optional.of(ConsumerGroupState.STABLE),
-        Optional.of(GroupType.CLASSIC)
-      ),
-      new ConsumerGroupListing(
-        protocolGroup,
         false,
         Optional.of(ConsumerGroupState.STABLE),
         Optional.of(GroupType.CLASSIC)
@@ -133,33 +126,23 @@ class ListConsumerGroupTest extends ConsumerGroupCommandTest {
     )
 
     // No filters explicitly mentioned. Expectation is that all groups are returned.
-    var foundListing = Set.empty[ConsumerGroupListing]
-    TestUtils.waitUntilTrue(() => {
-      foundListing = service.listConsumerGroupsWithFilters(Set.empty, Set.empty).toSet
-      expectedListing == foundListing
-    }, s"Expected to show groups $expectedListing, but found $foundListing")
+    testWaitUntilTrue(Set.empty, Set.empty, expectedListing, service)
 
     // When group type is mentioned:
     // Old Group Coordinator returns empty listings if the type is not Classic.
     // New Group Coordinator returns groups according to the filter.
-    foundListing = Set.empty[ConsumerGroupListing]
-    TestUtils.waitUntilTrue(() => {
-      foundListing = service.listConsumerGroupsWithFilters(Set(GroupType.CONSUMER), Set.empty).toSet
-      expectedListingStable == foundListing
-    }, s"Expected to show groups $expectedListing, but found $foundListing")
+    testWaitUntilTrue(Set(GroupType.CONSUMER), Set.empty, Set.empty[ConsumerGroupListing], service)
 
-    foundListing = Set.empty[ConsumerGroupListing]
-    TestUtils.waitUntilTrue(() => {
-      foundListing = service.listConsumerGroupsWithFilters(Set(GroupType.CLASSIC), Set.empty).toSet
-      expectedListing == foundListing
-    }, s"Expected to show groups $expectedListing, but found $foundListing")
+    testWaitUntilTrue(Set(GroupType.CLASSIC), Set.empty, expectedListing, service)
   }
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @CsvSource(Array("kraft+kip848,consumer"))
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersConsumerGroupProtocolOnly"))
   def testListConsumerGroupsWithTypesConsumerProtocol(quorum: String, groupProtocol: String): Unit = {
     val simpleGroup = "simple-group"
     val protocolGroup = "protocol-group"
+
+    createOffsetsTopic()
 
     addSimpleGroupExecutor(group = simpleGroup)
     addConsumerGroupExecutor(numConsumers = 1)
@@ -190,11 +173,7 @@ class ListConsumerGroupTest extends ConsumerGroupCommandTest {
       )
     )
 
-    var foundListing = Set.empty[ConsumerGroupListing]
-    TestUtils.waitUntilTrue(() => {
-      foundListing = service.listConsumerGroupsWithFilters(Set.empty, Set.empty).toSet
-      expectedListing == foundListing
-    }, s"Expected to show groups $expectedListing, but found $foundListing")
+    testWaitUntilTrue(Set.empty, Set.empty, expectedListing, service)
 
     // When group type is mentioned:
     // New Group Coordinator returns groups according to the filter.
@@ -207,11 +186,7 @@ class ListConsumerGroupTest extends ConsumerGroupCommandTest {
       )
     )
 
-    foundListing = Set.empty[ConsumerGroupListing]
-    TestUtils.waitUntilTrue(() => {
-      foundListing = service.listConsumerGroupsWithFilters(Set(GroupType.CONSUMER), Set.empty).toSet
-      expectedListing == foundListing
-    }, s"Expected to show groups $expectedListing, but found $foundListing")
+    testWaitUntilTrue(Set(GroupType.CONSUMER), Set.empty, expectedListing, service)
 
     expectedListing = Set(
       new ConsumerGroupListing(
@@ -228,16 +203,11 @@ class ListConsumerGroupTest extends ConsumerGroupCommandTest {
       )
     )
 
-    foundListing = Set.empty[ConsumerGroupListing]
-    TestUtils.waitUntilTrue(() => {
-      foundListing = service.listConsumerGroupsWithFilters(Set(GroupType.CLASSIC), Set.empty).toSet
-      expectedListing == foundListing
-    }, s"Expected to show groups $expectedListing, but found $foundListing")
+    testWaitUntilTrue(Set(GroupType.CLASSIC), Set.empty, expectedListing, service)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
-  def testConsumerGroupStatesFromString(quorum: String, groupProtocol: String): Unit = {
+  @Test
+  def testConsumerGroupStatesFromString(): Unit = {
     var result = ConsumerGroupCommand.consumerGroupStatesFromString("Stable")
     assertEquals(Set(ConsumerGroupState.STABLE), result)
 
@@ -263,9 +233,8 @@ class ListConsumerGroupTest extends ConsumerGroupCommandTest {
     assertThrows(classOf[IllegalArgumentException], () => ConsumerGroupCommand.consumerGroupStatesFromString("   ,   ,"))
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
-  def testConsumerGroupTypesFromString(quorum: String, groupProtocol: String): Unit = {
+  @Test
+  def testConsumerGroupTypesFromString(): Unit = {
     var result = ConsumerGroupCommand.consumerGroupTypesFromString("consumer")
     assertEquals(Set(GroupType.CONSUMER), result)
 
@@ -343,10 +312,12 @@ class ListConsumerGroupTest extends ConsumerGroupCommandTest {
   }
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @CsvSource(Array("kraft+kip848,consumer"))
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersConsumerGroupProtocolOnly"))
   def testListGroupCommandConsumerProtocol(quorum: String, groupProtocol: String): Unit = {
     val simpleGroup = "simple-group"
     val protocolGroup = "protocol-group"
+
+    createOffsetsTopic()
 
     addSimpleGroupExecutor(group = simpleGroup)
     addConsumerGroupExecutor(numConsumers = 1)
@@ -382,5 +353,18 @@ class ListConsumerGroupTest extends ConsumerGroupCommandTest {
       out = TestUtils.grabConsoleOutput(ConsumerGroupCommand.main(cgcArgs))
       out.contains("TYPE") && out.contains("Consumer") && out.contains("STATE") && out.contains("Stable") && out.contains(protocolGroup)
     }, s"Expected to find $protocolGroup and the header, but found $out")
+  }
+
+  def testWaitUntilTrue(
+    typeFilterSet: Set[GroupType],
+    stateFilterSet: Set[ConsumerGroupState],
+    expectedListing: Set[ConsumerGroupListing],
+    service:  ConsumerGroupCommand.ConsumerGroupService
+  ): Unit = {
+    var foundListing = Set.empty[ConsumerGroupListing]
+    TestUtils.waitUntilTrue(() => {
+      foundListing = service.listConsumerGroupsWithFilters(typeFilterSet, stateFilterSet).toSet
+      expectedListing == foundListing
+    }, s"Expected to show groups $expectedListing, but found $foundListing")
   }
 }

@@ -2816,10 +2816,13 @@ public class KafkaAdminClientTest {
         try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(mockCluster(1, 0))) {
             env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
 
-            // Test with no specific list consumer group options.
+            // Test with a specific state filter but no type filter in list consumer group options.
             env.kafkaClient().prepareResponse(prepareMetadataResponse(env.cluster(), Errors.NONE));
 
             env.kafkaClient().prepareResponseFrom(
+                request -> request instanceof ListGroupsRequest &&
+                    !((ListGroupsRequest) request).data().statesFilter().isEmpty() &&
+                    ((ListGroupsRequest) request).data().typesFilter().isEmpty(),
                 new ListGroupsResponse(new ListGroupsResponseData()
                     .setErrorCode(Errors.NONE.code())
                     .setGroups(Arrays.asList(
@@ -2827,20 +2830,15 @@ public class KafkaAdminClientTest {
                             .setGroupId("group-1")
                             .setProtocolType(ConsumerProtocol.PROTOCOL_TYPE)
                             .setGroupState("Stable")
-                            .setGroupType(GroupType.CLASSIC.toString()),
-                        new ListGroupsResponseData.ListedGroup()
-                            .setGroupId("group-2")
-                            .setGroupState("Empty")
                             .setGroupType(GroupType.CLASSIC.toString())))),
                 env.cluster().nodeById(0));
 
-            final ListConsumerGroupsOptions options = new ListConsumerGroupsOptions();
+            final ListConsumerGroupsOptions options = new ListConsumerGroupsOptions().inStates(singleton(ConsumerGroupState.STABLE));
             final ListConsumerGroupsResult result = env.adminClient().listConsumerGroups(options);
             Collection<ConsumerGroupListing> listings = result.valid().get();
 
-            assertEquals(2, listings.size());
+            assertEquals(1, listings.size());
             List<ConsumerGroupListing> expected = new ArrayList<>();
-            expected.add(new ConsumerGroupListing("group-2", true, Optional.of(ConsumerGroupState.EMPTY), Optional.of(GroupType.CLASSIC)));
             expected.add(new ConsumerGroupListing("group-1", false, Optional.of(ConsumerGroupState.STABLE), Optional.of(GroupType.CLASSIC)));
             assertEquals(expected, listings);
             assertEquals(0, result.errors().get().size());
@@ -2849,6 +2847,9 @@ public class KafkaAdminClientTest {
             env.kafkaClient().prepareResponse(prepareMetadataResponse(env.cluster(), Errors.NONE));
 
             env.kafkaClient().prepareResponseFrom(
+                request -> request instanceof ListGroupsRequest &&
+                    ((ListGroupsRequest) request).data().statesFilter().isEmpty() &&
+                    !((ListGroupsRequest) request).data().typesFilter().isEmpty(),
                 new ListGroupsResponse(new ListGroupsResponseData()
                     .setErrorCode(Errors.NONE.code())
                     .setGroups(Arrays.asList(
@@ -2925,26 +2926,35 @@ public class KafkaAdminClientTest {
 
             env.kafkaClient().prepareResponse(prepareMetadataResponse(env.cluster(), Errors.NONE));
 
-            // Check if we can list groups with older broker if we don't specify types.
+            // Check if we can list groups with older broker if we specify states and don't specify types.
             env.kafkaClient().prepareResponseFrom(
+                request -> request instanceof ListGroupsRequest &&
+                    !((ListGroupsRequest) request).data().statesFilter().isEmpty() &&
+                    ((ListGroupsRequest) request).data().typesFilter().isEmpty(),
                 new ListGroupsResponse(new ListGroupsResponseData()
                     .setErrorCode(Errors.NONE.code())
                     .setGroups(Collections.singletonList(
                         new ListGroupsResponseData.ListedGroup()
                             .setGroupId("group-1")
-                            .setProtocolType(ConsumerProtocol.PROTOCOL_TYPE)))),
+                            .setProtocolType(ConsumerProtocol.PROTOCOL_TYPE)
+                            .setGroupState(ConsumerGroupState.STABLE.toString())))),
                 env.cluster().nodeById(0));
-            ListConsumerGroupsOptions options = new ListConsumerGroupsOptions();
+
+            ListConsumerGroupsOptions options = new ListConsumerGroupsOptions().inStates(singleton(ConsumerGroupState.STABLE));
             ListConsumerGroupsResult result = env.adminClient().listConsumerGroups(options);
+
             Collection<ConsumerGroupListing> listing = result.all().get();
             assertEquals(1, listing.size());
-            List<ConsumerGroupListing> expected = Collections.singletonList(new ConsumerGroupListing("group-1", false));
+            List<ConsumerGroupListing> expected = Collections.singletonList(
+                new ConsumerGroupListing("group-1", false, Optional.of(ConsumerGroupState.STABLE))
+            );
             assertEquals(expected, listing);
 
             // Check that we cannot set a type filter with an older broker.
             env.kafkaClient().prepareResponse(prepareMetadataResponse(env.cluster(), Errors.NONE));
-            env.kafkaClient().prepareUnsupportedVersionResponse(
-                request -> request instanceof ListGroupsRequest && ((ListGroupsRequest) request).data().typesFilter() != null);
+            env.kafkaClient().prepareUnsupportedVersionResponse(request ->
+                request instanceof ListGroupsRequest && !((ListGroupsRequest) request).data().typesFilter().isEmpty()
+            );
 
             options = new ListConsumerGroupsOptions().withTypes(singleton(GroupType.CLASSIC));
             result = env.adminClient().listConsumerGroups(options);

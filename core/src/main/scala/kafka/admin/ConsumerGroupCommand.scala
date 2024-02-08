@@ -235,7 +235,7 @@ object ConsumerGroupCommand extends Logging {
 
       val maxGroupLen = groups.foldLeft(15)((maxLen, groupListing) => Math.max(maxLen, groupId(groupListing).length)) + 10
       var format = s"%-${maxGroupLen}s"
-      var header = List("Group")
+      var header = List("GROUP")
       var extractors: List[ConsumerGroupListing => String] = List(groupId)
 
       if (includeType) {

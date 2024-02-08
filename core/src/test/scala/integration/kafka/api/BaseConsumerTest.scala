@@ -144,6 +144,13 @@ object BaseConsumerTest {
         Arguments.of("kraft+kip848", "classic"))
   }
 
+  // For tests that only work with the consumer group protocol, we want to test the following combination:
+  // * KRaft with the new group coordinator enabled and the consumer group protocol
+  def getTestQuorumAndGroupProtocolParametersConsumerGroupProtocolOnly(): java.util.stream.Stream[Arguments] = {
+    java.util.stream.Stream.of(
+      Arguments.of("kraft+kip848", "consumer"))
+  }
+
   val updateProducerCount = new AtomicInteger()
   val updateConsumerCount = new AtomicInteger()
 

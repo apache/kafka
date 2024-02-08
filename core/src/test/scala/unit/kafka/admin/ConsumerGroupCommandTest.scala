@@ -125,6 +125,7 @@ class ConsumerGroupCommandTest extends KafkaServerTestHarness {
 object ConsumerGroupCommandTest {
    def getTestQuorumAndGroupProtocolParametersAll(): stream.Stream[Arguments] = BaseConsumerTest.getTestQuorumAndGroupProtocolParametersAll()
    def getTestQuorumAndGroupProtocolParametersClassicGroupProtocolOnly(): stream.Stream[Arguments] = BaseConsumerTest.getTestQuorumAndGroupProtocolParametersClassicGroupProtocolOnly()
+   def getTestQuorumAndGroupProtocolParametersConsumerGroupProtocolOnly(): stream.Stream[Arguments] = BaseConsumerTest.getTestQuorumAndGroupProtocolParametersConsumerGroupProtocolOnly()
 
   abstract class AbstractConsumerRunnable(broker: String, groupId: String, customPropsOpt: Option[Properties] = None,
                                           syncCommit: Boolean = false) extends Runnable {
