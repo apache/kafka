@@ -177,7 +177,7 @@ public class ProducerStateManager {
     }
 
     private void removeProducerIds(List<Long> keys) {
-        keys.forEach(producers.keySet()::remove);
+        keys.forEach(producers::remove);
         producerIdCount = producers.size();
     }
 
