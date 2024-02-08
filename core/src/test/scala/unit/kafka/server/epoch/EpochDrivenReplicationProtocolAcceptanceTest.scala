@@ -504,7 +504,6 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends QuorumTestHarness wit
                                 startup: Boolean = true): KafkaBroker = {
     val config = TestUtils.createBrokerConfig(id, zkConnectOrNull)
     TestUtils.setIbpAndMessageFormatVersions(config, metadataVersion)
-//    config.setProperty(KafkaConfig.UncleanLeaderElectionEnableProp, enableUncleanLeaderElection.toString)
     createBroker(fromProps(config), startup = startup)
   }
 
