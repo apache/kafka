@@ -26,6 +26,7 @@ import org.apache.kafka.clients.consumer.internals.events.ApplicationEventProces
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEventHandler;
 import org.apache.kafka.clients.consumer.internals.metrics.RebalanceCallbackMetricsManager;
+import org.apache.kafka.clients.consumer.internals.metrics.RebalanceMetricsManager;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.requests.MetadataResponse;
@@ -195,7 +196,22 @@ public class ConsumerTestBuilder implements Closeable {
                     gi.groupId,
                     gi.groupInstanceId,
                     metrics));
-            MembershipManager mm = mock(MembershipManagerImpl.class);
+            MembershipManager mm = spy(
+                new MembershipManagerImpl(
+                    gi.groupId,
+                    gi.groupInstanceId,
+                    groupRebalanceConfig.rebalanceTimeoutMs,
+                    gi.serverAssignor,
+                    subscriptions,
+                    commit,
+                    metadata,
+                    logContext,
+                    Optional.empty(),
+                    backgroundEventHandler,
+                    time,
+                    mock(RebalanceMetricsManager.class)
+                )
+            );
             HeartbeatRequestManager.HeartbeatState heartbeatState = spy(new HeartbeatRequestManager.HeartbeatState(
                     subscriptions,
                     mm,

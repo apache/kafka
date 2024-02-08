@@ -1963,7 +1963,7 @@ public class MembershipManagerImplTest {
     }
 
     @Test
-    public void testSomething() {
+    public void testRebalanceMetricsForMultipleReconcilationRounds() {
         rebalanceMetricsManager = new RebalanceMetricsManager(metrics);
         MembershipManagerImpl membershipManager = createMemberInStableState();
         ConsumerRebalanceListenerInvoker invoker = consumerRebalanceListenerInvoker();
@@ -2035,81 +2035,6 @@ public class MembershipManagerImplTest {
     }
 
     @Test
-    public void testRebalanceMetricsOnMultipleSuccessfulRebalance() {
-        rebalanceMetricsManager = new RebalanceMetricsManager(metrics);
-        MembershipManagerImpl membershipManager = createMemberInStableState();
-        ConsumerRebalanceListenerInvoker invoker = consumerRebalanceListenerInvoker();
-        SleepyRebalanceListener listener = new SleepyRebalanceListener(2000, time);
-
-        final String topicName = "topic";
-        final Uuid topicId = Uuid.randomUuid();
-
-        reconcileAssignmentsForRandomDuration(
-            topicId,
-            membershipManager,
-            listener,
-            Collections.emptySet(),
-            topicPartitions(topicName, 0, 1),
-            invoker);
-        long firstReconciliationDurationMs = listener.sleepMs;
-        sleepRandomMs(time, 2000);
-        reconcileAssignmentsForRandomDuration(
-            topicId,
-            membershipManager,
-            listener,
-            topicPartitions(topicName, 0, 1),
-            topicPartitions(topicName, 2),
-            invoker);
-        long secondReconciliationDurationMs = listener.sleepMs;
-        System.out.println(firstReconciliationDurationMs + " : " + secondReconciliationDurationMs);
-        long reconciliationDurationMs = firstReconciliationDurationMs + secondReconciliationDurationMs;
-        long avgReconciliationDurationMs = reconciliationDurationMs / 2;
-        long maxReconciliationDurationMs = Math.max(firstReconciliationDurationMs, secondReconciliationDurationMs);
-        assertEquals((double) reconciliationDurationMs, getMetricValue(metrics, rebalanceMetricsManager.rebalanceLatencyTotal));
-        assertEquals((double) avgReconciliationDurationMs, (double) getMetricValue(metrics,
-            rebalanceMetricsManager.rebalanceLatencyAvg), 1d);
-        assertEquals((double) maxReconciliationDurationMs, getMetricValue(metrics, rebalanceMetricsManager.rebalanceLatencyMax));
-        assertEquals(2d, getMetricValue(metrics, rebalanceMetricsManager.rebalanceTotal));
-        assertEquals(228d, (double) getMetricValue(metrics, rebalanceMetricsManager.rebalanceRatePerHour), 1d);
-        assertEquals(0d, getMetricValue(metrics, rebalanceMetricsManager.failedRebalanceRate));
-        assertEquals(0d, getMetricValue(metrics, rebalanceMetricsManager.failedRebalanceTotal));
-        assertEquals(0d, getMetricValue(metrics, rebalanceMetricsManager.lastRebalanceSecondsAgo));
-    }
-
-    private void reconcileAssignmentsForRandomDuration(Uuid topicId,
-                                                       MembershipManagerImpl membershipManager,
-                                                       ConsumerRebalanceListener listener,
-                                                       Set<TopicPartition> assignments,
-                                                       SortedSet<TopicPartition> tps,
-                                                       ConsumerRebalanceListenerInvoker invoker) {
-        when(subscriptionState.assignedPartitions()).thenReturn(assignments);
-        when(subscriptionState.hasAutoAssignedPartitions()).thenReturn(true);
-        when(subscriptionState.rebalanceListener()).thenReturn(Optional.of(listener));
-        List<Integer> partitions = tps.stream()
-            .map(TopicPartition::partition)
-            .collect(Collectors.toList());
-        receiveAssignment(topicId, partitions, membershipManager);
-        assignments.removeAll(tps);
-        performCallback(
-            membershipManager,
-            invoker,
-            ConsumerRebalanceListenerMethodName.ON_PARTITIONS_REVOKED,
-            new TreeSet<>(assignments),
-            true);
-
-        performCallback(
-            membershipManager,
-            invoker,
-            ConsumerRebalanceListenerMethodName.ON_PARTITIONS_ASSIGNED,
-            tps,
-            true);
-
-        // send ack heartbeat and transition to stable
-        ackSent(membershipManager);
-    }
-
-
-    @Test
     public void testRebalanceMetricsOnFailedRebalance() {
         rebalanceMetricsManager = new RebalanceMetricsManager(metrics);
         MembershipManagerImpl membershipManager = createMembershipManagerJoiningGroup();
@@ -2120,20 +2045,23 @@ public class MembershipManagerImplTest {
         String topicName = "topic1";
         Uuid topicId = Uuid.randomUuid();
 
+        when(subscriptionState.assignedPartitions()).thenReturn(Collections.emptySet());
         when(subscriptionState.hasAutoAssignedPartitions()).thenReturn(true);
-        when(subscriptionState.rebalanceListener()).thenReturn(Optional.empty());
+        when(subscriptionState.rebalanceListener()).thenReturn(Optional.of(mock(ConsumerRebalanceListener.class)));
         doNothing().when(subscriptionState).markPendingRevocation(anySet());
+        when(metadata.topicNames()).thenReturn(Collections.singletonMap(topicId, topicName));
 
         when(metadata.topicNames()).thenReturn(Collections.singletonMap(topicId, topicName));
         receiveAssignment(topicId, Arrays.asList(0, 1), membershipManager);
 
-        // Expecting heartbeat failure before rebalance callback is completed
+        // assign partitions
         performCallback(
             membershipManager,
             invoker,
             ConsumerRebalanceListenerMethodName.ON_PARTITIONS_ASSIGNED,
             topicPartitions(topicName, 0, 1),
-            false);
+            false
+        );
 
         sleepRandomMs(time, 2000);
 

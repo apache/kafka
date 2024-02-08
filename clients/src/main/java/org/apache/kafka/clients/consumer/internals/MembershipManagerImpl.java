@@ -265,8 +265,10 @@ public class MembershipManagerImpl implements MembershipManager {
      * when the timer is reset, only when it completes releasing its assignment.
      */
     private CompletableFuture<Void> staleMemberAssignmentRelease;
+    
     /*
      * Holding onto rebalance metric sensors. This module records success and failure of rebalance events.
+     * Measures successful rebalance latency and number of failed rebalances.
      */
     private final RebalanceMetricsManager metricsManager;
 
