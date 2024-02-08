@@ -2366,7 +2366,7 @@ project(':streams:streams-scala') {
     spotless {
       scala {
         target '**/*.scala'
-        scalafmt("$versions.scalafmt").configFile('../../checkstyle/.scalafmt.conf').scalaMajorVersion('2.13')
+        scalafmt("$versions.scalafmt").configFile('../../checkstyle/.scalafmt.conf').scalaMajorVersion(versions.baseScala)
         licenseHeaderFile '../../checkstyle/java.header', 'package'
       }
     }
