@@ -43,8 +43,6 @@ import scala.collection.immutable.TreeMap
 import scala.reflect.ClassTag
 import org.apache.kafka.common.requests.ListOffsetsResponse
 
-import scala.collection.compat.immutable.ArraySeq
-
 object ConsumerGroupCommand extends Logging {
 
   def main(args: Array[String]): Unit = {
@@ -202,30 +200,19 @@ object ConsumerGroupCommand extends Logging {
       val includeType = opts.options.has(opts.typeOpt)
       val includeState = opts.options.has(opts.stateOpt)
 
-      val groupInfoMap = mutable.Map[String, (String, String)]()
-
       if (includeType || includeState) {
-        val types = getTypeValues()
-        val states = getStateValues()
-        val listings = {
-          listConsumerGroupsWithFilters(types, states)
-        }
+        val types = typeValues()
+        val states = stateValues()
+        val listings = listConsumerGroupsWithFilters(types, states)
 
-        listings.foreach { listing =>
-          val groupId = listing.groupId
-          val groupType = listing.groupType().orElse(GroupType.UNKNOWN).toString
-          val state = listing.state().orElse(ConsumerGroupState.UNKNOWN).toString
-          groupInfoMap.update(groupId, (groupType, state))
-        }
-
-        printGroupInfo(groupInfoMap, includeType, includeState)
+        printGroupInfo(listings, includeType, includeState)
 
       } else {
         listConsumerGroups().foreach(println(_))
       }
     }
 
-    private def getStateValues(): Set[ConsumerGroupState] = {
+    private def stateValues(): Set[ConsumerGroupState] = {
       val stateValue = opts.options.valueOf(opts.stateOpt)
       if (stateValue == null || stateValue.isEmpty)
         Set[ConsumerGroupState]()
@@ -233,7 +220,7 @@ object ConsumerGroupCommand extends Logging {
         consumerGroupStatesFromString(stateValue)
     }
 
-    private def getTypeValues(): Set[GroupType] = {
+    private def typeValues(): Set[GroupType] = {
       val typeValue = opts.options.valueOf(opts.typeOpt)
       if (typeValue == null || typeValue.isEmpty)
         Set[GroupType]()
@@ -241,24 +228,32 @@ object ConsumerGroupCommand extends Logging {
         consumerGroupTypesFromString(typeValue)
     }
 
-    private def printGroupInfo(groupsAndInfo: Map[String, (String, String)], includeType: Boolean, includeState: Boolean): Unit = {
-      val maxGroupLen: Int = groupsAndInfo.keys.foldLeft(15)((maxLen, groupId) => Math.max(maxLen, groupId.length))
-      var header = "GROUP"
+    private def printGroupInfo(groups: List[ConsumerGroupListing], includeType: Boolean, includeState: Boolean): Unit = {
+      def groupId(groupListing: ConsumerGroupListing): String = groupListing.groupId
+      def groupType(groupListing: ConsumerGroupListing): String = groupListing.`type`().orElse(GroupType.UNKNOWN).toString
+      def groupState(groupListing: ConsumerGroupListing): String = groupListing.state.orElse(ConsumerGroupState.UNKNOWN).toString
+
+      val maxGroupLen = groups.foldLeft(15)((maxLen, groupListing) => Math.max(maxLen, groupId(groupListing).length)) + 10
       var format = s"%-${maxGroupLen}s"
+      var header = List("Group")
+      var extractors: List[ConsumerGroupListing => String] = List(groupId)
 
       if (includeType) {
-        header += " TYPE"
+        header = header :+ "TYPE"
+        extractors = extractors :+ groupType
         format += " %-20s"
       }
+
       if (includeState) {
-        header += " STATE"
+        header = header :+ "STATE"
+        extractors = extractors :+ groupState
         format += " %-20s"
       }
 
-      println(format.format(ArraySeq.unsafeWrapArray(header.split(" ")): _*))
+      println(format.format(header: _*))
 
-      groupsAndInfo.foreach { case (groupId, (groupType, state)) =>
-        val info = List(groupId) ++ (if (includeType) List(groupType) else List()) ++ (if (includeState) List(state) else List())
+      groups.foreach { groupListing =>
+        val info = extractors.map(extractor => extractor(groupListing))
         println(format.format(info: _*))
       }
     }

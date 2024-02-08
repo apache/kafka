@@ -3400,12 +3400,15 @@ public class KafkaAdminClient extends AdminClient {
                                 final Optional<ConsumerGroupState> state = group.groupState().equals("")
                                         ? Optional.empty()
                                         : Optional.of(ConsumerGroupState.parse(group.groupState()));
-                                final Optional<GroupType> groupType = group.groupType().equals("")
+                                final Optional<GroupType> type = group.groupType().equals("")
                                         ? Optional.empty()
                                         : Optional.of(GroupType.parse(group.groupType()));
-                                final ConsumerGroupListing groupListing = new ConsumerGroupListing(groupId, protocolType.isEmpty())
-                                        .setState(state)
-                                        .setType(groupType);
+                                final ConsumerGroupListing groupListing = new ConsumerGroupListing(
+                                        groupId,
+                                        protocolType.isEmpty(),
+                                        state,
+                                        type
+                                    );
                                 results.addListing(groupListing);
                             }
                         }

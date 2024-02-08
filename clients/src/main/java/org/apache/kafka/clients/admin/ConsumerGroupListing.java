@@ -29,8 +29,8 @@ import org.apache.kafka.common.GroupType;
 public class ConsumerGroupListing {
     private final String groupId;
     private final boolean isSimpleConsumerGroup;
-    private Optional<ConsumerGroupState> state;
-    private Optional<GroupType> groupType;
+    private final Optional<ConsumerGroupState> state;
+    private final Optional<GroupType> type;
 
     /**
      * Create an instance with the specified parameters.
@@ -39,10 +39,7 @@ public class ConsumerGroupListing {
      * @param isSimpleConsumerGroup If consumer group is simple or not.
      */
     public ConsumerGroupListing(String groupId, boolean isSimpleConsumerGroup) {
-        this.groupId = groupId;
-        this.isSimpleConsumerGroup = isSimpleConsumerGroup;
-        this.state = Optional.empty();
-        this.groupType = Optional.empty();
+        this(groupId, isSimpleConsumerGroup, Optional.empty(), Optional.empty());
     }
 
     /**
@@ -56,34 +53,31 @@ public class ConsumerGroupListing {
         this.groupId = groupId;
         this.isSimpleConsumerGroup = isSimpleConsumerGroup;
         this.state = Objects.requireNonNull(state);
+        this.type = Optional.empty();
     }
 
     /**
-     * Set the state of the consumer group.
+     * Create an instance with the specified parameters.
      *
-     * @param state         The state of the consumer group.
-     * @return This ConsumerGroupListing instance.
+     * @param groupId                   Group Id.
+     * @param isSimpleConsumerGroup     If consumer group is simple or not.
+     * @param state                     The state of the consumer group.
+     * @param type                      The type of the consumer group.
      */
-    public ConsumerGroupListing setState(Optional<ConsumerGroupState> state) {
+    public ConsumerGroupListing(
+        String groupId,
+        boolean isSimpleConsumerGroup,
+        Optional<ConsumerGroupState> state,
+        Optional<GroupType> type
+    ) {
+        this.groupId = groupId;
+        this.isSimpleConsumerGroup = isSimpleConsumerGroup;
         this.state = Objects.requireNonNull(state);
-        return this;
+        this.type = Objects.requireNonNull(type);
     }
 
     /**
-     * Set the type of the consumer group.
-     *
-     * @param groupType     The type of the consumer group.
-     * @return This ConsumerGroupListing instance.
-     */
-    public ConsumerGroupListing setType(Optional<GroupType> groupType) {
-        this.groupType = Objects.requireNonNull(groupType);
-        return this;
-    }
-
-    /**
-     * The group Id of the consumer group.
-     *
-     * @return The group Id.
+     * Consumer Group Id
      */
     public String groupId() {
         return groupId;
@@ -97,7 +91,7 @@ public class ConsumerGroupListing {
     }
 
     /**
-     * Consumer Group state.
+     * Consumer Group state
      */
     public Optional<ConsumerGroupState> state() {
         return state;
@@ -108,8 +102,8 @@ public class ConsumerGroupListing {
      *
      * @return An Optional containing the type, if available.
      */
-    public Optional<GroupType> groupType() {
-        return groupType;
+    public Optional<GroupType> type() {
+        return type;
     }
 
     @Override
@@ -118,13 +112,13 @@ public class ConsumerGroupListing {
             "groupId='" + groupId + '\'' +
             ", isSimpleConsumerGroup=" + isSimpleConsumerGroup +
             ", state=" + state +
-            ", groupType=" + groupType +
+            ", type=" + type +
             ')';
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(groupId, isSimpleConsumerGroup(), state, groupType);
+        return Objects.hash(groupId, isSimpleConsumerGroup(), state, type);
     }
 
     @Override
@@ -133,8 +127,8 @@ public class ConsumerGroupListing {
         if (!(o instanceof ConsumerGroupListing)) return false;
         ConsumerGroupListing that = (ConsumerGroupListing) o;
         return isSimpleConsumerGroup() == that.isSimpleConsumerGroup() &&
-               groupId.equals(that.groupId) &&
-               state.equals(that.state) &&
-               groupType.equals(that.groupType);
+            Objects.equals(groupId, that.groupId) &&
+            Objects.equals(state, that.state) &&
+            Objects.equals(type, that.type);
     }
 }
