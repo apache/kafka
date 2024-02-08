@@ -240,13 +240,13 @@ object ConsumerGroupCommand extends Logging {
 
       if (includeType) {
         header = header :+ "TYPE"
-        extractors = extractors :+ groupType
+        extractors = extractors :+ groupType _
         format += " %-20s"
       }
 
       if (includeState) {
         header = header :+ "STATE"
-        extractors = extractors :+ groupState
+        extractors = extractors :+ groupState _
         format += " %-20s"
       }
 
