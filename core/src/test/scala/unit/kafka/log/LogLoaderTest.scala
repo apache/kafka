@@ -132,7 +132,7 @@ class LogLoaderTest {
         override def loadLog(logDir: File, hadCleanShutdown: Boolean, recoveryPoints: Map[TopicPartition, Long],
                              logStartOffsets: Map[TopicPartition, Long], defaultConfig: LogConfig,
                              topicConfigs: Map[String, LogConfig], numRemainingSegments: ConcurrentMap[String, Int],
-                             isStrayKraftLog: UnifiedLog => Boolean): UnifiedLog = {
+                             shouldBeStrayKraftLog: UnifiedLog => Boolean): UnifiedLog = {
           if (simulateError.hasError) {
             simulateError.errorType match {
               case ErrorTypes.KafkaStorageExceptionWithIOExceptionCause =>

@@ -291,7 +291,7 @@ class BrokerMetadataPublisher(
       // recovery-from-unclean-shutdown if required.
       logManager.startup(
         metadataCache.getAllTopics(),
-        isStrayKraftLog = log => LogManager.isStrayKraftReplica(brokerId, newImage.topics(), log)
+        shouldBeStrayKraftLog = log => LogManager.isStrayKraftReplica(brokerId, newImage.topics(), log)
       )
 
       // Make the LogCleaner available for reconfiguration. We can't do this prior to this
