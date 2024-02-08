@@ -98,9 +98,9 @@ ext {
   userEnableTestCoverage = project.hasProperty("enableTestCoverage") ? enableTestCoverage : false
 
   userKeepAliveModeString = project.hasProperty("keepAliveMode") ? keepAliveMode : "daemon"
-  userKeepAliveMode = KeepAliveMode.values().find(m -> m.name().toLowerCase().equals(userKeepAliveModeString))
+  userKeepAliveMode = KeepAliveMode.values().find { m -> m.name().toLowerCase().equals(userKeepAliveModeString) }
   if (userKeepAliveMode == null) {
-    def keepAliveValues = KeepAliveMode.values().collect(m -> m.name.toLowerCase())
+    def keepAliveValues = KeepAliveMode.values().collect { m -> m.name.toLowerCase() }
     throw new GradleException("Unexpected value for keepAliveMode property. Expected one of $keepAliveValues, but received: $userKeepAliveModeString")
   }
 
@@ -2309,12 +2309,17 @@ project(':streams') {
 
 project(':streams:streams-scala') {
   apply plugin: 'scala'
-  archivesBaseName = "kafka-streams-scala_${versions.baseScala}"
+  archivesBaseName = "kafka-streams-scala_${versions.streamsBaseScala}"
+  if ( versions.streamsBaseScala == '3' ) {
+    tasks.withType(ScalaCompile) {
+      scalaCompileOptions.additionalParameters = []
+    }
+  }
   dependencies {
     api project(':streams')
 
-    api libs.scalaLibrary
-    if ( versions.baseScala == '2.12' ) {
+    api libs.streamsScalaLibrary
+    if ( versions.streamsBaseScala == '2.12' ) {
       // Scala-Collection-Compat isn't required when compiling with Scala 2.13 or later,
       // and having it in the dependencies could lead to classpath conflicts in Scala 3
       // projects that use kafka-streams-kafka_2.13 (because we don't have a Scala 3 version yet)
@@ -2361,7 +2366,7 @@ project(':streams:streams-scala') {
     spotless {
       scala {
         target '**/*.scala'
-        scalafmt("$versions.scalafmt").configFile('../../checkstyle/.scalafmt.conf').scalaMajorVersion(versions.baseScala)
+        scalafmt("$versions.scalafmt").configFile('../../checkstyle/.scalafmt.conf').scalaMajorVersion('2.13')
         licenseHeaderFile '../../checkstyle/java.header', 'package'
       }
     }
