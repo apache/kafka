@@ -767,16 +767,19 @@ public class GroupCoordinatorServiceTest {
         List<ListGroupsResponseData.ListedGroup> expectedResults = Arrays.asList(
             new ListGroupsResponseData.ListedGroup()
                 .setGroupId("group0")
+                .setProtocolType("protocol1")
                 .setGroupState("Stable")
-                .setProtocolType("protocol1"),
+                .setGroupType("classic"),
             new ListGroupsResponseData.ListedGroup()
                 .setGroupId("group1")
+                .setProtocolType(ConsumerProtocol.PROTOCOL_TYPE)
                 .setGroupState("Empty")
-                .setProtocolType(ConsumerProtocol.PROTOCOL_TYPE),
+                .setGroupType("consumer"),
             new ListGroupsResponseData.ListedGroup()
                 .setGroupId("group2")
-                .setGroupState("Dead")
                 .setProtocolType(ConsumerProtocol.PROTOCOL_TYPE)
+                .setGroupState("Dead")
+                .setGroupType("consumer")
         );
         when(runtime.partitions()).thenReturn(Sets.newSet(
             new TopicPartition("__consumer_offsets", 0),
@@ -816,12 +819,14 @@ public class GroupCoordinatorServiceTest {
         List<ListGroupsResponseData.ListedGroup> expectedResults = Arrays.asList(
             new ListGroupsResponseData.ListedGroup()
                 .setGroupId("group0")
+                .setProtocolType("protocol1")
                 .setGroupState("Stable")
-                .setProtocolType("protocol1"),
+                .setGroupType("classic"),
             new ListGroupsResponseData.ListedGroup()
                 .setGroupId("group1")
-                .setGroupState("Empty")
                 .setProtocolType(ConsumerProtocol.PROTOCOL_TYPE)
+                .setGroupState("Empty")
+                .setGroupType("consumer")
         );
 
         ListGroupsRequestData request = new ListGroupsRequestData();

@@ -730,7 +730,31 @@ if not user_ok("Have you successfully deployed the artifacts (y/n)?: "):
     fail("Ok, giving up")
 if not user_ok("Ok to push RC tag %s (y/n)?: " % rc_tag):
     fail("Ok, giving up")
-cmd("Pushing RC tag", "git push %s %s" % (PUSH_REMOTE_NAME, rc_tag))
+
+print(f"Pushing RC tag {rc_tag} to {PUSH_REMOTE_NAME}")
+try:
+    push_command = f"git push {PUSH_REMOTE_NAME} {rc_tag}".split()
+    output = subprocess.check_output(push_command, stderr=subprocess.STDOUT)
+    print_output(output.decode('utf-8'))
+    if "error" in output.decode('utf-8'):
+        print("*********************************************")
+        print("*** ERROR when trying to perform git push ***")
+        print("*********************************************")
+        print(output)
+        print("")
+        print("Due the failure of git push, the program will exit here. Please note that: ")
+        print(f"1) You are still at branch {release_version}, not {starting_branch}")
+        print(f"2) Tag {rc_tag} is still present locally")
+        print("")
+        print(f"In order to restart the workflow, you will have to manually switch back to the original branch and delete the branch {release_version} and tag {rc_tag}")
+        sys.exit(1)
+except Exception as e:
+    print(f"Failed when trying to git push {rc_tag}. Error: {e}"
+    print("You may need to clean up branches/tags yourself before retrying.")
+    print("Due the failure of git push, the program will exit here. Please note that: ")
+    print(f"1) You are still at branch {release_version}, not {starting_branch}")
+    print(f"2) Tag {rc_tag} is still present locally")
+    sys.exit(1)
 
 # Move back to starting branch and clean out the temporary release branch (e.g. 1.0.0) we used to generate everything
 cmd("Resetting repository working state", "git reset --hard HEAD && git checkout %s" % starting_branch, shell=True)
