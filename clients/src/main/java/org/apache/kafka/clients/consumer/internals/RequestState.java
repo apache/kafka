@@ -127,17 +127,19 @@ class RequestState {
      * @param currentTimeMs Current time in milliseconds
      */
     public void onFailedAttempt(final long currentTimeMs) {
-        onFailedAttempt(currentTimeMs, false);
+        this.lastReceivedMs = currentTimeMs;
+        this.backoffMs = exponentialBackoff.backoff(numAttempts);
+        this.numAttempts++;
     }
 
-    public void onFailedAttempt(final long currentTimeMs, final boolean skipBackoff) {
-        this.lastReceivedMs = currentTimeMs;
-        if (skipBackoff) {
-            this.backoffMs = 0;
-        } else {
-            this.backoffMs = exponentialBackoff.backoff(numAttempts);
-        }
-        this.numAttempts++;
+    /**
+     * Set backoff and number of attempts to 0. This will ensure that the request is sent out
+     * again right away. Expected to be used when receiving errors responses that lead to a new
+     * request that can be sent without backing off (ex. member rejoining after fencing)
+     */
+    public void resetBackoff() {
+        this.backoffMs = 0;
+        this.numAttempts = 0;
     }
 
     long remainingBackoffMs(final long currentTimeMs) {

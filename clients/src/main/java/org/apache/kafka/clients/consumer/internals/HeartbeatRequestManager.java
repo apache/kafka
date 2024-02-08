@@ -342,7 +342,7 @@ public class HeartbeatRequestManager implements RequestManager {
         String message;
 
         this.heartbeatState.reset();
-        boolean skipBackoff = false;
+        this.heartbeatRequestState.onFailedAttempt(currentTimeMs);
 
         switch (error) {
             case NOT_COORDINATOR:
@@ -353,7 +353,7 @@ public class HeartbeatRequestManager implements RequestManager {
                 logInfo(message, response, currentTimeMs);
                 coordinatorRequestManager.markCoordinatorUnknown(errorMessage, currentTimeMs);
                 // Skip backoff so that the next HB is sent as soon as the new coordinator is discovered
-                skipBackoff = true;
+                heartbeatRequestState.resetBackoff();
                 break;
 
             case COORDINATOR_NOT_AVAILABLE:
@@ -363,7 +363,7 @@ public class HeartbeatRequestManager implements RequestManager {
                 logInfo(message, response, currentTimeMs);
                 coordinatorRequestManager.markCoordinatorUnknown(errorMessage, currentTimeMs);
                 // Skip backoff so that the next HB is sent as soon as the new coordinator is discovered
-                skipBackoff = true;
+                heartbeatRequestState.resetBackoff();
                 break;
 
             case COORDINATOR_LOAD_IN_PROGRESS:
@@ -401,7 +401,7 @@ public class HeartbeatRequestManager implements RequestManager {
                 logInfo(message, response, currentTimeMs);
                 membershipManager.transitionToFenced();
                 // Skip backoff so that a next HB to rejoin is sent as soon as the fenced member releases it assignment
-                skipBackoff = true;
+                heartbeatRequestState.resetBackoff();
                 break;
 
             case UNKNOWN_MEMBER_ID:
@@ -410,7 +410,7 @@ public class HeartbeatRequestManager implements RequestManager {
                 logInfo(message, response, currentTimeMs);
                 membershipManager.transitionToFenced();
                 // Skip backoff so that a next HB to rejoin is sent as soon as the fenced member releases it assignment
-                skipBackoff = true;
+                heartbeatRequestState.resetBackoff();
                 break;
 
             default:
@@ -419,8 +419,6 @@ public class HeartbeatRequestManager implements RequestManager {
                 handleFatalFailure(error.exception(errorMessage));
                 break;
         }
-
-        this.heartbeatRequestState.onFailedAttempt(currentTimeMs, skipBackoff);
     }
 
     private void logInfo(final String message,
