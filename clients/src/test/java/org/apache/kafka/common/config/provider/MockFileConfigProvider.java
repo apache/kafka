@@ -34,6 +34,8 @@ public class MockFileConfigProvider extends FileConfigProvider {
     private boolean closed = false;
 
     public void configure(Map<String, ?> configs) {
+        super.configure(configs);
+
         Object id = configs.get("testId");
         if (id == null) {
             throw new RuntimeException(getClass().getName() + " missing 'testId' config");
@@ -43,8 +45,6 @@ public class MockFileConfigProvider extends FileConfigProvider {
         }
         this.id = id.toString();
         INSTANCES.put(id.toString(), this);
-
-        super.configure(configs);
     }
 
     @Override

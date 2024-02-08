@@ -18,7 +18,6 @@ package org.apache.kafka.common.config.provider;
 
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.internals.AllowedPaths;
-import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -27,6 +26,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import org.junit.jupiter.api.io.TempDir;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -35,16 +35,17 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 class AllowedPathsTest {
 
     private AllowedPaths allowedPaths;
+    @TempDir
+    private File parent;
     private String dir;
     private String myFile;
     private String dir2;
 
     @BeforeEach
     public void setup() throws IOException {
-        File parent = TestUtils.tempDirectory();
-        dir = Files.createDirectory(Paths.get(parent.getAbsolutePath(), "dir")).toString();
+        dir = Files.createDirectory(Paths.get(parent.toString(), "dir")).toString();
         myFile = Files.createFile(Paths.get(dir, "myFile")).toString();
-        dir2 = Files.createDirectory(Paths.get(parent.getAbsolutePath(), "dir2")).toString();
+        dir2 = Files.createDirectory(Paths.get(parent.toString(), "dir2")).toString();
     }
 
     @Test

@@ -17,7 +17,6 @@
 package org.apache.kafka.common.config.provider;
 
 import org.apache.kafka.common.config.ConfigData;
-import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -55,9 +54,8 @@ public class FileConfigProviderTest {
     public void setup() throws IOException {
         configProvider = new TestFileConfigProvider();
         configProvider.configure(Collections.emptyMap());
-        parent = TestUtils.tempDirectory();
 
-        dir = Files.createDirectory(Paths.get(parent.getAbsolutePath(), "dir")).toString();
+        dir = Files.createDirectory(Paths.get(parent.toString(), "dir")).toString();
         dirFile = Files.createFile(Paths.get(dir, "dirFile")).toString();
 
         siblingDir = Files.createDirectory(Paths.get(parent.toString(), "siblingDir")).toString();
@@ -66,7 +64,7 @@ public class FileConfigProviderTest {
 
     @Test
     public void testGetAllKeysAtPath() {
-        ConfigData configData = configProvider.get("/dummy");
+        ConfigData configData = configProvider.get("dummy");
         Map<String, String> result = new HashMap<>();
         result.put("testKey", "testResult");
         result.put("testKey2", "testResult2");
@@ -76,7 +74,7 @@ public class FileConfigProviderTest {
 
     @Test
     public void testGetOneKeyAtPath() {
-        ConfigData configData = configProvider.get("/dummy", Collections.singleton("testKey"));
+        ConfigData configData = configProvider.get("dummy", Collections.singleton("testKey"));
         Map<String, String> result = new HashMap<>();
         result.put("testKey", "testResult");
         assertEquals(result, configData.data());

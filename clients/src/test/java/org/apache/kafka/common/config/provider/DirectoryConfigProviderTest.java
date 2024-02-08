@@ -17,8 +17,6 @@
 package org.apache.kafka.common.config.provider;
 
 import org.apache.kafka.common.config.ConfigData;
-import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -51,7 +49,7 @@ public class DirectoryConfigProviderTest {
 
     private DirectoryConfigProvider provider;
     @TempDir
-    private File parent;
+    private Path parent;
     private String dir;
     private final String bar = "bar";
     private final String foo = "foo";
@@ -70,25 +68,22 @@ public class DirectoryConfigProviderTest {
         provider = new DirectoryConfigProvider();
         provider.configure(Collections.emptyMap());
 
-        parent = TestUtils.tempDirectory();
-        
-        dir = Files.createDirectory(Paths.get(parent.getAbsolutePath(), "dir")).toString();
+        dir = Files.createDirectory(Paths.get(parent.toString(), "dir")).toString();
         writeFile(Files.createFile(Paths.get(dir, foo)));
         writeFile(Files.createFile(Paths.get(dir, bar)));
 
         subdir = Files.createDirectory(Paths.get(dir, "subdir")).toString();
         writeFile(Files.createFile(Paths.get(subdir, subdirFileName)));
 
-        siblingDir = Files.createDirectory(Paths.get(parent.getAbsolutePath(), "siblingDir")).toString();
+        siblingDir = Files.createDirectory(Paths.get(parent.toString(), "siblingDir")).toString();
         writeFile(Files.createFile(Paths.get(siblingDir, siblingDirFileName)));
 
-        writeFile(Files.createFile(Paths.get(parent.getAbsolutePath(), siblingFileName)));
+        writeFile(Files.createFile(Paths.get(parent.toString(), siblingFileName)));
     }
 
     @AfterEach
     public void close() throws IOException {
         provider.close();
-        Utils.delete(parent);
     }
 
     @Test
@@ -167,7 +162,7 @@ public class DirectoryConfigProviderTest {
     @Test
     public void testAllowedPath() {
         Map<String, String> configs = new HashMap<>();
-        configs.put(ALLOWED_PATHS_CONFIG, parent.getAbsolutePath());
+        configs.put(ALLOWED_PATHS_CONFIG, parent.toString());
         provider.configure(configs);
 
         ConfigData configData = provider.get(dir);
