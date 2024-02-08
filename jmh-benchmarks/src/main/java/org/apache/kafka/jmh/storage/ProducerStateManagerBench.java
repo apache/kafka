@@ -1,6 +1,7 @@
 package org.apache.kafka.jmh.storage;
 
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.storage.internals.log.ProducerStateEntry;
 import org.apache.kafka.storage.internals.log.ProducerStateManager;
@@ -34,7 +35,7 @@ import java.util.concurrent.TimeUnit;
 @State(value = Scope.Benchmark)
 @OutputTimeUnit(TimeUnit.NANOSECONDS)
 public class ProducerStateManagerBench {
-    final Time time = Time.SYSTEM;
+    Time time = new MockTime();
     final int producerIdExpirationMs = 1000;
 
     ProducerStateManager manager;
