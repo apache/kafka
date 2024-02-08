@@ -15,6 +15,7 @@ patch-process/*
 .idea
 .svn
 .classpath
+/*/**/.gitignore
 /.metadata
 /.recommenders
 *~
