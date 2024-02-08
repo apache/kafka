@@ -114,5 +114,12 @@
       <allow pkg="org.apache.kafka.clients"/>
       <allow pkg="org.apache.kafka.metadata" />
     </subpackage>
+    <subpackage name="zk">
+      <allow pkg="io.netty"/>
+      <allow pkg="kafka.cluster"/>
+      <allow pkg="kafka.network"/>
+      <allow pkg="kafka.zookeeper"/>
+      <allow pkg="org.apache.zookeeper"/>
+    </subpackage>
   </subpackage>
 </import-control>

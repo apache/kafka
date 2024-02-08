@@ -2114,7 +2114,19 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boo
   }
 
   private class CheckedEphemeral(path: String, data: Array[Byte]) extends Logging {
+    private var attempt = 0
+    private val maxAttempt = 5
+    private val backoffMs = {
+      val negotiatedSessionTimeoutMs = zooKeeperClient.currentZooKeeper.getSessionTimeout
+      // Heuristic which, assuming the maximum number of attempted requests is made
+      // and that the sum of the response time for each of them is less than a second,
+      // sets an upper bound for the total time of the operation close to the timeout
+      // negotiated with Zookeeper for the current session.
+      (negotiatedSessionTimeoutMs + 1000) / maxAttempt
+    }
+
     def create(): Stat = {
+      attempt += 1
       val response = retryRequestUntilConnected(
         MultiRequest(Seq(
           CreateOp(path, null, defaultAcls(path), CreateMode.EPHEMERAL),
@@ -2186,8 +2198,19 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boo
           reCreate()
         case Code.OK if ephemeralOwnerId != zooKeeperClient.sessionId =>
           error(s"Error while creating ephemeral at $path, node already exists and owner " +
-            s"'0x${JLong.toHexString(ephemeralOwnerId)}' does not match current session '0x${JLong.toHexString(zooKeeperClient.sessionId)}'")
-          throw KeeperException.create(Code.NODEEXISTS)
+            s"'0x${JLong.toHexString(ephemeralOwnerId)}' does not match current session " +
+            s"'0x${JLong.toHexString(zooKeeperClient.sessionId)}'. Attempt $attempt out of $maxAttempt.")
+
+          // KAFKA-14845: This can happen even if this broker was the one which created the ephemeral znode, when
+          // the session ID of that znode was not recorded on the broker (e.g. because of a network partition).
+          // The conflicting ephemeral znode should be about to be deleted since its underlying owning session
+          // must have expired. Therefore, we retry a few times until that deletion happens.
+          if (attempt < maxAttempt) {
+            time.sleep(backoffMs)
+            create()
+          } else {
+            throw KeeperException.create(Code.NODEEXISTS)
+          }
         case Code.OK =>
           getDataResponse.stat
         case Code.NONODE =>
