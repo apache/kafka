@@ -40,7 +40,7 @@ public class ProducerStateManagerBench {
     ProducerStateManager manager;
     Path tempDirectory;
 
-    @Param({"100", "1000", "10000", "100000"}) //, "1000000"})
+    @Param({"100", "1000", "10000", "100000"})
     public int numProducerIds;
 
     @Setup(Level.Trial)
