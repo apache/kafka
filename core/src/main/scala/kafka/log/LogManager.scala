@@ -326,7 +326,7 @@ class LogManager(logDirs: Seq[File],
                            defaultConfig: LogConfig,
                            topicConfigOverrides: Map[String, LogConfig],
                            numRemainingSegments: ConcurrentMap[String, Int],
-                           isStrayKraftLog: (UnifiedLog) => Boolean): UnifiedLog = {
+                           shouldBeStrayKraftLog: UnifiedLog => Boolean): UnifiedLog = {
     val topicPartition = UnifiedLog.parseTopicPartitionName(logDir)
     val config = topicConfigOverrides.getOrElse(topicPartition.topic, defaultConfig)
     val logRecoveryPoint = recoveryPoints.getOrElse(topicPartition, 0L)
@@ -355,7 +355,7 @@ class LogManager(logDirs: Seq[File],
     } else if (logDir.getName.endsWith(UnifiedLog.StrayDirSuffix)) {
       addStrayLog(topicPartition, log)
       warn(s"Loaded stray log: $logDir")
-    } else if (isStrayKraftLog(log)) {
+    } else if (shouldBeStrayKraftLog(log)) {
       // Mark the partition directories we're not supposed to have as stray. We have to do this
       // during log load because topics may have been recreated with the same name while a disk
       // was offline.
@@ -408,7 +408,7 @@ class LogManager(logDirs: Seq[File],
   /**
    * Recover and load all logs in the given data directories
    */
-  private[log] def loadLogs(defaultConfig: LogConfig, topicConfigOverrides: Map[String, LogConfig], isStrayKraftLog: UnifiedLog => Boolean): Unit = {
+  private[log] def loadLogs(defaultConfig: LogConfig, topicConfigOverrides: Map[String, LogConfig], shouldBeStrayKraftLog: UnifiedLog => Boolean): Unit = {
     info(s"Loading logs from log dirs $liveLogDirs")
     val startMs = time.hiResClockMs()
     val threadPools = ArrayBuffer.empty[ExecutorService]
@@ -489,7 +489,7 @@ class LogManager(logDirs: Seq[File],
             val logLoadStartMs = time.hiResClockMs()
             try {
               log = Some(loadLog(logDir, hadCleanShutdown, recoveryPoints, logStartOffsets,
-                defaultConfig, topicConfigOverrides, numRemainingSegments, isStrayKraftLog))
+                defaultConfig, topicConfigOverrides, numRemainingSegments, shouldBeStrayKraftLog))
             } catch {
               case e: IOException =>
                 handleIOException(logDirAbsolutePath, e)
@@ -573,10 +573,10 @@ class LogManager(logDirs: Seq[File],
   /**
    *  Start the background threads to flush logs and do log cleanup
    */
-  def startup(topicNames: Set[String], isStrayKraftLog: UnifiedLog => Boolean = _ => false): Unit = {
+  def startup(topicNames: Set[String], shouldBeStrayKraftLog: UnifiedLog => Boolean = _ => false): Unit = {
     // ensure consistency between default config and overrides
     val defaultConfig = currentDefaultConfig
-    startupWithConfigOverrides(defaultConfig, fetchTopicConfigOverrides(defaultConfig, topicNames), isStrayKraftLog)
+    startupWithConfigOverrides(defaultConfig, fetchTopicConfigOverrides(defaultConfig, topicNames), shouldBeStrayKraftLog)
   }
 
   // visible for testing
@@ -618,8 +618,8 @@ class LogManager(logDirs: Seq[File],
   private[log] def startupWithConfigOverrides(
     defaultConfig: LogConfig,
     topicConfigOverrides: Map[String, LogConfig],
-    isStrayKraftLog: UnifiedLog => Boolean): Unit = {
-    loadLogs(defaultConfig, topicConfigOverrides, isStrayKraftLog) // this could take a while if shutdown was not clean
+    shouldBeStrayKraftLog: UnifiedLog => Boolean): Unit = {
+    loadLogs(defaultConfig, topicConfigOverrides, shouldBeStrayKraftLog) // this could take a while if shutdown was not clean
 
     /* Schedule the cleanup task to delete old logs */
     if (scheduler != null) {

@@ -519,6 +519,28 @@ class LogManagerTest {
     logManager.loadLogs(logConfig, Map.empty, _ => false)
   }
 
+  @Test
+  def testLoadLogRenameLogThatShouldBeStray(): Unit = {
+    var invokedCount = 0
+    val logDir = TestUtils.tempDir()
+    logManager = createLogManager(Seq(logDir))
+
+    val testTopic = "test-stray-topic"
+    val testTopicPartition = new TopicPartition(testTopic, 0)
+    val log = logManager.getOrCreateLog(testTopicPartition, topicId = Some(Uuid.randomUuid()))
+    def providedIsStray(log: UnifiedLog) = {
+      invokedCount += 1
+      true
+    }
+
+    logManager.loadLog(log.dir, true, Map.empty, Map.empty, logConfig, Map.empty, new ConcurrentHashMap[String, Int](),  providedIsStray)
+    assertEquals(1, invokedCount)
+    assertTrue(
+      logDir.listFiles().toSet
+      .exists(f => f.getName.startsWith(testTopic) && f.getName.endsWith(UnifiedLog.StrayDirSuffix))
+    )
+  }
+
   /**
    * Test that it is not possible to open two log managers using the same data directory
    */
