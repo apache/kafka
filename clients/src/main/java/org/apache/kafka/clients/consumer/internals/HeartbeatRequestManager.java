@@ -357,6 +357,7 @@ public class HeartbeatRequestManager implements RequestManager {
 
         this.heartbeatState.reset();
         this.heartbeatRequestState.onFailedAttempt(currentTimeMs);
+        membershipManager.onHeartbeatError();
 
         switch (error) {
             case NOT_COORDINATOR:

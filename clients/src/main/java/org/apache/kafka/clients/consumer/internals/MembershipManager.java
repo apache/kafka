@@ -71,6 +71,11 @@ public interface MembershipManager extends RequestManager {
     void onHeartbeatResponseReceived(ConsumerGroupHeartbeatResponseData response);
 
     /**
+     * Notify the member that an error heartbeat response was received.
+     */
+    void onHeartbeatError();
+
+    /**
      * Update state when a heartbeat is sent out. This will transition out of the states that end
      * when a heartbeat request is sent, without waiting for a response (ex.
      * {@link MemberState#ACKNOWLEDGING} and {@link MemberState#LEAVING}).

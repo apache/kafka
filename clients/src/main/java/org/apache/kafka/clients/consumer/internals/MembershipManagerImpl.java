@@ -393,7 +393,6 @@ public class MembershipManagerImpl implements MembershipManager {
     @Override
     public void onHeartbeatResponseReceived(ConsumerGroupHeartbeatResponseData response) {
         if (response.errorCode() != Errors.NONE.code()) {
-            metricsManager.maybeRecordRebalanceFailed();
             String errorMessage = String.format(
                     "Unexpected error in Heartbeat response. Expected no error, but received: %s",
                     Errors.forCode(response.errorCode())
@@ -441,6 +440,12 @@ public class MembershipManagerImpl implements MembershipManager {
         }
     }
 
+    @Override
+    public void onHeartbeatError() {
+        metricsManager.maybeRecordRebalanceFailed();
+        return;
+    }
+
     /**
      * @return True if the consumer is not a member of the group.
      */
@@ -460,9 +465,9 @@ public class MembershipManagerImpl implements MembershipManager {
      * @param assignment Assignment received from the broker.
      */
     private void processAssignmentReceived(ConsumerGroupHeartbeatResponseData.Assignment assignment) {
-        metricsManager.recordRebalanceStarted(time.milliseconds());
         replaceTargetAssignmentWithNewAssignment(assignment);
         if (!targetAssignmentReconciled()) {
+            metricsManager.recordRebalanceStarted(time.milliseconds());
             // Transition the member to RECONCILING when receiving a new target
             // assignment from the broker, different from the current assignment. Note that the
             // reconciliation might not be triggered just yet because of missing metadata.
@@ -546,7 +551,6 @@ public class MembershipManagerImpl implements MembershipManager {
      */
     @Override
     public void transitionToFatal() {
-        metricsManager.maybeRecordRebalanceFailed();
         MemberState previousState = state;
         transitionTo(MemberState.FATAL);
         log.error("Member {} with epoch {} transitioned to {} state", memberId, memberEpoch, MemberState.FATAL);

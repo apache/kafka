@@ -2040,33 +2040,15 @@ public class MembershipManagerImplTest {
         MembershipManagerImpl membershipManager = createMembershipManagerJoiningGroup();
         ConsumerGroupHeartbeatResponse heartbeatResponse = createConsumerGroupHeartbeatResponse(null);
         membershipManager.onHeartbeatResponseReceived(heartbeatResponse.data());
-        ConsumerRebalanceListenerInvoker invoker = mock(ConsumerRebalanceListenerInvoker.class);
 
-        String topicName = "topic1";
         Uuid topicId = Uuid.randomUuid();
 
-        when(subscriptionState.assignedPartitions()).thenReturn(Collections.emptySet());
-        when(subscriptionState.hasAutoAssignedPartitions()).thenReturn(true);
-        when(subscriptionState.rebalanceListener()).thenReturn(Optional.of(mock(ConsumerRebalanceListener.class)));
-        doNothing().when(subscriptionState).markPendingRevocation(anySet());
-        when(metadata.topicNames()).thenReturn(Collections.singletonMap(topicId, topicName));
-
-        when(metadata.topicNames()).thenReturn(Collections.singletonMap(topicId, topicName));
         receiveAssignment(topicId, Arrays.asList(0, 1), membershipManager);
-
-        // assign partitions
-        performCallback(
-            membershipManager,
-            invoker,
-            ConsumerRebalanceListenerMethodName.ON_PARTITIONS_ASSIGNED,
-            topicPartitions(topicName, 0, 1),
-            false
-        );
 
         sleepRandomMs(time, 2000);
 
         assertTrue(rebalanceMetricsManager.rebalanceStarted());
-        membershipManager.transitionToFatal();
+        membershipManager.onHeartbeatError();
 
         assertEquals((double) 0, getMetricValue(metrics, rebalanceMetricsManager.rebalanceLatencyTotal));
         assertEquals(0d, getMetricValue(metrics, rebalanceMetricsManager.rebalanceTotal));
