@@ -472,14 +472,15 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends QuorumTestHarness wit
     assertEquals(2, brokers.size)
     TestUtils.resource(TestUtils.createAdminClient(brokers = brokers, listenerName = listenerName)) {
       adminClient =>
-        val leader = adminClient.describeTopics(Collections.singletonList(topic))
+        adminClient.describeTopics(Collections.singletonList(topic))
           .topicNameValues()
-          .values().stream()
+          .values().asScala
           .map(future => future.get())
-          .flatMap(value => value.partitions().stream())
+          .flatMap(value => value.partitions().asScala)
           .map(partition => partition.leader())
-          .findFirst().get()
-        brokers.filter(_.config.brokerId == leader.id()).head
+          .map(e => brokers.filter(_.config.brokerId == e.id()))
+          .filter(broker => broker.nonEmpty)
+          .head.head
     }
   }
 
@@ -487,15 +488,14 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends QuorumTestHarness wit
     assertEquals(2, brokers.size)
     TestUtils.resource(TestUtils.createAdminClient(brokers = brokers, listenerName = listenerName)) {
       adminClient =>
-        val leader = adminClient.describeTopics(Collections.singletonList(topic))
+        adminClient.describeTopics(Collections.singletonList(topic))
           .topicNameValues()
-          .values().stream()
+          .values().asScala
           .map(future => future.get())
-          .flatMap(value => value.partitions().stream())
+          .flatMap(value => value.partitions().asScala)
           .map(partition => partition.leader())
-          .findFirst().get()
-
-        brokers.filter(_.config.brokerId != leader.id()).head
+          .map(e => brokers.filter(_.config.brokerId != e.id()))
+          .filter(broker => broker.nonEmpty).head.head
     }
   }
 
