@@ -151,6 +151,98 @@ public class JsonConverterTest {
     }
 
     @Test
+    public void stringToConnectOptional() {
+        Schema schema = SchemaBuilder.string().version(1).optional().schema();
+        String msg = "{ \"schema\": { \"type\": \"string\", \"version\": 1, \"optional\": true }, \"payload\": null }";
+        SchemaAndValue schemaAndValue = converter.toConnectData(TOPIC, msg.getBytes());
+        assertEquals(schema, schemaAndValue.schema());
+        assertNull(schemaAndValue.value());
+    }
+
+    @Test
+    public void stringToConnectOptionalWithDefaultValue() {
+        Schema schema = SchemaBuilder.string().version(1).optional().defaultValue("bar").schema();
+        String msg = "{ \"schema\": { \"type\": \"string\", \"version\": 1, \"optional\": true, \"default\": \"bar\" }, \"payload\": null }";
+        SchemaAndValue schemaAndValue = converter.toConnectData(TOPIC, msg.getBytes());
+        assertEquals(schema, schemaAndValue.schema());
+        assertEquals((String) schemaAndValue.value(), "bar");
+    }
+
+    @Test
+    public void structToConnectStringOptionalDefaultNull() {
+        Schema schema = SchemaBuilder.struct().field("foo", SchemaBuilder.string().optional().defaultValue(null).schema()).build();
+        String msg = "{ \"schema\": { \"type\": \"struct\", \"fields\" : [ { \"field\": \"foo\", \"type\": \"string\", \"optional\": true, \"default\": null } ] }, \"payload\": { } }";
+        SchemaAndValue schemaAndValue = converter.toConnectData(TOPIC, msg.getBytes());
+        assertEquals(schema, schemaAndValue.schema());
+        assertNull(((Struct) schemaAndValue.value()).getString("foo"));
+    }
+
+    @Test
+    public void structToJsonStringOptionalDefaultNull() {
+        Schema schema = SchemaBuilder.struct().field("foo", SchemaBuilder.string().optional().defaultValue(null).schema()).build();
+        Struct input = new Struct(schema);
+        JsonNode converted = parse(converter.fromConnectData(TOPIC, schema, input));
+        validateEnvelope(converted);
+        assertEquals(parse("{ \"type\": \"struct\", \"fields\" : [ { \"type\": \"string\", \"optional\": true, \"field\": \"foo\" } ], \"optional\": false }"),
+                converted.get(JsonSchema.ENVELOPE_SCHEMA_FIELD_NAME));
+        assertEquals(JsonNodeFactory.instance.objectNode()
+                        .putNull("foo"),
+                converted.get(JsonSchema.ENVELOPE_PAYLOAD_FIELD_NAME));
+    }
+
+    @Test
+    public void structToConnectStringOptionalDefaultValue() {
+        Schema schema = SchemaBuilder.struct().field("foo", SchemaBuilder.string().optional().defaultValue("bar").schema()).build();
+        String msg = "{ \"schema\": { \"type\": \"struct\", \"fields\" : [ { \"field\": \"foo\", \"type\": \"string\", \"optional\": true, \"default\": \"bar\" } ] }, \"payload\": { } }";
+        SchemaAndValue schemaAndValue = converter.toConnectData(TOPIC, msg.getBytes());
+        assertEquals(schema, schemaAndValue.schema());
+        assertEquals(((Struct) schemaAndValue.value()).getString("foo"), "bar");
+    }
+
+    @Test
+    public void structToJsonStringOptionalDefaultValue() {
+        Schema schema = SchemaBuilder.struct().field("foo", SchemaBuilder.string().optional().defaultValue("bar").schema()).build();
+        Struct input = new Struct(schema);
+        JsonNode converted = parse(converter.fromConnectData(TOPIC, schema, input));
+        validateEnvelope(converted);
+        assertEquals(parse("{ \"type\": \"struct\", \"fields\" : [ { \"type\": \"string\", \"optional\": true, \"default\": \"bar\", \"field\": \"foo\" } ], \"optional\": false }"),
+                converted.get(JsonSchema.ENVELOPE_SCHEMA_FIELD_NAME));
+        assertEquals(JsonNodeFactory.instance.objectNode()
+                        .put("foo", "bar"),
+                converted.get(JsonSchema.ENVELOPE_PAYLOAD_FIELD_NAME));
+    }
+
+    @Test
+    public void structToConnectRequiredWithStringOptionalDefaultValue() {
+        Schema schema = SchemaBuilder.struct()
+                .field("foo", SchemaBuilder.string().optional().defaultValue("bar").schema())
+                .field("for", Schema.STRING_SCHEMA)
+                .build();
+        String msg = "{ \"schema\": { \"type\": \"struct\", \"fields\" : [ { \"field\": \"foo\", \"type\": \"string\", \"optional\": true, \"default\": \"bar\" }, { \"field\": \"for\", \"type\": \"string\" } ] }, \"payload\": { \"for\": \"baz\" } }";
+        SchemaAndValue schemaAndValue = converter.toConnectData(TOPIC, msg.getBytes());
+        assertEquals(schema, schemaAndValue.schema());
+        assertEquals(((Struct) schemaAndValue.value()).getString("foo"), "bar");
+        assertEquals(((Struct) schemaAndValue.value()).getString("for"), "baz");
+    }
+
+    @Test
+    public void structToJsonRequiredWithStringOptionalDefaultValue() {
+        Schema schema = SchemaBuilder.struct()
+                .field("foo", SchemaBuilder.string().optional().defaultValue("bar").schema())
+                .field("for", Schema.STRING_SCHEMA)
+                .build();
+        Struct input = new Struct(schema).put("for", "baz");
+        JsonNode converted = parse(converter.fromConnectData(TOPIC, schema, input));
+        validateEnvelope(converted);
+        assertEquals(parse("{ \"type\": \"struct\", \"fields\" : [ { \"type\": \"string\", \"optional\": true, \"default\": \"bar\", \"field\": \"foo\" }, { \"type\": \"string\", \"optional\": false, \"field\": \"for\" } ], \"optional\": false }"),
+                converted.get(JsonSchema.ENVELOPE_SCHEMA_FIELD_NAME));
+        assertEquals(JsonNodeFactory.instance.objectNode()
+                        .put("foo", "bar")
+                        .put("for", "baz"),
+                converted.get(JsonSchema.ENVELOPE_PAYLOAD_FIELD_NAME));
+    }
+
+    @Test
     public void arrayToConnect() {
         byte[] arrayJson = "{ \"schema\": { \"type\": \"array\", \"items\": { \"type\" : \"int32\" } }, \"payload\": [1, 2, 3] }".getBytes();
         assertEquals(new SchemaAndValue(SchemaBuilder.array(Schema.INT32_SCHEMA).build(), Arrays.asList(1, 2, 3)), converter.toConnectData(TOPIC, arrayJson));
