@@ -52,7 +52,7 @@ public class MetadataCache {
     private final Map<TopicPartition, PartitionMetadata> metadataByPartition;
     private final Map<String, Uuid> topicIds;
     private final Map<Uuid, String> topicNames;
-    private Cluster clusterInstance;
+    private InternalCluster clusterInstance;
 
     MetadataCache(String clusterId,
                   Map<Integer, Node> nodes,
@@ -93,7 +93,10 @@ public class MetadataCache {
         if (clusterInstance == null) {
             computeClusterView();
         } else {
-            this.clusterInstance = clusterInstance;
+            this.clusterInstance = new InternalCluster(
+                clusterInstance,
+                new HashMap<>(metadataByPartition)
+            );
         }
     }
 
@@ -117,8 +120,12 @@ public class MetadataCache {
         if (clusterInstance == null) {
             throw new IllegalStateException("Cached Cluster instance should not be null, but was.");
         } else {
-            return clusterInstance;
+            return clusterInstance.toPublicCluster();
         }
+    }
+
+    InternalCluster internalCluster() {
+        return clusterInstance;
     }
 
     ClusterResource clusterResource() {
@@ -208,8 +215,9 @@ public class MetadataCache {
                 .stream()
                 .map(metadata -> MetadataResponse.toPartitionInfo(metadata, nodes))
                 .collect(Collectors.toList());
-        this.clusterInstance = new Cluster(clusterId, nodes.values(), partitionInfos, unauthorizedTopics,
-                invalidTopics, internalTopics, controller, topicIds);
+        Cluster cluster = new Cluster(clusterId, nodes.values(), partitionInfos, unauthorizedTopics,
+            invalidTopics, internalTopics, controller, topicIds);
+        this.clusterInstance = new InternalCluster(cluster, new HashMap<>(metadataByPartition));
     }
 
     static MetadataCache bootstrap(List<InetSocketAddress> addresses) {

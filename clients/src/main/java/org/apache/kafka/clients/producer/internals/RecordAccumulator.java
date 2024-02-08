@@ -33,6 +33,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.CommonClientConfigs;
+import org.apache.kafka.clients.InternalCluster;
 import org.apache.kafka.clients.producer.Callback;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.utils.ExponentialBackoff;
@@ -660,14 +661,14 @@ public class RecordAccumulator {
      * @param unknownLeaderTopics   The set of topics with no leader (to be filled in)
      * @return The delay for next check
      */
-    private long partitionReady(Cluster cluster, long nowMs, String topic,
+    private long partitionReady(InternalCluster cluster, long nowMs, String topic,
                                 TopicInfo topicInfo,
                                 long nextReadyCheckDelayMs, Set<Node> readyNodes, Set<String> unknownLeaderTopics) {
         ConcurrentMap<Integer, Deque<ProducerBatch>> batches = topicInfo.batches;
         // Collect the queue sizes for available partitions to be used in adaptive partitioning.
         int[] queueSizes = null;
         int[] partitionIds = null;
-        if (enableAdaptivePartitioning && batches.size() >= cluster.partitionsForTopic(topic).size()) {
+        if (enableAdaptivePartitioning && batches.size() >= cluster.toPublicCluster().partitionsForTopic(topic).size()) {
             // We don't do adaptive partitioning until we scheduled at least a batch for all
             // partitions (i.e. we have the corresponding entries in the batches map), we just
             // do uniform.  The reason is that we build queue sizes from the batches map,
@@ -684,7 +685,7 @@ public class RecordAccumulator {
             // Advance queueSizesIndex so that we properly index available
             // partitions.  Do it here so that it's done for all code paths.
 
-            Node leader = cluster.leaderFor(part);
+            Node leader = cluster.toPublicCluster().leaderFor(part);
             if (leader != null && queueSizes != null) {
                 ++queueSizesIndex;
                 assert queueSizesIndex < queueSizes.length;
@@ -699,8 +700,7 @@ public class RecordAccumulator {
             final int dequeSize;
             final boolean full;
 
-            PartitionInfo partitionInfo = cluster.partition(part);
-            Optional<Integer> leaderEpoch = (partitionInfo == null) ? Optional.empty() : partitionInfo.leaderEpoch();
+            Optional<Integer> leaderEpoch = cluster.leaderEpochFor(part);
 
             // This loop is especially hot with large partition counts. So -
 
@@ -781,7 +781,7 @@ public class RecordAccumulator {
      * </ul>
      * </ol>
      */
-    public ReadyCheckResult ready(Cluster cluster, long nowMs) {
+    public ReadyCheckResult ready(InternalCluster cluster, long nowMs) {
         Set<Node> readyNodes = new HashSet<>();
         long nextReadyCheckDelayMs = Long.MAX_VALUE;
         Set<String> unknownLeaderTopics = new HashSet<>();
@@ -866,9 +866,9 @@ public class RecordAccumulator {
         return false;
     }
 
-    private List<ProducerBatch> drainBatchesForOneNode(Cluster cluster, Node node, int maxSize, long now) {
+    private List<ProducerBatch> drainBatchesForOneNode(InternalCluster cluster, Node node, int maxSize, long now) {
         int size = 0;
-        List<PartitionInfo> parts = cluster.partitionsForNode(node.id());
+        List<PartitionInfo> parts = cluster.toPublicCluster().partitionsForNode(node.id());
         List<ProducerBatch> ready = new ArrayList<>();
         if (parts.isEmpty())
             return ready;
@@ -888,8 +888,7 @@ public class RecordAccumulator {
             if (deque == null)
                 continue;
 
-            PartitionInfo partitionInfo = cluster.partition(tp);
-            Optional<Integer> leaderEpoch = (partitionInfo == null) ? Optional.empty() : partitionInfo.leaderEpoch();
+            Optional<Integer> leaderEpoch = cluster.leaderEpochFor(tp);
 
             final ProducerBatch batch;
             synchronized (deque) {
@@ -974,7 +973,7 @@ public class RecordAccumulator {
      * @return A list of {@link ProducerBatch} for each node specified with total size less than the
      * requested maxSize.
      */
-    public Map<Integer, List<ProducerBatch>> drain(Cluster cluster, Set<Node> nodes, int maxSize, long now) {
+    public Map<Integer, List<ProducerBatch>> drain(InternalCluster cluster, Set<Node> nodes, int maxSize, long now) {
         if (nodes.isEmpty())
             return Collections.emptyMap();
 

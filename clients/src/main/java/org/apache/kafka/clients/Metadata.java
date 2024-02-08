@@ -121,10 +121,19 @@ public class Metadata implements Closeable {
     }
 
     /**
-     * Get the current cluster info without blocking
+     * Get the current cluster info without blocking.
+     * Prefer to use {@link #fetchInternalCluster()} over this for internal usages within the client.
      */
     public synchronized Cluster fetch() {
         return cache.cluster();
+    }
+
+    /**
+     * Get the current cluster info.
+     * Prefer to use this over {@link #fetch()} for internal usages within the client.
+     */
+    public synchronized InternalCluster fetchInternalCluster() {
+        return cache.internalCluster();
     }
 
     /**
