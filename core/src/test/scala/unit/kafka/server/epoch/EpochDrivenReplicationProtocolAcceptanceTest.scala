@@ -472,10 +472,9 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends QuorumTestHarness wit
     assertEquals(2, brokers.size)
     TestUtils.resource(TestUtils.createAdminClient(brokers = brokers, listenerName = listenerName)) {
       adminClient =>
-        adminClient.describeTopics(Collections.singletonList(topic))
-          .topicNameValues()
-          .values().asScala
-          .map(future => future.get())
+        val allTopicNames = adminClient.describeTopics(Collections.singletonList(topic)).allTopicNames().get()
+
+        allTopicNames.values().asScala
           .flatMap(value => value.partitions().asScala)
           .map(partition => partition.leader())
           .map(e => brokers.filter(_.config.brokerId == e.id()))
@@ -488,10 +487,9 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends QuorumTestHarness wit
     assertEquals(2, brokers.size)
     TestUtils.resource(TestUtils.createAdminClient(brokers = brokers, listenerName = listenerName)) {
       adminClient =>
-        adminClient.describeTopics(Collections.singletonList(topic))
-          .topicNameValues()
-          .values().asScala
-          .map(future => future.get())
+        val allTopicNames = adminClient.describeTopics(Collections.singletonList(topic)).allTopicNames().get()
+
+        allTopicNames.values().asScala
           .flatMap(value => value.partitions().asScala)
           .map(partition => partition.leader())
           .map(e => brokers.filter(_.config.brokerId != e.id()))
