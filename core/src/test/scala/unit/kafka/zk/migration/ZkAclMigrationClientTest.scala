@@ -26,11 +26,12 @@ import org.apache.kafka.common.resource.{PatternType, ResourcePattern, ResourceP
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.utils.SecurityUtils
 import org.apache.kafka.image.{MetadataDelta, MetadataImage, MetadataProvenance}
-import org.apache.kafka.metadata.migration.KRaftMigrationZkWriter
+import org.apache.kafka.metadata.migration.{KRaftMigrationOperation, KRaftMigrationOperationConsumer, KRaftMigrationZkWriter}
 import org.apache.kafka.server.common.ApiMessageAndVersion
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue, fail}
 import org.junit.jupiter.api.Test
 
+import java.util.function.Consumer
 import scala.collection.mutable
 import scala.jdk.CollectionConverters._
 
@@ -170,7 +171,12 @@ class ZkAclMigrationClientTest extends ZkMigrationTestHarness {
 
     // load snapshot to Zookeeper.
     val kraftMigrationZkWriter = new KRaftMigrationZkWriter(migrationClient, fail(_))
-    kraftMigrationZkWriter.handleSnapshot(image, (_, _, operation) => { migrationState = operation.apply(migrationState) })
+    kraftMigrationZkWriter.handleSnapshot(image,
+      new KRaftMigrationOperationConsumer() {
+        def accept(opType: String, logMsg: String, operation: KRaftMigrationOperation): Unit = {
+          migrationState = operation.apply(migrationState)
+        }
+      })
 
     // Verify the new ACLs in Zookeeper.
     val resource1AclsInZk = zkClient.getVersionedAclsForResource(resource1).acls
@@ -231,10 +237,16 @@ class ZkAclMigrationClientTest extends ZkMigrationTestHarness {
 
     // Sync image to ZK
     val errorLogs = mutable.Buffer[String]()
-    val kraftMigrationZkWriter = new KRaftMigrationZkWriter(migrationClient, errorLogs.append)
-    kraftMigrationZkWriter.handleSnapshot(image, (_, _, operation) => {
-      migrationState = operation.apply(migrationState)
-    })
+    val kraftMigrationZkWriter = new KRaftMigrationZkWriter(migrationClient,
+      new Consumer[String]() {
+        override def accept(t: String): Unit = errorLogs.append(t)
+      })
+    kraftMigrationZkWriter.handleSnapshot(image,
+      new KRaftMigrationOperationConsumer() {
+        def accept(opType: String, logMsg: String, operation: KRaftMigrationOperation): Unit = {
+          migrationState = operation.apply(migrationState)
+        }
+      })
 
     // verify 3 ACLs in ZK
     val aclsInZk = zkClient.getVersionedAclsForResource(resource).acls
@@ -276,7 +288,10 @@ class ZkAclMigrationClientTest extends ZkMigrationTestHarness {
   def testAclUpdateAndDelete(): Unit = {
     zkClient.createAclPaths()
     val errorLogs = mutable.Buffer[String]()
-    val kraftMigrationZkWriter = new KRaftMigrationZkWriter(migrationClient, errorLogs.append)
+    val kraftMigrationZkWriter = new KRaftMigrationZkWriter(migrationClient,
+      new Consumer[String]() {
+        override def accept(t: String): Unit = errorLogs.append(t)
+      })
 
     val topicName = "topic-" + Uuid.randomUuid()
     val otherName = "other-" + Uuid.randomUuid()
