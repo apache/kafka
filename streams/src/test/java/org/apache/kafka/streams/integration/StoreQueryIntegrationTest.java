@@ -105,7 +105,7 @@ public class StoreQueryIntegrationTest {
     private final MockTime mockTime = CLUSTER.time;
 
     @BeforeAll
-    public static void setupCluster() throws InterruptedException, IOException {
+    public static void setupCluster() throws Exception {
         CLUSTER.start();
         CLUSTER.createTopic(INPUT_TOPIC_NAME, 2, 1);
     }

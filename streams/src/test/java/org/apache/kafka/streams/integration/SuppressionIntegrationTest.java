@@ -22,6 +22,7 @@ import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serializer;
@@ -52,7 +53,6 @@ import org.junit.Test;
 import org.junit.experimental.categories.Category;
 import org.junit.rules.Timeout;
 
-import java.io.IOException;
 import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
@@ -93,7 +93,7 @@ public class SuppressionIntegrationTest {
     );
 
     @BeforeClass
-    public static void startCluster() throws IOException {
+    public static void startCluster() throws Exception {
         CLUSTER.start();
     }
 
@@ -382,9 +382,9 @@ public class SuppressionIntegrationTest {
             );
             final boolean rawRecords = waitForAnyRecord(outputRaw);
             final boolean suppressedRecords = waitForAnyRecord(outputSuppressed);
-            final Properties config = CLUSTER.getLogConfig(changeLog);
+            final Map<String, Object> config = CLUSTER.getLogConfig();
 
-            assertThat(config.getProperty("retention.ms"), is(logConfig.get("retention.ms")));
+            assertThat(config.get(TopicConfig.RETENTION_MS_CONFIG), is(logConfig.get("retention.ms")));
             assertThat(CLUSTER.getAllTopicsInCluster(), hasItem(changeLog));
             assertThat(rawRecords, Matchers.is(true));
             assertThat(suppressedRecords, is(true));

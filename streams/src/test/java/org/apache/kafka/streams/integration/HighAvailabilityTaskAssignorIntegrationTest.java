@@ -52,7 +52,6 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.Timeout;
 
-import java.io.IOException;
 import java.util.Collection;
 import java.util.Map;
 import java.util.Properties;
@@ -105,7 +104,7 @@ public class HighAvailabilityTaskAssignorIntegrationTest {
     }
 
     @BeforeAll
-    public static void startCluster() throws IOException {
+    public static void startCluster() throws Exception {
         CLUSTER.start();
     }
 

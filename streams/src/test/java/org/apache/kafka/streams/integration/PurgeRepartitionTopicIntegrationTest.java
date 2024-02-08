@@ -45,7 +45,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.api.Tag;
 
-import java.io.IOException;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -76,7 +75,7 @@ public class PurgeRepartitionTopicIntegrationTest {
     });
 
     @BeforeAll
-    public static void startCluster() throws IOException, InterruptedException {
+    public static void startCluster() throws Exception {
         CLUSTER.start();
         CLUSTER.createTopic(INPUT_TOPIC, 1, 1);
     }

@@ -51,7 +51,6 @@ import org.junit.Test;
 import org.junit.experimental.categories.Category;
 import org.junit.rules.TestName;
 
-import java.io.IOException;
 import java.time.Duration;
 import java.util.LinkedList;
 import java.util.List;
@@ -71,7 +70,7 @@ public class StoreUpgradeIntegrationTest {
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(1);
 
     @BeforeClass
-    public static void startCluster() throws IOException {
+    public static void startCluster() throws Exception {
         CLUSTER.start();
     }
 

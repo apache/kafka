@@ -24,7 +24,6 @@ import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.sa
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.core.Is.is;
 
-import java.io.IOException;
 import java.time.Duration;
 import java.util.List;
 import java.util.Properties;
@@ -67,7 +66,7 @@ public class SelfJoinUpgradeIntegrationTest {
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(1);
 
     @BeforeClass
-    public static void startCluster() throws IOException {
+    public static void startCluster() throws Exception {
         CLUSTER.start();
     }
 

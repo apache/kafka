@@ -20,7 +20,6 @@ import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.sa
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
 
-import java.io.IOException;
 import java.time.Duration;
 import java.util.Arrays;
 import java.util.Collections;
@@ -97,7 +96,7 @@ public class VersionedKeyValueStoreIntegrationTest {
     public TestName testName = new TestName();
 
     @BeforeClass
-    public static void before() throws IOException {
+    public static void before() throws Exception {
         CLUSTER.start();
     }
 
@@ -204,9 +203,9 @@ public class VersionedKeyValueStoreIntegrationTest {
 
         // verify changelog topic properties
         final String changelogTopic = props.getProperty(StreamsConfig.APPLICATION_ID_CONFIG) + "-versioned-store-changelog";
-        final Properties changelogTopicConfig = CLUSTER.getLogConfig(changelogTopic);
-        assertThat(changelogTopicConfig.getProperty("cleanup.policy"), equalTo("compact"));
-        assertThat(changelogTopicConfig.getProperty("min.compaction.lag.ms"), equalTo(Long.toString(HISTORY_RETENTION + 24 * 60 * 60 * 1000L)));
+        final Map<String, Object> changelogTopicConfig = CLUSTER.getLogConfig();
+        assertThat(changelogTopicConfig.get(TopicConfig.CLEANUP_POLICY_CONFIG), equalTo("compact"));
+        assertThat(changelogTopicConfig.get(TopicConfig.MIN_COMPACTION_LAG_MS_CONFIG), equalTo(Long.toString(HISTORY_RETENTION + 24 * 60 * 60 * 1000L)));
     }
 
     @Test

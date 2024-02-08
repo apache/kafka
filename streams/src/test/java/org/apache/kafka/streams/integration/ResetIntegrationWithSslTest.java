@@ -28,7 +28,6 @@ import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.experimental.categories.Category;
 
-import java.io.IOException;
 import java.util.Map;
 import java.util.Properties;
 
@@ -65,7 +64,7 @@ public class ResetIntegrationWithSslTest extends AbstractResetIntegrationTest {
     }
 
     @BeforeClass
-    public static void startCluster() throws IOException {
+    public static void startCluster() throws Exception {
         CLUSTER.start();
     }
 

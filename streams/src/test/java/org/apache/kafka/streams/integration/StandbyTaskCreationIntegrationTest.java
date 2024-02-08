@@ -42,7 +42,6 @@ import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.api.Tag;
 
-import java.io.IOException;
 import java.util.Properties;
 import java.util.function.Predicate;
 
@@ -58,7 +57,7 @@ public class StandbyTaskCreationIntegrationTest {
     private String safeTestName;
 
     @BeforeAll
-    public static void startCluster() throws IOException, InterruptedException {
+    public static void startCluster() throws Exception {
         CLUSTER.start();
         CLUSTER.createTopic(INPUT_TOPIC, 2, 1);
     }

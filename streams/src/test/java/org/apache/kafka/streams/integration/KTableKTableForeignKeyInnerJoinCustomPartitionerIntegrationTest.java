@@ -106,7 +106,7 @@ public class KTableKTableForeignKeyInnerJoinCustomPartitionerIntegrationTest {
     }
 
     @BeforeAll
-    public static void startCluster() throws IOException, InterruptedException {
+    public static void startCluster() throws Exception {
         CLUSTER.start();
         //Use multiple partitions to ensure distribution of keys.
 

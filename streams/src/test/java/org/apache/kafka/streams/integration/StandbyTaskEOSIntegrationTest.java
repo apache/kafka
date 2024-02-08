@@ -53,7 +53,6 @@ import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
 
 import java.io.File;
-import java.io.IOException;
 import java.time.Duration;
 import java.util.Collection;
 import java.util.Collections;
@@ -107,7 +106,7 @@ public class StandbyTaskEOSIntegrationTest {
     private static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(3);
 
     @BeforeClass
-    public static void startCluster() throws IOException {
+    public static void startCluster() throws Exception {
         CLUSTER.start();
     }
 

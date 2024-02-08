@@ -48,7 +48,6 @@ import org.junit.experimental.categories.Category;
 import org.junit.rules.TestName;
 import org.junit.rules.Timeout;
 
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -84,7 +83,7 @@ public class ConsistencyVectorIntegrationTest {
     private final MockTime mockTime = cluster.time;
 
     @Before
-    public void before() throws InterruptedException, IOException {
+    public void before() throws Exception {
         cluster.start();
         cluster.createTopic(INPUT_TOPIC_NAME, 1, 1);
     }

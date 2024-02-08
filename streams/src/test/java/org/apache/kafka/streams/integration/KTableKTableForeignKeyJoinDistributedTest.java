@@ -42,7 +42,6 @@ import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.api.Tag;
 
-import java.io.IOException;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
@@ -65,7 +64,7 @@ public class KTableKTableForeignKeyJoinDistributedTest {
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(NUM_BROKERS);
 
     @BeforeAll
-    public static void startCluster() throws IOException, InterruptedException {
+    public static void startCluster() throws Exception {
         CLUSTER.start();
         CLUSTER.createTopic(INPUT_TOPIC, 2, 1);
     }
