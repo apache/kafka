@@ -375,6 +375,7 @@
     <allow pkg="org.apache.kafka.clients.producer" exact-match="true"/>
     <allow pkg="org.apache.kafka.clients.consumer" exact-match="true"/>
     <allow pkg="org.apache.kafka.server.util"/>
+    <allow pkg="kafka.testkit" />
 
     <allow pkg="org.apache.kafka.streams"/>
 

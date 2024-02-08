@@ -64,7 +64,6 @@ import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
 
 import java.io.File;
-import java.io.IOException;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -131,7 +130,7 @@ public class EosV2UpgradeIntegrationTest {
 
 
     @BeforeClass
-    public static void startCluster() throws IOException {
+    public static void startCluster() throws Exception {
         CLUSTER.start();
     }
 

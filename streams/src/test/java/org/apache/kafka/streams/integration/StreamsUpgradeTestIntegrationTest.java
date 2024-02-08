@@ -29,7 +29,6 @@ import org.junit.Test;
 import org.junit.experimental.categories.Category;
 import org.junit.rules.Timeout;
 
-import java.io.IOException;
 import java.time.Duration;
 import java.util.Properties;
 import java.util.concurrent.CountDownLatch;
@@ -52,7 +51,7 @@ public class StreamsUpgradeTestIntegrationTest {
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(3);
 
     @BeforeClass
-    public static void startCluster() throws IOException {
+    public static void startCluster() throws Exception {
         CLUSTER.start();
         IntegrationTestUtils.cleanStateBeforeTest(CLUSTER, 1, "data");
     }

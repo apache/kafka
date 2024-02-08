@@ -46,7 +46,6 @@ import org.junit.experimental.categories.Category;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.IOException;
 import java.time.Duration;
 import java.util.Collections;
 import java.util.List;
@@ -81,7 +80,7 @@ public class StandbyTaskEOSMultiRebalanceIntegrationTest {
     private static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(3);
 
     @BeforeClass
-    public static void startCluster() throws IOException {
+    public static void startCluster() throws Exception {
         CLUSTER.start();
     }
 

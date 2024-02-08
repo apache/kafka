@@ -82,7 +82,6 @@ import org.junit.runners.Parameterized;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.IOException;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -99,10 +98,8 @@ import java.util.Properties;
 import java.util.Random;
 import java.util.Set;
 import java.util.TreeSet;
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
 import java.util.function.Consumer;
 import java.util.function.Function;
 
@@ -397,7 +394,7 @@ public class IQv2StoreIntegrationTest {
 
     @BeforeClass
     public static void before()
-        throws InterruptedException, IOException, ExecutionException, TimeoutException {
+            throws Exception {
 
         CLUSTER.start();
         CLUSTER.deleteAllTopicsAndWait(60 * 1000L);

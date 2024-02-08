@@ -45,7 +45,6 @@ import org.junit.rules.Timeout;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
 
-import java.io.IOException;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
@@ -79,7 +78,7 @@ public class ResetPartitionTimeIntegrationTest {
         new EmbeddedKafkaCluster(NUM_BROKERS, BROKER_CONFIG, 0L);
 
     @BeforeClass
-    public static void startCluster() throws IOException {
+    public static void startCluster() throws Exception {
         CLUSTER.start();
     }
 

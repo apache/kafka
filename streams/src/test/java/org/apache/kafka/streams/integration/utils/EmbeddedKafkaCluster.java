@@ -17,19 +17,18 @@
 package org.apache.kafka.streams.integration.utils;
 
 import kafka.server.KafkaConfig;
-import kafka.server.KafkaServer;
-import kafka.zk.EmbeddedZookeeper;
+import kafka.server.BrokerServer;
+import kafka.testkit.KafkaClusterTestKit;
+import kafka.testkit.TestKitNodes;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
-import org.apache.kafka.server.config.ConfigType;
 import org.apache.kafka.server.util.MockTime;
 import org.apache.kafka.test.TestCondition;
 import org.apache.kafka.test.TestUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -49,7 +48,7 @@ public class EmbeddedKafkaCluster {
     private static final int DEFAULT_BROKER_PORT = 0; // 0 results in a random port being selected
     private static final int TOPIC_CREATION_TIMEOUT = 30000;
     private static final int TOPIC_DELETION_TIMEOUT = 30000;
-    private EmbeddedZookeeper zookeeper = null;
+    private KafkaClusterTestKit cluster = null;
     private final KafkaEmbedded[] brokers;
 
     private final Properties brokerConfig;
@@ -102,13 +101,14 @@ public class EmbeddedKafkaCluster {
     /**
      * Creates and starts a Kafka cluster.
      */
-    public void start() throws IOException {
+    public void start() throws Exception {
         log.debug("Initiating embedded Kafka cluster startup");
-        log.debug("Starting a ZooKeeper instance");
-        zookeeper = new EmbeddedZookeeper();
-        log.debug("ZooKeeper instance is running at {}", zKConnectString());
+        final KafkaClusterTestKit.Builder clusterBuilder = new KafkaClusterTestKit.Builder(
+                new TestKitNodes.Builder()
+                        .setNumControllerNodes(1)
+                        .build()
+        );
 
-        brokerConfig.put(KafkaConfig.ZkConnectProp(), zKConnectString());
         putIfAbsent(brokerConfig, KafkaConfig.ListenersProp(), "PLAINTEXT://localhost:" + DEFAULT_BROKER_PORT);
         putIfAbsent(brokerConfig, KafkaConfig.DeleteTopicEnableProp(), true);
         putIfAbsent(brokerConfig, KafkaConfig.LogCleanerDedupeBufferSizeProp(), 2 * 1024 * 1024L);
@@ -119,6 +119,12 @@ public class EmbeddedKafkaCluster {
         putIfAbsent(brokerConfig, KafkaConfig.TransactionsTopicPartitionsProp(), 5);
         putIfAbsent(brokerConfig, KafkaConfig.AutoCreateTopicsEnableProp(), true);
 
+        brokerConfig.forEach((k, v) -> clusterBuilder.setConfigProp((String) k, v.toString()));
+
+        cluster = clusterBuilder.build();
+        cluster.format();
+        cluster.startup();
+
         for (int i = 0; i < brokers.length; i++) {
             brokerConfig.put(KafkaConfig.BrokerIdProp(), i);
             log.debug("Starting a Kafka instance on {} ...", brokerConfig.get(KafkaConfig.ListenersProp()));
@@ -128,11 +134,12 @@ public class EmbeddedKafkaCluster {
             if (brokerConfigOverrides != null && brokerConfigOverrides.size() > i) {
                 effectiveConfig.putAll(brokerConfigOverrides.get(i));
             }
-            brokers[i] = new KafkaEmbedded(effectiveConfig, time);
+            brokers[i] = new KafkaEmbedded(effectiveConfig);
 
-            log.debug("Kafka instance is running at {}, connected to ZooKeeper at {}",
-                brokers[i].brokerList(), brokers[i].zookeeperConnect());
+            log.debug("Kafka instance is running at {}",
+                brokers[i].brokerList());
         }
+        cluster.waitForReadyBrokers();
     }
 
     private void putIfAbsent(final Properties props, final String propertyKey, final Object propertyValue) {
@@ -165,17 +172,6 @@ public class EmbeddedKafkaCluster {
         for (final KafkaEmbedded broker : brokers) {
             broker.awaitStoppedAndPurge();
         }
-        zookeeper.shutdown();
-    }
-
-    /**
-     * The ZooKeeper connection string aka `zookeeper.connect` in `hostnameOrIp:port` format.
-     * Example: `127.0.0.1:2181`.
-     * <p>
-     * You can use this to e.g. tell Kafka brokers how to connect to this instance.
-     */
-    public String zKConnectString() {
-        return "127.0.0.1:" + zookeeper.port();
     }
 
     /**
@@ -346,24 +342,23 @@ public class EmbeddedKafkaCluster {
         }
     }
 
-    private List<KafkaServer> brokers() {
-        final List<KafkaServer> servers = new ArrayList<>();
+    private List<BrokerServer> brokers() {
+        final List<BrokerServer> servers = new ArrayList<>();
         for (final KafkaEmbedded broker : brokers) {
             servers.add(broker.kafkaServer());
         }
         return servers;
     }
 
-    public Properties getLogConfig(final String topic) {
-        return brokers[0].kafkaServer().zkClient().getEntityConfigs(ConfigType.TOPIC, topic);
+    public Map<String, Object> getLogConfig() {
+        return brokers[0].kafkaServer().config().extractLogConfigMap();
     }
 
     public Set<String> getAllTopicsInCluster() {
-        final scala.collection.Iterator<String> topicsIterator = brokers[0].kafkaServer().zkClient().getAllTopicsInCluster(false).iterator();
-        final Set<String> topics = new HashSet<>();
-        while (topicsIterator.hasNext()) {
-            topics.add(topicsIterator.next());
+        try {
+            return brokers[0].createAdminClient().listTopics().names().get();
+        } catch (final Exception e) {
+            throw new RuntimeException(e);
         }
-        return topics;
     }
 }

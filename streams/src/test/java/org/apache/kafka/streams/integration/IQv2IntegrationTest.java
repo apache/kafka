@@ -63,7 +63,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.Timeout;
 
-import java.io.IOException;
 import java.lang.reflect.Field;
 import java.time.Duration;
 import java.util.HashMap;
@@ -72,10 +71,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
 
 import static java.util.Collections.singleton;
 import static org.apache.kafka.common.utils.Utils.mkSet;
@@ -102,7 +99,7 @@ public class IQv2IntegrationTest {
 
     @BeforeAll
     public static void before()
-        throws InterruptedException, IOException, ExecutionException, TimeoutException {
+            throws Exception {
         CLUSTER.start();
         final int partitions = 2;
         CLUSTER.createTopic(INPUT_TOPIC_NAME, partitions, 1);

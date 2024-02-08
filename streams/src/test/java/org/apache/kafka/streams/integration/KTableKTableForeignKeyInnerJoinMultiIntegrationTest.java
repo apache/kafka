@@ -86,7 +86,7 @@ public class KTableKTableForeignKeyInnerJoinMultiIntegrationTest {
     private final static Properties PRODUCER_CONFIG_3 = new Properties();
 
     @BeforeAll
-    public static void startCluster() throws IOException, InterruptedException {
+    public static void startCluster() throws Exception {
         CLUSTER.start();
         //Use multiple partitions to ensure distribution of keys.
 
