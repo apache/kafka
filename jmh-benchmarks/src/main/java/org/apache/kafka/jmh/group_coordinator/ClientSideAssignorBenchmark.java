@@ -41,7 +41,7 @@ public class ClientSideAssignorBenchmark {
     @Param({"200"})
     private int partitionsPerTopicCount;
 
-    @Param({"100"})
+    @Param({"1000"})
     private int topicCount;
 
     @Param({"20"})
@@ -57,9 +57,13 @@ public class ClientSideAssignorBenchmark {
     private boolean isRangeAssignor;
 
     private final Map<String, ConsumerPartitionAssignor.Subscription> subscriptions = new HashMap<>();
-    protected int numBrokerRacks = 4;
-    protected int replicationFactor = 2;
+
+    private final int numBrokerRacks = 3;
+
+    private final int replicationFactor = 2;
+
     protected AbstractPartitionAssignor assignor;
+
     private Map<String, List<PartitionInfo>> partitionsPerTopic;
 
     @Setup(Level.Trial)
@@ -118,8 +122,8 @@ public class ClientSideAssignorBenchmark {
     }
 
     protected ConsumerPartitionAssignor.Subscription subscription(List<String> topics, int consumerIndex) {
-        String rackId = "rack" + consumerIndex % 4;
         if (isRackAware) {
+            String rackId = "rack" + consumerIndex % 3;
             return new ConsumerPartitionAssignor.Subscription(topics, null, Collections.emptyList(), DEFAULT_GENERATION, Optional.of(rackId));
         }
         return new ConsumerPartitionAssignor.Subscription(topics, null, Collections.emptyList(), DEFAULT_GENERATION, Optional.empty());

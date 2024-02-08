@@ -63,7 +63,10 @@ public class ServerSideAssignorBenchmark {
 
     private PartitionAssignor partitionAssignor;
 
+    private final int numberOfRacks = 3;
+
     private AssignmentSpec assignmentSpec;
+
     private SubscribedTopicDescriber subscribedTopicDescriber;
 
     @Setup(Level.Trial)
@@ -96,10 +99,10 @@ public class ServerSideAssignorBenchmark {
         }
     }
 
-    private static Map<Integer, Set<String>> mkMapOfPartitionRacks(int numPartitions) {
+    private Map<Integer, Set<String>> mkMapOfPartitionRacks(int numPartitions) {
         Map<Integer, Set<String>> partitionRacks = new HashMap<>(numPartitions);
         for (int i = 0; i < numPartitions; i++) {
-            partitionRacks.put(i, new HashSet<>(Arrays.asList("rack" + i % 4, "rack" + (i + 1) % 4)));
+            partitionRacks.put(i, new HashSet<>(Arrays.asList("rack" + i % numberOfRacks, "rack" + (i + 1) % numberOfRacks)));
         }
         return partitionRacks;
     }
@@ -130,7 +133,7 @@ public class ServerSideAssignorBenchmark {
         } else {
             for (int i = 1; i <= memberCount; i++) {
                 String memberName = "member" + i;
-                String rackId = "rack" + i % 4;
+                String rackId = "rack" + i % numberOfRacks;
 
                 // Distribute topics among members.
                 List<Uuid> assignedTopics = new ArrayList<>();
