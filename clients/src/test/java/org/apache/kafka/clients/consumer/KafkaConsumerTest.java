@@ -2169,10 +2169,8 @@ public class KafkaConsumerTest {
         assertThrows(AuthenticationException.class, () -> consumer.committed(Collections.singleton(tp0)).get(tp0));
     }
 
-    // TODO: this test triggers a bug with the CONSUMER group protocol implementation.
-    //       The bug will be investigated and fixed so this test can use both group protocols.
     @ParameterizedTest
-    @EnumSource(value = GroupProtocol.class, names = "CLASSIC")
+    @EnumSource(value = GroupProtocol.class)
     public void testMeasureCommitSyncDurationOnFailure(GroupProtocol groupProtocol) {
         final KafkaConsumer<String, String> consumer
             = consumerWithPendingError(groupProtocol, new MockTime(Duration.ofSeconds(1).toMillis()));

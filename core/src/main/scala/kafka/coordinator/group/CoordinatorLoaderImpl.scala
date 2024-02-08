@@ -79,6 +79,7 @@ class CoordinatorLoaderImpl[T](
     future: CompletableFuture[LoadSummary],
     startTimeMs: Long
   ): Unit = {
+    val schedulerQueueTimeMs = time.milliseconds() - startTimeMs
     try {
       replicaManager.getLog(tp) match {
         case None =>
@@ -157,6 +158,7 @@ class CoordinatorLoaderImpl[T](
                   numRecords = numRecords + 1
                   try {
                     coordinator.replay(
+                      record.offset(),
                       batch.producerId,
                       batch.producerEpoch,
                       deserializer.deserialize(record.key, record.value)
@@ -193,7 +195,7 @@ class CoordinatorLoaderImpl[T](
               s"Stopped loading records from $tp because the partition is not online or is no longer the leader."
             ))
           } else if (isRunning.get) {
-            future.complete(new LoadSummary(startTimeMs, endTimeMs, numRecords, numBytes))
+            future.complete(new LoadSummary(startTimeMs, endTimeMs, schedulerQueueTimeMs, numRecords, numBytes))
           } else {
             future.completeExceptionally(new RuntimeException("Coordinator loader is closed."))
           }

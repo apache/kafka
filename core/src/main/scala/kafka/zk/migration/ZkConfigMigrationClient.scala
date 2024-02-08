@@ -17,8 +17,8 @@
 
 package kafka.zk.migration
 
-import kafka.server.{ConfigEntityName, DynamicBrokerConfig, DynamicConfig, ZkAdminManager}
-import kafka.utils.{Logging, PasswordEncoder}
+import kafka.server.{DynamicBrokerConfig, DynamicConfig, ZkAdminManager}
+import kafka.utils.Logging
 import kafka.zk.ZkMigrationClient.{logAndRethrow, wrapZkException}
 import kafka.zk._
 import kafka.zookeeper.{CreateRequest, DeleteRequest, SetDataRequest}
@@ -31,9 +31,11 @@ import org.apache.kafka.common.quota.ClientQuotaEntity
 import org.apache.kafka.common.security.scram.internals.ScramCredentialUtils
 import org.apache.kafka.metadata.migration.ConfigMigrationClient.ClientQuotaVisitor
 import org.apache.kafka.metadata.migration.{ConfigMigrationClient, MigrationClientException, ZkMigrationLeadershipState}
-import org.apache.kafka.server.config.ConfigType
+import org.apache.kafka.security.PasswordEncoder
+import org.apache.kafka.server.config.{ConfigEntityName, ConfigType}
 import org.apache.zookeeper.KeeperException.Code
 import org.apache.zookeeper.{CreateMode, KeeperException}
+
 
 import java.{lang, util}
 import java.util.Properties
@@ -55,7 +57,7 @@ class ZkConfigMigrationClient(
    * to the special KRaft string.
    */
   private def fromZkEntityName(entityName: String): String = {
-    if (entityName.equals(ConfigEntityName.Default)) {
+    if (entityName.equals(ConfigEntityName.DEFAULT)) {
       ""
     } else {
       entityName
@@ -64,7 +66,7 @@ class ZkConfigMigrationClient(
 
   private def toZkEntityName(entityName: String): String = {
     if (entityName.isEmpty) {
-      ConfigEntityName.Default
+      ConfigEntityName.DEFAULT
     } else {
       entityName
     }

@@ -99,6 +99,7 @@ import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
+import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -127,7 +128,6 @@ import static org.apache.kafka.coordinator.group.classic.ClassicGroupState.PREPA
 import static org.apache.kafka.coordinator.group.classic.ClassicGroupState.STABLE;
 import static org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetrics.CLASSIC_GROUP_COMPLETED_REBALANCES_SENSOR_NAME;
 import static org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetrics.CONSUMER_GROUP_REBALANCES_SENSOR_NAME;
-import static org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetrics.CLASSIC_GROUP_REBALANCES_SENSOR_NAME;
 
 /**
  * The GroupMetadataManager manages the metadata of all classic and consumer groups. It holds
@@ -453,21 +453,46 @@ public class GroupMetadataManager {
     /**
      * Get the Group List.
      *
-     * @param statesFilter The states of the groups we want to list.
-     *                     If empty all groups are returned with their state.
-     * @param committedOffset A specified committed offset corresponding to this shard
+     * @param statesFilter      The states of the groups we want to list.
+     *                          If empty, all groups are returned with their state.
+     *                          If invalid, no groups are returned.
+     * @param typesFilter       The types of the groups we want to list.
+     *                          If empty, all groups are returned with their type.
+     *                          If invalid, no groups are returned.
+     * @param committedOffset   A specified committed offset corresponding to this shard.
      *
      * @return A list containing the ListGroupsResponseData.ListedGroup
      */
+    public List<ListGroupsResponseData.ListedGroup> listGroups(
+        Set<String> statesFilter,
+        Set<String> typesFilter,
+        long committedOffset
+    ) {
+        // Converts each state filter string to lower case for a case-insensitive comparison.
+        Set<String> caseInsensitiveFilterSet = statesFilter.stream()
+            .map(String::toLowerCase)
+            .map(String::trim)
+            .collect(Collectors.toSet());
 
-    public List<ListGroupsResponseData.ListedGroup> listGroups(List<String> statesFilter, long committedOffset) {
+        // Converts each type filter string to a value in the GroupType enum while being case-insensitive.
+        Set<Group.GroupType> enumTypesFilter = typesFilter.stream()
+            .map(Group.GroupType::parse)
+            .collect(Collectors.toSet());
+
+        Predicate<Group> combinedFilter = group -> {
+            boolean stateCheck = statesFilter.isEmpty() || group.isInStates(caseInsensitiveFilterSet, committedOffset);
+            boolean typeCheck = enumTypesFilter.isEmpty() || enumTypesFilter.contains(group.type());
+
+            return stateCheck && typeCheck;
+        };
+
         Stream<Group> groupStream = groups.values(committedOffset).stream();
-        if (!statesFilter.isEmpty()) {
-            groupStream = groupStream.filter(group -> statesFilter.contains(group.stateAsString(committedOffset)));
-        }
-        return groupStream.map(group -> group.asListedGroup(committedOffset)).collect(Collectors.toList());
-    }
 
+        return groupStream
+            .filter(combinedFilter)
+            .map(group -> group.asListedGroup(committedOffset))
+            .collect(Collectors.toList());
+    }
 
     /**
      * Handles a ConsumerGroupDescribe request.
@@ -484,7 +509,11 @@ public class GroupMetadataManager {
         final List<ConsumerGroupDescribeResponseData.DescribedGroup> describedGroups = new ArrayList<>();
         groupIds.forEach(groupId -> {
             try {
-                describedGroups.add(consumerGroup(groupId, committedOffset).asDescribedGroup(committedOffset, defaultAssignor.name()));
+                describedGroups.add(consumerGroup(groupId, committedOffset).asDescribedGroup(
+                    committedOffset,
+                    defaultAssignor.name(),
+                    metadataImage.topics()
+                ));
             } catch (GroupIdNotFoundException exception) {
                 describedGroups.add(new ConsumerGroupDescribeResponseData.DescribedGroup()
                     .setGroupId(groupId)
@@ -697,12 +726,16 @@ public class GroupMetadataManager {
                     ClassicGroup classicGroup = (ClassicGroup) group;
                     metrics.onClassicGroupStateTransition(classicGroup.currentState(), null);
                     break;
+                default:
+                    log.warn("Removed group {} with an unknown group type {}.", groupId, group.type());
+                    break;
             }
         }
     }
 
     /**
      * Throws an InvalidRequestException if the value is non-null and empty.
+     * A string containing only whitespaces is also considered empty.
      *
      * @param value The value.
      * @param error The error message.
@@ -712,7 +745,7 @@ public class GroupMetadataManager {
         String value,
         String error
     ) throws InvalidRequestException {
-        if (value != null && value.isEmpty()) {
+        if (value != null && value.trim().isEmpty()) {
             throw new InvalidRequestException(error);
         }
     }
@@ -1789,6 +1822,10 @@ public class GroupMetadataManager {
                             ". Rebalancing in order to give a chance for consumers to commit offsets");
                     }
                     break;
+
+                default:
+                    log.warn("Loaded group {} with an unknown group type {}.", groupId, group.type());
+                    break;
             }
         });
     }
@@ -2639,7 +2676,6 @@ public class GroupMetadataManager {
         }
 
         group.transitionTo(PREPARING_REBALANCE);
-        metrics.record(CLASSIC_GROUP_REBALANCES_SENSOR_NAME);
 
         log.info("Preparing to rebalance group {} in state {} with old generation {} (reason: {}).",
             group.groupId(), group.currentState(), group.generationId(), reason);
@@ -3396,7 +3432,7 @@ public class GroupMetadataManager {
     /**
      * Remove a member from the group. Cancel member's heartbeat, and prepare rebalance
      * or complete the join phase if necessary.
-     * 
+     *
      * @param group     The classic group.
      * @param memberId  The member id.
      * @param reason    The reason for the LeaveGroup request.

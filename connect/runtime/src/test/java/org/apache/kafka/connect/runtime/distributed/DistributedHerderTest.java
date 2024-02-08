@@ -40,6 +40,7 @@ import org.apache.kafka.connect.runtime.SourceConnectorConfig;
 import org.apache.kafka.connect.runtime.TargetState;
 import org.apache.kafka.connect.runtime.TaskConfig;
 import org.apache.kafka.connect.runtime.TaskStatus;
+import org.apache.kafka.connect.runtime.TooManyTasksException;
 import org.apache.kafka.connect.runtime.TopicStatus;
 import org.apache.kafka.connect.runtime.Worker;
 import org.apache.kafka.connect.runtime.WorkerConfig;
@@ -78,7 +79,6 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.MockitoJUnitRunner;
 import org.mockito.stubbing.Answer;
-import org.mockito.stubbing.OngoingStubbing;
 
 import javax.crypto.SecretKey;
 import java.util.ArrayList;
@@ -2695,15 +2695,14 @@ public class DistributedHerderTest {
         expectRebalance(1, Collections.emptyList(), Collections.emptyList());
         expectMemberPoll();
 
-        OngoingStubbing<RestClient.HttpResponse<Object>> expectRequest = when(restClient.httpRequest(
-                any(), eq("PUT"), isNull(), isNull(), isNull(), any(), any()
-        ));
-
-        if (succeed) {
-            expectRequest.thenReturn(null);
-        } else {
-            expectRequest.thenThrow(new ConnectRestException(409, "Rebalance :("));
-        }
+        doAnswer(invocation -> {
+            if (!succeed) {
+                throw new ConnectRestException(409, "Rebalance :(");
+            }
+            return null;
+        }).when(restClient).httpRequest(
+                any(), eq("PUT"), isNull(), isNull(), any(), any()
+        );
 
         ArgumentCaptor<Runnable> forwardRequest = ArgumentCaptor.forClass(Runnable.class);
 
@@ -3270,6 +3269,47 @@ public class DistributedHerderTest {
     }
 
     @Test
+    public void testTaskReconfigurationNoRetryWithTooManyTasks() {
+        // initial tick
+        when(member.memberId()).thenReturn("leader");
+        when(member.currentProtocolVersion()).thenReturn(CONNECT_PROTOCOL_V0);
+        expectRebalance(1, Collections.emptyList(), Collections.emptyList(), true);
+        expectConfigRefreshAndSnapshot(SNAPSHOT);
+
+        when(worker.isRunning(CONN1)).thenReturn(true);
+        when(worker.getPlugins()).thenReturn(plugins);
+
+        herder.tick();
+        // No requests are queued, so we shouldn't plan on waking up without external action
+        // (i.e., rebalance, user request, or shutdown)
+        // This helps indicate that no retriable operations (such as generating task configs after
+        // a backoff period) are queued up by the worker
+        verify(member, times(1)).poll(eq(Long.MAX_VALUE), any());
+
+        // Process the task reconfiguration request in this tick
+        int numTasks = MAX_TASKS + 5;
+        SinkConnectorConfig sinkConnectorConfig = new SinkConnectorConfig(plugins, CONN1_CONFIG);
+        // Fail to generate tasks because the connector provided too many task configs
+        when(worker.connectorTaskConfigs(CONN1, sinkConnectorConfig))
+                .thenThrow(new TooManyTasksException(CONN1, numTasks, MAX_TASKS));
+
+        herder.requestTaskReconfiguration(CONN1);
+        herder.tick();
+        // We tried to generate task configs for the connector one time during this tick
+        verify(worker, times(1)).connectorTaskConfigs(CONN1, sinkConnectorConfig);
+        // Verifying again that no requests are queued
+        verify(member, times(2)).poll(eq(Long.MAX_VALUE), any());
+        verifyNoMoreInteractions(worker);
+
+        time.sleep(DistributedHerder.RECONFIGURE_CONNECTOR_TASKS_BACKOFF_MAX_MS);
+        herder.tick();
+        // We ticked one more time, and no further attempt was made to generate task configs
+        verifyNoMoreInteractions(worker);
+        // And we don't have any requests queued
+        verify(member, times(3)).poll(eq(Long.MAX_VALUE), any());
+    }
+
+    @Test
     public void testTaskReconfigurationRetriesWithLeaderRequestForwardingException() {
         herder = mock(DistributedHerder.class, withSettings().defaultAnswer(CALLS_REAL_METHODS).useConstructor(new DistributedConfig(HERDER_CONFIG),
                 worker, WORKER_ID, KAFKA_CLUSTER_ID, statusBackingStore, configBackingStore, member, MEMBER_URL, restClient, metrics, time,
@@ -3291,10 +3331,10 @@ public class DistributedHerderTest {
         changedTaskConfigs.add(TASK_CONFIG);
         when(worker.connectorTaskConfigs(CONN1, sinkConnectorConfig)).thenReturn(changedTaskConfigs);
 
-        when(restClient.httpRequest(any(), eq("POST"), any(), any(), any(), any(), any()))
-                .thenThrow(new ConnectException("Request to leader to reconfigure connector tasks failed"))
-                .thenThrow(new ConnectException("Request to leader to reconfigure connector tasks failed"))
-                .thenReturn(null);
+        doThrow(new ConnectException("Request to leader to reconfigure connector tasks failed"))
+                .doThrow(new ConnectException("Request to leader to reconfigure connector tasks failed"))
+                .doNothing()
+                .when(restClient).httpRequest(any(), eq("POST"), any(), any(), any(), any());
 
         expectAndVerifyTaskReconfigurationRetries();
     }

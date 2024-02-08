@@ -42,11 +42,10 @@ import org.apache.kafka.common.requests.PushTelemetryRequest;
 import org.apache.kafka.common.requests.PushTelemetryResponse;
 import org.apache.kafka.common.telemetry.ClientTelemetryState;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.nio.ByteBuffer;
+import java.io.IOException;
 import java.time.Duration;
 import java.util.Collections;
 import java.util.List;
@@ -363,7 +362,7 @@ public class ClientTelemetryReporter implements MetricsReporter {
                     throw new IllegalStateException("Unknown telemetry state: " + localState);
             }
 
-            log.debug("For telemetry state {}, returning the value {} ms; {}", localState, timeMs, msg);
+            log.trace("For telemetry state {}, returning the value {} ms; {}", localState, timeMs, msg);
             return timeMs;
         }
 
@@ -640,6 +639,7 @@ public class ClientTelemetryReporter implements MetricsReporter {
              signal to the broker that we need to have a client instance ID assigned.
             */
             Uuid clientInstanceId = (localSubscription != null) ? localSubscription.clientInstanceId() : Uuid.ZERO_UUID;
+            log.debug("Creating telemetry subscription request with client instance id {}", clientInstanceId);
 
             lock.writeLock().lock();
             try {
@@ -668,6 +668,7 @@ public class ClientTelemetryReporter implements MetricsReporter {
                 return Optional.empty();
             }
 
+            log.debug("Creating telemetry push request with client instance id {}", localSubscription.clientInstanceId());
             /*
              Don't send a push request if we don't have the collector initialized. Re-attempt
              the push on the next interval.
@@ -702,6 +703,10 @@ public class ClientTelemetryReporter implements MetricsReporter {
                 lock.writeLock().unlock();
             }
 
+            return createPushRequest(localSubscription, terminating);
+        }
+
+        private Optional<Builder<?>> createPushRequest(ClientTelemetrySubscription localSubscription, boolean terminating) {
             byte[] payload;
             try (MetricsEmitter emitter = new ClientTelemetryEmitter(localSubscription.selector(), localSubscription.deltaTemporality())) {
                 emitter.init();
@@ -715,7 +720,14 @@ public class ClientTelemetryReporter implements MetricsReporter {
             }
 
             CompressionType compressionType = ClientTelemetryUtils.preferredCompressionType(localSubscription.acceptedCompressionTypes());
-            ByteBuffer buffer = ClientTelemetryUtils.compress(payload, compressionType);
+            byte[] compressedPayload;
+            try {
+                compressedPayload = ClientTelemetryUtils.compress(payload, compressionType);
+            } catch (IOException e) {
+                log.info("Failed to compress telemetry payload for compression: {}, sending uncompressed data", compressionType);
+                compressedPayload = payload;
+                compressionType = CompressionType.NONE;
+            }
 
             AbstractRequest.Builder<?> requestBuilder = new PushTelemetryRequest.Builder(
                 new PushTelemetryRequestData()
@@ -723,7 +735,7 @@ public class ClientTelemetryReporter implements MetricsReporter {
                     .setSubscriptionId(localSubscription.subscriptionId())
                     .setTerminating(terminating)
                     .setCompressionType(compressionType.id)
-                    .setMetrics(Utils.readBytes(buffer)), true);
+                    .setMetrics(compressedPayload), true);
 
             return Optional.of(requestBuilder);
         }

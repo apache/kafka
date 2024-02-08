@@ -24,7 +24,6 @@ import java.util.OptionalInt
 import java.util.concurrent.CompletableFuture
 import kafka.log.LogManager
 import kafka.log.UnifiedLog
-import kafka.server.KafkaRaftServer.ControllerRole
 import kafka.server.KafkaConfig
 import kafka.utils.CoreUtils
 import kafka.utils.FileLock
@@ -42,6 +41,7 @@ import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.utils.{LogContext, Time}
 import org.apache.kafka.raft.RaftConfig.{AddressSpec, InetAddressSpec, NON_ROUTABLE_ADDRESS, UnknownAddressSpec}
 import org.apache.kafka.raft.{FileBasedStateStore, KafkaNetworkChannel, KafkaRaftClient, KafkaRaftClientDriver, LeaderAndEpoch, RaftClient, RaftConfig, ReplicatedLog}
+import org.apache.kafka.server.ProcessRole
 import org.apache.kafka.server.common.serialization.RecordSerde
 import org.apache.kafka.server.util.KafkaScheduler
 import org.apache.kafka.server.fault.FaultHandler
@@ -120,7 +120,7 @@ class KafkaRaftManager[T](
       .map(Paths.get(_).toAbsolutePath)
       .contains(Paths.get(config.metadataLogDir).toAbsolutePath)
     // Or this node is only a controller
-    val isOnlyController = config.processRoles == Set(ControllerRole)
+    val isOnlyController = config.processRoles == Set(ProcessRole.ControllerRole)
 
     if (differentMetadataLogDir || isOnlyController) {
       Some(KafkaRaftManager.lockDataDir(new File(config.metadataLogDir)))

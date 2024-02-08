@@ -345,16 +345,16 @@ public class NetworkClient implements KafkaClient {
         for (InFlightRequest request : inFlightRequests) {
             if (log.isDebugEnabled()) {
                 log.debug("Cancelled in-flight {} request with correlation id {} due to node {} being disconnected " +
-                        "(elapsed time since creation: {}ms, elapsed time since send: {}ms, request timeout: {}ms): {}",
+                        "(elapsed time since creation: {}ms, elapsed time since send: {}ms, throttle time: {}ms, request timeout: {}ms): {}",
                     request.header.apiKey(), request.header.correlationId(), nodeId,
                     request.timeElapsedSinceCreateMs(now), request.timeElapsedSinceSendMs(now),
-                    request.requestTimeoutMs, request.request);
+                    request.throttleTimeMs(), request.requestTimeoutMs, request.request);
             } else {
                 log.info("Cancelled in-flight {} request with correlation id {} due to node {} being disconnected " +
-                        "(elapsed time since creation: {}ms, elapsed time since send: {}ms, request timeout: {}ms)",
+                        "(elapsed time since creation: {}ms, elapsed time since send: {}ms, throttle time: {}ms, request timeout: {}ms)",
                     request.header.apiKey(), request.header.correlationId(), nodeId,
                     request.timeElapsedSinceCreateMs(now), request.timeElapsedSinceSendMs(now),
-                    request.requestTimeoutMs);
+                    request.throttleTimeMs(), request.requestTimeoutMs);
             }
 
             if (!request.isInternalRequest) {
@@ -909,6 +909,7 @@ public class NetworkClient implements KafkaClient {
     private void maybeThrottle(AbstractResponse response, short apiVersion, String nodeId, long now) {
         int throttleTimeMs = response.throttleTimeMs();
         if (throttleTimeMs > 0 && response.shouldClientThrottle(apiVersion)) {
+            inFlightRequests.incrementThrottleTime(nodeId, throttleTimeMs);
             connectionStates.throttle(nodeId, now + throttleTimeMs);
             log.trace("Connection to node {} is throttled for {} ms until timestamp {}", nodeId, throttleTimeMs,
                       now + throttleTimeMs);
@@ -1386,6 +1387,7 @@ public class NetworkClient implements KafkaClient {
         final long sendTimeMs;
         final long createdTimeMs;
         final long requestTimeoutMs;
+        long throttleTimeMs;
 
         public InFlightRequest(ClientRequest clientRequest,
                                RequestHeader header,
@@ -1431,6 +1433,10 @@ public class NetworkClient implements KafkaClient {
             return Math.max(0, currentTimeMs - sendTimeMs);
         }
 
+        public long throttleTimeMs() {
+            return throttleTimeMs;
+        }
+
         public long timeElapsedSinceCreateMs(long currentTimeMs) {
             return Math.max(0, currentTimeMs - createdTimeMs);
         }
@@ -1462,6 +1468,10 @@ public class NetworkClient implements KafkaClient {
                     ", request=" + request +
                     ", callback=" + callback +
                     ", send=" + send + ")";
+        }
+
+        public void incrementThrottleTime(long throttleTimeMs) {
+            this.throttleTimeMs = throttleTimeMs + this.throttleTimeMs;
         }
     }
 

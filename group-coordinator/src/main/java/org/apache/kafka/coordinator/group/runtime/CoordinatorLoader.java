@@ -53,12 +53,14 @@ public interface CoordinatorLoader<U> extends AutoCloseable {
     class LoadSummary {
         private final long startTimeMs;
         private final long endTimeMs;
+        private final long schedulerQueueTimeMs;
         private final long numRecords;
         private final long numBytes;
 
-        public LoadSummary(long startTimeMs, long endTimeMs, long numRecords, long numBytes) {
+        public LoadSummary(long startTimeMs, long endTimeMs, long schedulerQueueTimeMs, long numRecords, long numBytes) {
             this.startTimeMs = startTimeMs;
             this.endTimeMs = endTimeMs;
+            this.schedulerQueueTimeMs = schedulerQueueTimeMs;
             this.numRecords = numRecords;
             this.numBytes = numBytes;
         }
@@ -69,6 +71,10 @@ public interface CoordinatorLoader<U> extends AutoCloseable {
 
         public long endTimeMs() {
             return endTimeMs;
+        }
+
+        public long schedulerQueueTimeMs() {
+            return schedulerQueueTimeMs;
         }
 
         public long numRecords() {
@@ -84,6 +90,7 @@ public interface CoordinatorLoader<U> extends AutoCloseable {
             return "LoadSummary(" +
                 "startTimeMs=" + startTimeMs +
                 ", endTimeMs=" + endTimeMs +
+                ", schedulerQueueTimeMs=" + schedulerQueueTimeMs +
                 ", numRecords=" + numRecords +
                 ", numBytes=" + numBytes + ")";
         }

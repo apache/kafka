@@ -327,14 +327,17 @@ class GroupCoordinatorAdapterTest {
 
   @Test
   def testListGroups(): Unit = {
-    testListGroups(null, Set.empty)
-    testListGroups(List(), Set.empty)
-    testListGroups(List("Stable"), Set("Stable"))
+    testListGroups(null, null, Set.empty, Set.empty)
+    testListGroups(List(), List(), Set.empty, Set.empty)
+    testListGroups(List("Stable, Empty"), List(), Set("Stable, Empty"), Set.empty)
+    testListGroups(List(), List("classic"), Set.empty, Set("classic"))
   }
 
   def testListGroups(
     statesFilter: List[String],
-    expectedStatesFilter: Set[String]
+    typesFilter: List[String],
+    expectedStatesFilter: Set[String],
+    expectedTypesFilter: Set[String]
   ): Unit = {
     val groupCoordinator = mock(classOf[GroupCoordinator])
     val adapter = new GroupCoordinatorAdapter(groupCoordinator, Time.SYSTEM)
@@ -342,11 +345,12 @@ class GroupCoordinatorAdapterTest {
     val ctx = makeContext(ApiKeys.LIST_GROUPS, ApiKeys.LIST_GROUPS.latestVersion)
     val data = new ListGroupsRequestData()
       .setStatesFilter(statesFilter.asJava)
+      .setTypesFilter(typesFilter.asJava)
 
-    when(groupCoordinator.handleListGroups(expectedStatesFilter)).thenReturn {
+    when(groupCoordinator.handleListGroups(expectedStatesFilter, expectedTypesFilter)).thenReturn {
       (Errors.NOT_COORDINATOR, List(
-        GroupOverview("group1", "protocol1", "Stable"),
-        GroupOverview("group2", "qwerty", "Empty")
+        GroupOverview("group1", "protocol1", "Stable", "classic"),
+        GroupOverview("group2", "qwerty", "Empty", "classic")
       ))
     }
 
@@ -358,12 +362,14 @@ class GroupCoordinatorAdapterTest {
       .setGroups(List(
         new ListGroupsResponseData.ListedGroup()
           .setGroupId("group1")
+          .setProtocolType("protocol1")
           .setGroupState("Stable")
-          .setProtocolType("protocol1"),
+          .setGroupType("classic"),
         new ListGroupsResponseData.ListedGroup()
           .setGroupId("group2")
-          .setGroupState("Empty")
           .setProtocolType("qwerty")
+          .setGroupState("Empty")
+          .setGroupType("classic")
       ).asJava)
 
     assertTrue(future.isDone)

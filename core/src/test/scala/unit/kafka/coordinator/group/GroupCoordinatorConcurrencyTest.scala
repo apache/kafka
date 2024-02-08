@@ -24,7 +24,7 @@ import kafka.common.OffsetAndMetadata
 import kafka.coordinator.AbstractCoordinatorConcurrencyTest
 import kafka.coordinator.AbstractCoordinatorConcurrencyTest._
 import kafka.coordinator.group.GroupCoordinatorConcurrencyTest._
-import kafka.server.{DelayedOperationPurgatory, KafkaConfig}
+import kafka.server.{DelayedOperationPurgatory, KafkaConfig, KafkaRequestHandler}
 import kafka.utils.CoreUtils
 import org.apache.kafka.common.{TopicIdPartition, TopicPartition, Uuid}
 import org.apache.kafka.common.internals.Topic
@@ -85,6 +85,10 @@ class GroupCoordinatorConcurrencyTest extends AbstractCoordinatorConcurrencyTest
     groupCoordinator = GroupCoordinator(config, replicaManager, heartbeatPurgatory, rebalancePurgatory, timer.time, metrics)
     groupCoordinator.startup(() => zkClient.getTopicPartitionCount(Topic.GROUP_METADATA_TOPIC_NAME).getOrElse(config.offsetsTopicPartitions),
       false)
+
+    // Transactional appends attempt to schedule to the request handler thread using
+    // a non request handler thread. Set this to avoid error.
+    KafkaRequestHandler.setBypassThreadCheck(true)
   }
 
   @AfterEach
