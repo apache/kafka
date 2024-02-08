@@ -132,16 +132,6 @@ class RequestState {
         this.numAttempts++;
     }
 
-    /**
-     * Set backoff and number of attempts to 0. This will ensure that the request is sent out
-     * again right away. Expected to be used when receiving errors responses that lead to a new
-     * request that can be sent without backing off (ex. member rejoining after fencing)
-     */
-    public void resetBackoff() {
-        this.backoffMs = 0;
-        this.numAttempts = 0;
-    }
-
     long remainingBackoffMs(final long currentTimeMs) {
         long timeSinceLastReceiveMs = currentTimeMs - this.lastReceivedMs;
         return Math.max(0, backoffMs - timeSinceLastReceiveMs);

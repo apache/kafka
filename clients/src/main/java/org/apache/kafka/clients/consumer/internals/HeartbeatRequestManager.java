@@ -353,7 +353,7 @@ public class HeartbeatRequestManager implements RequestManager {
                 logInfo(message, response, currentTimeMs);
                 coordinatorRequestManager.markCoordinatorUnknown(errorMessage, currentTimeMs);
                 // Skip backoff so that the next HB is sent as soon as the new coordinator is discovered
-                heartbeatRequestState.resetBackoff();
+                heartbeatRequestState.reset();
                 break;
 
             case COORDINATOR_NOT_AVAILABLE:
@@ -363,7 +363,7 @@ public class HeartbeatRequestManager implements RequestManager {
                 logInfo(message, response, currentTimeMs);
                 coordinatorRequestManager.markCoordinatorUnknown(errorMessage, currentTimeMs);
                 // Skip backoff so that the next HB is sent as soon as the new coordinator is discovered
-                heartbeatRequestState.resetBackoff();
+                heartbeatRequestState.reset();
                 break;
 
             case COORDINATOR_LOAD_IN_PROGRESS:
@@ -401,7 +401,7 @@ public class HeartbeatRequestManager implements RequestManager {
                 logInfo(message, response, currentTimeMs);
                 membershipManager.transitionToFenced();
                 // Skip backoff so that a next HB to rejoin is sent as soon as the fenced member releases it assignment
-                heartbeatRequestState.resetBackoff();
+                heartbeatRequestState.reset();
                 break;
 
             case UNKNOWN_MEMBER_ID:
@@ -410,7 +410,7 @@ public class HeartbeatRequestManager implements RequestManager {
                 logInfo(message, response, currentTimeMs);
                 membershipManager.transitionToFenced();
                 // Skip backoff so that a next HB to rejoin is sent as soon as the fenced member releases it assignment
-                heartbeatRequestState.resetBackoff();
+                heartbeatRequestState.reset();
                 break;
 
             default:
