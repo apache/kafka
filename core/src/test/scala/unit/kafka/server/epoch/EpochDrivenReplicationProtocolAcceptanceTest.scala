@@ -307,7 +307,7 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends QuorumTestHarness wit
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
-  def logsShouldNotDivergeOnUncleanLeaderElections(): Unit = {
+  def logsShouldNotDivergeOnUncleanLeaderElections(quorum: String): Unit = {
 
     // Given two brokers, unclean leader election is enabled
     brokers = (100 to 101).map(createBrokerForId(_, enableUncleanLeaderElection = true))
