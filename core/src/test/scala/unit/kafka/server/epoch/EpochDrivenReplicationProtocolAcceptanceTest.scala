@@ -518,7 +518,6 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends QuorumTestHarness wit
                    adminClientConfig: Properties = new Properties
                  ): scala.collection.immutable.Map[Int, Int] = {
     if (isKRaftTest()) {
-
       TestUtils.resource(TestUtils.createAdminClient(brokers, listenerName, adminClientConfig)) { admin =>
         TestUtils.createTopicWithAdmin(
           admin = admin,
