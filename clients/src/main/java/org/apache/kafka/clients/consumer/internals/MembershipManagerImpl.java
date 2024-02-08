@@ -443,7 +443,6 @@ public class MembershipManagerImpl implements MembershipManager {
     @Override
     public void onHeartbeatError() {
         metricsManager.maybeRecordRebalanceFailed();
-        return;
     }
 
     /**

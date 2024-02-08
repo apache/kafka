@@ -103,7 +103,7 @@ public class RebalanceMetricsManager {
     }
 
     public void maybeRecordRebalanceFailed() {
-        if (lastRebalanceStartMs < lastRebalanceEndMs)
+        if (lastRebalanceStartMs <= lastRebalanceEndMs)
             return;
         failedRebalanceSensor.record();
     }

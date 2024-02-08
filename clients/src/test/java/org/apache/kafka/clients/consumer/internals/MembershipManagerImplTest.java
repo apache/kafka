@@ -36,6 +36,7 @@ import org.apache.kafka.common.requests.ConsumerGroupHeartbeatResponse;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -100,6 +101,7 @@ public class MembershipManagerImplTest {
 
     private CommitRequestManager commitRequestManager;
 
+    private ConsumerTestBuilder testBuilder;
     private BlockingQueue<BackgroundEvent> backgroundEventQueue;
     private BackgroundEventHandler backgroundEventHandler;
     private Time time;
@@ -108,7 +110,7 @@ public class MembershipManagerImplTest {
 
     @BeforeEach
     public void setup() {
-        ConsumerTestBuilder testBuilder = new ConsumerTestBuilder(ConsumerTestBuilder.createDefaultGroupInformation());
+        testBuilder = new ConsumerTestBuilder(ConsumerTestBuilder.createDefaultGroupInformation());
         metadata = testBuilder.metadata;
         subscriptionState = testBuilder.subscriptions;
         commitRequestManager = testBuilder.commitRequestManager.orElseThrow(IllegalStateException::new);
@@ -116,6 +118,13 @@ public class MembershipManagerImplTest {
         backgroundEventHandler = testBuilder.backgroundEventHandler;
         time = new MockTime(0);
         metrics = new Metrics(time);
+    }
+
+    @AfterEach
+    public void tearDown() {
+        if (testBuilder != null) {
+            testBuilder.close();
+        }
     }
 
     private MembershipManagerImpl createMembershipManagerJoiningGroup() {
@@ -1141,6 +1150,7 @@ public class MembershipManagerImplTest {
 
     @Test
     public void testReconciliationSkippedWhenSameAssignmentReceived() {
+        rebalanceMetricsManager  = new RebalanceMetricsManager(metrics);
         // Member stable, no assignment
         MembershipManagerImpl membershipManager = createMembershipManagerJoiningGroup();
         Uuid topicId = Uuid.randomUuid();
@@ -1170,6 +1180,9 @@ public class MembershipManagerImplTest {
         verify(subscriptionState, never()).assignFromSubscribed(anyCollection());
 
         assertEquals(MemberState.STABLE, membershipManager.state());
+
+        assertEquals(1.0d, getMetricValue(metrics, rebalanceMetricsManager.rebalanceTotal));
+        assertEquals(0.0d, getMetricValue(metrics, rebalanceMetricsManager.failedRebalanceTotal));
     }
 
     @Test
@@ -1341,7 +1354,7 @@ public class MembershipManagerImplTest {
         assertEquals(assignedTopicIdPartitions, membershipManager.currentAssignment());
         assertFalse(membershipManager.reconciliationInProgress());
 
-        ackSent(membershipManager);
+        mockAckSent(membershipManager);
         when(subscriptionState.assignedPartitions()).thenReturn(assignedPartitions);
 
         // Revocation of topic not found in metadata cache
@@ -1937,6 +1950,17 @@ public class MembershipManagerImplTest {
     }
 
     @Test
+    public void testMetricsWhenHeartbeatFailed() {
+        rebalanceMetricsManager = new RebalanceMetricsManager(metrics);
+        MembershipManagerImpl membershipManager = createMemberInStableState();
+        membershipManager.onHeartbeatError();
+
+        // Not expecting rebalance failures without assignments being reconciled
+        assertEquals(0.0d, getMetricValue(metrics, rebalanceMetricsManager.rebalanceTotal));
+        assertEquals(0.0d, getMetricValue(metrics, rebalanceMetricsManager.failedRebalanceTotal));
+    }
+
+    @Test
     public void testRebalanceMetricsOnSuccessfulRebalance() {
         rebalanceMetricsManager = new RebalanceMetricsManager(metrics);
         MembershipManagerImpl membershipManager = createMembershipManagerJoiningGroup();
@@ -1963,7 +1987,7 @@ public class MembershipManagerImplTest {
     }
 
     @Test
-    public void testRebalanceMetricsForMultipleReconcilationRounds() {
+    public void testRebalanceMetricsForMultipleReconcilations() {
         rebalanceMetricsManager = new RebalanceMetricsManager(metrics);
         MembershipManagerImpl membershipManager = createMemberInStableState();
         ConsumerRebalanceListenerInvoker invoker = consumerRebalanceListenerInvoker();
@@ -2019,12 +2043,10 @@ public class MembershipManagerImplTest {
 
         long secondRebalanceMs = listener.sleepMs;
         long total = firstRebalanaceTimesMs + secondRebalanceMs;
-        long avg = total / 2;
+        double avg = total / 2.0d;
         long max = Math.max(firstRebalanaceTimesMs, secondRebalanceMs);
-        assertEquals((double) total, getMetricValue(metrics,
-            rebalanceMetricsManager.rebalanceLatencyTotal));
-        assertEquals((double) avg, (double) getMetricValue(metrics,
-            rebalanceMetricsManager.rebalanceLatencyAvg), 1d);
+        assertEquals((double) total, getMetricValue(metrics, rebalanceMetricsManager.rebalanceLatencyTotal));
+        assertEquals(avg, (double) getMetricValue(metrics, rebalanceMetricsManager.rebalanceLatencyAvg), 1d);
         assertEquals((double) max, getMetricValue(metrics, rebalanceMetricsManager.rebalanceLatencyMax));
         assertEquals(2d, getMetricValue(metrics, rebalanceMetricsManager.rebalanceTotal));
         // rate is not tested because it is subject to Rate implementation
@@ -2150,7 +2172,7 @@ public class MembershipManagerImplTest {
         return topicIdPartitions.stream().map(TopicIdPartition::topicPartition).collect(Collectors.toList());
     }
 
-    private void ackSent(MembershipManagerImpl membershipManager) {
+    private void mockAckSent(MembershipManagerImpl membershipManager) {
         membershipManager.onHeartbeatRequestSent();
     }
 
