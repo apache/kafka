@@ -27,7 +27,6 @@ import org.apache.kafka.common.metrics.stats.Max;
 import org.apache.kafka.common.metrics.stats.Rate;
 import org.apache.kafka.common.metrics.stats.WindowedCount;
 
-import java.util.Arrays;
 import java.util.concurrent.TimeUnit;
 
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.CONSUMER_METRIC_GROUP_PREFIX;
@@ -50,9 +49,6 @@ public class RebalanceMetricsManager {
     private long lastRebalanceStartMs = -1L;
 
     public RebalanceMetricsManager(Metrics metrics) {
-        StackTraceElement[] st = Thread.currentThread().getStackTrace();
-        System.out.println("first:");
-        System.out.println(Arrays.toString(st));
         metricGroupName = CONSUMER_METRIC_GROUP_PREFIX + COORDINATOR_METRICS_SUFFIX;
 
         rebalanceLatencyAvg = createMetric(metrics, "rebalance-latency-avg",
@@ -91,10 +87,6 @@ public class RebalanceMetricsManager {
             "last-rebalance-seconds-ago",
             "The number of seconds since the last rebalance event");
         metrics.addMetric(lastRebalanceSecondsAgo, lastRebalance);
-
-        st = Thread.currentThread().getStackTrace();
-        System.out.println("starting:");
-        System.out.println(Arrays.toString(st));
     }
 
     private MetricName createMetric(Metrics metrics, String name, String description) {
@@ -107,8 +99,6 @@ public class RebalanceMetricsManager {
 
     public void recordRebalanceEnded(long nowMs) {
         lastRebalanceEndMs = nowMs;
-        System.out.println("nowMS:" + nowMs);
-        System.out.println("startMs:" + lastRebalanceStartMs);
         successfulRebalanceSensor.record(nowMs - lastRebalanceStartMs);
     }
 

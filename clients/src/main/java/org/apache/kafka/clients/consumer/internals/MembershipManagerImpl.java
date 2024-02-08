@@ -33,6 +33,7 @@ import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatResponseData;
+import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.ConsumerGroupHeartbeatRequest;
 import org.apache.kafka.common.telemetry.internals.ClientTelemetryProvider;
@@ -290,7 +291,34 @@ public class MembershipManagerImpl implements MembershipManager {
                                  Optional<ClientTelemetryReporter> clientTelemetryReporter,
                                  BackgroundEventHandler backgroundEventHandler,
                                  Time time,
-                                 RebalanceMetricsManager metricsManager) {
+                                 Metrics metrics) {
+        this(groupId,
+            groupInstanceId,
+            rebalanceTimeoutMs,
+            serverAssignor,
+            subscriptions,
+            commitRequestManager,
+            metadata,
+            logContext,
+            clientTelemetryReporter,
+            backgroundEventHandler,
+            time,
+            new RebalanceMetricsManager(metrics));
+    }
+
+    // Visible for testing
+    MembershipManagerImpl(String groupId,
+                          Optional<String> groupInstanceId,
+                          int rebalanceTimeoutMs,
+                          Optional<String> serverAssignor,
+                          SubscriptionState subscriptions,
+                          CommitRequestManager commitRequestManager,
+                          ConsumerMetadata metadata,
+                          LogContext logContext,
+                          Optional<ClientTelemetryReporter> clientTelemetryReporter,
+                          BackgroundEventHandler backgroundEventHandler,
+                          Time time,
+                          RebalanceMetricsManager metricsManager) {
         this.groupId = groupId;
         this.state = MemberState.UNSUBSCRIBED;
         this.serverAssignor = serverAssignor;
@@ -362,7 +390,6 @@ public class MembershipManagerImpl implements MembershipManager {
      */
     @Override
     public void onHeartbeatResponseReceived(ConsumerGroupHeartbeatResponseData response) {
-        System.out.println("heartbeat response:" + response);
         if (response.errorCode() != Errors.NONE.code()) {
             metricsManager.maybeRecordRebalanceFailed();
             String errorMessage = String.format(
@@ -398,7 +425,6 @@ public class MembershipManagerImpl implements MembershipManager {
         ConsumerGroupHeartbeatResponseData.Assignment assignment = response.assignment();
 
         if (assignment != null) {
-            System.out.println("reciving some assignment");
             if (!state.canHandleNewAssignment()) {
                 // New assignment received but member is in a state where it cannot take new
                 // assignments (ex. preparing to leave the group)
@@ -432,7 +458,6 @@ public class MembershipManagerImpl implements MembershipManager {
      * @param assignment Assignment received from the broker.
      */
     private void processAssignmentReceived(ConsumerGroupHeartbeatResponseData.Assignment assignment) {
-        System.out.println("rebalance started:" + time.milliseconds());
         metricsManager.recordRebalanceStarted(time.milliseconds());
         replaceTargetAssignmentWithNewAssignment(assignment);
         if (!targetAssignmentReconciled()) {
