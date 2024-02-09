@@ -105,7 +105,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     var nodeStrs: List[String] = null
     do {
       val nodes = client.describeCluster().nodes().get().asScala
-      nodeStrs = nodes.map ( node => s"${node.host}:${node.port}" ).toList.sorted
+      nodeStrs = nodes.map(node => s"${node.host}:${node.port}").toList.sorted
     } while (nodeStrs.size < brokerStrs.size)
     assertEquals(brokerStrs.mkString(","), nodeStrs.mkString(","))
   }

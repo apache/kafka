@@ -231,7 +231,7 @@ class ZkAclMigrationClientTest extends ZkMigrationTestHarness {
 
     // Sync image to ZK
     val errorLogs = mutable.Buffer[String]()
-    val kraftMigrationZkWriter = new KRaftMigrationZkWriter(migrationClient, errorLogs.append)
+    val kraftMigrationZkWriter = new KRaftMigrationZkWriter(migrationClient, msg => errorLogs.append(msg))
     kraftMigrationZkWriter.handleSnapshot(image, (_, _, operation) => {
       migrationState = operation.apply(migrationState)
     })
@@ -276,7 +276,7 @@ class ZkAclMigrationClientTest extends ZkMigrationTestHarness {
   def testAclUpdateAndDelete(): Unit = {
     zkClient.createAclPaths()
     val errorLogs = mutable.Buffer[String]()
-    val kraftMigrationZkWriter = new KRaftMigrationZkWriter(migrationClient, errorLogs.append)
+    val kraftMigrationZkWriter = new KRaftMigrationZkWriter(migrationClient, msg => errorLogs.append(msg))
 
     val topicName = "topic-" + Uuid.randomUuid()
     val otherName = "other-" + Uuid.randomUuid()
