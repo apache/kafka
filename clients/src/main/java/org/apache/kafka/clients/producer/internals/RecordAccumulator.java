@@ -700,7 +700,7 @@ public class RecordAccumulator {
             final int dequeSize;
             final boolean full;
 
-            Optional<Integer> leaderEpoch = metadataCache.leaderForEpoch(part);
+            Optional<Integer> leaderEpoch = metadataCache.leaderEpochFor(part);
 
             // This loop is especially hot with large partition counts. So -
 
@@ -888,7 +888,7 @@ public class RecordAccumulator {
             if (deque == null)
                 continue;
 
-            Optional<Integer> leaderEpoch = metadataCache.leaderForEpoch(tp);
+            Optional<Integer> leaderEpoch = metadataCache.leaderEpochFor(tp);
 
             final ProducerBatch batch;
             synchronized (deque) {

@@ -129,7 +129,7 @@ public class MetadataCache {
      * @param tp partition
      * @return leader-epoch if known, else return optional.empty()
      */
-    public Optional<Integer> leaderForEpoch(TopicPartition tp) {
+    public Optional<Integer> leaderEpochFor(TopicPartition tp) {
         PartitionMetadata partitionMetadata = metadataByPartition.get(tp);
         if (partitionMetadata == null) {
             return Optional.empty();
