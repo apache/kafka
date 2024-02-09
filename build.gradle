@@ -2314,8 +2314,14 @@ project(':streams:streams-scala') {
     api project(':streams')
 
     api libs.scalaLibrary
-    api libs.scalaCollectionCompat
-
+    if ( versions.baseScala == '2.12' ) {
+      // Scala-Collection-Compat isn't required when compiling with Scala 2.13 or later,
+      // and having it in the dependencies could lead to classpath conflicts in Scala 3
+      // projects that use kafka-streams-kafka_2.13 (because we don't have a Scala 3 version yet)
+      // but also pull in scala-collection-compat_3 via another dependency.
+      // So we make sure to not include it in the dependencies.
+      api libs.scalaCollectionCompat
+    }
     testImplementation project(':core')
     testImplementation project(':core').sourceSets.test.output
     testImplementation project(':server-common').sourceSets.test.output
