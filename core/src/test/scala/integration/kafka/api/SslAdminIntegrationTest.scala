@@ -27,7 +27,7 @@ import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.apache.kafka.server.authorizer._
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertNotNull, assertTrue}
-import org.junit.jupiter.api.{AfterEach, Test}
+import org.junit.jupiter.api.{AfterEach, Tag, Test}
 
 import scala.jdk.CollectionConverters._
 import scala.collection.mutable
@@ -77,6 +77,7 @@ object SslAdminIntegrationTest {
   }
 }
 
+@Tag("integration")
 class SslAdminIntegrationTest extends SaslSslAdminIntegrationTest {
   override val authorizationAdmin = new AclAuthorizationAdmin(classOf[SslAdminIntegrationTest.TestableAclAuthorizer], classOf[AclAuthorizer])
 

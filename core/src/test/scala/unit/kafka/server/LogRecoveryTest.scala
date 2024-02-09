@@ -32,11 +32,12 @@ import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.serialization.{IntegerSerializer, StringSerializer}
-import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Tag, TestInfo}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 
+@Tag("integration")
 class LogRecoveryTest extends QuorumTestHarness {
 
   val replicaLagTimeMaxMs = 5000L

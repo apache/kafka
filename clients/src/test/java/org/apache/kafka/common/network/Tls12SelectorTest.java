@@ -29,8 +29,10 @@ import java.util.List;
 import java.util.Map;
 import org.apache.kafka.common.config.SslConfigs;
 import org.apache.kafka.test.TestSslUtils;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
+@Tag("integration")
 public class Tls12SelectorTest extends SslSelectorTest {
 
     @Override

@@ -31,11 +31,13 @@ import java.util.stream.Collectors;
 import org.apache.kafka.common.config.SslConfigs;
 import org.apache.kafka.test.TestSslUtils;
 import org.apache.kafka.test.TestUtils;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledForJreRange;
 import org.junit.jupiter.api.condition.JRE;
 
 @EnabledForJreRange(min = JRE.JAVA_11) // TLS 1.3 is only supported with Java 11 and newer
+@Tag("integration")
 public class Tls13SelectorTest extends SslSelectorTest {
 
     @Override

@@ -50,7 +50,7 @@ import org.apache.kafka.server.ControllerRequestCompletionHandler
 import org.apache.kafka.server.common.{ApiMessageAndVersion, MetadataVersion, ProducerIdsBlock}
 import org.apache.kafka.server.config.ConfigType
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertNotEquals, assertNotNull, assertTrue, fail}
-import org.junit.jupiter.api.{Assumptions, Timeout}
+import org.junit.jupiter.api.{Assumptions, Tag, Timeout}
 import org.junit.jupiter.api.extension.ExtendWith
 import org.slf4j.{Logger, LoggerFactory}
 
@@ -92,6 +92,7 @@ object ZkMigrationIntegrationTest {
 
 @ExtendWith(value = Array(classOf[ClusterTestExtensions]))
 @Timeout(300)
+@Tag("integration")
 class ZkMigrationIntegrationTest {
 
   val log: Logger = LoggerFactory.getLogger(classOf[ZkMigrationIntegrationTest])

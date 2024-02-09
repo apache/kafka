@@ -139,6 +139,7 @@ import org.apache.kafka.snapshot.Snapshots;
 import org.apache.kafka.test.TestUtils;
 import org.apache.kafka.timeline.SnapshotRegistry;
 import org.junit.jupiter.api.Disabled;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -170,6 +171,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 
 @Timeout(value = 40)
+@Tag("integration")
 public class QuorumControllerTest {
     private final static Logger log = LoggerFactory.getLogger(QuorumControllerTest.class);
 

@@ -17,7 +17,9 @@
 package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor;
+import org.junit.jupiter.api.Tag;
 
+@Tag("integration")
 public class CooperativeConsumerCoordinatorTest extends ConsumerCoordinatorTest {
     public CooperativeConsumerCoordinatorTest() {
         super(ConsumerPartitionAssignor.RebalanceProtocol.COOPERATIVE);

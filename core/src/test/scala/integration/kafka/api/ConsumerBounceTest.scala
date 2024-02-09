@@ -27,7 +27,7 @@ import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{FindCoordinatorRequest, FindCoordinatorResponse}
 import org.apache.kafka.server.util.ShutdownableThread
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.{AfterEach, Disabled, Test}
+import org.junit.jupiter.api.{AfterEach, Disabled, Tag, Test}
 
 import java.time.Duration
 import scala.annotation.nowarn
@@ -37,6 +37,7 @@ import scala.collection.{Seq, mutable}
 /**
  * Integration tests for the consumer that cover basic usage as well as server failures
  */
+@Tag("integration")
 class ConsumerBounceTest extends AbstractConsumerTest with Logging {
   val maxGroupSize = 5
 

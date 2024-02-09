@@ -27,13 +27,14 @@ import org.apache.kafka.common.requests.{MetadataRequest, MetadataResponse}
 import org.apache.kafka.metadata.BrokerState
 import org.apache.kafka.test.TestUtils.isValidClusterId
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.{BeforeEach, TestInfo}
+import org.junit.jupiter.api.{BeforeEach, Tag, TestInfo}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 
 import scala.collection.Seq
 import scala.jdk.CollectionConverters._
 
+@Tag("integration")
 class MetadataRequestTest extends AbstractMetadataRequestTest {
 
   @BeforeEach

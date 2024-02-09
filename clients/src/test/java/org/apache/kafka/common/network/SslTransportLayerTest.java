@@ -36,6 +36,7 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.test.TestSslUtils;
 import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.extension.ExtensionContext;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -76,6 +77,7 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
 /**
  * Tests for the SSL transport layer. These use a test harness that runs a simple socket server that echos back responses.
  */
+@Tag("integration")
 public class SslTransportLayerTest {
 
     private static final int BUFFER_SIZE = 4 * 1024;

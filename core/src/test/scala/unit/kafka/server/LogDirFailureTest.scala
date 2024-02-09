@@ -29,7 +29,7 @@ import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.{KafkaStorageException, NotLeaderOrFollowerException}
 import org.apache.kafka.common.utils.Utils
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.{BeforeEach, Test, TestInfo}
+import org.junit.jupiter.api.{BeforeEach, Tag, Test, TestInfo}
 import org.junit.jupiter.params.provider.ValueSource
 import org.junit.jupiter.params.ParameterizedTest
 
@@ -40,6 +40,7 @@ import scala.jdk.CollectionConverters._
 /**
   * Test whether clients can produce and consume when there is log directory failure
   */
+@Tag("integration")
 class LogDirFailureTest extends IntegrationTestHarness {
 
   val producerCount: Int = 1
