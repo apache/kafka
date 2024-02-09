@@ -17,6 +17,7 @@
 
 package org.apache.kafka.clients.consumer.internals;
 
+import org.apache.kafka.clients.consumer.internals.metrics.KafkaConsumerMetrics;
 import org.apache.kafka.common.metrics.Metrics;
 
 import org.junit.jupiter.api.Test;

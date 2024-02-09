@@ -34,6 +34,7 @@ import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
+import org.apache.kafka.clients.consumer.GroupProtocol;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetCommitCallback;
@@ -95,9 +96,8 @@ public class VerifiableConsumer implements Closeable, OffsetCommitCallback, Cons
     private final boolean useAsyncCommit;
     private final boolean verbose;
     private final int maxMessages;
+    private final CountDownLatch shutdownLatch = new CountDownLatch(1);
     private int consumedMessages = 0;
-
-    private CountDownLatch shutdownLatch = new CountDownLatch(1);
 
     public VerifiableConsumer(KafkaConsumer<String, String> consumer,
                               PrintStream out,
@@ -529,6 +529,15 @@ public class VerifiableConsumer implements Closeable, OffsetCommitCallback, Cons
                 .metavar("TOPIC")
                 .help("Consumes messages from this topic.");
 
+        parser.addArgument("--group-protocol")
+                .action(store())
+                .required(false)
+                .type(String.class)
+                .setDefault(GroupProtocol.CLASSIC.name)
+                .metavar("GROUP_PROTOCOL")
+                .dest("groupProtocol")
+                .help(String.format("Group protocol (must be one of %s)", Utils.join(GroupProtocol.values(), ", ")));
+
         parser.addArgument("--group-id")
                 .action(store())
                 .required(true)
@@ -618,6 +627,7 @@ public class VerifiableConsumer implements Closeable, OffsetCommitCallback, Cons
             }
         }
 
+        consumerProps.put(ConsumerConfig.GROUP_PROTOCOL_CONFIG, res.getString("groupProtocol"));
         consumerProps.put(ConsumerConfig.GROUP_ID_CONFIG, res.getString("groupId"));
 
         String groupInstanceId = res.getString("groupInstanceId");

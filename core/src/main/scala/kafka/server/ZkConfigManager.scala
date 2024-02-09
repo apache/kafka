@@ -29,10 +29,6 @@ import org.apache.kafka.server.config.ConfigType
 import scala.jdk.CollectionConverters._
 import scala.collection._
 
-object ConfigEntityName {
-  val Default = "<default>"
-}
-
 /**
  * This class initiates and carries out config changes for all entities defined in ConfigType.
  *

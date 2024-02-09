@@ -280,7 +280,7 @@ public class ClusterControlManagerTest {
                 MetadataVersion.IBP_3_3_IV2,
                 MetadataVersion.IBP_3_3_IV3,
                 MetadataVersion.IBP_3_7_IV2, // introduces directory assignment
-                MetadataVersion.latest()
+                MetadataVersion.latestTesting()
             ).map(Arguments::of);
     }
 

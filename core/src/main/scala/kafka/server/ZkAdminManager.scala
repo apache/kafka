@@ -48,7 +48,7 @@ import org.apache.kafka.common.requests.{AlterConfigsRequest, ApiError}
 import org.apache.kafka.common.security.scram.internals.{ScramCredentialUtils, ScramFormatter}
 import org.apache.kafka.common.utils.Sanitizer
 import org.apache.kafka.server.common.AdminOperationException
-import org.apache.kafka.server.config.ConfigType
+import org.apache.kafka.server.config.{ConfigEntityName, ConfigType}
 import org.apache.kafka.storage.internals.log.LogConfig
 
 import scala.collection.{Map, mutable, _}
@@ -518,7 +518,7 @@ class ZkAdminManager(val config: KafkaConfig,
             val perBrokerConfig = brokerId.nonEmpty
 
             val persistentProps = if (perBrokerConfig) adminZkClient.fetchEntityConfig(ConfigType.BROKER, brokerId.get.toString)
-            else adminZkClient.fetchEntityConfig(ConfigType.BROKER, ConfigEntityName.Default)
+            else adminZkClient.fetchEntityConfig(ConfigType.BROKER, ConfigEntityName.DEFAULT)
 
             val configProps = this.config.dynamicConfig.fromPersistentProps(persistentProps, perBrokerConfig)
             prepareIncrementalConfigs(alterConfigOps, configProps, KafkaConfig.configKeys)
@@ -559,13 +559,13 @@ class ZkAdminManager(val config: KafkaConfig,
 
   private def sanitizeEntityName(entityName: String): String =
     Option(entityName) match {
-      case None => ConfigEntityName.Default
+      case None => ConfigEntityName.DEFAULT
       case Some(name) => Sanitizer.sanitize(name)
     }
 
   private def desanitizeEntityName(sanitizedEntityName: String): String =
     sanitizedEntityName match {
-      case ConfigEntityName.Default => null
+      case ConfigEntityName.DEFAULT => null
       case name => Sanitizer.desanitize(name)
     }
 
@@ -661,7 +661,7 @@ class ZkAdminManager(val config: KafkaConfig,
     val exactUser = wantExact(userComponent)
     val exactClientId = wantExact(clientIdComponent)
 
-    def wantExcluded(component: Option[ClientQuotaFilterComponent]): Boolean = strict && !component.isDefined
+    def wantExcluded(component: Option[ClientQuotaFilterComponent]): Boolean = strict && component.isEmpty
     val excludeUser = wantExcluded(userComponent)
     val excludeClientId = wantExcluded(clientIdComponent)
 
@@ -803,7 +803,7 @@ class ZkAdminManager(val config: KafkaConfig,
   private val attemptToDescribeUserThatDoesNotExist = "Attempt to describe a user credential that does not exist"
 
   def describeUserScramCredentials(users: Option[Seq[String]]): DescribeUserScramCredentialsResponseData = {
-    val describingAllUsers = !users.isDefined || users.get.isEmpty
+    val describingAllUsers = users.isEmpty || users.get.isEmpty
     val retval = new DescribeUserScramCredentialsResponseData()
     val userResults = mutable.Map[String, DescribeUserScramCredentialsResponseData.DescribeUserScramCredentialsResult]()
 
@@ -970,7 +970,7 @@ class ZkAdminManager(val config: KafkaConfig,
     val initiallyValidUserMechanismPairs = (upsertions.filter(upsertion => !invalidUsers.contains(upsertion.name)).map(upsertion => (upsertion.name, upsertion.mechanism)) ++
       deletions.filter(deletion => !invalidUsers.contains(deletion.name)).map(deletion => (deletion.name, deletion.mechanism)))
 
-    val usersWithDuplicateUserMechanismPairs = initiallyValidUserMechanismPairs.groupBy(identity).filter (
+    val usersWithDuplicateUserMechanismPairs = initiallyValidUserMechanismPairs.groupBy(identity).filter(
       userMechanismPairAndOccurrencesTuple => userMechanismPairAndOccurrencesTuple._2.length > 1).keys.map(userMechanismPair => userMechanismPair._1).toSet
     usersWithDuplicateUserMechanismPairs.foreach { user =>
       retval.results.add(new AlterUserScramCredentialsResult()

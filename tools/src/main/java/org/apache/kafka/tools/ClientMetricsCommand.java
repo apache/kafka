@@ -104,7 +104,7 @@ public class ClientMetricsCommand {
     }
 
     public static class ClientMetricsService implements AutoCloseable {
-        private Admin adminClient;
+        private final Admin adminClient;
 
         public ClientMetricsService(Properties config) {
             this.adminClient = Admin.create(config);

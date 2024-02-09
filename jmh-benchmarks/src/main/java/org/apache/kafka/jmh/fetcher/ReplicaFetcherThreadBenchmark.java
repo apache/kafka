@@ -110,18 +110,17 @@ import scala.collection.Map;
 @BenchmarkMode(Mode.AverageTime)
 @OutputTimeUnit(TimeUnit.NANOSECONDS)
 public class ReplicaFetcherThreadBenchmark {
+    private final File logDir = new File(System.getProperty("java.io.tmpdir"), UUID.randomUUID().toString());
+    private final KafkaScheduler scheduler = new KafkaScheduler(1, true, "scheduler");
+    private final Pool<TopicPartition, Partition> pool = new Pool<TopicPartition, Partition>(Option.empty());
+    private final Metrics metrics = new Metrics();
+    private final Option<Uuid> topicId = Option.apply(Uuid.randomUuid());
     @Param({"100", "500", "1000", "5000"})
     private int partitionCount;
-
     private ReplicaFetcherBenchThread fetcher;
     private LogManager logManager;
-    private File logDir = new File(System.getProperty("java.io.tmpdir"), UUID.randomUUID().toString());
-    private KafkaScheduler scheduler = new KafkaScheduler(1, true, "scheduler");
-    private Pool<TopicPartition, Partition> pool = new Pool<TopicPartition, Partition>(Option.empty());
-    private Metrics metrics = new Metrics();
     private ReplicaManager replicaManager;
     private ReplicaQuota replicaQuota;
-    private Option<Uuid> topicId = Option.apply(Uuid.randomUuid());
 
     @Setup(Level.Trial)
     public void setup() throws IOException {
@@ -149,7 +148,7 @@ public class ReplicaFetcherThreadBenchmark {
             setFlushStartOffsetCheckpointMs(10000L).
             setRetentionCheckMs(1000L).
             setProducerStateManagerConfig(60000, false).
-            setInterBrokerProtocolVersion(MetadataVersion.latest()).
+            setInterBrokerProtocolVersion(MetadataVersion.latestTesting()).
             setScheduler(scheduler).
             setBrokerTopicStats(brokerTopicStats).
             setLogDirFailureChannel(logDirFailureChannel).
@@ -178,7 +177,7 @@ public class ReplicaFetcherThreadBenchmark {
             OffsetCheckpoints offsetCheckpoints = Mockito.mock(OffsetCheckpoints.class);
             Mockito.when(offsetCheckpoints.fetch(logDir.getAbsolutePath(), tp)).thenReturn(Option.apply(0L));
             AlterPartitionManager isrChannelManager = Mockito.mock(AlterPartitionManager.class);
-            Partition partition = new Partition(tp, 100, MetadataVersion.latest(),
+            Partition partition = new Partition(tp, 100, MetadataVersion.latestTesting(),
                     0, () -> -1, Time.SYSTEM, alterPartitionListener, new DelayedOperationsMock(tp),
                     Mockito.mock(MetadataCache.class), logManager, isrChannelManager);
 

@@ -36,11 +36,11 @@ public final class Heartbeat {
     private final Timer sessionTimer;
     private final Timer pollTimer;
     private final Logger log;
+    private final ExponentialBackoff retryBackoff;
 
     private volatile long lastHeartbeatSend = 0L;
     private volatile boolean heartbeatInFlight = false;
     private volatile long heartbeatAttempts = 0L;
-    private ExponentialBackoff retryBackoff;
 
     public Heartbeat(GroupRebalanceConfig config,
                      Time time) {

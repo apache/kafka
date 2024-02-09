@@ -17,12 +17,6 @@
 
 package kafka.server
 
-import java.net.InetAddress
-import java.nio.charset.StandardCharsets
-import java.util
-import java.util.Arrays.asList
-import java.util.concurrent.{CompletableFuture, TimeUnit}
-import java.util.{Collections, Comparator, Optional, OptionalInt, OptionalLong, Properties}
 import kafka.api.LeaderAndIsr
 import kafka.cluster.{Broker, Partition}
 import kafka.controller.{ControllerContext, KafkaController}
@@ -37,30 +31,28 @@ import org.apache.kafka.clients.admin.AlterConfigOp.OpType
 import org.apache.kafka.clients.admin.{AlterConfigOp, ConfigEntry}
 import org.apache.kafka.common.acl.AclOperation
 import org.apache.kafka.common.config.ConfigResource
+import org.apache.kafka.common.config.ConfigResource.Type.{BROKER, BROKER_LOGGER}
 import org.apache.kafka.common.errors.UnsupportedVersionException
 import org.apache.kafka.common.internals.{KafkaFutureImpl, Topic}
 import org.apache.kafka.common.memory.MemoryPool
-import org.apache.kafka.common.config.ConfigResource.Type.{BROKER, BROKER_LOGGER}
 import org.apache.kafka.common.message.AddPartitionsToTxnRequestData.{AddPartitionsToTxnTopic, AddPartitionsToTxnTopicCollection, AddPartitionsToTxnTransaction, AddPartitionsToTxnTransactionCollection}
 import org.apache.kafka.common.message.AddPartitionsToTxnResponseData.AddPartitionsToTxnResult
-import org.apache.kafka.common.message.AlterConfigsRequestData.{AlterConfigsResourceCollection => LAlterConfigsResourceCollection}
-import org.apache.kafka.common.message.AlterConfigsRequestData.{AlterConfigsResource => LAlterConfigsResource}
-import org.apache.kafka.common.message.AlterConfigsRequestData.{AlterableConfigCollection => LAlterableConfigCollection}
-import org.apache.kafka.common.message.AlterConfigsRequestData.{AlterableConfig => LAlterableConfig}
+import org.apache.kafka.common.message.AlterConfigsRequestData.{AlterConfigsResource => LAlterConfigsResource, AlterConfigsResourceCollection => LAlterConfigsResourceCollection, AlterableConfig => LAlterableConfig, AlterableConfigCollection => LAlterableConfigCollection}
 import org.apache.kafka.common.message.AlterConfigsResponseData.{AlterConfigsResourceResponse => LAlterConfigsResourceResponse}
 import org.apache.kafka.common.message.ApiMessageType.ListenerType
 import org.apache.kafka.common.message.ConsumerGroupDescribeResponseData.DescribedGroup
+import org.apache.kafka.common.message.CreatePartitionsRequestData.CreatePartitionsTopic
 import org.apache.kafka.common.message.CreateTopicsRequestData.{CreatableTopic, CreatableTopicCollection}
+import org.apache.kafka.common.message.CreateTopicsResponseData.CreatableTopicResult
 import org.apache.kafka.common.message.DescribeConfigsResponseData.DescribeConfigsResult
-import org.apache.kafka.common.message.IncrementalAlterConfigsRequestData.{AlterConfigsResource => IAlterConfigsResource}
-import org.apache.kafka.common.message.IncrementalAlterConfigsRequestData.{AlterConfigsResourceCollection => IAlterConfigsResourceCollection}
-import org.apache.kafka.common.message.IncrementalAlterConfigsRequestData.{AlterableConfig => IAlterableConfig}
-import org.apache.kafka.common.message.IncrementalAlterConfigsRequestData.{AlterableConfigCollection => IAlterableConfigCollection}
+import org.apache.kafka.common.message.IncrementalAlterConfigsRequestData.{AlterConfigsResource => IAlterConfigsResource, AlterConfigsResourceCollection => IAlterConfigsResourceCollection, AlterableConfig => IAlterableConfig, AlterableConfigCollection => IAlterableConfigCollection}
 import org.apache.kafka.common.message.IncrementalAlterConfigsResponseData.{AlterConfigsResourceResponse => IAlterConfigsResourceResponse}
 import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity
+import org.apache.kafka.common.message.ListClientMetricsResourcesResponseData.ClientMetricsResource
 import org.apache.kafka.common.message.ListOffsetsRequestData.{ListOffsetsPartition, ListOffsetsTopic}
 import org.apache.kafka.common.message.MetadataResponseData.MetadataResponseTopic
 import org.apache.kafka.common.message.OffsetDeleteRequestData.{OffsetDeleteRequestPartition, OffsetDeleteRequestTopic, OffsetDeleteRequestTopicCollection}
+import org.apache.kafka.common.message.OffsetDeleteResponseData.{OffsetDeleteResponsePartition, OffsetDeleteResponsePartitionCollection, OffsetDeleteResponseTopic, OffsetDeleteResponseTopicCollection}
 import org.apache.kafka.common.message.StopReplicaRequestData.{StopReplicaPartitionState, StopReplicaTopicState}
 import org.apache.kafka.common.message.UpdateMetadataRequestData.{UpdateMetadataBroker, UpdateMetadataEndpoint, UpdateMetadataPartitionState}
 import org.apache.kafka.common.message._
@@ -79,32 +71,33 @@ import org.apache.kafka.common.resource.{PatternType, Resource, ResourcePattern,
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, KafkaPrincipalSerde, SecurityProtocol}
 import org.apache.kafka.common.utils.annotation.ApiKeyVersionsSource
 import org.apache.kafka.common.utils.{ProducerIdAndEpoch, SecurityUtils, Utils}
-import org.apache.kafka.common.{ElectionType, IsolationLevel, Node, TopicIdPartition, TopicPartition, Uuid}
+import org.apache.kafka.common._
+import org.apache.kafka.coordinator.group.GroupCoordinator
+import org.apache.kafka.server.ClientMetricsManager
 import org.apache.kafka.server.authorizer.{Action, AuthorizationResult, Authorizer}
+import org.apache.kafka.server.common.MetadataVersion.{IBP_0_10_2_IV0, IBP_2_2_IV1}
+import org.apache.kafka.server.common.{Features, MetadataVersion}
+import org.apache.kafka.server.config.{ConfigType, Defaults}
+import org.apache.kafka.server.metrics.ClientMetricsTestUtils
+import org.apache.kafka.server.util.{FutureUtils, MockTime}
+import org.apache.kafka.storage.internals.log.{AppendOrigin, FetchParams, FetchPartitionData, LogConfig}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, Test}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{CsvSource, EnumSource, ValueSource}
-import org.mockito.ArgumentMatchers.{any, anyBoolean, anyDouble, anyInt, anyLong, anyShort, anyString, argThat, isNotNull}
-import org.mockito.Mockito.{mock, reset, times, verify, when}
+import org.mockito.ArgumentMatchers._
+import org.mockito.Mockito._
 import org.mockito.{ArgumentCaptor, ArgumentMatchers, Mockito}
 
+import java.net.InetAddress
+import java.nio.charset.StandardCharsets
+import java.time.Duration
+import java.util
+import java.util.Arrays.asList
+import java.util.concurrent.{CompletableFuture, TimeUnit}
+import java.util.{Collections, Comparator, Optional, OptionalInt, OptionalLong, Properties}
 import scala.collection.{Map, Seq, mutable}
 import scala.jdk.CollectionConverters._
-import org.apache.kafka.common.message.CreatePartitionsRequestData.CreatePartitionsTopic
-import org.apache.kafka.common.message.CreateTopicsResponseData.CreatableTopicResult
-import org.apache.kafka.common.message.ListClientMetricsResourcesResponseData.ClientMetricsResource
-import org.apache.kafka.common.message.OffsetDeleteResponseData.{OffsetDeleteResponsePartition, OffsetDeleteResponsePartitionCollection, OffsetDeleteResponseTopic, OffsetDeleteResponseTopicCollection}
-import org.apache.kafka.coordinator.group.GroupCoordinator
-import org.apache.kafka.server.ClientMetricsManager
-import org.apache.kafka.server.common.{Features, MetadataVersion}
-import org.apache.kafka.server.common.MetadataVersion.{IBP_0_10_2_IV0, IBP_2_2_IV1}
-import org.apache.kafka.server.config.ConfigType
-import org.apache.kafka.server.metrics.ClientMetricsTestUtils
-import org.apache.kafka.server.util.{FutureUtils, MockTime}
-import org.apache.kafka.storage.internals.log.{AppendOrigin, FetchParams, FetchPartitionData, LogConfig}
-
-import java.time.Duration
 
 class KafkaApisTest extends Logging {
   private val requestChannel: RequestChannel = mock(classOf[RequestChannel])
@@ -125,7 +118,7 @@ class KafkaApisTest extends Logging {
   private val metrics = new Metrics()
   private val brokerId = 1
   // KRaft tests should override this with a KRaftMetadataCache
-  private var metadataCache: MetadataCache = MetadataCache.zkMetadataCache(brokerId, MetadataVersion.latest())
+  private var metadataCache: MetadataCache = MetadataCache.zkMetadataCache(brokerId, MetadataVersion.latestTesting())
   private val brokerEpochManager: ZkBrokerEpochManager = new ZkBrokerEpochManager(metadataCache, controller, None)
   private val clientQuotaManager: ClientQuotaManager = mock(classOf[ClientQuotaManager])
   private val clientRequestQuotaManager: ClientRequestQuotaManager = mock(classOf[ClientRequestQuotaManager])
@@ -150,7 +143,7 @@ class KafkaApisTest extends Logging {
     metrics.close()
   }
 
-  def createKafkaApis(interBrokerProtocolVersion: MetadataVersion = MetadataVersion.latest,
+  def createKafkaApis(interBrokerProtocolVersion: MetadataVersion = MetadataVersion.latestTesting,
                       authorizer: Option[Authorizer] = None,
                       enableForwarding: Boolean = false,
                       configRepository: ConfigRepository = new MockConfigRepository(),
@@ -200,10 +193,10 @@ class KafkaApisTest extends Logging {
     val apiVersionManager = new SimpleApiVersionManager(
       listenerType,
       enabledApis,
-      BrokerFeatures.defaultSupportedFeatures(),
+      BrokerFeatures.defaultSupportedFeatures(true),
       true,
       false,
-      () => new Features(MetadataVersion.latest(), Collections.emptyMap[String, java.lang.Short], 0, raftSupport))
+      () => new Features(MetadataVersion.latestTesting(), Collections.emptyMap[String, java.lang.Short], 0, raftSupport))
 
     val clientMetricsManagerOpt = if (raftSupport) Some(clientMetricsManager) else None
 
@@ -633,8 +626,8 @@ class KafkaApisTest extends Logging {
     val requestData = DescribeQuorumRequest.singletonRequest(KafkaRaftServer.MetadataPartition)
     val requestBuilder = new DescribeQuorumRequest.Builder(requestData)
     metadataCache = MetadataCache.kRaftMetadataCache(brokerId)
-
-    testForwardableApi(kafkaApis = createKafkaApis(raftSupport = true),
+    kafkaApis = createKafkaApis(raftSupport = true)
+    testForwardableApi(kafkaApis = kafkaApis,
       ApiKeys.DESCRIBE_QUORUM,
       requestBuilder
     )
@@ -645,14 +638,16 @@ class KafkaApisTest extends Logging {
     requestBuilder: AbstractRequest.Builder[_ <: AbstractRequest]
   ): Unit = {
     metadataCache = MetadataCache.kRaftMetadataCache(brokerId)
-    testForwardableApi(kafkaApis = createKafkaApis(enableForwarding = true, raftSupport = true),
+    kafkaApis = createKafkaApis(enableForwarding = true, raftSupport = true)
+    testForwardableApi(kafkaApis = kafkaApis,
       apiKey,
       requestBuilder
     )
   }
 
   private def testForwardableApi(apiKey: ApiKeys, requestBuilder: AbstractRequest.Builder[_ <: AbstractRequest]): Unit = {
-    testForwardableApi(kafkaApis = createKafkaApis(enableForwarding = true),
+    kafkaApis = createKafkaApis(enableForwarding = true)
+    testForwardableApi(kafkaApis = kafkaApis,
       apiKey,
       requestBuilder
     )
@@ -1388,20 +1383,23 @@ class KafkaApisTest extends Logging {
       topics.foreach(topic => {
         val metadataRequestData = new MetadataRequestData().setTopics(Collections.singletonList(topic))
         val request = buildRequest(new MetadataRequest(metadataRequestData, version.toShort))
-        kafkaApis = createKafkaApis()
-
-        val capturedResponse: ArgumentCaptor[AbstractResponse] = ArgumentCaptor.forClass(classOf[AbstractResponse])
-        kafkaApis.handle(request, RequestLocal.withThreadConfinedCaching)
-        verify(requestChannel).sendResponse(
-          ArgumentMatchers.eq(request),
-          capturedResponse.capture(),
-          any()
-        )
-        val response = capturedResponse.getValue.asInstanceOf[MetadataResponse]
-        assertEquals(1, response.topicMetadata.size)
-        assertEquals(1, response.errorCounts.get(Errors.INVALID_REQUEST))
-        response.data.topics.forEach(topic => assertNotEquals(null, topic.name))
-        reset(requestChannel)
+        val kafkaApis = createKafkaApis()
+        try {
+          val capturedResponse: ArgumentCaptor[AbstractResponse] = ArgumentCaptor.forClass(classOf[AbstractResponse])
+          kafkaApis.handle(request, RequestLocal.withThreadConfinedCaching)
+          verify(requestChannel).sendResponse(
+            ArgumentMatchers.eq(request),
+            capturedResponse.capture(),
+            any()
+          )
+          val response = capturedResponse.getValue.asInstanceOf[MetadataResponse]
+          assertEquals(1, response.topicMetadata.size)
+          assertEquals(1, response.errorCounts.get(Errors.INVALID_REQUEST))
+          response.data.topics.forEach(topic => assertNotEquals(null, topic.name))
+          reset(requestChannel)
+        } finally {
+          kafkaApis.close()
+        }
       })
     )
   }
@@ -1666,12 +1664,16 @@ class KafkaApisTest extends Logging {
       val request = buildRequest(offsetCommitRequest)
       when(clientRequestQuotaManager.maybeRecordAndGetThrottleTimeMs(any[RequestChannel.Request](),
         any[Long])).thenReturn(0)
-      kafkaApis = createKafkaApis()
-      kafkaApis.handleOffsetCommitRequest(request, RequestLocal.withThreadConfinedCaching)
+      val kafkaApis = createKafkaApis()
+      try {
+        kafkaApis.handleOffsetCommitRequest(request, RequestLocal.withThreadConfinedCaching)
 
-      val response = verifyNoThrottling[OffsetCommitResponse](request)
-      assertEquals(Errors.UNKNOWN_TOPIC_OR_PARTITION,
-        Errors.forCode(response.data.topics().get(0).partitions().get(0).errorCode))
+        val response = verifyNoThrottling[OffsetCommitResponse](request)
+        assertEquals(Errors.UNKNOWN_TOPIC_OR_PARTITION,
+          Errors.forCode(response.data.topics().get(0).partitions().get(0).errorCode))
+      } finally {
+        kafkaApis.close()
+      }
     }
 
     checkInvalidPartition(-1)
@@ -1698,11 +1700,15 @@ class KafkaApisTest extends Logging {
       val request = buildRequest(offsetCommitRequest)
       when(clientRequestQuotaManager.maybeRecordAndGetThrottleTimeMs(any[RequestChannel.Request](),
         any[Long])).thenReturn(0)
-      kafkaApis = createKafkaApis()
-      kafkaApis.handleTxnOffsetCommitRequest(request, RequestLocal.withThreadConfinedCaching)
+      val kafkaApis = createKafkaApis()
+      try {
+        kafkaApis.handleTxnOffsetCommitRequest(request, RequestLocal.withThreadConfinedCaching)
 
-      val response = verifyNoThrottling[TxnOffsetCommitResponse](request)
-      assertEquals(Errors.UNKNOWN_TOPIC_OR_PARTITION, response.errors().get(invalidTopicPartition))
+        val response = verifyNoThrottling[TxnOffsetCommitResponse](request)
+        assertEquals(Errors.UNKNOWN_TOPIC_OR_PARTITION, response.errors().get(invalidTopicPartition))
+      } finally {
+        kafkaApis.close()
+      }
     }
 
     checkInvalidPartition(-1)
@@ -2058,20 +2064,24 @@ class KafkaApisTest extends Logging {
         responseCallback.capture(),
         ArgumentMatchers.eq(requestLocal)
       )).thenAnswer(_ => responseCallback.getValue.apply(InitProducerIdResult(producerId, epoch, Errors.PRODUCER_FENCED)))
-      kafkaApis = createKafkaApis()
-      kafkaApis.handleInitProducerIdRequest(request, requestLocal)
+      val kafkaApis = createKafkaApis()
+      try {
+        kafkaApis.handleInitProducerIdRequest(request, requestLocal)
 
-      verify(requestChannel).sendResponse(
-        ArgumentMatchers.eq(request),
-        capturedResponse.capture(),
-        ArgumentMatchers.eq(None)
-      )
-      val response = capturedResponse.getValue
+        verify(requestChannel).sendResponse(
+          ArgumentMatchers.eq(request),
+          capturedResponse.capture(),
+          ArgumentMatchers.eq(None)
+        )
+        val response = capturedResponse.getValue
 
-      if (version < 4) {
-        assertEquals(Errors.INVALID_PRODUCER_EPOCH.code, response.data.errorCode)
-      } else {
-        assertEquals(Errors.PRODUCER_FENCED.code, response.data.errorCode)
+        if (version < 4) {
+          assertEquals(Errors.INVALID_PRODUCER_EPOCH.code, response.data.errorCode)
+        } else {
+          assertEquals(Errors.PRODUCER_FENCED.code, response.data.errorCode)
+        }
+      } finally {
+        kafkaApis.close()
       }
     }
   }
@@ -2116,20 +2126,24 @@ class KafkaApisTest extends Logging {
         responseCallback.capture(),
         ArgumentMatchers.eq(requestLocal)
       )).thenAnswer(_ => responseCallback.getValue.apply(Errors.PRODUCER_FENCED))
-      kafkaApis = createKafkaApis()
-      kafkaApis.handleAddOffsetsToTxnRequest(request, requestLocal)
+      val kafkaApis = createKafkaApis()
+      try {
+        kafkaApis.handleAddOffsetsToTxnRequest(request, requestLocal)
 
-      verify(requestChannel).sendResponse(
-        ArgumentMatchers.eq(request),
-        capturedResponse.capture(),
-        ArgumentMatchers.eq(None)
-      )
-      val response = capturedResponse.getValue
+        verify(requestChannel).sendResponse(
+          ArgumentMatchers.eq(request),
+          capturedResponse.capture(),
+          ArgumentMatchers.eq(None)
+        )
+        val response = capturedResponse.getValue
 
-      if (version < 2) {
-        assertEquals(Errors.INVALID_PRODUCER_EPOCH.code, response.data.errorCode)
-      } else {
-        assertEquals(Errors.PRODUCER_FENCED.code, response.data.errorCode)
+        if (version < 2) {
+          assertEquals(Errors.INVALID_PRODUCER_EPOCH.code, response.data.errorCode)
+        } else {
+          assertEquals(Errors.PRODUCER_FENCED.code, response.data.errorCode)
+        }
+      } finally {
+        kafkaApis.close()
       }
     }
   }
@@ -2170,20 +2184,24 @@ class KafkaApisTest extends Logging {
         responseCallback.capture(),
         ArgumentMatchers.eq(requestLocal)
       )).thenAnswer(_ => responseCallback.getValue.apply(Errors.PRODUCER_FENCED))
-      kafkaApis = createKafkaApis()
-      kafkaApis.handleAddPartitionsToTxnRequest(request, requestLocal)
+      val kafkaApis = createKafkaApis()
+      try {
+        kafkaApis.handleAddPartitionsToTxnRequest(request, requestLocal)
 
-      verify(requestChannel).sendResponse(
-        ArgumentMatchers.eq(request),
-        capturedResponse.capture(),
-        ArgumentMatchers.eq(None)
-      )
-      val response = capturedResponse.getValue
+        verify(requestChannel).sendResponse(
+          ArgumentMatchers.eq(request),
+          capturedResponse.capture(),
+          ArgumentMatchers.eq(None)
+        )
+        val response = capturedResponse.getValue
 
-      if (version < 2) {
-        assertEquals(Collections.singletonMap(topicPartition, Errors.INVALID_PRODUCER_EPOCH), response.errors().get(AddPartitionsToTxnResponse.V3_AND_BELOW_TXN_ID))
-      } else {
-        assertEquals(Collections.singletonMap(topicPartition, Errors.PRODUCER_FENCED), response.errors().get(AddPartitionsToTxnResponse.V3_AND_BELOW_TXN_ID))
+        if (version < 2) {
+          assertEquals(Collections.singletonMap(topicPartition, Errors.INVALID_PRODUCER_EPOCH), response.errors().get(AddPartitionsToTxnResponse.V3_AND_BELOW_TXN_ID))
+        } else {
+          assertEquals(Collections.singletonMap(topicPartition, Errors.PRODUCER_FENCED), response.errors().get(AddPartitionsToTxnResponse.V3_AND_BELOW_TXN_ID))
+        }
+      } finally {
+        kafkaApis.close()
       }
     }
   }
@@ -2413,20 +2431,24 @@ class KafkaApisTest extends Logging {
         responseCallback.capture(),
         ArgumentMatchers.eq(requestLocal)
       )).thenAnswer(_ => responseCallback.getValue.apply(Errors.PRODUCER_FENCED))
-      kafkaApis = createKafkaApis()
-      kafkaApis.handleEndTxnRequest(request, requestLocal)
+      val kafkaApis = createKafkaApis()
+      try {
+        kafkaApis.handleEndTxnRequest(request, requestLocal)
 
-      verify(requestChannel).sendResponse(
-        ArgumentMatchers.eq(request),
-        capturedResponse.capture(),
-        ArgumentMatchers.eq(None)
-      )
-      val response = capturedResponse.getValue
+        verify(requestChannel).sendResponse(
+          ArgumentMatchers.eq(request),
+          capturedResponse.capture(),
+          ArgumentMatchers.eq(None)
+        )
+        val response = capturedResponse.getValue
 
-      if (version < 2) {
-        assertEquals(Errors.INVALID_PRODUCER_EPOCH.code, response.data.errorCode)
-      } else {
-        assertEquals(Errors.PRODUCER_FENCED.code, response.data.errorCode)
+        if (version < 2) {
+          assertEquals(Errors.INVALID_PRODUCER_EPOCH.code, response.data.errorCode)
+        } else {
+          assertEquals(Errors.PRODUCER_FENCED.code, response.data.errorCode)
+        }
+      } finally {
+        kafkaApis.close()
       }
     }
   }
@@ -2457,14 +2479,12 @@ class KafkaApisTest extends Logging {
         .build(version.toShort)
       val request = buildRequest(produceRequest)
 
-      when(replicaManager.appendRecords(anyLong,
+      when(replicaManager.handleProduceAppend(anyLong,
         anyShort,
         ArgumentMatchers.eq(false),
-        ArgumentMatchers.eq(AppendOrigin.CLIENT),
+        any(),
         any(),
         responseCallback.capture(),
-        any(),
-        any(),
         any(),
         any(),
         any()
@@ -2474,16 +2494,20 @@ class KafkaApisTest extends Logging {
         any[Long])).thenReturn(0)
       when(clientQuotaManager.maybeRecordAndGetThrottleTimeMs(
         any[RequestChannel.Request](), anyDouble, anyLong)).thenReturn(0)
-      kafkaApis = createKafkaApis()
-      kafkaApis.handleProduceRequest(request, RequestLocal.withThreadConfinedCaching)
+      val kafkaApis = createKafkaApis()
+      try {
+        kafkaApis.handleProduceRequest(request, RequestLocal.withThreadConfinedCaching)
 
-      val response = verifyNoThrottling[ProduceResponse](request)
+        val response = verifyNoThrottling[ProduceResponse](request)
 
-      assertEquals(1, response.data.responses.size)
-      val topicProduceResponse = response.data.responses.asScala.head
-      assertEquals(1, topicProduceResponse.partitionResponses.size)
-      val partitionProduceResponse = topicProduceResponse.partitionResponses.asScala.head
-      assertEquals(Errors.INVALID_PRODUCER_EPOCH, Errors.forCode(partitionProduceResponse.errorCode))
+        assertEquals(1, response.data.responses.size)
+        val topicProduceResponse = response.data.responses.asScala.head
+        assertEquals(1, topicProduceResponse.partitionResponses.size)
+        val partitionProduceResponse = topicProduceResponse.partitionResponses.asScala.head
+        assertEquals(Errors.INVALID_PRODUCER_EPOCH, Errors.forCode(partitionProduceResponse.errorCode))
+      } finally {
+        kafkaApis.close()
+      }
     }
   }
 
@@ -2516,14 +2540,12 @@ class KafkaApisTest extends Logging {
         .build(version.toShort)
       val request = buildRequest(produceRequest)
 
-      when(replicaManager.appendRecords(anyLong,
+      when(replicaManager.handleProduceAppend(anyLong,
         anyShort,
         ArgumentMatchers.eq(false),
-        ArgumentMatchers.eq(AppendOrigin.CLIENT),
+        any(),
         any(),
         responseCallback.capture(),
-        any(),
-        any(),
         any(),
         any(),
         any())
@@ -2582,14 +2604,12 @@ class KafkaApisTest extends Logging {
         .build(version.toShort)
       val request = buildRequest(produceRequest)
 
-      when(replicaManager.appendRecords(anyLong,
+      when(replicaManager.handleProduceAppend(anyLong,
         anyShort,
         ArgumentMatchers.eq(false),
-        ArgumentMatchers.eq(AppendOrigin.CLIENT),
+        any(),
         any(),
         responseCallback.capture(),
-        any(),
-        any(),
         any(),
         any(),
         any())
@@ -2647,14 +2667,12 @@ class KafkaApisTest extends Logging {
         .build(version.toShort)
       val request = buildRequest(produceRequest)
 
-      when(replicaManager.appendRecords(anyLong,
+      when(replicaManager.handleProduceAppend(anyLong,
         anyShort,
         ArgumentMatchers.eq(false),
-        ArgumentMatchers.eq(AppendOrigin.CLIENT),
+        any(),
         any(),
         responseCallback.capture(),
-        any(),
-        any(),
         any(),
         any(),
         any())
@@ -2696,8 +2714,6 @@ class KafkaApisTest extends Logging {
 
       reset(replicaManager, clientQuotaManager, clientRequestQuotaManager, requestChannel, txnCoordinator)
 
-      val responseCallback: ArgumentCaptor[Map[TopicPartition, PartitionResponse] => Unit] = ArgumentCaptor.forClass(classOf[Map[TopicPartition, PartitionResponse] => Unit])
-
       val tp = new TopicPartition("topic", 0)
 
       val produceRequest = ProduceRequest.forCurrentMagic(new ProduceRequestData()
@@ -2714,20 +2730,22 @@ class KafkaApisTest extends Logging {
         .build(version.toShort)
       val request = buildRequest(produceRequest)
 
-      kafkaApis = createKafkaApis()
-      kafkaApis.handleProduceRequest(request, RequestLocal.withThreadConfinedCaching)
-      
-      verify(replicaManager).appendRecords(anyLong,
-        anyShort,
-        ArgumentMatchers.eq(false),
-        ArgumentMatchers.eq(AppendOrigin.CLIENT),
-        any(),
-        responseCallback.capture(),
-        any(),
-        any(),
-        any(),
-        ArgumentMatchers.eq(transactionalId),
-        any())
+      val kafkaApis = createKafkaApis()
+      try {
+        kafkaApis.handleProduceRequest(request, RequestLocal.withThreadConfinedCaching)
+
+        verify(replicaManager).handleProduceAppend(anyLong,
+          anyShort,
+          ArgumentMatchers.eq(false),
+          ArgumentMatchers.eq(transactionalId),
+          any(),
+          any(),
+          any(),
+          any(),
+          any())
+      } finally {
+        kafkaApis.close()
+      }
     }
   }
 
@@ -2747,11 +2765,15 @@ class KafkaApisTest extends Logging {
 
       when(clientRequestQuotaManager.maybeRecordAndGetThrottleTimeMs(any[RequestChannel.Request](),
         any[Long])).thenReturn(0)
-      kafkaApis = createKafkaApis()
-      kafkaApis.handleAddPartitionsToTxnRequest(request, RequestLocal.withThreadConfinedCaching)
+      val kafkaApis = createKafkaApis()
+      try {
+        kafkaApis.handleAddPartitionsToTxnRequest(request, RequestLocal.withThreadConfinedCaching)
 
-      val response = verifyNoThrottling[AddPartitionsToTxnResponse](request)
-      assertEquals(Errors.UNKNOWN_TOPIC_OR_PARTITION, response.errors().get(AddPartitionsToTxnResponse.V3_AND_BELOW_TXN_ID).get(invalidTopicPartition))
+        val response = verifyNoThrottling[AddPartitionsToTxnResponse](request)
+        assertEquals(Errors.UNKNOWN_TOPIC_OR_PARTITION, response.errors().get(AddPartitionsToTxnResponse.V3_AND_BELOW_TXN_ID).get(invalidTopicPartition))
+      } finally {
+        kafkaApis.close()
+      }
     }
 
     checkInvalidPartition(-1)
@@ -2760,32 +2782,37 @@ class KafkaApisTest extends Logging {
 
   @Test
   def shouldThrowUnsupportedVersionExceptionOnHandleAddOffsetToTxnRequestWhenInterBrokerProtocolNotSupported(): Unit = {
+    kafkaApis = createKafkaApis(IBP_0_10_2_IV0)
     assertThrows(classOf[UnsupportedVersionException],
-      () => createKafkaApis(IBP_0_10_2_IV0).handleAddOffsetsToTxnRequest(null, RequestLocal.withThreadConfinedCaching))
+      () => kafkaApis.handleAddOffsetsToTxnRequest(null, RequestLocal.withThreadConfinedCaching))
   }
 
   @Test
   def shouldThrowUnsupportedVersionExceptionOnHandleAddPartitionsToTxnRequestWhenInterBrokerProtocolNotSupported(): Unit = {
+    kafkaApis = createKafkaApis(IBP_0_10_2_IV0)
     assertThrows(classOf[UnsupportedVersionException],
-      () => createKafkaApis(IBP_0_10_2_IV0).handleAddPartitionsToTxnRequest(null, RequestLocal.withThreadConfinedCaching))
+      () => kafkaApis.handleAddPartitionsToTxnRequest(null, RequestLocal.withThreadConfinedCaching))
   }
 
   @Test
   def shouldThrowUnsupportedVersionExceptionOnHandleTxnOffsetCommitRequestWhenInterBrokerProtocolNotSupported(): Unit = {
+    kafkaApis = createKafkaApis(IBP_0_10_2_IV0)
     assertThrows(classOf[UnsupportedVersionException],
-      () => createKafkaApis(IBP_0_10_2_IV0).handleAddPartitionsToTxnRequest(null, RequestLocal.withThreadConfinedCaching))
+      () => kafkaApis.handleAddPartitionsToTxnRequest(null, RequestLocal.withThreadConfinedCaching))
   }
 
   @Test
   def shouldThrowUnsupportedVersionExceptionOnHandleEndTxnRequestWhenInterBrokerProtocolNotSupported(): Unit = {
+    kafkaApis = createKafkaApis(IBP_0_10_2_IV0)
     assertThrows(classOf[UnsupportedVersionException],
-      () => createKafkaApis(IBP_0_10_2_IV0).handleEndTxnRequest(null, RequestLocal.withThreadConfinedCaching))
+      () => kafkaApis.handleEndTxnRequest(null, RequestLocal.withThreadConfinedCaching))
   }
 
   @Test
   def shouldThrowUnsupportedVersionExceptionOnHandleWriteTxnMarkersRequestWhenInterBrokerProtocolNotSupported(): Unit = {
+    kafkaApis = createKafkaApis(IBP_0_10_2_IV0)
     assertThrows(classOf[UnsupportedVersionException],
-      () => createKafkaApis(IBP_0_10_2_IV0).handleWriteTxnMarkersRequest(null, RequestLocal.withThreadConfinedCaching))
+      () => kafkaApis.handleWriteTxnMarkersRequest(null, RequestLocal.withThreadConfinedCaching))
   }
 
   @Test
@@ -3072,7 +3099,7 @@ class KafkaApisTest extends Logging {
       ArgumentMatchers.eq(1.toShort),
       ArgumentMatchers.eq(0),
       ArgumentMatchers.eq(TransactionResult.COMMIT),
-      ArgumentMatchers.eq(Duration.ofMillis(Defaults.RequestTimeoutMs))
+      ArgumentMatchers.eq(Duration.ofMillis(Defaults.REQUEST_TIMEOUT_MS))
     )).thenReturn(CompletableFuture.completedFuture[Void](null))
 
     when(groupCoordinator.completeTransaction(
@@ -3081,7 +3108,7 @@ class KafkaApisTest extends Logging {
       ArgumentMatchers.eq(1.toShort),
       ArgumentMatchers.eq(0),
       ArgumentMatchers.eq(TransactionResult.ABORT),
-      ArgumentMatchers.eq(Duration.ofMillis(Defaults.RequestTimeoutMs))
+      ArgumentMatchers.eq(Duration.ofMillis(Defaults.REQUEST_TIMEOUT_MS))
     )).thenReturn(CompletableFuture.completedFuture[Void](null))
 
     val entriesPerPartition: ArgumentCaptor[Map[TopicPartition, MemoryRecords]] =
@@ -3090,7 +3117,7 @@ class KafkaApisTest extends Logging {
       ArgumentCaptor.forClass(classOf[Map[TopicPartition, PartitionResponse] => Unit])
 
     when(replicaManager.appendRecords(
-      ArgumentMatchers.eq(Defaults.RequestTimeoutMs.toLong),
+      ArgumentMatchers.eq(Defaults.REQUEST_TIMEOUT_MS.toLong),
       ArgumentMatchers.eq(-1),
       ArgumentMatchers.eq(true),
       ArgumentMatchers.eq(AppendOrigin.COORDINATOR),
@@ -3191,7 +3218,7 @@ class KafkaApisTest extends Logging {
       ArgumentMatchers.eq(1.toShort),
       ArgumentMatchers.eq(0),
       ArgumentMatchers.eq(TransactionResult.COMMIT),
-      ArgumentMatchers.eq(Duration.ofMillis(Defaults.RequestTimeoutMs))
+      ArgumentMatchers.eq(Duration.ofMillis(Defaults.REQUEST_TIMEOUT_MS))
     )).thenReturn(FutureUtils.failedFuture[Void](error.exception()))
     kafkaApis = createKafkaApis(overrideProperties = Map(
       KafkaConfig.NewGroupCoordinatorEnableProp -> "true"
@@ -3780,13 +3807,17 @@ class KafkaApisTest extends Logging {
       )).thenReturn(CompletableFuture.completedFuture(
         new OffsetDeleteResponseData()
       ))
-      kafkaApis = createKafkaApis()
-      kafkaApis.handleOffsetDeleteRequest(request, RequestLocal.NoCaching)
+      val kafkaApis = createKafkaApis()
+      try {
+        kafkaApis.handleOffsetDeleteRequest(request, RequestLocal.NoCaching)
 
-      val response = verifyNoThrottling[OffsetDeleteResponse](request)
+        val response = verifyNoThrottling[OffsetDeleteResponse](request)
 
-      assertEquals(Errors.UNKNOWN_TOPIC_OR_PARTITION,
-        Errors.forCode(response.data.topics.find(topic).partitions.find(invalidPartitionId).errorCode))
+        assertEquals(Errors.UNKNOWN_TOPIC_OR_PARTITION,
+          Errors.forCode(response.data.topics.find(topic).partitions.find(invalidPartitionId).errorCode))
+      } finally {
+        kafkaApis.close()
+      }
     }
 
     checkInvalidPartition(-1)
@@ -4072,6 +4103,7 @@ class KafkaApisTest extends Logging {
         assertEquals(authorizedTopic, metadataResponseTopic.name())
       }
     }
+    kafkaApis.close()
 
     // 4. Send TopicMetadataReq using topic name
     reset(clientRequestQuotaManager, requestChannel)
@@ -4095,7 +4127,7 @@ class KafkaApisTest extends Logging {
     }
   }
 
-  /**
+    /**
    * Verifies that sending a fetch request with version 9 works correctly when
    * ReplicaManager.getLogConfig returns None.
    */
@@ -4245,13 +4277,13 @@ class KafkaApisTest extends Logging {
         Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false)))
     })
 
-    val fetchData = Map(tidp -> new FetchRequest.PartitionData(Uuid.ZERO_UUID, 0, 0, 1000,
+    val fetchData = Map(tidp -> new FetchRequest.PartitionData(topicId, 0, 0, 1000,
       Optional.empty())).asJava
-    val fetchDataBuilder = Map(tp -> new FetchRequest.PartitionData(Uuid.ZERO_UUID, 0, 0, 1000,
+    val fetchDataBuilder = Map(tp -> new FetchRequest.PartitionData(topicId, 0, 0, 1000,
       Optional.empty())).asJava
     val fetchMetadata = new JFetchMetadata(0, 0)
     val fetchContext = new FullFetchContext(time, new FetchSessionCache(1000, 100),
-      fetchMetadata, fetchData, false, false)
+      fetchMetadata, fetchData, true, false)
     when(fetchManager.newContext(
       any[Short],
       any[JFetchMetadata],
@@ -5742,11 +5774,13 @@ class KafkaApisTest extends Logging {
   def testListGroupsRequest(version: Short): Unit = {
     val listGroupsRequest = new ListGroupsRequestData()
       .setStatesFilter(if (version >= 4) List("Stable", "Empty").asJava else List.empty.asJava)
+      .setTypesFilter(if (version >= 5) List("classic", "consumer").asJava else List.empty.asJava)
 
     val requestChannelRequest = buildRequest(new ListGroupsRequest.Builder(listGroupsRequest).build(version))
 
     val expectedListGroupsRequest = new ListGroupsRequestData()
       .setStatesFilter(if (version >= 4) List("Stable", "Empty").asJava else List.empty.asJava)
+      .setTypesFilter(if (version >= 5) List("classic", "consumer").asJava else List.empty.asJava)
 
     val future = new CompletableFuture[ListGroupsResponseData]()
     when(groupCoordinator.listGroups(
@@ -5760,12 +5794,19 @@ class KafkaApisTest extends Logging {
       .setGroups(List(
         new ListGroupsResponseData.ListedGroup()
           .setGroupId("group1")
+          .setProtocolType("protocol1")
           .setGroupState(if (version >= 4) "Stable" else "")
-          .setProtocolType("protocol1"),
+          .setGroupType(if (version >= 5) "consumer" else ""),
         new ListGroupsResponseData.ListedGroup()
           .setGroupId("group2")
+          .setProtocolType("protocol2")
           .setGroupState(if (version >= 4) "Empty" else "")
-          .setProtocolType("qwerty")
+          .setGroupType(if (version >= 5) "classic" else ""),
+        new ListGroupsResponseData.ListedGroup()
+          .setGroupId("group3")
+          .setProtocolType("protocol3")
+          .setGroupState(if (version >= 4) "Stable" else "")
+          .setGroupType(if (version >= 5) "classic" else ""),
       ).asJava)
 
     future.complete(expectedListGroupsResponse)
@@ -5777,11 +5818,13 @@ class KafkaApisTest extends Logging {
   def testListGroupsRequestFutureFailed(): Unit = {
     val listGroupsRequest = new ListGroupsRequestData()
       .setStatesFilter(List("Stable", "Empty").asJava)
+      .setTypesFilter(List("classic", "consumer").asJava)
 
     val requestChannelRequest = buildRequest(new ListGroupsRequest.Builder(listGroupsRequest).build())
 
     val expectedListGroupsRequest = new ListGroupsRequestData()
       .setStatesFilter(List("Stable", "Empty").asJava)
+      .setTypesFilter(List("classic", "consumer").asJava)
 
     val future = new CompletableFuture[ListGroupsResponseData]()
     when(groupCoordinator.listGroups(
@@ -6052,9 +6095,9 @@ class KafkaApisTest extends Logging {
     // and have a non KafkaPrincipal.ANONYMOUS principal. This test is done before the check
     // for forwarding because after forwarding the context will have a different context. 
     // We validate the context authenticated failure case in other integration tests.
-    val context = new RequestContext(header, "1", InetAddress.getLocalHost, new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "Alice"),
-      listenerName, SecurityProtocol.SSL, ClientInformation.EMPTY, fromPrivilegedListener,
-      Optional.of(kafkaPrincipalSerde))
+    val context = new RequestContext(header, "1", InetAddress.getLocalHost, Optional.empty(),
+      new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "Alice"), listenerName, SecurityProtocol.SSL,
+      ClientInformation.EMPTY, fromPrivilegedListener, Optional.of(kafkaPrincipalSerde))
     new RequestChannel.Request(processor = 1, context = context, startTimeNanos = 0, MemoryPool.NONE, buffer,
       requestMetrics, envelope = None)
   }
@@ -6686,67 +6729,78 @@ class KafkaApisTest extends Logging {
   @Test
   def testRaftShouldNeverHandleLeaderAndIsrRequest(): Unit = {
     metadataCache = MetadataCache.kRaftMetadataCache(brokerId)
-    verifyShouldNeverHandleErrorMessage(createKafkaApis(raftSupport = true).handleLeaderAndIsrRequest)
+    kafkaApis = createKafkaApis(raftSupport = true)
+    verifyShouldNeverHandleErrorMessage(kafkaApis.handleLeaderAndIsrRequest)
   }
 
   @Test
   def testRaftShouldNeverHandleStopReplicaRequest(): Unit = {
     metadataCache = MetadataCache.kRaftMetadataCache(brokerId)
-    verifyShouldNeverHandleErrorMessage(createKafkaApis(raftSupport = true).handleStopReplicaRequest)
+    kafkaApis = createKafkaApis(raftSupport = true)
+    verifyShouldNeverHandleErrorMessage(kafkaApis.handleStopReplicaRequest)
   }
 
   @Test
   def testRaftShouldNeverHandleUpdateMetadataRequest(): Unit = {
     metadataCache = MetadataCache.kRaftMetadataCache(brokerId)
-    verifyShouldNeverHandleErrorMessage(createKafkaApis(raftSupport = true).handleUpdateMetadataRequest(_, RequestLocal.withThreadConfinedCaching))
+    kafkaApis = createKafkaApis(raftSupport = true)
+    verifyShouldNeverHandleErrorMessage(kafkaApis.handleUpdateMetadataRequest(_, RequestLocal.withThreadConfinedCaching))
   }
 
   @Test
   def testRaftShouldNeverHandleControlledShutdownRequest(): Unit = {
     metadataCache = MetadataCache.kRaftMetadataCache(brokerId)
-    verifyShouldNeverHandleErrorMessage(createKafkaApis(raftSupport = true).handleControlledShutdownRequest)
+    kafkaApis = createKafkaApis(raftSupport = true)
+    verifyShouldNeverHandleErrorMessage(kafkaApis.handleControlledShutdownRequest)
   }
 
   @Test
   def testRaftShouldNeverHandleAlterPartitionRequest(): Unit = {
     metadataCache = MetadataCache.kRaftMetadataCache(brokerId)
-    verifyShouldNeverHandleErrorMessage(createKafkaApis(raftSupport = true).handleAlterPartitionRequest)
+    kafkaApis = createKafkaApis(raftSupport = true)
+    verifyShouldNeverHandleErrorMessage(kafkaApis.handleAlterPartitionRequest)
   }
 
   @Test
   def testRaftShouldNeverHandleEnvelope(): Unit = {
     metadataCache = MetadataCache.kRaftMetadataCache(brokerId)
-    verifyShouldNeverHandleErrorMessage(createKafkaApis(raftSupport = true).handleEnvelope(_, RequestLocal.withThreadConfinedCaching))
+    kafkaApis = createKafkaApis(raftSupport = true)
+    verifyShouldNeverHandleErrorMessage(kafkaApis.handleEnvelope(_, RequestLocal.withThreadConfinedCaching))
   }
 
   @Test
   def testRaftShouldAlwaysForwardCreateTopicsRequest(): Unit = {
     metadataCache = MetadataCache.kRaftMetadataCache(brokerId)
-    verifyShouldAlwaysForwardErrorMessage(createKafkaApis(raftSupport = true).handleCreateTopicsRequest)
+    kafkaApis = createKafkaApis(raftSupport = true)
+    verifyShouldAlwaysForwardErrorMessage(kafkaApis.handleCreateTopicsRequest)
   }
 
   @Test
   def testRaftShouldAlwaysForwardCreatePartitionsRequest(): Unit = {
     metadataCache = MetadataCache.kRaftMetadataCache(brokerId)
-    verifyShouldAlwaysForwardErrorMessage(createKafkaApis(raftSupport = true).handleCreatePartitionsRequest)
+    kafkaApis = createKafkaApis(raftSupport = true)
+    verifyShouldAlwaysForwardErrorMessage(kafkaApis.handleCreatePartitionsRequest)
   }
 
   @Test
   def testRaftShouldAlwaysForwardDeleteTopicsRequest(): Unit = {
     metadataCache = MetadataCache.kRaftMetadataCache(brokerId)
-    verifyShouldAlwaysForwardErrorMessage(createKafkaApis(raftSupport = true).handleDeleteTopicsRequest)
+    kafkaApis = createKafkaApis(raftSupport = true)
+    verifyShouldAlwaysForwardErrorMessage(kafkaApis.handleDeleteTopicsRequest)
   }
 
   @Test
   def testRaftShouldAlwaysForwardCreateAcls(): Unit = {
     metadataCache = MetadataCache.kRaftMetadataCache(brokerId)
-    verifyShouldAlwaysForwardErrorMessage(createKafkaApis(raftSupport = true).handleCreateAcls)
+    kafkaApis = createKafkaApis(raftSupport = true)
+    verifyShouldAlwaysForwardErrorMessage(kafkaApis.handleCreateAcls)
   }
 
   @Test
   def testRaftShouldAlwaysForwardDeleteAcls(): Unit = {
     metadataCache = MetadataCache.kRaftMetadataCache(brokerId)
-    verifyShouldAlwaysForwardErrorMessage(createKafkaApis(raftSupport = true).handleDeleteAcls)
+    kafkaApis = createKafkaApis(raftSupport = true)
+    verifyShouldAlwaysForwardErrorMessage(kafkaApis.handleDeleteAcls)
   }
 
   @Test
@@ -6790,7 +6844,8 @@ class KafkaApisTest extends Logging {
   @Test
   def testRaftShouldAlwaysForwardAlterPartitionReassignmentsRequest(): Unit = {
     metadataCache = MetadataCache.kRaftMetadataCache(brokerId)
-    verifyShouldAlwaysForwardErrorMessage(createKafkaApis(raftSupport = true).handleAlterPartitionReassignmentsRequest)
+    kafkaApis = createKafkaApis(raftSupport = true)
+    verifyShouldAlwaysForwardErrorMessage(kafkaApis.handleAlterPartitionReassignmentsRequest)
   }
 
   @Test
@@ -6836,7 +6891,8 @@ class KafkaApisTest extends Logging {
   // We skip the pre-forward checks in handleCreateTokenRequest 
   def testRaftShouldAlwaysForwardCreateTokenRequest(): Unit = {
     metadataCache = MetadataCache.kRaftMetadataCache(brokerId)
-    verifyShouldAlwaysForwardErrorMessage(createKafkaApis(raftSupport = true).handleCreateTokenRequestZk)
+    kafkaApis = createKafkaApis(raftSupport = true)
+    verifyShouldAlwaysForwardErrorMessage(kafkaApis.handleCreateTokenRequestZk)
   }
 
   @Test
@@ -6844,7 +6900,8 @@ class KafkaApisTest extends Logging {
   // We skip the pre-forward checks in handleRenewTokenRequest 
   def testRaftShouldAlwaysForwardRenewTokenRequest(): Unit = {
     metadataCache = MetadataCache.kRaftMetadataCache(brokerId)
-    verifyShouldAlwaysForwardErrorMessage(createKafkaApis(raftSupport = true).handleRenewTokenRequestZk)
+    kafkaApis = createKafkaApis(raftSupport = true)
+    verifyShouldAlwaysForwardErrorMessage(kafkaApis.handleRenewTokenRequestZk)
   }
 
   @Test
@@ -6852,37 +6909,43 @@ class KafkaApisTest extends Logging {
   // We skip the pre-forward checks in handleExpireTokenRequest 
   def testRaftShouldAlwaysForwardExpireTokenRequest(): Unit = {
     metadataCache = MetadataCache.kRaftMetadataCache(brokerId)
-    verifyShouldAlwaysForwardErrorMessage(createKafkaApis(raftSupport = true).handleExpireTokenRequestZk)
+    kafkaApis = createKafkaApis(raftSupport = true)
+    verifyShouldAlwaysForwardErrorMessage(kafkaApis.handleExpireTokenRequestZk)
   }
 
   @Test
   def testRaftShouldAlwaysForwardAlterClientQuotasRequest(): Unit = {
     metadataCache = MetadataCache.kRaftMetadataCache(brokerId)
-    verifyShouldAlwaysForwardErrorMessage(createKafkaApis(raftSupport = true).handleAlterClientQuotasRequest)
+    kafkaApis = createKafkaApis(raftSupport = true)
+    verifyShouldAlwaysForwardErrorMessage(kafkaApis.handleAlterClientQuotasRequest)
   }
 
   @Test
   def testRaftShouldAlwaysForwardAlterUserScramCredentialsRequest(): Unit = {
     metadataCache = MetadataCache.kRaftMetadataCache(brokerId)
-    verifyShouldAlwaysForwardErrorMessage(createKafkaApis(raftSupport = true).handleAlterUserScramCredentialsRequest)
+    kafkaApis = createKafkaApis(raftSupport = true)
+    verifyShouldAlwaysForwardErrorMessage(kafkaApis.handleAlterUserScramCredentialsRequest)
   }
 
   @Test
   def testRaftShouldAlwaysForwardUpdateFeatures(): Unit = {
     metadataCache = MetadataCache.kRaftMetadataCache(brokerId)
-    verifyShouldAlwaysForwardErrorMessage(createKafkaApis(raftSupport = true).handleUpdateFeatures)
+    kafkaApis = createKafkaApis(raftSupport = true)
+    verifyShouldAlwaysForwardErrorMessage(kafkaApis.handleUpdateFeatures)
   }
 
   @Test
   def testRaftShouldAlwaysForwardElectLeaders(): Unit = {
     metadataCache = MetadataCache.kRaftMetadataCache(brokerId)
-    verifyShouldAlwaysForwardErrorMessage(createKafkaApis(raftSupport = true).handleElectLeaders)
+    kafkaApis = createKafkaApis(raftSupport = true)
+    verifyShouldAlwaysForwardErrorMessage(kafkaApis.handleElectLeaders)
   }
 
   @Test
   def testRaftShouldAlwaysForwardListPartitionReassignments(): Unit = {
     metadataCache = MetadataCache.kRaftMetadataCache(brokerId)
-    verifyShouldAlwaysForwardErrorMessage(createKafkaApis(raftSupport = true).handleListPartitionReassignmentsRequest)
+    kafkaApis = createKafkaApis(raftSupport = true)
+    verifyShouldAlwaysForwardErrorMessage(kafkaApis.handleListPartitionReassignmentsRequest)
   }
 
   @Test

@@ -20,12 +20,14 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.requests.TransactionResult;
+import org.apache.kafka.storage.internals.log.VerificationGuard;
 
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.stream.Collectors;
@@ -223,6 +225,7 @@ public class InMemoryPartitionWriter<T> implements PartitionWriter<T> {
         TopicPartition tp,
         long producerId,
         short producerEpoch,
+        VerificationGuard verificationGuard,
         List<T> records
     ) throws KafkaException {
         PartitionState state = partitionState(tp);
@@ -264,6 +267,16 @@ public class InMemoryPartitionWriter<T> implements PartitionWriter<T> {
         } finally {
             state.lock.unlock();
         }
+    }
+
+    @Override
+    public CompletableFuture<VerificationGuard> maybeStartTransactionVerification(
+        TopicPartition tp,
+        String transactionalId,
+        long producerId,
+        short producerEpoch
+    ) throws KafkaException {
+        return CompletableFuture.completedFuture(new VerificationGuard());
     }
 
     public void commit(

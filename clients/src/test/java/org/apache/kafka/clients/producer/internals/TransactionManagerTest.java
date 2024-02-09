@@ -1730,7 +1730,7 @@ public class TransactionManagerTest {
             "COORDINATOR_LOAD_IN_PROGRESS",
             "CONCURRENT_TRANSACTIONS"
     })
-    public void testRetriableErrors2(Errors error) {
+    public void testRetriableErrors(Errors error) {
         // Ensure FindCoordinator retries.
         TransactionalRequestResult result = transactionManager.initializeTransactions();
         prepareFindCoordinatorResponse(error, false, CoordinatorType.TRANSACTION, transactionalId);
@@ -2231,6 +2231,11 @@ public class TransactionManagerTest {
     @Test
     public void testHandlingOfCoordinatorLoadingErrorOnTxnOffsetCommit() {
         testRetriableErrorInTxnOffsetCommit(Errors.COORDINATOR_LOAD_IN_PROGRESS);
+    }
+
+    @Test
+    public void testHandlingOfNetworkExceptionOnTxnOffsetCommit() {
+        testRetriableErrorInTxnOffsetCommit(Errors.NETWORK_EXCEPTION);
     }
 
     private void testRetriableErrorInTxnOffsetCommit(Errors error) {
