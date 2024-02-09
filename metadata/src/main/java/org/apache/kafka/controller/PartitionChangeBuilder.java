@@ -52,7 +52,7 @@ public class PartitionChangeBuilder {
     public static boolean changeRecordIsNoOp(PartitionChangeRecord record) {
         if (record.isr() != null) return false;
         if (record.eligibleLeaderReplicas() != null) return false;
-        if (record.lastKnownELR() != null) return false;
+        if (record.lastKnownElr() != null) return false;
         if (record.leader() != NO_LEADER_CHANGE) return false;
         if (record.replicas() != null) return false;
         if (record.removingReplicas() != null) return false;
@@ -85,6 +85,8 @@ public class PartitionChangeBuilder {
     private final int partitionId;
     private final IntPredicate isAcceptableLeader;
     private final MetadataVersion metadataVersion;
+    private final int minISR;
+    private final Map<Integer, Uuid> targetDirectories;
     private List<Integer> targetIsr;
     private List<Integer> targetReplicas;
     private List<Integer> targetRemoving;
@@ -96,8 +98,6 @@ public class PartitionChangeBuilder {
     private LeaderRecoveryState targetLeaderRecoveryState;
     private boolean zkMigrationEnabled;
     private boolean eligibleLeaderReplicasEnabled;
-    private int minISR;
-    private Map<Integer, Uuid> targetDirectories;
     private DefaultDirProvider defaultDirProvider;
 
     // Whether allow electing last known leader in a Balanced recovery. Note, the last known leader will be stored in the
@@ -492,7 +492,7 @@ public class PartitionChangeBuilder {
         if (record.isr() != null && record.isr().isEmpty() && (partition.lastKnownElr.length != 1 ||
             partition.lastKnownElr[0] != partition.leader)) {
             // Only update the last known leader when the first time the partition becomes leaderless.
-            record.setLastKnownELR(Arrays.asList(partition.leader));
+            record.setLastKnownElr(Arrays.asList(partition.leader));
         }
     }
 
@@ -518,14 +518,14 @@ public class PartitionChangeBuilder {
         }
 
         if (!targetLastKnownElr.equals(Replicas.toList(partition.lastKnownElr))) {
-            record.setLastKnownELR(targetLastKnownElr);
+            record.setLastKnownElr(targetLastKnownElr);
         }
     }
 
     private void maybePopulateTargetElr() {
         if (!eligibleLeaderReplicasEnabled) return;
 
-        // If the ISR is larger or equal to the min ISR, clear the ELR and lastKnownELR.
+        // If the ISR is larger or equal to the min ISR, clear the ELR and LastKnownElr.
         if (targetIsr.size() >= minISR) {
             targetElr = Collections.emptyList();
             targetLastKnownElr = Collections.emptyList();

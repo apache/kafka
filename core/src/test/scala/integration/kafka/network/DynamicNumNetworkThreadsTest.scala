@@ -17,11 +17,12 @@
  */
 package kafka.network
 
-import kafka.server.{BaseRequestTest, Defaults, KafkaConfig}
+import kafka.server.{BaseRequestTest, KafkaConfig}
 import kafka.utils.{TestInfoUtils, TestUtils}
 import org.apache.kafka.clients.admin.{Admin, AdminClientConfig}
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.security.auth.SecurityProtocol
+import org.apache.kafka.server.config.Defaults
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo}
 import org.junit.jupiter.params.ParameterizedTest
@@ -42,7 +43,7 @@ class DynamicNumNetworkThreadsTest extends BaseRequestTest {
     properties.put(KafkaConfig.ListenersProp, s"$internal://localhost:0, $external://localhost:0")
     properties.put(KafkaConfig.ListenerSecurityProtocolMapProp, s"$internal:PLAINTEXT, $external:PLAINTEXT")
     properties.put(s"listener.name.${internal.toLowerCase}.${KafkaConfig.NumNetworkThreadsProp}", "2")
-    properties.put(KafkaConfig.NumNetworkThreadsProp, Defaults.NumNetworkThreads.toString)
+    properties.put(KafkaConfig.NumNetworkThreadsProp, Defaults.NUM_NETWORK_THREADS.toString)
   }
 
   @BeforeEach
@@ -51,7 +52,7 @@ class DynamicNumNetworkThreadsTest extends BaseRequestTest {
     admin = TestUtils.createAdminClient(brokers, ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT))
     assertEquals(2, getNumNetworkThreads(internal))
     TestUtils.createTopicWithAdmin(admin, "test", brokers, controllerServers)
-    assertEquals(Defaults.NumNetworkThreads, getNumNetworkThreads(external))
+    assertEquals(Defaults.NUM_NETWORK_THREADS, getNumNetworkThreads(external))
   }
   @AfterEach
   override def tearDown(): Unit = {
@@ -69,7 +70,7 @@ class DynamicNumNetworkThreadsTest extends BaseRequestTest {
   @ValueSource(strings = Array("zk", "kraft"))
   def testDynamicNumNetworkThreads(quorum: String): Unit = {
     // Increase the base network thread count
-    val newBaseNetworkThreadsCount = Defaults.NumNetworkThreads + 1
+    val newBaseNetworkThreadsCount = Defaults.NUM_NETWORK_THREADS + 1
     var props = new Properties
     props.put(KafkaConfig.NumNetworkThreadsProp, newBaseNetworkThreadsCount.toString)
     reconfigureServers(props, (KafkaConfig.NumNetworkThreadsProp, newBaseNetworkThreadsCount.toString))
