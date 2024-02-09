@@ -695,12 +695,12 @@ class ZkMetadataCache(
    *                           minExpectedEpoch within timeoutMs.
    */
   def waitUntilFeatureEpochOrThrow(minExpectedEpoch: Long, timeoutMs: Long): Unit = {
-    if(minExpectedEpoch < 0L) {
+    if (minExpectedEpoch < 0L) {
       throw new IllegalArgumentException(
         s"Expected minExpectedEpoch >= 0, but $minExpectedEpoch was provided.")
     }
 
-    if(timeoutMs < 0L) {
+    if (timeoutMs < 0L) {
       throw new IllegalArgumentException(s"Expected timeoutMs >= 0, but $timeoutMs was provided.")
     }
     val waitEndTimeNanos = System.nanoTime() + (timeoutMs * 1000000)
