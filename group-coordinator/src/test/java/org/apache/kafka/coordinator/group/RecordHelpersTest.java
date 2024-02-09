@@ -22,6 +22,7 @@ import org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProt
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.coordinator.group.Group.GroupType;
 import org.apache.kafka.coordinator.group.consumer.ClientAssignor;
 import org.apache.kafka.coordinator.group.consumer.ConsumerGroupMember;
 import org.apache.kafka.coordinator.group.common.TopicMetadata;
@@ -280,12 +281,33 @@ public class RecordHelpersTest {
                 (short) 3),
             new ApiMessageAndVersion(
                 new ConsumerGroupMetadataValue()
-                    .setEpoch(10),
-                (short) 0));
+                    .setEpoch(10)
+                    .setType(GroupType.CONSUMER.name()),
+                (short) 1));
 
         assertEquals(expectedRecord, newGroupEpochRecord(
             "group-id",
             10
+        ));
+    }
+
+    @Test
+    public void testNewGroupEpochRecordWithGroupType() {
+        Record expectedRecord = new Record(
+            new ApiMessageAndVersion(
+                new ConsumerGroupMetadataKey()
+                    .setGroupId("group-id"),
+                (short) 3),
+            new ApiMessageAndVersion(
+                new ConsumerGroupMetadataValue()
+                    .setEpoch(10)
+                    .setType(GroupType.SHARE.name()),
+                (short) 1));
+
+        assertEquals(expectedRecord, newGroupEpochRecord(
+            "group-id",
+            10,
+            GroupType.SHARE
         ));
     }
 

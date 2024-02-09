@@ -46,6 +46,8 @@ import org.apache.kafka.common.message.LeaveGroupRequestData;
 import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity;
 import org.apache.kafka.common.message.LeaveGroupResponseData;
 import org.apache.kafka.common.message.ListGroupsResponseData;
+import org.apache.kafka.common.message.ShareGroupHeartbeatRequestData;
+import org.apache.kafka.common.message.ShareGroupHeartbeatResponseData;
 import org.apache.kafka.common.message.SyncGroupRequestData;
 import org.apache.kafka.common.message.SyncGroupRequestData.SyncGroupRequestAssignment;
 import org.apache.kafka.common.message.SyncGroupResponseData;
@@ -64,6 +66,8 @@ import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.coordinator.group.Group.GroupType;
+import org.apache.kafka.coordinator.group.GroupMetadataManagerTest.GroupMetadataManagerTestContext.Builder;
 import org.apache.kafka.coordinator.group.MockCoordinatorTimer.ExpiredTimeout;
 import org.apache.kafka.coordinator.group.MockCoordinatorTimer.ScheduledTimeout;
 import org.apache.kafka.coordinator.group.assignor.AssignmentSpec;
@@ -135,11 +139,11 @@ import static org.apache.kafka.common.requests.JoinGroupRequest.UNKNOWN_MEMBER_I
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkAssignment;
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkTopicAssignment;
 import static org.apache.kafka.coordinator.group.GroupMetadataManager.appendGroupMetadataErrorToResponseError;
-import static org.apache.kafka.coordinator.group.GroupMetadataManager.consumerGroupRevocationTimeoutKey;
-import static org.apache.kafka.coordinator.group.GroupMetadataManager.consumerGroupSessionTimeoutKey;
+import static org.apache.kafka.coordinator.group.GroupMetadataManager.groupRevocationTimeoutKey;
 import static org.apache.kafka.coordinator.group.GroupMetadataManager.EMPTY_RESULT;
 import static org.apache.kafka.coordinator.group.GroupMetadataManager.classicGroupHeartbeatKey;
 import static org.apache.kafka.coordinator.group.GroupMetadataManager.classicGroupSyncKey;
+import static org.apache.kafka.coordinator.group.GroupMetadataManager.groupSessionTimeoutKey;
 import static org.apache.kafka.coordinator.group.RecordHelpersTest.mkMapOfPartitionRacks;
 import static org.apache.kafka.coordinator.group.classic.ClassicGroupState.COMPLETING_REBALANCE;
 import static org.apache.kafka.coordinator.group.classic.ClassicGroupState.DEAD;
@@ -318,6 +322,7 @@ public class GroupMetadataManagerTest {
             final private TopicPartition groupMetadataTopicPartition = new TopicPartition("topic", 0);
             private MetadataImage metadataImage;
             private List<PartitionAssignor> consumerGroupAssignors = Collections.singletonList(new MockPartitionAssignor("range"));
+            private PartitionAssignor shareGroupAssignor = new MockPartitionAssignor("share");
             private List<ConsumerGroupBuilder> consumerGroupBuilders = new ArrayList<>();
             private int consumerGroupMaxSize = Integer.MAX_VALUE;
             private int consumerGroupMetadataRefreshIntervalMs = Integer.MAX_VALUE;
@@ -338,7 +343,17 @@ public class GroupMetadataManagerTest {
                 return this;
             }
 
+            public Builder withShareGroupAssignor(PartitionAssignor shareGroupAssignor) {
+                this.shareGroupAssignor = shareGroupAssignor;
+                return this;
+            }
+
             public Builder withConsumerGroup(ConsumerGroupBuilder builder) {
+                this.consumerGroupBuilders.add(builder);
+                return this;
+            }
+
+            public Builder withShareGroup(ConsumerGroupBuilder builder) {
                 this.consumerGroupBuilders.add(builder);
                 return this;
             }
@@ -392,6 +407,7 @@ public class GroupMetadataManagerTest {
                         .withConsumerGroupSessionTimeout(45000)
                         .withConsumerGroupMaxSize(consumerGroupMaxSize)
                         .withConsumerGroupAssignors(consumerGroupAssignors)
+                        .withShareGroupAssignor(shareGroupAssignor)
                         .withConsumerGroupMetadataRefreshIntervalMs(consumerGroupMetadataRefreshIntervalMs)
                         .withClassicGroupMaxSize(classicGroupMaxSize)
                         .withClassicGroupMinSessionTimeoutMs(classicGroupMinSessionTimeoutMs)
@@ -501,6 +517,34 @@ public class GroupMetadataManagerTest {
             return result;
         }
 
+        public CoordinatorResult<ShareGroupHeartbeatResponseData, Record> shareGroupHeartbeat(
+            ShareGroupHeartbeatRequestData request
+        ) {
+            RequestContext context = new RequestContext(
+                new RequestHeader(
+                    ApiKeys.SHARE_GROUP_HEARTBEAT,
+                    ApiKeys.SHARE_GROUP_HEARTBEAT.latestVersion(),
+                    "client",
+                    0
+                ),
+                "1",
+                InetAddress.getLoopbackAddress(),
+                KafkaPrincipal.ANONYMOUS,
+                ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT),
+                SecurityProtocol.PLAINTEXT,
+                ClientInformation.EMPTY,
+                false
+            );
+
+            CoordinatorResult<ShareGroupHeartbeatResponseData, Record> result = groupMetadataManager.shareGroupHeartbeat(
+                context,
+                request
+            );
+
+            result.records().forEach(this::replay);
+            return result;
+        }
+
         public List<ExpiredTimeout<Void, Record>> sleep(long ms) {
             time.sleep(ms);
             List<ExpiredTimeout<Void, Record>> timeouts = timer.poll();
@@ -518,7 +562,7 @@ public class GroupMetadataManagerTest {
             long delayMs
         ) {
             ScheduledTimeout<Void, Record> timeout =
-                timer.timeout(consumerGroupSessionTimeoutKey(groupId, memberId));
+                timer.timeout(groupSessionTimeoutKey(groupId, memberId));
             assertNotNull(timeout);
             assertEquals(time.milliseconds() + delayMs, timeout.deadlineMs);
             return timeout;
@@ -529,7 +573,7 @@ public class GroupMetadataManagerTest {
             String memberId
         ) {
             ScheduledTimeout<Void, Record> timeout =
-                timer.timeout(consumerGroupSessionTimeoutKey(groupId, memberId));
+                timer.timeout(groupSessionTimeoutKey(groupId, memberId));
             assertNull(timeout);
         }
 
@@ -539,7 +583,7 @@ public class GroupMetadataManagerTest {
             long delayMs
         ) {
             ScheduledTimeout<Void, Record> timeout =
-                timer.timeout(consumerGroupRevocationTimeoutKey(groupId, memberId));
+                timer.timeout(groupRevocationTimeoutKey(groupId, memberId));
             assertNotNull(timeout);
             assertEquals(time.milliseconds() + delayMs, timeout.deadlineMs);
             return timeout;
@@ -550,7 +594,7 @@ public class GroupMetadataManagerTest {
             String memberId
         ) {
             ScheduledTimeout<Void, Record> timeout =
-                timer.timeout(consumerGroupRevocationTimeoutKey(groupId, memberId));
+                timer.timeout(groupRevocationTimeoutKey(groupId, memberId));
             assertNull(timeout);
         }
 
@@ -4163,7 +4207,7 @@ public class GroupMetadataManagerTest {
         // Verify the expired timeout.
         assertEquals(
             Collections.singletonList(new ExpiredTimeout<Void, Record>(
-                consumerGroupSessionTimeoutKey(groupId, memberId),
+                groupSessionTimeoutKey(groupId, memberId),
                 new CoordinatorResult<>(
                     Arrays.asList(
                         RecordHelpers.newCurrentAssignmentTombstoneRecord(groupId, memberId),
@@ -4244,7 +4288,7 @@ public class GroupMetadataManagerTest {
         // Verify the expired timeout.
         assertEquals(
             Collections.singletonList(new ExpiredTimeout<Void, Record>(
-                consumerGroupSessionTimeoutKey(groupId, memberId),
+                groupSessionTimeoutKey(groupId, memberId),
                 new CoordinatorResult<>(
                     Arrays.asList(
                         RecordHelpers.newCurrentAssignmentTombstoneRecord(groupId, memberId),
@@ -4619,7 +4663,7 @@ public class GroupMetadataManagerTest {
         // Verify the expired timeout.
         assertEquals(
             Collections.singletonList(new ExpiredTimeout<Void, Record>(
-                consumerGroupRevocationTimeoutKey(groupId, memberId1),
+                groupRevocationTimeoutKey(groupId, memberId1),
                 new CoordinatorResult<>(
                     Arrays.asList(
                         RecordHelpers.newCurrentAssignmentTombstoneRecord(groupId, memberId1),
@@ -4687,11 +4731,11 @@ public class GroupMetadataManagerTest {
         context.groupMetadataManager.onLoaded();
 
         // All members should have a session timeout in place.
-        assertNotNull(context.timer.timeout(consumerGroupSessionTimeoutKey("foo", "foo-1")));
-        assertNotNull(context.timer.timeout(consumerGroupSessionTimeoutKey("foo", "foo-2")));
+        assertNotNull(context.timer.timeout(groupSessionTimeoutKey("foo", "foo-1")));
+        assertNotNull(context.timer.timeout(groupSessionTimeoutKey("foo", "foo-2")));
 
         // foo-1 should also have a revocation timeout in place.
-        assertNotNull(context.timer.timeout(consumerGroupRevocationTimeoutKey("foo", "foo-1")));
+        assertNotNull(context.timer.timeout(groupRevocationTimeoutKey("foo", "foo-1")));
     }
 
     @Test
@@ -9980,9 +10024,35 @@ public class GroupMetadataManagerTest {
         }
     }
 
+    private static void assertResponseEquals(
+        ShareGroupHeartbeatResponseData expected,
+        ShareGroupHeartbeatResponseData actual
+    ) {
+        if (!responseEquals(expected, actual)) {
+            assertionFailure()
+                .expected(expected)
+                .actual(actual)
+                .buildAndThrow();
+        }
+    }
+
     private static boolean responseEquals(
         ConsumerGroupHeartbeatResponseData expected,
         ConsumerGroupHeartbeatResponseData actual
+    ) {
+        if (expected.throttleTimeMs() != actual.throttleTimeMs()) return false;
+        if (expected.errorCode() != actual.errorCode()) return false;
+        if (!Objects.equals(expected.errorMessage(), actual.errorMessage())) return false;
+        if (!Objects.equals(expected.memberId(), actual.memberId())) return false;
+        if (expected.memberEpoch() != actual.memberEpoch()) return false;
+        if (expected.heartbeatIntervalMs() != actual.heartbeatIntervalMs()) return false;
+        // Unordered comparison of the assignments.
+        return responseAssignmentEquals(expected.assignment(), actual.assignment());
+    }
+
+    private static boolean responseEquals(
+        ShareGroupHeartbeatResponseData expected,
+        ShareGroupHeartbeatResponseData actual
     ) {
         if (expected.throttleTimeMs() != actual.throttleTimeMs()) return false;
         if (expected.errorCode() != actual.errorCode()) return false;
@@ -10005,8 +10075,31 @@ public class GroupMetadataManagerTest {
         return Objects.equals(fromAssignment(expected.topicPartitions()), fromAssignment(actual.topicPartitions()));
     }
 
+    private static boolean responseAssignmentEquals(
+        ShareGroupHeartbeatResponseData.Assignment expected,
+        ShareGroupHeartbeatResponseData.Assignment actual
+    ) {
+        if (expected == actual) return true;
+        if (expected == null) return false;
+        if (actual == null) return false;
+
+        return Objects.equals(fromShareGroupAssignment(expected.assignedTopicPartitions()), fromShareGroupAssignment(actual.assignedTopicPartitions()));
+    }
+
     private static Map<Uuid, Set<Integer>> fromAssignment(
         List<ConsumerGroupHeartbeatResponseData.TopicPartitions> assignment
+    ) {
+        if (assignment == null) return null;
+
+        Map<Uuid, Set<Integer>> assignmentMap = new HashMap<>();
+        assignment.forEach(topicPartitions -> {
+            assignmentMap.put(topicPartitions.topicId(), new HashSet<>(topicPartitions.partitions()));
+        });
+        return assignmentMap;
+    }
+
+    private static Map<Uuid, Set<Integer>> fromShareGroupAssignment(
+        List<ShareGroupHeartbeatResponseData.TopicPartitions> assignment
     ) {
         if (assignment == null) return null;
 
@@ -10895,6 +10988,349 @@ public class GroupMetadataManagerTest {
 
         verify(context.metrics, times(1)).onConsumerGroupStateTransition(null, ConsumerGroup.ConsumerGroupState.EMPTY);
         verify(context.metrics, times(1)).onConsumerGroupStateTransition(ConsumerGroup.ConsumerGroupState.EMPTY, null);
+    }
+
+    @Test
+    public void testShareGroupHeartbeatRequestValidation() {
+        MockPartitionAssignor assignor = new MockPartitionAssignor("share");
+        GroupMetadataManagerTestContext context = new Builder()
+            .withShareGroupAssignor(assignor)
+            .build();
+        Exception ex;
+
+        // GroupId must be present in all requests.
+        ex = assertThrows(InvalidRequestException.class, () -> context.shareGroupHeartbeat(
+            new ShareGroupHeartbeatRequestData()));
+        assertEquals("GroupId can't be empty.", ex.getMessage());
+
+        // GroupId can't be all whitespaces.
+        ex = assertThrows(InvalidRequestException.class, () -> context.shareGroupHeartbeat(
+            new ShareGroupHeartbeatRequestData()
+                .setGroupId("   ")));
+        assertEquals("GroupId can't be empty.", ex.getMessage());
+
+        // RebalanceTimeoutMs must be present in the first request (epoch == 0).
+        ex = assertThrows(InvalidRequestException.class, () -> context.shareGroupHeartbeat(
+            new ShareGroupHeartbeatRequestData()
+                .setGroupId("foo")
+                .setMemberEpoch(0)));
+        assertEquals("RebalanceTimeoutMs must be provided in first request.", ex.getMessage());
+
+        // SubscribedTopicNames must be present and empty in the first request (epoch == 0).
+        ex = assertThrows(InvalidRequestException.class, () -> context.shareGroupHeartbeat(
+            new ShareGroupHeartbeatRequestData()
+                .setGroupId("foo")
+                .setMemberEpoch(0)
+                .setRebalanceTimeoutMs(5000)));
+        assertEquals("SubscribedTopicNames must be set in first request.", ex.getMessage());
+
+        // MemberId must be non-empty in all requests except for the first one where it
+        // could be empty (epoch != 0).
+        ex = assertThrows(InvalidRequestException.class, () -> context.shareGroupHeartbeat(
+            new ShareGroupHeartbeatRequestData()
+                .setGroupId("foo")
+                .setMemberEpoch(1)));
+        assertEquals("MemberId can't be empty.", ex.getMessage());
+
+        // RackId must be non-empty if provided in all requests.
+        ex = assertThrows(InvalidRequestException.class, () -> context.shareGroupHeartbeat(
+            new ShareGroupHeartbeatRequestData()
+                .setGroupId("foo")
+                .setMemberId(Uuid.randomUuid().toString())
+                .setMemberEpoch(1)
+                .setRackId("")));
+        assertEquals("RackId can't be empty.", ex.getMessage());
+    }
+
+    @Test
+    public void testShareGroupMemberIdGeneration() {
+        MockPartitionAssignor assignor = new MockPartitionAssignor("share");
+        GroupMetadataManagerTestContext context = new Builder()
+            .withShareGroupAssignor(assignor)
+            .build();
+
+        assignor.prepareGroupAssignment(new GroupAssignment(
+            Collections.emptyMap()
+        ));
+
+        CoordinatorResult<ShareGroupHeartbeatResponseData, Record> result = context.shareGroupHeartbeat(
+            new ShareGroupHeartbeatRequestData()
+                .setGroupId("group-foo")
+                .setMemberEpoch(0)
+                .setRebalanceTimeoutMs(5000)
+                .setSubscribedTopicNames(Arrays.asList("foo", "bar")));
+
+        // Verify that a member id was generated for the new member.
+        String memberId = result.response().memberId();
+        assertNotNull(memberId);
+        assertNotEquals("", memberId);
+
+        // The response should get a bumped epoch and should not
+        // contain any assignment because we did not provide
+        // topics metadata.
+        assertEquals(
+            new ShareGroupHeartbeatResponseData()
+                .setMemberId(memberId)
+                .setMemberEpoch(1)
+                .setHeartbeatIntervalMs(5000)
+                .setAssignment(new ShareGroupHeartbeatResponseData.Assignment()),
+            result.response()
+        );
+    }
+
+    @Test
+    public void testShareGroupUnknownGroupId() {
+        String groupId = "fooup";
+        String memberId = Uuid.randomUuid().toString();
+
+        MockPartitionAssignor assignor = new MockPartitionAssignor("share");
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withShareGroupAssignor(assignor)
+            .build();
+
+        assertThrows(GroupIdNotFoundException.class, () ->
+            context.shareGroupHeartbeat(
+                new ShareGroupHeartbeatRequestData()
+                    .setGroupId(groupId)
+                    .setMemberId(memberId)
+                    .setMemberEpoch(100) // Epoch must be > 0.
+                    .setRebalanceTimeoutMs(5000)
+                    .setSubscribedTopicNames(Arrays.asList("foo", "bar"))));
+    }
+
+    @Test
+    public void testShareGroupUnknownMemberIdJoins() {
+        String groupId = "fooup";
+        String memberId = Uuid.randomUuid().toString();
+
+        MockPartitionAssignor assignor = new MockPartitionAssignor("share");
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withShareGroupAssignor(assignor)
+            .build();
+
+        assignor.prepareGroupAssignment(new GroupAssignment(Collections.emptyMap()));
+
+        // A first member joins to create the group.
+        context.shareGroupHeartbeat(
+            new ShareGroupHeartbeatRequestData()
+                .setGroupId(groupId)
+                .setMemberId(memberId)
+                .setMemberEpoch(0)
+                .setRebalanceTimeoutMs(5000)
+                .setSubscribedTopicNames(Arrays.asList("foo", "bar")));
+
+        // The second member is rejected because the member id is unknown and
+        // the member epoch is not zero.
+        assertThrows(UnknownMemberIdException.class, () ->
+            context.shareGroupHeartbeat(
+                new ShareGroupHeartbeatRequestData()
+                    .setGroupId(groupId)
+                    .setMemberId(Uuid.randomUuid().toString())
+                    .setMemberEpoch(1)
+                    .setRebalanceTimeoutMs(5000)
+                    .setSubscribedTopicNames(Arrays.asList("foo", "bar"))));
+    }
+
+    @Test
+    public void testShareGroupMemberRejoinAfterFailover() {
+        String groupId = "fooup";
+        String memberId = Uuid.randomUuid().toString();
+
+        MockPartitionAssignor assignor = new MockPartitionAssignor("share");
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withShareGroupAssignor(assignor)
+            .build();
+
+        assignor.prepareGroupAssignment(new GroupAssignment(
+            Collections.emptyMap()
+        ));
+
+        context.replay(RecordHelpers.newGroupEpochRecord(groupId, 100, GroupType.SHARE));
+
+        // Member is not known after the failover.
+        assertThrows(UnknownMemberIdException.class, () ->
+            context.shareGroupHeartbeat(
+                new ShareGroupHeartbeatRequestData()
+                    .setGroupId(groupId)
+                    .setMemberId(memberId)
+                    .setMemberEpoch(100)
+                    .setRebalanceTimeoutMs(5000)
+                    .setSubscribedTopicNames(Arrays.asList("foo", "bar"))));
+
+        // Member joins with epoch 0 to re-join the group.
+        CoordinatorResult<ShareGroupHeartbeatResponseData, Record> result = context.shareGroupHeartbeat(
+            new ShareGroupHeartbeatRequestData()
+                .setGroupId(groupId)
+                .setMemberId(memberId)
+                .setMemberEpoch(0)
+                .setRebalanceTimeoutMs(5000)
+                .setSubscribedTopicNames(Arrays.asList("foo", "bar")));
+        assertEquals(101, result.response().memberEpoch());
+    }
+
+    @Test
+    public void testShareGroupMemberJoinsEmptyGroupWithAssignments() {
+        String groupId = "fooup";
+        String memberId = Uuid.randomUuid().toString();
+
+        Uuid fooTopicId = Uuid.randomUuid();
+        String fooTopicName = "foo";
+        Uuid barTopicId = Uuid.randomUuid();
+        String barTopicName = "bar";
+
+        MockPartitionAssignor assignor = new MockPartitionAssignor("share");
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withShareGroupAssignor(assignor)
+            .withMetadataImage(new MetadataImageBuilder()
+                .addTopic(fooTopicId, fooTopicName, 6)
+                .addTopic(barTopicId, barTopicName, 3)
+                .addRacks()
+                .build())
+            .build();
+
+        assignor.prepareGroupAssignment(new GroupAssignment(
+            Collections.singletonMap(memberId, new MemberAssignment(mkAssignment(
+                mkTopicAssignment(fooTopicId, 0, 1, 2, 3, 4, 5),
+                mkTopicAssignment(barTopicId, 0, 1, 2)
+            )))
+        ));
+
+        assertThrows(GroupIdNotFoundException.class, () ->
+            context.groupMetadataManager.getOrMaybeCreateShareGroup(groupId, false));
+
+        CoordinatorResult<ShareGroupHeartbeatResponseData, Record> result = context.shareGroupHeartbeat(
+            new ShareGroupHeartbeatRequestData()
+                .setGroupId(groupId)
+                .setMemberId(memberId)
+                .setMemberEpoch(0)
+                .setRebalanceTimeoutMs(5000)
+                .setSubscribedTopicNames(Arrays.asList("foo", "bar")));
+
+        assertResponseEquals(
+            new ShareGroupHeartbeatResponseData()
+                .setMemberId(memberId)
+                .setMemberEpoch(1)
+                .setHeartbeatIntervalMs(5000)
+                .setAssignment(new ShareGroupHeartbeatResponseData.Assignment()
+                    .setAssignedTopicPartitions(Arrays.asList(
+                        new ShareGroupHeartbeatResponseData.TopicPartitions()
+                            .setTopicId(fooTopicId)
+                            .setPartitions(Arrays.asList(0, 1, 2, 3, 4, 5)),
+                        new ShareGroupHeartbeatResponseData.TopicPartitions()
+                            .setTopicId(barTopicId)
+                            .setPartitions(Arrays.asList(0, 1, 2))
+                    ))),
+            result.response()
+        );
+
+        List<Record> expectedRecords = Collections.singletonList(
+            RecordHelpers.newGroupEpochRecord(groupId, 1, GroupType.SHARE)
+        );
+
+        assertRecordsEquals(expectedRecords, result.records());
+    }
+
+    @Test
+    public void testShareGroupLeavingMemberBumpsGroupEpoch() {
+        String groupId = "fooup";
+        String memberId1 = Uuid.randomUuid().toString();
+        String memberId2 = Uuid.randomUuid().toString();
+
+        // A share group cannot have pre-defined members and member metadata as members and assignments
+        // are not persisted.
+        MockPartitionAssignor assignor = new MockPartitionAssignor("share");
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withShareGroupAssignor(assignor)
+            .build();
+
+        assignor.prepareGroupAssignment(new GroupAssignment(
+            Collections.emptyMap()
+        ));
+
+        context.replay(RecordHelpers.newGroupEpochRecord(groupId, 100, GroupType.SHARE));
+
+        // Member 1 joins the group.
+        CoordinatorResult<ShareGroupHeartbeatResponseData, Record> result = context.shareGroupHeartbeat(
+            new ShareGroupHeartbeatRequestData()
+                .setGroupId(groupId)
+                .setMemberId(memberId1)
+                .setMemberEpoch(0)
+                .setRebalanceTimeoutMs(5000)
+                .setSubscribedTopicNames(Arrays.asList("foo", "bar")));
+        assertEquals(101, result.response().memberEpoch());
+
+        // Member 2 joins the group.
+        result = context.shareGroupHeartbeat(
+            new ShareGroupHeartbeatRequestData()
+                .setGroupId(groupId)
+                .setMemberId(memberId2)
+                .setMemberEpoch(0)
+                .setRebalanceTimeoutMs(5000)
+                .setSubscribedTopicNames(Arrays.asList("foo", "bar")));
+        assertEquals(102, result.response().memberEpoch());
+
+        // Member 2 leaves the consumer group.
+        result = context.shareGroupHeartbeat(
+            new ShareGroupHeartbeatRequestData()
+                .setGroupId(groupId)
+                .setMemberId(memberId2)
+                .setMemberEpoch(LEAVE_GROUP_MEMBER_EPOCH)
+                .setRebalanceTimeoutMs(5000)
+                .setSubscribedTopicNames(Arrays.asList("foo", "bar")));
+
+        assertResponseEquals(
+            new ShareGroupHeartbeatResponseData()
+                .setMemberId(memberId2)
+                .setMemberEpoch(LEAVE_GROUP_MEMBER_EPOCH),
+            result.response()
+        );
+
+        List<Record> expectedRecords = Collections.singletonList(
+            RecordHelpers.newGroupEpochRecord(groupId, 103, GroupType.SHARE)
+        );
+
+        assertRecordsEquals(expectedRecords, result.records());
+    }
+
+    @Test
+    public void testShareGroupNewMemberIsRejectedWithMaximumMembersIsReached() {
+        String groupId = "fooup";
+        // Use a static member id as it makes the test easier.
+        String memberId1 = Uuid.randomUuid().toString();
+        String memberId2 = Uuid.randomUuid().toString();
+
+        // A share group cannot have pre-defined members and member metadata as members and assignments
+        // are not persisted.
+        MockPartitionAssignor assignor = new MockPartitionAssignor("share");
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withShareGroupAssignor(assignor)
+            .withConsumerGroupMaxSize(1)
+            .build();
+
+        assignor.prepareGroupAssignment(new GroupAssignment(
+            Collections.emptyMap()
+        ));
+
+        context.replay(RecordHelpers.newGroupEpochRecord(groupId, 100, GroupType.SHARE));
+
+        // Member 1 joins the group.
+        CoordinatorResult<ShareGroupHeartbeatResponseData, Record> result = context.shareGroupHeartbeat(
+            new ShareGroupHeartbeatRequestData()
+                .setGroupId(groupId)
+                .setMemberId(memberId1)
+                .setMemberEpoch(0)
+                .setRebalanceTimeoutMs(5000)
+                .setSubscribedTopicNames(Arrays.asList("foo", "bar")));
+        assertEquals(101, result.response().memberEpoch());
+
+        // Member 2 joins the group.
+        assertThrows(GroupMaxSizeReachedException.class, () -> context.shareGroupHeartbeat(
+            new ShareGroupHeartbeatRequestData()
+                .setGroupId(groupId)
+                .setMemberId(memberId2)
+                .setMemberEpoch(0)
+                .setRebalanceTimeoutMs(5000)
+                .setSubscribedTopicNames(Arrays.asList("foo", "bar"))));
     }
 
     private static void assertNoOrEmptyResult(List<ExpiredTimeout<Void, Record>> timeouts) {

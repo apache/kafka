@@ -19,6 +19,7 @@ package org.apache.kafka.coordinator.group;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.requests.OffsetCommitRequest;
+import org.apache.kafka.coordinator.group.Group.GroupType;
 import org.apache.kafka.coordinator.group.consumer.ConsumerGroupMember;
 import org.apache.kafka.coordinator.group.common.TopicMetadata;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupCurrentMemberAssignmentKey;
@@ -193,6 +194,22 @@ public class RecordHelpers {
         String groupId,
         int newGroupEpoch
     ) {
+        return newGroupEpochRecord(groupId, newGroupEpoch, GroupType.CONSUMER);
+    }
+
+    /**
+     * Creates a group record.
+     *
+     * @param groupId       The consumer group id.
+     * @param newGroupEpoch The consumer group epoch.
+     * @param groupType     The consumer group type.
+     * @return The record.
+     */
+    public static Record newGroupEpochRecord(
+        String groupId,
+        int newGroupEpoch,
+        GroupType groupType
+    ) {
         return new Record(
             new ApiMessageAndVersion(
                 new ConsumerGroupMetadataKey()
@@ -201,8 +218,9 @@ public class RecordHelpers {
             ),
             new ApiMessageAndVersion(
                 new ConsumerGroupMetadataValue()
-                    .setEpoch(newGroupEpoch),
-                (short) 0
+                    .setEpoch(newGroupEpoch)
+                    .setType(groupType.name()),
+                (short) 1
             )
         );
     }
