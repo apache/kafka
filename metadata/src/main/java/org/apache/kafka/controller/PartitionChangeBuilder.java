@@ -17,10 +17,12 @@
 
 package org.apache.kafka.controller;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.function.IntPredicate;
@@ -33,6 +35,7 @@ import org.apache.kafka.common.metadata.PartitionChangeRecord;
 import org.apache.kafka.metadata.LeaderRecoveryState;
 import org.apache.kafka.metadata.PartitionRegistration;
 import org.apache.kafka.metadata.Replicas;
+import org.apache.kafka.metadata.placement.DefaultDirProvider;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.common.MetadataVersion;
 import org.slf4j.Logger;
@@ -49,7 +52,7 @@ public class PartitionChangeBuilder {
     public static boolean changeRecordIsNoOp(PartitionChangeRecord record) {
         if (record.isr() != null) return false;
         if (record.eligibleLeaderReplicas() != null) return false;
-        if (record.lastKnownELR() != null) return false;
+        if (record.lastKnownElr() != null) return false;
         if (record.leader() != NO_LEADER_CHANGE) return false;
         if (record.replicas() != null) return false;
         if (record.removingReplicas() != null) return false;
@@ -82,6 +85,8 @@ public class PartitionChangeBuilder {
     private final int partitionId;
     private final IntPredicate isAcceptableLeader;
     private final MetadataVersion metadataVersion;
+    private final int minISR;
+    private final Map<Integer, Uuid> targetDirectories;
     private List<Integer> targetIsr;
     private List<Integer> targetReplicas;
     private List<Integer> targetRemoving;
@@ -93,7 +98,7 @@ public class PartitionChangeBuilder {
     private LeaderRecoveryState targetLeaderRecoveryState;
     private boolean zkMigrationEnabled;
     private boolean eligibleLeaderReplicasEnabled;
-    private int minISR;
+    private DefaultDirProvider defaultDirProvider;
 
     // Whether allow electing last known leader in a Balanced recovery. Note, the last known leader will be stored in the
     // lastKnownElr field if enabled.
@@ -123,6 +128,10 @@ public class PartitionChangeBuilder {
         this.targetElr = Replicas.toList(partition.elr);
         this.targetLastKnownElr = Replicas.toList(partition.lastKnownElr);
         this.targetLeaderRecoveryState = partition.leaderRecoveryState;
+        this.targetDirectories = DirectoryId.createAssignmentMap(partition.replicas, partition.directories);
+        this.defaultDirProvider = uuid -> {
+            throw new IllegalStateException("DefaultDirProvider is not set");
+        };
     }
 
     public PartitionChangeBuilder setTargetIsr(List<Integer> targetIsr) {
@@ -181,6 +190,16 @@ public class PartitionChangeBuilder {
 
     public PartitionChangeBuilder setUseLastKnownLeaderInBalancedRecovery(boolean useLastKnownLeaderInBalancedRecovery) {
         this.useLastKnownLeaderInBalancedRecovery = useLastKnownLeaderInBalancedRecovery;
+        return this;
+    }
+
+    public PartitionChangeBuilder setDirectory(int brokerId, Uuid dir) {
+        this.targetDirectories.put(brokerId, dir);
+        return this;
+    }
+
+    public PartitionChangeBuilder setDefaultDirProvider(DefaultDirProvider defaultDirProvider) {
+        this.defaultDirProvider = defaultDirProvider;
         return this;
     }
 
@@ -446,11 +465,19 @@ public class PartitionChangeBuilder {
     }
 
     private void setAssignmentChanges(PartitionChangeRecord record) {
-        if (!targetReplicas.isEmpty() && !targetReplicas.equals(Replicas.toList(partition.replicas))) {
+        if (!targetReplicas.isEmpty()) {
             if (metadataVersion.isDirectoryAssignmentSupported()) {
-                record.setDirectories(DirectoryId.createDirectoriesFrom(partition.replicas, partition.directories, targetReplicas));
+                List<Uuid> directories = new ArrayList<>(targetReplicas.size());
+                for (int replica : targetReplicas) {
+                    directories.add(this.targetDirectories.getOrDefault(replica, defaultDirProvider.defaultDir(replica)));
+                }
+                if (!directories.equals(Arrays.asList(partition.directories))) {
+                    record.setDirectories(directories);
+                }
             }
-            record.setReplicas(targetReplicas);
+            if (!targetReplicas.equals(Replicas.toList(partition.replicas))) {
+                record.setReplicas(targetReplicas);
+            }
         }
         if (!targetRemoving.equals(Replicas.toList(partition.removingReplicas))) {
             record.setRemovingReplicas(targetRemoving);
@@ -465,7 +492,7 @@ public class PartitionChangeBuilder {
         if (record.isr() != null && record.isr().isEmpty() && (partition.lastKnownElr.length != 1 ||
             partition.lastKnownElr[0] != partition.leader)) {
             // Only update the last known leader when the first time the partition becomes leaderless.
-            record.setLastKnownELR(Arrays.asList(partition.leader));
+            record.setLastKnownElr(Arrays.asList(partition.leader));
         }
     }
 
@@ -491,14 +518,14 @@ public class PartitionChangeBuilder {
         }
 
         if (!targetLastKnownElr.equals(Replicas.toList(partition.lastKnownElr))) {
-            record.setLastKnownELR(targetLastKnownElr);
+            record.setLastKnownElr(targetLastKnownElr);
         }
     }
 
     private void maybePopulateTargetElr() {
         if (!eligibleLeaderReplicasEnabled) return;
 
-        // If the ISR is larger or equal to the min ISR, clear the ELR and lastKnownELR.
+        // If the ISR is larger or equal to the min ISR, clear the ELR and LastKnownElr.
         if (targetIsr.size() >= minISR) {
             targetElr = Collections.emptyList();
             targetLastKnownElr = Collections.emptyList();

@@ -20,6 +20,7 @@ package org.apache.kafka.metadata.placement;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 
+import org.apache.kafka.common.Uuid;
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
@@ -74,10 +75,16 @@ public class TopicAssignmentTest {
     @Test
     public void testToString() {
         List<Integer> replicas = Arrays.asList(0, 1, 2);
+        List<Uuid> directories = Arrays.asList(
+                Uuid.fromString("v56qeYzNRrqNtXsxzcReog"),
+                Uuid.fromString("MvUIAsOiRlSePeiBHdZrSQ"),
+                Uuid.fromString("jUqCchHtTHqMxeVv4dw1RA")
+        );
         List<PartitionAssignment> partitionAssignments = Arrays.asList(
-            new PartitionAssignment(replicas)
+            new PartitionAssignment(replicas, directories::get)
         );
         TopicAssignment topicAssignment = new TopicAssignment(partitionAssignments);
-        assertEquals("TopicAssignment(assignments=[PartitionAssignment(replicas=[0, 1, 2])])", topicAssignment.toString());
+        assertEquals("TopicAssignment(assignments=[PartitionAssignment(replicas=[0, 1, 2], " +
+                "directories=[v56qeYzNRrqNtXsxzcReog, MvUIAsOiRlSePeiBHdZrSQ, jUqCchHtTHqMxeVv4dw1RA])])", topicAssignment.toString());
     }
 }

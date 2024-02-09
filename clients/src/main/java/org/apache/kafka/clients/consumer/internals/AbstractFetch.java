@@ -16,14 +16,12 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
-import java.util.List;
-import java.util.stream.Collectors;
 import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.FetchSessionHandler;
 import org.apache.kafka.clients.KafkaClient;
-import org.apache.kafka.clients.NetworkClientUtils;
 import org.apache.kafka.clients.Metadata;
+import org.apache.kafka.clients.NetworkClientUtils;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
@@ -47,10 +45,12 @@ import java.io.Closeable;
 import java.time.Duration;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.function.Predicate;
+import java.util.stream.Collectors;
 
 import static org.apache.kafka.clients.consumer.internals.FetchUtils.requestMetadataUpdate;
 
@@ -376,25 +376,21 @@ public abstract class AbstractFetch implements Closeable {
         final Cluster cluster = metadata.fetch();
         Map<Node, FetchSessionHandler.Builder> fetchable = new HashMap<>();
 
-        try {
-            sessionHandlers.forEach((fetchTargetNodeId, sessionHandler) -> {
-                // set the session handler to notify close. This will set the next metadata request to send close message.
-                sessionHandler.notifyClose();
+        sessionHandlers.forEach((fetchTargetNodeId, sessionHandler) -> {
+            // set the session handler to notify close. This will set the next metadata request to send close message.
+            sessionHandler.notifyClose();
 
-                // FetchTargetNode may not be available as it may have disconnected the connection. In such cases, we will
-                // skip sending the close request.
-                final Node fetchTarget = cluster.nodeById(fetchTargetNodeId);
+            // FetchTargetNode may not be available as it may have disconnected the connection. In such cases, we will
+            // skip sending the close request.
+            final Node fetchTarget = cluster.nodeById(fetchTargetNodeId);
 
-                if (fetchTarget == null || isUnavailable(fetchTarget)) {
-                    log.debug("Skip sending close session request to broker {} since it is not reachable", fetchTarget);
-                    return;
-                }
+            if (fetchTarget == null || isUnavailable(fetchTarget)) {
+                log.debug("Skip sending close session request to broker {} since it is not reachable", fetchTarget);
+                return;
+            }
 
-                fetchable.put(fetchTarget, sessionHandler.newBuilder());
-            });
-        } finally {
-            sessionHandlers.clear();
-        }
+            fetchable.put(fetchTarget, sessionHandler.newBuilder());
+        });
 
         return fetchable.entrySet().stream().collect(Collectors.toMap(Map.Entry::getKey, e -> e.getValue().build()));
     }

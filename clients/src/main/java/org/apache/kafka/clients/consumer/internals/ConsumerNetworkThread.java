@@ -20,8 +20,6 @@ import org.apache.kafka.clients.KafkaClient;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEventProcessor;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
-import org.apache.kafka.common.KafkaException;
-import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.internals.IdempotentCloser;
 import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.utils.KafkaThread;
@@ -36,9 +34,7 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.concurrent.Future;
 import java.util.function.Supplier;
-import java.util.stream.Collectors;
 
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.DEFAULT_CLOSE_TIMEOUT_MS;
 import static org.apache.kafka.common.utils.Utils.closeQuietly;
@@ -49,7 +45,8 @@ import static org.apache.kafka.common.utils.Utils.closeQuietly;
  */
 public class ConsumerNetworkThread extends KafkaThread implements Closeable {
 
-    private static final long MAX_POLL_TIMEOUT_MS = 5000;
+    // visible for testing
+    static final long MAX_POLL_TIMEOUT_MS = 5000;
     private static final String BACKGROUND_THREAD_NAME = "consumer_background_thread";
     private final Time time;
     private final Logger log;
@@ -62,6 +59,7 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
     private volatile boolean running;
     private final IdempotentCloser closer = new IdempotentCloser();
     private volatile Duration closeTimeout = Duration.ofMillis(DEFAULT_CLOSE_TIMEOUT_MS);
+    private volatile long cachedMaximumTimeToWait = MAX_POLL_TIMEOUT_MS;
 
     public ConsumerNetworkThread(LogContext logContext,
                                  Time time,
@@ -74,13 +72,11 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
         this.applicationEventProcessorSupplier = applicationEventProcessorSupplier;
         this.networkClientDelegateSupplier = networkClientDelegateSupplier;
         this.requestManagersSupplier = requestManagersSupplier;
+        this.running = true;
     }
 
     @Override
     public void run() {
-        closer.assertOpen("Consumer network thread is already closed");
-        running = true;
-
         try {
             log.debug("Consumer network thread started");
 
@@ -90,14 +86,11 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
             while (running) {
                 try {
                     runOnce();
-                } catch (final WakeupException e) {
-                    log.debug("WakeupException caught, consumer network thread won't be interrupted");
-                    // swallow the wakeup exception to prevent killing the thread.
+                } catch (final Throwable e) {
+                    // Swallow the exception and continue
+                    log.error("Unexpected error caught in consumer network thread", e);
                 }
             }
-        } catch (final Throwable t) {
-            log.error("The consumer network thread failed due to unexpected error", t);
-            throw new KafkaException(t);
         } finally {
             cleanup();
         }
@@ -132,8 +125,9 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
      * </ol>
      */
     void runOnce() {
-        // If there are errors processing any events, the error will be thrown immediately. This will have
-        // the effect of closing the background thread.
+        // Process the events—if any—that were produced by the application thread. It is possible that when processing
+        // an event generates an error. In such cases, the processor will log an exception, but we do not want those
+        // errors to be propagated to the caller.
         applicationEventProcessor.process();
 
         final long currentTimeMs = time.milliseconds();
@@ -144,6 +138,12 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
                 .map(networkClientDelegate::addAll)
                 .reduce(MAX_POLL_TIMEOUT_MS, Math::min);
         networkClientDelegate.poll(pollWaitTimeMs, currentTimeMs);
+
+        cachedMaximumTimeToWait = requestManagers.entries().stream()
+                .filter(Optional::isPresent)
+                .map(Optional::get)
+                .map(rm -> rm.maximumTimeToWait(currentTimeMs))
+                .reduce(Long.MAX_VALUE, Math::min);
     }
 
     /**
@@ -173,29 +173,11 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
                            final NetworkClientDelegate networkClientDelegate,
                            final Timer timer) {
         // These are the optional outgoing requests at the
-        List<NetworkClientDelegate.PollResult> pollResults = requestManagers.stream()
+        requestManagers.stream()
                 .filter(Optional::isPresent)
                 .map(Optional::get)
                 .map(RequestManager::pollOnClose)
-                .collect(Collectors.toList());
-        long pollWaitTimeMs = pollResults.stream()
-                .map(networkClientDelegate::addAll)
-                .reduce(MAX_POLL_TIMEOUT_MS, Math::min);
-        pollWaitTimeMs = Math.min(pollWaitTimeMs, timer.remainingMs());
-        networkClientDelegate.poll(pollWaitTimeMs, timer.currentTimeMs());
-        timer.update();
-
-        List<Future<?>> requestFutures = pollResults.stream()
-                .flatMap(fads -> fads.unsentRequests.stream())
-                .map(NetworkClientDelegate.UnsentRequest::future)
-                .collect(Collectors.toList());
-
-        // Poll to ensure that request has been written to the socket. Wait until either the timer has expired or until
-        // all requests have received a response.
-        while (timer.notExpired() && !requestFutures.stream().allMatch(Future::isDone)) {
-            networkClientDelegate.poll(timer.remainingMs(), timer.currentTimeMs());
-            timer.update();
-        }
+                .forEach(networkClientDelegate::addAll);
     }
 
     public boolean isRunning() {
@@ -206,6 +188,22 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
         // The network client can be null if the initializeResources method has not yet been called.
         if (networkClientDelegate != null)
             networkClientDelegate.wakeup();
+    }
+
+    /**
+     * Returns the delay for which the application thread can safely wait before it should be responsive
+     * to results from the request managers. For example, the subscription state can change when heartbeats
+     * are sent, so blocking for longer than the heartbeat interval might mean the application thread is not
+     * responsive to changes.
+     *
+     * Because this method is called by the application thread, it's not allowed to access the request managers
+     * that actually provide the information. As a result, the consumer network thread periodically caches the
+     * information from the request managers and this can then be read safely using this method.
+     *
+     * @return The maximum delay in milliseconds
+     */
+    public long maximumTimeToWait() {
+        return cachedMaximumTimeToWait;
     }
 
     @Override
@@ -254,13 +252,31 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
         }
     }
 
+    /**
+     * Check the unsent queue one last time and poll until all requests are sent or the timer runs out.
+     */
+    private void sendUnsentRequests(final Timer timer) {
+        if (networkClientDelegate.unsentRequests().isEmpty())
+            return;
+        do {
+            networkClientDelegate.poll(timer.remainingMs(), timer.currentTimeMs());
+            timer.update();
+        } while (timer.notExpired() && !networkClientDelegate.unsentRequests().isEmpty());
+    }
+
     void cleanup() {
         log.trace("Closing the consumer network thread");
         Timer timer = time.timer(closeTimeout);
-        runAtClose(requestManagers.entries(), networkClientDelegate, timer);
-        closeQuietly(requestManagers, "request managers");
-        closeQuietly(networkClientDelegate, "network client delegate");
-        closeQuietly(applicationEventProcessor, "application event processor");
-        log.debug("Closed the consumer network thread");
+        try {
+            runAtClose(requestManagers.entries(), networkClientDelegate, timer);
+        } catch (Exception e) {
+            log.error("Unexpected error during shutdown.  Proceed with closing.", e);
+        } finally {
+            sendUnsentRequests(timer);
+            closeQuietly(requestManagers, "request managers");
+            closeQuietly(networkClientDelegate, "network client delegate");
+            closeQuietly(applicationEventProcessor, "application event processor");
+            log.debug("Closed the consumer network thread");
+        }
     }
 }

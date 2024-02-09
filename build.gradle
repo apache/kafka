@@ -44,7 +44,9 @@ plugins {
   // be dropped from gradle/resources/dependencycheck-suppressions.xml
   id "com.github.spotbugs" version '5.1.3' apply false
   id 'org.scoverage' version '7.0.1' apply false
-  id 'com.github.johnrengelman.shadow' version '8.1.1' apply false
+  // Updating the shadow plugin version to 8.1.1 causes issue with signing and publishing the shadowed
+  // artifacts - see https://github.com/johnrengelman/shadow/issues/901
+  id 'com.github.johnrengelman.shadow' version '8.1.0' apply false
   id 'com.diffplug.spotless' version '6.14.0' apply false // 6.14.1 and newer require Java 11 at compile time, so we can't upgrade until AK 4.0
 }
 
@@ -207,7 +209,9 @@ if (repo != null) {
         'streams/streams-scala/logs/*',
         'licenses/*',
         '**/generated/**',
-        'clients/src/test/resources/serializedData/*'
+        'clients/src/test/resources/serializedData/*',
+        'docker/test/fixtures/secrets/*',
+        'docker/examples/fixtures/secrets/*'
     ])
   }
 } else {
@@ -417,7 +421,6 @@ subprojects {
     testsToExclude.addAll([
       // connect tests
       "**/KafkaConfigBackingStoreTest.*",
-      "**/StandaloneHerderTest.*",
       "**/WorkerSinkTaskTest.*"
     ])
   }
@@ -848,6 +851,10 @@ project(':server') {
   dependencies {
     implementation project(':clients')
     implementation project(':server-common')
+    implementation project(':group-coordinator')
+    implementation project(':transaction-coordinator')
+    implementation project(':raft')
+    implementation libs.metrics
 
     implementation libs.slf4jApi
 
@@ -924,6 +931,7 @@ project(':core') {
 
     implementation project(':server-common')
     implementation project(':group-coordinator')
+    implementation project(':transaction-coordinator')
     implementation project(':metadata')
     implementation project(':storage:storage-api')
     implementation project(':tools:tools-api')
@@ -987,9 +995,6 @@ project(':core') {
     testImplementation libs.apachedsJdbmPartition
     testImplementation libs.junitJupiter
     testImplementation libs.slf4jlog4j
-    testImplementation(libs.jfreechart) {
-      exclude group: 'junit', module: 'junit'
-    }
     testImplementation libs.caffeine
     
     generator project(':generator')
@@ -1314,6 +1319,7 @@ project(':group-coordinator') {
     implementation project(':server-common')
     implementation project(':clients')
     implementation project(':metadata')
+    implementation project(':storage')
     implementation libs.slf4jApi
     implementation libs.metrics
 
@@ -1361,6 +1367,27 @@ project(':group-coordinator') {
 
   compileJava.dependsOn 'processMessages'
   srcJar.dependsOn 'processMessages'
+}
+
+project(':transaction-coordinator') {
+  archivesBaseName = "kafka-transaction-coordinator"
+
+  sourceSets {
+    main {
+      java {
+        srcDirs = ["src/generated/java", "src/main/java"]
+      }
+    }
+    test {
+      java {
+        srcDirs = ["src/generated/java", "src/test/java"]
+      }
+    }
+  }
+
+  javadoc {
+    enabled = false
+  }
 }
 
 project(':examples') {
@@ -1423,6 +1450,7 @@ project(':clients') {
     testImplementation libs.junitJupiter
     testImplementation libs.log4j
     testImplementation libs.mockitoCore
+    testImplementation libs.mockitoJunitJupiter // supports MockitoExtension
 
     testRuntimeOnly libs.slf4jlog4j
     testRuntimeOnly libs.jacksonDatabind
@@ -1581,6 +1609,7 @@ project(':raft') {
     implementation libs.jacksonDatabind
 
     testImplementation project(':server-common')
+    testImplementation project(':server-common').sourceSets.test.output
     testImplementation project(':clients')
     testImplementation project(':clients').sourceSets.test.output
     testImplementation libs.junitJupiter
@@ -1995,6 +2024,9 @@ project(':tools') {
     testImplementation libs.mockitoCore
     testImplementation libs.mockitoJunitJupiter // supports MockitoExtension
     testImplementation libs.bcpkix // required by the clients test module, but we have to specify it explicitly as gradle does not include the transitive test dependency automatically
+    testImplementation(libs.jfreechart) {
+      exclude group: 'junit', module: 'junit'
+    }
     testRuntimeOnly libs.slf4jlog4j
   }
 
@@ -2089,6 +2121,11 @@ project(':shell') {
     implementation libs.jacksonJaxrsJsonProvider
 
     testImplementation project(':clients')
+    testImplementation project(':clients').sourceSets.test.output
+    testImplementation project(':core')
+    testImplementation project(':core').sourceSets.test.output
+    testImplementation project(':server-common')
+    testImplementation project(':server-common').sourceSets.test.output
     testImplementation libs.junitJupiter
 
     testRuntimeOnly libs.slf4jlog4j
@@ -2138,6 +2175,7 @@ project(':streams') {
     testImplementation project(':core')
     testImplementation project(':tools')
     testImplementation project(':core').sourceSets.test.output
+    testImplementation project(':server-common')
     testImplementation project(':server-common').sourceSets.test.output
     testImplementation libs.log4j
     testImplementation libs.junitJupiter
@@ -2263,6 +2301,7 @@ project(':streams') {
             ':streams:upgrade-system-tests-33:test',
             ':streams:upgrade-system-tests-34:test',
             ':streams:upgrade-system-tests-35:test',
+            ':streams:upgrade-system-tests-36:test',
             ':streams:examples:test'
     ]
   )
@@ -2275,8 +2314,14 @@ project(':streams:streams-scala') {
     api project(':streams')
 
     api libs.scalaLibrary
-    api libs.scalaCollectionCompat
-
+    if ( versions.baseScala == '2.12' ) {
+      // Scala-Collection-Compat isn't required when compiling with Scala 2.13 or later,
+      // and having it in the dependencies could lead to classpath conflicts in Scala 3
+      // projects that use kafka-streams-kafka_2.13 (because we don't have a Scala 3 version yet)
+      // but also pull in scala-collection-compat_3 via another dependency.
+      // So we make sure to not include it in the dependencies.
+      api libs.scalaCollectionCompat
+    }
     testImplementation project(':core')
     testImplementation project(':core').sourceSets.test.output
     testImplementation project(':server-common').sourceSets.test.output
@@ -2674,6 +2719,20 @@ project(':streams:upgrade-system-tests-35') {
   }
 }
 
+
+project(':streams:upgrade-system-tests-36') {
+  archivesBaseName = "kafka-streams-upgrade-system-tests-36"
+
+  dependencies {
+    testImplementation libs.kafkaStreams_36
+    testRuntimeOnly libs.junitJupiter
+  }
+
+  systemTestLibs {
+    dependsOn testJar
+  }
+}
+
 project(':jmh-benchmarks') {
 
   apply plugin: 'com.github.johnrengelman.shadow'
@@ -2696,6 +2755,7 @@ project(':jmh-benchmarks') {
     implementation project(':core')
     implementation project(':connect:api')
     implementation project(':connect:transforms')
+    implementation project(':connect:json')
     implementation project(':clients').sourceSets.test.output
     implementation project(':core').sourceSets.test.output
     implementation project(':server-common').sourceSets.test.output
@@ -2842,6 +2902,7 @@ project(':connect:json') {
 
     api libs.jacksonDatabind
     api libs.jacksonJDK8Datatypes
+    api libs.jacksonAfterburner
 
     implementation libs.slf4jApi
 

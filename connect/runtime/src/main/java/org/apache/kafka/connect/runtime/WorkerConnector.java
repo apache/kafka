@@ -73,6 +73,7 @@ public class WorkerConnector implements Runnable {
     private final AtomicReference<TargetState> pendingTargetStateChange;
     private final AtomicReference<Callback<TargetState>> pendingStateChangeCallback;
     private final CountDownLatch shutdownLatch;
+    private volatile Throwable externalFailure;
     private volatile boolean stopping;  // indicates whether the Worker has asked the connector to stop
     private volatile boolean cancelled; // indicates whether the Worker has cancelled the connector (e.g. because of slow shutdown)
 
@@ -102,6 +103,7 @@ public class WorkerConnector implements Runnable {
         this.pendingTargetStateChange = new AtomicReference<>();
         this.pendingStateChangeCallback = new AtomicReference<>();
         this.shutdownLatch = new CountDownLatch(1);
+        this.externalFailure = null;
         this.stopping = false;
         this.cancelled = false;
     }
@@ -131,9 +133,27 @@ public class WorkerConnector implements Runnable {
         }
     }
 
+    /**
+     * Fail the connector.
+     * @param cause the cause of the failure; if null, the connector will not be failed
+     */
+    public void fail(Throwable cause) {
+        synchronized (this) {
+            if (this.externalFailure != null)
+                return;
+            log.error("{} Connector has failed", this, cause);
+            this.externalFailure = cause;
+            notify();
+        }
+    }
+
     void doRun() {
         initialize();
         while (!stopping) {
+            Throwable failure = externalFailure;
+            if (failure != null)
+                onFailure(failure);
+
             TargetState newTargetState;
             Callback<TargetState> stateChangeCallback;
             synchronized (this) {
@@ -144,7 +164,10 @@ public class WorkerConnector implements Runnable {
                 doTransitionTo(newTargetState, stateChangeCallback);
             }
             synchronized (this) {
-                if (pendingTargetStateChange.get() != null || stopping) {
+                if (pendingTargetStateChange.get() != null
+                        || (!State.FAILED.equals(state) && externalFailure != null)
+                        || stopping
+                ) {
                     // An update occurred before we entered the synchronized block; no big deal,
                     // just start the loop again until we've handled everything
                 } else {
@@ -203,7 +226,11 @@ public class WorkerConnector implements Runnable {
         }
     }
 
-    private void onFailure(Throwable t) {
+    private synchronized void onFailure(Throwable t) {
+        // If we've already failed, we don't overwrite the last-reported cause of failure
+        if (this.state == State.FAILED)
+            return;
+
         statusListener.onFailure(connName, t);
         this.state = State.FAILED;
     }

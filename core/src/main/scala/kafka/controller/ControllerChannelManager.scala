@@ -45,8 +45,8 @@ import scala.collection.{Seq, Set, mutable}
 import scala.jdk.CollectionConverters._
 
 object ControllerChannelManager {
-  val QueueSizeMetricName = "QueueSize"
-  val RequestRateAndQueueTimeMetricName = "RequestRateAndQueueTimeMs"
+  private val QueueSizeMetricName = "QueueSize"
+  private val RequestRateAndQueueTimeMetricName = "RequestRateAndQueueTimeMs"
 }
 
 class ControllerChannelManager(controllerEpoch: () => Int,
@@ -207,7 +207,7 @@ class ControllerChannelManager(controllerEpoch: () => Int,
     }
   }
 
-  protected def startRequestSendThread(brokerId: Int): Unit = {
+  private def startRequestSendThread(brokerId: Int): Unit = {
     val requestThread = brokerStateInfo(brokerId).requestSendThread
     if (requestThread.getState == Thread.State.NEW)
       requestThread.start()
@@ -332,7 +332,7 @@ class ControllerBrokerRequestBatch(
   stateChangeLogger
 ) {
 
-  def sendEvent(event: ControllerEvent): Unit = {
+  private def sendEvent(event: ControllerEvent): Unit = {
     controllerEventManager.put(event)
   }
   def sendRequest(brokerId: Int,
@@ -373,10 +373,10 @@ abstract class AbstractControllerBrokerRequestBatch(config: KafkaConfig,
                                                     stateChangeLogger: StateChangeLogger,
                                                     kraftController: Boolean = false) extends Logging {
   val controllerId: Int = config.brokerId
-  val leaderAndIsrRequestMap = mutable.Map.empty[Int, mutable.Map[TopicPartition, LeaderAndIsrPartitionState]]
-  val stopReplicaRequestMap = mutable.Map.empty[Int, mutable.Map[TopicPartition, StopReplicaPartitionState]]
-  val updateMetadataRequestBrokerSet = mutable.Set.empty[Int]
-  val updateMetadataRequestPartitionInfoMap = mutable.Map.empty[TopicPartition, UpdateMetadataPartitionState]
+  private val leaderAndIsrRequestMap = mutable.Map.empty[Int, mutable.Map[TopicPartition, LeaderAndIsrPartitionState]]
+  private val stopReplicaRequestMap = mutable.Map.empty[Int, mutable.Map[TopicPartition, StopReplicaPartitionState]]
+  private val updateMetadataRequestBrokerSet = mutable.Set.empty[Int]
+  private val updateMetadataRequestPartitionInfoMap = mutable.Map.empty[TopicPartition, UpdateMetadataPartitionState]
   private var updateType: AbstractControlRequest.Type = AbstractControlRequest.Type.UNKNOWN
   private var metadataInstance: ControllerChannelContext = _
 

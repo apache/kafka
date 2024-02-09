@@ -91,6 +91,7 @@ class AclAuthorizerWithZkSaslTest extends QuorumTestHarness with SaslSetup {
     aclAuthorizer.close()
     aclAuthorizer2.close()
     super.tearDown()
+    closeSasl()
   }
 
   @Test

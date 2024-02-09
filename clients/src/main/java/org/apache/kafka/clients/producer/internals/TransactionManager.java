@@ -1673,9 +1673,8 @@ public class TransactionManager {
                         coordinatorReloaded = true;
                         lookupCoordinator(FindCoordinatorRequest.CoordinatorType.GROUP, builder.data.groupId());
                     }
-                } else if (error == Errors.UNKNOWN_TOPIC_OR_PARTITION
-                        || error == Errors.COORDINATOR_LOAD_IN_PROGRESS) {
-                    // If the topic is unknown or the coordinator is loading, retry with the current coordinator
+                } else if (error.exception() instanceof RetriableException) {
+                    // If the topic is unknown, the coordinator is loading, or is another retriable error, retry with the current coordinator
                     continue;
                 } else if (error == Errors.GROUP_AUTHORIZATION_FAILED) {
                     abortableError(GroupAuthorizationException.forGroupId(builder.data.groupId()));

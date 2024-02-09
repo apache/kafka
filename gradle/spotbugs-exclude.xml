@@ -545,6 +545,12 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
     </Match>
 
     <Match>
+        <!-- False positive - null is allow in SortedMap -->
+        <Class name="org.apache.kafka.streams.processor.internals.assignment.Graph"/>
+        <Bug pattern="NP_NONNULL_PARAM_VIOLATION"/>
+    </Match>
+
+    <Match>
         <!-- Suppress a warning about ignoring return value because this is intentional. -->
         <Class name="org.apache.kafka.common.config.AbstractConfig$ResolvingMap"/>
         <Method name="get"/>

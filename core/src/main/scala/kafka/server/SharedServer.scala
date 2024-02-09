@@ -18,7 +18,6 @@
 package kafka.server
 
 import kafka.raft.KafkaRaftManager
-import kafka.server.KafkaRaftServer.{BrokerRole, ControllerRole}
 import kafka.server.Server.MetricsPrefix
 import kafka.server.metadata.BrokerServerMetrics
 import kafka.utils.{CoreUtils, Logging}
@@ -29,9 +28,11 @@ import org.apache.kafka.image.MetadataProvenance
 import org.apache.kafka.image.loader.MetadataLoader
 import org.apache.kafka.image.loader.metrics.MetadataLoaderMetrics
 import org.apache.kafka.image.publisher.{SnapshotEmitter, SnapshotGenerator}
+import org.apache.kafka.image.publisher.metrics.SnapshotEmitterMetrics
 import org.apache.kafka.metadata.MetadataRecordSerde
 import org.apache.kafka.metadata.properties.MetaPropertiesEnsemble
 import org.apache.kafka.raft.RaftConfig.AddressSpec
+import org.apache.kafka.server.ProcessRole
 import org.apache.kafka.server.common.ApiMessageAndVersion
 import org.apache.kafka.server.fault.{FaultHandler, LoggingFaultHandler, ProcessTerminatingFaultHandler}
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
@@ -170,7 +171,7 @@ class SharedServer(
    */
   def metadataLoaderFaultHandler: FaultHandler = faultHandlerFactory.build(
     name = "metadata loading",
-    fatal = sharedServerConfig.processRoles.contains(ControllerRole),
+    fatal = sharedServerConfig.processRoles.contains(ProcessRole.ControllerRole),
     action = () => SharedServer.this.synchronized {
       Option(brokerMetrics).foreach(_.metadataLoadErrorCount.getAndIncrement())
       Option(controllerServerMetrics).foreach(_.incrementMetadataErrorCount())
@@ -244,12 +245,12 @@ class SharedServer(
           // This is only done in tests.
           metrics = new Metrics()
         }
-        sharedServerConfig.dynamicConfig.initialize(zkClientOpt = None)
+        sharedServerConfig.dynamicConfig.initialize(zkClientOpt = None, clientMetricsReceiverPluginOpt = None)
 
-        if (sharedServerConfig.processRoles.contains(BrokerRole)) {
+        if (sharedServerConfig.processRoles.contains(ProcessRole.BrokerRole)) {
           brokerMetrics = BrokerServerMetrics(metrics)
         }
-        if (sharedServerConfig.processRoles.contains(ControllerRole)) {
+        if (sharedServerConfig.processRoles.contains(ProcessRole.ControllerRole)) {
           controllerServerMetrics = new ControllerMetadataMetrics(Optional.of(KafkaYammerMetrics.defaultRegistry()))
         }
         val _raftManager = new KafkaRaftManager[ApiMessageAndVersion](
@@ -289,6 +290,8 @@ class SharedServer(
         snapshotEmitter = new SnapshotEmitter.Builder().
           setNodeId(nodeId).
           setRaftClient(_raftManager.client).
+          setMetrics(new SnapshotEmitterMetrics(
+            Optional.of(KafkaYammerMetrics.defaultRegistry()), time)).
           build()
         snapshotGenerator = new SnapshotGenerator.Builder(snapshotEmitter).
           setNodeId(nodeId).

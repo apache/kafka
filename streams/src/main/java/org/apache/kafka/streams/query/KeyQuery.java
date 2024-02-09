@@ -22,6 +22,8 @@ import java.util.Objects;
 
 /**
  * Interactive query for retrieving a single record based on its key.
+ * @param <K> Type of keys
+ * @param <V> Type of values
  */
 @Evolving
 public final class KeyQuery<K, V> implements Query<V> {
@@ -30,7 +32,7 @@ public final class KeyQuery<K, V> implements Query<V> {
     private final boolean skipCache;
 
     private KeyQuery(final K key, final boolean skipCache) {
-        this.key = Objects.requireNonNull(key);
+        this.key = key;
         this.skipCache = skipCache;
     }
 
@@ -42,6 +44,7 @@ public final class KeyQuery<K, V> implements Query<V> {
      * @param <V> The type of the value that will be retrieved
      */
     public static <K, V> KeyQuery<K, V> withKey(final K key) {
+        Objects.requireNonNull(key, "the key should not be null");
         return new KeyQuery<>(key, false);
     }
 
@@ -54,7 +57,9 @@ public final class KeyQuery<K, V> implements Query<V> {
     }
 
     /**
-     * The key that was specified for this query.
+     * Return the key that was specified for this query.
+     *
+     * @return The key that was specified for this query.
      */
     public K getKey() {
         return key;

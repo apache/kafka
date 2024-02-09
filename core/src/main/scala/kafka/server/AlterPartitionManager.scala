@@ -299,7 +299,7 @@ class DefaultAlterPartitionManager(
     (new AlterPartitionRequest.Builder(message, canUseTopicIds), topicNamesByIds)
   }
 
-  def handleAlterPartitionResponse(
+  private def handleAlterPartitionResponse(
     requestHeader: RequestHeader,
     alterPartitionResp: AlterPartitionResponse,
     sentBrokerEpoch: Long,

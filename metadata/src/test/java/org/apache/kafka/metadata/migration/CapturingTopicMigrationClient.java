@@ -48,7 +48,7 @@ public class CapturingTopicMigrationClient implements TopicMigrationClient {
 
     @Override
     public void iterateTopics(EnumSet<TopicVisitorInterest> interests, TopicVisitor visitor) {
-        
+
     }
 
     @Override

@@ -53,6 +53,20 @@ public interface CoordinatorTimer<T, U> {
     void schedule(String key, long delay, TimeUnit unit, boolean retry, TimeoutOperation<T, U> operation);
 
     /**
+     * Add an operation to the timer. If an operation with the same key
+     * already exists, replace it with the new operation.
+     *
+     * @param key           The key to identify this operation.
+     * @param delay         The delay to wait before expiring.
+     * @param unit          The delay unit.
+     * @param retry         A boolean indicating whether the operation should
+     *                      be retried on failure.
+     * @param retryBackoff  The delay when rescheduled on retry. The same unit is used.
+     * @param operation     The operation to perform upon expiration.
+     */
+    void schedule(String key, long delay, TimeUnit unit, boolean retry, long retryBackoff, TimeoutOperation<T, U> operation);
+
+    /**
      * Remove an operation corresponding to a given key.
      *
      * @param key The key.

@@ -50,7 +50,7 @@ public class QuorumControllerTestEnv implements AutoCloseable {
         private OptionalLong sessionTimeoutMillis = OptionalLong.empty();
         private OptionalLong leaderImbalanceCheckIntervalNs = OptionalLong.empty();
         private BootstrapMetadata bootstrapMetadata = BootstrapMetadata.
-                fromVersion(MetadataVersion.latest(), "test-provided version");
+                fromVersion(MetadataVersion.latestTesting(), "test-provided version");
 
         public Builder(LocalLogManagerTestEnv logEnv) {
             this.logEnv = logEnv;
@@ -103,7 +103,7 @@ public class QuorumControllerTestEnv implements AutoCloseable {
                 builder.setRaftClient(logEnv.logManagers().get(nodeId));
                 builder.setBootstrapMetadata(bootstrapMetadata);
                 builder.setLeaderImbalanceCheckIntervalNs(leaderImbalanceCheckIntervalNs);
-                builder.setQuorumFeatures(new QuorumFeatures(nodeId, QuorumFeatures.defaultFeatureMap(), nodeIds));
+                builder.setQuorumFeatures(new QuorumFeatures(nodeId, QuorumFeatures.defaultFeatureMap(true), nodeIds));
                 sessionTimeoutMillis.ifPresent(timeout -> {
                     builder.setSessionTimeoutNs(NANOSECONDS.convert(timeout, TimeUnit.MILLISECONDS));
                 });

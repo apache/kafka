@@ -58,7 +58,7 @@ class BrokerLifecycleManager(
   val time: Time,
   val threadNamePrefix: String,
   val isZkBroker: Boolean,
-  val logDirs: Set[Uuid] = Set.empty[Uuid]
+  val logDirs: Set[Uuid]
 ) extends Logging {
 
   private def logPrefix(): String = {
@@ -106,23 +106,23 @@ class BrokerLifecycleManager(
   /**
    * The broker incarnation ID.  This ID uniquely identifies each time we start the broker
    */
-  val incarnationId = Uuid.randomUuid()
+  val incarnationId: Uuid = Uuid.randomUuid()
 
   /**
    * A future which is completed just as soon as the broker has caught up with the latest
    * metadata offset for the first time.
    */
-  val initialCatchUpFuture = new CompletableFuture[Void]()
+  val initialCatchUpFuture: CompletableFuture[Void] = new CompletableFuture[Void]()
 
   /**
    * A future which is completed when the broker is unfenced for the first time.
    */
-  val initialUnfenceFuture = new CompletableFuture[Void]()
+  val initialUnfenceFuture: CompletableFuture[Void] = new CompletableFuture[Void]()
 
   /**
    * A future which is completed when controlled shutdown is done.
    */
-  val controlledShutdownFuture = new CompletableFuture[Void]()
+  val controlledShutdownFuture: CompletableFuture[Void] = new CompletableFuture[Void]()
 
   /**
    * The broker epoch, or -1 if the broker has not yet registered.  This variable can only
@@ -149,10 +149,10 @@ class BrokerLifecycleManager(
   private var readyToUnfence = false
 
   /**
-   * List of offline directories pending to be sent.
+   * List of accumulated offline directories.
    * This variable can only be read or written from the event queue thread.
    */
-  private var offlineDirsPending = Set[Uuid]()
+  private var offlineDirs = Set[Uuid]()
 
   /**
    * True if we sent a event queue to the active controller requesting controlled
@@ -244,6 +244,19 @@ class BrokerLifecycleManager(
     eventQueue.append(new OfflineDirEvent(directory))
   }
 
+  def handleKraftJBODMetadataVersionUpdate(): Unit = {
+    eventQueue.append(new KraftJBODMetadataVersionUpdateEvent())
+  }
+
+  private class KraftJBODMetadataVersionUpdateEvent extends EventQueue.Event {
+    override def run(): Unit = {
+      if (!isZkBroker) {
+        registered = false
+        scheduleNextCommunicationImmediately()
+      }
+    }
+  }
+
   def brokerEpoch: Long = _brokerEpoch
 
   def state: BrokerState = _state
@@ -291,7 +304,7 @@ class BrokerLifecycleManager(
     eventQueue.close()
   }
 
-  private class SetReadyToUnfenceEvent() extends EventQueue.Event {
+  private class SetReadyToUnfenceEvent extends EventQueue.Event {
     override def run(): Unit = {
       readyToUnfence = true
       scheduleNextCommunicationImmediately()
@@ -300,10 +313,10 @@ class BrokerLifecycleManager(
 
   private class OfflineDirEvent(val dir: Uuid) extends EventQueue.Event {
     override def run(): Unit = {
-      if (offlineDirsPending.isEmpty) {
-        offlineDirsPending = Set(dir)
+      if (offlineDirs.isEmpty) {
+        offlineDirs = Set(dir)
       } else {
-        offlineDirsPending = offlineDirsPending + dir
+        offlineDirs = offlineDirs + dir
       }
       if (registered) {
         scheduleNextCommunicationImmediately()
@@ -345,7 +358,7 @@ class BrokerLifecycleManager(
         setMaxSupportedVersion(range.max()))
     }
     val sortedLogDirs = new util.ArrayList[Uuid]
-    logDirs.foreach(sortedLogDirs.add(_))
+    logDirs.foreach(sortedLogDirs.add)
     sortedLogDirs.sort(new Comparator[Uuid]() {
       override def compare(a: Uuid, b: Uuid): Int = a.compareTo(b)
     })
@@ -424,15 +437,15 @@ class BrokerLifecycleManager(
       setCurrentMetadataOffset(metadataOffset).
       setWantFence(!readyToUnfence).
       setWantShutDown(_state == BrokerState.PENDING_CONTROLLED_SHUTDOWN).
-      setOfflineLogDirs(offlineDirsPending.toSeq.asJava)
+      setOfflineLogDirs(offlineDirs.toSeq.asJava)
     if (isTraceEnabled) {
       trace(s"Sending broker heartbeat $data")
     }
-    val handler = new BrokerHeartbeatResponseHandler(offlineDirsPending)
+    val handler = new BrokerHeartbeatResponseHandler()
     _channelManager.sendRequest(new BrokerHeartbeatRequest.Builder(data), handler)
   }
 
-  private class BrokerHeartbeatResponseHandler(dirsInFlight: Set[Uuid]) extends ControllerRequestCompletionHandler {
+  private class BrokerHeartbeatResponseHandler extends ControllerRequestCompletionHandler {
     override def onComplete(response: ClientResponse): Unit = {
       if (response.authenticationException() != null) {
         error(s"Unable to send broker heartbeat for $nodeId because of an " +
@@ -456,7 +469,7 @@ class BrokerLifecycleManager(
           // this response handler is not invoked from the event handler thread,
           // and processing a successful heartbeat response requires updating
           // state, so to continue we need to schedule an event
-          eventQueue.prepend(new BrokerHeartbeatResponseEvent(message.data(), dirsInFlight))
+          eventQueue.prepend(new BrokerHeartbeatResponseEvent(message.data()))
         } else {
           warn(s"Broker $nodeId sent a heartbeat request but received error $errorCode.")
           scheduleNextCommunicationAfterFailure()
@@ -470,10 +483,9 @@ class BrokerLifecycleManager(
     }
   }
 
-  private class BrokerHeartbeatResponseEvent(response: BrokerHeartbeatResponseData, dirsInFlight: Set[Uuid]) extends EventQueue.Event {
+  private class BrokerHeartbeatResponseEvent(response: BrokerHeartbeatResponseData) extends EventQueue.Event {
     override def run(): Unit = {
       failedAttempts = 0
-      offlineDirsPending = offlineDirsPending.diff(dirsInFlight)
       _state match {
         case BrokerState.STARTING =>
           if (response.isCaughtUp) {

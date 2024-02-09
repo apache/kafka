@@ -42,6 +42,7 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeoutException;
 
@@ -67,13 +68,13 @@ public class RestClient {
     /**
      * Sends HTTP request to remote REST server
      *
-     * @param url             HTTP connection will be established with this url.
-     * @param method          HTTP method ("GET", "POST", "PUT", etc.)
+     * @param url             HTTP connection will be established with this url, non-null.
+     * @param method          HTTP method ("GET", "POST", "PUT", etc.), non-null
      * @param headers         HTTP headers from REST endpoint
      * @param requestBodyData Object to serialize as JSON and send in the request body.
-     * @param responseFormat  Expected format of the response to the HTTP request.
+     * @param responseFormat  Expected format of the response to the HTTP request, non-null.
      * @param <T>             The type of the deserialized response to the HTTP request.
-     * @return The deserialized response to the HTTP request, or null if no data is expected.
+     * @return The deserialized response to the HTTP request, containing null if no data is expected or returned.
      */
     public <T> HttpResponse<T> httpRequest(String url, String method, HttpHeaders headers, Object requestBodyData,
                                                   TypeReference<T> responseFormat) {
@@ -83,21 +84,41 @@ public class RestClient {
     /**
      * Sends HTTP request to remote REST server
      *
-     * @param url                       HTTP connection will be established with this url.
-     * @param method                    HTTP method ("GET", "POST", "PUT", etc.)
+     * @param url                       HTTP connection will be established with this url, non-null.
+     * @param method                    HTTP method ("GET", "POST", "PUT", etc.), non-null
      * @param headers                   HTTP headers from REST endpoint
      * @param requestBodyData           Object to serialize as JSON and send in the request body.
-     * @param responseFormat            Expected format of the response to the HTTP request.
+     * @param sessionKey                The key to sign the request with (intended for internal requests only);
+     *                                  may be null if the request doesn't need to be signed
+     * @param requestSignatureAlgorithm The algorithm to sign the request with (intended for internal requests only);
+     *                                  may be null if the request doesn't need to be signed
+     */
+    public void httpRequest(String url, String method, HttpHeaders headers, Object requestBodyData,
+                                           SecretKey sessionKey, String requestSignatureAlgorithm) {
+        httpRequest(url, method, headers, requestBodyData, new TypeReference<Void>() { }, sessionKey, requestSignatureAlgorithm);
+    }
+
+    /**
+     * Sends HTTP request to remote REST server
+     *
+     * @param url                       HTTP connection will be established with this url, non-null.
+     * @param method                    HTTP method ("GET", "POST", "PUT", etc.), non-null
+     * @param headers                   HTTP headers from REST endpoint
+     * @param requestBodyData           Object to serialize as JSON and send in the request body.
+     * @param responseFormat            Expected format of the response to the HTTP request, non-null.
      * @param <T>                       The type of the deserialized response to the HTTP request.
      * @param sessionKey                The key to sign the request with (intended for internal requests only);
      *                                  may be null if the request doesn't need to be signed
      * @param requestSignatureAlgorithm The algorithm to sign the request with (intended for internal requests only);
      *                                  may be null if the request doesn't need to be signed
-     * @return The deserialized response to the HTTP request, or null if no data is expected.
+     * @return The deserialized response to the HTTP request, containing null if no data is expected or returned.
      */
     public <T> HttpResponse<T> httpRequest(String url, String method, HttpHeaders headers, Object requestBodyData,
                                                   TypeReference<T> responseFormat,
                                                   SecretKey sessionKey, String requestSignatureAlgorithm) {
+        Objects.requireNonNull(url, "url must be non-null");
+        Objects.requireNonNull(method, "method must be non-null");
+        Objects.requireNonNull(responseFormat, "response format must be non-null");
         // Only try to load SSL configs if we have to (see KAFKA-14816)
         SslContextFactory sslContextFactory = url.startsWith("https://")
                 ? SSLUtils.createClientSideSslContextFactory(config)
