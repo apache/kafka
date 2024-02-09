@@ -39,8 +39,9 @@ import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
 /**
- * An internal mutable cache of nodes, topics, and partitions in the Kafka cluster. This keeps an up-to-date Cluster
+ * An internal immutable cache of nodes, topics, and partitions in the Kafka cluster. This keeps an up-to-date Cluster
  * instance which is optimized for read access.
+ * Prefer to extend MetadataCache's API for internal client usage Vs the public {@link Cluster}
  */
 public class MetadataCache {
     private final String clusterId;
@@ -75,20 +76,21 @@ public class MetadataCache {
                           Map<String, Uuid> topicIds,
                           Cluster clusterInstance) {
         this.clusterId = clusterId;
-        this.nodes = nodes;
-        this.unauthorizedTopics = unauthorizedTopics;
-        this.invalidTopics = invalidTopics;
-        this.internalTopics = internalTopics;
+        this.nodes = Collections.unmodifiableMap(nodes);
+        this.unauthorizedTopics = Collections.unmodifiableSet(unauthorizedTopics);
+        this.invalidTopics = Collections.unmodifiableSet(invalidTopics);
+        this.internalTopics = Collections.unmodifiableSet(internalTopics);
         this.controller = controller;
         this.topicIds = Collections.unmodifiableMap(topicIds);
         this.topicNames = Collections.unmodifiableMap(
             topicIds.entrySet().stream().collect(Collectors.toMap(Map.Entry::getValue, Map.Entry::getKey))
         );
 
-        this.metadataByPartition = new HashMap<>(partitions.size());
+        Map<TopicPartition, PartitionMetadata> tmpMetadataByPartition = new HashMap<>(partitions.size());
         for (PartitionMetadata p : partitions) {
-            this.metadataByPartition.put(p.topicPartition, p);
+            tmpMetadataByPartition.put(p.topicPartition, p);
         }
+        this.metadataByPartition = Collections.unmodifiableMap(tmpMetadataByPartition);
 
         if (clusterInstance == null) {
             computeClusterView();
