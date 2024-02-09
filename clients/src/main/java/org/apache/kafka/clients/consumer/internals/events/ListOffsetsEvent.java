@@ -32,8 +32,7 @@ import java.util.Map;
  * {@link OffsetAndTimestamp} found (offset of the first message whose timestamp is greater than
  * or equals to the target timestamp)
  */
-public class ListOffsetsEvent extends CompletableApplicationEvent<Map<TopicPartition, OffsetAndTimestamp>> {
-
+public class ListOffsetsEvent<T> extends CompletableApplicationEvent<Map<TopicPartition, T>> {
     private final Map<TopicPartition, Long> timestampsToSearch;
     private final boolean requireTimestamps;
 

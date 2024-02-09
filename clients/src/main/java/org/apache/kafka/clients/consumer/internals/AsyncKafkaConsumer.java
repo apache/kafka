@@ -1093,7 +1093,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                 return Collections.emptyMap();
             }
             final Timer timer = time.timer(timeout);
-            final ListOffsetsEvent listOffsetsEvent = new ListOffsetsEvent(
+            final ListOffsetsEvent<OffsetAndTimestamp> listOffsetsEvent = new ListOffsetsEvent<>(
                 timestampsToSearch,
                 true,
                 timer);
@@ -1145,17 +1145,17 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                 .stream()
                 .collect(Collectors.toMap(Function.identity(), tp -> timestamp));
             Timer timer = time.timer(timeout);
-            ListOffsetsEvent listOffsetsEvent = new ListOffsetsEvent(
+            ListOffsetsEvent<Long> listOffsetsEvent = new ListOffsetsEvent<>(
                 timestampToSearch,
                 false,
                 timer);
-            Map<TopicPartition, OffsetAndTimestamp> offsetAndTimestampMap = applicationEventHandler.addAndGet(
+            Map<TopicPartition, Long> offsetAndTimestampMap = applicationEventHandler.addAndGet(
                 listOffsetsEvent,
                 timer);
             return offsetAndTimestampMap
                 .entrySet()
                 .stream()
-                .collect(Collectors.toMap(Map.Entry::getKey, e -> e.getValue().offset()));
+                .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
         } finally {
             release();
         }

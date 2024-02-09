@@ -414,9 +414,8 @@ public class MembershipManagerImpl implements MembershipManager {
     public void onHeartbeatSuccess(ConsumerGroupHeartbeatResponseData response) {
         if (response.errorCode() != Errors.NONE.code()) {
             String errorMessage = String.format(
-                    "Unexpected error in Heartbeat response. Expected no error, but received: %s",
-                    Errors.forCode(response.errorCode())
-            );
+                "Unexpected error in Heartbeat response. Expected no error, but received: %s",
+                Errors.forCode(response.errorCode()));
             throw new IllegalArgumentException(errorMessage);
         }
         MemberState state = state();
