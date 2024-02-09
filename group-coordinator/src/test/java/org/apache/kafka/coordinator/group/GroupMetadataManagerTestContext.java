@@ -107,7 +107,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.Mockito.mock;
 
-class GroupMetadataManagerTestContext {
+public class GroupMetadataManagerTestContext {
     public static <T> void assertUnorderedListEquals(
         List<T> expected,
         List<T> actual
@@ -152,7 +152,7 @@ class GroupMetadataManagerTestContext {
         return Objects.equals(fromAssignment(expected.topicPartitions()), fromAssignment(actual.topicPartitions()));
     }
 
-    public static Map<Uuid, Set<Integer>> fromAssignment(
+    private static Map<Uuid, Set<Integer>> fromAssignment(
         List<ConsumerGroupHeartbeatResponseData.TopicPartitions> assignment
     ) {
         if (assignment == null) return null;
@@ -199,7 +199,7 @@ class GroupMetadataManagerTestContext {
         }
     }
 
-    public static void assertApiMessageAndVersionEquals(
+    private static void assertApiMessageAndVersionEquals(
         ApiMessageAndVersion expected,
         ApiMessageAndVersion actual
     ) {
@@ -234,7 +234,7 @@ class GroupMetadataManagerTestContext {
         }
     }
 
-    public static Map<Uuid, Set<Integer>> fromTopicPartitions(
+    private static Map<Uuid, Set<Integer>> fromTopicPartitions(
         List<ConsumerGroupCurrentMemberAssignmentValue.TopicPartitions> assignment
     ) {
         Map<Uuid, Set<Integer>> assignmentMap = new HashMap<>();

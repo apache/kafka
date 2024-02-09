@@ -30,7 +30,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-class ConsumerGroupBuilder {
+public class ConsumerGroupBuilder {
     private final String groupId;
     private final int groupEpoch;
     private int assignmentEpoch;

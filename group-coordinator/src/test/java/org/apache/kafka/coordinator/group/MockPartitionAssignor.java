@@ -22,7 +22,7 @@ import org.apache.kafka.coordinator.group.assignor.PartitionAssignor;
 import org.apache.kafka.coordinator.group.assignor.PartitionAssignorException;
 import org.apache.kafka.coordinator.group.assignor.SubscribedTopicDescriber;
 
-class MockPartitionAssignor implements PartitionAssignor {
+public class MockPartitionAssignor implements PartitionAssignor {
     private final String name;
     private GroupAssignment prepareGroupAssignment = null;
 
