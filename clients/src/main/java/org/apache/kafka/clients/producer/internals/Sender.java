@@ -704,9 +704,10 @@ public class Sender implements Runnable {
                             "topic-partition may not exist or the user may not have Describe access to it",
                         batch.topicPartition);
                 } else {
+                    String errorMessage = error.exception(response.errorMessage).toString();
+                    errorMessage = (errorMessage.endsWith(".")) ? errorMessage : (errorMessage + ".");
                     log.warn("Received invalid metadata error in produce request on partition {} due to {} Going " +
-                            "to request metadata update now", batch.topicPartition,
-                            error.exception(response.errorMessage).toString());
+                            "to request metadata update now", batch.topicPartition, errorMessage);
                 }
                 if (error.exception() instanceof NotLeaderOrFollowerException || error.exception() instanceof FencedLeaderEpochException) {
                     log.debug("For {}, received error {}, with leaderIdAndEpoch {}", batch.topicPartition, error, response.currentLeader);
