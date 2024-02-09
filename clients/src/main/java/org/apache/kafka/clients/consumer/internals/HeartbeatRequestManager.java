@@ -400,7 +400,7 @@ public class HeartbeatRequestManager implements RequestManager {
                         membershipManager.memberId(), membershipManager.memberEpoch());
                 logInfo(message, response, currentTimeMs);
                 membershipManager.transitionToFenced();
-                // Skip backoff so that a next HB to rejoin is sent as soon as the fenced member releases it assignment
+                // Skip backoff so that a next HB to rejoin is sent as soon as the fenced member releases its assignment
                 heartbeatRequestState.reset();
                 break;
 
@@ -409,7 +409,7 @@ public class HeartbeatRequestManager implements RequestManager {
                         membershipManager.memberId());
                 logInfo(message, response, currentTimeMs);
                 membershipManager.transitionToFenced();
-                // Skip backoff so that a next HB to rejoin is sent as soon as the fenced member releases it assignment
+                // Skip backoff so that a next HB to rejoin is sent as soon as the fenced member releases its assignment
                 heartbeatRequestState.reset();
                 break;
 
