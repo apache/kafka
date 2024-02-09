@@ -14,7 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package integration.kafka.server
+package kafka.server
 
 import kafka.server.{BaseFetchRequestTest, KafkaConfig}
 import kafka.utils.{TestInfoUtils, TestUtils}
