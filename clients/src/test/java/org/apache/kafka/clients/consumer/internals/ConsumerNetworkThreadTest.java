@@ -173,7 +173,7 @@ public class ConsumerNetworkThreadTest {
     public void testListOffsetsEventIsProcessed() {
         Map<TopicPartition, Long> timestamps = Collections.singletonMap(new TopicPartition("topic1", 1), 5L);
         Timer timer = time.timer(100);
-        ApplicationEvent e = new ListOffsetsEvent(timestamps, true, timer);
+        ApplicationEvent e = new ListOffsetsEvent<>(timestamps, true, timer);
         applicationEventsQueue.add(e);
         consumerNetworkThread.runOnce();
         verify(applicationEventProcessor).process(any(ListOffsetsEvent.class));

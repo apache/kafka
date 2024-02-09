@@ -197,10 +197,16 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
         manager.maybeAutoCommitAsync();
     }
 
+    @SuppressWarnings("unchecked")
     private void process(final ListOffsetsEvent event) {
-        final CompletableFuture<Map<TopicPartition, OffsetAndTimestamp>> future =
-                requestManagers.offsetsRequestManager.fetchOffsets(event.timestampsToSearch(),
-                        event.requireTimestamps());
+        if (event.requireTimestamps()) {
+            final CompletableFuture<Map<TopicPartition, OffsetAndTimestamp>> future =
+                    requestManagers.offsetsRequestManager.fetchOffsetsForTime(event.timestampsToSearch());
+            future.whenComplete(complete(event.future()));
+            return;
+        }
+        final CompletableFuture<Map<TopicPartition, Long>> future =
+                requestManagers.offsetsRequestManager.beginningOrEndOffset(event.timestampsToSearch());
         future.whenComplete(complete(event.future()));
     }
 

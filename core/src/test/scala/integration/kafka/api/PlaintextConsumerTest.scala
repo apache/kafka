@@ -805,4 +805,38 @@ class PlaintextConsumerTest extends BaseConsumerTest {
 
     consumer2.close()
   }
+
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
+  def testSubscribeAndCommitSync(quorum: String, groupProtocol: String): Unit = {
+    // This test ensure that the member ID is propagated from the group coordinator when the
+    // assignment is received into a subsequent offset commit
+    val consumer = createConsumer()
+    assertEquals(0, consumer.assignment.size)
+    consumer.subscribe(List(topic).asJava)
+    awaitAssignment(consumer, Set(tp, tp2))
+
+    consumer.seek(tp, 0)
+
+    consumer.commitSync()
+  }
+
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
+  def testEndOffsets(quorum: String, groupProtocol: String): Unit = {
+    val producer = createProducer()
+    (0 until 10000).foreach { i =>
+      producer.send(new ProducerRecord(tp.topic, tp.partition, i.toLong, s"key $i".getBytes, s"value $i"
+        .getBytes))
+    }
+    // This test ensure that the member ID is propagated from the group coordinator when the
+    // assignment is received into a subsequent offset commit
+    val consumer = createConsumer()
+    assertEquals(0, consumer.assignment.size)
+    consumer.subscribe(List(topic).asJava)
+    awaitAssignment(consumer, Set(tp, tp2))
+
+    print("listing offsets")
+    print(consumer.endOffsets(Set(tp, tp2).asJava))
+  }
 }
