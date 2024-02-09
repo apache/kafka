@@ -33,7 +33,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.CommonClientConfigs;
-import org.apache.kafka.clients.InternalCluster;
+import org.apache.kafka.clients.MetadataCache;
 import org.apache.kafka.clients.producer.Callback;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.utils.ExponentialBackoff;
@@ -652,7 +652,7 @@ public class RecordAccumulator {
      * partitions into the set of ready nodes.  If partition has no leader, add the topic to the set
      * of topics with no leader.  This function also calculates stats for adaptive partitioning.
      *
-     * @param cluster               The cluster metadata
+     * @param metadataCache         The cluster metadata
      * @param nowMs                 The current time
      * @param topic                 The topic
      * @param topicInfo             The topic info
@@ -661,14 +661,14 @@ public class RecordAccumulator {
      * @param unknownLeaderTopics   The set of topics with no leader (to be filled in)
      * @return The delay for next check
      */
-    private long partitionReady(InternalCluster cluster, long nowMs, String topic,
+    private long partitionReady(MetadataCache metadataCache, long nowMs, String topic,
                                 TopicInfo topicInfo,
                                 long nextReadyCheckDelayMs, Set<Node> readyNodes, Set<String> unknownLeaderTopics) {
         ConcurrentMap<Integer, Deque<ProducerBatch>> batches = topicInfo.batches;
         // Collect the queue sizes for available partitions to be used in adaptive partitioning.
         int[] queueSizes = null;
         int[] partitionIds = null;
-        if (enableAdaptivePartitioning && batches.size() >= cluster.toPublicCluster().partitionsForTopic(topic).size()) {
+        if (enableAdaptivePartitioning && batches.size() >= metadataCache.cluster().partitionsForTopic(topic).size()) {
             // We don't do adaptive partitioning until we scheduled at least a batch for all
             // partitions (i.e. we have the corresponding entries in the batches map), we just
             // do uniform.  The reason is that we build queue sizes from the batches map,
@@ -685,7 +685,7 @@ public class RecordAccumulator {
             // Advance queueSizesIndex so that we properly index available
             // partitions.  Do it here so that it's done for all code paths.
 
-            Node leader = cluster.toPublicCluster().leaderFor(part);
+            Node leader = metadataCache.cluster().leaderFor(part);
             if (leader != null && queueSizes != null) {
                 ++queueSizesIndex;
                 assert queueSizesIndex < queueSizes.length;
@@ -700,7 +700,7 @@ public class RecordAccumulator {
             final int dequeSize;
             final boolean full;
 
-            Optional<Integer> leaderEpoch = cluster.leaderEpochFor(part);
+            Optional<Integer> leaderEpoch = metadataCache.leaderForEpoch(part);
 
             // This loop is especially hot with large partition counts. So -
 
@@ -781,7 +781,7 @@ public class RecordAccumulator {
      * </ul>
      * </ol>
      */
-    public ReadyCheckResult ready(InternalCluster cluster, long nowMs) {
+    public ReadyCheckResult ready(MetadataCache metadataCache, long nowMs) {
         Set<Node> readyNodes = new HashSet<>();
         long nextReadyCheckDelayMs = Long.MAX_VALUE;
         Set<String> unknownLeaderTopics = new HashSet<>();
@@ -789,7 +789,7 @@ public class RecordAccumulator {
         // cumulative frequency table (used in partitioner).
         for (Map.Entry<String, TopicInfo> topicInfoEntry : this.topicInfoMap.entrySet()) {
             final String topic = topicInfoEntry.getKey();
-            nextReadyCheckDelayMs = partitionReady(cluster, nowMs, topic, topicInfoEntry.getValue(), nextReadyCheckDelayMs, readyNodes, unknownLeaderTopics);
+            nextReadyCheckDelayMs = partitionReady(metadataCache, nowMs, topic, topicInfoEntry.getValue(), nextReadyCheckDelayMs, readyNodes, unknownLeaderTopics);
         }
         return new ReadyCheckResult(readyNodes, nextReadyCheckDelayMs, unknownLeaderTopics);
     }
@@ -866,9 +866,9 @@ public class RecordAccumulator {
         return false;
     }
 
-    private List<ProducerBatch> drainBatchesForOneNode(InternalCluster cluster, Node node, int maxSize, long now) {
+    private List<ProducerBatch> drainBatchesForOneNode(MetadataCache metadataCache, Node node, int maxSize, long now) {
         int size = 0;
-        List<PartitionInfo> parts = cluster.toPublicCluster().partitionsForNode(node.id());
+        List<PartitionInfo> parts = metadataCache.cluster().partitionsForNode(node.id());
         List<ProducerBatch> ready = new ArrayList<>();
         if (parts.isEmpty())
             return ready;
@@ -888,7 +888,7 @@ public class RecordAccumulator {
             if (deque == null)
                 continue;
 
-            Optional<Integer> leaderEpoch = cluster.leaderEpochFor(tp);
+            Optional<Integer> leaderEpoch = metadataCache.leaderForEpoch(tp);
 
             final ProducerBatch batch;
             synchronized (deque) {
@@ -966,20 +966,20 @@ public class RecordAccumulator {
      * within the specified size on a per-node basis. This method attempts to avoid choosing the same
      * topic-node over and over.
      *
-     * @param cluster The current cluster metadata
-     * @param nodes   The list of node to drain
-     * @param maxSize The maximum number of bytes to drain
-     * @param now     The current unix time in milliseconds
+     * @param metadataCache The current cluster metadata
+     * @param nodes         The list of node to drain
+     * @param maxSize       The maximum number of bytes to drain
+     * @param now           The current unix time in milliseconds
      * @return A list of {@link ProducerBatch} for each node specified with total size less than the
      * requested maxSize.
      */
-    public Map<Integer, List<ProducerBatch>> drain(InternalCluster cluster, Set<Node> nodes, int maxSize, long now) {
+    public Map<Integer, List<ProducerBatch>> drain(MetadataCache metadataCache, Set<Node> nodes, int maxSize, long now) {
         if (nodes.isEmpty())
             return Collections.emptyMap();
 
         Map<Integer, List<ProducerBatch>> batches = new HashMap<>();
         for (Node node : nodes) {
-            List<ProducerBatch> ready = drainBatchesForOneNode(cluster, node, maxSize, now);
+            List<ProducerBatch> ready = drainBatchesForOneNode(metadataCache, node, maxSize, now);
             batches.put(node.id(), ready);
         }
         return batches;

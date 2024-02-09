@@ -53,9 +53,9 @@ public class MetadataCache {
     private final Map<TopicPartition, PartitionMetadata> metadataByPartition;
     private final Map<String, Uuid> topicIds;
     private final Map<Uuid, String> topicNames;
-    private InternalCluster clusterInstance;
+    private Cluster clusterInstance;
 
-    MetadataCache(String clusterId,
+    public MetadataCache(String clusterId,
                   Map<Integer, Node> nodes,
                   Collection<PartitionMetadata> partitions,
                   Set<String> unauthorizedTopics,
@@ -66,15 +66,15 @@ public class MetadataCache {
         this(clusterId, nodes, partitions, unauthorizedTopics, invalidTopics, internalTopics, controller, topicIds, null);
     }
 
-    private MetadataCache(String clusterId,
-                          Map<Integer, Node> nodes,
-                          Collection<PartitionMetadata> partitions,
-                          Set<String> unauthorizedTopics,
-                          Set<String> invalidTopics,
-                          Set<String> internalTopics,
-                          Node controller,
-                          Map<String, Uuid> topicIds,
-                          Cluster clusterInstance) {
+    public MetadataCache(String clusterId,
+        Map<Integer, Node> nodes,
+        Collection<PartitionMetadata> partitions,
+        Set<String> unauthorizedTopics,
+        Set<String> invalidTopics,
+        Set<String> internalTopics,
+        Node controller,
+        Map<String, Uuid> topicIds,
+        Cluster clusterInstance) {
         this.clusterId = clusterId;
         this.nodes = Collections.unmodifiableMap(nodes);
         this.unauthorizedTopics = Collections.unmodifiableSet(unauthorizedTopics);
@@ -95,10 +95,7 @@ public class MetadataCache {
         if (clusterInstance == null) {
             computeClusterView();
         } else {
-            this.clusterInstance = new InternalCluster(
-                clusterInstance,
-                new HashMap<>(metadataByPartition)
-            );
+            this.clusterInstance = clusterInstance;
         }
     }
 
@@ -118,16 +115,26 @@ public class MetadataCache {
         return Optional.ofNullable(nodes.get(id));
     }
 
-    Cluster cluster() {
+    public Cluster cluster() {
         if (clusterInstance == null) {
             throw new IllegalStateException("Cached Cluster instance should not be null, but was.");
         } else {
-            return clusterInstance.toPublicCluster();
+            return clusterInstance;
         }
     }
 
-    InternalCluster internalCluster() {
-        return clusterInstance;
+    /**
+     * Get leader-epoch for partition.
+     * @param tp partition
+     * @return leader-epoch if known, else return optional.empty()
+     */
+    public Optional<Integer> leaderForEpoch(TopicPartition tp) {
+        PartitionMetadata partitionMetadata = metadataByPartition.get(tp);
+        if (partitionMetadata == null) {
+            return Optional.empty();
+        } else {
+            return partitionMetadata.leaderEpoch;
+        }
     }
 
     ClusterResource clusterResource() {
@@ -217,9 +224,8 @@ public class MetadataCache {
                 .stream()
                 .map(metadata -> MetadataResponse.toPartitionInfo(metadata, nodes))
                 .collect(Collectors.toList());
-        Cluster cluster = new Cluster(clusterId, nodes.values(), partitionInfos, unauthorizedTopics,
-            invalidTopics, internalTopics, controller, topicIds);
-        this.clusterInstance = new InternalCluster(cluster, new HashMap<>(metadataByPartition));
+        this.clusterInstance = new Cluster(clusterId, nodes.values(), partitionInfos, unauthorizedTopics,
+                invalidTopics, internalTopics, controller, topicIds);
     }
 
     static MetadataCache bootstrap(List<InetSocketAddress> addresses) {

@@ -16,11 +16,9 @@
  */
 package org.apache.kafka.clients.producer.internals;
 
-import java.util.function.Function;
-import java.util.stream.Collectors;
 import org.apache.kafka.clients.ApiVersions;
-import org.apache.kafka.clients.InternalCluster;
 import org.apache.kafka.clients.Metadata;
+import org.apache.kafka.clients.MetadataCache;
 import org.apache.kafka.clients.MockClient;
 import org.apache.kafka.clients.NodeApiVersions;
 import org.apache.kafka.clients.consumer.CommitFailedException;
@@ -72,7 +70,6 @@ import org.apache.kafka.common.requests.FindCoordinatorResponse;
 import org.apache.kafka.common.requests.InitProducerIdRequest;
 import org.apache.kafka.common.requests.InitProducerIdResponse;
 import org.apache.kafka.common.requests.JoinGroupRequest;
-import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.common.requests.MetadataResponse.PartitionMetadata;
 import org.apache.kafka.common.requests.ProduceRequest;
 import org.apache.kafka.common.requests.ProduceResponse;
@@ -2485,18 +2482,12 @@ public class TransactionManagerTest {
         nodesById.put(node1.id(), node1);
         nodesById.put(node2.id(), node2);
         PartitionMetadata part1Metadata = new PartitionMetadata(Errors.NONE, tp0, Optional.of(node1.id()), Optional.empty(), null, null, null);
-        PartitionInfo part1 = MetadataResponse.toPartitionInfo(part1Metadata, nodesById);
         PartitionMetadata part2Metadata = new PartitionMetadata(Errors.NONE, tp1, Optional.of(node2.id()), Optional.empty(), null, null, null);
-        PartitionInfo part2 = MetadataResponse.toPartitionInfo(part2Metadata, nodesById);
-
-        Cluster cluster = new Cluster(null, Arrays.asList(node1, node2), Arrays.asList(part1, part2),
-                Collections.emptySet(), Collections.emptySet());
-        InternalCluster internalCluster = new InternalCluster(cluster, Arrays.asList(part1Metadata, part2Metadata).stream().collect(
-            Collectors.toMap(part -> part.topicPartition, Function.identity())));
+        MetadataCache metadataCache = new MetadataCache(null, nodesById, Arrays.asList(part1Metadata, part2Metadata), Collections.emptySet(), Collections.emptySet(), Collections.emptySet(), null, Collections.emptyMap());
         Set<Node> nodes = new HashSet<>();
         nodes.add(node1);
         nodes.add(node2);
-        Map<Integer, List<ProducerBatch>> drainedBatches = accumulator.drain(internalCluster, nodes, Integer.MAX_VALUE,
+        Map<Integer, List<ProducerBatch>> drainedBatches = accumulator.drain(metadataCache, nodes, Integer.MAX_VALUE,
                 time.milliseconds());
 
         // We shouldn't drain batches which haven't been added to the transaction yet.
@@ -2523,13 +2514,9 @@ public class TransactionManagerTest {
         // Try to drain a message destined for tp1, it should get drained.
         Node node1 = new Node(1, "localhost", 1112);
         PartitionMetadata part1Metadata = new PartitionMetadata(Errors.NONE, tp1, Optional.of(node1.id()), Optional.empty(), null, null, null);
-        PartitionInfo part1 = MetadataResponse.toPartitionInfo(part1Metadata, Collections.singletonMap(
-            node1.id(), node1));
-        Cluster cluster = new Cluster(null, Collections.singletonList(node1), Collections.singletonList(part1),
-                Collections.emptySet(), Collections.emptySet());
-        InternalCluster internalCluster = new InternalCluster(cluster, Collections.singletonMap(tp1, part1Metadata));
+        MetadataCache metadataCache = new MetadataCache(null, Collections.singletonMap(node1.id(), node1), Arrays.asList(part1Metadata), Collections.emptySet(), Collections.emptySet(), Collections.emptySet(), null, Collections.emptyMap());
         appendToAccumulator(tp1);
-        Map<Integer, List<ProducerBatch>> drainedBatches = accumulator.drain(internalCluster, Collections.singleton(node1),
+        Map<Integer, List<ProducerBatch>> drainedBatches = accumulator.drain(metadataCache, Collections.singleton(node1),
                 Integer.MAX_VALUE,
                 time.milliseconds());
 
@@ -2548,16 +2535,11 @@ public class TransactionManagerTest {
         appendToAccumulator(tp0);
         Node node1 = new Node(0, "localhost", 1111);
         PartitionMetadata part1Metadata = new PartitionMetadata(Errors.NONE, tp0, Optional.of(node1.id()), Optional.empty(), null, null, null);
-        PartitionInfo part1 = MetadataResponse.toPartitionInfo(part1Metadata, Collections.singletonMap(
-            node1.id(), node1));
-
-        Cluster cluster = new Cluster(null, Collections.singletonList(node1), Collections.singletonList(part1),
-                Collections.emptySet(), Collections.emptySet());
-        InternalCluster internalCluster = new InternalCluster(cluster, Collections.singletonMap(tp0, part1Metadata));
+        MetadataCache metadataCache = new MetadataCache(null, Collections.singletonMap(node1.id(), node1), Arrays.asList(part1Metadata), Collections.emptySet(), Collections.emptySet(), Collections.emptySet(), null, Collections.emptyMap());
 
         Set<Node> nodes = new HashSet<>();
         nodes.add(node1);
-        Map<Integer, List<ProducerBatch>> drainedBatches = accumulator.drain(internalCluster, nodes, Integer.MAX_VALUE,
+        Map<Integer, List<ProducerBatch>> drainedBatches = accumulator.drain(metadataCache, nodes, Integer.MAX_VALUE,
                 time.milliseconds());
 
         // We shouldn't drain batches which haven't been added to the transaction yet.

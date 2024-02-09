@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.test;
 
-import org.apache.kafka.clients.InternalCluster;
+import org.apache.kafka.clients.MetadataCache;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.Cluster;
@@ -35,7 +35,6 @@ import org.apache.kafka.common.record.RecordVersion;
 import org.apache.kafka.common.record.UnalignedRecords;
 import org.apache.kafka.common.requests.ApiVersionsResponse;
 import org.apache.kafka.common.requests.ByteBufferChannel;
-import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.common.requests.MetadataResponse.PartitionMetadata;
 import org.apache.kafka.common.requests.RequestHeader;
 import org.apache.kafka.common.utils.Exit;
@@ -127,36 +126,32 @@ public class TestUtils {
         return clusterWith(nodes, Collections.singletonMap(topic, partitions));
     }
 
-    public static InternalCluster internalClusterWith(final int nodes, final Map<String, Integer> topicPartitionCounts) {
+    public static MetadataCache metadataCacheWith(final int nodes, final Map<String, Integer> topicPartitionCounts) {
         final Node[] ns = new Node[nodes];
         Map<Integer, Node> nodesById = new HashMap<>();
         for (int i = 0; i < nodes; i++) {
             ns[i] = new Node(i, "localhost", 1969);
             nodesById.put(ns[i].id(), ns[i]);
         }
-        final List<PartitionInfo> parts = new ArrayList<>();
-        final Map<TopicPartition, PartitionMetadata> partsMetadata = new HashMap<>();
+        final List<PartitionMetadata> partsMetadatas = new ArrayList<>();
         for (final Map.Entry<String, Integer> topicPartition : topicPartitionCounts.entrySet()) {
             final String topic = topicPartition.getKey();
             final int partitions = topicPartition.getValue();
             for (int i = 0; i < partitions; i++) {
                 TopicPartition tp = new TopicPartition(topic, partitions);
                 Node node = ns[i % ns.length];
-                PartitionMetadata partMetadata = new PartitionMetadata(Errors.NONE, tp, Optional.of(node.id()), Optional.empty(), null, null, null);
-                partsMetadata.put(tp, partMetadata);
-                parts.add(MetadataResponse.toPartitionInfo(partMetadata, nodesById));
+                partsMetadatas.add(new PartitionMetadata(Errors.NONE, tp, Optional.of(node.id()), Optional.empty(), null, null, null));
             }
         }
-        Cluster cluster = new Cluster("kafka-cluster", asList(ns), parts, Collections.emptySet(), Collections.emptySet());
-        return new InternalCluster(cluster, partsMetadata);
+        return new MetadataCache("kafka-cluster", nodesById, partsMetadatas, Collections.emptySet(), Collections.emptySet(), Collections.emptySet(), null, Collections.emptyMap());
     }
 
-    public static InternalCluster internalClusterWith(int nodes) {
-        return internalClusterWith(nodes, new HashMap<>());
+    public static MetadataCache metadataCacheWith(int nodes) {
+        return metadataCacheWith(nodes, new HashMap<>());
     }
 
-    public static InternalCluster singletonInternalCluster() {
-        return internalClusterWith(1);
+    public static MetadataCache singletonMetadataCache() {
+        return metadataCacheWith(1);
     }
 
     /**

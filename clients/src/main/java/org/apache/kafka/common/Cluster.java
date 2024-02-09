@@ -107,7 +107,8 @@ public final class Cluster {
         this(clusterId, false, nodes, partitions, unauthorizedTopics, invalidTopics, internalTopics, controller, topicIds);
     }
 
-    private Cluster(String clusterId,
+    // Only visible for testing
+    public Cluster(String clusterId,
                     boolean isBootstrapConfigured,
                     Collection<Node> nodes,
                     Collection<PartitionInfo> partitions,
