@@ -194,7 +194,8 @@ public class RequestManagers implements Closeable {
                             coordinator,
                             subscriptions,
                             membershipManager,
-                            backgroundEventHandler);
+                            backgroundEventHandler,
+                            metrics);
                 }
 
                 return new RequestManagers(

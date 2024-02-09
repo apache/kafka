@@ -979,10 +979,10 @@ object ConfigCommand extends Logging {
         val isAddConfigFilePresent = options.has(addConfigFile)
         val isDeleteConfigPresent = options.has(deleteConfig)
 
-        if(isAddConfigPresent && isAddConfigFilePresent)
+        if (isAddConfigPresent && isAddConfigFilePresent)
           throw new IllegalArgumentException("Only one of --add-config or --add-config-file must be specified")
 
-        if(!isAddConfigPresent && !isAddConfigFilePresent && !isDeleteConfigPresent)
+        if (!isAddConfigPresent && !isAddConfigFilePresent && !isDeleteConfigPresent)
           throw new IllegalArgumentException("At least one of --add-config, --add-config-file, or --delete-config must be specified with --alter")
       }
     }

@@ -304,6 +304,7 @@ class ControllerServer(
           .setQuorumFeatures(quorumFeatures)
           .setConfigSchema(configSchema)
           .setControllerMetrics(quorumControllerMetrics)
+          .setMinMigrationBatchSize(config.migrationMetadataMinBatchSize)
           .setTime(time)
           .build()
         migrationDriver.start()
