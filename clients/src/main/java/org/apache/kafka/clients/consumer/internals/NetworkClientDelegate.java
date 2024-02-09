@@ -82,27 +82,6 @@ public class NetworkClientDelegate implements AutoCloseable {
     }
 
     /**
-     * Check if the node is disconnected and unavailable for immediate reconnection (i.e. if it is in
-     * reconnect backoff window following the disconnect).
-     *
-     * @param node {@link Node} to check for availability
-     * @see NetworkClientUtils#isUnavailable(KafkaClient, Node, Time)
-     */
-    public boolean isUnavailable(Node node) {
-        return NetworkClientUtils.isUnavailable(client, node, time);
-    }
-
-    /**
-     * Checks for an authentication error on a given node and throws the exception if it exists.
-     *
-     * @param node {@link Node} to check for a previous {@link AuthenticationException}; if found it is thrown
-     * @see NetworkClientUtils#maybeThrowAuthFailure(KafkaClient, Node)
-     */
-    public void maybeThrowAuthFailure(Node node) {
-        NetworkClientUtils.maybeThrowAuthFailure(client, node);
-    }
-
-    /**
      * Initiate a connection if currently possible. This is only really useful for resetting
      * the failed status of a socket.
      *
