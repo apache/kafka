@@ -299,9 +299,8 @@ public class ConsoleConsumerOptionsTest {
         };
 
         ConsoleConsumerOptions config = new ConsoleConsumerOptions(args);
-
-        assertEquals("1000", config.consumerProps().getProperty("request.timeout.ms"));
-        assertEquals("group1", config.consumerProps().getProperty("group.id"));
+        assertEquals("1000", config.consumerProps().get("request.timeout.ms"));
+        assertEquals("group1", config.consumerProps().get("group.id"));
     }
 
     @Test

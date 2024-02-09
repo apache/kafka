@@ -181,7 +181,6 @@ public final class ConsoleConsumerOptions extends CommandDefaultOptions {
                 ? Utils.loadProps(options.valueOf(consumerConfigOpt))
                 : new Properties();
         Properties extraConsumerProps = CommandLineUtils.parseKeyValueArgs(options.valuesOf(consumerPropertyOpt));
-
         Set<String> groupIdsProvided = checkConsumerGroup(consumerPropsFromFile, extraConsumerProps);
         consumerProps = buildConsumerProps(consumerPropsFromFile, extraConsumerProps, groupIdsProvided);
         offset = parseOffset();
@@ -238,7 +237,8 @@ public final class ConsoleConsumerOptions extends CommandDefaultOptions {
     }
 
     private Properties buildConsumerProps(Properties consumerPropsFromFile, Properties extraConsumerProps, Set<String> groupIdsProvided) {
-        Properties consumerProps = new Properties(consumerPropsFromFile);
+        Properties consumerProps = new Properties();
+        consumerProps.putAll(consumerPropsFromFile);
         consumerProps.putAll(extraConsumerProps);
         setAutoOffsetResetValue(consumerProps);
         consumerProps.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServer());
