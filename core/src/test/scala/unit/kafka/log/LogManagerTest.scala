@@ -353,7 +353,7 @@ class LogManagerTest {
   def testCleanupExpiredSegments(): Unit = {
     val log = logManager.getOrCreateLog(new TopicPartition(name, 0), topicId = None)
     var offset = 0L
-    for(_ <- 0 until 200) {
+    for (_ <- 0 until 200) {
       val set = TestUtils.singletonRecords("test".getBytes())
       val info = log.appendAsLeader(set, leaderEpoch = 0)
       offset = info.lastOffset
@@ -499,7 +499,7 @@ class LogManagerTest {
     logManager = createLogManager(dirs)
 
     // verify that logs are always assigned to the least loaded partition
-    for(partition <- 0 until 20) {
+    for (partition <- 0 until 20) {
       logManager.getOrCreateLog(new TopicPartition("test", partition), topicId = None)
       assertEquals(partition + 1, logManager.allLogs.size, "We should have created the right number of logs")
       val counts = logManager.allLogs.groupBy(_.dir.getParent).values.map(_.size)
