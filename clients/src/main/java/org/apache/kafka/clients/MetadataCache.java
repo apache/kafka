@@ -66,6 +66,7 @@ public class MetadataCache {
         this(clusterId, nodes, partitions, unauthorizedTopics, invalidTopics, internalTopics, controller, topicIds, null);
     }
 
+    // Visible for testing
     public MetadataCache(String clusterId,
         Map<Integer, Node> nodes,
         Collection<PartitionMetadata> partitions,
