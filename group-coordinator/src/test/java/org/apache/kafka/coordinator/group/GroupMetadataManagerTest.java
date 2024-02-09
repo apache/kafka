@@ -726,7 +726,7 @@ public class GroupMetadataManagerTest {
         );
 
         GroupMetadataManagerTestContext.assertRecordsEquals(expectedRecords.subList(0, 3), result.records().subList(0, 3));
-        GroupMetadataManagerTestContext.assertUnorderedListEquals(expectedRecords.subList(3, 6), result.records().subList(3, 6));
+        Assertions.assertUnorderedListEquals(expectedRecords.subList(3, 6), result.records().subList(3, 6));
         GroupMetadataManagerTestContext.assertRecordsEquals(expectedRecords.subList(6, 8), result.records().subList(6, 8));
     }
 
@@ -965,7 +965,7 @@ public class GroupMetadataManagerTest {
         );
 
         GroupMetadataManagerTestContext.assertRecordsEquals(expectedRecords.subList(0, 3), result.records().subList(0, 3));
-        GroupMetadataManagerTestContext.assertUnorderedListEquals(expectedRecords.subList(3, 6), result.records().subList(3, 6));
+        Assertions.assertUnorderedListEquals(expectedRecords.subList(3, 6), result.records().subList(3, 6));
         GroupMetadataManagerTestContext.assertRecordsEquals(expectedRecords.subList(6, 8), result.records().subList(6, 8));
     }
 

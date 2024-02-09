@@ -109,12 +109,6 @@ import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.Mockito.mock;
 
 public class GroupMetadataManagerTestContext {
-    public static <T> void assertUnorderedListEquals(
-        List<T> expected,
-        List<T> actual
-    ) {
-        assertEquals(new HashSet<>(expected), new HashSet<>(actual));
-    }
 
     public static void assertResponseEquals(
         ConsumerGroupHeartbeatResponseData expected,
@@ -128,7 +122,7 @@ public class GroupMetadataManagerTestContext {
         }
     }
 
-    public static boolean responseEquals(
+    private static boolean responseEquals(
         ConsumerGroupHeartbeatResponseData expected,
         ConsumerGroupHeartbeatResponseData actual
     ) {
@@ -142,7 +136,7 @@ public class GroupMetadataManagerTestContext {
         return responseAssignmentEquals(expected.assignment(), actual.assignment());
     }
 
-    public static boolean responseAssignmentEquals(
+    private static boolean responseAssignmentEquals(
         ConsumerGroupHeartbeatResponseData.Assignment expected,
         ConsumerGroupHeartbeatResponseData.Assignment actual
     ) {
