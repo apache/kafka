@@ -25,7 +25,7 @@ import scala.collection.mutable
 object ToolsUtils {
 
   def validatePortOrDie(parser: OptionParser, hostPort: String): Unit = {
-    val hostPorts: Array[String] = if(hostPort.contains(','))
+    val hostPorts: Array[String] = if (hostPort.contains(','))
       hostPort.split(",")
     else
       Array(hostPort)

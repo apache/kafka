@@ -544,7 +544,7 @@ class LogCleanerManagerTest extends Logging {
 
     val log = makeLog(config = LogConfig.fromProps(logConfig.originals, logProps))
 
-    while(log.numberOfSegments < 8)
+    while (log.numberOfSegments < 8)
       log.appendAsLeader(records(log.logEndOffset.toInt, log.logEndOffset.toInt, time.milliseconds()), leaderEpoch = 0)
 
     log.updateHighWatermark(50)
@@ -566,7 +566,7 @@ class LogCleanerManagerTest extends Logging {
 
     val log = makeLog(config = LogConfig.fromProps(logConfig.originals, logProps))
 
-    while(log.numberOfSegments < 8)
+    while (log.numberOfSegments < 8)
       log.appendAsLeader(records(log.logEndOffset.toInt, log.logEndOffset.toInt, time.milliseconds()), leaderEpoch = 0)
 
     log.updateHighWatermark(log.logEndOffset)
@@ -590,7 +590,7 @@ class LogCleanerManagerTest extends Logging {
     val log = makeLog(config = LogConfig.fromProps(logConfig.originals, logProps))
 
     val t0 = time.milliseconds
-    while(log.numberOfSegments < 4)
+    while (log.numberOfSegments < 4)
       log.appendAsLeader(records(log.logEndOffset.toInt, log.logEndOffset.toInt, t0), leaderEpoch = 0)
 
     val activeSegAtT0 = log.activeSegment
@@ -705,7 +705,7 @@ class LogCleanerManagerTest extends Logging {
     val logProps = new Properties()
     logProps.put(TopicConfig.SEGMENT_BYTES_CONFIG, 1024: java.lang.Integer)
     val log = makeLog(config = LogConfig.fromProps(logConfig.originals, logProps))
-    while(log.numberOfSegments < 8)
+    while (log.numberOfSegments < 8)
       log.appendAsLeader(records(log.logEndOffset.toInt, log.logEndOffset.toInt, time.milliseconds()), leaderEpoch = 0)
 
     val cleanerManager: LogCleanerManager = createCleanerManager(log)

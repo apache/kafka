@@ -752,7 +752,7 @@ object TestUtils extends Logging {
    */
   def checkEquals(b1: ByteBuffer, b2: ByteBuffer): Unit = {
     assertEquals(b1.limit() - b1.position(), b2.limit() - b2.position(), "Buffers should have equal length")
-    for(i <- 0 until b1.limit() - b1.position())
+    for (i <- 0 until b1.limit() - b1.position())
       assertEquals(b1.get(b1.position() + i), b2.get(b1.position() + i), "byte " + i + " byte not equal.")
   }
 
@@ -774,7 +774,7 @@ object TestUtils extends Logging {
    * different messages on their Nth element
    */
   def checkEquals[T](s1: java.util.Iterator[T], s2: java.util.Iterator[T]): Unit = {
-    while(s1.hasNext && s2.hasNext)
+    while (s1.hasNext && s2.hasNext)
       assertEquals(s1.next, s2.next)
     assertFalse(s1.hasNext, "Iterators have uneven length--first has more")
     assertFalse(s2.hasNext, "Iterators have uneven length--second has more")
@@ -815,7 +815,7 @@ object TestUtils extends Logging {
    */
   def hexString(buffer: ByteBuffer): String = {
     val builder = new StringBuilder("0x")
-    for(i <- 0 until buffer.limit())
+    for (i <- 0 until buffer.limit())
       builder.append(String.format("%x", Integer.valueOf(buffer.get(buffer.position() + i))))
     builder.toString
   }
@@ -1086,7 +1086,7 @@ object TestUtils extends Logging {
   def retry(maxWaitMs: Long)(block: => Unit): Unit = {
     var wait = 1L
     val startTime = System.currentTimeMillis()
-    while(true) {
+    while (true) {
       try {
         block
         return
