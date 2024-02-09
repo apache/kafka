@@ -71,7 +71,7 @@ abstract class BaseAdminIntegrationTest extends IntegrationTestHarness with Logg
 
   @Test
   def testCreateDeleteTopics(): Unit = {
-    client = Admin.create(createConfig)
+    client = createAdminClient
     val topics = Seq("mytopic", "mytopic2", "mytopic3")
     val newTopics = Seq(
       new NewTopic("mytopic", Map((0: Integer) -> Seq[Integer](1, 2).asJava, (1: Integer) -> Seq[Integer](2, 0).asJava).asJava),
@@ -163,7 +163,7 @@ abstract class BaseAdminIntegrationTest extends IntegrationTestHarness with Logg
 
   @Test
   def testAuthorizedOperations(): Unit = {
-    client = Admin.create(createConfig)
+    client = createAdminClient
 
     // without includeAuthorizedOperations flag
     var result = client.describeCluster
@@ -230,6 +230,13 @@ abstract class BaseAdminIntegrationTest extends IntegrationTestHarness with Logg
       adminClientSecurityConfigs(securityProtocol, trustStoreFile, clientSaslProperties)
     securityProps.forEach { (key, value) => config.put(key.asInstanceOf[String], value) }
     config
+  }
+
+  def createAdminClient: Admin = {
+    val props = new Properties()
+    props.putAll(createConfig)
+    val client = createAdminClient(configOverrides = props)
+    client
   }
 
   def waitForTopics(client: Admin, expectedPresent: Seq[String], expectedMissing: Seq[String]): Unit = {
