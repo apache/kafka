@@ -23,6 +23,7 @@ import org.apache.kafka.clients.consumer.internals.ConsumerMetadata;
 import org.apache.kafka.clients.consumer.internals.ConsumerNetworkThread;
 import org.apache.kafka.clients.consumer.internals.MembershipManager;
 import org.apache.kafka.clients.consumer.internals.RequestManagers;
+import org.apache.kafka.clients.consumer.internals.ShareMembershipManager;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
@@ -66,6 +67,7 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
         return process((event, error) -> error.ifPresent(e -> log.warn("Error processing event {}", e.getMessage(), e)));
     }
 
+    @SuppressWarnings("checkstyle:cyclomaticComplexity")
     @Override
     public void process(ApplicationEvent event) {
         switch (event.type()) {
@@ -125,18 +127,30 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
                 process((LeaveOnCloseApplicationEvent) event);
                 return;
 
+            case SHARE_SUBSCRIPTION_CHANGE:
+                process((ShareSubscriptionChangeApplicationEvent) event);
+                return;
+
+            case SHARE_UNSUBSCRIBE:
+                process((ShareUnsubscribeApplicationEvent) event);
+                return;
+
+            case SHARE_LEAVE_ON_CLOSE:
+                process((ShareLeaveOnCloseApplicationEvent) event);
+                return;
+
             default:
                 log.warn("Application event type " + event.type() + " was not expected");
         }
     }
 
     private void process(final PollApplicationEvent event) {
-        if (!requestManagers.commitRequestManager.isPresent()) {
-            return;
+        if (requestManagers.commitRequestManager.isPresent()) {
+            requestManagers.commitRequestManager.ifPresent(m -> m.updateAutoCommitTimer(event.pollTimeMs()));
+            requestManagers.heartbeatRequestManager.ifPresent(hrm -> hrm.resetPollTimer(event.pollTimeMs()));
+        } else {
+            requestManagers.shareHeartbeatRequestManager.ifPresent(hrm -> hrm.resetPollTimer(event.pollTimeMs()));
         }
-
-        requestManagers.commitRequestManager.ifPresent(m -> m.updateAutoCommitTimer(event.pollTimeMs()));
-        requestManagers.heartbeatRequestManager.ifPresent(hrm -> hrm.resetPollTimer(event.pollTimeMs()));
     }
 
     private void process(final CommitApplicationEvent event) {
@@ -272,6 +286,56 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
         MembershipManager membershipManager =
             Objects.requireNonNull(requestManagers.heartbeatRequestManager.get().membershipManager(), "Expecting " +
                 "membership manager to be non-null");
+        log.debug("Leaving group before closing");
+        CompletableFuture<Void> future = membershipManager.leaveGroup();
+        // The future will be completed on heartbeat sent
+        event.chain(future);
+    }
+
+    /**
+     * Process event that indicates that the subscription changed for a share group. This will make the
+     * consumer join the share group if it is not part of it yet, or send the updated subscription if
+     * it is already a member.
+     */
+    private void process(final ShareSubscriptionChangeApplicationEvent ignored) {
+        if (!requestManagers.shareHeartbeatRequestManager.isPresent()) {
+            log.warn("Group membership manager not present when processing a subscribe event");
+            return;
+        }
+        ShareMembershipManager membershipManager = requestManagers.shareHeartbeatRequestManager.get().membershipManager();
+        membershipManager.onSubscriptionUpdated();
+    }
+
+    /**
+     * Process event indicating that the consumer unsubscribed from all topics. This will make
+     * the consumer release its assignment and send a request to leave the share group.
+     *
+     * @param event Unsubscribe event containing a future that will complete when the callback
+     *              execution for releasing the assignment completes, and the request to leave
+     *              the group is sent out.
+     */
+    private void process(final ShareUnsubscribeApplicationEvent event) {
+        if (!requestManagers.shareHeartbeatRequestManager.isPresent()) {
+            KafkaException error = new KafkaException("Group membership manager not present when processing an unsubscribe event");
+            event.future().completeExceptionally(error);
+            return;
+        }
+        ShareMembershipManager membershipManager = requestManagers.shareHeartbeatRequestManager.get().membershipManager();
+        CompletableFuture<Void> future = membershipManager.leaveGroup();
+        // The future will be completed on heartbeat sent
+        event.chain(future);
+    }
+
+    private void process(final ShareLeaveOnCloseApplicationEvent event) {
+        if (!requestManagers.shareHeartbeatRequestManager.isPresent()) {
+            event.future().complete(null);
+            return;
+        }
+
+        ShareMembershipManager membershipManager =
+                Objects.requireNonNull(requestManagers.shareHeartbeatRequestManager.get().membershipManager(),
+                        "Expecting membership manager to be non-null");
+
         log.debug("Leaving group before closing");
         CompletableFuture<Void> future = membershipManager.leaveGroup();
         // The future will be completed on heartbeat sent

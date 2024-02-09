@@ -39,7 +39,7 @@ public class ShareGroupHeartbeatRequest extends AbstractRequest {
         private final ShareGroupHeartbeatRequestData data;
 
         public Builder(ShareGroupHeartbeatRequestData data) {
-            this(data, false);
+            this(data, true);
         }
 
         public Builder(ShareGroupHeartbeatRequestData data, boolean enableUnstableLastVersion) {

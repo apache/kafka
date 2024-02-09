@@ -48,6 +48,7 @@ public class RequestManagers implements Closeable {
     public final Optional<CoordinatorRequestManager> coordinatorRequestManager;
     public final Optional<CommitRequestManager> commitRequestManager;
     public final Optional<HeartbeatRequestManager> heartbeatRequestManager;
+    public final Optional<ShareHeartbeatRequestManager> shareHeartbeatRequestManager;
     public final OffsetsRequestManager offsetsRequestManager;
     public final TopicMetadataRequestManager topicMetadataRequestManager;
     public final FetchRequestManager fetchRequestManager;
@@ -68,6 +69,7 @@ public class RequestManagers implements Closeable {
         this.topicMetadataRequestManager = topicMetadataRequestManager;
         this.fetchRequestManager = fetchRequestManager;
         this.heartbeatRequestManager = heartbeatRequestManager;
+        this.shareHeartbeatRequestManager = Optional.empty();
 
         List<Optional<? extends RequestManager>> list = new ArrayList<>();
         list.add(coordinatorRequestManager);
@@ -76,6 +78,24 @@ public class RequestManagers implements Closeable {
         list.add(Optional.of(offsetsRequestManager));
         list.add(Optional.of(topicMetadataRequestManager));
         list.add(Optional.of(fetchRequestManager));
+        entries = Collections.unmodifiableList(list);
+    }
+
+    public RequestManagers(LogContext logContext,
+                           Optional<CoordinatorRequestManager> coordinatorRequestManager,
+                           Optional<ShareHeartbeatRequestManager> shareHeartbeatRequestManager) {
+        this.log = logContext.logger(RequestManagers.class);
+        this.coordinatorRequestManager = coordinatorRequestManager;
+        this.commitRequestManager = Optional.empty();
+        this.heartbeatRequestManager = Optional.empty();
+        this.shareHeartbeatRequestManager = shareHeartbeatRequestManager;
+        this.offsetsRequestManager = null;
+        this.topicMetadataRequestManager = null;
+        this.fetchRequestManager = null;
+
+        List<Optional<? extends RequestManager>> list = new ArrayList<>();
+        list.add(coordinatorRequestManager);
+        list.add(shareHeartbeatRequestManager);
         entries = Collections.unmodifiableList(list);
     }
 
@@ -152,7 +172,6 @@ public class RequestManagers implements Closeable {
                         logContext,
                         config);
                 HeartbeatRequestManager heartbeatRequestManager = null;
-                MembershipManager membershipManager = null;
                 CoordinatorRequestManager coordinator = null;
                 CommitRequestManager commit = null;
 
@@ -174,7 +193,7 @@ public class RequestManagers implements Closeable {
                             groupRebalanceConfig.groupId,
                             groupRebalanceConfig.groupInstanceId,
                             metrics);
-                    membershipManager = new MembershipManagerImpl(
+                    MembershipManager membershipManager = new MembershipManagerImpl(
                             groupRebalanceConfig.groupId,
                             groupRebalanceConfig.groupInstanceId,
                             groupRebalanceConfig.rebalanceTimeoutMs,
@@ -206,6 +225,60 @@ public class RequestManagers implements Closeable {
                         Optional.ofNullable(coordinator),
                         Optional.ofNullable(commit),
                         Optional.ofNullable(heartbeatRequestManager)
+                );
+            }
+        };
+    }
+
+    /**
+     * Creates a {@link Supplier} for deferred creation during invocation by
+     * {@link ShareConsumerImpl}.
+     */
+    @SuppressWarnings({"checkstyle:ParameterNumber"})
+    public static Supplier<RequestManagers> supplier(final Time time,
+                                                     final LogContext logContext,
+                                                     final BackgroundEventHandler backgroundEventHandler,
+                                                     final ConsumerMetadata metadata,
+                                                     final SubscriptionState subscriptions,
+                                                     final ConsumerConfig config,
+                                                     final GroupRebalanceConfig groupRebalanceConfig,
+                                                     final Optional<ClientTelemetryReporter> clientTelemetryReporter,
+                                                     final Metrics metrics
+    ) {
+        return new CachedSupplier<RequestManagers>() {
+            @Override
+            protected RequestManagers create() {
+                long retryBackoffMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG);
+                long retryBackoffMaxMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MAX_MS_CONFIG);
+
+                CoordinatorRequestManager coordinator = new CoordinatorRequestManager(time,
+                        logContext,
+                        retryBackoffMs,
+                        retryBackoffMaxMs,
+                        backgroundEventHandler,
+                        groupRebalanceConfig.groupId);
+                ShareMembershipManager shareMembershipManager = new ShareMembershipManager(
+                        groupRebalanceConfig.groupId,
+                        null,
+                        subscriptions,
+                        metadata,
+                        logContext,
+                        clientTelemetryReporter,
+                        backgroundEventHandler);
+                ShareHeartbeatRequestManager shareHeartbeatRequestManager = new ShareHeartbeatRequestManager(
+                        logContext,
+                        time,
+                        config,
+                        coordinator,
+                        subscriptions,
+                        shareMembershipManager,
+                        backgroundEventHandler,
+                        metrics);
+
+                return new RequestManagers(
+                        logContext,
+                        Optional.of(coordinator),
+                        Optional.of(shareHeartbeatRequestManager)
                 );
             }
         };
