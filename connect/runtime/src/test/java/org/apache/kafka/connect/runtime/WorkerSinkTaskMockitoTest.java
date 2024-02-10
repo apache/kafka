@@ -758,6 +758,7 @@ public class WorkerSinkTaskMockitoTest {
         ArgumentCaptor<Pattern> topicsRegex = ArgumentCaptor.forClass(Pattern.class);
 
         verify(consumer).subscribe(topicsRegex.capture(), rebalanceListener.capture());
+        assertEquals("te.*", topicsRegex.getValue().pattern());
         verify(sinkTask).initialize(sinkTaskContext.capture());
         verify(sinkTask).start(props);
 
