@@ -152,7 +152,30 @@ public class ConfigDef {
      */
     public ConfigDef define(String name, Type type, Object defaultValue, Validator validator, Importance importance, String documentation,
                             String group, int orderInGroup, Width width, String displayName, List<String> dependents, Recommender recommender) {
-        return define(new ConfigKey(name, type, defaultValue, validator, importance, documentation, group, orderInGroup, width, displayName, dependents, recommender, false));
+        return define(new ConfigKey(name, type, defaultValue, validator, importance, documentation, group, orderInGroup, width, displayName, dependents, recommender, false, null));
+    }
+
+    /**
+     * Define a new configuration
+     * @param name               the name of the config parameter
+     * @param type               the type of the config
+     * @param defaultValue       the default value to use if this config isn't present
+     * @param validator          the validator to use in checking the correctness of the config
+     * @param importance         the importance of this config
+     * @param documentation      the documentation string for the config
+     * @param group              the group this config belongs to
+     * @param orderInGroup       the order of this config in the group
+     * @param width              the width of the config
+     * @param displayName        the name suitable for display
+     * @param dependents         the configurations that are dependents of this configuration
+     * @param recommender        the recommender provides valid values given the parent configuration values
+     * @param alternativeString  the string which will be used to override the string of defaultValue
+     * @return This ConfigDef so you can chain calls
+     */
+    public ConfigDef define(String name, Type type, Object defaultValue, Validator validator, Importance importance, String documentation,
+                            String group, int orderInGroup, Width width, String displayName, List<String> dependents, Recommender recommender,
+                            String alternativeString) {
+        return define(new ConfigKey(name, type, defaultValue, validator, importance, documentation, group, orderInGroup, width, displayName, dependents, recommender, false, alternativeString));
     }
 
     /**
@@ -390,6 +413,21 @@ public class ConfigDef {
     }
 
     /**
+     * Define a new configuration with no special validation logic
+     * @param name              The name of the config parameter
+     * @param type              The type of the config
+     * @param defaultValue      The default value to use if this config isn't present
+     * @param importance        The importance of this config: is this something you will likely need to change.
+     * @param documentation     The documentation string for the config
+     * @param alternativeString The string which will be used to override the string of defaultValue
+     * @return This ConfigDef so you can chain calls
+     */
+    public ConfigDef define(String name, Type type, Object defaultValue, Importance importance, String documentation, String alternativeString) {
+        return define(name, type, defaultValue, null, importance, documentation, null, -1, Width.NONE,
+                name, Collections.emptyList(), null, alternativeString);
+    }
+
+    /**
      * Define a new configuration with no default value and no special validation logic
      * @param name          The name of the config parameter
      * @param type          The type of the config
@@ -411,7 +449,7 @@ public class ConfigDef {
      * @return This ConfigDef so you can chain calls
      */
     public ConfigDef defineInternal(final String name, final Type type, final Object defaultValue, final Importance importance) {
-        return define(new ConfigKey(name, type, defaultValue, null, importance, "", "", -1, Width.NONE, name, Collections.emptyList(), null, true));
+        return define(new ConfigKey(name, type, defaultValue, null, importance, "", "", -1, Width.NONE, name, Collections.emptyList(), null, true, null));
     }
 
     /**
@@ -426,7 +464,7 @@ public class ConfigDef {
      * @return This ConfigDef so you can chain calls
      */
     public ConfigDef defineInternal(final String name, final Type type, final Object defaultValue, final Validator validator, final Importance importance, final String documentation) {
-        return define(new ConfigKey(name, type, defaultValue, validator, importance, documentation, "", -1, Width.NONE, name, Collections.emptyList(), null, true));
+        return define(new ConfigKey(name, type, defaultValue, validator, importance, documentation, "", -1, Width.NONE, name, Collections.emptyList(), null, true, null));
     }
 
     /**
@@ -1216,12 +1254,13 @@ public class ConfigDef {
         public final List<String> dependents;
         public final Recommender recommender;
         public final boolean internalConfig;
+        public final String alternativeString;
 
         public ConfigKey(String name, Type type, Object defaultValue, Validator validator,
                          Importance importance, String documentation, String group,
                          int orderInGroup, Width width, String displayName,
                          List<String> dependents, Recommender recommender,
-                         boolean internalConfig) {
+                         boolean internalConfig, String alternativeString) {
             this.name = name;
             this.type = type;
             boolean hasDefault = !NO_DEFAULT_VALUE.equals(defaultValue);
@@ -1238,6 +1277,7 @@ public class ConfigDef {
             this.displayName = displayName;
             this.recommender = recommender;
             this.internalConfig = internalConfig;
+            this.alternativeString = alternativeString;
         }
 
         public boolean hasDefault() {
@@ -1530,7 +1570,8 @@ public class ConfigDef {
                     key.displayName,
                     embeddedDependents(keyPrefix, key.dependents),
                     embeddedRecommender(keyPrefix, key.recommender),
-                    key.internalConfig));
+                    key.internalConfig,
+                    key.alternativeString));
         }
     }
 
@@ -1652,6 +1693,10 @@ public class ConfigDef {
                     "<tbody>\n");
             for (String detail : headers()) {
                 if (detail.equals("Name") || detail.equals("Description")) continue;
+                if (detail.equals("Default") && key.alternativeString != null) {
+                    addConfigDetail(b, detail, key.alternativeString);
+                    continue;
+                }
                 addConfigDetail(b, detail, getConfigValue(key, detail));
             }
             if (hasUpdateModes) {

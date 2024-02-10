@@ -1323,7 +1323,7 @@ class LogManager(logDirs: Seq[File],
    * data directories by fewest partitions.
    */
   private def nextLogDirs(): List[File] = {
-    if(_liveLogDirs.size == 1) {
+    if (_liveLogDirs.size == 1) {
       List(_liveLogDirs.peek())
     } else {
       // count the number of logs in each parent directory (including 0 for empty directories
@@ -1438,7 +1438,7 @@ class LogManager(logDirs: Seq[File],
         val timeSinceLastFlush = time.milliseconds - log.lastFlushTime
         debug(s"Checking if flush is needed on ${topicPartition.topic} flush interval ${log.config.flushMs}" +
               s" last flushed ${log.lastFlushTime} time since last flush: $timeSinceLastFlush")
-        if(timeSinceLastFlush >= log.config.flushMs)
+        if (timeSinceLastFlush >= log.config.flushMs)
           log.flush(false)
       } catch {
         case e: Throwable =>

@@ -70,7 +70,7 @@ object StressTestLog {
         Utils.delete(dir)
     })
 
-    while(running.get) {
+    while (running.get) {
       Thread.sleep(1000)
       println("Reader offset = %d, writer offset = %d".format(reader.currentOffset, writer.currentOffset))
       writer.checkProgress()
@@ -83,7 +83,7 @@ object StressTestLog {
 
     override def run(): Unit = {
       try {
-        while(running.get)
+        while (running.get)
           work()
       } catch {
         case e: Exception => {
