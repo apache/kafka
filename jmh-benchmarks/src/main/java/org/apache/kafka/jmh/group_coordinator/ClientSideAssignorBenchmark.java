@@ -33,7 +33,7 @@ import static org.apache.kafka.clients.consumer.internals.AbstractStickyAssignor
 @State(Scope.Benchmark)
 @Fork(value = 1)
 @Warmup(iterations = 5)
-@Measurement(iterations = 15)
+@Measurement(iterations = 7)
 @BenchmarkMode(Mode.AverageTime)
 @OutputTimeUnit(TimeUnit.MILLISECONDS)
 public class ClientSideAssignorBenchmark {
@@ -96,8 +96,8 @@ public class ClientSideAssignorBenchmark {
     }
 
     private List<PartitionInfo> partitionInfos(String topic, int numberOfPartitions) {
-        // Ensure there are enough racks and brokers for the replication factor
-        if ( numBrokerRacks < replicationFactor) {
+        // Ensure there are enough racks and brokers for the replication factor.
+        if (numBrokerRacks < replicationFactor) {
             throw new IllegalArgumentException("Number of broker racks must be at least equal to the replication factor.");
         }
 
