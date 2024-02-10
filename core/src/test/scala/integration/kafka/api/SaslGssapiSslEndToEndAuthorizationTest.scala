@@ -21,11 +21,12 @@ import kafka.server.KafkaConfig
 import kafka.utils.JaasTestUtils
 import org.apache.kafka.common.config.SslConfigs
 import org.apache.kafka.common.security.auth._
-
 import org.junit.jupiter.api.Assertions.assertNull
+import org.junit.jupiter.api.Tag
 
 import scala.collection.immutable.List
 
+@Tag("integration")
 class SaslGssapiSslEndToEndAuthorizationTest extends SaslEndToEndAuthorizationTest {
   override val clientPrincipal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE,
     JaasTestUtils.KafkaClientPrincipalUnqualifiedName)

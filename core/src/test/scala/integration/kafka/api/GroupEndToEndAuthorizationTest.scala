@@ -21,6 +21,7 @@ import kafka.utils.JaasTestUtils
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs
 import org.apache.kafka.common.security.auth.{AuthenticationContext, KafkaPrincipal, SaslAuthenticationContext}
 import org.apache.kafka.common.security.authenticator.DefaultKafkaPrincipalBuilder
+import org.junit.jupiter.api.Tag
 
 object GroupEndToEndAuthorizationTest {
   val GroupPrincipalType = "Group"
@@ -40,6 +41,7 @@ object GroupEndToEndAuthorizationTest {
   }
 }
 
+@Tag("integration")
 class GroupEndToEndAuthorizationTest extends SaslScramSslEndToEndAuthorizationTest {
   override val clientPrincipal = new KafkaPrincipal(GroupPrincipalType, ClientGroup)
   override val kafkaPrincipal = new KafkaPrincipal(GroupPrincipalType, JaasTestUtils.KafkaScramAdmin)

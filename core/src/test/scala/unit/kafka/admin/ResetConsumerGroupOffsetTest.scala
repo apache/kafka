@@ -24,7 +24,7 @@ import org.apache.kafka.clients.producer.ProducerRecord
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.test
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.{Tag, Test}
 
 import scala.jdk.CollectionConverters._
 import scala.collection.Seq
@@ -41,6 +41,7 @@ import scala.collection.Seq
   * - scope=topics+partitions, scenario=to-earliest
   * - export/import
   */
+@Tag("integration")
 class ResetConsumerGroupOffsetTest extends ConsumerGroupCommandTest {
 
   val overridingProps = new Properties()

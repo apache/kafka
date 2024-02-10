@@ -13,7 +13,7 @@
 package kafka.api
 
 import kafka.server.KafkaConfig
-import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo, Timeout}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Tag, TestInfo, Timeout}
 import kafka.utils.{JaasTestUtils, TestInfoUtils, TestUtils}
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.junit.jupiter.params.ParameterizedTest
@@ -22,6 +22,7 @@ import org.junit.jupiter.params.provider.ValueSource
 import scala.jdk.CollectionConverters._
 
 @Timeout(600)
+@Tag("integration")
 class SaslMultiMechanismConsumerTest extends BaseConsumerTest with SaslSetup {
   private val kafkaClientSaslMechanism = "PLAIN"
   private val kafkaServerSaslMechanisms = List("GSSAPI", "PLAIN")
