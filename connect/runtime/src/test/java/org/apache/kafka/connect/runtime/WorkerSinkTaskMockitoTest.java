@@ -359,7 +359,6 @@ public class WorkerSinkTaskMockitoTest {
         createTask(initialState);
         expectTaskGetTopic();
 
-
         workerTask.initialize(TASK_CONFIG);
         workerTask.initializeAndStart();
         verifyInitializeTask();
@@ -369,7 +368,6 @@ public class WorkerSinkTaskMockitoTest {
                 .thenAnswer(expectConsumerPoll(1))
                 // Retry delivery should succeed
                 .thenAnswer(expectConsumerPoll(0))
-                .thenAnswer(expectConsumerPoll(1))
                 .thenAnswer(expectConsumerPoll(0));
         expectConversionAndTransformation(null, new RecordHeaders());
 
