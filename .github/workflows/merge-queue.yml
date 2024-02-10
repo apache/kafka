@@ -1,0 +1,21 @@
+name: Compile and validate before merging
+
+on:
+  merge_group:
+  pull_request:
+
+jobs:
+  validate-pr:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+    - name: Setup Java
+      uses: actions/setup-java@v4
+      with:
+        distribution: temurin
+        java-version: 21
+    - name: Setup Gradle
+      uses: gradle/gradle-build-action@v2
+    - name: Gradle check
+      run: ./gradlew --info check -x test
