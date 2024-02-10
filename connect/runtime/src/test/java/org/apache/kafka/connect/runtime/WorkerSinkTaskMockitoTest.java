@@ -641,7 +641,7 @@ public class WorkerSinkTaskMockitoTest {
         // stop wakes up the consumer
         verify(consumer).wakeup();
 
-        verify(sinkTask).close(any(Collection.class));
+        verify(sinkTask).close(any());
     }
 
     @Test
