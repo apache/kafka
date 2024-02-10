@@ -897,7 +897,7 @@ public class WorkerSinkTaskMockitoTest {
         expectTransformation(null);
 
         workerTask.iteration(); // iter 1 -- initial assignment
-        workerTask.iteration(); // iter 2 -- deliver 1 record
+        workerTask.iteration(); // iter 2 -- deliver records
 
         @SuppressWarnings("unchecked")
         ArgumentCaptor<Collection<SinkRecord>> records = ArgumentCaptor.forClass(Collection.class);
