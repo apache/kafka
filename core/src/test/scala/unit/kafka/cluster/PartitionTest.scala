@@ -3778,7 +3778,7 @@ class PartitionTest extends AbstractPartitionTest {
     val fetchParams = followerFetchParams(
       replicaId,
       maxBytes = maxBytes,
-      replicaEpoch = if (!replicaEpoch.isDefined) defaultBrokerEpoch(replicaId) else replicaEpoch.get
+      replicaEpoch = if (replicaEpoch.isEmpty) defaultBrokerEpoch(replicaId) else replicaEpoch.get
     )
 
     val fetchPartitionData = new FetchRequest.PartitionData(

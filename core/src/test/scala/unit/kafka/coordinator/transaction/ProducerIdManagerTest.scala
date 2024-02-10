@@ -156,7 +156,7 @@ class ProducerIdManagerTest {
 
     for ( _ <- 0 until numThreads) {
       requestHandlerThreadPool.submit(() => {
-        while(latch.getCount > 0) {
+        while (latch.getCount > 0) {
           val result = manager.generateProducerId()
           result match {
             case Success(pid) =>

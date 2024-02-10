@@ -1112,12 +1112,12 @@ class AuthorizerTest extends QuorumTestHarness with BaseAuthorizerTest {
                                  resource: ResourcePattern = resource): Set[AccessControlEntry] = {
     var acls = originalAcls
 
-    if(addedAcls.nonEmpty) {
+    if (addedAcls.nonEmpty) {
       addAcls(authorizer1, addedAcls, resource)
       acls ++= addedAcls
     }
 
-    if(removedAcls.nonEmpty) {
+    if (removedAcls.nonEmpty) {
       removeAcls(authorizer1, removedAcls, resource)
       acls --=removedAcls
     }
