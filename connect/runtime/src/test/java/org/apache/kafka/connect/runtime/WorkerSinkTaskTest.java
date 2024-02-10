@@ -125,7 +125,6 @@ public class WorkerSinkTaskTest {
     private static final TaskConfig TASK_CONFIG = new TaskConfig(TASK_PROPS);
 
     private ConnectorTaskId taskId = new ConnectorTaskId("job", 0);
-    private ConnectorTaskId taskId1 = new ConnectorTaskId("job", 1);
     private TargetState initialState = TargetState.STARTED;
     private MockTime time;
     private WorkerSinkTask workerTask;
