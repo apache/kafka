@@ -27,7 +27,7 @@ import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.apache.kafka.server.authorizer._
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertNotNull, assertTrue}
-import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo}
+import org.junit.jupiter.api.{AfterEach, Test}
 
 import scala.jdk.CollectionConverters._
 import scala.collection.mutable
@@ -94,12 +94,6 @@ class SslAdminIntegrationTest extends SaslSslAdminIntegrationTest {
     startSasl(jaasSections(List.empty, None, ZkSasl))
   }
 
-  @BeforeEach
-  override def setUp(testInfo: TestInfo): Unit = {
-    waitForNoBlockedRequestThreads(0)
-    super.setUp(testInfo)
-  }
-
   @AfterEach
   override def tearDown(): Unit = {
     // Ensure semaphore doesn't block shutdown even if test has failed
@@ -130,15 +124,15 @@ class SslAdminIntegrationTest extends SaslSslAdminIntegrationTest {
   def testSynchronousAuthorizerAclUpdatesBlockRequestThreads(): Unit = {
     val testSemaphore = new Semaphore(0)
     SslAdminIntegrationTest.semaphore = Some(testSemaphore)
-    waitForNoBlockedRequestThreads(numRequestThreads)
+    waitForNoBlockedRequestThreads()
 
     // Queue requests until all threads are blocked. ACL create requests are sent to least loaded
     // node, so we may need more than `numRequestThreads` requests to block all threads.
     val aclFutures = mutable.Buffer[CreateAclsResult]()
-    while (blockedRequestThreads(numRequestThreads).size < numRequestThreads) {
+    while (blockedRequestThreads.size < numRequestThreads) {
       aclFutures += createAdminClient.createAcls(List(acl2).asJava)
       assertTrue(aclFutures.size < numRequestThreads * 10,
-        s"Request threads not blocked numRequestThreads=$numRequestThreads blocked=${blockedRequestThreads(numRequestThreads)}")
+        s"Request threads not blocked numRequestThreads=$numRequestThreads blocked=$blockedRequestThreads")
     }
     assertEquals(0, purgatoryMetric("NumDelayedOperations"))
     assertEquals(0, purgatoryMetric("PurgatorySize"))
@@ -149,7 +143,7 @@ class SslAdminIntegrationTest extends SaslSslAdminIntegrationTest {
 
     // Release the semaphore and verify that all requests complete
     testSemaphore.release(aclFutures.size)
-    waitForNoBlockedRequestThreads(numRequestThreads)
+    waitForNoBlockedRequestThreads()
     assertNotNull(describeFuture.get(10, TimeUnit.SECONDS))
     // If any of the requests time out since we were blocking the threads earlier, retry the request.
     val numTimedOut = aclFutures.count { future =>
@@ -179,10 +173,10 @@ class SslAdminIntegrationTest extends SaslSslAdminIntegrationTest {
     val testSemaphore = new Semaphore(0)
     SslAdminIntegrationTest.semaphore = Some(testSemaphore)
 
-    waitForNoBlockedRequestThreads(numRequestThreads)
+    waitForNoBlockedRequestThreads()
 
     val aclFutures = (0 until numRequestThreads).map(_ => createAdminClient.createAcls(List(acl2).asJava))
-    waitForNoBlockedRequestThreads(numRequestThreads)
+    waitForNoBlockedRequestThreads()
     assertTrue(aclFutures.forall(future => !future.all.isDone))
     // Other requests should succeed even though ACL updates are blocked
     assertNotNull(createAdminClient.describeCluster().clusterId().get(10, TimeUnit.SECONDS))
@@ -243,30 +237,17 @@ class SslAdminIntegrationTest extends SaslSslAdminIntegrationTest {
     client
   }
 
-  private def blockedRequestThreads(numRequestThreads: Int): List[Thread] = {
+  private def blockedRequestThreads: List[Thread] = {
     val requestThreads = Thread.getAllStackTraces.keySet.asScala
       .filter(_.getName.contains("data-plane-kafka-request-handler"))
-    if (numRequestThreads != requestThreads.size) {
-      requestThreads.foreach(th => {
-        // Print the thread name and current state of thread.
-        System.out.println("Thread Name:" + th.getName)
-        System.out.println("Thread State:" + th.getState)
-        val trace = th.getStackTrace
-        for (el <- trace) {
-          println("\t" + el)
-        }
-        println()
-      })
-    }
-
     assertEquals(numRequestThreads, requestThreads.size)
     requestThreads.filter(_.getState == Thread.State.WAITING).toList
   }
 
   private def numRequestThreads = servers.head.config.numIoThreads * servers.size
 
-  private def waitForNoBlockedRequestThreads(numRequestThreads: Int): Unit = {
-    val (blockedThreads, _) = TestUtils.computeUntilTrue(blockedRequestThreads(numRequestThreads))(_.isEmpty)
+  private def waitForNoBlockedRequestThreads(): Unit = {
+    val (blockedThreads, _) = TestUtils.computeUntilTrue(blockedRequestThreads)(_.isEmpty)
     assertEquals(List.empty, blockedThreads)
   }
 
