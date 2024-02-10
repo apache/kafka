@@ -749,7 +749,7 @@ try:
         print(f"In order to restart the workflow, you will have to manually switch back to the original branch and delete the branch {release_version} and tag {rc_tag}")
         sys.exit(1)
 except Exception as e:
-    print(f"Failed when trying to git push {rc_tag}. Error: {e}"
+    print(f"Failed when trying to git push {rc_tag}. Error: {e}")
     print("You may need to clean up branches/tags yourself before retrying.")
     print("Due the failure of git push, the program will exit here. Please note that: ")
     print(f"1) You are still at branch {release_version}, not {starting_branch}")
