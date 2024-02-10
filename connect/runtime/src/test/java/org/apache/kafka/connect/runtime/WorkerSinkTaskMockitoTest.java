@@ -359,8 +359,6 @@ public class WorkerSinkTaskMockitoTest {
         createTask(initialState);
         expectTaskGetTopic();
 
-        when(consumer.assignment()).thenReturn(INITIAL_ASSIGNMENT);
-        INITIAL_ASSIGNMENT.forEach(tp -> when(consumer.position(tp)).thenReturn(FIRST_OFFSET));
 
         workerTask.initialize(TASK_CONFIG);
         workerTask.initializeAndStart();
