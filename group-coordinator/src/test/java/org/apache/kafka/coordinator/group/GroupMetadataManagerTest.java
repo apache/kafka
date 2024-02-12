@@ -4711,9 +4711,10 @@ public class GroupMetadataManagerTest {
         assertEquals(1, timeouts.size());
         timeouts.forEach(timeout -> {
             assertEquals(classicGroupHeartbeatKey("group-id", memberId), timeout.key);
-            assertEquals(Collections.singletonList(
-                GroupMetadataManagerTestContext.newGroupMetadataRecordWithCurrentState(group, MetadataVersion.latestTesting())),
-                timeout.result.records());
+            assertEquals(
+                Collections.singletonList(RecordHelpers.newGroupMetadataRecord(group, group.groupAssignment(), MetadataVersion.latestTesting())),
+                timeout.result.records()
+            );
         });
 
         assertTrue(joinResult.joinFuture.isDone());
@@ -5191,7 +5192,7 @@ public class GroupMetadataManagerTest {
         );
 
         assertEquals(
-            Collections.singletonList(GroupMetadataManagerTestContext.newGroupMetadataRecordWithCurrentState(group, MetadataVersion.latestTesting())),
+            Collections.singletonList(RecordHelpers.newGroupMetadataRecord(group, group.groupAssignment(), MetadataVersion.latestTesting())),
             joinResult.records
         );
         assertFalse(joinResult.joinFuture.isDone());
@@ -5318,7 +5319,7 @@ public class GroupMetadataManagerTest {
         );
 
         assertEquals(
-            Collections.singletonList(GroupMetadataManagerTestContext.newGroupMetadataRecordWithCurrentState(group, MetadataVersion.latestTesting())),
+            Collections.singletonList(RecordHelpers.newGroupMetadataRecord(group, group.groupAssignment(), MetadataVersion.latestTesting())),
             joinResult.records
         );
         assertFalse(joinResult.joinFuture.isDone());
@@ -5394,7 +5395,7 @@ public class GroupMetadataManagerTest {
             supportSkippingAssignment);
 
         assertEquals(
-            Collections.singletonList(GroupMetadataManagerTestContext.newGroupMetadataRecordWithCurrentState(group, MetadataVersion.latestTesting())),
+            Collections.singletonList(RecordHelpers.newGroupMetadataRecord(group, group.groupAssignment(), MetadataVersion.latestTesting())),
             joinResult.records
         );
         assertFalse(joinResult.joinFuture.isDone());
@@ -5962,7 +5963,7 @@ public class GroupMetadataManagerTest {
         );
 
         assertEquals(
-            Collections.singletonList(GroupMetadataManagerTestContext.newGroupMetadataRecordWithCurrentState(group, MetadataVersion.latestTesting())),
+            Collections.singletonList(RecordHelpers.newGroupMetadataRecord(group, group.groupAssignment(), MetadataVersion.latestTesting())),
             joinResult.records
         );
         // Simulate a successful write to the log.
@@ -6275,7 +6276,7 @@ public class GroupMetadataManagerTest {
         );
 
         assertEquals(
-            Collections.singletonList(GroupMetadataManagerTestContext.newGroupMetadataRecordWithCurrentState(group, MetadataVersion.latestTesting())),
+            Collections.singletonList(RecordHelpers.newGroupMetadataRecord(group, group.groupAssignment(), MetadataVersion.latestTesting())),
             followerJoinResult.records
         );
         // Simulate a failed write to the log.
@@ -6332,7 +6333,7 @@ public class GroupMetadataManagerTest {
         leaderSyncResult.appendFuture.complete(null);
 
         assertEquals(
-            Collections.singletonList(GroupMetadataManagerTestContext.newGroupMetadataRecordWithCurrentState(group, MetadataVersion.latestTesting())),
+            Collections.singletonList(RecordHelpers.newGroupMetadataRecord(group, group.groupAssignment(), MetadataVersion.latestTesting())),
             leaderSyncResult.records
         );
 
@@ -6382,7 +6383,7 @@ public class GroupMetadataManagerTest {
         );
 
         assertEquals(
-            Collections.singletonList(GroupMetadataManagerTestContext.newGroupMetadataRecordWithCurrentState(group, MetadataVersion.latestTesting())),
+            Collections.singletonList(RecordHelpers.newGroupMetadataRecord(group, group.groupAssignment(), MetadataVersion.latestTesting())),
             followerJoinResult.records
         );
 
@@ -6594,7 +6595,7 @@ public class GroupMetadataManagerTest {
         );
 
         assertEquals(
-            Collections.singletonList(GroupMetadataManagerTestContext.newGroupMetadataRecordWithCurrentState(group, MetadataVersion.latestTesting())),
+            Collections.singletonList(RecordHelpers.newGroupMetadataRecord(group, group.groupAssignment(), MetadataVersion.latestTesting())),
             followerJoinResult.records
         );
         // Simulate a successful write to log.
@@ -6801,7 +6802,7 @@ public class GroupMetadataManagerTest {
             );
 
             assertEquals(
-                Collections.singletonList(GroupMetadataManagerTestContext.newGroupMetadataRecordWithCurrentState(group, MetadataVersion.latestTesting())),
+                Collections.singletonList(RecordHelpers.newGroupMetadataRecord(group, group.groupAssignment(), MetadataVersion.latestTesting())),
                 leaderJoinResult.records
             );
             // Simulate a successful write to log.
@@ -8243,7 +8244,7 @@ public class GroupMetadataManagerTest {
         ExpiredTimeout<Void, Record> timeout = timeouts.get(0);
         assertEquals(classicGroupSyncKey("group-id"), timeout.key);
         assertEquals(
-            Collections.singletonList(GroupMetadataManagerTestContext.newGroupMetadataRecordWithCurrentState(group, MetadataVersion.latestTesting())),
+            Collections.singletonList(RecordHelpers.newGroupMetadataRecord(group, group.groupAssignment(), MetadataVersion.latestTesting())),
             timeout.result.records()
         );
 
@@ -8399,7 +8400,7 @@ public class GroupMetadataManagerTest {
 
             if (response.memberId().equals(leaderId)) {
                 assertEquals(
-                    Collections.singletonList(GroupMetadataManagerTestContext.newGroupMetadataRecordWithCurrentState(group, MetadataVersion.latestTesting())),
+                    Collections.singletonList(RecordHelpers.newGroupMetadataRecord(group, group.groupAssignment(), MetadataVersion.latestTesting())),
                     syncResult.records
                 );
 
@@ -9059,7 +9060,7 @@ public class GroupMetadataManagerTest {
                 ))
         );
         assertEquals(
-            Collections.singletonList(GroupMetadataManagerTestContext.newGroupMetadataRecordWithCurrentState(group, MetadataVersion.latestTesting())),
+            Collections.singletonList(RecordHelpers.newGroupMetadataRecord(group, group.groupAssignment(), MetadataVersion.latestTesting())),
             leaveResult.records()
         );
         // Simulate a successful write to the log.

@@ -139,13 +139,6 @@ public class GroupMetadataManagerTestContext {
         );
     }
 
-    public static Record newGroupMetadataRecordWithCurrentState(
-        ClassicGroup group,
-        MetadataVersion metadataVersion
-    ) {
-        return RecordHelpers.newGroupMetadataRecord(group, group.groupAssignment(), metadataVersion);
-    }
-
     public static class RebalanceResult {
         int generationId;
         String leaderId;
@@ -671,7 +664,7 @@ public class GroupMetadataManagerTestContext {
             .build());
 
         assertEquals(
-            Collections.singletonList(newGroupMetadataRecordWithCurrentState(group, MetadataVersion.latestTesting())),
+            Collections.singletonList(RecordHelpers.newGroupMetadataRecord(group, group.groupAssignment(), MetadataVersion.latestTesting())),
             syncResult.records
         );
         // Simulate a successful write to the log.
@@ -935,7 +928,7 @@ public class GroupMetadataManagerTestContext {
 
         // Now the group is stable, with the one member that joined above
         assertEquals(
-            Collections.singletonList(newGroupMetadataRecordWithCurrentState(group, MetadataVersion.latestTesting())),
+            Collections.singletonList(RecordHelpers.newGroupMetadataRecord(group, group.groupAssignment(), MetadataVersion.latestTesting())),
             syncResult.records
         );
         // Simulate a successful write to log.
@@ -973,7 +966,7 @@ public class GroupMetadataManagerTestContext {
         syncResult = sendClassicGroupSync(syncRequest.setGenerationId(nextGenerationId));
 
         assertEquals(
-            Collections.singletonList(newGroupMetadataRecordWithCurrentState(group, MetadataVersion.latestTesting())),
+            Collections.singletonList(RecordHelpers.newGroupMetadataRecord(group, group.groupAssignment(), MetadataVersion.latestTesting())),
             syncResult.records
         );
         // Simulate a successful write to log.
