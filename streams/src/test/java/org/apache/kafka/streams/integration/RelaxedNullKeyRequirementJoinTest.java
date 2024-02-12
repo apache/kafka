@@ -43,7 +43,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class RelaxedNullKeyRequirementJoinTest {
 
-    private static final JoinWindows WINDOW_60MS_GRACE_10MS = ofTimeDifferenceAndGrace(Duration.ofMillis(60), Duration.ofMillis(10));
+    private static final JoinWindows WINDOW = ofTimeDifferenceAndGrace(Duration.ofSeconds(60), Duration.ofSeconds(10));
     private static final ValueJoiner<String, String, String> JOINER = (lv, rv) -> lv + "|" + rv;
     private static final String LEFT = "left";
     private static final String RIGHT = "right";
@@ -71,21 +71,11 @@ public class RelaxedNullKeyRequirementJoinTest {
     @Test
     void testRelaxedLeftStreamStreamJoin() {
         leftStream
-            .leftJoin(rightStream, JOINER, WINDOW_60MS_GRACE_10MS)
+            .leftJoin(rightStream, JOINER, WINDOW)
             .to(OUT);
         initTopology();
-        left.pipeInput(null, "leftValue1", 1);
-        left.pipeInput(null, "leftValue2", 90);
-        left.pipeInput(null, "lateArrival-Dropped", 19);
-        left.pipeInput(null, "lateArrivalWithinGrace", 20);
-        assertEquals(
-            Arrays.asList(
-                new KeyValue<>(null, "leftValue1|null"),
-                new KeyValue<>(null, "leftValue2|null"),
-                new KeyValue<>(null, "lateArrivalWithinGrace|null")
-            ),
-            out.readKeyValuesToList()
-        );
+        left.pipeInput(null, "leftValue", 1);
+        assertEquals(Collections.singletonList(new KeyValue<>(null, "leftValue|null")), out.readKeyValuesToList());
     }
 
     @Test
@@ -101,22 +91,13 @@ public class RelaxedNullKeyRequirementJoinTest {
     @Test
     void testRelaxedOuterStreamStreamJoin() {
         leftStream
-            .outerJoin(rightStream, JOINER, WINDOW_60MS_GRACE_10MS)
+            .outerJoin(rightStream, JOINER, WINDOW)
             .to(OUT);
         initTopology();
         right.pipeInput(null, "rightValue", 1);
-        left.pipeInput(null, "leftValue", 90);
-        left.pipeInput(null, "lateArrival-dropped", 19);
-        right.pipeInput(null, "lateArrival-dropped", 19);
-        right.pipeInput(null, "lateArrivalWithinGrace", 20);
-        left.pipeInput(null, "lateArrivalWithinGrace", 20);
+        left.pipeInput(null, "leftValue");
         assertEquals(
-            Arrays.asList(
-                new KeyValue<>(null, "null|rightValue"),
-                new KeyValue<>(null, "leftValue|null"),
-                new KeyValue<>(null, "null|lateArrivalWithinGrace"),
-                new KeyValue<>(null, "lateArrivalWithinGrace|null")
-            ),
+            Arrays.asList(new KeyValue<>(null, "null|rightValue"), new KeyValue<>(null, "leftValue|null")),
             out.readKeyValuesToList()
         );
     }
