@@ -85,13 +85,31 @@ public class ClientSideAssignorBenchmark {
     }
 
     private void addSubscriptions(List<String> topics) {
+        int topicCount = topics.size();
+        subscriptions.clear();
+
         for (int i = 0; i < memberCount; i++) {
             String memberName = "member" + i;
-            if (i == memberCount - 1 && !isSubscriptionUniform) {
-                this.subscriptions.put(memberName, subscription(topics.subList(0, 1), i));
+            List<String> assignedTopics = new ArrayList<>();
+
+            if (!isSubscriptionUniform) {
+                // Assign topics in a round-robin fashion ensuring each topic is assigned exactly to two members.
+                for (int t = 0; t < topicCount; t++) {
+                    // Calculate the two members to assign each topic to, based on the topic index.
+                    int firstMemberIndex = t % memberCount;
+                    int secondMemberIndex = (t + 1) % memberCount;
+
+                    // If the current member is one of the two calculated members, add the topic to their list.
+                    if (i == firstMemberIndex || i == secondMemberIndex) {
+                        assignedTopics.add(topics.get(t));
+                    }
+                }
             } else {
-                this.subscriptions.put(memberName, subscription(topics, i));
+                // If distribution is uniform, just assign the full list of topics.
+                assignedTopics.addAll(topics);
             }
+
+            subscriptions.put(memberName, subscription(assignedTopics, i));
         }
     }
 
