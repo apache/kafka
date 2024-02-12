@@ -381,10 +381,11 @@ public class ShareConsumerImpl<K, V> implements ShareConsumer<K, V> {
                 throw new IllegalStateException("Consumer is not subscribed to any topics.");
             }
 
-            applicationEventHandler.add(new PollApplicationEvent(timer.currentTimeMs()));
-
             do {
                 backgroundEventProcessor.process();
+
+                applicationEventHandler.add(new PollApplicationEvent(timer.currentTimeMs()));
+
                 final Fetch<K, V> fetch = pollForFetches(timer);
                 if (!fetch.isEmpty()) {
                     return new ConsumerRecords<>(fetch.records());
