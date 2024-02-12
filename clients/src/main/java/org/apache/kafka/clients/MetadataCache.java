@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.clients;
 
+import java.util.OptionalInt;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.ClusterResource;
 import org.apache.kafka.common.Node;
@@ -126,15 +127,16 @@ public class MetadataCache {
 
     /**
      * Get leader-epoch for partition.
+     *
      * @param tp partition
-     * @return leader-epoch if known, else return optional.empty()
+     * @return leader-epoch if known, else return OptionalInt.empty()
      */
-    public Optional<Integer> leaderEpochFor(TopicPartition tp) {
+    public OptionalInt leaderEpochFor(TopicPartition tp) {
         PartitionMetadata partitionMetadata = metadataByPartition.get(tp);
-        if (partitionMetadata == null) {
-            return Optional.empty();
+        if (partitionMetadata == null || !partitionMetadata.leaderEpoch.isPresent()) {
+            return OptionalInt.empty();
         } else {
-            return partitionMetadata.leaderEpoch;
+            return OptionalInt.of(partitionMetadata.leaderEpoch.get());
         }
     }
 

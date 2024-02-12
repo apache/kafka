@@ -26,7 +26,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Optional;
+import java.util.OptionalInt;
 import java.util.Set;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -700,7 +700,7 @@ public class RecordAccumulator {
             final int dequeSize;
             final boolean full;
 
-            Optional<Integer> leaderEpoch = metadataCache.leaderEpochFor(part);
+            OptionalInt leaderEpoch = metadataCache.leaderEpochFor(part);
 
             // This loop is especially hot with large partition counts. So -
 
@@ -888,7 +888,7 @@ public class RecordAccumulator {
             if (deque == null)
                 continue;
 
-            Optional<Integer> leaderEpoch = metadataCache.leaderEpochFor(tp);
+            OptionalInt leaderEpoch = metadataCache.leaderEpochFor(tp);
 
             final ProducerBatch batch;
             synchronized (deque) {
