@@ -40,7 +40,7 @@ import org.apache.kafka.metadata.migration.ZkMigrationLeadershipState
 import org.apache.kafka.server.common.ApiMessageAndVersion
 import org.apache.kafka.server.config.ConfigType
 import org.apache.kafka.server.util.MockRandom
-import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
+import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue, fail}
 import org.junit.jupiter.api.Test
 
 import java.util
@@ -326,7 +326,7 @@ class ZkConfigMigrationClientTest extends ZkMigrationTestHarness {
     val image = delta.apply(MetadataProvenance.EMPTY)
 
     // load snapshot to Zookeeper.
-    val kraftMigrationZkWriter = new KRaftMigrationZkWriter(migrationClient)
+    val kraftMigrationZkWriter = new KRaftMigrationZkWriter(migrationClient, fail(_))
     kraftMigrationZkWriter.handleSnapshot(image, (_, _, operation) => {
       migrationState = operation.apply(migrationState)
     })
