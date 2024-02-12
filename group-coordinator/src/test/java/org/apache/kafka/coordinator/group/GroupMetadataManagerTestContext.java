@@ -18,7 +18,6 @@ package org.apache.kafka.coordinator.group;
 
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor;
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol;
-import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.UnknownMemberIdException;
 import org.apache.kafka.common.message.ConsumerGroupDescribeResponseData;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatRequestData;
@@ -74,6 +73,7 @@ import java.net.InetAddress;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -342,10 +342,9 @@ public class GroupMetadataManagerTestContext {
         final private MockCoordinatorTimer<Void, Record> timer = new MockCoordinatorTimer<>(time);
         final private LogContext logContext = new LogContext();
         final private SnapshotRegistry snapshotRegistry = new SnapshotRegistry(logContext);
-        final private TopicPartition groupMetadataTopicPartition = new TopicPartition("topic", 0);
         private MetadataImage metadataImage;
         private List<PartitionAssignor> consumerGroupAssignors = Collections.singletonList(new MockPartitionAssignor("range"));
-        private List<ConsumerGroupBuilder> consumerGroupBuilders = new ArrayList<>();
+        final private List<ConsumerGroupBuilder> consumerGroupBuilders = new ArrayList<>();
         private int consumerGroupMaxSize = Integer.MAX_VALUE;
         private int consumerGroupMetadataRefreshIntervalMs = Integer.MAX_VALUE;
         private int classicGroupMaxSize = Integer.MAX_VALUE;
@@ -353,7 +352,7 @@ public class GroupMetadataManagerTestContext {
         final private int classicGroupNewMemberJoinTimeoutMs = 5 * 60 * 1000;
         private int classicGroupMinSessionTimeoutMs = 10;
         private int classicGroupMaxSessionTimeoutMs = 10 * 60 * 1000;
-        private GroupCoordinatorMetricsShard metrics = mock(GroupCoordinatorMetricsShard.class);
+        final private GroupCoordinatorMetricsShard metrics = mock(GroupCoordinatorMetricsShard.class);
 
         public Builder withMetadataImage(MetadataImage metadataImage) {
             this.metadataImage = metadataImage;
@@ -431,9 +430,7 @@ public class GroupMetadataManagerTestContext {
                 classicGroupNewMemberJoinTimeoutMs
             );
 
-            consumerGroupBuilders.forEach(builder -> {
-                builder.build(metadataImage.topics()).forEach(context::replay);
-            });
+            consumerGroupBuilders.forEach(builder -> builder.build(metadataImage.topics()).forEach(context::replay));
 
             context.commit();
 
@@ -539,7 +536,7 @@ public class GroupMetadataManagerTestContext {
         return timeouts;
     }
 
-    public MockCoordinatorTimer.ScheduledTimeout<Void, Record> assertSessionTimeout(
+    public void assertSessionTimeout(
         String groupId,
         String memberId,
         long delayMs
@@ -548,7 +545,6 @@ public class GroupMetadataManagerTestContext {
             timer.timeout(consumerGroupSessionTimeoutKey(groupId, memberId));
         assertNotNull(timeout);
         assertEquals(time.milliseconds() + delayMs, timeout.deadlineMs);
-        return timeout;
     }
 
     public void assertNoSessionTimeout(
@@ -1071,8 +1067,8 @@ public class GroupMetadataManagerTestContext {
     }
 
     public List<ListGroupsResponseData.ListedGroup> sendListGroups(List<String> statesFilter, List<String> typesFilter) {
-        Set<String> statesFilterSet = statesFilter.stream().collect(Collectors.toSet());
-        Set<String> typesFilterSet = typesFilter.stream().collect(Collectors.toSet());
+        Set<String> statesFilterSet = new HashSet<>(statesFilter);
+        Set<String> typesFilterSet = new HashSet<>(typesFilter);
         return groupMetadataManager.listGroups(statesFilterSet, typesFilterSet, lastCommittedOffset);
     }
 
