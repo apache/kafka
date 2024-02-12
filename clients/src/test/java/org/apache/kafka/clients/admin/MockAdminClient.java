@@ -1339,6 +1339,11 @@ public class MockAdminClient extends AdminClient {
         listConsumerGroupOffsetsException = exception;
     }
 
+    @Override
+    public ListShareGroupsResult listShareGroups(ListShareGroupsOptions options) {
+        throw new UnsupportedOperationException("Not implemented yet");
+    }
+
     private final static class TopicMetadata {
         final Uuid topicId;
         final boolean isInternalTopic;

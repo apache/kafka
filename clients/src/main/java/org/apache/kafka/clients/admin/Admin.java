@@ -1215,6 +1215,26 @@ public interface Admin extends AutoCloseable {
     AlterConsumerGroupOffsetsResult alterConsumerGroupOffsets(String groupId, Map<TopicPartition, OffsetAndMetadata> offsets, AlterConsumerGroupOffsetsOptions options);
 
     /**
+     * List the share groups available in the cluster with the default options.
+     *
+     * <p>This is a convenience method for {@link #listShareGroups(ListShareGroupsOptions)} with default options.
+     * See the overload for more details.
+     *
+     * @return The ListShareGroupsResult.
+     */
+    default ListShareGroupsResult listShareGroups() {
+        return listShareGroups(new ListShareGroupsOptions());
+    }
+
+    /**
+     * List the share groups available in the cluster.
+     *
+     * @param options The options to use when listing the share groups.
+     * @return The ListShareGroupsResult.
+     */
+    ListShareGroupsResult listShareGroups(ListShareGroupsOptions options);
+
+    /**
      * <p>List offset for the specified partitions and OffsetSpec. This operation enables to find
      * the beginning offset, end offset as well as the offset matching a timestamp in partitions.
      *

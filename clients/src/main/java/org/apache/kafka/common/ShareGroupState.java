@@ -14,6 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.common;
 
 import java.util.Arrays;
@@ -22,30 +23,30 @@ import java.util.Map;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
-public enum GroupType {
+/**
+ * The consumer group state.
+ */
+public enum ShareGroupState {
     UNKNOWN("Unknown"),
-    CONSUMER("Consumer"),
-    CLASSIC("Classic"),
-    SHARE("Share");
+    STABLE("Stable"),
+    DEAD("Dead"),
+    EMPTY("Empty");
 
-    private final static Map<String, GroupType> NAME_TO_ENUM = Arrays.stream(values())
-        .collect(Collectors.toMap(type -> type.name.toLowerCase(Locale.ROOT), Function.identity()));
+    private final static Map<String, ShareGroupState> NAME_TO_ENUM = Arrays.stream(values())
+            .collect(Collectors.toMap(state -> state.name.toUpperCase(Locale.ROOT), Function.identity()));
 
     private final String name;
 
-    GroupType(String name) {
+    ShareGroupState(String name) {
         this.name = name;
     }
 
     /**
-     * Parse a string into a consumer group type, in a case-insensitive manner.
+     * Case-insensitive consumer group state lookup by string name.
      */
-    public static GroupType parse(String name) {
-        if (name == null) {
-            return UNKNOWN;
-        }
-        GroupType type = NAME_TO_ENUM.get(name.toLowerCase(Locale.ROOT));
-        return type == null ? UNKNOWN : type;
+    public static ShareGroupState parse(String name) {
+        ShareGroupState state = NAME_TO_ENUM.get(name.toUpperCase(Locale.ROOT));
+        return state == null ? UNKNOWN : state;
     }
 
     @Override
