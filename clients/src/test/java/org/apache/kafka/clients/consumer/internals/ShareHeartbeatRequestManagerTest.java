@@ -336,14 +336,25 @@ public class ShareHeartbeatRequestManagerTest {
 
             case COORDINATOR_LOAD_IN_PROGRESS:
                 verify(backgroundEventHandler, never()).add(any());
-                assertEquals(DEFAULT_RETRY_BACKOFF_MS, heartbeatRequestState.nextHeartbeatMs(time.milliseconds()));
+                assertEquals(DEFAULT_RETRY_BACKOFF_MS,
+                        heartbeatRequestState.nextHeartbeatMs(time.milliseconds()), "Request should " +
+                                "backoff after receiving a coordinator load in progress error. ");
                 break;
 
             case COORDINATOR_NOT_AVAILABLE:
             case NOT_COORDINATOR:
                 verify(backgroundEventHandler, never()).add(any());
                 verify(coordinatorRequestManager).markCoordinatorUnknown(any(), anyLong());
-                assertEquals(0, heartbeatRequestState.nextHeartbeatMs(time.milliseconds()));
+                assertEquals(0, heartbeatRequestState.nextHeartbeatMs(time.milliseconds()),
+                        "Request should not apply backoff so that the next heartbeat is sent " +
+                                "as soon as the new coordinator is discovered.");
+                break;
+
+            case UNKNOWN_MEMBER_ID:
+                verify(backgroundEventHandler, never()).add(any());
+                assertEquals(0, heartbeatRequestState.nextHeartbeatMs(time.milliseconds()),
+                        "Request should not apply backoff so that the next heartbeat to rejoin is " +
+                                "sent as soon as the fenced member releases its assignment.");
                 break;
 
             default:
@@ -355,6 +366,13 @@ public class ShareHeartbeatRequestManagerTest {
                     assertEquals(0, heartbeatRequestState.nextHeartbeatMs(time.milliseconds()));
                 }
                 break;
+        }
+
+        if (!isFatal) {
+            // Make sure a next heartbeat is sent for all non-fatal errors (to retry or rejoin)
+            time.sleep(DEFAULT_HEARTBEAT_INTERVAL_MS);
+            result = heartbeatRequestManager.poll(time.milliseconds());
+            assertEquals(1, result.unsentRequests.size());
         }
     }
 

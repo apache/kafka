@@ -259,11 +259,12 @@ public class ShareHeartbeatRequestManager implements RequestManager {
             return logResponse(request);
         else
             return request.whenComplete((response, exception) -> {
+                long completionTimeMs = request.handler().completionTimeMs();
                 if (response != null) {
                     metricsManager.recordRequestLatency(response.requestLatencyMs());
-                    onResponse((ShareGroupHeartbeatResponse) response.responseBody(), request.handler().completionTimeMs());
+                    onResponse((ShareGroupHeartbeatResponse) response.responseBody(), completionTimeMs);
                 } else {
-                    onFailure(exception, request.handler().completionTimeMs());
+                    onFailure(exception, completionTimeMs);
                 }
             });
     }
@@ -317,6 +318,7 @@ public class ShareHeartbeatRequestManager implements RequestManager {
         String message;
 
         this.heartbeatState.reset();
+        this.heartbeatRequestState.onFailedAttempt(currentTimeMs);
 
         switch (error) {
             case NOT_COORDINATOR:
@@ -326,6 +328,8 @@ public class ShareHeartbeatRequestManager implements RequestManager {
                         coordinatorRequestManager.coordinator());
                 logInfo(message, response, currentTimeMs);
                 coordinatorRequestManager.markCoordinatorUnknown(errorMessage, currentTimeMs);
+                // Skip backoff so that the next heartbeat is sent as soon as the new coordinator is discovered
+                heartbeatRequestState.reset();
                 break;
 
             case COORDINATOR_NOT_AVAILABLE:
@@ -334,6 +338,8 @@ public class ShareHeartbeatRequestManager implements RequestManager {
                         coordinatorRequestManager.coordinator());
                 logInfo(message, response, currentTimeMs);
                 coordinatorRequestManager.markCoordinatorUnknown(errorMessage, currentTimeMs);
+                // Skip backoff so that the next heartbeat is sent as soon as the new coordinator is discovered
+                heartbeatRequestState.reset();
                 break;
 
             case COORDINATOR_LOAD_IN_PROGRESS:
@@ -342,7 +348,6 @@ public class ShareHeartbeatRequestManager implements RequestManager {
                                 "Will retry",
                         coordinatorRequestManager.coordinator());
                 logInfo(message, response, currentTimeMs);
-                heartbeatRequestState.onFailedAttempt(currentTimeMs);
                 break;
 
             case GROUP_AUTHORIZATION_FAILED:
@@ -364,6 +369,8 @@ public class ShareHeartbeatRequestManager implements RequestManager {
                         shareMembershipManager.memberId());
                 logInfo(message, response, currentTimeMs);
                 shareMembershipManager.transitionToFenced();
+                // Skip backoff so that the next heartbeat is sent soon
+                heartbeatRequestState.reset();
                 break;
 
             default:

@@ -304,6 +304,9 @@ public class ShareConsumerImpl<K, V> implements ShareConsumer<K, V> {
         );
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public Set<String> subscription() {
         acquireAndEnsureOpen();
@@ -314,6 +317,9 @@ public class ShareConsumerImpl<K, V> implements ShareConsumer<K, V> {
         }
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public void subscribe(Collection<String> topics) {
         acquireAndEnsureOpen();
@@ -343,6 +349,9 @@ public class ShareConsumerImpl<K, V> implements ShareConsumer<K, V> {
         }
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public void unsubscribe() {
         acquireAndEnsureOpen();
@@ -357,6 +366,9 @@ public class ShareConsumerImpl<K, V> implements ShareConsumer<K, V> {
         }
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public synchronized ConsumerRecords<K, V> poll(Duration timeout) {
         Timer timer = time.timer(timeout);
@@ -403,36 +415,57 @@ public class ShareConsumerImpl<K, V> implements ShareConsumer<K, V> {
         return Fetch.empty();
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public void acknowledge(ConsumerRecord<K, V> record) {
         throw new UnsupportedOperationException();
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public void acknowledge(ConsumerRecord<K, V> record, AcknowledgeType type) {
         throw new UnsupportedOperationException();
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public Map<TopicIdPartition, Optional<KafkaException>> commitSync() {
         throw new UnsupportedOperationException();
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public Map<TopicIdPartition, Optional<KafkaException>> commitSync(Duration timeout) {
         throw new UnsupportedOperationException();
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public void commitAsync() {
         throw new UnsupportedOperationException();
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public void setAcknowledgeCommitCallback(AcknowledgeCommitCallback callback) {
         throw new UnsupportedOperationException();
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public Uuid clientInstanceId(Duration timeout) {
         if (!clientTelemetryReporter.isPresent()) {
@@ -442,16 +475,25 @@ public class ShareConsumerImpl<K, V> implements ShareConsumer<K, V> {
         return ClientTelemetryUtils.fetchClientInstanceId(clientTelemetryReporter.get(), timeout);
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public Map<MetricName, ? extends Metric> metrics() {
         return Collections.unmodifiableMap(metrics.metrics());
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public void close() {
         close(Duration.ofMillis(DEFAULT_CLOSE_TIMEOUT_MS));
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public void close(Duration timeout) {
         if (timeout.toMillis() < 0)
@@ -508,6 +550,9 @@ public class ShareConsumerImpl<K, V> implements ShareConsumer<K, V> {
             "Failed to send leaveGroup heartbeat with a timeout(ms)=" + timer.timeoutMs(), firstException);
     }
 
+    /**
+     * {@inheritDoc}
+     */
     @Override
     public void wakeup() {
     }
@@ -635,5 +680,4 @@ public class ShareConsumerImpl<K, V> implements ShareConsumer<K, V> {
             firstException.compareAndSet(null, e);
         }
     }
-
 }
