@@ -115,7 +115,9 @@ pipeline {
             doValidation()
             doTest(env)
             tryStreamsArchetype()
-            currentBuild.description += "hello from JDK 8 and Scala 2.12"
+            script {
+              currentBuild.description += "hello from JDK 8 and Scala 2.12"
+            }
           }
         }
 
@@ -135,7 +137,9 @@ pipeline {
             doValidation()
             doTest(env)
             echo 'Skipping Kafka Streams archetype test for Java 11'
-            currentBuild.description += "hello from JDK 11 and Scala 2.13"
+            script {
+              currentBuild.description += "hello from JDK 11 and Scala 2.13"
+            }
           }
         }
 
@@ -155,7 +159,9 @@ pipeline {
             doValidation()
             doTest(env)
             echo 'Skipping Kafka Streams archetype test for Java 17'
-            currentBuild.description += "hello from JDK 8 and Scala 2.12"
+            script {
+              currentBuild.description += "hello from JDK 17 and Scala 2.13"
+            }
           }
         }
 
@@ -175,6 +181,9 @@ pipeline {
             doValidation()
             doTest(env)
             echo 'Skipping Kafka Streams archetype test for Java 21'
+            script {
+              currentBuild.description += "hello from JDK 21 and Scala 2.13"
+            }
           }
         }
       }
