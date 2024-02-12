@@ -16,11 +16,6 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
-import static org.apache.kafka.streams.StreamsConfig.InternalConfig.EMIT_INTERVAL_MS_KSTREAMS_OUTER_JOIN_SPURIOUS_RESULTS_FIX;
-import static org.apache.kafka.streams.processor.internals.metrics.TaskMetrics.droppedRecordsSensor;
-
-import java.util.Optional;
-
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
@@ -42,6 +37,11 @@ import org.apache.kafka.streams.state.internals.LeftOrRightValue;
 import org.apache.kafka.streams.state.internals.TimestampedKeyAndJoinSide;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import java.util.Optional;
+
+import static org.apache.kafka.streams.StreamsConfig.InternalConfig.EMIT_INTERVAL_MS_KSTREAMS_OUTER_JOIN_SPURIOUS_RESULTS_FIX;
+import static org.apache.kafka.streams.processor.internals.metrics.TaskMetrics.droppedRecordsSensor;
 
 class KStreamKStreamJoin<K, V1, V2, VOut> implements ProcessorSupplier<K, V1, K, VOut> {
     private static final Logger LOG = LoggerFactory.getLogger(KStreamKStreamJoin.class);
@@ -130,7 +130,7 @@ class KStreamKStreamJoin<K, V1, V2, VOut> implements ProcessorSupplier<K, V1, K,
             final long timeTo = Math.max(0L, inputRecordTimestamp + joinAfterMs);
             sharedTimeTracker.advanceStreamTime(inputRecordTimestamp);
 
-            if (outer && record.key() == null && record.value() != null && isActiveWindow(timeFrom, timeTo)) {
+            if (outer && record.key() == null && record.value() != null) {
                 context().forward(record.withValue(joiner.apply(record.key(), record.value(), null)));
                 return;
             } else if (StreamStreamJoinUtil.skipRecord(record, LOG, droppedRecordsSensor, context())) {
@@ -193,10 +193,6 @@ class KStreamKStreamJoin<K, V1, V2, VOut> implements ProcessorSupplier<K, V1, K,
             }
         }
 
-        private boolean isActiveWindow(final long timeFrom, final long timeTo) {
-            return sharedTimeTracker.streamTime >= timeFrom && timeTo + joinGraceMs >= sharedTimeTracker.streamTime;
-        }
-            
         @SuppressWarnings("unchecked")
         private void emitNonJoinedOuterRecords(
             final KeyValueStore<TimestampedKeyAndJoinSide<K>, LeftOrRightValue<V1, V2>> store,
