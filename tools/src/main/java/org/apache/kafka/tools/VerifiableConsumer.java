@@ -533,10 +533,19 @@ public class VerifiableConsumer implements Closeable, OffsetCommitCallback, Cons
                 .action(store())
                 .required(false)
                 .type(String.class)
-                .setDefault(GroupProtocol.CLASSIC.name)
+                .setDefault(ConsumerConfig.DEFAULT_GROUP_PROTOCOL)
                 .metavar("GROUP_PROTOCOL")
                 .dest("groupProtocol")
                 .help(String.format("Group protocol (must be one of %s)", Utils.join(GroupProtocol.values(), ", ")));
+
+        parser.addArgument("--group-remote-assignor")
+                .action(store())
+                .required(false)
+                .type(String.class)
+                .setDefault(ConsumerConfig.DEFAULT_GROUP_REMOTE_ASSIGNOR)
+                .metavar("GROUP_REMOTE_ASSIGNOR")
+                .dest("groupRemoteAssignor")
+                .help(String.format("Group remote assignor; only used if the group protocol is %s", GroupProtocol.CONSUMER.name()));
 
         parser.addArgument("--group-id")
                 .action(store())
@@ -599,7 +608,7 @@ public class VerifiableConsumer implements Closeable, OffsetCommitCallback, Cons
                 .setDefault(RangeAssignor.class.getName())
                 .type(String.class)
                 .dest("assignmentStrategy")
-                .help("Set assignment strategy (e.g. " + RoundRobinAssignor.class.getName() + ")");
+                .help(String.format("Set assignment strategy (e.g. %s); only used if the group protocol is %s", RoundRobinAssignor.class.getName(), GroupProtocol.CLASSIC.name()));
 
         parser.addArgument("--consumer.config")
                 .action(store())
@@ -627,7 +636,17 @@ public class VerifiableConsumer implements Closeable, OffsetCommitCallback, Cons
             }
         }
 
-        consumerProps.put(ConsumerConfig.GROUP_PROTOCOL_CONFIG, res.getString("groupProtocol"));
+        String groupProtocol = res.getString("groupProtocol");
+        String assignmentStrategy = res.getString("assignmentStrategy");
+        String groupRemoteAssignor = res.getString("groupRemoteAssignor");
+
+        if (groupProtocol.equalsIgnoreCase(GroupProtocol.CLASSIC.name())) {
+            consumerProps.put(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG, assignmentStrategy);
+        } else if (groupRemoteAssignor != null) {
+            consumerProps.put(ConsumerConfig.GROUP_REMOTE_ASSIGNOR_CONFIG, groupRemoteAssignor);
+        }
+
+        consumerProps.put(ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol);
         consumerProps.put(ConsumerConfig.GROUP_ID_CONFIG, res.getString("groupId"));
 
         String groupInstanceId = res.getString("groupInstanceId");
@@ -650,7 +669,6 @@ public class VerifiableConsumer implements Closeable, OffsetCommitCallback, Cons
         consumerProps.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, useAutoCommit);
         consumerProps.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, res.getString("resetPolicy"));
         consumerProps.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, Integer.toString(res.getInt("sessionTimeout")));
-        consumerProps.put(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG, res.getString("assignmentStrategy"));
 
         StringDeserializer deserializer = new StringDeserializer();
         KafkaConsumer<String, String> consumer = new KafkaConsumer<>(consumerProps, deserializer, deserializer);

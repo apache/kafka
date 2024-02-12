@@ -168,6 +168,7 @@ class VerifiableConsumer(KafkaPathResolverMixin, VerifiableClientMixin, Backgrou
     def __init__(self, context, num_nodes, kafka, topic, group_id,
                  group_protocol="classic", static_membership=False, max_messages=-1, session_timeout_sec=30, enable_autocommit=False,
                  assignment_strategy=None,
+                 group_remote_assignor=None,
                  version=DEV_BRANCH, stop_timeout_sec=30, log_level="INFO", jaas_override_variables=None,
                  on_record_consumed=None, reset_policy="earliest", verify_offsets=True):
         """
@@ -178,6 +179,7 @@ class VerifiableConsumer(KafkaPathResolverMixin, VerifiableClientMixin, Backgrou
         self.kafka = kafka
         self.topic = topic
         self.group_protocol = group_protocol
+        self.group_remote_assignor = group_remote_assignor
         self.group_id = group_id
         self.reset_policy = reset_policy
         self.static_membership = static_membership
@@ -307,14 +309,17 @@ class VerifiableConsumer(KafkaPathResolverMixin, VerifiableClientMixin, Backgrou
             # if `None` is passed as the argument value
             cmd += " --group-instance-id None"
 
-        if self.assignment_strategy:
-            cmd += " --assignment-strategy %s" % self.assignment_strategy
-
         if self.enable_autocommit:
             cmd += " --enable-autocommit "
 
         if node.version >= V_3_7_0:
             cmd += " --group-protocol %s" % self.group_protocol
+
+        if node.version >= V_3_7_0 and self.group_protocol.upper() == "CONSUMER":
+            cmd += " --group-protocol %s" % self.group_protocol
+            cmd += " --group-remote-assignor %s" % self.group_remote_assignor
+        elif self.assignment_strategy:
+            cmd += " --assignment-strategy %s" % self.assignment_strategy
 
         cmd += " --reset-policy %s --group-id %s --topic %s --broker-list %s --session-timeout %s" % \
                (self.reset_policy, self.group_id, self.topic,
@@ -405,6 +410,11 @@ class VerifiableConsumer(KafkaPathResolverMixin, VerifiableClientMixin, Backgrou
         with self.lock:
             return [handler.node for handler in self.event_handlers.values()
                     if handler.state == ConsumerState.Joined]
+
+    def started_nodes(self):
+        with self.lock:
+            return [handler.node for handler in self.event_handlers.values()
+                    if handler.state == ConsumerState.Started]
 
     def rebalancing_nodes(self):
         with self.lock:
