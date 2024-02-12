@@ -32,7 +32,6 @@ import org.slf4j.Logger;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Optional;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Supplier;
@@ -149,8 +148,14 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
         }
 
         CommitRequestManager manager = requestManagers.commitRequestManager.get();
-        Optional<Long> expirationTimeMs = event.retryTimeoutMs().map(this::getExpirationTimeForTimeout);
-        event.chain(manager.addOffsetCommitRequest(event.offsets(), expirationTimeMs, false));
+        CompletableFuture<Void> commitResult;
+        if (event.retryTimeoutMs().isPresent()) {
+            long expirationTimeoutMs = getExpirationTimeForTimeout(event.retryTimeoutMs().get());
+            commitResult = manager.commitSync(event.offsets(), expirationTimeoutMs);
+        } else {
+            commitResult = manager.commitAsync(event.offsets());
+        }
+        event.chain(commitResult);
     }
 
     private void process(final FetchCommittedOffsetsApplicationEvent event) {
@@ -161,7 +166,7 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
         }
         CommitRequestManager manager = requestManagers.commitRequestManager.get();
         long expirationTimeMs = getExpirationTimeForTimeout(event.timeout());
-        event.chain(manager.addOffsetFetchRequest(event.partitions(), expirationTimeMs));
+        event.chain(manager.fetchOffsets(event.partitions(), expirationTimeMs));
     }
 
     private void process(final NewTopicsMetadataUpdateRequestEvent ignored) {
@@ -179,7 +184,7 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
         }
         CommitRequestManager manager = requestManagers.commitRequestManager.get();
         manager.updateAutoCommitTimer(event.currentTimeMs());
-        manager.maybeAutoCommitAllConsumedAsync();
+        manager.maybeAutoCommitAsync();
     }
 
     private void process(final ListOffsetsApplicationEvent event) {

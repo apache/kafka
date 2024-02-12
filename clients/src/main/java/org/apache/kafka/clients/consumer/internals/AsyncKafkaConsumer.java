@@ -755,8 +755,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     public void commitAsync(Map<TopicPartition, OffsetAndMetadata> offsets, OffsetCommitCallback callback) {
         acquireAndEnsureOpen();
         try {
-            // Commit without timer to indicate that the commit should be triggered without
-            // waiting for a response.
+            // Commit without retry timeout (the commit request won't be retried)
             CompletableFuture<Void> future = commit(offsets, false, Optional.empty());
             future.whenComplete((r, t) -> {
 
@@ -1344,8 +1343,8 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         long commitStart = time.nanoseconds();
         try {
             Timer requestTimer = time.timer(timeout.toMillis());
-            // Commit with a timer to control how long the request should be retried until it
-            // gets a successful response or non-retriable error.
+            // Commit with a retry timeout (the commit request will be retried until it gets a
+            // successful response, non-retriable error, or the timeout expires)
             CompletableFuture<Void> commitFuture = commit(offsets, true, Optional.of(timeout.toMillis()));
             ConsumerUtils.getResult(commitFuture, requestTimer);
             interceptors.onCommit(offsets);

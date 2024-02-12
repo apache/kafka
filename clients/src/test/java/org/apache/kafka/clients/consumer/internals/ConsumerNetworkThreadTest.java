@@ -209,7 +209,7 @@ public class ConsumerNetworkThreadTest {
         verify(networkClient, times(1)).poll(anyLong(), anyLong());
         verify(commitRequestManager, times(1)).updateAutoCommitTimer(currentTimeMs);
         // Assignment change should generate an async commit (not retried).
-        verify(commitRequestManager, times(1)).maybeAutoCommitAllConsumedAsync();
+        verify(commitRequestManager, times(1)).maybeAutoCommitAsync();
     }
 
     @Test
