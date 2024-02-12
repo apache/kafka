@@ -102,6 +102,7 @@ public class TaskManager {
     private final DefaultTaskManager schedulingTaskManager;
     private final long maxUncommittedStateBytes;
     private long lastUncommittedBytes = 0L;
+    private boolean transactionBuffersExceedCapacity = false;
 
     TaskManager(final Time time,
                 final ChangelogReader changelogReader,
@@ -1841,8 +1842,6 @@ public class TaskManager {
             maybeThrowTaskExceptions(schedulingTaskManager.drainUncaughtExceptions());
         }
     }
-
-    private boolean transactionBuffersExceedCapacity = false;
 
     boolean transactionBuffersExceedCapacity() {
         return transactionBuffersExceedCapacity;
