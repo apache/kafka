@@ -128,6 +128,16 @@ public class PartitionReassignmentReplicasTest {
     }
 
     @Test
+    public void testDoesNotCompleteReassignmentIfCompletionWillCauseUnderMinIsr() {
+        PartitionReassignmentReplicas replicas = new PartitionReassignmentReplicas(
+                new PartitionAssignment(Arrays.asList(0, 1, 2)), new PartitionAssignment(Arrays.asList(0, 1, 3)));
+        assertTrue(replicas.isReassignmentInProgress());
+        Optional<PartitionReassignmentReplicas.CompletedReassignment> reassignmentOptional =
+                replicas.maybeCompleteReassignment(Arrays.asList(2, 3), 2);
+        assertFalse(reassignmentOptional.isPresent());
+    }
+
+    @Test
     public void testDoesCompleteReassignmentIfUnderNewEffectiveMinIsr() {
         PartitionReassignmentReplicas replicas = new PartitionReassignmentReplicas(
                 new PartitionAssignment(Arrays.asList(0, 1, 2, 4, 5)), new PartitionAssignment(Arrays.asList(6, 7)));
