@@ -59,7 +59,6 @@ import java.util.stream.Stream;
  * <ul>
  *     <li>ClusterConfig (the same instance passed to the constructor)</li>
  *     <li>ClusterInstance (includes methods to expose underlying SocketServer-s)</li>
- *     <li>IntegrationTestHelper (helper methods)</li>
  * </ul>
  */
 public class RaftClusterInvocationContext implements TestTemplateInvocationContext {

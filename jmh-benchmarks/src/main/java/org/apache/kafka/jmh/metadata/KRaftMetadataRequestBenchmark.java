@@ -202,7 +202,7 @@ public class KRaftMetadataRequestBenchmark {
                         ApiMessageType.ListenerType.BROKER,
                         false,
                         false,
-                        () -> Features.fromKRaftVersion(MetadataVersion.latest()))).
+                        () -> Features.fromKRaftVersion(MetadataVersion.latestTesting()))).
                 build();
     }
 

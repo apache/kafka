@@ -267,6 +267,77 @@ public class SubscriptionStateTest {
     }
 
     @Test
+    public void testAssignedPartitionsAwaitingCallbackKeepPositionDefinedInCallback() {
+        // New partition assigned. Should not be fetchable or initializing positions.
+        state.subscribe(singleton(topic), Optional.of(rebalanceListener));
+        state.assignFromSubscribedAwaitingCallback(singleton(tp0), singleton(tp0));
+        assertAssignmentAppliedAwaitingCallback(tp0);
+
+        // Simulate callback setting position to start fetching from
+        state.seek(tp0, 100);
+
+        // Callback completed. Partition should be fetchable, and should not require
+        // initializing positions (position already defined in the callback)
+        state.enablePartitionsAwaitingCallback(singleton(tp0));
+        assertEquals(0, state.initializingPartitions().size());
+        assertTrue(state.isFetchable(tp0));
+        assertTrue(state.hasAllFetchPositions());
+        assertEquals(100L, state.position(tp0).offset);
+    }
+
+    @Test
+    public void testAssignedPartitionsAwaitingCallbackInitializePositionsWhenCallbackCompletes() {
+        // New partition assigned. Should not be fetchable or initializing positions.
+        state.subscribe(singleton(topic), Optional.of(rebalanceListener));
+        state.assignFromSubscribedAwaitingCallback(singleton(tp0), singleton(tp0));
+        assertAssignmentAppliedAwaitingCallback(tp0);
+
+        // Callback completed (without updating positions). Partition should require initializing
+        // positions, and start fetching once a valid position is set.
+        state.enablePartitionsAwaitingCallback(singleton(tp0));
+        assertEquals(1, state.initializingPartitions().size());
+        state.seek(tp0, 100);
+        assertTrue(state.isFetchable(tp0));
+        assertTrue(state.hasAllFetchPositions());
+        assertEquals(100L, state.position(tp0).offset);
+    }
+
+    @Test
+    public void testAssignedPartitionsAwaitingCallbackDoesNotAffectPreviouslyOwnedPartitions() {
+        // First partition assigned and callback completes.
+        state.subscribe(singleton(topic), Optional.of(rebalanceListener));
+        state.assignFromSubscribedAwaitingCallback(singleton(tp0), singleton(tp0));
+        assertAssignmentAppliedAwaitingCallback(tp0);
+        state.enablePartitionsAwaitingCallback(singleton(tp0));
+        state.seek(tp0, 100);
+        assertTrue(state.isFetchable(tp0));
+
+        // New partition added to the assignment. Owned partitions should continue to be
+        // fetchable, while the newly added should not be fetchable until callback completes.
+        state.assignFromSubscribedAwaitingCallback(Utils.mkSet(tp0, tp1), singleton(tp1));
+        assertTrue(state.isFetchable(tp0));
+        assertFalse(state.isFetchable(tp1));
+        assertEquals(0, state.initializingPartitions().size());
+
+        // Callback completed. Added partition be initializing positions and become fetchable when it gets one.
+        state.enablePartitionsAwaitingCallback(singleton(tp1));
+        assertEquals(1, state.initializingPartitions().size());
+        assertEquals(tp1, state.initializingPartitions().iterator().next());
+        state.seek(tp1, 200);
+        assertTrue(state.isFetchable(tp1));
+    }
+
+    private void assertAssignmentAppliedAwaitingCallback(TopicPartition topicPartition) {
+        assertEquals(singleton(topicPartition), state.assignedPartitions());
+        assertEquals(1, state.numAssignedPartitions());
+        assertEquals(singleton(topicPartition.topic()), state.subscription());
+
+        assertFalse(state.isFetchable(topicPartition));
+        assertEquals(0, state.initializingPartitions().size());
+        assertFalse(state.isPaused(topicPartition));
+    }
+
+    @Test
     public void invalidPositionUpdate() {
         state.subscribe(singleton(topic), Optional.of(rebalanceListener));
         assertTrue(state.checkAssignmentMatchedSubscription(singleton(tp0)));

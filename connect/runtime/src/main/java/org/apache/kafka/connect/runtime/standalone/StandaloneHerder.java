@@ -492,7 +492,7 @@ public class StandaloneHerder extends AbstractHerder {
         }
     }
 
-    private void updateConnectorTasks(String connName) throws Exception {
+    private synchronized void updateConnectorTasks(String connName) throws Exception {
         if (!worker.isRunning(connName)) {
             log.info("Skipping update of tasks for connector {} since it is not running", connName);
             return;

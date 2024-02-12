@@ -17,10 +17,10 @@
 package kafka.zk.migration
 
 import kafka.server.{KafkaConfig, QuorumTestHarness}
-import kafka.utils.PasswordEncoder
 import kafka.zk.ZkMigrationClient
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.metadata.migration.ZkMigrationLeadershipState
+import org.apache.kafka.security.PasswordEncoder
 import org.junit.jupiter.api.{BeforeEach, TestInfo}
 
 import java.util.Properties

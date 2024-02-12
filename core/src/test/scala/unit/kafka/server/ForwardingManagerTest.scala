@@ -229,6 +229,7 @@ class ForwardingManagerTest {
       requestHeader,
       "1",
       InetAddress.getLocalHost,
+      Optional.empty(),
       principal,
       new ListenerName("client"),
       SecurityProtocol.SASL_PLAINTEXT,

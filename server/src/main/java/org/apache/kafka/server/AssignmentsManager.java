@@ -51,8 +51,6 @@ import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
-import static org.apache.kafka.metadata.AssignmentsHelper.buildRequestData;
-
 public class AssignmentsManager {
 
     private static final Logger log = LoggerFactory.getLogger(AssignmentsManager.class);

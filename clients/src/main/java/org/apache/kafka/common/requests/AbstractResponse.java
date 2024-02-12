@@ -261,6 +261,8 @@ public abstract class AbstractResponse implements AbstractRequestResponse {
                 return AssignReplicasToDirsResponse.parse(responseBuffer, version);
             case LIST_CLIENT_METRICS_RESOURCES:
                 return ListClientMetricsResourcesResponse.parse(responseBuffer, version);
+            case DESCRIBE_TOPIC_PARTITIONS:
+                return DescribeTopicPartitionsResponse.parse(responseBuffer, version);
             default:
                 throw new AssertionError(String.format("ApiKey %s is not currently handled in `parseResponse`, the " +
                         "code should be updated to do so.", apiKey));

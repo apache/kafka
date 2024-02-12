@@ -431,6 +431,29 @@ public class ConnectAssertions {
     }
 
     /**
+     * Assert that a connector is in FAILED state, that it has a specific number of tasks, and that all of
+     * its tasks are in the RUNNING state.
+     *
+     * @param connectorName the connector name
+     * @param numTasks the number of tasks
+     * @param detailMessage the assertion message
+     * @throws InterruptedException
+     */
+    public void assertConnectorIsFailedAndNumTasksAreRunning(String connectorName, int numTasks, String detailMessage)
+            throws InterruptedException {
+        waitForConnectorState(
+                connectorName,
+                AbstractStatus.State.FAILED,
+                exactly(numTasks),
+                null,
+                AbstractStatus.State.RUNNING,
+                "Either the connector is running or not all the " + numTasks + " tasks are running.",
+                detailMessage,
+                CONNECTOR_SETUP_DURATION_MS
+        );
+    }
+
+    /**
      * Assert that a connector does not exist. This can be used to verify that a connector has been successfully deleted.
      *
      * @param connectorName the connector name
