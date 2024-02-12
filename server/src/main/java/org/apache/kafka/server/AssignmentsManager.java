@@ -270,9 +270,7 @@ public class AssignmentsManager {
             }
             Map<TopicIdPartition, Uuid> assignment = inflight.entrySet().stream()
                     .collect(Collectors.toMap(Map.Entry::getKey, e -> e.getValue().dirId));
-            if (log.isInfoEnabled()) {
-                log.info("Dispatching {} assignments:  {}", assignment.size(), assignment);
-            }
+            log.info("Dispatching {} assignments: {}", assignment.size(), assignment);
             channelManager.sendRequest(new AssignReplicasToDirsRequest.Builder(
                     buildRequestData(brokerId, brokerEpochSupplier.get(), assignment)),
                     new AssignReplicasToDirsRequestCompletionHandler());
