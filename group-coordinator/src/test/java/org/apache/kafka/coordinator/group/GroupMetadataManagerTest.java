@@ -60,6 +60,7 @@ import org.apache.kafka.coordinator.group.assignor.GroupAssignment;
 import org.apache.kafka.coordinator.group.assignor.MemberAssignment;
 import org.apache.kafka.coordinator.group.assignor.PartitionAssignor;
 import org.apache.kafka.coordinator.group.assignor.PartitionAssignorException;
+import org.apache.kafka.coordinator.group.classic.ClassicGroupState;
 import org.apache.kafka.coordinator.group.consumer.Assignment;
 import org.apache.kafka.coordinator.group.consumer.ConsumerGroup;
 import org.apache.kafka.coordinator.group.consumer.ConsumerGroupBuilder;
@@ -98,6 +99,10 @@ import static org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequ
 import static org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProtocolCollection;
 import static org.apache.kafka.common.requests.ConsumerGroupHeartbeatRequest.LEAVE_GROUP_MEMBER_EPOCH;
 import static org.apache.kafka.common.requests.JoinGroupRequest.UNKNOWN_MEMBER_ID;
+import static org.apache.kafka.coordinator.group.Assertions.assertRecordEquals;
+import static org.apache.kafka.coordinator.group.Assertions.assertRecordsEquals;
+import static org.apache.kafka.coordinator.group.Assertions.assertResponseEquals;
+import static org.apache.kafka.coordinator.group.Assertions.assertUnorderedListEquals;
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkAssignment;
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkTopicAssignment;
 import static org.apache.kafka.coordinator.group.GroupMetadataManager.appendGroupMetadataErrorToResponseError;
@@ -441,7 +446,7 @@ public class GroupMetadataManagerTest {
                 .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
                 .setTopicPartitions(Collections.emptyList()));
 
-        GroupMetadataManagerTestContext.assertResponseEquals(
+        assertResponseEquals(
             new ConsumerGroupHeartbeatResponseData()
                 .setMemberId(memberId)
                 .setMemberEpoch(1)
@@ -487,7 +492,7 @@ public class GroupMetadataManagerTest {
             RecordHelpers.newCurrentAssignmentRecord(groupId, expectedMember)
         );
 
-        GroupMetadataManagerTestContext.assertRecordsEquals(expectedRecords, result.records());
+        assertRecordsEquals(expectedRecords, result.records());
     }
 
     @Test
@@ -540,7 +545,7 @@ public class GroupMetadataManagerTest {
                 .setMemberEpoch(10)
                 .setSubscribedTopicNames(Arrays.asList("foo", "bar")));
 
-        GroupMetadataManagerTestContext.assertResponseEquals(
+        assertResponseEquals(
             new ConsumerGroupHeartbeatResponseData()
                 .setMemberId(memberId)
                 .setMemberEpoch(11)
@@ -587,7 +592,7 @@ public class GroupMetadataManagerTest {
             RecordHelpers.newCurrentAssignmentRecord(groupId, expectedMember)
         );
 
-        GroupMetadataManagerTestContext.assertRecordsEquals(expectedRecords, result.records());
+        assertRecordsEquals(expectedRecords, result.records());
     }
 
     @Test
@@ -677,7 +682,7 @@ public class GroupMetadataManagerTest {
                 .setServerAssignor("range")
                 .setTopicPartitions(Collections.emptyList()));
 
-        GroupMetadataManagerTestContext.assertResponseEquals(
+        assertResponseEquals(
             new ConsumerGroupHeartbeatResponseData()
                 .setMemberId(memberId3)
                 .setMemberEpoch(11)
@@ -725,9 +730,9 @@ public class GroupMetadataManagerTest {
             RecordHelpers.newCurrentAssignmentRecord(groupId, expectedMember3)
         );
 
-        GroupMetadataManagerTestContext.assertRecordsEquals(expectedRecords.subList(0, 3), result.records().subList(0, 3));
-        Assertions.assertUnorderedListEquals(expectedRecords.subList(3, 6), result.records().subList(3, 6));
-        GroupMetadataManagerTestContext.assertRecordsEquals(expectedRecords.subList(6, 8), result.records().subList(6, 8));
+        assertRecordsEquals(expectedRecords.subList(0, 3), result.records().subList(0, 3));
+        assertUnorderedListEquals(expectedRecords.subList(3, 6), result.records().subList(3, 6));
+        assertRecordsEquals(expectedRecords.subList(6, 8), result.records().subList(6, 8));
     }
 
     @Test
@@ -800,7 +805,7 @@ public class GroupMetadataManagerTest {
                 .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
                 .setTopicPartitions(Collections.emptyList()));
 
-        GroupMetadataManagerTestContext.assertResponseEquals(
+        assertResponseEquals(
             new ConsumerGroupHeartbeatResponseData()
                 .setMemberId(memberId2)
                 .setMemberEpoch(LEAVE_GROUP_MEMBER_EPOCH),
@@ -821,7 +826,7 @@ public class GroupMetadataManagerTest {
             RecordHelpers.newGroupEpochRecord(groupId, 11)
         );
 
-        GroupMetadataManagerTestContext.assertRecordsEquals(expectedRecords, result.records());
+        assertRecordsEquals(expectedRecords, result.records());
     }
 
     @Test
@@ -915,7 +920,7 @@ public class GroupMetadataManagerTest {
                 .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
                 .setTopicPartitions(Collections.emptyList()));
 
-        GroupMetadataManagerTestContext.assertResponseEquals(
+        assertResponseEquals(
             new ConsumerGroupHeartbeatResponseData()
                 .setMemberId(memberId3)
                 .setMemberEpoch(11)
@@ -964,9 +969,9 @@ public class GroupMetadataManagerTest {
             RecordHelpers.newCurrentAssignmentRecord(groupId, expectedMember3)
         );
 
-        GroupMetadataManagerTestContext.assertRecordsEquals(expectedRecords.subList(0, 3), result.records().subList(0, 3));
-        Assertions.assertUnorderedListEquals(expectedRecords.subList(3, 6), result.records().subList(3, 6));
-        GroupMetadataManagerTestContext.assertRecordsEquals(expectedRecords.subList(6, 8), result.records().subList(6, 8));
+        assertRecordsEquals(expectedRecords.subList(0, 3), result.records().subList(0, 3));
+        assertUnorderedListEquals(expectedRecords.subList(3, 6), result.records().subList(3, 6));
+        assertRecordsEquals(expectedRecords.subList(6, 8), result.records().subList(6, 8));
     }
 
     @Test
@@ -1064,7 +1069,7 @@ public class GroupMetadataManagerTest {
                 .setTopicPartitions(Collections.emptyList()));
 
         // Member epoch of the response would be set to -2.
-        GroupMetadataManagerTestContext.assertResponseEquals(
+        assertResponseEquals(
             new ConsumerGroupHeartbeatResponseData()
                 .setMemberId(memberId2)
                 .setMemberEpoch(-2),
@@ -1077,7 +1082,7 @@ public class GroupMetadataManagerTest {
             .build();
 
         assertEquals(1, result.records().size());
-        GroupMetadataManagerTestContext.assertRecordEquals(result.records().get(0), RecordHelpers.newCurrentAssignmentRecord(groupId, member2UpdatedEpoch));
+        assertRecordEquals(result.records().get(0), RecordHelpers.newCurrentAssignmentRecord(groupId, member2UpdatedEpoch));
 
         // Member 2 rejoins the group with the same instance id.
         CoordinatorResult<ConsumerGroupHeartbeatResponseData, Record> rejoinResult = context.consumerGroupHeartbeat(
@@ -1091,7 +1096,7 @@ public class GroupMetadataManagerTest {
                 .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
                 .setTopicPartitions(Collections.emptyList()));
 
-        GroupMetadataManagerTestContext.assertResponseEquals(
+        assertResponseEquals(
             new ConsumerGroupHeartbeatResponseData()
                 .setMemberId(member2RejoinId)
                 .setMemberEpoch(10)
@@ -1135,7 +1140,7 @@ public class GroupMetadataManagerTest {
             RecordHelpers.newCurrentAssignmentRecord(groupId, expectedRejoinedMember)
         );
 
-        GroupMetadataManagerTestContext.assertRecordsEquals(expectedRecordsAfterRejoin, rejoinResult.records());
+        assertRecordsEquals(expectedRecordsAfterRejoin, rejoinResult.records());
         // Verify that there are no timers.
         context.assertNoSessionTimeout(groupId, memberId2);
         context.assertNoRevocationTimeout(groupId, memberId2);
@@ -1214,7 +1219,7 @@ public class GroupMetadataManagerTest {
                 .setTopicPartitions(Collections.emptyList()));
 
         // member epoch of the response would be set to -2
-        GroupMetadataManagerTestContext.assertResponseEquals(
+        assertResponseEquals(
             new ConsumerGroupHeartbeatResponseData()
                 .setMemberId(memberId2)
                 .setMemberEpoch(LEAVE_GROUP_STATIC_MEMBER_EPOCH),
@@ -1227,7 +1232,7 @@ public class GroupMetadataManagerTest {
             .build();
 
         assertEquals(1, result.records().size());
-        GroupMetadataManagerTestContext.assertRecordEquals(result.records().get(0), RecordHelpers.newCurrentAssignmentRecord(groupId, member2UpdatedEpoch));
+        assertRecordEquals(result.records().get(0), RecordHelpers.newCurrentAssignmentRecord(groupId, member2UpdatedEpoch));
     }
 
     @Test
@@ -1303,7 +1308,7 @@ public class GroupMetadataManagerTest {
                 .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
                 .setTopicPartitions(Collections.emptyList()));
 
-        GroupMetadataManagerTestContext.assertResponseEquals(
+        assertResponseEquals(
             new ConsumerGroupHeartbeatResponseData()
                 .setMemberId(memberId2)
                 .setMemberEpoch(LEAVE_GROUP_MEMBER_EPOCH),
@@ -1324,7 +1329,7 @@ public class GroupMetadataManagerTest {
             RecordHelpers.newGroupEpochRecord(groupId, 11)
         );
 
-        GroupMetadataManagerTestContext.assertRecordsEquals(expectedRecords, result.records());
+        assertRecordsEquals(expectedRecords, result.records());
     }
 
     @Test
@@ -1749,7 +1754,7 @@ public class GroupMetadataManagerTest {
                 .setServerAssignor("range")
                 .setTopicPartitions(Collections.emptyList()));
 
-        GroupMetadataManagerTestContext.assertResponseEquals(
+        assertResponseEquals(
             new ConsumerGroupHeartbeatResponseData()
                 .setMemberId(memberId3)
                 .setMemberEpoch(11)
@@ -1760,7 +1765,7 @@ public class GroupMetadataManagerTest {
 
         // We only check the last record as the subscription/target assignment updates are
         // already covered by other tests.
-        GroupMetadataManagerTestContext.assertRecordEquals(
+        assertRecordEquals(
             RecordHelpers.newCurrentAssignmentRecord(groupId, new ConsumerGroupMember.Builder(memberId3)
                 .setMemberEpoch(11)
                 .setPreviousMemberEpoch(0)
@@ -1783,7 +1788,7 @@ public class GroupMetadataManagerTest {
             .setMemberId(memberId1)
             .setMemberEpoch(10));
 
-        GroupMetadataManagerTestContext.assertResponseEquals(
+        assertResponseEquals(
             new ConsumerGroupHeartbeatResponseData()
                 .setMemberId(memberId1)
                 .setMemberEpoch(10)
@@ -1800,7 +1805,7 @@ public class GroupMetadataManagerTest {
             result.response()
         );
 
-        GroupMetadataManagerTestContext.assertRecordsEquals(Collections.singletonList(
+        assertRecordsEquals(Collections.singletonList(
             RecordHelpers.newCurrentAssignmentRecord(groupId, new ConsumerGroupMember.Builder(memberId1)
                 .setMemberEpoch(10)
                 .setPreviousMemberEpoch(9)
@@ -1826,7 +1831,7 @@ public class GroupMetadataManagerTest {
             .setMemberId(memberId2)
             .setMemberEpoch(10));
 
-        GroupMetadataManagerTestContext.assertResponseEquals(
+        assertResponseEquals(
             new ConsumerGroupHeartbeatResponseData()
                 .setMemberId(memberId2)
                 .setMemberEpoch(10)
@@ -1843,7 +1848,7 @@ public class GroupMetadataManagerTest {
             result.response()
         );
 
-        GroupMetadataManagerTestContext.assertRecordsEquals(Collections.singletonList(
+        assertRecordsEquals(Collections.singletonList(
             RecordHelpers.newCurrentAssignmentRecord(groupId, new ConsumerGroupMember.Builder(memberId2)
                 .setMemberEpoch(10)
                 .setPreviousMemberEpoch(9)
@@ -1869,7 +1874,7 @@ public class GroupMetadataManagerTest {
             .setMemberId(memberId3)
             .setMemberEpoch(11));
 
-        GroupMetadataManagerTestContext.assertResponseEquals(
+        assertResponseEquals(
             new ConsumerGroupHeartbeatResponseData()
                 .setMemberId(memberId3)
                 .setMemberEpoch(11)
@@ -1897,7 +1902,7 @@ public class GroupMetadataManagerTest {
                     .setPartitions(Arrays.asList(0))
             )));
 
-        GroupMetadataManagerTestContext.assertResponseEquals(
+        assertResponseEquals(
             new ConsumerGroupHeartbeatResponseData()
                 .setMemberId(memberId1)
                 .setMemberEpoch(11)
@@ -1914,7 +1919,7 @@ public class GroupMetadataManagerTest {
             result.response()
         );
 
-        GroupMetadataManagerTestContext.assertRecordsEquals(Collections.singletonList(
+        assertRecordsEquals(Collections.singletonList(
             RecordHelpers.newCurrentAssignmentRecord(groupId, new ConsumerGroupMember.Builder(memberId1)
                 .setMemberEpoch(11)
                 .setPreviousMemberEpoch(10)
@@ -1935,7 +1940,7 @@ public class GroupMetadataManagerTest {
             .setMemberId(memberId2)
             .setMemberEpoch(10));
 
-        GroupMetadataManagerTestContext.assertResponseEquals(
+        assertResponseEquals(
             new ConsumerGroupHeartbeatResponseData()
                 .setMemberId(memberId2)
                 .setMemberEpoch(10)
@@ -1954,7 +1959,7 @@ public class GroupMetadataManagerTest {
             .setMemberId(memberId3)
             .setMemberEpoch(11));
 
-        GroupMetadataManagerTestContext.assertResponseEquals(
+        assertResponseEquals(
             new ConsumerGroupHeartbeatResponseData()
                 .setMemberId(memberId3)
                 .setMemberEpoch(11)
@@ -1967,7 +1972,7 @@ public class GroupMetadataManagerTest {
             result.response()
         );
 
-        GroupMetadataManagerTestContext.assertRecordsEquals(Collections.singletonList(
+        assertRecordsEquals(Collections.singletonList(
             RecordHelpers.newCurrentAssignmentRecord(groupId, new ConsumerGroupMember.Builder(memberId3)
                 .setMemberEpoch(11)
                 .setPreviousMemberEpoch(11)
@@ -1990,7 +1995,7 @@ public class GroupMetadataManagerTest {
             .setMemberId(memberId3)
             .setMemberEpoch(11));
 
-        GroupMetadataManagerTestContext.assertResponseEquals(
+        assertResponseEquals(
             new ConsumerGroupHeartbeatResponseData()
                 .setMemberId(memberId3)
                 .setMemberEpoch(11)
@@ -2018,7 +2023,7 @@ public class GroupMetadataManagerTest {
                     .setPartitions(Arrays.asList(2))
             )));
 
-        GroupMetadataManagerTestContext.assertResponseEquals(
+        assertResponseEquals(
             new ConsumerGroupHeartbeatResponseData()
                 .setMemberId(memberId2)
                 .setMemberEpoch(11)
@@ -2035,7 +2040,7 @@ public class GroupMetadataManagerTest {
             result.response()
         );
 
-        GroupMetadataManagerTestContext.assertRecordsEquals(Collections.singletonList(
+        assertRecordsEquals(Collections.singletonList(
             RecordHelpers.newCurrentAssignmentRecord(groupId, new ConsumerGroupMember.Builder(memberId2)
                 .setMemberEpoch(11)
                 .setPreviousMemberEpoch(10)
@@ -2056,7 +2061,7 @@ public class GroupMetadataManagerTest {
             .setMemberId(memberId3)
             .setMemberEpoch(11));
 
-        GroupMetadataManagerTestContext.assertResponseEquals(
+        assertResponseEquals(
             new ConsumerGroupHeartbeatResponseData()
                 .setMemberId(memberId3)
                 .setMemberEpoch(11)
@@ -2072,7 +2077,7 @@ public class GroupMetadataManagerTest {
             result.response()
         );
 
-        GroupMetadataManagerTestContext.assertRecordsEquals(Collections.singletonList(
+        assertRecordsEquals(Collections.singletonList(
             RecordHelpers.newCurrentAssignmentRecord(groupId, new ConsumerGroupMember.Builder(memberId3)
                 .setMemberEpoch(11)
                 .setPreviousMemberEpoch(11)
@@ -2152,7 +2157,7 @@ public class GroupMetadataManagerTest {
                 .setServerAssignor("range")
                 .setTopicPartitions(Collections.emptyList()));
 
-        GroupMetadataManagerTestContext.assertResponseEquals(
+        assertResponseEquals(
             new ConsumerGroupHeartbeatResponseData()
                 .setMemberId(memberId2)
                 .setMemberEpoch(11)
@@ -2161,7 +2166,7 @@ public class GroupMetadataManagerTest {
             result.response()
         );
 
-        GroupMetadataManagerTestContext.assertRecordEquals(
+        assertRecordEquals(
             RecordHelpers.newCurrentAssignmentRecord(groupId, new ConsumerGroupMember.Builder(memberId2)
                 .setMemberEpoch(11)
                 .setPreviousMemberEpoch(0)
@@ -2180,7 +2185,7 @@ public class GroupMetadataManagerTest {
             .setMemberId(memberId1)
             .setMemberEpoch(10));
 
-        GroupMetadataManagerTestContext.assertResponseEquals(
+        assertResponseEquals(
             new ConsumerGroupHeartbeatResponseData()
                 .setMemberId(memberId1)
                 .setMemberEpoch(10)
@@ -2193,7 +2198,7 @@ public class GroupMetadataManagerTest {
             result.response()
         );
 
-        GroupMetadataManagerTestContext.assertRecordsEquals(Collections.singletonList(
+        assertRecordsEquals(Collections.singletonList(
             RecordHelpers.newCurrentAssignmentRecord(groupId, new ConsumerGroupMember.Builder(memberId1)
                 .setMemberEpoch(10)
                 .setPreviousMemberEpoch(9)
@@ -2236,7 +2241,7 @@ public class GroupMetadataManagerTest {
                 .setServerAssignor("range")
                 .setTopicPartitions(Collections.emptyList()));
 
-        GroupMetadataManagerTestContext.assertResponseEquals(
+        assertResponseEquals(
             new ConsumerGroupHeartbeatResponseData()
                 .setMemberId(memberId3)
                 .setMemberEpoch(12)
@@ -2245,7 +2250,7 @@ public class GroupMetadataManagerTest {
             result.response()
         );
 
-        GroupMetadataManagerTestContext.assertRecordEquals(
+        assertRecordEquals(
             RecordHelpers.newCurrentAssignmentRecord(groupId, new ConsumerGroupMember.Builder(memberId3)
                 .setMemberEpoch(12)
                 .setPreviousMemberEpoch(0)
@@ -2264,7 +2269,7 @@ public class GroupMetadataManagerTest {
             .setMemberId(memberId1)
             .setMemberEpoch(10));
 
-        GroupMetadataManagerTestContext.assertResponseEquals(
+        assertResponseEquals(
             new ConsumerGroupHeartbeatResponseData()
                 .setMemberId(memberId1)
                 .setMemberEpoch(10)
@@ -2277,7 +2282,7 @@ public class GroupMetadataManagerTest {
             result.response()
         );
 
-        GroupMetadataManagerTestContext.assertRecordsEquals(Collections.singletonList(
+        assertRecordsEquals(Collections.singletonList(
                 RecordHelpers.newCurrentAssignmentRecord(groupId, new ConsumerGroupMember.Builder(memberId1)
                     .setMemberEpoch(10)
                     .setPreviousMemberEpoch(9)
@@ -2298,7 +2303,7 @@ public class GroupMetadataManagerTest {
             .setMemberId(memberId2)
             .setMemberEpoch(11));
 
-        GroupMetadataManagerTestContext.assertResponseEquals(
+        assertResponseEquals(
             new ConsumerGroupHeartbeatResponseData()
                 .setMemberId(memberId2)
                 .setMemberEpoch(12)
@@ -2307,7 +2312,7 @@ public class GroupMetadataManagerTest {
             result.response()
         );
 
-        GroupMetadataManagerTestContext.assertRecordsEquals(Collections.singletonList(
+        assertRecordsEquals(Collections.singletonList(
             RecordHelpers.newCurrentAssignmentRecord(groupId, new ConsumerGroupMember.Builder(memberId2)
                 .setMemberEpoch(12)
                 .setPreviousMemberEpoch(11)
@@ -2540,7 +2545,7 @@ public class GroupMetadataManagerTest {
                 .setMemberEpoch(10));
 
         // The member gets partitions 3, 4 and 5 assigned.
-        GroupMetadataManagerTestContext.assertResponseEquals(
+        assertResponseEquals(
             new ConsumerGroupHeartbeatResponseData()
                 .setMemberId(memberId)
                 .setMemberEpoch(11)
@@ -2580,7 +2585,7 @@ public class GroupMetadataManagerTest {
             RecordHelpers.newCurrentAssignmentRecord(groupId, expectedMember)
         );
 
-        GroupMetadataManagerTestContext.assertRecordsEquals(expectedRecords, result.records());
+        assertRecordsEquals(expectedRecords, result.records());
 
         // Check next refresh time.
         assertFalse(consumerGroup.hasMetadataExpired(context.time.milliseconds()));
@@ -2669,7 +2674,7 @@ public class GroupMetadataManagerTest {
 
 
         // The member gets partitions 3, 4 and 5 assigned.
-        GroupMetadataManagerTestContext.assertResponseEquals(
+        assertResponseEquals(
             new ConsumerGroupHeartbeatResponseData()
                 .setMemberId(memberId)
                 .setMemberEpoch(11)
@@ -2709,7 +2714,7 @@ public class GroupMetadataManagerTest {
             RecordHelpers.newCurrentAssignmentRecord(groupId, expectedMember)
         );
 
-        GroupMetadataManagerTestContext.assertRecordsEquals(expectedRecords, result.records());
+        assertRecordsEquals(expectedRecords, result.records());
 
         // Check next refresh time.
         assertFalse(consumerGroup.hasMetadataExpired(context.time.milliseconds()));
@@ -3182,7 +3187,7 @@ public class GroupMetadataManagerTest {
                     .setSubscribedTopicNames(Collections.singletonList("foo"))
                     .setTopicPartitions(Collections.emptyList()));
 
-        GroupMetadataManagerTestContext.assertResponseEquals(
+        assertResponseEquals(
             new ConsumerGroupHeartbeatResponseData()
                 .setMemberId(memberId1)
                 .setMemberEpoch(1)
@@ -3224,7 +3229,7 @@ public class GroupMetadataManagerTest {
                 .setSubscribedTopicNames(Collections.singletonList("foo"))
                 .setTopicPartitions(Collections.emptyList()));
 
-        GroupMetadataManagerTestContext.assertResponseEquals(
+        assertResponseEquals(
             new ConsumerGroupHeartbeatResponseData()
                 .setMemberId(memberId2)
                 .setMemberEpoch(2)
@@ -3248,7 +3253,7 @@ public class GroupMetadataManagerTest {
                 .setRebalanceTimeoutMs(12000)
                 .setSubscribedTopicNames(Collections.singletonList("foo")));
 
-        GroupMetadataManagerTestContext.assertResponseEquals(
+        assertResponseEquals(
             new ConsumerGroupHeartbeatResponseData()
                 .setMemberId(memberId1)
                 .setMemberEpoch(1)
@@ -3296,7 +3301,7 @@ public class GroupMetadataManagerTest {
                 .setSubscribedTopicNames(Collections.singletonList("foo"))
                 .setTopicPartitions(Collections.emptyList()));
 
-        GroupMetadataManagerTestContext.assertResponseEquals(
+        assertResponseEquals(
             new ConsumerGroupHeartbeatResponseData()
                 .setMemberId(memberId3)
                 .setMemberEpoch(3)
@@ -3320,7 +3325,7 @@ public class GroupMetadataManagerTest {
                 .setRebalanceTimeoutMs(90000)
                 .setSubscribedTopicNames(Collections.singletonList("foo")));
 
-        GroupMetadataManagerTestContext.assertResponseEquals(
+        assertResponseEquals(
             new ConsumerGroupHeartbeatResponseData()
                 .setMemberId(memberId1)
                 .setMemberEpoch(1)
@@ -3353,7 +3358,7 @@ public class GroupMetadataManagerTest {
                     .setTopicId(fooTopicId)
                     .setPartitions(Collections.singletonList(0)))));
 
-        GroupMetadataManagerTestContext.assertResponseEquals(
+        assertResponseEquals(
             new ConsumerGroupHeartbeatResponseData()
                 .setMemberId(memberId1)
                 .setMemberEpoch(3)
@@ -3414,7 +3419,7 @@ public class GroupMetadataManagerTest {
                     .setSubscribedTopicNames(Collections.singletonList("foo"))
                     .setTopicPartitions(Collections.emptyList()));
 
-        GroupMetadataManagerTestContext.assertResponseEquals(
+        assertResponseEquals(
             new ConsumerGroupHeartbeatResponseData()
                 .setMemberId(memberId1)
                 .setMemberEpoch(1)
@@ -3456,7 +3461,7 @@ public class GroupMetadataManagerTest {
                 .setSubscribedTopicNames(Collections.singletonList("foo"))
                 .setTopicPartitions(Collections.emptyList()));
 
-        GroupMetadataManagerTestContext.assertResponseEquals(
+        assertResponseEquals(
             new ConsumerGroupHeartbeatResponseData()
                 .setMemberId(memberId2)
                 .setMemberEpoch(2)
@@ -3478,7 +3483,7 @@ public class GroupMetadataManagerTest {
                 .setMemberId(memberId1)
                 .setMemberEpoch(1));
 
-        GroupMetadataManagerTestContext.assertResponseEquals(
+        assertResponseEquals(
             new ConsumerGroupHeartbeatResponseData()
                 .setMemberId(memberId1)
                 .setMemberEpoch(1)
@@ -3832,7 +3837,7 @@ public class GroupMetadataManagerTest {
             requiredKnownMemberId
         )).collect(Collectors.toList());
 
-        List<String> memberIds = GroupMetadataManagerTestContext.verifyClassicGroupJoinResponses(firstRoundJoinResults, 0, Errors.MEMBER_ID_REQUIRED);
+        List<String> memberIds = verifyClassicGroupJoinResponses(firstRoundJoinResults, 0, Errors.MEMBER_ID_REQUIRED);
         assertEquals(groupMaxSize + 1, memberIds.size());
         assertEquals(0, group.size());
         assertTrue(group.isInState(EMPTY));
@@ -3853,7 +3858,7 @@ public class GroupMetadataManagerTest {
         // the join group phase will complete.
         GroupMetadataManagerTestContext.assertNoOrEmptyResult(context.sleep(50));
 
-        GroupMetadataManagerTestContext.verifyClassicGroupJoinResponses(secondRoundJoinResults, groupMaxSize, Errors.GROUP_MAX_SIZE_REACHED);
+        verifyClassicGroupJoinResponses(secondRoundJoinResults, groupMaxSize, Errors.GROUP_MAX_SIZE_REACHED);
         assertEquals(groupMaxSize, group.size());
         assertEquals(0, group.numPendingJoinMembers());
         assertTrue(group.isInState(COMPLETING_REBALANCE));
@@ -3864,7 +3869,7 @@ public class GroupMetadataManagerTest {
             requiredKnownMemberId
         )).collect(Collectors.toList());
 
-        GroupMetadataManagerTestContext.verifyClassicGroupJoinResponses(thirdRoundJoinResults, groupMaxSize, Errors.GROUP_MAX_SIZE_REACHED);
+        verifyClassicGroupJoinResponses(thirdRoundJoinResults, groupMaxSize, Errors.GROUP_MAX_SIZE_REACHED);
     }
 
     @Test
@@ -3902,7 +3907,7 @@ public class GroupMetadataManagerTest {
         // we will complete the rebalance.
         GroupMetadataManagerTestContext.assertNoOrEmptyResult(context.sleep(50));
 
-        List<String> memberIds = GroupMetadataManagerTestContext.verifyClassicGroupJoinResponses(firstRoundJoinResults, groupMaxSize, Errors.GROUP_MAX_SIZE_REACHED);
+        List<String> memberIds = verifyClassicGroupJoinResponses(firstRoundJoinResults, groupMaxSize, Errors.GROUP_MAX_SIZE_REACHED);
 
         // Members that were accepted can rejoin while others are rejected in CompletingRebalance state.
         List<GroupMetadataManagerTestContext.JoinResult> secondRoundJoinResults = memberIds.stream().map(memberId -> context.sendClassicGroupJoin(
@@ -3910,7 +3915,7 @@ public class GroupMetadataManagerTest {
             requiredKnownMemberId
         )).collect(Collectors.toList());
 
-        GroupMetadataManagerTestContext.verifyClassicGroupJoinResponses(secondRoundJoinResults, 10, Errors.GROUP_MAX_SIZE_REACHED);
+        verifyClassicGroupJoinResponses(secondRoundJoinResults, 10, Errors.GROUP_MAX_SIZE_REACHED);
         assertEquals(groupMaxSize, group.size());
         assertEquals(0, group.numAwaitingJoinResponse());
         assertTrue(group.isInState(COMPLETING_REBALANCE));
@@ -3954,7 +3959,7 @@ public class GroupMetadataManagerTest {
         // we will complete the rebalance.
         GroupMetadataManagerTestContext.assertNoOrEmptyResult(context.sleep(50));
 
-        List<String> memberIds = GroupMetadataManagerTestContext.verifyClassicGroupJoinResponses(firstRoundJoinResults, groupMaxSize, Errors.GROUP_MAX_SIZE_REACHED);
+        List<String> memberIds = verifyClassicGroupJoinResponses(firstRoundJoinResults, groupMaxSize, Errors.GROUP_MAX_SIZE_REACHED);
 
         // Members which were accepted can rejoin, others are rejected, while
         // completing rebalance
@@ -3964,7 +3969,7 @@ public class GroupMetadataManagerTest {
                 .setGroupInstanceId(groupInstanceIds.get(i))
         )).collect(Collectors.toList());
 
-        GroupMetadataManagerTestContext.verifyClassicGroupJoinResponses(secondRoundJoinResults, groupMaxSize, Errors.GROUP_MAX_SIZE_REACHED);
+        verifyClassicGroupJoinResponses(secondRoundJoinResults, groupMaxSize, Errors.GROUP_MAX_SIZE_REACHED);
         assertEquals(groupMaxSize, group.size());
         assertEquals(0, group.numAwaitingJoinResponse());
         assertTrue(group.isInState(COMPLETING_REBALANCE));
@@ -3996,7 +4001,7 @@ public class GroupMetadataManagerTest {
         assertEquals(groupMaxSize + 1, group.numPendingJoinMembers());
         assertTrue(group.isInState(EMPTY));
 
-        List<String> memberIds = GroupMetadataManagerTestContext.verifyClassicGroupJoinResponses(firstRoundJoinResults, 0, Errors.MEMBER_ID_REQUIRED);
+        List<String> memberIds = verifyClassicGroupJoinResponses(firstRoundJoinResults, 0, Errors.MEMBER_ID_REQUIRED);
         assertEquals(groupMaxSize + 1, memberIds.size());
 
         // Second round of join requests with the generated member ids.
@@ -4027,7 +4032,7 @@ public class GroupMetadataManagerTest {
         // we will complete the rebalance.
         GroupMetadataManagerTestContext.assertNoOrEmptyResult(context.sleep(50));
 
-        GroupMetadataManagerTestContext.verifyClassicGroupJoinResponses(thirdRoundJoinResults, groupMaxSize, Errors.GROUP_MAX_SIZE_REACHED);
+        verifyClassicGroupJoinResponses(thirdRoundJoinResults, groupMaxSize, Errors.GROUP_MAX_SIZE_REACHED);
         assertEquals(groupMaxSize, group.size());
         assertEquals(0, group.numAwaitingJoinResponse());
         assertTrue(group.isInState(COMPLETING_REBALANCE));
@@ -4082,7 +4087,7 @@ public class GroupMetadataManagerTest {
         // Advance clock by rebalance timeout to complete join phase.
         GroupMetadataManagerTestContext.assertNoOrEmptyResult(context.sleep(10000));
 
-        GroupMetadataManagerTestContext.verifyClassicGroupJoinResponses(joinResults, groupMaxSize, Errors.GROUP_MAX_SIZE_REACHED);
+        verifyClassicGroupJoinResponses(joinResults, groupMaxSize, Errors.GROUP_MAX_SIZE_REACHED);
 
         assertEquals(groupMaxSize, group.size());
         assertTrue(group.isInState(COMPLETING_REBALANCE));
@@ -5399,7 +5404,7 @@ public class GroupMetadataManagerTest {
         assertTrue(joinResult.joinFuture.isDone());
 
         JoinGroupResponseData expectedResponse = new JoinGroupResponseData()
-            .setMembers(supportSkippingAssignment ? GroupMetadataManagerTestContext.toJoinResponseMembers(group) : Collections.emptyList())
+            .setMembers(supportSkippingAssignment ? toJoinResponseMembers(group) : Collections.emptyList())
             .setLeader(supportSkippingAssignment ? joinResult.joinFuture.get().memberId() : oldMemberId)
             .setMemberId(joinResult.joinFuture.get().memberId())
             .setGenerationId(1)
@@ -5648,7 +5653,7 @@ public class GroupMetadataManagerTest {
             .setMemberId(rebalanceResult.followerId)
             .setGenerationId(-1);
 
-        GroupMetadataManagerTestContext.checkJoinGroupResponse(
+        checkJoinGroupResponse(
             expectedResponse,
             oldFollowerJoinResult.joinFuture.get(),
             group,
@@ -5702,9 +5707,9 @@ public class GroupMetadataManagerTest {
             .setLeader(rebalanceResult.leaderId)
             .setProtocolName("range")
             .setProtocolType("consumer")
-            .setMembers(GroupMetadataManagerTestContext.toJoinResponseMembers(group));
+            .setMembers(toJoinResponseMembers(group));
 
-        GroupMetadataManagerTestContext.checkJoinGroupResponse(
+        checkJoinGroupResponse(
             expectedLeaderResponse,
             leaderJoinResult.joinFuture.get(),
             group,
@@ -5726,7 +5731,7 @@ public class GroupMetadataManagerTest {
             .setProtocolName("range")
             .setProtocolType("consumer");
 
-        GroupMetadataManagerTestContext.checkJoinGroupResponse(
+        checkJoinGroupResponse(
             expectedFollowerResponse,
             oldFollowerJoinResult.joinFuture.get(),
             group,
@@ -5832,9 +5837,9 @@ public class GroupMetadataManagerTest {
             .setLeader(rebalanceResult.leaderId)
             .setProtocolName("range")
             .setProtocolType("consumer")
-            .setMembers(GroupMetadataManagerTestContext.toJoinResponseMembers(group));
+            .setMembers(toJoinResponseMembers(group));
 
-        GroupMetadataManagerTestContext.checkJoinGroupResponse(
+        checkJoinGroupResponse(
             expectedLeaderResponse,
             leaderJoinResult.joinFuture.get(),
             group,
@@ -5853,7 +5858,7 @@ public class GroupMetadataManagerTest {
             .setProtocolType("consumer")
             .setMembers(Collections.emptyList());
 
-        GroupMetadataManagerTestContext.checkJoinGroupResponse(
+        checkJoinGroupResponse(
             expectedDuplicateFollowerResponse,
             duplicateFollowerJoinResult.joinFuture.get(),
             group,
@@ -5872,7 +5877,7 @@ public class GroupMetadataManagerTest {
             .setProtocolType(null)
             .setMembers(Collections.emptyList());
 
-        GroupMetadataManagerTestContext.checkJoinGroupResponse(
+        checkJoinGroupResponse(
             expectedOldFollowerResponse,
             oldFollowerJoinResult.joinFuture.get(),
             group,
@@ -5968,7 +5973,7 @@ public class GroupMetadataManagerTest {
             joinResult.joinFuture.get().memberId() : rebalanceResult.leaderId;
 
         List<JoinGroupResponseMember> members = supportSkippingAssignment ?
-            GroupMetadataManagerTestContext.toJoinResponseMembers(group) : Collections.emptyList();
+            toJoinResponseMembers(group) : Collections.emptyList();
 
         JoinGroupResponseData expectedJoinResponse = new JoinGroupResponseData()
             .setErrorCode(Errors.NONE.code())
@@ -5980,7 +5985,7 @@ public class GroupMetadataManagerTest {
             .setSkipAssignment(supportSkippingAssignment)
             .setMembers(members);
 
-        GroupMetadataManagerTestContext.checkJoinGroupResponse(
+        checkJoinGroupResponse(
             expectedJoinResponse,
             joinResult.joinFuture.get(),
             group,
@@ -6054,9 +6059,9 @@ public class GroupMetadataManagerTest {
             .setLeader(rebalanceResult.leaderId)
             .setProtocolName("range")
             .setProtocolType("consumer")
-            .setMembers(GroupMetadataManagerTestContext.toJoinResponseMembers(group));
+            .setMembers(toJoinResponseMembers(group));
 
-        GroupMetadataManagerTestContext.checkJoinGroupResponse(
+        checkJoinGroupResponse(
             expectedResponse,
             joinResponse,
             group,
@@ -6168,9 +6173,9 @@ public class GroupMetadataManagerTest {
             .setLeader(rebalanceResult.followerId)
             .setProtocolName("roundrobin")
             .setProtocolType("consumer")
-            .setMembers(GroupMetadataManagerTestContext.toJoinResponseMembers(group));
+            .setMembers(toJoinResponseMembers(group));
 
-        GroupMetadataManagerTestContext.checkJoinGroupResponse(
+        checkJoinGroupResponse(
             expectedResponse,
             joinResult.joinFuture.get(),
             group,
@@ -6230,9 +6235,9 @@ public class GroupMetadataManagerTest {
             .setLeader(joinResult.joinFuture.get().memberId())
             .setProtocolName("roundrobin")
             .setProtocolType("consumer")
-            .setMembers(GroupMetadataManagerTestContext.toJoinResponseMembers(group));
+            .setMembers(toJoinResponseMembers(group));
 
-        GroupMetadataManagerTestContext.checkJoinGroupResponse(
+        checkJoinGroupResponse(
             expectedResponse,
             joinResult.joinFuture.get(),
             group,
@@ -6287,7 +6292,7 @@ public class GroupMetadataManagerTest {
             .setSkipAssignment(false)
             .setMembers(Collections.emptyList());
 
-        GroupMetadataManagerTestContext.checkJoinGroupResponse(
+        checkJoinGroupResponse(
             expectedResponse,
             followerJoinResult.joinFuture.get(),
             group,
@@ -6395,7 +6400,7 @@ public class GroupMetadataManagerTest {
             .setSkipAssignment(false)
             .setMembers(Collections.emptyList());
 
-        GroupMetadataManagerTestContext.checkJoinGroupResponse(
+        checkJoinGroupResponse(
             expectedResponse,
             followerJoinResult.joinFuture.get(),
             group,
@@ -6491,9 +6496,9 @@ public class GroupMetadataManagerTest {
             .setProtocolName("range")
             .setProtocolType("consumer")
             .setSkipAssignment(false)
-            .setMembers(GroupMetadataManagerTestContext.toJoinResponseMembers(group));
+            .setMembers(toJoinResponseMembers(group));
 
-        GroupMetadataManagerTestContext.checkJoinGroupResponse(
+        checkJoinGroupResponse(
             expectedLeaderResponse,
             leaderJoinResult.joinFuture.get(),
             group,
@@ -6511,7 +6516,7 @@ public class GroupMetadataManagerTest {
             .setSkipAssignment(false)
             .setMembers(Collections.emptyList());
 
-        GroupMetadataManagerTestContext.checkJoinGroupResponse(
+        checkJoinGroupResponse(
             expectedFollowerResponse,
             followerJoinResult.joinFuture.get(),
             group,
@@ -6551,9 +6556,9 @@ public class GroupMetadataManagerTest {
             .setProtocolName("range")
             .setProtocolType("consumer")
             .setSkipAssignment(false)
-            .setMembers(GroupMetadataManagerTestContext.toJoinResponseMembers(group));
+            .setMembers(toJoinResponseMembers(group));
 
-        GroupMetadataManagerTestContext.checkJoinGroupResponse(
+        checkJoinGroupResponse(
             expectedFollowerResponse,
             followerJoinResult.joinFuture.get(),
             group,
@@ -6610,7 +6615,7 @@ public class GroupMetadataManagerTest {
             .setSkipAssignment(false)
             .setMembers(Collections.emptyList());
 
-        GroupMetadataManagerTestContext.checkJoinGroupResponse(
+        checkJoinGroupResponse(
             expectedFollowerResponse,
             followerJoinResult.joinFuture.get(),
             group,
@@ -6677,7 +6682,7 @@ public class GroupMetadataManagerTest {
             .setSkipAssignment(false)
             .setMembers(Collections.emptyList());
 
-        GroupMetadataManagerTestContext.checkJoinGroupResponse(
+        checkJoinGroupResponse(
             expectedFollowerResponse,
             followerJoinResult.joinFuture.get(),
             group,
@@ -6933,9 +6938,9 @@ public class GroupMetadataManagerTest {
             .setProtocolName("range")
             .setProtocolType("consumer")
             .setSkipAssignment(false)
-            .setMembers(GroupMetadataManagerTestContext.toJoinResponseMembers(group));
+            .setMembers(toJoinResponseMembers(group));
 
-        GroupMetadataManagerTestContext.checkJoinGroupResponse(
+        checkJoinGroupResponse(
             expectedLeaderResponse,
             leaderJoinResult.joinFuture.get(),
             group,
@@ -6953,7 +6958,7 @@ public class GroupMetadataManagerTest {
             .setSkipAssignment(false)
             .setMembers(Collections.emptyList());
 
-        GroupMetadataManagerTestContext.checkJoinGroupResponse(
+        checkJoinGroupResponse(
             expectedNewMemberResponse,
             newMemberJoinResult.joinFuture.get(),
             group,
@@ -7029,9 +7034,9 @@ public class GroupMetadataManagerTest {
             .setProtocolName("range")
             .setProtocolType("consumer")
             .setSkipAssignment(false)
-            .setMembers(GroupMetadataManagerTestContext.toJoinResponseMembers(group));
+            .setMembers(toJoinResponseMembers(group));
 
-        GroupMetadataManagerTestContext.checkJoinGroupResponse(
+        checkJoinGroupResponse(
             expectedLeaderResponse,
             newLeaderResponse,
             group,
@@ -7049,7 +7054,7 @@ public class GroupMetadataManagerTest {
             .setSkipAssignment(false)
             .setMembers(Collections.emptyList());
 
-        GroupMetadataManagerTestContext.checkJoinGroupResponse(
+        checkJoinGroupResponse(
             expectedNewMemberResponse,
             newFollowerResponse,
             group,
@@ -9604,5 +9609,66 @@ public class GroupMetadataManagerTest {
 
         verify(context.metrics, times(1)).onConsumerGroupStateTransition(null, ConsumerGroup.ConsumerGroupState.EMPTY);
         verify(context.metrics, times(1)).onConsumerGroupStateTransition(ConsumerGroup.ConsumerGroupState.EMPTY, null);
+    }
+
+    private static void checkJoinGroupResponse(
+        JoinGroupResponseData expectedResponse,
+        JoinGroupResponseData actualResponse,
+        ClassicGroup group,
+        ClassicGroupState expectedState,
+        Set<String> expectedGroupInstanceIds
+    ) {
+        assertEquals(expectedResponse, actualResponse);
+        assertTrue(group.isInState(expectedState));
+
+        Set<String> groupInstanceIds = actualResponse.members()
+                                                     .stream()
+                                                     .map(JoinGroupResponseMember::groupInstanceId)
+                                                     .collect(Collectors.toSet());
+
+        assertEquals(expectedGroupInstanceIds, groupInstanceIds);
+    }
+
+    private static List<JoinGroupResponseMember> toJoinResponseMembers(ClassicGroup group) {
+        List<JoinGroupResponseMember> members = new ArrayList<>();
+        String protocolName = group.protocolName().get();
+        group.allMembers().forEach(member -> {
+            members.add(
+                new JoinGroupResponseMember()
+                    .setMemberId(member.memberId())
+                    .setGroupInstanceId(member.groupInstanceId().orElse(""))
+                    .setMetadata(member.metadata(protocolName))
+            );
+        });
+
+        return members;
+    }
+
+    private static List<String> verifyClassicGroupJoinResponses(
+        List<GroupMetadataManagerTestContext.JoinResult> joinResults,
+        int expectedSuccessCount,
+        Errors expectedFailure
+    ) {
+        int successCount = 0;
+        List<String> memberIds = new ArrayList<>();
+        for (GroupMetadataManagerTestContext.JoinResult joinResult : joinResults) {
+            if (!joinResult.joinFuture.isDone()) {
+                fail("All responseFutures should be completed.");
+            }
+            try {
+                JoinGroupResponseData joinResponse = joinResult.joinFuture.get();
+                if (joinResponse.errorCode() == Errors.NONE.code()) {
+                    successCount++;
+                } else {
+                    assertEquals(expectedFailure.code(), joinResponse.errorCode());
+                }
+                memberIds.add(joinResponse.memberId());
+            } catch (Exception e) {
+                fail("Unexpected exception: " + e.getMessage());
+            }
+        }
+
+        assertEquals(expectedSuccessCount, successCount);
+        return memberIds;
     }
 }

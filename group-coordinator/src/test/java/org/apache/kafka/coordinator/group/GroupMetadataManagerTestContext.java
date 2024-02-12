@@ -19,7 +19,6 @@ package org.apache.kafka.coordinator.group;
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor;
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.UnknownMemberIdException;
 import org.apache.kafka.common.message.ConsumerGroupDescribeResponseData;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatRequestData;
@@ -47,7 +46,6 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.coordinator.group.assignor.PartitionAssignor;
 import org.apache.kafka.coordinator.group.classic.ClassicGroup;
-import org.apache.kafka.coordinator.group.classic.ClassicGroupState;
 import org.apache.kafka.coordinator.group.consumer.ConsumerGroup;
 import org.apache.kafka.coordinator.group.consumer.ConsumerGroupBuilder;
 import org.apache.kafka.coordinator.group.consumer.ConsumerGroupMember;
@@ -71,17 +69,13 @@ import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.timeline.SnapshotRegistry;
-import org.opentest4j.AssertionFailedError;
 
 import java.net.InetAddress;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
@@ -98,7 +92,6 @@ import static org.apache.kafka.coordinator.group.classic.ClassicGroupState.DEAD;
 import static org.apache.kafka.coordinator.group.classic.ClassicGroupState.EMPTY;
 import static org.apache.kafka.coordinator.group.classic.ClassicGroupState.PREPARING_REBALANCE;
 import static org.apache.kafka.coordinator.group.classic.ClassicGroupState.STABLE;
-import static org.junit.jupiter.api.AssertionFailureBuilder.assertionFailure;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -110,199 +103,9 @@ import static org.mockito.Mockito.mock;
 
 public class GroupMetadataManagerTestContext {
 
-    public static void assertResponseEquals(
-        ConsumerGroupHeartbeatResponseData expected,
-        ConsumerGroupHeartbeatResponseData actual
-    ) {
-        if (!responseEquals(expected, actual)) {
-            assertionFailure()
-                .expected(expected)
-                .actual(actual)
-                .buildAndThrow();
-        }
-    }
-
-    private static boolean responseEquals(
-        ConsumerGroupHeartbeatResponseData expected,
-        ConsumerGroupHeartbeatResponseData actual
-    ) {
-        if (expected.throttleTimeMs() != actual.throttleTimeMs()) return false;
-        if (expected.errorCode() != actual.errorCode()) return false;
-        if (!Objects.equals(expected.errorMessage(), actual.errorMessage())) return false;
-        if (!Objects.equals(expected.memberId(), actual.memberId())) return false;
-        if (expected.memberEpoch() != actual.memberEpoch()) return false;
-        if (expected.heartbeatIntervalMs() != actual.heartbeatIntervalMs()) return false;
-        // Unordered comparison of the assignments.
-        return responseAssignmentEquals(expected.assignment(), actual.assignment());
-    }
-
-    private static boolean responseAssignmentEquals(
-        ConsumerGroupHeartbeatResponseData.Assignment expected,
-        ConsumerGroupHeartbeatResponseData.Assignment actual
-    ) {
-        if (expected == actual) return true;
-        if (expected == null) return false;
-        if (actual == null) return false;
-
-        return Objects.equals(fromAssignment(expected.topicPartitions()), fromAssignment(actual.topicPartitions()));
-    }
-
-    private static Map<Uuid, Set<Integer>> fromAssignment(
-        List<ConsumerGroupHeartbeatResponseData.TopicPartitions> assignment
-    ) {
-        if (assignment == null) return null;
-
-        Map<Uuid, Set<Integer>> assignmentMap = new HashMap<>();
-        assignment.forEach(topicPartitions -> {
-            assignmentMap.put(topicPartitions.topicId(), new HashSet<>(topicPartitions.partitions()));
-        });
-        return assignmentMap;
-    }
-
-    public static void assertRecordsEquals(
-        List<Record> expectedRecords,
-        List<Record> actualRecords
-    ) {
-        try {
-            assertEquals(expectedRecords.size(), actualRecords.size());
-
-            for (int i = 0; i < expectedRecords.size(); i++) {
-                Record expectedRecord = expectedRecords.get(i);
-                Record actualRecord = actualRecords.get(i);
-                assertRecordEquals(expectedRecord, actualRecord);
-            }
-        } catch (AssertionFailedError e) {
-            assertionFailure()
-                .expected(expectedRecords)
-                .actual(actualRecords)
-                .buildAndThrow();
-        }
-    }
-
-    public static void assertRecordEquals(
-        Record expected,
-        Record actual
-    ) {
-        try {
-            assertApiMessageAndVersionEquals(expected.key(), actual.key());
-            assertApiMessageAndVersionEquals(expected.value(), actual.value());
-        } catch (AssertionFailedError e) {
-            assertionFailure()
-                .expected(expected)
-                .actual(actual)
-                .buildAndThrow();
-        }
-    }
-
-    private static void assertApiMessageAndVersionEquals(
-        ApiMessageAndVersion expected,
-        ApiMessageAndVersion actual
-    ) {
-        if (expected == actual) return;
-
-        assertEquals(expected.version(), actual.version());
-
-        if (actual.message() instanceof ConsumerGroupCurrentMemberAssignmentValue) {
-            // The order of the topics stored in ConsumerGroupCurrentMemberAssignmentValue is not
-            // always guaranteed. Therefore, we need a special comparator.
-            ConsumerGroupCurrentMemberAssignmentValue expectedValue =
-                (ConsumerGroupCurrentMemberAssignmentValue) expected.message();
-            ConsumerGroupCurrentMemberAssignmentValue actualValue =
-                (ConsumerGroupCurrentMemberAssignmentValue) actual.message();
-
-            assertEquals(expectedValue.memberEpoch(), actualValue.memberEpoch());
-            assertEquals(expectedValue.previousMemberEpoch(), actualValue.previousMemberEpoch());
-            assertEquals(expectedValue.targetMemberEpoch(), actualValue.targetMemberEpoch());
-            assertEquals(expectedValue.error(), actualValue.error());
-            assertEquals(expectedValue.metadataVersion(), actualValue.metadataVersion());
-            assertEquals(expectedValue.metadataBytes(), actualValue.metadataBytes());
-
-            // We transform those to Maps before comparing them.
-            assertEquals(fromTopicPartitions(expectedValue.assignedPartitions()),
-                fromTopicPartitions(actualValue.assignedPartitions()));
-            assertEquals(fromTopicPartitions(expectedValue.partitionsPendingRevocation()),
-                fromTopicPartitions(actualValue.partitionsPendingRevocation()));
-            assertEquals(fromTopicPartitions(expectedValue.partitionsPendingAssignment()),
-                fromTopicPartitions(actualValue.partitionsPendingAssignment()));
-        } else {
-            assertEquals(expected.message(), actual.message());
-        }
-    }
-
-    private static Map<Uuid, Set<Integer>> fromTopicPartitions(
-        List<ConsumerGroupCurrentMemberAssignmentValue.TopicPartitions> assignment
-    ) {
-        Map<Uuid, Set<Integer>> assignmentMap = new HashMap<>();
-        assignment.forEach(topicPartitions -> {
-            assignmentMap.put(topicPartitions.topicId(), new HashSet<>(topicPartitions.partitions()));
-        });
-        return assignmentMap;
-    }
-
-    public static List<JoinGroupResponseData.JoinGroupResponseMember> toJoinResponseMembers(ClassicGroup group) {
-        List<JoinGroupResponseData.JoinGroupResponseMember> members = new ArrayList<>();
-        String protocolName = group.protocolName().get();
-        group.allMembers().forEach(member -> {
-            members.add(
-                new JoinGroupResponseData.JoinGroupResponseMember()
-                    .setMemberId(member.memberId())
-                    .setGroupInstanceId(member.groupInstanceId().orElse(""))
-                    .setMetadata(member.metadata(protocolName))
-            );
-        });
-
-        return members;
-    }
-
-    public static void checkJoinGroupResponse(
-        JoinGroupResponseData expectedResponse,
-        JoinGroupResponseData actualResponse,
-        ClassicGroup group,
-        ClassicGroupState expectedState,
-        Set<String> expectedGroupInstanceIds
-    ) {
-        assertEquals(expectedResponse, actualResponse);
-        assertTrue(group.isInState(expectedState));
-
-        Set<String> groupInstanceIds = actualResponse.members()
-            .stream()
-            .map(JoinGroupResponseData.JoinGroupResponseMember::groupInstanceId)
-            .collect(Collectors.toSet());
-
-        assertEquals(expectedGroupInstanceIds, groupInstanceIds);
-    }
-
     public static void assertNoOrEmptyResult(List<MockCoordinatorTimer.ExpiredTimeout<Void, Record>> timeouts) {
         assertTrue(timeouts.size() <= 1);
         timeouts.forEach(timeout -> assertEquals(EMPTY_RESULT, timeout.result));
-    }
-
-    public static List<String> verifyClassicGroupJoinResponses(
-        List<JoinResult> joinResults,
-        int expectedSuccessCount,
-        Errors expectedFailure
-    ) {
-        int successCount = 0;
-        List<String> memberIds = new ArrayList<>();
-        for (JoinResult joinResult : joinResults) {
-            if (!joinResult.joinFuture.isDone()) {
-                fail("All responseFutures should be completed.");
-            }
-            try {
-                JoinGroupResponseData joinResponse = joinResult.joinFuture.get();
-                if (joinResponse.errorCode() == Errors.NONE.code()) {
-                    successCount++;
-                } else {
-                    assertEquals(expectedFailure.code(), joinResponse.errorCode());
-                }
-                memberIds.add(joinResponse.memberId());
-            } catch (Exception e) {
-                fail("Unexpected exception: " + e.getMessage());
-            }
-        }
-
-        assertEquals(expectedSuccessCount, successCount);
-        return memberIds;
     }
 
     public static JoinGroupRequestData.JoinGroupRequestProtocolCollection toProtocols(String... protocolNames) {
