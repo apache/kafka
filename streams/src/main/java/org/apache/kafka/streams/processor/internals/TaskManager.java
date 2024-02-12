@@ -1925,8 +1925,7 @@ public class TaskManager {
         if (rebalanceInProgress) {
             return -1;
         } else {
-            final int committedOffsets = taskExecutor.commitTasksAndMaybeUpdateCommittableOffsets(tasksToCommit, consumedOffsetsAndMetadata);
-            return committedOffsets;
+            return taskExecutor.commitTasksAndMaybeUpdateCommittableOffsets(tasksToCommit, consumedOffsetsAndMetadata);
         }
     }
 
