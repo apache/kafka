@@ -931,7 +931,7 @@ private[log] class Cleaner(val id: Int,
    */
   private def growBuffers(maxLogMessageSize: Int): Unit = {
     val maxBufferSize = math.max(maxLogMessageSize, maxIoBufferSize)
-    if(readBuffer.capacity >= maxBufferSize || writeBuffer.capacity >= maxBufferSize)
+    if (readBuffer.capacity >= maxBufferSize || writeBuffer.capacity >= maxBufferSize)
       throw new IllegalStateException("This log contains a message larger than maximum allowable size of %s.".format(maxBufferSize))
     val newSize = math.min(this.readBuffer.capacity * 2, maxBufferSize)
     info(s"Growing cleaner I/O buffers from ${readBuffer.capacity} bytes to $newSize bytes.")
@@ -943,9 +943,9 @@ private[log] class Cleaner(val id: Int,
    * Restore the I/O buffer capacity to its original size
    */
   private def restoreBuffers(): Unit = {
-    if(this.readBuffer.capacity > this.ioBufferSize)
+    if (this.readBuffer.capacity > this.ioBufferSize)
       this.readBuffer = ByteBuffer.allocate(this.ioBufferSize)
-    if(this.writeBuffer.capacity > this.ioBufferSize)
+    if (this.writeBuffer.capacity > this.ioBufferSize)
       this.writeBuffer = ByteBuffer.allocate(this.ioBufferSize)
   }
 
@@ -964,13 +964,13 @@ private[log] class Cleaner(val id: Int,
   private[log] def groupSegmentsBySize(segments: Iterable[LogSegment], maxSize: Int, maxIndexSize: Int, firstUncleanableOffset: Long): List[Seq[LogSegment]] = {
     var grouped = List[List[LogSegment]]()
     var segs = segments.toList
-    while(segs.nonEmpty) {
+    while (segs.nonEmpty) {
       var group = List(segs.head)
       var logSize = segs.head.size.toLong
       var indexSize = segs.head.offsetIndex.sizeInBytes.toLong
       var timeIndexSize = segs.head.timeIndex.sizeInBytes.toLong
       segs = segs.tail
-      while(segs.nonEmpty &&
+      while (segs.nonEmpty &&
             logSize + segs.head.size <= maxSize &&
             indexSize + segs.head.offsetIndex.sizeInBytes <= maxIndexSize &&
             timeIndexSize + segs.head.timeIndex.sizeInBytes <= maxIndexSize &&
@@ -1124,7 +1124,7 @@ private[log] class Cleaner(val id: Int,
       stats.indexBytesRead(bytesRead)
 
       // if we didn't read even one complete message, our read buffer may be too small
-      if(position == startPosition)
+      if (position == startPosition)
         growBuffersOrFail(segment.log, position, maxLogMessageSize, records)
     }
 

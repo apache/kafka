@@ -134,7 +134,8 @@ public class KRaftMigrationDriver implements MetadataPublisher {
         this.time = time;
         LogContext logContext = new LogContext("[KRaftMigrationDriver id=" + nodeId + "] ");
         this.controllerMetrics = controllerMetrics;
-        this.log = logContext.logger(KRaftMigrationDriver.class);
+        Logger log = logContext.logger(KRaftMigrationDriver.class);
+        this.log = log;
         this.migrationState = MigrationDriverState.UNINITIALIZED;
         this.migrationLeadershipState = ZkMigrationLeadershipState.EMPTY;
         this.eventQueue = new KafkaEventQueue(Time.SYSTEM, logContext, "controller-" + nodeId + "-migration-driver-");
@@ -144,7 +145,7 @@ public class KRaftMigrationDriver implements MetadataPublisher {
         this.initialZkLoadHandler = initialZkLoadHandler;
         this.faultHandler = faultHandler;
         this.quorumFeatures = quorumFeatures;
-        this.zkMetadataWriter = new KRaftMigrationZkWriter(zkMigrationClient);
+        this.zkMetadataWriter = new KRaftMigrationZkWriter(zkMigrationClient, log::error);
         this.recordRedactor = new RecordRedactor(configSchema);
         this.minBatchSize = minBatchSize;
     }
