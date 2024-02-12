@@ -504,6 +504,7 @@ public class StreamsConfig extends AbstractConfig {
     public static final String STATESTORE_CACHE_MAX_BYTES_CONFIG = "statestore.cache.max.bytes";
     public static final String STATESTORE_CACHE_MAX_BYTES_DOC = "Maximum number of memory bytes to be used for statestore cache across all threads";
 
+    public static final long UNBOUNDED_STATESTORE_UNCOMMITTED_BYTES = -1L;
     public static final String STATESTORE_UNCOMMITTED_MAX_BYTES_CONFIG = "statestore.uncommitted.max.bytes";
     public static final String STATESTORE_UNCOMMITTED_MAX_BYTES_DOC = "Maximum number of memory bytes to be used to buffer uncommitted state-store records. " +
             "If this limit is exceeded, a task commit will be requested. No limit: -1. ";

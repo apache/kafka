@@ -31,6 +31,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.LockException;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskCorruptedException;
@@ -1848,7 +1849,7 @@ public class TaskManager {
     }
 
     boolean transactionBuffersWillExceedCapacity() {
-        final boolean transactionBuffersAreUnbounded = maxUncommittedStateBytes < 0;
+        final boolean transactionBuffersAreUnbounded = maxUncommittedStateBytes == StreamsConfig.UNBOUNDED_STATESTORE_UNCOMMITTED_BYTES;
         if (transactionBuffersAreUnbounded) {
             return false;
         }
