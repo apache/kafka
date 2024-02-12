@@ -751,8 +751,8 @@ public class MembershipManagerImpl implements MembershipManager {
      * callbacks and update the subscription state.
      *
      * There are three conditions under which no reconciliation will be triggered:
-     *  - We have already reconciled the assignment (the target assignment is the same as the current assignment)
-     *  - Another reconciliation is already in progress
+     *  - We have already reconciled the assignment (the target assignment is the same as the current assignment).
+     *  - Another reconciliation is already in progress.
      *  - There are topics that haven't been added to the current assignment yet, but all their topic IDs
      *    are missing from the target assignment.
      */
@@ -1357,10 +1357,6 @@ public class MembershipManagerImpl implements MembershipManager {
         this.stateUpdatesListeners.add(listener);
     }
 
-    /**
-     * If either a new target assignment or new metadata is available that we have not yet attempted
-     * to reconcile, and we are currently in state RECONCILING, trigger reconciliation.
-     */
     @Override
     public PollResult poll(final long currentTimeMs) {
         if (state == MemberState.RECONCILING) {
