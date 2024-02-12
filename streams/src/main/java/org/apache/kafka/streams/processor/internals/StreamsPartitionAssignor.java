@@ -160,6 +160,8 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         }
     }
 
+    private static final long FOLLOWUP_REBALANCE_DELAY_MS = 5 * 1_000L;
+
     // keep track of any future consumers in a "dummy" Client since we can't decipher their subscription
     private static final UUID FUTURE_ID = randomUUID();
 
@@ -817,6 +819,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                                                          final boolean versionProbing,
                                                          final boolean shouldTriggerProbingRebalance) {
         boolean rebalanceRequired = shouldTriggerProbingRebalance || versionProbing;
+        final long currentTimeMs = time.milliseconds();
         final Map<String, Assignment> assignment = new HashMap<>();
 
         // within the client, distribute tasks to its owned consumers
@@ -875,7 +878,8 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                 standbyTaskAssignment,
                 minUserMetadataVersion,
                 minSupportedMetadataVersion,
-                encodeNextProbingRebalanceTime
+                encodeNextProbingRebalanceTime,
+                currentTimeMs
             );
 
             if (tasksRevoked || encodeNextProbingRebalanceTime) {
@@ -923,7 +927,8 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                                          final Map<String, List<TaskId>> standbyTaskAssignments,
                                          final int minUserMetadataVersion,
                                          final int minSupportedMetadataVersion,
-                                         final boolean probingRebalanceNeeded) {
+                                         final boolean probingRebalanceNeeded,
+                                         final long currentTimeMs) {
         boolean followupRebalanceRequiredForRevokedTasks = false;
 
         // We only want to encode a scheduled probing rebalance for a single member in this client
@@ -974,7 +979,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                 // Don't bother to schedule a probing rebalance if an immediate one is already scheduled
                 shouldEncodeProbingRebalance = false;
             } else if (shouldEncodeProbingRebalance) {
-                final long nextRebalanceTimeMs = time.milliseconds() + probingRebalanceIntervalMs();
+                final long nextRebalanceTimeMs = currentTimeMs + probingRebalanceIntervalMs();
                 log.info("Requesting followup rebalance be scheduled by {} for {} to probe for caught-up replica tasks.",
                         consumer, Utils.toLogDateTimeFormat(nextRebalanceTimeMs));
                 info.setNextRebalanceTime(nextRebalanceTimeMs);
@@ -1376,7 +1381,8 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
             nextScheduledRebalanceMs.set(0L);
         } else if (encodedNextScheduledRebalanceMs == 0L) {
             log.info("Requested to schedule immediate rebalance for new tasks to be safely revoked from current owner.");
-            nextScheduledRebalanceMs.set(0L);
+            // Instead of scheduling the followup right away, use a small delay to make sure the entire group has synced
+            nextScheduledRebalanceMs.set(time.milliseconds() + FOLLOWUP_REBALANCE_DELAY_MS);
         } else if (encodedNextScheduledRebalanceMs < Long.MAX_VALUE) {
             log.info(
                 "Requested to schedule next probing rebalance at {} to try for a more balanced assignment.",
