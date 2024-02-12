@@ -37,7 +37,7 @@ import org.apache.kafka.coordinator.group.generated.GroupMetadataKey;
 import org.apache.kafka.coordinator.group.generated.GroupMetadataValue;
 import org.apache.kafka.coordinator.group.generated.OffsetCommitKey;
 import org.apache.kafka.coordinator.group.generated.OffsetCommitValue;
-import org.apache.kafka.coordinator.group.generic.GenericGroup;
+import org.apache.kafka.coordinator.group.classic.ClassicGroup;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.common.MetadataVersion;
 
@@ -379,13 +379,13 @@ public class RecordHelpers {
     /**
      * Creates a GroupMetadata record.
      *
-     * @param group              The generic group.
-     * @param assignment         The generic group assignment.
+     * @param group              The classic group.
+     * @param assignment         The classic group assignment.
      * @param metadataVersion    The metadata version.
      * @return The record.
      */
     public static Record newGroupMetadataRecord(
-        GenericGroup group,
+        ClassicGroup group,
         Map<String, byte[]> assignment,
         MetadataVersion metadataVersion
     ) {
@@ -456,12 +456,12 @@ public class RecordHelpers {
     /**
      * Creates an empty GroupMetadata record.
      *
-     * @param group              The generic group.
+     * @param group              The classic group.
      * @param metadataVersion    The metadata version.
      * @return The record.
      */
     public static Record newEmptyGroupMetadataRecord(
-        GenericGroup group,
+        ClassicGroup group,
         MetadataVersion metadataVersion
     ) {
         return new Record(
@@ -512,7 +512,7 @@ public class RecordHelpers {
             ),
             new ApiMessageAndVersion(
                 new OffsetCommitValue()
-                    .setOffset(offsetAndMetadata.offset)
+                    .setOffset(offsetAndMetadata.committedOffset)
                     .setLeaderEpoch(offsetAndMetadata.leaderEpoch.orElse(RecordBatch.NO_PARTITION_LEADER_EPOCH))
                     .setMetadata(offsetAndMetadata.metadata)
                     .setCommitTimestamp(offsetAndMetadata.commitTimestampMs)

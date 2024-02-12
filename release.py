@@ -491,6 +491,35 @@ Some of these may be used from these previous settings loaded from %s:
 Do you have all of of these setup? (y/n): """ % (PREFS_FILE, json.dumps(prefs, indent=2))):
     fail("Please try again once you have all the prerequisites ready.")
 
+apache_id = sanitize_input("Please enter your apache-id: ")
+
+print("Begin to check if you have met all the pre-requisites for the release process")
+
+try:
+    test_maven = cmd_output("mvn -v")
+    if "Apache Maven" in test_maven:
+        print("Pre-requisite met: You have maven cli in place")
+    else:
+        fail("Pre-requisite not met: You need to install maven CLI")
+except Exception as e:
+    fail(f"Pre-requisite not met: Unable to check if maven cli is installed. Error: {e}")
+
+try:
+    test_sftp = subprocess.run(f"sftp {apache_id}@home.apache.org".split())
+    if test_sftp.returncode != 0:
+        fail("Pre-requisite not met: Cannot establish sftp connection. Please check your apache-id and ssh keys.")
+    print("Pre-requisite met: sftp connection is successful")
+except Exception as e:
+    fail(f"Pre-requisite not met: Unable to check if sftp connection is successful. Error: {e}")
+
+try:
+    test_svn = cmd_output("svn --version")
+    if "svn" in test_svn:
+        print("Pre-requisite met: You have svn cli in place")
+    else:
+        fail("Pre-requisite not met: You need to install svn cli")
+except Exception as e:
+    fail(f"Pre-requisite not met: Unable to check if svn cli is installed. Error: {e}")
 
 starting_branch = cmd_output('git rev-parse --abbrev-ref HEAD')
 
@@ -701,7 +730,31 @@ if not user_ok("Have you successfully deployed the artifacts (y/n)?: "):
     fail("Ok, giving up")
 if not user_ok("Ok to push RC tag %s (y/n)?: " % rc_tag):
     fail("Ok, giving up")
-cmd("Pushing RC tag", "git push %s %s" % (PUSH_REMOTE_NAME, rc_tag))
+
+print(f"Pushing RC tag {rc_tag} to {PUSH_REMOTE_NAME}")
+try:
+    push_command = f"git push {PUSH_REMOTE_NAME} {rc_tag}".split()
+    output = subprocess.check_output(push_command, stderr=subprocess.STDOUT)
+    print_output(output.decode('utf-8'))
+    if "error" in output.decode('utf-8'):
+        print("*********************************************")
+        print("*** ERROR when trying to perform git push ***")
+        print("*********************************************")
+        print(output)
+        print("")
+        print("Due the failure of git push, the program will exit here. Please note that: ")
+        print(f"1) You are still at branch {release_version}, not {starting_branch}")
+        print(f"2) Tag {rc_tag} is still present locally")
+        print("")
+        print(f"In order to restart the workflow, you will have to manually switch back to the original branch and delete the branch {release_version} and tag {rc_tag}")
+        sys.exit(1)
+except Exception as e:
+    print(f"Failed when trying to git push {rc_tag}. Error: {e}")
+    print("You may need to clean up branches/tags yourself before retrying.")
+    print("Due the failure of git push, the program will exit here. Please note that: ")
+    print(f"1) You are still at branch {release_version}, not {starting_branch}")
+    print(f"2) Tag {rc_tag} is still present locally")
+    sys.exit(1)
 
 # Move back to starting branch and clean out the temporary release branch (e.g. 1.0.0) we used to generate everything
 cmd("Resetting repository working state", "git reset --hard HEAD && git checkout %s" % starting_branch, shell=True)
@@ -730,6 +783,10 @@ https://kafka.apache.org/KEYS
 * Release artifacts to be voted upon (source and binary):
 https://home.apache.org/~%(apache_id)s/kafka-%(rc_tag)s/
 
+<USE docker/README.md FOR STEPS TO CREATE RELEASE CANDIDATE DOCKER IMAGE>
+* Docker release artifact to be voted upon:
+apache/kafka:%(rc_tag)s
+
 * Maven artifacts to be voted upon:
 https://repository.apache.org/content/groups/staging/org/apache/kafka/
 
@@ -748,6 +805,10 @@ https://kafka.apache.org/%(docs_version)s/protocol.html
 * Successful Jenkins builds for the %(dev_branch)s branch:
 Unit/integration tests: https://ci-builds.apache.org/job/Kafka/job/kafka/job/%(dev_branch)s/<BUILD NUMBER>/
 System tests: https://jenkins.confluent.io/job/system-test-kafka/job/%(dev_branch)s/<BUILD_NUMBER>/
+
+<USE docker/README.md FOR STEPS TO RUN DOCKER BUILD TEST GITHUB ACTIONS>
+* Successful Docker Image Github Actions Pipeline for %(dev_branch)s branch:
+Docker Build Test Pipeline: https://github.com/apache/kafka/actions/runs/<RUN_NUMBER>
 
 /**************************************
 

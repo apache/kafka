@@ -28,6 +28,8 @@ import org.apache.kafka.common.message.AlterPartitionReassignmentsRequestData;
 import org.apache.kafka.common.message.AlterPartitionReassignmentsResponseData;
 import org.apache.kafka.common.message.AlterUserScramCredentialsRequestData;
 import org.apache.kafka.common.message.AlterUserScramCredentialsResponseData;
+import org.apache.kafka.common.message.AssignReplicasToDirsRequestData;
+import org.apache.kafka.common.message.AssignReplicasToDirsResponseData;
 import org.apache.kafka.common.message.BrokerHeartbeatRequestData;
 import org.apache.kafka.common.message.BrokerRegistrationRequestData;
 import org.apache.kafka.common.message.ControllerRegistrationRequestData;
@@ -402,6 +404,19 @@ public interface Controller extends AclMutator, AutoCloseable {
     CompletableFuture<Void> registerController(
         ControllerRequestContext context,
         ControllerRegistrationRequestData request
+    );
+
+    /**
+     * Assign replicas to directories.
+     *
+     * @param context       The controller request context.
+     * @param request       The assign replicas to dirs request.
+     *
+     * @return              A future yielding the results.
+     */
+    CompletableFuture<AssignReplicasToDirsResponseData> assignReplicasToDirs(
+        ControllerRequestContext context,
+        AssignReplicasToDirsRequestData request
     );
 
     /**

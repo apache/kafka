@@ -48,7 +48,7 @@ import static java.util.Collections.singleton;
 /**
  * This class implements a read-process-write application.
  */
-public class ExactlyOnceMessageProcessor extends Thread implements ConsumerRebalanceListener {
+public class ExactlyOnceMessageProcessor extends Thread implements ConsumerRebalanceListener, AutoCloseable {
     private final String bootstrapServers;
     private final String inputTopic;
     private final String outputTopic;
@@ -213,5 +213,16 @@ public class ExactlyOnceMessageProcessor extends Thread implements ConsumerRebal
                 return 0;
             }
         }).sum();
+    }
+
+    @Override
+    public void close() throws Exception {
+        if (producer != null) {
+            producer.close();
+        }
+
+        if (consumer != null) {
+            consumer.close();
+        }
     }
 }

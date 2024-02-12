@@ -17,9 +17,13 @@
 package org.apache.kafka.coordinator.group.consumer;
 
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.message.ConsumerGroupDescribeResponseData;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupCurrentMemberAssignmentValue;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupMemberMetadataValue;
+import org.apache.kafka.image.TopicImage;
+import org.apache.kafka.image.TopicsImage;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -551,6 +555,62 @@ public class ConsumerGroupMember {
             && state == that.state
             && Objects.equals(assignedPartitions, that.assignedPartitions)
             && Objects.equals(revokedPartitions, that.revokedPartitions);
+    }
+
+    /**
+     * @param targetAssignment The target assignment of this member in the corresponding group.
+     *
+     * @return The ConsumerGroupMember mapped as ConsumerGroupDescribeResponseData.Member.
+     */
+    public ConsumerGroupDescribeResponseData.Member asConsumerGroupDescribeMember(
+        Assignment targetAssignment,
+        TopicsImage topicsImage
+    ) {
+        return new ConsumerGroupDescribeResponseData.Member()
+            .setMemberEpoch(memberEpoch)
+            .setMemberId(memberId)
+            .setAssignment(new ConsumerGroupDescribeResponseData.Assignment()
+                .setTopicPartitions(topicPartitionsFromMap(assignedPartitions, topicsImage)))
+            .setTargetAssignment(new ConsumerGroupDescribeResponseData.Assignment()
+                .setTopicPartitions(topicPartitionsFromMap(
+                    targetAssignment != null ? targetAssignment.partitions() : Collections.emptyMap(),
+                    topicsImage
+                )))
+            .setClientHost(clientHost)
+            .setClientId(clientId)
+            .setInstanceId(instanceId)
+            .setRackId(rackId)
+            .setSubscribedTopicNames(subscribedTopicNames)
+            .setSubscribedTopicRegex(subscribedTopicRegex);
+    }
+
+    private static List<ConsumerGroupDescribeResponseData.TopicPartitions> topicPartitionsFromMap(
+        Map<Uuid, Set<Integer>> partitions,
+        TopicsImage topicsImage
+    ) {
+        List<ConsumerGroupDescribeResponseData.TopicPartitions> topicPartitions = new ArrayList<>();
+        partitions.forEach((topicId, partitionSet) -> {
+            String topicName = lookupTopicNameById(topicId, topicsImage);
+            if (topicName != null) {
+                topicPartitions.add(new ConsumerGroupDescribeResponseData.TopicPartitions()
+                    .setTopicId(topicId)
+                    .setTopicName(topicName)
+                    .setPartitions(new ArrayList<>(partitionSet)));
+            }
+        });
+        return topicPartitions;
+    }
+
+    private static String lookupTopicNameById(
+        Uuid topicId,
+        TopicsImage topicsImage
+    ) {
+        TopicImage topicImage = topicsImage.getTopic(topicId);
+        if (topicImage != null) {
+            return topicImage.name();
+        } else {
+            return null;
+        }
     }
 
     @Override

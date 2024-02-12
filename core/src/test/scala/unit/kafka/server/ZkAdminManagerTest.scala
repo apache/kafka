@@ -26,6 +26,7 @@ import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.message.DescribeConfigsRequestData
 import org.apache.kafka.common.message.DescribeConfigsResponseData
 import org.apache.kafka.common.protocol.Errors
+import org.apache.kafka.server.config.ConfigType
 import org.junit.jupiter.api.{AfterEach, Test}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertNotEquals, assertNotNull, assertThrows}
 import org.mockito.Mockito.{mock, when}
@@ -74,7 +75,7 @@ class ZkAdminManagerTest {
 
   @Test
   def testDescribeConfigsWithNullConfigurationKeys(): Unit = {
-    when(zkClient.getEntityConfigs(ConfigType.Topic, topic)).thenReturn(TestUtils.createBrokerConfig(brokerId, "zk"))
+    when(zkClient.getEntityConfigs(ConfigType.TOPIC, topic)).thenReturn(TestUtils.createBrokerConfig(brokerId, "zk"))
     when(metadataCache.contains(topic)).thenReturn(true)
 
     val resources = List(new DescribeConfigsRequestData.DescribeConfigsResource()
@@ -89,7 +90,7 @@ class ZkAdminManagerTest {
 
   @Test
   def testDescribeConfigsWithEmptyConfigurationKeys(): Unit = {
-    when(zkClient.getEntityConfigs(ConfigType.Topic, topic)).thenReturn(TestUtils.createBrokerConfig(brokerId, "zk"))
+    when(zkClient.getEntityConfigs(ConfigType.TOPIC, topic)).thenReturn(TestUtils.createBrokerConfig(brokerId, "zk"))
     when(metadataCache.contains(topic)).thenReturn(true)
 
     val resources = List(new DescribeConfigsRequestData.DescribeConfigsResource()
@@ -103,7 +104,7 @@ class ZkAdminManagerTest {
 
   @Test
   def testDescribeConfigsWithConfigurationKeys(): Unit = {
-    when(zkClient.getEntityConfigs(ConfigType.Topic, topic)).thenReturn(TestUtils.createBrokerConfig(brokerId, "zk"))
+    when(zkClient.getEntityConfigs(ConfigType.TOPIC, topic)).thenReturn(TestUtils.createBrokerConfig(brokerId, "zk"))
     when(metadataCache.contains(topic)).thenReturn(true)
 
     val resources = List(new DescribeConfigsRequestData.DescribeConfigsResource()
@@ -120,8 +121,8 @@ class ZkAdminManagerTest {
 
   @Test
   def testDescribeConfigsWithDocumentation(): Unit = {
-    when(zkClient.getEntityConfigs(ConfigType.Topic, topic)).thenReturn(new Properties)
-    when(zkClient.getEntityConfigs(ConfigType.Broker, brokerId.toString)).thenReturn(new Properties)
+    when(zkClient.getEntityConfigs(ConfigType.TOPIC, topic)).thenReturn(new Properties)
+    when(zkClient.getEntityConfigs(ConfigType.BROKER, brokerId.toString)).thenReturn(new Properties)
     when(metadataCache.contains(topic)).thenReturn(true)
 
     val configHelper = createConfigHelper(metadataCache, zkClient)

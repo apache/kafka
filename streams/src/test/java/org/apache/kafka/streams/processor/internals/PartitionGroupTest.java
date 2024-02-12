@@ -33,6 +33,7 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.LogAndContinueExceptionHandler;
 import org.apache.kafka.streams.processor.TimestampExtractor;
 import org.apache.kafka.common.utils.LogCaptureAppender;
+import org.apache.kafka.streams.processor.internals.AbstractPartitionGroup.RecordInfo;
 import org.apache.kafka.test.InternalMockProcessorContext;
 import org.apache.kafka.test.MockSourceNode;
 import org.apache.kafka.test.MockTimestampExtractor;
@@ -133,7 +134,7 @@ public class PartitionGroupTest {
 
     private void testFirstBatch(final PartitionGroup group) {
         StampedRecord record;
-        final PartitionGroup.RecordInfo info = new PartitionGroup.RecordInfo();
+        final PartitionGroup.RecordInfo info = new RecordInfo();
         assertThat(group.numBuffered(), is(0));
 
         // add three 3 records with timestamp 1, 3, 5 to partition-1
@@ -193,7 +194,7 @@ public class PartitionGroupTest {
 
     private void testSecondBatch(final PartitionGroup group) {
         StampedRecord record;
-        final PartitionGroup.RecordInfo info = new PartitionGroup.RecordInfo();
+        final PartitionGroup.RecordInfo info = new RecordInfo();
 
         // add 2 more records with timestamp 2, 4 to partition-1
         final List<ConsumerRecord<byte[], byte[]>> list3 = Arrays.asList(
@@ -316,7 +317,7 @@ public class PartitionGroupTest {
         assertEquals(0.0, metrics.metric(lastLatenessValue).metricValue());
 
         StampedRecord record;
-        final PartitionGroup.RecordInfo info = new PartitionGroup.RecordInfo();
+        final PartitionGroup.RecordInfo info = new RecordInfo();
 
         // get first two records from partition 1
         record = group.nextRecord(info, time.milliseconds());
@@ -445,15 +446,16 @@ public class PartitionGroupTest {
                 new ConsumerRecord<>("topic", 1, 3L, recordKey, recordValue),
                 new ConsumerRecord<>("topic", 1, 5L, recordKey, recordValue));
         group.addRawRecords(partition1, list);
-        group.nextRecord(new PartitionGroup.RecordInfo(), time.milliseconds());
-        group.nextRecord(new PartitionGroup.RecordInfo(), time.milliseconds());
+        group.nextRecord(new RecordInfo(), time.milliseconds());
+        group.nextRecord(new RecordInfo(), time.milliseconds());
         group.updateLags();
+
 
         group.clear();
 
         assertThat(group.numBuffered(), equalTo(0));
         assertThat(group.streamTime(), equalTo(RecordQueue.UNKNOWN));
-        assertThat(group.nextRecord(new PartitionGroup.RecordInfo(), time.milliseconds()), equalTo(null));
+        assertThat(group.nextRecord(new RecordInfo(), time.milliseconds()), equalTo(null));
         assertThat(group.partitionTimestamp(partition1), equalTo(RecordQueue.UNKNOWN));
         hasNoFetchedLag(group, partition1);
 
@@ -475,7 +477,7 @@ public class PartitionGroupTest {
         group.addRawRecords(partition2, list2);
         assertEquals(list1.size() + list2.size(), group.numBuffered());
         assertTrue(group.allPartitionsBufferedLocally());
-        group.nextRecord(new PartitionGroup.RecordInfo(), time.milliseconds());
+        group.nextRecord(new RecordInfo(), time.milliseconds());
 
         // shrink list of queues
         group.updatePartitions(mkSet(createPartition2()), p -> {
@@ -487,7 +489,7 @@ public class PartitionGroupTest {
         assertEquals(list2.size(), group.numBuffered());
         assertEquals(1, group.streamTime());
         assertThrows(IllegalStateException.class, () -> group.partitionTimestamp(partition1));
-        assertThat(group.nextRecord(new PartitionGroup.RecordInfo(), time.milliseconds()), notNullValue());  // can access buffered records
+        assertThat(group.nextRecord(new RecordInfo(), time.milliseconds()), notNullValue());  // can access buffered records
         assertThat(group.partitionTimestamp(partition2), equalTo(2L));
     }
 
@@ -508,7 +510,7 @@ public class PartitionGroupTest {
 
         assertEquals(list1.size(), group.numBuffered());
         assertTrue(group.allPartitionsBufferedLocally());
-        group.nextRecord(new PartitionGroup.RecordInfo(), time.milliseconds());
+        group.nextRecord(new RecordInfo(), time.milliseconds());
 
         // expand list of queues
         group.updatePartitions(mkSet(createPartition1(), createPartition2()), p -> {
@@ -521,7 +523,7 @@ public class PartitionGroupTest {
         assertEquals(1, group.streamTime());
         assertThat(group.partitionTimestamp(partition1), equalTo(1L));
         assertThat(group.partitionTimestamp(partition2), equalTo(RecordQueue.UNKNOWN));
-        assertThat(group.nextRecord(new PartitionGroup.RecordInfo(), time.milliseconds()), notNullValue());  // can access buffered records
+        assertThat(group.nextRecord(new RecordInfo(), time.milliseconds()), notNullValue());  // can access buffered records
     }
 
     @Test
@@ -540,7 +542,7 @@ public class PartitionGroupTest {
         group.addRawRecords(partition1, list1);
         assertEquals(list1.size(), group.numBuffered());
         assertTrue(group.allPartitionsBufferedLocally());
-        group.nextRecord(new PartitionGroup.RecordInfo(), time.milliseconds());
+        group.nextRecord(new RecordInfo(), time.milliseconds());
 
         // expand and shrink list of queues
         group.updatePartitions(mkSet(createPartition2()), p -> {
@@ -553,7 +555,7 @@ public class PartitionGroupTest {
         assertEquals(1, group.streamTime());
         assertThrows(IllegalStateException.class, () -> group.partitionTimestamp(partition1));
         assertThat(group.partitionTimestamp(partition2), equalTo(RecordQueue.UNKNOWN));
-        assertThat(group.nextRecord(new PartitionGroup.RecordInfo(), time.milliseconds()), nullValue());  // all available records removed
+        assertThat(group.nextRecord(new RecordInfo(), time.milliseconds()), nullValue());  // all available records removed
     }
 
     @Test

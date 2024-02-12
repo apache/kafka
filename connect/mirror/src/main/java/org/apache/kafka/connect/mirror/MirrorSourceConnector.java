@@ -91,6 +91,8 @@ public class MirrorSourceConnector extends SourceConnector {
     private static final String READ_COMMITTED = IsolationLevel.READ_COMMITTED.toString().toLowerCase(Locale.ROOT);
     private static final String EXACTLY_ONCE_SUPPORT_CONFIG = "exactly.once.support";
 
+    private final AtomicBoolean noAclAuthorizer = new AtomicBoolean(false);
+
     private Scheduler scheduler;
     private MirrorSourceConfig config;
     private SourceAndTarget sourceAndTarget;
@@ -105,7 +107,6 @@ public class MirrorSourceConnector extends SourceConnector {
     private Admin targetAdminClient;
     private Admin offsetSyncsAdminClient;
     private volatile boolean useIncrementalAlterConfigs;
-    private AtomicBoolean noAclAuthorizer = new AtomicBoolean(false);
 
     public MirrorSourceConnector() {
         // nop

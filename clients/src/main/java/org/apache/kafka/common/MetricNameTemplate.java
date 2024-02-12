@@ -32,7 +32,7 @@ public class MetricNameTemplate {
     private final String name;
     private final String group;
     private final String description;
-    private LinkedHashSet<String> tags;
+    private final LinkedHashSet<String> tags;
 
     /**
      * Create a new template. Note that the order of the tags will be preserved if the supplied

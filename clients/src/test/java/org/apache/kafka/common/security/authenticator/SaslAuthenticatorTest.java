@@ -1133,6 +1133,7 @@ public class SaslAuthenticatorTest {
                 TestServerCallbackHandler.class);
         saslServerConfigs.put(listener.saslMechanismConfigPrefix("digest-md5") + BrokerSecurityConfigs.SASL_SERVER_CALLBACK_HANDLER_CLASS,
                 DigestServerCallbackHandler.class);
+        server.close();
         server = createEchoServer(securityProtocol);
 
         // Verify that DIGEST-MD5 (currently configured for client) works with `DigestServerCallbackHandler`

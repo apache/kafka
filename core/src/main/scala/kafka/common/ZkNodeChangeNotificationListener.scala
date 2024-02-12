@@ -68,7 +68,7 @@ class ZkNodeChangeNotificationListener(private val zkClient: KafkaZkClient,
     thread.start()
   }
 
-  def close() = {
+  def close(): Unit = {
     isClosed.set(true)
     zkClient.unregisterStateChangeHandler(ZkStateChangeHandler.name)
     zkClient.unregisterZNodeChildChangeHandler(ChangeNotificationHandler.path)
@@ -117,7 +117,7 @@ class ZkNodeChangeNotificationListener(private val zkClient: KafkaZkClient,
       queue.put(new ChangeNotification)
   }
 
-  class ChangeNotification {
+  private class ChangeNotification {
     def process(): Unit = processNotifications()
   }
 
@@ -143,11 +143,11 @@ class ZkNodeChangeNotificationListener(private val zkClient: KafkaZkClient,
   /* get the change number from a change notification znode */
   private def changeNumber(name: String): Long = name.substring(seqNodePrefix.length).toLong
 
-  class ChangeEventProcessThread(name: String) extends ShutdownableThread(name) {
+  private class ChangeEventProcessThread(name: String) extends ShutdownableThread(name) {
     override def doWork(): Unit = queue.take().process()
   }
 
-  object ChangeNotificationHandler extends ZNodeChildChangeHandler {
+  private object ChangeNotificationHandler extends ZNodeChildChangeHandler {
     override val path: String = seqNodeRoot
     override def handleChildChange(): Unit = addChangeNotification()
   }

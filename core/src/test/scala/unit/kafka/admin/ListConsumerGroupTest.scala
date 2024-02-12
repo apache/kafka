@@ -95,9 +95,16 @@ class ListConsumerGroupTest extends ConsumerGroupCommandTest {
     result = ConsumerGroupCommand.consumerGroupStatesFromString("Dead,CompletingRebalance,")
     assertEquals(Set(ConsumerGroupState.DEAD, ConsumerGroupState.COMPLETING_REBALANCE), result)
 
-    assertThrows(classOf[IllegalArgumentException], () => ConsumerGroupCommand.consumerGroupStatesFromString("bad, wrong"))
+    result = ConsumerGroupCommand.consumerGroupStatesFromString("stable")
+    assertEquals(Set(ConsumerGroupState.STABLE), result)
 
-    assertThrows(classOf[IllegalArgumentException], () => ConsumerGroupCommand.consumerGroupStatesFromString("stable"))
+    result = ConsumerGroupCommand.consumerGroupStatesFromString("stable, assigning")
+    assertEquals(Set(ConsumerGroupState.STABLE, ConsumerGroupState.ASSIGNING), result)
+
+    result = ConsumerGroupCommand.consumerGroupStatesFromString("dead,reconciling,")
+    assertEquals(Set(ConsumerGroupState.DEAD, ConsumerGroupState.RECONCILING), result)
+
+    assertThrows(classOf[IllegalArgumentException], () => ConsumerGroupCommand.consumerGroupStatesFromString("bad, wrong"))
 
     assertThrows(classOf[IllegalArgumentException], () => ConsumerGroupCommand.consumerGroupStatesFromString("  bad, Stable"))
 
@@ -125,6 +132,12 @@ class ListConsumerGroupTest extends ConsumerGroupCommandTest {
     }, s"Expected to find $simpleGroup, $group and the header, but found $out")
 
     cgcArgs = Array("--bootstrap-server", bootstrapServers(), "--list", "--state", "Stable")
+    TestUtils.waitUntilTrue(() => {
+      out = TestUtils.grabConsoleOutput(ConsumerGroupCommand.main(cgcArgs))
+      out.contains("STATE") && out.contains(group) && out.contains("Stable")
+    }, s"Expected to find $group in state Stable and the header, but found $out")
+
+    cgcArgs = Array("--bootstrap-server", bootstrapServers(), "--list", "--state", "stable")
     TestUtils.waitUntilTrue(() => {
       out = TestUtils.grabConsoleOutput(ConsumerGroupCommand.main(cgcArgs))
       out.contains("STATE") && out.contains(group) && out.contains("Stable")

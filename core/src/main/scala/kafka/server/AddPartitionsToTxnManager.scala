@@ -70,8 +70,8 @@ class AddPartitionsToTxnManager(
   private val nodesToTransactions = mutable.Map[Node, TransactionDataAndCallbacks]()
 
   private val metricsGroup = new KafkaMetricsGroup(this.getClass)
-  val verificationFailureRate = metricsGroup.newMeter(VerificationFailureRateMetricName, "failures", TimeUnit.SECONDS)
-  val verificationTimeMs = metricsGroup.newHistogram(VerificationTimeMsMetricName)
+  private val verificationFailureRate = metricsGroup.newMeter(VerificationFailureRateMetricName, "failures", TimeUnit.SECONDS)
+  private val verificationTimeMs = metricsGroup.newHistogram(VerificationTimeMsMetricName)
 
   def verifyTransaction(
     transactionalId: String,

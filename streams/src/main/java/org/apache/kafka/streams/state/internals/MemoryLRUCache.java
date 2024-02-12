@@ -41,9 +41,7 @@ import static org.apache.kafka.streams.StreamsConfig.InternalConfig.IQ_CONSISTEN
  * An in-memory LRU cache store based on HashSet and HashMap.
  */
 public class MemoryLRUCache implements KeyValueStore<Bytes, byte[]> {
-
-    protected StateStoreContext context;
-    private Position position = Position.emptyPosition();
+    private final Position position = Position.emptyPosition();
 
     public interface EldestEntryRemovalListener {
         void apply(Bytes key, byte[] value);
@@ -55,6 +53,7 @@ public class MemoryLRUCache implements KeyValueStore<Bytes, byte[]> {
     private boolean restoring = false; // TODO: this is a sub-optimal solution to avoid logging during restoration.
                                        // in the future we should augment the StateRestoreCallback with onComplete etc to better resolve this.
     private volatile boolean open = true;
+    protected StateStoreContext context;
 
     private EldestEntryRemovalListener listener;
 

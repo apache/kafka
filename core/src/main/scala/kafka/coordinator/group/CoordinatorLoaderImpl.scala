@@ -20,7 +20,8 @@ import kafka.server.ReplicaManager
 import kafka.utils.Logging
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.NotLeaderOrFollowerException
-import org.apache.kafka.common.record.{FileRecords, MemoryRecords}
+import org.apache.kafka.common.record.{ControlRecordType, FileRecords, MemoryRecords}
+import org.apache.kafka.common.requests.TransactionResult
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.coordinator.group.runtime.CoordinatorLoader.{Deserializer, LoadSummary, UnknownRecordTypeException}
 import org.apache.kafka.coordinator.group.runtime.{CoordinatorLoader, CoordinatorPlayback}
@@ -78,6 +79,7 @@ class CoordinatorLoaderImpl[T](
     future: CompletableFuture[LoadSummary],
     startTimeMs: Long
   ): Unit = {
+    val schedulerQueueTimeMs = time.milliseconds() - startTimeMs
     try {
       replicaManager.getLog(tp) match {
         case None =>
@@ -96,6 +98,7 @@ class CoordinatorLoaderImpl[T](
           // the log end offset but the log is empty. This could happen with compacted topics.
           var readAtLeastOneRecord = true
 
+          var previousHighWatermark = -1L
           var numRecords = 0
           var numBytes = 0
           while (currentOffset < logEndOffset && readAtLeastOneRecord && isRunning.get) {
@@ -134,12 +137,32 @@ class CoordinatorLoaderImpl[T](
 
             memoryRecords.batches.forEach { batch =>
               if (batch.isControlBatch) {
-                throw new IllegalStateException("Control batches are not supported yet.")
+                batch.asScala.foreach { record =>
+                  val controlRecord = ControlRecordType.parse(record.key)
+                  if (controlRecord == ControlRecordType.COMMIT) {
+                    coordinator.replayEndTransactionMarker(
+                      batch.producerId,
+                      batch.producerEpoch,
+                      TransactionResult.COMMIT
+                    )
+                  } else if (controlRecord == ControlRecordType.ABORT) {
+                    coordinator.replayEndTransactionMarker(
+                      batch.producerId,
+                      batch.producerEpoch,
+                      TransactionResult.ABORT
+                    )
+                  }
+                }
               } else {
                 batch.asScala.foreach { record =>
                   numRecords = numRecords + 1
                   try {
-                    coordinator.replay(deserializer.deserialize(record.key, record.value))
+                    coordinator.replay(
+                      record.offset(),
+                      batch.producerId,
+                      batch.producerEpoch,
+                      deserializer.deserialize(record.key, record.value)
+                    )
                   } catch {
                     case ex: UnknownRecordTypeException =>
                       warn(s"Unknown record type ${ex.unknownType} while loading offsets and group metadata " +
@@ -148,14 +171,31 @@ class CoordinatorLoaderImpl[T](
                 }
               }
 
+              // Note that the high watermark can be greater than the current offset but as we load more records
+              // the current offset will eventually surpass the high watermark. Also note that the high watermark
+              // will continue to advance while loading.
               currentOffset = batch.nextOffset
+              val currentHighWatermark = log.highWatermark
+              if (currentOffset >= currentHighWatermark) {
+                coordinator.updateLastWrittenOffset(currentOffset)
+
+                if (currentHighWatermark > previousHighWatermark) {
+                  coordinator.updateLastCommittedOffset(currentHighWatermark)
+                  previousHighWatermark = currentHighWatermark
+                }
+              }
             }
             numBytes = numBytes + memoryRecords.sizeInBytes()
           }
+
           val endTimeMs = time.milliseconds()
 
-          if (isRunning.get) {
-            future.complete(new LoadSummary(startTimeMs, endTimeMs, numRecords, numBytes))
+          if (logEndOffset == -1L) {
+            future.completeExceptionally(new NotLeaderOrFollowerException(
+              s"Stopped loading records from $tp because the partition is not online or is no longer the leader."
+            ))
+          } else if (isRunning.get) {
+            future.complete(new LoadSummary(startTimeMs, endTimeMs, schedulerQueueTimeMs, numRecords, numBytes))
           } else {
             future.completeExceptionally(new RuntimeException("Coordinator loader is closed."))
           }

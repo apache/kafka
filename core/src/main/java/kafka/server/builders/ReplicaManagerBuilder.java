@@ -35,6 +35,7 @@ import kafka.log.remote.RemoteLogManager;
 import kafka.zk.KafkaZkClient;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.server.common.DirectoryEventHandler;
 import org.apache.kafka.storage.internals.log.LogDirFailureChannel;
 import org.apache.kafka.server.util.Scheduler;
 import scala.compat.java8.OptionConverters;
@@ -66,6 +67,7 @@ public class ReplicaManagerBuilder {
     private Optional<String> threadNamePrefix = Optional.empty();
     private Long brokerEpoch = -1L;
     private Optional<AddPartitionsToTxnManager> addPartitionsToTxnManager = Optional.empty();
+    private DirectoryEventHandler directoryEventHandler = DirectoryEventHandler.NOOP;
 
     public ReplicaManagerBuilder setConfig(KafkaConfig config) {
         this.config = config;
@@ -172,14 +174,22 @@ public class ReplicaManagerBuilder {
         return this;
     }
 
+    public ReplicaManagerBuilder setDirectoryEventHandler(DirectoryEventHandler directoryEventHandler) {
+        this.directoryEventHandler = directoryEventHandler;
+        return this;
+    }
+
     public ReplicaManager build() {
         if (config == null) config = new KafkaConfig(Collections.emptyMap());
-        if (metrics == null) metrics = new Metrics();
         if (logManager == null) throw new RuntimeException("You must set logManager");
         if (metadataCache == null) throw new RuntimeException("You must set metadataCache");
         if (logDirFailureChannel == null) throw new RuntimeException("You must set logDirFailureChannel");
         if (alterPartitionManager == null) throw new RuntimeException("You must set alterIsrManager");
         if (brokerTopicStats == null) brokerTopicStats = new BrokerTopicStats(Optional.of(config));
+        // Initialize metrics in the end just before passing it to ReplicaManager to ensure ReplicaManager closes the
+        // metrics correctly. There might be a resource leak if it is initialized and an exception occurs between
+        // its initialization and creation of ReplicaManager.
+        if (metrics == null) metrics = new Metrics();
         return new ReplicaManager(config,
                              metrics,
                              time,
@@ -200,6 +210,7 @@ public class ReplicaManagerBuilder {
                              OptionConverters.toScala(delayedRemoteFetchPurgatory),
                              OptionConverters.toScala(threadNamePrefix),
                              () -> brokerEpoch,
-                             OptionConverters.toScala(addPartitionsToTxnManager));
+                             OptionConverters.toScala(addPartitionsToTxnManager),
+                             directoryEventHandler);
     }
 }

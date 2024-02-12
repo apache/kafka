@@ -1664,6 +1664,26 @@ public interface Admin extends AutoCloseable {
                                         FenceProducersOptions options);
 
     /**
+     * List the client metrics configuration resources available in the cluster.
+     *
+     * @param options The options to use when listing the client metrics resources.
+     * @return The ListClientMetricsResourcesResult.
+     */
+    ListClientMetricsResourcesResult listClientMetricsResources(ListClientMetricsResourcesOptions options);
+
+    /**
+     * List the client metrics configuration resources available in the cluster with the default options.
+     * <p>
+     * This is a convenience method for {@link #listClientMetricsResources(ListClientMetricsResourcesOptions)}
+     * with default options. See the overload for more details.
+     *
+     * @return The ListClientMetricsResourcesResult.
+     */
+    default ListClientMetricsResourcesResult listClientMetricsResources() {
+        return listClientMetricsResources(new ListClientMetricsResourcesOptions());
+    }
+
+    /**
      * Determines the client's unique client instance ID used for telemetry. This ID is unique to
      * this specific client instance and will not change after it is initially generated.
      * The ID is useful for correlating client operations with telemetry sent to the broker and
