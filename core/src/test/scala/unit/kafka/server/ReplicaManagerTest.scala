@@ -94,6 +94,7 @@ object ReplicaManagerTest {
   }
 }
 
+// Marked integration for flakiness
 @Tag("integration")
 class ReplicaManagerTest {
 

@@ -46,6 +46,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
  * Tests for the SSL transport layer.
  * Checks different versions of the protocol usage on the server and client.
  */
+// Marked integration for flakiness
 @Tag("integration")
 public class SslVersionsTransportLayerTest {
     private static final int BUFFER_SIZE = 4 * 1024;

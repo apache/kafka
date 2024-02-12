@@ -94,6 +94,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
 @RunWith(Parameterized.class)
+// Marked integration for runtime
 @Category({IntegrationTest.class})
 public class KStreamSlidingWindowAggregateTest {
 

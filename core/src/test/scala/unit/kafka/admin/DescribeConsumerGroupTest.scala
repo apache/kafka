@@ -22,14 +22,12 @@ import org.apache.kafka.clients.consumer.{ConsumerConfig, RoundRobinAssignor}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.TimeoutException
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.Tag
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{MethodSource, ValueSource}
 
 import scala.concurrent.ExecutionException
 import scala.util.Random
 
-@Tag("integration")
 class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
   private val describeTypeOffsets = Array(Array(""), Array("--offsets"))
   private val describeTypeMembers = Array(Array("--members"), Array("--members", "--verbose"))

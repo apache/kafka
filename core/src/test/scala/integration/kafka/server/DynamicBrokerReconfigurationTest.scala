@@ -67,7 +67,7 @@ import org.apache.kafka.server.util.ShutdownableThread
 import org.apache.kafka.storage.internals.log.{CleanerConfig, LogConfig}
 import org.apache.kafka.test.{TestSslUtils, TestUtils => JTestUtils}
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.{AfterEach, BeforeEach, Disabled, Tag, Test, TestInfo}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Disabled, Test, TestInfo}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 
@@ -84,7 +84,6 @@ object DynamicBrokerReconfigurationTest {
   val SecureExternal = "EXTERNAL"
 }
 
-@Tag("integration")
 class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup {
 
   import DynamicBrokerReconfigurationTest._

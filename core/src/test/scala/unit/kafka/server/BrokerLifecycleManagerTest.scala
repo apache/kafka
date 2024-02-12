@@ -32,6 +32,7 @@ import java.util.concurrent.{CompletableFuture, Future}
 import scala.jdk.CollectionConverters._
 
 @Timeout(value = 12)
+// Marked integration for flakiness
 @Tag("integration")
 class BrokerLifecycleManagerTest {
   def configProperties = {

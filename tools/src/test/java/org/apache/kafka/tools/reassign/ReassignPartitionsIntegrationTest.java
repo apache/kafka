@@ -44,7 +44,6 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.tools.TerseException;
 import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -88,7 +87,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @SuppressWarnings("ClassFanOutComplexity")
 @Timeout(300)
-@Tag("integration")
 public class ReassignPartitionsIntegrationTest extends QuorumTestHarness {
     ReassignPartitionsTestCluster cluster;
 

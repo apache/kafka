@@ -86,6 +86,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
+// Marked integration for flakiness
 @Tag("integration")
 public class AbstractCoordinatorTest {
     private static final ByteBuffer EMPTY_DATA = ByteBuffer.wrap(new byte[0]);

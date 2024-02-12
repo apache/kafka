@@ -66,6 +66,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+// Marked integration for flakiness
 @Tag("integration")
 public class ClientMetricsManagerTest {
 

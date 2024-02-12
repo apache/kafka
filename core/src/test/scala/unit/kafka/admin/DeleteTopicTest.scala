@@ -25,7 +25,7 @@ import kafka.zk.TopicPartitionZNode
 import kafka.utils._
 import kafka.server.{KafkaBroker, KafkaConfig, KafkaServer, QuorumTestHarness}
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.{AfterEach, Tag, Test}
+import org.junit.jupiter.api.{AfterEach, Test}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 import kafka.controller.{OfflineReplica, PartitionAndReplica, ReplicaAssignment, ReplicaDeletionSuccessful}
@@ -38,7 +38,6 @@ import org.apache.kafka.metadata.BrokerState
 
 import scala.jdk.CollectionConverters._
 
-@Tag("integration")
 class DeleteTopicTest extends QuorumTestHarness {
 
   var brokers: Seq[KafkaBroker] = Seq()

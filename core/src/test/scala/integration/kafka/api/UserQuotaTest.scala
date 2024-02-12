@@ -17,9 +17,8 @@ package kafka.api
 import kafka.server.KafkaBroker
 import kafka.utils.{JaasTestUtils, TestUtils}
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
-import org.junit.jupiter.api.{AfterEach, BeforeEach, Tag, TestInfo}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo}
 
-@Tag("integration")
 class UserQuotaTest extends BaseQuotaTest with SaslSetup {
 
   override protected def securityProtocol = SecurityProtocol.SASL_SSL

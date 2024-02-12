@@ -26,7 +26,6 @@ import org.apache.kafka.clients.producer.internals.ErrorLoggingCallback
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.server.util.ShutdownableThread
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.Tag
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 
@@ -34,7 +33,6 @@ import scala.annotation.nowarn
 import scala.jdk.CollectionConverters._
 import scala.collection.mutable
 
-@Tag("integration")
 class TransactionsBounceTest extends IntegrationTestHarness {
   private val consumeRecordTimeout = 30000
   private val producerBufferSize =  65536

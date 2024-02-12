@@ -60,7 +60,7 @@ import org.apache.kafka.common.{ElectionType, IsolationLevel, KafkaException, No
 import org.apache.kafka.metadata.authorizer.StandardAuthorizer
 import org.apache.kafka.test.{TestUtils => JTestUtils}
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.{BeforeEach, Tag, TestInfo}
+import org.junit.jupiter.api.{BeforeEach, TestInfo}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{CsvSource, ValueSource}
 
@@ -91,7 +91,6 @@ object AuthorizerIntegrationTest {
   }
 }
 
-@Tag("integration")
 class AuthorizerIntegrationTest extends BaseRequestTest {
   import AuthorizerIntegrationTest._
 

@@ -51,6 +51,7 @@ import org.junit.jupiter.params.provider.MethodSource;
 
 import static java.util.Collections.emptyList;
 
+// Marked integration for flakiness
 @Tag("integration")
 public class StickyAssignorTest extends AbstractStickyAssignorTest {
 

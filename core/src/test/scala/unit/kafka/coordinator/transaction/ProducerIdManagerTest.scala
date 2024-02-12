@@ -40,6 +40,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 import scala.collection.mutable
 import scala.util.{Failure, Success}
 
+// Marked integration for flakiness
 @Tag("integration")
 class ProducerIdManagerTest {
 

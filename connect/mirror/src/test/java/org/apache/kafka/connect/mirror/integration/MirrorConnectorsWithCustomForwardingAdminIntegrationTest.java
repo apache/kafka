@@ -35,7 +35,6 @@ import org.apache.kafka.connect.mirror.clients.admin.FakeLocalMetadataStore;
 import org.apache.kafka.connect.util.clusters.EmbeddedKafkaCluster;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
@@ -59,7 +58,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  * Tests MM2 is using provided ForwardingAdmin to create/alter topics, partitions and ACLs.
  */
-@Tag("integration")
 public class MirrorConnectorsWithCustomForwardingAdminIntegrationTest extends MirrorConnectorsIntegrationBaseTest {
     private static final int FAKE_LOCAL_METADATA_STORE_SYNC_DURATION_MS = 60_000;
 

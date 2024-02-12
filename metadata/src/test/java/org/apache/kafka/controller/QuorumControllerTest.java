@@ -171,6 +171,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 
 @Timeout(value = 40)
+// Marked integration for flakiness
 @Tag("integration")
 public class QuorumControllerTest {
     private final static Logger log = LoggerFactory.getLogger(QuorumControllerTest.class);

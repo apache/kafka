@@ -81,6 +81,7 @@ import static org.mockito.Mockito.when;
  * A set of tests for the selector. These use a test harness that runs a simple socket server that echos back responses.
  */
 @Timeout(240)
+// Marked integration for flakiness
 @Tag("integration")
 public class SelectorTest {
     protected static final int BUFFER_SIZE = 4 * 1024;

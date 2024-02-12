@@ -40,7 +40,7 @@ import org.apache.kafka.controller.ControllerRequestContextUtil
 import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.storage.internals.log.LogConfig
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.{AfterEach, Tag}
+import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 
@@ -55,7 +55,6 @@ import scala.jdk.CollectionConverters._
   *
   * Anything over 100MB/s tends to fail as this is the non-throttled replication rate
   */
-@Tag("integration")
 class ReplicationQuotasTest extends QuorumTestHarness {
   val msg100KB = new Array[Byte](100000)
   val listenerName: ListenerName = ListenerName.forSecurityProtocol(PLAINTEXT)

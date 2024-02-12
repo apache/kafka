@@ -49,6 +49,7 @@ import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 
+// Marked integration for flakiness
 @Tag("integration")
 public class BufferPoolTest {
     private final MockTime time = new MockTime();

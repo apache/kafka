@@ -40,6 +40,7 @@ import java.util.concurrent.{CompletableFuture, TimeUnit}
 import scala.jdk.CollectionConverters._
 
 @Timeout(value = 60)
+// Marked integration for flakiness
 @Tag("integration")
 class ControllerRegistrationManagerTest {
   private val controller1 = new Node(1, "localhost", 7000)

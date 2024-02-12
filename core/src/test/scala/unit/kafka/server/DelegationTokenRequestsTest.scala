@@ -27,13 +27,12 @@ import org.apache.kafka.common.utils.SecurityUtils
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
-import org.junit.jupiter.api.{AfterEach, BeforeEach, Tag, TestInfo}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo}
 
 import java.util
 import scala.concurrent.ExecutionException
 import scala.jdk.CollectionConverters._
 
-@Tag("integration")
 class DelegationTokenRequestsTest extends IntegrationTestHarness with SaslSetup {
   override protected def securityProtocol = SecurityProtocol.SASL_PLAINTEXT
   private val kafkaClientSaslMechanism = "PLAIN"

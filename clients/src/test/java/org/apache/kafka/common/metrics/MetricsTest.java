@@ -67,6 +67,7 @@ import org.junit.jupiter.api.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+// Marked integration for flakiness
 @Tag("integration")
 public class MetricsTest {
     private static final Logger log = LoggerFactory.getLogger(MetricsTest.class);

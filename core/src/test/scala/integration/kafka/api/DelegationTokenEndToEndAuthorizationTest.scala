@@ -30,13 +30,12 @@ import org.apache.kafka.common.security.token.delegation.DelegationToken
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
-import org.junit.jupiter.api.{BeforeEach, Tag, TestInfo}
+import org.junit.jupiter.api.{BeforeEach, TestInfo}
 
 import scala.jdk.CollectionConverters._
 import scala.collection.mutable.ArrayBuffer
 import org.apache.kafka.server.common.ApiMessageAndVersion
 
-@Tag("integration")
 class DelegationTokenEndToEndAuthorizationTest extends EndToEndAuthorizationTest {
 
   val kafkaClientSaslMechanism = "SCRAM-SHA-256"

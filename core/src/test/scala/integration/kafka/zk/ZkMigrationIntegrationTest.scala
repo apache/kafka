@@ -92,6 +92,7 @@ object ZkMigrationIntegrationTest {
 
 @ExtendWith(value = Array(classOf[ClusterTestExtensions]))
 @Timeout(300)
+// Marked integration for flakiness
 @Tag("integration")
 class ZkMigrationIntegrationTest {
 

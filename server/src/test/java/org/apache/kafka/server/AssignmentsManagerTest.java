@@ -59,6 +59,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 
+// Marked integration for flakiness
 @Tag("integration")
 public class AssignmentsManagerTest {
 

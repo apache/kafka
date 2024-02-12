@@ -43,6 +43,7 @@ import java.util.{Collections, Optional}
 import java.util.concurrent.{CountDownLatch, Executors, Future, TimeUnit}
 import scala.collection.mutable
 
+// Marked integration for flakiness
 @Tag("integration")
 class RemoteIndexCacheTest {
   private val defaultRemoteIndexCacheSizeBytes = 1024 * 1024L

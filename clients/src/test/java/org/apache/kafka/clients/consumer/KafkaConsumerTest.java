@@ -166,6 +166,7 @@ import static org.mockito.Mockito.when;
  * Note to future authors in this class. If you close the consumer, close with DURATION.ZERO to reduce the duration of
  * the test.
  */
+// Marked integration for flakiness
 @Tag("integration")
 public class KafkaConsumerTest {
 

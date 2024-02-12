@@ -284,6 +284,7 @@ import static org.junit.jupiter.api.Assertions.fail;
  * See AdminClientIntegrationTest for an integration test.
  */
 @Timeout(120)
+// Marked integration for flakiness
 @Tag("integration")
 public class KafkaAdminClientTest {
     private static final Logger log = LoggerFactory.getLogger(KafkaAdminClientTest.class);

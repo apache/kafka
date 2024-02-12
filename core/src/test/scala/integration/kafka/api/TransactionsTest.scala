@@ -30,7 +30,7 @@ import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
 import org.apache.kafka.common.errors.{InvalidProducerEpochException, ProducerFencedException, TimeoutException}
 import org.apache.kafka.common.TopicPartition
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.{AfterEach, BeforeEach, Tag, TestInfo}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 
@@ -41,7 +41,6 @@ import scala.jdk.CollectionConverters._
 import scala.collection.mutable.{Buffer, ListBuffer}
 import scala.concurrent.ExecutionException
 
-@Tag("integration")
 class TransactionsTest extends IntegrationTestHarness {
   override def brokerCount = 3
 

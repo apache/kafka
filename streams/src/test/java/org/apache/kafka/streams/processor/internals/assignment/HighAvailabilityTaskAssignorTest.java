@@ -100,6 +100,7 @@ import static org.junit.Assert.fail;
 import static org.mockito.Mockito.spy;
 
 @RunWith(Parameterized.class)
+// Marked integration for runtime
 @Category({IntegrationTest.class})
 public class HighAvailabilityTaskAssignorTest {
     private AssignmentConfigs getConfigWithoutStandbys() {

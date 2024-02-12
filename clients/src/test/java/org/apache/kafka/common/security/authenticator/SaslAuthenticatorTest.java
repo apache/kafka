@@ -149,6 +149,7 @@ import static org.junit.jupiter.api.Assertions.fail;
 /**
  * Tests for the Sasl authenticator. These use a test harness that runs a simple socket server that echos back responses.
  */
+// Marked integration for flakiness
 @Tag("integration")
 public class SaslAuthenticatorTest {
 

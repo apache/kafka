@@ -77,6 +77,7 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
 /**
  * Tests for the SSL transport layer. These use a test harness that runs a simple socket server that echos back responses.
  */
+// Marked integration for flakiness
 @Tag("integration")
 public class SslTransportLayerTest {
 

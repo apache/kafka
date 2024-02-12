@@ -51,6 +51,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 
 @Timeout(value = 40)
+// Marked integration for flakiness
 @Tag("integration")
 public class QuorumControllerMetricsIntegrationTest {
 

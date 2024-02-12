@@ -60,6 +60,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
+// Marked integration for flakiness
 @Tag("integration")
 class AdminApiDriverTest {
     private static final int API_TIMEOUT_MS = 30000;

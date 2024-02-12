@@ -46,6 +46,7 @@ import java.util.List;
 import java.util.Properties;
 import java.util.concurrent.TimeoutException;
 
+// Marked integration for flakiness
 @Tag("integration")
 @SuppressWarnings("deprecation") // Added for Scala 2.12 compatibility for usages of JavaConverters
 public class TopicBasedRemoteLogMetadataManagerTest {
