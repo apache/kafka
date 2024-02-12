@@ -2147,6 +2147,9 @@ public class ReplicationControlManager {
         if (!leaderAndIsrUpdates.isEmpty()) {
             generateLeaderAndIsrUpdates("offline-dir-assignment", brokerId, NO_LEADER, records, leaderAndIsrUpdates.iterator());
         }
+        if (log.isInfoEnabled()) {
+            log.info("Handled AssignReplicasToDirRequest from broker {} with {} directories", brokerId, request.directories().size());
+        }
         return ControllerResult.of(records, response);
     }
 
