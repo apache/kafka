@@ -523,6 +523,10 @@ public class TaskManager {
             tasksToRecycleFromStateUpdater,
             tasksToCloseCleanFromStateUpdater
         );
+        log.debug("Tasks to recycle from state updater: {}", tasksToRecycleFromStateUpdater);
+        log.debug("Tasks to cleanly close from state updater: {}", tasksToCloseCleanFromStateUpdater);
+        log.debug("Active tasks to create: {}", activeTasksToCreate);
+        log.debug("Standby tasks to create: {}", standbyTasksToCreate);
     }
 
     private void handleTasksPendingInitialization() {
