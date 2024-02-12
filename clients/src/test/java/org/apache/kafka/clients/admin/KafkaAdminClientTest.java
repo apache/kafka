@@ -243,6 +243,7 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.OptionalLong;
@@ -2820,9 +2821,7 @@ public class KafkaAdminClientTest {
             env.kafkaClient().prepareResponse(prepareMetadataResponse(env.cluster(), Errors.NONE));
 
             env.kafkaClient().prepareResponseFrom(
-                request -> request instanceof ListGroupsRequest &&
-                    !((ListGroupsRequest) request).data().statesFilter().isEmpty() &&
-                    ((ListGroupsRequest) request).data().typesFilter().isEmpty(),
+                expectListGroupsRequestWithFilters(singleton(ConsumerGroupState.STABLE.toString()), Collections.emptySet()),
                 new ListGroupsResponse(new ListGroupsResponseData()
                     .setErrorCode(Errors.NONE.code())
                     .setGroups(Arrays.asList(
@@ -2847,9 +2846,7 @@ public class KafkaAdminClientTest {
             env.kafkaClient().prepareResponse(prepareMetadataResponse(env.cluster(), Errors.NONE));
 
             env.kafkaClient().prepareResponseFrom(
-                request -> request instanceof ListGroupsRequest &&
-                    ((ListGroupsRequest) request).data().statesFilter().isEmpty() &&
-                    !((ListGroupsRequest) request).data().typesFilter().isEmpty(),
+                expectListGroupsRequestWithFilters(Collections.emptySet(), singleton(GroupType.CONSUMER.toString())),
                 new ListGroupsResponse(new ListGroupsResponseData()
                     .setErrorCode(Errors.NONE.code())
                     .setGroups(Arrays.asList(
@@ -2928,9 +2925,7 @@ public class KafkaAdminClientTest {
 
             // Check if we can list groups with older broker if we specify states and don't specify types.
             env.kafkaClient().prepareResponseFrom(
-                request -> request instanceof ListGroupsRequest &&
-                    !((ListGroupsRequest) request).data().statesFilter().isEmpty() &&
-                    ((ListGroupsRequest) request).data().typesFilter().isEmpty(),
+                expectListGroupsRequestWithFilters(singleton(ConsumerGroupState.STABLE.toString()), Collections.emptySet()),
                 new ListGroupsResponse(new ListGroupsResponseData()
                     .setErrorCode(Errors.NONE.code())
                     .setGroups(Collections.singletonList(
@@ -2960,6 +2955,20 @@ public class KafkaAdminClientTest {
             result = env.adminClient().listConsumerGroups(options);
             TestUtils.assertFutureThrows(result.all(), UnsupportedVersionException.class);
         }
+    }
+
+    private MockClient.RequestMatcher expectListGroupsRequestWithFilters(
+        Set<String> expectedStates,
+        Set<String> expectedTypes
+    ) {
+        return body -> {
+            if (body instanceof ListGroupsRequest) {
+                ListGroupsRequest request = (ListGroupsRequest) body;
+                return Objects.equals(new HashSet<>(request.data().statesFilter()), expectedStates)
+                    && Objects.equals(new HashSet<>(request.data().typesFilter()), expectedTypes);
+            }
+            return false;
+        };
     }
 
     @Test
