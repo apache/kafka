@@ -289,10 +289,8 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     assertEquals(500, anotherConsumer.committed(Set(tp2).asJava).get(tp2).offset)
   }
 
-  // TODO: Enable this test for both protocols when the Jira tracking its failure (KAFKA-16167) is fixed. This
-  //       is done by setting the @MethodSource value to "getTestQuorumAndGroupProtocolParametersAll"
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersClassicGroupProtocolOnly"))
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
   def testAutoCommitOnCloseAfterWakeup(quorum: String, groupProtocol: String): Unit = {
     this.consumerConfig.setProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "true")
     val consumer = createConsumer()
