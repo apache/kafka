@@ -19,6 +19,7 @@ package org.apache.kafka.coordinator.group;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatResponseData;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupCurrentMemberAssignmentValue;
+import org.apache.kafka.coordinator.group.generated.ConsumerGroupPartitionMetadataValue;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.opentest4j.AssertionFailedError;
 
@@ -31,6 +32,7 @@ import java.util.Set;
 
 import static org.junit.jupiter.api.AssertionFailureBuilder.assertionFailure;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.fail;
 
 public class Assertions {
     public static <T> void assertUnorderedListEquals(
@@ -154,6 +156,54 @@ public class Assertions {
                 fromTopicPartitions(actualValue.partitionsPendingRevocation()));
             assertEquals(fromTopicPartitions(expectedValue.partitionsPendingAssignment()),
                 fromTopicPartitions(actualValue.partitionsPendingAssignment()));
+        } else if (actual.message() instanceof ConsumerGroupPartitionMetadataValue) {
+            // The order of the racks stored in the PartitionMetadata of the ConsumerGroupPartitionMetadataValue
+            // is not always guaranteed. Therefore, we need a special comparator.
+            ConsumerGroupPartitionMetadataValue expectedValue =
+                (ConsumerGroupPartitionMetadataValue) expected.message();
+            ConsumerGroupPartitionMetadataValue actualValue =
+                (ConsumerGroupPartitionMetadataValue) actual.message();
+
+            List<ConsumerGroupPartitionMetadataValue.TopicMetadata> expectedTopicMetadataList =
+                expectedValue.topics();
+            List<ConsumerGroupPartitionMetadataValue.TopicMetadata> actualTopicMetadataList =
+                actualValue.topics();
+
+            if (expectedTopicMetadataList.size() != actualTopicMetadataList.size()) {
+                fail("Topic metadata lists have different sizes");
+            }
+
+            for (int i = 0; i < expectedTopicMetadataList.size(); i++) {
+                ConsumerGroupPartitionMetadataValue.TopicMetadata expectedTopicMetadata =
+                    expectedTopicMetadataList.get(i);
+                ConsumerGroupPartitionMetadataValue.TopicMetadata actualTopicMetadata =
+                    actualTopicMetadataList.get(i);
+
+                assertEquals(expectedTopicMetadata.topicId(), actualTopicMetadata.topicId());
+                assertEquals(expectedTopicMetadata.topicName(), actualTopicMetadata.topicName());
+                assertEquals(expectedTopicMetadata.numPartitions(), actualTopicMetadata.numPartitions());
+
+                List<ConsumerGroupPartitionMetadataValue.PartitionMetadata> expectedPartitionMetadataList =
+                    expectedTopicMetadata.partitionMetadata();
+                List<ConsumerGroupPartitionMetadataValue.PartitionMetadata> actualPartitionMetadataList =
+                    actualTopicMetadata.partitionMetadata();
+
+                // If the list is empty, rack information wasn't available for any replica of
+                // the partition and hence, the entry wasn't added to the record.
+                if (expectedPartitionMetadataList.size() != actualPartitionMetadataList.size()) {
+                    fail("Partition metadata lists have different sizes");
+                } else if (!expectedPartitionMetadataList.isEmpty() && !actualPartitionMetadataList.isEmpty()) {
+                    for (int j = 0; j < expectedTopicMetadataList.size(); j++) {
+                        ConsumerGroupPartitionMetadataValue.PartitionMetadata expectedPartitionMetadata =
+                            expectedPartitionMetadataList.get(j);
+                        ConsumerGroupPartitionMetadataValue.PartitionMetadata actualPartitionMetadata =
+                            actualPartitionMetadataList.get(j);
+
+                        assertEquals(expectedPartitionMetadata.partition(), actualPartitionMetadata.partition());
+                        assertUnorderedListEquals(expectedPartitionMetadata.racks(), actualPartitionMetadata.racks());
+                    }
+                }
+            }
         } else {
             assertEquals(expected.message(), actual.message());
         }
