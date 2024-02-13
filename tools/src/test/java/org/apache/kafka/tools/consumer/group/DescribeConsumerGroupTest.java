@@ -291,6 +291,7 @@ public class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
             if (!res)
                 return false;
 
+            @SuppressWarnings("cast")
             ConsumerGroupCommand.PartitionAssignmentState partitionState =
                     (ConsumerGroupCommand.PartitionAssignmentState) assignments.get().filter(isGrp).head();
 
@@ -324,6 +325,7 @@ public class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
             if (!res)
                 return false;
 
+            @SuppressWarnings("cast")
             ConsumerGroupCommand.MemberAssignmentState assignmentState =
                     (ConsumerGroupCommand.MemberAssignmentState) assignments.get().filter(isGrp).head();
 
@@ -830,6 +832,7 @@ public class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
             if (!res)
                 return false;
 
+            @SuppressWarnings("cast")
             ConsumerGroupCommand.PartitionAssignmentState assignmentState =
                     (ConsumerGroupCommand.PartitionAssignmentState) groupOffsets._2.get().filter(isGrp).head();
 
