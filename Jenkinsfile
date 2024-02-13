@@ -98,14 +98,15 @@ def reportFlakyTests() {
 
   for (SuiteResult suiteResult : testResult.getSuites()) {
     def log = readFile(suiteResult.getFile())
-    def testsuite = new XmlSlurper().parseText(text)
-
-    def flaky = testsuite.children.findAll { node ->
-       node.name() == "testcase" && node['@flakyFailure'] != null
-    }*.@flakyFailure
-
-    currentBuild.description += "Flaky Report: \n"
-    currentBuild.description += flaky.join("\n")
+    org.dom4j.Document document = org.dom4j.DocumentHelper.parseText(log)
+//     def testsuite = new XmlSlurper().parseText(text)
+//
+//     def flaky = testsuite.children.findAll { node ->
+//        node.name() == "testcase" && node['@flakyFailure'] != null
+//     }*.@flakyFailure
+//
+//     currentBuild.description += "Flaky Report: \n"
+//     currentBuild.description += flaky.join("\n")
   }
 }
 
