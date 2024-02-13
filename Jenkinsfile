@@ -96,17 +96,11 @@ def tryStreamsArchetype() {
 currentBuild.description = ""
 
 def reportFlakyTests() {
-  def testResultAction = currentBuild.rawBuild.getAction(hudson.tasks.junit.TestResultAction.class)
-
-  for (SuiteResult suiteResult : testResult.getSuites()) {
-    Document document = DocumentHelper.parseText(readFile(suiteResult.getFile()))
+  //def testResultAction = currentBuild.rawBuild.getAction(hudson.tasks.junit.TestResultAction.class)
+  def files = findFiles(glob: "**/build/test-results/**/TEST-*.xml")
+  for (def filename : files) {
+    Document document = DocumentHelper.parseText(readFile(filename))
     List<Node> list = document.selectNodes("//testcase/@flakyFailure")
-//     def testsuite = new XmlSlurper().parseText(text)
-//
-//     def flaky = testsuite.children.findAll { node ->
-//        node.name() == "testcase" && node['@flakyFailure'] != null
-//     }*.@flakyFailure
-//
     currentBuild.description += "Flaky Report: \n"
     currentBuild.description += list.join("\n")
   }
