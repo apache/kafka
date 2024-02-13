@@ -98,8 +98,8 @@ currentBuild.description = ""
 def reportFlakyTests() {
   //def testResultAction = currentBuild.rawBuild.getAction(hudson.tasks.junit.TestResultAction.class)
   def files = findFiles(glob: "**/build/test-results/**/TEST-*.xml")
-  for (def filename : files) {
-    Document document = DocumentHelper.parseText(readFile(filename))
+  for (def file : files) {
+    Document document = DocumentHelper.parseText(readFile(file.path))
     List<Node> list = document.selectNodes("//testcase/@flakyFailure")
     currentBuild.description += "Flaky Report: \n"
     currentBuild.description += list.join("\n")
