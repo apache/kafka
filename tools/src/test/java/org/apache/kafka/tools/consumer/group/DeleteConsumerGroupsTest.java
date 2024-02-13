@@ -245,13 +245,9 @@ public class DeleteConsumerGroupsTest extends ConsumerGroupCommandTest {
             () -> Objects.equals(service.collectGroupState(GROUP).state, "Empty"),
             "The group did not become empty as expected.");
 
-        String[] cgcArgs2 = new String[cgcArgs.length + 2];
+        cgcArgs = new String[]{"--bootstrap-server", bootstrapServers(listenerName()), "--delete", "--group", GROUP, "--group", missingGroup};
 
-        System.arraycopy(cgcArgs, 0, cgcArgs2, 0, cgcArgs.length);
-        cgcArgs2[cgcArgs2.length - 2] = "--group";
-        cgcArgs2[cgcArgs2.length - 1] = missingGroup;
-
-        ConsumerGroupService service2 = getConsumerGroupService(cgcArgs2);
+        ConsumerGroupService service2 = getConsumerGroupService(cgcArgs);
 
         String output = ToolsTestUtils.grabConsoleOutput(service2::deleteGroups);
         assertTrue(output.contains("Group '" + missingGroup + "' could not be deleted due to:")
@@ -281,13 +277,9 @@ public class DeleteConsumerGroupsTest extends ConsumerGroupCommandTest {
             () -> Objects.equals(service.collectGroupState(GROUP).state, "Empty"),
             "The group did not become empty as expected.");
 
-        String[] cgcArgs2 = new String[cgcArgs.length + 2];
+        cgcArgs = new String[]{"--bootstrap-server", bootstrapServers(listenerName()), "--delete", "--group", GROUP, "--group", missingGroup};
 
-        System.arraycopy(cgcArgs, 0, cgcArgs2, 0, cgcArgs.length);
-        cgcArgs2[cgcArgs2.length - 2] = "--group";
-        cgcArgs2[cgcArgs2.length - 1] = missingGroup;
-
-        ConsumerGroupService service2 = getConsumerGroupService(cgcArgs2);
+        ConsumerGroupService service2 = getConsumerGroupService(cgcArgs);
         Map<String, Throwable> result = service2.deleteGroups();
         assertTrue(result.size() == 2 &&
                 result.containsKey(GROUP) && result.get(GROUP) == null &&

@@ -31,6 +31,7 @@ import java.util.HashSet;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -46,11 +47,11 @@ public class ListConsumerGroupTest extends ConsumerGroupCommandTest {
         String[] cgcArgs = new String[]{"--bootstrap-server", bootstrapServers(listenerName()), "--list"};
         ConsumerGroupService service = getConsumerGroupService(cgcArgs);
         Set<String> expectedGroups = new HashSet<>(Arrays.asList(GROUP, simpleGroup));
-        final Set[] foundGroups = new Set[]{Collections.emptySet()};
+        final AtomicReference<Set<String>> foundGroups = new AtomicReference<>(Collections.emptySet());
         TestUtils.waitForCondition(() -> {
-            foundGroups[0] = new HashSet<>(service.listConsumerGroups());
-            return Objects.equals(expectedGroups, foundGroups[0]);
-        }, "Expected --list to show groups " + expectedGroups + ", but found " + foundGroups[0] + ".");
+            foundGroups.set(new HashSet<>(service.listConsumerGroups()));
+            return Objects.equals(expectedGroups, foundGroups.get());
+        }, "Expected --list to show groups " + expectedGroups + ", but found " + foundGroups.get() + ".");
     }
 
     @ParameterizedTest
@@ -74,21 +75,21 @@ public class ListConsumerGroupTest extends ConsumerGroupCommandTest {
             new ConsumerGroupListing(simpleGroup, true, Optional.of(ConsumerGroupState.EMPTY)),
             new ConsumerGroupListing(GROUP, false, Optional.of(ConsumerGroupState.STABLE))));
 
-        final Set[] foundListing = new Set[]{Collections.emptySet()};
+        final AtomicReference<Set<ConsumerGroupListing>> foundListing = new AtomicReference<>(Collections.emptySet());
         TestUtils.waitForCondition(() -> {
-            foundListing[0] = new HashSet<>(service.listConsumerGroupsWithState(new HashSet<>(Arrays.asList(ConsumerGroupState.values()))));
-            return Objects.equals(expectedListing, foundListing[0]);
-        }, "Expected to show groups " + expectedListing + ", but found " + foundListing[0]);
+            foundListing.set(new HashSet<>(service.listConsumerGroupsWithState(new HashSet<>(Arrays.asList(ConsumerGroupState.values())))));
+            return Objects.equals(expectedListing, foundListing.get());
+        }, "Expected to show groups " + expectedListing + ", but found " + foundListing.get());
 
         Set<ConsumerGroupListing> expectedListingStable = Collections.singleton(
             new ConsumerGroupListing(GROUP, false, Optional.of(ConsumerGroupState.STABLE)));
 
-        foundListing[0] = Collections.emptySet();
+        foundListing.set(Collections.emptySet());
 
         TestUtils.waitForCondition(() -> {
-            foundListing[0] = new HashSet<>(service.listConsumerGroupsWithState(Collections.singleton(ConsumerGroupState.STABLE)));
-            return Objects.equals(expectedListingStable, foundListing[0]);
-        }, "Expected to show groups " + expectedListingStable + ", but found " + foundListing[0]);
+            foundListing.set(new HashSet<>(service.listConsumerGroupsWithState(Collections.singleton(ConsumerGroupState.STABLE))));
+            return Objects.equals(expectedListingStable, foundListing.get());
+        }, "Expected to show groups " + expectedListingStable + ", but found " + foundListing.get());
     }
 
     @ParameterizedTest
@@ -125,30 +126,30 @@ public class ListConsumerGroupTest extends ConsumerGroupCommandTest {
         String simpleGroup = "simple-group";
         addSimpleGroupExecutor(simpleGroup);
         addConsumerGroupExecutor(1);
-        final String[] out = {""};
+        final AtomicReference<String> out = new AtomicReference<>("");
 
         String[] cgcArgs1 = new String[]{"--bootstrap-server", bootstrapServers(listenerName()), "--list"};
         TestUtils.waitForCondition(() -> {
-            out[0] = ToolsTestUtils.grabConsoleOutput(() -> ConsumerGroupCommand.main(cgcArgs1));
-            return !out[0].contains("STATE") && out[0].contains(simpleGroup) && out[0].contains(GROUP);
-        }, "Expected to find " + simpleGroup + ", " + GROUP + " and no header, but found " + out[0]);
+            out.set(ToolsTestUtils.grabConsoleOutput(() -> ConsumerGroupCommand.main(cgcArgs1)));
+            return !out.get().contains("STATE") && out.get().contains(simpleGroup) && out.get().contains(GROUP);
+        }, "Expected to find " + simpleGroup + ", " + GROUP + " and no header, but found " + out.get());
 
         String[] cgcArgs2 = new String[]{"--bootstrap-server", bootstrapServers(listenerName()), "--list", "--state"};
         TestUtils.waitForCondition(() -> {
-            out[0] = ToolsTestUtils.grabConsoleOutput(() -> ConsumerGroupCommand.main(cgcArgs2));
-            return out[0].contains("STATE") && out[0].contains(simpleGroup) && out[0].contains(GROUP);
-        }, "Expected to find " + simpleGroup + ", " + GROUP + " and the header, but found " + out[0]);
+            out.set(ToolsTestUtils.grabConsoleOutput(() -> ConsumerGroupCommand.main(cgcArgs2)));
+            return out.get().contains("STATE") && out.get().contains(simpleGroup) && out.get().contains(GROUP);
+        }, "Expected to find " + simpleGroup + ", " + GROUP + " and the header, but found " + out.get());
 
         String[] cgcArgs3 = new String[]{"--bootstrap-server", bootstrapServers(listenerName()), "--list", "--state", "Stable"};
         TestUtils.waitForCondition(() -> {
-            out[0] = ToolsTestUtils.grabConsoleOutput(() -> ConsumerGroupCommand.main(cgcArgs3));
-            return out[0].contains("STATE") && out[0].contains(GROUP) && out[0].contains("Stable");
-        }, "Expected to find " + GROUP + " in state Stable and the header, but found " + out[0]);
+            out.set(ToolsTestUtils.grabConsoleOutput(() -> ConsumerGroupCommand.main(cgcArgs3)));
+            return out.get().contains("STATE") && out.get().contains(GROUP) && out.get().contains("Stable");
+        }, "Expected to find " + GROUP + " in state Stable and the header, but found " + out.get());
 
         String[] cgcArgs4 = new String[]{"--bootstrap-server", bootstrapServers(listenerName()), "--list", "--state", "stable"};
         TestUtils.waitForCondition(() -> {
-            out[0] = ToolsTestUtils.grabConsoleOutput(() -> ConsumerGroupCommand.main(cgcArgs4));
-            return out[0].contains("STATE") && out[0].contains(GROUP) && out[0].contains("Stable");
-        }, "Expected to find " + GROUP + " in state Stable and the header, but found " + out[0]);
+            out.set(ToolsTestUtils.grabConsoleOutput(() -> ConsumerGroupCommand.main(cgcArgs4)));
+            return out.get().contains("STATE") && out.get().contains(GROUP) && out.get().contains("Stable");
+        }, "Expected to find " + GROUP + " in state Stable and the header, but found " + out.get());
     }
 }
