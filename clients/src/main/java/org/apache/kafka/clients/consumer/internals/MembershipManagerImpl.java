@@ -712,7 +712,7 @@ public class MembershipManagerImpl implements MembershipManager {
     @Override
     public void onHeartbeatRequestSkipped() {
         if (state == MemberState.LEAVING) {
-            log.warn("Heartbeat for leaving group could not be sent. Member {} with epoch {} will transition to {}.",
+            log.debug("Heartbeat for leaving group could not be sent. Member {} with epoch {} will transition to {}.",
                     memberId, memberEpoch, MemberState.UNSUBSCRIBED);
             transitionToUnsubscribed();
         }
