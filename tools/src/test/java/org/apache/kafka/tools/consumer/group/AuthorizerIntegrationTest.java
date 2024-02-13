@@ -32,7 +32,7 @@ import static org.apache.kafka.common.acl.AclOperation.DESCRIBE;
 import static org.apache.kafka.common.acl.AclPermissionType.ALLOW;
 import static org.apache.kafka.tools.ToolsTestUtils.TEST_WITH_PARAMETERIZED_QUORUM_NAME;
 
-public class AuthorizerIntegrationTest extends kafka.api.AuthorizerIntegrationTest {
+public class AuthorizerIntegrationTest extends kafka.api.AbstractAuthorizerIntegrationTest {
     @ParameterizedTest(name = TEST_WITH_PARAMETERIZED_QUORUM_NAME)
     @ValueSource(strings = {"zk", "kraft"})
     public void testDescribeGroupCliWithGroupDescribe(String quorum) throws Exception {

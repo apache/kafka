@@ -31,7 +31,7 @@ import java.util.concurrent.ExecutionException;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
-public class SaslClientsWithInvalidCredentialsTest extends kafka.api.SaslClientsWithInvalidCredentialsTest {
+public class SaslClientsWithInvalidCredentialsTest extends kafka.api.AbstractSaslClientsWithInvalidCredentialsTest {
     @Test
     public void testConsumerGroupServiceWithAuthenticationFailure() {
         try (ConsumerGroupService consumerGroupService = prepareConsumerGroupService();
