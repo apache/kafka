@@ -86,6 +86,23 @@ def tryStreamsArchetype() {
   }
 }
 
+currentBuild.description = ""
+
+def reportFlakyTests() {
+  def testResultAction = currentBuild.rawBuild.getAction(hudson.tasks.junit.TestResultAction.class)
+
+  for (SuiteResult suiteResult : testResult.getSuites()) {
+    def log = readFile(suiteResult.getFile())
+    def testsuite = new groovy.xml.XmlSlurper().parseText(text)
+
+    def flaky = testsuite.children.findAll { node ->
+       node.name() == "testcase" && node['@flakyFailure'] != null
+    }*.@flakyFailure
+
+    currentBuild.description += "Flaky Report: \n"
+    currentBuild.description += flaky.join("\n")
+  }
+}
 
 pipeline {
   agent none
@@ -115,9 +132,7 @@ pipeline {
             doValidation()
             doTest(env)
             tryStreamsArchetype()
-            script {
-              currentBuild.description += "hello from JDK 8 and Scala 2.12"
-            }
+            reportFlakyTests()
           }
         }
 
@@ -137,9 +152,7 @@ pipeline {
             doValidation()
             doTest(env)
             echo 'Skipping Kafka Streams archetype test for Java 11'
-            script {
-              currentBuild.description += "hello from JDK 11 and Scala 2.13"
-            }
+            reportFlakyTests()
           }
         }
 
@@ -159,9 +172,7 @@ pipeline {
             doValidation()
             doTest(env)
             echo 'Skipping Kafka Streams archetype test for Java 17'
-            script {
-              currentBuild.description += "hello from JDK 17 and Scala 2.13"
-            }
+            reportFlakyTests()
           }
         }
 
@@ -181,9 +192,7 @@ pipeline {
             doValidation()
             doTest(env)
             echo 'Skipping Kafka Streams archetype test for Java 21'
-            script {
-              currentBuild.description += "hello from JDK 21 and Scala 2.13"
-            }
+            reportFlakyTests()
           }
         }
       }
