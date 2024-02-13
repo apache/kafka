@@ -1044,10 +1044,14 @@ project(':core') {
       exclude module: 'mina-core'
     }
     testImplementation libs.apachedsCoreApi
-    testImplementation libs.apachedsInterceptorKerberos
+    testImplementation (libs.apachedsInterceptorKerberos) {
+      exclude module: 'bcprov-jdk15on'
+    }
     testImplementation libs.apachedsProtocolShared
     testImplementation libs.apachedsProtocolKerberos
-    testImplementation libs.apachedsProtocolLdap
+    testImplementation (libs.apachedsProtocolLdap) {
+      exclude module: 'bcprov-jdk15on'
+    }
     testImplementation libs.apachedsLdifPartition
     testImplementation libs.apachedsMavibotPartition
     testImplementation libs.apachedsJdbmPartition
