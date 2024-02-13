@@ -17,6 +17,11 @@
  *
  */
 
+import hudson.tasks.junit.TestResultAction
+import hudson.tasks.junit.TestResult
+import hudson.tasks.junit.SuiteResult
+import groovy.xml.XmlSlurper
+
 def doValidation() {
   // Run all the tasks associated with `check` except for `test` - the latter is executed via `doTest`
   sh """
@@ -93,7 +98,7 @@ def reportFlakyTests() {
 
   for (SuiteResult suiteResult : testResult.getSuites()) {
     def log = readFile(suiteResult.getFile())
-    def testsuite = new groovy.xml.XmlSlurper().parseText(text)
+    def testsuite = new XmlSlurper().parseText(text)
 
     def flaky = testsuite.children.findAll { node ->
        node.name() == "testcase" && node['@flakyFailure'] != null
