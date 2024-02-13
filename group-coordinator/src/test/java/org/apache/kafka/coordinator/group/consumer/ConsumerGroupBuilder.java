@@ -67,14 +67,14 @@ public class ConsumerGroupBuilder {
         List<Record> records = new ArrayList<>();
 
         // Add subscription records for members.
-        members.forEach((memberId, member) -> {
-            records.add(RecordHelpers.newMemberSubscriptionRecord(groupId, member));
-        });
+        members.forEach((memberId, member) ->
+            records.add(RecordHelpers.newMemberSubscriptionRecord(groupId, member))
+        );
 
         // Add subscription metadata.
         if (subscriptionMetadata == null) {
             subscriptionMetadata = new HashMap<>();
-            members.forEach((memberId, member) -> {
+            members.forEach((memberId, member) ->
                 member.subscribedTopicNames().forEach(topicName -> {
                     TopicImage topicImage = topicsImage.getTopic(topicName);
                     if (topicImage != null) {
@@ -85,8 +85,8 @@ public class ConsumerGroupBuilder {
                             Collections.emptyMap()
                         ));
                     }
-                });
-            });
+                })
+            );
         }
 
         if (!subscriptionMetadata.isEmpty()) {
@@ -97,17 +97,17 @@ public class ConsumerGroupBuilder {
         records.add(RecordHelpers.newGroupEpochRecord(groupId, groupEpoch));
 
         // Add target assignment records.
-        assignments.forEach((memberId, assignment) -> {
-            records.add(RecordHelpers.newTargetAssignmentRecord(groupId, memberId, assignment.partitions()));
-        });
+        assignments.forEach((memberId, assignment) ->
+            records.add(RecordHelpers.newTargetAssignmentRecord(groupId, memberId, assignment.partitions()))
+        );
 
         // Add target assignment epoch.
         records.add(RecordHelpers.newTargetAssignmentEpochRecord(groupId, assignmentEpoch));
 
         // Add current assignment records for members.
-        members.forEach((memberId, member) -> {
-            records.add(RecordHelpers.newCurrentAssignmentRecord(groupId, member));
-        });
+        members.forEach((memberId, member) ->
+            records.add(RecordHelpers.newCurrentAssignmentRecord(groupId, member))
+        );
 
         return records;
     }

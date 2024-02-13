@@ -85,9 +85,9 @@ public class Assertions {
         if (assignment == null) return null;
 
         Map<Uuid, Set<Integer>> assignmentMap = new HashMap<>();
-        assignment.forEach(topicPartitions -> {
-            assignmentMap.put(topicPartitions.topicId(), new HashSet<>(topicPartitions.partitions()));
-        });
+        assignment.forEach(topicPartitions ->
+            assignmentMap.put(topicPartitions.topicId(), new HashSet<>(topicPartitions.partitions()))
+        );
         return assignmentMap;
     }
 
@@ -213,9 +213,9 @@ public class Assertions {
         List<ConsumerGroupCurrentMemberAssignmentValue.TopicPartitions> assignment
     ) {
         Map<Uuid, Set<Integer>> assignmentMap = new HashMap<>();
-        assignment.forEach(topicPartitions -> {
-            assignmentMap.put(topicPartitions.topicId(), new HashSet<>(topicPartitions.partitions()));
-        });
+        assignment.forEach(topicPartitions ->
+            assignmentMap.put(topicPartitions.topicId(), new HashSet<>(topicPartitions.partitions()))
+        );
         return assignmentMap;
     }
 }
