@@ -40,11 +40,11 @@ import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
 /**
- * An internal immutable cache of nodes, topics, and partitions in the Kafka cluster. This keeps an up-to-date Cluster
+ * An internal immutable snapshot of nodes, topics, and partitions in the Kafka cluster. This keeps an up-to-date Cluster
  * instance which is optimized for read access.
- * Prefer to extend MetadataCache's API for internal client usage Vs the public {@link Cluster}
+ * Prefer to extend MetadataSnapshot's API for internal client usage Vs the public {@link Cluster}
  */
-public class MetadataCache {
+public class MetadataSnapshot {
     private final String clusterId;
     private final Map<Integer, Node> nodes;
     private final Set<String> unauthorizedTopics;
@@ -56,7 +56,7 @@ public class MetadataCache {
     private final Map<Uuid, String> topicNames;
     private Cluster clusterInstance;
 
-    public MetadataCache(String clusterId,
+    public MetadataSnapshot(String clusterId,
                   Map<Integer, Node> nodes,
                   Collection<PartitionMetadata> partitions,
                   Set<String> unauthorizedTopics,
@@ -68,7 +68,7 @@ public class MetadataCache {
     }
 
     // Visible for testing
-    public MetadataCache(String clusterId,
+    public MetadataSnapshot(String clusterId,
         Map<Integer, Node> nodes,
         Collection<PartitionMetadata> partitions,
         Set<String> unauthorizedTopics,
@@ -145,8 +145,8 @@ public class MetadataCache {
     }
 
     /**
-     * Merges the metadata cache's contents with the provided metadata, returning a new metadata cache. The provided
-     * metadata is presumed to be more recent than the cache's metadata, and therefore all overlapping metadata will
+     * Merges the metadata snapshot's contents with the provided metadata, returning a new metadata snapshot. The provided
+     * metadata is presumed to be more recent than the snapshot's metadata, and therefore all overlapping metadata will
      * be overridden.
      *
      * @param newClusterId the new cluster Id
@@ -157,9 +157,9 @@ public class MetadataCache {
      * @param newController the new controller node
      * @param addTopicIds the mapping from topic name to topic ID, for topics in addPartitions
      * @param retainTopic returns whether a pre-existing topic's metadata should be retained
-     * @return the merged metadata cache
+     * @return the merged metadata snapshot
      */
-    MetadataCache mergeWith(String newClusterId,
+    MetadataSnapshot mergeWith(String newClusterId,
                             Map<Integer, Node> newNodes,
                             Collection<PartitionMetadata> addPartitions,
                             Set<String> addUnauthorizedTopics,
@@ -199,7 +199,7 @@ public class MetadataCache {
         Set<String> newInvalidTopics = fillSet(addInvalidTopics, invalidTopics, shouldRetainTopic);
         Set<String> newInternalTopics = fillSet(addInternalTopics, internalTopics, shouldRetainTopic);
 
-        return new MetadataCache(newClusterId, newNodes, newMetadataByPartition.values(), newUnauthorizedTopics,
+        return new MetadataSnapshot(newClusterId, newNodes, newMetadataByPartition.values(), newUnauthorizedTopics,
                 newInvalidTopics, newInternalTopics, newController, newTopicIds);
     }
 
@@ -231,26 +231,26 @@ public class MetadataCache {
                 invalidTopics, internalTopics, controller, topicIds);
     }
 
-    static MetadataCache bootstrap(List<InetSocketAddress> addresses) {
+    static MetadataSnapshot bootstrap(List<InetSocketAddress> addresses) {
         Map<Integer, Node> nodes = new HashMap<>();
         int nodeId = -1;
         for (InetSocketAddress address : addresses) {
             nodes.put(nodeId, new Node(nodeId, address.getHostString(), address.getPort()));
             nodeId--;
         }
-        return new MetadataCache(null, nodes, Collections.emptyList(),
+        return new MetadataSnapshot(null, nodes, Collections.emptyList(),
                 Collections.emptySet(), Collections.emptySet(), Collections.emptySet(),
                 null, Collections.emptyMap(), Cluster.bootstrap(addresses));
     }
 
-    static MetadataCache empty() {
-        return new MetadataCache(null, Collections.emptyMap(), Collections.emptyList(),
+    static MetadataSnapshot empty() {
+        return new MetadataSnapshot(null, Collections.emptyMap(), Collections.emptyList(),
                 Collections.emptySet(), Collections.emptySet(), Collections.emptySet(), null, Collections.emptyMap(), Cluster.empty());
     }
 
     @Override
     public String toString() {
-        return "MetadataCache{" +
+        return "MetadataSnapshot{" +
                 "clusterId='" + clusterId + '\'' +
                 ", nodes=" + nodes +
                 ", partitions=" + metadataByPartition.values() +

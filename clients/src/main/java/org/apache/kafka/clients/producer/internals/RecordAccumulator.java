@@ -33,7 +33,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.CommonClientConfigs;
-import org.apache.kafka.clients.MetadataCache;
+import org.apache.kafka.clients.MetadataSnapshot;
 import org.apache.kafka.clients.producer.Callback;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.utils.ExponentialBackoff;
@@ -661,7 +661,7 @@ public class RecordAccumulator {
      * @param unknownLeaderTopics   The set of topics with no leader (to be filled in)
      * @return The delay for next check
      */
-    private long partitionReady(MetadataCache metadataCache, long nowMs, String topic,
+    private long partitionReady(MetadataSnapshot metadataCache, long nowMs, String topic,
                                 TopicInfo topicInfo,
                                 long nextReadyCheckDelayMs, Set<Node> readyNodes, Set<String> unknownLeaderTopics) {
         ConcurrentMap<Integer, Deque<ProducerBatch>> batches = topicInfo.batches;
@@ -781,7 +781,7 @@ public class RecordAccumulator {
      * </ul>
      * </ol>
      */
-    public ReadyCheckResult ready(MetadataCache metadataCache, long nowMs) {
+    public ReadyCheckResult ready(MetadataSnapshot metadataCache, long nowMs) {
         Set<Node> readyNodes = new HashSet<>();
         long nextReadyCheckDelayMs = Long.MAX_VALUE;
         Set<String> unknownLeaderTopics = new HashSet<>();
@@ -866,7 +866,7 @@ public class RecordAccumulator {
         return false;
     }
 
-    private List<ProducerBatch> drainBatchesForOneNode(MetadataCache metadataCache, Node node, int maxSize, long now) {
+    private List<ProducerBatch> drainBatchesForOneNode(MetadataSnapshot metadataCache, Node node, int maxSize, long now) {
         int size = 0;
         List<PartitionInfo> parts = metadataCache.cluster().partitionsForNode(node.id());
         List<ProducerBatch> ready = new ArrayList<>();
@@ -973,7 +973,7 @@ public class RecordAccumulator {
      * @return A list of {@link ProducerBatch} for each node specified with total size less than the
      * requested maxSize.
      */
-    public Map<Integer, List<ProducerBatch>> drain(MetadataCache metadataCache, Set<Node> nodes, int maxSize, long now) {
+    public Map<Integer, List<ProducerBatch>> drain(MetadataSnapshot metadataCache, Set<Node> nodes, int maxSize, long now) {
         if (nodes.isEmpty())
             return Collections.emptyMap();
 

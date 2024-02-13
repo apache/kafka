@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.test;
 
-import org.apache.kafka.clients.MetadataCache;
+import org.apache.kafka.clients.MetadataSnapshot;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.Cluster;
@@ -126,7 +126,14 @@ public class TestUtils {
         return clusterWith(nodes, Collections.singletonMap(topic, partitions));
     }
 
-    public static MetadataCache metadataCacheWith(final int nodes, final Map<String, Integer> topicPartitionCounts) {
+    /**
+     * Test utility function to get MetadataSnapshot with configured nodes and partitions.
+     * @param nodes number of nodes in the cluster
+     * @param topicPartitionCounts map of topic -> # of partitions
+     * @return a MetadataSnapshot with number of nodes, partitions as per the input.
+     */
+
+    public static MetadataSnapshot metadataSnapshotWith(final int nodes, final Map<String, Integer> topicPartitionCounts) {
         final Node[] ns = new Node[nodes];
         Map<Integer, Node> nodesById = new HashMap<>();
         for (int i = 0; i < nodes; i++) {
@@ -143,15 +150,16 @@ public class TestUtils {
                 partsMetadatas.add(new PartitionMetadata(Errors.NONE, tp, Optional.of(node.id()), Optional.empty(), null, null, null));
             }
         }
-        return new MetadataCache("kafka-cluster", nodesById, partsMetadatas, Collections.emptySet(), Collections.emptySet(), Collections.emptySet(), null, Collections.emptyMap());
+        return new MetadataSnapshot("kafka-cluster", nodesById, partsMetadatas, Collections.emptySet(), Collections.emptySet(), Collections.emptySet(), null, Collections.emptyMap());
     }
 
-    public static MetadataCache metadataCacheWith(int nodes) {
-        return metadataCacheWith(nodes, new HashMap<>());
-    }
-
-    public static MetadataCache singletonMetadataCache() {
-        return metadataCacheWith(1);
+    /**
+     * Test utility function to get MetadataSnapshot of cluster with 1 node, and 0 partitions.
+     * @param nodes number of nodes in the cluster.
+     * @return a MetadataSnapshot of cluster with number of nodes in the input.
+     */
+    public static MetadataSnapshot metadataSnapshotWith(int nodes) {
+        return metadataSnapshotWith(nodes, new HashMap<>());
     }
 
     /**

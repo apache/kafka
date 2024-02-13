@@ -38,7 +38,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-public class MetadataCacheTest {
+public class MetadataSnapshotTest {
 
     @Test
     public void testMissingLeaderEndpoint() {
@@ -63,7 +63,7 @@ public class MetadataCacheTest {
         nodesById.put(7, new Node(7, "localhost", 2078));
         nodesById.put(8, new Node(8, "localhost", 2079));
 
-        MetadataCache cache = new MetadataCache("clusterId",
+        MetadataSnapshot cache = new MetadataSnapshot("clusterId",
                 nodesById,
                 Collections.singleton(partitionMetadata),
                 Collections.emptySet(),
@@ -108,7 +108,7 @@ public class MetadataCacheTest {
         Uuid topic1Id = Uuid.randomUuid();
         topicsIds.put(topic1Partition.topic(), topic1Id);
 
-        MetadataCache cache = new MetadataCache("clusterId",
+        MetadataSnapshot cache = new MetadataSnapshot("clusterId",
             nodesById,
             Collections.singleton(partitionMetadata1),
             Collections.emptySet(),
@@ -156,7 +156,7 @@ public class MetadataCacheTest {
         topicIds.put("topic1", Uuid.randomUuid());
         topicIds.put("topic2", Uuid.randomUuid());
 
-        MetadataCache cache = new MetadataCache("clusterId",
+        MetadataSnapshot cache = new MetadataSnapshot("clusterId",
                 Collections.singletonMap(6, new Node(6, "localhost", 2077)),
                 Collections.emptyList(),
                 Collections.emptySet(),
@@ -175,7 +175,7 @@ public class MetadataCacheTest {
     public void testEmptyTopicNamesCacheBuiltFromTopicIds() {
         Map<String, Uuid> topicIds = new HashMap<>();
 
-        MetadataCache cache = new MetadataCache("clusterId",
+        MetadataSnapshot cache = new MetadataSnapshot("clusterId",
                 Collections.singletonMap(6, new Node(6, "localhost", 2077)),
                 Collections.emptyList(),
                 Collections.emptySet(),
@@ -215,7 +215,7 @@ public class MetadataCacheTest {
         nodesById.put(6, new Node(6, "localhost", 2078));
         nodesById.put(7, new Node(7, "localhost", 2079));
 
-        MetadataCache cache = new MetadataCache("clusterId",
+        MetadataSnapshot cache = new MetadataSnapshot("clusterId",
             nodesById,
             Arrays.asList(partitionMetadata1, partitionMetadata2),
             Collections.emptySet(),

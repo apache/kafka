@@ -21,7 +21,7 @@ import java.util.OptionalInt;
 import java.util.function.Function;
 import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.CommonClientConfigs;
-import org.apache.kafka.clients.MetadataCache;
+import org.apache.kafka.clients.MetadataSnapshot;
 import org.apache.kafka.clients.NodeApiVersions;
 import org.apache.kafka.clients.producer.Callback;
 import org.apache.kafka.clients.producer.Partitioner;
@@ -100,7 +100,7 @@ public class RecordAccumulatorTest {
     private List<PartitionMetadata> partMetadatas = new ArrayList<>(Arrays.asList(partMetadata1, partMetadata2, partMetadata3));
 
     private Map<Integer, Node> nodes = Arrays.asList(node1, node2).stream().collect(Collectors.toMap(Node::id, Function.identity()));
-    private MetadataCache metadataCache = new MetadataCache(null,
+    private MetadataSnapshot metadataCache = new MetadataSnapshot(null,
         nodes,
         partMetadatas,
         Collections.emptySet(),
@@ -146,7 +146,7 @@ public class RecordAccumulatorTest {
         Cluster cluster = new Cluster(null, Arrays.asList(node1, node2), Arrays.asList(part1, part2, part3, part4),
             Collections.emptySet(), Collections.emptySet());
 
-        metadataCache = new MetadataCache(null,
+        metadataCache = new MetadataSnapshot(null,
             nodes,
             partMetadatas,
             Collections.emptySet(),
@@ -495,7 +495,8 @@ public class RecordAccumulatorTest {
         assertEquals(tp1, batches.get(0).get(0).topicPartition, "Node1 should only have one batch for partition 0.");
     }
 
-    private Map<Integer, List<ProducerBatch>> drainAndCheckBatchAmount(MetadataCache metadataCache, Node leader, RecordAccumulator accum, long now, int expected) {
+    private Map<Integer, List<ProducerBatch>> drainAndCheckBatchAmount(
+        MetadataSnapshot metadataCache, Node leader, RecordAccumulator accum, long now, int expected) {
         RecordAccumulator.ReadyCheckResult result = accum.ready(metadataCache, now);
         if (expected > 0) {
             assertEquals(Collections.singleton(leader), result.readyNodes, "Leader should be ready");
@@ -564,7 +565,7 @@ public class RecordAccumulatorTest {
         PartitionMetadata part2Metadata = new PartitionMetadata(Errors.NONE, tp2, Optional.of(node1.id()), Optional.empty(), null, null, null);
         PartitionMetadata part3Metadata = new PartitionMetadata(Errors.NONE, tp3, Optional.of(node2.id()), Optional.empty(), null, null, null);
 
-        MetadataCache metadataCache = new MetadataCache(null,
+        MetadataSnapshot metadataCache = new MetadataSnapshot(null,
             nodes,
             Arrays.asList(part1Metadata, part2Metadata, part3Metadata),
             Collections.emptySet(),
@@ -573,7 +574,7 @@ public class RecordAccumulatorTest {
             null,
             Collections.emptyMap());
 
-        MetadataCache metadataCacheChange = new MetadataCache(null,
+        MetadataSnapshot metadataCacheChange = new MetadataSnapshot(null,
             nodes,
             Arrays.asList(part1MetadataChange, part2Metadata, part3Metadata),
             Collections.emptySet(),
@@ -1483,7 +1484,7 @@ public class RecordAccumulatorTest {
         int part1LeaderEpoch = 100;
         // Create cluster metadata, partition1 being hosted by node1
         PartitionMetadata part1Metadata = new PartitionMetadata(Errors.NONE, tp1, Optional.of(node1.id()),  Optional.of(part1LeaderEpoch), null, null, null);
-        MetadataCache metadataCache = new MetadataCache(null, nodes, Arrays.asList(part1Metadata), Collections.emptySet(), Collections.emptySet(), Collections.emptySet(), null, Collections.emptyMap());
+        MetadataSnapshot metadataCache = new MetadataSnapshot(null, nodes, Arrays.asList(part1Metadata), Collections.emptySet(), Collections.emptySet(), Collections.emptySet(), null, Collections.emptyMap());
 
         int batchSize = 10;
         int lingerMs = 10;
@@ -1536,7 +1537,7 @@ public class RecordAccumulatorTest {
             part1LeaderEpoch++;
             // Create cluster metadata, with new leader epoch.
             part1Metadata = new PartitionMetadata(Errors.NONE, tp1, Optional.of(node1.id()),  Optional.of(part1LeaderEpoch), null, null, null);
-            metadataCache = new MetadataCache(null, nodes, Arrays.asList(part1Metadata), Collections.emptySet(), Collections.emptySet(), Collections.emptySet(), null, Collections.emptyMap());
+            metadataCache = new MetadataSnapshot(null, nodes, Arrays.asList(part1Metadata), Collections.emptySet(), Collections.emptySet(), Collections.emptySet(), null, Collections.emptyMap());
             RecordAccumulator.ReadyCheckResult result = accum.ready(metadataCache, now);
             assertTrue(result.readyNodes.contains(node1), "Node1 is ready");
 
@@ -1556,7 +1557,7 @@ public class RecordAccumulatorTest {
             now += 2 * retryBackoffMaxMs;
             // Create cluster metadata, with new leader epoch.
             part1Metadata = new PartitionMetadata(Errors.NONE, tp1, Optional.of(node1.id()),  Optional.of(part1LeaderEpoch), null, null, null);
-            metadataCache = new MetadataCache(null, nodes, Arrays.asList(part1Metadata), Collections.emptySet(), Collections.emptySet(), Collections.emptySet(), null, Collections.emptyMap());
+            metadataCache = new MetadataSnapshot(null, nodes, Arrays.asList(part1Metadata), Collections.emptySet(), Collections.emptySet(), Collections.emptySet(), null, Collections.emptyMap());
             RecordAccumulator.ReadyCheckResult result = accum.ready(metadataCache, now);
             assertTrue(result.readyNodes.contains(node1), "Node1 is ready");
 
@@ -1577,7 +1578,7 @@ public class RecordAccumulatorTest {
             part1LeaderEpoch++;
             // Create cluster metadata, with new leader epoch.
             part1Metadata = new PartitionMetadata(Errors.NONE, tp1, Optional.of(node1.id()),  Optional.of(part1LeaderEpoch), null, null, null);
-            metadataCache = new MetadataCache(null, nodes, Arrays.asList(part1Metadata), Collections.emptySet(), Collections.emptySet(), Collections.emptySet(), null, Collections.emptyMap());
+            metadataCache = new MetadataSnapshot(null, nodes, Arrays.asList(part1Metadata), Collections.emptySet(), Collections.emptySet(), Collections.emptySet(), null, Collections.emptyMap());
             RecordAccumulator.ReadyCheckResult result = accum.ready(metadataCache, now);
             assertTrue(result.readyNodes.contains(node1), "Node1 is ready");
 
@@ -1603,7 +1604,7 @@ public class RecordAccumulatorTest {
 
         // Create cluster metadata, node2 doesn't host any partitions.
         PartitionMetadata part1Metadata = new PartitionMetadata(Errors.NONE, tp1, Optional.of(node1.id()), Optional.empty(), null, null, null);
-        MetadataCache metadataCache = new MetadataCache(null, nodes, Arrays.asList(part1Metadata), Collections.emptySet(), Collections.emptySet(), Collections.emptySet(), null, Collections.emptyMap());
+        MetadataSnapshot metadataCache = new MetadataSnapshot(null, nodes, Arrays.asList(part1Metadata), Collections.emptySet(), Collections.emptySet(), Collections.emptySet(), null, Collections.emptyMap());
 
         // Drain for node2, it should return 0 batches,
         Map<Integer, List<ProducerBatch>> batches = accum.drain(metadataCache,

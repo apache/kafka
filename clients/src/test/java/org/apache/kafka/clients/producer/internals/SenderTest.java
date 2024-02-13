@@ -20,7 +20,7 @@ import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.ClientRequest;
 import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.Metadata;
-import org.apache.kafka.clients.MetadataCache;
+import org.apache.kafka.clients.MetadataSnapshot;
 import org.apache.kafka.clients.MockClient;
 import org.apache.kafka.clients.NetworkClient;
 import org.apache.kafka.clients.NodeApiVersions;
@@ -472,7 +472,7 @@ public class SenderTest {
         final byte[] key = "key".getBytes();
         final byte[] value = "value".getBytes();
         final long maxBlockTimeMs = 1000;
-        MetadataCache metadataCache = TestUtils.singletonMetadataCache();
+        MetadataSnapshot metadataCache = TestUtils.metadataSnapshotWith(1);
         RecordAccumulator.AppendCallbacks callbacks = new RecordAccumulator.AppendCallbacks() {
             @Override
             public void setPartition(int partition) {

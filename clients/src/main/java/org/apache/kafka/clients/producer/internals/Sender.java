@@ -25,7 +25,7 @@ import org.apache.kafka.clients.ClientRequest;
 import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.KafkaClient;
 import org.apache.kafka.clients.Metadata;
-import org.apache.kafka.clients.MetadataCache;
+import org.apache.kafka.clients.MetadataSnapshot;
 import org.apache.kafka.clients.NetworkClientUtils;
 import org.apache.kafka.clients.RequestCompletionHandler;
 import org.apache.kafka.common.InvalidRecordException;
@@ -362,7 +362,7 @@ public class Sender implements Runnable {
     }
 
     private long sendProducerData(long now) {
-        MetadataCache metadataCache = metadata.fetchCache();
+        MetadataSnapshot metadataCache = metadata.fetchCache();
         // get the list of partitions with data ready to send
         RecordAccumulator.ReadyCheckResult result = this.accumulator.ready(metadataCache, now);
 
