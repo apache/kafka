@@ -132,7 +132,9 @@ pipeline {
             doValidation()
             doTest(env)
             tryStreamsArchetype()
-            reportFlakyTests()
+            script {
+              reportFlakyTests()
+            }
           }
         }
 
@@ -152,7 +154,9 @@ pipeline {
             doValidation()
             doTest(env)
             echo 'Skipping Kafka Streams archetype test for Java 11'
-            reportFlakyTests()
+            script {
+              reportFlakyTests()
+            }
           }
         }
 
@@ -172,7 +176,9 @@ pipeline {
             doValidation()
             doTest(env)
             echo 'Skipping Kafka Streams archetype test for Java 17'
-            reportFlakyTests()
+            script {
+              reportFlakyTests()
+            }
           }
         }
 
@@ -192,7 +198,9 @@ pipeline {
             doValidation()
             doTest(env)
             echo 'Skipping Kafka Streams archetype test for Java 21'
-            reportFlakyTests()
+            script {
+              reportFlakyTests()
+            }
           }
         }
       }
@@ -203,7 +211,6 @@ pipeline {
     always {
       script {
         if (!isChangeRequest(env)) {
-          currentBuild.description += "hello from post"
           node('ubuntu') {
             step([$class: 'Mailer',
                  notifyEveryUnstableBuild: true,
