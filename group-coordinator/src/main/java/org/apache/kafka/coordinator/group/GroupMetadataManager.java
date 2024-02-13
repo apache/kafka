@@ -1208,14 +1208,14 @@ public class GroupMetadataManager {
         // 1. The member reported its owned partitions;
         // 2. The member just joined or rejoined to group (epoch equals to zero);
         // 3. The member's assignment has been updated.
-        if (ownedTopicPartitions != null || memberEpoch == 0 || assignedPartitionsUpdated(member, updatedMember)) {
+        if (ownedTopicPartitions != null || memberEpoch == 0 || hasAssignedPartitionsChanged(member, updatedMember)) {
             response.setAssignment(createResponseAssignment(updatedMember));
         }
 
         return new CoordinatorResult<>(records, response);
     }
 
-    private boolean assignedPartitionsUpdated(
+    private boolean hasAssignedPartitionsChanged(
         ConsumerGroupMember member1,
         ConsumerGroupMember member2
     ) {
