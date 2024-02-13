@@ -407,21 +407,35 @@ public class KafkaClusterTestKit implements AutoCloseable {
     }
 
     public void startup() throws ExecutionException, InterruptedException {
-        List<Future<?>> futures = new ArrayList<>();
+        Map<Integer, Future<?>> controllerFutures = new HashMap<>();
+        Map<Integer, Future<?>> brokerFutures = new HashMap<>();
         try {
             // Note the startup order here is chosen to be consistent with
             // `KafkaRaftServer`. See comments in that class for an explanation.
+            System.out.println("DEBUG: starting controllers " + controllers.keySet());
             for (ControllerServer controller : controllers.values()) {
-                futures.add(executorService.submit(controller::startup));
+                controllerFutures.put(controller.config().nodeId(), executorService.submit(controller::startup));
             }
+            // Ensure that the controllers have started successfully before starting brokers
+            for (Entry<Integer, Future<?>> future: controllerFutures.entrySet()) {
+                System.out.println("DEBUG: getting controller future for " + future.getKey());
+                future.getValue().get();
+            }
+
+            System.out.println("DEBUG: starting brokers " + brokers.keySet());
             for (BrokerServer broker : brokers.values()) {
-                futures.add(executorService.submit(broker::startup));
+                brokerFutures.put(broker.config().nodeId(), executorService.submit(broker::startup));
             }
-            for (Future<?> future: futures) {
-                future.get();
+            for (Entry<Integer, Future<?>> future: brokerFutures.entrySet()) {
+                System.out.println("DEBUG: getting broker future for " + future.getKey());
+                future.getValue().get();
             }
         } catch (Exception e) {
-            for (Future<?> future: futures) {
+            for (Future<?> future: controllerFutures.values()) {
+                future.cancel(true);
+            }
+
+            for (Future<?> future: controllerFutures.values()) {
                 future.cancel(true);
             }
             throw e;

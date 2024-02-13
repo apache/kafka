@@ -471,7 +471,7 @@ class BrokerServer(
       // us as caught up. It will do this by returning a heartbeat response with isCaughtUp set to
       // true. The BrokerLifecycleManager tracks this.
       FutureUtils.waitWithLogging(logger.underlying, logIdent,
-        "the controller to acknowledge that we are caught up",
+        "the controller to acknowledge that broker " + config.brokerId + " is caught up",
         lifecycleManager.initialCatchUpFuture, startupDeadline, time)
 
       // Wait for the first metadata update to be published. Metadata updates are not published
