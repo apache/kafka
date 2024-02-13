@@ -24,6 +24,7 @@ import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.coordinator.group.consumer.ClientAssignor;
 import org.apache.kafka.coordinator.group.consumer.ConsumerGroupMember;
+import org.apache.kafka.coordinator.group.consumer.MemberState;
 import org.apache.kafka.coordinator.group.consumer.TopicMetadata;
 import org.apache.kafka.coordinator.group.consumer.VersionedMetadata;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupCurrentMemberAssignmentKey;
@@ -408,7 +409,7 @@ public class RecordHelpersTest {
                 (short) 8),
             new ApiMessageAndVersion(
                 new ConsumerGroupCurrentMemberAssignmentValue()
-                    .setState(ConsumerGroupMember.MemberState.UNACKNOWLEDGED_ASSIGNMENT.value())
+                    .setState(MemberState.UNREVOKED_PARTITIONS.value())
                     .setMemberEpoch(22)
                     .setPreviousMemberEpoch(21)
                     .setAssignedPartitions(Arrays.asList(
@@ -430,7 +431,7 @@ public class RecordHelpersTest {
         assertEquals(expectedRecord, newCurrentAssignmentRecord(
             "group-id",
             new ConsumerGroupMember.Builder("member-id")
-                .setState(ConsumerGroupMember.MemberState.UNACKNOWLEDGED_ASSIGNMENT)
+                .setState(MemberState.UNREVOKED_PARTITIONS)
                 .setMemberEpoch(22)
                 .setPreviousMemberEpoch(21)
                 .setAssignedPartitions(assigned)

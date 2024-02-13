@@ -26,7 +26,6 @@ import org.apache.kafka.image.TopicsImage;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -258,59 +257,6 @@ public class ConsumerGroupMember {
     }
 
     /**
-     * The various states that a member can be in. For their definition,
-     * refer to the documentation of {{@link CurrentAssignmentBuilder}}.
-     */
-    public enum MemberState {
-        /**
-         * The member is fully reconciled with the desired target assignment.
-         */
-        STABLE((byte) 0),
-
-        /**
-         * The member has received a new assignment and needs to acknowledge it.
-         */
-        UNACKNOWLEDGED_ASSIGNMENT((byte) 1),
-
-        /**
-         * The member waits on unreleased partitions.
-         */
-        UNRELEASED_PARTITIONS((byte) 2),
-
-        /**
-         * The member is in an unknown state. This can only happen if a future
-         * version of the software introduces a new state unknown by this version.
-         */
-        UNKNOWN((byte) 127);
-
-        private final static Map<Byte, MemberState> VALUES_TO_ENUMS = new HashMap<>();
-
-        static {
-            for (MemberState state : MemberState.values()) {
-                VALUES_TO_ENUMS.put(state.value(), state);
-            }
-        }
-
-        private final byte value;
-
-        MemberState(byte value) {
-            this.value = value;
-        }
-
-        public byte value() {
-            return value;
-        }
-
-        public static MemberState fromValue(byte value) {
-            MemberState state = VALUES_TO_ENUMS.get(value);
-            if (state == null) {
-                return UNKNOWN;
-            }
-            return state;
-        }
-    }
-
-    /**
      * The member id.
      */
     private final String memberId;
@@ -514,7 +460,7 @@ public class ConsumerGroupMember {
      * @return True of the member is in the Stable state and at the desired epoch.
      */
     public boolean isReconciledTo(int targetAssignmentEpoch) {
-        return state == ConsumerGroupMember.MemberState.STABLE && memberEpoch == targetAssignmentEpoch;
+        return state == MemberState.STABLE && memberEpoch == targetAssignmentEpoch;
     }
 
     /**
@@ -672,7 +618,7 @@ public class ConsumerGroupMember {
             ", serverAssignorName='" + serverAssignorName + '\'' +
             ", clientAssignors=" + clientAssignors +
             ", assignedPartitions=" + assignedPartitions +
-            ", partitionsPendingRevocation=" + revokedPartitions +
+            ", revokedPartitions=" + revokedPartitions +
             ')';
     }
 }

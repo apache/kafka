@@ -58,6 +58,7 @@ import org.apache.kafka.coordinator.group.consumer.Assignment;
 import org.apache.kafka.coordinator.group.consumer.ConsumerGroup;
 import org.apache.kafka.coordinator.group.consumer.ConsumerGroupMember;
 import org.apache.kafka.coordinator.group.consumer.CurrentAssignmentBuilder;
+import org.apache.kafka.coordinator.group.consumer.MemberState;
 import org.apache.kafka.coordinator.group.consumer.TargetAssignmentBuilder;
 import org.apache.kafka.coordinator.group.consumer.TopicMetadata;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupCurrentMemberAssignmentKey;
@@ -1058,7 +1059,6 @@ public class GroupMetadataManager {
             }
         }
 
-
         int groupEpoch = group.groupEpoch();
         Map<String, TopicMetadata> subscriptionMetadata = group.subscriptionMetadata();
 
@@ -1178,14 +1178,20 @@ public class GroupMetadataManager {
                 .build();
 
             if (!updatedMember.assignmentEquals(prevMember)) {
+                assignmentUpdated = !updatedMember.assignedPartitions().equals(prevMember.assignedPartitions());
+
                 records.add(newCurrentAssignmentRecord(groupId, updatedMember));
 
                 log.info("[GroupId {}] Member {} transitioned from {} to {}.",
                     groupId, memberId, member.currentAssignmentSummary(), updatedMember.currentAssignmentSummary());
 
-                if (updatedMember.state() == ConsumerGroupMember.MemberState.UNACKNOWLEDGED_ASSIGNMENT) {
-                    assignmentUpdated = true;
-                    scheduleConsumerGroupRebalanceTimeout(groupId, updatedMember);
+                if (updatedMember.state() == MemberState.UNREVOKED_PARTITIONS) {
+                    scheduleConsumerGroupRebalanceTimeout(
+                        groupId,
+                        updatedMember.memberId(),
+                        updatedMember.memberEpoch(),
+                        updatedMember.rebalanceTimeoutMs()
+                    );
                 } else {
                     cancelConsumerGroupRebalanceTimeout(groupId, memberId);
                 }
@@ -1395,35 +1401,39 @@ public class GroupMetadataManager {
     /**
      * Schedules a rebalance timeout for the member.
      *
-     * @param groupId           The group id.
-     * @param expectedMember    The expected member.
+     * @param groupId               The group id.
+     * @param memberId              The member id.
+     * @param memberEpoch           The member epoch.
+     * @param rebalanceTimeoutMs    The rebalance timeout.
      */
     private void scheduleConsumerGroupRebalanceTimeout(
         String groupId,
-        ConsumerGroupMember expectedMember
+        String memberId,
+        int memberEpoch,
+        int rebalanceTimeoutMs
     ) {
-        String key = consumerGroupRebalanceTimeoutKey(groupId, expectedMember.memberId());
-        timer.schedule(key, expectedMember.rebalanceTimeoutMs(), TimeUnit.MILLISECONDS, true, () -> {
+        String key = consumerGroupRebalanceTimeoutKey(groupId, memberId);
+        timer.schedule(key, rebalanceTimeoutMs, TimeUnit.MILLISECONDS, true, () -> {
             try {
                 ConsumerGroup group = getOrMaybeCreateConsumerGroup(groupId, false);
-                ConsumerGroupMember member = group.getOrMaybeCreateMember(expectedMember.memberId(), false);
+                ConsumerGroupMember member = group.getOrMaybeCreateMember(memberId, false);
 
-                if (!member.assignmentEquals(expectedMember)) {
+                if (member.memberEpoch() == memberEpoch) {
+                    log.info("[GroupId {}] Member {} fenced from the group because " +
+                            "it failed to transition from epoch {} within {}ms.",
+                        groupId, memberId, memberEpoch, rebalanceTimeoutMs);
+                    return new CoordinatorResult<>(consumerGroupFenceMember(group, member));
+                } else {
                     log.debug("[GroupId {}] Ignoring rebalance timeout for {} because the member " +
-                        "state does not match the expected state.", groupId, expectedMember.memberId());
+                        "left the epoch {}.", groupId, memberId, memberEpoch);
                     return new CoordinatorResult<>(Collections.emptyList());
                 }
-
-                log.info("[GroupId {}] Member {} fenced from the group because " +
-                    "it failed to acknowledge new assignment within {}ms.",
-                    groupId, expectedMember.memberId(), expectedMember.rebalanceTimeoutMs());
-                return new CoordinatorResult<>(consumerGroupFenceMember(group, member));
             } catch (GroupIdNotFoundException ex) {
                 log.debug("[GroupId {}] Could not fence {}} because the group does not exist.",
-                    groupId, expectedMember.memberId());
+                    groupId, memberId);
             } catch (UnknownMemberIdException ex) {
                 log.debug("[GroupId {}] Could not fence {} because the member does not exist.",
-                    groupId, expectedMember.memberId());
+                    groupId, memberId);
             }
 
             return new CoordinatorResult<>(Collections.emptyList());
@@ -1783,8 +1793,13 @@ public class GroupMetadataManager {
                     consumerGroup.members().forEach((memberId, member) -> {
                         log.debug("Loaded member {} in consumer group {}.", memberId, groupId);
                         scheduleConsumerGroupSessionTimeout(groupId, memberId);
-                        if (member.state() == ConsumerGroupMember.MemberState.UNACKNOWLEDGED_ASSIGNMENT) {
-                            scheduleConsumerGroupRebalanceTimeout(groupId, member);
+                        if (member.state() == MemberState.UNREVOKED_PARTITIONS) {
+                            scheduleConsumerGroupRebalanceTimeout(
+                                groupId,
+                                member.memberId(),
+                                member.memberEpoch(),
+                                member.rebalanceTimeoutMs()
+                            );
                         }
                     });
                     break;
