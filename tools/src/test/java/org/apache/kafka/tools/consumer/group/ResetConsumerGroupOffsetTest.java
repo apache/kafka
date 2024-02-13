@@ -557,10 +557,14 @@ public class ResetConsumerGroupOffsetTest extends ConsumerGroupCommandTest {
 
         try {
             for (final String topic : topics) {
-                resetOffsetsResultByGroup.foreachEntry((group, partitionInfo) -> {
+                resetOffsetsResultByGroup.foreach(entry -> {
+                    String group = entry._1;
+                    scala.collection.Map<TopicPartition, OffsetAndMetadata> partitionInfo = entry._2;
                     Map<TopicPartition, Long> priorOffsets = committedOffsets(topic, group);
                     Map<TopicPartition, Long> offsets = new HashMap<>();
-                    partitionInfo.foreachEntry((tp, offsetAndMetadata) -> {
+                    partitionInfo.foreach(partitionInfoEntry -> {
+                        TopicPartition tp = partitionInfoEntry._1;
+                        OffsetAndMetadata offsetAndMetadata = partitionInfoEntry._2;
                         if (Objects.equals(tp.topic(), topic))
                             offsets.put(tp, offsetAndMetadata.offset());
                         return null;
@@ -580,8 +584,12 @@ public class ResetConsumerGroupOffsetTest extends ConsumerGroupCommandTest {
                                                 String topic) {
         scala.collection.Map<String, scala.collection.Map<TopicPartition, OffsetAndMetadata>> allResetOffsets = consumerGroupService.resetOffsets();
 
-        allResetOffsets.foreachEntry((group, offsetsInfo) -> {
-            offsetsInfo.foreachEntry((tp, offsetMetadata) -> {
+        allResetOffsets.foreach(entry -> {
+            String group = entry._1;
+            scala.collection.Map<TopicPartition, OffsetAndMetadata> offsetsInfo = entry._2;
+            offsetsInfo.foreach(offsetInfoEntry -> {
+                TopicPartition tp = offsetInfoEntry._1;
+                OffsetAndMetadata offsetMetadata = offsetInfoEntry._2;
                 assertEquals(offsetMetadata.offset(), expectedOffsets.get(tp));
                 assertEquals(expectedOffsets, committedOffsets(topic, group));
                 return null;
@@ -594,7 +602,9 @@ public class ResetConsumerGroupOffsetTest extends ConsumerGroupCommandTest {
         assertTrue(map.isDefined());
         Map<TopicPartition, Long> res = new HashMap<>();
         map.foreach(m -> {
-            m.foreachEntry((tp, offsetAndMetadata) -> {
+            m.foreach(entry -> {
+                TopicPartition tp = entry._1;
+                OffsetAndMetadata offsetAndMetadata = entry._2;
                 res.put(tp, offsetAndMetadata.offset());
                 return null;
             });

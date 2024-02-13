@@ -33,7 +33,6 @@ import scala.Function0;
 import scala.Function1;
 import scala.Option;
 import scala.collection.Seq;
-import scala.collection.SeqOps;
 import scala.runtime.BoxedUnit;
 
 import java.util.ArrayList;
@@ -147,7 +146,7 @@ public class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
         ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(cgcArgs);
 
         scala.Tuple2<Option<String>, Option<Seq<ConsumerGroupCommand.PartitionAssignmentState>>> res = service.collectGroupOffsets(group);
-        assertTrue(res._1.map(s -> s.contains("Dead")).getOrElse(() -> false) && res._2.map(SeqOps::isEmpty).getOrElse(() -> false),
+        assertTrue(res._1.map(s -> s.contains("Dead")).getOrElse(() -> false) && res._2.map(Seq::isEmpty).getOrElse(() -> false),
             "Expected the state to be 'Dead', with no members in the group '" + group + "'.");
     }
 
@@ -164,11 +163,11 @@ public class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
         ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(cgcArgs);
 
         scala.Tuple2<Option<String>, Option<Seq<ConsumerGroupCommand.MemberAssignmentState>>> res = service.collectGroupMembers(group, false);
-        assertTrue(res._1.map(s -> s.contains("Dead")).getOrElse(() -> false) && res._2.map(SeqOps::isEmpty).getOrElse(() -> false),
+        assertTrue(res._1.map(s -> s.contains("Dead")).getOrElse(() -> false) && res._2.map(Seq::isEmpty).getOrElse(() -> false),
             "Expected the state to be 'Dead', with no members in the group '" + group + "'.");
 
         scala.Tuple2<Option<String>, Option<Seq<ConsumerGroupCommand.MemberAssignmentState>>> res2 = service.collectGroupMembers(group, true);
-        assertTrue(res2._1.map(s -> s.contains("Dead")).getOrElse(() -> false) && res2._2.map(SeqOps::isEmpty).getOrElse(() -> false),
+        assertTrue(res2._1.map(s -> s.contains("Dead")).getOrElse(() -> false) && res2._2.map(Seq::isEmpty).getOrElse(() -> false),
             "Expected the state to be 'Dead', with no members in the group '" + group + "' (verbose option).");
     }
 
@@ -831,7 +830,8 @@ public class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
             if (!res)
                 return false;
 
-            ConsumerGroupCommand.PartitionAssignmentState assignmentState = groupOffsets._2.get().filter(isGrp).head();
+            ConsumerGroupCommand.PartitionAssignmentState assignmentState =
+                    (ConsumerGroupCommand.PartitionAssignmentState) groupOffsets._2.get().filter(isGrp).head();
 
             return assignmentState.consumerId().map(c -> !c.trim().equals(ConsumerGroupCommand.MISSING_COLUMN_VALUE())).getOrElse(() -> false) &&
                     assignmentState.clientId().map(c -> !c.trim().equals(ConsumerGroupCommand.MISSING_COLUMN_VALUE())).getOrElse(() -> false) &&
