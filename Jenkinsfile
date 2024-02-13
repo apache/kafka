@@ -20,6 +20,9 @@
 import hudson.tasks.junit.TestResultAction
 import hudson.tasks.junit.TestResult
 import hudson.tasks.junit.SuiteResult
+import org.dom4j.DocumentHelper
+import org.dom4j.Document
+import org.dom4j.Node
 
 def doValidation() {
   // Run all the tasks associated with `check` except for `test` - the latter is executed via `doTest`
@@ -96,16 +99,16 @@ def reportFlakyTests() {
   def testResultAction = currentBuild.rawBuild.getAction(hudson.tasks.junit.TestResultAction.class)
 
   for (SuiteResult suiteResult : testResult.getSuites()) {
-    def log = readFile(suiteResult.getFile())
-    org.dom4j.Document document = org.dom4j.DocumentHelper.parseText(log)
+    Document document = DocumentHelper.parseText(readFile(suiteResult.getFile()))
+    List<Node> list = document.selectNodes("//testcase/@flakyFailure")
 //     def testsuite = new XmlSlurper().parseText(text)
 //
 //     def flaky = testsuite.children.findAll { node ->
 //        node.name() == "testcase" && node['@flakyFailure'] != null
 //     }*.@flakyFailure
 //
-//     currentBuild.description += "Flaky Report: \n"
-//     currentBuild.description += flaky.join("\n")
+    currentBuild.description += "Flaky Report: \n"
+    currentBuild.description += list.join("\n")
   }
 }
 
