@@ -1168,9 +1168,9 @@ public class GroupMetadataManager {
 
         // 3. Reconcile the member's assignment with the target assignment. This is only required if
         // the member is not stable or if a new target assignment has been installed.
-        boolean assignmentUpdated = false;
         if (!updatedMember.isReconciledTo(targetAssignmentEpoch)) {
             ConsumerGroupMember prevMember = updatedMember;
+
             updatedMember = new CurrentAssignmentBuilder(updatedMember)
                 .withTargetAssignment(targetAssignmentEpoch, targetAssignment)
                 .withCurrentPartitionEpoch(group::currentPartitionEpoch)
@@ -1178,8 +1178,6 @@ public class GroupMetadataManager {
                 .build();
 
             if (!updatedMember.assignmentEquals(prevMember)) {
-                assignmentUpdated = !updatedMember.assignedPartitions().equals(prevMember.assignedPartitions());
-
                 records.add(newCurrentAssignmentRecord(groupId, updatedMember));
 
                 log.info("[GroupId {}] Member {} transitioned from {} to {}.",
@@ -1210,11 +1208,18 @@ public class GroupMetadataManager {
         // 1. The member reported its owned partitions;
         // 2. The member just joined or rejoined to group (epoch equals to zero);
         // 3. The member's assignment has been updated.
-        if (ownedTopicPartitions != null || memberEpoch == 0 || assignmentUpdated) {
+        if (ownedTopicPartitions != null || memberEpoch == 0 || assignedPartitionsUpdated(member, updatedMember)) {
             response.setAssignment(createResponseAssignment(updatedMember));
         }
 
         return new CoordinatorResult<>(records, response);
+    }
+
+    private boolean assignedPartitionsUpdated(
+        ConsumerGroupMember member1,
+        ConsumerGroupMember member2
+    ) {
+        return !member1.assignedPartitions().equals(member2.assignedPartitions());
     }
 
     private void removeMemberAndCancelTimers(
