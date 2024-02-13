@@ -561,7 +561,8 @@ public class ResetConsumerGroupOffsetTest extends ConsumerGroupCommandTest {
                     Map<TopicPartition, Long> priorOffsets = committedOffsets(topic, group);
                     Map<TopicPartition, Long> offsets = new HashMap<>();
                     partitionInfo.foreachEntry((tp, offsetAndMetadata) -> {
-                        offsets.put(tp, offsetAndMetadata.offset());
+                        if (Objects.equals(tp.topic(), topic))
+                            offsets.put(tp, offsetAndMetadata.offset());
                         return null;
                     });
                     assertEquals(expectedOffsets.get(topic), offsets);
