@@ -314,12 +314,11 @@ public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements Se
                 metrics
         );
 
-        segments.openExisting(this.context, observedStreamTime);
-
         final File positionCheckpointFile = new File(context.stateDir(), name() + ".position");
         this.positionCheckpoint = new OffsetCheckpoint(positionCheckpointFile);
         this.position = StoreQueryUtils.readPositionFromCheckpoint(positionCheckpoint);
         segments.setPosition(position);
+        segments.openExisting(this.context, observedStreamTime);
 
         // register and possibly restore the state from the logs
         stateStoreContext.register(

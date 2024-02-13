@@ -46,6 +46,7 @@ import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.processor.internals.Task.TaskType;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.query.Position;
+import org.apache.kafka.streams.query.internals.SynchronizedPosition;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.StateSerdes;
 import org.apache.kafka.test.InternalMockProcessorContext;
@@ -535,8 +536,8 @@ public abstract class AbstractRocksDBSegmentedBytesStoreTest<S extends Segment> 
         context.setRecordContext(new ProcessorRecordContext(0, 4, 0, "", new RecordHeaders()));
         bytesStore.put(serializeKey(new Windowed<>(keyC, windows[3])), serializeValue(200));
 
-        final Position expected = Position.fromMap(mkMap(mkEntry("", mkMap(mkEntry(0, 4L)))));
-        final Position actual = bytesStore.getPosition();
+        final SynchronizedPosition expected = SynchronizedPosition.fromMap(mkMap(mkEntry("", mkMap(mkEntry(0, 4L)))));
+        final SynchronizedPosition actual = (SynchronizedPosition) bytesStore.getPosition();
         assertEquals(expected, actual);
     }
 
@@ -678,7 +679,7 @@ public abstract class AbstractRocksDBSegmentedBytesStoreTest<S extends Segment> 
         bytesStore = getBytesStore();
         bytesStore.init((StateStoreContext) context, bytesStore);
         bytesStore.restoreAllInternal(getChangelogRecordsWithoutHeaders());
-        assertThat(bytesStore.getPosition(), is(Position.emptyPosition()));
+        assertThat(bytesStore.getPosition(), is(SynchronizedPosition.emptyPosition()));
     }
 
     private List<ConsumerRecord<byte[], byte[]>> getChangelogRecords() {

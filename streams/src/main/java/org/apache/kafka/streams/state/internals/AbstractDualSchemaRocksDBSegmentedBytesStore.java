@@ -260,11 +260,12 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStore<S extends Seg
             metrics
         );
 
-        segments.openExisting(context, observedStreamTime);
-
         final File positionCheckpointFile = new File(context.stateDir(), name() + ".position");
         this.positionCheckpoint = new OffsetCheckpoint(positionCheckpointFile);
         this.position = StoreQueryUtils.readPositionFromCheckpoint(positionCheckpoint);
+        segments.setPosition(this.position);
+
+        segments.openExisting(context, observedStreamTime);
 
         // register and possibly restore the state from the logs
         stateStoreContext.register(

@@ -124,7 +124,7 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]> {
             context.register(
                 root,
                 (RecordBatchingStateRestoreCallback) records -> {
-                    position.unlock();
+                    position.lock();
                     try {
                         for (final ConsumerRecord<byte[], byte[]> record : records) {
                             put(

@@ -373,12 +373,11 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
 
         metricsRecorder.init(ProcessorContextUtils.getMetricsImpl(context), context.taskId());
 
-        segmentStores.openExisting(context, observedStreamTime);
-
         final File positionCheckpointFile = new File(context.stateDir(), name() + ".position");
         positionCheckpoint = new OffsetCheckpoint(positionCheckpointFile);
         position = StoreQueryUtils.readPositionFromCheckpoint(positionCheckpoint);
         segmentStores.setPosition(position);
+        segmentStores.openExisting(context, observedStreamTime);
 
         // register and possibly restore the state from the logs
         stateStoreContext.register(
