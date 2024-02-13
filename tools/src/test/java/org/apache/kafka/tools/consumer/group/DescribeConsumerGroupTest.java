@@ -279,18 +279,25 @@ public class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
         ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(cgcArgs);
 
         TestUtils.waitForCondition(() -> {
-            scala.Tuple2<Option<String>, Option<Seq<ConsumerGroupCommand.PartitionAssignmentState>>> res = service.collectGroupOffsets(GROUP);
-            Option<String> state = res._1;
-            Option<Seq<ConsumerGroupCommand.PartitionAssignmentState>> assignments = res._2;
+            scala.Tuple2<Option<String>, Option<Seq<ConsumerGroupCommand.PartitionAssignmentState>>> groupOffsets = service.collectGroupOffsets(GROUP);
+            Option<String> state = groupOffsets._1;
+            Option<Seq<ConsumerGroupCommand.PartitionAssignmentState>> assignments = groupOffsets._2;
 
             Function1<ConsumerGroupCommand.PartitionAssignmentState, Object> isGrp = s -> Objects.equals(s.group(), GROUP);
 
-            return state.map(s -> s.contains("Stable")).getOrElse(() -> false) &&
-                assignments.isDefined() &&
-                assignments.get().count(isGrp) == 1 &&
-                !((ConsumerGroupCommand.PartitionAssignmentState) assignments.get().filter(isGrp).head()).consumerId().map(s0 -> s0.trim().equals(ConsumerGroupCommand.MISSING_COLUMN_VALUE())).getOrElse(() -> false) &&
-                !((ConsumerGroupCommand.PartitionAssignmentState) assignments.get().filter(isGrp).head()).clientId().map(s0 -> s0.trim().equals(ConsumerGroupCommand.MISSING_COLUMN_VALUE())).getOrElse(() -> false) &&
-                !((ConsumerGroupCommand.PartitionAssignmentState) assignments.get().filter(isGrp).head()).host().map(h -> h.trim().equals(ConsumerGroupCommand.MISSING_COLUMN_VALUE())).getOrElse(() -> false);
+            boolean res = state.map(s -> s.contains("Stable")).getOrElse(() -> false) &&
+                    assignments.isDefined() &&
+                    assignments.get().count(isGrp) == 1;
+
+            if (!res)
+                return false;
+
+            ConsumerGroupCommand.PartitionAssignmentState partitionState =
+                    (ConsumerGroupCommand.PartitionAssignmentState) assignments.get().filter(isGrp).head();
+
+            return !partitionState.consumerId().map(s0 -> s0.trim().equals(ConsumerGroupCommand.MISSING_COLUMN_VALUE())).getOrElse(() -> false) &&
+                    !partitionState.clientId().map(s0 -> s0.trim().equals(ConsumerGroupCommand.MISSING_COLUMN_VALUE())).getOrElse(() -> false) &&
+                    !partitionState.host().map(h -> h.trim().equals(ConsumerGroupCommand.MISSING_COLUMN_VALUE())).getOrElse(() -> false);
         }, "Expected a 'Stable' group status, rows and valid values for consumer id / client id / host columns in describe results for group " + GROUP + ".");
     }
 
@@ -305,18 +312,25 @@ public class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
         ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(cgcArgs);
 
         TestUtils.waitForCondition(() -> {
-            scala.Tuple2<Option<String>, Option<Seq<ConsumerGroupCommand.MemberAssignmentState>>> res = service.collectGroupMembers(GROUP, false);
-            Option<String> state = res._1;
-            Option<Seq<ConsumerGroupCommand.MemberAssignmentState>> assignments = res._2;
+            scala.Tuple2<Option<String>, Option<Seq<ConsumerGroupCommand.MemberAssignmentState>>> groupMembers = service.collectGroupMembers(GROUP, false);
+            Option<String> state = groupMembers._1;
+            Option<Seq<ConsumerGroupCommand.MemberAssignmentState>> assignments = groupMembers._2;
 
             Function1<ConsumerGroupCommand.MemberAssignmentState, Object> isGrp = s -> Objects.equals(s.group(), GROUP);
 
-            return state.map(s -> s.contains("Stable")).getOrElse(() -> false) &&
-                assignments.isDefined() &&
-                    assignments.get().count(s -> Objects.equals(s.group(), GROUP)) == 1 &&
-                !Objects.equals(((ConsumerGroupCommand.MemberAssignmentState) assignments.get().filter(isGrp).head()).consumerId(), ConsumerGroupCommand.MISSING_COLUMN_VALUE()) &&
-                !Objects.equals(((ConsumerGroupCommand.MemberAssignmentState) assignments.get().filter(isGrp).head()).clientId(), ConsumerGroupCommand.MISSING_COLUMN_VALUE()) &&
-                !Objects.equals(((ConsumerGroupCommand.MemberAssignmentState) assignments.get().filter(isGrp).head()).host(), ConsumerGroupCommand.MISSING_COLUMN_VALUE());
+            boolean res = state.map(s -> s.contains("Stable")).getOrElse(() -> false) &&
+                    assignments.isDefined() &&
+                    assignments.get().count(s -> Objects.equals(s.group(), GROUP)) == 1;
+
+            if (!res)
+                return false;
+
+            ConsumerGroupCommand.MemberAssignmentState assignmentState =
+                    (ConsumerGroupCommand.MemberAssignmentState) assignments.get().filter(isGrp).head();
+
+            return !Objects.equals(assignmentState.consumerId(), ConsumerGroupCommand.MISSING_COLUMN_VALUE()) &&
+                    !Objects.equals(assignmentState.clientId(), ConsumerGroupCommand.MISSING_COLUMN_VALUE()) &&
+                    !Objects.equals(assignmentState.host(), ConsumerGroupCommand.MISSING_COLUMN_VALUE());
         }, "Expected a 'Stable' group status, rows and valid member information for group " + GROUP + ".");
 
         scala.Tuple2<Option<String>, Option<Seq<ConsumerGroupCommand.MemberAssignmentState>>> res = service.collectGroupMembers(GROUP, true);
@@ -542,7 +556,7 @@ public class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
 
         TestUtils.waitForCondition(() -> {
             scala.Tuple2<Option<String>, Option<Seq<ConsumerGroupCommand.PartitionAssignmentState>>> res = service.collectGroupOffsets(GROUP);
-            return res._1.map(s -> s.contains("Stable")).isDefined() &&
+            return res._1.map(s -> s.contains("Stable")).getOrElse(() -> false) &&
                 res._2.isDefined() &&
                 res._2.get().count(s -> Objects.equals(s.group(), GROUP)) == 1 &&
                 res._2.get().count(x -> Objects.equals(x.group(), GROUP) && x.partition().isDefined()) == 1;
@@ -806,15 +820,22 @@ public class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
         ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(cgcArgs);
 
         TestUtils.waitForCondition(() -> {
+            scala.Tuple2<Option<String>, Option<Seq<ConsumerGroupCommand.PartitionAssignmentState>>> groupOffsets = service.collectGroupOffsets(GROUP);
+
             Function1<ConsumerGroupCommand.PartitionAssignmentState, Object> isGrp = s -> Objects.equals(s.group(), GROUP);
 
-            scala.Tuple2<Option<String>, Option<Seq<ConsumerGroupCommand.PartitionAssignmentState>>> res = service.collectGroupOffsets(GROUP);
-            return res._1.map(s -> s.contains("Stable")).getOrElse(() -> false) &&
-                res._2.isDefined() &&
-                res._2.get().count(isGrp) == 1 &&
-                ((ConsumerGroupCommand.PartitionAssignmentState) res._2.get().filter(isGrp).head()).consumerId().map(c -> !c.trim().equals(ConsumerGroupCommand.MISSING_COLUMN_VALUE())).getOrElse(() -> false) &&
-                ((ConsumerGroupCommand.PartitionAssignmentState) res._2.get().filter(isGrp).head()).clientId().map(c -> !c.trim().equals(ConsumerGroupCommand.MISSING_COLUMN_VALUE())).getOrElse(() -> false) &&
-                ((ConsumerGroupCommand.PartitionAssignmentState) res._2.get().filter(isGrp).head()).host().map(h -> !h.trim().equals(ConsumerGroupCommand.MISSING_COLUMN_VALUE())).getOrElse(() -> false);
+            boolean res = groupOffsets._1.map(s -> s.contains("Stable")).getOrElse(() -> false) &&
+                    groupOffsets._2.isDefined() &&
+                    groupOffsets._2.get().count(isGrp) == 1;
+
+            if (!res)
+                return false;
+
+            ConsumerGroupCommand.PartitionAssignmentState assignmentState = groupOffsets._2.get().filter(isGrp).head();
+
+            return assignmentState.consumerId().map(c -> !c.trim().equals(ConsumerGroupCommand.MISSING_COLUMN_VALUE())).getOrElse(() -> false) &&
+                    assignmentState.clientId().map(c -> !c.trim().equals(ConsumerGroupCommand.MISSING_COLUMN_VALUE())).getOrElse(() -> false) &&
+                    assignmentState.host().map(h -> !h.trim().equals(ConsumerGroupCommand.MISSING_COLUMN_VALUE())).getOrElse(() -> false);
         }, "Expected a 'Stable' group status, rows and valid values for consumer id / client id / host columns in describe results for non-offset-committing group " + GROUP + ".");
     }
 
