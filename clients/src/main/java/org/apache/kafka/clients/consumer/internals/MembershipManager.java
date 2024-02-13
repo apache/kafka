@@ -34,7 +34,7 @@ import java.util.concurrent.CompletableFuture;
  * <li>Keeping assignment for the member</li>
  * <li>Computing assignment for the group if the member is required to do so<li/>
  */
-public interface MembershipManager {
+public interface MembershipManager extends RequestManager {
 
     /**
      * @return Group ID of the consumer group the member is part of (or wants to be part of).
