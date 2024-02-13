@@ -99,6 +99,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
+import java.util.function.BiFunction;
 import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
@@ -1168,33 +1169,15 @@ public class GroupMetadataManager {
 
         // 3. Reconcile the member's assignment with the target assignment. This is only required if
         // the member is not stable or if a new target assignment has been installed.
-        if (!updatedMember.isReconciledTo(targetAssignmentEpoch)) {
-            ConsumerGroupMember prevMember = updatedMember;
-
-            updatedMember = new CurrentAssignmentBuilder(updatedMember)
-                .withTargetAssignment(targetAssignmentEpoch, targetAssignment)
-                .withCurrentPartitionEpoch(group::currentPartitionEpoch)
-                .withOwnedTopicPartitions(ownedTopicPartitions)
-                .build();
-
-            if (!updatedMember.assignmentEquals(prevMember)) {
-                records.add(newCurrentAssignmentRecord(groupId, updatedMember));
-
-                log.info("[GroupId {}] Member {} transitioned from {} to {}.",
-                    groupId, memberId, member.currentAssignmentSummary(), updatedMember.currentAssignmentSummary());
-
-                if (updatedMember.state() == MemberState.UNREVOKED_PARTITIONS) {
-                    scheduleConsumerGroupRebalanceTimeout(
-                        groupId,
-                        updatedMember.memberId(),
-                        updatedMember.memberEpoch(),
-                        updatedMember.rebalanceTimeoutMs()
-                    );
-                } else {
-                    cancelConsumerGroupRebalanceTimeout(groupId, memberId);
-                }
-            }
-        }
+        updatedMember = maybeReconcile(
+            groupId,
+            updatedMember,
+            group::currentPartitionEpoch,
+            targetAssignmentEpoch,
+            targetAssignment,
+            ownedTopicPartitions,
+            records
+        );
 
         scheduleConsumerGroupSessionTimeout(groupId, memberId);
 
@@ -1213,6 +1196,48 @@ public class GroupMetadataManager {
         }
 
         return new CoordinatorResult<>(records, response);
+    }
+
+    private ConsumerGroupMember maybeReconcile(
+        String groupId,
+        ConsumerGroupMember member,
+        BiFunction<Uuid, Integer, Integer> currentPartitionEpoch,
+        int targetAssignmentEpoch,
+        Assignment targetAssignment,
+        List<ConsumerGroupHeartbeatRequestData.TopicPartitions> ownedTopicPartitions,
+        List<Record> records
+    ) {
+        if (member.isReconciledTo(targetAssignmentEpoch)) {
+            return member;
+        }
+
+        ConsumerGroupMember updatedMember = new CurrentAssignmentBuilder(member)
+            .withTargetAssignment(targetAssignmentEpoch, targetAssignment)
+            .withCurrentPartitionEpoch(currentPartitionEpoch)
+            .withOwnedTopicPartitions(ownedTopicPartitions)
+            .build();
+
+        if (!updatedMember.assignmentEquals(member)) {
+            records.add(newCurrentAssignmentRecord(groupId, updatedMember));
+
+            log.info("[GroupId {}] Member {} updated its current assignment to epoch={}, previousEpoch={}, state={}, "
+                     + "assignedPartitions={} and revokedPartitions={}.",
+                groupId, updatedMember.memberId(), updatedMember.memberEpoch(), updatedMember.previousMemberEpoch(),
+                updatedMember.state(), updatedMember.assignedPartitions(), updatedMember.revokedPartitions());
+
+            if (updatedMember.state() == MemberState.UNREVOKED_PARTITIONS) {
+                scheduleConsumerGroupRebalanceTimeout(
+                    groupId,
+                    updatedMember.memberId(),
+                    updatedMember.memberEpoch(),
+                    updatedMember.rebalanceTimeoutMs()
+                );
+            } else {
+                cancelConsumerGroupRebalanceTimeout(groupId, updatedMember.memberId());
+            }
+        }
+
+        return updatedMember;
     }
 
     private boolean hasAssignedPartitionsChanged(

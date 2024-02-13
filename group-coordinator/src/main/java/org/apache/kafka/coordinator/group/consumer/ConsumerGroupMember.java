@@ -478,18 +478,6 @@ public class ConsumerGroupMember {
     }
 
     /**
-     * @return A string representation of the current assignment state.
-     */
-    public String currentAssignmentSummary() {
-        return "CurrentAssignment(memberEpoch=" + memberEpoch +
-            ", previousMemberEpoch=" + previousMemberEpoch +
-            ", state=" + state +
-            ", assignedPartitions=" + assignedPartitions +
-            ", revokedPartitions=" + revokedPartitions +
-            ')';
-    }
-
-    /**
      * @return True if the assignment of this member is equals to the assignment
      *         of that member.
      */
