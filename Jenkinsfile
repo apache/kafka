@@ -20,7 +20,6 @@
 import hudson.tasks.junit.TestResultAction
 import hudson.tasks.junit.TestResult
 import hudson.tasks.junit.SuiteResult
-import groovy.xml.XmlSlurper
 
 def doValidation() {
   // Run all the tasks associated with `check` except for `test` - the latter is executed via `doTest`
