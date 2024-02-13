@@ -154,7 +154,7 @@ public class TestUtils {
     }
 
     /**
-     * Test utility function to get MetadataSnapshot of cluster with 1 node, and 0 partitions.
+     * Test utility function to get MetadataSnapshot of cluster with configured, and 0 partitions.
      * @param nodes number of nodes in the cluster.
      * @return a MetadataSnapshot of cluster with number of nodes in the input.
      */

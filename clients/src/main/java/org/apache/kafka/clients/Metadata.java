@@ -130,7 +130,7 @@ public class Metadata implements Closeable {
     /**
      * Get the current metadata cache.
      */
-    public MetadataSnapshot fetchCache() {
+    public MetadataSnapshot fetchMetadataSnapshot() {
         return metadataSnapshot;
     }
 
