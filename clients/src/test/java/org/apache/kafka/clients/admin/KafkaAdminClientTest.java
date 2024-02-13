@@ -35,6 +35,7 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
+import org.apache.kafka.common.ShareGroupState;
 import org.apache.kafka.common.TopicCollection;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.TopicPartitionReplica;
@@ -5060,6 +5061,189 @@ public class KafkaAdminClientTest {
 
             TestUtils.assertFutureError(errorResult.all(), GroupAuthorizationException.class);
             TestUtils.assertFutureError(errorResult.partitionResult(tp1), GroupAuthorizationException.class);
+        }
+    }
+
+    @Test
+    public void testListShareGroups() throws Exception {
+        try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(mockCluster(4, 0),
+                AdminClientConfig.RETRIES_CONFIG, "2")) {
+            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
+
+            // Empty metadata response should be retried
+            env.kafkaClient().prepareResponse(
+                    RequestTestUtils.metadataResponse(
+                            Collections.emptyList(),
+                            env.cluster().clusterResource().clusterId(),
+                            -1,
+                            Collections.emptyList()));
+
+            env.kafkaClient().prepareResponse(
+                    RequestTestUtils.metadataResponse(
+                            env.cluster().nodes(),
+                            env.cluster().clusterResource().clusterId(),
+                            env.cluster().controller().id(),
+                            Collections.emptyList()));
+
+            env.kafkaClient().prepareResponseFrom(
+                    new ListGroupsResponse(
+                            new ListGroupsResponseData()
+                                    .setErrorCode(Errors.NONE.code())
+                                    .setGroups(Arrays.asList(
+                                            new ListGroupsResponseData.ListedGroup()
+                                                    .setGroupId("share-group-1")
+                                                    .setGroupType(GroupType.SHARE.toString())
+                                                    .setGroupState("Stable")
+                                    ))),
+                    env.cluster().nodeById(0));
+
+            // handle retriable errors
+            env.kafkaClient().prepareResponseFrom(
+                    new ListGroupsResponse(
+                            new ListGroupsResponseData()
+                                    .setErrorCode(Errors.COORDINATOR_NOT_AVAILABLE.code())
+                                    .setGroups(Collections.emptyList())
+                    ),
+                    env.cluster().nodeById(1));
+            env.kafkaClient().prepareResponseFrom(
+                    new ListGroupsResponse(
+                            new ListGroupsResponseData()
+                                    .setErrorCode(Errors.COORDINATOR_LOAD_IN_PROGRESS.code())
+                                    .setGroups(Collections.emptyList())
+                    ),
+                    env.cluster().nodeById(1));
+            env.kafkaClient().prepareResponseFrom(
+                    new ListGroupsResponse(
+                            new ListGroupsResponseData()
+                                    .setErrorCode(Errors.NONE.code())
+                                    .setGroups(Arrays.asList(
+                                            new ListGroupsResponseData.ListedGroup()
+                                                    .setGroupId("share-group-2")
+                                                    .setGroupType(GroupType.SHARE.toString())
+                                                    .setGroupState("Stable"),
+                                            new ListGroupsResponseData.ListedGroup()
+                                                    .setGroupId("share-group-3")
+                                                    .setGroupType(GroupType.SHARE.toString())
+                                                    .setGroupState("Stable")
+                                    ))),
+                    env.cluster().nodeById(1));
+
+            env.kafkaClient().prepareResponseFrom(
+                    new ListGroupsResponse(
+                            new ListGroupsResponseData()
+                                    .setErrorCode(Errors.NONE.code())
+                                    .setGroups(Arrays.asList(
+                                            new ListGroupsResponseData.ListedGroup()
+                                                    .setGroupId("share-group-4")
+                                                    .setGroupType(GroupType.SHARE.toString())
+                                                    .setGroupState("Stable")
+                                    ))),
+                    env.cluster().nodeById(2));
+
+            // fatal error
+            env.kafkaClient().prepareResponseFrom(
+                    new ListGroupsResponse(
+                            new ListGroupsResponseData()
+                                    .setErrorCode(Errors.UNKNOWN_SERVER_ERROR.code())
+                                    .setGroups(Collections.emptyList())),
+                    env.cluster().nodeById(3));
+
+            final ListShareGroupsResult result = env.adminClient().listShareGroups();
+            TestUtils.assertFutureError(result.all(), UnknownServerException.class);
+
+            Collection<ShareGroupListing> listings = result.valid().get();
+            assertEquals(4, listings.size());
+
+            Set<String> groupIds = new HashSet<>();
+            for (ShareGroupListing listing : listings) {
+                groupIds.add(listing.groupId());
+                assertTrue(listing.state().isPresent());
+            }
+
+            assertEquals(Utils.mkSet("share-group-1", "share-group-2", "share-group-3", "share-group-4"), groupIds);
+            assertEquals(1, result.errors().get().size());
+        }
+    }
+
+    @Test
+    public void testListShareGroupsMetadataFailure() throws Exception {
+        final Cluster cluster = mockCluster(3, 0);
+        final Time time = new MockTime();
+
+        try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(time, cluster,
+                AdminClientConfig.RETRIES_CONFIG, "0")) {
+            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
+
+            // Empty metadata causes the request to fail since we have no list of brokers
+            // to send the ListGroups requests to
+            env.kafkaClient().prepareResponse(
+                    RequestTestUtils.metadataResponse(
+                            Collections.emptyList(),
+                            env.cluster().clusterResource().clusterId(),
+                            -1,
+                            Collections.emptyList()));
+
+            final ListShareGroupsResult result = env.adminClient().listShareGroups();
+            TestUtils.assertFutureError(result.all(), KafkaException.class);
+        }
+    }
+
+    @Test
+    public void testListShareGroupsWithStates() throws Exception {
+        try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(mockCluster(1, 0))) {
+            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
+
+            env.kafkaClient().prepareResponse(prepareMetadataResponse(env.cluster(), Errors.NONE));
+
+            env.kafkaClient().prepareResponseFrom(
+                    new ListGroupsResponse(new ListGroupsResponseData()
+                            .setErrorCode(Errors.NONE.code())
+                            .setGroups(Arrays.asList(
+                                    new ListGroupsResponseData.ListedGroup()
+                                            .setGroupId("share-group-1")
+                                            .setGroupType(GroupType.SHARE.toString())
+                                            .setGroupState("Stable"),
+                                    new ListGroupsResponseData.ListedGroup()
+                                            .setGroupId("share-group-2")
+                                            .setGroupType(GroupType.SHARE.toString())
+                                            .setGroupState("Empty")))),
+                    env.cluster().nodeById(0));
+
+            final ListShareGroupsOptions options = new ListShareGroupsOptions();
+            final ListShareGroupsResult result = env.adminClient().listShareGroups(options);
+            Collection<ShareGroupListing> listings = result.valid().get();
+
+            assertEquals(2, listings.size());
+            List<ShareGroupListing> expected = new ArrayList<>();
+            expected.add(new ShareGroupListing("share-group-1", Optional.of(ShareGroupState.STABLE)));
+            expected.add(new ShareGroupListing("share-group-2", Optional.of(ShareGroupState.EMPTY)));
+            assertEquals(expected, listings);
+            assertEquals(0, result.errors().get().size());
+        }
+    }
+
+    @Test
+    public void testListShareGroupsWithStatesOlderBrokerVersion() throws Exception {
+        ApiVersion listGroupV4 = new ApiVersion()
+                .setApiKey(ApiKeys.LIST_GROUPS.id)
+                .setMinVersion((short) 0)
+                .setMaxVersion((short) 4);
+        try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(mockCluster(1, 0))) {
+            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create(Collections.singletonList(listGroupV4)));
+
+            env.kafkaClient().prepareResponse(prepareMetadataResponse(env.cluster(), Errors.NONE));
+
+            // Check we should not be able to list share groups with broker having version < 5
+            env.kafkaClient().prepareResponseFrom(
+                    new ListGroupsResponse(new ListGroupsResponseData()
+                            .setErrorCode(Errors.NONE.code())
+                            .setGroups(Collections.singletonList(
+                                    new ListGroupsResponseData.ListedGroup()
+                                            .setGroupId("share-group-1")))),
+                    env.cluster().nodeById(0));
+            ListShareGroupsOptions options = new ListShareGroupsOptions();
+            ListShareGroupsResult result = env.adminClient().listShareGroups(options);
+            TestUtils.assertFutureThrows(result.all(), UnsupportedVersionException.class);
         }
     }
 
