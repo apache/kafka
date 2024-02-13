@@ -767,8 +767,7 @@ public class DefaultStateUpdater implements StateUpdater {
     @Override
     public CompletableFuture<Task> remove(final TaskId taskId,
                                           final BiConsumer<? super Task, ? super Throwable> action) {
-        final CompletableFuture<Task> future = new CompletableFuture<>();
-        future.whenComplete(action);
+        final CompletableFuture<Task> future = new CompletableFuture<Task>().whenComplete(action);
         tasksAndActionsLock.lock();
         try {
             tasksAndActions.add(TaskAndAction.createRemoveTask(taskId, future));
