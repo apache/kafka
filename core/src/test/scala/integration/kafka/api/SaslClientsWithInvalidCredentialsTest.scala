@@ -23,7 +23,6 @@ import org.apache.kafka.common.{KafkaException, TopicPartition}
 import org.apache.kafka.common.errors.SaslAuthenticationException
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo}
 import org.junit.jupiter.api.Assertions._
-import kafka.admin.ConsumerGroupCommand.{ConsumerGroupCommandOptions, ConsumerGroupService}
 import kafka.server.KafkaConfig
 import kafka.utils.{JaasTestUtils, TestUtils}
 import kafka.zk.ConfigEntityChangeNotificationZNode
@@ -31,8 +30,8 @@ import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 
-class SaslClientsWithInvalidCredentialsTest extends IntegrationTestHarness with SaslSetup {
-  private val kafkaClientSaslMechanism = "SCRAM-SHA-256"
+class AbstractSaslClientsWithInvalidCredentialsTest extends IntegrationTestHarness with SaslSetup {
+  val kafkaClientSaslMechanism = "SCRAM-SHA-256"
   private val kafkaServerSaslMechanisms = List(kafkaClientSaslMechanism)
   override protected val securityProtocol = SecurityProtocol.SASL_PLAINTEXT
   override protected val serverSaslProperties = Some(kafkaServerSaslProperties(kafkaServerSaslMechanisms, kafkaClientSaslMechanism))
@@ -62,6 +61,10 @@ class SaslClientsWithInvalidCredentialsTest extends IntegrationTestHarness with 
       kafkaClientSaslMechanism, JaasTestUtils.KafkaScramAdmin, JaasTestUtils.KafkaScramAdminPassword)
   }
 
+  def createClientCredential(): Unit = {
+    createScramCredentialsViaPrivilegedAdminClient(JaasTestUtils.KafkaScramUser2, JaasTestUtils.KafkaScramPassword2)
+  }
+
   @BeforeEach
   override def setUp(testInfo: TestInfo): Unit = {
     startSasl(jaasSections(kafkaServerSaslMechanisms, Some(kafkaClientSaslMechanism), Both,
@@ -76,6 +79,28 @@ class SaslClientsWithInvalidCredentialsTest extends IntegrationTestHarness with 
     closeSasl()
   }
 
+  def verifyAuthenticationException(action: => Unit): Unit = {
+    val startMs = System.currentTimeMillis
+    assertThrows(classOf[Exception], () => action)
+    val elapsedMs = System.currentTimeMillis - startMs
+    assertTrue(elapsedMs <= 5000, s"Poll took too long, elapsed=$elapsedMs")
+  }
+
+  def verifyWithRetry(action: => Unit): Unit = {
+    var attempts = 0
+    TestUtils.waitUntilTrue(() => {
+      try {
+        attempts += 1
+        action
+        true
+      } catch {
+        case _: SaslAuthenticationException => false
+      }
+    }, s"Operation did not succeed within timeout after $attempts")
+  }
+}
+
+class SaslClientsWithInvalidCredentialsTest extends AbstractSaslClientsWithInvalidCredentialsTest {
   @ParameterizedTest
   @ValueSource(booleans = Array(true, false))
   def testProducerWithAuthenticationFailure(isIdempotenceEnabled: Boolean): Unit = {
@@ -166,49 +191,6 @@ class SaslClientsWithInvalidCredentialsTest extends IntegrationTestHarness with 
     }
   }
 
-  @Test
-  def testConsumerGroupServiceWithAuthenticationFailure(): Unit = {
-    val consumerGroupService: ConsumerGroupService = prepareConsumerGroupService
-
-    val consumer = createConsumer()
-    try {
-      consumer.subscribe(List(topic).asJava)
-
-      verifyAuthenticationException(consumerGroupService.listGroups())
-    } finally consumerGroupService.close()
-  }
-
-  @Test
-  def testConsumerGroupServiceWithAuthenticationSuccess(): Unit = {
-    createClientCredential()
-    val consumerGroupService: ConsumerGroupService = prepareConsumerGroupService
-
-    val consumer = createConsumer()
-    try {
-      consumer.subscribe(List(topic).asJava)
-
-      verifyWithRetry(consumer.poll(Duration.ofMillis(1000)))
-      assertEquals(1, consumerGroupService.listConsumerGroups().size)
-    }
-    finally consumerGroupService.close()
-  }
-
-  private def prepareConsumerGroupService = {
-    val propsFile = TestUtils.tempPropertiesFile(Map("security.protocol" -> "SASL_PLAINTEXT", "sasl.mechanism" -> kafkaClientSaslMechanism))
-
-    val cgcArgs = Array("--bootstrap-server", bootstrapServers(),
-                        "--describe",
-                        "--group", "test.group",
-                        "--command-config", propsFile.getAbsolutePath)
-    val opts = new ConsumerGroupCommandOptions(cgcArgs)
-    val consumerGroupService = new ConsumerGroupService(opts)
-    consumerGroupService
-  }
-
-  private def createClientCredential(): Unit = {
-    createScramCredentialsViaPrivilegedAdminClient(JaasTestUtils.KafkaScramUser2, JaasTestUtils.KafkaScramPassword2)
-  }
-
   private def sendOneRecord(producer: KafkaProducer[Array[Byte], Array[Byte]], maxWaitMs: Long = 15000): Unit = {
     val record = new ProducerRecord(tp.topic(), tp.partition(), 0L, "key".getBytes, "value".getBytes)
     val future = producer.send(record)
@@ -219,26 +201,6 @@ class SaslClientsWithInvalidCredentialsTest extends IntegrationTestHarness with 
     } catch {
       case e: ExecutionException => throw e.getCause
     }
-  }
-
-  private def verifyAuthenticationException(action: => Unit): Unit = {
-    val startMs = System.currentTimeMillis
-    assertThrows(classOf[Exception], () => action)
-    val elapsedMs = System.currentTimeMillis - startMs
-    assertTrue(elapsedMs <= 5000, s"Poll took too long, elapsed=$elapsedMs")
-  }
-
-  private def verifyWithRetry(action: => Unit): Unit = {
-    var attempts = 0
-    TestUtils.waitUntilTrue(() => {
-      try {
-        attempts += 1
-        action
-        true
-      } catch {
-        case _: SaslAuthenticationException => false
-      }
-    }, s"Operation did not succeed within timeout after $attempts")
   }
 
   private def createTransactionalProducer(): KafkaProducer[Array[Byte], Array[Byte]] = {
