@@ -488,6 +488,8 @@ class DeleteTopicTest extends QuorumTestHarness {
       // Restart KRaft quorum with the updated config
       val overridingProps = new Properties()
       overridingProps.put(KafkaConfig.DeleteTopicEnableProp, false.toString)
+      if (implementation != null)
+        implementation.shutdown()
       implementation = newKRaftQuorum(overridingProps)
     }
 
