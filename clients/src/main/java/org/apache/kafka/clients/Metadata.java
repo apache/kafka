@@ -123,7 +123,7 @@ public class Metadata implements Closeable {
     /**
      * Get the current cluster info without blocking
      */
-    public synchronized Cluster fetch() {
+    public Cluster fetch() {
         return metadataSnapshot.cluster();
     }
 
