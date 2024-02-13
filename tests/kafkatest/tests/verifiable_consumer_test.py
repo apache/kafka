@@ -80,11 +80,22 @@ class VerifiableConsumerTest(KafkaTest):
                    timeout_sec=self.consumption_timeout_sec,
                    err_msg="Timed out waiting for consumption")
 
-    def await_members(self, consumer, num_consumers):
+    def await_members(self, consumer, num_consumers, include_started=False, include_joined=True):
         # Wait until all members have joined the group
-        wait_until(lambda: len(consumer.started_nodes() + consumer.joined_nodes()) == num_consumers,
+        wait_until(lambda: self.node_count_equal(consumer, num_consumers, include_started, include_joined),
                    timeout_sec=self.session_timeout_sec*2,
                    err_msg="Consumers failed to join in a reasonable amount of time")
         
     def await_all_members(self, consumer):
         self.await_members(consumer, self.num_consumers)
+
+    def node_count_equal(self, consumer, expected, include_started_nodes, include_joined_nodes):
+        count = 0
+
+        if include_started_nodes:
+            count += len(consumer.started_nodes())
+
+        if include_joined_nodes:
+            count += len(consumer.joined_nodes())
+
+        return count == expected

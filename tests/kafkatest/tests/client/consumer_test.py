@@ -523,11 +523,7 @@ class OffsetValidationTest(VerifiableConsumerTest):
 
     @cluster(num_nodes=7)
     @matrix(
-        metadata_quorum=[quorum.zk],
-        use_new_coordinator=[False]
-    )
-    @matrix(
-        metadata_quorum=[quorum.isolated_kraft],
+        metadata_quorum=[quorum.zk, quorum.isolated_kraft],
         use_new_coordinator=[False]
     )
     @matrix(
@@ -556,7 +552,7 @@ class OffsetValidationTest(VerifiableConsumerTest):
 
         for num_started, node in enumerate(consumer.nodes, 1):
             consumer.start_node(node)
-            self.await_members(consumer, num_started)
+            self.await_members(consumer, num_started, include_started=True)
             self.await_consumed_messages(consumer)
 
         for num_stopped, node in enumerate(consumer.nodes, 1):
@@ -588,15 +584,8 @@ class AssignmentValidationTest(VerifiableConsumerTest):
     @matrix(
         assignment_strategy=["org.apache.kafka.clients.consumer.RangeAssignor",
                              "org.apache.kafka.clients.consumer.RoundRobinAssignor",
-                             "org.apache.kafka.clients.consumer.StickyAssignor"], 
-        metadata_quorum=[quorum.zk],
-        use_new_coordinator=[False]
-    )
-    @matrix(
-        assignment_strategy=["org.apache.kafka.clients.consumer.RangeAssignor",
-                             "org.apache.kafka.clients.consumer.RoundRobinAssignor",
                              "org.apache.kafka.clients.consumer.StickyAssignor"],
-        metadata_quorum=[quorum.isolated_kraft],
+        metadata_quorum=[quorum.zk, quorum.isolated_kraft],
         use_new_coordinator=[False]
     )
     @matrix(
@@ -605,9 +594,15 @@ class AssignmentValidationTest(VerifiableConsumerTest):
                              "org.apache.kafka.clients.consumer.StickyAssignor"],
         metadata_quorum=[quorum.isolated_kraft],
         use_new_coordinator=[True],
-        group_protocol=["classic", "consumer"]
+        group_protocol=["classic"]
     )
-    def test_valid_assignment(self, assignment_strategy, metadata_quorum=quorum.zk, use_new_coordinator=False, group_protocol="classic"):
+    @matrix(
+        metadata_quorum=[quorum.isolated_kraft],
+        use_new_coordinator=[True],
+        group_protocol=["consumer"],
+        group_remote_assignor=["range"]
+    )
+    def test_valid_assignment(self, assignment_strategy=None, metadata_quorum=quorum.zk, use_new_coordinator=False, group_protocol="classic", group_remote_assignor=None):
         """
         Verify assignment strategy correctness: each partition is assigned to exactly
         one consumer instance.
@@ -617,7 +612,10 @@ class AssignmentValidationTest(VerifiableConsumerTest):
         - Start the consumers one by one
         - Validate assignment after every expected rebalance
         """
-        consumer = self.setup_consumer(self.TOPIC, group_protocol=group_protocol, assignment_strategy=assignment_strategy)
+        consumer = self.setup_consumer(self.TOPIC,
+                                       group_protocol=group_protocol,
+                                       assignment_strategy=assignment_strategy,
+                                       group_remote_assignor=group_remote_assignor)
         for num_started, node in enumerate(consumer.nodes, 1):
             consumer.start_node(node)
             self.await_members(consumer, num_started)

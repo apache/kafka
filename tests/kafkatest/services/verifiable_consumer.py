@@ -39,7 +39,7 @@ class ConsumerEventHandler(object):
         self.state = ConsumerState.Dead
         self.revoked_count = 0
         self.assigned_count = 0
-        self.assignment = []
+        self.assignment = set()
         self.position = {}
         self.committed = {}
         self.total_consumed = 0
@@ -102,17 +102,16 @@ class ConsumerEventHandler(object):
     def handle_partitions_revoked(self, event):
         self.revoked_count += 1
         self.state = ConsumerState.Rebalancing
+        for topic_partition in self._topic_partitions(event):
+            if topic_partition in self.assignment:
+                self.assignment.remove(topic_partition)
         self.position = {}
 
     def handle_partitions_assigned(self, event):
         self.assigned_count += 1
         self.state = ConsumerState.Joined
-        assignment = []
-        for topic_partition in event["partitions"]:
-            topic = topic_partition["topic"]
-            partition = topic_partition["partition"]
-            assignment.append(TopicPartition(topic, partition))
-        self.assignment = assignment
+        for topic_partition in self._topic_partitions(event):
+            self.assignment.add(topic_partition)
 
     def handle_kill_process(self, clean_shutdown):
         # if the shutdown was clean, then we expect the explicit
@@ -135,6 +134,16 @@ class ConsumerEventHandler(object):
         else:
             return None
 
+    def _topic_partitions(self, event):
+        tps = []
+
+        for topic_partition in event["partitions"]:
+            topic = topic_partition["topic"]
+            partition = topic_partition["partition"]
+            tp = TopicPartition(topic, partition)
+            tps.append(tp)
+
+        return tps
 
 class VerifiableConsumer(KafkaPathResolverMixin, VerifiableClientMixin, BackgroundThreadService):
     """This service wraps org.apache.kafka.tools.VerifiableConsumer for use in
