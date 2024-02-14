@@ -243,7 +243,7 @@ public class HeartbeatRequestManager implements RequestManager {
         pollTimer.update(currentTimeMs);
         if (
             pollTimer.isExpired() ||
-            (membershipManager.shouldHeartbeatNow() && !heartbeatRequestState.requestInFlight())
+                (membershipManager.shouldHeartbeatNow() && !heartbeatRequestState.requestInFlight())
         ) {
             return 0L;
         }
