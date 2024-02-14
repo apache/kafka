@@ -26,6 +26,11 @@ import java.util.List;
 public class GroupCoordinatorConfig {
 
     /**
+     * The timeout used to wait for a new member in milliseconds.
+     */
+    public static final int CLASSIC_GROUP_NEW_MEMBER_JOIN_TIMEOUT_MS = 5 * 60 * 1000;
+
+    /**
      * The number of threads or event loops running.
      */
     public final int numThreads;
@@ -56,13 +61,79 @@ public class GroupCoordinatorConfig {
      */
     public final int offsetsTopicSegmentBytes;
 
+    /**
+     * The maximum size for a metadata entry associated with an offset commit.
+     */
+    public final int offsetMetadataMaxSize;
+
+    /**
+     * The classic group maximum size.
+     */
+    public final int classicGroupMaxSize;
+
+    /**
+     * The delay in milliseconds introduced for the first rebalance of a classic group.
+     */
+    public final int classicGroupInitialRebalanceDelayMs;
+
+    /**
+     * The timeout used to wait for a new member in milliseconds.
+     */
+    public final int classicGroupNewMemberJoinTimeoutMs;
+
+    /**
+     * The classic group minimum session timeout.
+     */
+    public final int classicGroupMinSessionTimeoutMs;
+
+    /**
+     * The classic group maximum session timeout.
+     */
+    public final int classicGroupMaxSessionTimeoutMs;
+
+    /**
+     * Frequency at which to check for expired offsets.
+     */
+    public final long offsetsRetentionCheckIntervalMs;
+
+    /**
+     * For subscribed consumers, committed offset of a specific partition will be expired and discarded when:
+     *     1) This retention period has elapsed after the consumer group loses all its consumers (i.e. becomes empty);
+     *     2) This retention period has elapsed since the last time an offset is committed for the partition AND
+     *        the group is no longer subscribed to the corresponding topic.
+     *
+     * For standalone consumers (using manual assignment), offsets will be expired after this retention period has
+     * elapsed since the time of last commit.
+     *
+     * Note that when a group is deleted via the DeleteGroups request, its committed offsets will also be deleted immediately;
+     *
+     * Also, when a topic is deleted via the delete-topic request, upon propagated metadata update any group's
+     *     committed offsets for that topic will also be deleted without extra retention period.
+     */
+    public final long offsetsRetentionMs;
+
+    /**
+     * Offset commit will be delayed until all replicas for the offsets topic receive the commit
+     * or this timeout is reached
+     */
+    public final int offsetCommitTimeoutMs;
+
     public GroupCoordinatorConfig(
         int numThreads,
         int consumerGroupSessionTimeoutMs,
         int consumerGroupHeartbeatIntervalMs,
         int consumerGroupMaxSize,
         List<PartitionAssignor> consumerGroupAssignors,
-        int offsetsTopicSegmentBytes
+        int offsetsTopicSegmentBytes,
+        int offsetMetadataMaxSize,
+        int classicGroupMaxSize,
+        int classicGroupInitialRebalanceDelayMs,
+        int classicGroupNewMemberJoinTimeoutMs,
+        int classicGroupMinSessionTimeoutMs,
+        int classicGroupMaxSessionTimeoutMs,
+        long offsetsRetentionCheckIntervalMs,
+        long offsetsRetentionMs,
+        int offsetCommitTimeoutMs
     ) {
         this.numThreads = numThreads;
         this.consumerGroupSessionTimeoutMs = consumerGroupSessionTimeoutMs;
@@ -70,5 +141,14 @@ public class GroupCoordinatorConfig {
         this.consumerGroupMaxSize = consumerGroupMaxSize;
         this.consumerGroupAssignors = consumerGroupAssignors;
         this.offsetsTopicSegmentBytes = offsetsTopicSegmentBytes;
+        this.offsetMetadataMaxSize = offsetMetadataMaxSize;
+        this.classicGroupMaxSize = classicGroupMaxSize;
+        this.classicGroupInitialRebalanceDelayMs = classicGroupInitialRebalanceDelayMs;
+        this.classicGroupNewMemberJoinTimeoutMs = classicGroupNewMemberJoinTimeoutMs;
+        this.classicGroupMinSessionTimeoutMs = classicGroupMinSessionTimeoutMs;
+        this.classicGroupMaxSessionTimeoutMs = classicGroupMaxSessionTimeoutMs;
+        this.offsetsRetentionCheckIntervalMs = offsetsRetentionCheckIntervalMs;
+        this.offsetsRetentionMs = offsetsRetentionMs;
+        this.offsetCommitTimeoutMs = offsetCommitTimeoutMs;
     }
 }

@@ -17,7 +17,7 @@
 package kafka.cluster
 
 import kafka.log.LogManager
-import kafka.server.{Defaults, MetadataCache}
+import kafka.server.MetadataCache
 import kafka.server.checkpoints.OffsetCheckpoints
 import kafka.server.metadata.MockConfigRepository
 import kafka.utils.TestUtils.{MockAlterPartitionListener, MockAlterPartitionManager}
@@ -34,6 +34,7 @@ import org.mockito.Mockito.{mock, when}
 import java.io.File
 import java.util.Properties
 import org.apache.kafka.server.common.MetadataVersion
+import org.apache.kafka.server.config.Defaults
 import org.apache.kafka.server.util.MockTime
 import org.apache.kafka.storage.internals.log.{CleanerConfig, LogConfig}
 
@@ -74,13 +75,13 @@ class AbstractPartitionTest {
     logDir1 = TestUtils.randomPartitionLogDir(tmpDir)
     logDir2 = TestUtils.randomPartitionLogDir(tmpDir)
     logManager = TestUtils.createLogManager(Seq(logDir1, logDir2), logConfig, configRepository,
-      new CleanerConfig(false), time, interBrokerProtocolVersion)
+      new CleanerConfig(false), time, interBrokerProtocolVersion, transactionVerificationEnabled = true)
     logManager.startup(Set.empty)
 
     alterPartitionManager = TestUtils.createAlterIsrManager()
     alterPartitionListener = TestUtils.createIsrChangeListener()
     partition = new Partition(topicPartition,
-      replicaLagTimeMaxMs = Defaults.ReplicaLagTimeMaxMs,
+      replicaLagTimeMaxMs = Defaults.REPLICA_LAG_TIME_MAX_MS,
       interBrokerProtocolVersion = interBrokerProtocolVersion,
       localBrokerId = brokerId,
       () => defaultBrokerEpoch(brokerId),
@@ -95,7 +96,7 @@ class AbstractPartitionTest {
       .thenReturn(None)
   }
 
-  protected def interBrokerProtocolVersion: MetadataVersion = MetadataVersion.latest
+  protected def interBrokerProtocolVersion: MetadataVersion = MetadataVersion.latestTesting
 
   def createLogProperties(overrides: Map[String, String]): Properties = {
     val logProps = new Properties()

@@ -31,6 +31,7 @@ import org.apache.kafka.common.errors.{InvalidRequestException, UnsupportedVersi
 import org.apache.kafka.common.internals.KafkaFutureImpl
 import org.apache.kafka.common.quota.{ClientQuotaAlteration, ClientQuotaEntity, ClientQuotaFilter, ClientQuotaFilterComponent}
 import org.apache.kafka.common.requests.{AlterClientQuotasRequest, AlterClientQuotasResponse, DescribeClientQuotasRequest, DescribeClientQuotasResponse}
+import org.apache.kafka.server.config.ConfigEntityName
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.extension.ExtendWith
@@ -526,7 +527,7 @@ class ClientQuotasRequestTest(cluster: ClusterInstance) {
   def testClientQuotasWithDefaultName(): Unit = {
     // An entity using the name associated with the default entity name. The entity's name should be sanitized so
     // that it does not conflict with the default entity name.
-    val entity = new ClientQuotaEntity(Map((ClientQuotaEntity.CLIENT_ID -> ConfigEntityName.Default)).asJava)
+    val entity = new ClientQuotaEntity(Map((ClientQuotaEntity.CLIENT_ID -> ConfigEntityName.DEFAULT)).asJava)
     alterEntityQuotas(entity, Map((ProducerByteRateProp -> Some(20000.0))), validateOnly = false)
     verifyDescribeEntityQuotas(entity, Map((ProducerByteRateProp -> 20000.0)))
 

@@ -20,10 +20,11 @@ package kafka.server
 import java.util
 import java.util.Properties
 import org.apache.kafka.common.config.ConfigResource
-import org.apache.kafka.common.config.ConfigResource.Type.{BROKER, TOPIC}
+import org.apache.kafka.common.config.ConfigResource.Type.{BROKER, CLIENT_METRICS, TOPIC}
 import org.apache.kafka.controller.ConfigurationValidator
 import org.apache.kafka.common.errors.{InvalidConfigurationException, InvalidRequestException}
 import org.apache.kafka.common.internals.Topic
+import org.apache.kafka.server.metrics.ClientMetricsConfigs
 import org.apache.kafka.storage.internals.log.LogConfig
 
 import scala.collection.mutable
@@ -42,11 +43,11 @@ import scala.collection.mutable
  * in the same RPC, BROKER_LOGGER is not really a dynamic configuration in the same sense
  * as the others. It is not persisted to the metadata log (or to ZK, when we're in that mode).
  */
-class ControllerConfigurationValidator extends ConfigurationValidator {
+class ControllerConfigurationValidator(kafkaConfig: KafkaConfig) extends ConfigurationValidator {
   private def validateTopicName(
     name: String
   ): Unit = {
-    if (name.isEmpty()) {
+    if (name.isEmpty) {
       throw new InvalidRequestException("Default topic resources are not allowed.")
     }
     Topic.validate(name)
@@ -55,7 +56,7 @@ class ControllerConfigurationValidator extends ConfigurationValidator {
   private def validateBrokerName(
     name: String
   ): Unit = {
-    if (!name.isEmpty()) {
+    if (name.nonEmpty) {
       val brokerId = try {
         Integer.valueOf(name)
       } catch {
@@ -96,18 +97,22 @@ class ControllerConfigurationValidator extends ConfigurationValidator {
         val properties = new Properties()
         val nullTopicConfigs = new mutable.ArrayBuffer[String]()
         config.entrySet().forEach(e => {
-          if (e.getValue() == null) {
-            nullTopicConfigs += e.getKey()
+          if (e.getValue == null) {
+            nullTopicConfigs += e.getKey
           } else {
-            properties.setProperty(e.getKey(), e.getValue())
+            properties.setProperty(e.getKey, e.getValue)
           }
         })
         if (nullTopicConfigs.nonEmpty) {
           throw new InvalidConfigurationException("Null value not supported for topic configs: " +
             nullTopicConfigs.mkString(","))
         }
-        LogConfig.validate(properties)
+        LogConfig.validate(properties, kafkaConfig.extractLogConfigMap, kafkaConfig.isRemoteLogStorageSystemEnabled)
       case BROKER => validateBrokerName(resource.name())
+      case CLIENT_METRICS =>
+        val properties = new Properties()
+        config.entrySet().forEach(e => properties.setProperty(e.getKey, e.getValue))
+        ClientMetricsConfigs.validate(resource.name(), properties)
       case _ => throwExceptionForUnknownResourceType(resource)
     }
   }

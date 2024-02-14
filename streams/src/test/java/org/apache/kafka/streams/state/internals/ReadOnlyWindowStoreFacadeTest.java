@@ -23,22 +23,20 @@ import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.TimestampedWindowStore;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.state.WindowStoreIterator;
-import org.easymock.EasyMockRunner;
-import org.easymock.Mock;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
+import org.mockito.Mock;
+import org.mockito.junit.MockitoJUnitRunner;
 
 import java.time.Instant;
 
-import static org.easymock.EasyMock.expect;
-import static org.easymock.EasyMock.replay;
-import static org.easymock.EasyMock.verify;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.is;
 import static org.junit.Assert.assertNull;
+import static org.mockito.Mockito.when;
 
-@RunWith(EasyMockRunner.class)
+@RunWith(MockitoJUnitRunner.StrictStubs.class)
 public class ReadOnlyWindowStoreFacadeTest {
     @Mock
     private TimestampedWindowStore<String, String> mockedWindowTimestampStore;
@@ -56,152 +54,135 @@ public class ReadOnlyWindowStoreFacadeTest {
 
     @Test
     public void shouldReturnPlainKeyValuePairsOnSingleKeyFetch() {
-        expect(mockedWindowTimestampStore.fetch("key1", 21L))
-            .andReturn(ValueAndTimestamp.make("value1", 42L));
-        expect(mockedWindowTimestampStore.fetch("unknownKey", 21L))
-            .andReturn(null);
-        replay(mockedWindowTimestampStore);
+        when(mockedWindowTimestampStore.fetch("key1", 21L))
+            .thenReturn(ValueAndTimestamp.make("value1", 42L));
+        when(mockedWindowTimestampStore.fetch("unknownKey", 21L))
+            .thenReturn(null);
 
         assertThat(readOnlyWindowStoreFacade.fetch("key1", 21L), is("value1"));
         assertNull(readOnlyWindowStoreFacade.fetch("unknownKey", 21L));
-
-        verify(mockedWindowTimestampStore);
     }
 
     @Test
     public void shouldReturnPlainKeyValuePairsOnSingleKeyFetchLongParameters() {
-        expect(mockedWindowTimestampIterator.next())
-            .andReturn(KeyValue.pair(21L, ValueAndTimestamp.make("value1", 22L)))
-            .andReturn(KeyValue.pair(42L, ValueAndTimestamp.make("value2", 23L)));
-        expect(mockedWindowTimestampStore.fetch("key1", Instant.ofEpochMilli(21L), Instant.ofEpochMilli(42L)))
-            .andReturn(mockedWindowTimestampIterator);
-        replay(mockedWindowTimestampIterator, mockedWindowTimestampStore);
+        when(mockedWindowTimestampIterator.next())
+            .thenReturn(KeyValue.pair(21L, ValueAndTimestamp.make("value1", 22L)))
+            .thenReturn(KeyValue.pair(42L, ValueAndTimestamp.make("value2", 23L)));
+        when(mockedWindowTimestampStore.fetch("key1", Instant.ofEpochMilli(21L), Instant.ofEpochMilli(42L)))
+            .thenReturn(mockedWindowTimestampIterator);
 
         final WindowStoreIterator<String> iterator =
             readOnlyWindowStoreFacade.fetch("key1", Instant.ofEpochMilli(21L), Instant.ofEpochMilli(42L));
 
         assertThat(iterator.next(), is(KeyValue.pair(21L, "value1")));
         assertThat(iterator.next(), is(KeyValue.pair(42L, "value2")));
-        verify(mockedWindowTimestampIterator, mockedWindowTimestampStore);
     }
 
     @Test
     public void shouldReturnPlainKeyValuePairsOnSingleKeyFetchInstantParameters() {
-        expect(mockedWindowTimestampIterator.next())
-            .andReturn(KeyValue.pair(21L, ValueAndTimestamp.make("value1", 22L)))
-            .andReturn(KeyValue.pair(42L, ValueAndTimestamp.make("value2", 23L)));
-        expect(mockedWindowTimestampStore.fetch("key1", Instant.ofEpochMilli(21L), Instant.ofEpochMilli(42L)))
-            .andReturn(mockedWindowTimestampIterator);
-        replay(mockedWindowTimestampIterator, mockedWindowTimestampStore);
+        when(mockedWindowTimestampIterator.next())
+            .thenReturn(KeyValue.pair(21L, ValueAndTimestamp.make("value1", 22L)))
+            .thenReturn(KeyValue.pair(42L, ValueAndTimestamp.make("value2", 23L)));
+        when(mockedWindowTimestampStore.fetch("key1", Instant.ofEpochMilli(21L), Instant.ofEpochMilli(42L)))
+            .thenReturn(mockedWindowTimestampIterator);
 
         final WindowStoreIterator<String> iterator =
             readOnlyWindowStoreFacade.fetch("key1", Instant.ofEpochMilli(21L), Instant.ofEpochMilli(42L));
 
         assertThat(iterator.next(), is(KeyValue.pair(21L, "value1")));
         assertThat(iterator.next(), is(KeyValue.pair(42L, "value2")));
-        verify(mockedWindowTimestampIterator, mockedWindowTimestampStore);
     }
 
     @Test
     public void shouldReturnPlainKeyValuePairsOnRangeFetchLongParameters() {
-        expect(mockedKeyValueWindowTimestampIterator.next())
-            .andReturn(KeyValue.pair(
+        when(mockedKeyValueWindowTimestampIterator.next())
+            .thenReturn(KeyValue.pair(
                 new Windowed<>("key1", new TimeWindow(21L, 22L)),
                 ValueAndTimestamp.make("value1", 22L)))
-            .andReturn(KeyValue.pair(
+            .thenReturn(KeyValue.pair(
                 new Windowed<>("key2", new TimeWindow(42L, 43L)),
                 ValueAndTimestamp.make("value2", 100L)));
-        expect(mockedWindowTimestampStore.fetch("key1", "key2", Instant.ofEpochMilli(21L), Instant.ofEpochMilli(42L)))
-            .andReturn(mockedKeyValueWindowTimestampIterator);
-        replay(mockedKeyValueWindowTimestampIterator, mockedWindowTimestampStore);
+        when(mockedWindowTimestampStore.fetch("key1", "key2", Instant.ofEpochMilli(21L), Instant.ofEpochMilli(42L)))
+            .thenReturn(mockedKeyValueWindowTimestampIterator);
 
         final KeyValueIterator<Windowed<String>, String> iterator =
             readOnlyWindowStoreFacade.fetch("key1", "key2", Instant.ofEpochMilli(21L), Instant.ofEpochMilli(42L));
 
         assertThat(iterator.next(), is(KeyValue.pair(new Windowed<>("key1", new TimeWindow(21L, 22L)), "value1")));
         assertThat(iterator.next(), is(KeyValue.pair(new Windowed<>("key2", new TimeWindow(42L, 43L)), "value2")));
-        verify(mockedKeyValueWindowTimestampIterator, mockedWindowTimestampStore);
     }
 
     @Test
     public void shouldReturnPlainKeyValuePairsOnRangeFetchInstantParameters() {
-        expect(mockedKeyValueWindowTimestampIterator.next())
-            .andReturn(KeyValue.pair(
+        when(mockedKeyValueWindowTimestampIterator.next())
+            .thenReturn(KeyValue.pair(
                 new Windowed<>("key1", new TimeWindow(21L, 22L)),
                 ValueAndTimestamp.make("value1", 22L)))
-            .andReturn(KeyValue.pair(
+            .thenReturn(KeyValue.pair(
                 new Windowed<>("key2", new TimeWindow(42L, 43L)),
                 ValueAndTimestamp.make("value2", 100L)));
-        expect(mockedWindowTimestampStore.fetch("key1", "key2", Instant.ofEpochMilli(21L), Instant.ofEpochMilli(42L)))
-            .andReturn(mockedKeyValueWindowTimestampIterator);
-        replay(mockedKeyValueWindowTimestampIterator, mockedWindowTimestampStore);
+        when(mockedWindowTimestampStore.fetch("key1", "key2", Instant.ofEpochMilli(21L), Instant.ofEpochMilli(42L)))
+            .thenReturn(mockedKeyValueWindowTimestampIterator);
 
         final KeyValueIterator<Windowed<String>, String> iterator =
             readOnlyWindowStoreFacade.fetch("key1", "key2", Instant.ofEpochMilli(21L), Instant.ofEpochMilli(42L));
 
         assertThat(iterator.next(), is(KeyValue.pair(new Windowed<>("key1", new TimeWindow(21L, 22L)), "value1")));
         assertThat(iterator.next(), is(KeyValue.pair(new Windowed<>("key2", new TimeWindow(42L, 43L)), "value2")));
-        verify(mockedKeyValueWindowTimestampIterator, mockedWindowTimestampStore);
     }
 
     @Test
     public void shouldReturnPlainKeyValuePairsOnFetchAllLongParameters() {
-        expect(mockedKeyValueWindowTimestampIterator.next())
-            .andReturn(KeyValue.pair(
+        when(mockedKeyValueWindowTimestampIterator.next())
+            .thenReturn(KeyValue.pair(
                 new Windowed<>("key1", new TimeWindow(21L, 22L)),
                 ValueAndTimestamp.make("value1", 22L)))
-            .andReturn(KeyValue.pair(
+            .thenReturn(KeyValue.pair(
                 new Windowed<>("key2", new TimeWindow(42L, 43L)),
                 ValueAndTimestamp.make("value2", 100L)));
-        expect(mockedWindowTimestampStore.fetchAll(Instant.ofEpochMilli(21L), Instant.ofEpochMilli(42L)))
-            .andReturn(mockedKeyValueWindowTimestampIterator);
-        replay(mockedKeyValueWindowTimestampIterator, mockedWindowTimestampStore);
+        when(mockedWindowTimestampStore.fetchAll(Instant.ofEpochMilli(21L), Instant.ofEpochMilli(42L)))
+            .thenReturn(mockedKeyValueWindowTimestampIterator);
 
         final KeyValueIterator<Windowed<String>, String> iterator =
             readOnlyWindowStoreFacade.fetchAll(Instant.ofEpochMilli(21L), Instant.ofEpochMilli(42L));
 
         assertThat(iterator.next(), is(KeyValue.pair(new Windowed<>("key1", new TimeWindow(21L, 22L)), "value1")));
         assertThat(iterator.next(), is(KeyValue.pair(new Windowed<>("key2", new TimeWindow(42L, 43L)), "value2")));
-        verify(mockedKeyValueWindowTimestampIterator, mockedWindowTimestampStore);
     }
 
     @Test
     public void shouldReturnPlainKeyValuePairsOnFetchAllInstantParameters() {
-        expect(mockedKeyValueWindowTimestampIterator.next())
-            .andReturn(KeyValue.pair(
+        when(mockedKeyValueWindowTimestampIterator.next())
+            .thenReturn(KeyValue.pair(
                 new Windowed<>("key1", new TimeWindow(21L, 22L)),
                 ValueAndTimestamp.make("value1", 22L)))
-            .andReturn(KeyValue.pair(
+            .thenReturn(KeyValue.pair(
                 new Windowed<>("key2", new TimeWindow(42L, 43L)),
                 ValueAndTimestamp.make("value2", 100L)));
-        expect(mockedWindowTimestampStore.fetchAll(Instant.ofEpochMilli(21L), Instant.ofEpochMilli(42L)))
-            .andReturn(mockedKeyValueWindowTimestampIterator);
-        replay(mockedKeyValueWindowTimestampIterator, mockedWindowTimestampStore);
+        when(mockedWindowTimestampStore.fetchAll(Instant.ofEpochMilli(21L), Instant.ofEpochMilli(42L)))
+            .thenReturn(mockedKeyValueWindowTimestampIterator);
 
         final KeyValueIterator<Windowed<String>, String> iterator =
             readOnlyWindowStoreFacade.fetchAll(Instant.ofEpochMilli(21L), Instant.ofEpochMilli(42L));
 
         assertThat(iterator.next(), is(KeyValue.pair(new Windowed<>("key1", new TimeWindow(21L, 22L)), "value1")));
         assertThat(iterator.next(), is(KeyValue.pair(new Windowed<>("key2", new TimeWindow(42L, 43L)), "value2")));
-        verify(mockedKeyValueWindowTimestampIterator, mockedWindowTimestampStore);
     }
 
     @Test
     public void shouldReturnPlainKeyValuePairsOnAll() {
-        expect(mockedKeyValueWindowTimestampIterator.next())
-            .andReturn(KeyValue.pair(
+        when(mockedKeyValueWindowTimestampIterator.next())
+            .thenReturn(KeyValue.pair(
                 new Windowed<>("key1", new TimeWindow(21L, 22L)),
                 ValueAndTimestamp.make("value1", 22L)))
-            .andReturn(KeyValue.pair(
+            .thenReturn(KeyValue.pair(
                 new Windowed<>("key2", new TimeWindow(42L, 43L)),
                 ValueAndTimestamp.make("value2", 100L)));
-        expect(mockedWindowTimestampStore.all()).andReturn(mockedKeyValueWindowTimestampIterator);
-        replay(mockedKeyValueWindowTimestampIterator, mockedWindowTimestampStore);
+        when(mockedWindowTimestampStore.all()).thenReturn(mockedKeyValueWindowTimestampIterator);
 
         final KeyValueIterator<Windowed<String>, String> iterator = readOnlyWindowStoreFacade.all();
 
         assertThat(iterator.next(), is(KeyValue.pair(new Windowed<>("key1", new TimeWindow(21L, 22L)), "value1")));
         assertThat(iterator.next(), is(KeyValue.pair(new Windowed<>("key2", new TimeWindow(42L, 43L)), "value2")));
-        verify(mockedKeyValueWindowTimestampIterator, mockedWindowTimestampStore);
     }
 }

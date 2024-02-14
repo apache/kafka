@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.clients.admin;
 
+import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -101,6 +103,16 @@ public class AdminClientTestUtils {
         return new AlterConfigsResult(futures);
     }
 
+    /** Helper to create a DescribeConfigsResult instance for a given ConfigResource.
+     * DescribeConfigsResult's constructor is only accessible from within the
+     * admin package.
+     */
+    public static DescribeConfigsResult describeConfigsResult(ConfigResource cr, Config config) {
+        KafkaFutureImpl<Config> future = new KafkaFutureImpl<>();
+        future.complete(config);
+        return new DescribeConfigsResult(Collections.singletonMap(cr, future));
+    }
+
     /**
      * Helper to create a CreatePartitionsResult instance for a given Throwable.
      * CreatePartitionsResult's constructor is only accessible from within the
@@ -139,6 +151,19 @@ public class AdminClientTestUtils {
         final KafkaFutureImpl<Map<TopicPartition, OffsetAndMetadata>> future = new KafkaFutureImpl<>();
         future.completeExceptionally(exception);
         return new ListConsumerGroupOffsetsResult(Collections.singletonMap(CoordinatorKey.byGroupId(group), future));
+    }
+
+    public static ListClientMetricsResourcesResult listClientMetricsResourcesResult(String... names) {
+        return new ListClientMetricsResourcesResult(
+                KafkaFuture.completedFuture(Arrays.stream(names)
+                        .map(name -> new ClientMetricsResourceListing(name))
+                        .collect(Collectors.toList())));
+    }
+
+    public static ListClientMetricsResourcesResult listClientMetricsResourcesResult(KafkaException exception) {
+        final KafkaFutureImpl<Collection<ClientMetricsResourceListing>> future = new KafkaFutureImpl<>();
+        future.completeExceptionally(exception);
+        return new ListClientMetricsResourcesResult(future);
     }
 
     /**

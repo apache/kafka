@@ -45,7 +45,7 @@ class ForwardingManagerTest {
   private val time = new MockTime()
   private val client = new MockClient(time)
   private val controllerNodeProvider = Mockito.mock(classOf[ControllerNodeProvider])
-  private val brokerToController = new MockBrokerToControllerChannelManager(
+  private val brokerToController = new MockNodeToControllerChannelManager(
     client, time, controllerNodeProvider, controllerApiVersions)
   private val forwardingManager = new ForwardingManagerImpl(brokerToController)
   private val principalBuilder = new DefaultKafkaPrincipalBuilder(null, null)
@@ -229,6 +229,7 @@ class ForwardingManagerTest {
       requestHeader,
       "1",
       InetAddress.getLocalHost,
+      Optional.empty(),
       principal,
       new ListenerName("client"),
       SecurityProtocol.SASL_PLAINTEXT,

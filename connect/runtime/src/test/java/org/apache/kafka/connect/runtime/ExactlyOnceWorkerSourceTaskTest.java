@@ -146,7 +146,7 @@ public class ExactlyOnceWorkerSourceTaskTest {
     @Mock private Converter keyConverter;
     @Mock private Converter valueConverter;
     @Mock private HeaderConverter headerConverter;
-    @Mock private TransformationChain<SourceRecord> transformationChain;
+    @Mock private TransformationChain<SourceRecord, SourceRecord> transformationChain;
     @Mock private Producer<byte[], byte[]> producer;
     @Mock private TopicAdmin admin;
     @Mock private CloseableOffsetStorageReader offsetReader;
@@ -290,8 +290,8 @@ public class ExactlyOnceWorkerSourceTaskTest {
     private void createWorkerTask(TargetState initialState, Converter keyConverter, Converter valueConverter, HeaderConverter headerConverter) {
         workerTask = new ExactlyOnceWorkerSourceTask(taskId, sourceTask, statusListener, initialState, keyConverter, valueConverter, headerConverter,
                 transformationChain, producer, admin, TopicCreationGroup.configuredGroups(sourceConfig), offsetReader, offsetWriter, offsetStore,
-                config, clusterConfigState, metrics, errorHandlingMetrics, plugins.delegatingLoader(), time, RetryWithToleranceOperatorTest.NOOP_OPERATOR, statusBackingStore,
-                sourceConfig, Runnable::run, preProducerCheck, postProducerCheck);
+                config, clusterConfigState, metrics, errorHandlingMetrics, plugins.delegatingLoader(), time, RetryWithToleranceOperatorTest.noopOperator(), statusBackingStore,
+                sourceConfig, Runnable::run, preProducerCheck, postProducerCheck, Collections::emptyList);
     }
 
     @Test
@@ -1101,8 +1101,8 @@ public class ExactlyOnceWorkerSourceTaskTest {
     }
 
     private void expectApplyTransformationChain() {
-        when(transformationChain.apply(any()))
-                .thenAnswer(invocation -> invocation.getArgument(0));
+        when(transformationChain.apply(any(), any()))
+                .thenAnswer(invocation -> invocation.getArgument(1));
     }
 
     private void expectTaskGetTopic() {

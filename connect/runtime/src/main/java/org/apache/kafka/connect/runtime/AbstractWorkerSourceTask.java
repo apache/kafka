@@ -37,6 +37,8 @@ import org.apache.kafka.connect.errors.RetriableException;
 import org.apache.kafka.connect.header.Header;
 import org.apache.kafka.connect.header.Headers;
 import org.apache.kafka.connect.runtime.errors.ErrorHandlingMetrics;
+import org.apache.kafka.connect.runtime.errors.ErrorReporter;
+import org.apache.kafka.connect.runtime.errors.ProcessingContext;
 import org.apache.kafka.connect.runtime.errors.RetryWithToleranceOperator;
 import org.apache.kafka.connect.runtime.errors.Stage;
 import org.apache.kafka.connect.runtime.errors.ToleranceType;
@@ -65,6 +67,7 @@ import java.util.Optional;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executor;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Supplier;
 
 import static org.apache.kafka.connect.runtime.WorkerConfig.TOPIC_TRACKING_ENABLE_CONFIG;
 
@@ -72,7 +75,7 @@ import static org.apache.kafka.connect.runtime.WorkerConfig.TOPIC_TRACKING_ENABL
  * WorkerTask that contains shared logic for running source tasks with either standard semantics
  * (i.e., either at-least-once or at-most-once) or exactly-once semantics.
  */
-public abstract class AbstractWorkerSourceTask extends WorkerTask {
+public abstract class AbstractWorkerSourceTask extends WorkerTask<SourceRecord, SourceRecord> {
     private static final Logger log = LoggerFactory.getLogger(AbstractWorkerSourceTask.class);
 
     private static final long SEND_FAILED_BACKOFF_MS = 100;
@@ -155,6 +158,7 @@ public abstract class AbstractWorkerSourceTask extends WorkerTask {
 
     /**
      * Invoked when a record given to {@link Producer#send(ProducerRecord, Callback)} has failed with a non-retriable error.
+     * @param context the context for this record
      * @param synchronous whether the error occurred during the invocation of {@link Producer#send(ProducerRecord, Callback)}.
      *                    If {@code false}, indicates that the error was reported asynchronously by the producer by a {@link Callback}
      * @param producerRecord the {@link ProducerRecord} that the producer failed to send; never null
@@ -163,6 +167,7 @@ public abstract class AbstractWorkerSourceTask extends WorkerTask {
      *          via {@link Callback} after the call to {@link Producer#send(ProducerRecord, Callback)} completed
      */
     protected abstract void producerSendFailed(
+            ProcessingContext<SourceRecord> context,
             boolean synchronous,
             ProducerRecord<byte[], byte[]> producerRecord,
             SourceRecord preTransformRecord,
@@ -187,7 +192,6 @@ public abstract class AbstractWorkerSourceTask extends WorkerTask {
     private final Converter keyConverter;
     private final Converter valueConverter;
     private final HeaderConverter headerConverter;
-    private final TransformationChain<SourceRecord> transformationChain;
     private final TopicAdmin admin;
     private final CloseableOffsetStorageReader offsetReader;
     private final SourceTaskMetricsGroup sourceTaskMetricsGroup;
@@ -209,7 +213,7 @@ public abstract class AbstractWorkerSourceTask extends WorkerTask {
                                        Converter keyConverter,
                                        Converter valueConverter,
                                        HeaderConverter headerConverter,
-                                       TransformationChain<SourceRecord> transformationChain,
+                                       TransformationChain<SourceRecord, SourceRecord> transformationChain,
                                        WorkerSourceTaskContext sourceTaskContext,
                                        Producer<byte[], byte[]> producer,
                                        TopicAdmin admin,
@@ -222,19 +226,20 @@ public abstract class AbstractWorkerSourceTask extends WorkerTask {
                                        ErrorHandlingMetrics errorMetrics,
                                        ClassLoader loader,
                                        Time time,
-                                       RetryWithToleranceOperator retryWithToleranceOperator,
+                                       RetryWithToleranceOperator<SourceRecord> retryWithToleranceOperator,
                                        StatusBackingStore statusBackingStore,
-                                       Executor closeExecutor) {
+                                       Executor closeExecutor,
+                                       Supplier<List<ErrorReporter<SourceRecord>>> errorReportersSupplier) {
 
         super(id, statusListener, initialState, loader, connectMetrics, errorMetrics,
-                retryWithToleranceOperator, time, statusBackingStore);
+                retryWithToleranceOperator, transformationChain, errorReportersSupplier,
+                time, statusBackingStore);
 
         this.workerConfig = workerConfig;
         this.task = task;
         this.keyConverter = keyConverter;
         this.valueConverter = valueConverter;
         this.headerConverter = headerConverter;
-        this.transformationChain = transformationChain;
         this.producer = producer;
         this.admin = admin;
         this.offsetReader = offsetReader;
@@ -242,7 +247,6 @@ public abstract class AbstractWorkerSourceTask extends WorkerTask {
         this.offsetStore = Objects.requireNonNull(offsetStore, "offset store cannot be null for source tasks");
         this.closeExecutor = closeExecutor;
         this.sourceTaskContext = sourceTaskContext;
-
         this.stopRequestedLatch = new CountDownLatch(1);
         this.sourceTaskMetricsGroup = new SourceTaskMetricsGroup(id, connectMetrics);
         this.topicTrackingEnabled = workerConfig.getBoolean(TOPIC_TRACKING_ENABLE_CONFIG);
@@ -313,8 +317,6 @@ public abstract class AbstractWorkerSourceTask extends WorkerTask {
         if (admin != null) {
             Utils.closeQuietly(() -> admin.close(Duration.ofSeconds(30)), "source task admin");
         }
-        Utils.closeQuietly(transformationChain, "transformation chain");
-        Utils.closeQuietly(retryWithToleranceOperator, "retry operator");
         Utils.closeQuietly(offsetReader, "offset reader");
         Utils.closeQuietly(offsetStore::stop, "offset backing store");
         Utils.closeQuietly(headerConverter, "header converter");
@@ -391,12 +393,13 @@ public abstract class AbstractWorkerSourceTask extends WorkerTask {
         final SourceRecordWriteCounter counter =
                 toSend.size() > 0 ? new SourceRecordWriteCounter(toSend.size(), sourceTaskMetricsGroup) : null;
         for (final SourceRecord preTransformRecord : toSend) {
-            retryWithToleranceOperator.sourceRecord(preTransformRecord);
-            final SourceRecord record = transformationChain.apply(preTransformRecord);
-            final ProducerRecord<byte[], byte[]> producerRecord = convertTransformedRecord(record);
-            if (producerRecord == null || retryWithToleranceOperator.failed()) {
+            ProcessingContext<SourceRecord> context = new ProcessingContext<>(preTransformRecord);
+            final SourceRecord record = transformationChain.apply(context, preTransformRecord);
+            final ProducerRecord<byte[], byte[]> producerRecord = convertTransformedRecord(context, record);
+            if (producerRecord == null || context.failed()) {
                 counter.skipRecord();
                 recordDropped(preTransformRecord);
+                processed++;
                 continue;
             }
 
@@ -415,7 +418,7 @@ public abstract class AbstractWorkerSourceTask extends WorkerTask {
                                 log.error("{} failed to send record to {}: ", AbstractWorkerSourceTask.this, topic, e);
                             }
                             log.trace("{} Failed record: {}", AbstractWorkerSourceTask.this, preTransformRecord);
-                            producerSendFailed(false, producerRecord, preTransformRecord, e);
+                            producerSendFailed(context, false, producerRecord, preTransformRecord, e);
                             if (retryWithToleranceOperator.getErrorToleranceType() == ToleranceType.ALL) {
                                 counter.skipRecord();
                                 submittedRecord.ifPresent(SubmittedRecords.SubmittedRecord::ack);
@@ -447,7 +450,7 @@ public abstract class AbstractWorkerSourceTask extends WorkerTask {
                 log.trace("{} Failed to send {} with unrecoverable exception: ", this, producerRecord, e);
                 throw e;
             } catch (KafkaException e) {
-                producerSendFailed(true, producerRecord, preTransformRecord, e);
+                producerSendFailed(context, true, producerRecord, preTransformRecord, e);
             }
             processed++;
             recordDispatched(preTransformRecord);
@@ -474,20 +477,20 @@ public abstract class AbstractWorkerSourceTask extends WorkerTask {
      * @return the producer record which can sent over to Kafka. A null is returned if the input is null or
      * if an error was encountered during any of the converter stages.
      */
-    protected ProducerRecord<byte[], byte[]> convertTransformedRecord(SourceRecord record) {
+    protected ProducerRecord<byte[], byte[]> convertTransformedRecord(ProcessingContext<SourceRecord> context, SourceRecord record) {
         if (record == null) {
             return null;
         }
 
-        RecordHeaders headers = retryWithToleranceOperator.execute(() -> convertHeaderFor(record), Stage.HEADER_CONVERTER, headerConverter.getClass());
+        RecordHeaders headers = retryWithToleranceOperator.execute(context, () -> convertHeaderFor(record), Stage.HEADER_CONVERTER, headerConverter.getClass());
 
-        byte[] key = retryWithToleranceOperator.execute(() -> keyConverter.fromConnectData(record.topic(), headers, record.keySchema(), record.key()),
+        byte[] key = retryWithToleranceOperator.execute(context, () -> keyConverter.fromConnectData(record.topic(), headers, record.keySchema(), record.key()),
                 Stage.KEY_CONVERTER, keyConverter.getClass());
 
-        byte[] value = retryWithToleranceOperator.execute(() -> valueConverter.fromConnectData(record.topic(), headers, record.valueSchema(), record.value()),
+        byte[] value = retryWithToleranceOperator.execute(context, () -> valueConverter.fromConnectData(record.topic(), headers, record.valueSchema(), record.value()),
                 Stage.VALUE_CONVERTER, valueConverter.getClass());
 
-        if (retryWithToleranceOperator.failed()) {
+        if (context.failed()) {
             return null;
         }
 

@@ -110,7 +110,7 @@ public abstract class KafkaFuture<T> implements Future<T> {
      * {@code CompletionStage} will work normally.
      *
      * <p>If you want to block on the completion of a KafkaFuture you should use
-     * {@link #get()}, {@link #get(long, TimeUnit)} or {@link #getNow(Object)}, rather then calling
+     * {@link #get()}, {@link #get(long, TimeUnit)} or {@link #getNow(Object)}, rather than calling
      * {@code .toCompletionStage().toCompletableFuture().get()} etc.
      *
      * @since Kafka 3.0

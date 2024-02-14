@@ -28,7 +28,7 @@ import joptsimple.OptionParser
 import kafka.utils._
 import org.apache.kafka.clients.admin.{Admin, NewTopic}
 import org.apache.kafka.clients.CommonClientConfigs
-import org.apache.kafka.clients.consumer.{ConsumerConfig, KafkaConsumer}
+import org.apache.kafka.clients.consumer.{Consumer, ConsumerConfig, KafkaConsumer}
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.serialization.{ByteArraySerializer, StringDeserializer}
@@ -293,7 +293,7 @@ object LogCompactionTester {
     }
   }
 
-  def createConsumer(brokerUrl: String): KafkaConsumer[String, String] = {
+  def createConsumer(brokerUrl: String): Consumer[String, String] = {
     val consumerProps = new Properties
     consumerProps.setProperty(ConsumerConfig.GROUP_ID_CONFIG, "log-cleaner-test-" + new Random().nextInt(Int.MaxValue))
     consumerProps.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerUrl)

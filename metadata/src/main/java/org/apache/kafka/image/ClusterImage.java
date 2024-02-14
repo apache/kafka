@@ -21,9 +21,11 @@ import org.apache.kafka.image.node.ClusterImageNode;
 import org.apache.kafka.image.writer.ImageWriter;
 import org.apache.kafka.image.writer.ImageWriterOptions;
 import org.apache.kafka.metadata.BrokerRegistration;
+import org.apache.kafka.metadata.ControllerRegistration;
 
 import java.util.Collections;
 import java.util.Map;
+import java.util.Objects;
 
 
 /**
@@ -32,12 +34,20 @@ import java.util.Map;
  * This class is thread-safe.
  */
 public final class ClusterImage {
-    public static final ClusterImage EMPTY = new ClusterImage(Collections.emptyMap());
+    public static final ClusterImage EMPTY = new ClusterImage(
+            Collections.emptyMap(),
+            Collections.emptyMap());
 
     private final Map<Integer, BrokerRegistration> brokers;
 
-    public ClusterImage(Map<Integer, BrokerRegistration> brokers) {
+    private final Map<Integer, ControllerRegistration> controllers;
+
+    public ClusterImage(
+        Map<Integer, BrokerRegistration> brokers,
+        Map<Integer, ControllerRegistration> controllers
+    ) {
         this.brokers = Collections.unmodifiableMap(brokers);
+        this.controllers = Collections.unmodifiableMap(controllers);
     }
 
     public boolean isEmpty() {
@@ -52,6 +62,10 @@ public final class ClusterImage {
         return brokers.get(nodeId);
     }
 
+    public Map<Integer, ControllerRegistration> controllers() {
+        return controllers;
+    }
+
     public boolean containsBroker(int brokerId) {
         return brokers.containsKey(brokerId);
     }
@@ -60,18 +74,28 @@ public final class ClusterImage {
         for (BrokerRegistration broker : brokers.values()) {
             writer.write(broker.toRecord(options));
         }
+        if (!controllers.isEmpty()) {
+            if (!options.metadataVersion().isControllerRegistrationSupported()) {
+                options.handleLoss("controller registration data");
+            } else {
+                for (ControllerRegistration controller : controllers.values()) {
+                    writer.write(controller.toRecord(options));
+                }
+            }
+        }
     }
 
     @Override
     public int hashCode() {
-        return brokers.hashCode();
+        return Objects.hash(brokers, controllers);
     }
 
     @Override
     public boolean equals(Object o) {
         if (!(o instanceof ClusterImage)) return false;
         ClusterImage other = (ClusterImage) o;
-        return brokers.equals(other.brokers);
+        return brokers.equals(other.brokers) &&
+            controllers.equals(other.controllers);
     }
 
     @Override

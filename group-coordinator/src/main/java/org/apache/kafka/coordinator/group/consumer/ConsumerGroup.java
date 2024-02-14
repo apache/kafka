@@ -16,9 +16,21 @@
  */
 package org.apache.kafka.coordinator.group.consumer;
 
+import org.apache.kafka.clients.consumer.internals.ConsumerProtocol;
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.errors.ApiException;
+import org.apache.kafka.common.errors.StaleMemberEpochException;
 import org.apache.kafka.common.errors.UnknownMemberIdException;
+import org.apache.kafka.common.message.ConsumerGroupDescribeResponseData;
+import org.apache.kafka.common.message.ListGroupsResponseData;
+import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.coordinator.group.Group;
+import org.apache.kafka.coordinator.group.OffsetExpirationCondition;
+import org.apache.kafka.coordinator.group.OffsetExpirationConditionImpl;
+import org.apache.kafka.coordinator.group.Record;
+import org.apache.kafka.coordinator.group.RecordHelpers;
+import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetricsShard;
+import org.apache.kafka.image.ClusterImage;
 import org.apache.kafka.image.TopicImage;
 import org.apache.kafka.image.TopicsImage;
 import org.apache.kafka.timeline.SnapshotRegistry;
@@ -28,10 +40,18 @@ import org.apache.kafka.timeline.TimelineObject;
 
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+
+import static org.apache.kafka.coordinator.group.consumer.ConsumerGroup.ConsumerGroupState.ASSIGNING;
+import static org.apache.kafka.coordinator.group.consumer.ConsumerGroup.ConsumerGroupState.EMPTY;
+import static org.apache.kafka.coordinator.group.consumer.ConsumerGroup.ConsumerGroupState.RECONCILING;
+import static org.apache.kafka.coordinator.group.consumer.ConsumerGroup.ConsumerGroupState.STABLE;
 
 /**
  * A Consumer Group. All the metadata in this class are backed by
@@ -40,21 +60,40 @@ import java.util.Set;
 public class ConsumerGroup implements Group {
 
     public enum ConsumerGroupState {
-        EMPTY("empty"),
-        ASSIGNING("assigning"),
-        RECONCILING("reconciling"),
-        STABLE("stable"),
-        DEAD("dead");
+        EMPTY("Empty"),
+        ASSIGNING("Assigning"),
+        RECONCILING("Reconciling"),
+        STABLE("Stable"),
+        DEAD("Dead");
 
         private final String name;
 
+        private final String lowerCaseName;
+
         ConsumerGroupState(String name) {
             this.name = name;
+            this.lowerCaseName = name.toLowerCase(Locale.ROOT);
         }
 
         @Override
         public String toString() {
             return name;
+        }
+
+        public String toLowerCaseString() {
+            return lowerCaseName;
+        }
+    }
+
+    public static class DeadlineAndEpoch {
+        static final DeadlineAndEpoch EMPTY = new DeadlineAndEpoch(0L, 0);
+
+        public final long deadlineMs;
+        public final int epoch;
+
+        DeadlineAndEpoch(long deadlineMs, int epoch) {
+            this.deadlineMs = deadlineMs;
+            this.epoch = epoch;
         }
     }
 
@@ -84,6 +123,11 @@ public class ConsumerGroup implements Group {
      * The group members.
      */
     private final TimelineHashMap<String, ConsumerGroupMember> members;
+
+    /**
+     * The static group members.
+     */
+    private final TimelineHashMap<String, String> staticMembers;
 
     /**
      * The number of members supporting each server assignor name.
@@ -119,21 +163,41 @@ public class ConsumerGroup implements Group {
      */
     private final TimelineHashMap<Uuid, TimelineHashMap<Integer, Integer>> currentPartitionEpoch;
 
+    /**
+     * The coordinator metrics.
+     */
+    private final GroupCoordinatorMetricsShard metrics;
+
+    /**
+     * The metadata refresh deadline. It consists of a timestamp in milliseconds together with
+     * the group epoch at the time of setting it. The metadata refresh time is considered as a
+     * soft state (read that it is not stored in a timeline data structure). It is like this
+     * because it is not persisted to the log. The group epoch is here to ensure that the
+     * metadata refresh deadline is invalidated if the group epoch does not correspond to
+     * the current group epoch. This can happen if the metadata refresh deadline is updated
+     * after having refreshed the metadata but the write operation failed. In this case, the
+     * time is not automatically rolled back.
+     */
+    private DeadlineAndEpoch metadataRefreshDeadline = DeadlineAndEpoch.EMPTY;
+
     public ConsumerGroup(
         SnapshotRegistry snapshotRegistry,
-        String groupId
+        String groupId,
+        GroupCoordinatorMetricsShard metrics
     ) {
         this.snapshotRegistry = Objects.requireNonNull(snapshotRegistry);
         this.groupId = Objects.requireNonNull(groupId);
-        this.state = new TimelineObject<>(snapshotRegistry, ConsumerGroupState.EMPTY);
+        this.state = new TimelineObject<>(snapshotRegistry, EMPTY);
         this.groupEpoch = new TimelineInteger(snapshotRegistry);
         this.members = new TimelineHashMap<>(snapshotRegistry, 0);
+        this.staticMembers = new TimelineHashMap<>(snapshotRegistry, 0);
         this.serverAssignors = new TimelineHashMap<>(snapshotRegistry, 0);
         this.subscribedTopicNames = new TimelineHashMap<>(snapshotRegistry, 0);
         this.subscribedTopicMetadata = new TimelineHashMap<>(snapshotRegistry, 0);
         this.targetAssignmentEpoch = new TimelineInteger(snapshotRegistry);
         this.targetAssignment = new TimelineHashMap<>(snapshotRegistry, 0);
         this.currentPartitionEpoch = new TimelineHashMap<>(snapshotRegistry, 0);
+        this.metrics = Objects.requireNonNull(metrics);
     }
 
     /**
@@ -153,6 +217,24 @@ public class ConsumerGroup implements Group {
     }
 
     /**
+     * @return The current state as a String with given committedOffset.
+     */
+    public String stateAsString(long committedOffset) {
+        return state.get(committedOffset).toString();
+    }
+
+    /**
+     * @return the group formatted as a list group response based on the committed offset.
+     */
+    public ListGroupsResponseData.ListedGroup asListedGroup(long committedOffset) {
+        return new ListGroupsResponseData.ListedGroup()
+            .setGroupId(groupId)
+            .setProtocolType(ConsumerProtocol.PROTOCOL_TYPE)
+            .setGroupState(state.get(committedOffset).toString())
+            .setGroupType(type().toString());
+    }
+
+    /**
      * @return The group id.
      */
     @Override
@@ -165,6 +247,13 @@ public class ConsumerGroup implements Group {
      */
     public ConsumerGroupState state() {
         return state.get();
+    }
+
+    /**
+     * @return The current state based on committed offset.
+     */
+    public ConsumerGroupState state(long committedOffset) {
+        return state.get(committedOffset);
     }
 
     /**
@@ -202,6 +291,18 @@ public class ConsumerGroup implements Group {
     }
 
     /**
+     * Get member id of a static member that matches the given group
+     * instance id.
+     *
+     * @param groupInstanceId The group instance id.
+     *
+     * @return The member id corresponding to the given instance id or null if it does not exist
+     */
+    public String staticMemberId(String groupInstanceId) {
+        return staticMembers.get(groupInstanceId);
+    }
+
+    /**
      * Gets or creates a member.
      *
      * @param memberId          The member id.
@@ -228,6 +329,18 @@ public class ConsumerGroup implements Group {
     }
 
     /**
+     * Gets a static member.
+     *
+     * @param instanceId The group instance id.
+     *
+     * @return The member corresponding to the given instance id or null if it does not exist
+     */
+    public ConsumerGroupMember staticMember(String instanceId) {
+        String existingMemberId = staticMemberId(instanceId);
+        return existingMemberId == null ? null : getOrMaybeCreateMember(existingMemberId, false);
+    }
+
+    /**
      * Updates the member.
      *
      * @param newMember The new member state.
@@ -240,7 +353,19 @@ public class ConsumerGroup implements Group {
         maybeUpdateSubscribedTopicNames(oldMember, newMember);
         maybeUpdateServerAssignors(oldMember, newMember);
         maybeUpdatePartitionEpoch(oldMember, newMember);
+        updateStaticMember(newMember);
         maybeUpdateGroupState();
+    }
+
+    /**
+     * Updates the member id stored against the instance id if the member is a static member.
+     *
+     * @param newMember The new member state.
+     */
+    private void updateStaticMember(ConsumerGroupMember newMember) {
+        if (newMember.instanceId() != null) {
+            staticMembers.put(newMember.instanceId(), newMember.memberId());
+        }
     }
 
     /**
@@ -249,9 +374,23 @@ public class ConsumerGroup implements Group {
      * @param memberId The member id to remove.
      */
     public void removeMember(String memberId) {
-        ConsumerGroupMember member = members.remove(memberId);
-        maybeRemovePartitionEpoch(member);
+        ConsumerGroupMember oldMember = members.remove(memberId);
+        maybeUpdateSubscribedTopicNames(oldMember, null);
+        maybeUpdateServerAssignors(oldMember, null);
+        maybeRemovePartitionEpoch(oldMember);
+        removeStaticMember(oldMember);
         maybeUpdateGroupState();
+    }
+
+    /**
+     * Remove the static member mapping if the removed member is static.
+     *
+     * @param oldMember The member to remove.
+     */
+    private void removeStaticMember(ConsumerGroupMember oldMember) {
+        if (oldMember.instanceId() != null) {
+            staticMembers.remove(oldMember.instanceId());
+        }
     }
 
     /**
@@ -277,6 +416,32 @@ public class ConsumerGroup implements Group {
      */
     public Map<String, ConsumerGroupMember> members() {
         return Collections.unmodifiableMap(members);
+    }
+
+    /**
+     * @return An immutable Map containing all the static members keyed by instance id.
+     */
+    public Map<String, String> staticMembers() {
+        return Collections.unmodifiableMap(staticMembers);
+    }
+
+    /**
+     * @return An immutable Set containing all the subscribed topic names.
+     */
+    public Set<String> subscribedTopicNames() {
+        return Collections.unmodifiableSet(subscribedTopicNames.keySet());
+    }
+
+    /**
+     * Returns true if the consumer group is actively subscribed to the topic.
+     *
+     * @param topic  The topic name.
+     *
+     * @return Whether the group is subscribed to the topic.
+     */
+    @Override
+    public boolean isSubscribedToTopic(String topic) {
+        return subscribedTopicNames.containsKey(topic);
     }
 
     /**
@@ -363,14 +528,21 @@ public class ConsumerGroup implements Group {
      * @return The preferred assignor for the group.
      */
     public Optional<String> preferredServerAssignor() {
-        return serverAssignors.entrySet().stream()
+        return preferredServerAssignor(Long.MAX_VALUE);
+    }
+
+    /**
+     * @return The preferred assignor for the group with given offset.
+     */
+    public Optional<String> preferredServerAssignor(long committedOffset) {
+        return serverAssignors.entrySet(committedOffset).stream()
             .max(Map.Entry.comparingByValue())
             .map(Map.Entry::getKey);
     }
 
     /**
-     * @return An immutable Map containing the subscription metadata for all the topics whose
-     *         members are subscribed to.
+     * @return An immutable Map of subscription metadata for
+     *         each topic that the consumer group is subscribed to.
      */
     public Map<String, TopicMetadata> subscriptionMetadata() {
         return Collections.unmodifiableMap(subscribedTopicMetadata);
@@ -392,16 +564,18 @@ public class ConsumerGroup implements Group {
      * Computes the subscription metadata based on the current subscription and
      * an updated member.
      *
-     * @param oldMember     The old member.
-     * @param newMember     The new member.
-     * @param topicsImage   The topic metadata.
+     * @param oldMember     The old member of the consumer group.
+     * @param newMember     The updated member of the consumer group.
+     * @param topicsImage   The current metadata for all available topics.
+     * @param clusterImage  The current metadata for the Kafka cluster.
      *
-     * @return The new subscription metadata as an immutable Map.
+     * @return An immutable map of subscription metadata for each topic that the consumer group is subscribed to.
      */
     public Map<String, TopicMetadata> computeSubscriptionMetadata(
         ConsumerGroupMember oldMember,
         ConsumerGroupMember newMember,
-        TopicsImage topicsImage
+        TopicsImage topicsImage,
+        ClusterImage clusterImage
     ) {
         // Copy and update the current subscriptions.
         Map<String, Integer> subscribedTopicNames = new HashMap<>(this.subscribedTopicNames);
@@ -409,14 +583,30 @@ public class ConsumerGroup implements Group {
 
         // Create the topic metadata for each subscribed topic.
         Map<String, TopicMetadata> newSubscriptionMetadata = new HashMap<>(subscribedTopicNames.size());
+
         subscribedTopicNames.forEach((topicName, count) -> {
             TopicImage topicImage = topicsImage.getTopic(topicName);
             if (topicImage != null) {
+                Map<Integer, Set<String>> partitionRacks = new HashMap<>();
+                topicImage.partitions().forEach((partition, partitionRegistration) -> {
+                    Set<String> racks = new HashSet<>();
+                    for (int replica : partitionRegistration.replicas) {
+                        Optional<String> rackOptional = clusterImage.broker(replica).rack();
+                        // Only add the rack if it is available for the broker/replica.
+                        rackOptional.ifPresent(racks::add);
+                    }
+                    // If rack information is unavailable for all replicas of this partition,
+                    // no corresponding entry will be stored for it in the map.
+                    if (!racks.isEmpty())
+                        partitionRacks.put(partition, racks);
+                });
+
                 newSubscriptionMetadata.put(topicName, new TopicMetadata(
                     topicImage.id(),
                     topicImage.name(),
-                    topicImage.partitions().size()
-                ));
+                    topicImage.partitions().size(),
+                    partitionRacks)
+                );
             }
         });
 
@@ -424,23 +614,180 @@ public class ConsumerGroup implements Group {
     }
 
     /**
+     * Updates the metadata refresh deadline.
+     *
+     * @param deadlineMs The deadline in milliseconds.
+     * @param groupEpoch The associated group epoch.
+     */
+    public void setMetadataRefreshDeadline(
+        long deadlineMs,
+        int groupEpoch
+    ) {
+        this.metadataRefreshDeadline = new DeadlineAndEpoch(deadlineMs, groupEpoch);
+    }
+
+    /**
+     * Requests a metadata refresh.
+     */
+    public void requestMetadataRefresh() {
+        this.metadataRefreshDeadline = DeadlineAndEpoch.EMPTY;
+    }
+
+    /**
+     * Checks if a metadata refresh is required. A refresh is required in two cases:
+     * 1) The deadline is smaller or equal to the current time;
+     * 2) The group epoch associated with the deadline is larger than
+     *    the current group epoch. This means that the operations which updated
+     *    the deadline failed.
+     *
+     * @param currentTimeMs The current time in milliseconds.
+     * @return A boolean indicating whether a refresh is required or not.
+     */
+    public boolean hasMetadataExpired(long currentTimeMs) {
+        return currentTimeMs >= metadataRefreshDeadline.deadlineMs || groupEpoch() < metadataRefreshDeadline.epoch;
+    }
+
+    /**
+     * @return The metadata refresh deadline.
+     */
+    public DeadlineAndEpoch metadataRefreshDeadline() {
+        return metadataRefreshDeadline;
+    }
+
+    /**
+     * Validates the OffsetCommit request.
+     *
+     * @param memberId          The member id.
+     * @param groupInstanceId   The group instance id.
+     * @param memberEpoch       The member epoch.
+     * @param isTransactional   Whether the offset commit is transactional or not. It has no
+     *                          impact when a consumer group is used.
+     */
+    @Override
+    public void validateOffsetCommit(
+        String memberId,
+        String groupInstanceId,
+        int memberEpoch,
+        boolean isTransactional
+    ) throws UnknownMemberIdException, StaleMemberEpochException {
+        // When the member epoch is -1, the request comes from either the admin client
+        // or a consumer which does not use the group management facility. In this case,
+        // the request can commit offsets if the group is empty.
+        if (memberEpoch < 0 && members().isEmpty()) return;
+
+        final ConsumerGroupMember member = getOrMaybeCreateMember(memberId, false);
+        validateMemberEpoch(memberEpoch, member.memberEpoch());
+    }
+
+    /**
+     * Validates the OffsetFetch request.
+     *
+     * @param memberId              The member id for consumer groups.
+     * @param memberEpoch           The member epoch for consumer groups.
+     * @param lastCommittedOffset   The last committed offsets in the timeline.
+     */
+    @Override
+    public void validateOffsetFetch(
+        String memberId,
+        int memberEpoch,
+        long lastCommittedOffset
+    ) throws UnknownMemberIdException, StaleMemberEpochException {
+        // When the member id is null and the member epoch is -1, the request either comes
+        // from the admin client or from a client which does not provide them. In this case,
+        // the fetch request is accepted.
+        if (memberId == null && memberEpoch < 0) return;
+
+        final ConsumerGroupMember member = members.get(memberId, lastCommittedOffset);
+        if (member == null) {
+            throw new UnknownMemberIdException(String.format("Member %s is not a member of group %s.",
+                memberId, groupId));
+        }
+        validateMemberEpoch(memberEpoch, member.memberEpoch());
+    }
+
+    /**
+     * Validates the OffsetDelete request.
+     */
+    @Override
+    public void validateOffsetDelete() {}
+
+    /**
+     * Validates the DeleteGroups request.
+     */
+    @Override
+    public void validateDeleteGroup() throws ApiException {
+        if (state() != ConsumerGroupState.EMPTY) {
+            throw Errors.NON_EMPTY_GROUP.exception();
+        }
+    }
+
+    /**
+     * Populates the list of records with tombstone(s) for deleting the group.
+     *
+     * @param records The list of records.
+     */
+    @Override
+    public void createGroupTombstoneRecords(List<Record> records) {
+        records.add(RecordHelpers.newTargetAssignmentEpochTombstoneRecord(groupId()));
+        records.add(RecordHelpers.newGroupSubscriptionMetadataTombstoneRecord(groupId()));
+        records.add(RecordHelpers.newGroupEpochTombstoneRecord(groupId()));
+    }
+
+    @Override
+    public boolean isEmpty() {
+        return state() == ConsumerGroupState.EMPTY;
+    }
+
+    /**
+     * See {@link org.apache.kafka.coordinator.group.OffsetExpirationCondition}
+     *
+     * @return The offset expiration condition for the group or Empty if no such condition exists.
+     */
+    @Override
+    public Optional<OffsetExpirationCondition> offsetExpirationCondition() {
+        return Optional.of(new OffsetExpirationConditionImpl(offsetAndMetadata -> offsetAndMetadata.commitTimestampMs));
+    }
+
+    @Override
+    public boolean isInStates(Set<String> statesFilter, long committedOffset) {
+        return statesFilter.contains(state.get(committedOffset).toLowerCaseString());
+    }
+
+    /**
+     * Throws a StaleMemberEpochException if the received member epoch does not match
+     * the expected member epoch.
+     */
+    private void validateMemberEpoch(
+        int receivedMemberEpoch,
+        int expectedMemberEpoch
+    ) throws StaleMemberEpochException {
+        if (receivedMemberEpoch != expectedMemberEpoch) {
+            throw new StaleMemberEpochException(String.format("The received member epoch %d does not match "
+                + "the expected member epoch %d.", receivedMemberEpoch, expectedMemberEpoch));
+        }
+    }
+
+    /**
      * Updates the current state of the group.
      */
     private void maybeUpdateGroupState() {
+        ConsumerGroupState previousState = state.get();
+        ConsumerGroupState newState = STABLE;
         if (members.isEmpty()) {
-            state.set(ConsumerGroupState.EMPTY);
+            newState = EMPTY;
         } else if (groupEpoch.get() > targetAssignmentEpoch.get()) {
-            state.set(ConsumerGroupState.ASSIGNING);
+            newState = ASSIGNING;
         } else {
             for (ConsumerGroupMember member : members.values()) {
                 if (member.targetMemberEpoch() != targetAssignmentEpoch.get() || member.state() != ConsumerGroupMember.MemberState.STABLE) {
-                    state.set(ConsumerGroupState.RECONCILING);
-                    return;
+                    newState = RECONCILING;
+                    break;
                 }
             }
-
-            state.set(ConsumerGroupState.STABLE);
         }
+
+        state.set(newState);
+        metrics.onConsumerGroupStateTransition(previousState, newState);
     }
 
     /**
@@ -528,19 +875,9 @@ public class ConsumerGroup implements Group {
         ConsumerGroupMember oldMember,
         ConsumerGroupMember newMember
     ) {
-        if (oldMember == null) {
-            addPartitionEpochs(newMember.assignedPartitions(), newMember.memberEpoch());
-            addPartitionEpochs(newMember.partitionsPendingRevocation(), newMember.memberEpoch());
-        } else {
-            if (!oldMember.assignedPartitions().equals(newMember.assignedPartitions())) {
-                removePartitionEpochs(oldMember.assignedPartitions());
-                addPartitionEpochs(newMember.assignedPartitions(), newMember.memberEpoch());
-            }
-            if (!oldMember.partitionsPendingRevocation().equals(newMember.partitionsPendingRevocation())) {
-                removePartitionEpochs(oldMember.partitionsPendingRevocation());
-                addPartitionEpochs(newMember.partitionsPendingRevocation(), newMember.memberEpoch());
-            }
-        }
+        maybeRemovePartitionEpoch(oldMember);
+        addPartitionEpochs(newMember.assignedPartitions(), newMember.memberEpoch());
+        addPartitionEpochs(newMember.partitionsPendingRevocation(), newMember.memberEpoch());
     }
 
     /**
@@ -552,8 +889,8 @@ public class ConsumerGroup implements Group {
         ConsumerGroupMember oldMember
     ) {
         if (oldMember != null) {
-            removePartitionEpochs(oldMember.assignedPartitions());
-            removePartitionEpochs(oldMember.partitionsPendingRevocation());
+            removePartitionEpochs(oldMember.assignedPartitions(), oldMember.memberEpoch());
+            removePartitionEpochs(oldMember.partitionsPendingRevocation(), oldMember.memberEpoch());
         }
     }
 
@@ -561,21 +898,34 @@ public class ConsumerGroup implements Group {
      * Removes the partition epochs based on the provided assignment.
      *
      * @param assignment    The assignment.
+     * @param expectedEpoch The expected epoch.
+     * @throws IllegalStateException if the epoch does not match the expected one.
+     * package-private for testing.
      */
-    private void removePartitionEpochs(
-        Map<Uuid, Set<Integer>> assignment
+    void removePartitionEpochs(
+        Map<Uuid, Set<Integer>> assignment,
+        int expectedEpoch
     ) {
         assignment.forEach((topicId, assignedPartitions) -> {
             currentPartitionEpoch.compute(topicId, (__, partitionsOrNull) -> {
                 if (partitionsOrNull != null) {
-                    assignedPartitions.forEach(partitionsOrNull::remove);
+                    assignedPartitions.forEach(partitionId -> {
+                        Integer prevValue = partitionsOrNull.remove(partitionId);
+                        if (prevValue != expectedEpoch) {
+                            throw new IllegalStateException(
+                                String.format("Cannot remove the epoch %d from %s-%s because the partition is " +
+                                    "still owned at a different epoch %d", expectedEpoch, topicId, partitionId, prevValue));
+                        }
+                    });
                     if (partitionsOrNull.isEmpty()) {
                         return null;
                     } else {
                         return partitionsOrNull;
                     }
                 } else {
-                    return null;
+                    throw new IllegalStateException(
+                        String.format("Cannot remove the epoch %d from %s because it does not have any epoch",
+                            expectedEpoch, topicId));
                 }
             });
         });
@@ -586,8 +936,10 @@ public class ConsumerGroup implements Group {
      *
      * @param assignment    The assignment.
      * @param epoch         The new epoch.
+     * @throws IllegalStateException if the partition already has an epoch assigned.
+     * package-private for testing.
      */
-    private void addPartitionEpochs(
+    void addPartitionEpochs(
         Map<Uuid, Set<Integer>> assignment,
         int epoch
     ) {
@@ -597,7 +949,12 @@ public class ConsumerGroup implements Group {
                     partitionsOrNull = new TimelineHashMap<>(snapshotRegistry, assignedPartitions.size());
                 }
                 for (Integer partitionId : assignedPartitions) {
-                    partitionsOrNull.put(partitionId, epoch);
+                    Integer prevValue = partitionsOrNull.put(partitionId, epoch);
+                    if (prevValue != null) {
+                        throw new IllegalStateException(
+                            String.format("Cannot set the epoch of %s-%s to %d because the partition is " +
+                                "still owned at epoch %d", topicId, partitionId, epoch, prevValue));
+                    }
                 }
                 return partitionsOrNull;
             });
@@ -618,5 +975,27 @@ public class ConsumerGroup implements Group {
      */
     private static Integer incValue(String key, Integer value) {
         return value == null ? 1 : value + 1;
+    }
+
+    public ConsumerGroupDescribeResponseData.DescribedGroup asDescribedGroup(
+        long committedOffset,
+        String defaultAssignor,
+        TopicsImage topicsImage
+    ) {
+        ConsumerGroupDescribeResponseData.DescribedGroup describedGroup = new ConsumerGroupDescribeResponseData.DescribedGroup()
+            .setGroupId(groupId)
+            .setAssignorName(preferredServerAssignor(committedOffset).orElse(defaultAssignor))
+            .setGroupEpoch(groupEpoch.get(committedOffset))
+            .setGroupState(state.get(committedOffset).toString())
+            .setAssignmentEpoch(targetAssignmentEpoch.get(committedOffset));
+        members.entrySet(committedOffset).forEach(
+            entry -> describedGroup.members().add(
+                entry.getValue().asConsumerGroupDescribeMember(
+                    targetAssignment.get(entry.getValue().memberId(), committedOffset),
+                    topicsImage
+                )
+            )
+        );
+        return describedGroup;
     }
 }

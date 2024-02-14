@@ -33,8 +33,12 @@ import org.apache.kafka.streams.kstream.JoinWindows;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.StreamJoined;
 import org.apache.kafka.streams.processor.api.Record;
+import org.apache.kafka.streams.state.BuiltInDslStoreSuppliers;
+import org.apache.kafka.streams.state.DslKeyValueParams;
+import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.WindowBytesStoreSupplier;
+import org.apache.kafka.streams.state.internals.WrappedStateStore;
 import org.apache.kafka.streams.test.TestRecord;
 import org.apache.kafka.test.MockApiProcessor;
 import org.apache.kafka.test.MockApiProcessorSupplier;
@@ -50,9 +54,11 @@ import java.util.Collection;
 import java.util.HashSet;
 import java.util.Properties;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static java.time.Duration.ZERO;
 import static java.time.Duration.ofMillis;
+import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
 
 public class KStreamKStreamOuterJoinTest {
@@ -1307,5 +1313,48 @@ public class KStreamKStreamOuterJoinTest {
         processor.checkAndClearProcessResult(
             new KeyValueTimestamp<>(0, "dummy+null", 1103L)
         );
+    }
+
+    public static class CapturingStoreSuppliers extends BuiltInDslStoreSuppliers.RocksDBDslStoreSuppliers {
+
+        final AtomicReference<KeyValueBytesStoreSupplier> capture = new AtomicReference<>();
+
+        @Override
+        public KeyValueBytesStoreSupplier keyValueStore(final DslKeyValueParams params) {
+            final KeyValueBytesStoreSupplier result = super.keyValueStore(params);
+            capture.set(result);
+            return result;
+        }
+    }
+
+    @Test
+    public void shouldJoinWithNonTimestampedStore() {
+        final CapturingStoreSuppliers suppliers = new CapturingStoreSuppliers();
+        final StreamJoined<Integer, String, String> streamJoined =
+                StreamJoined.with(Serdes.Integer(), Serdes.String(), Serdes.String())
+                        .withDslStoreSuppliers(suppliers);
+
+        final StreamsBuilder builder = new StreamsBuilder();
+
+        final KStream<Integer, String> stream1;
+        final KStream<Integer, String> stream2;
+        final KStream<Integer, String> joined;
+        final MockApiProcessorSupplier<Integer, String, Void, Void> supplier = new MockApiProcessorSupplier<>();
+        stream1 = builder.stream(topic1, consumed);
+        stream2 = builder.stream(topic2, consumed);
+
+        joined = stream1.outerJoin(
+                stream2,
+                MockValueJoiner.TOSTRING_JOINER,
+                JoinWindows.ofTimeDifferenceWithNoGrace(ofMillis(100L)),
+                streamJoined
+        );
+        joined.process(supplier);
+
+        // create a TTD so that the topology gets built
+        try (final TopologyTestDriver ignored = new TopologyTestDriver(builder.build(PROPS), PROPS)) {
+            assertThat("Expected stream joined to supply builders that create non-timestamped stores",
+                    !WrappedStateStore.isTimestamped(suppliers.capture.get().get()));
+        }
     }
 }

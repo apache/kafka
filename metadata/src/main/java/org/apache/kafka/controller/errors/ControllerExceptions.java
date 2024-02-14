@@ -17,18 +17,11 @@
 
 package org.apache.kafka.controller.errors;
 
-import org.apache.kafka.common.errors.ApiException;
 import org.apache.kafka.common.errors.NotControllerException;
-import org.apache.kafka.common.errors.PolicyViolationException;
 import org.apache.kafka.common.errors.TimeoutException;
-import org.apache.kafka.common.errors.UnknownServerException;
-import org.apache.kafka.raft.errors.NotLeaderException;
-import org.apache.kafka.server.mutable.BoundedListTooLongException;
 
 import java.util.OptionalInt;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.RejectedExecutionException;
-import java.util.function.Supplier;
 
 
 public class ControllerExceptions {
@@ -92,59 +85,5 @@ public class ControllerExceptions {
         } else {
             return new NotControllerException("No controller appears to be active.");
         }
-    }
-
-    /**
-     * Determine if an exception is expected. Unexpected exceptions trigger controller failovers
-     * when they are raised.
-     *
-     * @param exception     The exception.
-     * @return              True if the exception is expected.
-     */
-    public static boolean isExpected(Throwable exception) {
-        if (exception instanceof ApiException) {
-            // ApiExceptions indicate errors that should be returned to the user.
-            return true;
-        } else if (exception instanceof NotLeaderException) {
-            // NotLeaderException is thrown if we try to append records, but are not the leader.
-            return true;
-        } else if (exception instanceof RejectedExecutionException) {
-            // This can happen when the controller is shutting down.
-            return true;
-        } else if (exception instanceof BoundedListTooLongException) {
-            // This can happen if we tried to create too many records.
-            return true;
-        } else if (exception instanceof InterruptedException) {
-            // Interrupted exceptions are not expected. They might happen during junit tests if
-            // the test gets stuck and must be terminated by sending IE to all the threads.
-            return false;
-        }
-        // Other exceptions are unexpected.
-        return false;
-    }
-
-    /**
-     * Translate an internal controller exception to its external equivalent.
-     *
-     * @param exception     The internal exception.
-     * @return              Its external equivalent.
-     */
-    public static Throwable toExternalException(
-        Throwable exception,
-        Supplier<OptionalInt> latestControllerSupplier
-    ) {
-        if (exception instanceof ApiException) {
-            return exception;
-        } else if (exception instanceof NotLeaderException) {
-            return newWrongControllerException(latestControllerSupplier.get());
-        } else if (exception instanceof RejectedExecutionException) {
-            return new TimeoutException("The controller is shutting down.", exception);
-        } else if (exception instanceof BoundedListTooLongException) {
-            return new PolicyViolationException("Unable to perform excessively large batch " +
-                    "operation.");
-        } else if (exception instanceof InterruptedException) {
-            return new UnknownServerException("The controller was interrupted.");
-        }
-        return new UnknownServerException(exception);
     }
 }

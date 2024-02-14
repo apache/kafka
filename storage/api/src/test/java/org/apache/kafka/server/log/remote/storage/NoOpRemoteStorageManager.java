@@ -16,14 +16,18 @@
  */
 package org.apache.kafka.server.log.remote.storage;
 
+import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentMetadata.CustomMetadata;
+
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import java.util.Map;
+import java.util.Optional;
 
 public class NoOpRemoteStorageManager implements RemoteStorageManager {
     @Override
-    public void copyLogSegmentData(RemoteLogSegmentMetadata remoteLogSegmentMetadata,
-                                   LogSegmentData logSegmentData) {
+    public Optional<CustomMetadata> copyLogSegmentData(RemoteLogSegmentMetadata remoteLogSegmentMetadata,
+                                                       LogSegmentData logSegmentData) {
+        return Optional.empty();
     }
 
     @Override

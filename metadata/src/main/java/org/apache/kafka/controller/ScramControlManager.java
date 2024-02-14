@@ -322,7 +322,7 @@ public class ScramControlManager {
         if (credentials.remove(key) == null) {
             throw new RuntimeException("Unable to find credential to delete: " + key);
         }
-        log.info("Removed SCRAM credential for {} with mechanism {}.",
+        log.info("Replayed RemoveUserScramCredentialRecord for {} with mechanism {}.",
             key.username, key.mechanism);
     }
 
@@ -334,11 +334,11 @@ public class ScramControlManager {
             record.serverKey(),
             record.iterations());
         if (credentials.put(key, value) == null) {
-            log.info("Created new SCRAM credential for {} with mechanism {}.",
-                key.username, key.mechanism);
+            log.info("Replayed UserScramCredentialRecord creating new entry for {} with " +
+                "mechanism {}.", key.username, key.mechanism);
         } else {
-            log.info("Modified SCRAM credential for {} with mechanism {}.",
-                key.username, key.mechanism);
+            log.info("Replayed UserScramCredentialRecord modifying existing entry for {} " +
+                "with mechanism {}.", key.username, key.mechanism);
         }
     }
 

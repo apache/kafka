@@ -170,6 +170,33 @@ public class MirrorCheckpointTaskTest {
     }
 
     @Test
+    public void testSyncOffsetForTargetGroupWithNullOffsetAndMetadata() {
+        Map<String, Map<TopicPartition, OffsetAndMetadata>> idleConsumerGroupsOffset = new HashMap<>();
+        Map<String, Map<TopicPartition, Checkpoint>> checkpointsPerConsumerGroup = new HashMap<>();
+
+        String consumer = "consumer";
+        String topic = "topic";
+        Map<TopicPartition, OffsetAndMetadata> ct = new HashMap<>();
+        TopicPartition tp = new TopicPartition(topic, 0);
+        // Simulate other clients such as Sarama, which may reset group offsets to -1. This can cause
+        // the obtained `OffsetAndMetadata` of the target cluster to be null.
+        ct.put(tp, null);
+        idleConsumerGroupsOffset.put(consumer, ct);
+
+        Checkpoint cp = new Checkpoint(consumer, new TopicPartition(topic, 0), 200, 101, "metadata");
+        Map<TopicPartition, Checkpoint> checkpointMap = new HashMap<>();
+        checkpointMap.put(cp.topicPartition(), cp);
+        checkpointsPerConsumerGroup.put(consumer, checkpointMap);
+
+        MirrorCheckpointTask mirrorCheckpointTask = new MirrorCheckpointTask("source", "target",
+                new DefaultReplicationPolicy(), null, idleConsumerGroupsOffset, checkpointsPerConsumerGroup);
+
+        Map<String, Map<TopicPartition, OffsetAndMetadata>> output = mirrorCheckpointTask.syncGroupOffset();
+
+        assertEquals(101, output.get(consumer).get(tp).offset(), "Consumer " + topic + " failed");
+    }
+
+    @Test
     public void testNoCheckpointForTopicWithoutOffsetSyncs() {
         OffsetSyncStoreTest.FakeOffsetSyncStore offsetSyncStore = new OffsetSyncStoreTest.FakeOffsetSyncStore();
         offsetSyncStore.start();

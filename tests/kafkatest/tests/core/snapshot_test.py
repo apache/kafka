@@ -118,7 +118,7 @@ class TestSnapshots(ProduceConsumeValidateTest):
         cmd = "ls %s" % file_path
         files = node.account.ssh_output(cmd, allow_fail=True, combine_stderr=False)
 
-        if len(files) == 0:
+        if not files:
             self.logger.debug("File %s does not exist" % file_path)
             return False
         else:
@@ -144,8 +144,11 @@ class TestSnapshots(ProduceConsumeValidateTest):
         self.validate()
 
     @cluster(num_nodes=9)
-    @matrix(metadata_quorum=quorum.all_kraft)
-    def test_broker(self, metadata_quorum=quorum.combined_kraft):
+    @matrix(
+        metadata_quorum=quorum.all_kraft,
+        use_new_coordinator=[True, False]
+    )
+    def test_broker(self, metadata_quorum=quorum.combined_kraft, use_new_coordinator=False):
         """ Test the ability of a broker to consume metadata snapshots
         and to recover the cluster metadata state using them
 
@@ -204,8 +207,11 @@ class TestSnapshots(ProduceConsumeValidateTest):
         self.validate_success(broker_topic)
 
     @cluster(num_nodes=9)
-    @matrix(metadata_quorum=quorum.all_kraft)
-    def test_controller(self, metadata_quorum=quorum.combined_kraft):
+    @matrix(
+        metadata_quorum=quorum.all_kraft,
+        use_new_coordinator=[True, False]
+    )
+    def test_controller(self, metadata_quorum=quorum.combined_kraft, use_new_coordinator=False):
         """ Test the ability of controllers to consume metadata snapshots
         and to recover the cluster metadata state using them
 

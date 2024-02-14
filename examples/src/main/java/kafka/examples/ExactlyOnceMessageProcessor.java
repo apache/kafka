@@ -48,7 +48,7 @@ import static java.util.Collections.singleton;
 /**
  * This class implements a read-process-write application.
  */
-public class ExactlyOnceMessageProcessor extends Thread implements ConsumerRebalanceListener {
+public class ExactlyOnceMessageProcessor extends Thread implements ConsumerRebalanceListener, AutoCloseable {
     private final String bootstrapServers;
     private final String inputTopic;
     private final String outputTopic;
@@ -74,14 +74,29 @@ public class ExactlyOnceMessageProcessor extends Thread implements ConsumerRebal
         int transactionTimeoutMs = 10_000;
         // A unique transactional.id must be provided in order to properly use EOS.
         producer = new Producer(
-            "processor-producer", KafkaProperties.KAFKA_SERVER_URL + ":" + KafkaProperties.KAFKA_SERVER_PORT, outputTopic, true, transactionalId, true, -1, transactionTimeoutMs, null)
+                "processor-producer",
+                KafkaProperties.BOOTSTRAP_SERVERS,
+                outputTopic,
+                true,
+                transactionalId,
+                true,
+                -1,
+                transactionTimeoutMs,
+                null)
                 .createKafkaProducer();
         // Consumer must be in read_committed mode, which means it won't be able to read uncommitted data.
         // Consumer could optionally configure groupInstanceId to avoid unnecessary rebalances.
         this.groupInstanceId = "giid-" + threadName;
         boolean readCommitted = true;
         consumer = new Consumer(
-            "processor-consumer", KafkaProperties.KAFKA_SERVER_URL + ":" + KafkaProperties.KAFKA_SERVER_PORT, inputTopic, "processor-group", Optional.of(groupInstanceId), readCommitted, -1, null)
+                "processor-consumer",
+                KafkaProperties.BOOTSTRAP_SERVERS,
+                inputTopic,
+                "processor-group",
+                Optional.of(groupInstanceId),
+                readCommitted,
+                -1,
+                null)
                 .createKafkaConsumer();
         this.latch = latch;
     }
@@ -198,5 +213,16 @@ public class ExactlyOnceMessageProcessor extends Thread implements ConsumerRebal
                 return 0;
             }
         }).sum();
+    }
+
+    @Override
+    public void close() throws Exception {
+        if (producer != null) {
+            producer.close();
+        }
+
+        if (consumer != null) {
+            consumer.close();
+        }
     }
 }

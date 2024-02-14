@@ -64,7 +64,7 @@ public class ConsumerNetworkClientTest {
     private MockTime time = new MockTime(1);
     private Cluster cluster = TestUtils.singletonCluster(topicName, 1);
     private Node node = cluster.nodes().get(0);
-    private Metadata metadata = new Metadata(100, 50000, new LogContext(),
+    private Metadata metadata = new Metadata(100, 100, 50000, new LogContext(),
             new ClusterResourceListeners());
     private MockClient client = new MockClient(time, metadata);
     private ConsumerNetworkClient consumerClient = new ConsumerNetworkClient(new LogContext(),

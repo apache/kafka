@@ -20,10 +20,9 @@ package kafka.security.token.delegation
 import java.net.InetAddress
 import java.nio.ByteBuffer
 import java.util.{Base64, Properties}
-import kafka.network.RequestChannel.Session
-import kafka.security.authorizer.{AclAuthorizer, AuthorizerUtils}
+import kafka.security.authorizer.AclAuthorizer
 import kafka.security.authorizer.AclEntry.WildcardHost
-import kafka.server.{CreateTokenResult, Defaults, DelegationTokenManager, KafkaConfig, QuorumTestHarness}
+import kafka.server.{CreateTokenResult, DelegationTokenManager, DelegationTokenManagerZk, KafkaConfig, QuorumTestHarness}
 import kafka.utils.TestUtils
 import kafka.zk.KafkaZkClient
 import org.apache.kafka.common.acl.{AccessControlEntry, AclBinding, AclOperation}
@@ -38,13 +37,20 @@ import org.apache.kafka.common.security.scram.internals.ScramMechanism
 import org.apache.kafka.common.security.token.delegation.internals.DelegationTokenCache
 import org.apache.kafka.common.security.token.delegation.{DelegationToken, TokenInformation}
 import org.apache.kafka.common.utils.{MockTime, SecurityUtils, Time}
+import org.apache.kafka.network.Session
+import org.apache.kafka.security.authorizer.AuthorizerUtils
 import org.apache.kafka.server.authorizer._
+import org.apache.kafka.server.config.Defaults
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo}
 
 import scala.jdk.CollectionConverters._
 import scala.collection.mutable.Buffer
 
+/*
+ * These tests are only for the Zk DelegationTokenManager.
+ * They work by directly calling the DelegationTokenManager which only exists in Zk
+ */
 class DelegationTokenManagerTest extends QuorumTestHarness  {
 
   val time = new MockTime()
@@ -53,8 +59,8 @@ class DelegationTokenManagerTest extends QuorumTestHarness  {
   val tokenManagers = Buffer[DelegationTokenManager]()
 
   val secretKey = "secretKey"
-  val maxLifeTimeMsDefault = Defaults.DelegationTokenMaxLifeTimeMsDefault
-  val renewTimeMsDefault = Defaults.DelegationTokenExpiryTimeMsDefault
+  val maxLifeTimeMsDefault = Defaults.DELEGATION_TOKEN_MAX_LIFE_TIME_MS
+  val renewTimeMsDefault = Defaults.DELEGATION_TOKEN_EXPIRY_TIME_MS
   var tokenCache: DelegationTokenCache = _
   var props: Properties = _
 
@@ -106,9 +112,9 @@ class DelegationTokenManagerTest extends QuorumTestHarness  {
     val password = DelegationTokenManager.createHmac(tokenId, secretKey)
     assertEquals(CreateTokenResult(owner, owner, issueTime, issueTime + renewTimeMsDefault,  issueTime + maxLifeTimeMsDefault, tokenId, password, Errors.NONE), createTokenResult)
 
-    val token = tokenManager.getToken(tokenId)
-    assertFalse(token.isEmpty )
-    assertTrue(password sameElements token.get.hmac)
+    val tokenInfo = tokenCache.token(tokenId)
+    val token = tokenManager.getDelegationToken(tokenInfo)
+    assertTrue(password sameElements token.hmac)
   }
 
   @Test
@@ -193,9 +199,9 @@ class DelegationTokenManagerTest extends QuorumTestHarness  {
 
     //try expire token immediately, even if it is an expired token
     tokenManager.expireToken(owner, ByteBuffer.wrap(password), -1, renewResponseCallback)
-    assert(tokenManager.getToken(tokenId).isEmpty)
     assertEquals(Errors.NONE, error)
     assertEquals(time.milliseconds, expiryTimeStamp)
+    assert(tokenCache.token(tokenId) == null)
   }
 
   @Test
@@ -219,7 +225,7 @@ class DelegationTokenManagerTest extends QuorumTestHarness  {
     assertNull(tokenInformation)
 
     //check that the token is removed
-    assert(tokenManager.getToken(tokenId).isEmpty)
+    assert(tokenCache.token(tokenId) == null)
   }
 
   @Test
@@ -311,7 +317,7 @@ class DelegationTokenManagerTest extends QuorumTestHarness  {
     assertEquals(1, tokens.size)
 
     //get all tokens for multiple owners (renewer2, renewer3) which are token renewers principals and with permissions
-    hostSession = Session(renewer2, InetAddress.getByName("192.168.1.1"))
+    hostSession = new Session(renewer2, InetAddress.getByName("192.168.1.1"))
     createAcl(new AclBinding(new ResourcePattern(DELEGATION_TOKEN, tokenId2, LITERAL),
       new AccessControlEntry(renewer2.toString, WildcardHost, DESCRIBE, ALLOW)))
     tokens = getTokens(tokenManager, aclAuthorizer, hostSession,  renewer2, List(renewer2, renewer3))
@@ -375,7 +381,7 @@ class DelegationTokenManagerTest extends QuorumTestHarness  {
 
   private def createDelegationTokenManager(config: KafkaConfig, tokenCache: DelegationTokenCache,
                                            time: Time, zkClient: KafkaZkClient): DelegationTokenManager = {
-    val tokenManager = new DelegationTokenManager(config, tokenCache, time, zkClient)
+    val tokenManager = new DelegationTokenManagerZk(config, tokenCache, time, zkClient)
     tokenManagers += tokenManager
     tokenManager
   }

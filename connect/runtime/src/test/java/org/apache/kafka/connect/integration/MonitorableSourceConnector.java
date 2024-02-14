@@ -27,7 +27,7 @@ import org.apache.kafka.connect.source.ConnectorTransactionBoundaries;
 import org.apache.kafka.connect.source.ExactlyOnceSupport;
 import org.apache.kafka.connect.source.SourceRecord;
 import org.apache.kafka.connect.source.SourceTask;
-import org.apache.kafka.tools.ThroughputThrottler;
+import org.apache.kafka.server.util.ThroughputThrottler;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -51,6 +51,7 @@ public class MonitorableSourceConnector extends SampleSourceConnector {
     private static final Logger log = LoggerFactory.getLogger(MonitorableSourceConnector.class);
 
     public static final String TOPIC_CONFIG = "topic";
+    public static final String NUM_TASKS = "num.tasks";
     public static final String MESSAGES_PER_POLL_CONFIG = "messages.per.poll";
     public static final String MAX_MESSAGES_PER_SECOND_CONFIG = "throughput";
     public static final String MAX_MESSAGES_PRODUCED_CONFIG = "max.messages";
@@ -93,14 +94,25 @@ public class MonitorableSourceConnector extends SampleSourceConnector {
 
     @Override
     public List<Map<String, String>> taskConfigs(int maxTasks) {
+        String numTasksProp = commonConfigs.get(NUM_TASKS);
+        int numTasks = numTasksProp != null ? Integer.parseInt(numTasksProp) : maxTasks;
         List<Map<String, String>> configs = new ArrayList<>();
-        for (int i = 0; i < maxTasks; i++) {
-            Map<String, String> config = new HashMap<>(commonConfigs);
-            config.put("connector.name", connectorName);
-            config.put("task.id", taskId(connectorName, i));
+        for (int i = 0; i < numTasks; i++) {
+            Map<String, String> config = taskConfig(commonConfigs, connectorName, i);
             configs.add(config);
         }
         return configs;
+    }
+
+    public static Map<String, String> taskConfig(
+            Map<String, String> connectorProps,
+            String connectorName,
+            int taskNum
+    ) {
+        Map<String, String> result = new HashMap<>(connectorProps);
+        result.put("connector.name", connectorName);
+        result.put("task.id", taskId(connectorName, taskNum));
+        return result;
     }
 
     @Override
@@ -275,13 +287,17 @@ public class MonitorableSourceConnector extends SampleSourceConnector {
             if (context.transactionContext() == null || seqno != nextTransactionBoundary) {
                 return;
             }
+            long transactionSize = nextTransactionBoundary - priorTransactionBoundary;
+
             // If the transaction boundary ends on an even-numbered offset, abort it
             // Otherwise, commit
             boolean abort = nextTransactionBoundary % 2 == 0;
             calculateNextBoundary();
             if (abort) {
+                log.info("Aborting transaction of {} records", transactionSize);
                 context.transactionContext().abortTransaction(record);
             } else {
+                log.info("Committing transaction of {} records", transactionSize);
                 context.transactionContext().commitTransaction(record);
             }
         }

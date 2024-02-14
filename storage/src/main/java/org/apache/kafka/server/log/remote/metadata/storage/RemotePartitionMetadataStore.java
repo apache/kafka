@@ -18,6 +18,7 @@ package org.apache.kafka.server.log.remote.metadata.storage;
 
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.ReplicaNotAvailableException;
 import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentId;
 import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentMetadata;
 import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentMetadataUpdate;
@@ -151,6 +152,12 @@ public class RemotePartitionMetadataStore extends RemotePartitionMetadataEventHa
             throw new RemoteResourceNotFoundException("No resource found for partition: " + topicIdPartition);
         }
 
+        if (!remoteLogMetadataCache.isInitialized()) {
+            // Throwing a retriable ReplicaNotAvailableException here for clients retry. We can introduce a new more
+            // appropriate exception with a KIP in the future.
+            throw new ReplicaNotAvailableException("Remote log metadata cache is not initialized for partition: " + topicIdPartition);
+        }
+
         return remoteLogMetadataCache;
     }
 
@@ -180,9 +187,21 @@ public class RemotePartitionMetadataStore extends RemotePartitionMetadataEventHa
         idToRemoteLogMetadataCache = Collections.emptyMap();
     }
 
+    @Override
     public void maybeLoadPartition(TopicIdPartition partition) {
         idToRemoteLogMetadataCache.computeIfAbsent(partition,
             topicIdPartition -> new FileBasedRemoteLogMetadataCache(topicIdPartition, partitionLogDirectory(topicIdPartition.topicPartition())));
     }
 
+    @Override
+    public void markInitialized(TopicIdPartition partition) {
+        idToRemoteLogMetadataCache.get(partition).markInitialized();
+        log.trace("Remote log components are initialized for user-partition: {}", partition);
+    }
+
+    @Override
+    public boolean isInitialized(TopicIdPartition topicIdPartition) {
+        RemoteLogMetadataCache metadataCache = idToRemoteLogMetadataCache.get(topicIdPartition);
+        return metadataCache != null && metadataCache.isInitialized();
+    }
 }

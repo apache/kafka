@@ -118,12 +118,12 @@ public class FollowerState implements EpochState {
 
             if (updatedHighWatermark < 0) {
                 throw new IllegalArgumentException(
-                    String.format("Illegal negative (%s) high watermark update", updatedHighWatermark)
+                    String.format("Illegal negative (%d) high watermark update", updatedHighWatermark)
                 );
             } else if (previousHighWatermark > updatedHighWatermark) {
                 throw new IllegalArgumentException(
                     String.format(
-                        "Non-monotonic update of high watermark from %s to %s",
+                        "Non-monotonic update of high watermark from %d to %d",
                         previousHighWatermark,
                         updatedHighWatermark
                     )
@@ -153,9 +153,7 @@ public class FollowerState implements EpochState {
     }
 
     public void setFetchingSnapshot(Optional<RawSnapshotWriter> newSnapshot) {
-        if (fetchingSnapshot.isPresent()) {
-            fetchingSnapshot.get().close();
-        }
+        fetchingSnapshot.ifPresent(RawSnapshotWriter::close);
         fetchingSnapshot = newSnapshot;
     }
 
@@ -180,9 +178,7 @@ public class FollowerState implements EpochState {
 
     @Override
     public void close() {
-        if (fetchingSnapshot.isPresent()) {
-            fetchingSnapshot.get().close();
-        }
+        fetchingSnapshot.ifPresent(RawSnapshotWriter::close);
     }
 
     private void logHighWatermarkUpdate(

@@ -18,6 +18,7 @@
 package org.apache.kafka.connect.transforms;
 
 import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.connect.data.Date;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaBuilder;
@@ -679,6 +680,13 @@ public class TimestampConverterTest {
 
         assertNull(transformed.keySchema());
         assertEquals(DATE_PLUS_TIME.getTime(), transformed.key());
+    }
+
+    @Test
+    public void testTimestampConverterVersionRetrievedFromAppInfoParser() {
+        assertEquals(AppInfoParser.getVersion(), xformKey.version());
+        assertEquals(AppInfoParser.getVersion(), xformValue.version());
+        assertEquals(xformKey.version(), xformValue.version());
     }
 
     private SourceRecord createRecordWithSchema(Schema schema, Object value) {

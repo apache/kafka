@@ -108,6 +108,7 @@ import static org.apache.kafka.common.utils.Utils.mkProperties;
 import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.apache.kafka.streams.StreamsConfig.AT_LEAST_ONCE;
 import static org.apache.kafka.streams.StreamsConfig.EXACTLY_ONCE_V2;
+import static org.apache.kafka.streams.processor.internals.Task.State.CLOSED;
 import static org.apache.kafka.streams.processor.internals.Task.State.CREATED;
 import static org.apache.kafka.streams.processor.internals.Task.State.RESTORING;
 import static org.apache.kafka.streams.processor.internals.Task.State.RUNNING;
@@ -339,7 +340,7 @@ public class StreamTaskTest {
 
     @Test
     public void shouldAttemptToDeleteStateDirectoryWhenCloseDirtyAndEosEnabled() throws IOException {
-        final IMocksControl ctrl = EasyMock.createStrictControl();
+        final IMocksControl ctrl = EasyMock.createNiceControl();
         final ProcessorStateManager stateManager = ctrl.createMock(ProcessorStateManager.class);
         EasyMock.expect(stateManager.taskType()).andStubReturn(TaskType.ACTIVE);
         stateDirectory = ctrl.createMock(StateDirectory.class);
@@ -352,6 +353,12 @@ public class StreamTaskTest {
         EasyMock.expect(stateDirectory.lock(taskId)).andReturn(true);
 
         stateManager.close();
+        EasyMock.expectLastCall();
+
+        stateManager.transitionTaskState(SUSPENDED);
+        EasyMock.expectLastCall();
+
+        stateManager.transitionTaskState(CLOSED);
         EasyMock.expectLastCall();
 
         // The `baseDir` will be accessed when attempting to delete the state store.
@@ -538,6 +545,10 @@ public class StreamTaskTest {
     @Test
     public void shouldProcessInOrder() {
         task = createStatelessTask(createConfig());
+        task.initializeIfNeeded();
+        task.completeRestoration(noOpResetter -> { });
+
+        task.resumePollingForPartitionsWithAvailableSpace();
 
         task.addRecords(partition1, asList(
             getConsumerRecordWithOffsetAsTimestamp(partition1, 10, 101),
@@ -550,6 +561,8 @@ public class StreamTaskTest {
             getConsumerRecordWithOffsetAsTimestamp(partition2, 35, 202),
             getConsumerRecordWithOffsetAsTimestamp(partition2, 45, 203)
         ));
+
+        task.updateLags();
 
         assertTrue(task.process(0L));
         assertEquals(5, task.numBuffered());
@@ -975,6 +988,8 @@ public class StreamTaskTest {
     @Test
     public void shouldPauseAndResumeBasedOnBufferedRecords() {
         task = createStatelessTask(createConfig("100"));
+        task.initializeIfNeeded();
+        task.completeRestoration(noOpResetter -> { });
 
         task.addRecords(partition1, asList(
             getConsumerRecordWithOffsetAsTimestamp(partition1, 10),
@@ -1009,6 +1024,12 @@ public class StreamTaskTest {
         assertEquals(2, source1.numReceived);
         assertEquals(0, source2.numReceived);
 
+        assertEquals(2, consumer.paused().size());
+        assertTrue(consumer.paused().contains(partition1));
+        assertTrue(consumer.paused().contains(partition2));
+
+        task.resumePollingForPartitionsWithAvailableSpace();
+
         assertEquals(1, consumer.paused().size());
         assertTrue(consumer.paused().contains(partition2));
 
@@ -1023,6 +1044,11 @@ public class StreamTaskTest {
         assertEquals(3, source1.numReceived);
         assertEquals(1, source2.numReceived);
 
+        assertEquals(1, consumer.paused().size());
+        assertTrue(consumer.paused().contains(partition2));
+
+        task.resumePollingForPartitionsWithAvailableSpace();
+
         assertEquals(0, consumer.paused().size());
     }
 
@@ -1031,6 +1057,8 @@ public class StreamTaskTest {
         task = createStatelessTask(createConfig());
         task.initializeIfNeeded();
         task.completeRestoration(noOpResetter -> { });
+
+        task.resumePollingForPartitionsWithAvailableSpace();
 
         task.addRecords(partition1, asList(
             getConsumerRecordWithOffsetAsTimestamp(partition1, 20),
@@ -1046,7 +1074,10 @@ public class StreamTaskTest {
             getConsumerRecordWithOffsetAsTimestamp(partition2, 161)
         ));
 
+        task.updateLags();
+
         // st: -1
+        assertFalse(task.canPunctuateStreamTime());
         assertFalse(task.maybePunctuateStreamTime()); // punctuate at 20
 
         // st: 20
@@ -1054,6 +1085,7 @@ public class StreamTaskTest {
         assertEquals(7, task.numBuffered());
         assertEquals(1, source1.numReceived);
         assertEquals(0, source2.numReceived);
+        assertTrue(task.canPunctuateStreamTime());
         assertTrue(task.maybePunctuateStreamTime());
 
         // st: 25
@@ -1061,6 +1093,7 @@ public class StreamTaskTest {
         assertEquals(6, task.numBuffered());
         assertEquals(1, source1.numReceived);
         assertEquals(1, source2.numReceived);
+        assertFalse(task.canPunctuateStreamTime());
         assertFalse(task.maybePunctuateStreamTime());
 
         // st: 142
@@ -1069,6 +1102,7 @@ public class StreamTaskTest {
         assertEquals(5, task.numBuffered());
         assertEquals(2, source1.numReceived);
         assertEquals(1, source2.numReceived);
+        assertTrue(task.canPunctuateStreamTime());
         assertTrue(task.maybePunctuateStreamTime());
 
         // st: 145
@@ -1077,6 +1111,7 @@ public class StreamTaskTest {
         assertEquals(4, task.numBuffered());
         assertEquals(2, source1.numReceived);
         assertEquals(2, source2.numReceived);
+        assertFalse(task.canPunctuateStreamTime());
         assertFalse(task.maybePunctuateStreamTime());
 
         // st: 155
@@ -1085,6 +1120,7 @@ public class StreamTaskTest {
         assertEquals(3, task.numBuffered());
         assertEquals(3, source1.numReceived);
         assertEquals(2, source2.numReceived);
+        assertTrue(task.canPunctuateStreamTime());
         assertTrue(task.maybePunctuateStreamTime());
 
         // st: 159
@@ -1092,6 +1128,7 @@ public class StreamTaskTest {
         assertEquals(2, task.numBuffered());
         assertEquals(3, source1.numReceived);
         assertEquals(3, source2.numReceived);
+        assertFalse(task.canPunctuateStreamTime());
         assertFalse(task.maybePunctuateStreamTime());
 
         // st: 160, aligned at 0
@@ -1099,6 +1136,7 @@ public class StreamTaskTest {
         assertEquals(1, task.numBuffered());
         assertEquals(4, source1.numReceived);
         assertEquals(3, source2.numReceived);
+        assertTrue(task.canPunctuateStreamTime());
         assertTrue(task.maybePunctuateStreamTime());
 
         // st: 161
@@ -1106,6 +1144,7 @@ public class StreamTaskTest {
         assertEquals(0, task.numBuffered());
         assertEquals(4, source1.numReceived);
         assertEquals(4, source2.numReceived);
+        assertFalse(task.canPunctuateStreamTime());
         assertFalse(task.maybePunctuateStreamTime());
 
         processorStreamTime.mockProcessor.checkAndClearPunctuateResult(PunctuationType.STREAM_TIME, 20L, 142L, 155L, 160L);
@@ -1129,16 +1168,19 @@ public class StreamTaskTest {
             getConsumerRecordWithOffsetAsTimestamp(partition2, 45)
         ));
 
+        assertFalse(task.canPunctuateStreamTime());
         assertFalse(task.maybePunctuateStreamTime());
 
         // st is now 20
         assertTrue(task.process(0L));
 
+        assertTrue(task.canPunctuateStreamTime());
         assertTrue(task.maybePunctuateStreamTime());
 
         // st is now 25
         assertTrue(task.process(0L));
 
+        assertFalse(task.canPunctuateStreamTime());
         assertFalse(task.maybePunctuateStreamTime());
 
         // st is now 30
@@ -1146,6 +1188,7 @@ public class StreamTaskTest {
 
         processorStreamTime.mockProcessor.scheduleCancellable().cancel();
 
+        assertFalse(task.canPunctuateStreamTime());
         assertFalse(task.maybePunctuateStreamTime());
 
         processorStreamTime.mockProcessor.checkAndClearPunctuateResult(PunctuationType.STREAM_TIME, 20L);
@@ -1158,9 +1201,11 @@ public class StreamTaskTest {
         task.completeRestoration(noOpResetter -> { });
         final long now = time.milliseconds();
         time.sleep(10);
+        assertTrue(task.canPunctuateSystemTime());
         assertTrue(task.maybePunctuateSystemTime());
         processorSystemTime.mockProcessor.scheduleCancellable().cancel();
         time.sleep(10);
+        assertFalse(task.canPunctuateSystemTime());
         assertFalse(task.maybePunctuateSystemTime());
         processorSystemTime.mockProcessor.checkAndClearPunctuateResult(PunctuationType.WALL_CLOCK_TIME, now + 10);
     }
@@ -1183,6 +1228,7 @@ public class StreamTaskTest {
         task.postCommit(true);
         assertFalse(task.commitNeeded());
 
+        assertTrue(task.canPunctuateStreamTime());
         assertTrue(task.maybePunctuateStreamTime());
         assertTrue(task.commitNeeded());
 
@@ -1193,6 +1239,7 @@ public class StreamTaskTest {
         assertFalse(task.commitNeeded());
 
         time.sleep(10);
+        assertTrue(task.canPunctuateSystemTime());
         assertTrue(task.maybePunctuateSystemTime());
         assertTrue(task.commitNeeded());
 
@@ -1263,7 +1310,9 @@ public class StreamTaskTest {
         // the task should still be committed since the processed records have not reached the consumer position
         assertTrue(task.commitNeeded());
 
+        task.resumePollingForPartitionsWithAvailableSpace();
         consumer.poll(Duration.ZERO);
+        task.updateLags();
         task.process(0L);
 
         assertTrue(task.commitNeeded());
@@ -1284,6 +1333,8 @@ public class StreamTaskTest {
         task.initializeIfNeeded();
         task.completeRestoration(noOpResetter -> { });
 
+        task.resumePollingForPartitionsWithAvailableSpace();
+
         consumer.addRecord(getConsumerRecordWithOffsetAsTimestamp(partition1, 0L));
         consumer.addRecord(getConsumerRecordWithOffsetAsTimestamp(partition1, 1L));
         consumer.addRecord(getConsumerRecordWithOffsetAsTimestamp(partition2, 0L));
@@ -1292,6 +1343,8 @@ public class StreamTaskTest {
 
         task.addRecords(partition1, singletonList(getConsumerRecordWithOffsetAsTimestamp(partition1, 0L)));
         task.addRecords(partition1, singletonList(getConsumerRecordWithOffsetAsTimestamp(partition1, 1L)));
+
+        task.updateLags();
 
         task.process(0L);
         processorStreamTime.mockProcessor.addProcessorMetadata("key1", 100L);
@@ -1413,15 +1466,21 @@ public class StreamTaskTest {
         task.completeRestoration(noOpResetter -> { });
         final long now = time.milliseconds();
         time.sleep(10);
+        assertTrue(task.canPunctuateSystemTime());
         assertTrue(task.maybePunctuateSystemTime());
         time.sleep(10);
+        assertTrue(task.canPunctuateSystemTime());
         assertTrue(task.maybePunctuateSystemTime());
         time.sleep(9);
+        assertFalse(task.canPunctuateSystemTime());
         assertFalse(task.maybePunctuateSystemTime());
         time.sleep(1);
+        assertTrue(task.canPunctuateSystemTime());
         assertTrue(task.maybePunctuateSystemTime());
         time.sleep(20);
+        assertTrue(task.canPunctuateSystemTime());
         assertTrue(task.maybePunctuateSystemTime());
+        assertFalse(task.canPunctuateSystemTime());
         assertFalse(task.maybePunctuateSystemTime());
         processorSystemTime.mockProcessor.checkAndClearPunctuateResult(PunctuationType.WALL_CLOCK_TIME, now + 10, now + 20, now + 30, now + 50);
     }
@@ -1431,8 +1490,10 @@ public class StreamTaskTest {
         task = createStatelessTask(createConfig("100"));
         task.initializeIfNeeded();
         task.completeRestoration(noOpResetter -> { });
+        assertFalse(task.canPunctuateSystemTime());
         assertFalse(task.maybePunctuateSystemTime());
         time.sleep(9);
+        assertFalse(task.canPunctuateSystemTime());
         assertFalse(task.maybePunctuateSystemTime());
         processorSystemTime.mockProcessor.checkAndClearPunctuateResult(PunctuationType.WALL_CLOCK_TIME);
     }
@@ -1444,21 +1505,31 @@ public class StreamTaskTest {
         task.completeRestoration(noOpResetter -> { });
         final long now = time.milliseconds();
         time.sleep(100);
+        assertTrue(task.canPunctuateSystemTime());
         assertTrue(task.maybePunctuateSystemTime());
+        assertFalse(task.canPunctuateSystemTime());
         assertFalse(task.maybePunctuateSystemTime());
         time.sleep(10);
+        assertTrue(task.canPunctuateSystemTime());
         assertTrue(task.maybePunctuateSystemTime());
         time.sleep(12);
+        assertTrue(task.canPunctuateSystemTime());
         assertTrue(task.maybePunctuateSystemTime());
         time.sleep(7);
+        assertFalse(task.canPunctuateSystemTime());
         assertFalse(task.maybePunctuateSystemTime());
         time.sleep(1); // punctuate at now + 130
+        assertTrue(task.canPunctuateSystemTime());
         assertTrue(task.maybePunctuateSystemTime());
         time.sleep(105); // punctuate at now + 235
+        assertTrue(task.canPunctuateSystemTime());
         assertTrue(task.maybePunctuateSystemTime());
+        assertFalse(task.canPunctuateSystemTime());
         assertFalse(task.maybePunctuateSystemTime());
         time.sleep(5); // punctuate at now + 240, still aligned on the initial punctuation
+        assertTrue(task.canPunctuateSystemTime());
         assertTrue(task.maybePunctuateSystemTime());
+        assertFalse(task.canPunctuateSystemTime());
         assertFalse(task.maybePunctuateSystemTime());
         processorSystemTime.mockProcessor.checkAndClearPunctuateResult(PunctuationType.WALL_CLOCK_TIME, now + 100, now + 110, now + 122, now + 130, now + 235, now + 240);
     }
@@ -1794,13 +1865,18 @@ public class StreamTaskTest {
             stateManager,
             recordCollector,
             context,
-            logContext);
+            logContext,
+            false
+            );
 
         task.initializeIfNeeded();
         task.completeRestoration(noOpResetter -> { });
 
         task.addRecords(partition1, singletonList(getConsumerRecordWithOffsetAsTimestamp(partition1, 5L)));
         task.addRecords(repartition, singletonList(getConsumerRecordWithOffsetAsTimestamp(repartition, 10L)));
+
+        task.resumePollingForPartitionsWithAvailableSpace();
+        task.updateLags();
 
         assertTrue(task.process(0L));
         assertTrue(task.process(0L));
@@ -2280,6 +2356,19 @@ public class StreamTaskTest {
     }
 
     @Test
+    public void shouldFlushStateManagerAndRecordCollector() {
+        stateManager.flush();
+        EasyMock.expectLastCall().once();
+        recordCollector.flush();
+        EasyMock.expectLastCall().once();
+        EasyMock.replay(stateManager, recordCollector);
+
+        task = createStatefulTask(createConfig("100"), false);
+
+        task.flush();
+    }
+
+    @Test
     public void shouldClearCommitStatusesInCloseDirty() {
         task = createSingleSourceStateless(createConfig(AT_LEAST_ONCE, "0"), StreamsConfig.METRICS_LATEST);
         task.initializeIfNeeded();
@@ -2447,7 +2536,9 @@ public class StreamTaskTest {
                 stateManager,
                 recordCollector,
                 context,
-                logContext)
+                logContext,
+                false
+            )
         );
 
         assertThat(exception.getMessage(), equalTo("Invalid topology: " +
@@ -2496,8 +2587,10 @@ public class StreamTaskTest {
             getCorruptedConsumerRecordWithOffsetAsTimestamp(++offset));
         consumer.addRecord(records.get(0));
         consumer.addRecord(records.get(1));
+        task.resumePollingForPartitionsWithAvailableSpace();
         consumer.poll(Duration.ZERO);
         task.addRecords(partition1, records);
+        task.updateLags();
 
         assertTrue(task.process(offset));
         assertTrue(task.commitNeeded());
@@ -2526,8 +2619,10 @@ public class StreamTaskTest {
             getConsumerRecordWithOffsetAsTimestamp(partition1, ++offset));
         consumer.addRecord(records.get(0));
         consumer.addRecord(records.get(1));
+        task.resumePollingForPartitionsWithAvailableSpace();
         consumer.poll(Duration.ZERO);
         task.addRecords(partition1, records);
+        task.updateLags();
 
         assertTrue(task.process(offset));
         assertTrue(task.commitNeeded());
@@ -2553,8 +2648,10 @@ public class StreamTaskTest {
             getCorruptedConsumerRecordWithOffsetAsTimestamp(++offset));
         consumer.addRecord(records.get(0));
         consumer.addRecord(records.get(1));
+        task.resumePollingForPartitionsWithAvailableSpace();
         consumer.poll(Duration.ZERO);
         task.addRecords(partition1, records);
+        task.updateLags();
 
         assertTrue(task.process(offset));
         assertTrue(task.commitNeeded());
@@ -2594,6 +2691,7 @@ public class StreamTaskTest {
         verify(processorStateManager, never()).changelogOffsets();
         verify(recordCollector, never()).offsets();
     }
+
 
     private ProcessorStateManager mockStateManager() {
         final ProcessorStateManager manager = mock(ProcessorStateManager.class);
@@ -2636,7 +2734,8 @@ public class StreamTaskTest {
             stateManager,
             recordCollector,
             context,
-            logContext
+            logContext,
+            false
         );
     }
 
@@ -2677,7 +2776,8 @@ public class StreamTaskTest {
             stateManager,
             recordCollector,
             context,
-            logContext
+            logContext,
+            false
         );
     }
 
@@ -2710,7 +2810,8 @@ public class StreamTaskTest {
             stateManager,
             recordCollector,
             context,
-            logContext
+            logContext,
+            false
         );
     }
 
@@ -2748,7 +2849,8 @@ public class StreamTaskTest {
             stateManager,
             recordCollector,
             context,
-            logContext
+            logContext,
+            false
         );
     }
 
@@ -2788,7 +2890,8 @@ public class StreamTaskTest {
             stateManager,
             recordCollector,
             context,
-            logContext
+            logContext,
+            false
         );
     }
 
@@ -2829,7 +2932,8 @@ public class StreamTaskTest {
             stateManager,
             recordCollector,
             context,
-            logContext
+            logContext,
+            false
         );
     }
 
@@ -2868,7 +2972,8 @@ public class StreamTaskTest {
             stateManager,
             recordCollector,
             context,
-            logContext
+            logContext,
+            false
         );
     }
 
@@ -2902,7 +3007,8 @@ public class StreamTaskTest {
             stateManager,
             recordCollector,
             context,
-            logContext
+            logContext,
+            false
         );
     }
 

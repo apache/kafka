@@ -66,7 +66,6 @@ import static java.util.Arrays.asList;
 import static java.util.Collections.singleton;
 import static java.util.Collections.singletonList;
 import static net.sourceforge.argparse4j.impl.Arguments.store;
-import static org.apache.kafka.server.util.ToolsUtils.prettyPrintTable;
 
 public abstract class TransactionsCommand {
     private static final Logger log = LoggerFactory.getLogger(TransactionsCommand.class);
@@ -336,7 +335,7 @@ public abstract class TransactionsCommand {
                 );
             }).collect(Collectors.toList());
 
-            prettyPrintTable(HEADERS, rows, out);
+            ToolsUtils.prettyPrintTable(HEADERS, rows, out);
         }
     }
 
@@ -414,7 +413,7 @@ public abstract class TransactionsCommand {
                 Utils.join(result.topicPartitions(), ",")
             );
 
-            prettyPrintTable(HEADERS, singletonList(row), out);
+            ToolsUtils.prettyPrintTable(HEADERS, singletonList(row), out);
         }
     }
 
@@ -469,7 +468,7 @@ public abstract class TransactionsCommand {
                 }
             }
 
-            prettyPrintTable(HEADERS, rows, out);
+            ToolsUtils.prettyPrintTable(HEADERS, rows, out);
         }
     }
 
@@ -671,7 +670,7 @@ public abstract class TransactionsCommand {
                 ));
             }
 
-            prettyPrintTable(HEADERS, rows, out);
+            ToolsUtils.prettyPrintTable(HEADERS, rows, out);
         }
 
         private Map<String, TransactionDescription> describeTransactions(

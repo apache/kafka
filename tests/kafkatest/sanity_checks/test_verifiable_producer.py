@@ -92,7 +92,7 @@ class TestVerifiableProducer(Test):
         # Easy fix is to decrease throughput= above, the good fix is to make the producer
         # not terminate until explicitly killed in this case.
         if node.version <= LATEST_0_8_2:
-            assert is_version(node, [node.version.vstring, DEV_BRANCH.vstring], logger=self.logger)
+            assert is_version(node, [node.version.vstring, LATEST_0_9.vstring], logger=self.logger)
         else:
             assert is_version(node, [node.version.vstring], logger=self.logger)
 

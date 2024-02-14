@@ -44,10 +44,13 @@ import org.apache.kafka.connect.mirror.MirrorClient;
 import org.apache.kafka.connect.mirror.MirrorHeartbeatConnector;
 import org.apache.kafka.connect.mirror.MirrorMakerConfig;
 import org.apache.kafka.connect.mirror.MirrorSourceConnector;
+import org.apache.kafka.connect.mirror.MirrorUtils;
 import org.apache.kafka.connect.mirror.SourceAndTarget;
 import org.apache.kafka.connect.mirror.Checkpoint;
 import org.apache.kafka.connect.mirror.MirrorCheckpointConnector;
 import org.apache.kafka.connect.mirror.TestUtils;
+import org.apache.kafka.connect.runtime.rest.entities.ConnectorOffset;
+import org.apache.kafka.connect.runtime.rest.entities.ConnectorOffsets;
 import org.apache.kafka.connect.util.clusters.EmbeddedConnectCluster;
 import org.apache.kafka.connect.util.clusters.EmbeddedKafkaCluster;
 import org.apache.kafka.connect.util.clusters.UngracefulShutdownException;
@@ -56,10 +59,12 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
@@ -69,12 +74,14 @@ import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
+import java.util.function.LongUnaryOperator;
 import java.util.stream.Collectors;
 
 import org.junit.jupiter.api.Tag;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import static org.apache.kafka.clients.consumer.ConsumerConfig.AUTO_OFFSET_RESET_CONFIG;
 import static org.apache.kafka.test.TestUtils.waitForCondition;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
@@ -198,7 +205,7 @@ public class MirrorConnectorsIntegrationBaseTest {
                 .brokerProps(primaryBrokerProps)
                 .workerProps(primaryWorkerProps)
                 .maskExitProcedures(false)
-                .clientConfigs(additionalPrimaryClusterClientsConfigs)
+                .clientProps(additionalPrimaryClusterClientsConfigs)
                 .build();
 
         backup = new EmbeddedConnectCluster.Builder()
@@ -208,7 +215,7 @@ public class MirrorConnectorsIntegrationBaseTest {
                 .brokerProps(backupBrokerProps)
                 .workerProps(backupWorkerProps)
                 .maskExitProcedures(false)
-                .clientConfigs(additionalBackupClusterClientsConfigs)
+                .clientProps(additionalBackupClusterClientsConfigs)
                 .build();
         
         primary.start();
@@ -256,8 +263,6 @@ public class MirrorConnectorsIntegrationBaseTest {
             for (String x : backup.connectors()) {
                 backup.deleteConnector(x);
             }
-            deleteAllTopics(primary.kafka());
-            deleteAllTopics(backup.kafka());
         } finally {
             shuttingDown = true;
             try {
@@ -375,7 +380,6 @@ public class MirrorConnectorsIntegrationBaseTest {
                 assertTrue(primaryConsumer.position(
                         new TopicPartition(reverseTopic1, 0)) <= NUM_RECORDS_PRODUCED, "Consumer failedback beyond expected downstream offset.");
             }
-
         }
 
         // create more matching topics
@@ -406,7 +410,7 @@ public class MirrorConnectorsIntegrationBaseTest {
                     "New topic was not replicated to primary cluster.");
         }
     }
-    
+
     @Test
     public void testReplicationWithEmptyPartition() throws Exception {
         String consumerGroupName = "consumer-group-testReplicationWithEmptyPartition";
@@ -558,27 +562,30 @@ public class MirrorConnectorsIntegrationBaseTest {
         String remoteTopic = remoteTopicName("test-topic-1", PRIMARY_CLUSTER_ALIAS);
 
         // Check offsets are pushed to the checkpoint topic
-        Consumer<byte[], byte[]> backupConsumer = backup.kafka().createConsumerAndSubscribeTo(Collections.singletonMap(
-                "auto.offset.reset", "earliest"), PRIMARY_CLUSTER_ALIAS + ".checkpoints.internal");
-        waitForCondition(() -> {
-            ConsumerRecords<byte[], byte[]> records = backupConsumer.poll(Duration.ofSeconds(1L));
-            for (ConsumerRecord<byte[], byte[]> record : records) {
-                Checkpoint checkpoint = Checkpoint.deserializeRecord(record);
-                if (remoteTopic.equals(checkpoint.topicPartition().topic())) {
-                    return true;
+        try (Consumer<byte[], byte[]> backupConsumer = backup.kafka().createConsumerAndSubscribeTo(Collections.singletonMap(
+                "auto.offset.reset", "earliest"), PRIMARY_CLUSTER_ALIAS + ".checkpoints.internal")) {
+            waitForCondition(() -> {
+                ConsumerRecords<byte[], byte[]> records = backupConsumer.poll(Duration.ofSeconds(1L));
+                for (ConsumerRecord<byte[], byte[]> record : records) {
+                    Checkpoint checkpoint = Checkpoint.deserializeRecord(record);
+                    if (remoteTopic.equals(checkpoint.topicPartition().topic())) {
+                        return true;
+                    }
                 }
-            }
-            return false;
-        }, 30_000,
-            "Unable to find checkpoints for " + PRIMARY_CLUSTER_ALIAS + ".test-topic-1"
-        );
+                return false;
+            }, 30_000,
+                "Unable to find checkpoints for " + PRIMARY_CLUSTER_ALIAS + ".test-topic-1"
+            );
+        }
 
         assertMonotonicCheckpoints(backup, PRIMARY_CLUSTER_ALIAS + ".checkpoints.internal");
 
         // Ensure no offset-syncs topics have been created on the primary cluster
-        Set<String> primaryTopics = primary.kafka().createAdminClient().listTopics().names().get();
-        assertFalse(primaryTopics.contains("mm2-offset-syncs." + PRIMARY_CLUSTER_ALIAS + ".internal"));
-        assertFalse(primaryTopics.contains("mm2-offset-syncs." + BACKUP_CLUSTER_ALIAS + ".internal"));
+        try (Admin adminClient = primary.kafka().createAdminClient()) {
+            Set<String> primaryTopics = adminClient.listTopics().names().get();
+            assertFalse(primaryTopics.contains("mm2-offset-syncs." + PRIMARY_CLUSTER_ALIAS + ".internal"));
+            assertFalse(primaryTopics.contains("mm2-offset-syncs." + BACKUP_CLUSTER_ALIAS + ".internal"));
+        }
     }
 
     @Test
@@ -644,6 +651,8 @@ public class MirrorConnectorsIntegrationBaseTest {
             return translatedOffsets.containsKey(remoteTopicPartition(tp1, PRIMARY_CLUSTER_ALIAS)) &&
                    translatedOffsets.containsKey(remoteTopicPartition(tp2, PRIMARY_CLUSTER_ALIAS));
         }, OFFSET_SYNC_DURATION_MS, "Checkpoints were not emitted correctly to backup cluster");
+
+        backupClient.close();
     }
 
     @Test
@@ -725,6 +734,8 @@ public class MirrorConnectorsIntegrationBaseTest {
                     backupClient, consumerGroupName, PRIMARY_CLUSTER_ALIAS, remoteTopic, partialCheckpoints);
             log.info("Final checkpoints: {}", finalCheckpoints);
         }
+
+        backupClient.close();
 
         for (TopicPartition tp : partialCheckpoints.keySet()) {
             assertTrue(finalCheckpoints.get(tp).offset() < partialCheckpoints.get(tp).offset(),
@@ -871,6 +882,34 @@ public class MirrorConnectorsIntegrationBaseTest {
         }, 30000, "Topic configurations were not synced");
     }
 
+    @Test
+    public void testReplicateFromLatest() throws Exception {
+        // populate topic with records that should not be replicated
+        String topic = "test-topic-1";
+        produceMessages(primaryProducer, topic, NUM_PARTITIONS);
+
+        // consume from the ends of topics when no committed offsets are found
+        mm2Props.put(PRIMARY_CLUSTER_ALIAS + ".consumer." + AUTO_OFFSET_RESET_CONFIG, "latest");
+        // one way replication from primary to backup
+        mm2Props.put(BACKUP_CLUSTER_ALIAS + "->" + PRIMARY_CLUSTER_ALIAS + ".enabled", "false");
+        mm2Config = new MirrorMakerConfig(mm2Props);
+        waitUntilMirrorMakerIsRunning(backup, CONNECTOR_LIST, mm2Config, PRIMARY_CLUSTER_ALIAS, BACKUP_CLUSTER_ALIAS);
+
+        // produce some more messages to the topic, now that MM2 is running and replication should be taking place
+        produceMessages(primaryProducer, topic, NUM_PARTITIONS);
+
+        String backupTopic = remoteTopicName(topic, PRIMARY_CLUSTER_ALIAS);
+        // wait for at least the expected number of records to be replicated to the backup cluster
+        backup.kafka().consume(NUM_PARTITIONS * NUM_RECORDS_PER_PARTITION, RECORD_TRANSFER_DURATION_MS, backupTopic);
+        // consume all records from backup cluster
+        ConsumerRecords<byte[], byte[]> replicatedRecords = backup.kafka().consumeAll(RECORD_TRANSFER_DURATION_MS, backupTopic);
+        // ensure that we only replicated the records produced after startup
+        replicatedRecords.partitions().forEach(topicPartition -> {
+            int replicatedCount = replicatedRecords.records(topicPartition).size();
+            assertEquals(NUM_RECORDS_PER_PARTITION, replicatedCount);
+        });
+    }
+
     private TopicPartition remoteTopicPartition(TopicPartition tp, String alias) {
         return new TopicPartition(remoteTopicName(tp.topic(), alias), tp.partition());
     }
@@ -933,9 +972,100 @@ public class MirrorConnectorsIntegrationBaseTest {
         }
     }
 
-    private static void restartMirrorMakerConnectors(EmbeddedConnectCluster connectCluster, List<Class<? extends Connector>> connectorClasses)  {
+    protected static void restartMirrorMakerConnectors(EmbeddedConnectCluster connectCluster, List<Class<? extends Connector>> connectorClasses)  {
         for (Class<? extends Connector> connector : connectorClasses) {
             connectCluster.restartConnectorAndTasks(connector.getSimpleName(), false, true, false);
+        }
+    }
+
+    @SafeVarargs
+    protected static void resumeMirrorMakerConnectors(EmbeddedConnectCluster connectCluster, Class<? extends Connector>... connectorClasses) throws InterruptedException {
+        for (Class<? extends Connector> connectorClass : connectorClasses) {
+            connectCluster.resumeConnector(connectorClass.getSimpleName());
+        }
+        for (Class<? extends Connector> connectorClass : connectorClasses) {
+            String connectorName = connectorClass.getSimpleName();
+            connectCluster.assertions().assertConnectorAndExactlyNumTasksAreRunning(
+                    connectorName,
+                    1,
+                    "Connector '" + connectorName + "' and/or task did not resume in time"
+            );
+        }
+    }
+
+    @SafeVarargs
+    protected static void stopMirrorMakerConnectors(EmbeddedConnectCluster connectCluster, Class<? extends Connector>... connectorClasses) throws InterruptedException {
+        for (Class<? extends Connector> connectorClass : connectorClasses) {
+            connectCluster.stopConnector(connectorClass.getSimpleName());
+        }
+        for (Class<? extends Connector> connectorClass : connectorClasses) {
+            String connectorName = connectorClass.getSimpleName();
+            connectCluster.assertions().assertConnectorIsStopped(
+                    connectorName,
+                    "Connector did not stop in time"
+            );
+        }
+    }
+
+    protected static void alterMirrorMakerSourceConnectorOffsets(EmbeddedConnectCluster connectCluster, LongUnaryOperator alterOffset, String... topics) {
+        Set<String> topicsSet = new HashSet<>(Arrays.asList(topics));
+        String connectorName = MirrorSourceConnector.class.getSimpleName();
+
+        ConnectorOffsets currentOffsets = connectCluster.connectorOffsets(connectorName);
+        List<ConnectorOffset> alteredOffsetContents = currentOffsets.offsets().stream()
+                .map(connectorOffset -> {
+                    TopicPartition topicPartition = MirrorUtils.unwrapPartition(connectorOffset.partition());
+                    if (!topicsSet.contains(topicPartition.topic())) {
+                        return null;
+                    }
+
+                    Object currentOffsetObject = connectorOffset.offset().get(MirrorUtils.OFFSET_KEY);
+                    if (!(currentOffsetObject instanceof Integer || currentOffsetObject instanceof Long)) {
+                        throw new AssertionError("Unexpected type for offset '" + currentOffsetObject + "'; should be integer or long");
+                    }
+
+                    long currentOffset = ((Number) currentOffsetObject).longValue();
+                    long alteredOffset = alterOffset.applyAsLong(currentOffset);
+
+                    return new ConnectorOffset(
+                            connectorOffset.partition(),
+                            MirrorUtils.wrapOffset(alteredOffset)
+                    );
+                }).filter(Objects::nonNull)
+                .collect(Collectors.toList());
+
+        connectCluster.alterConnectorOffsets(connectorName, new ConnectorOffsets(alteredOffsetContents));
+    }
+
+    protected static void resetSomeMirrorMakerSourceConnectorOffsets(EmbeddedConnectCluster connectCluster, String... topics) {
+        Set<String> topicsSet = new HashSet<>(Arrays.asList(topics));
+        String connectorName = MirrorSourceConnector.class.getSimpleName();
+
+        ConnectorOffsets currentOffsets = connectCluster.connectorOffsets(connectorName);
+        List<ConnectorOffset> alteredOffsetContents = currentOffsets.offsets().stream()
+                .map(connectorOffset -> {
+                    TopicPartition topicPartition = MirrorUtils.unwrapPartition(connectorOffset.partition());
+                    if (!topicsSet.contains(topicPartition.topic())) {
+                        return null;
+                    }
+
+                    return new ConnectorOffset(connectorOffset.partition(), null);
+                }).filter(Objects::nonNull)
+                .collect(Collectors.toList());
+
+        connectCluster.alterConnectorOffsets(connectorName, new ConnectorOffsets(alteredOffsetContents));
+    }
+
+    @SafeVarargs
+    protected static void resetAllMirrorMakerConnectorOffsets(EmbeddedConnectCluster connectCluster, Class<? extends Connector>... connectorClasses) {
+        for (Class<? extends Connector> connectorClass : connectorClasses) {
+            String connectorName = connectorClass.getSimpleName();
+            connectCluster.resetConnectorOffsets(connectorName);
+            assertEquals(
+                    Collections.emptyList(),
+                    connectCluster.connectorOffsets(connectorName).offsets(),
+                    "Offsets for connector should be completely empty after full reset"
+            );
         }
     }
 
@@ -953,17 +1083,6 @@ public class MirrorConnectorsIntegrationBaseTest {
         }
     }
 
-    /*
-     * delete all topics of the input kafka cluster
-     */
-    private static void deleteAllTopics(EmbeddedKafkaCluster cluster) throws Exception {
-        try (final Admin adminClient = cluster.createAdminClient()) {
-            Set<String> topicsToBeDeleted = adminClient.listTopics().names().get();
-            log.debug("Deleting topics: {} ", topicsToBeDeleted);
-            adminClient.deleteTopics(topicsToBeDeleted).all().get();
-        }
-    }
-    
     /*
      * retrieve the config value based on the input cluster, topic and config name
      */

@@ -30,6 +30,20 @@ import java.util.stream.IntStream;
 
 class CapturingMigrationClient implements MigrationClient {
 
+    static final MigrationBatchSupplier EMPTY_BATCH_SUPPLIER = new MigrationBatchSupplier() {
+
+    };
+
+    interface MigrationBatchSupplier {
+        default List<List<ApiMessageAndVersion>> recordBatches() {
+            return Collections.emptyList();
+        }
+
+        default List<Integer> brokerIds() {
+            return Collections.emptyList();
+        }
+    }
+
     static Builder newBuilder() {
         return new Builder();
     }
@@ -39,6 +53,9 @@ class CapturingMigrationClient implements MigrationClient {
         TopicMigrationClient topicMigrationClient = new CapturingTopicMigrationClient();
         ConfigMigrationClient configMigrationClient = new CapturingConfigMigrationClient();
         AclMigrationClient aclMigrationClient = new CapturingAclMigrationClient();
+        DelegationTokenMigrationClient delegationTokenMigrationClient = new CapturingDelegationTokenMigrationClient();
+        MigrationBatchSupplier batchSupplier = EMPTY_BATCH_SUPPLIER;
+
 
         public Builder setBrokersInZk(int... brokerIds) {
             brokersInZk = IntStream.of(brokerIds).boxed().collect(Collectors.toSet());
@@ -60,12 +77,24 @@ class CapturingMigrationClient implements MigrationClient {
             return this;
         }
 
+        public Builder setDelegationTokenMigrationClient(DelegationTokenMigrationClient delegationTokenMigrationClient) {
+            this.delegationTokenMigrationClient = delegationTokenMigrationClient;
+            return this;
+        }
+
+        public Builder setBatchSupplier(MigrationBatchSupplier batchSupplier) {
+            this.batchSupplier = batchSupplier;
+            return this;
+        }
+
         public CapturingMigrationClient build() {
             return new CapturingMigrationClient(
                 brokersInZk,
                 topicMigrationClient,
                 configMigrationClient,
-                aclMigrationClient
+                aclMigrationClient,
+                delegationTokenMigrationClient,
+                batchSupplier
             );
         }
     }
@@ -74,19 +103,24 @@ class CapturingMigrationClient implements MigrationClient {
     private final TopicMigrationClient topicMigrationClient;
     private final ConfigMigrationClient configMigrationClient;
     private final AclMigrationClient aclMigrationClient;
-
+    private final DelegationTokenMigrationClient delegationTokenMigrationClient;
+    private final MigrationBatchSupplier batchSupplier;
     private ZkMigrationLeadershipState state = null;
 
     CapturingMigrationClient(
         Set<Integer> brokerIdsInZk,
         TopicMigrationClient topicMigrationClient,
         ConfigMigrationClient configMigrationClient,
-        AclMigrationClient aclMigrationClient
+        AclMigrationClient aclMigrationClient,
+        DelegationTokenMigrationClient delegationTokenMigrationClient,
+        MigrationBatchSupplier batchSupplier
     ) {
         this.brokerIds = brokerIdsInZk;
         this.topicMigrationClient = topicMigrationClient;
         this.configMigrationClient = configMigrationClient;
         this.aclMigrationClient = aclMigrationClient;
+        this.delegationTokenMigrationClient = delegationTokenMigrationClient;
+        this.batchSupplier = batchSupplier;
     }
 
     @Override
@@ -105,14 +139,18 @@ class CapturingMigrationClient implements MigrationClient {
 
     @Override
     public ZkMigrationLeadershipState claimControllerLeadership(ZkMigrationLeadershipState state) {
-        this.state = state;
-        return state;
+        if (state.zkControllerEpochZkVersion() == ZkMigrationLeadershipState.UNKNOWN_ZK_VERSION) {
+            this.state = state.withZkController(0, 0);
+        } else {
+            this.state = state.withZkController(state.zkControllerEpoch() + 1, state.zkControllerEpochZkVersion() + 1);
+        }
+        return this.state;
     }
 
     @Override
     public ZkMigrationLeadershipState releaseControllerLeadership(ZkMigrationLeadershipState state) {
-        this.state = state;
-        return state;
+        this.state = state.withUnknownZkController();
+        return this.state;
     }
 
 
@@ -129,6 +167,11 @@ class CapturingMigrationClient implements MigrationClient {
     @Override
     public AclMigrationClient aclClient() {
         return aclMigrationClient;
+    }
+
+    @Override
+    public DelegationTokenMigrationClient delegationTokenClient() {
+        return delegationTokenMigrationClient;
     }
 
     @Override
@@ -150,7 +193,8 @@ class CapturingMigrationClient implements MigrationClient {
         Consumer<List<ApiMessageAndVersion>> batchConsumer,
         Consumer<Integer> brokerIdConsumer
     ) {
-
+        batchSupplier.recordBatches().forEach(batchConsumer);
+        batchSupplier.brokerIds().forEach(brokerIdConsumer);
     }
 
     @Override

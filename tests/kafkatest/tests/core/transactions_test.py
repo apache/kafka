@@ -97,12 +97,12 @@ class TransactionsTest(Test):
                 self.kafka.stop_node(node, clean_shutdown = False)
                 gracePeriodSecs = 5
                 if self.zk:
-                    wait_until(lambda: len(self.kafka.pids(node)) == 0 and not self.kafka.is_registered(node),
+                    wait_until(lambda: not self.kafka.pids(node) and not self.kafka.is_registered(node),
                                timeout_sec=self.kafka.zk_session_timeout + gracePeriodSecs,
                                err_msg="Failed to see timely deregistration of hard-killed broker %s" % str(node.account))
                 else:
                     brokerSessionTimeoutSecs = 18
-                    wait_until(lambda: len(self.kafka.pids(node)) == 0,
+                    wait_until(lambda: not self.kafka.pids(node),
                                timeout_sec=brokerSessionTimeoutSecs + gracePeriodSecs,
                                err_msg="Failed to see timely disappearance of process for hard-killed broker %s" % str(node.account))
                     time.sleep(brokerSessionTimeoutSecs + gracePeriodSecs)
@@ -243,11 +243,23 @@ class TransactionsTest(Test):
         }
 
     @cluster(num_nodes=9)
-    @matrix(failure_mode=["hard_bounce", "clean_bounce"],
-            bounce_target=["brokers", "clients"],
-            check_order=[True, False],
-            use_group_metadata=[True, False])
-    def test_transactions(self, failure_mode, bounce_target, check_order, use_group_metadata, metadata_quorum=quorum.all):
+    @matrix(
+        failure_mode=["hard_bounce", "clean_bounce"],
+        bounce_target=["brokers", "clients"],
+        check_order=[True, False],
+        use_group_metadata=[True, False],
+        metadata_quorum=[quorum.zk],
+        use_new_coordinator=[False]
+    )
+    @matrix(
+        failure_mode=["hard_bounce", "clean_bounce"],
+        bounce_target=["brokers", "clients"],
+        check_order=[True, False],
+        use_group_metadata=[True, False],
+        metadata_quorum=quorum.all_kraft,
+        use_new_coordinator=[True, False]
+    )
+    def test_transactions(self, failure_mode, bounce_target, check_order, use_group_metadata, metadata_quorum=quorum.zk, use_new_coordinator=False):
         security_protocol = 'PLAINTEXT'
         self.kafka.security_protocol = security_protocol
         self.kafka.interbroker_security_protocol = security_protocol

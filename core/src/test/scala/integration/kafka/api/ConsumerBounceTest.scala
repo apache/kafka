@@ -95,27 +95,30 @@ class ConsumerBounceTest extends AbstractConsumerTest with Logging {
     consumer.subscribe(Collections.singletonList(topic))
 
     val scheduler = new BounceBrokerScheduler(numIters)
-    scheduler.start()
+    try {
+      scheduler.start()
 
-    while (scheduler.isRunning) {
-      val records = consumer.poll(Duration.ofMillis(100)).asScala
+      while (scheduler.isRunning) {
+        val records = consumer.poll(Duration.ofMillis(100)).asScala
 
-      for (record <- records) {
-        assertEquals(consumed, record.offset())
-        consumed += 1
-      }
+        for (record <- records) {
+          assertEquals(consumed, record.offset())
+          consumed += 1
+        }
 
-      if (records.nonEmpty) {
-        consumer.commitSync()
-        assertEquals(consumer.position(tp), consumer.committed(Set(tp).asJava).get(tp).offset)
+        if (records.nonEmpty) {
+          consumer.commitSync()
+          assertEquals(consumer.position(tp), consumer.committed(Set(tp).asJava).get(tp).offset)
 
-        if (consumer.position(tp) == numRecords) {
-          consumer.seekToBeginning(Collections.emptyList())
-          consumed = 0
+          if (consumer.position(tp) == numRecords) {
+            consumer.seekToBeginning(Collections.emptyList())
+            consumed = 0
+          }
         }
       }
+    } finally {
+      scheduler.shutdown()
     }
-    scheduler.shutdown()
   }
 
   @Test
@@ -136,24 +139,28 @@ class ConsumerBounceTest extends AbstractConsumerTest with Logging {
     ), "Failed to update high watermark for followers after timeout")
 
     val scheduler = new BounceBrokerScheduler(numIters)
-    scheduler.start()
+    try {
+      scheduler.start()
 
-    while(scheduler.isRunning) {
-      val coin = TestUtils.random.nextInt(3)
-      if (coin == 0) {
-        info("Seeking to end of log")
-        consumer.seekToEnd(Collections.emptyList())
-        assertEquals(numRecords.toLong, consumer.position(tp))
-      } else if (coin == 1) {
-        val pos = TestUtils.random.nextInt(numRecords).toLong
-        info("Seeking to " + pos)
-        consumer.seek(tp, pos)
-        assertEquals(pos, consumer.position(tp))
-      } else if (coin == 2) {
-        info("Committing offset.")
-        consumer.commitSync()
-        assertEquals(consumer.position(tp), consumer.committed(Set(tp).asJava).get(tp).offset)
+      while (scheduler.isRunning) {
+        val coin = TestUtils.random.nextInt(3)
+        if (coin == 0) {
+          info("Seeking to end of log")
+          consumer.seekToEnd(Collections.emptyList())
+          assertEquals(numRecords.toLong, consumer.position(tp))
+        } else if (coin == 1) {
+          val pos = TestUtils.random.nextInt(numRecords).toLong
+          info("Seeking to " + pos)
+          consumer.seek(tp, pos)
+          assertEquals(pos, consumer.position(tp))
+        } else if (coin == 2) {
+          info("Committing offset.")
+          consumer.commitSync()
+          assertEquals(consumer.position(tp), consumer.committed(Set(tp).asJava).get(tp).offset)
+        }
       }
+    } finally {
+      scheduler.shutdown()
     }
   }
 
@@ -344,21 +351,26 @@ class ConsumerBounceTest extends AbstractConsumerTest with Logging {
     val partitions = createTopicPartitions(topic, numPartitions = maxGroupSize, replicationFactor = brokerCount)
 
     // Create N+1 consumers in the same consumer group and assert that the N+1th consumer receives a fatal error when it tries to join the group
-    addConsumersToGroupAndWaitForGroupAssignment(maxGroupSize, mutable.Buffer[Consumer[Array[Byte], Array[Byte]]](),
-      consumerPollers, List[String](topic), partitions, group)
-    val (_, rejectedConsumerPollers) = addConsumersToGroup(1,
-      mutable.Buffer[Consumer[Array[Byte], Array[Byte]]](), mutable.Buffer[ConsumerAssignmentPoller](), List[String](topic), partitions, group)
-    val rejectedConsumer = rejectedConsumerPollers.head
-    TestUtils.waitUntilTrue(() => {
-      rejectedConsumer.thrownException.isDefined
-    }, "Extra consumer did not throw an exception")
-    assertTrue(rejectedConsumer.thrownException.get.isInstanceOf[GroupMaxSizeReachedException])
+    val consumerPollers = mutable.Buffer[ConsumerAssignmentPoller]()
+    try {
+      addConsumersToGroupAndWaitForGroupAssignment(maxGroupSize, mutable.Buffer[Consumer[Array[Byte], Array[Byte]]](),
+        consumerPollers, List[String](topic), partitions, group)
+      val (_, rejectedConsumerPollers) = addConsumersToGroup(1,
+        mutable.Buffer[Consumer[Array[Byte], Array[Byte]]](), mutable.Buffer[ConsumerAssignmentPoller](), List[String](topic), partitions, group)
+      val rejectedConsumer = rejectedConsumerPollers.head
+      TestUtils.waitUntilTrue(() => {
+        rejectedConsumer.thrownException.isDefined
+      }, "Extra consumer did not throw an exception")
+      assertTrue(rejectedConsumer.thrownException.get.isInstanceOf[GroupMaxSizeReachedException])
 
-    // assert group continues to live
-    producerSend(createProducer(), maxGroupSize * 100, topic, numPartitions = Some(partitions.size))
-    TestUtils.waitUntilTrue(() => {
-      consumerPollers.forall(p => p.receivedMessages >= 100)
-    }, "The consumers in the group could not fetch the expected records", 10000L)
+      // assert group continues to live
+      producerSend(createProducer(), maxGroupSize * 100, topic, numPartitions = Some(partitions.size))
+      TestUtils.waitUntilTrue(() => {
+        consumerPollers.forall(p => p.receivedMessages >= 100)
+      }, "The consumers in the group could not fetch the expected records", 10000L)
+    } finally {
+      consumerPollers.foreach(_.shutdown())
+    }
   }
 
   /**
@@ -437,6 +449,7 @@ class ConsumerBounceTest extends AbstractConsumerTest with Logging {
       else
         subscribeConsumerAndStartPolling(consumer, List(topic))
 
+    consumerPollers += consumerPoller
     receiveExactRecords(consumerPoller, numRecords)
     consumerPoller.shutdown()
     consumer

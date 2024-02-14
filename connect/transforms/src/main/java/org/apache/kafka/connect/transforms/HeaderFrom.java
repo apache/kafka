@@ -21,6 +21,8 @@ import org.apache.kafka.common.cache.LRUCache;
 import org.apache.kafka.common.cache.SynchronizedCache;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.utils.AppInfoParser;
+import org.apache.kafka.connect.components.Versioned;
 import org.apache.kafka.connect.connector.ConnectRecord;
 import org.apache.kafka.connect.data.Field;
 import org.apache.kafka.connect.data.Schema;
@@ -40,7 +42,7 @@ import java.util.Map;
 import static java.lang.String.format;
 import static org.apache.kafka.common.config.ConfigDef.NO_DEFAULT_VALUE;
 
-public abstract class HeaderFrom<R extends ConnectRecord<R>> implements Transformation<R> {
+public abstract class HeaderFrom<R extends ConnectRecord<R>> implements Transformation<R>, Versioned {
 
     public static final String FIELDS_FIELD = "fields";
     public static final String HEADERS_FIELD = "headers";
@@ -70,6 +72,7 @@ public abstract class HeaderFrom<R extends ConnectRecord<R>> implements Transfor
                     "Either <code>move</code> if the fields are to be moved to the headers (removed from the key/value), " +
                             "or <code>copy</code> if the fields are to be copied to the headers (retained in the key/value).");
 
+    private final Cache<Schema, Schema> moveSchemaCache = new SynchronizedCache<>(new LRUCache<>(16));
     enum Operation {
         MOVE(MOVE_OPERATION),
         COPY(COPY_OPERATION);
@@ -102,8 +105,6 @@ public abstract class HeaderFrom<R extends ConnectRecord<R>> implements Transfor
 
     private Operation operation;
 
-    private Cache<Schema, Schema> moveSchemaCache = new SynchronizedCache<>(new LRUCache<>(16));
-
     @Override
     public R apply(R record) {
         Object operatingValue = operatingValue(record);
@@ -114,6 +115,11 @@ public abstract class HeaderFrom<R extends ConnectRecord<R>> implements Transfor
         } else {
             return applyWithSchema(record, operatingValue, operatingSchema);
         }
+    }
+
+    @Override
+    public String version() {
+        return AppInfoParser.getVersion();
     }
 
     private R applyWithSchema(R record, Object operatingValue, Schema operatingSchema) {

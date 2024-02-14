@@ -17,6 +17,7 @@
 package org.apache.kafka.connect.runtime.isolation;
 
 import org.apache.kafka.common.config.ConfigDef;
+import org.apache.kafka.connect.components.Versioned;
 import org.apache.kafka.connect.connector.ConnectRecord;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaAndValue;
@@ -508,11 +509,11 @@ public class PluginUtilsTest {
     @Test
     public void testNonCollidingAliases() {
         SortedSet<PluginDesc<SinkConnector>> sinkConnectors = new TreeSet<>();
-        sinkConnectors.add(new PluginDesc<>(MockSinkConnector.class, null, MockSinkConnector.class.getClassLoader()));
+        sinkConnectors.add(new PluginDesc<>(MockSinkConnector.class, null, PluginType.SINK, MockSinkConnector.class.getClassLoader()));
         SortedSet<PluginDesc<SourceConnector>> sourceConnectors = new TreeSet<>();
-        sourceConnectors.add(new PluginDesc<>(MockSourceConnector.class, null, MockSourceConnector.class.getClassLoader()));
+        sourceConnectors.add(new PluginDesc<>(MockSourceConnector.class, null, PluginType.SOURCE, MockSourceConnector.class.getClassLoader()));
         SortedSet<PluginDesc<Converter>> converters = new TreeSet<>();
-        converters.add(new PluginDesc<>(CollidingConverter.class, null, CollidingConverter.class.getClassLoader()));
+        converters.add(new PluginDesc<>(CollidingConverter.class, null, PluginType.CONVERTER, CollidingConverter.class.getClassLoader()));
         PluginScanResult result = new PluginScanResult(
                 sinkConnectors,
                 sourceConnectors,
@@ -540,8 +541,8 @@ public class PluginUtilsTest {
     public void testMultiVersionAlias() {
         SortedSet<PluginDesc<SinkConnector>> sinkConnectors = new TreeSet<>();
         // distinct versions don't cause an alias collision (the class name is the same)
-        sinkConnectors.add(new PluginDesc<>(MockSinkConnector.class, null, MockSinkConnector.class.getClassLoader()));
-        sinkConnectors.add(new PluginDesc<>(MockSinkConnector.class, "1.0", MockSinkConnector.class.getClassLoader()));
+        sinkConnectors.add(new PluginDesc<>(MockSinkConnector.class, null, PluginType.SINK, MockSinkConnector.class.getClassLoader()));
+        sinkConnectors.add(new PluginDesc<>(MockSinkConnector.class, "1.0", PluginType.SINK, MockSinkConnector.class.getClassLoader()));
         assertEquals(2, sinkConnectors.size());
         PluginScanResult result = new PluginScanResult(
                 sinkConnectors,
@@ -564,9 +565,9 @@ public class PluginUtilsTest {
     @Test
     public void testCollidingPrunedAlias() {
         SortedSet<PluginDesc<Converter>> converters = new TreeSet<>();
-        converters.add(new PluginDesc<>(CollidingConverter.class, null, CollidingConverter.class.getClassLoader()));
+        converters.add(new PluginDesc<>(CollidingConverter.class, null, PluginType.CONVERTER, CollidingConverter.class.getClassLoader()));
         SortedSet<PluginDesc<HeaderConverter>> headerConverters = new TreeSet<>();
-        headerConverters.add(new PluginDesc<>(CollidingHeaderConverter.class, null, CollidingHeaderConverter.class.getClassLoader()));
+        headerConverters.add(new PluginDesc<>(CollidingHeaderConverter.class, null, PluginType.HEADER_CONVERTER, CollidingHeaderConverter.class.getClassLoader()));
         PluginScanResult result = new PluginScanResult(
                 Collections.emptySortedSet(),
                 Collections.emptySortedSet(),
@@ -589,9 +590,9 @@ public class PluginUtilsTest {
     @Test
     public void testCollidingSimpleAlias() {
         SortedSet<PluginDesc<Converter>> converters = new TreeSet<>();
-        converters.add(new PluginDesc<>(CollidingConverter.class, null, CollidingConverter.class.getClassLoader()));
+        converters.add(new PluginDesc<>(CollidingConverter.class, null, PluginType.CONVERTER, CollidingConverter.class.getClassLoader()));
         SortedSet<PluginDesc<Transformation<?>>> transformations = new TreeSet<>();
-        transformations.add(new PluginDesc<>((Class<? extends Transformation<?>>) (Class<?>) Colliding.class, null, Colliding.class.getClassLoader()));
+        transformations.add(new PluginDesc<>((Class<? extends Transformation<?>>) (Class<?>) Colliding.class, null, PluginType.TRANSFORMATION, Colliding.class.getClassLoader()));
         PluginScanResult result = new PluginScanResult(
                 Collections.emptySortedSet(),
                 Collections.emptySortedSet(),
@@ -609,7 +610,7 @@ public class PluginUtilsTest {
         assertEquals(expectedAliases, actualAliases);
     }
 
-    public static class CollidingConverter implements Converter {
+    public static class CollidingConverter implements Converter, Versioned {
         @Override
         public void configure(Map<String, ?> configs, boolean isKey) {
         }
@@ -623,9 +624,14 @@ public class PluginUtilsTest {
         public SchemaAndValue toConnectData(String topic, byte[] value) {
             return null;
         }
+
+        @Override
+        public String version() {
+            return "1.0";
+        }
     }
 
-    public static class CollidingHeaderConverter implements HeaderConverter {
+    public static class CollidingHeaderConverter implements HeaderConverter, Versioned {
 
         @Override
         public SchemaAndValue toConnectHeader(String topic, String headerKey, byte[] value) {
@@ -649,9 +655,19 @@ public class PluginUtilsTest {
         @Override
         public void configure(Map<String, ?> configs) {
         }
+
+        @Override
+        public String version() {
+            return "1.0";
+        }
     }
 
-    public static class Colliding<R extends ConnectRecord<R>> implements Transformation<R> {
+    public static class Colliding<R extends ConnectRecord<R>> implements Transformation<R>, Versioned {
+
+        @Override
+        public String version() {
+            return "1.0";
+        }
 
         @Override
         public void configure(Map<String, ?> configs) {

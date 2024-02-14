@@ -79,7 +79,7 @@ class ConnectStandaloneFileTest(Test):
         parameterizations to test different converters (which also test per-connector converter overrides), schema/schemaless
         modes, and security support.
         """
-        assert converter != None, "converter type must be set"
+        assert converter is not None, "converter type must be set"
         # Template parameters. Note that we don't set key/value.converter. These default to JsonConverter and we validate
         # converter overrides via the connector configuration.
         if converter != "org.apache.kafka.connect.json.JsonConverter":

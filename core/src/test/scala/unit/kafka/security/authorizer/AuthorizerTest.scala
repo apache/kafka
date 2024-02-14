@@ -35,8 +35,9 @@ import org.apache.kafka.common.resource.ResourceType._
 import org.apache.kafka.common.resource.{PatternType, ResourcePattern, ResourcePatternFilter, ResourceType}
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.apache.kafka.common.utils.{Time, SecurityUtils => JSecurityUtils}
+import org.apache.kafka.controller.MockAclMutator
 import org.apache.kafka.metadata.authorizer.StandardAuthorizerTest.AuthorizerTestServerInfo
-import org.apache.kafka.metadata.authorizer.{MockAclMutator, StandardAuthorizer}
+import org.apache.kafka.metadata.authorizer.StandardAuthorizer
 import org.apache.kafka.server.authorizer._
 import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.server.common.MetadataVersion.{IBP_2_0_IV0, IBP_2_0_IV1}
@@ -1111,12 +1112,12 @@ class AuthorizerTest extends QuorumTestHarness with BaseAuthorizerTest {
                                  resource: ResourcePattern = resource): Set[AccessControlEntry] = {
     var acls = originalAcls
 
-    if(addedAcls.nonEmpty) {
+    if (addedAcls.nonEmpty) {
       addAcls(authorizer1, addedAcls, resource)
       acls ++= addedAcls
     }
 
-    if(removedAcls.nonEmpty) {
+    if (removedAcls.nonEmpty) {
       removeAcls(authorizer1, removedAcls, resource)
       acls --=removedAcls
     }

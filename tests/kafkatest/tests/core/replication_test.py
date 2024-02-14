@@ -69,12 +69,12 @@ def hard_bounce(test, broker_type):
 
         gracePeriodSecs = 5
         if test.zk:
-            wait_until(lambda: len(test.kafka.pids(prev_broker_node)) == 0 and not test.kafka.is_registered(prev_broker_node),
+            wait_until(lambda: not test.kafka.pids(prev_broker_node) and not test.kafka.is_registered(prev_broker_node),
                        timeout_sec=test.kafka.zk_session_timeout + gracePeriodSecs,
                        err_msg="Failed to see timely deregistration of hard-killed broker %s" % str(prev_broker_node.account))
         else:
             brokerSessionTimeoutSecs = 18
-            wait_until(lambda: len(test.kafka.pids(prev_broker_node)) == 0,
+            wait_until(lambda: not test.kafka.pids(prev_broker_node),
                        timeout_sec=brokerSessionTimeoutSecs + gracePeriodSecs,
                        err_msg="Failed to see timely disappearance of process for hard-killed broker %s" % str(prev_broker_node.account))
             time.sleep(brokerSessionTimeoutSecs + gracePeriodSecs)

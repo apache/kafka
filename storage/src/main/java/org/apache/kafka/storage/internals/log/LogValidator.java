@@ -38,7 +38,7 @@ import org.apache.kafka.common.record.MemoryRecordsBuilder.RecordsInfo;
 import org.apache.kafka.common.record.MutableRecordBatch;
 import org.apache.kafka.common.record.Record;
 import org.apache.kafka.common.record.RecordBatch;
-import org.apache.kafka.common.record.RecordConversionStats;
+import org.apache.kafka.common.record.RecordValidationStats;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.requests.ProduceResponse.RecordError;
 import org.apache.kafka.common.utils.BufferSupplier;
@@ -70,17 +70,17 @@ public class LogValidator {
         public final long maxTimestampMs;
         public final long shallowOffsetOfMaxTimestampMs;
         public final boolean messageSizeMaybeChanged;
-        public final RecordConversionStats recordConversionStats;
+        public final RecordValidationStats recordValidationStats;
 
         public ValidationResult(long logAppendTimeMs, MemoryRecords validatedRecords, long maxTimestampMs,
-                long shallowOffsetOfMaxTimestampMs, boolean messageSizeMaybeChanged,
-                RecordConversionStats recordConversionStats) {
+                                long shallowOffsetOfMaxTimestampMs, boolean messageSizeMaybeChanged,
+                                RecordValidationStats recordValidationStats) {
             this.logAppendTimeMs = logAppendTimeMs;
             this.validatedRecords = validatedRecords;
             this.maxTimestampMs = maxTimestampMs;
             this.shallowOffsetOfMaxTimestampMs = shallowOffsetOfMaxTimestampMs;
             this.messageSizeMaybeChanged = messageSizeMaybeChanged;
-            this.recordConversionStats = recordConversionStats;
+            this.recordValidationStats = recordValidationStats;
         }
     }
 
@@ -102,7 +102,8 @@ public class LogValidator {
     private final boolean compactedTopic;
     private final byte toMagic;
     private final TimestampType timestampType;
-    private final long timestampDiffMaxMs;
+    private final long timestampBeforeMaxMs;
+    private final long timestampAfterMaxMs;
     private final int partitionLeaderEpoch;
     private final AppendOrigin origin;
     private final MetadataVersion interBrokerProtocolVersion;
@@ -115,7 +116,8 @@ public class LogValidator {
                         boolean compactedTopic,
                         byte toMagic,
                         TimestampType timestampType,
-                        long timestampDiffMaxMs,
+                        long timestampBeforeMaxMs,
+                        long timestampAfterMaxMs,
                         int partitionLeaderEpoch,
                         AppendOrigin origin,
                         MetadataVersion interBrokerProtocolVersion) {
@@ -127,7 +129,8 @@ public class LogValidator {
         this.compactedTopic = compactedTopic;
         this.toMagic = toMagic;
         this.timestampType = timestampType;
-        this.timestampDiffMaxMs = timestampDiffMaxMs;
+        this.timestampBeforeMaxMs = timestampBeforeMaxMs;
+        this.timestampAfterMaxMs = timestampAfterMaxMs;
         this.partitionLeaderEpoch = partitionLeaderEpoch;
         this.origin = origin;
         this.interBrokerProtocolVersion = interBrokerProtocolVersion;
@@ -205,16 +208,16 @@ public class LogValidator {
             validateBatch(topicPartition, firstBatch, batch, origin, toMagic, metricsRecorder);
 
             List<ApiRecordError> recordErrors = new ArrayList<>(0);
-            int batchIndex = 0;
+            int recordIndex = 0;
             for (Record record : batch) {
                 Optional<ApiRecordError> recordError = validateRecord(batch, topicPartition,
-                    record, batchIndex, now, timestampType, timestampDiffMaxMs, compactedTopic,
+                    record, recordIndex, now, timestampType, timestampBeforeMaxMs, timestampAfterMaxMs, compactedTopic,
                     metricsRecorder);
                 recordError.ifPresent(e -> recordErrors.add(e));
                 // we fail the batch if any record fails, so we stop appending if any record fails
                 if (recordErrors.isEmpty())
                     builder.appendWithOffset(offsetCounter.value++, record);
-                ++batchIndex;
+                ++recordIndex;
             }
 
             processRecordErrors(recordErrors);
@@ -223,7 +226,7 @@ public class LogValidator {
         MemoryRecords convertedRecords = builder.build();
 
         RecordsInfo info = builder.info();
-        RecordConversionStats recordConversionStats = new RecordConversionStats(
+        RecordValidationStats recordValidationStats = new RecordValidationStats(
             builder.uncompressedBytesWritten(), builder.numRecords(), time.nanoseconds() - startNanos);
         return new ValidationResult(
             now,
@@ -231,7 +234,7 @@ public class LogValidator {
             info.maxTimestamp,
             info.shallowOffsetOfMaxTimestamp,
             true,
-            recordConversionStats);
+            recordValidationStats);
     }
 
     // Visible for benchmarking
@@ -254,18 +257,18 @@ public class LogValidator {
             // This is a hot path and we want to avoid any unnecessary allocations.
             // That said, there is no benefit in using `skipKeyValueIterator` for the uncompressed
             // case since we don't do key/value copies in this path (we just slice the ByteBuffer)
-            int batchIndex = 0;
+            int recordIndex = 0;
             for (Record record : batch) {
                 Optional<ApiRecordError> recordError = validateRecord(batch, topicPartition, record,
-                    batchIndex, now, timestampType, timestampDiffMaxMs, compactedTopic, metricsRecorder);
-                recordError.ifPresent(e -> recordErrors.add(e));
+                    recordIndex, now, timestampType, timestampBeforeMaxMs, timestampAfterMaxMs, compactedTopic, metricsRecorder);
+                recordError.ifPresent(recordErrors::add);
 
                 long offset = offsetCounter.value++;
                 if (batch.magic() > RecordBatch.MAGIC_VALUE_V0 && record.timestamp() > maxBatchTimestamp) {
                     maxBatchTimestamp = record.timestamp();
                     offsetOfMaxBatchTimestamp = offset;
                 }
-                ++batchIndex;
+                ++recordIndex;
             }
 
             processRecordErrors(recordErrors);
@@ -290,10 +293,11 @@ public class LogValidator {
 
         if (timestampType == TimestampType.LOG_APPEND_TIME) {
             maxTimestamp = now;
-            if (toMagic >= RecordBatch.MAGIC_VALUE_V2)
-                offsetOfMaxTimestamp = offsetCounter.value - 1;
-            else
-                offsetOfMaxTimestamp = initialOffset;
+            offsetOfMaxTimestamp = initialOffset;
+        }
+
+        if (toMagic >= RecordBatch.MAGIC_VALUE_V2) {
+            offsetOfMaxTimestamp = offsetCounter.value - 1;
         }
 
         return new ValidationResult(
@@ -302,7 +306,7 @@ public class LogValidator {
             maxTimestamp,
             offsetOfMaxTimestamp,
             false,
-            RecordConversionStats.EMPTY);
+            RecordValidationStats.EMPTY);
     }
 
     /**
@@ -359,16 +363,16 @@ public class LogValidator {
             try {
                 List<ApiRecordError> recordErrors = new ArrayList<>(0);
                 // this is a hot path and we want to avoid any unnecessary allocations.
-                int batchIndex = 0;
+                int recordIndex = 0;
                 while (recordsIterator.hasNext()) {
                     Record record = recordsIterator.next();
                     long expectedOffset = expectedInnerOffset.value++;
 
                     Optional<ApiRecordError> recordError = validateRecordCompression(sourceCompression,
-                        batchIndex, record);
+                        recordIndex, record);
                     if (!recordError.isPresent()) {
-                        recordError = validateRecord(batch, topicPartition, record, batchIndex, now,
-                            timestampType, timestampDiffMaxMs, compactedTopic, metricsRecorder);
+                        recordError = validateRecord(batch, topicPartition, record, recordIndex, now,
+                            timestampType, timestampBeforeMaxMs, timestampAfterMaxMs, compactedTopic, metricsRecorder);
                     }
 
                     if (!recordError.isPresent()
@@ -393,7 +397,7 @@ public class LogValidator {
                         validatedRecords.add(record);
                     }
 
-                    ++batchIndex;
+                    ++recordIndex;
                 }
 
                 processRecordErrors(recordErrors);
@@ -422,14 +426,14 @@ public class LogValidator {
             if (toMagic >= RecordBatch.MAGIC_VALUE_V2)
                 firstBatch.setPartitionLeaderEpoch(partitionLeaderEpoch);
 
-            RecordConversionStats recordConversionStats = new RecordConversionStats(uncompressedSizeInBytes, 0, 0);
+            RecordValidationStats recordValidationStats = new RecordValidationStats(uncompressedSizeInBytes, 0, 0);
             return new ValidationResult(
                 now,
                 records,
                 maxTimestamp,
                 lastOffset,
                 false,
-                recordConversionStats);
+                recordValidationStats);
         }
     }
 
@@ -461,7 +465,7 @@ public class LogValidator {
         // message format V0 or if the inner offsets are not consecutive. This is OK since the impact is the same: we have
         // to rebuild the records (including recompression if enabled).
         int conversionCount = builder.numRecords();
-        RecordConversionStats recordConversionStats = new RecordConversionStats(
+        RecordValidationStats recordValidationStats = new RecordValidationStats(
             uncompressedSizeInBytes + builder.uncompressedBytesWritten(), conversionCount,
             time.nanoseconds() - startNanos);
 
@@ -471,7 +475,7 @@ public class LogValidator {
             info.maxTimestamp,
             info.shallowOffsetOfMaxTimestamp,
             true,
-            recordConversionStats);
+            recordValidationStats);
     }
 
 
@@ -534,16 +538,17 @@ public class LogValidator {
     private static Optional<ApiRecordError> validateRecord(RecordBatch batch,
                                                            TopicPartition topicPartition,
                                                            Record record,
-                                                           int batchIndex,
+                                                           int recordIndex,
                                                            long now,
                                                            TimestampType timestampType,
-                                                           long timestampDiffMaxMs,
+                                                           long timestampBeforeMaxMs,
+                                                           long timestampAfterMaxMs,
                                                            boolean compactedTopic,
                                                            MetricsRecorder metricsRecorder) {
         if (!record.hasMagic(batch.magic())) {
             metricsRecorder.recordInvalidMagic();
             return Optional.of(new ApiRecordError(Errors.INVALID_RECORD,
-                new RecordError(batchIndex, "Record " + record
+                new RecordError(recordIndex, "Record " + record
                     + "'s magic does not match outer magic " + batch.magic() + " in topic partition "
                     + topicPartition)));
         }
@@ -561,22 +566,22 @@ public class LogValidator {
             }
         }
 
-        Optional<ApiRecordError> keyError = validateKey(record, batchIndex, topicPartition,
+        Optional<ApiRecordError> keyError = validateKey(record, recordIndex, topicPartition,
             compactedTopic, metricsRecorder);
         if (keyError.isPresent())
             return keyError;
         else
-            return validateTimestamp(batch, record, batchIndex, now, timestampType, timestampDiffMaxMs);
+            return validateTimestamp(batch, record, recordIndex, now, timestampType, timestampBeforeMaxMs, timestampAfterMaxMs);
     }
 
     private static Optional<ApiRecordError> validateKey(Record record,
-                                                        int batchIndex,
+                                                        int recordIndex,
                                                         TopicPartition topicPartition,
                                                         boolean compactedTopic,
                                                         MetricsRecorder metricsRecorder) {
         if (compactedTopic && !record.hasKey()) {
             metricsRecorder.recordNoKeyCompactedTopic();
-            return Optional.of(new ApiRecordError(Errors.INVALID_RECORD, new RecordError(batchIndex,
+            return Optional.of(new ApiRecordError(Errors.INVALID_RECORD, new RecordError(recordIndex,
                 "Compacted topic cannot accept message without key in topic partition "
                 + topicPartition)));
         } else
@@ -585,30 +590,39 @@ public class LogValidator {
 
     private static Optional<ApiRecordError> validateTimestamp(RecordBatch batch,
                                                               Record record,
-                                                              int batchIndex,
+                                                              int recordIndex,
                                                               long now,
                                                               TimestampType timestampType,
-                                                              long timestampDiffMaxMs) {
-        if (timestampType == TimestampType.CREATE_TIME
-                && record.timestamp() != RecordBatch.NO_TIMESTAMP
-                && Math.abs(record.timestamp() - now) > timestampDiffMaxMs)
-            return Optional.of(new ApiRecordError(Errors.INVALID_TIMESTAMP, new RecordError(batchIndex,
-                "Timestamp " + record.timestamp() + " of message with offset " + record.offset()
-                + " is out of range. The timestamp should be within [" + (now - timestampDiffMaxMs)
-                + ", " + (now + timestampDiffMaxMs) + "]")));
-        else if (batch.timestampType() == TimestampType.LOG_APPEND_TIME)
-            return Optional.of(new ApiRecordError(Errors.INVALID_TIMESTAMP, new RecordError(batchIndex,
+                                                              long timestampBeforeMaxMs,
+                                                              long timestampAfterMaxMs) {
+        if (timestampType == TimestampType.CREATE_TIME && record.timestamp() != RecordBatch.NO_TIMESTAMP) {
+            if (recordHasInvalidTimestamp(record, now, timestampBeforeMaxMs, timestampAfterMaxMs)) {
+                return Optional.of(new ApiRecordError(Errors.INVALID_TIMESTAMP, new RecordError(recordIndex,
+                    "Timestamp " + record.timestamp() + " of message with offset " + record.offset()
+                        + " is out of range. The timestamp should be within [" + (now - timestampBeforeMaxMs)
+                        + ", " + (now + timestampAfterMaxMs) + "]")));
+            }
+        } else if (batch.timestampType() == TimestampType.LOG_APPEND_TIME)
+            return Optional.of(new ApiRecordError(Errors.INVALID_TIMESTAMP, new RecordError(recordIndex,
                 "Invalid timestamp type in message " + record + ". Producer should not set timestamp "
                 + "type to LogAppendTime.")));
-        else
-            return Optional.empty();
+        return Optional.empty();
+    }
+
+    private static boolean recordHasInvalidTimestamp(Record record,
+                                                     long now,
+                                                     long timestampBeforeMaxMs,
+                                                     long timestampAfterMaxMs) {
+        final long timestampDiff = now - record.timestamp();
+        return timestampDiff > timestampBeforeMaxMs ||
+                -1 * timestampDiff > timestampAfterMaxMs;
     }
 
     private static Optional<ApiRecordError> validateRecordCompression(CompressionType sourceCompression,
-                                                                      int batchIndex,
+                                                                      int recordIndex,
                                                                       Record record) {
         if (sourceCompression != CompressionType.NONE && record.isCompressed())
-            return Optional.of(new ApiRecordError(Errors.INVALID_RECORD, new RecordError(batchIndex,
+            return Optional.of(new ApiRecordError(Errors.INVALID_RECORD, new RecordError(recordIndex,
                 "Compressed outer record should not have an inner record with a compression attribute set: "
                 + record)));
         else

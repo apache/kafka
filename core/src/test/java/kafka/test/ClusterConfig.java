@@ -146,11 +146,16 @@ public class ClusterConfig {
         copy.consumerProperties.putAll(consumerProperties);
         copy.saslServerProperties.putAll(saslServerProperties);
         copy.saslClientProperties.putAll(saslClientProperties);
+        perBrokerOverrideProperties.forEach((brokerId, props) -> {
+            Properties propsCopy = new Properties();
+            propsCopy.putAll(props);
+            copy.perBrokerOverrideProperties.put(brokerId, propsCopy);
+        });
         return copy;
     }
 
     public static Builder defaultClusterBuilder() {
-        return new Builder(Type.ZK, 1, 1, true, SecurityProtocol.PLAINTEXT, MetadataVersion.latest());
+        return new Builder(Type.ZK, 1, 1, true, SecurityProtocol.PLAINTEXT, MetadataVersion.latestTesting());
     }
 
     public static Builder clusterBuilder(Type type, int brokers, int controllers, boolean autoStart,

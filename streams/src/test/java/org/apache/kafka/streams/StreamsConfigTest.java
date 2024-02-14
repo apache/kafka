@@ -31,11 +31,13 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.errors.StreamsException;
+import org.apache.kafka.streams.internals.UpgradeFromValues;
 import org.apache.kafka.streams.processor.FailOnInvalidTimestamp;
 import org.apache.kafka.streams.processor.TimestampExtractor;
 import org.apache.kafka.streams.processor.internals.DefaultKafkaClientSupplier;
 import org.apache.kafka.streams.processor.internals.StreamsPartitionAssignor;
 import org.apache.kafka.common.utils.LogCaptureAppender;
+import org.apache.kafka.streams.state.BuiltInDslStoreSuppliers;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
@@ -58,11 +60,14 @@ import static org.apache.kafka.common.IsolationLevel.READ_UNCOMMITTED;
 import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.apache.kafka.streams.StreamsConfig.AT_LEAST_ONCE;
 import static org.apache.kafka.streams.StreamsConfig.DEFAULT_DSL_STORE_CONFIG;
+import static org.apache.kafka.streams.StreamsConfig.DSL_STORE_SUPPLIERS_CLASS_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.EXACTLY_ONCE;
 import static org.apache.kafka.streams.StreamsConfig.EXACTLY_ONCE_BETA;
 import static org.apache.kafka.streams.StreamsConfig.EXACTLY_ONCE_V2;
 import static org.apache.kafka.streams.StreamsConfig.MAX_RACK_AWARE_ASSIGNMENT_TAG_KEY_LENGTH;
 import static org.apache.kafka.streams.StreamsConfig.MAX_RACK_AWARE_ASSIGNMENT_TAG_VALUE_LENGTH;
+import static org.apache.kafka.streams.StreamsConfig.RACK_AWARE_ASSIGNMENT_NON_OVERLAP_COST_CONFIG;
+import static org.apache.kafka.streams.StreamsConfig.RACK_AWARE_ASSIGNMENT_TRAFFIC_COST_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.STATE_DIR_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.adminClientPrefix;
@@ -77,6 +82,7 @@ import static org.hamcrest.CoreMatchers.nullValue;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.core.IsEqual.equalTo;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
@@ -1035,6 +1041,7 @@ public class StreamsConfigTest {
         assertThrows(ConfigException.class, () -> new StreamsConfig(props));
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void shouldSpecifyRocksdbWhenNotExplicitlyAddedToConfigs() {
         final String expectedDefaultStoreType = StreamsConfig.ROCKS_DB;
@@ -1042,6 +1049,7 @@ public class StreamsConfigTest {
         assertEquals("default.dsl.store should be \"rocksDB\"", expectedDefaultStoreType, actualDefaultStoreType);
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void shouldSpecifyInMemoryWhenExplicitlyAddedToConfigs() {
         final String expectedDefaultStoreType = StreamsConfig.IN_MEMORY;
@@ -1051,10 +1059,33 @@ public class StreamsConfigTest {
         assertEquals("default.dsl.store should be \"in_memory\"", expectedDefaultStoreType, actualDefaultStoreType);
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void shouldThrowConfigExceptionWhenStoreTypeConfigNotValueInRange() {
         props.put(DEFAULT_DSL_STORE_CONFIG, "bad_config");
         assertThrows(ConfigException.class, () -> new StreamsConfig(props));
+    }
+
+    @Test
+    public void shouldSpecifyRocksdbDslSupplierWhenNotExplicitlyAddedToConfigs() {
+        final Class<?> expectedDefaultStoreType = BuiltInDslStoreSuppliers.RocksDBDslStoreSuppliers.class;
+        final Class<?> actualDefaultStoreType = streamsConfig.getClass(DSL_STORE_SUPPLIERS_CLASS_CONFIG);
+        assertEquals(
+                "default " + DSL_STORE_SUPPLIERS_CLASS_CONFIG + " should be " + expectedDefaultStoreType,
+                expectedDefaultStoreType,
+                actualDefaultStoreType);
+    }
+
+    @Test
+    public void shouldSpecifyInMemoryDslSupplierWhenExplicitlyAddedToConfigs() {
+        final Class<?> expectedDefaultStoreType = BuiltInDslStoreSuppliers.InMemoryDslStoreSuppliers.class;
+        props.put(DSL_STORE_SUPPLIERS_CLASS_CONFIG, BuiltInDslStoreSuppliers.InMemoryDslStoreSuppliers.class);
+        final StreamsConfig config = new StreamsConfig(props);
+        final Class<?> actualDefaultStoreType = config.getClass(DSL_STORE_SUPPLIERS_CLASS_CONFIG);
+        assertEquals(
+                "default " + DSL_STORE_SUPPLIERS_CLASS_CONFIG + " should be " + expectedDefaultStoreType,
+                expectedDefaultStoreType,
+                actualDefaultStoreType);
     }
 
     @SuppressWarnings("deprecation")
@@ -1062,8 +1093,8 @@ public class StreamsConfigTest {
     public void shouldLogWarningWhenEosAlphaIsUsed() {
         props.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE);
 
-        LogCaptureAppender.setClassLoggerToDebug(StreamsConfig.class);
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(StreamsConfig.class)) {
+            appender.setClassLoggerToDebug(StreamsConfig.class);
             new StreamsConfig(props);
 
             assertThat(
@@ -1082,8 +1113,8 @@ public class StreamsConfigTest {
     public void shouldLogWarningWhenEosBetaIsUsed() {
         props.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_BETA);
 
-        LogCaptureAppender.setClassLoggerToDebug(StreamsConfig.class);
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(StreamsConfig.class)) {
+            appender.setClassLoggerToDebug(StreamsConfig.class);
             new StreamsConfig(props);
 
             assertThat(
@@ -1100,8 +1131,8 @@ public class StreamsConfigTest {
     public void shouldLogWarningWhenRetriesIsUsed() {
         props.put(StreamsConfig.RETRIES_CONFIG, 0);
 
-        LogCaptureAppender.setClassLoggerToDebug(StreamsConfig.class);
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(StreamsConfig.class)) {
+            appender.setClassLoggerToDebug(StreamsConfig.class);
             new StreamsConfig(props);
 
             assertThat(
@@ -1379,6 +1410,54 @@ public class StreamsConfigTest {
     }
 
     @Test
+    public void shouldReturnDefaultRackAwareAssignmentConfig() {
+        final String strategy = streamsConfig.getString(StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_CONFIG);
+        assertEquals("none", strategy);
+    }
+
+    @Test
+    public void shouldtSetMinTrafficRackAwareAssignmentConfig() {
+        props.put(StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_CONFIG, StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_MIN_TRAFFIC);
+        assertEquals("min_traffic", new StreamsConfig(props).getString(StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_CONFIG));
+    }
+
+    @Test
+    public void shouldtSetBalanceSubtopologyRackAwareAssignmentConfig() {
+        props.put(StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_CONFIG, StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_BALANCE_SUBTOPOLOGY);
+        assertEquals("balance_subtopology", new StreamsConfig(props).getString(StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_CONFIG));
+    }
+
+    @Test
+    public void shouldThrowIfNotSetCorrectRackAwareAssignmentConfig() {
+        props.put(StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_CONFIG, "invalid");
+        assertThrows(ConfigException.class, () -> new StreamsConfig(props));
+    }
+
+    @Test
+    public void shouldReturnDefaultRackAwareAssignmentTrafficCost() {
+        final Integer cost = streamsConfig.getInt(StreamsConfig.RACK_AWARE_ASSIGNMENT_TRAFFIC_COST_CONFIG);
+        assertNull(cost);
+    }
+
+    @Test
+    public void shouldReturnRackAwareAssignmentTrafficCost() {
+        props.put(StreamsConfig.RACK_AWARE_ASSIGNMENT_TRAFFIC_COST_CONFIG, "10");
+        assertEquals(Integer.valueOf(10), new StreamsConfig(props).getInt(RACK_AWARE_ASSIGNMENT_TRAFFIC_COST_CONFIG));
+    }
+
+    @Test
+    public void shouldReturnDefaultRackAwareAssignmentNonOverlapCost() {
+        final Integer cost = streamsConfig.getInt(StreamsConfig.RACK_AWARE_ASSIGNMENT_NON_OVERLAP_COST_CONFIG);
+        assertNull(cost);
+    }
+
+    @Test
+    public void shouldReturnRackAwareAssignmentNonOverlapCost() {
+        props.put(StreamsConfig.RACK_AWARE_ASSIGNMENT_NON_OVERLAP_COST_CONFIG, "10");
+        assertEquals(Integer.valueOf(10), new StreamsConfig(props).getInt(RACK_AWARE_ASSIGNMENT_NON_OVERLAP_COST_CONFIG));
+    }
+
+    @Test
     public void shouldReturnDefaultClientSupplier() {
         final KafkaClientSupplier supplier = streamsConfig.getKafkaClientSupplier();
         assertTrue(supplier instanceof DefaultKafkaClientSupplier);
@@ -1388,6 +1467,116 @@ public class StreamsConfigTest {
     public void shouldThrowOnInvalidClientSupplier() {
         props.put(StreamsConfig.DEFAULT_CLIENT_SUPPLIER_CONFIG, "invalid.class");
         assertThrows(ConfigException.class, () -> new StreamsConfig(props));
+    }
+
+    @Test
+    public void shouldSupportAllUpgradeFromValues() {
+        for (final UpgradeFromValues upgradeFrom : UpgradeFromValues.values()) {
+            props.put(StreamsConfig.UPGRADE_FROM_CONFIG, upgradeFrom.toString());
+            try {
+                new StreamsConfig(props);
+            } catch (final Exception fatal) {
+                throw new AssertionError("StreamsConfig did not accept `upgrade.from` config value `" + upgradeFrom + "`");
+            }
+        }
+    }
+
+    @Test
+    public void shouldNotSetEnableMetricCollectionByDefault() {
+        assertNull(
+            streamsConfig.getMainConsumerConfigs("groupId", "clientId", 0)
+                .get(ConsumerConfig.ENABLE_METRICS_PUSH_CONFIG)
+        );
+        assertNull(
+            streamsConfig.getRestoreConsumerConfigs("clientId")
+                .get(ConsumerConfig.ENABLE_METRICS_PUSH_CONFIG)
+        );
+        assertNull(
+            streamsConfig.getGlobalConsumerConfigs("clientId")
+                .get(ConsumerConfig.ENABLE_METRICS_PUSH_CONFIG)
+        );
+        assertNull(
+            streamsConfig.getProducerConfigs("clientId")
+                .get(ConsumerConfig.ENABLE_METRICS_PUSH_CONFIG)
+        );
+        assertNull(
+            streamsConfig.getAdminConfigs("clientId")
+                .get(ConsumerConfig.ENABLE_METRICS_PUSH_CONFIG)
+        );
+    }
+
+    @Test
+    public void shouldEnableMetricCollectionForAllInternalClientsByDefault() {
+        props.put(StreamsConfig.ENABLE_METRICS_PUSH_CONFIG, true);
+        final StreamsConfig streamsConfig = new StreamsConfig(props);
+
+        assertTrue(
+            (Boolean) streamsConfig.getMainConsumerConfigs("groupId", "clientId", 0)
+                .get(ConsumerConfig.ENABLE_METRICS_PUSH_CONFIG)
+        );
+        assertTrue(
+            (Boolean) streamsConfig.getRestoreConsumerConfigs("clientId")
+                .get(ConsumerConfig.ENABLE_METRICS_PUSH_CONFIG)
+        );
+        assertTrue(
+            (Boolean) streamsConfig.getGlobalConsumerConfigs("clientId")
+                .get(ConsumerConfig.ENABLE_METRICS_PUSH_CONFIG)
+        );
+        assertTrue(
+            (Boolean) streamsConfig.getProducerConfigs("clientId")
+                .get(ConsumerConfig.ENABLE_METRICS_PUSH_CONFIG)
+        );
+        assertTrue(
+            (Boolean) streamsConfig.getAdminConfigs("clientId")
+                .get(ConsumerConfig.ENABLE_METRICS_PUSH_CONFIG)
+        );
+    }
+
+    @Test
+    public void shouldDisableMetricCollectionForAllInternalClients() {
+        props.put(StreamsConfig.ENABLE_METRICS_PUSH_CONFIG, false);
+        final StreamsConfig streamsConfig = new StreamsConfig(props);
+
+        assertFalse(
+            (Boolean) streamsConfig.getMainConsumerConfigs("groupId", "clientId", 0)
+                .get(ConsumerConfig.ENABLE_METRICS_PUSH_CONFIG)
+        );
+        assertFalse(
+            (Boolean) streamsConfig.getRestoreConsumerConfigs("clientId")
+                .get(ConsumerConfig.ENABLE_METRICS_PUSH_CONFIG)
+        );
+        assertFalse(
+            (Boolean) streamsConfig.getGlobalConsumerConfigs("clientId")
+                .get(ConsumerConfig.ENABLE_METRICS_PUSH_CONFIG)
+        );
+        assertFalse(
+            (Boolean) streamsConfig.getProducerConfigs("clientId")
+                .get(ConsumerConfig.ENABLE_METRICS_PUSH_CONFIG)
+        );
+        assertFalse(
+            (Boolean) streamsConfig.getAdminConfigs("clientId")
+                .get(ConsumerConfig.ENABLE_METRICS_PUSH_CONFIG)
+        );
+    }
+
+    @Test
+    public void shouldDisableMetricCollectionOnMainConsumerOnly() {
+        props.put(StreamsConfig.mainConsumerPrefix(ConsumerConfig.ENABLE_METRICS_PUSH_CONFIG), false);
+
+        final StreamsConfig streamsConfig = new StreamsConfig(props);
+
+        assertFalse(
+            (Boolean) streamsConfig.getMainConsumerConfigs("groupId", "clientId", 0)
+                .get(ConsumerConfig.ENABLE_METRICS_PUSH_CONFIG)
+        );
+        assertNull(
+            streamsConfig.getRestoreConsumerConfigs("clientId")
+                .get(ConsumerConfig.ENABLE_METRICS_PUSH_CONFIG)
+        );
+        assertNull(
+            streamsConfig.getGlobalConsumerConfigs("clientId")
+                .get(ConsumerConfig.ENABLE_METRICS_PUSH_CONFIG)
+        );
     }
 
     static class MisconfiguredSerde implements Serde<Object> {

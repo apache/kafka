@@ -81,7 +81,7 @@ public class AuthorizerBenchmark {
         ACL(AclAuthorizer::new),
         KRAFT(StandardAuthorizer::new);
 
-        private Supplier<Authorizer> supplier;
+        private final Supplier<Authorizer> supplier;
 
         AuthorizerType(Supplier<Authorizer> supplier) {
             this.supplier = supplier;
@@ -107,13 +107,12 @@ public class AuthorizerBenchmark {
     private final int hostPreCount = 1000;
     private final String resourceNamePrefix = "foo-bar35_resource-";
     private final KafkaPrincipal principal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "test-user");
+    private final String authorizeByResourceTypeHostName = "127.0.0.2";
+    private final HashMap<ResourcePattern, AclAuthorizer.VersionedAcls> aclToUpdate = new HashMap<>();
     private Authorizer authorizer;
     private List<Action> actions = new ArrayList<>();
     private RequestContext authorizeContext;
     private RequestContext authorizeByResourceTypeContext;
-    private String authorizeByResourceTypeHostName = "127.0.0.2";
-
-    private HashMap<ResourcePattern, AclAuthorizer.VersionedAcls> aclToUpdate = new HashMap<>();
 
     Random rand = new Random(System.currentTimeMillis());
     double eps = 1e-9;

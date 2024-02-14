@@ -17,13 +17,11 @@
 package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.common.header.internals.RecordHeaders;
-import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.To;
-import org.apache.kafka.streams.processor.internals.Task.TaskType;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.SessionStore;
 import org.apache.kafka.streams.state.TimestampedKeyValueStore;
@@ -32,18 +30,20 @@ import org.apache.kafka.streams.state.WindowStore;
 import org.hamcrest.core.IsInstanceOf;
 import org.junit.Before;
 import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.mockito.Mock;
+import org.mockito.junit.MockitoJUnitRunner;
 
-import static org.easymock.EasyMock.anyObject;
-import static org.easymock.EasyMock.expect;
-import static org.easymock.EasyMock.expectLastCall;
-import static org.easymock.EasyMock.mock;
-import static org.easymock.EasyMock.replay;
-import static org.easymock.EasyMock.verify;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.fail;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
+@RunWith(MockitoJUnitRunner.StrictStubs.class)
 public class GlobalProcessorContextImplTest {
     private static final String GLOBAL_STORE_NAME = "global-store";
     private static final String GLOBAL_KEY_VALUE_STORE_NAME = "global-key-value-store";
@@ -55,27 +55,16 @@ public class GlobalProcessorContextImplTest {
 
     private GlobalProcessorContextImpl globalContext;
 
+    @Mock
     private ProcessorNode<Object, Object, Object, Object> child;
     private ProcessorRecordContext recordContext;
+    @Mock
+    private GlobalStateManager stateManager;
 
     @Before
     public void setup() {
         final StreamsConfig streamsConfig = mock(StreamsConfig.class);
-        expect(streamsConfig.getString(StreamsConfig.APPLICATION_ID_CONFIG)).andReturn("dummy-id");
-        expect(streamsConfig.defaultValueSerde()).andReturn(Serdes.ByteArray());
-        expect(streamsConfig.defaultKeySerde()).andReturn(Serdes.ByteArray());
-        replay(streamsConfig);
-
-        final GlobalStateManager stateManager = mock(GlobalStateManager.class);
-        expect(stateManager.getGlobalStore(GLOBAL_STORE_NAME)).andReturn(mock(StateStore.class));
-        expect(stateManager.getGlobalStore(GLOBAL_KEY_VALUE_STORE_NAME)).andReturn(mock(KeyValueStore.class));
-        expect(stateManager.getGlobalStore(GLOBAL_TIMESTAMPED_KEY_VALUE_STORE_NAME)).andReturn(mock(TimestampedKeyValueStore.class));
-        expect(stateManager.getGlobalStore(GLOBAL_WINDOW_STORE_NAME)).andReturn(mock(WindowStore.class));
-        expect(stateManager.getGlobalStore(GLOBAL_TIMESTAMPED_WINDOW_STORE_NAME)).andReturn(mock(TimestampedWindowStore.class));
-        expect(stateManager.getGlobalStore(GLOBAL_SESSION_STORE_NAME)).andReturn(mock(SessionStore.class));
-        expect(stateManager.getGlobalStore(UNKNOWN_STORE)).andReturn(null);
-        expect(stateManager.taskType()).andStubReturn(TaskType.GLOBAL);
-        replay(stateManager);
+        when(streamsConfig.getString(StreamsConfig.APPLICATION_ID_CONFIG)).thenReturn("dummy-id");
 
         globalContext = new GlobalProcessorContextImpl(
             streamsConfig,
@@ -86,7 +75,6 @@ public class GlobalProcessorContextImplTest {
 
         final ProcessorNode<Object, Object, Object, Object> processorNode = new ProcessorNode<>("testNode");
 
-        child = mock(ProcessorNode.class);
         processorNode.addChild(child);
 
         globalContext.setCurrentNode(processorNode);
@@ -96,20 +84,18 @@ public class GlobalProcessorContextImplTest {
 
     @Test
     public void shouldReturnGlobalOrNullStore() {
+        when(stateManager.getGlobalStore(GLOBAL_STORE_NAME)).thenReturn(mock(StateStore.class));
         assertThat(globalContext.getStateStore(GLOBAL_STORE_NAME), new IsInstanceOf(StateStore.class));
         assertNull(globalContext.getStateStore(UNKNOWN_STORE));
     }
 
     @Test
     public void shouldForwardToSingleChild() {
-        child.process(anyObject());
-        expectLastCall();
+        doNothing().when(child).process(any());
 
-        expect(recordContext.timestamp()).andStubReturn(0L);
-        expect(recordContext.headers()).andStubReturn(new RecordHeaders());
-        replay(child, recordContext);
+        when(recordContext.timestamp()).thenReturn(0L);
+        when(recordContext.headers()).thenReturn(new RecordHeaders());
         globalContext.forward((Object /*forcing a call to the K/V forward*/) null, null);
-        verify(child, recordContext);
     }
 
     @Test
@@ -129,6 +115,7 @@ public class GlobalProcessorContextImplTest {
 
     @Test
     public void shouldNotAllowInitForKeyValueStore() {
+        when(stateManager.getGlobalStore(GLOBAL_KEY_VALUE_STORE_NAME)).thenReturn(mock(KeyValueStore.class));
         final StateStore store = globalContext.getStateStore(GLOBAL_KEY_VALUE_STORE_NAME);
         try {
             store.init((StateStoreContext) null, null);
@@ -138,6 +125,7 @@ public class GlobalProcessorContextImplTest {
 
     @Test
     public void shouldNotAllowInitForTimestampedKeyValueStore() {
+        when(stateManager.getGlobalStore(GLOBAL_TIMESTAMPED_KEY_VALUE_STORE_NAME)).thenReturn(mock(TimestampedKeyValueStore.class));
         final StateStore store = globalContext.getStateStore(GLOBAL_TIMESTAMPED_KEY_VALUE_STORE_NAME);
         try {
             store.init((StateStoreContext) null, null);
@@ -147,6 +135,7 @@ public class GlobalProcessorContextImplTest {
 
     @Test
     public void shouldNotAllowInitForWindowStore() {
+        when(stateManager.getGlobalStore(GLOBAL_WINDOW_STORE_NAME)).thenReturn(mock(WindowStore.class));
         final StateStore store = globalContext.getStateStore(GLOBAL_WINDOW_STORE_NAME);
         try {
             store.init((StateStoreContext) null, null);
@@ -156,6 +145,7 @@ public class GlobalProcessorContextImplTest {
 
     @Test
     public void shouldNotAllowInitForTimestampedWindowStore() {
+        when(stateManager.getGlobalStore(GLOBAL_TIMESTAMPED_WINDOW_STORE_NAME)).thenReturn(mock(TimestampedWindowStore.class));
         final StateStore store = globalContext.getStateStore(GLOBAL_TIMESTAMPED_WINDOW_STORE_NAME);
         try {
             store.init((StateStoreContext) null, null);
@@ -165,6 +155,7 @@ public class GlobalProcessorContextImplTest {
 
     @Test
     public void shouldNotAllowInitForSessionStore() {
+        when(stateManager.getGlobalStore(GLOBAL_SESSION_STORE_NAME)).thenReturn(mock(SessionStore.class));
         final StateStore store = globalContext.getStateStore(GLOBAL_SESSION_STORE_NAME);
         try {
             store.init((StateStoreContext) null, null);
@@ -174,6 +165,7 @@ public class GlobalProcessorContextImplTest {
 
     @Test
     public void shouldNotAllowCloseForKeyValueStore() {
+        when(stateManager.getGlobalStore(GLOBAL_KEY_VALUE_STORE_NAME)).thenReturn(mock(KeyValueStore.class));
         final StateStore store = globalContext.getStateStore(GLOBAL_KEY_VALUE_STORE_NAME);
         try {
             store.close();
@@ -183,6 +175,7 @@ public class GlobalProcessorContextImplTest {
 
     @Test
     public void shouldNotAllowCloseForTimestampedKeyValueStore() {
+        when(stateManager.getGlobalStore(GLOBAL_TIMESTAMPED_KEY_VALUE_STORE_NAME)).thenReturn(mock(TimestampedKeyValueStore.class));
         final StateStore store = globalContext.getStateStore(GLOBAL_TIMESTAMPED_KEY_VALUE_STORE_NAME);
         try {
             store.close();
@@ -192,6 +185,7 @@ public class GlobalProcessorContextImplTest {
 
     @Test
     public void shouldNotAllowCloseForWindowStore() {
+        when(stateManager.getGlobalStore(GLOBAL_WINDOW_STORE_NAME)).thenReturn(mock(WindowStore.class));
         final StateStore store = globalContext.getStateStore(GLOBAL_WINDOW_STORE_NAME);
         try {
             store.close();
@@ -201,6 +195,7 @@ public class GlobalProcessorContextImplTest {
 
     @Test
     public void shouldNotAllowCloseForTimestampedWindowStore() {
+        when(stateManager.getGlobalStore(GLOBAL_TIMESTAMPED_WINDOW_STORE_NAME)).thenReturn(mock(TimestampedWindowStore.class));
         final StateStore store = globalContext.getStateStore(GLOBAL_TIMESTAMPED_WINDOW_STORE_NAME);
         try {
             store.close();
@@ -210,6 +205,7 @@ public class GlobalProcessorContextImplTest {
 
     @Test
     public void shouldNotAllowCloseForSessionStore() {
+        when(stateManager.getGlobalStore(GLOBAL_SESSION_STORE_NAME)).thenReturn(mock(SessionStore.class));
         final StateStore store = globalContext.getStateStore(GLOBAL_SESSION_STORE_NAME);
         try {
             store.close();
@@ -217,8 +213,8 @@ public class GlobalProcessorContextImplTest {
         } catch (final UnsupportedOperationException expected) { }
     }
 
-    @Test(expected = UnsupportedOperationException.class)
+    @Test
     public void shouldThrowOnCurrentStreamTime() {
-        globalContext.currentStreamTimeMs();
+        assertThrows(UnsupportedOperationException.class, () -> globalContext.currentStreamTimeMs());
     }
 }

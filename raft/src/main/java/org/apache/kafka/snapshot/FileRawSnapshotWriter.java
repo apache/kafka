@@ -35,7 +35,7 @@ public final class FileRawSnapshotWriter implements RawSnapshotWriter {
     private final FileChannel channel;
     private final OffsetAndEpoch snapshotId;
     private final Optional<ReplicatedLog> replicatedLog;
-    private boolean frozen = false;
+    private long frozenSize;
 
     private FileRawSnapshotWriter(
         Path tempSnapshotPath,
@@ -47,6 +47,7 @@ public final class FileRawSnapshotWriter implements RawSnapshotWriter {
         this.channel = channel;
         this.snapshotId = snapshotId;
         this.replicatedLog = replicatedLog;
+        this.frozenSize = -1L;
     }
 
     @Override
@@ -56,6 +57,9 @@ public final class FileRawSnapshotWriter implements RawSnapshotWriter {
 
     @Override
     public long sizeInBytes() {
+        if (frozenSize >= 0) {
+            return frozenSize;
+        }
         try {
             return channel.size();
         } catch (IOException e) {
@@ -99,7 +103,7 @@ public final class FileRawSnapshotWriter implements RawSnapshotWriter {
 
     @Override
     public boolean isFrozen() {
-        return frozen;
+        return frozenSize >= 0;
     }
 
     @Override
@@ -107,8 +111,11 @@ public final class FileRawSnapshotWriter implements RawSnapshotWriter {
         try {
             checkIfFrozen("Freeze");
 
+            frozenSize = channel.size();
+            // force the channel to write to the file system before closing, to make sure that the file has the data
+            // on disk before performing the atomic file move
+            channel.force(true);
             channel.close();
-            frozen = true;
 
             if (!tempSnapshotPath.toFile().setReadOnly()) {
                 throw new IllegalStateException(String.format("Unable to set file (%s) as read-only", tempSnapshotPath));
@@ -148,12 +155,12 @@ public final class FileRawSnapshotWriter implements RawSnapshotWriter {
             "FileRawSnapshotWriter(path=%s, snapshotId=%s, frozen=%s)",
             tempSnapshotPath,
             snapshotId,
-            frozen
+            isFrozen()
         );
     }
 
     void checkIfFrozen(String operation) {
-        if (frozen) {
+        if (isFrozen()) {
             throw new IllegalStateException(
                 String.format(
                     "%s is not supported. Snapshot is already frozen: id = %s; temp path = %s",

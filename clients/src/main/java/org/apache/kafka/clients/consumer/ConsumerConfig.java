@@ -106,6 +106,24 @@ public class ConsumerConfig extends AbstractConfig {
     private static final String HEARTBEAT_INTERVAL_MS_DOC = CommonClientConfigs.HEARTBEAT_INTERVAL_MS_DOC;
 
     /**
+     * <code>group.protocol</code>
+     */
+    public static final String GROUP_PROTOCOL_CONFIG = "group.protocol";
+    public static final String DEFAULT_GROUP_PROTOCOL = GroupProtocol.CLASSIC.name().toLowerCase(Locale.ROOT);
+    public static final String GROUP_PROTOCOL_DOC = "The group protocol consumer should use. We currently " +
+        "support \"classic\" or \"consumer\". If \"consumer\" is specified, then the consumer group protocol will be " +
+        "used. Otherwise, the classic group protocol will be used.";
+
+    /**
+    * <code>group.remote.assignor</code>
+    */
+    public static final String GROUP_REMOTE_ASSIGNOR_CONFIG = "group.remote.assignor";
+    public static final String DEFAULT_GROUP_REMOTE_ASSIGNOR = null;
+    public static final String GROUP_REMOTE_ASSIGNOR_DOC = "The server-side assignor to use. If no assignor is specified, " +
+        "the group coordinator will pick one. This configuration is applied only if <code>group.protocol</code> is " +
+        "set to \"consumer\".";
+
+    /**
      * <code>bootstrap.servers</code>
      */
     public static final String BOOTSTRAP_SERVERS_CONFIG = CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG;
@@ -149,7 +167,14 @@ public class ConsumerConfig extends AbstractConfig {
      * <code>auto.offset.reset</code>
      */
     public static final String AUTO_OFFSET_RESET_CONFIG = "auto.offset.reset";
-    public static final String AUTO_OFFSET_RESET_DOC = "What to do when there is no initial offset in Kafka or if the current offset does not exist any more on the server (e.g. because that data has been deleted): <ul><li>earliest: automatically reset the offset to the earliest offset<li>latest: automatically reset the offset to the latest offset</li><li>none: throw exception to the consumer if no previous offset is found for the consumer's group</li><li>anything else: throw exception to the consumer.</li></ul>";
+    public static final String AUTO_OFFSET_RESET_DOC = "What to do when there is no initial offset in Kafka or if the current offset does not exist any more on the server " +
+            "(e.g. because that data has been deleted): " +
+            "<ul><li>earliest: automatically reset the offset to the earliest offset" +
+            "<li>latest: automatically reset the offset to the latest offset</li>" +
+            "<li>none: throw exception to the consumer if no previous offset is found for the consumer's group</li>" +
+            "<li>anything else: throw exception to the consumer.</li></ul>" +
+            "<p>Note that altering partition numbers while setting this config to latest may cause message delivery loss since " +
+            "producers could start to send messages to newly added partitions (i.e. no initial offsets exist yet) before consumers reset their offsets.";
 
     /**
      * <code>fetch.min.bytes</code>
@@ -222,6 +247,17 @@ public class ConsumerConfig extends AbstractConfig {
      * <code>retry.backoff.ms</code>
      */
     public static final String RETRY_BACKOFF_MS_CONFIG = CommonClientConfigs.RETRY_BACKOFF_MS_CONFIG;
+
+    /**
+     * <code>enable.metrics.push</code>
+     */
+    public static final String ENABLE_METRICS_PUSH_CONFIG = CommonClientConfigs.ENABLE_METRICS_PUSH_CONFIG;
+    public static final String ENABLE_METRICS_PUSH_DOC = CommonClientConfigs.ENABLE_METRICS_PUSH_DOC;
+
+    /**
+     * <code>retry.backoff.max.ms</code>
+     */
+    public static final String RETRY_BACKOFF_MAX_MS_CONFIG = CommonClientConfigs.RETRY_BACKOFF_MAX_MS_CONFIG;
 
     /**
      * <code>metrics.sample.window.ms</code>
@@ -459,10 +495,21 @@ public class ConsumerConfig extends AbstractConfig {
                                         CommonClientConfigs.RECONNECT_BACKOFF_MAX_MS_DOC)
                                 .define(RETRY_BACKOFF_MS_CONFIG,
                                         Type.LONG,
-                                        100L,
+                                        CommonClientConfigs.DEFAULT_RETRY_BACKOFF_MS,
                                         atLeast(0L),
                                         Importance.LOW,
                                         CommonClientConfigs.RETRY_BACKOFF_MS_DOC)
+                                .define(RETRY_BACKOFF_MAX_MS_CONFIG,
+                                        Type.LONG,
+                                        CommonClientConfigs.DEFAULT_RETRY_BACKOFF_MAX_MS,
+                                        atLeast(0L),
+                                        Importance.LOW,
+                                        CommonClientConfigs.RETRY_BACKOFF_MAX_MS_DOC)
+                                .define(ENABLE_METRICS_PUSH_CONFIG,
+                                        Type.BOOLEAN,
+                                        true,
+                                        Importance.LOW,
+                                        ENABLE_METRICS_PUSH_DOC)
                                 .define(AUTO_OFFSET_RESET_CONFIG,
                                         Type.STRING,
                                         OffsetResetStrategy.LATEST.toString(),
@@ -581,6 +628,17 @@ public class ConsumerConfig extends AbstractConfig {
                                         DEFAULT_ALLOW_AUTO_CREATE_TOPICS,
                                         Importance.MEDIUM,
                                         ALLOW_AUTO_CREATE_TOPICS_DOC)
+                                .define(GROUP_PROTOCOL_CONFIG,
+                                        Type.STRING,
+                                        DEFAULT_GROUP_PROTOCOL,
+                                        ConfigDef.CaseInsensitiveValidString.in(Utils.enumOptions(GroupProtocol.class)),
+                                        Importance.HIGH,
+                                        GROUP_PROTOCOL_DOC)
+                                .define(GROUP_REMOTE_ASSIGNOR_CONFIG,
+                                        Type.STRING,
+                                        DEFAULT_GROUP_REMOTE_ASSIGNOR,
+                                        Importance.MEDIUM,
+                                        GROUP_REMOTE_ASSIGNOR_DOC)
                                 // security support
                                 .define(SECURITY_PROVIDERS_CONFIG,
                                         Type.STRING,
@@ -601,8 +659,10 @@ public class ConsumerConfig extends AbstractConfig {
     @Override
     protected Map<String, Object> postProcessParsedConfig(final Map<String, Object> parsedValues) {
         CommonClientConfigs.postValidateSaslMechanismConfig(this);
+        CommonClientConfigs.warnDisablingExponentialBackoff(this);
         Map<String, Object> refinedConfigs = CommonClientConfigs.postProcessReconnectBackoffConfigs(this, parsedValues);
         maybeOverrideClientId(refinedConfigs);
+        maybeOverrideEnableAutoCommit(refinedConfigs);
         return refinedConfigs;
     }
 
@@ -620,9 +680,9 @@ public class ConsumerConfig extends AbstractConfig {
         }
     }
 
-    protected static Map<String, Object> appendDeserializerToConfig(Map<String, Object> configs,
-                                                                    Deserializer<?> keyDeserializer,
-                                                                    Deserializer<?> valueDeserializer) {
+    public static Map<String, Object> appendDeserializerToConfig(Map<String, Object> configs,
+                                                                 Deserializer<?> keyDeserializer,
+                                                                 Deserializer<?> valueDeserializer) {
         // validate deserializer configuration, if the passed deserializer instance is null, the user must explicitly set a valid deserializer configuration value
         Map<String, Object> newConfigs = new HashMap<>(configs);
         if (keyDeserializer != null)
@@ -636,17 +696,17 @@ public class ConsumerConfig extends AbstractConfig {
         return newConfigs;
     }
 
-    boolean maybeOverrideEnableAutoCommit() {
+    private void maybeOverrideEnableAutoCommit(Map<String, Object> configs) {
         Optional<String> groupId = Optional.ofNullable(getString(CommonClientConfigs.GROUP_ID_CONFIG));
-        boolean enableAutoCommit = getBoolean(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG);
+        Map<String, Object> originals = originals();
+        boolean enableAutoCommit = originals.containsKey(ENABLE_AUTO_COMMIT_CONFIG) ? getBoolean(ENABLE_AUTO_COMMIT_CONFIG) : false;
         if (!groupId.isPresent()) { // overwrite in case of default group id where the config is not explicitly provided
-            if (!originals().containsKey(ENABLE_AUTO_COMMIT_CONFIG)) {
-                enableAutoCommit = false;
+            if (!originals.containsKey(ENABLE_AUTO_COMMIT_CONFIG)) {
+                configs.put(ENABLE_AUTO_COMMIT_CONFIG, false);
             } else if (enableAutoCommit) {
-                throw new InvalidConfigurationException(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG + " cannot be set to true when default group id (null) is used.");
+                throw new InvalidConfigurationException(ENABLE_AUTO_COMMIT_CONFIG + " cannot be set to true when default group id (null) is used.");
             }
         }
-        return enableAutoCommit;
     }
 
     public ConsumerConfig(Properties props) {

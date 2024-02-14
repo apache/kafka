@@ -1,0 +1,93 @@
+// Licensed to the Apache Software Foundation (ASF) under one or more
+// contributor license agreements.  See the NOTICE file distributed with
+// this work for additional information regarding copyright ownership.
+// The ASF licenses this file to You under the Apache License, Version 2.0
+// (the "License"); you may not use this file except in compliance with
+// the License.  You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+{
+  "apiKey": 69,
+  "type": "response",
+  "name": "ConsumerGroupDescribeResponse",
+  "validVersions": "0",
+  "flexibleVersions": "0+",
+  // Supported errors:
+  // - GROUP_AUTHORIZATION_FAILED (version 0+)
+  // - NOT_COORDINATOR (version 0+)
+  // - COORDINATOR_NOT_AVAILABLE (version 0+)
+  // - COORDINATOR_LOAD_IN_PROGRESS (version 0+)
+  // - INVALID_REQUEST (version 0+)
+  // - INVALID_GROUP_ID (version 0+)
+  // - GROUP_ID_NOT_FOUND (version 0+)
+  "fields": [
+    { "name": "ThrottleTimeMs", "type": "int32", "versions": "0+",
+      "about": "The duration in milliseconds for which the request was throttled due to a quota violation, or zero if the request did not violate any quota." },
+    { "name": "Groups", "type": "[]DescribedGroup", "versions": "0+",
+      "about": "Each described group.",
+      "fields": [
+        { "name": "ErrorCode", "type": "int16", "versions": "0+",
+          "about": "The describe error, or 0 if there was no error." },
+        { "name": "ErrorMessage", "type": "string", "versions": "0+", "nullableVersions": "0+", "default": "null",
+          "about": "The top-level error message, or null if there was no error." },
+        { "name": "GroupId", "type": "string", "versions": "0+", "entityType": "groupId",
+          "about": "The group ID string." },
+        { "name": "GroupState", "type": "string", "versions": "0+",
+          "about": "The group state string, or the empty string." },
+        { "name": "GroupEpoch", "type": "int32", "versions": "0+",
+          "about": "The group epoch." },
+        { "name": "AssignmentEpoch", "type": "int32", "versions": "0+",
+          "about": "The assignment epoch." },
+        { "name": "AssignorName", "type": "string", "versions": "0+",
+          "about": "The selected assignor." },
+        { "name": "Members", "type": "[]Member", "versions": "0+",
+          "about": "The members.",
+          "fields": [
+            { "name": "MemberId", "type": "string", "versions": "0+",
+              "about": "The member ID." },
+            { "name": "InstanceId", "type": "string", "versions": "0+", "nullableVersions": "0+", "default": "null",
+              "about": "The member instance ID." },
+            { "name": "RackId", "type": "string", "versions": "0+", "nullableVersions": "0+", "default": "null",
+              "about": "The member rack ID." },
+            { "name": "MemberEpoch", "type": "int32", "versions": "0+",
+              "about": "The current member epoch." },
+            { "name": "ClientId", "type": "string", "versions": "0+",
+              "about": "The client ID." },
+            { "name": "ClientHost", "type": "string", "versions": "0+",
+              "about": "The client host." },
+            { "name": "SubscribedTopicNames", "type": "[]string", "versions": "0+", "entityType": "topicName",
+              "about": "The subscribed topic names." },
+            { "name": "SubscribedTopicRegex", "type": "string", "versions": "0+", "nullableVersions": "0+", "default": "null",
+              "about": "the subscribed topic regex otherwise or null of not provided." },
+            { "name": "Assignment", "type": "Assignment", "versions": "0+",
+              "about": "The current assignment." },
+            { "name": "TargetAssignment", "type": "Assignment", "versions": "0+",
+              "about": "The target assignment." }
+          ]},
+        { "name": "AuthorizedOperations", "type": "int32", "versions": "0+", "default": "-2147483648",
+          "about": "32-bit bitfield to represent authorized operations for this group." }
+      ]
+    }
+  ],
+  "commonStructs": [
+    { "name": "TopicPartitions", "versions": "0+", "fields": [
+      { "name": "TopicId", "type": "uuid", "versions": "0+",
+        "about": "The topic ID." },
+      { "name": "TopicName", "type": "string", "versions": "0+", "entityType": "topicName",
+        "about": "The topic name." },
+      { "name": "Partitions", "type": "[]int32", "versions": "0+",
+        "about": "The partitions." }
+    ]},
+    { "name": "Assignment", "versions": "0+", "fields": [
+      { "name": "TopicPartitions", "type": "[]TopicPartitions", "versions": "0+",
+        "about": "The assigned topic-partitions to the member." }
+    ]}
+  ]
+}

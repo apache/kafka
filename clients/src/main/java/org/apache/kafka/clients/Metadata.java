@@ -17,6 +17,7 @@
 package org.apache.kafka.clients;
 
 import org.apache.kafka.common.Cluster;
+import org.apache.kafka.common.ClusterResourceListener;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
@@ -28,6 +29,8 @@ import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.MetadataRequest;
 import org.apache.kafka.common.requests.MetadataResponse;
+import org.apache.kafka.common.requests.MetadataResponse.PartitionMetadata;
+import org.apache.kafka.common.utils.ExponentialBackoff;
 import org.apache.kafka.common.utils.LogContext;
 import org.slf4j.Logger;
 
@@ -39,10 +42,12 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.function.Supplier;
+import java.util.stream.Collectors;
 
 import static org.apache.kafka.common.record.RecordBatch.NO_PARTITION_LEADER_EPOCH;
 
@@ -60,18 +65,20 @@ import static org.apache.kafka.common.record.RecordBatch.NO_PARTITION_LEADER_EPO
  */
 public class Metadata implements Closeable {
     private final Logger log;
-    private final long refreshBackoffMs;
+    private final ExponentialBackoff refreshBackoff;
     private final long metadataExpireMs;
     private int updateVersion;  // bumped on every metadata response
     private int requestVersion; // bumped on every new topic addition
     private long lastRefreshMs;
     private long lastSuccessfulRefreshMs;
+    private long attempts;
     private KafkaException fatalException;
     private Set<String> invalidTopics;
     private Set<String> unauthorizedTopics;
     private MetadataCache cache = MetadataCache.empty();
     private boolean needFullUpdate;
     private boolean needPartialUpdate;
+    private long equivalentResponseCount;
     private final ClusterResourceListeners clusterResourceListeners;
     private boolean isClosed;
     private final Map<TopicPartition, Integer> lastSeenLeaderEpochs;
@@ -81,23 +88,31 @@ public class Metadata implements Closeable {
      *
      * @param refreshBackoffMs         The minimum amount of time that must expire between metadata refreshes to avoid busy
      *                                 polling
+     * @param refreshBackoffMaxMs      The maximum amount of time to wait between metadata refreshes
      * @param metadataExpireMs         The maximum amount of time that metadata can be retained without refresh
      * @param logContext               Log context corresponding to the containing client
      * @param clusterResourceListeners List of ClusterResourceListeners which will receive metadata updates.
      */
     public Metadata(long refreshBackoffMs,
+                    long refreshBackoffMaxMs,
                     long metadataExpireMs,
                     LogContext logContext,
                     ClusterResourceListeners clusterResourceListeners) {
         this.log = logContext.logger(Metadata.class);
-        this.refreshBackoffMs = refreshBackoffMs;
+        this.refreshBackoff = new ExponentialBackoff(
+            refreshBackoffMs,
+            CommonClientConfigs.RETRY_BACKOFF_EXP_BASE,
+            refreshBackoffMaxMs,
+            CommonClientConfigs.RETRY_BACKOFF_JITTER);
         this.metadataExpireMs = metadataExpireMs;
         this.lastRefreshMs = 0L;
         this.lastSuccessfulRefreshMs = 0L;
+        this.attempts = 0L;
         this.requestVersion = 0;
         this.updateVersion = 0;
         this.needFullUpdate = false;
         this.needPartialUpdate = false;
+        this.equivalentResponseCount = 0;
         this.clusterResourceListeners = clusterResourceListeners;
         this.isClosed = false;
         this.lastSeenLeaderEpochs = new HashMap<>();
@@ -114,18 +129,38 @@ public class Metadata implements Closeable {
 
     /**
      * Return the next time when the current cluster info can be updated (i.e., backoff time has elapsed).
+     * There are two calculations for backing off based on how many attempts to retrieve metadata have been made
+     * since the last successful response, and how many equivalent metadata responses have been received.
+     * The second of these allows backing off when there are errors to do with stale metadata, even though the
+     * metadata responses are clean.
+     * <p>
+     * This can be used to check whether it's worth requesting an update in the knowledge that it will
+     * not be delayed if this method returns 0.
      *
      * @param nowMs current time in ms
      * @return remaining time in ms till the cluster info can be updated again
      */
     public synchronized long timeToAllowUpdate(long nowMs) {
-        return Math.max(this.lastRefreshMs + this.refreshBackoffMs - nowMs, 0);
+        // Calculate the backoff for attempts which acts when metadata responses fail
+        long backoffForAttempts = Math.max(this.lastRefreshMs +
+                this.refreshBackoff.backoff(this.attempts > 0 ? this.attempts - 1 : 0) - nowMs, 0);
+
+        // Periodic updates based on expiration resets the equivalent response count so exponential backoff is not used
+        if (Math.max(this.lastSuccessfulRefreshMs + this.metadataExpireMs - nowMs, 0) == 0) {
+            this.equivalentResponseCount = 0;
+        }
+
+        // Calculate the backoff for equivalent responses which acts when metadata responses are not making progress
+        long backoffForEquivalentResponseCount = Math.max(this.lastRefreshMs +
+                (this.equivalentResponseCount > 0 ? this.refreshBackoff.backoff(this.equivalentResponseCount - 1) : 0) - nowMs, 0);
+
+        return Math.max(backoffForAttempts, backoffForEquivalentResponseCount);
     }
 
     /**
      * The next time to update the cluster info is the maximum of the time the current info will expire and the time the
-     * current info can be updated (i.e. backoff time has elapsed); If an update has been request then the expiry time
-     * is now
+     * current info can be updated (i.e. backoff time has elapsed). If an update has been requested, the metadata
+     * expiry time is now.
      *
      * @param nowMs current time in ms
      * @return remaining time in ms till updating the cluster info
@@ -140,24 +175,43 @@ public class Metadata implements Closeable {
     }
 
     /**
-     * Request an update of the current cluster metadata info, return the current updateVersion before the update
+     * Request an update of the current cluster metadata info, permitting backoff based on the number of
+     * equivalent metadata responses, which indicates that responses did not make progress and may be stale.
+     * 
+     * @param resetEquivalentResponseBackoff Whether to reset backing off based on consecutive equivalent responses.
+     *                                       This should be set to <i>false</i> in situations where the update is
+     *                                       being requested to retry an operation, such as when the leader has
+     *                                       changed. It should be set to <i>true</i> in situations where new
+     *                                       metadata is being requested, such as adding a topic to a subscription.
+     *                                       In situations where it's not clear, it's best to use <i>true</i>.
+     * 
+     * @return The current updateVersion before the update
      */
-    public synchronized int requestUpdate() {
+    public synchronized int requestUpdate(final boolean resetEquivalentResponseBackoff) {
         this.needFullUpdate = true;
+        if (resetEquivalentResponseBackoff) {
+            this.equivalentResponseCount = 0;
+        }
         return this.updateVersion;
     }
 
+    /**
+     * Request an immediate update of the current cluster metadata info, because the caller is interested in
+     * metadata that is being newly requested.
+     * @return The current updateVersion before the update
+     */
     public synchronized int requestUpdateForNewTopics() {
         // Override the timestamp of last refresh to let immediate update.
         this.lastRefreshMs = 0;
         this.needPartialUpdate = true;
+        this.equivalentResponseCount = 0;
         this.requestVersion++;
         return this.updateVersion;
     }
 
     /**
      * Request an update for the partition metadata iff we have seen a newer leader epoch. This is called by the client
-     * any time it handles a response from the broker that includes leader epoch, except for UpdateMetadata which
+     * any time it handles a response from the broker that includes leader epoch, except for update via Metadata RPC which
      * follows a different code path ({@link #update}).
      *
      * @param topicPartition
@@ -200,6 +254,10 @@ public class Metadata implements Closeable {
      */
     public synchronized boolean updateRequested() {
         return this.needFullUpdate || this.needPartialUpdate;
+    }
+
+    public synchronized void addClusterUpdateListener(ClusterResourceListener listener) {
+        this.clusterResourceListeners.maybeAdd(listener);
     }
 
     /**
@@ -267,11 +325,15 @@ public class Metadata implements Closeable {
 
         this.needPartialUpdate = requestVersion < this.requestVersion;
         this.lastRefreshMs = nowMs;
+        this.attempts = 0;
         this.updateVersion += 1;
         if (!isPartialUpdate) {
             this.needFullUpdate = false;
             this.lastSuccessfulRefreshMs = nowMs;
         }
+        // If we subsequently find that the metadata response is not equivalent to the metadata already known,
+        // this count is reset to 0 in updateLatestMetadata()
+        this.equivalentResponseCount++;
 
         String previousClusterId = cache.clusterResource().clusterId();
 
@@ -289,6 +351,97 @@ public class Metadata implements Closeable {
         clusterResourceListeners.onUpdate(cache.clusterResource());
 
         log.debug("Updated cluster metadata updateVersion {} to {}", this.updateVersion, this.cache);
+    }
+
+    /**
+     * Updates the partition-leadership info in the metadata. Update is done by merging existing metadata with the input leader information and nodes.
+     * This is called whenever partition-leadership updates are returned in a response from broker(ex - ProduceResponse & FetchResponse).
+     * Note that the updates via Metadata RPC are handled separately in ({@link #update}).
+     * Both partitionLeader and leaderNodes override the existing metadata. Non-overlapping metadata is kept as it is.
+     * @param partitionLeaders map of new leadership information for partitions.
+     * @param leaderNodes a list of nodes for leaders in the above map.
+     * @return a set of partitions, for which leaders were updated.
+     */
+    public synchronized Set<TopicPartition> updatePartitionLeadership(Map<TopicPartition, LeaderIdAndEpoch> partitionLeaders, List<Node> leaderNodes) {
+        Map<Integer, Node> newNodes = leaderNodes.stream().collect(Collectors.toMap(Node::id, node -> node));
+        // Insert non-overlapping nodes from existing-nodes into new-nodes.
+        this.cache.cluster().nodes().stream().forEach(node -> newNodes.putIfAbsent(node.id(), node));
+
+        // Create partition-metadata for all updated partitions. Exclude updates for partitions -
+        // 1. for which the corresponding partition has newer leader in existing metadata.
+        // 2. for which corresponding leader's node is missing in the new-nodes.
+        // 3. for which the existing metadata doesn't know about the partition.
+        List<PartitionMetadata> updatePartitionMetadata = new ArrayList<>();
+        for (Entry<TopicPartition, Metadata.LeaderIdAndEpoch> partitionLeader: partitionLeaders.entrySet()) {
+            TopicPartition partition = partitionLeader.getKey();
+            Metadata.LeaderAndEpoch currentLeader = currentLeader(partition);
+            Metadata.LeaderIdAndEpoch newLeader = partitionLeader.getValue();
+            if (!newLeader.epoch.isPresent() || !newLeader.leaderId.isPresent()) {
+                log.debug("For {}, incoming leader information is incomplete {}", partition, newLeader);
+                continue;
+            }
+            if (currentLeader.epoch.isPresent() && newLeader.epoch.get() <= currentLeader.epoch.get()) {
+                log.debug("For {}, incoming leader({}) is not-newer than the one in the existing metadata {}, so ignoring.", partition, newLeader, currentLeader);
+                continue;
+            }
+            if (!newNodes.containsKey(newLeader.leaderId.get())) {
+                log.debug("For {}, incoming leader({}), the corresponding node information for node-id {} is missing, so ignoring.", partition, newLeader, newLeader.leaderId.get());
+                continue;
+            }
+            if (!this.cache.partitionMetadata(partition).isPresent()) {
+                log.debug("For {}, incoming leader({}), partition metadata is no longer cached, ignoring.", partition, newLeader);
+                continue;
+            }
+
+            MetadataResponse.PartitionMetadata existingMetadata = this.cache.partitionMetadata(partition).get();
+            MetadataResponse.PartitionMetadata updatedMetadata = new MetadataResponse.PartitionMetadata(
+                existingMetadata.error,
+                partition,
+                newLeader.leaderId,
+                newLeader.epoch,
+                existingMetadata.replicaIds,
+                existingMetadata.inSyncReplicaIds,
+                existingMetadata.offlineReplicaIds
+            );
+            updatePartitionMetadata.add(updatedMetadata);
+
+            lastSeenLeaderEpochs.put(partition, newLeader.epoch.get());
+        }
+
+        if (updatePartitionMetadata.isEmpty()) {
+            log.debug("No relevant metadata updates.");
+            return new HashSet<>();
+        }
+
+        Set<String> updatedTopics = updatePartitionMetadata.stream().map(MetadataResponse.PartitionMetadata::topic).collect(Collectors.toSet());
+
+        // Get topic-ids for updated topics from existing topic-ids.
+        Map<String, Uuid> existingTopicIds = this.cache.topicIds();
+        Map<String, Uuid> topicIdsForUpdatedTopics = updatedTopics.stream()
+            .filter(e -> existingTopicIds.containsKey(e))
+            .collect(Collectors.toMap(e -> e, e -> existingTopicIds.get(e)));
+
+        if (log.isDebugEnabled()) {
+            updatePartitionMetadata.forEach(
+                partMetadata -> log.debug("For {} updating leader information, updated metadata is {}.", partMetadata.topicPartition, partMetadata)
+            );
+        }
+
+        // Fetch responses can include partition level leader changes, when this happens, we perform a partial
+        // metadata update, by keeping the unchanged partition and update the changed partitions.
+        this.cache = cache.mergeWith(
+            cache.clusterResource().clusterId(),
+            newNodes,
+            updatePartitionMetadata,
+            Collections.emptySet(), Collections.emptySet(), Collections.emptySet(),
+            cache.cluster().controller(),
+            topicIdsForUpdatedTopics,
+            (topic, isInternal) -> true);
+        clusterResourceListeners.onUpdate(cache.clusterResource());
+
+        return updatePartitionMetadata.stream()
+            .map(metadata -> metadata.topicPartition)
+            .collect(Collectors.toSet());
     }
 
     private void maybeSetMetadataError(Cluster cluster) {
@@ -355,13 +508,13 @@ public class Metadata implements Closeable {
                     if (partitionMetadata.error.exception() instanceof InvalidMetadataException) {
                         log.debug("Requesting metadata update for partition {} due to error {}",
                                 partitionMetadata.topicPartition, partitionMetadata.error);
-                        requestUpdate();
+                        requestUpdate(false);
                     }
                 }
             } else {
                 if (metadata.error().exception() instanceof InvalidMetadataException) {
                     log.debug("Requesting metadata update for topic {} due to error {}", topicName, metadata.error());
-                    requestUpdate();
+                    requestUpdate(false);
                 }
 
                 if (metadata.error() == Errors.INVALID_TOPIC_EXCEPTION)
@@ -399,6 +552,7 @@ public class Metadata implements Closeable {
                 log.debug("Setting the last seen epoch of partition {} to {} since the last known epoch was undefined.",
                         tp, newEpoch);
                 lastSeenLeaderEpochs.put(tp, newEpoch);
+                this.equivalentResponseCount = 0;
                 return Optional.of(partitionMetadata);
             } else if (topicId != null && !topicId.equals(oldTopicId)) {
                 // If the new topic ID is valid and different from the last seen topic ID, update the metadata.
@@ -408,11 +562,15 @@ public class Metadata implements Closeable {
                 log.info("Resetting the last seen epoch of partition {} to {} since the associated topicId changed from {} to {}",
                         tp, newEpoch, oldTopicId, topicId);
                 lastSeenLeaderEpochs.put(tp, newEpoch);
+                this.equivalentResponseCount = 0;
                 return Optional.of(partitionMetadata);
             } else if (newEpoch >= currentEpoch) {
                 // If the received leader epoch is at least the same as the previous one, update the metadata
                 log.debug("Updating last seen epoch for partition {} from {} to epoch {} from new metadata", tp, currentEpoch, newEpoch);
                 lastSeenLeaderEpochs.put(tp, newEpoch);
+                if (newEpoch > currentEpoch) {
+                    this.equivalentResponseCount = 0;
+                }
                 return Optional.of(partitionMetadata);
             } else {
                 // Otherwise ignore the new metadata and use the previously cached info
@@ -422,6 +580,7 @@ public class Metadata implements Closeable {
         } else {
             // Handle old cluster formats as well as error responses where leader and epoch are missing
             lastSeenLeaderEpochs.remove(tp);
+            this.equivalentResponseCount = 0;
             return Optional.of(partitionMetadata.withoutLeaderEpoch());
         }
     }
@@ -495,6 +654,8 @@ public class Metadata implements Closeable {
      */
     public synchronized void failedUpdate(long now) {
         this.lastRefreshMs = now;
+        this.attempts++;
+        this.equivalentResponseCount = 0;
     }
 
     /**
@@ -574,6 +735,13 @@ public class Metadata implements Closeable {
         return null;
     }
 
+    /**
+     * @return Mapping from topic IDs to topic names for all topics in the cache.
+     */
+    public synchronized Map<Uuid, String> topicNames() {
+        return cache.topicNames();
+    }
+
     protected boolean retainTopic(String topic, boolean isInternal, long nowMs) {
         return true;
     }
@@ -637,6 +805,24 @@ public class Metadata implements Closeable {
                     "leader=" + leader +
                     ", epoch=" + epoch.map(Number::toString).orElse("absent") +
                     '}';
+        }
+    }
+
+    public static class LeaderIdAndEpoch {
+        public final Optional<Integer> leaderId;
+        public final Optional<Integer> epoch;
+
+        public LeaderIdAndEpoch(Optional<Integer> leaderId, Optional<Integer> epoch) {
+            this.leaderId = Objects.requireNonNull(leaderId);
+            this.epoch = Objects.requireNonNull(epoch);
+        }
+
+        @Override
+        public String toString() {
+            return "LeaderIdAndEpoch{" +
+                "leaderId=" + leaderId.map(Number::toString).orElse("absent") +
+                ", epoch=" + epoch.map(Number::toString).orElse("absent") +
+                '}';
         }
     }
 }

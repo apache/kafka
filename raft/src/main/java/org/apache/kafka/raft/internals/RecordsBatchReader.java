@@ -117,14 +117,8 @@ public final class RecordsBatchReader<T> implements BatchReader<T> {
     }
 
     private Optional<Batch<T>> nextBatch() {
-        while (iterator.hasNext()) {
-            Batch<T> batch = iterator.next();
-
-            if (batch.records().isEmpty()) {
-                lastReturnedOffset = batch.lastOffset();
-            } else {
-                return Optional.of(batch);
-            }
+        if (iterator.hasNext()) {
+            return Optional.of(iterator.next());
         }
 
         return Optional.empty();

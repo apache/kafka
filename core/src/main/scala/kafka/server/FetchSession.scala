@@ -17,6 +17,7 @@
 
 package kafka.server
 
+import com.typesafe.scalalogging.Logger
 import kafka.utils.Logging
 import org.apache.kafka.common.{TopicIdPartition, TopicPartition, Uuid}
 import org.apache.kafka.common.message.FetchResponseData
@@ -356,12 +357,19 @@ class SessionErrorContext(val error: Errors,
   }
 }
 
+object SessionlessFetchContext {
+  private final val logger = Logger(classOf[SessionlessFetchContext])
+}
+
 /**
   * The fetch context for a sessionless fetch request.
   *
   * @param fetchData          The partition data from the fetch request.
   */
 class SessionlessFetchContext(val fetchData: util.Map[TopicIdPartition, FetchRequest.PartitionData]) extends FetchContext {
+
+  override lazy val logger = SessionlessFetchContext.logger
+
   override def getFetchOffset(part: TopicIdPartition): Option[Long] =
     Option(fetchData.get(part)).map(_.fetchOffset)
 
@@ -377,6 +385,10 @@ class SessionlessFetchContext(val fetchData: util.Map[TopicIdPartition, FetchReq
     debug(s"Sessionless fetch context returning ${partitionsToLogString(updates.keySet)}")
     FetchResponse.of(Errors.NONE, 0, INVALID_SESSION_ID, updates)
   }
+}
+
+object FullFetchContext {
+  private final val logger = Logger(classOf[FullFetchContext])
 }
 
 /**
@@ -395,6 +407,9 @@ class FullFetchContext(private val time: Time,
                        private val fetchData: util.Map[TopicIdPartition, FetchRequest.PartitionData],
                        private val usesTopicIds: Boolean,
                        private val isFromFollower: Boolean) extends FetchContext {
+
+  override lazy val logger = FullFetchContext.logger
+
   override def getFetchOffset(part: TopicIdPartition): Option[Long] =
     Option(fetchData.get(part)).map(_.fetchOffset)
 
@@ -423,6 +438,10 @@ class FullFetchContext(private val time: Time,
   }
 }
 
+object IncrementalFetchContext {
+  private val logger = Logger(classOf[IncrementalFetchContext])
+}
+
 /**
   * The fetch context for an incremental fetch request.
   *
@@ -435,6 +454,8 @@ class IncrementalFetchContext(private val time: Time,
                               private val reqMetadata: JFetchMetadata,
                               private val session: FetchSession,
                               private val topicNames: FetchSession.TOPIC_NAME_MAP) extends FetchContext {
+
+  override lazy val logger = IncrementalFetchContext.logger
 
   override def getFetchOffset(tp: TopicIdPartition): Option[Long] = session.getFetchOffset(tp)
 

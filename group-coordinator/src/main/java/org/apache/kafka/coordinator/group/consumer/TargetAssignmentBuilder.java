@@ -20,7 +20,6 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.coordinator.group.Record;
 import org.apache.kafka.coordinator.group.assignor.AssignmentMemberSpec;
 import org.apache.kafka.coordinator.group.assignor.AssignmentSpec;
-import org.apache.kafka.coordinator.group.assignor.AssignmentTopicMetadata;
 import org.apache.kafka.coordinator.group.assignor.GroupAssignment;
 import org.apache.kafka.coordinator.group.assignor.MemberAssignment;
 import org.apache.kafka.coordinator.group.assignor.PartitionAssignor;
@@ -129,6 +128,11 @@ public class TargetAssignmentBuilder {
     private final Map<String, ConsumerGroupMember> updatedMembers = new HashMap<>();
 
     /**
+     * The static members in the group.
+     */
+    private Map<String, String> staticMembers = new HashMap<>();
+
+    /**
      * Constructs the object.
      *
      * @param groupId       The group id.
@@ -155,6 +159,19 @@ public class TargetAssignmentBuilder {
         Map<String, ConsumerGroupMember> members
     ) {
         this.members = members;
+        return this;
+    }
+
+    /**
+     * Adds all the existing static members.
+     *
+     * @param staticMembers   The existing static members in the consumer group.
+     * @return This object.
+     */
+    public TargetAssignmentBuilder withStaticMembers(
+        Map<String, String> staticMembers
+    ) {
+        this.staticMembers = staticMembers;
         return this;
     }
 
@@ -235,25 +252,36 @@ public class TargetAssignmentBuilder {
             if (updatedMemberOrNull == null) {
                 memberSpecs.remove(memberId);
             } else {
+                ConsumerGroupMember member = members.get(memberId);
+                Assignment assignment;
+                // A new static member joins and needs to replace an existing departed one.
+                if (member == null && staticMembers.containsKey(updatedMemberOrNull.instanceId())) {
+                    assignment = targetAssignment.getOrDefault(staticMembers.get(updatedMemberOrNull.instanceId()), Assignment.EMPTY);
+                } else {
+                    assignment = targetAssignment.getOrDefault(memberId, Assignment.EMPTY);
+                }
                 memberSpecs.put(memberId, createAssignmentMemberSpec(
                     updatedMemberOrNull,
-                    targetAssignment.getOrDefault(memberId, Assignment.EMPTY),
+                    assignment,
                     subscriptionMetadata
                 ));
             }
         });
 
         // Prepare the topic metadata.
-        Map<Uuid, AssignmentTopicMetadata> topics = new HashMap<>();
+        Map<Uuid, TopicMetadata> topicMetadataMap = new HashMap<>();
         subscriptionMetadata.forEach((topicName, topicMetadata) ->
-            topics.put(topicMetadata.id(), new AssignmentTopicMetadata(topicMetadata.numPartitions()))
+            topicMetadataMap.put(
+                topicMetadata.id(),
+                topicMetadata
+            )
         );
 
         // Compute the assignment.
-        GroupAssignment newGroupAssignment = assignor.assign(new AssignmentSpec(
-            Collections.unmodifiableMap(memberSpecs),
-            Collections.unmodifiableMap(topics)
-        ));
+        GroupAssignment newGroupAssignment = assignor.assign(
+            new AssignmentSpec(Collections.unmodifiableMap(memberSpecs)),
+            new SubscribedTopicMetadata(topicMetadataMap)
+        );
 
         // Compute delta from previous to new target assignment and create the
         // relevant records.

@@ -21,8 +21,11 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.log.remote.metadata.storage.generated.RemoteLogSegmentMetadataUpdateRecord;
 import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentId;
+import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentMetadata.CustomMetadata;
 import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentMetadataUpdate;
 import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentState;
+
+import java.util.Optional;
 
 public class RemoteLogSegmentMetadataUpdateTransform implements RemoteLogMetadataTransform<RemoteLogSegmentMetadataUpdate> {
 
@@ -32,6 +35,7 @@ public class RemoteLogSegmentMetadataUpdateTransform implements RemoteLogMetadat
                 .setBrokerId(segmentMetadataUpdate.brokerId())
                 .setEventTimestampMs(segmentMetadataUpdate.eventTimestampMs())
                 .setRemoteLogSegmentState(segmentMetadataUpdate.state().id());
+        segmentMetadataUpdate.customMetadata().ifPresent(md -> record.setCustomMetadata(md.value()));
 
         return new ApiMessageAndVersion(record, record.highestSupportedVersion());
     }
@@ -42,8 +46,9 @@ public class RemoteLogSegmentMetadataUpdateTransform implements RemoteLogMetadat
         TopicIdPartition topicIdPartition = new TopicIdPartition(entry.topicIdPartition().id(),
                 new TopicPartition(entry.topicIdPartition().name(), entry.topicIdPartition().partition()));
 
+        Optional<CustomMetadata> customMetadata = Optional.ofNullable(record.customMetadata()).map(CustomMetadata::new);
         return new RemoteLogSegmentMetadataUpdate(new RemoteLogSegmentId(topicIdPartition, entry.id()),
-                record.eventTimestampMs(), RemoteLogSegmentState.forId(record.remoteLogSegmentState()), record.brokerId());
+                record.eventTimestampMs(), customMetadata, RemoteLogSegmentState.forId(record.remoteLogSegmentState()), record.brokerId());
     }
 
     private RemoteLogSegmentMetadataUpdateRecord.RemoteLogSegmentIdEntry createRemoteLogSegmentIdEntry(RemoteLogSegmentMetadataUpdate data) {

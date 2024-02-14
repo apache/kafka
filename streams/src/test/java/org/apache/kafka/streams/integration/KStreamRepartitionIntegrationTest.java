@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.streams.integration;
 
-import org.apache.kafka.clients.admin.AdminClient;
+import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.admin.TopicDescription;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
@@ -135,7 +135,7 @@ public class KStreamRepartitionIntegrationTest {
         streamsConfiguration = new Properties();
         kafkaStreamsInstances = new ArrayList<>();
 
-        safeTestName = safeUniqueTestName(getClass(), testName);
+        safeTestName = safeUniqueTestName(testName);
 
         topicB = "topic-b-" + safeTestName;
         inputTopic = "input-topic-" + safeTestName;
@@ -265,8 +265,11 @@ public class KStreamRepartitionIntegrationTest {
             new KeyValue<>(2, "B")
         );
 
-        sendEvents(timestamp, expectedRecords);
-        sendEvents(topicB, timestamp, expectedRecords);
+        final List<KeyValue<Integer, String>> recordsToSend = new ArrayList<>(expectedRecords);
+        recordsToSend.add(new KeyValue<>(null, "C"));
+
+        sendEvents(timestamp, recordsToSend);
+        sendEvents(topicB, timestamp, recordsToSend);
 
         final StreamsBuilder builder = new StreamsBuilder();
 
@@ -757,7 +760,7 @@ public class KStreamRepartitionIntegrationTest {
     }
 
     private int getNumberOfPartitionsForTopic(final String topic) throws Exception {
-        try (final AdminClient adminClient = createAdminClient()) {
+        try (final Admin adminClient = createAdminClient()) {
             final TopicDescription topicDescription = adminClient.describeTopics(Collections.singleton(topic))
                                                                  .topicNameValues()
                                                                  .get(topic)
@@ -768,7 +771,7 @@ public class KStreamRepartitionIntegrationTest {
     }
 
     private boolean topicExists(final String topic) throws Exception {
-        try (final AdminClient adminClient = createAdminClient()) {
+        try (final Admin adminClient = createAdminClient()) {
             final Set<String> topics = adminClient.listTopics()
                                                   .names()
                                                   .get();
@@ -781,11 +784,11 @@ public class KStreamRepartitionIntegrationTest {
         return applicationId + "-" + input + "-repartition";
     }
 
-    private static AdminClient createAdminClient() {
+    private static Admin createAdminClient() {
         final Properties properties = new Properties();
         properties.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
 
-        return AdminClient.create(properties);
+        return Admin.create(properties);
     }
 
     private static int countOccurrencesInTopology(final String topologyString,
@@ -887,7 +890,7 @@ public class KStreamRepartitionIntegrationTest {
                                                  final List<KeyValue<K, V>> expectedRecords,
                                                  final String outputTopic) throws Exception {
 
-        final String safeTestName = safeUniqueTestName(getClass(), testName);
+        final String safeTestName = safeUniqueTestName(testName);
         final Properties consumerProperties = new Properties();
         consumerProperties.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
         consumerProperties.setProperty(ConsumerConfig.GROUP_ID_CONFIG, "group-" + safeTestName);

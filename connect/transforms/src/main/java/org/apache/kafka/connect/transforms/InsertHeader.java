@@ -17,6 +17,8 @@
 package org.apache.kafka.connect.transforms;
 
 import org.apache.kafka.common.config.ConfigDef;
+import org.apache.kafka.common.utils.AppInfoParser;
+import org.apache.kafka.connect.components.Versioned;
 import org.apache.kafka.connect.connector.ConnectRecord;
 import org.apache.kafka.connect.data.SchemaAndValue;
 import org.apache.kafka.connect.data.Values;
@@ -27,7 +29,7 @@ import java.util.Map;
 
 import static org.apache.kafka.common.config.ConfigDef.NO_DEFAULT_VALUE;
 
-public class InsertHeader<R extends ConnectRecord<R>> implements Transformation<R> {
+public class InsertHeader<R extends ConnectRecord<R>> implements Transformation<R>, Versioned {
 
     public static final String OVERVIEW_DOC =
             "Add a header to each record.";
@@ -55,6 +57,11 @@ public class InsertHeader<R extends ConnectRecord<R>> implements Transformation<
         updatedHeaders.add(header, literalValue);
         return record.newRecord(record.topic(), record.kafkaPartition(), record.keySchema(), record.key(),
                 record.valueSchema(), record.value(), record.timestamp(), updatedHeaders);
+    }
+
+    @Override
+    public String version() {
+        return AppInfoParser.getVersion();
     }
 
 

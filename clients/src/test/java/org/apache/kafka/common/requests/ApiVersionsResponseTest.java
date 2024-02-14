@@ -103,7 +103,8 @@ public class ApiVersionsResponseTest {
             ApiMessageType.ListenerType.ZK_BROKER,
             RecordVersion.current(),
             activeControllerApiVersions,
-            true
+            true,
+            false
         );
 
         verifyVersions(forwardableAPIKey.id, minVersion, maxVersion, commonResponse);
@@ -123,7 +124,8 @@ public class ApiVersionsResponseTest {
             null,
             ListenerType.ZK_BROKER,
             true,
-            false
+            false,
+            true
         );
         verifyApiKeysForMagic(response, RecordBatch.MAGIC_VALUE_V1);
         assertEquals(10, response.throttleTimeMs());
@@ -144,7 +146,8 @@ public class ApiVersionsResponseTest {
             null,
             ListenerType.ZK_BROKER,
             true,
-            false
+            false,
+            true
         );
 
         verifyApiKeysForMagic(response, RecordBatch.MAGIC_VALUE_V1);
@@ -162,8 +165,9 @@ public class ApiVersionsResponseTest {
         assertEquals(10, response.data().finalizedFeaturesEpoch());
     }
 
-    @Test
-    public void shouldReturnAllKeysWhenMagicIsCurrentValueAndThrottleMsIsDefaultThrottle() {
+    @ParameterizedTest
+    @EnumSource(names = {"ZK_BROKER", "BROKER"})
+    public void shouldReturnAllKeysWhenMagicIsCurrentValueAndThrottleMsIsDefaultThrottle(ListenerType listenerType) {
         ApiVersionsResponse response = ApiVersionsResponse.createApiVersionsResponse(
             AbstractResponse.DEFAULT_THROTTLE_TIME,
             RecordVersion.current(),
@@ -171,15 +175,50 @@ public class ApiVersionsResponseTest {
             Collections.emptyMap(),
             ApiVersionsResponse.UNKNOWN_FINALIZED_FEATURES_EPOCH,
             null,
-            ListenerType.ZK_BROKER,
+            listenerType,
             true,
-            false
+            false,
+            true
         );
-        assertEquals(new HashSet<>(ApiKeys.zkBrokerApis()), apiKeysInResponse(response));
+        assertEquals(new HashSet<>(ApiKeys.apisForListener(listenerType)), apiKeysInResponse(response));
         assertEquals(AbstractResponse.DEFAULT_THROTTLE_TIME, response.throttleTimeMs());
         assertTrue(response.data().supportedFeatures().isEmpty());
         assertTrue(response.data().finalizedFeatures().isEmpty());
         assertEquals(ApiVersionsResponse.UNKNOWN_FINALIZED_FEATURES_EPOCH, response.data().finalizedFeaturesEpoch());
+    }
+
+    @Test
+    public void shouldCreateApiResponseWithTelemetryWhenEnabled() {
+        ApiVersionsResponse response = ApiVersionsResponse.createApiVersionsResponse(
+            10,
+            RecordVersion.V1,
+            Features.emptySupportedFeatures(),
+            Collections.emptyMap(),
+            ApiVersionsResponse.UNKNOWN_FINALIZED_FEATURES_EPOCH,
+            null,
+            ListenerType.BROKER,
+            true,
+            false,
+            true
+        );
+        verifyApiKeysForTelemetry(response, 2);
+    }
+
+    @Test
+    public void shouldNotCreateApiResponseWithTelemetryWhenDisabled() {
+        ApiVersionsResponse response = ApiVersionsResponse.createApiVersionsResponse(
+            10,
+            RecordVersion.V1,
+            Features.emptySupportedFeatures(),
+            Collections.emptyMap(),
+            ApiVersionsResponse.UNKNOWN_FINALIZED_FEATURES_EPOCH,
+            null,
+            ListenerType.BROKER,
+            true,
+            false,
+            false
+        );
+        verifyApiKeysForTelemetry(response, 0);
     }
 
     @Test
@@ -193,7 +232,8 @@ public class ApiVersionsResponseTest {
             null,
             ListenerType.ZK_BROKER,
             true,
-            false
+            false,
+            true
         );
 
         // Ensure that APIs needed for the KRaft mode are not exposed through ApiVersions until we are ready for them
@@ -251,6 +291,16 @@ public class ApiVersionsResponseTest {
         for (ApiVersion version : response.data().apiKeys()) {
             assertTrue(ApiKeys.forId(version.apiKey()).minRequiredInterBrokerMagic <= maxMagic);
         }
+    }
+
+    private void verifyApiKeysForTelemetry(ApiVersionsResponse response, int expectedCount) {
+        int count = 0;
+        for (ApiVersion version : response.data().apiKeys()) {
+            if (version.apiKey() == ApiKeys.GET_TELEMETRY_SUBSCRIPTIONS.id || version.apiKey() == ApiKeys.PUSH_TELEMETRY.id) {
+                count++;
+            }
+        }
+        assertEquals(expectedCount, count);
     }
 
     private HashSet<ApiKeys> apiKeysInResponse(ApiVersionsResponse apiVersions) {

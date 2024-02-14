@@ -33,6 +33,8 @@ import org.apache.kafka.image.ClientQuotaImage;
 import org.apache.kafka.image.ClientQuotasImage;
 import org.apache.kafka.image.ConfigurationsDelta;
 import org.apache.kafka.image.ConfigurationsImage;
+import org.apache.kafka.image.DelegationTokenDelta;
+import org.apache.kafka.image.DelegationTokenImage;
 import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.image.ProducerIdsDelta;
@@ -41,6 +43,7 @@ import org.apache.kafka.image.ScramImage;
 import org.apache.kafka.image.TopicImage;
 import org.apache.kafka.image.TopicsDelta;
 import org.apache.kafka.image.TopicsImage;
+import org.apache.kafka.metadata.DelegationTokenData;
 import org.apache.kafka.metadata.PartitionRegistration;
 import org.apache.kafka.metadata.ScramCredentialData;
 import org.apache.kafka.metadata.authorizer.StandardAcl;
@@ -57,8 +60,8 @@ import java.util.Map.Entry;
 import java.util.Optional;
 import java.util.Set;
 import java.util.function.BiConsumer;
+import java.util.function.Consumer;
 import java.util.function.Function;
-import java.util.stream.Collectors;
 
 public class KRaftMigrationZkWriter {
 
@@ -66,6 +69,7 @@ public class KRaftMigrationZkWriter {
     private static final String CREATE_TOPIC = "CreateTopic";
     private static final String UPDATE_TOPIC = "UpdateTopic";
     private static final String DELETE_TOPIC = "DeleteTopic";
+    private static final String DELETE_PENDING_TOPIC_DELETION = "DeletePendingTopicDeletion";
     private static final String UPDATE_PARTITION = "UpdatePartition";
     private static final String DELETE_PARTITION = "DeletePartition";
     private static final String UPDATE_BROKER_CONFIG = "UpdateBrokerConfig";
@@ -78,11 +82,14 @@ public class KRaftMigrationZkWriter {
 
 
     private final MigrationClient migrationClient;
+    private final Consumer<String> errorLogger;
 
     public KRaftMigrationZkWriter(
-        MigrationClient migrationClient
+        MigrationClient migrationClient,
+        Consumer<String> errorLogger
     ) {
         this.migrationClient = migrationClient;
+        this.errorLogger = errorLogger;
     }
 
     public void handleSnapshot(MetadataImage image, KRaftMigrationOperationConsumer operationConsumer) {
@@ -91,29 +98,41 @@ public class KRaftMigrationZkWriter {
         handleClientQuotasSnapshot(image.clientQuotas(), image.scram(), operationConsumer);
         handleProducerIdSnapshot(image.producerIds(), operationConsumer);
         handleAclsSnapshot(image.acls(), operationConsumer);
+        handleDelegationTokenSnapshot(image.delegationTokens(), operationConsumer);
     }
 
-    public void handleDelta(
+    public boolean handleDelta(
         MetadataImage previousImage,
         MetadataImage image,
         MetadataDelta delta,
         KRaftMigrationOperationConsumer operationConsumer
     ) {
+        boolean updated = false;
         if (delta.topicsDelta() != null) {
             handleTopicsDelta(previousImage.topics().topicIdToNameView()::get, image.topics(), delta.topicsDelta(), operationConsumer);
+            updated = true;
         }
         if (delta.configsDelta() != null) {
             handleConfigsDelta(image.configs(), delta.configsDelta(), operationConsumer);
+            updated = true;
         }
         if ((delta.clientQuotasDelta() != null) || (delta.scramDelta() != null)) {
             handleClientQuotasDelta(image, delta, operationConsumer);
+            updated = true;
         }
         if (delta.producerIdsDelta() != null) {
             handleProducerIdDelta(delta.producerIdsDelta(), operationConsumer);
+            updated = true;
         }
         if (delta.aclsDelta() != null) {
-            handleAclsDelta(image.acls(), delta.aclsDelta(), operationConsumer);
+            handleAclsDelta(previousImage.acls(), image.acls(), delta.aclsDelta(), operationConsumer);
+            updated = true;
         }
+        if (delta.delegationTokenDelta() != null) {
+            handleDelegationTokenDelta(image.delegationTokens(), delta.delegationTokenDelta(), operationConsumer);
+            updated = true;
+        }
+        return updated;
     }
 
     /**
@@ -130,6 +149,15 @@ public class KRaftMigrationZkWriter {
         Map<String, Set<Integer>> extraneousPartitionsInZk = new HashMap<>();
         Map<Uuid, Map<Integer, PartitionRegistration>> changedPartitions = new HashMap<>();
         Map<Uuid, Map<Integer, PartitionRegistration>> newPartitions = new HashMap<>();
+
+        Set<String> pendingTopicDeletions = migrationClient.topicClient().readPendingTopicDeletions();
+        if (!pendingTopicDeletions.isEmpty()) {
+            operationConsumer.accept(
+                DELETE_PENDING_TOPIC_DELETION,
+                "Delete pending topic deletions",
+                migrationState -> migrationClient.topicClient().clearPendingTopicDeletions(pendingTopicDeletions, migrationState)
+            );
+        }
 
         migrationClient.topicClient().iterateTopics(
             EnumSet.of(
@@ -291,8 +319,8 @@ public class KRaftMigrationZkWriter {
                             topicId,
                             topicsImage.getTopic(topicId).partitions(),
                             migrationState));
-                Map<Integer, PartitionRegistration> newPartitions = topicDelta.newPartitions();
-                Map<Integer, PartitionRegistration> changedPartitions = topicDelta.partitionChanges();
+                Map<Integer, PartitionRegistration> newPartitions = new HashMap<>(topicDelta.newPartitions());
+                Map<Integer, PartitionRegistration> changedPartitions = new HashMap<>(topicDelta.partitionChanges());
                 if (!newPartitions.isEmpty()) {
                     operationConsumer.accept(
                         UPDATE_PARTITION,
@@ -568,6 +596,7 @@ public class KRaftMigrationZkWriter {
         });
 
         newResources.forEach(resourcePattern -> {
+            // newResources is generated from allAclsInSnapshot, and we don't remove from that map, so this unguarded .get() is safe
             Set<AccessControlEntry> accessControlEntries = allAclsInSnapshot.get(resourcePattern);
             String name = "Writing " + accessControlEntries.size() + " for resource " + resourcePattern;
             operationConsumer.accept(UPDATE_ACL, name, migrationState ->
@@ -587,43 +616,75 @@ public class KRaftMigrationZkWriter {
         });
     }
 
-    void handleAclsDelta(AclsImage image, AclsDelta delta, KRaftMigrationOperationConsumer operationConsumer) {
-        // Compute the resource patterns that were changed
-        Set<ResourcePattern> resourcesWithChangedAcls = delta.changes().values()
-            .stream()
-            .filter(Optional::isPresent)
-            .map(Optional::get)
-            .map(this::resourcePatternFromAcl)
-            .collect(Collectors.toSet());
-
-        Set<ResourcePattern> resourcesWithDeletedAcls = delta.deleted()
-            .stream()
-            .map(this::resourcePatternFromAcl)
-            .collect(Collectors.toSet());
-
+    void handleAclsDelta(AclsImage prevImage, AclsImage image, AclsDelta delta, KRaftMigrationOperationConsumer operationConsumer) {
         // Need to collect all ACLs for any changed resource pattern
         Map<ResourcePattern, List<AccessControlEntry>> aclsToWrite = new HashMap<>();
-        image.acls().forEach((uuid, standardAcl) -> {
-            ResourcePattern resourcePattern = resourcePatternFromAcl(standardAcl);
-            boolean removed = resourcesWithDeletedAcls.remove(resourcePattern);
-            // If a resource pattern is present in the delta as a changed or deleted acl, need to include it
-            if (resourcesWithChangedAcls.contains(resourcePattern) || removed) {
-                aclsToWrite.computeIfAbsent(resourcePattern, __ -> new ArrayList<>()).add(
-                    new AccessControlEntry(standardAcl.principal(), standardAcl.host(), standardAcl.operation(), standardAcl.permissionType())
-                );
+        delta.changes().forEach((aclId, aclChange) -> {
+            if (aclChange.isPresent()) {
+                ResourcePattern resourcePattern = resourcePatternFromAcl(aclChange.get());
+                aclsToWrite.put(resourcePattern, new ArrayList<>());
+            } else {
+                // We need to look in the previous image to get deleted ACLs resource pattern
+                StandardAcl deletedAcl = prevImage.acls().get(aclId);
+                if (deletedAcl == null) {
+                    errorLogger.accept("Cannot delete ACL " + aclId + " from ZK since it is missing from previous AclImage");
+                } else {
+                    ResourcePattern resourcePattern = resourcePatternFromAcl(deletedAcl);
+                    aclsToWrite.put(resourcePattern, new ArrayList<>());
+                }
             }
         });
 
-        resourcesWithDeletedAcls.forEach(deletedResource -> {
-            String name = "Deleting resource " + deletedResource + " which has no more ACLs";
-            operationConsumer.accept(DELETE_ACL, name, migrationState ->
-                migrationClient.aclClient().deleteResource(deletedResource, migrationState));
+        // Iterate through the new image to collect any ACLs for these changed resources
+        image.acls().forEach((uuid, standardAcl) -> {
+            ResourcePattern resourcePattern = resourcePatternFromAcl(standardAcl);
+            List<AccessControlEntry> entries = aclsToWrite.get(resourcePattern);
+            if (entries != null) {
+                entries.add(new AccessControlEntry(standardAcl.principal(), standardAcl.host(), standardAcl.operation(), standardAcl.permissionType()));
+            }
         });
 
+        // If there are no more ACLs for a resource, delete it. Otherwise, update it with the new set of ACLs
         aclsToWrite.forEach((resourcePattern, accessControlEntries) -> {
-            String name = "Writing " + accessControlEntries.size() + " for resource " + resourcePattern;
-            operationConsumer.accept(UPDATE_ACL, name, migrationState ->
-                migrationClient.aclClient().writeResourceAcls(resourcePattern, accessControlEntries, migrationState));
+            if (accessControlEntries.isEmpty()) {
+                String name = "Deleting resource " + resourcePattern + " which has no more ACLs";
+                operationConsumer.accept(DELETE_ACL, name, migrationState ->
+                    migrationClient.aclClient().deleteResource(resourcePattern, migrationState));
+            } else {
+                String name = "Writing " + accessControlEntries.size() + " for resource " + resourcePattern;
+                operationConsumer.accept(UPDATE_ACL, name, migrationState ->
+                    migrationClient.aclClient().writeResourceAcls(resourcePattern, accessControlEntries, migrationState));
+            }
+        });
+    }
+
+    void handleDelegationTokenDelta(DelegationTokenImage image, DelegationTokenDelta delta, KRaftMigrationOperationConsumer operationConsumer) {
+        Set<String> updatedTokens = delta.changes().keySet();
+        updatedTokens.forEach(tokenId -> {
+            DelegationTokenData tokenData = image.tokens().get(tokenId);
+            if (tokenData == null) {
+                operationConsumer.accept("DeleteDelegationToken", "Delete DelegationToken for " + tokenId, migrationState ->
+                    migrationClient.delegationTokenClient().deleteDelegationToken(tokenId, migrationState));
+            } else {
+                operationConsumer.accept("UpdateDelegationToken", "Update DelegationToken for " + tokenId, migrationState ->
+                    migrationClient.delegationTokenClient().writeDelegationToken(tokenId, tokenData.tokenInformation(), migrationState));
+            }
+        });
+    }
+
+    void handleDelegationTokenSnapshot(DelegationTokenImage image, KRaftMigrationOperationConsumer operationConsumer) {
+        image.tokens().keySet().forEach(tokenId -> {
+            DelegationTokenData tokenData = image.tokens().get(tokenId);
+            operationConsumer.accept("UpdateDelegationToken", "Update DelegationToken for " + tokenId, migrationState ->
+                migrationClient.delegationTokenClient().writeDelegationToken(tokenId, tokenData.tokenInformation(), migrationState));
+        });
+
+        List<String> tokens = migrationClient.delegationTokenClient().getDelegationTokens();
+        tokens.forEach(tokenId -> {
+            if (!image.tokens().containsKey(tokenId)) {
+                operationConsumer.accept("DeleteDelegationToken", "Delete DelegationToken for " + tokenId, migrationState ->
+                    migrationClient.delegationTokenClient().deleteDelegationToken(tokenId, migrationState));
+            }
         });
     }
 }

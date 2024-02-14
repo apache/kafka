@@ -17,6 +17,7 @@
 package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.ClientResponse;
+import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
@@ -28,6 +29,7 @@ import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.MetadataRequest;
 import org.apache.kafka.common.requests.MetadataResponse;
+import org.apache.kafka.common.utils.ExponentialBackoff;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Timer;
 import org.slf4j.Logger;
@@ -46,12 +48,15 @@ public class TopicMetadataFetcher {
 
     private final Logger log;
     private final ConsumerNetworkClient client;
-    private final long retryBackoffMs;
+    private final ExponentialBackoff retryBackoff;
 
-    public TopicMetadataFetcher(LogContext logContext, ConsumerNetworkClient client, long retryBackoffMs) {
+    public TopicMetadataFetcher(LogContext logContext, ConsumerNetworkClient client, long retryBackoffMs, long retryBackoffMaxMs) {
         this.log = logContext.logger(getClass());
         this.client = client;
-        this.retryBackoffMs = retryBackoffMs;
+        this.retryBackoff = new ExponentialBackoff(retryBackoffMs,
+                CommonClientConfigs.RETRY_BACKOFF_EXP_BASE,
+                retryBackoffMaxMs,
+                CommonClientConfigs.RETRY_BACKOFF_JITTER);
     }
 
     /**
@@ -90,6 +95,7 @@ public class TopicMetadataFetcher {
         if (!request.isAllTopics() && request.emptyTopicList())
             return Collections.emptyMap();
 
+        long attempts = 0L;
         do {
             RequestFuture<ClientResponse> future = sendMetadataRequest(request);
             client.poll(future, timer);
@@ -139,7 +145,7 @@ public class TopicMetadataFetcher {
                 }
             }
 
-            timer.sleep(retryBackoffMs);
+            timer.sleep(retryBackoff.backoff(attempts++));
         } while (timer.notExpired());
 
         throw new TimeoutException("Timeout expired while fetching topic metadata");

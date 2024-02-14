@@ -19,7 +19,6 @@ package org.apache.kafka.connect.runtime.rest.entities;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
-import org.apache.kafka.connect.runtime.isolation.DelegatingClassLoader;
 import org.apache.kafka.connect.runtime.isolation.PluginDesc;
 import org.apache.kafka.connect.runtime.isolation.PluginType;
 
@@ -91,7 +90,7 @@ public class PluginInfo {
     public static final class NoVersionFilter {
         // This method is used by Jackson to filter the version field for plugins that don't have a version
         public boolean equals(Object obj) {
-            return DelegatingClassLoader.UNDEFINED_VERSION.equals(obj);
+            return PluginDesc.UNDEFINED_VERSION.equals(obj);
         }
 
         // Dummy hashCode method to not fail compilation because of equals() method

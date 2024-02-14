@@ -31,13 +31,17 @@
   // version 7 adds a new field called groupInstanceId to indicate member identity across restarts.
   //
   // Version 8 is the first flexible version.
-  "validVersions": "0-8",
+  //
+  // Version 9 is the first version that can be used with the new consumer group protocol (KIP-848). The
+  // request is the same as version 8.
+  "validVersions": "0-9",
+  "deprecatedVersions": "0-1",
   "flexibleVersions": "8+",
   "fields": [
     { "name": "GroupId", "type": "string", "versions": "0+", "entityType": "groupId",
       "about": "The unique group identifier." },
-    { "name": "GenerationId", "type": "int32", "versions": "1+", "default": "-1", "ignorable": true,
-      "about": "The generation of the group." },
+    { "name": "GenerationIdOrMemberEpoch", "type": "int32", "versions": "1+", "default": "-1", "ignorable": true,
+      "about": "The generation of the group if using the classic group protocol or the member epoch if using the consumer protocol." },
     { "name": "MemberId", "type": "string", "versions": "1+", "ignorable": true,
       "about": "The member ID assigned by the group coordinator." },
     { "name": "GroupInstanceId", "type": "string", "versions": "7+",

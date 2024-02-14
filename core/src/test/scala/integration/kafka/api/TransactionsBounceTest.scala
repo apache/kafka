@@ -18,16 +18,16 @@
 package kafka.api
 
 import java.util.Properties
-
 import kafka.server.KafkaConfig
-import kafka.utils.TestUtils
-import org.apache.kafka.clients.consumer.{ConsumerConfig, KafkaConsumer}
+import kafka.utils.{TestInfoUtils, TestUtils}
+import org.apache.kafka.clients.consumer.{Consumer, ConsumerConfig}
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig}
 import org.apache.kafka.clients.producer.internals.ErrorLoggingCallback
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.server.util.ShutdownableThread
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.Test
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.ValueSource
 
 import scala.annotation.nowarn
 import scala.jdk.CollectionConverters._
@@ -67,34 +67,36 @@ class TransactionsBounceTest extends IntegrationTestHarness {
   // Since such quick rotation of servers is incredibly unrealistic, we allow this one test to preallocate ports, leaving
   // a small risk of hitting errors due to port conflicts. Hopefully this is infrequent enough to not cause problems.
   override def generateConfigs = {
-    FixedPortTestUtils.createBrokerConfigs(brokerCount, zkConnect, enableControlledShutdown = true)
+    FixedPortTestUtils.createBrokerConfigs(brokerCount, zkConnectOrNull, enableControlledShutdown = true)
       .map(KafkaConfig.fromProps(_, overridingProps))
   }
 
   override protected def brokerCount: Int = 4
 
   @nowarn("cat=deprecation")
-  @Test
-  def testWithGroupId(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testWithGroupId(quorum: String): Unit = {
     testBrokerFailure((producer, groupId, consumer) =>
       producer.sendOffsetsToTransaction(TestUtils.consumerPositions(consumer).asJava, groupId))
   }
 
-  @Test
-  def testWithGroupMetadata(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testWithGroupMetadata(quorum: String): Unit = {
     testBrokerFailure((producer, _, consumer) =>
       producer.sendOffsetsToTransaction(TestUtils.consumerPositions(consumer).asJava, consumer.groupMetadata()))
   }
 
   private def testBrokerFailure(commit: (KafkaProducer[Array[Byte], Array[Byte]],
-    String, KafkaConsumer[Array[Byte], Array[Byte]]) => Unit): Unit = {
+    String, Consumer[Array[Byte], Array[Byte]]) => Unit): Unit = {
     // basic idea is to seed a topic with 10000 records, and copy it transactionally while bouncing brokers
     // constantly through the period.
     val consumerGroup = "myGroup"
     val numInputRecords = 10000
     createTopics()
 
-    TestUtils.seedTopicWithNumberedRecords(inputTopic, numInputRecords, servers)
+    TestUtils.seedTopicWithNumberedRecords(inputTopic, numInputRecords, brokers)
     val consumer = createConsumerAndSubscribe(consumerGroup, List(inputTopic))
     val producer = createTransactionalProducer("test-txn")
 
@@ -189,7 +191,7 @@ class TransactionsBounceTest extends IntegrationTestHarness {
 
   private class BounceScheduler extends ShutdownableThread("daemon-broker-bouncer", false) {
     override def doWork(): Unit = {
-      for (server <- servers) {
+      for (server <- brokers) {
         trace("Shutting down server : %s".format(server.config.brokerId))
         server.shutdown()
         server.awaitShutdown()
@@ -200,7 +202,7 @@ class TransactionsBounceTest extends IntegrationTestHarness {
         Thread.sleep(500)
       }
 
-      (0 until numPartitions).foreach(partition => TestUtils.waitUntilLeaderIsElectedOrChanged(zkClient, outputTopic, partition))
+      (0 until numPartitions).foreach(partition => TestUtils.waitUntilLeaderIsElectedOrChangedWithAdmin(createAdminClient(), outputTopic, partition))
     }
 
     override def shutdown(): Unit = {

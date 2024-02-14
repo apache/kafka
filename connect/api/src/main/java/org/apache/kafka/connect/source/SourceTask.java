@@ -105,9 +105,10 @@ public abstract class SourceTask implements Task {
     public abstract List<SourceRecord> poll() throws InterruptedException;
 
     /**
-     * <p>
-     * Commit the offsets, up to the offsets that have been returned by {@link #poll()}. This
-     * method should block until the commit is complete.
+     * This method is invoked periodically when offsets are committed for this source task. Note that the offsets
+     * being committed won't necessarily correspond to the latest offsets returned by this source task via
+     * {@link #poll()}. Also see {@link #commitRecord(SourceRecord, RecordMetadata)} which allows for a more
+     * fine-grained tracking of records that have been successfully delivered.
      * <p>
      * SourceTasks are not required to implement this functionality; Kafka Connect will record offsets
      * automatically. This hook is provided for systems that also need to store offsets internally

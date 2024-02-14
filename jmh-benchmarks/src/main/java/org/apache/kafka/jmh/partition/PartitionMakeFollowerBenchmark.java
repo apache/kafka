@@ -76,15 +76,15 @@ import scala.compat.java8.OptionConverters;
 @BenchmarkMode(Mode.AverageTime)
 @OutputTimeUnit(TimeUnit.NANOSECONDS)
 public class PartitionMakeFollowerBenchmark {
-    private LogManager logManager;
-    private File logDir = new File(System.getProperty("java.io.tmpdir"), UUID.randomUUID().toString());
-    private KafkaScheduler scheduler = new KafkaScheduler(1, true, "scheduler");
-    private Partition partition;
-    private List<Integer> replicas = Arrays.asList(0, 1, 2);
-    private OffsetCheckpoints offsetCheckpoints = Mockito.mock(OffsetCheckpoints.class);
-    private DelayedOperations delayedOperations  = Mockito.mock(DelayedOperations.class);
-    private ExecutorService executorService = Executors.newSingleThreadExecutor();
+    private final File logDir = new File(System.getProperty("java.io.tmpdir"), UUID.randomUUID().toString());
+    private final KafkaScheduler scheduler = new KafkaScheduler(1, true, "scheduler");
+    private final List<Integer> replicas = Arrays.asList(0, 1, 2);
+    private final OffsetCheckpoints offsetCheckpoints = Mockito.mock(OffsetCheckpoints.class);
+    private final DelayedOperations delayedOperations  = Mockito.mock(DelayedOperations.class);
+    private final ExecutorService executorService = Executors.newSingleThreadExecutor();
     private Option<Uuid> topicId;
+    private Partition partition;
+    private LogManager logManager;
 
     @Setup(Level.Trial)
     public void setup() throws IOException {
@@ -94,7 +94,7 @@ public class PartitionMakeFollowerBenchmark {
         scheduler.startup();
         LogConfig logConfig = new LogConfig(new Properties());
 
-        BrokerTopicStats brokerTopicStats = new BrokerTopicStats();
+        BrokerTopicStats brokerTopicStats = new BrokerTopicStats(Optional.empty());
         LogDirFailureChannel logDirFailureChannel = Mockito.mock(LogDirFailureChannel.class);
         logManager = new LogManagerBuilder().
             setLogDirs(Collections.singletonList(logDir)).
@@ -108,7 +108,7 @@ public class PartitionMakeFollowerBenchmark {
             setFlushStartOffsetCheckpointMs(10000L).
             setRetentionCheckMs(1000L).
             setProducerStateManagerConfig(60000, false).
-            setInterBrokerProtocolVersion(MetadataVersion.latest()).
+            setInterBrokerProtocolVersion(MetadataVersion.latestTesting()).
             setScheduler(scheduler).
             setBrokerTopicStats(brokerTopicStats).
             setLogDirFailureChannel(logDirFailureChannel).
@@ -122,10 +122,10 @@ public class PartitionMakeFollowerBenchmark {
         AlterPartitionListener alterPartitionListener = Mockito.mock(AlterPartitionListener.class);
         AlterPartitionManager alterPartitionManager = Mockito.mock(AlterPartitionManager.class);
         partition = new Partition(tp, 100,
-            MetadataVersion.latest(), 0, () -> -1, Time.SYSTEM,
+            MetadataVersion.latestTesting(), 0, () -> -1, Time.SYSTEM,
             alterPartitionListener, delayedOperations,
             Mockito.mock(MetadataCache.class), logManager, alterPartitionManager);
-        partition.createLogIfNotExists(true, false, offsetCheckpoints, topicId);
+        partition.createLogIfNotExists(true, false, offsetCheckpoints, topicId, Option.empty());
         executorService.submit((Runnable) () -> {
             SimpleRecord[] simpleRecords = new SimpleRecord[] {
                 new SimpleRecord(1L, "foo".getBytes(StandardCharsets.UTF_8), "1".getBytes(StandardCharsets.UTF_8)),
@@ -143,7 +143,7 @@ public class PartitionMakeFollowerBenchmark {
     @TearDown(Level.Trial)
     public void tearDown() throws IOException, InterruptedException {
         executorService.shutdownNow();
-        logManager.shutdown();
+        logManager.shutdown(-1L);
         scheduler.shutdown();
         Utils.delete(logDir);
     }
@@ -158,6 +158,6 @@ public class PartitionMakeFollowerBenchmark {
             .setPartitionEpoch(1)
             .setReplicas(replicas)
             .setIsNew(true);
-        return partition.makeFollower(partitionState, offsetCheckpoints, topicId);
+        return partition.makeFollower(partitionState, offsetCheckpoints, topicId, Option.empty());
     }
 }

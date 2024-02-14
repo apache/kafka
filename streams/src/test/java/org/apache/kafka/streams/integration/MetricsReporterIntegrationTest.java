@@ -27,14 +27,13 @@ import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.Produced;
-import org.apache.kafka.test.IntegrationTest;
-import org.junit.experimental.categories.Category;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.Timeout;
+import org.junit.jupiter.api.Tag;
 
 import java.io.IOException;
 import java.util.HashMap;
@@ -47,7 +46,7 @@ import static org.hamcrest.CoreMatchers.notNullValue;
 import static org.hamcrest.MatcherAssert.assertThat;
 
 @Timeout(600)
-@Category({IntegrationTest.class})
+@Tag("integration")
 public class MetricsReporterIntegrationTest {
     private static final int NUM_BROKERS = 1;
 
@@ -74,7 +73,7 @@ public class MetricsReporterIntegrationTest {
     public void before(final TestInfo testInfo) throws InterruptedException {
         builder = new StreamsBuilder();
 
-        final String safeTestName = safeUniqueTestName(getClass(), testInfo);
+        final String safeTestName = safeUniqueTestName(testInfo);
         final String appId = "app-" + safeTestName;
 
         streamsConfiguration = new Properties();
@@ -120,12 +119,12 @@ public class MetricsReporterIntegrationTest {
         builder.stream(STREAM_INPUT, Consumed.with(Serdes.Integer(), Serdes.String()))
                 .to(STREAM_OUTPUT, Produced.with(Serdes.Integer(), Serdes.String()));
         final Topology topology = builder.build();
-        final KafkaStreams kafkaStreams = new KafkaStreams(topology, streamsConfiguration);
-
-        kafkaStreams.metrics().keySet().forEach(metricName -> {
-            final Object initialMetricValue = METRIC_NAME_TO_INITIAL_VALUE.get(metricName.name());
-            assertThat(initialMetricValue, notNullValue());
-        });
+        try (KafkaStreams kafkaStreams = new KafkaStreams(topology, streamsConfiguration)) {
+            kafkaStreams.metrics().keySet().forEach(metricName -> {
+                final Object initialMetricValue = METRIC_NAME_TO_INITIAL_VALUE.get(metricName.name());
+                assertThat(initialMetricValue, notNullValue());
+            });
+        }
     }
 
 }

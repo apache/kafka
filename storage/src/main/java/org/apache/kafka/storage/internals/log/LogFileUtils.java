@@ -84,7 +84,7 @@ public final class LogFileUtils {
      * @param offset The offset to use in the file name
      * @return The filename
      */
-    private static String filenamePrefixFromOffset(long offset) {
+    public static String filenamePrefixFromOffset(long offset) {
         NumberFormat nf = NumberFormat.getInstance();
         nf.setMinimumIntegerDigits(20);
         nf.setMaximumFractionDigits(0);
