@@ -285,7 +285,7 @@ public class Metadata implements Closeable {
     /**
      * @return a mapping from topic names to topic IDs for all topics with valid IDs in the cache
      */
-    public synchronized Map<String, Uuid> topicIds() {
+    public Map<String, Uuid> topicIds() {
         return metadataSnapshot.topicIds();
     }
 
@@ -745,7 +745,7 @@ public class Metadata implements Closeable {
     /**
      * @return Mapping from topic IDs to topic names for all topics in the cache.
      */
-    public synchronized Map<Uuid, String> topicNames() {
+    public Map<Uuid, String> topicNames() {
         return metadataSnapshot.topicNames();
     }
 
