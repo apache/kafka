@@ -27,6 +27,7 @@ import org.apache.kafka.clients.consumer.internals.events.ShareUnsubscribeApplic
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.errors.InvalidGroupIdException;
 import org.apache.kafka.common.errors.TimeoutException;
+import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
@@ -118,6 +119,18 @@ public class ShareConsumerImplTest {
     public void testInvalidGroupId() {
         KafkaException e = assertThrows(KafkaException.class, this::newConsumerWithEmptyGroupId);
         assertInstanceOf(InvalidGroupIdException.class, e.getCause());
+    }
+
+    @Test
+    public void testWakeupBeforeCallingPoll() {
+        consumer = newConsumer();
+        final String topicName = "foo";
+        consumer.subscribe(singletonList(topicName));
+
+        consumer.wakeup();
+
+        assertThrows(WakeupException.class, () -> consumer.poll(Duration.ZERO));
+        assertDoesNotThrow(() -> consumer.poll(Duration.ZERO));
     }
 
     @Test
@@ -296,7 +309,7 @@ public class ShareConsumerImplTest {
         CountDownLatch latch = new CountDownLatch(3);
 
         // Mock our call to Future.get(timeout) so that it mimics a delay of 200 milliseconds. Keep in mind that
-        // the incremental timeout inside processBackgroundEvents is 100 seconds for each pass. Our first two passes
+        // the incremental timeout inside processBackgroundEvents is 100 milliseconds for each pass. Our first two passes
         // will exceed the incremental timeout, but the third will return.
         doAnswer(invocation -> {
             latch.countDown();

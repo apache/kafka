@@ -175,6 +175,8 @@ public class ShareConsumerImpl<K, V> implements ShareConsumer<K, V> {
     private volatile boolean closed = false;
     private final Optional<ClientTelemetryReporter> clientTelemetryReporter;
 
+    private final WakeupTrigger wakeupTrigger = new WakeupTrigger();
+
     // currentThread holds the threadId of the current thread accessing the KafkaShareConsumer
     // and is used to prevent multithreaded access
     private final AtomicLong currentThread = new AtomicLong(NO_CURRENT_THREAD);
@@ -382,6 +384,12 @@ public class ShareConsumerImpl<K, V> implements ShareConsumer<K, V> {
             }
 
             do {
+                // We must not allow wake-ups between polling for fetches and returning the records.
+                // If the polled fetches are not empty the consumed position has already been updated in the polling
+                // of the fetches. A wakeup between returned fetches and returning records would lead to never
+                // returning the records in the fetches. Thus, we trigger a possible wake-up before we poll fetches.
+                wakeupTrigger.maybeTriggerWakeup();
+
                 backgroundEventProcessor.process();
 
                 applicationEventHandler.add(new PollApplicationEvent(timer.currentTimeMs()));
@@ -396,6 +404,7 @@ public class ShareConsumerImpl<K, V> implements ShareConsumer<K, V> {
             return ConsumerRecords.empty();
         } finally {
             kafkaConsumerMetrics.recordPollEnd(timer.currentTimeMs());
+            wakeupTrigger.clearTask();
             release();
         }
     }
@@ -556,6 +565,7 @@ public class ShareConsumerImpl<K, V> implements ShareConsumer<K, V> {
      */
     @Override
     public void wakeup() {
+        wakeupTrigger.wakeup();
     }
 
     /**
