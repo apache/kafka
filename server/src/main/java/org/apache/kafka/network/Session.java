@@ -14,35 +14,21 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.tools.reassign;
+package org.apache.kafka.network;
 
-import java.util.Objects;
+import org.apache.kafka.common.security.auth.KafkaPrincipal;
+import org.apache.kafka.common.utils.Sanitizer;
 
-public final class Tuple2<V1, V2> {
-    public final V1 v1;
+import java.net.InetAddress;
 
-    public final V2 v2;
+public class Session {
+    public final KafkaPrincipal principal;
+    public final InetAddress clientAddress;
+    public final String sanitizedUser;
 
-    public Tuple2(V1 v1, V2 v2) {
-        this.v1 = v1;
-        this.v2 = v2;
-    }
-
-    @Override
-    public boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
-        Tuple2<?, ?> tuple = (Tuple2<?, ?>) o;
-        return Objects.equals(v1, tuple.v1) && Objects.equals(v2, tuple.v2);
-    }
-
-    @Override
-    public int hashCode() {
-        return Objects.hash(v1, v2);
-    }
-
-    @Override
-    public String toString() {
-        return "Tuple2{v1=" + v1 + ", v2=" + v2 + '}';
+    public Session(KafkaPrincipal principal, InetAddress clientAddress) {
+        this.principal = principal;
+        this.clientAddress = clientAddress;
+        this.sanitizedUser = Sanitizer.sanitize(principal.getName());
     }
 }

@@ -25,7 +25,7 @@ import org.apache.kafka.clients.consumer.internals.events.ApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEventProcessor;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEventHandler;
-import org.apache.kafka.clients.consumer.internals.metrics.RebalanceCallbackMetrics;
+import org.apache.kafka.clients.consumer.internals.metrics.RebalanceCallbackMetricsManager;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.requests.MetadataResponse;
@@ -52,6 +52,7 @@ import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.createFe
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.createMetrics;
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.createSubscriptionState;
 import static org.apache.kafka.common.utils.Utils.closeQuietly;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.spy;
 
 @SuppressWarnings("ClassDataAbstractionCoupling")
@@ -96,6 +97,7 @@ public class ConsumerTestBuilder implements Closeable {
     public final ConsumerRebalanceListenerInvoker rebalanceListenerInvoker;
     final MockClient client;
     final Optional<GroupInformation> groupInfo;
+    final OffsetCommitCallbackInvoker offsetCommitCallbackInvoker;
 
     public ConsumerTestBuilder(Optional<GroupInformation> groupInfo) {
         this(groupInfo, true, true);
@@ -107,6 +109,7 @@ public class ConsumerTestBuilder implements Closeable {
         this.applicationEventQueue = new LinkedBlockingQueue<>();
         this.backgroundEventQueue = new LinkedBlockingQueue<>();
         this.backgroundEventHandler = spy(new BackgroundEventHandler(logContext, backgroundEventQueue));
+        this.offsetCommitCallbackInvoker = mock(OffsetCommitCallbackInvoker.class);
         GroupRebalanceConfig groupRebalanceConfig = new GroupRebalanceConfig(
             100,
             DEFAULT_MAX_POLL_INTERVAL_MS,
@@ -188,6 +191,7 @@ public class ConsumerTestBuilder implements Closeable {
                     subscriptions,
                     config,
                     coordinator,
+                    offsetCommitCallbackInvoker,
                     gi.groupId,
                     gi.groupInstanceId,
                     metrics));
@@ -225,7 +229,8 @@ public class ConsumerTestBuilder implements Closeable {
                     mm,
                     heartbeatState,
                     heartbeatRequestState,
-                    backgroundEventHandler));
+                    backgroundEventHandler,
+                    metrics));
 
             this.coordinatorRequestManager = Optional.of(coordinator);
             this.commitRequestManager = Optional.of(commit);
@@ -258,7 +263,9 @@ public class ConsumerTestBuilder implements Closeable {
                 fetchRequestManager,
                 coordinatorRequestManager,
                 commitRequestManager,
-                heartbeatRequestManager);
+                heartbeatRequestManager,
+                membershipManager
+            );
         this.applicationEventProcessor = spy(new ApplicationEventProcessor(
                 logContext,
                 applicationEventQueue,
@@ -271,7 +278,7 @@ public class ConsumerTestBuilder implements Closeable {
                 logContext,
                 subscriptions,
                 time,
-                new RebalanceCallbackMetrics(metrics)
+                new RebalanceCallbackMetricsManager(metrics)
         );
     }
 

@@ -975,7 +975,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
             || isPartitionDiverged(partitionResponse)
             || isPartitionSnapshotted(partitionResponse)) {
             // Reply immediately if any of the following is true
-            // 1. The response contains an errror
+            // 1. The response contains an error
             // 2. There are records in the response
             // 3. The fetching replica doesn't want to wait for the partition to contain new data
             // 4. The fetching replica needs to truncate because the log diverged

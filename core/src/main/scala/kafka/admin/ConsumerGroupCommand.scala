@@ -135,7 +135,7 @@ object ConsumerGroupCommand extends Logging {
   private[admin] case class MemberAssignmentState(group: String, consumerId: String, host: String, clientId: String, groupInstanceId: String,
                                              numPartitions: Int, assignment: List[TopicPartition])
 
-  private[admin] case class GroupState(group: String, coordinator: Node, assignmentStrategy: String, state: String, numMembers: Int)
+  case class GroupState(group: String, coordinator: Node, assignmentStrategy: String, state: String, numMembers: Int)
 
   private[admin] sealed trait CsvRecord
   private[admin] case class CsvRecordWithGroup(group: String, topic: String, partition: Int, offset: Long) extends CsvRecord
@@ -239,7 +239,7 @@ object ConsumerGroupCommand extends Logging {
             printError(s"Consumer group '$group' does not exist.")
           case Some("Empty") =>
             Console.err.println(s"\nConsumer group '$group' has no active members.")
-          case Some("PreparingRebalance") | Some("CompletingRebalance") =>
+          case Some("PreparingRebalance") | Some("CompletingRebalance") | Some("Assigning") | Some("Reconciling") =>
             Console.err.println(s"\nWarning: Consumer group '$group' is rebalancing.")
           case Some("Stable") =>
           case other =>

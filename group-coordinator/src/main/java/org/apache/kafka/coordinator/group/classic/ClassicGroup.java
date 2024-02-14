@@ -1298,7 +1298,8 @@ public class ClassicGroup implements Group {
         return new ListGroupsResponseData.ListedGroup()
             .setGroupId(groupId)
             .setProtocolType(protocolType.orElse(""))
-            .setGroupState(state.toString());
+            .setGroupState(state.toString())
+            .setGroupType(type().toString());
     }
 
     /**

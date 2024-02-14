@@ -14,22 +14,17 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.tools.consumer.group;
+package org.apache.kafka.tools.consumer;
 
-import org.apache.kafka.common.Node;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.common.MessageFormatter;
 
-class GroupState {
-    public final String group;
-    public final Node coordinator;
-    public final String assignmentStrategy;
-    public final String state;
-    public final int numMembers;
+import java.io.PrintStream;
 
-    public GroupState(String group, Node coordinator, String assignmentStrategy, String state, int numMembers) {
-        this.group = group;
-        this.coordinator = coordinator;
-        this.assignmentStrategy = assignmentStrategy;
-        this.state = state;
-        this.numMembers = numMembers;
+class NoOpMessageFormatter implements MessageFormatter {
+
+    @Override
+    public void writeTo(ConsumerRecord<byte[], byte[]> consumerRecord, PrintStream output) {
+
     }
 }

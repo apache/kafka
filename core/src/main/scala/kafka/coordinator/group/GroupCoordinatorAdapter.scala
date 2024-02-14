@@ -211,9 +211,10 @@ private[group] class GroupCoordinatorAdapter(
     context: RequestContext,
     request: ListGroupsRequestData
   ): CompletableFuture[ListGroupsResponseData] = {
-    // Handle a null array the same as empty
+    // Handle a null array the same as empty.
     val (error, groups) = coordinator.handleListGroups(
-      Option(request.statesFilter).map(_.asScala.toSet).getOrElse(Set.empty)
+      Option(request.statesFilter).map(_.asScala.toSet).getOrElse(Set.empty),
+      Option(request.typesFilter).map(_.asScala.toSet).getOrElse(Set.empty)
     )
 
     val response = new ListGroupsResponseData()
@@ -223,7 +224,8 @@ private[group] class GroupCoordinatorAdapter(
       response.groups.add(new ListGroupsResponseData.ListedGroup()
         .setGroupId(group.groupId)
         .setProtocolType(group.protocolType)
-        .setGroupState(group.state))
+        .setGroupState(group.state)
+        .setGroupType(group.groupType))
     }
 
     CompletableFuture.completedFuture(response)

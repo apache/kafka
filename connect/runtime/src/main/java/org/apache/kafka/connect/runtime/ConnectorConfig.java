@@ -115,6 +115,16 @@ public class ConnectorConfig extends AbstractConfig {
 
     private static final String TASK_MAX_DISPLAY = "Tasks max";
 
+    public static final String TASKS_MAX_ENFORCE_CONFIG = "tasks.max.enforce";
+    private static final String TASKS_MAX_ENFORCE_DOC =
+            "(Deprecated) Whether to enforce that the tasks.max property is respected by the connector. "
+                    + "By default, connectors that generate too many tasks will fail, and existing sets of tasks that exceed the tasks.max property will also be failed. "
+                    + "If this property is set to false, then connectors will be allowed to generate more than the maximum number of tasks, and existing sets of "
+                    + "tasks that exceed the tasks.max property will be allowed to run. "
+                    + "This property is deprecated and will be removed in an upcoming major release.";
+    public static final boolean TASKS_MAX_ENFORCE_DEFAULT = true;
+    private static final String TASKS_MAX_ENFORCE_DISPLAY = "Enforce tasks max";
+
     public static final String TRANSFORMS_CONFIG = "transforms";
     private static final String TRANSFORMS_DOC = "Aliases for the transformations to be applied to records.";
     private static final String TRANSFORMS_DISPLAY = "Transforms";
@@ -195,6 +205,7 @@ public class ConnectorConfig extends AbstractConfig {
                 .define(NAME_CONFIG, Type.STRING, ConfigDef.NO_DEFAULT_VALUE, nonEmptyStringWithoutControlChars(), Importance.HIGH, NAME_DOC, COMMON_GROUP, ++orderInGroup, Width.MEDIUM, NAME_DISPLAY)
                 .define(CONNECTOR_CLASS_CONFIG, Type.STRING, Importance.HIGH, CONNECTOR_CLASS_DOC, COMMON_GROUP, ++orderInGroup, Width.LONG, CONNECTOR_CLASS_DISPLAY)
                 .define(TASKS_MAX_CONFIG, Type.INT, TASKS_MAX_DEFAULT, atLeast(TASKS_MIN_CONFIG), Importance.HIGH, TASKS_MAX_DOC, COMMON_GROUP, ++orderInGroup, Width.SHORT, TASK_MAX_DISPLAY)
+                .define(TASKS_MAX_ENFORCE_CONFIG, Type.BOOLEAN, TASKS_MAX_ENFORCE_DEFAULT, Importance.LOW, TASKS_MAX_ENFORCE_DOC, COMMON_GROUP, ++orderInGroup, Width.SHORT, TASKS_MAX_ENFORCE_DISPLAY)
                 .define(KEY_CONVERTER_CLASS_CONFIG, Type.CLASS, null, KEY_CONVERTER_CLASS_VALIDATOR, Importance.LOW, KEY_CONVERTER_CLASS_DOC, COMMON_GROUP, ++orderInGroup, Width.SHORT, KEY_CONVERTER_CLASS_DISPLAY)
                 .define(VALUE_CONVERTER_CLASS_CONFIG, Type.CLASS, null, VALUE_CONVERTER_CLASS_VALIDATOR, Importance.LOW, VALUE_CONVERTER_CLASS_DOC, COMMON_GROUP, ++orderInGroup, Width.SHORT, VALUE_CONVERTER_CLASS_DISPLAY)
                 .define(HEADER_CONVERTER_CLASS_CONFIG, Type.CLASS, HEADER_CONVERTER_CLASS_DEFAULT, HEADER_CONVERTER_CLASS_VALIDATOR, Importance.LOW, HEADER_CONVERTER_CLASS_DOC, COMMON_GROUP, ++orderInGroup, Width.SHORT, HEADER_CONVERTER_CLASS_DISPLAY)
@@ -279,6 +290,14 @@ public class ConnectorConfig extends AbstractConfig {
 
     public boolean includeRecordDetailsInErrorLog() {
         return getBoolean(ERRORS_LOG_INCLUDE_MESSAGES_CONFIG);
+    }
+
+    public int tasksMax() {
+        return getInt(TASKS_MAX_CONFIG);
+    }
+
+    public boolean enforceTasksMax() {
+        return getBoolean(TASKS_MAX_ENFORCE_CONFIG);
     }
 
     /**
