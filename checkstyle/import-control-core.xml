@@ -105,6 +105,8 @@
     <allow pkg="kafka.server"/>
     <allow pkg="kafka.zk" />
     <allow pkg="org.apache.kafka.clients.admin"/>
+    <allow pkg="org.apache.kafka.clients.consumer"/>
+    <allow pkg="org.apache.kafka.clients.producer"/>
     <allow pkg="integration.kafka.server" class="IntegrationTestHelper"/>
     <subpackage name="annotation">
       <allow pkg="kafka.test"/>

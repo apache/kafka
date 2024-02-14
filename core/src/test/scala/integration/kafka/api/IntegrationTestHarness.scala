@@ -18,7 +18,7 @@
 package kafka.api
 
 import java.time.Duration
-import org.apache.kafka.clients.consumer.{Consumer, ConsumerConfig, KafkaConsumer}
+import org.apache.kafka.clients.consumer.{Consumer, ConsumerConfig, KafkaConsumer, KafkaShareConsumer, ShareConsumer}
 import kafka.utils.TestUtils
 import kafka.utils.Implicits._
 
@@ -49,6 +49,7 @@ abstract class IntegrationTestHarness extends KafkaServerTestHarness {
   val controllerConfig = new Properties
 
   private val consumers = mutable.Buffer[Consumer[_, _]]()
+  private val shareConsumers = mutable.Buffer[ShareConsumer[_, _]]()
   private val producers = mutable.Buffer[KafkaProducer[_, _]]()
   private val adminClients = mutable.Buffer[Admin]()
 
@@ -69,6 +70,11 @@ abstract class IntegrationTestHarness extends KafkaServerTestHarness {
     }
     if (isNewGroupCoordinatorEnabled()) {
       cfgs.foreach(_.setProperty(KafkaConfig.NewGroupCoordinatorEnableProp, "true"))
+    }
+    if (isShareGroupEnabled()) {
+      cfgs.foreach(_.setProperty(KafkaConfig.ShareGroupEnableProp, "true"))
+      cfgs.foreach(_.setProperty(KafkaConfig.GroupCoordinatorRebalanceProtocolsProp, "classic,consumer"))
+      cfgs.foreach(_.setProperty(KafkaConfig.UnstableApiVersionsEnableProp, "true"))
     }
     insertControllerListenersIfNeeded(cfgs)
     cfgs.map(KafkaConfig.fromProps)
@@ -187,6 +193,19 @@ abstract class IntegrationTestHarness extends KafkaServerTestHarness {
     consumer
   }
 
+  def createShareConsumer[K, V](keyDeserializer: Deserializer[K] = new ByteArrayDeserializer,
+                           valueDeserializer: Deserializer[V] = new ByteArrayDeserializer,
+                           configOverrides: Properties = new Properties,
+                           configsToRemove: List[String] = List()): KafkaShareConsumer[K, V] = {
+    val props = new Properties
+    props ++= consumerConfig
+    props ++= configOverrides
+    configsToRemove.foreach(props.remove(_))
+    val consumer = new KafkaShareConsumer[K, V](props, keyDeserializer, valueDeserializer)
+    shareConsumers += consumer
+    consumer
+  }
+
   def createAdminClient(
     listenerName: ListenerName = listenerName,
     configOverrides: Properties = new Properties
@@ -216,10 +235,13 @@ abstract class IntegrationTestHarness extends KafkaServerTestHarness {
     producers.foreach(_.close(Duration.ZERO))
     consumers.foreach(_.wakeup())
     consumers.foreach(_.close(Duration.ZERO))
+    shareConsumers.foreach(_.wakeup())
+    shareConsumers.foreach(_.close(Duration.ZERO))
     adminClients.foreach(_.close(Duration.ZERO))
 
     producers.clear()
     consumers.clear()
+    shareConsumers.clear()
     adminClients.clear()
 
     super.tearDown()

@@ -19,6 +19,8 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.locks.ReentrantLock
 import java.util.regex.Pattern
 import java.util.{Locale, Optional, Properties}
+import kafka.api.BaseConsumerTest.SerializerImpl
+import kafka.api.BaseConsumerTest.DeserializerImpl
 import kafka.server.{KafkaBroker, QuotaType}
 import kafka.utils.{TestInfoUtils, TestUtils}
 import org.apache.kafka.clients.admin.{NewPartitions, NewTopic}
@@ -27,7 +29,6 @@ import org.apache.kafka.clients.producer.{ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.{KafkaException, MetricName, PartitionInfo, TopicPartition}
 import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.errors.{InvalidGroupIdException, InvalidTopicException, UnsupportedAssignorException}
-import org.apache.kafka.common.header.Headers
 import org.apache.kafka.common.record.{CompressionType, TimestampType}
 import org.apache.kafka.common.serialization._
 import org.apache.kafka.common.utils.Utils
@@ -72,43 +73,6 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     }
   }
 
-  trait SerializerImpl extends Serializer[Array[Byte]]{
-    var serializer = new ByteArraySerializer()
-
-    override def serialize(topic: String, headers: Headers, data: Array[Byte]): Array[Byte] = {
-      headers.add("content-type", "application/octet-stream".getBytes)
-      serializer.serialize(topic, data)
-    }
-
-    override def configure(configs: util.Map[String, _], isKey: Boolean): Unit = serializer.configure(configs, isKey)
-
-    override def close(): Unit = serializer.close()
-
-    override def serialize(topic: String, data: Array[Byte]): Array[Byte] = {
-      fail("method should not be invoked")
-      null
-    }
-  }
-
-  trait DeserializerImpl extends Deserializer[Array[Byte]]{
-    var deserializer = new ByteArrayDeserializer()
-
-    override def deserialize(topic: String, headers: Headers, data: Array[Byte]): Array[Byte] = {
-      val header = headers.lastHeader("content-type")
-      assertEquals("application/octet-stream", if (header == null) null else new String(header.value()))
-      deserializer.deserialize(topic, data)
-    }
-
-    override def configure(configs: util.Map[String, _], isKey: Boolean): Unit = deserializer.configure(configs, isKey)
-
-    override def close(): Unit = deserializer.close()
-
-    override def deserialize(topic: String, data: Array[Byte]): Array[Byte] = {
-      fail("method should not be invoked")
-      null
-    }
-  }
-
   private def testHeadersSerializeDeserialize(serializer: Serializer[Array[Byte]], deserializer: Deserializer[Array[Byte]]): Unit = {
     val numRecords = 1
     val record = new ProducerRecord(tp.topic, tp.partition, null, "key".getBytes, "value".getBytes)
@@ -145,9 +109,9 @@ class PlaintextConsumerTest extends BaseConsumerTest {
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
   @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
   def testHeadersSerializerDeserializer(quorum: String, groupProtocol: String): Unit = {
-    val extendedSerializer = new Serializer[Array[Byte]] with SerializerImpl
+    val extendedSerializer = new SerializerImpl
 
-    val extendedDeserializer = new Deserializer[Array[Byte]] with DeserializerImpl
+    val extendedDeserializer = new DeserializerImpl
 
     testHeadersSerializeDeserialize(extendedSerializer, extendedDeserializer)
   }

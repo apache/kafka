@@ -194,6 +194,10 @@ abstract class QuorumTestHarness extends Logging {
     TestInfoUtils.isNewGroupCoordinatorEnabled(testInfo)
   }
 
+  def isShareGroupEnabled(): Boolean = {
+    TestInfoUtils.isShareGroupEnabled(testInfo)
+  }
+
   def maybeGroupProtocolSpecified(testInfo: TestInfo): Option[GroupProtocol] = {
     TestInfoUtils.maybeGroupProtocolSpecified(testInfo)
   }
