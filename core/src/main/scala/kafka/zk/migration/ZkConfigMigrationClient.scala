@@ -228,7 +228,7 @@ class ZkConfigMigrationClient(
       val (migrationZkVersion, responses) = zkClient.retryMigrationRequestsUntilConnected(requests, state)
 
       if (responses.head.resultCode.equals(Code.NONODE)) {
-        // Not fatal. This is expected in the case this is a topic config and we delete the topic (KAFKA-16206)
+        // Not fatal. This is expected in the case this is a topic config and we delete the topic
         debug(s"Did not delete $configResource since the node did not exist.")
         state
       } else if (responses.head.resultCode.equals(Code.OK)) {

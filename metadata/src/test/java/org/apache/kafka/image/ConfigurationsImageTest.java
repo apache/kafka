@@ -17,7 +17,6 @@
 
 package org.apache.kafka.image;
 
-import java.util.Collections;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.metadata.ConfigRecord;
 import org.apache.kafka.image.writer.ImageWriterOptions;
@@ -28,6 +27,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
