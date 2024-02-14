@@ -75,7 +75,7 @@ public class Metadata implements Closeable {
     private KafkaException fatalException;
     private Set<String> invalidTopics;
     private Set<String> unauthorizedTopics;
-    private MetadataCache cache = MetadataCache.empty();
+    private volatile MetadataCache cache = MetadataCache.empty();
     private boolean needFullUpdate;
     private boolean needPartialUpdate;
     private long equivalentResponseCount;
@@ -123,7 +123,7 @@ public class Metadata implements Closeable {
     /**
      * Get the current cluster info without blocking
      */
-    public synchronized Cluster fetch() {
+    public Cluster fetch() {
         return cache.cluster();
     }
 
@@ -278,7 +278,7 @@ public class Metadata implements Closeable {
     /**
      * @return a mapping from topic names to topic IDs for all topics with valid IDs in the cache
      */
-    public synchronized Map<String, Uuid> topicIds() {
+    public Map<String, Uuid> topicIds() {
         return cache.topicIds();
     }
 

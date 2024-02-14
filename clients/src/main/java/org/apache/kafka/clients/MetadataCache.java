@@ -35,11 +35,12 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.function.BiPredicate;
+import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
 /**
- * An internal mutable cache of nodes, topics, and partitions in the Kafka cluster. This keeps an up-to-date Cluster
+ * An internal immutable cache of nodes, topics, and partitions in the Kafka cluster. This keeps an up-to-date Cluster
  * instance which is optimized for read access.
  */
 public class MetadataCache {
@@ -52,7 +53,7 @@ public class MetadataCache {
     private final Map<TopicPartition, PartitionMetadata> metadataByPartition;
     private final Map<String, Uuid> topicIds;
     private final Map<Uuid, String> topicNames;
-    private Cluster clusterInstance;
+    private final Cluster clusterInstance;
 
     MetadataCache(String clusterId,
                   Map<Integer, Node> nodes,
@@ -75,23 +76,27 @@ public class MetadataCache {
                           Map<String, Uuid> topicIds,
                           Cluster clusterInstance) {
         this.clusterId = clusterId;
-        this.nodes = nodes;
-        this.unauthorizedTopics = unauthorizedTopics;
-        this.invalidTopics = invalidTopics;
-        this.internalTopics = internalTopics;
+        this.nodes = Collections.unmodifiableMap(nodes);
+        this.unauthorizedTopics = Collections.unmodifiableSet(unauthorizedTopics);
+        this.invalidTopics = Collections.unmodifiableSet(invalidTopics);
+        this.internalTopics = Collections.unmodifiableSet(internalTopics);
         this.controller = controller;
         this.topicIds = Collections.unmodifiableMap(topicIds);
         this.topicNames = Collections.unmodifiableMap(
             topicIds.entrySet().stream().collect(Collectors.toMap(Map.Entry::getValue, Map.Entry::getKey))
         );
-
-        this.metadataByPartition = new HashMap<>(partitions.size());
-        for (PartitionMetadata p : partitions) {
-            this.metadataByPartition.put(p.topicPartition, p);
-        }
-
+        this.metadataByPartition = Collections.unmodifiableMap(partitions
+                .stream()
+                .collect(Collectors.toMap(metadata -> metadata.topicPartition, Function.identity())));
         if (clusterInstance == null) {
-            computeClusterView();
+            this.clusterInstance = computeClusterView(clusterId,
+                    this.nodes,
+                    this.unauthorizedTopics,
+                    this.invalidTopics,
+                    this.internalTopics,
+                    this.controller,
+                    this.metadataByPartition,
+                    this.topicIds);
         } else {
             this.clusterInstance = clusterInstance;
         }
@@ -203,12 +208,20 @@ public class MetadataCache {
         return result;
     }
 
-    private void computeClusterView() {
+    private static Cluster computeClusterView(String clusterId,
+                                           Map<Integer, Node> nodes,
+                                           Set<String> unauthorizedTopics,
+                                           Set<String> invalidTopics,
+                                           Set<String> internalTopics,
+                                           Node controller,
+                                           Map<TopicPartition, PartitionMetadata> metadataByPartition,
+                                           Map<String, Uuid> topicIds) {
         List<PartitionInfo> partitionInfos = metadataByPartition.values()
                 .stream()
                 .map(metadata -> MetadataResponse.toPartitionInfo(metadata, nodes))
                 .collect(Collectors.toList());
-        this.clusterInstance = new Cluster(clusterId, nodes.values(), partitionInfos, unauthorizedTopics,
+
+        return new Cluster(clusterId, nodes.values(), partitionInfos, unauthorizedTopics,
                 invalidTopics, internalTopics, controller, topicIds);
     }
 

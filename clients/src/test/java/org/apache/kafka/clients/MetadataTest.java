@@ -58,6 +58,10 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Semaphore;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 
@@ -1018,6 +1022,69 @@ public class MetadataTest {
         assertEquals(cluster.unauthorizedTopics(), Collections.emptySet());
         assertEquals(cluster.topics(), Collections.emptySet());
         assertTrue(cluster.topicIds().isEmpty());
+    }
+
+    @Test
+    public void testConcurrentUpdateAndGetCluster() throws InterruptedException {
+        int numberOfThreads = 10;
+        int skew = 3; // how much out-of-order read/update could be
+        Semaphore semaphore = new Semaphore(skew);
+        final AtomicReference<Set<String>> retainTopics = new AtomicReference<>(new HashSet<>());
+        metadata = new Metadata(refreshBackoffMs, refreshBackoffMaxMs, metadataExpireMs, new LogContext(), new ClusterResourceListeners()) {
+            @Override
+            protected boolean retainTopic(String topic, boolean isInternal, long nowMs) {
+                return retainTopics.get().contains(topic);
+            }
+        };
+        retainTopics.set(Utils.mkSet(
+                "oldInvalidTopic",
+                "keepInvalidTopic",
+                "oldUnauthorizedTopic",
+                "keepUnauthorizedTopic",
+                "oldValidTopic",
+                "keepValidTopic"));
+        Time time = new MockTime();
+        ExecutorService service = Executors.newFixedThreadPool(10);
+        CountDownLatch latch = new CountDownLatch(numberOfThreads);
+        AtomicReference<Cluster> cluster = new AtomicReference<>();
+        for (int i = 0; i < numberOfThreads; i++) {
+            final int id = i + 1;
+            service.execute(() -> {
+                if (id % 2 == 0) {
+                    Map<String, Uuid> topicIds = new HashMap<>();
+
+                    // Initialize a metadata instance with two topic variants "old" and "keep". Both will be retained.
+                    String oldClusterId = "clusterId";
+                    int nNodes = id;
+                    Map<String, Errors> topicErrors = new HashMap<>();
+                    topicErrors.put("oldInvalidTopic", Errors.INVALID_TOPIC_EXCEPTION);
+                    topicErrors.put("keepInvalidTopic", Errors.INVALID_TOPIC_EXCEPTION);
+                    topicErrors.put("oldUnauthorizedTopic", Errors.TOPIC_AUTHORIZATION_FAILED);
+                    topicErrors.put("keepUnauthorizedTopic", Errors.TOPIC_AUTHORIZATION_FAILED);
+                    Map<String, Integer> topicPartitionCounts = new HashMap<>();
+                    topicPartitionCounts.put("oldValidTopic", 2 * id);
+                    topicPartitionCounts.put("keepValidTopic", 3 * id);
+                    topicIds.put("oldValidTopic", Uuid.randomUuid());
+                    topicIds.put("keepValidTopic", Uuid.randomUuid());
+                    MetadataResponse metadataResponse =
+                            RequestTestUtils.metadataUpdateWithIds(oldClusterId, nNodes, topicErrors, topicPartitionCounts, _tp -> 100, topicIds);
+                    metadata.updateWithCurrentRequestVersion(metadataResponse, true, time.milliseconds());
+                    semaphore.release();
+                } else {
+                    try {
+                        semaphore.acquire();
+                    } catch (InterruptedException e) {
+                        throw new IllegalStateException(e);
+                    }
+                    cluster.set(metadata.fetch());
+                }
+                latch.countDown();
+            });
+        }
+        latch.await();
+        int n = cluster.get().nodes().size();
+        assertEquals(2, cluster.get().partitionCountForTopic("oldValidTopic") / n);
+        assertEquals(3, cluster.get().partitionCountForTopic("keepValidTopic") / n);
     }
 
     @Test
