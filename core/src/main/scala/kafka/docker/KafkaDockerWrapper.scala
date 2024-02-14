@@ -16,7 +16,6 @@
  */
 package kafka.docker
 
-import kafka.tools.StorageTool
 import kafka.utils.Exit
 import net.sourceforge.argparse4j.ArgumentParsers
 import net.sourceforge.argparse4j.impl.Arguments.store
@@ -44,7 +43,9 @@ object KafkaDockerWrapper {
         }
 
         val formatCmd = formatStorageCmd(finalConfigsPath, envVars)
-        StorageTool.main(formatCmd)
+        val toolClass = Class.forName("org.apache.kafka.tools.StorageTool")
+        val toolMethod = toolClass.getDeclaredMethod("main", classOf[Array[String]])
+        toolMethod.invoke(null, formatCmd)
       case _ =>
         throw new RuntimeException(s"Unknown operation $command. " +
           s"Please provide a valid operation: 'setup'.")
