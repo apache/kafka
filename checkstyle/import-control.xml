@@ -321,6 +321,17 @@
     <allow pkg="kafka.utils" />
     <allow pkg="scala.collection" />
 
+    <subpackage name="consumer">
+      <allow pkg="org.apache.kafka.tools"/>
+
+      <subpackage name="group">
+        <allow pkg="kafka.api"/>
+        <allow pkg="org.apache.kafka.tools"/>
+        <allow pkg="org.apache.kafka.server.config" />
+        <allow pkg="scala"/>
+      </subpackage>
+    </subpackage>
+
     <subpackage name="reassign">
       <allow pkg="org.apache.kafka.admin"/>
       <allow pkg="org.apache.kafka.tools"/>
@@ -329,13 +340,6 @@
       <allow pkg="kafka.log" />
       <allow pkg="kafka.server" />
       <allow pkg="scala" />
-    </subpackage>
-
-    <subpackage name="consumer.group">
-      <allow pkg="kafka.api"/>
-      <allow pkg="org.apache.kafka.tools"/>
-      <allow pkg="org.apache.kafka.server.config" />
-      <allow pkg="scala"/>
     </subpackage>
 
     <subpackage name="other">
