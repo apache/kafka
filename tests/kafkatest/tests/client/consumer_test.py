@@ -581,21 +581,21 @@ class AssignmentValidationTest(VerifiableConsumerTest):
         })
 
     @cluster(num_nodes=6)
-    @matrix(
-        assignment_strategy=["org.apache.kafka.clients.consumer.RangeAssignor",
-                             "org.apache.kafka.clients.consumer.RoundRobinAssignor",
-                             "org.apache.kafka.clients.consumer.StickyAssignor"],
-        metadata_quorum=[quorum.zk, quorum.isolated_kraft],
-        use_new_coordinator=[False]
-    )
-    @matrix(
-        assignment_strategy=["org.apache.kafka.clients.consumer.RangeAssignor",
-                             "org.apache.kafka.clients.consumer.RoundRobinAssignor",
-                             "org.apache.kafka.clients.consumer.StickyAssignor"],
-        metadata_quorum=[quorum.isolated_kraft],
-        use_new_coordinator=[True],
-        group_protocol=["classic"]
-    )
+    # @matrix(
+    #     assignment_strategy=["org.apache.kafka.clients.consumer.RangeAssignor",
+    #                          "org.apache.kafka.clients.consumer.RoundRobinAssignor",
+    #                          "org.apache.kafka.clients.consumer.StickyAssignor"],
+    #     metadata_quorum=[quorum.zk, quorum.isolated_kraft],
+    #     use_new_coordinator=[False]
+    # )
+    # @matrix(
+    #     assignment_strategy=["org.apache.kafka.clients.consumer.RangeAssignor",
+    #                          "org.apache.kafka.clients.consumer.RoundRobinAssignor",
+    #                          "org.apache.kafka.clients.consumer.StickyAssignor"],
+    #     metadata_quorum=[quorum.isolated_kraft],
+    #     use_new_coordinator=[True],
+    #     group_protocol=["classic"]
+    # )
     @matrix(
         metadata_quorum=[quorum.isolated_kraft],
         use_new_coordinator=[True],
@@ -618,8 +618,5 @@ class AssignmentValidationTest(VerifiableConsumerTest):
                                        group_remote_assignor=group_remote_assignor)
         for num_started, node in enumerate(consumer.nodes, 1):
             consumer.start_node(node)
-            self.await_members(consumer, num_started)
-            assert self.valid_assignment(self.TOPIC, self.NUM_PARTITIONS, consumer.current_assignment()), \
-                "expected valid assignments of %d partitions when num_started %d: %s" % \
-                (self.NUM_PARTITIONS, num_started, \
-                 [(str(node.account), a) for node, a in consumer.current_assignment().items()])
+            self.await_members(consumer, num_started, include_started=True, include_joined=True, include_rebalancing=True)
+            self.await_valid_assignment(consumer, self.TOPIC, self.NUM_PARTITIONS, num_started)

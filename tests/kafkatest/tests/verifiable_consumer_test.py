@@ -17,8 +17,9 @@ from ducktape.utils.util import wait_until
 
 from kafkatest.tests.kafka_test import KafkaTest
 from kafkatest.services.verifiable_producer import VerifiableProducer
-from kafkatest.services.verifiable_consumer import VerifiableConsumer
+from kafkatest.services.verifiable_consumer import ConsumerState, VerifiableConsumer
 from kafkatest.services.kafka import TopicPartition
+
 
 class VerifiableConsumerTest(KafkaTest):
     PRODUCER_REQUEST_TIMEOUT_SEC = 30
@@ -44,10 +45,23 @@ class VerifiableConsumerTest(KafkaTest):
             partitions += parts
         return partitions
 
-    def valid_assignment(self, topic, num_partitions, assignment):
+    def await_valid_assignment(self, consumer, topic, num_partitions, num_consumers):
+        # Wait until all assignments have settled
+        timeout_sec = self.session_timeout_sec * 2
+        wait_until(lambda: self._valid_assignment(topic, num_partitions, consumer.current_assignment()),
+                   timeout_sec=timeout_sec,
+                   err_msg=self._valid_assignment_err_msg(consumer, topic, num_consumers, num_partitions, timeout_sec))
+
+    def _valid_assignment(self, topic, num_partitions, assignment):
         all_partitions = self._all_partitions(topic, num_partitions)
         partitions = self._partitions(assignment)
         return len(partitions) == num_partitions and set(partitions) == all_partitions
+
+    def _valid_assignment_err_msg(self, consumer, topic, num_consumers, num_partitions, timeout_sec):
+        assignment = consumer.current_assignment()
+        assignments = [(str(node.account), a) for node, a in assignment.items()]
+        return "Not all of the %d partitions for topic %s were assigned among the %d consumers within the timeout of %d seconds: %s" % (num_partitions, topic, num_consumers, timeout_sec, assignments),
+
 
     def min_cluster_size(self):
         """Override this since we're adding services outside of the constructor"""
@@ -80,22 +94,41 @@ class VerifiableConsumerTest(KafkaTest):
                    timeout_sec=self.consumption_timeout_sec,
                    err_msg="Timed out waiting for consumption")
 
-    def await_members(self, consumer, num_consumers, include_started=False, include_joined=True):
+    def await_members(self, consumer, num_consumers, include_started=False, include_joined=True, include_rebalancing=False):
         # Wait until all members have joined the group
-        wait_until(lambda: self.node_count_equal(consumer, num_consumers, include_started, include_joined),
-                   timeout_sec=self.session_timeout_sec*2,
-                   err_msg="Consumers failed to join in a reasonable amount of time")
+        timeout_sec = self.session_timeout_sec * 2
+        wait_until(lambda: self._await_members(consumer, include_started, include_joined, include_rebalancing) == num_consumers,
+                   timeout_sec=timeout_sec,
+                   err_msg=self._await_members_err_msg(consumer, num_consumers, include_started, include_joined, include_rebalancing, timeout_sec))
         
     def await_all_members(self, consumer):
         self.await_members(consumer, self.num_consumers)
 
-    def node_count_equal(self, consumer, expected, include_started_nodes, include_joined_nodes):
+    def _await_members(self, consumer, include_started, include_joined, include_rebalancing):
         count = 0
 
-        if include_started_nodes:
+        if include_started:
             count += len(consumer.started_nodes())
 
-        if include_joined_nodes:
+        if include_joined:
             count += len(consumer.joined_nodes())
 
-        return count == expected
+        if include_rebalancing:
+            count += len(consumer.rebalancing_nodes())
+
+        return count
+
+    def _await_members_err_msg(self, consumer, num_consumers, include_started, include_joined, include_rebalancing, timeout_sec):
+        actual = self._await_members(consumer, include_started, include_joined, include_rebalancing)
+        states = []
+
+        if include_started:
+            states.append(ConsumerState.Started)
+
+        if include_joined:
+            states.append(ConsumerState.Joined)
+
+        if include_rebalancing:
+            states.append(ConsumerState.Rebalancing)
+
+        return "Only %d out of %d consumers joined the group within the timeout of %d seconds" % (actual, num_consumers, timeout_sec)

@@ -99,19 +99,23 @@ class ConsumerEventHandler(object):
                     logger.warn(msg)
         self.total_consumed += event["count"]
 
-    def handle_partitions_revoked(self, event):
+    def handle_partitions_revoked(self, event, node, logger):
         self.revoked_count += 1
         self.state = ConsumerState.Rebalancing
         for topic_partition in self._topic_partitions(event):
             if topic_partition in self.assignment:
                 self.assignment.remove(topic_partition)
+                logger.debug("KIRK_DEBUG - removed partition %s from assignment for node %s", topic_partition, node.account.hostname)
+            else:
+                logger.debug("KIRK_DEBUG - skipped removing partition %s from assignment for node %s as it's not already assigned somehow", topic_partition, node.account.hostname)
         self.position = {}
 
-    def handle_partitions_assigned(self, event):
+    def handle_partitions_assigned(self, event, node, logger):
         self.assigned_count += 1
         self.state = ConsumerState.Joined
         for topic_partition in self._topic_partitions(event):
             self.assignment.add(topic_partition)
+            logger.debug("KIRK_DEBUG - added partition %s to assignment for node %s", topic_partition, node.account.hostname)
 
     def handle_kill_process(self, clean_shutdown):
         # if the shutdown was clean, then we expect the explicit
@@ -119,7 +123,8 @@ class ConsumerEventHandler(object):
         if not clean_shutdown:
             self.handle_shutdown_complete()
 
-    def current_assignment(self):
+    def current_assignment(self, node, logger):
+        logger.debug("KIRK_DEBUG - partitions assigned for node %s: %s", node.account.hostname, self.assignment)
         return list(self.assignment)
 
     def current_position(self, tp):
@@ -265,9 +270,9 @@ class VerifiableConsumer(KafkaPathResolverMixin, VerifiableClientMixin, Backgrou
                     elif name == "record_data" and self.on_record_consumed:
                         self.on_record_consumed(event, node)
                     elif name == "partitions_revoked":
-                        handler.handle_partitions_revoked(event)
+                        handler.handle_partitions_revoked(event, node, self.logger)
                     elif name == "partitions_assigned":
-                        handler.handle_partitions_assigned(event)
+                        handler.handle_partitions_assigned(event, node, self.logger)
                     else:
                         self.logger.debug("%s: ignoring unknown event: %s" % (str(node.account), event))
 
@@ -379,7 +384,7 @@ class VerifiableConsumer(KafkaPathResolverMixin, VerifiableClientMixin, Backgrou
 
     def current_assignment(self):
         with self.lock:
-            return { handler.node: handler.current_assignment() for handler in self.event_handlers.values() }
+            return { handler.node: handler.current_assignment(handler.node, self.logger) for handler in self.event_handlers.values() }
 
     def current_position(self, tp):
         with self.lock:
@@ -416,26 +421,21 @@ class VerifiableConsumer(KafkaPathResolverMixin, VerifiableClientMixin, Backgrou
                        if handler.idx <= keep_alive)
 
     def joined_nodes(self):
-        with self.lock:
-            return [handler.node for handler in self.event_handlers.values()
-                    if handler.state == ConsumerState.Joined]
+        return self._nodes_in_state(ConsumerState.Joined)
 
     def started_nodes(self):
-        with self.lock:
-            return [handler.node for handler in self.event_handlers.values()
-                    if handler.state == ConsumerState.Started]
+        return self._nodes_in_state(ConsumerState.Started)
 
     def rebalancing_nodes(self):
-        with self.lock:
-            return [handler.node for handler in self.event_handlers.values()
-                    if handler.state == ConsumerState.Rebalancing]
+        return self._nodes_in_state(ConsumerState.Rebalancing)
 
     def dead_nodes(self):
-        with self.lock:
-            return [handler.node for handler in self.event_handlers.values()
-                    if handler.state == ConsumerState.Dead]
+        return self._nodes_in_state(ConsumerState.Dead)
 
     def alive_nodes(self):
         with self.lock:
-            return [handler.node for handler in self.event_handlers.values()
-                    if handler.state != ConsumerState.Dead]
+            return [handler.node for handler in self.event_handlers.values() if handler.state != ConsumerState.Dead]
+
+    def _nodes_in_state(self, state):
+        with self.lock:
+            return [handler.node for handler in self.event_handlers.values() if handler.state == state]
