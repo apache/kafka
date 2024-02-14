@@ -26,7 +26,7 @@ import org.apache.kafka.clients.consumer._
 import org.apache.kafka.clients.producer.{ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.{KafkaException, MetricName, PartitionInfo, TopicPartition}
 import org.apache.kafka.common.config.TopicConfig
-import org.apache.kafka.common.errors.{InvalidGroupIdException, InvalidTopicException, UnsupportedAssignorException}
+import org.apache.kafka.common.errors.{AuthorizationException, InvalidGroupIdException, InvalidTopicException, OutOfOrderSequenceException, ProducerFencedException, UnsupportedAssignorException}
 import org.apache.kafka.common.header.Headers
 import org.apache.kafka.common.record.{CompressionType, TimestampType}
 import org.apache.kafka.common.serialization._
@@ -2371,5 +2371,76 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     consumer.seek(tp, 0)
 
     consumer.commitSync()
+  }
+
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndConsumerOnly"))
+  def test(quorum: String, groupProtocol: String): Unit = {
+
+    val producerConfig = new Properties
+    producerConfig.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, classOf[ByteArraySerializer])
+    producerConfig.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, classOf[ByteArraySerializer])
+    producerConfig.setProperty(ProducerConfig.ACKS_CONFIG, "all")
+    val numRecords = 10000
+    val producer = createProducer(configOverrides = producerConfig);
+    sendRecords(producer, numRecords, tp)
+
+    this.consumerConfig.setProperty(ConsumerConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.CONSUMER.toString)
+    this.consumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, "KIP848-group-id-3")
+    this.consumerConfig.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, classOf[StringDeserializer])
+    this.consumerConfig.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, classOf[StringDeserializer])
+    this.consumerConfig.setProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false")
+    this.consumerConfig.setProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest")
+    this.consumerConfig.put(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, 300000)
+    val consumer = createConsumer[String, String](valueDeserializer = new StringDeserializer, keyDeserializer = new StringDeserializer)
+
+    val txnProducerConfig = new Properties
+    txnProducerConfig.setProperty(ProducerConfig.TRANSACTIONAL_ID_CONFIG, "my-transactional-id-2")
+    txnProducerConfig.setProperty(ProducerConfig.ACKS_CONFIG, "all")
+    txnProducerConfig.setProperty(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, "true")
+    txnProducerConfig.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, classOf[StringDeserializer])
+    txnProducerConfig.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, classOf[StringDeserializer])
+    val txnProducer = createProducer[String, String](valueSerializer = new StringSerializer, keySerializer = new StringSerializer, configOverrides = txnProducerConfig)
+
+    txnProducer.initTransactions()
+    System.out.println("Init transactions called")
+
+    try {
+      txnProducer.beginTransaction()
+      System.out.println("Begin transactions called")
+      consumer.subscribe(List(topic).asJava)
+      System.out.println("Consumer subscribed to topic -> KIP848-topic-2 ")
+      val records = consumer.poll(Duration.ofSeconds(10)).asScala
+      System.out.println("Returned " + records.size + " records.")
+      // Process and send txn messages.
+      for (processedRecord <- records) {
+        txnProducer.send(new ProducerRecord[String, String](topic2, processedRecord.key, "Processed: " + processedRecord.value))
+      }
+      val groupMetadata = consumer.groupMetadata
+      System.out.println("Group metadata inside test " + groupMetadata)
+      val offsetsToCommit = new util.HashMap[TopicPartition, OffsetAndMetadata]
+      for (record <- records) {
+        offsetsToCommit.put(new TopicPartition(record.topic, record.partition), new OffsetAndMetadata(record.offset + 1))
+      }
+      System.out.println("Offsets to commit " + offsetsToCommit)
+      // Send offsets to transaction with ConsumerGroupMetadata.
+      txnProducer.sendOffsetsToTransaction(offsetsToCommit, groupMetadata)
+      System.out.println("Send offsets to transaction done")
+      // Commit the transaction.
+      txnProducer.commitTransaction()
+      System.out.println("Commit transaction done")
+    } catch {
+      case e@(_: ProducerFencedException | _: OutOfOrderSequenceException | _: AuthorizationException) =>
+        e.printStackTrace()
+//        txnProducer.close()
+        fail("ProducerFencedException | OutOfOrderSequenceException | AuthorizationException")
+      case e: KafkaException =>
+        e.printStackTrace()
+        txnProducer.abortTransaction()
+        fail("KafkaException")
+    } finally {
+      txnProducer.close()
+      consumer.close()
+    }
   }
 }

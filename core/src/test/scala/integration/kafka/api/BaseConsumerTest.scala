@@ -124,6 +124,11 @@ object BaseConsumerTest {
         Arguments.of("kraft+kip848", "consumer"))
   }
 
+  def getTestQuorumAndConsumerOnly() : java.util.stream.Stream[Arguments] = {
+    java.util.stream.Stream.of(
+        Arguments.of("kraft+kip848", "consumer"))
+  }
+
   // In Scala 2.12, it is necessary to disambiguate the java.util.stream.Stream.of() method call
   // in the case where there's only a single Arguments in the list. The following commented-out
   // method works in Scala 2.13, but not 2.12. For this reason, tests which run against just a
