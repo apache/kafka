@@ -61,7 +61,7 @@ public class ConsumerGroupCommandTest extends kafka.integration.KafkaServerTestH
     List<AbstractConsumerGroupExecutor> consumerGroupExecutors = new ArrayList<>();
 
     @Override
-    public Seq<KafkaConfig> generateConfigs() {
+    public Seq<kafka.server.KafkaConfig> generateConfigs() {
         List<KafkaConfig> cfgs = new ArrayList<>();
 
         TestUtils.createBrokerConfigs(
