@@ -64,9 +64,11 @@ public interface MembershipManager extends RequestManager {
     MemberState state();
 
     /**
-     * @return True if the member is staled due to expired poll timer.
+     * @return True if the poll timer expired, indicating that there hasn't been a call to
+     * consumer poll within the max poll interval. In this case, the member will proactively
+     * leave the group, and rejoin on the next call to poll.
      */
-    boolean isStaled();
+    boolean isStale();
 
     /**
      * Update member info and transition member state based on a successful heartbeat response.
@@ -174,4 +176,10 @@ public interface MembershipManager extends RequestManager {
      * transitions of new data received from the server, as defined in {@link MemberStateListener}.
      */
     void registerStateListener(MemberStateListener listener);
+
+    /**
+     * @return True if the member is preparing to leave the group (waiting for callbacks), or
+     * leaving (sending last heartbeat).
+     */
+    boolean isLeavingGroup();
 }

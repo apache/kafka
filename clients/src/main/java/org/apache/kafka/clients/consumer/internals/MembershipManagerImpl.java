@@ -335,8 +335,13 @@ public class MembershipManagerImpl implements MembershipManager {
         return memberEpoch;
     }
 
+    /**
+     * @return True if there hasn't been a call to consumer.poll() withing the max.poll.interval.
+     * In that case, it is expected that the member will leave the group and rejoin on the next
+     * call to consumer.poll().
+     */
     @Override
-    public boolean isStaled() {
+    public boolean isStale() {
         return state == MemberState.STALE;
     }
 
@@ -685,13 +690,6 @@ public class MembershipManagerImpl implements MembershipManager {
     @Override
     public void onHeartbeatRequestSent() {
         MemberState state = state();
-        if (isStaled()) {
-            log.debug("Member {} is staled and is therefore leaving the group.  It will rejoin upon the next poll.", memberEpoch);
-            // TODO: Integrate partition revocation/loss callback
-            transitionToJoining();
-            return;
-        }
-
         if (state == MemberState.ACKNOWLEDGING) {
             if (targetAssignmentReconciled()) {
                 transitionTo(MemberState.STABLE);
@@ -731,10 +729,29 @@ public class MembershipManagerImpl implements MembershipManager {
         return currentAssignment.equals(currentTargetAssignment);
     }
 
+    /**
+     * @return True if the member should not send heartbeats, which would be one of the following
+     * cases:
+     * <ul>
+     * <li>Member is not subscribed to any topics</li>
+     * <li>Member has received a fatal error in a previous heartbeat response</li>
+     * <li>Member is stale, meaning that it has left the group due to expired poll timer</li>
+     * </ul>
+     */
     @Override
     public boolean shouldSkipHeartbeat() {
         MemberState state = state();
-        return state == MemberState.UNSUBSCRIBED || state == MemberState.FATAL;
+        return state == MemberState.UNSUBSCRIBED || state == MemberState.FATAL || state == MemberState.STALE;
+    }
+
+    /**
+     * @return True if the member is preparing to leave the group (waiting for callbacks), or
+     * leaving (sending last heartbeat). This is used to skip proactively leaving the group when
+     * the consumer poll timer expires.
+     */
+    public boolean isLeavingGroup() {
+        MemberState state = state();
+        return state == MemberState.PREPARE_LEAVING || state == MemberState.LEAVING;
     }
 
     /**
