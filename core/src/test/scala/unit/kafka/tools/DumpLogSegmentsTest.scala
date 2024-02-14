@@ -416,7 +416,7 @@ class DumpLogSegmentsTest {
     var batchesBytes = 0
     var batchesCounter = 0
     while (lines.hasNext) {
-      if (batchesCounter >= limit){
+      if (batchesCounter >= limit) {
         return batchesBytes
       }
       val line = lines.next()

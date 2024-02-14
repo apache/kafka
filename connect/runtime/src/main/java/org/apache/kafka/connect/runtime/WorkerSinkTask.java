@@ -60,6 +60,7 @@ import org.slf4j.LoggerFactory;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -343,9 +344,14 @@ class WorkerSinkTask extends WorkerTask<ConsumerRecord<byte[], byte[]>, SinkReco
         deliverMessages();
     }
 
-    // Visible for testing
+    // VisibleForTesting
     boolean isCommitting() {
         return committing;
+    }
+
+    //VisibleForTesting
+    Map<TopicPartition, OffsetAndMetadata> lastCommittedOffsets() {
+        return Collections.unmodifiableMap(lastCommittedOffsets);
     }
 
     private void doCommitSync(Map<TopicPartition, OffsetAndMetadata> offsets, int seqno) {

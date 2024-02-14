@@ -310,7 +310,7 @@ class KRaftClusterTest {
         filter = ClientQuotaFilter.contains(
           List(ClientQuotaFilterComponent.ofEntity("user", "testkit")).asJava)
 
-        TestUtils.tryUntilNoAssertionError(){
+        TestUtils.tryUntilNoAssertionError() {
           val results = admin.describeClientQuotas(filter).entities().get()
           assertEquals(2, results.size(), "Broker did not see two client quotas")
           assertEquals(9999.0, results.get(entity).get("producer_byte_rate"), 1e-6)

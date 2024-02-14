@@ -239,7 +239,7 @@ object MirrorMaker extends Logging {
           exitingOnSendFailure = true
           fatal("Mirror maker thread failure due to ", t)
       } finally {
-        CoreUtils.swallow ({
+        CoreUtils.swallow({
           info("Flushing producer.")
           producer.flush()
 
