@@ -46,6 +46,8 @@ import org.apache.kafka.common.message.LeaveGroupRequestData;
 import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity;
 import org.apache.kafka.common.message.LeaveGroupResponseData;
 import org.apache.kafka.common.message.ListGroupsResponseData;
+import org.apache.kafka.common.message.ShareGroupDescribeRequestData;
+import org.apache.kafka.common.message.ShareGroupDescribeResponseData;
 import org.apache.kafka.common.message.ShareGroupHeartbeatRequestData;
 import org.apache.kafka.common.message.ShareGroupHeartbeatResponseData;
 import org.apache.kafka.common.message.SyncGroupRequestData;
@@ -318,7 +320,7 @@ public class GroupMetadataManagerTest {
             final private MockTime time = new MockTime();
             final private MockCoordinatorTimer<Void, Record> timer = new MockCoordinatorTimer<>(time);
             final private LogContext logContext = new LogContext();
-            final private SnapshotRegistry snapshotRegistry = new SnapshotRegistry(logContext);
+            private SnapshotRegistry snapshotRegistry = new SnapshotRegistry(logContext);
             final private TopicPartition groupMetadataTopicPartition = new TopicPartition("topic", 0);
             private MetadataImage metadataImage;
             private List<PartitionAssignor> consumerGroupAssignors = Collections.singletonList(new MockPartitionAssignor("range"));
@@ -380,6 +382,11 @@ public class GroupMetadataManagerTest {
 
             public Builder withClassicGroupMaxSessionTimeoutMs(int classicGroupMaxSessionTimeoutMs) {
                 this.classicGroupMaxSessionTimeoutMs = classicGroupMaxSessionTimeoutMs;
+                return this;
+            }
+
+            public Builder withSnapshotRegistry(SnapshotRegistry registry) {
+                this.snapshotRegistry = registry;
                 return this;
             }
 
@@ -538,6 +545,15 @@ public class GroupMetadataManagerTest {
 
             result.records().forEach(this::replay);
             return result;
+        }
+
+        public List<ShareGroupDescribeResponseData.DescribedGroup> shareGroupDescribe(
+            ShareGroupDescribeRequestData request
+        ) {
+            return groupMetadataManager.shareGroupDescribe(
+                request.groupIds(),
+                0L
+            );
         }
 
         public List<ExpiredTimeout<Void, Record>> sleep(long ms) {
@@ -11035,6 +11051,21 @@ public class GroupMetadataManagerTest {
                 .setMemberEpoch(1)
                 .setRackId("")));
         assertEquals("RackId can't be empty.", ex.getMessage());
+    }
+
+    @Test
+    public void testShareGroupDescribeRequest() {
+        GroupMetadataManagerTestContext context = new Builder().build();
+
+        // GroupId is not required
+        List<ShareGroupDescribeResponseData.DescribedGroup> groups = context.shareGroupDescribe(new ShareGroupDescribeRequestData());
+        assertEquals(0, groups.size());
+
+        // Group id not found
+        groups = context.shareGroupDescribe(
+            new ShareGroupDescribeRequestData().setGroupIds(Collections.singletonList("unknown-group")));
+        assertEquals(1, groups.size());
+        assertEquals(Errors.GROUP_ID_NOT_FOUND.code(), groups.get(0).errorCode());
     }
 
     @Test

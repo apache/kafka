@@ -17,8 +17,12 @@
 package org.apache.kafka.coordinator.group.share;
 
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.message.ShareGroupDescribeResponseData;
 import org.apache.kafka.coordinator.group.GroupMember;
+import org.apache.kafka.coordinator.group.Utils;
+import org.apache.kafka.image.TopicsImage;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
@@ -235,5 +239,42 @@ public class ShareGroupMember extends GroupMember {
             ", state=" + state +
             ", assignedPartitions=" + assignedPartitions +
             ')';
+  }
+
+  private static List<ShareGroupDescribeResponseData.TopicPartitions> topicPartitionsFromMap(
+      Map<Uuid, Set<Integer>> partitions,
+      TopicsImage topicsImage
+  ) {
+    List<ShareGroupDescribeResponseData.TopicPartitions> topicPartitions = new ArrayList<>();
+    partitions.forEach((topicId, partitionSet) -> {
+      String topicName = Utils.lookupTopicNameById(topicId, topicsImage);
+      if (topicName != null) {
+        topicPartitions.add(new ShareGroupDescribeResponseData.TopicPartitions()
+            .setTopicId(topicId)
+            .setTopicName(topicName)
+            .setPartitions(new ArrayList<>(partitionSet)));
+      }
+    });
+    return topicPartitions;
+  }
+
+  /**
+   * @param topicsImage: Topics image objec to search for a specific topic id
+   *
+   * @return The ShareGroupMember mapped as ShareGroupDescribeResponseData.Member.
+   */
+  public ShareGroupDescribeResponseData.Member asShareGroupDescribeMember(
+      TopicsImage topicsImage
+  ) {
+    return new ShareGroupDescribeResponseData.Member()
+        .setMemberEpoch(memberEpoch)
+        .setMemberId(memberId)
+        .setAssignment(new ShareGroupDescribeResponseData.Assignment()
+            .setTopicPartitions(topicPartitionsFromMap(assignedPartitions, topicsImage)))
+        .setClientHost(clientHost)
+        .setClientId(clientId)
+        .setInstanceId(instanceId)
+        .setRackId(rackId)
+        .setSubscribedTopicNames(subscribedTopicNames);
   }
 }
