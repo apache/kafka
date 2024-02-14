@@ -326,9 +326,10 @@
 
       <subpackage name="group">
         <allow pkg="kafka.api"/>
+        <allow pkg="kafka.security"/>
         <allow pkg="org.apache.kafka.tools"/>
         <allow pkg="org.apache.kafka.server.config" />
-        <allow pkg="scala"/>
+        <allow pkg="org.apache.kafka.metadata.authorizer"/>
       </subpackage>
     </subpackage>
 
@@ -340,14 +341,6 @@
       <allow pkg="kafka.log" />
       <allow pkg="kafka.server" />
       <allow pkg="scala" />
-    </subpackage>
-
-    <subpackage name="consumer.group">
-      <allow pkg="kafka.api"/>
-      <allow pkg="kafka.security"/>
-      <allow pkg="org.apache.kafka.tools"/>
-      <allow pkg="org.apache.kafka.server.config" />
-      <allow pkg="org.apache.kafka.metadata.authorizer"/>
     </subpackage>
 
     <subpackage name="other">
