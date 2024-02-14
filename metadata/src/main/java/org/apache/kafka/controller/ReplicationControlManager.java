@@ -479,9 +479,7 @@ public class ReplicationControlManager {
             log.info("Replayed PartitionRecord for new partition {} and {}.", description,
                     newPartInfo);
             topicInfo.parts.put(record.partitionId(), newPartInfo);
-            brokersToIsrs.update(record.topicId(), record.partitionId(), null,
-                newPartInfo.isr, NO_LEADER, newPartInfo.leader);
-            brokersToElrs.update(record.topicId(), record.partitionId(), null, newPartInfo.elr);
+            updatePartitionInfo(record.topicId(), record.partitionId(), null, newPartInfo);
             updatePartitionDirectories(record.topicId(), record.partitionId(), null, newPartInfo.directories);
             updateReassigningTopicsIfNeeded(record.topicId(), record.partitionId(),
                     false,  isReassignmentInProgress(newPartInfo));
@@ -490,10 +488,7 @@ public class ReplicationControlManager {
                     newPartInfo);
             newPartInfo.maybeLogPartitionChange(log, description, prevPartInfo);
             topicInfo.parts.put(record.partitionId(), newPartInfo);
-            brokersToIsrs.update(record.topicId(), record.partitionId(), prevPartInfo.isr,
-                newPartInfo.isr, prevPartInfo.leader, newPartInfo.leader);
-            brokersToElrs.update(record.topicId(), record.partitionId(), prevPartInfo.elr,
-                newPartInfo.elr);
+            updatePartitionInfo(record.topicId(), record.partitionId(), prevPartInfo, newPartInfo);
             updatePartitionDirectories(record.topicId(), record.partitionId(), prevPartInfo.directories, newPartInfo.directories);
             updateReassigningTopicsIfNeeded(record.topicId(), record.partitionId(),
                     isReassignmentInProgress(prevPartInfo), isReassignmentInProgress(newPartInfo));
@@ -539,10 +534,7 @@ public class ReplicationControlManager {
         updateReassigningTopicsIfNeeded(record.topicId(), record.partitionId(),
                 isReassignmentInProgress(prevPartitionInfo), isReassignmentInProgress(newPartitionInfo));
         topicInfo.parts.put(record.partitionId(), newPartitionInfo);
-        brokersToIsrs.update(record.topicId(), record.partitionId(),
-            prevPartitionInfo.isr, newPartitionInfo.isr, prevPartitionInfo.leader,
-            newPartitionInfo.leader);
-        brokersToElrs.update(record.topicId(), record.partitionId(), prevPartitionInfo.elr, newPartitionInfo.elr);
+        updatePartitionInfo(record.topicId(), record.partitionId(), prevPartitionInfo, newPartitionInfo);
         updatePartitionDirectories(record.topicId(), record.partitionId(), prevPartitionInfo.directories, newPartitionInfo.directories);
         String topicPart = topicInfo.name + "-" + record.partitionId() + " with topic ID " +
             record.topicId();
@@ -2289,6 +2281,25 @@ public class ReplicationControlManager {
                 }
             }
         }
+    }
+
+    private void updatePartitionInfo(
+        Uuid topicId,
+        Integer partitionId,
+        PartitionRegistration prevPartInfo,
+        PartitionRegistration newPartInfo
+    ) {
+        HashSet<Integer> validationSet = new HashSet<>();
+        Arrays.stream(newPartInfo.isr).forEach(ii -> validationSet.add(ii));
+        Arrays.stream(newPartInfo.elr).forEach(ii -> validationSet.add(ii));
+        if (validationSet.size() != newPartInfo.isr.length + newPartInfo.elr.length) {
+            log.warn("{}-{} has overlapping ISR={} and ELR={}", topics.get(topicId).name, partitionId,
+                Arrays.toString(newPartInfo.isr), partitionId, Arrays.toString(newPartInfo.elr));
+        }
+        brokersToIsrs.update(topicId, partitionId, prevPartInfo == null ? null : prevPartInfo.isr,
+            newPartInfo.isr, prevPartInfo == null ? NO_LEADER : prevPartInfo.leader, newPartInfo.leader);
+        brokersToElrs.update(topicId, partitionId, prevPartInfo == null ? null : prevPartInfo.elr,
+            newPartInfo.elr);
     }
 
     private static final class IneligibleReplica {

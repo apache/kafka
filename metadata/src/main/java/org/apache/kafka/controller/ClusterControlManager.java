@@ -91,6 +91,7 @@ public class ClusterControlManager {
         private ReplicaPlacer replicaPlacer = null;
         private FeatureControlManager featureControl = null;
         private boolean zkMigrationEnabled = false;
+        private BrokerUncleanShutdownHandler brokerUncleanShutdownHandler = null;
 
         Builder setLogContext(LogContext logContext) {
             this.logContext = logContext;
@@ -132,6 +133,11 @@ public class ClusterControlManager {
             return this;
         }
 
+        Builder setBrokerUncleanShutdownHandler(BrokerUncleanShutdownHandler brokerUncleanShutdownHandler) {
+            this.brokerUncleanShutdownHandler = brokerUncleanShutdownHandler;
+            return this;
+        }
+
         ClusterControlManager build() {
             if (logContext == null) {
                 logContext = new LogContext();
@@ -148,6 +154,9 @@ public class ClusterControlManager {
             if (featureControl == null) {
                 throw new RuntimeException("You must specify FeatureControlManager");
             }
+            if (brokerUncleanShutdownHandler == null) {
+                throw new RuntimeException("You must specify BrokerUncleanShutdownHandler");
+            }
             return new ClusterControlManager(logContext,
                 clusterId,
                 time,
@@ -155,7 +164,8 @@ public class ClusterControlManager {
                 sessionTimeoutNs,
                 replicaPlacer,
                 featureControl,
-                zkMigrationEnabled
+                zkMigrationEnabled,
+                brokerUncleanShutdownHandler
             );
         }
     }
@@ -247,7 +257,7 @@ public class ClusterControlManager {
      */
     private final boolean zkMigrationEnabled;
 
-    private HandleBrokerUncleanShutdownHelper handleBrokerUncleanShutdownHelper;
+    private BrokerUncleanShutdownHandler brokerUncleanShutdownHandler;
 
     /**
      * Maps controller IDs to controller registrations.
@@ -267,7 +277,8 @@ public class ClusterControlManager {
         long sessionTimeoutNs,
         ReplicaPlacer replicaPlacer,
         FeatureControlManager featureControl,
-        boolean zkMigrationEnabled
+        boolean zkMigrationEnabled,
+        BrokerUncleanShutdownHandler brokerUncleanShutdownHandler
     ) {
         this.logContext = logContext;
         this.clusterId = clusterId;
@@ -283,6 +294,7 @@ public class ClusterControlManager {
         this.zkMigrationEnabled = zkMigrationEnabled;
         this.controllerRegistrations = new TimelineHashMap<>(snapshotRegistry, 0);
         this.directoryToBroker = new TimelineHashMap<>(snapshotRegistry, 0);
+        this.brokerUncleanShutdownHandler = brokerUncleanShutdownHandler;
     }
 
     ReplicaPlacer replicaPlacer() {
@@ -304,10 +316,6 @@ public class ClusterControlManager {
      */
     public void deactivate() {
         heartbeatManager = null;
-    }
-
-    public void setHandleBrokerUncleanShutdownHelper(HandleBrokerUncleanShutdownHelper handleBrokerUncleanShutdownHelper) {
-        this.handleBrokerUncleanShutdownHelper = handleBrokerUncleanShutdownHelper;
     }
 
     Map<Integer, BrokerRegistration> brokerRegistrations() {
@@ -345,11 +353,7 @@ public class ClusterControlManager {
         List<ApiMessageAndVersion> records = new ArrayList<>();
         BrokerRegistration existing = brokerRegistrations.get(brokerId);
         if (version < 2 || existing == null || request.previousBrokerEpoch() != existing.epoch()) {
-            if (handleBrokerUncleanShutdownHelper == null) {
-                log.warn("No handleBrokerUncleanShutdownHelper provided");
-            } else {
-                handleBrokerUncleanShutdownHelper.apply(request.brokerId(), records);
-            }
+            brokerUncleanShutdownHandler.apply(request.brokerId(), records);
         }
         if (existing != null) {
             if (heartbeatManager.hasValidSession(brokerId)) {
@@ -791,7 +795,7 @@ public class ClusterControlManager {
     }
 
     @FunctionalInterface
-    interface HandleBrokerUncleanShutdownHelper {
+    interface BrokerUncleanShutdownHandler {
         void apply(int brokerId, List<ApiMessageAndVersion> records);
     }
 }

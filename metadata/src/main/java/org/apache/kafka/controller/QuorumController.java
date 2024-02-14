@@ -1861,6 +1861,7 @@ public final class QuorumController implements Controller {
             setReplicaPlacer(replicaPlacer).
             setFeatureControlManager(featureControl).
             setZkMigrationEnabled(zkMigrationEnabled).
+            setBrokerUncleanShutdownHandler(this::handleUncleanBrokerShutdown).
             build();
         this.producerIdControlManager = new ProducerIdControlManager.Builder().
             setLogContext(logContext).
@@ -1882,9 +1883,6 @@ public final class QuorumController implements Controller {
             setCreateTopicPolicy(createTopicPolicy).
             setFeatureControl(featureControl).
             build();
-        this.clusterControl.setHandleBrokerUncleanShutdownHelper(
-            (brokerId, records) -> replicationControl.handleBrokerUncleanShutdown(brokerId, records)
-        );
         this.scramControlManager = new ScramControlManager.Builder().
             setLogContext(logContext).
             setSnapshotRegistry(snapshotRegistry).
@@ -2357,5 +2355,9 @@ public final class QuorumController implements Controller {
         appendControlEvent("setNewNextWriteOffset", () -> {
             offsetControl.setNextWriteOffset(newNextWriteOffset);
         });
+    }
+
+    void handleUncleanBrokerShutdown(int brokerId, List<ApiMessageAndVersion> records) {
+        replicationControl.handleBrokerUncleanShutdown(brokerId, records);
     }
 }
