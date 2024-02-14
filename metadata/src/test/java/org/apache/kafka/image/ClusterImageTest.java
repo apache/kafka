@@ -17,15 +17,15 @@
 
 package org.apache.kafka.image;
 
+import org.apache.kafka.common.Endpoint;
+import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.metadata.BrokerRegistrationChangeRecord;
+import org.apache.kafka.common.metadata.FenceBrokerRecord;
 import org.apache.kafka.common.metadata.RegisterBrokerRecord;
 import org.apache.kafka.common.metadata.RegisterBrokerRecord.BrokerEndpoint;
 import org.apache.kafka.common.metadata.RegisterBrokerRecord.BrokerEndpointCollection;
 import org.apache.kafka.common.metadata.RegisterBrokerRecord.BrokerFeature;
 import org.apache.kafka.common.metadata.RegisterBrokerRecord.BrokerFeatureCollection;
-import org.apache.kafka.common.Endpoint;
-import org.apache.kafka.common.Uuid;
-import org.apache.kafka.common.metadata.BrokerRegistrationChangeRecord;
-import org.apache.kafka.common.metadata.FenceBrokerRecord;
 import org.apache.kafka.common.metadata.RegisterControllerRecord;
 import org.apache.kafka.common.metadata.RegisterControllerRecord.ControllerEndpoint;
 import org.apache.kafka.common.metadata.RegisterControllerRecord.ControllerEndpointCollection;
@@ -63,19 +63,19 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 @Timeout(value = 40)
 public class ClusterImageTest {
 
-    public final static ClusterImage IMAGE1;
+    public static final ClusterImage IMAGE1;
 
     static final List<ApiMessageAndVersion> DELTA1_RECORDS;
 
-    final static ClusterDelta DELTA1;
+    static final ClusterDelta DELTA1;
 
-    final static ClusterImage IMAGE2;
+    static final ClusterImage IMAGE2;
 
     static final List<ApiMessageAndVersion> DELTA2_RECORDS;
 
     static final ClusterDelta DELTA2;
 
-    final static ClusterImage IMAGE3;
+    static final ClusterImage IMAGE3;
 
     static {
         Map<Integer, BrokerRegistration> map1 = new HashMap<>();

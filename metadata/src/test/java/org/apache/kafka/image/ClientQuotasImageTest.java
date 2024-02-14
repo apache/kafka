@@ -17,7 +17,6 @@
 
 package org.apache.kafka.image;
 
-import java.util.Collections;
 import org.apache.kafka.common.config.internals.QuotaConfigs;
 import org.apache.kafka.common.metadata.ClientQuotaRecord;
 import org.apache.kafka.common.metadata.ClientQuotaRecord.EntityData;
@@ -31,6 +30,7 @@ import org.junit.jupiter.api.Timeout;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
