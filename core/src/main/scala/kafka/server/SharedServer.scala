@@ -285,6 +285,7 @@ class SharedServer(
           setThreadNamePrefix(s"kafka-${sharedServerConfig.nodeId}-").
           setFaultHandler(metadataLoaderFaultHandler).
           setHighWaterMarkAccessor(() => _raftManager.client.highWatermark()).
+          setLeaderAndEpochAccessor(() => _raftManager.client.leaderAndEpoch()).
           setMetrics(metadataLoaderMetrics)
         loader = loaderBuilder.build()
         snapshotEmitter = new SnapshotEmitter.Builder().

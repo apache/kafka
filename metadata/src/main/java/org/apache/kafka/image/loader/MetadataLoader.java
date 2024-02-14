@@ -75,6 +75,7 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
         private FaultHandler faultHandler = (m, e) -> new FaultHandlerException(m, e);
         private MetadataLoaderMetrics metrics = null;
         private Supplier<OptionalLong> highWaterMarkAccessor = null;
+        private Supplier<LeaderAndEpoch> leaderAndEpochAccessor = () -> LeaderAndEpoch.UNKNOWN;
 
         public Builder setNodeId(int nodeId) {
             this.nodeId = nodeId;
@@ -98,6 +99,11 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
 
         public Builder setHighWaterMarkAccessor(Supplier<OptionalLong> highWaterMarkAccessor) {
             this.highWaterMarkAccessor = highWaterMarkAccessor;
+            return this;
+        }
+
+        public Builder setLeaderAndEpochAccessor(Supplier<LeaderAndEpoch> leaderAndEpochAccessor) {
+            this.leaderAndEpochAccessor = leaderAndEpochAccessor;
             return this;
         }
 
@@ -126,7 +132,8 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
                 threadNamePrefix,
                 faultHandler,
                 metrics,
-                highWaterMarkAccessor);
+                highWaterMarkAccessor,
+                leaderAndEpochAccessor);
         }
     }
 
@@ -156,6 +163,11 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
      * A function which supplies the current high water mark, or empty if it is not known.
      */
     private final Supplier<OptionalLong> highWaterMarkAccessor;
+
+    /**
+     * A function which supplies the current leader and epoch.
+     */
+    private final Supplier<LeaderAndEpoch> leaderAndEpochAccessor;
 
     /**
      * Publishers which haven't received any metadata yet.
@@ -197,13 +209,15 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
         String threadNamePrefix,
         FaultHandler faultHandler,
         MetadataLoaderMetrics metrics,
-        Supplier<OptionalLong> highWaterMarkAccessor
+        Supplier<OptionalLong> highWaterMarkAccessor,
+        Supplier<LeaderAndEpoch> leaderAndEpochAccessor
     ) {
         this.log = logContext.logger(MetadataLoader.class);
         this.time = time;
         this.faultHandler = faultHandler;
         this.metrics = metrics;
         this.highWaterMarkAccessor = highWaterMarkAccessor;
+        this.leaderAndEpochAccessor = leaderAndEpochAccessor;
         this.uninitializedPublishers = new LinkedHashMap<>();
         this.publishers = new LinkedHashMap<>();
         this.image = MetadataImage.EMPTY;
@@ -245,8 +259,9 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
                     offset + " and high water mark is {}", where, highWaterMark.getAsLong());
             return true;
         }
-        log.info("{}: The loader finished catching up to the current high water mark of {}",
-                where, highWaterMark.getAsLong());
+        currentLeaderAndEpoch = leaderAndEpochAccessor.get();
+        log.info("{}: The loader finished catching up to the current high water mark of {}, {}",
+                where, highWaterMark.getAsLong(), currentLeaderAndEpoch);
         catchingUp = false;
         return false;
     }
