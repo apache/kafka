@@ -28,7 +28,6 @@ import org.apache.kafka.clients.consumer.RangeAssignor;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.serialization.StringDeserializer;
-import org.apache.kafka.tools.consumer.group.ConsumerGroupCommand.ConsumerGroupService;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.TestInfo;
@@ -58,7 +57,7 @@ public class ConsumerGroupCommandTest extends kafka.integration.KafkaServerTestH
     public static final String TOPIC = "foo";
     public static final String GROUP = "test.group";
 
-    List<ConsumerGroupService> consumerGroupService = new ArrayList<>();
+    List<ConsumerGroupCommand.ConsumerGroupService> consumerGroupService = new ArrayList<>();
     List<AbstractConsumerGroupExecutor> consumerGroupExecutors = new ArrayList<>();
 
     @Override
@@ -106,7 +105,7 @@ public class ConsumerGroupCommandTest extends kafka.integration.KafkaServerTestH
     @AfterEach
     @Override
     public void tearDown() {
-        consumerGroupService.forEach(ConsumerGroupService::close);
+        consumerGroupService.forEach(ConsumerGroupCommand.ConsumerGroupService::close);
         consumerGroupExecutors.forEach(AbstractConsumerGroupExecutor::shutdown);
         super.tearDown();
     }
@@ -130,9 +129,9 @@ public class ConsumerGroupCommandTest extends kafka.integration.KafkaServerTestH
         return new KafkaConsumer<>(props, new StringDeserializer(), new StringDeserializer());
     }
 
-    ConsumerGroupService getConsumerGroupService(String[] args) {
+    ConsumerGroupCommand.ConsumerGroupService getConsumerGroupService(String[] args) {
         ConsumerGroupCommandOptions opts = new ConsumerGroupCommandOptions(args);
-        ConsumerGroupService service = new ConsumerGroupService(
+        ConsumerGroupCommand.ConsumerGroupService service = new ConsumerGroupCommand.ConsumerGroupService(
             opts,
             Collections.singletonMap(AdminClientConfig.RETRIES_CONFIG, Integer.toString(Integer.MAX_VALUE))
         );

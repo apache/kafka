@@ -24,7 +24,6 @@ import org.apache.kafka.common.errors.GroupNotEmptyException;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.test.TestUtils;
 import org.apache.kafka.tools.ToolsTestUtils;
-import org.apache.kafka.tools.consumer.group.ConsumerGroupCommand.ConsumerGroupService;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
@@ -60,7 +59,7 @@ public class DeleteConsumerGroupsTest extends ConsumerGroupCommandTest {
         String missingGroup = "missing.group";
 
         String[] cgcArgs = new String[]{"--bootstrap-server", bootstrapServers(listenerName()), "--delete", "--group", missingGroup};
-        ConsumerGroupService service = getConsumerGroupService(cgcArgs);
+        ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(cgcArgs);
 
         String output = ToolsTestUtils.grabConsoleOutput(service::deleteGroups);
         assertTrue(output.contains("Group '" + missingGroup + "' could not be deleted due to:") && output.contains(Errors.GROUP_ID_NOT_FOUND.message()),
@@ -75,7 +74,7 @@ public class DeleteConsumerGroupsTest extends ConsumerGroupCommandTest {
 
         // note the group to be deleted is a different (non-existing) group
         String[] cgcArgs = new String[]{"--bootstrap-server", bootstrapServers(listenerName()), "--delete", "--group", missingGroup};
-        ConsumerGroupService service = getConsumerGroupService(cgcArgs);
+        ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(cgcArgs);
 
         Map<String, Throwable> result = service.deleteGroups();
         assertTrue(result.size() == 1 && result.containsKey(missingGroup) && result.get(missingGroup).getCause() instanceof GroupIdNotFoundException,
@@ -90,7 +89,7 @@ public class DeleteConsumerGroupsTest extends ConsumerGroupCommandTest {
         // run one consumer in the group
         addConsumerGroupExecutor(1);
         String[] cgcArgs = new String[]{"--bootstrap-server", bootstrapServers(listenerName()), "--delete", "--group", GROUP};
-        ConsumerGroupService service = getConsumerGroupService(cgcArgs);
+        ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(cgcArgs);
 
         TestUtils.waitForCondition(
             () -> service.collectGroupMembers(GROUP, false).v2.get().size() == 1,
@@ -110,7 +109,7 @@ public class DeleteConsumerGroupsTest extends ConsumerGroupCommandTest {
         // run one consumer in the group
         addConsumerGroupExecutor(1);
         String[] cgcArgs = new String[]{"--bootstrap-server", bootstrapServers(listenerName()), "--delete", "--group", GROUP};
-        ConsumerGroupService service = getConsumerGroupService(cgcArgs);
+        ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(cgcArgs);
 
         TestUtils.waitForCondition(
             () -> service.collectGroupMembers(GROUP, false).v2.get().size() == 1,
@@ -132,7 +131,7 @@ public class DeleteConsumerGroupsTest extends ConsumerGroupCommandTest {
         // run one consumer in the group
         ConsumerGroupExecutor executor = addConsumerGroupExecutor(1);
         String[] cgcArgs = new String[]{"--bootstrap-server", bootstrapServers(listenerName()), "--delete", "--group", GROUP};
-        ConsumerGroupService service = getConsumerGroupService(cgcArgs);
+        ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(cgcArgs);
 
         TestUtils.waitForCondition(
             () -> service.listConsumerGroups().contains(GROUP) && Objects.equals(service.collectGroupState(GROUP).state, "Stable"),
@@ -163,7 +162,7 @@ public class DeleteConsumerGroupsTest extends ConsumerGroupCommandTest {
         ));
 
         String[] cgcArgs = new String[]{"--bootstrap-server", bootstrapServers(listenerName()), "--delete", "--all-groups"};
-        ConsumerGroupService service = getConsumerGroupService(cgcArgs);
+        ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(cgcArgs);
 
         TestUtils.waitForCondition(() ->
             new HashSet<>(service.listConsumerGroups()).equals(groups.keySet()) &&
@@ -207,7 +206,7 @@ public class DeleteConsumerGroupsTest extends ConsumerGroupCommandTest {
         // run one consumer in the group
         ConsumerGroupExecutor executor = addConsumerGroupExecutor(1);
         String[] cgcArgs = new String[]{"--bootstrap-server", bootstrapServers(listenerName()), "--delete", "--group", GROUP};
-        ConsumerGroupService service = getConsumerGroupService(cgcArgs);
+        ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(cgcArgs);
 
         TestUtils.waitForCondition(
             () -> service.listConsumerGroups().contains(GROUP) && Objects.equals(service.collectGroupState(GROUP).state, "Stable"),
@@ -233,7 +232,7 @@ public class DeleteConsumerGroupsTest extends ConsumerGroupCommandTest {
         // run one consumer in the group
         ConsumerGroupExecutor executor = addConsumerGroupExecutor(1);
         String[] cgcArgs = new String[]{"--bootstrap-server", bootstrapServers(listenerName()), "--delete", "--group", GROUP};
-        ConsumerGroupService service = getConsumerGroupService(cgcArgs);
+        ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(cgcArgs);
 
         TestUtils.waitForCondition(
             () -> service.listConsumerGroups().contains(GROUP) && Objects.equals(service.collectGroupState(GROUP).state, "Stable"),
@@ -247,7 +246,7 @@ public class DeleteConsumerGroupsTest extends ConsumerGroupCommandTest {
 
         cgcArgs = new String[]{"--bootstrap-server", bootstrapServers(listenerName()), "--delete", "--group", GROUP, "--group", missingGroup};
 
-        ConsumerGroupService service2 = getConsumerGroupService(cgcArgs);
+        ConsumerGroupCommand.ConsumerGroupService service2 = getConsumerGroupService(cgcArgs);
 
         String output = ToolsTestUtils.grabConsoleOutput(service2::deleteGroups);
         assertTrue(output.contains("Group '" + missingGroup + "' could not be deleted due to:")
@@ -265,7 +264,7 @@ public class DeleteConsumerGroupsTest extends ConsumerGroupCommandTest {
         // run one consumer in the group
         ConsumerGroupExecutor executor = addConsumerGroupExecutor(1);
         String[] cgcArgs = new String[]{"--bootstrap-server", bootstrapServers(listenerName()), "--delete", "--group", GROUP};
-        ConsumerGroupService service = getConsumerGroupService(cgcArgs);
+        ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(cgcArgs);
 
         TestUtils.waitForCondition(
             () -> service.listConsumerGroups().contains(GROUP) && Objects.equals(service.collectGroupState(GROUP).state, "Stable"),
@@ -279,7 +278,7 @@ public class DeleteConsumerGroupsTest extends ConsumerGroupCommandTest {
 
         cgcArgs = new String[]{"--bootstrap-server", bootstrapServers(listenerName()), "--delete", "--group", GROUP, "--group", missingGroup};
 
-        ConsumerGroupService service2 = getConsumerGroupService(cgcArgs);
+        ConsumerGroupCommand.ConsumerGroupService service2 = getConsumerGroupService(cgcArgs);
         Map<String, Throwable> result = service2.deleteGroups();
         assertTrue(result.size() == 2 &&
                 result.containsKey(GROUP) && result.get(GROUP) == null &&

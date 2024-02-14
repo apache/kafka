@@ -30,7 +30,6 @@ import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.server.config.Defaults;
 import org.apache.kafka.tools.Tuple2;
-import org.apache.kafka.tools.consumer.group.ConsumerGroupCommand.ConsumerGroupService;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
@@ -59,7 +58,7 @@ public class DeleteOffsetsConsumerGroupCommandIntegrationTest extends ConsumerGr
     public void testDeleteOffsetsNonExistingGroup() {
         String group = "missing.group";
         String topic = "foo:1";
-        ConsumerGroupService service = getConsumerGroupService(getArgs(group, topic));
+        ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(getArgs(group, topic));
 
         Tuple2<Errors, Map<TopicPartition, Throwable>> res = service.deleteOffsets(group, Collections.singletonList(topic));
         assertEquals(Errors.GROUP_ID_NOT_FOUND, res.v1);
@@ -145,7 +144,7 @@ public class DeleteOffsetsConsumerGroupCommandIntegrationTest extends ConsumerGr
         produceRecord();
         withConsumerGroup.accept(() -> {
             String topic = inputPartition >= 0 ? inputTopic + ":" + inputPartition : inputTopic;
-            ConsumerGroupService service = getConsumerGroupService(getArgs(GROUP, topic));
+            ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(getArgs(GROUP, topic));
             Tuple2<Errors, Map<TopicPartition, Throwable>> res = service.deleteOffsets(GROUP, Collections.singletonList(topic));
             Errors topLevelError = res.v1;
             Map<TopicPartition, Throwable> partitions = res.v2;

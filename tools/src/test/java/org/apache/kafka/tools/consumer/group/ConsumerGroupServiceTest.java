@@ -39,7 +39,6 @@ import org.apache.kafka.common.TopicPartitionInfo;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.tools.Tuple2;
-import org.apache.kafka.tools.consumer.group.ConsumerGroupCommand.ConsumerGroupService;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentMatcher;
 import org.mockito.ArgumentMatchers;
@@ -83,7 +82,7 @@ public class ConsumerGroupServiceTest {
     @Test
     public void testAdminRequestsForDescribeOffsets() throws Exception {
         String[] args = new String[]{"--bootstrap-server", "localhost:9092", "--group", GROUP, "--describe", "--offsets"};
-        ConsumerGroupService groupService = consumerGroupService(args);
+        ConsumerGroupCommand.ConsumerGroupService groupService = consumerGroupService(args);
 
         when(admin.describeConsumerGroups(ArgumentMatchers.eq(Collections.singletonList(GROUP)), any()))
                 .thenReturn(describeGroupsResult(ConsumerGroupState.STABLE));
@@ -105,7 +104,7 @@ public class ConsumerGroupServiceTest {
     @Test
     public void testAdminRequestsForDescribeNegativeOffsets() throws Exception {
         String[] args = new String[]{"--bootstrap-server", "localhost:9092", "--group", GROUP, "--describe", "--offsets"};
-        ConsumerGroupService groupService = consumerGroupService(args);
+        ConsumerGroupCommand.ConsumerGroupService groupService = consumerGroupService(args);
 
         TopicPartition testTopicPartition0 = new TopicPartition("testTopic1", 0);
         TopicPartition testTopicPartition1 = new TopicPartition("testTopic1", 1);
@@ -201,7 +200,7 @@ public class ConsumerGroupServiceTest {
         topicsWithoutPartitionsSpecified.forEach(topic -> topicArgs.addAll(Arrays.asList("--topic", topic)));
 
         args.addAll(topicArgs);
-        ConsumerGroupService groupService = consumerGroupService(args.toArray(new String[0]));
+        ConsumerGroupCommand.ConsumerGroupService groupService = consumerGroupService(args.toArray(new String[0]));
 
         when(admin.describeConsumerGroups(ArgumentMatchers.eq(Collections.singletonList(GROUP)), any()))
                 .thenReturn(describeGroupsResult(ConsumerGroupState.DEAD));
@@ -219,8 +218,8 @@ public class ConsumerGroupServiceTest {
         verify(admin, times(1)).listOffsets(offsetsArgMatcher(), any());
     }
 
-    private ConsumerGroupService consumerGroupService(String[] args) {
-        return new ConsumerGroupService(new ConsumerGroupCommandOptions(args), Collections.emptyMap()) {
+    private ConsumerGroupCommand.ConsumerGroupService consumerGroupService(String[] args) {
+        return new ConsumerGroupCommand.ConsumerGroupService(new ConsumerGroupCommandOptions(args), Collections.emptyMap()) {
             @Override
             protected Admin createAdminClient(Map<String, String> configOverrides) {
                 return admin;

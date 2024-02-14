@@ -21,7 +21,6 @@ import org.apache.kafka.clients.admin.ConsumerGroupListing;
 import org.apache.kafka.common.ConsumerGroupState;
 import org.apache.kafka.test.TestUtils;
 import org.apache.kafka.tools.ToolsTestUtils;
-import org.apache.kafka.tools.consumer.group.ConsumerGroupCommand.ConsumerGroupService;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
@@ -45,7 +44,7 @@ public class ListConsumerGroupTest extends ConsumerGroupCommandTest {
         addConsumerGroupExecutor(1);
 
         String[] cgcArgs = new String[]{"--bootstrap-server", bootstrapServers(listenerName()), "--list"};
-        ConsumerGroupService service = getConsumerGroupService(cgcArgs);
+        ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(cgcArgs);
         Set<String> expectedGroups = new HashSet<>(Arrays.asList(GROUP, simpleGroup));
         final AtomicReference<Set<String>> foundGroups = new AtomicReference<>(Collections.emptySet());
         TestUtils.waitForCondition(() -> {
@@ -69,7 +68,7 @@ public class ListConsumerGroupTest extends ConsumerGroupCommandTest {
         addConsumerGroupExecutor(1);
 
         String[] cgcArgs = new String[]{"--bootstrap-server", bootstrapServers(listenerName()), "--list", "--state"};
-        ConsumerGroupService service = getConsumerGroupService(cgcArgs);
+        ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(cgcArgs);
 
         Set<ConsumerGroupListing> expectedListing = new HashSet<>(Arrays.asList(
             new ConsumerGroupListing(simpleGroup, true, Optional.of(ConsumerGroupState.EMPTY)),
