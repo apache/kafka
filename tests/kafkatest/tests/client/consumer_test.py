@@ -600,7 +600,7 @@ class AssignmentValidationTest(VerifiableConsumerTest):
         metadata_quorum=[quorum.isolated_kraft],
         use_new_coordinator=[True],
         group_protocol=["consumer"],
-        group_remote_assignor=["range"]
+        group_remote_assignor=["range", "uniform"]
     )
     def test_valid_assignment(self, assignment_strategy=None, metadata_quorum=quorum.zk, use_new_coordinator=False, group_protocol="classic", group_remote_assignor=None):
         """
