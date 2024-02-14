@@ -1278,9 +1278,8 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     runMultiConsumerSessionTimeoutTest(true)
   }
 
-  // TODO: enable this test for the consumer group protocol when consumer interceptors are supported
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersClassicGroupProtocolOnly"))
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
   def testInterceptors(quorum: String, groupProtocol: String): Unit = {
     val appendStr = "mock"
     MockConsumerInterceptor.resetCounters()
@@ -1339,9 +1338,8 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     MockProducerInterceptor.resetCounters()
   }
 
-  // TODO: enable this test for the consumer group protocol when consumer interceptors are supported
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersClassicGroupProtocolOnly"))
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
   def testAutoCommitIntercept(quorum: String, groupProtocol: String): Unit = {
     val topic2 = "topic2"
     createTopic(topic2, 2, brokerCount)
@@ -1379,6 +1377,14 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     // after rebalancing, we should have reset to the committed positions
     assertEquals(10, testConsumer.committed(Set(tp).asJava).get(tp).offset)
     assertEquals(20, testConsumer.committed(Set(tp2).asJava).get(tp2).offset)
+
+    // In both CLASSIC and CONSUMER protocols, interceptors are executed in poll and close.
+    // However, in the CONSUMER protocol, the assignment may be changed outside of a poll, so
+    // we need to poll once to ensure the interceptor is called.
+    if (groupProtocol.toUpperCase == GroupProtocol.CONSUMER.name) {
+      testConsumer.poll(Duration.ZERO);
+    }
+
     assertTrue(MockConsumerInterceptor.ON_COMMIT_COUNT.intValue() > commitCountBeforeRebalance)
 
     // verify commits are intercepted on close
@@ -1391,9 +1397,8 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     MockConsumerInterceptor.resetCounters()
   }
 
-  // TODO: enable this test for the consumer group protocol when consumer interceptors are supported
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersClassicGroupProtocolOnly"))
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
   def testInterceptorsWithWrongKeyValue(quorum: String, groupProtocol: String): Unit = {
     val appendStr = "mock"
     // create producer with interceptor that has different key and value types from the producer

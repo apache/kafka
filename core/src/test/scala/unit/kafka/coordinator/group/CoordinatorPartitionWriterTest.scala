@@ -16,7 +16,7 @@
  */
 package kafka.coordinator.group
 
-import kafka.server.{ReplicaManager, RequestLocal}
+import kafka.server.ReplicaManager
 import kafka.utils.TestUtils
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.config.TopicConfig
@@ -334,8 +334,8 @@ class CoordinatorPartitionWriterTest {
       VerificationGuard.SENTINEL
     }
 
-    val callbackCapture: ArgumentCaptor[(Errors, RequestLocal, VerificationGuard) => Unit] =
-      ArgumentCaptor.forClass(classOf[(Errors, RequestLocal, VerificationGuard) => Unit])
+    val callbackCapture: ArgumentCaptor[((Errors, VerificationGuard)) => Unit] =
+      ArgumentCaptor.forClass(classOf[((Errors, VerificationGuard)) => Unit])
 
     when(replicaManager.maybeStartTransactionVerificationForPartition(
       ArgumentMatchers.eq(tp),
@@ -343,14 +343,12 @@ class CoordinatorPartitionWriterTest {
       ArgumentMatchers.eq(10L),
       ArgumentMatchers.eq(5.toShort),
       ArgumentMatchers.eq(RecordBatch.NO_SEQUENCE),
-      ArgumentMatchers.eq(RequestLocal.NoCaching),
       callbackCapture.capture()
     )).thenAnswer(_ => {
-      callbackCapture.getValue.apply(
+      callbackCapture.getValue.apply((
         error,
-        RequestLocal.NoCaching,
         verificationGuard
-      )
+      ))
     })
 
     val future = partitionRecordWriter.maybeStartTransactionVerification(

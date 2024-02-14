@@ -21,7 +21,6 @@ import java.{lang, util}
 import java.util.concurrent.TimeUnit
 import java.util.{Collections, Properties}
 import kafka.cluster.EndPoint
-import kafka.security.authorizer.AuthorizerUtils
 import kafka.server.KafkaConfig.{ControllerListenerNamesProp, ListenerSecurityProtocolMapProp}
 import kafka.utils.CoreUtils.parseCsvList
 import kafka.utils.{CoreUtils, Logging}
@@ -40,15 +39,18 @@ import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.coordinator.group.Group.GroupType
 import org.apache.kafka.coordinator.group.assignor.PartitionAssignor
 import org.apache.kafka.raft.RaftConfig
+import org.apache.kafka.security.authorizer.AuthorizerUtils
+import org.apache.kafka.security.PasswordEncoderConfigs
 import org.apache.kafka.server.ProcessRole
 import org.apache.kafka.server.authorizer.Authorizer
 import org.apache.kafka.server.common.{MetadataVersion, MetadataVersionValidator}
 import org.apache.kafka.server.common.MetadataVersion._
 import org.apache.kafka.server.config.{Defaults, ServerTopicConfigSynonyms}
-import org.apache.kafka.storage.internals.log.{LogConfig, ProducerStateManagerConfig}
-import org.apache.kafka.storage.internals.log.LogConfig.MessageFormatVersion
 import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig
 import org.apache.kafka.server.record.BrokerCompressionType
+import org.apache.kafka.server.util.Csv
+import org.apache.kafka.storage.internals.log.{LogConfig, ProducerStateManagerConfig}
+import org.apache.kafka.storage.internals.log.LogConfig.MessageFormatVersion
 import org.apache.zookeeper.client.ZKClientConfig
 
 import scala.annotation.nowarn
@@ -164,6 +166,7 @@ object KafkaConfig {
 
   /** ZK to KRaft Migration configs */
   val MigrationEnabledProp = "zookeeper.metadata.migration.enable"
+  val MigrationMetadataMinBatchSizeProp = "zookeeper.metadata.migration.min.batch.size"
 
   /** Enable eligible leader replicas configs */
   val ElrEnabledProp = "eligible.leader.replicas.enable"
@@ -435,12 +438,12 @@ object KafkaConfig {
   val DelegationTokenExpiryCheckIntervalMsProp = "delegation.token.expiry.check.interval.ms"
 
   /** ********* Password encryption configuration for dynamic configs *********/
-  val PasswordEncoderSecretProp = "password.encoder.secret"
-  val PasswordEncoderOldSecretProp = "password.encoder.old.secret"
-  val PasswordEncoderKeyFactoryAlgorithmProp = "password.encoder.keyfactory.algorithm"
-  val PasswordEncoderCipherAlgorithmProp = "password.encoder.cipher.algorithm"
-  val PasswordEncoderKeyLengthProp =  "password.encoder.key.length"
-  val PasswordEncoderIterationsProp =  "password.encoder.iterations"
+  val PasswordEncoderSecretProp = PasswordEncoderConfigs.SECRET
+  val PasswordEncoderOldSecretProp = PasswordEncoderConfigs.OLD_SECRET
+  val PasswordEncoderKeyFactoryAlgorithmProp = PasswordEncoderConfigs.KEYFACTORY_ALGORITHM
+  val PasswordEncoderCipherAlgorithmProp = PasswordEncoderConfigs.CIPHER_ALGORITHM
+  val PasswordEncoderKeyLengthProp = PasswordEncoderConfigs.KEY_LENGTH
+  val PasswordEncoderIterationsProp = PasswordEncoderConfigs.ITERATIONS
 
   /** Internal Configurations **/
   val UnstableApiVersionsEnableProp = "unstable.api.versions.enable"
@@ -1027,6 +1030,8 @@ object KafkaConfig {
       .defineInternal(ServerMaxStartupTimeMsProp, LONG, Defaults.SERVER_MAX_STARTUP_TIME_MS, atLeast(0), MEDIUM, ServerMaxStartupTimeMsDoc)
       .define(MigrationEnabledProp, BOOLEAN, false, HIGH, "Enable ZK to KRaft migration")
       .define(ElrEnabledProp, BOOLEAN, false, HIGH, "Enable the Eligible leader replicas")
+      .defineInternal(MigrationMetadataMinBatchSizeProp, INT, Defaults.MIGRATION_METADATA_MIN_BATCH_SIZE, atLeast(1),
+        MEDIUM, "Soft minimum batch size to use when migrating metadata from ZooKeeper to KRaft")
 
       /************* Authorizer Configuration ***********/
       .define(AuthorizerClassNameProp, STRING, Defaults.AUTHORIZER_CLASS_NAME, new ConfigDef.NonNullValidator(), LOW, AuthorizerClassNameDoc)
@@ -1536,6 +1541,7 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
   def usesSelfManagedQuorum: Boolean = processRoles.nonEmpty
 
   val migrationEnabled: Boolean = getBoolean(KafkaConfig.MigrationEnabledProp)
+  val migrationMetadataMinBatchSize: Int = getInt(KafkaConfig.MigrationMetadataMinBatchSizeProp)
 
   val elrEnabled: Boolean = getBoolean(KafkaConfig.ElrEnabledProp)
 
@@ -1873,7 +1879,7 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
   def passwordEncoderSecret = Option(getPassword(KafkaConfig.PasswordEncoderSecretProp))
   def passwordEncoderOldSecret = Option(getPassword(KafkaConfig.PasswordEncoderOldSecretProp))
   def passwordEncoderCipherAlgorithm = getString(KafkaConfig.PasswordEncoderCipherAlgorithmProp)
-  def passwordEncoderKeyFactoryAlgorithm = Option(getString(KafkaConfig.PasswordEncoderKeyFactoryAlgorithmProp))
+  def passwordEncoderKeyFactoryAlgorithm = getString(KafkaConfig.PasswordEncoderKeyFactoryAlgorithmProp)
   def passwordEncoderKeyLength = getInt(KafkaConfig.PasswordEncoderKeyLengthProp)
   def passwordEncoderIterations = getInt(KafkaConfig.PasswordEncoderIterationsProp)
 
@@ -1935,7 +1941,7 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
 
   private def getMap(propName: String, propValue: String): Map[String, String] = {
     try {
-      CoreUtils.parseCsvMap(propValue)
+      Csv.parseCsvMap(propValue).asScala
     } catch {
       case e: Exception => throw new IllegalArgumentException("Error parsing configuration property '%s': %s".format(propName, e.getMessage))
     }
