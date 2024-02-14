@@ -46,7 +46,6 @@ abstract class AbstractConsumerTest extends BaseRequestTest {
   override def brokerCount: Int = 3
 
   val topic = "topic"
-  val topic2 = "topic2"
   val part = 0
   val tp = new TopicPartition(topic, part)
   val part2 = 1
@@ -81,7 +80,6 @@ abstract class AbstractConsumerTest extends BaseRequestTest {
 
     // create the test topic with all the brokers as replicas
     createTopic(topic, 2, brokerCount, adminClientConfig = this.adminClientConfig)
-    createTopic(topic2, 2, brokerCount, adminClientConfig = this.adminClientConfig)
   }
 
   protected class TestConsumerReassignmentListener extends ConsumerRebalanceListener {

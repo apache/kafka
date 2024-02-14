@@ -111,6 +111,7 @@ import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Future;
 import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
@@ -712,14 +713,18 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                 wakeupTrigger.maybeTriggerWakeup();
 
                 updateAssignmentMetadataIfNeeded(timer);
-                final Fetch<K, V> fetch = pollForFetches(timer);
-                if (!fetch.isEmpty()) {
-                    if (fetch.records().isEmpty()) {
-                        log.trace("Returning empty records from `poll()` "
+                if (isGenerationKnown()) {
+                    final Fetch<K, V> fetch = pollForFetches(timer);
+                    if (!fetch.isEmpty()) {
+                        if (fetch.records().isEmpty()) {
+                            log.trace("Returning empty records from `poll()` "
                                 + "since the consumer's position has advanced for at least one topic partition");
-                    }
+                        }
 
-                    return interceptors.onConsume(new ConsumerRecords<>(fetch.records()));
+                        return interceptors.onConsume(new ConsumerRecords<>(fetch.records()));
+                    }
+                } else {
+                    timer.update();
                 }
                 // We will wait for retryBackoffMs
             } while (timer.notExpired());
@@ -731,6 +736,17 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         }
     }
 
+    private boolean isGenerationKnown() {
+        final AtomicBoolean generationIsValid = new AtomicBoolean(true);
+        if (subscriptions.hasAutoAssignedPartitions()) {
+            groupMetadata.ifPresent(groupMetadata -> {
+                if (groupMetadata.generationId() == JoinGroupRequest.UNKNOWN_GENERATION_ID) {
+                    generationIsValid.set(false);
+                }
+            });
+        }
+        return generationIsValid.get();
+    }
     /**
      * Commit offsets returned on the last {@link #poll(Duration) poll()} for all the subscribed list of topics and
      * partitions.
@@ -1463,6 +1479,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                 } catch (TimeoutException e) {
                     log.error("Failed while waiting for the unsubscribe event to complete");
                 }
+                groupMetadata = initializeGroupMetadata(groupMetadata.get().groupId(), Optional.empty());
             }
             subscriptions.unsubscribe();
         } finally {

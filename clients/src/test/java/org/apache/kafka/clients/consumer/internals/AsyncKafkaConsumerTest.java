@@ -51,6 +51,7 @@ import org.apache.kafka.clients.consumer.internals.events.SubscriptionChangeAppl
 import org.apache.kafka.clients.consumer.internals.events.SyncCommitApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.UnsubscribeApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.ValidatePositionsApplicationEvent;
+import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.Node;
@@ -99,6 +100,7 @@ import java.util.concurrent.Future;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -1131,6 +1133,146 @@ public class AsyncKafkaConsumerTest {
         assertEquals(expectedGroupMetadata, secondActualGroupMetadataWithoutUpdate);
     }
 
+    @Test
+    public void testPollNotReturningRecordsIfGroupMetadataHasUnknownGenerationAndGroupManagementIsUsed() {
+        final String groupId = "consumerGroupA";
+        final ConsumerConfig config = new ConsumerConfig(requiredConsumerPropertiesAndGroupId(groupId));
+        consumer = newConsumer(config);
+        consumer.subscribe(singletonList("topic"));
+
+        consumer.poll(Duration.ZERO);
+
+        verify(fetchCollector, never()).collectFetch(any(FetchBuffer.class));
+    }
+
+    @Test
+    public void testPollNotReturningRecordsIfGroupMetadataHasUnknownGenerationAndGroupManagementIsUsedWithPattern() {
+        final String groupId = "consumerGroupA";
+        final ConsumerConfig config = new ConsumerConfig(requiredConsumerPropertiesAndGroupId(groupId));
+        consumer = newConsumer(config);
+        when(metadata.fetch()).thenReturn(Cluster.empty());
+        consumer.subscribe(Pattern.compile("topic"));
+
+        consumer.poll(Duration.ZERO);
+
+        verify(fetchCollector, never()).collectFetch(any(FetchBuffer.class));
+    }
+
+    @Test
+    public void testPollReturningRecordsIfGroupMetadataHasKnownGenerationAndGroupManagementIsNotUsed() {
+        final String topic = "topic";
+        final TopicPartition topicPartition = new TopicPartition(topic, 0);
+        final ConsumerConfig config = new ConsumerConfig(requiredConsumerPropertiesAndGroupId("consumerGroupA"));
+        consumer = newConsumer(config);
+        consumer.assign(singletonList(topicPartition));
+        final int generation = 1;
+        final String memberId = "newMemberId";
+        final GroupMetadataUpdateEvent groupMetadataUpdateEvent = new GroupMetadataUpdateEvent(
+            generation,
+            memberId
+        );
+        backgroundEventQueue.add(groupMetadataUpdateEvent);
+        final List<ConsumerRecord<String, String>> records = singletonList(
+            new ConsumerRecord<>(topic, 0, 2, "key1", "value1")
+        );
+        when(fetchCollector.collectFetch(any(FetchBuffer.class)))
+            .thenReturn(Fetch.forPartition(topicPartition, records, true));
+        completeFetchedCommittedOffsetApplicationEventSuccessfully(mkMap());
+
+        consumer.poll(Duration.ZERO);
+
+        verify(fetchCollector).collectFetch(any(FetchBuffer.class));
+    }
+
+    @Test
+    public void testPollReturningRecordIfGroupMetadataHasKnownGenerationAndGroupManagementIsUsed() {
+        final String topic = "topic";
+        final ConsumerConfig config = new ConsumerConfig(requiredConsumerPropertiesAndGroupId("consumerGroupA"));
+        consumer = newConsumer(config);
+        consumer.subscribe(singletonList(topic));
+        final int generation = 1;
+        final String memberId = "newMemberId";
+        final GroupMetadataUpdateEvent groupMetadataUpdateEvent = new GroupMetadataUpdateEvent(
+            generation,
+            memberId
+        );
+        backgroundEventQueue.add(groupMetadataUpdateEvent);
+        final TopicPartition topicPartition = new TopicPartition(topic, 0);
+        final List<ConsumerRecord<String, String>> records = singletonList(
+            new ConsumerRecord<>(topic, 0, 2, "key1", "value1")
+        );
+        when(fetchCollector.collectFetch(any(FetchBuffer.class)))
+            .thenReturn(Fetch.forPartition(topicPartition, records, true));
+
+        consumer.poll(Duration.ZERO);
+
+        verify(fetchCollector).collectFetch(any(FetchBuffer.class));
+    }
+
+    @Test
+    public void testPollReturningRecordIfGroupMetadataHasValidGenerationAndGroupManagementIsUsedWithPattern() {
+        final String topic = "topic";
+        final ConsumerConfig config = new ConsumerConfig(requiredConsumerPropertiesAndGroupId("consumerGroupA"));
+        final int generation = 1;
+        final String memberId = "newMemberId";
+        final GroupMetadataUpdateEvent groupMetadataUpdateEvent = new GroupMetadataUpdateEvent(
+            generation,
+            memberId
+        );
+        backgroundEventQueue.add(groupMetadataUpdateEvent);
+        final TopicPartition topicPartition = new TopicPartition(topic, 0);
+        final List<ConsumerRecord<String, String>> records = singletonList(
+            new ConsumerRecord<>(topic, 0, 2, "key1", "value1")
+        );
+        when(fetchCollector.collectFetch(any(FetchBuffer.class)))
+            .thenReturn(Fetch.forPartition(topicPartition, records, true));
+        when(metadata.fetch()).thenReturn(Cluster.empty());
+        consumer = newConsumer(config);
+        consumer.subscribe(Pattern.compile(topic));
+
+        consumer.poll(Duration.ZERO);
+
+        verify(fetchCollector).collectFetch(any(FetchBuffer.class));
+    }
+
+    @Test
+    public void testGroupMetadataIsResetAfterUnsubscribe() {
+        final String groupId = "consumerGroupA";
+        final ConsumerConfig config = new ConsumerConfig(requiredConsumerPropertiesAndGroupId(groupId));
+        consumer = newConsumer(config);
+        consumer.subscribe(singletonList("topic"));
+        final int generation = 1;
+        final String memberId = "newMemberId";
+        final ConsumerGroupMetadata groupMetadataAfterSubscription = new ConsumerGroupMetadata(
+            groupId,
+            generation,
+            memberId,
+            Optional.empty()
+        );
+        final GroupMetadataUpdateEvent groupMetadataUpdateEvent = new GroupMetadataUpdateEvent(
+            generation,
+            memberId
+        );
+        backgroundEventQueue.add(groupMetadataUpdateEvent);
+        when(fetchCollector.collectFetch(any(FetchBuffer.class))).thenReturn(Fetch.empty());
+        consumer.poll(Duration.ZERO);
+
+        assertEquals(groupMetadataAfterSubscription, consumer.groupMetadata());
+
+        completeUnsubscribeApplicationEventSuccessfully();
+
+        consumer.unsubscribe();
+
+        final ConsumerGroupMetadata groupMetadataAfterUnsubscription = new ConsumerGroupMetadata(
+            groupId,
+            JoinGroupRequest.UNKNOWN_GENERATION_ID,
+            JoinGroupRequest.UNKNOWN_MEMBER_ID,
+            Optional.empty()
+        );
+
+        assertEquals(groupMetadataAfterUnsubscription, consumer.groupMetadata());
+    }
+
     /**
      * Tests that the consumer correctly invokes the callbacks for {@link ConsumerRebalanceListener} that was
      * specified. We don't go through the full effort to emulate heartbeats and correct group management here. We're
@@ -1416,6 +1558,13 @@ public class AsyncKafkaConsumerTest {
             new ConsumerRecord<>(topicName, partition, 3, "key2", "value2")
         );
 
+        final int generation = 1;
+        final String memberId = "newMemberId";
+        final GroupMetadataUpdateEvent groupMetadataUpdateEvent = new GroupMetadataUpdateEvent(
+            generation,
+            memberId
+        );
+        backgroundEventQueue.add(groupMetadataUpdateEvent);
         // On the first iteration, return no data; on the second, return two records
         doAnswer(invocation -> {
             // Mock the subscription being assigned as the first fetch is collected
