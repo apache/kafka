@@ -898,29 +898,6 @@ public interface Admin extends AutoCloseable {
     }
 
     /**
-     * Describe some share group IDs in the cluster.
-     *
-     * @param groupIds The IDs of the share groups to describe.
-     * @param options  The options to use when describing the share groups.
-     * @return The DescribeShareGroupResult.
-     */
-    DescribeShareGroupsResult describeShareGroups(Collection<String> groupIds,
-                                                        DescribeShareGroupsOptions options);
-
-    /**
-     * Describe some share group IDs in the cluster, with the default options.
-     * <p>
-     * This is a convenience method for {@link #describeShareGroups(Collection, DescribeShareGroupsOptions)}
-     * with default options. See the overload for more details.
-     *
-     * @param groupIds The IDs of the share groups to describe.
-     * @return The DescribeShareGroupResult.
-     */
-    default DescribeShareGroupsResult describeShareGroups(Collection<String> groupIds) {
-        return describeShareGroups(groupIds, new DescribeShareGroupsOptions());
-    }
-
-    /**
      * List the consumer groups available in the cluster.
      *
      * @param options The options to use when listing the consumer groups.

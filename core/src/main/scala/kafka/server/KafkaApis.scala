@@ -257,7 +257,6 @@ class KafkaApis(val requestChannel: RequestChannel,
         case ApiKeys.PUSH_TELEMETRY => handlePushTelemetryRequest(request)
         case ApiKeys.LIST_CLIENT_METRICS_RESOURCES => handleListClientMetricsResources(request)
         case ApiKeys.SHARE_GROUP_HEARTBEAT => handleShareGroupHeartbeat(request).exceptionally(handleError)
-        case ApiKeys.SHARE_GROUP_DESCRIBE => handleShareGroupDescribe(request).exceptionally(handleError)
         case _ => throw new IllegalStateException(s"No handler for request api key ${request.header.apiKey}")
       }
     } catch {
@@ -3870,55 +3869,6 @@ class KafkaApis(val requestChannel: RequestChannel,
           }
 
           requestHelper.sendMaybeThrottle(request, new ConsumerGroupDescribeResponse(response))
-        }
-      }
-    }
-
-  }
-
-  def handleShareGroupDescribe(request: RequestChannel.Request): CompletableFuture[Unit] = {
-    val shareGroupDescribeRequest = request.body[ShareGroupDescribeRequest]
-
-    if (!config.isNewGroupCoordinatorEnabled) {
-      // The API is not supported by the "old" group coordinator (the default). If the
-      // new one is not enabled, we fail directly here. (KIP-848)
-      requestHelper.sendMaybeThrottle(request, request.body[ShareGroupDescribeRequest].getErrorResponse(Errors.UNSUPPORTED_VERSION.exception))
-      CompletableFuture.completedFuture[Unit](())
-    } else if (!config.isShareGroupEnabled) {
-      // The API is not supported when the configuration `group.share.enable` has not been set explicitly
-      requestHelper.sendMaybeThrottle(request, shareGroupDescribeRequest.getErrorResponse(Errors.UNSUPPORTED_VERSION.exception))
-      CompletableFuture.completedFuture[Unit](())
-    } else {
-      val response = new ShareGroupDescribeResponseData()
-
-      val authorizedGroups = new ArrayBuffer[String]()
-      shareGroupDescribeRequest.data.groupIds.forEach { groupId =>
-        if (!authHelper.authorize(request.context, DESCRIBE, GROUP, groupId)) {
-          response.groups.add(new ShareGroupDescribeResponseData.DescribedGroup()
-            .setGroupId(groupId)
-            .setErrorCode(Errors.GROUP_AUTHORIZATION_FAILED.code)
-          )
-        } else {
-          authorizedGroups += groupId
-        }
-      }
-
-      groupCoordinator.shareGroupDescribe(
-        request.context,
-        authorizedGroups.asJava
-      ).handle[Unit] { (results, exception) =>
-        if (exception != null) {
-          requestHelper.sendMaybeThrottle(request, shareGroupDescribeRequest.getErrorResponse(exception))
-        } else {
-          if (response.groups.isEmpty) {
-            // If the response is empty, we can directly reuse the results.
-            response.setGroups(results)
-          } else {
-            // Otherwise, we have to copy the results into the existing ones.
-            response.groups.addAll(results)
-          }
-
-          requestHelper.sendMaybeThrottle(request, new ShareGroupDescribeResponse(response))
         }
       }
     }

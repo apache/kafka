@@ -16,10 +16,6 @@
  */
 package org.apache.kafka.coordinator.group;
 
-import org.apache.kafka.common.Uuid;
-import org.apache.kafka.image.TopicImage;
-import org.apache.kafka.image.TopicsImage;
-
 import java.util.OptionalInt;
 import java.util.OptionalLong;
 
@@ -40,20 +36,5 @@ public class Utils {
      */
     public static OptionalLong ofSentinel(long value) {
         return value != -1 ? OptionalLong.of(value) : OptionalLong.empty();
-    }
-
-    /**
-     * @return Return specific topic image corresponding to topic id from topicsImage or null
-     */
-    public static String lookupTopicNameById(
-        Uuid topicId,
-        TopicsImage topicsImage
-    ) {
-        TopicImage topicImage = topicsImage.getTopic(topicId);
-        if (topicImage != null) {
-            return topicImage.name();
-        } else {
-            return null;
-        }
     }
 }

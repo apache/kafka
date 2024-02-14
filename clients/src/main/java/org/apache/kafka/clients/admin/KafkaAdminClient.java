@@ -48,7 +48,6 @@ import org.apache.kafka.clients.admin.internals.DeleteConsumerGroupsHandler;
 import org.apache.kafka.clients.admin.internals.DeleteRecordsHandler;
 import org.apache.kafka.clients.admin.internals.DescribeConsumerGroupsHandler;
 import org.apache.kafka.clients.admin.internals.DescribeProducersHandler;
-import org.apache.kafka.clients.admin.internals.DescribeShareGroupsHandler;
 import org.apache.kafka.clients.admin.internals.DescribeTransactionsHandler;
 import org.apache.kafka.clients.admin.internals.FenceProducersHandler;
 import org.apache.kafka.clients.admin.internals.ListConsumerGroupOffsetsHandler;
@@ -3296,17 +3295,6 @@ public class KafkaAdminClient extends AdminClient {
         invokeDriver(handler, future, options.timeoutMs);
         return new DescribeConsumerGroupsResult(future.all().entrySet().stream()
                 .collect(Collectors.toMap(entry -> entry.getKey().idValue, Map.Entry::getValue)));
-    }
-
-    @Override
-    public DescribeShareGroupsResult describeShareGroups(final Collection<String> groupIds,
-                                                               final DescribeShareGroupsOptions options) {
-        SimpleAdminApiFuture<CoordinatorKey, ShareGroupDescription> future =
-            DescribeShareGroupsHandler.newFuture(groupIds);
-        DescribeShareGroupsHandler handler = new DescribeShareGroupsHandler(options.includeAuthorizedOperations(), logContext);
-        invokeDriver(handler, future, options.timeoutMs);
-        return new DescribeShareGroupsResult(future.all().entrySet().stream()
-            .collect(Collectors.toMap(entry -> entry.getKey().idValue, Map.Entry::getValue)));
     }
 
     private Set<AclOperation> validAclOperations(final int authorizedOperations) {
