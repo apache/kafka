@@ -50,6 +50,7 @@ public class RequestManagers implements Closeable {
     public final Optional<HeartbeatRequestManager> heartbeatRequestManager;
     public final Optional<ShareHeartbeatRequestManager> shareHeartbeatRequestManager;
     public final Optional<MembershipManager> membershipManager;
+    public final Optional<ShareMembershipManager> shareMembershipManager;
     public final OffsetsRequestManager offsetsRequestManager;
     public final TopicMetadataRequestManager topicMetadataRequestManager;
     public final FetchRequestManager fetchRequestManager;
@@ -73,6 +74,7 @@ public class RequestManagers implements Closeable {
         this.heartbeatRequestManager = heartbeatRequestManager;
         this.shareHeartbeatRequestManager = Optional.empty();
         this.membershipManager = membershipManager;
+        this.shareMembershipManager = Optional.empty();
 
         List<Optional<? extends RequestManager>> list = new ArrayList<>();
         list.add(coordinatorRequestManager);
@@ -87,13 +89,15 @@ public class RequestManagers implements Closeable {
 
     public RequestManagers(LogContext logContext,
                            Optional<CoordinatorRequestManager> coordinatorRequestManager,
-                           Optional<ShareHeartbeatRequestManager> shareHeartbeatRequestManager) {
+                           Optional<ShareHeartbeatRequestManager> shareHeartbeatRequestManager,
+                           Optional<ShareMembershipManager> shareMembershipManager) {
         this.log = logContext.logger(RequestManagers.class);
         this.coordinatorRequestManager = coordinatorRequestManager;
         this.commitRequestManager = Optional.empty();
         this.heartbeatRequestManager = Optional.empty();
         this.shareHeartbeatRequestManager = shareHeartbeatRequestManager;
         this.membershipManager = Optional.empty();
+        this.shareMembershipManager = shareMembershipManager;
         this.offsetsRequestManager = null;
         this.topicMetadataRequestManager = null;
         this.fetchRequestManager = null;
@@ -101,6 +105,7 @@ public class RequestManagers implements Closeable {
         List<Optional<? extends RequestManager>> list = new ArrayList<>();
         list.add(coordinatorRequestManager);
         list.add(shareHeartbeatRequestManager);
+        list.add(shareMembershipManager);
         entries = Collections.unmodifiableList(list);
     }
 
@@ -285,7 +290,8 @@ public class RequestManagers implements Closeable {
                 return new RequestManagers(
                         logContext,
                         Optional.of(coordinator),
-                        Optional.of(shareHeartbeatRequestManager)
+                        Optional.of(shareHeartbeatRequestManager),
+                        Optional.of(shareMembershipManager)
                 );
             }
         };

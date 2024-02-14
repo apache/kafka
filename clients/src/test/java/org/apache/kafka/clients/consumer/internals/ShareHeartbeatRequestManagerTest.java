@@ -429,7 +429,9 @@ public class ShareHeartbeatRequestManagerTest {
                 .setAssignment(assignmentTopic1));
         when(metadata.topicNames()).thenReturn(Collections.singletonMap(topicId, "topic1"));
         membershipManager.onHeartbeatResponseReceived(rs1.data());
-        assertEquals(MemberState.ACKNOWLEDGING, membershipManager.state());
+
+        // We remain in RECONCILING state, as the assignment will be reconciled on the next poll
+        assertEquals(MemberState.RECONCILING, membershipManager.state());
     }
 
     @Test

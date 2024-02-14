@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
-import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.GroupRebalanceConfig;
 import org.apache.kafka.clients.MockClient;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
@@ -35,7 +34,6 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
 
 import java.io.Closeable;
-import java.time.Duration;
 import java.util.HashMap;
 import java.util.Optional;
 import java.util.Properties;
@@ -102,24 +100,10 @@ public class ShareConsumerTestBuilder implements Closeable {
         this.applicationEventQueue = new LinkedBlockingQueue<>();
         this.backgroundEventQueue = new LinkedBlockingQueue<>();
         this.backgroundEventHandler = spy(new BackgroundEventHandler(logContext, backgroundEventQueue));
-//        Properties groupRebalanceProperties = new Properties();
-//        groupRebalanceProperties.put(SESSION_TIMEOUT_MS_CONFIG, 100);
-//        groupRebalanceProperties.put(MAX_POLL_INTERVAL_MS_CONFIG, DEFAULT_MAX_POLL_INTERVAL_MS);
-//        groupRebalanceProperties.put(HEARTBEAT_INTERVAL_MS_CONFIG, DEFAULT_HEARTBEAT_INTERVAL_MS);
-//        groupInfo.ifPresent(gi -> {groupRebalanceProperties.put(GROUP_ID_CONFIG, gi.groupId);});
-//        groupRebalanceProperties.put(RETRY_BACKOFF_MS_CONFIG, DEFAULT_RETRY_BACKOFF_MS);
-//        groupRebalanceProperties.put(RETRY_BACKOFF_MAX_MS_CONFIG, DEFAULT_RETRY_BACKOFF_MAX_MS);
-//        groupRebalanceProperties.put("internal.leave.group.on.close", true);
-//        ConsumerConfig consumerConfig = new ConsumerConfig(groupRebalanceProperties);
-//        GroupRebalanceConfig groupRebalanceConfig = new GroupRebalanceConfig(
-//                consumerConfig,
-//                GroupRebalanceConfig.ProtocolType.SHARE);
-        ApiVersions apiVersions = new ApiVersions();
 
         Properties properties = new Properties();
         properties.put(KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
         properties.put(VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
-        properties.put(RETRY_BACKOFF_MS_CONFIG, DEFAULT_RETRY_BACKOFF_MS);
         properties.put(REQUEST_TIMEOUT_MS_CONFIG, DEFAULT_REQUEST_TIMEOUT_MS);
         properties.put(SESSION_TIMEOUT_MS_CONFIG, 100);
         properties.put(MAX_POLL_INTERVAL_MS_CONFIG, DEFAULT_MAX_POLL_INTERVAL_MS);
@@ -159,7 +143,7 @@ public class ShareConsumerTestBuilder implements Closeable {
                 logContext,
                 client));
 
-        ShareMembershipManager shareMembershipManager = spy(new ShareMembershipManager(
+        ShareMembershipManager membershipManager = spy(new ShareMembershipManager(
                 groupInfo.groupId,
                 null,
                 subscriptions,
@@ -178,7 +162,7 @@ public class ShareConsumerTestBuilder implements Closeable {
 
         ShareHeartbeatRequestManager.HeartbeatState heartbeatState = spy(new ShareHeartbeatRequestManager.HeartbeatState(
                 subscriptions,
-                shareMembershipManager,
+                membershipManager,
                 DEFAULT_MAX_POLL_INTERVAL_MS));
         ShareHeartbeatRequestManager.HeartbeatRequestState heartbeatRequestState = spy(new ShareHeartbeatRequestManager.HeartbeatRequestState(
                 logContext,
@@ -192,7 +176,7 @@ public class ShareConsumerTestBuilder implements Closeable {
                 pollTimer,
                 config,
                 coordinator,
-                shareMembershipManager,
+                membershipManager,
                 heartbeatState,
                 heartbeatRequestState,
                 backgroundEventHandler,
@@ -202,11 +186,12 @@ public class ShareConsumerTestBuilder implements Closeable {
         this.heartbeatRequestManager = Optional.of(heartbeat);
         this.heartbeatState = Optional.of(heartbeatState);
         this.heartbeatRequestState = Optional.of(heartbeatRequestState);
-        this.shareMembershipManager = Optional.of(shareMembershipManager);
+        this.shareMembershipManager = Optional.of(membershipManager);
 
         this.requestManagers = new RequestManagers(logContext,
                 coordinatorRequestManager,
-                heartbeatRequestManager);
+                heartbeatRequestManager,
+                shareMembershipManager);
         this.applicationEventProcessor = spy(new ApplicationEventProcessor(
                         logContext,
                         applicationEventQueue,
@@ -220,31 +205,6 @@ public class ShareConsumerTestBuilder implements Closeable {
     public void close() {
         closeQuietly(requestManagers, RequestManagers.class.getSimpleName());
         closeQuietly(applicationEventProcessor, ApplicationEventProcessor.class.getSimpleName());
-    }
-
-    public static class ConsumerNetworkThreadTestBuilder extends ShareConsumerTestBuilder {
-
-        final ConsumerNetworkThread consumerNetworkThread;
-
-        public ConsumerNetworkThreadTestBuilder() {
-            this(createDefaultGroupInformation());
-        }
-
-        public ConsumerNetworkThreadTestBuilder(GroupInformation groupInfo) {
-            super(groupInfo);
-            this.consumerNetworkThread = new ConsumerNetworkThread(
-                    logContext,
-                    time,
-                    () -> applicationEventProcessor,
-                    () -> networkClientDelegate,
-                    () -> requestManagers
-            );
-        }
-
-        @Override
-        public void close() {
-            consumerNetworkThread.close(Duration.ZERO);
-        }
     }
 
     public static class GroupInformation {

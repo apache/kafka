@@ -72,7 +72,6 @@ public class ShareMembershipManagerTest {
     private static final String GROUP_ID = "test-group";
     private static final String MEMBER_ID = "test-member-1";
     private static final String RACK_ID = null;
-    private static final int REBALANCE_TIMEOUT = 100;
     private static final int MEMBER_EPOCH = 1;
 
     private final LogContext logContext = new LogContext();
@@ -114,7 +113,6 @@ public class ShareMembershipManagerTest {
                 GROUP_ID, RACK_ID, subscriptionState, metadata,
                 logContext, Optional.empty(), backgroundEventHandler);
         manager.transitionToJoining();
-        verify(metadata).addClusterUpdateListener(manager);
         clearInvocations(metadata);
 
         // Following joins should not register again.
@@ -125,7 +123,6 @@ public class ShareMembershipManagerTest {
         manager.onHeartbeatRequestSent();
         assertEquals(MemberState.UNSUBSCRIBED, manager.state());
         manager.transitionToJoining();
-        verify(metadata, never()).addClusterUpdateListener(manager);
     }
 
     @Test
@@ -148,17 +145,10 @@ public class ShareMembershipManagerTest {
         membershipManager.onHeartbeatResponseReceived(responseWithoutAssignment.data());
         assertNotEquals(MemberState.RECONCILING, membershipManager.state());
 
-        // It is necessary to prime the SubscriptionState with a subscription so that
-        // it will accept partitions assigned by the following heartbeat response
-        Set<String> topicNames = new HashSet<>();
-        topicNames.add("topic1");
-        topicNames.add("topic2");
-        subscriptionState.subscribe(topicNames, Optional.empty());
-
         ShareGroupHeartbeatResponse responseWithAssignment =
                 createShareGroupHeartbeatResponse(createAssignment(true));
         membershipManager.onHeartbeatResponseReceived(responseWithAssignment.data());
-        assertEquals(MemberState.ACKNOWLEDGING, membershipManager.state());
+        assertEquals(MemberState.RECONCILING, membershipManager.state());
     }
 
     @Test
@@ -357,6 +347,7 @@ public class ShareMembershipManagerTest {
                 );
 
         receiveAssignment(newAssignment, membershipManager);
+        membershipManager.poll(time.milliseconds());
 
         verifyReconciliationNotTriggered(membershipManager);
         assertEquals(MemberState.RECONCILING, membershipManager.state());
@@ -373,7 +364,7 @@ public class ShareMembershipManagerTest {
         );
         when(metadata.topicNames()).thenReturn(fullTopicMetadata);
 
-        membershipManager.onUpdate(null);
+        membershipManager.poll(time.milliseconds());
 
         verifyReconciliationTriggeredAndCompleted(membershipManager, Arrays.asList(topicId1Partition0, topicId2Partition0));
     }
@@ -394,6 +385,23 @@ public class ShareMembershipManagerTest {
     }
 
     @Test
+    public void testIgnoreHeartbeatWhenLeavingGroup() {
+        ShareMembershipManager membershipManager = createMemberInStableState();
+        mockLeaveGroup();
+
+        CompletableFuture<Void> leaveResult = membershipManager.leaveGroup();
+
+        membershipManager.onHeartbeatResponseReceived(createShareGroupHeartbeatResponse(createAssignment(true)).data());
+
+        assertEquals(MemberState.LEAVING, membershipManager.state());
+        assertEquals(-1, membershipManager.memberEpoch());
+        assertEquals(MEMBER_ID, membershipManager.memberId());
+        assertTrue(membershipManager.currentAssignment().isEmpty());
+        assertFalse(leaveResult.isDone(), "Leave group result should not complete until the " +
+                "heartbeat request to leave is sent out.");
+    }
+
+    @Test
     public void testLeaveGroupWhenMemberOwnsAssignment() {
         Uuid topicId = Uuid.randomUuid();
         String topicName = "topic1";
@@ -401,6 +409,9 @@ public class ShareMembershipManagerTest {
         mockOwnedPartitionAndAssignmentReceived(membershipManager, topicId, topicName, Collections.emptyList());
 
         receiveAssignment(topicId, Arrays.asList(0, 1), membershipManager);
+
+        verifyReconciliationNotTriggered(membershipManager);
+        membershipManager.poll(time.milliseconds());
 
         List<TopicIdPartition> assignedPartitions = Arrays.asList(
                 new TopicIdPartition(topicId, new TopicPartition(topicName, 0)),
@@ -558,6 +569,10 @@ public class ShareMembershipManagerTest {
         String topicName = "topic1";
         when(metadata.topicNames()).thenReturn(Collections.singletonMap(topicId, topicName));
         receiveAssignment(topicId, Collections.singletonList(0), membershipManager);
+
+        verifyReconciliationNotTriggered(membershipManager);
+        membershipManager.poll(time.milliseconds());
+
         Set<TopicPartition> expectedAssignment = Collections.singleton(new TopicPartition(topicName, 0));
         assertEquals(MemberState.ACKNOWLEDGING, membershipManager.state());
         verify(subscriptionState).assignFromSubscribed(expectedAssignment);
@@ -635,7 +650,8 @@ public class ShareMembershipManagerTest {
         String topicName = "topic1";
         when(metadata.topicNames()).thenReturn(Collections.singletonMap(topicId, topicName));
         when(subscriptionState.hasAutoAssignedPartitions()).thenReturn(true);
-        membershipManager.onUpdate(null);
+
+        membershipManager.poll(time.milliseconds());
 
         // Assignment should have been reconciled.
         Set<TopicPartition> expectedAssignment = Collections.singleton(new TopicPartition(topicName, 1));
@@ -696,6 +712,9 @@ public class ShareMembershipManagerTest {
 
         receiveAssignment(topicId, Arrays.asList(0, 1), membershipManager);
 
+        verifyReconciliationNotTriggered(membershipManager);
+        membershipManager.poll(time.milliseconds());
+
         List<TopicIdPartition> assignedPartitions = topicIdPartitions(topicId, topicName, 0, 1);
         verifyReconciliationTriggeredAndCompleted(membershipManager, assignedPartitions);
     }
@@ -711,6 +730,9 @@ public class ShareMembershipManagerTest {
 
         // New assignment received, adding partitions 1 and 2 to the previously owned partition 0.
         receiveAssignment(topicId, Arrays.asList(0, 1, 2), membershipManager);
+
+        verifyReconciliationNotTriggered(membershipManager);
+        membershipManager.poll(time.milliseconds());
 
         List<TopicIdPartition> assignedPartitions = new ArrayList<>();
         assignedPartitions.add(ownedPartition);
@@ -729,6 +751,10 @@ public class ShareMembershipManagerTest {
         mockOwnedPartitionAndAssignmentReceived(membershipManager, topicId, topicName, Collections.emptyList());
         List<TopicIdPartition> expectedAssignmentReconciled = topicIdPartitions(topicId, topicName, 0, 1);
         receiveAssignment(topicId, Arrays.asList(0, 1), membershipManager);
+
+        verifyReconciliationNotTriggered(membershipManager);
+        membershipManager.poll(time.milliseconds());
+
         verifyReconciliationTriggeredAndCompleted(membershipManager, expectedAssignmentReconciled);
         assertEquals(MemberState.ACKNOWLEDGING, membershipManager.state());
         clearInvocations(subscriptionState, membershipManager);
@@ -762,6 +788,9 @@ public class ShareMembershipManagerTest {
         // New assignment received, revoking partition 0, and assigning new partitions 1 and 2.
         receiveAssignment(topicId, Arrays.asList(1, 2), membershipManager);
 
+        verifyReconciliationNotTriggered(membershipManager);
+        membershipManager.poll(time.milliseconds());
+
         assertEquals(MemberState.ACKNOWLEDGING, membershipManager.state());
         assertEquals(topicIdPartitionsMap(topicId, 1, 2), membershipManager.currentAssignment());
         assertFalse(membershipManager.reconciliationInProgress());
@@ -791,7 +820,7 @@ public class ShareMembershipManagerTest {
         mockTopicNameInMetadataCache(Collections.singletonMap(topicId, topicName), true);
 
         // When metadata is updated, the member should re-trigger reconciliation
-        membershipManager.onUpdate(null);
+        membershipManager.poll(time.milliseconds());
         List<TopicIdPartition> expectedAssignmentReconciled = topicIdPartitions(topicId, topicName, 0, 1);
         verifyReconciliationTriggeredAndCompleted(membershipManager, expectedAssignmentReconciled);
         assertEquals(MemberState.ACKNOWLEDGING, membershipManager.state());
@@ -816,10 +845,10 @@ public class ShareMembershipManagerTest {
         assertEquals(Collections.singleton(topicId), membershipManager.topicsAwaitingReconciliation());
         verify(metadata).requestUpdate(anyBoolean());
 
-        // Metadata update received, but still without the unresolved topic in it. Should keep
+        // Next poll is run, but metadata still without the unresolved topic in it. Should keep
         // the unresolved and request update again.
         when(metadata.topicNames()).thenReturn(Collections.emptyMap());
-        membershipManager.onUpdate(null);
+        membershipManager.poll(time.milliseconds());
         verifyReconciliationNotTriggered(membershipManager);
         assertEquals(Collections.singleton(topicId), membershipManager.topicsAwaitingReconciliation());
         verify(metadata, times(2)).requestUpdate(anyBoolean());
@@ -836,6 +865,9 @@ public class ShareMembershipManagerTest {
         // Member received assignment to reconcile;
 
         receiveAssignment(topicId, Arrays.asList(0, 1), membershipManager);
+
+        verifyReconciliationNotTriggered(membershipManager);
+        membershipManager.poll(time.milliseconds());
 
         // Member should complete reconciliation
         assertEquals(MemberState.ACKNOWLEDGING, membershipManager.state());
@@ -857,6 +889,8 @@ public class ShareMembershipManagerTest {
 
         // Revoke one of the 2 partitions
         receiveAssignment(topicId, Collections.singletonList(1), membershipManager);
+
+        membershipManager.poll(time.milliseconds());
 
         // Revocation should complete without requesting any metadata update given that the topic
         // received in target assignment should exist in local topic name cache.
@@ -937,16 +971,14 @@ public class ShareMembershipManagerTest {
 
         receiveAssignment(topicId, partitions, membershipManager);
 
+        verifyReconciliationNotTriggered(membershipManager);
+        membershipManager.poll(time.milliseconds());
+
         List<TopicIdPartition> assignedPartitions =
                 partitions.stream().map(tp -> new TopicIdPartition(topicId,
                         new TopicPartition(topicName, tp))).collect(Collectors.toList());
         verifyReconciliationTriggeredAndCompleted(membershipManager, assignedPartitions);
         return membershipManager;
-    }
-
-    private void verifyReconciliationTriggered(ShareMembershipManager membershipManager) {
-        verify(membershipManager).markReconciliationInProgress();
-        assertEquals(MemberState.RECONCILING, membershipManager.state());
     }
 
     private void verifyReconciliationNotTriggered(ShareMembershipManager membershipManager) {
@@ -1045,6 +1077,8 @@ public class ShareMembershipManagerTest {
         when(subscriptionState.hasAutoAssignedPartitions()).thenReturn(true);
 
         membershipManager.onHeartbeatResponseReceived(heartbeatResponse.data());
+        membershipManager.poll(time.milliseconds());
+
         if (expectSubscriptionUpdated) {
             verify(subscriptionState).assignFromSubscribed(anyCollection());
         } else {
@@ -1079,17 +1113,6 @@ public class ShareMembershipManagerTest {
                                 .setTopicId(topicId)
                                 .setPartitions(partitions)));
         ShareGroupHeartbeatResponse heartbeatResponse = createShareGroupHeartbeatResponse(targetAssignment);
-        membershipManager.onHeartbeatResponseReceived(heartbeatResponse.data());
-    }
-
-    private void receiveAssignmentAfterRejoin(Uuid topicId, List<Integer> partitions, ShareMembershipManager membershipManager) {
-        ShareGroupHeartbeatResponseData.Assignment targetAssignment = new ShareGroupHeartbeatResponseData.Assignment()
-                .setAssignedTopicPartitions(Collections.singletonList(
-                        new ShareGroupHeartbeatResponseData.TopicPartitions()
-                                .setTopicId(topicId)
-                                .setPartitions(partitions)));
-        ShareGroupHeartbeatResponse heartbeatResponse =
-                createShareGroupHeartbeatResponseWithBumpedEpoch(targetAssignment);
         membershipManager.onHeartbeatResponseReceived(heartbeatResponse.data());
     }
 
@@ -1174,20 +1197,6 @@ public class ShareMembershipManagerTest {
                 .setErrorCode(Errors.NONE.code())
                 .setMemberId(MEMBER_ID)
                 .setMemberEpoch(MEMBER_EPOCH)
-                .setAssignment(assignment));
-    }
-
-    /**
-     * Create heartbeat response with the given assignment and a bumped epoch (incrementing by 1
-     * as default but could be any increment). This will be used to mock when a member
-     * receives a heartbeat response to the join request, and the response includes an assignment.
-     */
-    private ShareGroupHeartbeatResponse createShareGroupHeartbeatResponseWithBumpedEpoch(
-            ShareGroupHeartbeatResponseData.Assignment assignment) {
-        return new ShareGroupHeartbeatResponse(new ShareGroupHeartbeatResponseData()
-                .setErrorCode(Errors.NONE.code())
-                .setMemberId(MEMBER_ID)
-                .setMemberEpoch(MEMBER_EPOCH + 1)
                 .setAssignment(assignment));
     }
 

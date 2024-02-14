@@ -19,12 +19,11 @@ package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
+import org.apache.kafka.clients.consumer.internals.NetworkClientDelegate.PollResult;
 import org.apache.kafka.clients.consumer.internals.Utils.TopicIdPartitionComparator;
 import org.apache.kafka.clients.consumer.internals.Utils.TopicPartitionComparator;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEventHandler;
 import org.apache.kafka.clients.consumer.internals.events.ErrorBackgroundEvent;
-import org.apache.kafka.common.ClusterResource;
-import org.apache.kafka.common.ClusterResourceListener;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
@@ -90,7 +89,7 @@ import java.util.stream.Collectors;
  * </ol>
  *
  */
-public class ShareMembershipManager implements ClusterResourceListener {
+public class ShareMembershipManager implements RequestManager {
 
     /**
      * TopicPartition comparator based on topic name and partition id.
@@ -174,7 +173,7 @@ public class ShareMembershipManager implements ClusterResourceListener {
     private final Map<Uuid, SortedSet<Integer>> currentTargetAssignment;
 
     /**
-     * If there is a reconciliation running. This will be true if {@link #reconcile()} has been triggered
+     * If there is a reconciliation running. This will be true if {@link #maybeReconcile()} has been triggered
      * after receiving a heartbeat response, or a metadata update.
      */
     private boolean reconciliationInProgress;
@@ -192,14 +191,6 @@ public class ShareMembershipManager implements ClusterResourceListener {
      * (heartbeat request to leave is sent out). This will be empty if the member is not leaving.
      */
     private Optional<CompletableFuture<Void>> leaveGroupInProgress = Optional.empty();
-
-    /**
-     * True if the member has registered to be notified when the cluster metadata is updated.
-     * This is initially false, as the member that is not part of a consumer group does not
-     * require metadata updated. This becomes true the first time the member joins on the
-     * {@link #transitionToJoining()}
-     */
-    private boolean isRegisteredForMetadataUpdates;
 
     /**
      * Registered listeners that will be notified whenever the memberID/epoch gets updated (valid
@@ -306,6 +297,12 @@ public class ShareMembershipManager implements ClusterResourceListener {
             throw new IllegalArgumentException(errorMessage);
         }
 
+        if (state == MemberState.LEAVING) {
+            log.debug("Ignoring heartbeat response received from broker. Member {} with epoch {} is " +
+                    "already leaving the group.", memberId, memberEpoch);
+            return;
+        }
+
         // Update the group member id label in the client telemetry reporter if the member id has
         // changed. Initially the member id is empty, and it is updated when the member joins the
         // group. This is done here to avoid updating the label on every heartbeat response. Also
@@ -337,9 +334,9 @@ public class ShareMembershipManager implements ClusterResourceListener {
 
     /**
      * This will process the assignment received if it is different from the member's current
-     * assignment. If a new assignment is received, this will try to resolve the topic names from
-     * metadata, reconcile the resolved assignment, and keep the unresolved to be reconciled when
-     * metadata is discovered.
+     * assignment. If a new assignment is received, this will make sure reconciliation is attempted
+     * on the next call to `poll`. If another reconciliation is currently in process, the first `poll`
+     * after that reconciliation will trigger the new reconciliation.
      *
      * @param assignment Assignment received from the broker.
      */
@@ -350,7 +347,6 @@ public class ShareMembershipManager implements ClusterResourceListener {
             // assignment from the broker, different from the current assignment. Note that the
             // reconciliation might not be triggered just yet because of missing metadata.
             transitionTo(MemberState.RECONCILING);
-            reconcile();
         } else {
             // Same assignment received, nothing to reconcile.
             log.debug("Target assignment {} received from the broker is equals to the member " +
@@ -487,18 +483,6 @@ public class ShareMembershipManager implements ClusterResourceListener {
         resetEpoch();
         transitionTo(MemberState.JOINING);
         clearPendingAssignmentsAndLocalNamesCache();
-        registerForMetadataUpdates();
-    }
-
-    /**
-     * Register to get notified when the cluster metadata is updated, via the
-     * {@link #onUpdate(ClusterResource)}. Register only if the manager is not register already.
-     */
-    private void registerForMetadataUpdates() {
-        if (!isRegisteredForMetadataUpdates) {
-            this.metadata.addClusterUpdateListener(this);
-            isRegisteredForMetadataUpdates = true;
-        }
     }
 
     /**
@@ -525,16 +509,15 @@ public class ShareMembershipManager implements ClusterResourceListener {
 
         releaseAssignment();
 
-        // Clear the subscription, no matter if the callback execution failed or succeeded.
+        // Clear the subscription
         updateSubscription(new TreeSet<>(TOPIC_ID_PARTITION_COMPARATOR), true);
 
         // Transition to ensure that a heartbeat request is sent out to effectively leave the
-        // group (even in the case where the member had no assignment to release or when the
-        // callback execution failed.)
+        // group (even in the case where the member had no assignment to release)
         transitionToSendingLeaveGroup();
 
-        // Return future to indicate that the leave group is done when the callbacks
-        // complete, and the transition to send the heartbeat has been made.
+        // Return future to indicate that the leave group is done when the transition to send
+        // the heartbeat has been made.
         return leaveResult;
     }
 
@@ -667,13 +650,16 @@ public class ShareMembershipManager implements ClusterResourceListener {
     /**
      * Reconcile the assignment that has been received from the server. If for some topics, the
      * topic ID cannot be matched to a topic name, a metadata update will be triggered and only
-     * the subset of topics that are resolvable will be reconciled. Reconciliation will trigger the
-     * callbacks and update the subscription state. Note that only one reconciliation
-     * can be in progress at a time. If there is already another one in progress when this is
-     * triggered, it will be no-op, and the assignment will be reconciled on the next
-     * reconciliation loop.
+     * the subset of topics that are resolvable will be reconciled. Reconciliation will update
+     * the subscription state.
+     *
+     * <p>There are three conditions under which no reconciliation will be triggered:
+     *  - We have already reconciled the assignment (the target assignment is the same as the current assignment).
+     *  - Another reconciliation is already in progress.
+     *  - There are topics that haven't been added to the current assignment yet, but all their topic IDs
+     *    are missing from the target assignment.
      */
-    void reconcile() {
+    void maybeReconcile() {
         if (targetAssignmentReconciled()) {
             log.debug("Ignoring reconciliation attempt. Target assignment is equal to the " +
                     "current assignment.");
@@ -694,7 +680,7 @@ public class ShareMembershipManager implements ClusterResourceListener {
 
         // Keep copy of assigned TopicPartitions created from the TopicIdPartitions that are
         // being reconciled. Needed for interactions with the centralized subscription state that
-        // does not support topic IDs yet, and for the callbacks.
+        // does not support topic IDs yet.
         SortedSet<TopicPartition> assignedTopicPartitions = toTopicPartitionSet(assignedTopicIdPartitions);
 
         // Check same assignment. Based on topic names for now, until topic IDs are properly
@@ -761,8 +747,7 @@ public class ShareMembershipManager implements ClusterResourceListener {
                     "{} state with epoch {}. Interrupting reconciliation as it's " +
                     "not relevant anymore,", memberEpochOnReconciliationStart, state, memberEpoch);
             String reason = interruptedReconciliationErrorMessage();
-            log.error("Interrupting reconciliation after partitions assigned callback " +
-                    "completed. " + reason);
+            log.error("Interrupting reconciliation. " + reason);
         }
     }
 
@@ -785,7 +770,7 @@ public class ShareMembershipManager implements ClusterResourceListener {
     }
 
     /**
-     * @return Reason for interrupting a reconciliation progress when callbacks complete.
+     * @return Reason for interrupting a reconciliation progress.
      */
     private String interruptedReconciliationErrorMessage() {
         String reason;
@@ -901,8 +886,8 @@ public class ShareMembershipManager implements ClusterResourceListener {
         // while waiting for the commit to complete.
         if (state == MemberState.FATAL) {
             String errorMsg = String.format("Member %s with epoch %s received a fatal error " +
-                    "while waiting for a revocation commit to complete. Will abort revocation " +
-                    "without triggering user callback.", memberId, memberEpoch);
+                    "while waiting for a revocation commit to complete. Will abort revocation.",
+                    memberId, memberEpoch);
             log.debug(errorMsg);
         }
     }
@@ -917,7 +902,7 @@ public class ShareMembershipManager implements ClusterResourceListener {
      */
     private void assignPartitions(SortedSet<TopicIdPartition> assignedPartitions) {
         // Update assignment in the subscription state, and ensure that no fetching or positions
-        // initialization happens for the newly added partitions while the callback runs.
+        // initialization happens for the newly added partitions.
         updateSubscription(assignedPartitions, false);
 
         // Clear topic names cache, removing topics that are not assigned to the member anymore.
@@ -1037,27 +1022,10 @@ public class ShareMembershipManager implements ClusterResourceListener {
 
     /**
      * @return If there is a reconciliation in process now. Note that reconciliation is triggered
-     * by a call to {@link #reconcile()}. Visible for testing.
+     * by a call to {@link #maybeReconcile()}. Visible for testing.
      */
     boolean reconciliationInProgress() {
         return reconciliationInProgress;
-    }
-
-    /**
-     * When cluster metadata is updated, try to resolve topic names for topic IDs received in
-     * assignment that hasn't been resolved yet.
-     * <ul>
-     *     <li>Try to find topic names for all assignments</li>
-     *     <li>Add discovered topic names to the local topic names cache</li>
-     *     <li>If any topics are resolved, trigger a reconciliation process</li>
-     *     <li>If some topics still remain unresolved, request another metadata update</li>
-     * </ul>
-     */
-    @Override
-    public void onUpdate(ClusterResource clusterResource) {
-        if (state == MemberState.RECONCILING) {
-            reconcile();
-        }
     }
 
     /**
@@ -1071,5 +1039,13 @@ public class ShareMembershipManager implements ClusterResourceListener {
             throw new IllegalArgumentException("State updates listener cannot be null");
         }
         this.stateUpdatesListeners.add(listener);
+    }
+
+    @Override
+    public PollResult poll(long currentTimeMs) {
+        if (state == MemberState.RECONCILING) {
+            maybeReconcile();
+        }
+        return PollResult.EMPTY;
     }
 }
