@@ -25,7 +25,7 @@ import org.apache.kafka.common.message.ConsumerGroupDescribeResponseData;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.coordinator.group.Group;
-import org.apache.kafka.coordinator.group.GroupMetadataManagerTest;
+import org.apache.kafka.coordinator.group.MetadataImageBuilder;
 import org.apache.kafka.coordinator.group.OffsetAndMetadata;
 import org.apache.kafka.coordinator.group.OffsetExpirationCondition;
 import org.apache.kafka.coordinator.group.OffsetExpirationConditionImpl;
@@ -584,7 +584,7 @@ public class ConsumerGroupTest {
         Uuid barTopicId = Uuid.randomUuid();
         Uuid zarTopicId = Uuid.randomUuid();
 
-        MetadataImage image = new GroupMetadataManagerTest.MetadataImageBuilder()
+        MetadataImage image = new MetadataImageBuilder()
             .addTopic(fooTopicId, "foo", 1)
             .addTopic(barTopicId, "bar", 2)
             .addTopic(zarTopicId, "zar", 3)
@@ -922,7 +922,7 @@ public class ConsumerGroupTest {
         Uuid fooTopicId = Uuid.randomUuid();
         Uuid barTopicId = Uuid.randomUuid();
 
-        MetadataImage image = new GroupMetadataManagerTest.MetadataImageBuilder()
+        MetadataImage image = new MetadataImageBuilder()
             .addTopic(fooTopicId, "foo", 1)
             .addTopic(barTopicId, "bar", 2)
             .addRacks()
@@ -993,7 +993,7 @@ public class ConsumerGroupTest {
                     .setSubscribedTopicRegex("")
             ));
         ConsumerGroupDescribeResponseData.DescribedGroup actual = group.asDescribedGroup(1, "",
-            new GroupMetadataManagerTest.MetadataImageBuilder().build().topics());
+            new MetadataImageBuilder().build().topics());
 
         assertEquals(expected, actual);
     }

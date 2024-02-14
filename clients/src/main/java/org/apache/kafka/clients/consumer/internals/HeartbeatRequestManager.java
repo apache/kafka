@@ -267,11 +267,12 @@ public class HeartbeatRequestManager implements RequestManager {
             return logResponse(request);
         else
             return request.whenComplete((response, exception) -> {
+                long completionTimeMs = request.handler().completionTimeMs();
                 if (response != null) {
                     metricsManager.recordRequestLatency(response.requestLatencyMs());
-                    onResponse((ConsumerGroupHeartbeatResponse) response.responseBody(), request.handler().completionTimeMs());
+                    onResponse((ConsumerGroupHeartbeatResponse) response.responseBody(), completionTimeMs);
                 } else {
-                    onFailure(exception, request.handler().completionTimeMs());
+                    onFailure(exception, completionTimeMs);
                 }
             });
     }
@@ -341,9 +342,8 @@ public class HeartbeatRequestManager implements RequestManager {
         String message;
 
         this.heartbeatState.reset();
+        this.heartbeatRequestState.onFailedAttempt(currentTimeMs);
 
-        // TODO: upon encountering a fatal/fenced error, trigger onPartitionLost logic to give up the current
-        //  assignments.
         switch (error) {
             case NOT_COORDINATOR:
                 // the manager should retry immediately when the coordinator node becomes available again
@@ -352,6 +352,8 @@ public class HeartbeatRequestManager implements RequestManager {
                         coordinatorRequestManager.coordinator());
                 logInfo(message, response, currentTimeMs);
                 coordinatorRequestManager.markCoordinatorUnknown(errorMessage, currentTimeMs);
+                // Skip backoff so that the next HB is sent as soon as the new coordinator is discovered
+                heartbeatRequestState.reset();
                 break;
 
             case COORDINATOR_NOT_AVAILABLE:
@@ -360,6 +362,8 @@ public class HeartbeatRequestManager implements RequestManager {
                         coordinatorRequestManager.coordinator());
                 logInfo(message, response, currentTimeMs);
                 coordinatorRequestManager.markCoordinatorUnknown(errorMessage, currentTimeMs);
+                // Skip backoff so that the next HB is sent as soon as the new coordinator is discovered
+                heartbeatRequestState.reset();
                 break;
 
             case COORDINATOR_LOAD_IN_PROGRESS:
@@ -368,7 +372,6 @@ public class HeartbeatRequestManager implements RequestManager {
                                 "Will retry",
                         coordinatorRequestManager.coordinator());
                 logInfo(message, response, currentTimeMs);
-                heartbeatRequestState.onFailedAttempt(currentTimeMs);
                 break;
 
             case GROUP_AUTHORIZATION_FAILED:
@@ -397,6 +400,8 @@ public class HeartbeatRequestManager implements RequestManager {
                         membershipManager.memberId(), membershipManager.memberEpoch());
                 logInfo(message, response, currentTimeMs);
                 membershipManager.transitionToFenced();
+                // Skip backoff so that a next HB to rejoin is sent as soon as the fenced member releases its assignment
+                heartbeatRequestState.reset();
                 break;
 
             case UNKNOWN_MEMBER_ID:
@@ -404,6 +409,8 @@ public class HeartbeatRequestManager implements RequestManager {
                         membershipManager.memberId());
                 logInfo(message, response, currentTimeMs);
                 membershipManager.transitionToFenced();
+                // Skip backoff so that a next HB to rejoin is sent as soon as the fenced member releases its assignment
+                heartbeatRequestState.reset();
                 break;
 
             default:

@@ -111,7 +111,7 @@ abstract class AbstractApiVersionsRequestTest(cluster: ClusterInstance) {
 
     val defaultApiVersionsResponse = if (!cluster.isKRaftTest) {
       TestUtils.defaultApiVersionsResponse(0, ListenerType.ZK_BROKER, enableUnstableLastVersion)
-    } else if(cluster.controllerListenerName().asScala.contains(listenerName)) {
+    } else if (cluster.controllerListenerName().asScala.contains(listenerName)) {
       TestUtils.defaultApiVersionsResponse(0, ListenerType.CONTROLLER, enableUnstableLastVersion)
     } else {
       TestUtils.createApiVersionsResponse(0, expectedApis)

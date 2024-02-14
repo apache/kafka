@@ -27,7 +27,6 @@ import org.apache.kafka.clients.admin.ShareGroupListing;
 import org.apache.kafka.common.ShareGroupState;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.server.util.CommandLineUtils;
-import org.apache.kafka.tools.reassign.Tuple2;
 
 import java.io.IOException;
 import java.util.ArrayList;

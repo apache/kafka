@@ -105,7 +105,7 @@ class SchedulerTest {
   @Test
   def testPeriodicTask(): Unit = {
     scheduler.schedule("test", () => counter1.getAndIncrement(), 0, 5)
-    retry(30000){
+    retry(30000) {
       assertTrue(counter1.get >= 20, "Should count to 20")
     }
   }
