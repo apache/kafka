@@ -25,7 +25,7 @@ import org.apache.kafka.common.message.{ShareGroupHeartbeatRequestData, ShareGro
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{ShareGroupHeartbeatRequest, ShareGroupHeartbeatResponse}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertNotNull}
-import org.junit.jupiter.api.{Disabled, Tag, Timeout}
+import org.junit.jupiter.api.{Tag, Timeout}
 import org.junit.jupiter.api.extension.ExtendWith
 
 import java.util.stream.Collectors
@@ -50,7 +50,6 @@ class ShareGroupHeartbeatRequestTest(cluster: ClusterInstance) {
 
   // TODO: The below test runs fine for consumers joining and leaving the group but fails when checking for expected partition assignment.
   //  It should be enabled once the partition assignment in share groups is fixed
-  @Disabled
   @ClusterTest(serverProperties = Array(
     new ClusterConfigProperty(key = "group.coordinator.new.enable", value = "true"),
     new ClusterConfigProperty(key = "group.share.enable", value = "true"),

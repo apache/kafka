@@ -1396,7 +1396,8 @@ public class GroupMetadataManager {
                 .build();
 
         boolean bumpGroupEpoch = false;
-        if (!updatedMember.equals(member)) {
+        boolean memberUpdated = !updatedMember.equals(member);
+        if (memberUpdated) {
             if (!updatedMember.subscribedTopicNames().equals(member.subscribedTopicNames())) {
                 log.info("[GroupId {}] Member {} updated its subscribed topics to: {}.",
                         groupId, memberId, updatedMember.subscribedTopicNames());
@@ -1434,6 +1435,7 @@ public class GroupMetadataManager {
         // The delta between the existing and the new target assignment is persisted to the partition.
         int targetAssignmentEpoch = group.assignmentEpoch();
         Assignment targetAssignment = group.targetAssignment(memberId);
+        boolean assignmentEpochUpdated = false;
         if (groupEpoch > targetAssignmentEpoch) {
             try {
                 TargetAssignmentBuilder.TargetAssignmentResult assignmentResult =
@@ -1449,6 +1451,7 @@ public class GroupMetadataManager {
 
                 targetAssignment = assignmentResult.targetAssignment().get(memberId);
                 targetAssignmentEpoch = groupEpoch;
+                assignmentEpochUpdated = true;
             } catch (PartitionAssignorException ex) {
                 String msg = String.format("Failed to compute a new target assignment for epoch %d: %s",
                         groupEpoch, ex.getMessage());
@@ -1491,12 +1494,28 @@ public class GroupMetadataManager {
             response.setAssignment(createShareGroupResponseAssignment(updatedMember));
         }
 
-        // For a consumer group, this would occur as a result of applying (replaying) a member assignment
-        // record. Because a share group doesn't use assignment records, hence we need to do this here.
+        /*
+         For a consumer group, below updates would occur as a result of applying (replaying) a member
+         or group updates record. Because a share group doesn't use additional records, hence we need
+         to update members and group here.
+        */
+
+        // Create copy of old topics. Keeping reference from subscribed topic names will lead to
+        // incorrect old subscribed topics state.
+        Set<String> oldSubscribedTopics = new HashSet<>(group.subscribedTopicNames());
         // TODO: we need to verify if bumping the group epoch is done post updating the member's assignment
         //  then can it cause any issues. Epoch bump is done by replaying the group records.
         if (assignmentUpdated) {
+            // Update the member in the group which also updates the group's subscribed topics.
             group.updateMember(updatedMember);
+        }
+        if (memberUpdated) {
+            updateGroupsByTopics(groupId, oldSubscribedTopics, group.subscribedTopicNames());
+        }
+        if (assignmentEpochUpdated) {
+            // Update group target assignment epoch as we do not persist and replay the share group
+            // assignment epoch when target assignment is recomputed.
+            group.setTargetAssignmentEpoch(targetAssignmentEpoch);
         }
 
         return new CoordinatorResult<>(records, response);
@@ -2225,8 +2244,14 @@ public class GroupMetadataManager {
             });
             allGroupIds.forEach(groupId -> {
                 Group group = groups.get(groupId);
-                if (group != null && group.type() == Group.GroupType.CONSUMER) {
-                    ((ConsumerGroup) group).requestMetadataRefresh();
+                if (group != null) {
+                    // TODO: Another instance of defining the AbstractGroup for the ConsumerGroup and ShareGroup.
+                    //  to have a common definition.
+                    if (group.type() == Group.GroupType.CONSUMER) {
+                        ((ConsumerGroup) group).requestMetadataRefresh();
+                    } else if (group.type() == SHARE) {
+                        ((ShareGroup) group).requestMetadataRefresh();
+                    }
                 }
             });
         });
@@ -2270,6 +2295,10 @@ public class GroupMetadataManager {
                             " (size " + classicGroup.numMembers() + ") is over capacity " + classicGroupMaxSize +
                             ". Rebalancing in order to give a chance for consumers to commit offsets");
                     }
+                    break;
+
+                case SHARE:
+                    // Nothing for now for the ShareGroup as no members are persisted.
                     break;
 
                 default:
