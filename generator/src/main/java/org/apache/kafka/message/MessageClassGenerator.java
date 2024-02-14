@@ -27,7 +27,7 @@ public interface MessageClassGenerator {
     String outputName(MessageSpec spec);
 
     /**
-     * Generate the convertere, and then write it out.
+     * Generate the converter, and then write it out.
      *
      * @param spec      The message to generate a converter for.
      * @param writer    The writer to write out the state to.

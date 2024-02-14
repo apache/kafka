@@ -47,6 +47,56 @@ public interface CoordinatorLoader<U> extends AutoCloseable {
     }
 
     /**
+     * Object that is returned as part of the future from load(). Holds the partition load time and the
+     * end time.
+     */
+    class LoadSummary {
+        private final long startTimeMs;
+        private final long endTimeMs;
+        private final long schedulerQueueTimeMs;
+        private final long numRecords;
+        private final long numBytes;
+
+        public LoadSummary(long startTimeMs, long endTimeMs, long schedulerQueueTimeMs, long numRecords, long numBytes) {
+            this.startTimeMs = startTimeMs;
+            this.endTimeMs = endTimeMs;
+            this.schedulerQueueTimeMs = schedulerQueueTimeMs;
+            this.numRecords = numRecords;
+            this.numBytes = numBytes;
+        }
+
+        public long startTimeMs() {
+            return startTimeMs;
+        }
+
+        public long endTimeMs() {
+            return endTimeMs;
+        }
+
+        public long schedulerQueueTimeMs() {
+            return schedulerQueueTimeMs;
+        }
+
+        public long numRecords() {
+            return numRecords;
+        }
+
+        public long numBytes() {
+            return numBytes;
+        }
+
+        @Override
+        public String toString() {
+            return "LoadSummary(" +
+                "startTimeMs=" + startTimeMs +
+                ", endTimeMs=" + endTimeMs +
+                ", schedulerQueueTimeMs=" + schedulerQueueTimeMs +
+                ", numRecords=" + numRecords +
+                ", numBytes=" + numBytes + ")";
+        }
+    }
+
+    /**
      * Deserializer to translates bytes to T.
      *
      * @param <T> The record type.
@@ -69,7 +119,7 @@ public interface CoordinatorLoader<U> extends AutoCloseable {
      * @param tp            The TopicPartition to read from.
      * @param coordinator   The object to apply records to.
      */
-    CompletableFuture<Void> load(
+    CompletableFuture<LoadSummary> load(
         TopicPartition tp,
         CoordinatorPlayback<U> coordinator
     );

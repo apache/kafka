@@ -56,6 +56,7 @@ import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.test.InternalMockProcessorContext;
 import org.apache.kafka.test.MockClientSupplier;
+import org.apache.log4j.Level;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -90,6 +91,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -780,6 +782,66 @@ public class RecordCollectorTest {
     }
 
     @Test
+    public void shouldClearOffsetsOnCloseClean() {
+        shouldClearOffsetsOnClose(true);
+    }
+
+    @Test
+    public void shouldClearOffsetsOnCloseDirty() {
+        shouldClearOffsetsOnClose(false);
+    }
+
+    private void shouldClearOffsetsOnClose(final boolean clean) {
+        final StreamsProducer streamsProducer = mock(StreamsProducer.class);
+        when(streamsProducer.eosEnabled()).thenReturn(true);
+        final long offset = 1234L;
+        final RecordMetadata metadata = new RecordMetadata(
+            new TopicPartition(topic, 0),
+            offset,
+            0,
+            0,
+            1,
+            1
+        );
+        when(streamsProducer.send(any(), any())).thenAnswer(invocation -> {
+            ((Callback) invocation.getArgument(1)).onCompletion(metadata, null);
+            return null;
+        });
+        final ProcessorTopology topology = mock(ProcessorTopology.class);
+
+        final RecordCollector collector = new RecordCollectorImpl(
+            logContext,
+            taskId,
+            streamsProducer,
+            productionExceptionHandler,
+            streamsMetrics,
+            topology
+        );
+        collector.send(
+            topic + "-changelog",
+            "key",
+            "value",
+            new RecordHeaders(),
+            0,
+            0L,
+            new StringSerializer(),
+            new StringSerializer(),
+            null,
+            null
+        );
+
+        assertFalse(collector.offsets().isEmpty());
+
+        if (clean) {
+            collector.closeClean();
+        } else {
+            collector.closeDirty();
+        }
+
+        assertTrue(collector.offsets().isEmpty());
+    }
+
+    @Test
     public void shouldNotAbortTxOnCloseCleanIfEosEnabled() {
         final StreamsProducer streamsProducer = mock(StreamsProducer.class);
         when(streamsProducer.eosEnabled()).thenReturn(true);
@@ -1228,6 +1290,7 @@ public class RecordCollectorTest {
 
         try (final LogCaptureAppender logCaptureAppender =
                  LogCaptureAppender.createAndRegister(RecordCollectorImpl.class)) {
+            logCaptureAppender.setThreshold(Level.INFO);
 
             collector.send(topic, "3", "0", null, null, stringSerializer, stringSerializer, null, null, streamPartitioner);
             collector.flush();

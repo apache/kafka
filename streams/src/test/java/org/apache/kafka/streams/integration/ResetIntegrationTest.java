@@ -101,7 +101,7 @@ public class ResetIntegrationTest extends AbstractResetIntegrationTest {
 
     @Test
     public void shouldNotAllowToResetWhileStreamsIsRunning() {
-        final String appID = IntegrationTestUtils.safeUniqueTestName(getClass(), testName);
+        final String appID = IntegrationTestUtils.safeUniqueTestName(testName);
         final String[] parameters = new String[] {
             "--application-id", appID,
             "--bootstrap-server", cluster.bootstrapServers(),
@@ -125,7 +125,7 @@ public class ResetIntegrationTest extends AbstractResetIntegrationTest {
 
     @Test
     public void shouldNotAllowToResetWhenInputTopicAbsent() {
-        final String appID = IntegrationTestUtils.safeUniqueTestName(getClass(), testName);
+        final String appID = IntegrationTestUtils.safeUniqueTestName(testName);
         final String[] parameters = new String[] {
             "--application-id", appID,
             "--bootstrap-server", cluster.bootstrapServers(),
@@ -141,7 +141,7 @@ public class ResetIntegrationTest extends AbstractResetIntegrationTest {
 
     @Test
     public void shouldNotAllowToResetWhenIntermediateTopicAbsent() {
-        final String appID = IntegrationTestUtils.safeUniqueTestName(getClass(), testName);
+        final String appID = IntegrationTestUtils.safeUniqueTestName(testName);
         final String[] parameters = new String[] {
             "--application-id", appID,
             "--bootstrap-server", cluster.bootstrapServers(),
@@ -157,7 +157,7 @@ public class ResetIntegrationTest extends AbstractResetIntegrationTest {
 
     @Test
     public void shouldNotAllowToResetWhenSpecifiedInternalTopicDoesNotExist() {
-        final String appID = IntegrationTestUtils.safeUniqueTestName(getClass(), testName);
+        final String appID = IntegrationTestUtils.safeUniqueTestName(testName);
         final String[] parameters = new String[] {
             "--application-id", appID,
             "--bootstrap-server", cluster.bootstrapServers(),
@@ -173,7 +173,7 @@ public class ResetIntegrationTest extends AbstractResetIntegrationTest {
 
     @Test
     public void shouldNotAllowToResetWhenSpecifiedInternalTopicIsNotInternal() {
-        final String appID = IntegrationTestUtils.safeUniqueTestName(getClass(), testName);
+        final String appID = IntegrationTestUtils.safeUniqueTestName(testName);
         final String[] parameters = new String[] {
             "--application-id", appID,
             "--bootstrap-server", cluster.bootstrapServers(),
@@ -189,7 +189,7 @@ public class ResetIntegrationTest extends AbstractResetIntegrationTest {
 
     @Test
     public void testResetWhenLongSessionTimeoutConfiguredWithForceOption() throws Exception {
-        final String appID = IntegrationTestUtils.safeUniqueTestName(getClass(), testName);
+        final String appID = IntegrationTestUtils.safeUniqueTestName(testName);
         streamsConfig.put(StreamsConfig.APPLICATION_ID_CONFIG, appID);
         streamsConfig.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, Integer.toString(STREAMS_CONSUMER_TIMEOUT * 100));
 
@@ -225,7 +225,7 @@ public class ResetIntegrationTest extends AbstractResetIntegrationTest {
 
     @Test
     public void testReprocessingFromFileAfterResetWithoutIntermediateUserTopic() throws Exception {
-        final String appID = IntegrationTestUtils.safeUniqueTestName(getClass(), testName);
+        final String appID = IntegrationTestUtils.safeUniqueTestName(testName);
         streamsConfig.put(StreamsConfig.APPLICATION_ID_CONFIG, appID);
 
         // RUN
@@ -266,7 +266,7 @@ public class ResetIntegrationTest extends AbstractResetIntegrationTest {
 
     @Test
     public void testReprocessingFromDateTimeAfterResetWithoutIntermediateUserTopic() throws Exception {
-        final String appID = IntegrationTestUtils.safeUniqueTestName(getClass(), testName);
+        final String appID = IntegrationTestUtils.safeUniqueTestName(testName);
         streamsConfig.put(StreamsConfig.APPLICATION_ID_CONFIG, appID);
 
         // RUN
@@ -311,7 +311,7 @@ public class ResetIntegrationTest extends AbstractResetIntegrationTest {
 
     @Test
     public void testReprocessingByDurationAfterResetWithoutIntermediateUserTopic() throws Exception {
-        final String appID = IntegrationTestUtils.safeUniqueTestName(getClass(), testName);
+        final String appID = IntegrationTestUtils.safeUniqueTestName(testName);
         streamsConfig.put(StreamsConfig.APPLICATION_ID_CONFIG, appID);
 
         // RUN

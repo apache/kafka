@@ -38,5 +38,8 @@ public interface PartitionAssignor {
      * @param subscribedTopicDescriber The topic and partition metadata describer.
      * @return The new assignment for the group.
      */
-    GroupAssignment assign(AssignmentSpec assignmentSpec, SubscribedTopicDescriber subscribedTopicDescriber) throws PartitionAssignorException;
+    GroupAssignment assign(
+        AssignmentSpec assignmentSpec,
+        SubscribedTopicDescriber subscribedTopicDescriber
+    ) throws PartitionAssignorException;
 }

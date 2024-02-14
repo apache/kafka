@@ -26,7 +26,7 @@ import com.typesafe.scalalogging.Logger
 
 import javax.management._
 import scala.collection._
-import scala.collection.{Seq, mutable}
+import scala.collection.Seq
 import kafka.cluster.EndPoint
 import org.apache.commons.validator.routines.InetAddressValidator
 import org.apache.kafka.common.network.ListenerName
@@ -94,7 +94,7 @@ object CoreUtils {
    */
   def registerMBean(mbean: Object, name: String): Boolean = {
     try {
-      val mbs = ManagementFactory.getPlatformMBeanServer()
+      val mbs = ManagementFactory.getPlatformMBeanServer
       mbs synchronized {
         val objName = new ObjectName(name)
         if (mbs.isRegistered(objName))
@@ -107,23 +107,6 @@ object CoreUtils {
         logger.error(s"Failed to register Mbean $name", e)
         false
     }
-  }
-
-  /**
-   * This method gets comma separated values which contains key,value pairs and returns a map of
-   * key value pairs. the format of allCSVal is key1:val1, key2:val2 ....
-   * Also supports strings with multiple ":" such as IpV6 addresses, taking the last occurrence
-   * of the ":" in the pair as the split, eg a:b:c:val1, d:e:f:val2 => a:b:c -> val1, d:e:f -> val2
-   */
-  def parseCsvMap(str: String): Map[String, String] = {
-    val map = new mutable.HashMap[String, String]
-    if ("".equals(str))
-      return map
-    val keyVals = str.split("\\s*,\\s*").map(s => {
-      val lio = s.lastIndexOf(":")
-      (s.substring(0,lio).trim, s.substring(lio + 1).trim)
-    })
-    keyVals.toMap
   }
 
   /**
@@ -141,7 +124,7 @@ object CoreUtils {
    * Create an instance of the class with the given class name
    */
   def createObject[T <: AnyRef](className: String, args: AnyRef*): T = {
-    val klass = Class.forName(className, true, Utils.getContextOrKafkaClassLoader()).asInstanceOf[Class[T]]
+    val klass = Class.forName(className, true, Utils.getContextOrKafkaClassLoader).asInstanceOf[Class[T]]
     val constructor = klass.getConstructor(args.map(_.getClass): _*)
     constructor.newInstance(args: _*)
   }
@@ -173,7 +156,7 @@ object CoreUtils {
   }
 
   def listenerListToEndPoints(listeners: String, securityProtocolMap: Map[ListenerName, SecurityProtocol]): Seq[EndPoint] = {
-    listenerListToEndPoints(listeners, securityProtocolMap, true)
+    listenerListToEndPoints(listeners, securityProtocolMap, requireDistinctPorts = true)
   }
 
   def checkDuplicateListenerPorts(endpoints: Seq[EndPoint], listeners: String): Unit = {

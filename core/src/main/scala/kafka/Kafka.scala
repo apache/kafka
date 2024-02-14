@@ -18,7 +18,6 @@
 package kafka
 
 import java.util.Properties
-
 import joptsimple.OptionParser
 import kafka.server.{KafkaConfig, KafkaRaftServer, KafkaServer, Server}
 import kafka.utils.Implicits._

@@ -21,11 +21,11 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * Hierarchical Timing Wheels
- *
+ * <br>
  * A simple timing wheel is a circular list of buckets of timer tasks. Let u be the time unit.
  * A timing wheel with size n has n buckets and can hold timer tasks in n * u time interval.
  * Each bucket holds timer tasks that fall into the corresponding time range. At the beginning,
- * the first bucket holds tasks for [0, u), the second bucket holds tasks for [u, 2u), …,
+ * the first bucket holds tasks for [0, u), the second bucket holds tasks for [u, 2u), &hellip;,
  * the n-th bucket for [u * (n -1), u * n). Every interval of time unit u, the timer ticks and
  * moved to the next bucket then expire all timer tasks in it. So, the timer never insert a task
  * into the bucket for the current time since it is already expired. The timer immediately runs
@@ -34,7 +34,7 @@ import java.util.concurrent.atomic.AtomicInteger;
  * A timing wheel has O(1) cost for insert/delete (start-timer/stop-timer) whereas priority queue
  * based timers, such as java.util.concurrent.DelayQueue and java.util.Timer, have O(log n)
  * insert/delete cost.
- *
+ * <br>
  * A major drawback of a simple timing wheel is that it assumes that a timer request is within
  * the time interval of n * u from the current time. If a timer request is out of this interval,
  * it is an overflow. A hierarchical timing wheel deals with such overflows. It is a hierarchically
@@ -47,50 +47,50 @@ import java.util.concurrent.atomic.AtomicInteger;
  * are then moved to the finer grain wheels or be executed. The insert (start-timer) cost is O(m)
  * where m is the number of wheels, which is usually very small compared to the number of requests
  * in the system, and the delete (stop-timer) cost is still O(1).
- *
+ * <br>
  * Example
  * Let's say that u is 1 and n is 3. If the start time is c,
  * then the buckets at different levels are:
- *
+ * <pre>
  * level    buckets
  * 1        [c,c]   [c+1,c+1]  [c+2,c+2]
  * 2        [c,c+2] [c+3,c+5]  [c+6,c+8]
  * 3        [c,c+8] [c+9,c+17] [c+18,c+26]
- *
+ * </pre>
  * The bucket expiration is at the time of bucket beginning.
  * So at time = c+1, buckets [c,c], [c,c+2] and [c,c+8] are expired.
  * Level 1's clock moves to c+1, and [c+3,c+3] is created.
  * Level 2 and level3's clock stay at c since their clocks move in unit of 3 and 9, respectively.
  * So, no new buckets are created in level 2 and 3.
- *
+ * <br>
  * Note that bucket [c,c+2] in level 2 won't receive any task since that range is already covered in level 1.
  * The same is true for the bucket [c,c+8] in level 3 since its range is covered in level 2.
  * This is a bit wasteful, but simplifies the implementation.
- *
+ * <pre>
  * 1        [c+1,c+1]  [c+2,c+2]  [c+3,c+3]
  * 2        [c,c+2]    [c+3,c+5]  [c+6,c+8]
  * 3        [c,c+8]    [c+9,c+17] [c+18,c+26]
- *
+ * </pre>
  * At time = c+2, [c+1,c+1] is newly expired.
  * Level 1 moves to c+2, and [c+4,c+4] is created,
- *
+ * <pre>
  * 1        [c+2,c+2]  [c+3,c+3]  [c+4,c+4]
  * 2        [c,c+2]    [c+3,c+5]  [c+6,c+8]
  * 3        [c,c+8]    [c+9,c+17] [c+18,c+26]
- *
+ * </pre>
  * At time = c+3, [c+2,c+2] is newly expired.
  * Level 2 moves to c+3, and [c+5,c+5] and [c+9,c+11] are created.
  * Level 3 stay at c.
- *
+ * <pre>
  * 1        [c+3,c+3]  [c+4,c+4]  [c+5,c+5]
  * 2        [c+3,c+5]  [c+6,c+8]  [c+9,c+11]
  * 3        [c,c+8]    [c+9,c+17] [c+18,c+26]
- *
+ * </pre>
  * The hierarchical timing wheels works especially well when operations are completed before they time out.
  * Even when everything times out, it still has advantageous when there are many items in the timer.
  * Its insert cost (including reinsert) and delete cost are O(m) and O(1), respectively while priority
  * queue based timers takes O(log N) for both insert and delete where N is the number of items in the queue.
- *
+ * <br>
  * This class is not thread-safe. There should not be any add calls while advanceClock is executing.
  * It is caller's responsibility to enforce it. Simultaneous add calls are thread-safe.
  */

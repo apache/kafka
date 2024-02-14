@@ -35,6 +35,7 @@ import java.util.List;
 
 
 public class LogManagerBuilder {
+    private static final int PRODUCER_ID_EXPIRATION_CHECK_INTERVAL_MS = 600000;
     private List<File> logDirs = null;
     private List<File> initialOfflineDirs = Collections.emptyList();
     private ConfigRepository configRepository = null;
@@ -47,8 +48,7 @@ public class LogManagerBuilder {
     private long retentionCheckMs = 1000L;
     private int maxTransactionTimeoutMs = 15 * 60 * 1000;
     private ProducerStateManagerConfig producerStateManagerConfig = new ProducerStateManagerConfig(60000, false);
-    private int producerIdExpirationCheckIntervalMs = 600000;
-    private MetadataVersion interBrokerProtocolVersion = MetadataVersion.latest();
+    private MetadataVersion interBrokerProtocolVersion = MetadataVersion.latestProduction();
     private Scheduler scheduler = null;
     private BrokerTopicStats brokerTopicStats = null;
     private LogDirFailureChannel logDirFailureChannel = null;
@@ -172,7 +172,7 @@ public class LogManagerBuilder {
                               retentionCheckMs,
                               maxTransactionTimeoutMs,
                               producerStateManagerConfig,
-                              producerIdExpirationCheckIntervalMs,
+                              PRODUCER_ID_EXPIRATION_CHECK_INTERVAL_MS,
                               interBrokerProtocolVersion,
                               scheduler,
                               brokerTopicStats,

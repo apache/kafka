@@ -22,12 +22,16 @@ import org.apache.kafka.connect.runtime.ConnectorConfig;
 import org.apache.kafka.connect.runtime.Herder;
 import org.apache.kafka.connect.runtime.isolation.PluginDesc;
 import org.apache.kafka.connect.runtime.isolation.PluginType;
+import org.apache.kafka.connect.runtime.rest.RestRequestTimeout;
 import org.apache.kafka.connect.runtime.rest.entities.ConfigInfos;
 import org.apache.kafka.connect.runtime.rest.entities.ConfigKeyInfo;
 import org.apache.kafka.connect.runtime.rest.entities.PluginInfo;
 import org.apache.kafka.connect.runtime.rest.errors.ConnectRestException;
 import org.apache.kafka.connect.util.FutureCallback;
+import org.apache.kafka.connect.util.Stage;
+import org.apache.kafka.connect.util.StagedTimeoutException;
 
+import javax.inject.Inject;
 import javax.ws.rs.BadRequestException;
 import javax.ws.rs.Consumes;
 import javax.ws.rs.DefaultValue;
@@ -39,6 +43,7 @@ import javax.ws.rs.Produces;
 import javax.ws.rs.QueryParam;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -53,17 +58,18 @@ import java.util.stream.Collectors;
 @Path("/connector-plugins")
 @Produces(MediaType.APPLICATION_JSON)
 @Consumes(MediaType.APPLICATION_JSON)
-public class ConnectorPluginsResource implements ConnectResource {
+public class ConnectorPluginsResource {
 
     private static final String ALIAS_SUFFIX = "Connector";
     private final Herder herder;
     private final Set<PluginInfo> connectorPlugins;
-    private long requestTimeoutMs;
+    private final RestRequestTimeout requestTimeout;
 
-    public ConnectorPluginsResource(Herder herder) {
+    @Inject
+    public ConnectorPluginsResource(Herder herder, RestRequestTimeout requestTimeout) {
         this.herder = herder;
+        this.requestTimeout = requestTimeout;
         this.connectorPlugins = new LinkedHashSet<>();
-        this.requestTimeoutMs = DEFAULT_REST_REQUEST_TIMEOUT_MS;
 
         // TODO: improve once plugins are allowed to be added/removed during runtime.
         addConnectorPlugins(herder.plugins().sinkConnectors());
@@ -78,11 +84,6 @@ public class ConnectorPluginsResource implements ConnectResource {
         plugins.stream()
                 .map(PluginInfo::new)
                 .forEach(connectorPlugins::add);
-    }
-
-    @Override
-    public void requestTimeout(long requestTimeoutMs) {
-        this.requestTimeoutMs = requestTimeoutMs;
     }
 
     @PUT
@@ -106,7 +107,23 @@ public class ConnectorPluginsResource implements ConnectResource {
         herder.validateConnectorConfig(connectorConfig, validationCallback, false);
 
         try {
-            return validationCallback.get(requestTimeoutMs, TimeUnit.MILLISECONDS);
+            return validationCallback.get(requestTimeout.timeoutMs(), TimeUnit.MILLISECONDS);
+        } catch (StagedTimeoutException e) {
+            Stage stage = e.stage();
+            String message;
+            if (stage.completed() != null) {
+                message = "Request timed out. The last operation the worker completed was "
+                        + stage.description() + ", which began at "
+                        + Instant.ofEpochMilli(stage.started()) + " and completed at "
+                        + Instant.ofEpochMilli(stage.completed());
+            } else {
+                message = "Request timed out. The worker is currently "
+                        + stage.description() + ", which began at "
+                        + Instant.ofEpochMilli(stage.started());
+            }
+            // This timeout is for the operation itself. None of the timeout error codes are relevant, so internal server
+            // error is the best option
+            throw new ConnectRestException(Response.Status.INTERNAL_SERVER_ERROR.getStatusCode(), message);
         } catch (TimeoutException e) {
             // This timeout is for the operation itself. None of the timeout error codes are relevant, so internal server
             // error is the best option
@@ -117,7 +134,6 @@ public class ConnectorPluginsResource implements ConnectResource {
     }
 
     @GET
-    @Path("/")
     @Operation(summary = "List all connector plugins installed")
     public List<PluginInfo> listConnectorPlugins(
             @DefaultValue("true") @QueryParam("connectorsOnly") @Parameter(description = "Whether to list only connectors instead of all plugins") boolean connectorsOnly

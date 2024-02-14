@@ -70,6 +70,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.when;
 
@@ -187,7 +188,7 @@ public class RestForwardingIntegrationTest {
             followerCallbackCaptor.getValue().onCompletion(forwardException, null);
             return null;
         }).when(followerHerder)
-                .putConnectorConfig(any(), any(), anyBoolean(), followerCallbackCaptor.capture());
+                .putConnectorConfig(any(), any(), isNull(), anyBoolean(), followerCallbackCaptor.capture());
 
         // Leader will reply
         ConnectorInfo connectorInfo = new ConnectorInfo("blah", Collections.emptyMap(), Collections.emptyList(), ConnectorType.SOURCE);
@@ -197,7 +198,7 @@ public class RestForwardingIntegrationTest {
             leaderCallbackCaptor.getValue().onCompletion(null, leaderAnswer);
             return null;
         }).when(leaderHerder)
-                .putConnectorConfig(any(), any(), anyBoolean(), leaderCallbackCaptor.capture());
+                .putConnectorConfig(any(), any(), isNull(), anyBoolean(), leaderCallbackCaptor.capture());
 
         // Client makes request to the follower
         URI followerUrl = followerServer.advertisedUrl();

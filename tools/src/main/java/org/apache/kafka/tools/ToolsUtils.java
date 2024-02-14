@@ -22,8 +22,10 @@ import org.apache.kafka.common.utils.Utils;
 
 import java.io.PrintStream;
 import java.util.Arrays;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.TreeMap;
 import java.util.stream.Collectors;
 
@@ -123,4 +125,34 @@ public class ToolsUtils {
             throw new IllegalArgumentException("Please provide valid host:port like host1:9091,host2:9092\n");
         }
     }
+
+    /**
+     * Return all duplicates in a list. A duplicated element will appear only once.
+     */
+    public static <T> Set<T> duplicates(List<T> s) {
+        Set<T> set = new HashSet<>();
+        Set<T> duplicates = new HashSet<>();
+
+        s.forEach(element -> {
+            if (!set.add(element)) {
+                duplicates.add(element);
+            }
+        });
+        return duplicates;
+    }
+
+    /**
+     * @param set Source set.
+     * @param toRemove Elements to remove.
+     * @return {@code set} copy without {@code toRemove} elements.
+     * @param <T> Element type.
+     */
+    @SuppressWarnings("unchecked")
+    public static <T> Set<T> minus(Set<T> set, T...toRemove) {
+        Set<T> res = new HashSet<>(set);
+        for (T t : toRemove)
+            res.remove(t);
+        return res;
+    }
+
 }

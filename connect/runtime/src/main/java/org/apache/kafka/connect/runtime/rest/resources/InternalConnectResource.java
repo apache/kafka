@@ -18,7 +18,9 @@ package org.apache.kafka.connect.runtime.rest.resources;
 
 import org.apache.kafka.connect.runtime.Herder;
 import org.apache.kafka.connect.runtime.rest.RestClient;
+import org.apache.kafka.connect.runtime.rest.RestRequestTimeout;
 
+import javax.inject.Inject;
 import javax.ws.rs.Path;
 
 @Path("/connectors")
@@ -26,8 +28,9 @@ public class InternalConnectResource extends InternalClusterResource {
 
     private final Herder herder;
 
-    public InternalConnectResource(Herder herder, RestClient restClient) {
-        super(restClient);
+    @Inject
+    public InternalConnectResource(Herder herder, RestClient restClient, RestRequestTimeout requestTimeout) {
+        super(restClient, requestTimeout);
         this.herder = herder;
     }
 

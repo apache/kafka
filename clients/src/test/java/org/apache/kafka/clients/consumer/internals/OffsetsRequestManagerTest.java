@@ -22,6 +22,9 @@ import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.NodeApiVersions;
 import org.apache.kafka.clients.consumer.OffsetAndTimestamp;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
+import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
+import org.apache.kafka.clients.consumer.internals.events.BackgroundEventHandler;
+import org.apache.kafka.clients.consumer.internals.events.ErrorBackgroundEvent;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.ClusterResource;
 import org.apache.kafka.common.IsolationLevel;
@@ -57,15 +60,20 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -84,6 +92,7 @@ public class OffsetsRequestManagerTest {
     private SubscriptionState subscriptionState;
     private MockTime time;
     private ApiVersions apiVersions;
+    private BlockingQueue<BackgroundEvent> backgroundEventQueue;
     private static final String TEST_TOPIC = "t1";
     private static final TopicPartition TEST_PARTITION_1 = new TopicPartition(TEST_TOPIC, 1);
     private static final TopicPartition TEST_PARTITION_2 = new TopicPartition(TEST_TOPIC, 2);
@@ -95,13 +104,25 @@ public class OffsetsRequestManagerTest {
 
     @BeforeEach
     public void setup() {
+        LogContext logContext = new LogContext();
+        backgroundEventQueue = new LinkedBlockingQueue<>();
+        BackgroundEventHandler backgroundEventHandler = new BackgroundEventHandler(logContext, backgroundEventQueue);
         metadata = mock(ConsumerMetadata.class);
         subscriptionState = mock(SubscriptionState.class);
-        this.time = new MockTime(0);
+        time = new MockTime(0);
         apiVersions = mock(ApiVersions.class);
-        requestManager = new OffsetsRequestManager(subscriptionState, metadata,
-                DEFAULT_ISOLATION_LEVEL, time, RETRY_BACKOFF_MS, REQUEST_TIMEOUT_MS,
-                apiVersions, mock(NetworkClientDelegate.class), new LogContext());
+        requestManager = new OffsetsRequestManager(
+                subscriptionState,
+                metadata,
+                DEFAULT_ISOLATION_LEVEL,
+                time,
+                RETRY_BACKOFF_MS,
+                REQUEST_TIMEOUT_MS,
+                apiVersions,
+                mock(NetworkClientDelegate.class),
+                backgroundEventHandler,
+                logContext
+        );
     }
 
     @Test
@@ -500,7 +521,7 @@ public class OffsetsRequestManagerTest {
     }
 
     @Test
-    public void testResetPositionsThrowsPreviousException() {
+    public void testResetOffsetsAuthorizationFailure() {
         when(subscriptionState.partitionsNeedingReset(time.milliseconds())).thenReturn(Collections.singleton(TEST_PARTITION_1));
         when(subscriptionState.resetStrategy(any())).thenReturn(OffsetResetStrategy.EARLIEST);
         mockSuccessfulRequest(Collections.singletonMap(TEST_PARTITION_1, LEADER_1));
@@ -510,8 +531,9 @@ public class OffsetsRequestManagerTest {
         // Reset positions response with TopicAuthorizationException
         NetworkClientDelegate.PollResult res = requestManager.poll(time.milliseconds());
         NetworkClientDelegate.UnsentRequest unsentRequest = res.unsentRequests.get(0);
+        Errors topicAuthorizationFailedError = Errors.TOPIC_AUTHORIZATION_FAILED;
         ClientResponse clientResponse = buildClientResponseWithErrors(
-                unsentRequest, Collections.singletonMap(TEST_PARTITION_1, Errors.TOPIC_AUTHORIZATION_FAILED));
+                unsentRequest, Collections.singletonMap(TEST_PARTITION_1, topicAuthorizationFailedError));
         clientResponse.onComplete();
 
         assertTrue(unsentRequest.future().isDone());
@@ -520,11 +542,23 @@ public class OffsetsRequestManagerTest {
         verify(subscriptionState).requestFailed(any(), anyLong());
         verify(metadata).requestUpdate(false);
 
-        // Following resetPositions should raise the previous exception without performing any
-        // request
-        assertThrows(TopicAuthorizationException.class,
-                () -> requestManager.resetPositionsIfNeeded());
+        // Following resetPositions should enqueue the previous exception in the background event queue
+        // without performing any request
+        assertDoesNotThrow(() -> requestManager.resetPositionsIfNeeded());
         assertEquals(0, requestManager.requestsToSend());
+
+        // Check that the event was enqueued during resetPositionsIfNeeded
+        assertEquals(1, backgroundEventQueue.size());
+        BackgroundEvent event = backgroundEventQueue.poll();
+        assertNotNull(event);
+
+        // Check that the event itself is of the expected type
+        assertInstanceOf(ErrorBackgroundEvent.class, event);
+        ErrorBackgroundEvent errorEvent = (ErrorBackgroundEvent) event;
+        assertNotNull(errorEvent.error());
+
+        // Check that the error held in the event is of the expected type
+        assertInstanceOf(topicAuthorizationFailedError.exception().getClass(), errorEvent.error());
     }
 
     @Test
@@ -820,7 +854,7 @@ public class OffsetsRequestManagerTest {
         OffsetsForLeaderEpochResponse response = new OffsetsForLeaderEpochResponse(data);
         return new ClientResponse(
                 new RequestHeader(ApiKeys.OFFSET_FOR_LEADER_EPOCH, offsetsForLeaderEpochRequest.version(), "", 1),
-                request.callback(),
+                request.handler(),
                 "-1",
                 time.milliseconds(),
                 time.milliseconds(),
@@ -853,7 +887,7 @@ public class OffsetsRequestManagerTest {
         OffsetsForLeaderEpochResponse response = new OffsetsForLeaderEpochResponse(data);
         return new ClientResponse(
                 new RequestHeader(ApiKeys.OFFSET_FOR_LEADER_EPOCH, offsetsForLeaderEpochRequest.version(), "", 1),
-                request.callback(),
+                request.handler(),
                 "-1",
                 time.milliseconds(),
                 time.milliseconds(),
@@ -902,7 +936,7 @@ public class OffsetsRequestManagerTest {
         ListOffsetsResponse response = buildListOffsetsResponse(topicResponses);
         return new ClientResponse(
                 new RequestHeader(ApiKeys.OFFSET_FETCH, offsetFetchRequest.version(), "", 1),
-                request.callback(),
+                request.handler(),
                 "-1",
                 time.milliseconds(),
                 time.milliseconds(),

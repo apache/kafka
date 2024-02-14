@@ -19,7 +19,6 @@ package kafka.zk
 import java.nio.charset.StandardCharsets.UTF_8
 import java.util
 import java.util.Properties
-
 import com.fasterxml.jackson.annotation.JsonProperty
 import com.fasterxml.jackson.core.JsonProcessingException
 import kafka.api.LeaderAndIsr
@@ -28,7 +27,7 @@ import kafka.common.{NotificationHandler, ZkNodeChangeNotificationListener}
 import kafka.controller.{IsrChangeNotificationHandler, LeaderIsrAndControllerEpoch, ReplicaAssignment}
 import kafka.security.authorizer.AclAuthorizer.VersionedAcls
 import kafka.security.authorizer.AclEntry
-import kafka.server.{ConfigType, DelegationTokenManagerZk}
+import kafka.server.DelegationTokenManagerZk
 import kafka.utils.Json
 import kafka.utils.json.JsonObject
 import org.apache.kafka.common.errors.UnsupportedVersionException
@@ -44,6 +43,7 @@ import org.apache.kafka.metadata.LeaderRecoveryState
 import org.apache.kafka.metadata.migration.ZkMigrationLeadershipState
 import org.apache.kafka.server.common.{MetadataVersion, ProducerIdsBlock}
 import org.apache.kafka.server.common.MetadataVersion.{IBP_0_10_0_IV1, IBP_2_7_IV0}
+import org.apache.kafka.server.config.ConfigType
 import org.apache.zookeeper.ZooDefs
 import org.apache.zookeeper.data.{ACL, Stat}
 
@@ -1103,11 +1103,11 @@ object ZkData {
     IsrChangeNotificationZNode.path,
     ProducerIdBlockZNode.path,
     LogDirEventNotificationZNode.path
-  ) ++ ConfigType.all.map(ConfigEntityTypeZNode.path)
+  ) ++ ConfigType.ALL.asScala.map(ConfigEntityTypeZNode.path)
 
   val SensitiveRootPaths = Seq(
-    ConfigEntityTypeZNode.path(ConfigType.User),
-    ConfigEntityTypeZNode.path(ConfigType.Broker),
+    ConfigEntityTypeZNode.path(ConfigType.USER),
+    ConfigEntityTypeZNode.path(ConfigType.BROKER),
     DelegationTokensZNode.path
   )
 
