@@ -65,7 +65,7 @@ class FileLock(val file: File) extends Logging {
   def unlock(): Unit = {
     this synchronized {
       trace(s"Releasing lock on ${file.getAbsolutePath}")
-      if(flock != null)
+      if (flock != null)
         flock.release()
     }
   }

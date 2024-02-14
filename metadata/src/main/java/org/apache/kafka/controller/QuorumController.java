@@ -1715,7 +1715,7 @@ public final class QuorumController implements Controller {
      * from this callbacks need to compare against this value to verify that the event
      * was not from a previous registration.
      */
-    private QuorumMetaLogListener metaLogListener;
+    private final QuorumMetaLogListener metaLogListener;
 
     /**
      * If this controller is active, this is the non-negative controller epoch.

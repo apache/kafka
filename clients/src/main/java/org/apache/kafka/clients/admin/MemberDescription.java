@@ -29,18 +29,39 @@ public class MemberDescription {
     private final String clientId;
     private final String host;
     private final MemberAssignment assignment;
+    private final Optional<MemberAssignment> targetAssignment;
 
     public MemberDescription(String memberId,
-                             Optional<String> groupInstanceId,
-                             String clientId,
-                             String host,
-                             MemberAssignment assignment) {
+        Optional<String> groupInstanceId,
+        String clientId,
+        String host,
+        MemberAssignment assignment,
+        Optional<MemberAssignment> targetAssignment
+    ) {
         this.memberId = memberId == null ? "" : memberId;
         this.groupInstanceId = groupInstanceId;
         this.clientId = clientId == null ? "" : clientId;
         this.host = host == null ? "" : host;
         this.assignment = assignment == null ?
             new MemberAssignment(Collections.emptySet()) : assignment;
+        this.targetAssignment = targetAssignment;
+    }
+
+    public MemberDescription(
+        String memberId,
+        Optional<String> groupInstanceId,
+        String clientId,
+        String host,
+        MemberAssignment assignment
+    ) {
+        this(
+            memberId,
+            groupInstanceId,
+            clientId,
+            host,
+            assignment,
+            Optional.empty()
+        );
     }
 
     public MemberDescription(String memberId,
@@ -59,12 +80,13 @@ public class MemberDescription {
             groupInstanceId.equals(that.groupInstanceId) &&
             clientId.equals(that.clientId) &&
             host.equals(that.host) &&
-            assignment.equals(that.assignment);
+            assignment.equals(that.assignment) &&
+            targetAssignment.equals(that.targetAssignment);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(memberId, groupInstanceId, clientId, host, assignment);
+        return Objects.hash(memberId, groupInstanceId, clientId, host, assignment, targetAssignment);
     }
 
     /**
@@ -96,10 +118,17 @@ public class MemberDescription {
     }
 
     /**
-     * The assignment of the group member.
+     * The assignment of the group member. Provided for both classic group and consumer group.
      */
     public MemberAssignment assignment() {
         return assignment;
+    }
+
+    /**
+     * The target assignment of the member. Provided only for consumer group.
+     */
+    public Optional<MemberAssignment> targetAssignment() {
+        return targetAssignment;
     }
 
     @Override
@@ -108,6 +137,7 @@ public class MemberDescription {
             ", groupInstanceId=" + groupInstanceId.orElse("null") +
             ", clientId=" + clientId +
             ", host=" + host +
-            ", assignment=" + assignment + ")";
+            ", assignment=" + assignment +
+            ", targetAssignment=" + targetAssignment + ")";
     }
 }

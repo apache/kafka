@@ -21,8 +21,12 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.CompressionType;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
+import java.io.IOException;
+import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -30,9 +34,11 @@ import java.util.List;
 import java.util.Optional;
 import java.util.function.Predicate;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -111,5 +117,24 @@ public class ClientTelemetryUtilsTest {
     public void testPreferredCompressionType() {
         assertEquals(CompressionType.NONE, ClientTelemetryUtils.preferredCompressionType(Collections.emptyList()));
         assertEquals(CompressionType.NONE, ClientTelemetryUtils.preferredCompressionType(null));
+        assertEquals(CompressionType.NONE, ClientTelemetryUtils.preferredCompressionType(Arrays.asList(CompressionType.NONE, CompressionType.GZIP)));
+        assertEquals(CompressionType.GZIP, ClientTelemetryUtils.preferredCompressionType(Arrays.asList(CompressionType.GZIP, CompressionType.NONE)));
+    }
+
+    @ParameterizedTest
+    @EnumSource(CompressionType.class)
+    public void testCompressDecompress(CompressionType compressionType) throws IOException {
+        byte[] testString = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa".getBytes(StandardCharsets.UTF_8);
+        byte[] compressed = ClientTelemetryUtils.compress(testString, compressionType);
+        assertNotNull(compressed);
+        if (compressionType != CompressionType.NONE) {
+            assertTrue(compressed.length < testString.length);
+        } else {
+            assertArrayEquals(testString, compressed);
+        }
+
+        ByteBuffer decompressed = ClientTelemetryUtils.decompress(compressed, compressionType);
+        assertNotNull(decompressed);
+        assertArrayEquals(testString, decompressed.array());
     }
 }

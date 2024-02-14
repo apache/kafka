@@ -207,7 +207,7 @@ class MigrationPropagator(
         val newReplicas = partitionRegistration.replicas.toSet
         val removedReplicas = oldReplicas -- newReplicas
         if (removedReplicas.nonEmpty) {
-          requestBatch.addStopReplicaRequestForBrokers(removedReplicas.toSeq, tp, deletePartition = false)
+          requestBatch.addStopReplicaRequestForBrokers(removedReplicas.toSeq, tp, deletePartition = true)
         }
       }
     }

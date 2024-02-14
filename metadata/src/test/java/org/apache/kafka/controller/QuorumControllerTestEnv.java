@@ -51,7 +51,7 @@ public class QuorumControllerTestEnv implements AutoCloseable {
         private OptionalLong leaderImbalanceCheckIntervalNs = OptionalLong.empty();
         private boolean eligibleLeaderReplicasEnabled = false;
         private BootstrapMetadata bootstrapMetadata = BootstrapMetadata.
-                fromVersion(MetadataVersion.latest(), "test-provided version");
+                fromVersion(MetadataVersion.latestTesting(), "test-provided version");
 
         public Builder(LocalLogManagerTestEnv logEnv) {
             this.logEnv = logEnv;

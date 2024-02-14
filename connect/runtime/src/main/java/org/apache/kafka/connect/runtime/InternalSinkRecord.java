@@ -20,6 +20,7 @@ import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.header.Header;
+import org.apache.kafka.connect.runtime.errors.ProcessingContext;
 import org.apache.kafka.connect.sink.SinkRecord;
 
 /**
@@ -29,30 +30,31 @@ import org.apache.kafka.connect.sink.SinkRecord;
  */
 public class InternalSinkRecord extends SinkRecord {
 
-    private final ConsumerRecord<byte[], byte[]> originalRecord;
+    private final ProcessingContext<ConsumerRecord<byte[], byte[]>> context;
 
-    public InternalSinkRecord(ConsumerRecord<byte[], byte[]> originalRecord, SinkRecord record) {
+    public InternalSinkRecord(ProcessingContext<ConsumerRecord<byte[], byte[]>> context, SinkRecord record) {
         super(record.topic(), record.kafkaPartition(), record.keySchema(), record.key(),
                 record.valueSchema(), record.value(), record.kafkaOffset(), record.timestamp(),
-                record.timestampType(), record.headers(), originalRecord.topic(), originalRecord.partition(),
-                originalRecord.offset());
-        this.originalRecord = originalRecord;
+                record.timestampType(), record.headers(), context.original().topic(),
+                context.original().partition(), context.original().offset());
+        this.context = context;
     }
 
-    protected InternalSinkRecord(ConsumerRecord<byte[], byte[]> originalRecord, String topic,
+    protected InternalSinkRecord(ProcessingContext<ConsumerRecord<byte[], byte[]>> context, String topic,
                                  int partition, Schema keySchema, Object key, Schema valueSchema,
                                  Object value, long kafkaOffset, Long timestamp,
                                  TimestampType timestampType, Iterable<Header> headers) {
         super(topic, partition, keySchema, key, valueSchema, value, kafkaOffset, timestamp, timestampType, headers,
-                originalRecord.topic(), originalRecord.partition(), originalRecord.offset());
-        this.originalRecord = originalRecord;
+                context.original().topic(), context.original().partition(),
+                context.original().offset());
+        this.context = context;
     }
 
     @Override
     public SinkRecord newRecord(String topic, Integer kafkaPartition, Schema keySchema, Object key,
                                 Schema valueSchema, Object value, Long timestamp,
                                 Iterable<Header> headers) {
-        return new InternalSinkRecord(originalRecord, topic, kafkaPartition, keySchema, key,
+        return new InternalSinkRecord(context, topic, kafkaPartition, keySchema, key,
                 valueSchema, value, kafkaOffset(), timestamp, timestampType(), headers);
     }
 
@@ -67,12 +69,12 @@ public class InternalSinkRecord extends SinkRecord {
     }
 
     /**
-    * Return the original consumer record that this sink record represents.
-    *
-    * @return the original consumer record; never null
-    */
-    public ConsumerRecord<byte[], byte[]> originalRecord() {
-        return originalRecord;
+     * Return the context used to process this record
+     *
+     * @return the processing context; never null
+     */
+    public ProcessingContext<ConsumerRecord<byte[], byte[]>> context() {
+        return context;
     }
 }
 
