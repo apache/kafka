@@ -353,11 +353,6 @@ public class GroupMetadataManagerTest {
                 return this;
             }
 
-            public Builder withShareGroup(ConsumerGroupBuilder builder) {
-                this.consumerGroupBuilders.add(builder);
-                return this;
-            }
-
             public Builder withConsumerGroupMaxSize(int consumerGroupMaxSize) {
                 this.consumerGroupMaxSize = consumerGroupMaxSize;
                 return this;
