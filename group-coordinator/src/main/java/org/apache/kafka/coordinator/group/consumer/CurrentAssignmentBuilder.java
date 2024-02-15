@@ -196,7 +196,7 @@ public class CurrentAssignmentBuilder {
 
                 return computeNextAssignment(
                     targetAssignmentEpoch,
-                    Collections.emptyMap()
+                    member.assignedPartitions()
                 );
         }
 

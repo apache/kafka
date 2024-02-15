@@ -17,14 +17,17 @@
 package org.apache.kafka.coordinator.group.consumer;
 
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.errors.FencedMemberEpochException;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatRequestData;
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
+import java.util.Collections;
 
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkAssignment;
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkTopicAssignment;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class CurrentAssignmentBuilderTest {
 
@@ -480,6 +483,54 @@ public class CurrentAssignmentBuilderTest {
                 .setRevokedPartitions(mkAssignment(
                     mkTopicAssignment(topicId1, 2),
                     mkTopicAssignment(topicId2, 5)))
+                .build(),
+            updatedMember
+        );
+    }
+
+    @Test
+    public void testUnknownState() {
+        Uuid topicId1 = Uuid.randomUuid();
+        Uuid topicId2 = Uuid.randomUuid();
+
+        ConsumerGroupMember member = new ConsumerGroupMember.Builder("member")
+            .setState(MemberState.UNKNOWN)
+            .setMemberEpoch(11)
+            .setPreviousMemberEpoch(11)
+            .setAssignedPartitions(mkAssignment(
+                mkTopicAssignment(topicId1, 3),
+                mkTopicAssignment(topicId2, 6)))
+            .setRevokedPartitions(mkAssignment(
+                mkTopicAssignment(topicId1, 2),
+                mkTopicAssignment(topicId2, 5)))
+            .build();
+
+        // When the member is in an unknown state, the member is first to force
+        // a reset of the client side member state.
+        assertThrows(FencedMemberEpochException.class, () -> new CurrentAssignmentBuilder(member)
+            .withTargetAssignment(12, new Assignment(mkAssignment(
+                mkTopicAssignment(topicId1, 3),
+                mkTopicAssignment(topicId2, 6))))
+            .withCurrentPartitionEpoch((topicId, partitionId) -> 10)
+            .build());
+
+        // Then the member rejoins with no owned partitions.
+        ConsumerGroupMember updatedMember = new CurrentAssignmentBuilder(member)
+            .withTargetAssignment(12, new Assignment(mkAssignment(
+                mkTopicAssignment(topicId1, 3),
+                mkTopicAssignment(topicId2, 6))))
+            .withCurrentPartitionEpoch((topicId, partitionId) -> 11)
+            .withOwnedTopicPartitions(Collections.emptyList())
+            .build();
+
+        assertEquals(
+            new ConsumerGroupMember.Builder("member")
+                .setState(MemberState.STABLE)
+                .setMemberEpoch(12)
+                .setPreviousMemberEpoch(11)
+                .setAssignedPartitions(mkAssignment(
+                    mkTopicAssignment(topicId1, 3),
+                    mkTopicAssignment(topicId2, 6)))
                 .build(),
             updatedMember
         );
