@@ -55,7 +55,7 @@ class ServerTest {
 
     val props = new Properties()
     props.put(KafkaConfig.BrokerIdProp, brokerId.toString)
-    props.put(ZkConfig.ZkConnectProp, "127.0.0.1:0")
+    props.put(ZkConfig.ZK_CONNECT_PROP, "127.0.0.1:0")
     val config = KafkaConfig.fromProps(props)
 
     val context = Server.createKafkaMetricsContext(config, clusterId)

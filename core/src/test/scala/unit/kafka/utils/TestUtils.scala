@@ -364,8 +364,8 @@ object TestUtils extends Logging {
       // controllerQuorumVotersFuture instead.
       props.put(KafkaConfig.QuorumVotersProp, "1000@localhost:0")
     } else {
-      props.put(ZkConfig.ZkConnectProp, zkConnect)
-      props.put(ZkConfig.ZkConnectionTimeoutMsProp, "10000")
+      props.put(ZkConfig.ZK_CONNECT_PROP, zkConnect)
+      props.put(ZkConfig.ZK_CONNECTION_TIMEOUT_MS_PROP, "10000")
     }
     props.put(KafkaConfig.ReplicaSocketTimeoutMsProp, "1500")
     props.put(KafkaConfig.ControllerSocketTimeoutMsProp, "1500")

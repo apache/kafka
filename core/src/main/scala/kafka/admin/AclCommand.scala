@@ -200,7 +200,7 @@ object AclCommand extends Logging {
       // We will default the value of zookeeper.set.acl to true or false based on whether SASL is configured,
       // but if SASL is not configured and zookeeper.set.acl is supposed to be true due to mutual certificate authentication
       // then it will be up to the user to explicitly specify zookeeper.set.acl=true in the authorizer-properties.
-      val defaultProps = Map(ZkConfig.ZkEnableSecureAclsProp -> JaasUtils.isZkSaslEnabled)
+      val defaultProps = Map(ZkConfig.ZK_ENABLE_SECURE_ACLS_PROP -> JaasUtils.isZkSaslEnabled)
       val authorizerPropertiesWithoutTls =
         if (opts.options.has(opts.authorizerPropertiesOpt)) {
           val authorizerProperties = opts.options.valuesOf(opts.authorizerPropertiesOpt)
@@ -211,7 +211,7 @@ object AclCommand extends Logging {
       val authorizerProperties =
         if (opts.options.has(opts.zkTlsConfigFile)) {
           // load in TLS configs both with and without the "authorizer." prefix
-          val validKeys = (ZkConfig.ZkSslConfigToSystemPropertyMap.asScala.keys.toList ++ ZkConfig.ZkSslConfigToSystemPropertyMap.asScala.keys.map("authorizer." + _).toList).asJava
+          val validKeys = (ZkConfig.ZK_SSL_CONFIG_TO_SYSTEM_PROPERTY_MAP.asScala.keys.toList ++ ZkConfig.ZK_SSL_CONFIG_TO_SYSTEM_PROPERTY_MAP.asScala.keys.map("authorizer." + _).toList).asJava
           authorizerPropertiesWithoutTls ++ Utils.loadProps(opts.options.valueOf(opts.zkTlsConfigFile), validKeys).asInstanceOf[java.util.Map[String, Any]].asScala
         }
         else
@@ -619,7 +619,7 @@ object AclCommand extends Logging {
       "DEPRECATED: Identifies the file where ZooKeeper client TLS connectivity properties are defined for" +
         " the default authorizer kafka.security.authorizer.AclAuthorizer." +
         " Any properties other than the following (with or without an \"authorizer.\" prefix) are ignored: " +
-        ZkConfig.ZkSslConfigToSystemPropertyMap.asScala.keys.toList.sorted.mkString(", ") +
+        ZkConfig.ZK_SSL_CONFIG_TO_SYSTEM_PROPERTY_MAP.asScala.keys.toList.sorted.mkString(", ") +
         ". Note that if SASL is not configured and zookeeper.set.acl is supposed to be true due to mutual certificate authentication being used" +
         " then it is necessary to explicitly specify --authorizer-properties zookeeper.set.acl=true. " +
         AclCommand.AuthorizerDeprecationMessage)

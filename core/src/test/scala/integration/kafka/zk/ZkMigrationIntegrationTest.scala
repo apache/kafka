@@ -177,7 +177,7 @@ class ZkMigrationIntegrationTest {
         setNumBrokerNodes(0).
         setNumControllerNodes(1).build())
       .setConfigProp(KafkaConfig.MigrationEnabledProp, "true")
-      .setConfigProp(ZkConfig.ZkConnectProp, zkCluster.asInstanceOf[ZkClusterInstance].getUnderlying.zkConnect)
+      .setConfigProp(ZkConfig.ZK_CONNECT_PROP, zkCluster.asInstanceOf[ZkClusterInstance].getUnderlying.zkConnect)
       .build()
     try {
       kraftCluster.format()
@@ -299,7 +299,7 @@ class ZkMigrationIntegrationTest {
         setNumBrokerNodes(0).
         setNumControllerNodes(1).build())
       .setConfigProp(KafkaConfig.MigrationEnabledProp, "true")
-      .setConfigProp(ZkConfig.ZkConnectProp, zkCluster.asInstanceOf[ZkClusterInstance].getUnderlying.zkConnect)
+      .setConfigProp(ZkConfig.ZK_CONNECT_PROP, zkCluster.asInstanceOf[ZkClusterInstance].getUnderlying.zkConnect)
       .build()
     try {
       kraftCluster.format()
@@ -433,7 +433,7 @@ class ZkMigrationIntegrationTest {
         setNumBrokerNodes(0).
         setNumControllerNodes(1).build())
       .setConfigProp(KafkaConfig.MigrationEnabledProp, "true")
-      .setConfigProp(ZkConfig.ZkConnectProp, zkCluster.asInstanceOf[ZkClusterInstance].getUnderlying.zkConnect)
+      .setConfigProp(ZkConfig.ZK_CONNECT_PROP, zkCluster.asInstanceOf[ZkClusterInstance].getUnderlying.zkConnect)
       .build()
     try {
       kraftCluster.format()
@@ -498,7 +498,7 @@ class ZkMigrationIntegrationTest {
         setNumBrokerNodes(0).
         setNumControllerNodes(1).build())
       .setConfigProp(KafkaConfig.MigrationEnabledProp, "true")
-      .setConfigProp(ZkConfig.ZkConnectProp, zkCluster.asInstanceOf[ZkClusterInstance].getUnderlying.zkConnect)
+      .setConfigProp(ZkConfig.ZK_CONNECT_PROP, zkCluster.asInstanceOf[ZkClusterInstance].getUnderlying.zkConnect)
       .build()
     try {
       kraftCluster.format()
@@ -566,7 +566,7 @@ class ZkMigrationIntegrationTest {
         setNumBrokerNodes(0).
         setNumControllerNodes(1).build())
       .setConfigProp(KafkaConfig.MigrationEnabledProp, "true")
-      .setConfigProp(ZkConfig.ZkConnectProp, zkCluster.asInstanceOf[ZkClusterInstance].getUnderlying.zkConnect)
+      .setConfigProp(ZkConfig.ZK_CONNECT_PROP, zkCluster.asInstanceOf[ZkClusterInstance].getUnderlying.zkConnect)
       .build()
     try {
       kraftCluster.format()
@@ -626,7 +626,7 @@ class ZkMigrationIntegrationTest {
         setNumBrokerNodes(0).
         setNumControllerNodes(1).build())
       .setConfigProp(KafkaConfig.MigrationEnabledProp, "true")
-      .setConfigProp(ZkConfig.ZkConnectProp, zkCluster.asInstanceOf[ZkClusterInstance].getUnderlying.zkConnect)
+      .setConfigProp(ZkConfig.ZK_CONNECT_PROP, zkCluster.asInstanceOf[ZkClusterInstance].getUnderlying.zkConnect)
       .build()
     try {
       kraftCluster.format()
@@ -701,7 +701,7 @@ class ZkMigrationIntegrationTest {
         setNumBrokerNodes(0).
         setNumControllerNodes(1).build())
       .setConfigProp(KafkaConfig.MigrationEnabledProp, "true")
-      .setConfigProp(ZkConfig.ZkConnectProp, zkCluster.asInstanceOf[ZkClusterInstance].getUnderlying.zkConnect)
+      .setConfigProp(ZkConfig.ZK_CONNECT_PROP, zkCluster.asInstanceOf[ZkClusterInstance].getUnderlying.zkConnect)
       .build()
     try {
       kraftCluster.format()

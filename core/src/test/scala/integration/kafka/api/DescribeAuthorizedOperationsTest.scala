@@ -76,7 +76,7 @@ class DescribeAuthorizedOperationsTest extends IntegrationTestHarness with SaslS
   import DescribeAuthorizedOperationsTest._
 
   override val brokerCount = 1
-  this.serverConfig.setProperty(ZkConfig.ZkEnableSecureAclsProp, "true")
+  this.serverConfig.setProperty(ZkConfig.ZK_ENABLE_SECURE_ACLS_PROP, "true")
   this.serverConfig.setProperty(KafkaConfig.AuthorizerClassNameProp, classOf[AclAuthorizer].getName)
 
   var client: Admin = _

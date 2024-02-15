@@ -109,7 +109,7 @@ public class EmbeddedKafkaCluster {
         zookeeper = new EmbeddedZookeeper();
         log.debug("ZooKeeper instance is running at {}", zKConnectString());
 
-        brokerConfig.put(ZkConfig.ZkConnectProp, zKConnectString());
+        brokerConfig.put(ZkConfig.ZK_CONNECT_PROP, zKConnectString());
         putIfAbsent(brokerConfig, KafkaConfig.ListenersProp(), "PLAINTEXT://localhost:" + DEFAULT_BROKER_PORT);
         putIfAbsent(brokerConfig, KafkaConfig.DeleteTopicEnableProp(), true);
         putIfAbsent(brokerConfig, KafkaConfig.LogCleanerDedupeBufferSizeProp(), 2 * 1024 * 1024L);

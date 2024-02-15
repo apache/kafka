@@ -41,7 +41,7 @@ class ZkMigrationTestHarness extends QuorumTestHarness {
 
   val encoder: PasswordEncoder = {
     val encoderProps = new Properties()
-    encoderProps.put(ZkConfig.ZkConnectProp, "localhost:1234") // Get around the config validation
+    encoderProps.put(ZkConfig.ZK_CONNECT_PROP, "localhost:1234") // Get around the config validation
     encoderProps.put(KafkaConfig.PasswordEncoderSecretProp, SECRET) // Zk secret to encrypt the
     val encoderConfig = new KafkaConfig(encoderProps)
     PasswordEncoder.encrypting(encoderConfig.passwordEncoderSecret.get,

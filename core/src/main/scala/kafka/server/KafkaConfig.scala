@@ -68,14 +68,14 @@ object KafkaConfig {
   }
 
   private[kafka] def zooKeeperClientProperty(clientConfig: ZKClientConfig, kafkaPropName: String): Option[String] = {
-    Option(clientConfig.getProperty(ZkConfig.ZkSslConfigToSystemPropertyMap.get(kafkaPropName)))
+    Option(clientConfig.getProperty(ZkConfig.ZK_SSL_CONFIG_TO_SYSTEM_PROPERTY_MAP.get(kafkaPropName)))
   }
 
   private[kafka] def setZooKeeperClientProperty(clientConfig: ZKClientConfig, kafkaPropName: String, kafkaPropValue: Any): Unit = {
-    clientConfig.setProperty(ZkConfig.ZkSslConfigToSystemPropertyMap.get(kafkaPropName),
+    clientConfig.setProperty(ZkConfig.ZK_SSL_CONFIG_TO_SYSTEM_PROPERTY_MAP.get(kafkaPropName),
       kafkaPropName match {
-        case ZkConfig.ZkSslEndpointIdentificationAlgorithmProp => (kafkaPropValue.toString.toUpperCase == "HTTPS").toString
-        case ZkConfig.ZkSslEnabledProtocolsProp | ZkConfig.ZkSslCipherSuitesProp => kafkaPropValue match {
+        case ZkConfig.ZK_SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_PROP => (kafkaPropValue.toString.toUpperCase == "HTTPS").toString
+        case ZkConfig.ZK_SSL_ENABLED_PROTOCOLS_PROP | ZkConfig.ZK_SSL_CIPHER_SUITES_PROP => kafkaPropValue match {
           case list: java.util.List[_] => list.asScala.mkString(",")
           case _ => kafkaPropValue.toString
         }
@@ -86,9 +86,9 @@ object KafkaConfig {
   // For ZooKeeper TLS client authentication to be enabled the client must (at a minimum) configure itself as using TLS
   // with both a client connection socket and a key store location explicitly set.
   private[kafka] def zkTlsClientAuthEnabled(zkClientConfig: ZKClientConfig): Boolean = {
-    zooKeeperClientProperty(zkClientConfig, ZkConfig.ZkSslClientEnableProp).contains("true") &&
-      zooKeeperClientProperty(zkClientConfig, ZkConfig.ZkClientCnxnSocketProp).isDefined &&
-      zooKeeperClientProperty(zkClientConfig, ZkConfig.ZkSslKeyStoreLocationProp).isDefined
+    zooKeeperClientProperty(zkClientConfig, ZkConfig.ZK_SSL_CLIENT_ENABLE_PROP).contains("true") &&
+      zooKeeperClientProperty(zkClientConfig, ZkConfig.ZK_CLIENT_CNXN_SOCKET_PROP).isDefined &&
+      zooKeeperClientProperty(zkClientConfig, ZkConfig.ZK_SSL_KEY_STORE_LOCATION_PROP).isDefined
   }
 
   /** ********* General Configuration ***********/
@@ -419,44 +419,44 @@ object KafkaConfig {
   "The server can also have a ZooKeeper chroot path as part of its ZooKeeper connection string which puts its data under some path in the global ZooKeeper namespace. " +
   "For example to give a chroot path of <code>/chroot/path</code> you would give the connection string as <code>hostname1:port1,hostname2:port2,hostname3:port3/chroot/path</code>."
   val ZkSessionTimeoutMsDoc = "Zookeeper session timeout"
-  val ZkConnectionTimeoutMsDoc = "The max time that the client waits to establish a connection to ZooKeeper. If not set, the value in " + ZkConfig.ZkSessionTimeoutMsProp + " is used"
+  val ZkConnectionTimeoutMsDoc = "The max time that the client waits to establish a connection to ZooKeeper. If not set, the value in " + ZkConfig.ZK_SESSION_TIMEOUT_MS_PROP + " is used"
   val ZkEnableSecureAclsDoc = "Set client to use secure ACLs"
   val ZkMaxInFlightRequestsDoc = "The maximum number of unacknowledged requests the client will send to ZooKeeper before blocking."
   val ZkSslClientEnableDoc = "Set client to use TLS when connecting to ZooKeeper." +
     " An explicit value overrides any value set via the <code>zookeeper.client.secure</code> system property (note the different name)." +
-    s" Defaults to false if neither is set; when true, <code>${ZkConfig.ZkClientCnxnSocketProp}</code> must be set (typically to <code>org.apache.zookeeper.ClientCnxnSocketNetty</code>); other values to set may include " +
-    ZkConfig.ZkSslConfigToSystemPropertyMap.asScala.keys.toList.filter(x => x != ZkConfig.ZkSslClientEnableProp && x != ZkConfig.ZkClientCnxnSocketProp).sorted.mkString("<code>", "</code>, <code>", "</code>")
+    s" Defaults to false if neither is set; when true, <code>${ZkConfig.ZK_CLIENT_CNXN_SOCKET_PROP}</code> must be set (typically to <code>org.apache.zookeeper.ClientCnxnSocketNetty</code>); other values to set may include " +
+    ZkConfig.ZK_SSL_CONFIG_TO_SYSTEM_PROPERTY_MAP.asScala.keys.toList.filter(x => x != ZkConfig.ZK_SSL_CLIENT_ENABLE_PROP && x != ZkConfig.ZK_CLIENT_CNXN_SOCKET_PROP).sorted.mkString("<code>", "</code>, <code>", "</code>")
   val ZkClientCnxnSocketDoc = "Typically set to <code>org.apache.zookeeper.ClientCnxnSocketNetty</code> when using TLS connectivity to ZooKeeper." +
-    s" Overrides any explicit value set via the same-named <code>${ZkConfig.ZkSslConfigToSystemPropertyMap.get(ZkConfig.ZkClientCnxnSocketProp)}</code> system property."
+    s" Overrides any explicit value set via the same-named <code>${ZkConfig.ZK_SSL_CONFIG_TO_SYSTEM_PROPERTY_MAP.get(ZkConfig.ZK_CLIENT_CNXN_SOCKET_PROP)}</code> system property."
   val ZkSslKeyStoreLocationDoc = "Keystore location when using a client-side certificate with TLS connectivity to ZooKeeper." +
-    s" Overrides any explicit value set via the <code>${ZkConfig.ZkSslConfigToSystemPropertyMap.get(ZkConfig.ZkSslKeyStoreLocationProp)}</code> system property (note the camelCase)."
+    s" Overrides any explicit value set via the <code>${ZkConfig.ZK_SSL_CONFIG_TO_SYSTEM_PROPERTY_MAP.get(ZkConfig.ZK_SSL_KEY_STORE_LOCATION_PROP)}</code> system property (note the camelCase)."
   val ZkSslKeyStorePasswordDoc = "Keystore password when using a client-side certificate with TLS connectivity to ZooKeeper." +
-    s" Overrides any explicit value set via the <code>${ZkConfig.ZkSslConfigToSystemPropertyMap.get(ZkConfig.ZkSslKeyStorePasswordProp)}</code> system property (note the camelCase)." +
+    s" Overrides any explicit value set via the <code>${ZkConfig.ZK_SSL_CONFIG_TO_SYSTEM_PROPERTY_MAP.get(ZkConfig.ZK_SSL_KEY_STORE_PASSWORD_PROP)}</code> system property (note the camelCase)." +
     " Note that ZooKeeper does not support a key password different from the keystore password, so be sure to set the key password in the keystore to be identical to the keystore password; otherwise the connection attempt to Zookeeper will fail."
   val ZkSslKeyStoreTypeDoc = "Keystore type when using a client-side certificate with TLS connectivity to ZooKeeper." +
-    s" Overrides any explicit value set via the <code>${ZkConfig.ZkSslConfigToSystemPropertyMap.get(ZkConfig.ZkSslKeyStoreTypeProp)}</code> system property (note the camelCase)." +
+    s" Overrides any explicit value set via the <code>${ZkConfig.ZK_SSL_CONFIG_TO_SYSTEM_PROPERTY_MAP.get(ZkConfig.ZK_SSL_KEY_STORE_TYPE_PROP)}</code> system property (note the camelCase)." +
     " The default value of <code>null</code> means the type will be auto-detected based on the filename extension of the keystore."
   val ZkSslTrustStoreLocationDoc = "Truststore location when using TLS connectivity to ZooKeeper." +
-    s" Overrides any explicit value set via the <code>${ZkConfig.ZkSslConfigToSystemPropertyMap.get(ZkConfig.ZkSslTrustStoreLocationProp)}</code> system property (note the camelCase)."
+    s" Overrides any explicit value set via the <code>${ZkConfig.ZK_SSL_CONFIG_TO_SYSTEM_PROPERTY_MAP.get(ZkConfig.ZK_SSL_TRUST_STORE_LOCATION_PROP)}</code> system property (note the camelCase)."
   val ZkSslTrustStorePasswordDoc = "Truststore password when using TLS connectivity to ZooKeeper." +
-    s" Overrides any explicit value set via the <code>${ZkConfig.ZkSslConfigToSystemPropertyMap.get(ZkConfig.ZkSslTrustStorePasswordProp)}</code> system property (note the camelCase)."
+    s" Overrides any explicit value set via the <code>${ZkConfig.ZK_SSL_CONFIG_TO_SYSTEM_PROPERTY_MAP.get(ZkConfig.ZK_SSL_TRUST_STORE_PASSWORD_PROP)}</code> system property (note the camelCase)."
   val ZkSslTrustStoreTypeDoc = "Truststore type when using TLS connectivity to ZooKeeper." +
-    s" Overrides any explicit value set via the <code>${ZkConfig.ZkSslConfigToSystemPropertyMap.get(ZkConfig.ZkSslTrustStoreTypeProp)}</code> system property (note the camelCase)." +
+    s" Overrides any explicit value set via the <code>${ZkConfig.ZK_SSL_CONFIG_TO_SYSTEM_PROPERTY_MAP.get(ZkConfig.ZK_SSL_TRUST_STORE_TYPE_PROP)}</code> system property (note the camelCase)." +
     " The default value of <code>null</code> means the type will be auto-detected based on the filename extension of the truststore."
   val ZkSslProtocolDoc = "Specifies the protocol to be used in ZooKeeper TLS negotiation." +
-    s" An explicit value overrides any value set via the same-named <code>${ZkConfig.ZkSslConfigToSystemPropertyMap.get(ZkConfig.ZkSslProtocolProp)}</code> system property."
+    s" An explicit value overrides any value set via the same-named <code>${ZkConfig.ZK_SSL_CONFIG_TO_SYSTEM_PROPERTY_MAP.get(ZkConfig.ZK_SSL_PROTOCOL_PROP)}</code> system property."
   val ZkSslEnabledProtocolsDoc = "Specifies the enabled protocol(s) in ZooKeeper TLS negotiation (csv)." +
-    s" Overrides any explicit value set via the <code>${ZkConfig.ZkSslConfigToSystemPropertyMap.get(ZkConfig.ZkSslEnabledProtocolsProp)}</code> system property (note the camelCase)." +
-    s" The default value of <code>null</code> means the enabled protocol will be the value of the <code>${ZkConfig.ZkSslProtocolProp}</code> configuration property."
+    s" Overrides any explicit value set via the <code>${ZkConfig.ZK_SSL_CONFIG_TO_SYSTEM_PROPERTY_MAP.get(ZkConfig.ZK_SSL_ENABLED_PROTOCOLS_PROP)}</code> system property (note the camelCase)." +
+    s" The default value of <code>null</code> means the enabled protocol will be the value of the <code>${ZkConfig.ZK_SSL_PROTOCOL_PROP}</code> configuration property."
   val ZkSslCipherSuitesDoc = "Specifies the enabled cipher suites to be used in ZooKeeper TLS negotiation (csv)." +
-    s""" Overrides any explicit value set via the <code>${ZkConfig.ZkSslConfigToSystemPropertyMap.get(ZkConfig.ZkSslCipherSuitesProp)}</code> system property (note the single word \"ciphersuites\").""" +
+    s""" Overrides any explicit value set via the <code>${ZkConfig.ZK_SSL_CONFIG_TO_SYSTEM_PROPERTY_MAP.get(ZkConfig.ZK_SSL_CIPHER_SUITES_PROP)}</code> system property (note the single word \"ciphersuites\").""" +
     " The default value of <code>null</code> means the list of enabled cipher suites is determined by the Java runtime being used."
   val ZkSslEndpointIdentificationAlgorithmDoc = "Specifies whether to enable hostname verification in the ZooKeeper TLS negotiation process, with (case-insensitively) \"https\" meaning ZooKeeper hostname verification is enabled and an explicit blank value meaning it is disabled (disabling it is only recommended for testing purposes)." +
-    s""" An explicit value overrides any \"true\" or \"false\" value set via the <code>${ZkConfig.ZkSslConfigToSystemPropertyMap.get(ZkConfig.ZkSslEndpointIdentificationAlgorithmProp)}</code> system property (note the different name and values; true implies https and false implies blank)."""
+    s""" An explicit value overrides any \"true\" or \"false\" value set via the <code>${ZkConfig.ZK_SSL_CONFIG_TO_SYSTEM_PROPERTY_MAP.get(ZkConfig.ZK_SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_PROP)}</code> system property (note the different name and values; true implies https and false implies blank)."""
   val ZkSslCrlEnableDoc = "Specifies whether to enable Certificate Revocation List in the ZooKeeper TLS protocols." +
-    s" Overrides any explicit value set via the <code>${ZkConfig.ZkSslConfigToSystemPropertyMap.get(ZkConfig.ZkSslCrlEnableProp)}</code> system property (note the shorter name)."
+    s" Overrides any explicit value set via the <code>${ZkConfig.ZK_SSL_CONFIG_TO_SYSTEM_PROPERTY_MAP.get(ZkConfig.ZK_SSL_CRL_ENABLE_PROP)}</code> system property (note the shorter name)."
   val ZkSslOcspEnableDoc = "Specifies whether to enable Online Certificate Status Protocol in the ZooKeeper TLS protocols." +
-    s" Overrides any explicit value set via the <code>${ZkConfig.ZkSslConfigToSystemPropertyMap.get(ZkConfig.ZkSslOcspEnableProp)}</code> system property (note the shorter name)."
+    s" Overrides any explicit value set via the <code>${ZkConfig.ZK_SSL_CONFIG_TO_SYSTEM_PROPERTY_MAP.get(ZkConfig.ZK_SSL_OCSP_ENABLE_PROP)}</code> system property (note the shorter name)."
   /** ********* General Configuration ***********/
   val BrokerIdGenerationEnableDoc = s"Enable automatic broker id generation on the server. When enabled the value configured for $MaxReservedBrokerIdProp should be reviewed."
   val MaxReservedBrokerIdDoc = "Max number that can be used for a broker.id"
@@ -935,25 +935,25 @@ object KafkaConfig {
     new ConfigDef()
 
       /** ********* Zookeeper Configuration ***********/
-      .define(ZkConfig.ZkConnectProp, STRING, null, HIGH, ZkConnectDoc)
-      .define(ZkConfig.ZkSessionTimeoutMsProp, INT, Defaults.ZK_SESSION_TIMEOUT_MS, HIGH, ZkSessionTimeoutMsDoc)
-      .define(ZkConfig.ZkConnectionTimeoutMsProp, INT, null, HIGH, ZkConnectionTimeoutMsDoc)
-      .define(ZkConfig.ZkEnableSecureAclsProp, BOOLEAN, Defaults.ZK_ENABLE_SECURE_ACLS, HIGH, ZkEnableSecureAclsDoc)
-      .define(ZkConfig.ZkMaxInFlightRequestsProp, INT, Defaults.ZK_MAX_IN_FLIGHT_REQUESTS, atLeast(1), HIGH, ZkMaxInFlightRequestsDoc)
-      .define(ZkConfig.ZkSslClientEnableProp, BOOLEAN, Defaults.ZK_SSL_CLIENT_ENABLE, MEDIUM, ZkSslClientEnableDoc)
-      .define(ZkConfig.ZkClientCnxnSocketProp, STRING, null, MEDIUM, ZkClientCnxnSocketDoc)
-      .define(ZkConfig.ZkSslKeyStoreLocationProp, STRING, null, MEDIUM, ZkSslKeyStoreLocationDoc)
-      .define(ZkConfig.ZkSslKeyStorePasswordProp, PASSWORD, null, MEDIUM, ZkSslKeyStorePasswordDoc)
-      .define(ZkConfig.ZkSslKeyStoreTypeProp, STRING, null, MEDIUM, ZkSslKeyStoreTypeDoc)
-      .define(ZkConfig.ZkSslTrustStoreLocationProp, STRING, null, MEDIUM, ZkSslTrustStoreLocationDoc)
-      .define(ZkConfig.ZkSslTrustStorePasswordProp, PASSWORD, null, MEDIUM, ZkSslTrustStorePasswordDoc)
-      .define(ZkConfig.ZkSslTrustStoreTypeProp, STRING, null, MEDIUM, ZkSslTrustStoreTypeDoc)
-      .define(ZkConfig.ZkSslProtocolProp, STRING, Defaults.ZK_SSL_PROTOCOL, LOW, ZkSslProtocolDoc)
-      .define(ZkConfig.ZkSslEnabledProtocolsProp, LIST, null, LOW, ZkSslEnabledProtocolsDoc)
-      .define(ZkConfig.ZkSslCipherSuitesProp, LIST, null, LOW, ZkSslCipherSuitesDoc)
-      .define(ZkConfig.ZkSslEndpointIdentificationAlgorithmProp, STRING, Defaults.ZK_SSL_ENDPOINT_IDENTIFICATION_ALGORITHM, LOW, ZkSslEndpointIdentificationAlgorithmDoc)
-      .define(ZkConfig.ZkSslCrlEnableProp, BOOLEAN, Defaults.ZK_SSL_CRL_ENABLE, LOW, ZkSslCrlEnableDoc)
-      .define(ZkConfig.ZkSslOcspEnableProp, BOOLEAN, Defaults.ZK_SSL_OCSP_ENABLE, LOW, ZkSslOcspEnableDoc)
+      .define(ZkConfig.ZK_CONNECT_PROP, STRING, null, HIGH, ZkConnectDoc)
+      .define(ZkConfig.ZK_SESSION_TIMEOUT_MS_PROP, INT, Defaults.ZK_SESSION_TIMEOUT_MS, HIGH, ZkSessionTimeoutMsDoc)
+      .define(ZkConfig.ZK_CONNECTION_TIMEOUT_MS_PROP, INT, null, HIGH, ZkConnectionTimeoutMsDoc)
+      .define(ZkConfig.ZK_ENABLE_SECURE_ACLS_PROP, BOOLEAN, Defaults.ZK_ENABLE_SECURE_ACLS, HIGH, ZkEnableSecureAclsDoc)
+      .define(ZkConfig.ZK_MAX_IN_FLIGHT_REQUESTS_PROP, INT, Defaults.ZK_MAX_IN_FLIGHT_REQUESTS, atLeast(1), HIGH, ZkMaxInFlightRequestsDoc)
+      .define(ZkConfig.ZK_SSL_CLIENT_ENABLE_PROP, BOOLEAN, Defaults.ZK_SSL_CLIENT_ENABLE, MEDIUM, ZkSslClientEnableDoc)
+      .define(ZkConfig.ZK_CLIENT_CNXN_SOCKET_PROP, STRING, null, MEDIUM, ZkClientCnxnSocketDoc)
+      .define(ZkConfig.ZK_SSL_KEY_STORE_LOCATION_PROP, STRING, null, MEDIUM, ZkSslKeyStoreLocationDoc)
+      .define(ZkConfig.ZK_SSL_KEY_STORE_PASSWORD_PROP, PASSWORD, null, MEDIUM, ZkSslKeyStorePasswordDoc)
+      .define(ZkConfig.ZK_SSL_KEY_STORE_TYPE_PROP, STRING, null, MEDIUM, ZkSslKeyStoreTypeDoc)
+      .define(ZkConfig.ZK_SSL_TRUST_STORE_LOCATION_PROP, STRING, null, MEDIUM, ZkSslTrustStoreLocationDoc)
+      .define(ZkConfig.ZK_SSL_TRUST_STORE_PASSWORD_PROP, PASSWORD, null, MEDIUM, ZkSslTrustStorePasswordDoc)
+      .define(ZkConfig.ZK_SSL_TRUST_STORE_TYPE_PROP, STRING, null, MEDIUM, ZkSslTrustStoreTypeDoc)
+      .define(ZkConfig.ZK_SSL_PROTOCOL_PROP, STRING, Defaults.ZK_SSL_PROTOCOL, LOW, ZkSslProtocolDoc)
+      .define(ZkConfig.ZK_SSL_ENABLED_PROTOCOLS_PROP, LIST, null, LOW, ZkSslEnabledProtocolsDoc)
+      .define(ZkConfig.ZK_SSL_CIPHER_SUITES_PROP, LIST, null, LOW, ZkSslCipherSuitesDoc)
+      .define(ZkConfig.ZK_SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_PROP, STRING, Defaults.ZK_SSL_ENDPOINT_IDENTIFICATION_ALGORITHM, LOW, ZkSslEndpointIdentificationAlgorithmDoc)
+      .define(ZkConfig.ZK_SSL_CRL_ENABLE_PROP, BOOLEAN, Defaults.ZK_SSL_CRL_ENABLE, LOW, ZkSslCrlEnableDoc)
+      .define(ZkConfig.ZK_SSL_OCSP_ENABLE_PROP, BOOLEAN, Defaults.ZK_SSL_OCSP_ENABLE, LOW, ZkSslOcspEnableDoc)
 
       /** ********* General Configuration ***********/
       .define(BrokerIdGenerationEnableProp, BOOLEAN, Defaults.BROKER_ID_GENERATION_ENABLE, MEDIUM, BrokerIdGenerationEnableDoc)
@@ -1409,12 +1409,12 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
     super.valuesWithPrefixOverride(prefix)
 
   /** ********* Zookeeper Configuration ***********/
-  val zkConnect: String = getString(ZkConfig.ZkConnectProp)
-  val zkSessionTimeoutMs: Int = getInt(ZkConfig.ZkSessionTimeoutMsProp)
+  val zkConnect: String = getString(ZkConfig.ZK_CONNECT_PROP)
+  val zkSessionTimeoutMs: Int = getInt(ZkConfig.ZK_SESSION_TIMEOUT_MS_PROP)
   val zkConnectionTimeoutMs: Int =
-    Option(getInt(ZkConfig.ZkConnectionTimeoutMsProp)).map(_.toInt).getOrElse(getInt(ZkConfig.ZkSessionTimeoutMsProp))
-  val zkEnableSecureAcls: Boolean = getBoolean(ZkConfig.ZkEnableSecureAclsProp)
-  val zkMaxInFlightRequests: Int = getInt(ZkConfig.ZkMaxInFlightRequestsProp)
+    Option(getInt(ZkConfig.ZK_CONNECTION_TIMEOUT_MS_PROP)).map(_.toInt).getOrElse(getInt(ZkConfig.ZK_SESSION_TIMEOUT_MS_PROP))
+  val zkEnableSecureAcls: Boolean = getBoolean(ZkConfig.ZK_ENABLE_SECURE_ACLS_PROP)
+  val zkMaxInFlightRequests: Int = getInt(ZkConfig.ZK_MAX_IN_FLIGHT_REQUESTS_PROP)
 
   private val _remoteLogManagerConfig = new RemoteLogManagerConfig(this)
   def remoteLogManagerConfig = _remoteLogManagerConfig
@@ -1462,21 +1462,21 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
     }
   }
 
-  val zkSslClientEnable = zkBooleanConfigOrSystemPropertyWithDefaultValue(ZkConfig.ZkSslClientEnableProp)
-  val zkClientCnxnSocketClassName = zkOptionalStringConfigOrSystemProperty(ZkConfig.ZkClientCnxnSocketProp)
-  val zkSslKeyStoreLocation = zkOptionalStringConfigOrSystemProperty(ZkConfig.ZkSslKeyStoreLocationProp)
-  val zkSslKeyStorePassword = zkPasswordConfigOrSystemProperty(ZkConfig.ZkSslKeyStorePasswordProp)
-  val zkSslKeyStoreType = zkOptionalStringConfigOrSystemProperty(ZkConfig.ZkSslKeyStoreTypeProp)
-  val zkSslTrustStoreLocation = zkOptionalStringConfigOrSystemProperty(ZkConfig.ZkSslTrustStoreLocationProp)
-  val zkSslTrustStorePassword = zkPasswordConfigOrSystemProperty(ZkConfig.ZkSslTrustStorePasswordProp)
-  val zkSslTrustStoreType = zkOptionalStringConfigOrSystemProperty(ZkConfig.ZkSslTrustStoreTypeProp)
-  val ZkSslProtocol = zkStringConfigOrSystemPropertyWithDefaultValue(ZkConfig.ZkSslProtocolProp)
-  val ZkSslEnabledProtocols = zkListConfigOrSystemProperty(ZkConfig.ZkSslEnabledProtocolsProp)
-  val ZkSslCipherSuites = zkListConfigOrSystemProperty(ZkConfig.ZkSslCipherSuitesProp)
+  val zkSslClientEnable = zkBooleanConfigOrSystemPropertyWithDefaultValue(ZkConfig.ZK_SSL_CLIENT_ENABLE_PROP)
+  val zkClientCnxnSocketClassName = zkOptionalStringConfigOrSystemProperty(ZkConfig.ZK_CLIENT_CNXN_SOCKET_PROP)
+  val zkSslKeyStoreLocation = zkOptionalStringConfigOrSystemProperty(ZkConfig.ZK_SSL_KEY_STORE_LOCATION_PROP)
+  val zkSslKeyStorePassword = zkPasswordConfigOrSystemProperty(ZkConfig.ZK_SSL_KEY_STORE_PASSWORD_PROP)
+  val zkSslKeyStoreType = zkOptionalStringConfigOrSystemProperty(ZkConfig.ZK_SSL_KEY_STORE_TYPE_PROP)
+  val zkSslTrustStoreLocation = zkOptionalStringConfigOrSystemProperty(ZkConfig.ZK_SSL_TRUST_STORE_LOCATION_PROP)
+  val zkSslTrustStorePassword = zkPasswordConfigOrSystemProperty(ZkConfig.ZK_SSL_TRUST_STORE_PASSWORD_PROP)
+  val zkSslTrustStoreType = zkOptionalStringConfigOrSystemProperty(ZkConfig.ZK_SSL_TRUST_STORE_TYPE_PROP)
+  val ZkSslProtocol = zkStringConfigOrSystemPropertyWithDefaultValue(ZkConfig.ZK_SSL_PROTOCOL_PROP)
+  val ZkSslEnabledProtocols = zkListConfigOrSystemProperty(ZkConfig.ZK_SSL_ENABLED_PROTOCOLS_PROP)
+  val ZkSslCipherSuites = zkListConfigOrSystemProperty(ZkConfig.ZK_SSL_CIPHER_SUITES_PROP)
   val ZkSslEndpointIdentificationAlgorithm = {
     // Use the system property if it exists and the Kafka config value was defaulted rather than actually provided
     // Need to translate any system property value from true/false to HTTPS/<blank>
-    val kafkaProp = ZkConfig.ZkSslEndpointIdentificationAlgorithmProp
+    val kafkaProp = ZkConfig.ZK_SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_PROP
     val actuallyProvided = originals.containsKey(kafkaProp)
     if (actuallyProvided)
       getString(kafkaProp)
@@ -1488,8 +1488,8 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
       }
     }
   }
-  val ZkSslCrlEnable = zkBooleanConfigOrSystemPropertyWithDefaultValue(ZkConfig.ZkSslCrlEnableProp)
-  val ZkSslOcspEnable = zkBooleanConfigOrSystemPropertyWithDefaultValue(ZkConfig.ZkSslOcspEnableProp)
+  val ZkSslCrlEnable = zkBooleanConfigOrSystemPropertyWithDefaultValue(ZkConfig.ZK_SSL_CRL_ENABLE_PROP)
+  val ZkSslOcspEnable = zkBooleanConfigOrSystemPropertyWithDefaultValue(ZkConfig.ZK_SSL_OCSP_ENABLE_PROP)
   /** ********* General Configuration ***********/
   val brokerIdGenerationEnable: Boolean = getBoolean(KafkaConfig.BrokerIdGenerationEnableProp)
   val maxReservedBrokerId: Int = getInt(KafkaConfig.MaxReservedBrokerIdProp)
@@ -2032,7 +2032,7 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
     }
     if (requiresZookeeper) {
       if (zkConnect == null) {
-        throw new ConfigException(s"Missing required configuration `${ZkConfig.ZkConnectProp}` which has no default value.")
+        throw new ConfigException(s"Missing required configuration `${ZkConfig.ZK_CONNECT_PROP}` which has no default value.")
       }
       if (brokerIdGenerationEnable) {
         require(brokerId >= -1 && brokerId <= maxReservedBrokerId, "broker.id must be greater than or equal to -1 and not greater than reserved.broker.max.id")
@@ -2047,7 +2047,7 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
       }
       if (migrationEnabled) {
         if (zkConnect == null) {
-          throw new ConfigException(s"If using `${KafkaConfig.MigrationEnabledProp}` in KRaft mode, `${ZkConfig.ZkConnectProp}` must also be set.")
+          throw new ConfigException(s"If using `${KafkaConfig.MigrationEnabledProp}` in KRaft mode, `${ZkConfig.ZK_CONNECT_PROP}` must also be set.")
         }
       }
     }

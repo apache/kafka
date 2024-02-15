@@ -2349,9 +2349,9 @@ object KafkaZkClient {
 
     if (secureAclsEnabled && !isZkSecurityEnabled)
       throw new java.lang.SecurityException(
-        s"${ZkConfig.ZkEnableSecureAclsProp} is true, but ZooKeeper client TLS configuration identifying at least " +
-          s"${ZkConfig.ZkSslClientEnableProp}, ${ZkConfig.ZkClientCnxnSocketProp}, and " +
-          s"${ZkConfig.ZkSslKeyStoreLocationProp} was not present and the verification of the JAAS login file failed " +
+        s"${ZkConfig.ZK_ENABLE_SECURE_ACLS_PROP} is true, but ZooKeeper client TLS configuration identifying at least " +
+          s"${ZkConfig.ZK_SSL_CLIENT_ENABLE_PROP}, ${ZkConfig.ZK_CLIENT_CNXN_SOCKET_PROP}, and " +
+          s"${ZkConfig.ZK_SSL_KEY_STORE_LOCATION_PROP} was not present and the verification of the JAAS login file failed " +
           s"${JaasUtils.zkSecuritySysConfigString}")
 
     KafkaZkClient(config.zkConnect, secureAclsEnabled, config.zkSessionTimeoutMs, config.zkConnectionTimeoutMs,

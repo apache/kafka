@@ -79,7 +79,7 @@ object SslAdminIntegrationTest {
 class SslAdminIntegrationTest extends SaslSslAdminIntegrationTest {
   override val authorizationAdmin = new AclAuthorizationAdmin(classOf[SslAdminIntegrationTest.TestableAclAuthorizer], classOf[AclAuthorizer])
 
-  this.serverConfig.setProperty(ZkConfig.ZkEnableSecureAclsProp, "true")
+  this.serverConfig.setProperty(ZkConfig.ZK_ENABLE_SECURE_ACLS_PROP, "true")
 
   override protected def securityProtocol = SecurityProtocol.SSL
   override protected lazy val trustStoreFile = Some(TestUtils.tempFile("truststore", ".jks"))

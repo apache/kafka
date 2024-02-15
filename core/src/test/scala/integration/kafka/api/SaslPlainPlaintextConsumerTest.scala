@@ -26,7 +26,7 @@ class SaslPlainPlaintextConsumerTest extends BaseConsumerTest with SaslSetup {
   private val kafkaServerSaslMechanisms = List(kafkaClientSaslMechanism)
   private val kafkaServerJaasEntryName =
     s"${listenerName.value.toLowerCase(Locale.ROOT)}.${JaasTestUtils.KafkaServerContextName}"
-  this.serverConfig.setProperty(ZkConfig.ZkEnableSecureAclsProp, "false")
+  this.serverConfig.setProperty(ZkConfig.ZK_ENABLE_SECURE_ACLS_PROP, "false")
   // disable secure acls of zkClient in QuorumTestHarness
   override protected def zkAclsEnabled = Some(false)
   override protected def securityProtocol = SecurityProtocol.SASL_PLAINTEXT

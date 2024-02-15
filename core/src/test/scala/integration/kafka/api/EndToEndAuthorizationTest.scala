@@ -157,7 +157,7 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
     } else {
       // The next two configuration parameters enable ZooKeeper secure ACLs
       // and sets the Kafka authorizer, both necessary to enable security.
-      this.serverConfig.setProperty(ZkConfig.ZkEnableSecureAclsProp, "true")
+      this.serverConfig.setProperty(ZkConfig.ZK_ENABLE_SECURE_ACLS_PROP, "true")
       this.serverConfig.setProperty(KafkaConfig.AuthorizerClassNameProp, authorizerClass.getName)
 
       // Set the specific principal that can update ACLs.
