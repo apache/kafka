@@ -108,7 +108,7 @@ class VerifiableConsumerTest(KafkaTest):
 
         def _err_msg():
             return ("Only %d out of %d consumers were in one of the expected states (%s) within the timeout of %d seconds" %
-                    (_count(), num_consumers, ", ".join(states), timeout_sec))
+                    (_count(), num_consumers, states, timeout_sec))
 
         wait_until(lambda: _condition(), timeout_sec=timeout_sec, err_msg=_err_msg())
 
