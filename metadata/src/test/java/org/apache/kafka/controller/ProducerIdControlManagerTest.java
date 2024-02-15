@@ -56,6 +56,7 @@ public class ProducerIdControlManagerTest {
             setSnapshotRegistry(snapshotRegistry).
             setSessionTimeoutNs(1000).
             setFeatureControlManager(featureControl).
+            setBrokerUncleanShutdownHandler((brokerId, records) -> { }).
             build();
 
         clusterControl.activate();

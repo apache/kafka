@@ -243,6 +243,7 @@ public class ReplicationControlManagerTest {
                 setSessionTimeoutNs(TimeUnit.MILLISECONDS.convert(BROKER_SESSION_TIMEOUT_MS, TimeUnit.NANOSECONDS)).
                 setReplicaPlacer(new StripedReplicaPlacer(random)).
                 setFeatureControlManager(featureControl).
+                setBrokerUncleanShutdownHandler(this::handleUncleanBrokerShutdown).
                 build();
 
             this.replicationControl = new ReplicationControlManager.Builder().
@@ -256,6 +257,10 @@ public class ReplicationControlManagerTest {
                 setEligibleLeaderReplicasEnabled(isElrEnabled).
                 build();
             clusterControl.activate();
+        }
+
+        void handleUncleanBrokerShutdown(int brokerId, List<ApiMessageAndVersion> records) {
+            replicationControl.handleBrokerUncleanShutdown(brokerId, records);
         }
 
         CreatableTopicResult createTestTopic(String name,
