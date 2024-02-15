@@ -202,6 +202,8 @@ public abstract class AbstractWorkerSourceTask extends WorkerTask<SourceRecord, 
 
     // Visible for testing
     List<SourceRecord> toSend;
+    ProducerRecord<byte[], byte[]> lastErroredConvertedRecord;
+    SourceRecord lastErroredSourceRecord;
     protected Map<String, String> taskConfig;
     protected boolean started = false;
     private volatile boolean producerClosed = false;
@@ -394,16 +396,21 @@ public abstract class AbstractWorkerSourceTask extends WorkerTask<SourceRecord, 
                 toSend.size() > 0 ? new SourceRecordWriteCounter(toSend.size(), sourceTaskMetricsGroup) : null;
         for (final SourceRecord preTransformRecord : toSend) {
             ProcessingContext<SourceRecord> context = new ProcessingContext<>(preTransformRecord);
-            final SourceRecord record = transformationChain.apply(context, preTransformRecord);
-            final ProducerRecord<byte[], byte[]> producerRecord = convertTransformedRecord(context, record);
-            if (producerRecord == null || context.failed()) {
-                counter.skipRecord();
-                recordDropped(preTransformRecord);
-                processed++;
-                continue;
+            final ProducerRecord<byte[], byte[]> producerRecord;
+            if (preTransformRecord.equals(lastErroredSourceRecord)) {
+                producerRecord = lastErroredConvertedRecord;
+            } else {
+                final SourceRecord record = transformationChain.apply(context, preTransformRecord);
+                producerRecord = convertTransformedRecord(context, record);
+                if (producerRecord == null || context.failed()) {
+                    counter.skipRecord();
+                    recordDropped(preTransformRecord);
+                    processed++;
+                    continue;
+                }
+                log.trace("{} Appending record to the topic {} with key {}, value {}", this, record.topic(), record.key(), record.value());
             }
 
-            log.trace("{} Appending record to the topic {} with key {}, value {}", this, record.topic(), record.key(), record.value());
             Optional<SubmittedRecords.SubmittedRecord> submittedRecord = prepareToSendRecord(preTransformRecord, producerRecord);
             try {
                 final String topic = producerRecord.topic();
@@ -441,6 +448,8 @@ public abstract class AbstractWorkerSourceTask extends WorkerTask<SourceRecord, 
                 log.warn("{} Failed to send record to topic '{}' and partition '{}'. Backing off before retrying: ",
                         this, producerRecord.topic(), producerRecord.partition(), e);
                 toSend = toSend.subList(processed, toSend.size());
+                lastErroredSourceRecord = preTransformRecord;
+                lastErroredConvertedRecord = producerRecord;
                 submittedRecord.ifPresent(SubmittedRecords.SubmittedRecord::drop);
                 counter.retryRemaining();
                 return false;
@@ -457,6 +466,8 @@ public abstract class AbstractWorkerSourceTask extends WorkerTask<SourceRecord, 
         }
         toSend = null;
         batchDispatched();
+        lastErroredSourceRecord = null;
+        lastErroredConvertedRecord = null;
         return true;
     }
 
