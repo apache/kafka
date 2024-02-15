@@ -121,10 +121,7 @@ class VerifiableConsumerTest(KafkaTest):
         return "Only %d out of %d consumers joined the group within the timeout of %d seconds" % (actual, num_consumers, timeout_sec)
 
     def await_all_members(self, consumer, require_joined=True):
-        self.await_members(consumer, self.num_consumers, require_joined)
-
-    def temp_hack_await_all_members(self, consumer):
         if consumer.supports_kip_848():
             self.await_members(consumer, 1)
         else:
-            self.await_all_members(consumer)
+            self.await_members(consumer, self.num_consumers, require_joined)

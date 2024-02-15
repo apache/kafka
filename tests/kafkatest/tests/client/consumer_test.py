@@ -44,7 +44,7 @@ class OffsetValidationTest(VerifiableConsumerTest):
 
                 consumer.start_node(node)
 
-                self.temp_hack_await_all_members(consumer)
+                self.await_all_members(consumer)
                 self.await_consumed_messages(consumer)
 
     def bounce_all_consumers(self, consumer, keep_alive=0, num_bounces=5, clean_shutdown=True):
@@ -58,14 +58,14 @@ class OffsetValidationTest(VerifiableConsumerTest):
             for node in consumer.nodes[keep_alive:]:
                 consumer.start_node(node)
 
-            self.temp_hack_await_all_members(consumer)
+            self.await_all_members(consumer)
             self.await_consumed_messages(consumer)
 
     def rolling_bounce_brokers(self, consumer, num_bounces=5, clean_shutdown=True):
         for _ in range(num_bounces):
             for node in self.kafka.nodes:
                 self.kafka.restart_node(node, clean_shutdown=True)
-                self.temp_hack_await_all_members(consumer)
+                self.await_all_members(consumer)
                 self.await_consumed_messages(consumer)
 
     def setup_consumer(self, topic, **kwargs):
@@ -115,7 +115,7 @@ class OffsetValidationTest(VerifiableConsumerTest):
         self.await_produced_messages(producer)
 
         consumer.start()
-        self.temp_hack_await_all_members(consumer)
+        self.await_all_members(consumer)
 
         num_rebalances = consumer.num_rebalances()
         # TODO: make this test work with hard shutdowns, which probably requires
@@ -168,7 +168,7 @@ class OffsetValidationTest(VerifiableConsumerTest):
         self.await_produced_messages(producer)
 
         consumer.start()
-        self.temp_hack_await_all_members(consumer)
+        self.await_all_members(consumer)
 
         if bounce_mode == "all":
             self.bounce_all_consumers(consumer, clean_shutdown=clean_shutdown)
@@ -230,7 +230,7 @@ class OffsetValidationTest(VerifiableConsumerTest):
         consumer = self.setup_consumer(self.TOPIC, static_membership=static_membership, group_protocol=group_protocol)
 
         consumer.start()
-        self.temp_hack_await_all_members(consumer)
+        self.await_all_members(consumer)
 
         num_revokes_before_bounce = consumer.num_revokes_for_alive()
 
@@ -294,7 +294,7 @@ class OffsetValidationTest(VerifiableConsumerTest):
         self.session_timeout_sec = 60
         consumer = self.setup_consumer(self.TOPIC, static_membership=True)
         consumer.start()
-        self.temp_hack_await_all_members(consumer)
+        self.await_all_members(consumer)
 
         # bounce the static member to trigger its member.id updated
         if bounce_mode == "all":
@@ -385,7 +385,7 @@ class OffsetValidationTest(VerifiableConsumerTest):
         producer = self.setup_producer(self.TOPIC)
 
         consumer.start()
-        self.temp_hack_await_all_members(consumer)
+        self.await_all_members(consumer)
 
         partition_owner = consumer.owner(partition)
         assert partition_owner is not None
@@ -451,7 +451,7 @@ class OffsetValidationTest(VerifiableConsumerTest):
 
         producer.start()
         consumer.start()
-        self.temp_hack_await_all_members(consumer)
+        self.await_all_members(consumer)
 
         num_rebalances = consumer.num_rebalances()
 
