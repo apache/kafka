@@ -100,25 +100,25 @@ class VerifiableConsumerTest(KafkaTest):
         actual = consumer.total_consumed()
         return "Consumers received only %d out of %d expected messages within the timeout of %d seconds" % (actual, lower_bound, timeout_sec)
 
-    def await_members(self, consumer, num_consumers, group_protocol):
+    def await_members(self, consumer, num_consumers, require_joined=True):
         # Wait until all members have joined the group
         timeout_sec = self.session_timeout_sec * 2
-        wait_until(lambda: self._await_members(consumer, group_protocol) == num_consumers,
+        wait_until(lambda: self._await_members(consumer, require_joined) == num_consumers,
                    timeout_sec=timeout_sec,
-                   err_msg=self._await_members_err_msg(consumer, num_consumers, group_protocol, timeout_sec))
+                   err_msg=self._await_members_err_msg(consumer, num_consumers, require_joined, timeout_sec))
 
-    def _await_members(self, consumer, group_protocol):
+    def _await_members(self, consumer, require_joined):
         count = len(consumer.joined_nodes())
 
-        if group_protocol is not None and group_protocol == "consumer":
+        if not require_joined:
             count += len(consumer.started_nodes())
             count += len(consumer.rebalancing_nodes())
 
         return count
 
-    def _await_members_err_msg(self, consumer, num_consumers, group_protocol, timeout_sec):
-        actual = self._await_members(consumer, group_protocol)
+    def _await_members_err_msg(self, consumer, num_consumers, require_joined, timeout_sec):
+        actual = self._await_members(consumer, require_joined)
         return "Only %d out of %d consumers joined the group within the timeout of %d seconds" % (actual, num_consumers, timeout_sec)
 
-    def await_all_members(self, consumer, group_protocol):
-        self.await_members(consumer, self.num_consumers, group_protocol)
+    def await_all_members(self, consumer, require_joined=True):
+        self.await_members(consumer, self.num_consumers, require_joined)

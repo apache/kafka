@@ -180,7 +180,7 @@ class VerifiableConsumer(KafkaPathResolverMixin, VerifiableClientMixin, Backgrou
         }
 
     def __init__(self, context, num_nodes, kafka, topic, group_id,
-                 group_protocol="classic", static_membership=False, max_messages=-1, session_timeout_sec=30, enable_autocommit=False,
+                 group_protocol=None, static_membership=False, max_messages=-1, session_timeout_sec=30, enable_autocommit=False,
                  assignment_strategy=None,
                  group_remote_assignor=None,
                  version=DEV_BRANCH, stop_timeout_sec=30, log_level="INFO", jaas_override_variables=None,
@@ -326,10 +326,7 @@ class VerifiableConsumer(KafkaPathResolverMixin, VerifiableClientMixin, Backgrou
         if self.enable_autocommit:
             cmd += " --enable-autocommit "
 
-        if node.version >= V_3_7_0:
-            cmd += " --group-protocol %s" % self.group_protocol
-
-        if node.version >= V_3_7_0 and self.group_protocol.upper() == "CONSUMER":
+        if node.version >= V_3_7_0 and self.supports_kip_848():
             cmd += " --group-protocol %s" % self.group_protocol
             cmd += " --group-remote-assignor %s" % self.group_remote_assignor
         elif self.assignment_strategy:
@@ -439,3 +436,6 @@ class VerifiableConsumer(KafkaPathResolverMixin, VerifiableClientMixin, Backgrou
     def _nodes_in_state(self, state):
         with self.lock:
             return [handler.node for handler in self.event_handlers.values() if handler.state == state]
+
+    def supports_kip_848(self):
+        return self.group_protocol and self.group_protocol.upper() == "CONSUMER"
