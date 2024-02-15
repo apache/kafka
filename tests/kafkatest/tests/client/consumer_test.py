@@ -120,27 +120,20 @@ class OffsetValidationTest(VerifiableConsumerTest):
         self.await_produced_messages(producer)
 
         consumer.start()
-        self.logger.debug("KIRK_DEBUG - test_broker_rolling_bounce - a - rebalances: %d", consumer.num_rebalances())
 
         if consumer.supports_kip_848():
             self.await_members(consumer, 1)
         else:
             self.await_all_members(consumer)
 
-        self.logger.debug("KIRK_DEBUG - test_broker_rolling_bounce - b - rebalances: %d", consumer.num_rebalances())
-
         num_rebalances = consumer.num_rebalances()
-        self.logger.debug("KIRK_DEBUG - test_broker_rolling_bounce - c - rebalances: %d", consumer.num_rebalances())
 
         # TODO: make this test work with hard shutdowns, which probably requires
         #       pausing before the node is restarted to ensure that any ephemeral
         #       nodes have time to expire
-        self.logger.debug("KIRK_DEBUG - test_broker_rolling_bounce - d - rebalances: %d", consumer.num_rebalances())
         self.rolling_bounce_brokers(consumer, clean_shutdown=True)
-        self.logger.debug("KIRK_DEBUG - test_broker_rolling_bounce - e - rebalances: %d", consumer.num_rebalances())
 
         unexpected_rebalances = consumer.num_rebalances() - num_rebalances
-        self.logger.debug("KIRK_DEBUG - test_broker_rolling_bounce - f - rebalances: %d", consumer.num_rebalances())
         assert unexpected_rebalances == 0, \
             "Broker rolling bounce caused %d unexpected group rebalances" % unexpected_rebalances
 
@@ -154,13 +147,7 @@ class OffsetValidationTest(VerifiableConsumerTest):
     @matrix(
         clean_shutdown=[True],
         bounce_mode=["all", "rolling"],
-        metadata_quorum=[quorum.zk],
-        use_new_coordinator=[False]
-    )
-    @matrix(
-        clean_shutdown=[True],
-        bounce_mode=["all", "rolling"],
-        metadata_quorum=[quorum.isolated_kraft],
+        metadata_quorum=[quorum.zk, quorum.isolated_kraft],
         use_new_coordinator=[False]
     )
     @matrix(
