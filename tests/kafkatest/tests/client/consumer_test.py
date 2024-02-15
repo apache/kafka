@@ -19,6 +19,7 @@ from ducktape.mark.resource import cluster
 
 from kafkatest.tests.verifiable_consumer_test import VerifiableConsumerTest
 from kafkatest.services.kafka import TopicPartition, quorum
+from kafkatest.services.verifiable_consumer import ConsumerState
 
 import signal
 
@@ -395,7 +396,7 @@ class OffsetValidationTest(VerifiableConsumerTest):
 
         # stop the partition owner and await its shutdown
         consumer.kill_node(partition_owner, clean_shutdown=clean_shutdown)
-        self.await_dead_members(consumer, 1)
+        self.await_members_in_state(consumer, 1, [ConsumerState.Dead], self.session_timeout_sec * 2 + 5)
         self.await_partition_assigned(consumer, partition)
 
         # ensure that the remaining consumer does some work after rebalancing

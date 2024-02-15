@@ -411,6 +411,11 @@ class VerifiableConsumer(KafkaPathResolverMixin, VerifiableClientMixin, Backgrou
             return max(handler.revoked_count for handler in self.event_handlers.values()
                        if handler.idx <= keep_alive)
 
+    def nodes_in_state(self, states):
+        with self.lock:
+            return [handler.node for handler in self.event_handlers.values()
+                    if handler.state in states]
+
     def joined_nodes(self):
         with self.lock:
             return [handler.node for handler in self.event_handlers.values()
