@@ -7359,4 +7359,107 @@ class KafkaApisTest extends Logging {
     val response = verifyNoThrottling[ShareGroupHeartbeatResponse](requestChannelRequest)
     assertEquals(Errors.FENCED_MEMBER_EPOCH.code, response.data.errorCode)
   }
+
+  @Test
+  def testShareGroupDescribeSuccess(): Unit = {
+    val groupIds = List("share-group-id-0", "share-group-id-1").asJava
+    val describedGroups: util.List[ShareGroupDescribeResponseData.DescribedGroup] = List(
+      new ShareGroupDescribeResponseData.DescribedGroup().setGroupId(groupIds.get(0)),
+      new ShareGroupDescribeResponseData.DescribedGroup().setGroupId(groupIds.get(1))
+    ).asJava
+    getShareGroupDescribeResponse(groupIds, Map(KafkaConfig.NewGroupCoordinatorEnableProp -> "true", KafkaConfig.ShareGroupEnableProp -> "true")
+      , true, null, describedGroups)
+  }
+
+  @Test
+  def testShareGroupDescribeErrorNewCoordNotSet(): Unit = {
+    val groupIds = List("share-group-id-0", "share-group-id-1").asJava
+    val describedGroups: util.List[ShareGroupDescribeResponseData.DescribedGroup] = List(
+      new ShareGroupDescribeResponseData.DescribedGroup().setGroupId(groupIds.get(0)),
+      new ShareGroupDescribeResponseData.DescribedGroup().setGroupId(groupIds.get(1))
+    ).asJava
+    val response = getShareGroupDescribeResponse(groupIds, Map(KafkaConfig.ShareGroupEnableProp -> "true")
+      , false, null, describedGroups)
+    assertNotNull(response.data)
+    assertEquals(2, response.data.groups.size)
+    response.data.groups.forEach(group => assertEquals(Errors.UNSUPPORTED_VERSION.code(), group.errorCode()))
+  }
+
+  @Test
+  def testShareGroupDescribeErrorShareEnableNotSet(): Unit = {
+    val groupIds = List("share-group-id-0", "share-group-id-1").asJava
+    val describedGroups: util.List[ShareGroupDescribeResponseData.DescribedGroup] = List(
+      new ShareGroupDescribeResponseData.DescribedGroup().setGroupId(groupIds.get(0)),
+      new ShareGroupDescribeResponseData.DescribedGroup().setGroupId(groupIds.get(1))
+    ).asJava
+    val response = getShareGroupDescribeResponse(groupIds, Map(KafkaConfig.NewGroupCoordinatorEnableProp -> "true")
+      , false, null, describedGroups)
+    assertNotNull(response.data)
+    assertEquals(2, response.data.groups.size)
+    response.data.groups.forEach(group => assertEquals(Errors.UNSUPPORTED_VERSION.code(), group.errorCode()))
+  }
+
+  @Test
+  def testShareGroupDescribeRequestAuthorizationFailed(): Unit = {
+    val groupIds = List("share-group-id-0", "share-group-id-1").asJava
+    val describedGroups: util.List[ShareGroupDescribeResponseData.DescribedGroup] = List().asJava
+    val authorizer: Authorizer = mock(classOf[Authorizer])
+    when(authorizer.authorize(any[RequestContext], any[util.List[Action]]))
+      .thenReturn(Seq(AuthorizationResult.DENIED).asJava)
+    val response = getShareGroupDescribeResponse(groupIds, Map(KafkaConfig.NewGroupCoordinatorEnableProp -> "true", KafkaConfig.ShareGroupEnableProp -> "true")
+      , false, authorizer, describedGroups)
+    assertNotNull(response.data)
+    assertEquals(2, response.data.groups.size)
+    response.data.groups.forEach(group => assertEquals(Errors.GROUP_AUTHORIZATION_FAILED.code(), group.errorCode()))
+  }
+
+  @Test
+  def testShareGroupDescribeRequestAuthorizationFailedForOneGroup(): Unit = {
+    val groupIds = List("share-group-id-fail-0", "share-group-id-1").asJava
+    val describedGroups: util.List[ShareGroupDescribeResponseData.DescribedGroup] = List(
+      new ShareGroupDescribeResponseData.DescribedGroup().setGroupId(groupIds.get(1))
+    ).asJava
+
+    val authorizer: Authorizer = mock(classOf[Authorizer])
+    when(authorizer.authorize(any[RequestContext], any[util.List[Action]]))
+      .thenReturn(Seq(AuthorizationResult.DENIED).asJava, Seq(AuthorizationResult.ALLOWED).asJava)
+
+    val response = getShareGroupDescribeResponse(groupIds, Map(KafkaConfig.NewGroupCoordinatorEnableProp -> "true", KafkaConfig.ShareGroupEnableProp -> "true")
+      , false, authorizer, describedGroups)
+
+    assertNotNull(response.data)
+    assertEquals(2, response.data.groups.size)
+    assertEquals(Errors.GROUP_AUTHORIZATION_FAILED.code(), response.data.groups.get(0).errorCode())
+    assertEquals(Errors.NONE.code(), response.data.groups.get(1).errorCode())
+  }
+
+  def getShareGroupDescribeResponse(groupIds: util.List[String], configOverrides: Map[String, String], verifyNoErr: Boolean = true, authorizer: Authorizer = null,
+                                    describedGroups: util.List[ShareGroupDescribeResponseData.DescribedGroup]): ShareGroupDescribeResponse = {
+    val shareGroupDescribeRequestData = new ShareGroupDescribeRequestData()
+    shareGroupDescribeRequestData.groupIds.addAll(groupIds)
+    val requestChannelRequest = buildRequest(new ShareGroupDescribeRequest.Builder(shareGroupDescribeRequestData, true).build())
+
+    val future = new CompletableFuture[util.List[ShareGroupDescribeResponseData.DescribedGroup]]()
+    when(groupCoordinator.shareGroupDescribe(
+      any[RequestContext],
+      any[util.List[String]]
+    )).thenReturn(future)
+    metadataCache = MetadataCache.kRaftMetadataCache(brokerId)
+    kafkaApis = createKafkaApis(
+      overrideProperties = configOverrides,
+      authorizer = Option(authorizer),
+      raftSupport = true
+    )
+    kafkaApis.handle(requestChannelRequest, RequestLocal.NoCaching)
+
+    future.complete(describedGroups)
+
+    val response = verifyNoThrottling[ShareGroupDescribeResponse](requestChannelRequest)
+    if (verifyNoErr) {
+      val expectedShareGroupDescribeResponseData = new ShareGroupDescribeResponseData()
+        .setGroups(describedGroups)
+      assertEquals(expectedShareGroupDescribeResponseData, response.data)
+    }
+    response
+  }
 }

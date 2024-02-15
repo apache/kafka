@@ -164,6 +164,11 @@ public class ForwardingAdmin implements Admin {
     }
 
     @Override
+    public DescribeShareGroupsResult describeShareGroups(Collection<String> groupIds, DescribeShareGroupsOptions options) {
+        return delegate.describeShareGroups(groupIds, options);
+    }
+
+    @Override
     public ListConsumerGroupsResult listConsumerGroups(ListConsumerGroupsOptions options) {
         return delegate.listConsumerGroups(options);
     }

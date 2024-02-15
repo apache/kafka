@@ -22,6 +22,7 @@ import org.apache.kafka.common.errors.ApiException;
 import org.apache.kafka.common.errors.StaleMemberEpochException;
 import org.apache.kafka.common.errors.UnknownMemberIdException;
 import org.apache.kafka.common.message.ListGroupsResponseData;
+import org.apache.kafka.common.message.ShareGroupDescribeResponseData;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.coordinator.group.Group;
 import org.apache.kafka.coordinator.group.GroupMember;
@@ -190,7 +191,8 @@ public class ShareGroup implements Group {
     return new ListGroupsResponseData.ListedGroup()
             .setGroupId(groupId)
             .setProtocolType(ConsumerProtocol.PROTOCOL_TYPE)
-            .setGroupState(state.get(committedOffset).toString());
+            .setGroupState(state.get(committedOffset).toString())
+            .setGroupType(type().toString());
   }
 
   /**
@@ -769,5 +771,26 @@ public class ShareGroup implements Group {
    */
   private static Integer incValue(String key, Integer value) {
     return value == null ? 1 : value + 1;
+  }
+
+  public ShareGroupDescribeResponseData.DescribedGroup asDescribedGroup(
+      long committedOffset,
+      String defaultAssignor,
+      TopicsImage topicsImage
+  ) {
+    ShareGroupDescribeResponseData.DescribedGroup describedGroup = new ShareGroupDescribeResponseData.DescribedGroup()
+        .setGroupId(groupId)
+        .setAssignorName(defaultAssignor)
+        .setGroupEpoch(groupEpoch.get(committedOffset))
+        .setGroupState(state.get(committedOffset).toString())
+        .setAssignmentEpoch(targetAssignmentEpoch.get(committedOffset));
+    members.entrySet(committedOffset).forEach(
+        entry -> describedGroup.members().add(
+            entry.getValue().asShareGroupDescribeMember(
+                topicsImage
+            )
+        )
+    );
+    return describedGroup;
   }
 }
