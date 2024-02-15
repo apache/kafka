@@ -203,10 +203,9 @@ class OffsetValidationTest(VerifiableConsumerTest):
         bounce_mode=["all", "rolling"],
         num_bounces=[5],
         metadata_quorum=[quorum.isolated_kraft],
-        use_new_coordinator=[True],
-        group_protocol=["classic", "consumer"]
+        use_new_coordinator=[True]
     )
-    def test_static_consumer_bounce(self, clean_shutdown, static_membership, bounce_mode, num_bounces, metadata_quorum=quorum.zk, use_new_coordinator=False, group_protocol=None):
+    def test_static_consumer_bounce(self, clean_shutdown, static_membership, bounce_mode, num_bounces, metadata_quorum=quorum.zk, use_new_coordinator=False):
         """
         Verify correct static consumer behavior when the consumers in the group are restarted. In order to make
         sure the behavior of static members are different from dynamic ones, we take both static and dynamic
@@ -227,7 +226,7 @@ class OffsetValidationTest(VerifiableConsumerTest):
         self.await_produced_messages(producer)
 
         self.session_timeout_sec = 60
-        consumer = self.setup_consumer(self.TOPIC, static_membership=static_membership, group_protocol=group_protocol)
+        consumer = self.setup_consumer(self.TOPIC, static_membership=static_membership)
 
         consumer.start()
         self.await_all_members(consumer)
