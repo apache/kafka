@@ -746,7 +746,7 @@ public class MembershipManagerImpl implements MembershipManager {
 
     /**
      * Sets the epoch to the leave group epoch and clears the assignments. The member will rejoin with
-     * the existing subscriptions on the next time user polls.
+     * the existing subscriptions after the next application poll event.
      */
     @Override
     public void transitionToStale() {

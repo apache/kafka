@@ -107,7 +107,7 @@ public enum MemberState {
      * hasn't been a call to consumer.poll within the <code>max.poll.interval.ms</code>. While in
      * this state, the member will send a heartbeat to leave the group, invoke the
      * onPartitionsLost callback, and clear its assignments. The member will only transition
-     * out of this state when the user polls the consumer again. The member will then transition
+     * out of this state on the next application poll event. The member will then transition
      * to JOINING, to rejoin the group.
      */
     STALE;
