@@ -48,20 +48,19 @@ class VerifiableConsumerTest(KafkaTest):
     def await_valid_assignment(self, consumer, topic, num_partitions, num_consumers):
         # Wait until all assignments have settled
         timeout_sec = self.session_timeout_sec * 2
-        wait_until(lambda: self._valid_assignment(topic, num_partitions, consumer.current_assignment()),
-                   timeout_sec=timeout_sec,
-                   err_msg=self._valid_assignment_err_msg(consumer, topic, num_consumers, num_partitions, timeout_sec))
 
-    def _valid_assignment(self, topic, num_partitions, assignment):
-        all_partitions = self._all_partitions(topic, num_partitions)
-        partitions = self._partitions(assignment)
-        return len(partitions) == num_partitions and set(partitions) == all_partitions
+        def _condition():
+            assignment = consumer.current_assignment()
+            all_partitions = self._all_partitions(topic, num_partitions)
+            partitions = self._partitions(assignment)
+            return len(partitions) == num_partitions and set(partitions) == all_partitions
 
-    def _valid_assignment_err_msg(self, consumer, topic, num_consumers, num_partitions, timeout_sec):
-        assignment = consumer.current_assignment()
-        assignments = [(str(node.account), a) for node, a in assignment.items()]
-        return "Not all of the %d partitions for topic %s were assigned among the %d consumers within the timeout of %d seconds: %s" % (num_partitions, topic, num_consumers, timeout_sec, assignments),
+        def _err_msg():
+            assignment = consumer.current_assignment()
+            assignments = [(str(node.account), a) for node, a in assignment.items()]
+            return "Not all of the %d partitions for topic %s were assigned among the %d consumers within the timeout of %d seconds: %s" % (num_partitions, topic, num_consumers, timeout_sec, assignments),
 
+        wait_until(lambda: _condition(), timeout_sec=timeout_sec, err_msg=_err_msg())
 
     def min_cluster_size(self):
         """Override this since we're adding services outside of the constructor"""
@@ -92,36 +91,56 @@ class VerifiableConsumerTest(KafkaTest):
         timeout_sec = self.consumption_timeout_sec
         current_total = consumer.total_consumed()
         lower_bound = current_total + min_messages
-        wait_until(lambda: consumer.total_consumed() >= lower_bound,
-                   timeout_sec=timeout_sec,
-                   err_msg=self._await_consumed_messages_err_msg(consumer, lower_bound, timeout_sec))
 
-    def _await_consumed_messages_err_msg(self, consumer, lower_bound, timeout_sec):
-        actual = consumer.total_consumed()
-        return "Consumers received only %d out of %d expected messages within the timeout of %d seconds" % (actual, lower_bound, timeout_sec)
+        def _condition():
+            return consumer.total_consumed() >= lower_bound
+
+        def _err_msg():
+            actual = consumer.total_consumed()
+            return "Consumers received only %d out of %d expected messages within the timeout of %d seconds" % (actual, lower_bound, timeout_sec)
+
+        wait_until(lambda: _condition(), timeout_sec=timeout_sec, err_msg=_err_msg())
 
     def await_members(self, consumer, num_consumers, require_joined=True):
         # Wait until all members have joined the group
         timeout_sec = self.session_timeout_sec * 2
-        wait_until(lambda: self._await_members(consumer, require_joined) == num_consumers,
-                   timeout_sec=timeout_sec,
-                   err_msg=self._await_members_err_msg(consumer, num_consumers, require_joined, timeout_sec))
 
-    def _await_members(self, consumer, require_joined):
-        count = len(consumer.joined_nodes())
+        def _count():
+            count = len(consumer.joined_nodes())
 
-        if not require_joined:
-            count += len(consumer.started_nodes())
-            count += len(consumer.rebalancing_nodes())
+            if not require_joined:
+                count += len(consumer.started_nodes())
+                count += len(consumer.rebalancing_nodes())
 
-        return count
+            return count
 
-    def _await_members_err_msg(self, consumer, num_consumers, require_joined, timeout_sec):
-        actual = self._await_members(consumer, require_joined)
-        return "Only %d out of %d consumers joined the group within the timeout of %d seconds" % (actual, num_consumers, timeout_sec)
+        def _condition():
+            return _count() == num_consumers
+
+        def _err_msg():
+            return ("Only %d out of %d consumers joined the group within the timeout of %d seconds" %
+                    (_count(), num_consumers, timeout_sec))
+
+        wait_until(lambda: _condition(), timeout_sec=timeout_sec, err_msg=_err_msg)
 
     def await_all_members(self, consumer, require_joined=True):
         if consumer.supports_kip_848():
             self.await_members(consumer, 1)
         else:
             self.await_members(consumer, self.num_consumers, require_joined)
+
+    def await_close_all_members(self, consumer, partition):
+        # Wait until all consumers have closed
+        timeout_sec = self.session_timeout_sec * 2 + 5
+
+        def _count():
+            return len(consumer.joined_nodes())
+
+        def _condition():
+            return _count() == self.num_consumers - 1 and consumer.owner(partition) is not None
+
+        def _err_msg():
+            return ("Only %d out of %d consumers closed within the timeout of %d seconds" %
+                    (_count(), self.num_consumers, timeout_sec))
+
+        wait_until(lambda: _condition(), timeout_sec=timeout_sec, err_msg=_err_msg())
