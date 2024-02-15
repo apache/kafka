@@ -61,11 +61,11 @@ class OffsetValidationTest(VerifiableConsumerTest):
             self.await_all_members(consumer)
             self.await_consumed_messages(consumer)
 
-    def rolling_bounce_brokers(self, consumer, num_bounces=5, clean_shutdown=True):
+    def rolling_bounce_brokers(self, consumer, num_bounces=5, clean_shutdown=True, group_protocol=None):
         for _ in range(num_bounces):
             for node in self.kafka.nodes:
                 self.kafka.restart_node(node, clean_shutdown=True)
-                self.await_all_members(consumer)
+                self.await_all_members(consumer, group_protocol)
                 self.await_consumed_messages(consumer)
 
     def setup_consumer(self, topic, **kwargs):
@@ -76,11 +76,7 @@ class OffsetValidationTest(VerifiableConsumerTest):
 
     @cluster(num_nodes=7)
     @matrix(
-        metadata_quorum=[quorum.zk],
-        use_new_coordinator=[False]
-    )
-    @matrix(
-        metadata_quorum=[quorum.isolated_kraft],
+        metadata_quorum=[quorum.zk, quorum.isolated_kraft],
         use_new_coordinator=[False]
     )
     @matrix(
@@ -91,7 +87,7 @@ class OffsetValidationTest(VerifiableConsumerTest):
     def test_broker_rolling_bounce(self,
                                    metadata_quorum=quorum.zk,
                                    use_new_coordinator=False,
-                                   group_protocol="classic"):
+                                   group_protocol=None):
         """
         Verify correct consumer behavior when the brokers are consecutively restarted.
 
@@ -128,7 +124,7 @@ class OffsetValidationTest(VerifiableConsumerTest):
         # TODO: make this test work with hard shutdowns, which probably requires
         #       pausing before the node is restarted to ensure that any ephemeral
         #       nodes have time to expire
-        self.rolling_bounce_brokers(consumer, clean_shutdown=True)
+        self.rolling_bounce_brokers(consumer, clean_shutdown=True, group_protocol=group_protocol)
 
         unexpected_rebalances = consumer.num_rebalances() - num_rebalances
         assert unexpected_rebalances == 0, \
