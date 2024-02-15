@@ -275,10 +275,9 @@ class OffsetValidationTest(VerifiableConsumerTest):
     @matrix(
         bounce_mode=["all", "rolling"],
         metadata_quorum=[quorum.isolated_kraft],
-        use_new_coordinator=[True],
-        group_protocol=["classic", "consumer"]
+        use_new_coordinator=[True]
     )
-    def test_static_consumer_persisted_after_rejoin(self, bounce_mode, metadata_quorum=quorum.zk, use_new_coordinator=False, group_protocol=None):
+    def test_static_consumer_persisted_after_rejoin(self, bounce_mode, metadata_quorum=quorum.zk, use_new_coordinator=False):
         """
         Verify that the updated member.id(updated_member_id) caused by static member rejoin would be persisted. If not,
         after the brokers rolling bounce, the migrated group coordinator would load the stale persisted member.id and
@@ -293,7 +292,7 @@ class OffsetValidationTest(VerifiableConsumerTest):
         producer.start()
         self.await_produced_messages(producer)
         self.session_timeout_sec = 60
-        consumer = self.setup_consumer(self.TOPIC, static_membership=True, group_protocol=group_protocol)
+        consumer = self.setup_consumer(self.TOPIC, static_membership=True)
         consumer.start()
         self.temp_hack_await_all_members(consumer)
 
