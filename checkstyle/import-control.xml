@@ -601,6 +601,7 @@
         <allow pkg="com.fasterxml.jackson.core.type" />
         <allow pkg="org.apache.kafka.metadata" />
         <allow pkg="org.eclipse.jetty.client"/>
+        <allow class="org.apache.zookeeper.client.ZKClientConfig" />
       </subpackage>
     </subpackage>
 

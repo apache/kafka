@@ -90,7 +90,7 @@ public class KafkaEmbedded {
         effectiveConfig.put(KafkaConfig.AutoCreateTopicsEnableProp(), true);
         effectiveConfig.put(KafkaConfig.MessageMaxBytesProp(), 1000000);
         effectiveConfig.put(KafkaConfig.ControlledShutdownEnableProp(), true);
-        effectiveConfig.put(KafkaConfig.ZkSessionTimeoutMsProp(), 10000);
+        effectiveConfig.put(ZkConfig.ZkSessionTimeoutMsProp(), 10000);
 
         effectiveConfig.putAll(initialConfig);
         effectiveConfig.setProperty(KafkaConfig.LogDirProp(), logDir.getAbsolutePath());

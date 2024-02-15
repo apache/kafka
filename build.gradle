@@ -857,6 +857,17 @@ project(':server') {
     implementation libs.metrics
 
     implementation libs.slf4jApi
+    implementation(libs.zookeeper) {
+      // Dropwizard Metrics are required by ZooKeeper as of v3.6.0,
+      // but the library should *not* be used in Kafka code
+      implementation libs.dropwizardMetrics
+      exclude module: 'slf4j-log4j12'
+      exclude module: 'log4j'
+      // Both Kafka and Zookeeper use slf4j. ZooKeeper moved from log4j to logback in v3.8.0, but Kafka relies on reload4j.
+      // We are removing Zookeeper's dependency on logback so we have a singular logging backend.
+      exclude module: 'logback-classic'
+      exclude module: 'logback-core'
+    }
 
     compileOnly libs.log4j
 
@@ -954,6 +965,7 @@ project(':core') {
     implementation libs.scalaReflect
     implementation libs.scalaLogging
     implementation libs.slf4jApi
+    // TODO: check if this can be removed or moved to test dependencies
     implementation(libs.zookeeper) {
       // Dropwizard Metrics are required by ZooKeeper as of v3.6.0,
       // but the library should *not* be used in Kafka code
@@ -2179,6 +2191,7 @@ project(':streams') {
     testImplementation project(':core').sourceSets.test.output
     testImplementation project(':server-common')
     testImplementation project(':server-common').sourceSets.test.output
+    testImplementation project(':server')
     testImplementation libs.log4j
     testImplementation libs.junitJupiter
     testImplementation libs.junitVintageEngine
@@ -2749,6 +2762,7 @@ project(':jmh-benchmarks') {
       exclude group: 'net.sf.jopt-simple', module: 'jopt-simple'
     }
     implementation project(':server-common')
+    implementation project(':server')
     implementation project(':clients')
     implementation project(':group-coordinator')
     implementation project(':metadata')
@@ -2978,6 +2992,7 @@ project(':connect:runtime') {
     testImplementation project(':metadata')
     testImplementation project(':core').sourceSets.test.output
     testImplementation project(':server-common')
+    testImplementation project(':server')
     testImplementation project(':connect:test-plugins')
 
     testImplementation libs.easymock
