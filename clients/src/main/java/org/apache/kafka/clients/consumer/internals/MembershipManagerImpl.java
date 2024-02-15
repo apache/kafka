@@ -336,16 +336,6 @@ public class MembershipManagerImpl implements MembershipManager {
     }
 
     /**
-     * @return True if there hasn't been a call to consumer.poll() withing the max.poll.interval.
-     * In that case, it is expected that the member will leave the group and rejoin on the next
-     * call to consumer.poll().
-     */
-    @Override
-    public boolean isStale() {
-        return state == MemberState.STALE;
-    }
-
-    /**
      * {@inheritDoc}
      */
     @Override
