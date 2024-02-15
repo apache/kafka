@@ -98,7 +98,7 @@ currentBuild.description = ""
 def reportFlakyTests() {
   def testResultAction = currentBuild.rawBuild.getAction(hudson.tasks.junit.TestResultAction.class)
 
-  if (testResultAction != null && && testResultAction instanceof TestResultAction) {
+  if (testResultAction != null && testResultAction instanceof TestResultAction) {
     def testResult = (TestResult) testResultAction.getResult()
     for (SuiteResult suiteResult : testResult.getSuites()) {
       Document document = DocumentHelper.parseText(readFile(suiteResult.getFile()))
