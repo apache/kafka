@@ -35,7 +35,7 @@ class ConsumerWithLegacyMessageFormatIntegrationTest extends AbstractConsumerTes
   override protected def brokerPropertyOverrides(properties: Properties): Unit = {
     // legacy message formats are only supported with IBP < 3.0
     // KRaft mode is not supported for inter.broker.protocol.version = 2.8, The minimum version required is 3.0-IV1"
-    if(!isKRaftTest())
+    if (!isKRaftTest())
       properties.put(KafkaConfig.InterBrokerProtocolVersionProp, "2.8")
   }
 
@@ -91,7 +91,7 @@ class ConsumerWithLegacyMessageFormatIntegrationTest extends AbstractConsumerTes
     assertEquals(20, timestampTopic1P1.timestamp)
     assertEquals(Optional.of(0), timestampTopic1P1.leaderEpoch)
 
-    if(!isKRaftTest()) {
+    if (!isKRaftTest()) {
       assertNull(timestampOffsets.get(new TopicPartition(topic2, 0)), "null should be returned when message format is 0.9.0")
       assertNull(timestampOffsets.get(new TopicPartition(topic2, 1)), "null should be returned when message format is 0.9.0")
     }

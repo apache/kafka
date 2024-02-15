@@ -352,6 +352,23 @@ abstract class EmbeddedConnect {
     }
 
     /**
+     * Restart an existing task.
+     *
+     * @param connName name of the connector
+     * @param taskNum ID of the task (starting from 0)
+     * @throws ConnectRestException if the REST API returns error status
+     * @throws ConnectException for any other error.
+     */
+    public void restartTask(String connName, int taskNum) {
+        String url = endpointForResource(String.format("connectors/%s/tasks/%d/restart", connName, taskNum));
+        Response response = requestPost(url, "", Collections.emptyMap());
+        if (response.getStatus() >= Response.Status.BAD_REQUEST.getStatusCode()) {
+            throw new ConnectRestException(response.getStatus(),
+                    "Could not execute POST request. Error response: " + responseToString(response));
+        }
+    }
+
+    /**
      * Restart an existing connector and its tasks.
      *
      * @param connName  name of the connector to be restarted

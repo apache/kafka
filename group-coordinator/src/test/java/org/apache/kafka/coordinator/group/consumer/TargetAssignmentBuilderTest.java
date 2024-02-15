@@ -33,6 +33,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
+import static org.apache.kafka.coordinator.group.Assertions.assertUnorderedListEquals;
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkAssignment;
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkTopicAssignment;
 import static org.apache.kafka.coordinator.group.RecordHelpers.newTargetAssignmentEpochRecord;
@@ -382,7 +383,7 @@ public class TargetAssignmentBuilderTest {
 
         assertEquals(3, result.records().size());
 
-        assertUnorderedList(Arrays.asList(
+        assertUnorderedListEquals(Arrays.asList(
             newTargetAssignmentRecord("my-group", "member-1", mkAssignment(
                 mkTopicAssignment(fooTopicId, 4, 5, 6),
                 mkTopicAssignment(barTopicId, 4, 5, 6)
@@ -452,7 +453,7 @@ public class TargetAssignmentBuilderTest {
 
         assertEquals(4, result.records().size());
 
-        assertUnorderedList(Arrays.asList(
+        assertUnorderedListEquals(Arrays.asList(
             newTargetAssignmentRecord("my-group", "member-1", mkAssignment(
                 mkTopicAssignment(fooTopicId, 1, 2),
                 mkTopicAssignment(barTopicId, 1, 2)
@@ -539,7 +540,7 @@ public class TargetAssignmentBuilderTest {
 
         assertEquals(4, result.records().size());
 
-        assertUnorderedList(Arrays.asList(
+        assertUnorderedListEquals(Arrays.asList(
             newTargetAssignmentRecord("my-group", "member-1", mkAssignment(
                 mkTopicAssignment(fooTopicId, 1, 2),
                 mkTopicAssignment(barTopicId, 1, 2)
@@ -621,7 +622,7 @@ public class TargetAssignmentBuilderTest {
         assertEquals(3, result.records().size());
 
         // Member 1 has no record because its assignment did not change.
-        assertUnorderedList(Arrays.asList(
+        assertUnorderedListEquals(Arrays.asList(
             newTargetAssignmentRecord("my-group", "member-2", mkAssignment(
                 mkTopicAssignment(fooTopicId, 3, 4, 5),
                 mkTopicAssignment(barTopicId, 3, 4, 5)
@@ -695,7 +696,7 @@ public class TargetAssignmentBuilderTest {
 
         assertEquals(3, result.records().size());
 
-        assertUnorderedList(Arrays.asList(
+        assertUnorderedListEquals(Arrays.asList(
             newTargetAssignmentRecord("my-group", "member-1", mkAssignment(
                 mkTopicAssignment(fooTopicId, 1, 2, 3),
                 mkTopicAssignment(barTopicId, 1, 2, 3)
@@ -774,7 +775,7 @@ public class TargetAssignmentBuilderTest {
 
         assertEquals(2, result.records().size());
 
-        assertUnorderedList(Collections.singletonList(
+        assertUnorderedListEquals(Collections.singletonList(
             newTargetAssignmentRecord("my-group", "member-3-a", mkAssignment(
                 mkTopicAssignment(fooTopicId, 5, 6),
                 mkTopicAssignment(barTopicId, 5, 6)
@@ -802,12 +803,5 @@ public class TargetAssignmentBuilderTest {
         )));
 
         assertEquals(expectedAssignment, result.targetAssignment());
-    }
-    private static <T> void assertUnorderedList(
-        List<T> expected,
-        List<T> actual
-    ) {
-        assertEquals(expected.size(), actual.size());
-        assertEquals(new HashSet<>(expected), new HashSet<>(actual));
     }
 }

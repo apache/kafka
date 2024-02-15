@@ -849,7 +849,7 @@ final class KafkaMetadataLogTest {
     val log = buildMetadataLog(tempDir, mockTime, config)
 
     // Generate some segments
-    for(_ <- 0 to 100) {
+    for (_ <- 0 to 100) {
       append(log, 47, 1) // An odd number of records to avoid offset alignment
     }
     assertFalse(log.maybeClean(), "Should not clean since HW was still 0")
@@ -889,12 +889,12 @@ final class KafkaMetadataLogTest {
     )
     val log = buildMetadataLog(tempDir, mockTime, config)
 
-    for(_ <- 0 to 1000) {
+    for (_ <- 0 to 1000) {
       append(log, 1, 1)
     }
     log.updateHighWatermark(new LogOffsetMetadata(1001))
 
-    for(offset <- Seq(100, 200, 300, 400, 500, 600)) {
+    for (offset <- Seq(100, 200, 300, 400, 500, 600)) {
       val snapshotId = new OffsetAndEpoch(offset, 1)
       TestUtils.resource(log.storeSnapshot(snapshotId).get()) { snapshot =>
         append(snapshot, 10)
@@ -924,7 +924,7 @@ final class KafkaMetadataLogTest {
     )
     val log = buildMetadataLog(tempDir, mockTime, config)
 
-    for(_ <- 0 to 2000) {
+    for (_ <- 0 to 2000) {
       append(log, 1, 1)
     }
     log.updateHighWatermark(new LogOffsetMetadata(2000))

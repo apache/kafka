@@ -2362,7 +2362,7 @@ public class OffsetMetadataManagerTest {
             "foo",
             true
         );
-        MetadataImage image = new GroupMetadataManagerTest.MetadataImageBuilder()
+        MetadataImage image = new MetadataImageBuilder()
             .addTopic(Uuid.randomUuid(), "foo", 1)
             .addRacks()
             .build();
@@ -2399,7 +2399,7 @@ public class OffsetMetadataManagerTest {
     }
 
     @ParameterizedTest
-    @EnumSource(Group.GroupType.class)
+    @EnumSource(value = Group.GroupType.class, names = {"CLASSIC", "CONSUMER"})
     public void testDeleteGroupAllOffsets(Group.GroupType groupType) {
         OffsetMetadataManagerTestContext context = new OffsetMetadataManagerTestContext.Builder().build();
         context.getOrMaybeCreateGroup(groupType, "foo");
@@ -2422,7 +2422,7 @@ public class OffsetMetadataManagerTest {
     }
 
     @ParameterizedTest
-    @EnumSource(Group.GroupType.class)
+    @EnumSource(value = Group.GroupType.class, names = {"CLASSIC", "CONSUMER"})
     public void testDeleteGroupAllOffsetsWithPendingTransactionalOffsets(Group.GroupType groupType) {
         OffsetMetadataManagerTestContext context = new OffsetMetadataManagerTestContext.Builder().build();
         context.getOrMaybeCreateGroup(groupType, "foo");
