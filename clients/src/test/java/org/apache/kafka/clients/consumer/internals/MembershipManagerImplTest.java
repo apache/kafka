@@ -697,6 +697,22 @@ public class MembershipManagerImplTest {
         testLeaveGroupReleasesAssignmentAndResetsEpochToSendLeaveGroup(membershipManager);
         verify(subscriptionState).assignFromSubscribed(Collections.emptySet());
     }
+    @Test
+    public void testIgnoreHeartbeatWhenLeavingGroup() {
+        MembershipManager membershipManager = createMemberInStableState();
+        mockLeaveGroup();
+
+        CompletableFuture<Void> leaveResult = membershipManager.leaveGroup();
+
+        membershipManager.onHeartbeatResponseReceived(createConsumerGroupHeartbeatResponse(createAssignment(true)).data());
+
+        assertEquals(MemberState.LEAVING, membershipManager.state());
+        assertEquals(-1, membershipManager.memberEpoch());
+        assertEquals(MEMBER_ID, membershipManager.memberId());
+        assertTrue(membershipManager.currentAssignment().isEmpty());
+        assertFalse(leaveResult.isDone(), "Leave group result should not complete until the " +
+            "heartbeat request to leave is sent out.");
+    }
 
     @Test
     public void testLeaveGroupWhenStateIsReconciling() {

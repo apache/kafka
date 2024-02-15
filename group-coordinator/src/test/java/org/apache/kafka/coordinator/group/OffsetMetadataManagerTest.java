@@ -2362,7 +2362,7 @@ public class OffsetMetadataManagerTest {
             "foo",
             true
         );
-        MetadataImage image = new GroupMetadataManagerTest.MetadataImageBuilder()
+        MetadataImage image = new MetadataImageBuilder()
             .addTopic(Uuid.randomUuid(), "foo", 1)
             .addRacks()
             .build();

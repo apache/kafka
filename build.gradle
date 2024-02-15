@@ -2012,6 +2012,8 @@ project(':tools') {
 
     testImplementation project(':clients')
     testImplementation project(':clients').sourceSets.test.output
+    testImplementation project(':server')
+    testImplementation project(':server').sourceSets.test.output
     testImplementation project(':core')
     testImplementation project(':core').sourceSets.test.output
     testImplementation project(':server-common')

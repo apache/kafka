@@ -604,11 +604,11 @@ public class MetadataTest {
 
         // Sentinel instances
         InetSocketAddress address = InetSocketAddress.createUnresolved("localhost", 0);
-        Cluster fromMetadata = MetadataCache.bootstrap(Collections.singletonList(address)).cluster();
+        Cluster fromMetadata = MetadataSnapshot.bootstrap(Collections.singletonList(address)).cluster();
         Cluster fromCluster = Cluster.bootstrap(Collections.singletonList(address));
         assertEquals(fromMetadata, fromCluster);
 
-        Cluster fromMetadataEmpty = MetadataCache.empty().cluster();
+        Cluster fromMetadataEmpty = MetadataSnapshot.empty().cluster();
         Cluster fromClusterEmpty = Cluster.empty();
         assertEquals(fromMetadataEmpty, fromClusterEmpty);
     }

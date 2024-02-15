@@ -1338,9 +1338,8 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     MockProducerInterceptor.resetCounters()
   }
 
-  // This is disabled for the the consumer group until KAFKA-16155 is resolved.
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersClassicGroupProtocolOnly"))
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
   def testAutoCommitIntercept(quorum: String, groupProtocol: String): Unit = {
     val topic2 = "topic2"
     createTopic(topic2, 2, brokerCount)
@@ -1378,6 +1377,14 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     // after rebalancing, we should have reset to the committed positions
     assertEquals(10, testConsumer.committed(Set(tp).asJava).get(tp).offset)
     assertEquals(20, testConsumer.committed(Set(tp2).asJava).get(tp2).offset)
+
+    // In both CLASSIC and CONSUMER protocols, interceptors are executed in poll and close.
+    // However, in the CONSUMER protocol, the assignment may be changed outside of a poll, so
+    // we need to poll once to ensure the interceptor is called.
+    if (groupProtocol.toUpperCase == GroupProtocol.CONSUMER.name) {
+      testConsumer.poll(Duration.ZERO);
+    }
+
     assertTrue(MockConsumerInterceptor.ON_COMMIT_COUNT.intValue() > commitCountBeforeRebalance)
 
     // verify commits are intercepted on close

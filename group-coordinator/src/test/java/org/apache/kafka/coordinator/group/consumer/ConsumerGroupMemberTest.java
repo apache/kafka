@@ -18,7 +18,7 @@ package org.apache.kafka.coordinator.group.consumer;
 
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.ConsumerGroupDescribeResponseData;
-import org.apache.kafka.coordinator.group.GroupMetadataManagerTest;
+import org.apache.kafka.coordinator.group.MetadataImageBuilder;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupCurrentMemberAssignmentValue;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupMemberMetadataValue;
 import org.apache.kafka.image.MetadataImage;
@@ -320,7 +320,7 @@ public class ConsumerGroupMemberTest {
         Uuid topicId2 = Uuid.randomUuid();
         Uuid topicId3 = Uuid.randomUuid();
         Uuid topicId4 = Uuid.randomUuid();
-        MetadataImage metadataImage = new GroupMetadataManagerTest.MetadataImageBuilder()
+        MetadataImage metadataImage = new MetadataImageBuilder()
             .addTopic(topicId1, "topic1", 3)
             .addTopic(topicId2, "topic2", 3)
             .addTopic(topicId3, "topic3", 3)
@@ -398,7 +398,7 @@ public class ConsumerGroupMemberTest {
             .build();
 
         ConsumerGroupDescribeResponseData.Member consumerGroupDescribeMember = member.asConsumerGroupDescribeMember(
-            null, new GroupMetadataManagerTest.MetadataImageBuilder().build().topics());
+            null, new MetadataImageBuilder().build().topics());
 
         assertEquals(new ConsumerGroupDescribeResponseData.Assignment(), consumerGroupDescribeMember.targetAssignment());
     }
@@ -418,7 +418,7 @@ public class ConsumerGroupMemberTest {
             .setMemberId(memberId.toString())
             .setSubscribedTopicRegex("");
         ConsumerGroupDescribeResponseData.Member actual = member.asConsumerGroupDescribeMember(null,
-            new GroupMetadataManagerTest.MetadataImageBuilder()
+            new MetadataImageBuilder()
                 .addTopic(Uuid.randomUuid(), "foo", 3)
                 .build().topics()
         );
