@@ -433,7 +433,8 @@ class VerifiableConsumer(KafkaPathResolverMixin, VerifiableClientMixin, Backgrou
 
     def alive_nodes(self):
         with self.lock:
-            return [handler.node for handler in self.event_handlers.values() if handler.state != ConsumerState.Dead]
+            return [handler.node for handler in self.event_handlers.values()
+                    if handler.state != ConsumerState.Dead]
 
     def supports_kip_848(self):
         return self.group_protocol and self.group_protocol.upper() == "CONSUMER"

@@ -44,7 +44,7 @@ class OffsetValidationTest(VerifiableConsumerTest):
 
                 consumer.start_node(node)
 
-                self.await_all_members(consumer)
+                self.temp_hack_await_all_members(consumer)
                 self.await_consumed_messages(consumer)
 
     def bounce_all_consumers(self, consumer, keep_alive=0, num_bounces=5, clean_shutdown=True):
@@ -58,16 +58,14 @@ class OffsetValidationTest(VerifiableConsumerTest):
             for node in consumer.nodes[keep_alive:]:
                 consumer.start_node(node)
 
-            self.await_all_members(consumer)
+            self.temp_hack_await_all_members(consumer)
             self.await_consumed_messages(consumer)
 
     def rolling_bounce_brokers(self, consumer, num_bounces=5, clean_shutdown=True):
-        require_joined = False if consumer.supports_kip_848() else True
-
         for _ in range(num_bounces):
             for node in self.kafka.nodes:
                 self.kafka.restart_node(node, clean_shutdown=True)
-                self.await_all_members(consumer, require_joined)
+                self.temp_hack_await_all_members(consumer)
                 self.await_consumed_messages(consumer)
 
     def setup_consumer(self, topic, **kwargs):
@@ -86,10 +84,7 @@ class OffsetValidationTest(VerifiableConsumerTest):
         use_new_coordinator=[True],
         group_protocol=["classic", "consumer"]
     )
-    def test_broker_rolling_bounce(self,
-                                   metadata_quorum=quorum.zk,
-                                   use_new_coordinator=False,
-                                   group_protocol=None):
+    def test_broker_rolling_bounce(self, metadata_quorum=quorum.zk, use_new_coordinator=False, group_protocol=None):
         """
         Verify correct consumer behavior when the brokers are consecutively restarted.
 
@@ -120,14 +115,9 @@ class OffsetValidationTest(VerifiableConsumerTest):
         self.await_produced_messages(producer)
 
         consumer.start()
-
-        if consumer.supports_kip_848():
-            self.await_members(consumer, 1)
-        else:
-            self.await_all_members(consumer)
+        self.temp_hack_await_all_members(consumer, 1)
 
         num_rebalances = consumer.num_rebalances()
-
         # TODO: make this test work with hard shutdowns, which probably requires
         #       pausing before the node is restarted to ensure that any ephemeral
         #       nodes have time to expire
@@ -157,7 +147,7 @@ class OffsetValidationTest(VerifiableConsumerTest):
         use_new_coordinator=[True],
         group_protocol=["classic", "consumer"]
     )
-    def test_consumer_bounce(self, clean_shutdown, bounce_mode, metadata_quorum=quorum.zk, use_new_coordinator=False, group_protocol="classic"):
+    def test_consumer_bounce(self, clean_shutdown, bounce_mode, metadata_quorum=quorum.zk, use_new_coordinator=False, group_protocol=None):
         """
         Verify correct consumer behavior when the consumers in the group are consecutively restarted.
 
@@ -178,7 +168,7 @@ class OffsetValidationTest(VerifiableConsumerTest):
         self.await_produced_messages(producer)
 
         consumer.start()
-        self.await_all_members(consumer)
+        self.temp_hack_await_all_members(consumer)
 
         if bounce_mode == "all":
             self.bounce_all_consumers(consumer, clean_shutdown=clean_shutdown)
@@ -204,15 +194,7 @@ class OffsetValidationTest(VerifiableConsumerTest):
         static_membership=[True, False],
         bounce_mode=["all", "rolling"],
         num_bounces=[5],
-        metadata_quorum=[quorum.zk],
-        use_new_coordinator=[False]
-    )
-    @matrix(
-        clean_shutdown=[True],
-        static_membership=[True, False],
-        bounce_mode=["all", "rolling"],
-        num_bounces=[5],
-        metadata_quorum=[quorum.isolated_kraft],
+        metadata_quorum=[quorum.zk, quorum.isolated_kraft],
         use_new_coordinator=[False]
     )
     @matrix(
@@ -224,7 +206,7 @@ class OffsetValidationTest(VerifiableConsumerTest):
         use_new_coordinator=[True],
         group_protocol=["classic", "consumer"]
     )
-    def test_static_consumer_bounce(self, clean_shutdown, static_membership, bounce_mode, num_bounces, metadata_quorum=quorum.zk, use_new_coordinator=False, group_protocol="classic"):
+    def test_static_consumer_bounce(self, clean_shutdown, static_membership, bounce_mode, num_bounces, metadata_quorum=quorum.zk, use_new_coordinator=False, group_protocol=None):
         """
         Verify correct static consumer behavior when the consumers in the group are restarted. In order to make
         sure the behavior of static members are different from dynamic ones, we take both static and dynamic
@@ -248,7 +230,7 @@ class OffsetValidationTest(VerifiableConsumerTest):
         consumer = self.setup_consumer(self.TOPIC, static_membership=static_membership, group_protocol=group_protocol)
 
         consumer.start()
-        self.await_all_members(consumer)
+        self.temp_hack_await_all_members(consumer)
 
         num_revokes_before_bounce = consumer.num_revokes_for_alive()
 
@@ -287,12 +269,7 @@ class OffsetValidationTest(VerifiableConsumerTest):
     @cluster(num_nodes=7)
     @matrix(
         bounce_mode=["all", "rolling"],
-        metadata_quorum=[quorum.zk],
-        use_new_coordinator=[False]
-    )
-    @matrix(
-        bounce_mode=["all", "rolling"],
-        metadata_quorum=[quorum.isolated_kraft],
+        metadata_quorum=[quorum.zk, quorum.isolated_kraft],
         use_new_coordinator=[False]
     )
     @matrix(
@@ -301,7 +278,7 @@ class OffsetValidationTest(VerifiableConsumerTest):
         use_new_coordinator=[True],
         group_protocol=["classic", "consumer"]
     )
-    def test_static_consumer_persisted_after_rejoin(self, bounce_mode, metadata_quorum=quorum.zk, use_new_coordinator=False, group_protocol="classic"):
+    def test_static_consumer_persisted_after_rejoin(self, bounce_mode, metadata_quorum=quorum.zk, use_new_coordinator=False, group_protocol=None):
         """
         Verify that the updated member.id(updated_member_id) caused by static member rejoin would be persisted. If not,
         after the brokers rolling bounce, the migrated group coordinator would load the stale persisted member.id and
@@ -318,7 +295,7 @@ class OffsetValidationTest(VerifiableConsumerTest):
         self.session_timeout_sec = 60
         consumer = self.setup_consumer(self.TOPIC, static_membership=True, group_protocol=group_protocol)
         consumer.start()
-        self.await_all_members(consumer)
+        self.temp_hack_await_all_members(consumer)
 
         # bounce the static member to trigger its member.id updated
         if bounce_mode == "all":
@@ -334,13 +311,7 @@ class OffsetValidationTest(VerifiableConsumerTest):
     @matrix(
         num_conflict_consumers=[1, 2],
         fencing_stage=["stable", "all"],
-        metadata_quorum=[quorum.zk],
-        use_new_coordinator=[False]
-    )
-    @matrix(
-        num_conflict_consumers=[1, 2],
-        fencing_stage=["stable", "all"],
-        metadata_quorum=[quorum.isolated_kraft],
+        metadata_quorum=[quorum.zk, quorum.isolated_kraft],
         use_new_coordinator=[False]
     )
     @matrix(
@@ -350,7 +321,7 @@ class OffsetValidationTest(VerifiableConsumerTest):
         use_new_coordinator=[True],
         group_protocol=["classic", "consumer"]
     )
-    def test_fencing_static_consumer(self, num_conflict_consumers, fencing_stage, metadata_quorum=quorum.zk, use_new_coordinator=False, group_protocol="classic"):
+    def test_fencing_static_consumer(self, num_conflict_consumers, fencing_stage, metadata_quorum=quorum.zk, use_new_coordinator=False, group_protocol=None):
         """
         Verify correct static consumer behavior when there are conflicting consumers with same group.instance.id.
 
@@ -405,13 +376,7 @@ class OffsetValidationTest(VerifiableConsumerTest):
     @matrix(
         clean_shutdown=[True],
         enable_autocommit=[True, False],
-        metadata_quorum=[quorum.zk],
-        use_new_coordinator=[False]
-    )
-    @matrix(
-        clean_shutdown=[True],
-        enable_autocommit=[True, False],
-        metadata_quorum=[quorum.isolated_kraft],
+        metadata_quorum=[quorum.zk, quorum.isolated_kraft],
         use_new_coordinator=[False]
     )
     @matrix(
@@ -421,14 +386,14 @@ class OffsetValidationTest(VerifiableConsumerTest):
         use_new_coordinator=[True],
         group_protocol=["classic", "consumer"]
     )
-    def test_consumer_failure(self, clean_shutdown, enable_autocommit, metadata_quorum=quorum.zk, use_new_coordinator=False, group_protocol="classic"):
+    def test_consumer_failure(self, clean_shutdown, enable_autocommit, metadata_quorum=quorum.zk, use_new_coordinator=False, group_protocol=None):
         partition = TopicPartition(self.TOPIC, 0)
 
         consumer = self.setup_consumer(self.TOPIC, enable_autocommit=enable_autocommit, group_protocol=group_protocol)
         producer = self.setup_producer(self.TOPIC)
 
         consumer.start()
-        self.await_all_members(consumer)
+        self.temp_hack_await_all_members(consumer)
 
         partition_owner = consumer.owner(partition)
         assert partition_owner is not None
@@ -499,7 +464,7 @@ class OffsetValidationTest(VerifiableConsumerTest):
 
         producer.start()
         consumer.start()
-        self.await_all_members(consumer)
+        self.temp_hack_await_all_members(consumer)
 
         num_rebalances = consumer.num_rebalances()
 
@@ -633,3 +598,10 @@ class AssignmentValidationTest(VerifiableConsumerTest):
             consumer.start_node(node)
             self.await_members(consumer, num_started, group_protocol)
             self.await_valid_assignment(consumer, self.TOPIC, self.NUM_PARTITIONS, num_started)
+
+    def temp_hack_await_all_members(self, consumer):
+        if consumer.supports_kip_848():
+            self.await_members(consumer, 1)
+        else:
+            self.await_all_members(consumer)
+
