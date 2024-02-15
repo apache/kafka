@@ -86,12 +86,6 @@ import static java.util.Collections.singletonMap;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.streams.processor.internals.ClientUtils.producerRecordSizeInBytes;
-import static org.easymock.EasyMock.expect;
-import static org.easymock.EasyMock.expectLastCall;
-import static org.easymock.EasyMock.mock;
-import static org.easymock.EasyMock.replay;
-import static org.easymock.EasyMock.verify;
-import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.TOPIC_LEVEL_GROUP;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.core.IsEqual.equalTo;
 import static org.hamcrest.core.IsInstanceOf.instanceOf;
@@ -809,7 +803,7 @@ public class RecordCollectorTest {
             taskId,
             streamsProducer,
             productionExceptionHandler,
-            streamsMetrics,
+            mockStreamsMetrics,
             topology
         );
         collector.send(
@@ -1315,7 +1309,9 @@ public class RecordCollectorTest {
             collector.send(topic, "3", "0", null, null, stringSerializer, stringSerializer, null, null, streamPartitioner);
             collector.flush();
             collector.closeClean();
+        }
     }
+    
 
     @Test
     public void shouldNotAbortTxnOnEOSCloseDirtyIfNothingSent() {
