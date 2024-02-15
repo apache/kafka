@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.clients;
 
+import java.util.OptionalInt;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
@@ -37,7 +38,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-public class MetadataCacheTest {
+public class MetadataSnapshotTest {
 
     @Test
     public void testMissingLeaderEndpoint() {
@@ -62,7 +63,7 @@ public class MetadataCacheTest {
         nodesById.put(7, new Node(7, "localhost", 2078));
         nodesById.put(8, new Node(8, "localhost", 2079));
 
-        MetadataCache cache = new MetadataCache("clusterId",
+        MetadataSnapshot cache = new MetadataSnapshot("clusterId",
                 nodesById,
                 Collections.singleton(partitionMetadata),
                 Collections.emptySet(),
@@ -107,7 +108,7 @@ public class MetadataCacheTest {
         Uuid topic1Id = Uuid.randomUuid();
         topicsIds.put(topic1Partition.topic(), topic1Id);
 
-        MetadataCache cache = new MetadataCache("clusterId",
+        MetadataSnapshot cache = new MetadataSnapshot("clusterId",
             nodesById,
             Collections.singleton(partitionMetadata1),
             Collections.emptySet(),
@@ -155,7 +156,7 @@ public class MetadataCacheTest {
         topicIds.put("topic1", Uuid.randomUuid());
         topicIds.put("topic2", Uuid.randomUuid());
 
-        MetadataCache cache = new MetadataCache("clusterId",
+        MetadataSnapshot cache = new MetadataSnapshot("clusterId",
                 Collections.singletonMap(6, new Node(6, "localhost", 2077)),
                 Collections.emptyList(),
                 Collections.emptySet(),
@@ -174,7 +175,7 @@ public class MetadataCacheTest {
     public void testEmptyTopicNamesCacheBuiltFromTopicIds() {
         Map<String, Uuid> topicIds = new HashMap<>();
 
-        MetadataCache cache = new MetadataCache("clusterId",
+        MetadataSnapshot cache = new MetadataSnapshot("clusterId",
                 Collections.singletonMap(6, new Node(6, "localhost", 2077)),
                 Collections.emptyList(),
                 Collections.emptySet(),
@@ -183,6 +184,51 @@ public class MetadataCacheTest {
                 null,
                 topicIds);
         assertEquals(Collections.emptyMap(), cache.topicNames());
+    }
+
+    @Test
+    public void testLeaderEpochFor() {
+        // Setup partition 0 with a leader-epoch of 10.
+        TopicPartition topicPartition1 = new TopicPartition("topic", 0);
+        MetadataResponse.PartitionMetadata partitionMetadata1 = new MetadataResponse.PartitionMetadata(
+            Errors.NONE,
+            topicPartition1,
+            Optional.of(5),
+            Optional.of(10),
+            Arrays.asList(5, 6, 7),
+            Arrays.asList(5, 6, 7),
+            Collections.emptyList());
+
+        // Setup partition 1 with an unknown leader epoch.
+        TopicPartition topicPartition2 = new TopicPartition("topic", 1);
+        MetadataResponse.PartitionMetadata partitionMetadata2 = new MetadataResponse.PartitionMetadata(
+            Errors.NONE,
+            topicPartition2,
+            Optional.of(5),
+            Optional.empty(),
+            Arrays.asList(5, 6, 7),
+            Arrays.asList(5, 6, 7),
+            Collections.emptyList());
+
+        Map<Integer, Node> nodesById = new HashMap<>();
+        nodesById.put(5, new Node(5, "localhost", 2077));
+        nodesById.put(6, new Node(6, "localhost", 2078));
+        nodesById.put(7, new Node(7, "localhost", 2079));
+
+        MetadataSnapshot cache = new MetadataSnapshot("clusterId",
+            nodesById,
+            Arrays.asList(partitionMetadata1, partitionMetadata2),
+            Collections.emptySet(),
+            Collections.emptySet(),
+            Collections.emptySet(),
+            null,
+            Collections.emptyMap());
+
+        assertEquals(OptionalInt.of(10), cache.leaderEpochFor(topicPartition1));
+
+        assertEquals(OptionalInt.empty(), cache.leaderEpochFor(topicPartition2));
+
+        assertEquals(OptionalInt.empty(), cache.leaderEpochFor(new TopicPartition("topic_missing", 0)));
     }
 
 }

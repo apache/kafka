@@ -7258,7 +7258,7 @@ public class KafkaAdminClientTest {
                 request -> request instanceof GetTelemetrySubscriptionsRequest,
                 new GetTelemetrySubscriptionsResponse(responseData));
 
-            Uuid result = env.adminClient().clientInstanceId(Duration.ofMillis(10));
+            Uuid result = env.adminClient().clientInstanceId(Duration.ofSeconds(1));
             assertEquals(expected, result);
         }
     }
