@@ -436,16 +436,25 @@ public abstract class TransactionsCommand {
 
         @Override
         public void addSubparser(Subparsers subparsers) {
-            subparsers.addParser(name())
+            Subparser subparser = subparsers.addParser(name())
                 .help("list transactions");
+
+            subparser.addArgument("--duration-filter")
+                    .help("filter duration of transaction in ms")
+                    .action(store())
+                    .type(Long.class)
+                    .required(false);
         }
 
         @Override
         public void execute(Admin admin, Namespace ns, PrintStream out) throws Exception {
+            ListTransactionsOptions options = new ListTransactionsOptions();
+            Optional.ofNullable(ns.getLong("duration_filter")).ifPresent(options::durationFilter);
+
             final Map<Integer, Collection<TransactionListing>> result;
 
             try {
-                result = admin.listTransactions(new ListTransactionsOptions())
+                result = admin.listTransactions(options)
                     .allByBrokerId()
                     .get();
             } catch (ExecutionException e) {
