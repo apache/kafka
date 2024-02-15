@@ -47,7 +47,7 @@ class ConsumerEventHandler(object):
 
     def handle_shutdown_complete(self):
         self.state = ConsumerState.Dead
-        self.assignment = []
+        self.assignment = set()
         self.position = {}
 
     def handle_startup_complete(self):

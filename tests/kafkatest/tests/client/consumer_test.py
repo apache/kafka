@@ -312,16 +312,9 @@ class OffsetValidationTest(VerifiableConsumerTest):
         num_conflict_consumers=[1, 2],
         fencing_stage=["stable", "all"],
         metadata_quorum=[quorum.zk, quorum.isolated_kraft],
-        use_new_coordinator=[False]
+        use_new_coordinator=[False, True]
     )
-    @matrix(
-        num_conflict_consumers=[1, 2],
-        fencing_stage=["stable", "all"],
-        metadata_quorum=[quorum.isolated_kraft],
-        use_new_coordinator=[True],
-        group_protocol=["classic", "consumer"]
-    )
-    def test_fencing_static_consumer(self, num_conflict_consumers, fencing_stage, metadata_quorum=quorum.zk, use_new_coordinator=False, group_protocol=None):
+    def test_fencing_static_consumer(self, num_conflict_consumers, fencing_stage, metadata_quorum=quorum.zk, use_new_coordinator=False):
         """
         Verify correct static consumer behavior when there are conflicting consumers with same group.instance.id.
 
@@ -338,19 +331,19 @@ class OffsetValidationTest(VerifiableConsumerTest):
         self.await_produced_messages(producer)
 
         self.session_timeout_sec = 60
-        consumer = self.setup_consumer(self.TOPIC, static_membership=True, group_protocol=group_protocol)
+        consumer = self.setup_consumer(self.TOPIC, static_membership=True)
 
         self.num_consumers = num_conflict_consumers
-        conflict_consumer = self.setup_consumer(self.TOPIC, static_membership=True, group_protocol=group_protocol)
+        conflict_consumer = self.setup_consumer(self.TOPIC, static_membership=True)
 
         # wait original set of consumer to stable stage before starting conflict members.
         if fencing_stage == "stable":
             consumer.start()
-            self.await_members(consumer, len(consumer.nodes), group_protocol)
+            self.await_members(consumer, len(consumer.nodes))
 
             conflict_consumer.start()
-            self.await_members(conflict_consumer, num_conflict_consumers, group_protocol)
-            self.await_members(consumer, len(consumer.nodes) - num_conflict_consumers, group_protocol)
+            self.await_members(conflict_consumer, num_conflict_consumers)
+            self.await_members(consumer, len(consumer.nodes) - num_conflict_consumers)
 
             wait_until(lambda: len(consumer.dead_nodes()) == num_conflict_consumers,
                        timeout_sec=10,
@@ -585,9 +578,3 @@ class AssignmentValidationTest(VerifiableConsumerTest):
             consumer.start_node(node)
             self.await_members(consumer, num_started, group_protocol)
             self.await_valid_assignment(consumer, self.TOPIC, self.NUM_PARTITIONS, num_started)
-
-    def temp_hack_await_all_members(self, consumer):
-        if consumer.supports_kip_848():
-            self.await_members(consumer, 1)
-        else:
-            self.await_all_members(consumer)

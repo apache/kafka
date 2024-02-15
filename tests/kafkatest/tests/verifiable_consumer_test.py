@@ -122,3 +122,9 @@ class VerifiableConsumerTest(KafkaTest):
 
     def await_all_members(self, consumer, require_joined=True):
         self.await_members(consumer, self.num_consumers, require_joined)
+
+    def temp_hack_await_all_members(self, consumer):
+        if consumer.supports_kip_848():
+            self.await_members(consumer, 1)
+        else:
+            self.await_all_members(consumer)
