@@ -115,7 +115,7 @@ class OffsetValidationTest(VerifiableConsumerTest):
         self.await_produced_messages(producer)
 
         consumer.start()
-        self.temp_hack_await_all_members(consumer, 1)
+        self.temp_hack_await_all_members(consumer)
 
         num_rebalances = consumer.num_rebalances()
         # TODO: make this test work with hard shutdowns, which probably requires
@@ -451,12 +451,7 @@ class OffsetValidationTest(VerifiableConsumerTest):
         use_new_coordinator=[True],
         group_protocol=["classic", "consumer"]
     )
-    def test_broker_failure(self,
-                            clean_shutdown,
-                            enable_autocommit,
-                            metadata_quorum=quorum.zk,
-                            use_new_coordinator=False,
-                            group_protocol=None):
+    def test_broker_failure(self, clean_shutdown, enable_autocommit, metadata_quorum=quorum.zk, use_new_coordinator=False, group_protocol=None):
         partition = TopicPartition(self.TOPIC, 0)
 
         consumer = self.setup_consumer(self.TOPIC, enable_autocommit=enable_autocommit, group_protocol=group_protocol)
@@ -501,10 +496,7 @@ class OffsetValidationTest(VerifiableConsumerTest):
         use_new_coordinator=[True],
         group_protocol=["classic", "consumer"]
     )
-    def test_group_consumption(self,
-                               metadata_quorum=quorum.zk,
-                               use_new_coordinator=False,
-                               group_protocol="classic"):
+    def test_group_consumption(self, metadata_quorum=quorum.zk, use_new_coordinator=False, group_protocol="classic"):
         """
         Verifies correct group rebalance behavior as consumers are started and stopped.
         In particular, this test verifies that the partition is readable after every
@@ -554,33 +546,28 @@ class AssignmentValidationTest(VerifiableConsumerTest):
         })
 
     @cluster(num_nodes=6)
-    # @matrix(
-    #     assignment_strategy=["org.apache.kafka.clients.consumer.RangeAssignor",
-    #                          "org.apache.kafka.clients.consumer.RoundRobinAssignor",
-    #                          "org.apache.kafka.clients.consumer.StickyAssignor"],
-    #     metadata_quorum=[quorum.zk, quorum.isolated_kraft],
-    #     use_new_coordinator=[False]
-    # )
-    # @matrix(
-    #     assignment_strategy=["org.apache.kafka.clients.consumer.RangeAssignor",
-    #                          "org.apache.kafka.clients.consumer.RoundRobinAssignor",
-    #                          "org.apache.kafka.clients.consumer.StickyAssignor"],
-    #     metadata_quorum=[quorum.isolated_kraft],
-    #     use_new_coordinator=[True],
-    #     group_protocol=["classic"]
-    # )
+    @matrix(
+        assignment_strategy=["org.apache.kafka.clients.consumer.RangeAssignor",
+                             "org.apache.kafka.clients.consumer.RoundRobinAssignor",
+                             "org.apache.kafka.clients.consumer.StickyAssignor"],
+        metadata_quorum=[quorum.zk, quorum.isolated_kraft],
+        use_new_coordinator=[False]
+    )
+    @matrix(
+        assignment_strategy=["org.apache.kafka.clients.consumer.RangeAssignor",
+                             "org.apache.kafka.clients.consumer.RoundRobinAssignor",
+                             "org.apache.kafka.clients.consumer.StickyAssignor"],
+        metadata_quorum=[quorum.isolated_kraft],
+        use_new_coordinator=[True],
+        group_protocol=["classic"]
+    )
     @matrix(
         metadata_quorum=[quorum.isolated_kraft],
         use_new_coordinator=[True],
         group_protocol=["consumer"],
         group_remote_assignor=["range", "uniform"]
     )
-    def test_valid_assignment(self,
-                              assignment_strategy=None,
-                              metadata_quorum=quorum.zk,
-                              use_new_coordinator=False,
-                              group_protocol=None,
-                              group_remote_assignor=None):
+    def test_valid_assignment(self, assignment_strategy=None, metadata_quorum=quorum.zk, use_new_coordinator=False, group_protocol=None, group_remote_assignor=None):
         """
         Verify assignment strategy correctness: each partition is assigned to exactly
         one consumer instance.
@@ -604,4 +591,3 @@ class AssignmentValidationTest(VerifiableConsumerTest):
             self.await_members(consumer, 1)
         else:
             self.await_all_members(consumer)
-
