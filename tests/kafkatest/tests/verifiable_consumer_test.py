@@ -89,46 +89,36 @@ class VerifiableConsumerTest(KafkaTest):
                    err_msg="Timeout awaiting messages to be produced and acked")
 
     def await_consumed_messages(self, consumer, min_messages=1):
+        timeout_sec = self.consumption_timeout_sec
         current_total = consumer.total_consumed()
-        wait_until(lambda: consumer.total_consumed() >= current_total + min_messages,
-                   timeout_sec=self.consumption_timeout_sec,
-                   err_msg="Timed out waiting for consumption")
+        lower_bound = current_total + min_messages
+        wait_until(lambda: consumer.total_consumed() >= lower_bound,
+                   timeout_sec=timeout_sec,
+                   err_msg=self._await_consumed_messages_err_msg(consumer, lower_bound, timeout_sec))
 
-    def await_members(self, consumer, num_consumers, include_started=False, include_joined=True, include_rebalancing=False):
+    def _await_consumed_messages_err_msg(self, consumer, lower_bound, timeout_sec):
+        actual = consumer.total_consumed()
+        return "Consumers received only %d out of %d expected messages within the timeout of %d seconds" % (actual, lower_bound, timeout_sec)
+
+    def await_members(self, consumer, num_consumers, group_protocol):
         # Wait until all members have joined the group
         timeout_sec = self.session_timeout_sec * 2
-        wait_until(lambda: self._await_members(consumer, include_started, include_joined, include_rebalancing) == num_consumers,
+        wait_until(lambda: self._await_members(consumer, group_protocol) == num_consumers,
                    timeout_sec=timeout_sec,
-                   err_msg=self._await_members_err_msg(consumer, num_consumers, include_started, include_joined, include_rebalancing, timeout_sec))
-        
-    def await_all_members(self, consumer):
-        self.await_members(consumer, self.num_consumers)
+                   err_msg=self._await_members_err_msg(consumer, num_consumers, group_protocol, timeout_sec))
 
-    def _await_members(self, consumer, include_started, include_joined, include_rebalancing):
-        count = 0
+    def _await_members(self, consumer, group_protocol):
+        count = len(consumer.joined_nodes())
 
-        if include_started:
+        if group_protocol is not None and group_protocol == "consumer":
             count += len(consumer.started_nodes())
-
-        if include_joined:
-            count += len(consumer.joined_nodes())
-
-        if include_rebalancing:
             count += len(consumer.rebalancing_nodes())
 
         return count
 
-    def _await_members_err_msg(self, consumer, num_consumers, include_started, include_joined, include_rebalancing, timeout_sec):
-        actual = self._await_members(consumer, include_started, include_joined, include_rebalancing)
-        states = []
-
-        if include_started:
-            states.append(ConsumerState.Started)
-
-        if include_joined:
-            states.append(ConsumerState.Joined)
-
-        if include_rebalancing:
-            states.append(ConsumerState.Rebalancing)
-
+    def _await_members_err_msg(self, consumer, num_consumers, group_protocol, timeout_sec):
+        actual = self._await_members(consumer, group_protocol)
         return "Only %d out of %d consumers joined the group within the timeout of %d seconds" % (actual, num_consumers, timeout_sec)
+
+    def await_all_members(self, consumer, group_protocol):
+        self.await_members(consumer, self.num_consumers, group_protocol)

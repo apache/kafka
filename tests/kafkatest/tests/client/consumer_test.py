@@ -88,7 +88,10 @@ class OffsetValidationTest(VerifiableConsumerTest):
         use_new_coordinator=[True],
         group_protocol=["classic", "consumer"]
     )
-    def test_broker_rolling_bounce(self, metadata_quorum=quorum.zk, use_new_coordinator=False, group_protocol="classic"):
+    def test_broker_rolling_bounce(self,
+                                   metadata_quorum=quorum.zk,
+                                   use_new_coordinator=False,
+                                   group_protocol="classic"):
         """
         Verify correct consumer behavior when the brokers are consecutively restarted.
 
@@ -119,7 +122,7 @@ class OffsetValidationTest(VerifiableConsumerTest):
         self.await_produced_messages(producer)
 
         consumer.start()
-        self.await_all_members(consumer)
+        self.await_all_members(consumer, group_protocol)
 
         num_rebalances = consumer.num_rebalances()
         # TODO: make this test work with hard shutdowns, which probably requires
@@ -375,11 +378,11 @@ class OffsetValidationTest(VerifiableConsumerTest):
         # wait original set of consumer to stable stage before starting conflict members.
         if fencing_stage == "stable":
             consumer.start()
-            self.await_members(consumer, len(consumer.nodes))
+            self.await_members(consumer, len(consumer.nodes), group_protocol)
 
             conflict_consumer.start()
-            self.await_members(conflict_consumer, num_conflict_consumers)
-            self.await_members(consumer, len(consumer.nodes) - num_conflict_consumers)
+            self.await_members(conflict_consumer, num_conflict_consumers, group_protocol)
+            self.await_members(consumer, len(consumer.nodes) - num_conflict_consumers, group_protocol)
 
             wait_until(lambda: len(consumer.dead_nodes()) == num_conflict_consumers,
                        timeout_sec=10,
@@ -486,10 +489,15 @@ class OffsetValidationTest(VerifiableConsumerTest):
         use_new_coordinator=[True],
         group_protocol=["classic", "consumer"]
     )
-    def test_broker_failure(self, clean_shutdown, enable_autocommit, metadata_quorum=quorum.zk, use_new_coordinator=False, group_protocol="classic"):
+    def test_broker_failure(self,
+                            clean_shutdown,
+                            enable_autocommit,
+                            metadata_quorum=quorum.zk,
+                            use_new_coordinator=False,
+                            group_protocol=None):
         partition = TopicPartition(self.TOPIC, 0)
 
-        consumer = self.setup_consumer(self.TOPIC, group_protocol=group_protocol, enable_autocommit=enable_autocommit)
+        consumer = self.setup_consumer(self.TOPIC, enable_autocommit=enable_autocommit, group_protocol=group_protocol)
         producer = self.setup_producer(self.TOPIC)
 
         producer.start()
@@ -531,7 +539,10 @@ class OffsetValidationTest(VerifiableConsumerTest):
         use_new_coordinator=[True],
         group_protocol=["classic", "consumer"]
     )
-    def test_group_consumption(self, metadata_quorum=quorum.zk, use_new_coordinator=False, group_protocol="classic"):
+    def test_group_consumption(self,
+                               metadata_quorum=quorum.zk,
+                               use_new_coordinator=False,
+                               group_protocol="classic"):
         """
         Verifies correct group rebalance behavior as consumers are started and stopped.
         In particular, this test verifies that the partition is readable after every
@@ -552,14 +563,14 @@ class OffsetValidationTest(VerifiableConsumerTest):
 
         for num_started, node in enumerate(consumer.nodes, 1):
             consumer.start_node(node)
-            self.await_members(consumer, num_started, include_started=True)
+            self.await_members(consumer, num_started, group_protocol)
             self.await_consumed_messages(consumer)
 
         for num_stopped, node in enumerate(consumer.nodes, 1):
             consumer.stop_node(node)
 
             if num_stopped < self.num_consumers:
-                self.await_members(consumer, self.num_consumers - num_stopped)
+                self.await_members(consumer, self.num_consumers - num_stopped, group_protocol)
                 self.await_consumed_messages(consumer)
 
         assert consumer.current_position(partition) == consumer.total_consumed(), \
@@ -602,7 +613,12 @@ class AssignmentValidationTest(VerifiableConsumerTest):
         group_protocol=["consumer"],
         group_remote_assignor=["range", "uniform"]
     )
-    def test_valid_assignment(self, assignment_strategy=None, metadata_quorum=quorum.zk, use_new_coordinator=False, group_protocol="classic", group_remote_assignor=None):
+    def test_valid_assignment(self,
+                              assignment_strategy=None,
+                              metadata_quorum=quorum.zk,
+                              use_new_coordinator=False,
+                              group_protocol=None,
+                              group_remote_assignor=None):
         """
         Verify assignment strategy correctness: each partition is assigned to exactly
         one consumer instance.
@@ -618,5 +634,5 @@ class AssignmentValidationTest(VerifiableConsumerTest):
                                        group_remote_assignor=group_remote_assignor)
         for num_started, node in enumerate(consumer.nodes, 1):
             consumer.start_node(node)
-            self.await_members(consumer, num_started, include_started=True, include_joined=True, include_rebalancing=True)
+            self.await_members(consumer, num_started, group_protocol)
             self.await_valid_assignment(consumer, self.TOPIC, self.NUM_PARTITIONS, num_started)
