@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.clients;
 
+import java.util.OptionalInt;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.ClusterResource;
 import org.apache.kafka.common.Node;
@@ -39,10 +40,11 @@ import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
 /**
- * An internal mutable cache of nodes, topics, and partitions in the Kafka cluster. This keeps an up-to-date Cluster
+ * An internal immutable snapshot of nodes, topics, and partitions in the Kafka cluster. This keeps an up-to-date Cluster
  * instance which is optimized for read access.
+ * Prefer to extend MetadataSnapshot's API for internal client usage Vs the public {@link Cluster}
  */
-public class MetadataCache {
+public class MetadataSnapshot {
     private final String clusterId;
     private final Map<Integer, Node> nodes;
     private final Set<String> unauthorizedTopics;
@@ -54,7 +56,7 @@ public class MetadataCache {
     private final Map<Uuid, String> topicNames;
     private Cluster clusterInstance;
 
-    MetadataCache(String clusterId,
+    public MetadataSnapshot(String clusterId,
                   Map<Integer, Node> nodes,
                   Collection<PartitionMetadata> partitions,
                   Set<String> unauthorizedTopics,
@@ -65,30 +67,32 @@ public class MetadataCache {
         this(clusterId, nodes, partitions, unauthorizedTopics, invalidTopics, internalTopics, controller, topicIds, null);
     }
 
-    private MetadataCache(String clusterId,
-                          Map<Integer, Node> nodes,
-                          Collection<PartitionMetadata> partitions,
-                          Set<String> unauthorizedTopics,
-                          Set<String> invalidTopics,
-                          Set<String> internalTopics,
-                          Node controller,
-                          Map<String, Uuid> topicIds,
-                          Cluster clusterInstance) {
+    // Visible for testing
+    public MetadataSnapshot(String clusterId,
+        Map<Integer, Node> nodes,
+        Collection<PartitionMetadata> partitions,
+        Set<String> unauthorizedTopics,
+        Set<String> invalidTopics,
+        Set<String> internalTopics,
+        Node controller,
+        Map<String, Uuid> topicIds,
+        Cluster clusterInstance) {
         this.clusterId = clusterId;
-        this.nodes = nodes;
-        this.unauthorizedTopics = unauthorizedTopics;
-        this.invalidTopics = invalidTopics;
-        this.internalTopics = internalTopics;
+        this.nodes = Collections.unmodifiableMap(nodes);
+        this.unauthorizedTopics = Collections.unmodifiableSet(unauthorizedTopics);
+        this.invalidTopics = Collections.unmodifiableSet(invalidTopics);
+        this.internalTopics = Collections.unmodifiableSet(internalTopics);
         this.controller = controller;
         this.topicIds = Collections.unmodifiableMap(topicIds);
         this.topicNames = Collections.unmodifiableMap(
             topicIds.entrySet().stream().collect(Collectors.toMap(Map.Entry::getValue, Map.Entry::getKey))
         );
 
-        this.metadataByPartition = new HashMap<>(partitions.size());
+        Map<TopicPartition, PartitionMetadata> tmpMetadataByPartition = new HashMap<>(partitions.size());
         for (PartitionMetadata p : partitions) {
-            this.metadataByPartition.put(p.topicPartition, p);
+            tmpMetadataByPartition.put(p.topicPartition, p);
         }
+        this.metadataByPartition = Collections.unmodifiableMap(tmpMetadataByPartition);
 
         if (clusterInstance == null) {
             computeClusterView();
@@ -113,11 +117,26 @@ public class MetadataCache {
         return Optional.ofNullable(nodes.get(id));
     }
 
-    Cluster cluster() {
+    public Cluster cluster() {
         if (clusterInstance == null) {
             throw new IllegalStateException("Cached Cluster instance should not be null, but was.");
         } else {
             return clusterInstance;
+        }
+    }
+
+    /**
+     * Get leader-epoch for partition.
+     *
+     * @param tp partition
+     * @return leader-epoch if known, else return OptionalInt.empty()
+     */
+    public OptionalInt leaderEpochFor(TopicPartition tp) {
+        PartitionMetadata partitionMetadata = metadataByPartition.get(tp);
+        if (partitionMetadata == null || !partitionMetadata.leaderEpoch.isPresent()) {
+            return OptionalInt.empty();
+        } else {
+            return OptionalInt.of(partitionMetadata.leaderEpoch.get());
         }
     }
 
@@ -126,8 +145,8 @@ public class MetadataCache {
     }
 
     /**
-     * Merges the metadata cache's contents with the provided metadata, returning a new metadata cache. The provided
-     * metadata is presumed to be more recent than the cache's metadata, and therefore all overlapping metadata will
+     * Merges the metadata snapshot's contents with the provided metadata, returning a new metadata snapshot. The provided
+     * metadata is presumed to be more recent than the snapshot's metadata, and therefore all overlapping metadata will
      * be overridden.
      *
      * @param newClusterId the new cluster Id
@@ -138,9 +157,9 @@ public class MetadataCache {
      * @param newController the new controller node
      * @param addTopicIds the mapping from topic name to topic ID, for topics in addPartitions
      * @param retainTopic returns whether a pre-existing topic's metadata should be retained
-     * @return the merged metadata cache
+     * @return the merged metadata snapshot
      */
-    MetadataCache mergeWith(String newClusterId,
+    MetadataSnapshot mergeWith(String newClusterId,
                             Map<Integer, Node> newNodes,
                             Collection<PartitionMetadata> addPartitions,
                             Set<String> addUnauthorizedTopics,
@@ -180,7 +199,7 @@ public class MetadataCache {
         Set<String> newInvalidTopics = fillSet(addInvalidTopics, invalidTopics, shouldRetainTopic);
         Set<String> newInternalTopics = fillSet(addInternalTopics, internalTopics, shouldRetainTopic);
 
-        return new MetadataCache(newClusterId, newNodes, newMetadataByPartition.values(), newUnauthorizedTopics,
+        return new MetadataSnapshot(newClusterId, newNodes, newMetadataByPartition.values(), newUnauthorizedTopics,
                 newInvalidTopics, newInternalTopics, newController, newTopicIds);
     }
 
@@ -212,26 +231,26 @@ public class MetadataCache {
                 invalidTopics, internalTopics, controller, topicIds);
     }
 
-    static MetadataCache bootstrap(List<InetSocketAddress> addresses) {
+    static MetadataSnapshot bootstrap(List<InetSocketAddress> addresses) {
         Map<Integer, Node> nodes = new HashMap<>();
         int nodeId = -1;
         for (InetSocketAddress address : addresses) {
             nodes.put(nodeId, new Node(nodeId, address.getHostString(), address.getPort()));
             nodeId--;
         }
-        return new MetadataCache(null, nodes, Collections.emptyList(),
+        return new MetadataSnapshot(null, nodes, Collections.emptyList(),
                 Collections.emptySet(), Collections.emptySet(), Collections.emptySet(),
                 null, Collections.emptyMap(), Cluster.bootstrap(addresses));
     }
 
-    static MetadataCache empty() {
-        return new MetadataCache(null, Collections.emptyMap(), Collections.emptyList(),
+    static MetadataSnapshot empty() {
+        return new MetadataSnapshot(null, Collections.emptyMap(), Collections.emptyList(),
                 Collections.emptySet(), Collections.emptySet(), Collections.emptySet(), null, Collections.emptyMap(), Cluster.empty());
     }
 
     @Override
     public String toString() {
-        return "MetadataCache{" +
+        return "MetadataSnapshot{" +
                 "clusterId='" + clusterId + '\'' +
                 ", nodes=" + nodes +
                 ", partitions=" + metadataByPartition.values() +
