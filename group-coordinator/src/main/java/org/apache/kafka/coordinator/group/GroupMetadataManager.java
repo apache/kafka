@@ -93,6 +93,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -1198,6 +1199,22 @@ public class GroupMetadataManager {
         return new CoordinatorResult<>(records, response);
     }
 
+    /**
+     * Reconciles the current assignment of the member if needed.
+     *
+     * @param groupId               The group id.
+     * @param member                The member to reconcile.
+     * @param currentPartitionEpoch The function returning the current epoch of
+     *                              a given partition.
+     * @param targetAssignmentEpoch The target assignment epoch.
+     * @param targetAssignment      The target assignment.
+     * @param ownedTopicPartitions  The list of partitions owned by the member. This
+     *                              is reported in the ConsumerGroupHeartbeat API and
+     *                              it could be null if not provided.
+     * @param records               The list to accumulate any new records.
+     * @return The received member if no changes have been made; or a new
+     *         member containing the new assignment.
+     */
     private ConsumerGroupMember maybeReconcile(
         String groupId,
         ConsumerGroupMember member,
@@ -1217,13 +1234,13 @@ public class GroupMetadataManager {
             .withOwnedTopicPartitions(ownedTopicPartitions)
             .build();
 
-        if (!updatedMember.assignmentEquals(member)) {
+        if (!updatedMember.equals(member)) {
             records.add(newCurrentAssignmentRecord(groupId, updatedMember));
 
-            log.info("[GroupId {}] Member {} updated its current assignment to epoch={}, previousEpoch={}, state={}, "
+            log.info("[GroupId {}] Member {} new assignment state: epoch={}, previousEpoch={}, state={}, "
                      + "assignedPartitions={} and revokedPartitions={}.",
-                groupId, updatedMember.memberId(), updatedMember.memberEpoch(), updatedMember.previousMemberEpoch(),
-                updatedMember.state(), updatedMember.assignedPartitions(), updatedMember.revokedPartitions());
+                groupId, updatedMember.memberId(), updatedMember.memberEpoch(), updatedMember.previousMemberEpoch(), updatedMember.state(),
+                formatAssignment(updatedMember.assignedPartitions()), formatAssignment(updatedMember.revokedPartitions()));
 
             if (updatedMember.state() == MemberState.UNREVOKED_PARTITIONS) {
                 scheduleConsumerGroupRebalanceTimeout(
@@ -1238,6 +1255,27 @@ public class GroupMetadataManager {
         }
 
         return updatedMember;
+    }
+
+    private String formatAssignment(
+        Map<Uuid, Set<Integer>> assignment
+    ) {
+        StringBuilder builder = new StringBuilder("[");
+        Iterator<Map.Entry<Uuid, Set<Integer>>> topicsIterator = assignment.entrySet().iterator();
+        while (topicsIterator.hasNext()) {
+            Map.Entry<Uuid, Set<Integer>> entry = topicsIterator.next();
+            Iterator<Integer> partitionsIterator = entry.getValue().iterator();
+            while (partitionsIterator.hasNext()) {
+                builder.append(entry.getKey());
+                builder.append("-");
+                builder.append(partitionsIterator.next());
+                if (partitionsIterator.hasNext() || topicsIterator.hasNext()) {
+                    builder.append(", ");
+                }
+            }
+        }
+        builder.append("]");
+        return builder.toString();
     }
 
     private boolean hasAssignedPartitionsChanged(

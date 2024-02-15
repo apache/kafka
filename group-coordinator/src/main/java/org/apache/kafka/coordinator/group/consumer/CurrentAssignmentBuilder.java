@@ -129,6 +129,9 @@ public class CurrentAssignmentBuilder {
     public ConsumerGroupMember build() {
         switch (member.state()) {
             case STABLE:
+                // When the member is in the STABLE state, we verify if a newer
+                // epoch (or target assignment) is available. If it is, we can
+                // reconcile the member towards it. Otherwise, we return.
                 if (member.memberEpoch() != targetAssignmentEpoch) {
                     return computeNextAssignment(
                         member.memberEpoch(),
@@ -139,42 +142,53 @@ public class CurrentAssignmentBuilder {
                 }
 
             case UNREVOKED_PARTITIONS:
-                // The member did not report its partitions. We wait.
+                // When the member is in the UNREVOKED_PARTITIONS state, we wait
+                // until the member has revoked the necessary partitions. They are
+                // considered revoked when they are not anymore reported in the
+                // owned partitions set in the ConsumerGroupHeartbeat API.
+
+                // If the member does not provide its owned partitions. We cannot
+                // progress.
                 if (ownedTopicPartitions == null) {
                     return member;
                 }
 
-                // The member reported his partitions so we check if he still owns
-                // any partitions that must be revoked. If it does, we wait.
+                // If the member provides its owned partitions. We verify if it still
+                // owens any of the revoked partitions. If it does, we cannot progress.
                 for (ConsumerGroupHeartbeatRequestData.TopicPartitions topicPartitions : ownedTopicPartitions) {
                     for (Integer partitionId : topicPartitions.partitions()) {
-                        boolean waitsOnPartition = member
+                        boolean stillHasRevokedPartition = member
                             .revokedPartitions()
                             .getOrDefault(topicPartitions.topicId(), Collections.emptySet())
                             .contains(partitionId);
-                        if (waitsOnPartition) {
+                        if (stillHasRevokedPartition) {
                             return member;
                         }
                     }
                 }
 
-                // When the member has revoked all the pending partitions, he can
-                // transition to the next epoch (current + 1).
+                // When the member has revoked all the pending partitions, it can
+                // transition to the next epoch (current + 1) and we can reconcile
+                // its state towards the latest target assignment.
                 return computeNextAssignment(
                     member.memberEpoch() + 1,
                     member.assignedPartitions()
                 );
 
             case UNRELEASED_PARTITIONS:
+                // When the member is in the UNRELEASED_PARTITIONS, we reconcile the
+                // member towards the latest target assignment. This will assign any
+                // of the unreleased partitions when they become available.
                 return computeNextAssignment(
                     member.memberEpoch(),
                     member.assignedPartitions()
                 );
 
             case UNKNOWN:
-                // If we ever get to such state, we fence the member to force him to
-                // abandon its partitions and to rejoin the group. When he does so,
-                // we transition him to the target epoch with no owned partitions.
+                // We could only end up in this state if a new state is added in the
+                // future and the group coordinator is downgraded. In this case, the
+                // best option is to fence the member to force it to rejoin the group
+                // without any partitions and to reconcile it again from scratch.
                 if (ownedTopicPartitions == null || !ownedTopicPartitions.isEmpty()) {
                     throw new FencedMemberEpochException("The consumer group member is in a unknown state. "
                         + "The member must abandon all its partitions and rejoin.");
@@ -257,11 +271,9 @@ public class CurrentAssignmentBuilder {
             // the partitions are directly added to the assigned partitions set. The
             // member transitions to the STABLE state or to the UNRELEASED_PARTITIONS
             // state depending on whether there are unreleased partitions or not.
-            newPartitionsPendingAssignment.forEach((topicId, partitions) -> {
-                newAssignedPartitions
-                    .computeIfAbsent(topicId, __ -> new HashSet<>())
-                    .addAll(partitions);
-            });
+            newPartitionsPendingAssignment.forEach((topicId, partitions) -> newAssignedPartitions
+                .computeIfAbsent(topicId, __ -> new HashSet<>())
+                .addAll(partitions));
             MemberState newState = hasUnreleasedPartitions ? MemberState.UNRELEASED_PARTITIONS : MemberState.STABLE;
             return new ConsumerGroupMember.Builder(member)
                 .setState(newState)

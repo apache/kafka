@@ -478,20 +478,6 @@ public class ConsumerGroupMember {
     }
 
     /**
-     * @return True if the assignment of this member is equals to the assignment
-     *         of that member.
-     */
-    public boolean assignmentEquals(ConsumerGroupMember that) {
-        if (this == that) return true;
-        if (that == null) return false;
-        return memberEpoch == that.memberEpoch
-            && previousMemberEpoch == that.previousMemberEpoch
-            && state == that.state
-            && Objects.equals(assignedPartitions, that.assignedPartitions)
-            && Objects.equals(revokedPartitions, that.revokedPartitions);
-    }
-
-    /**
      * @param targetAssignment The target assignment of this member in the corresponding group.
      *
      * @return The ConsumerGroupMember mapped as ConsumerGroupDescribeResponseData.Member.
