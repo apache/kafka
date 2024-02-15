@@ -395,7 +395,8 @@ class OffsetValidationTest(VerifiableConsumerTest):
 
         # stop the partition owner and await its shutdown
         consumer.kill_node(partition_owner, clean_shutdown=clean_shutdown)
-        self.await_close_all_members(consumer, partition)
+        self.await_dead_members(consumer, 1)
+        self.await_partition_assigned(consumer, partition)
 
         # ensure that the remaining consumer does some work after rebalancing
         self.await_consumed_messages(consumer, min_messages=1000)

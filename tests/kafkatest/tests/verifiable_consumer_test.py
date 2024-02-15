@@ -106,13 +106,7 @@ class VerifiableConsumerTest(KafkaTest):
         timeout_sec = self.session_timeout_sec * 2
 
         def _count():
-            count = len(consumer.joined_nodes())
-
-            if not require_joined:
-                count += len(consumer.started_nodes())
-                count += len(consumer.rebalancing_nodes())
-
-            return count
+            return self._members_in_state(consumer, require_joined)
 
         def _condition():
             return _count() == num_consumers
@@ -129,18 +123,39 @@ class VerifiableConsumerTest(KafkaTest):
         else:
             self.await_members(consumer, self.num_consumers, require_joined)
 
-    def await_close_all_members(self, consumer, partition):
-        # Wait until all consumers have closed
+    def await_dead_members(self, consumer, num_consumers):
+        # Wait until the requisite number of consumers have shut down.
         timeout_sec = self.session_timeout_sec * 2 + 5
 
         def _count():
-            return len(consumer.joined_nodes())
+            return len(consumer.dead_nodes())
 
         def _condition():
-            return _count() == self.num_consumers - 1 and consumer.owner(partition) is not None
+            return _count() == num_consumers
 
         def _err_msg():
             return ("Only %d out of %d consumers closed within the timeout of %d seconds" %
-                    (_count(), self.num_consumers, timeout_sec))
+                    (_count(), num_consumers, timeout_sec))
 
         wait_until(lambda: _condition(), timeout_sec=timeout_sec, err_msg=_err_msg())
+
+    def await_partition_assigned(self, consumer, partition):
+        # Wait until the partition has been (re-)assigned to a consumer.
+        timeout_sec = self.session_timeout_sec * 2 + 5
+
+        def _condition():
+            return consumer.owner(partition) is not None
+
+        def _err_msg():
+            return "Partition %s was not (re-)assigned within the timeout of %d seconds" % (partition, timeout_sec)
+
+        wait_until(lambda: _condition(), timeout_sec=timeout_sec, err_msg=_err_msg())
+
+    def _members_in_state(self, consumer, require_joined=True):
+        count = len(consumer.joined_nodes())
+
+        if not require_joined:
+            count += len(consumer.started_nodes())
+            count += len(consumer.rebalancing_nodes())
+
+        return count
