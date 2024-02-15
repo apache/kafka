@@ -24,6 +24,7 @@ import org.apache.kafka.clients.consumer.internals.ConsumerProtocol;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.acl.AclOperation;
 import org.apache.kafka.common.message.DescribeGroupsResponseData;
+import org.apache.kafka.common.message.ShareGroupDescribeResponseData;
 import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.common.utils.Utils;
 
@@ -73,5 +74,28 @@ public class DescribeGroupsHandlerHelper {
     return memberDescriptions;
   }
 
+  public static List<MemberDescription> memberDescriptionsShare(List<ShareGroupDescribeResponseData.Member> members) {
+    final List<MemberDescription> memberDescriptions = new ArrayList<>(members.size());
+    if (members.size() == 0) {
+      return memberDescriptions;
+    }
+    for (ShareGroupDescribeResponseData.Member groupMember : members) {
+      Set<TopicPartition> partitions = new HashSet<>();
+      if (groupMember.assignment() != null && groupMember.assignment().topicPartitions() != null) {
+        for (ShareGroupDescribeResponseData.TopicPartitions tp : groupMember.assignment().topicPartitions()) {
+          for (int partition : tp.partitions()) {
+            partitions.add(new TopicPartition(tp.topicName(), partition));
+          }
+        }
+      }
 
+      memberDescriptions.add(new MemberDescription(
+          groupMember.memberId(),
+          Optional.ofNullable(groupMember.instanceId()),
+          groupMember.clientId(),
+          groupMember.clientHost(),
+          new MemberAssignment(partitions)));
+    }
+    return memberDescriptions;
+  }
 }
