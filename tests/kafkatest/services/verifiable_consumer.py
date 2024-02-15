@@ -175,9 +175,8 @@ class VerifiableConsumer(KafkaPathResolverMixin, VerifiableClientMixin, Backgrou
         }
 
     def __init__(self, context, num_nodes, kafka, topic, group_id,
-                 group_protocol=None, static_membership=False, max_messages=-1, session_timeout_sec=30, enable_autocommit=False,
-                 assignment_strategy=None,
-                 group_remote_assignor=None,
+                 static_membership=False, max_messages=-1, session_timeout_sec=30, enable_autocommit=False,
+                 assignment_strategy=None, group_protocol=None, group_remote_assignor=None,
                  version=DEV_BRANCH, stop_timeout_sec=30, log_level="INFO", jaas_override_variables=None,
                  on_record_consumed=None, reset_policy="earliest", verify_offsets=True):
         """
@@ -318,14 +317,14 @@ class VerifiableConsumer(KafkaPathResolverMixin, VerifiableClientMixin, Backgrou
             # if `None` is passed as the argument value
             cmd += " --group-instance-id None"
 
-        if self.enable_autocommit:
-            cmd += " --enable-autocommit "
-
         if node.version >= V_3_7_0 and self.supports_kip_848():
             cmd += " --group-protocol %s" % self.group_protocol
             cmd += " --group-remote-assignor %s" % self.group_remote_assignor
         elif self.assignment_strategy:
             cmd += " --assignment-strategy %s" % self.assignment_strategy
+
+        if self.enable_autocommit:
+            cmd += " --enable-autocommit "
 
         cmd += " --reset-policy %s --group-id %s --topic %s --broker-list %s --session-timeout %s" % \
                (self.reset_policy, self.group_id, self.topic,
@@ -413,24 +412,28 @@ class VerifiableConsumer(KafkaPathResolverMixin, VerifiableClientMixin, Backgrou
                        if handler.idx <= keep_alive)
 
     def joined_nodes(self):
-        return self._nodes_in_state(ConsumerState.Joined)
+        with self.lock:
+            return [handler.node for handler in self.event_handlers.values()
+                    if handler.state == ConsumerState.Joined]
 
     def started_nodes(self):
-        return self._nodes_in_state(ConsumerState.Started)
+        with self.lock:
+            return [handler.node for handler in self.event_handlers.values()
+                    if handler.state == ConsumerState.Started]
 
     def rebalancing_nodes(self):
-        return self._nodes_in_state(ConsumerState.Rebalancing)
+        with self.lock:
+            return [handler.node for handler in self.event_handlers.values()
+                    if handler.state == ConsumerState.Rebalancing]
 
     def dead_nodes(self):
-        return self._nodes_in_state(ConsumerState.Dead)
+        with self.lock:
+            return [handler.node for handler in self.event_handlers.values()
+                    if handler.state == ConsumerState.Dead]
 
     def alive_nodes(self):
         with self.lock:
             return [handler.node for handler in self.event_handlers.values() if handler.state != ConsumerState.Dead]
-
-    def _nodes_in_state(self, state):
-        with self.lock:
-            return [handler.node for handler in self.event_handlers.values() if handler.state == state]
 
     def supports_kip_848(self):
         return self.group_protocol and self.group_protocol.upper() == "CONSUMER"
