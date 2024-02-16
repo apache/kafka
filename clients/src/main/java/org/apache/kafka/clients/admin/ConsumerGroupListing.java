@@ -104,10 +104,7 @@ public class ConsumerGroupListing {
             return false;
         if (isSimpleConsumerGroup != other.isSimpleConsumerGroup)
             return false;
-        if (state == null) {
-            if (other.state != null)
-                return false;
-        } else if (!state.equals(other.state))
+        if (!state.equals(other.state))
             return false;
         return true;
     }
