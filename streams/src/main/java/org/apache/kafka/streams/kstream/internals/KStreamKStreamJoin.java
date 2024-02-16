@@ -129,7 +129,10 @@ class KStreamKStreamJoin<K, V1, V2, VOut> implements ProcessorSupplier<K, V1, K,
             final long timeFrom = Math.max(0L, inputRecordTimestamp - joinBeforeMs);
             final long timeTo = Math.max(0L, inputRecordTimestamp + joinAfterMs);
             sharedTimeTracker.advanceStreamTime(inputRecordTimestamp);
-            if (!isActiveWindow(timeFrom, timeTo)) return;
+            if (sharedTimeTracker.streamTime > timeTo + joinGraceMs){
+                // Window is no longer active, drop too late record.
+                return;
+            }
             if (outer && record.key() == null && record.value() != null) {
                 context().forward(record.withValue(joiner.apply(record.key(), record.value(), null)));
                 return;
@@ -191,10 +194,6 @@ class KStreamKStreamJoin<K, V1, V2, VOut> implements ProcessorSupplier<K, V1, K,
                     }
                 }
             }
-        }
-
-        private boolean isActiveWindow(final long timeFrom, final long timeTo) {
-            return sharedTimeTracker.streamTime >= timeFrom && timeTo + joinGraceMs >= sharedTimeTracker.streamTime;
         }
 
         @SuppressWarnings("unchecked")
