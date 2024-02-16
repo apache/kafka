@@ -23,6 +23,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.math.BigDecimal;
+import java.math.BigInteger;
+import java.math.RoundingMode;
 import java.nio.ByteBuffer;
 import java.text.CharacterIterator;
 import java.text.DateFormat;
@@ -72,6 +74,9 @@ public class Values {
     private static final Schema STRUCT_SELECTOR_SCHEMA = SchemaBuilder.struct().build();
     private static final String TRUE_LITERAL = Boolean.TRUE.toString();
     private static final String FALSE_LITERAL = Boolean.FALSE.toString();
+    private static final BigInteger LONG_MIN = BigInteger.valueOf(Long.MIN_VALUE);
+
+    private static final BigInteger LONG_MAX = BigInteger.valueOf(Long.MAX_VALUE);
     private static final long MILLIS_PER_DAY = 24 * 60 * 60 * 1000;
     private static final String NULL_VALUE = "null";
     static final String ISO_8601_DATE_FORMAT_PATTERN = "yyyy-MM-dd";
@@ -1007,25 +1012,26 @@ public class Values {
     }
 
     private static SchemaAndValue parseAsExactDecimal(BigDecimal decimal) {
-        try {
-            return new SchemaAndValue(Schema.INT8_SCHEMA, decimal.byteValueExact());
-        } catch (ArithmeticException e) {
-            // continue
-        }
-        try {
-            return new SchemaAndValue(Schema.INT16_SCHEMA, decimal.shortValueExact());
-        } catch (ArithmeticException e) {
-            // continue
-        }
-        try {
-            return new SchemaAndValue(Schema.INT32_SCHEMA, decimal.intValueExact());
-        } catch (ArithmeticException e) {
-            // continue
-        }
-        try {
-            return new SchemaAndValue(Schema.INT64_SCHEMA, decimal.longValueExact());
-        } catch (ArithmeticException e) {
-            // continue
+        BigDecimal ceil = decimal.setScale(0, RoundingMode.CEILING);
+        BigDecimal floor = decimal.setScale(0, RoundingMode.FLOOR);
+        if (ceil.equals(floor)) {
+            BigInteger num = ceil.toBigIntegerExact();
+            if (ceil.precision() >= 19 && (num.compareTo(LONG_MIN) < 0 || num.compareTo(LONG_MAX) > 0)) {
+                return null;
+            }
+            long integral = num.longValue();
+            byte int8 = (byte) integral;
+            short int16 = (short) integral;
+            int int32 = (int) integral;
+            if (int8 == integral) {
+                return new SchemaAndValue(Schema.INT8_SCHEMA, int8);
+            } else if (int16 == integral) {
+                return new SchemaAndValue(Schema.INT16_SCHEMA, int16);
+            } else if (int32 == integral) {
+                return new SchemaAndValue(Schema.INT32_SCHEMA, int32);
+            } else {
+                return new SchemaAndValue(Schema.INT64_SCHEMA, integral);
+            }
         }
         return null;
     }
