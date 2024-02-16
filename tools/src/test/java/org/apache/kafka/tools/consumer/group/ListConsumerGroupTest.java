@@ -71,14 +71,14 @@ public class ListConsumerGroupTest extends ConsumerGroupCommandTest {
     }
 
     @ParameterizedTest(name = TEST_WITH_PARAMETERIZED_QUORUM_AND_GROUP_PROTOCOL_NAMES)
-    @MethodSource("getTestQuorumAndGroupProtocolParametersAll")
+    @MethodSource("getTestQuorumAndGroupProtocolParametersClassicGroupProtocolOnly")
     public void testListConsumerGroupsWithStates(String quorum, String groupProtocol) throws Exception {
         String simpleGroup = "simple-group";
 
         createOffsetsTopic(listenerName(), new Properties());
 
         addSimpleGroupExecutor(simpleGroup);
-        addConsumerGroupExecutor(1);
+        addConsumerGroupExecutor(1, groupProtocol);
 
         String[] cgcArgs = new String[]{"--bootstrap-server", bootstrapServers(listenerName()), "--list", "--state"};
         ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(cgcArgs);
@@ -99,10 +99,10 @@ public class ListConsumerGroupTest extends ConsumerGroupCommandTest {
         ));
 
         assertGroupListing(
+            service,
             Collections.emptySet(),
             EnumSet.allOf(ConsumerGroupState.class),
-            expectedListing,
-            service
+            expectedListing
         );
 
         expectedListing = new HashSet<>(Arrays.asList(
@@ -115,17 +115,17 @@ public class ListConsumerGroupTest extends ConsumerGroupCommandTest {
         ));
 
         assertGroupListing(
+            service,
             Collections.emptySet(),
             new HashSet<>(Arrays.asList(ConsumerGroupState.STABLE)),
-            expectedListing,
-            service
+            expectedListing
         );
 
         assertGroupListing(
+            service,
             Collections.emptySet(),
             new HashSet<>(Arrays.asList(ConsumerGroupState.PREPARING_REBALANCE)),
-            Collections.emptySet(),
-            service
+            Collections.emptySet()
         );
     }
 
@@ -158,14 +158,29 @@ public class ListConsumerGroupTest extends ConsumerGroupCommandTest {
         ));
 
         // No filters explicitly mentioned. Expectation is that all groups are returned.
-        assertGroupListing(Collections.emptySet(), Collections.emptySet(), expectedListing, service);
+        assertGroupListing(
+            service,
+            Collections.emptySet(),
+            Collections.emptySet(),
+            expectedListing
+        );
 
         // When group type is mentioned:
         // Old Group Coordinator returns empty listings if the type is not Classic.
         // New Group Coordinator returns groups according to the filter.
-        assertGroupListing(new HashSet<>(Arrays.asList(GroupType.CONSUMER)), Collections.emptySet(), Collections.emptySet(), service);
+        assertGroupListing(
+            service,
+            new HashSet<>(Arrays.asList(GroupType.CONSUMER)),
+            Collections.emptySet(),
+            Collections.emptySet()
+        );
 
-        assertGroupListing(new HashSet<>(Arrays.asList(GroupType.CLASSIC)), Collections.emptySet(), expectedListing, service);
+        assertGroupListing(
+            service,
+            new HashSet<>(Arrays.asList(GroupType.CLASSIC)),
+            Collections.emptySet(),
+            expectedListing
+        );
     }
 
     @ParameterizedTest(name = TEST_WITH_PARAMETERIZED_QUORUM_AND_GROUP_PROTOCOL_NAMES)
@@ -204,7 +219,7 @@ public class ListConsumerGroupTest extends ConsumerGroupCommandTest {
             )
         ));
 
-        assertGroupListing(Collections.emptySet(), Collections.emptySet(), expectedListing, service);
+        assertGroupListing(service, Collections.emptySet(), Collections.emptySet(), expectedListing);
 
         // When group type is mentioned:
         // New Group Coordinator returns groups according to the filter.
@@ -217,7 +232,12 @@ public class ListConsumerGroupTest extends ConsumerGroupCommandTest {
             )
         ));
 
-        assertGroupListing(new HashSet<>(Arrays.asList(GroupType.CONSUMER)), Collections.emptySet(), expectedListing, service);
+        assertGroupListing(
+            service,
+            new HashSet<>(Arrays.asList(GroupType.CONSUMER)),
+            Collections.emptySet(),
+            expectedListing
+        );
 
         expectedListing = new HashSet<>(Arrays.asList(
             new ConsumerGroupListing(
@@ -234,7 +254,12 @@ public class ListConsumerGroupTest extends ConsumerGroupCommandTest {
             )
         ));
 
-        assertGroupListing(new HashSet<>(Arrays.asList(GroupType.CLASSIC)), Collections.emptySet(), expectedListing, service);
+        assertGroupListing(
+            service,
+            new HashSet<>(Arrays.asList(GroupType.CLASSIC)),
+            Collections.emptySet(),
+            expectedListing
+        );
     }
 
     @Test
@@ -290,7 +315,7 @@ public class ListConsumerGroupTest extends ConsumerGroupCommandTest {
         createOffsetsTopic(listenerName(), new Properties());
 
         addSimpleGroupExecutor(simpleGroup);
-        addConsumerGroupExecutor(1);
+        addConsumerGroupExecutor(1, groupProtocol);
 
         final AtomicReference<String> out = new AtomicReference<>("");
 
@@ -430,11 +455,11 @@ public class ListConsumerGroupTest extends ConsumerGroupCommandTest {
         }, "Expected to find " + PROTOCOL_GROUP + " with type and state header, but found " + out.get());
     }
 
-    private void assertGroupListing(
+    private static void assertGroupListing(
+        ConsumerGroupCommand.ConsumerGroupService service,
         Set<GroupType> typeFilterSet,
         Set<ConsumerGroupState> stateFilterSet,
-        Set<ConsumerGroupListing> expectedListing,
-        ConsumerGroupCommand.ConsumerGroupService service
+        Set<ConsumerGroupListing> expectedListing
     ) throws Exception {
         final AtomicReference<scala.collection.Set> foundListing = new AtomicReference<>();
         TestUtils.waitForCondition(() -> {
