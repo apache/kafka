@@ -317,7 +317,7 @@ class TransactionStateManager(brokerId: Int,
           }
         }
 
-        val now : Long = System.currentTimeMillis()
+        val now : Long = time.milliseconds()
         def shouldInclude(txnMetadata: TransactionMetadata): Boolean = {
           if (txnMetadata.state == Dead) {
             // We filter the `Dead` state since it is a transient state which
