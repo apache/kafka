@@ -440,7 +440,8 @@ public abstract class TransactionsCommand {
                 .help("list transactions");
 
             subparser.addArgument("--duration-filter")
-                    .help("filter duration of transaction in ms, only transactions running longer than this duration will be returned")
+                    .help("Duration (in millis) to filter by: if < 0, all transactions will be returned; " +
+                            "otherwise, only transactions running longer than this duration will be returned")
                     .action(store())
                     .type(Long.class)
                     .required(false);

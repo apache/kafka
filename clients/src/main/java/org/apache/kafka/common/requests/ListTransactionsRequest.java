@@ -36,9 +36,9 @@ public class ListTransactionsRequest extends AbstractRequest {
 
         @Override
         public ListTransactionsRequest build(short version) {
-            if (data.durationFilter() > 0 && version < 1) {
+            if (data.durationFilter() >= 0 && version < 1) {
                 throw new UnsupportedVersionException("Duration filter can be set only when using API version 1 or higher." +
-                        " If client is connected to an older broker, set duration filter to 0.");
+                        " If client is connected to an older broker, do not specify duration filter or set duration filter to -1.");
             }
             return new ListTransactionsRequest(data, version);
         }

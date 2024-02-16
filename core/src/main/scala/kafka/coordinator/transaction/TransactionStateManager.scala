@@ -328,7 +328,7 @@ class TransactionStateManager(brokerId: Int,
             false
           } else if (filterStateNames.nonEmpty && !filterStates.contains(txnMetadata.state)) {
             false
-          } else if (durationFilterMs > 0 && (now - txnMetadata.txnStartTimestamp) <= durationFilterMs) {
+          } else if (durationFilterMs >= 0 && (now - txnMetadata.txnStartTimestamp) <= durationFilterMs) {
             false
           } else {
             true

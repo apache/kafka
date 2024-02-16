@@ -35,7 +35,7 @@ public class ListTransactionsOptions extends AbstractOptions<ListTransactionsOpt
     private Set<TransactionState> filteredStates = Collections.emptySet();
     private Set<Long> filteredProducerIds = Collections.emptySet();
 
-    private Long durationFilter = 0L;
+    private Long durationFilter = -1L;
     /**
      * Filter only the transactions that are in a specific set of states. If no filter
      * is specified or if the passed set of states is empty, then transactions in all
