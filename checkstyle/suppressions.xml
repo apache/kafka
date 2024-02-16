@@ -40,7 +40,6 @@
               files="core[\\/]src[\\/](generated|generated-test)[\\/].+.java$"/>
     <suppress checks="NPathComplexity" files="(ClusterTestExtensions|KafkaApisBuilder).java"/>
     <suppress checks="NPathComplexity|ClassFanOutComplexity|ClassDataAbstractionCoupling" files="(RemoteLogManager|RemoteLogManagerTest).java"/>
-    <suppress checks="ClassFanOutComplexity" files="RemoteLogManagerTest.java"/>
     <suppress checks="MethodLength"
               files="(KafkaClusterTestKit).java"/>
 
@@ -59,14 +58,12 @@
     <suppress checks="ClassFanOutComplexity"
               files="Errors.java"/>
     <suppress checks="ClassFanOutComplexity"
-              files="Utils.java"/>
-    <suppress checks="ClassFanOutComplexity"
               files="AbstractRequest.java"/>
     <suppress checks="ClassFanOutComplexity"
               files="AbstractResponse.java"/>
 
     <suppress checks="MethodLength"
-              files="(KerberosLogin|RequestResponseTest|ConnectMetricsRegistry|KafkaConsumer|AbstractStickyAssignor|AbstractRequest|AbstractResponse).java"/>
+              files="(KerberosLogin|ConnectMetricsRegistry|KafkaConsumer|AbstractStickyAssignor|AbstractRequest|AbstractResponse).java"/>
 
     <suppress checks="ParameterNumber"
               files="(NetworkClient|FieldSpec|KafkaRaftClient|KafkaProducer).java"/>
@@ -95,10 +92,10 @@
               files="(AbstractFetch|ConsumerCoordinator|CommitRequestManager|FetchCollector|OffsetFetcherUtils|KafkaProducer|Sender|ConfigDef|KerberosLogin|AbstractRequest|AbstractResponse|Selector|SslFactory|SslTransportLayer|SaslClientAuthenticator|SaslClientCallbackHandler|SaslServerAuthenticator|AbstractCoordinator|TransactionManager|AbstractStickyAssignor|DefaultSslEngineFactory|Authorizer|RecordAccumulator|MemoryRecords|FetchSessionHandler|MockAdminClient).java"/>
 
     <suppress checks="JavaNCSS"
-              files="(AbstractRequest|AbstractResponse|KerberosLogin|WorkerSinkTaskTest|TransactionManagerTest|SenderTest|KafkaAdminClient|ConsumerCoordinatorTest|KafkaAdminClientTest|KafkaRaftClientTest).java"/>
+              files="(AbstractRequest|AbstractResponse|KerberosLogin|WorkerSinkTaskTest|TransactionManagerTest|SenderTest|KafkaAdminClient|ConsumerCoordinatorTest|KafkaRaftClientTest).java"/>
 
     <suppress checks="NPathComplexity"
-              files="(ConsumerCoordinator|BufferPool|MetricName|Node|ConfigDef|RecordBatch|SslFactory|SslTransportLayer|MetadataResponse|KerberosLogin|Selector|Sender|Serdes|TokenInformation|Agent|Values|PluginUtils|MiniTrogdorCluster|TasksRequest|KafkaProducer|AbstractStickyAssignor|KafkaRaftClient|Authorizer|FetchSessionHandler|RecordAccumulator).java"/>
+              files="(ConsumerCoordinator|BufferPool|MetricName|Node|ConfigDef|RecordBatch|SslFactory|SslTransportLayer|MetadataResponse|KerberosLogin|Selector|Sender|Serdes|TokenInformation|Values|PluginUtils|MiniTrogdorCluster|TasksRequest|KafkaProducer|AbstractStickyAssignor|KafkaRaftClient|Authorizer|FetchSessionHandler|RecordAccumulator).java"/>
 
     <suppress checks="(JavaNCSS|CyclomaticComplexity|MethodLength)"
               files="CoordinatorClient.java"/>
@@ -139,8 +136,6 @@
     <!-- Connect -->
     <suppress checks="ClassFanOutComplexity"
               files="(AbstractHerder|DistributedHerder|Worker).java"/>
-    <suppress checks="ClassFanOutComplexity"
-              files="Worker(|Test).java"/>
     <suppress checks="MethodLength"
               files="(DistributedHerder|DistributedConfig|KafkaConfigBackingStore|Values|IncrementalCooperativeAssignor).java"/>
     <suppress checks="ParameterNumber"
@@ -174,7 +169,7 @@
     <suppress checks="ClassFanOutComplexity"
               files="(WorkerSink|WorkerSource|ErrorHandling)Task(|WithTopicCreation)Test.java"/>
     <suppress checks="ClassFanOutComplexity"
-              files="DistributedHerderTest.java"/>
+              files="(DistributedHerder|Worker)Test.java"/>
 
     <suppress checks="MethodLength"
               files="(RequestResponse|WorkerSinkTask)Test.java"/>
@@ -256,9 +251,6 @@
     <suppress checks="MethodLength"
               files="(KStreamSlidingWindowAggregateTest|KStreamKStreamLeftJoinTest|KStreamKStreamOuterJoinTest|KTableKTableForeignKeyVersionedJoinIntegrationTest).java"/>
 
-    <suppress checks="ClassFanOutComplexity"
-              files="StreamTaskTest.java"/>
-
     <!-- Streams test-utils -->
     <suppress checks="ClassFanOutComplexity"
               files="TopologyTestDriver.java"/>
@@ -307,8 +299,6 @@
 
     <suppress checks="NPathComplexity"
               files="KafkaLog4jAppender.java"/>
-    <suppress checks="JavaNCSS"
-              files="RequestResponseTest.java"/>
 
     <!-- metadata -->
     <suppress checks="ClassDataAbstractionCoupling"
@@ -317,7 +307,7 @@
               files="(QuorumController|QuorumControllerTest|ReplicationControlManager|ReplicationControlManagerTest).java"/>
     <suppress checks="MethodLength"
               files="ReplicationControlManagerTest.java"/>
-    <suppress checks="(ParameterNumber|ClassDataAbstractionCoupling)"
+    <suppress checks="ParameterNumber"
               files="(QuorumController).java"/>
     <suppress checks="(CyclomaticComplexity|NPathComplexity)"
               files="(PartitionRegistration|PartitionChangeBuilder).java"/>
@@ -354,7 +344,7 @@
     <suppress checks="CyclomaticComplexity"
               files="(LogValidator|RemoteLogManagerConfig|RemoteLogManager).java"/>
     <suppress checks="NPathComplexity"
-              files="(LogValidator|RemoteLogManager|RemoteIndexCache).java"/>
+              files="(LogValidator|RemoteIndexCache).java"/>
     <suppress checks="ParameterNumber"
               files="(LogAppendInfo|RemoteLogManagerConfig).java"/>
     <suppress checks="MethodLength"
