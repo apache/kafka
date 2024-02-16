@@ -160,7 +160,7 @@ public class ListConsumerGroupTest extends ConsumerGroupCommandTest {
             Arrays.asList("GROUP", "STATE"),
             mkSet(
                 Arrays.asList(GROUP, "Stable")
-                )
+            )
         );
     }
 
