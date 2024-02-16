@@ -21,7 +21,7 @@ from ducktape.services.background_thread import BackgroundThreadService
 from kafkatest.directory_layout.kafka_path import KafkaPathResolverMixin
 from kafkatest.services.kafka import TopicPartition
 from kafkatest.services.verifiable_client import VerifiableClientMixin
-from kafkatest.version import DEV_BRANCH, V_2_3_0, V_2_3_1, V_0_10_0_0
+from kafkatest.version import DEV_BRANCH, V_2_3_0, V_2_3_1, V_3_7_0, V_0_10_0_0
 
 
 class ConsumerState:
@@ -167,7 +167,7 @@ class VerifiableConsumer(KafkaPathResolverMixin, VerifiableClientMixin, Backgrou
 
     def __init__(self, context, num_nodes, kafka, topic, group_id,
                  static_membership=False, max_messages=-1, session_timeout_sec=30, enable_autocommit=False,
-                 assignment_strategy=None,
+                 assignment_strategy=None, group_protocol=None, group_remote_assignor=None,
                  version=DEV_BRANCH, stop_timeout_sec=30, log_level="INFO", jaas_override_variables=None,
                  on_record_consumed=None, reset_policy="earliest", verify_offsets=True):
         """
@@ -184,6 +184,8 @@ class VerifiableConsumer(KafkaPathResolverMixin, VerifiableClientMixin, Backgrou
         self.session_timeout_sec = session_timeout_sec
         self.enable_autocommit = enable_autocommit
         self.assignment_strategy = assignment_strategy
+        self.group_protocol = group_protocol
+        self.group_remote_assignor = group_remote_assignor
         self.prop_file = ""
         self.stop_timeout_sec = stop_timeout_sec
         self.on_record_consumed = on_record_consumed
@@ -306,8 +308,20 @@ class VerifiableConsumer(KafkaPathResolverMixin, VerifiableClientMixin, Backgrou
             # if `None` is passed as the argument value
             cmd += " --group-instance-id None"
 
-        if self.assignment_strategy:
-            cmd += " --assignment-strategy %s" % self.assignment_strategy
+        # 3.7.0 includes support for KIP-848 which introduced a new implementation of the consumer group protocol.
+        # The two implementations use slightly different configuration, hence these arguments are conditional.
+        #
+        # See the Java class/method VerifiableConsumer.createFromArgs() for how the command line arguments are
+        # parsed and used as configuration in the runner.
+        if node.version >= V_3_7_0 and self.is_consumer_group_protocol_enabled():
+            cmd += " --group-protocol %s" % self.group_protocol
+
+            if self.group_remote_assignor:
+                cmd += " --group-remote-assignor %s" % self.group_remote_assignor
+        else:
+            # Either we're an older consumer version or we're using the old consumer group protocol.
+            if self.assignment_strategy:
+                cmd += " --assignment-strategy %s" % self.assignment_strategy
 
         if self.enable_autocommit:
             cmd += " --enable-autocommit "
@@ -416,3 +430,6 @@ class VerifiableConsumer(KafkaPathResolverMixin, VerifiableClientMixin, Backgrou
         with self.lock:
             return [handler.node for handler in self.event_handlers.values()
                     if handler.state != ConsumerState.Dead]
+
+    def is_consumer_group_protocol_enabled(self):
+        return self.group_protocol and self.group_protocol.upper() == "CONSUMER"
