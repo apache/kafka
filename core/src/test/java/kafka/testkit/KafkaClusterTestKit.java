@@ -213,6 +213,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
                                   (Raft Manager per broker/controller)
              */
             int numOfExecutorThreads = (nodes.brokerNodes().size() + nodes.controllerNodes().size()) * 2;
+            System.out.println("DEBUG: creating nodes for" + nodes.controllerNodes().keySet());
             ExecutorService executorService = null;
             ControllerQuorumVotersFutureManager connectFutureManager =
                 new ControllerQuorumVotersFutureManager(nodes.controllerNodes().size());
@@ -243,6 +244,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
                         throw e;
                     }
                     controllers.put(node.id(), controller);
+                    System.out.println("DEBUG: created a controller" + node.id());
                     controller.socketServerFirstBoundPortFuture().whenComplete((port, e) -> {
                         if (e != null) {
                             connectFutureManager.fail(e);
@@ -269,6 +271,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
                         if (broker != null) broker.shutdown();
                         throw e;
                     }
+                    System.out.println("DEBUG: created a broker" + node.id());
                     brokers.put(node.id(), broker);
                 }
             } catch (Exception e) {
