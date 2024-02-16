@@ -36,6 +36,7 @@
   //
   // Version 10 is the same as version 9 (KIP-951).
   "validVersions": "0-10",
+  "deprecatedVersions": "0-6",
   "flexibleVersions": "9+",
   "fields": [
     { "name": "TransactionalId", "type": "string", "versions": "3+", "nullableVersions": "3+", "default": "null", "entityType": "transactionalId",

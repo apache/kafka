@@ -21,6 +21,7 @@ import org.apache.kafka.common.message.ListGroupsResponseData;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 /**
  * Interface common for all groups.
@@ -28,7 +29,7 @@ import java.util.Optional;
 public interface Group {
     enum GroupType {
         CONSUMER("consumer"),
-        GENERIC("generic");
+        CLASSIC("classic");
 
         private final String name;
 
@@ -60,7 +61,7 @@ public interface Group {
     /**
      * @return the group formatted as a list group response based on the committed offset.
      */
-    public ListGroupsResponseData.ListedGroup asListedGroup(long committedOffset);
+    ListGroupsResponseData.ListedGroup asListedGroup(long committedOffset);
 
     /**
      * @return The group id.
@@ -74,11 +75,13 @@ public interface Group {
      * @param groupInstanceId           The group instance id.
      * @param generationIdOrMemberEpoch The generation id for genetic groups or the member epoch
      *                                  for consumer groups.
+     * @param isTransactional           Whether the offset commit is transactional or not.
      */
     void validateOffsetCommit(
         String memberId,
         String groupInstanceId,
-        int generationIdOrMemberEpoch
+        int generationIdOrMemberEpoch,
+        boolean isTransactional
     ) throws KafkaException;
 
     /**
@@ -112,7 +115,7 @@ public interface Group {
      * @return Whether the group is subscribed to the topic.
      */
     boolean isSubscribedToTopic(String topic);
-    
+
     /**
      * Populates the list of records with tombstone(s) for deleting the group.
      *
@@ -131,4 +134,12 @@ public interface Group {
      * @return The offset expiration condition for the group or Empty if no such condition exists.
      */
     Optional<OffsetExpirationCondition> offsetExpirationCondition();
+
+    /**
+     * Returns true if the statesFilter contains the current state with given committedOffset.
+     *
+     * @param statesFilter The states to filter, which must be lowercase.
+     * @return true if the state includes, false otherwise.
+     */
+    boolean isInStates(Set<String> statesFilter, long committedOffset);
 }

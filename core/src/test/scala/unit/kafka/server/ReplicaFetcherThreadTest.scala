@@ -83,7 +83,7 @@ class ReplicaFetcherThreadTest {
   private val updateMetadataRequest = new UpdateMetadataRequest.Builder(ApiKeys.UPDATE_METADATA.latestVersion(),
     0, 0, 0, partitionStates, Collections.emptyList(), topicIds.asJava).build()
   // TODO: support raft code?
-  private var metadataCache = new ZkMetadataCache(0, MetadataVersion.latest(), BrokerFeatures.createEmpty())
+  private var metadataCache = new ZkMetadataCache(0, MetadataVersion.latestTesting(), BrokerFeatures.createEmpty())
   metadataCache.updateMetadata(0, updateMetadataRequest)
 
   private def initialFetchState(topicId: Option[Uuid], fetchOffset: Long, leaderEpoch: Int = 1): InitialFetchState = {
@@ -277,7 +277,7 @@ class ReplicaFetcherThreadTest {
 
   @Test
   def shouldNotFetchLeaderEpochOnFirstFetchWithTruncateOnFetch(): Unit = {
-    verifyFetchLeaderEpochOnFirstFetch(MetadataVersion.latest, epochFetchCount = 0)
+    verifyFetchLeaderEpochOnFirstFetch(MetadataVersion.latestTesting, epochFetchCount = 0)
   }
 
   private def verifyFetchLeaderEpochOnFirstFetch(ibp: MetadataVersion, epochFetchCount: Int = 1): Unit = {
@@ -667,6 +667,7 @@ class ReplicaFetcherThreadTest {
     val log: UnifiedLog = mock(classOf[UnifiedLog])
     val partition: Partition = mock(classOf[Partition])
     val replicaManager: ReplicaManager = mock(classOf[ReplicaManager])
+    val replicaAlterLogDirsManager: ReplicaAlterLogDirsManager = mock(classOf[ReplicaAlterLogDirsManager])
 
     val logEndOffset = 150
     val highWatermark = 130
@@ -678,6 +679,7 @@ class ReplicaFetcherThreadTest {
 
     when(replicaManager.metadataCache).thenReturn(metadataCache)
     when(replicaManager.logManager).thenReturn(logManager)
+    when(replicaManager.replicaAlterLogDirsManager).thenReturn(replicaAlterLogDirsManager)
 
     when(replicaManager.localLogOrException(t1p0)).thenReturn(log)
     when(replicaManager.getPartitionOrException(t1p0)).thenReturn(partition)

@@ -341,6 +341,7 @@ public class RemoteLogManager implements Closeable {
 
             leaderPartitions.forEach(this::cacheTopicPartitionIds);
             followerPartitions.forEach(this::cacheTopicPartitionIds);
+            followerPartitions.forEach(this::removeRemoteTopicPartitionMetrics);
 
             remoteLogMetadataManager.onPartitionLeadershipChanges(leaderPartitions, followerPartitions);
             followerPartitions.forEach(topicIdPartition ->
@@ -373,6 +374,9 @@ public class RemoteLogManager implements Closeable {
                         LOGGER.info("Cancelling the RLM task for tpId: {}", tpId);
                         task.cancel();
                     }
+
+                    removeRemoteTopicPartitionMetrics(tpId);
+
                     if (stopPartition.deleteRemoteLog()) {
                         LOGGER.info("Deleting the remote log segments task for partition: {}", tpId);
                         deleteRemoteLogPartition(tpId);
@@ -778,6 +782,13 @@ public class RemoteLogManager implements Closeable {
             // are not deleted before they are copied to remote storage.
             log.updateHighestOffsetInRemoteStorage(endOffset);
             logger.info("Copied {} to remote storage with segment-id: {}", logFileName, copySegmentFinishedRlsm.remoteLogSegmentId());
+
+            long bytesLag = log.onlyLocalLogSegmentsSize() - log.activeSegment().size();
+            String topic = topicIdPartition.topic();
+            int partition = topicIdPartition.partition();
+            long segmentsLag = log.onlyLocalLogSegmentsCount();
+            brokerTopicStats.recordRemoteCopyLagBytes(topic, partition, bytesLag);
+            brokerTopicStats.recordRemoteCopyLagSegments(topic, partition, segmentsLag);
         }
 
         private Path toPathIfExists(File file) {
@@ -920,12 +931,26 @@ public class RemoteLogManager implements Closeable {
                     throws RemoteStorageException, ExecutionException, InterruptedException {
                 if (predicate.test(segmentMetadata)) {
                     logger.debug("Deleting remote log segment {}", segmentMetadata.remoteLogSegmentId());
+
+                    String topic = segmentMetadata.topicIdPartition().topic();
+
                     // Publish delete segment started event.
                     remoteLogMetadataManager.updateRemoteLogSegmentMetadata(
                             new RemoteLogSegmentMetadataUpdate(segmentMetadata.remoteLogSegmentId(), time.milliseconds(),
                                     segmentMetadata.customMetadata(), RemoteLogSegmentState.DELETE_SEGMENT_STARTED, brokerId)).get();
+
+                    brokerTopicStats.topicStats(topic).remoteDeleteRequestRate().mark();
+                    brokerTopicStats.allTopicsStats().remoteDeleteRequestRate().mark();
+
                     // Delete the segment in remote storage.
-                    remoteLogStorageManager.deleteLogSegmentData(segmentMetadata);
+                    try {
+                        remoteLogStorageManager.deleteLogSegmentData(segmentMetadata);
+                    } catch (RemoteStorageException e) {
+                        brokerTopicStats.topicStats(topic).failedRemoteDeleteRequestRate().mark();
+                        brokerTopicStats.allTopicsStats().failedRemoteDeleteRequestRate().mark();
+                        throw e;
+                    }
+
                     // Publish delete segment finished event.
                     remoteLogMetadataManager.updateRemoteLogSegmentMetadata(
                             new RemoteLogSegmentMetadataUpdate(segmentMetadata.remoteLogSegmentId(), time.milliseconds(),
@@ -938,16 +963,23 @@ public class RemoteLogManager implements Closeable {
 
         }
 
+        private void updateMetadataCountAndLogSizeWith(int metadataCount, long remoteLogSizeBytes) {
+            int partition = topicIdPartition.partition();
+            String topic = topicIdPartition.topic();
+            brokerTopicStats.recordRemoteLogMetadataCount(topic, partition, metadataCount);
+            brokerTopicStats.recordRemoteLogSizeBytes(topic, partition, remoteLogSizeBytes);
+        }
+
+        private void updateRemoteDeleteLagWith(int segmentsLeftToDelete, long sizeOfDeletableSegmentsBytes) {
+            String topic = topicIdPartition.topic();
+            int partition = topicIdPartition.partition();
+            brokerTopicStats.recordRemoteDeleteLagSegments(topic, partition, segmentsLeftToDelete);
+            brokerTopicStats.recordRemoteDeleteLagBytes(topic, partition, sizeOfDeletableSegmentsBytes);
+        }
+
         void cleanupExpiredRemoteLogSegments() throws RemoteStorageException, ExecutionException, InterruptedException {
             if (isCancelled() || !isLeader()) {
                 logger.info("Returning from remote log segments cleanup as the task state is changed");
-                return;
-            }
-
-            // Cleanup remote log segments and update the log start offset if applicable.
-            final Iterator<RemoteLogSegmentMetadata> segmentMetadataIter = remoteLogMetadataManager.listRemoteLogSegments(topicIdPartition);
-            if (!segmentMetadataIter.hasNext()) {
-                logger.debug("No remote log segments available on remote storage for partition: {}", topicIdPartition);
                 return;
             }
 
@@ -964,13 +996,27 @@ public class RemoteLogManager implements Closeable {
                 return;
             }
 
+            // Cleanup remote log segments and update the log start offset if applicable.
+            final Iterator<RemoteLogSegmentMetadata> segmentMetadataIter = remoteLogMetadataManager.listRemoteLogSegments(topicIdPartition);
+            if (!segmentMetadataIter.hasNext()) {
+                updateMetadataCountAndLogSizeWith(0, 0);
+                logger.debug("No remote log segments available on remote storage for partition: {}", topicIdPartition);
+                return;
+            }
+
             final Set<Integer> epochsSet = new HashSet<>();
+            int metadataCount = 0;
+            long remoteLogSizeBytes = 0;
             // Good to have an API from RLMM to get all the remote leader epochs of all the segments of a partition
             // instead of going through all the segments and building it here.
             while (segmentMetadataIter.hasNext()) {
                 RemoteLogSegmentMetadata segmentMetadata = segmentMetadataIter.next();
                 epochsSet.addAll(segmentMetadata.segmentLeaderEpochs().keySet());
+                metadataCount++;
+                remoteLogSizeBytes += segmentMetadata.segmentSizeInBytes();
             }
+
+            updateMetadataCountAndLogSizeWith(metadataCount, remoteLogSizeBytes);
 
             // All the leader epochs in sorted order that exists in remote storage
             final List<Integer> remoteLeaderEpochs = new ArrayList<>(epochsSet);
@@ -990,6 +1036,7 @@ public class RemoteLogManager implements Closeable {
             Iterator<Integer> epochIterator = epochWithOffsets.navigableKeySet().iterator();
             boolean canProcess = true;
             List<RemoteLogSegmentMetadata> segmentsToDelete = new ArrayList<>();
+            long sizeOfDeletableSegmentsBytes = 0L;
             while (canProcess && epochIterator.hasNext()) {
                 Integer epoch = epochIterator.next();
                 Iterator<RemoteLogSegmentMetadata> segmentsIterator = remoteLogMetadataManager.listRemoteLogSegments(topicIdPartition, epoch);
@@ -1025,6 +1072,7 @@ public class RemoteLogManager implements Closeable {
                     }
                     if (shouldDeleteSegment) {
                         segmentsToDelete.add(metadata);
+                        sizeOfDeletableSegmentsBytes += metadata.segmentSizeInBytes();
                     }
                     canProcess = shouldDeleteSegment || !isValidSegment;
                 }
@@ -1041,10 +1089,16 @@ public class RemoteLogManager implements Closeable {
             // and delete them accordingly.
             // If the follower HAS NOT picked up the changes, and they become the leader then they will go through this process
             // again and delete them with the original deletion reason i.e. size, time or log start offset breach.
+            int segmentsLeftToDelete = segmentsToDelete.size();
+            updateRemoteDeleteLagWith(segmentsLeftToDelete, sizeOfDeletableSegmentsBytes);
             List<String> undeletedSegments = new ArrayList<>();
             for (RemoteLogSegmentMetadata segmentMetadata : segmentsToDelete) {
                 if (!remoteLogRetentionHandler.deleteRemoteLogSegment(segmentMetadata, x -> !isCancelled() && isLeader())) {
                     undeletedSegments.add(segmentMetadata.remoteLogSegmentId().toString());
+                } else {
+                    sizeOfDeletableSegmentsBytes -= segmentMetadata.segmentSizeInBytes();
+                    segmentsLeftToDelete--;
+                    updateRemoteDeleteLagWith(segmentsLeftToDelete, sizeOfDeletableSegmentsBytes);
                 }
             }
             if (!undeletedSegments.isEmpty()) {
@@ -1061,15 +1115,31 @@ public class RemoteLogManager implements Closeable {
                 Iterator<Integer> epochsToClean = remoteLeaderEpochs.stream()
                         .filter(remoteEpoch -> remoteEpoch < earliestEpochEntry.epoch)
                         .iterator();
+
+                List<RemoteLogSegmentMetadata> listOfSegmentsToBeCleaned = new ArrayList<>();
+
                 while (epochsToClean.hasNext()) {
                     int epoch = epochsToClean.next();
                     Iterator<RemoteLogSegmentMetadata> segmentsToBeCleaned = remoteLogMetadataManager.listRemoteLogSegments(topicIdPartition, epoch);
                     while (segmentsToBeCleaned.hasNext()) {
-                        if (isCancelled() || !isLeader()) {
-                            return;
+                        if (!isCancelled() && isLeader()) {
+                            RemoteLogSegmentMetadata nextSegmentMetadata = segmentsToBeCleaned.next();
+                            sizeOfDeletableSegmentsBytes += nextSegmentMetadata.segmentSizeInBytes();
+                            listOfSegmentsToBeCleaned.add(nextSegmentMetadata);
                         }
+                    }
+                }
+
+                segmentsLeftToDelete += listOfSegmentsToBeCleaned.size();
+                updateRemoteDeleteLagWith(segmentsLeftToDelete, sizeOfDeletableSegmentsBytes);
+                for (RemoteLogSegmentMetadata segmentMetadata : listOfSegmentsToBeCleaned) {
+                    if (!isCancelled() && isLeader()) {
                         // No need to update the log-start-offset even though the segment is deleted as these epochs/offsets are earlier to that value.
-                        remoteLogRetentionHandler.deleteLogSegmentsDueToLeaderEpochCacheTruncation(earliestEpochEntry, segmentsToBeCleaned.next());
+                        if (remoteLogRetentionHandler.deleteLogSegmentsDueToLeaderEpochCacheTruncation(earliestEpochEntry, segmentMetadata)) {
+                            sizeOfDeletableSegmentsBytes -= segmentMetadata.segmentSizeInBytes();
+                            segmentsLeftToDelete--;
+                            updateRemoteDeleteLagWith(segmentsLeftToDelete, sizeOfDeletableSegmentsBytes);
+                        }
                     }
                 }
             }
@@ -1086,6 +1156,7 @@ public class RemoteLogManager implements Closeable {
                                                                    long logEndOffset,
                                                                    NavigableMap<Integer, Long> epochEntries) throws RemoteStorageException {
             if (retentionSize > -1) {
+                long startTimeMs = time.milliseconds();
                 long remoteLogSizeBytes = 0L;
                 Set<RemoteLogSegmentId> visitedSegmentIds = new HashSet<>();
                 for (Integer epoch : epochEntries.navigableKeySet()) {
@@ -1103,6 +1174,8 @@ public class RemoteLogManager implements Closeable {
                         }
                     }
                 }
+
+                brokerTopicStats.recordRemoteLogSizeComputationTime(topicIdPartition.topic(), topicIdPartition.partition(), time.milliseconds() - startTimeMs);
 
                 // This is the total size of segments in local log that have their base-offset > local-log-start-offset
                 // and size of the segments in remote storage which have their end-offset < local-log-start-offset.
@@ -1279,15 +1352,25 @@ public class RemoteLogManager implements Closeable {
         }
 
         RemoteLogSegmentMetadata remoteLogSegmentMetadata = rlsMetadataOptional.get();
-        int startPos = lookupPositionForOffset(remoteLogSegmentMetadata, offset);
         InputStream remoteSegInputStream = null;
         try {
-            // Search forward for the position of the last offset that is greater than or equal to the target offset
-            remoteSegInputStream = remoteLogStorageManager.fetchLogSegment(remoteLogSegmentMetadata, startPos);
-            RemoteLogInputStream remoteLogInputStream = new RemoteLogInputStream(remoteSegInputStream);
+            int startPos = 0;
+            RecordBatch firstBatch = null;
 
-            RecordBatch firstBatch = findFirstBatch(remoteLogInputStream, offset);
-
+            //  Iteration over multiple RemoteSegmentMetadata is required in case of log compaction.
+            //  It may be possible the offset is log compacted in the current RemoteLogSegmentMetadata
+            //  And we need to iterate over the next segment metadata to fetch messages higher than the given offset.
+            while (firstBatch == null && rlsMetadataOptional.isPresent()) {
+                remoteLogSegmentMetadata = rlsMetadataOptional.get();
+                // Search forward for the position of the last offset that is greater than or equal to the target offset
+                startPos = lookupPositionForOffset(remoteLogSegmentMetadata, offset);
+                remoteSegInputStream = remoteLogStorageManager.fetchLogSegment(remoteLogSegmentMetadata, startPos);
+                RemoteLogInputStream remoteLogInputStream = getRemoteLogInputStream(remoteSegInputStream);
+                firstBatch = findFirstBatch(remoteLogInputStream, offset);
+                if (firstBatch == null) {
+                    rlsMetadataOptional = findNextSegmentMetadata(rlsMetadataOptional.get(), logOptional.get().leaderEpochCache());
+                }
+            }
             if (firstBatch == null)
                 return new FetchDataInfo(new LogOffsetMetadata(offset), MemoryRecords.EMPTY, false,
                         includeAbortedTxns ? Optional.of(Collections.emptyList()) : Optional.empty());
@@ -1329,6 +1412,10 @@ public class RemoteLogManager implements Closeable {
         } finally {
             Utils.closeQuietly(remoteSegInputStream, "RemoteLogSegmentInputStream");
         }
+    }
+    // for testing
+    RemoteLogInputStream getRemoteLogInputStream(InputStream in) {
+        return new RemoteLogInputStream(in);
     }
 
     // Visible for testing
@@ -1403,8 +1490,9 @@ public class RemoteLogManager implements Closeable {
         }
     }
 
-    private Optional<RemoteLogSegmentMetadata> findNextSegmentMetadata(RemoteLogSegmentMetadata segmentMetadata,
-                                                                       Option<LeaderEpochFileCache> leaderEpochFileCacheOption) throws RemoteStorageException {
+    // visible for testing.
+    Optional<RemoteLogSegmentMetadata> findNextSegmentMetadata(RemoteLogSegmentMetadata segmentMetadata,
+                                                               Option<LeaderEpochFileCache> leaderEpochFileCacheOption) throws RemoteStorageException {
         if (leaderEpochFileCacheOption.isEmpty()) {
             return Optional.empty();
         }
@@ -1574,6 +1662,30 @@ public class RemoteLogManager implements Closeable {
         }
 
         LOGGER.info("Shutting down of thread pool {} is completed", poolName);
+    }
+
+    private void removeRemoteTopicPartitionMetrics(TopicIdPartition topicIdPartition) {
+        String topic = topicIdPartition.topic();
+        if (!brokerTopicStats.isTopicStatsExisted(topicIdPartition.topic())) {
+            // The topic metrics are already removed, removing this topic key from broker-level metrics
+            brokerTopicStats.removeBrokerLevelRemoteCopyLagBytes(topic);
+            brokerTopicStats.removeBrokerLevelRemoteCopyLagSegments(topic);
+            brokerTopicStats.removeBrokerLevelRemoteDeleteLagBytes(topic);
+            brokerTopicStats.removeBrokerLevelRemoteDeleteLagSegments(topic);
+            brokerTopicStats.removeBrokerLevelRemoteLogMetadataCount(topic);
+            brokerTopicStats.removeBrokerLevelRemoteLogSizeComputationTime(topic);
+            brokerTopicStats.removeBrokerLevelRemoteLogSizeBytes(topic);
+        } else {
+            int partition = topicIdPartition.partition();
+            // remove the partition metric values and update the broker-level metrics
+            brokerTopicStats.removeRemoteCopyLagBytes(topic, partition);
+            brokerTopicStats.removeRemoteCopyLagSegments(topic, partition);
+            brokerTopicStats.removeRemoteDeleteLagBytes(topic, partition);
+            brokerTopicStats.removeRemoteDeleteLagSegments(topic, partition);
+            brokerTopicStats.removeRemoteLogMetadataCount(topic, partition);
+            brokerTopicStats.removeRemoteLogSizeComputationTime(topic, partition);
+            brokerTopicStats.removeRemoteLogSizeBytes(topic, partition);
+        }
     }
 
     //Visible for testing

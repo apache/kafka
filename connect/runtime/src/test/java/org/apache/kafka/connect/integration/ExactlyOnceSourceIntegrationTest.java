@@ -500,7 +500,7 @@ public class ExactlyOnceSourceIntegrationTest {
         connectorHandle.expectedCommits(MINIMUM_MESSAGES);
 
         // make sure the worker is actually up (otherwise, it may fence out our simulated zombie leader, instead of the other way around)
-        assertEquals(404, connect.requestGet(connect.endpointForResource("connectors/nonexistent")).getStatus());
+        connect.assertions().assertExactlyNumWorkersAreUp(1, "Connect worker did not complete startup in time");
 
         // fence out the leader of the cluster
         Producer<?, ?> zombieLeader = transactionalProducer(
@@ -655,8 +655,9 @@ public class ExactlyOnceSourceIntegrationTest {
         startConnect();
 
         String topic = "test-topic";
-        Admin admin = connect.kafka().createAdminClient();
-        admin.createTopics(Collections.singleton(new NewTopic(topic, 3, (short) 1))).all().get();
+        try (Admin admin = connect.kafka().createAdminClient()) {
+            admin.createTopics(Collections.singleton(new NewTopic(topic, 3, (short) 1))).all().get();
+        }
 
         Map<String, String> props = new HashMap<>();
         int tasksMax = 2; // Use two tasks since single-task connectors don't require zombie fencing
@@ -680,16 +681,18 @@ public class ExactlyOnceSourceIntegrationTest {
                         + "password=\"connector_pwd\";");
         // Grant the connector's admin permissions to access the topics for its records and offsets
         // Intentionally leave out permissions required for fencing
-        admin.createAcls(Arrays.asList(
-                new AclBinding(
-                        new ResourcePattern(ResourceType.TOPIC, topic, PatternType.LITERAL),
-                        new AccessControlEntry("User:connector", "*", AclOperation.ALL, AclPermissionType.ALLOW)
-                ),
-                new AclBinding(
-                        new ResourcePattern(ResourceType.TOPIC, globalOffsetsTopic, PatternType.LITERAL),
-                        new AccessControlEntry("User:connector", "*", AclOperation.ALL, AclPermissionType.ALLOW)
-                )
-        )).all().get();
+        try (Admin admin = connect.kafka().createAdminClient()) {
+            admin.createAcls(Arrays.asList(
+                    new AclBinding(
+                            new ResourcePattern(ResourceType.TOPIC, topic, PatternType.LITERAL),
+                            new AccessControlEntry("User:connector", "*", AclOperation.ALL, AclPermissionType.ALLOW)
+                    ),
+                    new AclBinding(
+                            new ResourcePattern(ResourceType.TOPIC, globalOffsetsTopic, PatternType.LITERAL),
+                            new AccessControlEntry("User:connector", "*", AclOperation.ALL, AclPermissionType.ALLOW)
+                    )
+            )).all().get();
+        }
 
         StartAndStopLatch connectorStart = connectorAndTaskStart(tasksMax);
 
@@ -707,16 +710,18 @@ public class ExactlyOnceSourceIntegrationTest {
         connect.assertions().assertConnectorIsRunningAndTasksHaveFailed(CONNECTOR_NAME, tasksMax, "Task should have failed on startup");
 
         // Now grant the necessary permissions for fencing to the connector's admin
-        admin.createAcls(Arrays.asList(
-                new AclBinding(
-                        new ResourcePattern(ResourceType.TRANSACTIONAL_ID, Worker.taskTransactionalId(CLUSTER_GROUP_ID, CONNECTOR_NAME, 0), PatternType.LITERAL),
-                        new AccessControlEntry("User:connector", "*", AclOperation.ALL, AclPermissionType.ALLOW)
-                ),
-                new AclBinding(
-                        new ResourcePattern(ResourceType.TRANSACTIONAL_ID, Worker.taskTransactionalId(CLUSTER_GROUP_ID, CONNECTOR_NAME, 1), PatternType.LITERAL),
-                        new AccessControlEntry("User:connector", "*", AclOperation.ALL, AclPermissionType.ALLOW)
-                )
-        ));
+        try (Admin admin = connect.kafka().createAdminClient()) {
+            admin.createAcls(Arrays.asList(
+                    new AclBinding(
+                            new ResourcePattern(ResourceType.TRANSACTIONAL_ID, Worker.taskTransactionalId(CLUSTER_GROUP_ID, CONNECTOR_NAME, 0), PatternType.LITERAL),
+                            new AccessControlEntry("User:connector", "*", AclOperation.ALL, AclPermissionType.ALLOW)
+                    ),
+                    new AclBinding(
+                            new ResourcePattern(ResourceType.TRANSACTIONAL_ID, Worker.taskTransactionalId(CLUSTER_GROUP_ID, CONNECTOR_NAME, 1), PatternType.LITERAL),
+                            new AccessControlEntry("User:connector", "*", AclOperation.ALL, AclPermissionType.ALLOW)
+                    )
+            ));
+        }
 
         log.info("Restarting connector after tweaking its ACLs; fencing should succeed this time");
         connect.restartConnectorAndTasks(CONNECTOR_NAME, false, true, false);

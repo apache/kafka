@@ -64,6 +64,7 @@ import org.apache.kafka.common.errors.InvalidPartitionsException;
 import org.apache.kafka.common.errors.InvalidPidMappingException;
 import org.apache.kafka.common.errors.InvalidPrincipalTypeException;
 import org.apache.kafka.common.errors.InvalidProducerEpochException;
+import org.apache.kafka.common.errors.InvalidRegistrationException;
 import org.apache.kafka.common.errors.InvalidReplicaAssignmentException;
 import org.apache.kafka.common.errors.InvalidReplicationFactorException;
 import org.apache.kafka.common.errors.InvalidRequestException;
@@ -390,21 +391,22 @@ public enum Errors {
     UNSUPPORTED_ENDPOINT_TYPE(115, "This endpoint type is not supported yet.", UnsupportedEndpointTypeException::new),
     UNKNOWN_CONTROLLER_ID(116, "This controller ID is not known.", UnknownControllerIdException::new),
     UNKNOWN_SUBSCRIPTION_ID(117, "Client sent a push telemetry request with an invalid or outdated subscription ID.", UnknownSubscriptionIdException::new),
-    TELEMETRY_TOO_LARGE(118, "Client sent a push telemetry request larger than the maximum size the broker will accept.", TelemetryTooLargeException::new);
+    TELEMETRY_TOO_LARGE(118, "Client sent a push telemetry request larger than the maximum size the broker will accept.", TelemetryTooLargeException::new),
+    INVALID_REGISTRATION(119, "The controller has considered the broker registration to be invalid.", InvalidRegistrationException::new);
 
     private static final Logger log = LoggerFactory.getLogger(Errors.class);
 
-    private static Map<Class<?>, Errors> classToError = new HashMap<>();
-    private static Map<Short, Errors> codeToError = new HashMap<>();
+    private static final Map<Class<?>, Errors> CLASS_TO_ERROR = new HashMap<>();
+    private static final Map<Short, Errors> CODE_TO_ERROR = new HashMap<>();
 
     static {
         for (Errors error : Errors.values()) {
-            if (codeToError.put(error.code(), error) != null)
+            if (CODE_TO_ERROR.put(error.code(), error) != null)
                 throw new ExceptionInInitializerError("Code " + error.code() + " for error " +
                         error + " has already been used");
 
             if (error.exception != null)
-                classToError.put(error.exception.getClass(), error);
+                CLASS_TO_ERROR.put(error.exception.getClass(), error);
         }
     }
 
@@ -477,7 +479,7 @@ public enum Errors {
      * Throw the exception if there is one
      */
     public static Errors forCode(short code) {
-        Errors error = codeToError.get(code);
+        Errors error = CODE_TO_ERROR.get(code);
         if (error != null) {
             return error;
         } else {
@@ -494,7 +496,7 @@ public enum Errors {
         Throwable cause = maybeUnwrapException(t);
         Class<?> clazz = cause.getClass();
         while (clazz != null) {
-            Errors error = classToError.get(clazz);
+            Errors error = CLASS_TO_ERROR.get(clazz);
             if (error != null)
                 return error;
             clazz = clazz.getSuperclass();

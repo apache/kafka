@@ -37,7 +37,7 @@ class AclPublisher(
 
   override def name(): String = s"AclPublisher $nodeType id=$nodeId"
 
-  var completedInitialLoad = false
+  private var completedInitialLoad = false
 
   override def onMetadataUpdate(
     delta: MetadataDelta,

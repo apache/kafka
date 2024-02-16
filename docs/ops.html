@@ -1289,12 +1289,16 @@ $ bin/kafka-acls.sh \
 
   <h3 class="anchor-heading"><a id="java" class="anchor-link"></a><a href="#java">6.6 Java Version</a></h3>
 
-  Java 8, Java 11, and Java 17 are supported. Note that Java 8 support has been deprecated since Apache Kafka 3.0 and will be removed in Apache Kafka 4.0.
+  Java 8, Java 11, and Java 17 are supported.
+  <p>
+  Note that Java 8 support project-wide has been deprecated since Apache Kafka 3.0 and Java 11 support for the broker and tools
+  has been deprecated since Apache Kafka 3.7. Both will be removed in Apache Kafka 4.0.
+  <p>
   Java 11 and later versions perform significantly better if TLS is enabled, so they are highly recommended (they also include a number of other
   performance improvements: G1GC, CRC32C, Compact Strings, Thread-Local Handshakes and more).
-
+  <p>
   From a security perspective, we recommend the latest released patch version as older freely available versions have disclosed security vulnerabilities.
-
+  <p>
   Typical arguments for running Kafka with OpenJDK-based Java implementations (including Oracle JDK) are:
 
   <pre class="line-numbers"><code class="language-text">  -Xmx6g -Xms6g -XX:MetaspaceSize=96m -XX:+UseG1GC
@@ -1891,6 +1895,66 @@ $ bin/kafka-acls.sh \
         <td>Remote Copy Errors Per Sec</td>
         <td>Rate of write errors from remote storage per topic. Omitting 'topic=(...)' will yield the all-topic rate</td>
         <td>kafka.server:type=BrokerTopicMetrics,name=RemoteCopyErrorsPerSec,topic=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>Remote Copy Lag Bytes</td>
+        <td>Bytes which are eligible for tiering, but are not in remote storage yet. Omitting 'topic=(...)' will yield the all-topic sum</td>
+        <td>kafka.server:type=BrokerTopicMetrics,name=RemoteCopyLagBytes,topic=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>Remote Copy Lag Segments</td>
+        <td>Segments which are eligible for tiering, but are not in remote storage yet. Omitting 'topic=(...)' will yield the all-topic count</td>
+        <td>kafka.server:type=BrokerTopicMetrics,name=RemoteCopyLagSegments,topic=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>Remote Delete Requests Per Sec</td>
+        <td>Rate of delete requests to remote storage per topic. Omitting 'topic=(...)' will yield the all-topic rate</td>
+        <td>kafka.server:type=BrokerTopicMetrics,name=RemoteDeleteRequestsPerSec,topic=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>Remote Delete Errors Per Sec</td>
+        <td>Rate of delete errors from remote storage per topic. Omitting 'topic=(...)' will yield the all-topic rate</td>
+        <td>kafka.server:type=BrokerTopicMetrics,name=RemoteDeleteErrorsPerSec,topic=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>Remote Delete Lag Bytes</td>
+        <td>Tiered bytes which are eligible for deletion, but have not been deleted yet. Omitting 'topic=(...)' will yield the all-topic sum</td>
+        <td>kafka.server:type=BrokerTopicMetrics,name=RemoteDeleteLagBytes,topic=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>Remote Delete Lag Segments</td>
+        <td>Tiered segments which are eligible for deletion, but have not been deleted yet. Omitting 'topic=(...)' will yield the all-topic count</td>
+        <td>kafka.server:type=BrokerTopicMetrics,name=RemoteDeleteLagSegments,topic=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>Build Remote Log Aux State Requests Per Sec</td>
+        <td>Rate of requests for rebuilding the auxiliary state from remote storage per topic. Omitting 'topic=(...)' will yield the all-topic rate</td>
+        <td>kafka.server:type=BrokerTopicMetrics,name=BuildRemoteLogAuxStateRequestsPerSec,topic=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>Build Remote Log Aux State Errors Per Sec</td>
+        <td>Rate of errors for rebuilding the auxiliary state from remote storage per topic. Omitting 'topic=(...)' will yield the all-topic rate</td>
+        <td>kafka.server:type=BrokerTopicMetrics,name=BuildRemoteLogAuxStateErrorsPerSec,topic=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>Remote Log Size Computation Time</td>
+        <td>The amount of time needed to compute the size of the remote log. Omitting 'topic=(...)' will yield the all-topic time</td>
+        <td>kafka.server:type=BrokerTopicMetrics,name=RemoteLogSizeComputationTime,topic=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>Remote Log Size Bytes</td>
+        <td>The total size of a remote log in bytes. Omitting 'topic=(...)' will yield the all-topic sum</td>
+        <td>kafka.server:type=BrokerTopicMetrics,name=RemoteLogSizeBytes,topic=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>Remote Log Metadata Count</td>
+        <td>The total number of metadata entries for remote storage. Omitting 'topic=(...)' will yield the all-topic count</td>
+        <td>kafka.server:type=BrokerTopicMetrics,name=RemoteLogMetadataCount,topic=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>Delayed Remote Fetch Expires Per Sec</td>
+        <td>The number of expired remote fetches per second. Omitting 'topic=(...)' will yield the all-topic rate</td>
+        <td>kafka.server:type=DelayedRemoteFetchMetrics,name=ExpiresPerSec,topic=([-.\w]+)</td>
       </tr>
       <tr>
         <td>RemoteLogReader Task Queue Size</td>
@@ -3810,7 +3874,7 @@ zookeeper.connect=localhost:2181
   <p><em>Note: The KRaft cluster <code>node.id</code> values must be different from any existing ZK broker <code>broker.id</code>.
   In KRaft-mode, the brokers and controllers share the same Node ID namespace.</em></p>
 
-  <h3>Enabling the migration on the brokers</h3>
+  <h3>Enter Migration Mode on the Brokers</h3>
   <p>
     Once the KRaft controller quorum has been started, the brokers will need to be reconfigured and restarted. Brokers
     may be restarted in a rolling fashion to avoid impacting cluster availability. Each broker requires the
@@ -3855,9 +3919,10 @@ controller.listener.names=CONTROLLER</pre>
 
   <h3>Migrating brokers to KRaft</h3>
   <p>
-    Once the KRaft controller completes the metadata migration, the brokers will still be running in ZK mode. While the
-    KRaft controller is in migration mode, it will continue sending controller RPCs to the ZK mode brokers. This includes
-    RPCs like UpdateMetadata and LeaderAndIsr.
+    Once the KRaft controller completes the metadata migration, the brokers will still be running
+    in ZooKeeper mode. While the KRaft controller is in migration mode, it will continue sending
+    controller RPCs to the ZooKeeper mode brokers. This includes RPCs like UpdateMetadata and
+    LeaderAndIsr.
   </p>
 
   <p>
@@ -3892,19 +3957,15 @@ controller.listener.names=CONTROLLER</pre>
     Each broker is restarted with a KRaft configuration until the entire cluster is running in KRaft mode.
   </p>
 
-  <h3>Reverting to ZooKeeper mode During the Migration</h3>
-    While the cluster is still in migration mode, it is possible to revert to ZK mode. In order to do this:
-    <ol>
-      <li>One by one, take each KRaft broker down. Remove the __cluster_metadata directory on the broker. Then, restart the broker in ZooKeeper mode.</li>
-      <li>Take down the KRaft quorum.</li>
-      <li>Using ZooKeeper shell, delete the controller node using <code>rmr /controller</code>, so that a ZooKeeper-based broker can become the next controller.</li>
-    </ol>
-
   <h3>Finalizing the migration</h3>
   <p>
     Once all brokers have been restarted in KRaft mode, the last step to finalize the migration is to take the
     KRaft controllers out of migration mode. This is done by removing the "zookeeper.metadata.migration.enable"
     property from each of their configs and restarting them one at a time.
+  </p>
+  <p>
+    Once the migration has been finalized, you can safely deprovision your ZooKeeper cluster, assuming you are
+    not using it for anything else. After this point, it is no longer possible to revert to ZooKeeper mode.
   </p>
 
   <pre>
@@ -3922,6 +3983,136 @@ listeners=CONTROLLER://:9093
 # zookeeper.connect=localhost:2181
 
 # Other configs ...</pre>
+
+  <h3>Reverting to ZooKeeper mode During the Migration</h3>
+  <p>
+    While the cluster is still in migration mode, it is possible to revert to ZooKeeper mode.  The process
+    to follow depends on how far the migration has progressed. In order to find out how to revert,
+    select the <b>final</b> migration step that you have <b>completed</b> in this table.
+  </p>
+  <p>
+    Note that the directions given here assume that each step was fully completed, and they were
+    done in order. So, for example, we assume that if "Enter Migration Mode on the Brokers" was
+    completed, "Provisioning the KRaft controller quorum" was also fully completed previously.
+  </p>
+  <p>
+    If you did not fully complete any step, back out whatever you have done and then follow revert
+    directions for the last fully completed step.
+  </p>
+
+  <table class="data-table">
+      <tbody>
+      <tr>
+        <th>Final Migration Section Completed</th>
+        <th>Directions for Reverting</th>
+        <th>Notes</th>
+      </tr>
+      <tr>
+        <td>Preparing for migration</td>
+        <td>
+          The preparation section does not involve leaving ZooKeeper mode. So there is nothing to do in the
+          case of a revert.
+        </td>
+        <td>
+        </td>
+      </tr>
+      <tr>
+        <td>Provisioning the KRaft controller quorum</td>
+        <td>
+          <ul>
+            <li>
+              Deprovision the KRaft controller quorum.
+            </li>
+            <li>
+              Then you are done.
+            </li>
+          </ul>
+        </td>
+        <td>
+        </td>
+      </tr>
+      <tr>
+        <td>Enter Migration Mode on the brokers</td>
+        <td>
+          <ul>
+            <li>
+              Deprovision the KRaft controller quorum.
+            </li>
+            <li>
+              Using <code>zookeeper-shell.sh</code>, run <code>rmr /controller</code> so that one
+              of the brokers can become the new old-style controller.
+            </li>
+            <li>
+              On each broker, remove the <code>zookeeper.metadata.migration.enable</code>,
+              <code>controller.listener.names</code>, and <code>controller.quorum.voters</code>
+              configurations, and replace <code>node.id</code> with <code>broker.id</code>.
+              Then perform a rolling restart of all brokers.
+            </li>
+            <li>
+              Then you are done.
+            </li>
+          </ul>
+        </td>
+        <td>
+          It is important to perform the <code>zookeeper-shell.sh</code> step quickly, to minimize the amount of
+          time that the cluster lacks a controller.
+        </td>
+      </tr>
+      <tr>
+        <td>Migrating brokers to KRaft</td>
+        <td>
+          <ul>
+            <li>
+              On each broker, remove the <code>process.roles</code> configuration, and
+              restore the <code>zookeeper.connect</code> configuration to its previous value.
+              If your cluster requires other ZooKeeper configurations for brokers, such as
+              <code>zookeeper.ssl.protocol</code>, re-add those configurations as well.
+              Then perform a rolling restart of all brokers.
+            </li>
+            <li>
+              Deprovision the KRaft controller quorum.
+            </li>
+            <li>
+              Using <code>zookeeper-shell.sh</code>, run <code>rmr /controller</code> so that one
+              of the brokers can become the new old-style controller.
+            </li>
+            <li>
+              On each broker, remove the <code>zookeeper.metadata.migration.enable</code>,
+              <code>controller.listener.names</code>, and <code>controller.quorum.voters</code>
+              configurations. Replace <code>node.id</code> with <code>broker.id</code>.
+              Then perform a second rolling restart of all brokers.
+            </li>
+            <li>
+              Then you are done.
+            </li>
+          </ul>
+        </td>
+        <td>
+          <ul>
+            <li>
+              It is important to perform the <code>zookeeper-shell.sh</code> step <b>quickly</b>, to minimize the amount of
+              time that the cluster lacks a controller.
+            </li>
+            <li>
+              Make sure that on the first cluster roll, <code>zookeeper.metadata.migration.enable</code> remains set to
+              </code>true</code>. <b>Do not set it to false until the second cluster roll.</b>
+            </li>
+          </ul>
+        </td>
+      </tr>
+      <tr>
+        <td>Finalizing the migration</td>
+        <td>
+          If you have finalized the ZK migration, then you cannot revert.
+        </td>
+        <td>
+          Some users prefer to wait for a week or two before finalizing the migration. While this
+          requires you to keep the ZooKeeper cluster running for a while longer, it may be helpful
+          in validating KRaft mode in your cluster.
+        </td>
+      </tr>
+    </tbody>
+ </table>
 
 
 <h3 class="anchor-heading"><a id="tiered_storage" class="anchor-link"></a><a href="#kraft">6.11 Tiered Storage</a></h3>

@@ -49,7 +49,6 @@ import static org.apache.kafka.controller.PartitionChangeBuilder.Election;
 import static org.apache.kafka.controller.PartitionChangeBuilder.changeRecordIsNoOp;
 import static org.apache.kafka.metadata.LeaderConstants.NO_LEADER;
 import static org.apache.kafka.metadata.LeaderConstants.NO_LEADER_CHANGE;
-import static org.apache.kafka.metadata.util.MetadataFeatureUtil.withDirectoryAssignmentSupport;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -87,7 +86,7 @@ public class PartitionChangeBuilderTest {
         assertFalse(changeRecordIsNoOp(new PartitionChangeRecord().
                 setEligibleLeaderReplicas(Arrays.asList(5))));
         assertFalse(changeRecordIsNoOp(new PartitionChangeRecord().
-                setLastKnownELR(Arrays.asList(6))));
+                setLastKnownElr(Arrays.asList(6))));
         assertFalse(
             changeRecordIsNoOp(
                 new PartitionChangeRecord()
@@ -124,7 +123,7 @@ public class PartitionChangeBuilderTest {
             case (short) 1:
                 return MetadataVersion.IBP_3_7_IV2;
             case (short) 2:
-                return MetadataVersion.IBP_3_7_IV3;
+                return MetadataVersion.IBP_3_8_IV0;
             default:
                 throw new RuntimeException("Unknown PartitionChangeRecord version " + version);
         }
@@ -576,7 +575,7 @@ public class PartitionChangeBuilderTest {
         if (version >= 2) {
             // The test partition has ELR, so unclean election will clear these fiedls.
             record.setEligibleLeaderReplicas(Collections.emptyList())
-                .setLastKnownELR(Collections.emptyList());
+                .setLastKnownElr(Collections.emptyList());
         }
 
         expectedRecord = new ApiMessageAndVersion(record, version);
@@ -891,7 +890,7 @@ public class PartitionChangeBuilderTest {
 
         // Both versions will set the elr and lastKnownElr as empty list.
         record.setEligibleLeaderReplicas(Collections.emptyList())
-            .setLastKnownELR(Collections.emptyList());
+            .setLastKnownElr(Collections.emptyList());
         ApiMessageAndVersion expectedRecord = new ApiMessageAndVersion(record, version);
         assertEquals(Optional.of(expectedRecord), builder.build());
         partition = partition.merge((PartitionChangeRecord) builder.build().get().message());
@@ -936,9 +935,9 @@ public class PartitionChangeBuilderTest {
             .setLeaderRecoveryState(LeaderRecoveryState.NO_CHANGE);
         if (version < 2) {
             record.setEligibleLeaderReplicas(Collections.emptyList());
-            record.setLastKnownELR(Collections.emptyList());
+            record.setLastKnownElr(Collections.emptyList());
         }
-        // No change is expected to ELR/LastKnownELR.
+        // No change is expected to ELR/LastKnownElr.
         ApiMessageAndVersion expectedRecord = new ApiMessageAndVersion(record, version);
         assertEquals(Optional.of(expectedRecord), builder.build());
         partition = partition.merge((PartitionChangeRecord) builder.build().get().message());
@@ -988,7 +987,7 @@ public class PartitionChangeBuilderTest {
             .setLeaderRecoveryState(LeaderRecoveryState.NO_CHANGE);
         if (version >= 2) {
             record.setEligibleLeaderReplicas(Arrays.asList(2))
-                .setLastKnownELR(Arrays.asList(3));
+                .setLastKnownElr(Arrays.asList(3));
         } else {
             record.setEligibleLeaderReplicas(Collections.emptyList());
         }
@@ -1058,7 +1057,7 @@ public class PartitionChangeBuilderTest {
                 setPartitionEpoch(200).
                 build();
         Optional<ApiMessageAndVersion> built = new PartitionChangeBuilder(registration, FOO_ID,
-                0, r -> true, withDirectoryAssignmentSupport(MetadataVersion.latest()), 2).
+                0, r -> true, MetadataVersion.latestTesting(), 2).
                 setDirectory(3, Uuid.fromString("pN1VKs9zRzK4APflpegAVg")).
                 setDirectory(1, DirectoryId.LOST).
                 setDefaultDirProvider(DEFAULT_DIR_PROVIDER).
@@ -1162,7 +1161,7 @@ public class PartitionChangeBuilderTest {
             .setEligibleLeaderReplicas(Arrays.asList(1, 2, 3, 4));
 
         if (lastKnownLeaderEnabled) {
-            record.setLastKnownELR(Arrays.asList(1));
+            record.setLastKnownElr(Arrays.asList(1));
         }
 
         ApiMessageAndVersion expectedRecord = new ApiMessageAndVersion(record, version);
@@ -1179,7 +1178,7 @@ public class PartitionChangeBuilderTest {
                 .setDefaultDirProvider(DEFAULT_DIR_PROVIDER)
                 .setUseLastKnownLeaderInBalancedRecovery(lastKnownLeaderEnabled);
             PartitionChangeRecord changeRecord = (PartitionChangeRecord) builder.build().get().message();
-            assertTrue(changeRecord.lastKnownELR() == null, changeRecord.toString());
+            assertTrue(changeRecord.lastKnownElr() == null, changeRecord.toString());
         } else {
             assertTrue(Arrays.equals(new int[]{}, partition.lastKnownElr), partition.toString());
         }
@@ -1218,7 +1217,7 @@ public class PartitionChangeBuilderTest {
                 .setIsr(Arrays.asList(1))
                 .setLeader(1)
                 .setLeaderRecoveryState(LeaderRecoveryState.RECOVERING.value())
-                .setLastKnownELR(Collections.emptyList()),
+                .setLastKnownElr(Collections.emptyList()),
             version
         );
         assertEquals(Optional.of(expectedRecord), builder.build());

@@ -18,10 +18,9 @@ package kafka.coordinator.transaction
 
 import java.nio.ByteBuffer
 import java.util.Properties
-import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.locks.ReentrantReadWriteLock
-import kafka.server.{Defaults, ReplicaManager, RequestLocal}
+import kafka.server.{ReplicaManager, RequestLocal}
 import kafka.utils.CoreUtils.{inReadLock, inWriteLock}
 import kafka.utils.{Logging, Pool}
 import kafka.utils.Implicits._
@@ -36,6 +35,8 @@ import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.requests.TransactionResult
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.common.{KafkaException, TopicPartition}
+import org.apache.kafka.coordinator.transaction.{TransactionLogConfig, TransactionStateManagerConfig}
+import org.apache.kafka.server.config.Defaults
 import org.apache.kafka.server.record.BrokerCompressionType
 import org.apache.kafka.server.util.Scheduler
 import org.apache.kafka.storage.internals.log.{AppendOrigin, FetchIsolation}
@@ -43,17 +44,6 @@ import org.apache.kafka.storage.internals.log.{AppendOrigin, FetchIsolation}
 import scala.jdk.CollectionConverters._
 import scala.collection.mutable
 
-
-object TransactionStateManager {
-  // default transaction management config values
-  val DefaultTransactionsMaxTimeoutMs: Int = TimeUnit.MINUTES.toMillis(15).toInt
-  val DefaultTransactionalIdExpirationMs: Int = TimeUnit.DAYS.toMillis(7).toInt
-  val DefaultAbortTimedOutTransactionsIntervalMs: Int = TimeUnit.SECONDS.toMillis(10).toInt
-  val DefaultRemoveExpiredTransactionalIdsIntervalMs: Int = TimeUnit.HOURS.toMillis(1).toInt
-
-  val MetricsGroup: String = "transaction-coordinator-metrics"
-  val LoadTimeSensor: String = "TransactionsPartitionLoadTime"
-}
 
 /**
  * Transaction state manager is part of the transaction coordinator, it manages:
@@ -81,7 +71,7 @@ class TransactionStateManager(brokerId: Int,
 
   this.logIdent = "[Transaction State Manager " + brokerId + "]: "
 
-  type SendTxnMarkersCallback = (Int, TransactionResult, TransactionMetadata, TxnTransitMetadata) => Unit
+  private type SendTxnMarkersCallback = (Int, TransactionResult, TransactionMetadata, TxnTransitMetadata) => Unit
 
   /** shutting down flag */
   private val shuttingDown = new AtomicBoolean(false)
@@ -100,13 +90,13 @@ class TransactionStateManager(brokerId: Int,
   @volatile private var transactionTopicPartitionCount: Int = _
 
   /** setup metrics*/
-  private val partitionLoadSensor = metrics.sensor(TransactionStateManager.LoadTimeSensor)
+  private val partitionLoadSensor = metrics.sensor(TransactionStateManagerConfig.LOAD_TIME_SENSOR)
 
   partitionLoadSensor.add(metrics.metricName("partition-load-time-max",
-    TransactionStateManager.MetricsGroup,
+    TransactionStateManagerConfig.METRICS_GROUP,
     "The max time it took to load the partitions in the last 30sec"), new Max())
   partitionLoadSensor.add(metrics.metricName("partition-load-time-avg",
-    TransactionStateManager.MetricsGroup,
+    TransactionStateManagerConfig.METRICS_GROUP,
     "The avg time it took to load the partitions in the last 30sec"), new Avg())
 
   // visible for testing only
@@ -281,12 +271,12 @@ class TransactionStateManager(brokerId: Int,
 
     inReadLock(stateLock) {
       replicaManager.appendRecords(
-        config.requestTimeoutMs,
-        TransactionLog.EnforcedRequiredAcks,
+        timeout = config.requestTimeoutMs,
+        requiredAcks = TransactionLog.EnforcedRequiredAcks,
         internalTopicsAllowed = true,
         origin = AppendOrigin.COORDINATOR,
         entriesPerPartition = Map(transactionPartition -> tombstoneRecords),
-        removeFromCacheCallback,
+        responseCallback = removeFromCacheCallback,
         requestLocal = RequestLocal.NoCaching)
     }
   }
@@ -767,15 +757,15 @@ class TransactionStateManager(brokerId: Int,
           }
           if (append) {
             replicaManager.appendRecords(
-                newMetadata.txnTimeoutMs.toLong,
-                TransactionLog.EnforcedRequiredAcks,
-                internalTopicsAllowed = true,
-                origin = AppendOrigin.COORDINATOR,
-                recordsPerPartition,
-                updateCacheCallback,
-                requestLocal = requestLocal)
+              timeout = newMetadata.txnTimeoutMs.toLong,
+              requiredAcks = TransactionLog.EnforcedRequiredAcks,
+              internalTopicsAllowed = true,
+              origin = AppendOrigin.COORDINATOR,
+              entriesPerPartition = recordsPerPartition,
+              responseCallback = updateCacheCallback,
+              requestLocal = requestLocal)
 
-              trace(s"Appending new metadata $newMetadata for transaction id $transactionalId with coordinator epoch $coordinatorEpoch to the local transaction log")
+            trace(s"Appending new metadata $newMetadata for transaction id $transactionalId with coordinator epoch $coordinatorEpoch to the local transaction log")
           }
       }
     }
@@ -808,16 +798,16 @@ private[transaction] case class TxnMetadataCacheEntry(coordinatorEpoch: Int,
 private[transaction] case class CoordinatorEpochAndTxnMetadata(coordinatorEpoch: Int,
                                                                transactionMetadata: TransactionMetadata)
 
-private[transaction] case class TransactionConfig(transactionalIdExpirationMs: Int = TransactionStateManager.DefaultTransactionalIdExpirationMs,
-                                                  transactionMaxTimeoutMs: Int = TransactionStateManager.DefaultTransactionsMaxTimeoutMs,
-                                                  transactionLogNumPartitions: Int = TransactionLog.DefaultNumPartitions,
-                                                  transactionLogReplicationFactor: Short = TransactionLog.DefaultReplicationFactor,
-                                                  transactionLogSegmentBytes: Int = TransactionLog.DefaultSegmentBytes,
-                                                  transactionLogLoadBufferSize: Int = TransactionLog.DefaultLoadBufferSize,
-                                                  transactionLogMinInsyncReplicas: Int = TransactionLog.DefaultMinInSyncReplicas,
-                                                  abortTimedOutTransactionsIntervalMs: Int = TransactionStateManager.DefaultAbortTimedOutTransactionsIntervalMs,
-                                                  removeExpiredTransactionalIdsIntervalMs: Int = TransactionStateManager.DefaultRemoveExpiredTransactionalIdsIntervalMs,
-                                                  requestTimeoutMs: Int = Defaults.RequestTimeoutMs)
+private[transaction] case class TransactionConfig(transactionalIdExpirationMs: Int = TransactionStateManagerConfig.DEFAULT_TRANSACTIONAL_ID_EXPIRATION_MS,
+                                                  transactionMaxTimeoutMs: Int = TransactionStateManagerConfig.DEFAULT_TRANSACTIONS_MAX_TIMEOUT_MS,
+                                                  transactionLogNumPartitions: Int = TransactionLogConfig.DEFAULT_NUM_PARTITIONS,
+                                                  transactionLogReplicationFactor: Short = TransactionLogConfig.DEFAULT_REPLICATION_FACTOR,
+                                                  transactionLogSegmentBytes: Int = TransactionLogConfig.DEFAULT_SEGMENT_BYTES,
+                                                  transactionLogLoadBufferSize: Int = TransactionLogConfig.DEFAULT_LOAD_BUFFER_SIZE,
+                                                  transactionLogMinInsyncReplicas: Int = TransactionLogConfig.DEFAULT_MIN_IN_SYNC_REPLICAS,
+                                                  abortTimedOutTransactionsIntervalMs: Int = TransactionStateManagerConfig.DEFAULT_ABORT_TIMED_OUT_TRANSACTIONS_INTERVAL_MS,
+                                                  removeExpiredTransactionalIdsIntervalMs: Int = TransactionStateManagerConfig.DEFAULT_REMOVE_EXPIRED_TRANSACTIONAL_IDS_INTERVAL_MS,
+                                                  requestTimeoutMs: Int = Defaults.REQUEST_TIMEOUT_MS)
 
 case class TransactionalIdAndProducerIdEpoch(transactionalId: String, producerId: Long, producerEpoch: Short) {
   override def toString: String = {

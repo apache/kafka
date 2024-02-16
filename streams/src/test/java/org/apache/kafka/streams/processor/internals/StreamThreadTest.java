@@ -30,11 +30,13 @@ import org.apache.kafka.clients.producer.MockProducer;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.ProducerFencedException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.header.internals.RecordHeaders;
@@ -84,6 +86,7 @@ import org.apache.kafka.streams.state.internals.OffsetCheckpoint;
 import org.apache.kafka.test.MockApiProcessor;
 import org.apache.kafka.test.MockClientSupplier;
 import org.apache.kafka.test.MockKeyValueStoreBuilder;
+import org.apache.kafka.test.MockStandbyUpdateListener;
 import org.apache.kafka.test.MockStateRestoreListener;
 import org.apache.kafka.test.MockTimestampExtractor;
 import org.apache.kafka.test.StreamsTestUtils;
@@ -123,6 +126,7 @@ import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
@@ -149,6 +153,7 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.empty;
 import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.isA;
+import static org.hamcrest.core.IsInstanceOf.instanceOf;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
@@ -330,6 +335,7 @@ public class StreamThreadTest {
             0,
             stateDirectory,
             new MockStateRestoreListener(),
+            new MockStandbyUpdateListener(),
             threadIdx,
             null,
             HANDLER
@@ -734,6 +740,7 @@ public class StreamThreadTest {
             0,
             stateDirectory,
             new MockStateRestoreListener(),
+            new MockStandbyUpdateListener(),
             threadIdx,
             null,
             mockExceptionHandler
@@ -767,7 +774,7 @@ public class StreamThreadTest {
             mockTime
         );
 
-        when(consumer.poll(any())).thenReturn(ConsumerRecords.empty());
+        lenient().when(consumer.poll(any())).thenReturn(ConsumerRecords.empty());
         final ConsumerGroupMetadata consumerGroupMetadata = mock(ConsumerGroupMetadata.class);
         when(consumer.groupMetadata()).thenReturn(consumerGroupMetadata);
         when(consumerGroupMetadata.groupInstanceId()).thenReturn(Optional.empty());
@@ -795,6 +802,7 @@ public class StreamThreadTest {
             0,
             stateDirectory,
             new MockStateRestoreListener(),
+            new MockStandbyUpdateListener(),
             threadIdx,
             null,
             null
@@ -1486,6 +1494,7 @@ public class StreamThreadTest {
             changelogReader,
             null,
             taskManager,
+            null,
             streamsMetrics,
             new TopologyMetadata(internalTopologyBuilder, config),
             CLIENT_ID,
@@ -1941,6 +1950,7 @@ public class StreamThreadTest {
             0,
             stateDirectory,
             new MockStateRestoreListener(),
+            new MockStandbyUpdateListener(),
             threadIdx,
             null,
             HANDLER
@@ -2677,6 +2687,7 @@ public class StreamThreadTest {
             changelogReader,
             null,
             taskManager,
+            null,
             streamsMetrics,
             topologyMetadata,
             CLIENT_ID,
@@ -2733,6 +2744,7 @@ public class StreamThreadTest {
             changelogReader,
             null,
             taskManager,
+            null,
             streamsMetrics,
             topologyMetadata,
             CLIENT_ID,
@@ -2798,6 +2810,7 @@ public class StreamThreadTest {
             changelogReader,
             null,
             taskManager,
+            null,
             streamsMetrics,
             topologyMetadata,
             CLIENT_ID,
@@ -2859,6 +2872,7 @@ public class StreamThreadTest {
             changelogReader,
             null,
             taskManager,
+            null,
             streamsMetrics,
             topologyMetadata,
             CLIENT_ID,
@@ -2917,6 +2931,7 @@ public class StreamThreadTest {
             changelogReader,
             null,
             taskManager,
+            null,
             streamsMetrics,
             topologyMetadata,
             CLIENT_ID,
@@ -3121,6 +3136,7 @@ public class StreamThreadTest {
             changelogReader,
             null,
             taskManager,
+            null,
             streamsMetrics,
             topologyMetadata,
             CLIENT_ID,
@@ -3174,6 +3190,7 @@ public class StreamThreadTest {
             changelogReader,
             null,
             taskManager,
+            null,
             streamsMetrics,
             topologyMetadata,
             CLIENT_ID,
@@ -3248,6 +3265,8 @@ public class StreamThreadTest {
         thread = setUpThread(streamsConfigProps);
         thread.setState(State.STARTING);
         thread.setState(State.PARTITIONS_ASSIGNED);
+        thread.updateThreadMetadata("metadata");
+        thread.setState(State.RUNNING);
 
         runOnce();
 
@@ -3299,6 +3318,243 @@ public class StreamThreadTest {
         Mockito.verify(mainConsumer).poll(Duration.ZERO);
     }
 
+    @Test
+    public void shouldGetMainAndRestoreConsumerInstanceId() throws Exception {
+        getMainAndRestoreConsumerInstanceId(false);
+    }
+
+    @Test
+    public void shouldGetMainAndRestoreConsumerInstanceIdWithInternalTimeout() throws Exception {
+        getMainAndRestoreConsumerInstanceId(true);
+    }
+
+    private void getMainAndRestoreConsumerInstanceId(final boolean injectTimeException) throws Exception {
+        final Uuid consumerInstanceId = Uuid.randomUuid();
+        clientSupplier.consumer.setClientInstanceId(consumerInstanceId);
+        if (injectTimeException) {
+            clientSupplier.consumer.injectTimeoutException(1);
+        }
+        final Uuid restoreInstanceId = Uuid.randomUuid();
+        clientSupplier.restoreConsumer.setClientInstanceId(restoreInstanceId);
+        if (injectTimeException) {
+            clientSupplier.restoreConsumer.injectTimeoutException(1);
+        }
+
+        thread = createStreamThread("clientId");
+        thread.setState(State.STARTING);
+
+        final Map<String, KafkaFuture<Uuid>> consumerInstanceIdFutures = thread.consumerClientInstanceIds(Duration.ZERO);
+
+        thread.maybeGetClientInstanceIds(); // triggers internal timeout; should not crash
+        thread.maybeGetClientInstanceIds();
+
+        final KafkaFuture<Uuid> mainConsumerFuture = consumerInstanceIdFutures.get("clientId-StreamThread-1-consumer");
+        final Uuid mainConsumerUuid = mainConsumerFuture.get();
+        assertThat(mainConsumerUuid, equalTo(consumerInstanceId));
+
+        final KafkaFuture<Uuid> restoreConsumerFuture = consumerInstanceIdFutures.get("clientId-StreamThread-1-restore-consumer");
+        final Uuid restoreConsumerUuid = restoreConsumerFuture.get();
+        assertThat(restoreConsumerUuid, equalTo(restoreInstanceId));
+    }
+
+    @Test
+    public void shouldGetProducerInstanceId() throws Exception {
+        getProducerInstanceId(false);
+    }
+
+    @Test
+    public void shouldProducerInstanceIdAndInternalTimeout() throws Exception {
+        getProducerInstanceId(true);
+    }
+
+    private void getProducerInstanceId(final boolean injectTimeException) throws Exception {
+        final Uuid producerInstanceId = Uuid.randomUuid();
+        final MockProducer<byte[], byte[]> producer = new MockProducer<>();
+        producer.setClientInstanceId(producerInstanceId);
+        if (injectTimeException) {
+            producer.injectTimeoutException(1);
+        }
+        clientSupplier.prepareProducer(producer);
+
+        thread = createStreamThread("clientId");
+        thread.setState(State.STARTING);
+
+        final KafkaFuture<Map<String, KafkaFuture<Uuid>>> producerInstanceIdFutures =
+            thread.producersClientInstanceIds(Duration.ZERO);
+
+        thread.maybeGetClientInstanceIds(); // triggers internal timeout; should not crash
+        thread.maybeGetClientInstanceIds();
+
+        final KafkaFuture<Uuid> producerFuture = producerInstanceIdFutures.get().get("clientId-StreamThread-1-producer");
+        final Uuid producerUuid = producerFuture.get();
+        assertThat(producerUuid, equalTo(producerInstanceId));
+    }
+
+    @Test
+    public void shouldReturnErrorIfMainConsumerInstanceIdNotInitialized() {
+        thread = createStreamThread("clientId");
+        thread.setState(State.STARTING);
+
+        final Map<String, KafkaFuture<Uuid>> consumerFutures = thread.consumerClientInstanceIds(Duration.ZERO);
+
+        thread.maybeGetClientInstanceIds();
+
+        final KafkaFuture<Uuid> future = consumerFutures.get("clientId-StreamThread-1-consumer");
+        final ExecutionException error = assertThrows(ExecutionException.class, future::get);
+        assertThat(error.getCause(), instanceOf(UnsupportedOperationException.class));
+        assertThat(error.getCause().getMessage(), equalTo("clientInstanceId not set"));
+    }
+
+    @Test
+    public void shouldReturnErrorIfRestoreConsumerInstanceIdNotInitialized() {
+        thread = createStreamThread("clientId");
+        thread.setState(State.STARTING);
+
+        final Map<String, KafkaFuture<Uuid>> consumerFutures = thread.consumerClientInstanceIds(Duration.ZERO);
+
+        thread.maybeGetClientInstanceIds();
+
+        final KafkaFuture<Uuid> future = consumerFutures.get("clientId-StreamThread-1-restore-consumer");
+        final ExecutionException error = assertThrows(ExecutionException.class, future::get);
+        assertThat(error.getCause(), instanceOf(UnsupportedOperationException.class));
+        assertThat(error.getCause().getMessage(), equalTo("clientInstanceId not set"));
+    }
+
+    @Test
+    public void shouldReturnErrorIfProducerInstanceIdNotInitialized() throws Exception {
+        thread = createStreamThread("clientId");
+        thread.setState(State.STARTING);
+
+        final Map<String, KafkaFuture<Uuid>> producerFutures = thread.producersClientInstanceIds(Duration.ZERO).get();
+
+        thread.maybeGetClientInstanceIds();
+
+        final KafkaFuture<Uuid> future = producerFutures.get("clientId-StreamThread-1-producer");
+        final ExecutionException error = assertThrows(ExecutionException.class, future::get);
+        assertThat(error.getCause(), instanceOf(UnsupportedOperationException.class));
+        assertThat(error.getCause().getMessage(), equalTo("clientInstanceId not set"));
+    }
+
+    @Test
+    public void shouldReturnNullIfMainConsumerTelemetryDisabled() throws Exception {
+        clientSupplier.consumer.disableTelemetry();
+        thread = createStreamThread("clientId");
+        thread.setState(State.STARTING);
+
+        final Map<String, KafkaFuture<Uuid>> consumerFutures = thread.consumerClientInstanceIds(Duration.ZERO);
+
+        thread.maybeGetClientInstanceIds();
+
+        final KafkaFuture<Uuid> future = consumerFutures.get("clientId-StreamThread-1-consumer");
+        final Uuid clientInstanceId = future.get();
+        assertThat(clientInstanceId, equalTo(null));
+    }
+
+    @Test
+    public void shouldReturnNullIfRestoreConsumerTelemetryDisabled() throws Exception {
+        clientSupplier.restoreConsumer.disableTelemetry();
+
+        thread = createStreamThread("clientId");
+        thread.setState(State.STARTING);
+
+        final Map<String, KafkaFuture<Uuid>> consumerFutures = thread.consumerClientInstanceIds(Duration.ZERO);
+
+        thread.maybeGetClientInstanceIds();
+
+        final KafkaFuture<Uuid> future = consumerFutures.get("clientId-StreamThread-1-restore-consumer");
+        final Uuid clientInstanceId = future.get();
+        assertThat(clientInstanceId, equalTo(null));
+    }
+
+    @Test
+    public void shouldReturnNullIfProducerTelemetryDisabled() throws Exception {
+        final MockProducer<byte[], byte[]> producer = new MockProducer<>();
+        producer.disableTelemetry();
+        clientSupplier.prepareProducer(producer);
+
+        thread = createStreamThread("clientId");
+        thread.setState(State.STARTING);
+
+        final Map<String, KafkaFuture<Uuid>> producerFutures = thread.producersClientInstanceIds(Duration.ZERO).get();
+
+        thread.maybeGetClientInstanceIds();
+
+        final KafkaFuture<Uuid> future = producerFutures.get("clientId-StreamThread-1-producer");
+        final Uuid clientInstanceId = future.get();
+        assertThat(clientInstanceId, equalTo(null));
+    }
+
+    @Test
+    public void shouldTimeOutOnMainConsumerInstanceId() {
+        clientSupplier.consumer.setClientInstanceId(Uuid.randomUuid());
+        clientSupplier.consumer.injectTimeoutException(-1);
+        thread = createStreamThread("clientId");
+        thread.setState(State.STARTING);
+
+        final Map<String, KafkaFuture<Uuid>> consumerFutures = thread.consumerClientInstanceIds(Duration.ZERO);
+
+        mockTime.sleep(1L);
+
+        thread.maybeGetClientInstanceIds();
+
+        final KafkaFuture<Uuid> future = consumerFutures.get("clientId-StreamThread-1-consumer");
+        final ExecutionException error = assertThrows(ExecutionException.class, future::get);
+        assertThat(error.getCause(), instanceOf(TimeoutException.class));
+        assertThat(
+            error.getCause().getMessage(),
+            equalTo("Could not retrieve main consumer client instance id.")
+        );
+    }
+
+
+    @Test
+    public void shouldTimeOutOnRestoreConsumerInstanceId() {
+        clientSupplier.restoreConsumer.setClientInstanceId(Uuid.randomUuid());
+        clientSupplier.restoreConsumer.injectTimeoutException(-1);
+        thread = createStreamThread("clientId");
+        thread.setState(State.STARTING);
+
+        final Map<String, KafkaFuture<Uuid>> consumerFutures = thread.consumerClientInstanceIds(Duration.ZERO);
+
+        mockTime.sleep(1L);
+
+        thread.maybeGetClientInstanceIds();
+
+        final KafkaFuture<Uuid> future = consumerFutures.get("clientId-StreamThread-1-restore-consumer");
+
+        final ExecutionException error = assertThrows(ExecutionException.class, future::get);
+        assertThat(error.getCause(), instanceOf(TimeoutException.class));
+        assertThat(
+            error.getCause().getMessage(),
+            equalTo("Could not retrieve restore consumer client instance id.")
+        );
+    }
+
+    @Test
+    public void shouldTimeOutOnProducerInstanceId() throws Exception {
+        final MockProducer<byte[], byte[]> producer = new MockProducer<>();
+        producer.setClientInstanceId(Uuid.randomUuid());
+        producer.injectTimeoutException(-1);
+        clientSupplier.prepareProducer(producer);
+
+        thread = createStreamThread("clientId");
+        thread.setState(State.STARTING);
+
+        final Map<String, KafkaFuture<Uuid>> producerFutures = thread.producersClientInstanceIds(Duration.ZERO).get();
+
+        mockTime.sleep(1L);
+
+        thread.maybeGetClientInstanceIds();
+
+        final KafkaFuture<Uuid> future = producerFutures.get("clientId-StreamThread-1-producer");
+        final ExecutionException error = assertThrows(ExecutionException.class, future::get);
+        assertThat(error.getCause(), instanceOf(TimeoutException.class));
+        assertThat(
+            error.getCause().getMessage(),
+            equalTo("Could not retrieve thread producer client instance id.")
+        );
+    }
+
     private StreamThread setUpThread(final Properties streamsConfigProps) {
         final StreamsConfig config = new StreamsConfig(streamsConfigProps);
         final ConsumerGroupMetadata consumerGroupMetadata = Mockito.mock(ConsumerGroupMetadata.class);
@@ -3318,6 +3574,7 @@ public class StreamThreadTest {
             changelogReader,
             "",
             taskManager,
+            null,
             new StreamsMetricsImpl(metrics, CLIENT_ID, StreamsConfig.METRICS_LATEST, mockTime),
             topologyMetadata,
             "thread-id",
@@ -3438,6 +3695,7 @@ public class StreamThreadTest {
             changelogReader,
             null,
             taskManager,
+            null,
             streamsMetrics,
             topologyMetadata,
             CLIENT_ID,

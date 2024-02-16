@@ -97,7 +97,7 @@ public class StreamsUncaughtExceptionHandlerIntegrationTest {
     @Rule
     public final TestName testName = new TestName();
 
-    private final String testId = safeUniqueTestName(getClass(), testName);
+    private final String testId = safeUniqueTestName(testName);
     private final String appId = "appId_" + testId;
     private final String inputTopic = "input" + testId;
     private final String inputTopic2 = "input2" + testId;

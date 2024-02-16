@@ -17,12 +17,12 @@
 package org.apache.kafka.connect.runtime.rest;
 
 import org.apache.kafka.connect.runtime.Herder;
-import org.apache.kafka.connect.runtime.rest.resources.ConnectResource;
 import org.apache.kafka.connect.runtime.rest.resources.ConnectorPluginsResource;
 import org.apache.kafka.connect.runtime.rest.resources.ConnectorsResource;
 import org.apache.kafka.connect.runtime.rest.resources.InternalConnectResource;
 import org.apache.kafka.connect.runtime.rest.resources.LoggingResource;
 import org.apache.kafka.connect.runtime.rest.resources.RootResource;
+import org.glassfish.hk2.utilities.binding.AbstractBinder;
 import org.glassfish.jersey.server.ResourceConfig;
 
 import java.util.Arrays;
@@ -45,25 +45,40 @@ public class ConnectRestServer extends RestServer {
     }
 
     @Override
-    protected Collection<ConnectResource> regularResources() {
+    protected Collection<Class<?>> regularResources() {
         return Arrays.asList(
-                new RootResource(herder),
-                new ConnectorsResource(herder, config, restClient),
-                new InternalConnectResource(herder, restClient),
-                new ConnectorPluginsResource(herder)
+                RootResource.class,
+                ConnectorsResource.class,
+                InternalConnectResource.class,
+                ConnectorPluginsResource.class
         );
     }
 
     @Override
-    protected Collection<ConnectResource> adminResources() {
+    protected Collection<Class<?>> adminResources() {
         return Arrays.asList(
-                new LoggingResource(herder)
+                LoggingResource.class
         );
     }
 
     @Override
     protected void configureRegularResources(ResourceConfig resourceConfig) {
         registerRestExtensions(herder, resourceConfig);
+        resourceConfig.register(new Binder());
+    }
+
+    private class Binder extends AbstractBinder {
+        @Override
+        protected void configure() {
+            bind(herder).to(Herder.class);
+            bind(restClient).to(RestClient.class);
+            bind(config).to(RestServerConfig.class);
+        }
+    }
+
+    @Override
+    protected void configureAdminResources(ResourceConfig resourceConfig) {
+        resourceConfig.register(new Binder());
     }
 
 }

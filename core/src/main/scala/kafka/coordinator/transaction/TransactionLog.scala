@@ -38,13 +38,6 @@ import scala.jdk.CollectionConverters._
  */
 object TransactionLog {
 
-  // log-level config default values and enforced values
-  val DefaultNumPartitions: Int = 50
-  val DefaultSegmentBytes: Int = 100 * 1024 * 1024
-  val DefaultReplicationFactor: Short = 3.toShort
-  val DefaultMinInSyncReplicas: Int = 2
-  val DefaultLoadBufferSize: Int = 5 * 1024 * 1024
-
   // enforce always using
   //  1. cleanup policy = compact
   //  2. compression = none

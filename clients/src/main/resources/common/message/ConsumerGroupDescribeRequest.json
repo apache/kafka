@@ -19,10 +19,6 @@
   "listeners": ["zkBroker", "broker"],
   "name": "ConsumerGroupDescribeRequest",
   "validVersions": "0",
-  // The ConsumerGroupDescribe API is added as part of KIP-848 and is still
-  // under development. Hence, the API is not exposed by default by brokers
-  // unless explicitly enabled.
-  "latestVersionUnstable": true,
   "flexibleVersions": "0+",
   "fields": [
     { "name": "GroupIds", "type": "[]string", "versions": "0+", "entityType": "groupId",

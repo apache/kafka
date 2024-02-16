@@ -123,7 +123,7 @@ public class BrokerRegistration {
         }
 
         public Builder setDirectories(List<Uuid> directories) {
-            this.directories = new ArrayList<>(directories);
+            this.directories = directories;
             return this;
         }
 
@@ -264,8 +264,32 @@ public class BrokerRegistration {
         return isMigratingZkBroker;
     }
 
+    public List<Uuid> directories() {
+        return directories;
+    }
+
     public boolean hasOnlineDir(Uuid dir) {
         return DirectoryId.isOnline(dir, directories);
+    }
+
+    public List<Uuid> directoryIntersection(List<Uuid> otherDirectories) {
+        List<Uuid> results = new ArrayList<>();
+        for (Uuid directory : directories) {
+            if (otherDirectories.contains(directory)) {
+                results.add(directory);
+            }
+        }
+        return results;
+    }
+
+    public List<Uuid> directoryDifference(List<Uuid> otherDirectories) {
+        List<Uuid> results = new ArrayList<>();
+        for (Uuid directory : directories) {
+            if (!otherDirectories.contains(directory)) {
+                results.add(directory);
+            }
+        }
+        return results;
     }
 
     public ApiMessageAndVersion toRecord(ImageWriterOptions options) {
@@ -366,12 +390,14 @@ public class BrokerRegistration {
 
     public BrokerRegistration cloneWith(
         Optional<Boolean> fencingChange,
-        Optional<Boolean> inControlledShutdownChange
+        Optional<Boolean> inControlledShutdownChange,
+        Optional<List<Uuid>> directoriesChange
     ) {
         boolean newFenced = fencingChange.orElse(fenced);
         boolean newInControlledShutdownChange = inControlledShutdownChange.orElse(inControlledShutdown);
+        List<Uuid> newDirectories = directoriesChange.orElse(directories);
 
-        if (newFenced == fenced && newInControlledShutdownChange == inControlledShutdown)
+        if (newFenced == fenced && newInControlledShutdownChange == inControlledShutdown && newDirectories.equals(directories))
             return this;
 
         return new BrokerRegistration(
@@ -384,7 +410,7 @@ public class BrokerRegistration {
             newFenced,
             newInControlledShutdownChange,
             isMigratingZkBroker,
-            directories
+            newDirectories
         );
     }
 }

@@ -200,17 +200,18 @@ public class PartitionRegistration {
             record.leaderEpoch(),
             record.partitionEpoch(),
             Replicas.toArray(record.eligibleLeaderReplicas()),
-            Replicas.toArray(record.lastKnownELR()));
+            Replicas.toArray(record.lastKnownElr()));
     }
 
     private PartitionRegistration(int[] replicas, Uuid[] directories, int[] isr, int[] removingReplicas,
                                  int[] addingReplicas, int leader, LeaderRecoveryState leaderRecoveryState,
                                  int leaderEpoch, int partitionEpoch, int[] elr, int[] lastKnownElr) {
-        if (directories != null && directories.length > 0 && directories.length != replicas.length) {
+        Objects.requireNonNull(directories);
+        if (directories.length > 0 && directories.length != replicas.length) {
             throw new IllegalArgumentException("The lengths for replicas and directories do not match.");
         }
         this.replicas = replicas;
-        this.directories = Objects.requireNonNull(directories);
+        this.directories = directories;
         this.isr = isr;
         this.removingReplicas = removingReplicas;
         this.addingReplicas = addingReplicas;
@@ -254,7 +255,7 @@ public class PartitionRegistration {
         LeaderRecoveryState newLeaderRecoveryState = leaderRecoveryState.changeTo(record.leaderRecoveryState());
 
         int[] newElr = (record.eligibleLeaderReplicas() == null) ? elr : Replicas.toArray(record.eligibleLeaderReplicas());
-        int[] newLastKnownElr = (record.lastKnownELR() == null) ? lastKnownElr : Replicas.toArray(record.lastKnownELR());
+        int[] newLastKnownElr = (record.lastKnownElr() == null) ? lastKnownElr : Replicas.toArray(record.lastKnownElr());
         return new PartitionRegistration(newReplicas,
             defaultToMigrating(newDirectories, replicas.length),
             newIsr,
@@ -380,7 +381,7 @@ public class PartitionRegistration {
             // The following are tagged fields, we should only set them when there are some contents, in order to save
             // spaces.
             if (elr.length > 0) record.setEligibleLeaderReplicas(Replicas.toList(elr));
-            if (lastKnownElr.length > 0) record.setLastKnownELR(Replicas.toList(lastKnownElr));
+            if (lastKnownElr.length > 0) record.setLastKnownElr(Replicas.toList(lastKnownElr));
         }
         if (options.metadataVersion().isDirectoryAssignmentSupported()) {
             record.setDirectories(Uuid.toList(directories));

@@ -42,6 +42,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -59,21 +60,28 @@ import static org.apache.kafka.coordinator.group.consumer.ConsumerGroup.Consumer
 public class ConsumerGroup implements Group {
 
     public enum ConsumerGroupState {
-        EMPTY("empty"),
-        ASSIGNING("assigning"),
-        RECONCILING("reconciling"),
-        STABLE("stable"),
-        DEAD("dead");
+        EMPTY("Empty"),
+        ASSIGNING("Assigning"),
+        RECONCILING("Reconciling"),
+        STABLE("Stable"),
+        DEAD("Dead");
 
         private final String name;
 
+        private final String lowerCaseName;
+
         ConsumerGroupState(String name) {
             this.name = name;
+            this.lowerCaseName = name.toLowerCase(Locale.ROOT);
         }
 
         @Override
         public String toString() {
             return name;
+        }
+
+        public String toLowerCaseString() {
+            return lowerCaseName;
         }
     }
 
@@ -190,8 +198,6 @@ public class ConsumerGroup implements Group {
         this.targetAssignment = new TimelineHashMap<>(snapshotRegistry, 0);
         this.currentPartitionEpoch = new TimelineHashMap<>(snapshotRegistry, 0);
         this.metrics = Objects.requireNonNull(metrics);
-
-        metrics.onConsumerGroupStateTransition(null, this.state.get());
     }
 
     /**
@@ -653,12 +659,15 @@ public class ConsumerGroup implements Group {
      * @param memberId          The member id.
      * @param groupInstanceId   The group instance id.
      * @param memberEpoch       The member epoch.
+     * @param isTransactional   Whether the offset commit is transactional or not. It has no
+     *                          impact when a consumer group is used.
      */
     @Override
     public void validateOffsetCommit(
         String memberId,
         String groupInstanceId,
-        int memberEpoch
+        int memberEpoch,
+        boolean isTransactional
     ) throws UnknownMemberIdException, StaleMemberEpochException {
         // When the member epoch is -1, the request comes from either the admin client
         // or a consumer which does not use the group management facility. In this case,
@@ -736,6 +745,11 @@ public class ConsumerGroup implements Group {
     @Override
     public Optional<OffsetExpirationCondition> offsetExpirationCondition() {
         return Optional.of(new OffsetExpirationConditionImpl(offsetAndMetadata -> offsetAndMetadata.commitTimestampMs));
+    }
+
+    @Override
+    public boolean isInStates(Set<String> statesFilter, long committedOffset) {
+        return statesFilter.contains(state.get(committedOffset).toLowerCaseString());
     }
 
     /**
@@ -860,19 +874,9 @@ public class ConsumerGroup implements Group {
         ConsumerGroupMember oldMember,
         ConsumerGroupMember newMember
     ) {
-        if (oldMember == null) {
-            addPartitionEpochs(newMember.assignedPartitions(), newMember.memberEpoch());
-            addPartitionEpochs(newMember.partitionsPendingRevocation(), newMember.memberEpoch());
-        } else {
-            if (!oldMember.assignedPartitions().equals(newMember.assignedPartitions())) {
-                removePartitionEpochs(oldMember.assignedPartitions());
-                addPartitionEpochs(newMember.assignedPartitions(), newMember.memberEpoch());
-            }
-            if (!oldMember.partitionsPendingRevocation().equals(newMember.partitionsPendingRevocation())) {
-                removePartitionEpochs(oldMember.partitionsPendingRevocation());
-                addPartitionEpochs(newMember.partitionsPendingRevocation(), newMember.memberEpoch());
-            }
-        }
+        maybeRemovePartitionEpoch(oldMember);
+        addPartitionEpochs(newMember.assignedPartitions(), newMember.memberEpoch());
+        addPartitionEpochs(newMember.partitionsPendingRevocation(), newMember.memberEpoch());
     }
 
     /**
@@ -884,8 +888,8 @@ public class ConsumerGroup implements Group {
         ConsumerGroupMember oldMember
     ) {
         if (oldMember != null) {
-            removePartitionEpochs(oldMember.assignedPartitions());
-            removePartitionEpochs(oldMember.partitionsPendingRevocation());
+            removePartitionEpochs(oldMember.assignedPartitions(), oldMember.memberEpoch());
+            removePartitionEpochs(oldMember.partitionsPendingRevocation(), oldMember.memberEpoch());
         }
     }
 
@@ -893,21 +897,34 @@ public class ConsumerGroup implements Group {
      * Removes the partition epochs based on the provided assignment.
      *
      * @param assignment    The assignment.
+     * @param expectedEpoch The expected epoch.
+     * @throws IllegalStateException if the epoch does not match the expected one.
+     * package-private for testing.
      */
-    private void removePartitionEpochs(
-        Map<Uuid, Set<Integer>> assignment
+    void removePartitionEpochs(
+        Map<Uuid, Set<Integer>> assignment,
+        int expectedEpoch
     ) {
         assignment.forEach((topicId, assignedPartitions) -> {
             currentPartitionEpoch.compute(topicId, (__, partitionsOrNull) -> {
                 if (partitionsOrNull != null) {
-                    assignedPartitions.forEach(partitionsOrNull::remove);
+                    assignedPartitions.forEach(partitionId -> {
+                        Integer prevValue = partitionsOrNull.remove(partitionId);
+                        if (prevValue != expectedEpoch) {
+                            throw new IllegalStateException(
+                                String.format("Cannot remove the epoch %d from %s-%s because the partition is " +
+                                    "still owned at a different epoch %d", expectedEpoch, topicId, partitionId, prevValue));
+                        }
+                    });
                     if (partitionsOrNull.isEmpty()) {
                         return null;
                     } else {
                         return partitionsOrNull;
                     }
                 } else {
-                    return null;
+                    throw new IllegalStateException(
+                        String.format("Cannot remove the epoch %d from %s because it does not have any epoch",
+                            expectedEpoch, topicId));
                 }
             });
         });
@@ -918,8 +935,10 @@ public class ConsumerGroup implements Group {
      *
      * @param assignment    The assignment.
      * @param epoch         The new epoch.
+     * @throws IllegalStateException if the partition already has an epoch assigned.
+     * package-private for testing.
      */
-    private void addPartitionEpochs(
+    void addPartitionEpochs(
         Map<Uuid, Set<Integer>> assignment,
         int epoch
     ) {
@@ -929,7 +948,12 @@ public class ConsumerGroup implements Group {
                     partitionsOrNull = new TimelineHashMap<>(snapshotRegistry, assignedPartitions.size());
                 }
                 for (Integer partitionId : assignedPartitions) {
-                    partitionsOrNull.put(partitionId, epoch);
+                    Integer prevValue = partitionsOrNull.put(partitionId, epoch);
+                    if (prevValue != null) {
+                        throw new IllegalStateException(
+                            String.format("Cannot set the epoch of %s-%s to %d because the partition is " +
+                                "still owned at epoch %d", topicId, partitionId, epoch, prevValue));
+                    }
                 }
                 return partitionsOrNull;
             });
@@ -952,7 +976,11 @@ public class ConsumerGroup implements Group {
         return value == null ? 1 : value + 1;
     }
 
-    public ConsumerGroupDescribeResponseData.DescribedGroup asDescribedGroup(long committedOffset, String defaultAssignor) {
+    public ConsumerGroupDescribeResponseData.DescribedGroup asDescribedGroup(
+        long committedOffset,
+        String defaultAssignor,
+        TopicsImage topicsImage
+    ) {
         ConsumerGroupDescribeResponseData.DescribedGroup describedGroup = new ConsumerGroupDescribeResponseData.DescribedGroup()
             .setGroupId(groupId)
             .setAssignorName(preferredServerAssignor(committedOffset).orElse(defaultAssignor))
@@ -961,7 +989,10 @@ public class ConsumerGroup implements Group {
             .setAssignmentEpoch(targetAssignmentEpoch.get(committedOffset));
         members.entrySet(committedOffset).forEach(
             entry -> describedGroup.members().add(
-                entry.getValue().asConsumerGroupDescribeMember(targetAssignment.get(entry.getValue().memberId(), committedOffset))
+                entry.getValue().asConsumerGroupDescribeMember(
+                    targetAssignment.get(entry.getValue().memberId(), committedOffset),
+                    topicsImage
+                )
             )
         );
         return describedGroup;

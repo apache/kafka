@@ -29,9 +29,12 @@ import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.metrics.stats.Meter
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
+import org.apache.kafka.common.record.RecordBatch
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.utils.Time
+import org.apache.kafka.coordinator.group.OffsetConfig
 import org.apache.kafka.server.record.BrokerCompressionType
+import org.apache.kafka.storage.internals.log.VerificationGuard
 
 import scala.collection.{Map, Seq, Set, immutable, mutable}
 import scala.math.max
@@ -909,8 +912,37 @@ private[group] class GroupCoordinator(
         val group = groupManager.getGroup(groupId).getOrElse {
           groupManager.addGroup(new GroupMetadata(groupId, Empty, time))
         }
-        doTxnCommitOffsets(group, transactionalId, memberId, groupInstanceId, generationId, producerId, producerEpoch,
-          offsetMetadata, requestLocal, responseCallback)
+
+        val offsetTopicPartition = new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, partitionFor(group.groupId))
+
+        def postVerificationCallback(
+          newRequestLocal: RequestLocal,
+          errorAndGuard: (Errors, VerificationGuard)
+        ): Unit = {
+          val (error, verificationGuard) = errorAndGuard
+          if (error != Errors.NONE) {
+            val finalError = GroupMetadataManager.maybeConvertOffsetCommitError(error)
+            responseCallback(offsetMetadata.map { case (k, _) => k -> finalError })
+          } else {
+            doTxnCommitOffsets(group, memberId, groupInstanceId, generationId, producerId, producerEpoch,
+              offsetTopicPartition, offsetMetadata, newRequestLocal, responseCallback, Some(verificationGuard))
+          }
+        }
+
+        groupManager.replicaManager.maybeStartTransactionVerificationForPartition(
+          topicPartition = offsetTopicPartition,
+          transactionalId,
+          producerId,
+          producerEpoch,
+          RecordBatch.NO_SEQUENCE,
+          // Wrap the callback to be handled on an arbitrary request handler thread
+          // when transaction verification is complete. The request local passed in
+          // is only used when the callback is executed immediately.
+          KafkaRequestHandler.wrapAsyncCallback(
+            postVerificationCallback,
+            requestLocal
+          )
+        )
     }
   }
 
@@ -952,15 +984,16 @@ private[group] class GroupCoordinator(
   }
 
   private def doTxnCommitOffsets(group: GroupMetadata,
-                                 transactionalId: String,
                                  memberId: String,
                                  groupInstanceId: Option[String],
                                  generationId: Int,
                                  producerId: Long,
                                  producerEpoch: Short,
+                                 offsetTopicPartition: TopicPartition,
                                  offsetMetadata: immutable.Map[TopicIdPartition, OffsetAndMetadata],
                                  requestLocal: RequestLocal,
-                                 responseCallback: immutable.Map[TopicIdPartition, Errors] => Unit): Unit = {
+                                 responseCallback: immutable.Map[TopicIdPartition, Errors] => Unit,
+                                 verificationGuard: Option[VerificationGuard]): Unit = {
     group.inLock {
       val validationErrorOpt = validateOffsetCommit(
         group,
@@ -973,8 +1006,8 @@ private[group] class GroupCoordinator(
       if (validationErrorOpt.isDefined) {
         responseCallback(offsetMetadata.map { case (k, _) => k -> validationErrorOpt.get })
       } else {
-        groupManager.storeOffsets(group, memberId, offsetMetadata, responseCallback, transactionalId, producerId,
-          producerEpoch, requestLocal)
+        groupManager.storeOffsets(group, memberId, offsetTopicPartition, offsetMetadata, responseCallback, producerId,
+          producerEpoch, requestLocal, verificationGuard)
       }
     }
   }
@@ -1033,19 +1066,21 @@ private[group] class GroupCoordinator(
         isTransactional = false
       )
 
+      val offsetTopicPartition = new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, partitionFor(group.groupId))
+
       if (validationErrorOpt.isDefined) {
         responseCallback(offsetMetadata.map { case (k, _) => k -> validationErrorOpt.get })
       } else {
         group.currentState match {
           case Empty =>
-            groupManager.storeOffsets(group, memberId, offsetMetadata, responseCallback)
+            groupManager.storeOffsets(group, memberId, offsetTopicPartition, offsetMetadata, responseCallback, verificationGuard = None)
 
           case Stable | PreparingRebalance =>
             // During PreparingRebalance phase, we still allow a commit request since we rely
             // on heartbeat response to eventually notify the rebalance in progress signal to the consumer
             val member = group.get(memberId)
             completeAndScheduleNextHeartbeatExpiration(group, member)
-            groupManager.storeOffsets(group, memberId, offsetMetadata, responseCallback, requestLocal = requestLocal)
+            groupManager.storeOffsets(group, memberId, offsetTopicPartition, offsetMetadata, responseCallback, requestLocal = requestLocal, verificationGuard = None)
 
           case CompletingRebalance =>
             // We should not receive a commit request if the group has not completed rebalance;
@@ -1084,8 +1119,10 @@ private[group] class GroupCoordinator(
       // if states is empty, return all groups
       val groups = if (states.isEmpty)
         groupManager.currentGroups
-      else
-        groupManager.currentGroups.filter(g => states.contains(g.summary.state))
+      else {
+        val caseInsensitiveStates = states.map(_.toLowerCase)
+        groupManager.currentGroups.filter(g => g.isInStates(caseInsensitiveStates))
+      }
       (errorCode, groups.map(_.overview).toList)
     }
   }
@@ -1722,17 +1759,17 @@ object GroupCoordinator {
     GroupCoordinator(config, replicaManager, heartbeatPurgatory, rebalancePurgatory, time, metrics)
   }
 
-  private[group] def offsetConfig(config: KafkaConfig) = OffsetConfig(
-    maxMetadataSize = config.offsetMetadataMaxSize,
-    loadBufferSize = config.offsetsLoadBufferSize,
-    offsetsRetentionMs = config.offsetsRetentionMinutes * 60L * 1000L,
-    offsetsRetentionCheckIntervalMs = config.offsetsRetentionCheckIntervalMs,
-    offsetsTopicNumPartitions = config.offsetsTopicPartitions,
-    offsetsTopicSegmentBytes = config.offsetsTopicSegmentBytes,
-    offsetsTopicReplicationFactor = config.offsetsTopicReplicationFactor,
-    offsetsTopicCompressionType = config.offsetsTopicCompressionType,
-    offsetCommitTimeoutMs = config.offsetCommitTimeoutMs,
-    offsetCommitRequiredAcks = config.offsetCommitRequiredAcks
+  private[group] def offsetConfig(config: KafkaConfig) = new OffsetConfig(
+    config.offsetMetadataMaxSize,
+    config.offsetsLoadBufferSize,
+    config.offsetsRetentionMinutes * 60L * 1000L,
+    config.offsetsRetentionCheckIntervalMs,
+    config.offsetsTopicPartitions,
+    config.offsetsTopicSegmentBytes,
+    config.offsetsTopicReplicationFactor,
+    config.offsetsTopicCompressionType,
+    config.offsetCommitTimeoutMs,
+    config.offsetCommitRequiredAcks
   )
 
   private[group] def apply(

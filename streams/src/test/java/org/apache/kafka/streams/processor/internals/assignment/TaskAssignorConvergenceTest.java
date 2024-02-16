@@ -362,23 +362,30 @@ public class TaskAssignorConvergenceTest {
         }
     }
 
-    @Parameter
-    public boolean enableRackAwareTaskAssignor;
+    private int skewThreshold = 1;
 
-    private String rackAwareStrategy = StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_NONE;
+    @Parameter
+    public String rackAwareStrategy;
 
     @Before
     public void setUp() {
-        if (enableRackAwareTaskAssignor) {
-            rackAwareStrategy = StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_MIN_TRAFFIC;
+        if (rackAwareStrategy.equals(StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_BALANCE_SUBTOPOLOGY)) {
+            // We take ceiling of [task_in_subtopology / total_task * original_task_assigned_to_client] as the capacity from
+            // stage 1 client to stage 2 client which can result in the skew to be at most 2
+            // For example, suppose there are 2 subtopologies s1 and s2. s1 has 2 tasks [t1, t2], s2 has 1 task t3. There are 2 clients c1 and c2 with
+            // originally 2 tasks and 1 task. Then the capacity from stage 1 c1 to stage 2 c1 is ceil(2 * 2.0 / 3 * 2) = 2 which can result in both
+            // t1 and t2 assigned to c1. So the max skew for stateful or stateless assignment could be 2 + 2 = 4.
+            // Details in https://cwiki.apache.org/confluence/display/KAFKA/KIP-925%3A+Rack+aware+task+assignment+in+Kafka+Streams
+            skewThreshold = 4;
         }
     }
 
-    @Parameterized.Parameters(name = "enableRackAwareTaskAssignor={0}")
+    @Parameterized.Parameters(name = "rackAwareStrategy={0}")
     public static Collection<Object[]> getParamStoreType() {
         return asList(new Object[][] {
-            {true},
-            {false}
+            {StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_NONE},
+            {StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_MIN_TRAFFIC},
+            {StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_BALANCE_SUBTOPOLOGY},
         });
     }
 
@@ -397,7 +404,7 @@ public class TaskAssignorConvergenceTest {
 
         testForConvergence(harness, configs, 1);
         verifyValidAssignment(0, harness);
-        verifyBalancedAssignment(harness);
+        verifyBalancedAssignment(harness, skewThreshold);
     }
 
     @Test
@@ -425,9 +432,9 @@ public class TaskAssignorConvergenceTest {
         testForConvergence(harness, configs, numStatefulTasks / maxWarmupReplicas + 1);
         verifyValidAssignment(numStandbyReplicas, harness);
 
-        // Rack aware assignor doesn't balance subtopolgy
-        if (!enableRackAwareTaskAssignor) {
-            verifyBalancedAssignment(harness);
+        // min-cost rack aware assignor doesn't balance subtopolgy
+        if (!rackAwareStrategy.equals(StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_MIN_TRAFFIC)) {
+            verifyBalancedAssignment(harness, skewThreshold);
         }
     }
 
@@ -457,9 +464,9 @@ public class TaskAssignorConvergenceTest {
 
         verifyValidAssignment(numStandbyReplicas, harness);
 
-        // Rack aware assignor doesn't balance subtopolgy
-        if (!enableRackAwareTaskAssignor) {
-            verifyBalancedAssignment(harness);
+        // min-cost rack aware assignor doesn't balance subtopolgy
+        if (!rackAwareStrategy.equals(StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_MIN_TRAFFIC)) {
+            verifyBalancedAssignment(harness, skewThreshold);
         }
     }
 
@@ -508,9 +515,9 @@ public class TaskAssignorConvergenceTest {
             testForConvergence(harness, configs, 1);
             verifyValidAssignment(numStandbyReplicas, harness);
 
-            // Rack aware assignor doesn't balance subtopolgy
-            if (!enableRackAwareTaskAssignor) {
-                verifyBalancedAssignment(harness);
+            // min-cost rack aware assignor doesn't balance subtopolgy
+            if (!rackAwareStrategy.equals(StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_MIN_TRAFFIC)) {
+                verifyBalancedAssignment(harness, skewThreshold);
             }
 
             for (int i = 0; i < numberOfEvents; i++) {
@@ -528,9 +535,9 @@ public class TaskAssignorConvergenceTest {
                 if (!harness.clientStates.isEmpty()) {
                     testForConvergence(harness, configs, 2 * (numStatefulTasks + numStatefulTasks * numStandbyReplicas));
                     verifyValidAssignment(numStandbyReplicas, harness);
-                    // Rack aware assignor doesn't balance subtopolgy
-                    if (!enableRackAwareTaskAssignor) {
-                        verifyBalancedAssignment(harness);
+                    // min-cost rack aware assignor doesn't balance subtopolgy
+                    if (!rackAwareStrategy.equals(StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_MIN_TRAFFIC)) {
+                        verifyBalancedAssignment(harness, skewThreshold);
                     }
                 }
             }
@@ -552,14 +559,14 @@ public class TaskAssignorConvergenceTest {
         }
     }
 
-    private static void verifyBalancedAssignment(final Harness harness) {
+    private static void verifyBalancedAssignment(final Harness harness, final int skewThreshold) {
         final Set<TaskId> allStatefulTasks = harness.statefulTaskEndOffsetSums.keySet();
         final Map<UUID, ClientState> clientStates = harness.clientStates;
         final StringBuilder failureContext = harness.history;
 
         assertBalancedActiveAssignment(clientStates, failureContext);
         assertBalancedStatefulAssignment(allStatefulTasks, clientStates, failureContext);
-        final AssignmentTestUtils.TaskSkewReport taskSkewReport = AssignmentTestUtils.analyzeTaskAssignmentBalance(harness.clientStates);
+        final AssignmentTestUtils.TaskSkewReport taskSkewReport = AssignmentTestUtils.analyzeTaskAssignmentBalance(harness.clientStates, skewThreshold);
         if (taskSkewReport.totalSkewedTasks() > 0) {
             fail(
                 new StringBuilder().append("Expected a balanced task assignment, but was: ")

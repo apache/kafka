@@ -40,6 +40,7 @@ public abstract class ConvertingFutureCallback<U, T> implements Callback<U>, Fut
     private volatile T result = null;
     private volatile Throwable exception = null;
     private volatile boolean cancelled = false;
+    private volatile Stage currentStage = null;
 
     public ConvertingFutureCallback() {
         this(null);
@@ -110,9 +111,20 @@ public abstract class ConvertingFutureCallback<U, T> implements Callback<U>, Fut
     @Override
     public T get(long l, TimeUnit timeUnit)
             throws InterruptedException, ExecutionException, TimeoutException {
-        if (!finishedLatch.await(l, timeUnit))
-            throw new TimeoutException("Timed out waiting for future");
+        if (!finishedLatch.await(l, timeUnit)) {
+            Stage stage = currentStage;
+            if (stage != null) {
+                throw new StagedTimeoutException(stage);
+            } else {
+                throw new TimeoutException();
+            }
+        }
         return result();
+    }
+
+    @Override
+    public void recordStage(Stage stage) {
+        this.currentStage = stage;
     }
 
     private T result() throws ExecutionException {

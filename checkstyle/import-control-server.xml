@@ -18,7 +18,7 @@
  limitations under the License.
 -->
 
-<import-control pkg="org.apache.kafka.server">
+<import-control pkg="org.apache.kafka">
 
   <!-- THINK HARD ABOUT THE LAYERING OF THE PROJECT BEFORE CHANGING THIS FILE -->
 
@@ -53,10 +53,18 @@
   <allow pkg="org.apache.kafka.common.protocol" />
   <allow pkg="org.apache.kafka.common.record" />
   <allow pkg="org.apache.kafka.common.requests" />
+  <allow pkg="org.apache.kafka.metadata" />
 
   <!-- utilities and reusable classes from server-common -->
   <allow pkg="org.apache.kafka.queue" />
+  <allow pkg="org.apache.kafka.security" />
   <allow pkg="org.apache.kafka.server.common" />
+  <allow pkg="org.apache.kafka.server.metrics" />
+  <allow pkg="org.apache.kafka.server.util" />
+  <allow pkg="com.yammer.metrics" />
+
+  <!-- utilities for testing -->
+  <allow pkg="org.apache.kafka.test" />
 
   <!-- persistent collection factories/non-library-specific wrappers -->
   <allow pkg="org.apache.kafka.server.immutable" exact-match="true" />
@@ -64,9 +72,22 @@
   <!-- server-metrics specific classes -->
   <allow pkg="org.apache.kafka.server.metrics" />
 
-  <subpackage name="metrics">
-    <allow class="org.apache.kafka.server.authorizer.AuthorizableRequestContext" />
-    <allow pkg="org.apache.kafka.server.telemetry" />
+  <!-- server-configs dependencies -->
+  <allow pkg="org.apache.kafka.coordinator" />
+  <allow pkg="org.apache.kafka.common" />
+  <allow pkg="org.apache.kafka.raft" />
+
+  <subpackage name="server">
+    <subpackage name="metrics">
+      <allow class="org.apache.kafka.server.authorizer.AuthorizableRequestContext" />
+      <allow pkg="org.apache.kafka.server.telemetry" />
+    </subpackage>
+  </subpackage>
+
+  <subpackage name="security">
+    <allow pkg="org.apache.kafka.common.resource" />
+    <allow pkg="org.apache.kafka.network" />
+    <allow pkg="org.apache.kafka.server.authorizer" />
   </subpackage>
 
 </import-control>

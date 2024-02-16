@@ -67,6 +67,7 @@ import java.util.stream.Collectors;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.security.token.delegation.DelegationToken;
 import org.apache.kafka.common.security.token.delegation.TokenInformation;
+import org.apache.kafka.common.utils.Time;
 
 public class MockAdminClient extends AdminClient {
     public static final String DEFAULT_CLUSTER_ID = "I4ZmrWqfT2e-upky_4fdPA";
@@ -99,6 +100,8 @@ public class MockAdminClient extends AdminClient {
     private boolean telemetryDisabled = false;
     private Uuid clientInstanceId;
     private int injectTimeoutExceptionCounter;
+    private Time mockTime;
+    private long blockingTimeMs;
 
     private KafkaException listConsumerGroupOffsetsException;
 
@@ -1014,7 +1017,13 @@ public class MockAdminClient extends AdminClient {
                 for (Node node : nodes) {
                     Map<String, LogDirDescription> logDirDescriptionMap = unwrappedResults.get(node.id());
                     LogDirDescription logDirDescription = logDirDescriptionMap.getOrDefault(partitionLogDirs.get(0), new LogDirDescription(null, new HashMap<>()));
-                    logDirDescription.replicaInfos().put(new TopicPartition(topicName, topicPartitionInfo.partition()), new ReplicaInfo(0, 0, false));
+                    Map<TopicPartition, ReplicaInfo> topicPartitionReplicaInfoMap = new HashMap<>(logDirDescription.replicaInfos());
+                    topicPartitionReplicaInfoMap.put(new TopicPartition(topicName, topicPartitionInfo.partition()), new ReplicaInfo(0, 0, false));
+                    logDirDescriptionMap.put(partitionLogDirs.get(0), new LogDirDescription(
+                        logDirDescription.error(),
+                        topicPartitionReplicaInfoMap,
+                        logDirDescription.totalBytes().orElse(DescribeLogDirsResponse.UNKNOWN_VOLUME_BYTES),
+                        logDirDescription.usableBytes().orElse(DescribeLogDirsResponse.UNKNOWN_VOLUME_BYTES)));
                 }
             }
         }
@@ -1306,7 +1315,9 @@ public class MockAdminClient extends AdminClient {
 
     @Override
     public ListClientMetricsResourcesResult listClientMetricsResources(ListClientMetricsResourcesOptions options) {
-        throw new UnsupportedOperationException("Not implemented yet");
+        KafkaFutureImpl<Collection<ClientMetricsResourceListing>> future = new KafkaFutureImpl<>();
+        future.complete(clientMetricsConfigs.keySet().stream().map(ClientMetricsResourceListing::new).collect(Collectors.toList()));
+        return new ListClientMetricsResourcesResult(future);
     }
 
     @Override
@@ -1368,6 +1379,11 @@ public class MockAdminClient extends AdminClient {
         this.injectTimeoutExceptionCounter = injectTimeoutExceptionCounter;
     }
 
+    public void advanceTimeOnClientInstanceId(final Time mockTime, final long blockingTimeMs) {
+        this.mockTime = mockTime;
+        this.blockingTimeMs = blockingTimeMs;
+    }
+
     public void setClientInstanceId(final Uuid instanceId) {
         clientInstanceId = instanceId;
     }
@@ -1386,6 +1402,10 @@ public class MockAdminClient extends AdminClient {
                 --injectTimeoutExceptionCounter;
             }
             throw new TimeoutException();
+        }
+
+        if (mockTime != null) {
+            mockTime.sleep(blockingTimeMs);
         }
 
         return clientInstanceId;

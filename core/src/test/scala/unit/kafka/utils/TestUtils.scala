@@ -25,7 +25,7 @@ import java.nio.file.{Files, StandardOpenOption}
 import java.security.cert.X509Certificate
 import java.time.Duration
 import java.util
-import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger, AtomicReference}
+import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger}
 import java.util.concurrent.{Callable, CompletableFuture, ExecutionException, Executors, TimeUnit}
 import java.util.{Arrays, Collections, Optional, Properties}
 import com.yammer.metrics.core.{Gauge, Histogram, Meter}
@@ -74,6 +74,7 @@ import org.apache.kafka.metadata.properties.MetaProperties
 import org.apache.kafka.server.ControllerRequestCompletionHandler
 import org.apache.kafka.server.authorizer.{AuthorizableRequestContext, Authorizer => JAuthorizer}
 import org.apache.kafka.server.common.{ApiMessageAndVersion, MetadataVersion}
+import org.apache.kafka.server.config.Defaults
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.apache.kafka.server.util.MockTime
 import org.apache.kafka.storage.internals.log.{CleanerConfig, LogConfig, LogDirFailureChannel, ProducerStateManagerConfig}
@@ -505,6 +506,33 @@ object TestUtils extends Logging {
     }.toMap
   }
 
+  def increasePartitions[B <: KafkaBroker](admin: Admin,
+                                              topic: String,
+                                              totalPartitionCount: Int,
+                                              brokersToValidate: Seq[B]
+                                            ): Unit = {
+
+    try {
+      val newPartitionSet: Map[String, NewPartitions] = Map.apply(topic -> NewPartitions.increaseTo(totalPartitionCount))
+      admin.createPartitions(newPartitionSet.asJava)
+    } catch {
+      case e: ExecutionException =>
+        throw e
+    }
+
+    if (brokersToValidate.size > 0) {
+      // wait until we've propagated all partitions metadata to all brokers
+      val allPartitionsMetadata = waitForAllPartitionsMetadata(brokersToValidate, topic, totalPartitionCount)
+
+      (0 until totalPartitionCount - 1).map { i =>
+        i -> allPartitionsMetadata.get(new TopicPartition(topic, i)).map(_.leader()).getOrElse(
+          throw new IllegalStateException(s"Cannot get the partition leader for topic: $topic, partition: $i in server metadata cache"))
+      }.toMap
+    } else {
+      Map.empty
+    }
+  }
+
   def describeTopic(
     admin: Admin,
     topic: String
@@ -917,7 +945,7 @@ object TestUtils extends Logging {
       Broker(b.id, Seq(EndPoint("localhost", 6667, listenerName, protocol)), if (b.rack.isPresent) Some(b.rack.get()) else None)
     }
     brokers.foreach(b => zkClient.registerBroker(BrokerInfo(Broker(b.id, b.endPoints, rack = b.rack),
-      MetadataVersion.latest, jmxPort = -1)))
+      MetadataVersion.latestTesting, jmxPort = -1)))
     brokers
   }
 
@@ -1331,6 +1359,22 @@ object TestUtils extends Logging {
     newLeaderExists.get
   }
 
+  def getLeaderIdForPartition[B <: KafkaBroker](
+      brokers: Seq[B],
+      tp: TopicPartition,
+      timeout: Long = JTestUtils.DEFAULT_MAX_WAIT_MS): Int = {
+    def leaderExists: Option[Int] = {
+      brokers.find { broker =>
+          broker.replicaManager.onlinePartition(tp).exists(_.leaderLogIfLocal.isDefined)
+      }.map(_.config.brokerId)
+    }
+
+    waitUntilTrue(() => leaderExists.isDefined,
+      s"Did not find a leader for partition $tp after $timeout ms", waitTimeMs = timeout)
+
+    leaderExists.get
+  }
+
   def waitUntilLeaderIsKnown[B <: KafkaBroker](
       brokers: Seq[B],
       tp: TopicPartition,
@@ -1402,6 +1446,17 @@ object TestUtils extends Logging {
     assertEquals(0, threadCount, s"Found unexpected $threadCount NonDaemon threads=${nonDaemonThreads.map(t => t.getName).mkString(", ")}")
   }
 
+  // Some threads are closed, but the state didn't reflect in the JVM immediately, so add some wait time for it
+  def assertNoNonDaemonThreadsWithWaiting(threadNamePrefix: String, waitTimeMs: Long = 500L): Unit = {
+    var nonDemonThreads: mutable.Set[Thread] = mutable.Set.empty[Thread]
+    waitUntilTrue(() => {
+      nonDemonThreads = Thread.getAllStackTraces.keySet.asScala.filter { t =>
+        !t.isDaemon && t.isAlive && t.getName.startsWith(threadNamePrefix)
+      }
+      0 == nonDemonThreads.size
+    }, s"Found unexpected ${nonDemonThreads.size} NonDaemon threads=${nonDemonThreads.map(t => t.getName).mkString(", ")}", waitTimeMs)
+  }
+
   def numThreadsRunning(threadNamePrefix: String, isDaemon: Boolean): mutable.Set[Thread] = {
     Thread.getAllStackTraces.keySet.asScala.filter { t =>
       isDaemon && t.isAlive && t.getName.startsWith(threadNamePrefix)
@@ -1443,7 +1498,7 @@ object TestUtils extends Logging {
                        configRepository: ConfigRepository = new MockConfigRepository,
                        cleanerConfig: CleanerConfig = new CleanerConfig(false),
                        time: MockTime = new MockTime(),
-                       interBrokerProtocolVersion: MetadataVersion = MetadataVersion.latest,
+                       interBrokerProtocolVersion: MetadataVersion = MetadataVersion.latestTesting,
                        recoveryThreadsPerDataDir: Int = 4,
                        transactionVerificationEnabled: Boolean = false,
                        log: Option[UnifiedLog] = None,
@@ -1459,8 +1514,8 @@ object TestUtils extends Logging {
                    flushStartOffsetCheckpointMs = 10000L,
                    retentionCheckMs = 1000L,
                    maxTransactionTimeoutMs = 5 * 60 * 1000,
-                   producerStateManagerConfig = new ProducerStateManagerConfig(kafka.server.Defaults.ProducerIdExpirationMs, transactionVerificationEnabled),
-                   producerIdExpirationCheckIntervalMs = kafka.server.Defaults.ProducerIdExpirationCheckIntervalMs,
+                   producerStateManagerConfig = new ProducerStateManagerConfig(Defaults.PRODUCER_ID_EXPIRATION_MS, transactionVerificationEnabled),
+                   producerIdExpirationCheckIntervalMs = Defaults.PRODUCER_ID_EXPIRATION_CHECK_INTERVAL_MS,
                    scheduler = time.scheduler,
                    time = time,
                    brokerTopicStats = new BrokerTopicStats,
@@ -1471,7 +1526,7 @@ object TestUtils extends Logging {
 
     if (log.isDefined) {
       val spyLogManager = Mockito.spy(logManager)
-      Mockito.doReturn(log.get, Nil: _*).when(spyLogManager).getOrCreateLog(any(classOf[TopicPartition]), anyBoolean(), anyBoolean(), any(classOf[Option[Uuid]]))
+      Mockito.doReturn(log.get, Nil: _*).when(spyLogManager).getOrCreateLog(any(classOf[TopicPartition]), anyBoolean(), anyBoolean(), any(classOf[Option[Uuid]]), any(classOf[Option[Uuid]]))
       spyLogManager
     } else
       logManager
@@ -1529,7 +1584,6 @@ object TestUtils extends Logging {
     val expands: AtomicInteger = new AtomicInteger(0)
     val shrinks: AtomicInteger = new AtomicInteger(0)
     val failures: AtomicInteger = new AtomicInteger(0)
-    val directory: AtomicReference[String] = new AtomicReference[String]()
 
     override def markIsrExpand(): Unit = expands.incrementAndGet()
 
@@ -1537,13 +1591,11 @@ object TestUtils extends Logging {
 
     override def markFailed(): Unit = failures.incrementAndGet()
 
-    override def assignDir(dir: String): Unit = directory.set(dir)
 
     def reset(): Unit = {
       expands.set(0)
       shrinks.set(0)
       failures.set(0)
-      directory.set(null)
     }
   }
 
@@ -1644,7 +1696,7 @@ object TestUtils extends Logging {
   }
 
 
-  def causeLogDirFailure(failureType: LogDirFailureType, leaderBroker: KafkaBroker, partition: TopicPartition): Unit = {
+  def causeLogDirFailure(failureType: LogDirFailureType, leaderBroker: KafkaBroker, partition: TopicPartition): File = {
     // Make log directory of the partition on the leader broker inaccessible by replacing it with a file
     val localLog = leaderBroker.replicaManager.localLogOrException(partition)
     val logDir = localLog.dir.getParentFile
@@ -1661,6 +1713,7 @@ object TestUtils extends Logging {
     // Wait for ReplicaHighWatermarkCheckpoint to happen so that the log directory of the topic will be offline
     waitUntilTrue(() => !leaderBroker.logManager.isLogDirOnline(logDir.getAbsolutePath), "Expected log directory offline", 3000L)
     assertTrue(leaderBroker.replicaManager.localLog(partition).isEmpty)
+    logDir
   }
 
   /**
@@ -2190,13 +2243,15 @@ object TestUtils extends Logging {
   }
 
   def meterCount(metricName: String): Long = {
+    meterCountOpt(metricName).getOrElse(fail(s"Unable to find metric $metricName"))
+  }
+
+  def meterCountOpt(metricName: String): Option[Long] = {
     KafkaYammerMetrics.defaultRegistry.allMetrics.asScala
       .filter { case (k, _) => k.getMBeanName.endsWith(metricName) }
       .values
       .headOption
-      .getOrElse(fail(s"Unable to find metric $metricName"))
-      .asInstanceOf[Meter]
-      .count
+      .map(_.asInstanceOf[Meter].count)
   }
 
   def metersCount(metricName: String): Long = {
@@ -2212,6 +2267,14 @@ object TestUtils extends Logging {
   def clearYammerMetrics(): Unit = {
     for (metricName <- KafkaYammerMetrics.defaultRegistry.allMetrics.keySet.asScala)
       KafkaYammerMetrics.defaultRegistry.removeMetric(metricName)
+  }
+
+  def clearYammerMetricsExcept(names: Set[String]): Unit = {
+    for (metricName <- KafkaYammerMetrics.defaultRegistry.allMetrics.keySet.asScala) {
+      if (!names.contains(metricName.getMBeanName)) {
+        KafkaYammerMetrics.defaultRegistry.removeMetric(metricName)
+      }
+    }
   }
 
   def stringifyTopicPartitions(partitions: Set[TopicPartition]): String = {
@@ -2399,7 +2462,7 @@ object TestUtils extends Logging {
 
     RequestHeader.parse(envelopeBuffer)
 
-    val envelopeContext = new RequestContext(envelopeHeader, "1", InetAddress.getLocalHost,
+    val envelopeContext = new RequestContext(envelopeHeader, "1", InetAddress.getLocalHost, Optional.empty(),
       KafkaPrincipal.ANONYMOUS, listenerName, SecurityProtocol.PLAINTEXT, ClientInformation.EMPTY,
       fromPrivilegedListener, Optional.of(principalSerde))
 

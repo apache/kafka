@@ -18,7 +18,7 @@
   "type": "metadata",
   "name": "PartitionChangeRecord",
   // Version 1 adds Directories for KIP-858.
-  // Version 2 implements Eligible Leader Replicas and LastKnownELR as described in KIP-966.
+  // Version 2 implements Eligible Leader Replicas and LastKnownElr as described in KIP-966.
   "validVersions": "0-2",
   "flexibleVersions": "0+",
   "fields": [
@@ -49,8 +49,8 @@
     { "name": "EligibleLeaderReplicas", "type": "[]int32", "default": "null", "entityType": "brokerId",
       "versions": "2+", "nullableVersions": "2+", "taggedVersions": "2+", "tag": 6,
       "about": "null if the ELR didn't change; the new eligible leader replicas otherwise." },
-    { "name": "LastKnownELR", "type": "[]int32", "default": "null", "entityType": "brokerId",
+    { "name": "LastKnownElr", "type": "[]int32", "default": "null", "entityType": "brokerId",
       "versions": "2+", "nullableVersions": "2+", "taggedVersions": "2+", "tag": 7,
-      "about": "null if the LastKnownELR didn't change; the last known eligible leader replicas otherwise." }
+      "about": "null if the LastKnownElr didn't change; the last known eligible leader replicas otherwise." }
   ]
 }

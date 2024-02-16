@@ -24,10 +24,9 @@ import kafka.log.remote.RemoteLogManager
 import kafka.log.{LogManager, UnifiedLog}
 import kafka.server.HostedPartition.Online
 import kafka.server.QuotaFactory.QuotaManagers
-import kafka.server.ReplicaManager.{AtMinIsrPartitionCountMetricName, FailedIsrUpdatesPerSecMetricName, IsrExpandsPerSecMetricName, IsrShrinksPerSecMetricName, LeaderCountMetricName, OfflineReplicaCountMetricName, PartitionCountMetricName, PartitionsWithLateTransactionsCountMetricName, ProducerIdCountMetricName, ReassigningPartitionsMetricName, UnderMinIsrPartitionCountMetricName, UnderReplicatedPartitionsMetricName}
-import kafka.server.ReplicaManager.createLogReadResult
+import kafka.server.ReplicaManager.{AtMinIsrPartitionCountMetricName, FailedIsrUpdatesPerSecMetricName, IsrExpandsPerSecMetricName, IsrShrinksPerSecMetricName, LeaderCountMetricName, OfflineReplicaCountMetricName, PartitionCountMetricName, PartitionsWithLateTransactionsCountMetricName, ProducerIdCountMetricName, ReassigningPartitionsMetricName, UnderMinIsrPartitionCountMetricName, UnderReplicatedPartitionsMetricName, createLogReadResult}
 import kafka.server.checkpoints.{LazyOffsetCheckpoints, OffsetCheckpointFile, OffsetCheckpoints}
-import kafka.server.metadata.{KRaftMetadataCache, ZkMetadataCache}
+import kafka.server.metadata.ZkMetadataCache
 import kafka.utils.Implicits._
 import kafka.utils._
 import kafka.zk.KafkaZkClient
@@ -184,7 +183,7 @@ object HostedPartition {
   /**
    * This broker hosts the partition, but it is in an offline log directory.
    */
-  final object Offline extends HostedPartition
+  final case class Offline(partition: Option[Partition]) extends HostedPartition
 }
 
 object ReplicaManager {
@@ -272,7 +271,7 @@ class ReplicaManager(val config: KafkaConfig,
                      threadNamePrefix: Option[String] = None,
                      val brokerEpochSupplier: () => Long = () => -1,
                      addPartitionsToTxnManager: Option[AddPartitionsToTxnManager] = None,
-                     directoryEventHandler: DirectoryEventHandler = DirectoryEventHandler.NOOP
+                     val directoryEventHandler: DirectoryEventHandler = DirectoryEventHandler.NOOP
                      ) extends Logging {
   private val metricsGroup = new KafkaMetricsGroup(this.getClass)
 
@@ -399,20 +398,20 @@ class ReplicaManager(val config: KafkaConfig,
   private def maybeRemoveTopicMetrics(topic: String): Unit = {
     val topicHasNonOfflinePartition = allPartitions.values.exists {
       case online: HostedPartition.Online => topic == online.partition.topic
-      case HostedPartition.None | HostedPartition.Offline => false
+      case HostedPartition.None | HostedPartition.Offline(_) => false
     }
     if (!topicHasNonOfflinePartition) // nothing online or deferred
       brokerTopicStats.removeMetrics(topic)
   }
 
-  private[server] def updateStrayLogs(strayPartitions: Set[TopicPartition]): Unit = {
+  private[server] def updateStrayLogs(strayPartitions: Iterable[TopicPartition]): Unit = {
     if (strayPartitions.isEmpty) {
       return
     }
     warn(s"Found stray partitions ${strayPartitions.mkString(",")}")
 
     // First, stop the partitions. This will shutdown the fetchers and other managers
-    val partitionsToStop = strayPartitions.map { tp => tp -> false }.toMap
+    val partitionsToStop = strayPartitions.map(tp => StopPartition(tp, false)).toSet
     stopPartitions(partitionsToStop).forKeyValue { (topicPartition, exception) =>
       error(s"Unable to stop stray partition $topicPartition", exception)
     }
@@ -439,11 +438,6 @@ class ReplicaManager(val config: KafkaConfig,
       error(s"Failed to delete stray partition $topicPartition due to " +
         s"${e.getClass.getName} exception: ${e.getMessage}")
     })
-  }
-
-  // Find logs which exist on the broker, but aren't present in the full LISR
-  private[server] def findStrayPartitionsFromLeaderAndIsr(partitionsFromRequest: Set[TopicPartition]): Set[TopicPartition] = {
-    logManager.allLogs.map(_.topicPartition).filterNot(partitionsFromRequest.contains).toSet
   }
 
   protected def completeDelayedFetchOrProduceRequests(topicPartition: TopicPartition): Unit = {
@@ -515,7 +509,7 @@ class ReplicaManager(val config: KafkaConfig,
           val deletePartition = partitionState.deletePartition()
 
           getPartition(topicPartition) match {
-            case HostedPartition.Offline =>
+            case HostedPartition.Offline(_) =>
               stateChangeLogger.warn(s"Ignoring StopReplica request (delete=$deletePartition) from " +
                 s"controller $controllerId with correlation id $correlationId " +
                 s"epoch $controllerEpoch for partition $topicPartition as the local replica for the " +
@@ -536,18 +530,12 @@ class ReplicaManager(val config: KafkaConfig,
                   deletePartition && partition.isLeader && requestLeaderEpoch == LeaderAndIsr.EpochDuringDelete)
                 // Assume that everything will go right. It is overwritten in case of an error.
                 responseMap.put(topicPartition, Errors.NONE)
-              } else if (requestLeaderEpoch < currentLeaderEpoch) {
+              } else {
                 stateChangeLogger.warn(s"Ignoring StopReplica request (delete=$deletePartition) from " +
                   s"controller $controllerId with correlation id $correlationId " +
                   s"epoch $controllerEpoch for partition $topicPartition since its associated " +
                   s"leader epoch $requestLeaderEpoch is smaller than the current " +
                   s"leader epoch $currentLeaderEpoch")
-                responseMap.put(topicPartition, Errors.FENCED_LEADER_EPOCH)
-              } else {
-                stateChangeLogger.info(s"Ignoring StopReplica request (delete=$deletePartition) from " +
-                  s"controller $controllerId with correlation id $correlationId " +
-                  s"epoch $controllerEpoch for partition $topicPartition since its associated " +
-                  s"leader epoch $requestLeaderEpoch matches the current leader epoch")
                 responseMap.put(topicPartition, Errors.FENCED_LEADER_EPOCH)
               }
 
@@ -576,20 +564,6 @@ class ReplicaManager(val config: KafkaConfig,
         (responseMap, Errors.NONE)
       }
     }
-  }
-
-  /**
-   * Stop the given partitions.
-   *
-   * @param partitionsToStop A map from a topic partition to a boolean indicating
-   *                         whether the partition should be deleted.
-   * @return A map from partitions to exceptions which occurred.
-   *         If no errors occurred, the map will be empty.
-   */
-  private def stopPartitions(partitionsToStop: Map[TopicPartition, Boolean]): Map[TopicPartition, Throwable] = {
-    stopPartitions(partitionsToStop.map {
-      case (topicPartition, deleteLocalLog) => StopPartition(topicPartition, deleteLocalLog)
-    }.toSet)
   }
 
   /**
@@ -685,7 +659,7 @@ class ReplicaManager(val config: KafkaConfig,
   }
 
   private def offlinePartitionCount: Int = {
-    allPartitions.values.iterator.count(_ == HostedPartition.Offline)
+    allPartitions.values.iterator.count(_.getClass == HostedPartition.Offline.getClass)
   }
 
   def getPartitionOrException(topicPartition: TopicPartition): Partition = {
@@ -705,7 +679,7 @@ class ReplicaManager(val config: KafkaConfig,
       case HostedPartition.Online(partition) =>
         Right(partition)
 
-      case HostedPartition.Offline =>
+      case HostedPartition.Offline(_) =>
         Left(Errors.KAFKA_STORAGE_ERROR)
 
       case HostedPartition.None if metadataCache.contains(topicPartition) =>
@@ -764,9 +738,10 @@ class ReplicaManager(val config: KafkaConfig,
    * @param responseCallback              callback for sending the response
    * @param delayedProduceLock            lock for the delayed actions
    * @param recordValidationStatsCallback callback for updating stats on record conversions
-   * @param requestLocal                  container for the stateful instances scoped to this request
-   * @param transactionalId               transactional ID if the request is from a producer and the producer is transactional
+   * @param requestLocal                  container for the stateful instances scoped to this request -- this must correspond to the
+   *                                      thread calling this method
    * @param actionQueue                   the action queue to use. ReplicaManager#defaultActionQueue is used by default.
+   * @param verificationGuards            the mapping from topic partition to verification guards if transaction verification is used
    */
   def appendRecords(timeout: Long,
                     requiredAcks: Short,
@@ -777,117 +752,146 @@ class ReplicaManager(val config: KafkaConfig,
                     delayedProduceLock: Option[Lock] = None,
                     recordValidationStatsCallback: Map[TopicPartition, RecordValidationStats] => Unit = _ => (),
                     requestLocal: RequestLocal = RequestLocal.NoCaching,
-                    transactionalId: String = null,
-                    actionQueue: ActionQueue = this.defaultActionQueue): Unit = {
-    if (isValidRequiredAcks(requiredAcks)) {
-
-      val verificationGuards: mutable.Map[TopicPartition, VerificationGuard] = mutable.Map[TopicPartition, VerificationGuard]()
-      val (verifiedEntriesPerPartition, notYetVerifiedEntriesPerPartition, errorsPerPartition) =
-        if (transactionalId == null || !config.transactionPartitionVerificationEnable)
-          (entriesPerPartition, Map.empty[TopicPartition, MemoryRecords], Map.empty[TopicPartition, Errors])
-        else {
-          val verifiedEntries = mutable.Map[TopicPartition, MemoryRecords]()
-          val unverifiedEntries = mutable.Map[TopicPartition, MemoryRecords]()
-          val errorEntries = mutable.Map[TopicPartition, Errors]()
-          partitionEntriesForVerification(verificationGuards, entriesPerPartition, verifiedEntries, unverifiedEntries, errorEntries)
-          (verifiedEntries.toMap, unverifiedEntries.toMap, errorEntries.toMap)
-        }
-
-      if (notYetVerifiedEntriesPerPartition.isEmpty || addPartitionsToTxnManager.isEmpty) {
-        appendEntries(verifiedEntriesPerPartition, internalTopicsAllowed, origin, requiredAcks, verificationGuards.toMap,
-          errorsPerPartition, recordValidationStatsCallback, timeout, responseCallback, delayedProduceLock, actionQueue)(requestLocal, Map.empty)
-      } else {
-        // For unverified entries, send a request to verify. When verified, the append process will proceed via the callback.
-        // We verify above that all partitions use the same producer ID.
-        val batchInfo = notYetVerifiedEntriesPerPartition.head._2.firstBatch()
-        addPartitionsToTxnManager.foreach(_.verifyTransaction(
-          transactionalId = transactionalId,
-          producerId = batchInfo.producerId,
-          producerEpoch = batchInfo.producerEpoch,
-          topicPartitions = notYetVerifiedEntriesPerPartition.keySet.toSeq,
-          callback = KafkaRequestHandler.wrapAsyncCallback(
-            appendEntries(
-              entriesPerPartition,
-              internalTopicsAllowed,
-              origin,
-              requiredAcks,
-              verificationGuards.toMap,
-              errorsPerPartition,
-              recordValidationStatsCallback,
-              timeout,
-              responseCallback,
-              delayedProduceLock,
-              actionQueue
-            ),
-            requestLocal)
-        ))
-      }
-    } else {
-      // If required.acks is outside accepted range, something is wrong with the client
-      // Just return an error and don't handle the request at all
-      val responseStatus = entriesPerPartition.map { case (topicPartition, _) =>
-        topicPartition -> new PartitionResponse(
-          Errors.INVALID_REQUIRED_ACKS,
-          LogAppendInfo.UNKNOWN_LOG_APPEND_INFO.firstOffset,
-          RecordBatch.NO_TIMESTAMP,
-          LogAppendInfo.UNKNOWN_LOG_APPEND_INFO.logStartOffset
-        )
-      }
-      responseCallback(responseStatus)
+                    actionQueue: ActionQueue = this.defaultActionQueue,
+                    verificationGuards: Map[TopicPartition, VerificationGuard] = Map.empty): Unit = {
+    if (!isValidRequiredAcks(requiredAcks)) {
+      sendInvalidRequiredAcksResponse(entriesPerPartition, responseCallback)
+      return
     }
-  }
 
-  /*
-   * Note: This method can be used as a callback in a different request thread. Ensure that correct RequestLocal
-   * is passed when executing this method. Accessing non-thread-safe data structures should be avoided if possible.
-   */
-  private def appendEntries(allEntries: Map[TopicPartition, MemoryRecords],
-                            internalTopicsAllowed: Boolean,
-                            origin: AppendOrigin,
-                            requiredAcks: Short,
-                            verificationGuards: Map[TopicPartition, VerificationGuard],
-                            errorsPerPartition: Map[TopicPartition, Errors],
-                            recordConversionStatsCallback: Map[TopicPartition, RecordValidationStats] => Unit,
-                            timeout: Long,
-                            responseCallback: Map[TopicPartition, PartitionResponse] => Unit,
-                            delayedProduceLock: Option[Lock],
-                            actionQueue: ActionQueue)
-                           (requestLocal: RequestLocal, unverifiedEntries: Map[TopicPartition, Errors]): Unit = {
     val sTime = time.milliseconds
-    val verifiedEntries =
-      if (unverifiedEntries.isEmpty)
-        allEntries
-      else
-        allEntries.filter { case (tp, _) =>
-          !unverifiedEntries.contains(tp)
-        }
-
     val localProduceResults = appendToLocalLog(internalTopicsAllowed = internalTopicsAllowed,
-      origin, verifiedEntries, requiredAcks, requestLocal, verificationGuards.toMap)
+      origin, entriesPerPartition, requiredAcks, requestLocal, verificationGuards.toMap)
     debug("Produce to local log in %d ms".format(time.milliseconds - sTime))
 
-    val errorResults = (unverifiedEntries ++ errorsPerPartition).map {
-      case (topicPartition, error) =>
-        // translate transaction coordinator errors to known producer response errors
-        val customException =
-          error match {
-            case Errors.INVALID_TXN_STATE => Some(error.exception("Partition was not added to the transaction"))
-            case Errors.CONCURRENT_TRANSACTIONS |
-                 Errors.COORDINATOR_LOAD_IN_PROGRESS |
-                 Errors.COORDINATOR_NOT_AVAILABLE |
-                 Errors.NOT_COORDINATOR => Some(new NotEnoughReplicasException(
-              s"Unable to verify the partition has been added to the transaction. Underlying error: ${error.toString}"))
-            case _ => None
-          }
-        topicPartition -> LogAppendResult(
-          LogAppendInfo.UNKNOWN_LOG_APPEND_INFO,
-          Some(customException.getOrElse(error.exception)),
-          hasCustomErrorMessage = customException.isDefined
-        )
+    val produceStatus = buildProducePartitionStatus(localProduceResults)
+
+    addCompletePurgatoryAction(actionQueue, localProduceResults)
+    recordValidationStatsCallback(localProduceResults.map { case (k, v) =>
+      k -> v.info.recordValidationStats
+    })
+
+    maybeAddDelayedProduce(
+      requiredAcks,
+      delayedProduceLock,
+      timeout,
+      entriesPerPartition,
+      localProduceResults,
+      produceStatus,
+      responseCallback
+    )
+  }
+
+  /**
+   * Handles the produce request by starting any transactional verification before appending.
+   *
+   * @param timeout                       maximum time we will wait to append before returning
+   * @param requiredAcks                  number of replicas who must acknowledge the append before sending the response
+   * @param internalTopicsAllowed         boolean indicating whether internal topics can be appended to
+   * @param transactionalId               the transactional ID for the produce request or null if there is none.
+   * @param entriesPerPartition           the records per partition to be appended
+   * @param responseCallback              callback for sending the response
+   * @param recordValidationStatsCallback callback for updating stats on record conversions
+   * @param requestLocal                  container for the stateful instances scoped to this request -- this must correspond to the
+   *                                      thread calling this method
+   * @param actionQueue                   the action queue to use. ReplicaManager#defaultActionQueue is used by default.
+   *
+   * The responseCallback is wrapped so that it is scheduled on a request handler thread. There, it should be called with
+   * that request handler thread's thread local and not the one supplied to this method.
+   */
+  def handleProduceAppend(timeout: Long,
+                          requiredAcks: Short,
+                          internalTopicsAllowed: Boolean,
+                          transactionalId: String,
+                          entriesPerPartition: Map[TopicPartition, MemoryRecords],
+                          responseCallback: Map[TopicPartition, PartitionResponse] => Unit,
+                          recordValidationStatsCallback: Map[TopicPartition, RecordValidationStats] => Unit = _ => (),
+                          requestLocal: RequestLocal = RequestLocal.NoCaching,
+                          actionQueue: ActionQueue = this.defaultActionQueue): Unit = {
+
+    val transactionalProducerInfo = mutable.HashSet[(Long, Short)]()
+    val topicPartitionBatchInfo = mutable.Map[TopicPartition, Int]()
+    entriesPerPartition.forKeyValue { (topicPartition, records) =>
+      // Produce requests (only requests that require verification) should only have one batch per partition in "batches" but check all just to be safe.
+      val transactionalBatches = records.batches.asScala.filter(batch => batch.hasProducerId && batch.isTransactional)
+      transactionalBatches.foreach(batch => transactionalProducerInfo.add(batch.producerId, batch.producerEpoch))
+      if (transactionalBatches.nonEmpty) topicPartitionBatchInfo.put(topicPartition, records.firstBatch.baseSequence)
+    }
+    if (transactionalProducerInfo.size > 1) {
+      throw new InvalidPidMappingException("Transactional records contained more than one producer ID")
     }
 
-    val allResults = localProduceResults ++ errorResults
-    val produceStatus = allResults.map { case (topicPartition, result) =>
+    def postVerificationCallback(newRequestLocal: RequestLocal,
+                                 results: (Map[TopicPartition, Errors], Map[TopicPartition, VerificationGuard])): Unit = {
+      val (preAppendErrors, verificationGuards) = results
+      val errorResults = preAppendErrors.map {
+        case (topicPartition, error) =>
+          // translate transaction coordinator errors to known producer response errors
+          val customException =
+            error match {
+              case Errors.INVALID_TXN_STATE => Some(error.exception("Partition was not added to the transaction"))
+              case Errors.CONCURRENT_TRANSACTIONS |
+                   Errors.COORDINATOR_LOAD_IN_PROGRESS |
+                   Errors.COORDINATOR_NOT_AVAILABLE |
+                   Errors.NOT_COORDINATOR => Some(new NotEnoughReplicasException(
+                s"Unable to verify the partition has been added to the transaction. Underlying error: ${error.toString}"))
+              case _ => None
+            }
+          topicPartition -> LogAppendResult(
+            LogAppendInfo.UNKNOWN_LOG_APPEND_INFO,
+            Some(customException.getOrElse(error.exception)),
+            hasCustomErrorMessage = customException.isDefined
+          )
+      }
+      val entriesWithoutErrorsPerPartition = entriesPerPartition.filter { case (key, _) => !errorResults.contains(key) }
+
+      val preAppendPartitionResponses = buildProducePartitionStatus(errorResults).map { case (k, status) => k -> status.responseStatus }
+
+      def newResponseCallback(responses: Map[TopicPartition, PartitionResponse]): Unit = {
+        responseCallback(preAppendPartitionResponses ++ responses)
+      }
+
+      appendRecords(
+        timeout = timeout,
+        requiredAcks = requiredAcks,
+        internalTopicsAllowed = internalTopicsAllowed,
+        origin = AppendOrigin.CLIENT,
+        entriesPerPartition = entriesWithoutErrorsPerPartition,
+        responseCallback = newResponseCallback,
+        recordValidationStatsCallback = recordValidationStatsCallback,
+        requestLocal = newRequestLocal,
+        actionQueue = actionQueue,
+        verificationGuards = verificationGuards
+      )
+    }
+
+    if (transactionalProducerInfo.size < 1) {
+      postVerificationCallback(
+        requestLocal,
+        (Map.empty[TopicPartition, Errors], Map.empty[TopicPartition, VerificationGuard])
+      )
+      return
+    }
+
+    maybeStartTransactionVerificationForPartitions(
+      topicPartitionBatchInfo,
+      transactionalId,
+      transactionalProducerInfo.head._1,
+      transactionalProducerInfo.head._2,
+      // Wrap the callback to be handled on an arbitrary request handler thread
+      // when transaction verification is complete. The request local passed in
+      // is only used when the callback is executed immediately.
+      KafkaRequestHandler.wrapAsyncCallback(
+        postVerificationCallback,
+        requestLocal
+      )
+    )
+  }
+
+  private def buildProducePartitionStatus(
+    results: Map[TopicPartition, LogAppendResult]
+  ): Map[TopicPartition, ProducePartitionStatus] = {
+    results.map { case (topicPartition, result) =>
       topicPartition -> ProducePartitionStatus(
         result.info.lastOffset + 1, // required offset
         new PartitionResponse(
@@ -899,11 +903,16 @@ class ReplicaManager(val config: KafkaConfig,
           result.info.recordErrors,
           result.errorMessage
         )
-      ) // response status
+      )
     }
+  }
 
+  private def addCompletePurgatoryAction(
+    actionQueue: ActionQueue,
+    appendResults: Map[TopicPartition, LogAppendResult]
+  ): Unit = {
     actionQueue.add {
-      () => allResults.foreach { case (topicPartition, result) =>
+      () => appendResults.foreach { case (topicPartition, result) =>
         val requestKey = TopicPartitionOperationKey(topicPartition)
         result.info.leaderHwChange match {
           case LeaderHwChange.INCREASED =>
@@ -915,20 +924,28 @@ class ReplicaManager(val config: KafkaConfig,
             // probably unblock some follower fetch requests since log end offset has been updated
             delayedFetchPurgatory.checkAndComplete(requestKey)
           case LeaderHwChange.NONE =>
-            // nothing
-          }
+          // nothing
         }
+      }
     }
+  }
 
-    recordConversionStatsCallback(localProduceResults.map { case (k, v) => k -> v.info.recordValidationStats })
-
-    if (delayedProduceRequestRequired(requiredAcks, allEntries, allResults)) {
+  private def maybeAddDelayedProduce(
+    requiredAcks: Short,
+    delayedProduceLock: Option[Lock],
+    timeoutMs: Long,
+    entriesPerPartition: Map[TopicPartition, MemoryRecords],
+    initialAppendResults: Map[TopicPartition, LogAppendResult],
+    initialProduceStatus: Map[TopicPartition, ProducePartitionStatus],
+    responseCallback: Map[TopicPartition, PartitionResponse] => Unit,
+  ): Unit = {
+    if (delayedProduceRequestRequired(requiredAcks, entriesPerPartition, initialAppendResults)) {
       // create delayed produce operation
-      val produceMetadata = ProduceMetadata(requiredAcks, produceStatus)
-      val delayedProduce = new DelayedProduce(timeout, produceMetadata, this, responseCallback, delayedProduceLock)
+      val produceMetadata = ProduceMetadata(requiredAcks, initialProduceStatus)
+      val delayedProduce = new DelayedProduce(timeoutMs, produceMetadata, this, responseCallback, delayedProduceLock)
 
       // create a list of (topic, partition) pairs to use as keys for this delayed produce operation
-      val producerRequestKeys = allEntries.keys.map(TopicPartitionOperationKey(_)).toSeq
+      val producerRequestKeys = entriesPerPartition.keys.map(TopicPartitionOperationKey(_)).toSeq
 
       // try to complete the request immediately, otherwise put it into the purgatory
       // this is because while the delayed produce operation is being created, new
@@ -936,43 +953,146 @@ class ReplicaManager(val config: KafkaConfig,
       delayedProducePurgatory.tryCompleteElseWatch(delayedProduce, producerRequestKeys)
     } else {
       // we can respond immediately
-      val produceResponseStatus = produceStatus.map { case (k, status) => k -> status.responseStatus }
+      val produceResponseStatus = initialProduceStatus.map { case (k, status) => k -> status.responseStatus }
       responseCallback(produceResponseStatus)
     }
   }
 
-  private def partitionEntriesForVerification(verificationGuards: mutable.Map[TopicPartition, VerificationGuard],
-                                              entriesPerPartition: Map[TopicPartition, MemoryRecords],
-                                              verifiedEntries: mutable.Map[TopicPartition, MemoryRecords],
-                                              unverifiedEntries: mutable.Map[TopicPartition, MemoryRecords],
-                                              errorEntries: mutable.Map[TopicPartition, Errors]): Unit= {
-    val transactionalProducerIds = mutable.HashSet[Long]()
-    entriesPerPartition.foreach { case (topicPartition, records) =>
-      try {
-        // Produce requests (only requests that require verification) should only have one batch per partition in "batches" but check all just to be safe.
-        val transactionalBatches = records.batches.asScala.filter(batch => batch.hasProducerId && batch.isTransactional)
-        transactionalBatches.foreach(batch => transactionalProducerIds.add(batch.producerId))
+  private def sendInvalidRequiredAcksResponse(entries: Map[TopicPartition, MemoryRecords],
+                                             responseCallback: Map[TopicPartition, PartitionResponse] => Unit): Unit = {
+    // If required.acks is outside accepted range, something is wrong with the client
+    // Just return an error and don't handle the request at all
+    val responseStatus = entries.map { case (topicPartition, _) =>
+      topicPartition -> new PartitionResponse(
+        Errors.INVALID_REQUIRED_ACKS,
+        LogAppendInfo.UNKNOWN_LOG_APPEND_INFO.firstOffset,
+        RecordBatch.NO_TIMESTAMP,
+        LogAppendInfo.UNKNOWN_LOG_APPEND_INFO.logStartOffset
+      )
+    }
+    responseCallback(responseStatus)
+  }
 
-        if (transactionalBatches.nonEmpty) {
-          // We return VerificationGuard if the partition needs to be verified. If no state is present, no need to verify.
-          val firstBatch = records.firstBatch
-          val verificationGuard = getPartitionOrException(topicPartition).maybeStartTransactionVerification(firstBatch.producerId, firstBatch.baseSequence, firstBatch.producerEpoch)
-          if (verificationGuard != VerificationGuard.SENTINEL) {
-            verificationGuards.put(topicPartition, verificationGuard)
-            unverifiedEntries.put(topicPartition, records)
-          } else
-            verifiedEntries.put(topicPartition, records)
-        } else {
-          // If there is no producer ID or transactional records in the batches, no need to verify.
-          verifiedEntries.put(topicPartition, records)
-        }
-      } catch {
-        case e: Exception => errorEntries.put(topicPartition, Errors.forException(e))
+  /**
+   *
+   * @param topicPartition  the topic partition to maybe verify
+   * @param transactionalId the transactional id for the transaction
+   * @param producerId      the producer id for the producer writing to the transaction
+   * @param producerEpoch   the epoch of the producer writing to the transaction
+   * @param baseSequence    the base sequence of the first record in the batch we are trying to append
+   * @param callback        the method to execute once the verification is either completed or returns an error
+   *
+   * When the verification returns, the callback will be supplied the error if it exists or Errors.NONE.
+   * If the verification guard exists, it will also be supplied. Otherwise the SENTINEL verification guard will be returned.
+   * This guard can not be used for verification and any appends that attempt to use it will fail.
+   */
+  def maybeStartTransactionVerificationForPartition(
+    topicPartition: TopicPartition,
+    transactionalId: String,
+    producerId: Long,
+    producerEpoch: Short,
+    baseSequence: Int,
+    callback: ((Errors, VerificationGuard)) => Unit
+  ): Unit = {
+    def generalizedCallback(results: (Map[TopicPartition, Errors], Map[TopicPartition, VerificationGuard])): Unit = {
+      val (preAppendErrors, verificationGuards) = results
+      callback((
+        preAppendErrors.getOrElse(topicPartition, Errors.NONE),
+        verificationGuards.getOrElse(topicPartition, VerificationGuard.SENTINEL)
+      ))
+    }
+
+    maybeStartTransactionVerificationForPartitions(
+      Map(topicPartition -> baseSequence),
+      transactionalId,
+      producerId,
+      producerEpoch,
+      generalizedCallback
+    )
+  }
+
+  /**
+   *
+   * @param topicPartitionBatchInfo  the topic partitions to maybe verify mapped to the base sequence of their first record batch
+   * @param transactionalId          the transactional id for the transaction
+   * @param producerId               the producer id for the producer writing to the transaction
+   * @param producerEpoch            the epoch of the producer writing to the transaction
+   * @param callback                 the method to execute once the verification is either completed or returns an error
+   *
+   * When the verification returns, the callback will be supplied the errors per topic partition if there were errors.
+   * The callback will also be supplied the verification guards per partition if they exist. It is possible to have an
+   * error and a verification guard for a topic partition if the topic partition was unable to be verified by the transaction
+   * coordinator. Transaction coordinator errors are mapped to append-friendly errors.
+   */
+  private def maybeStartTransactionVerificationForPartitions(
+    topicPartitionBatchInfo: Map[TopicPartition, Int],
+    transactionalId: String,
+    producerId: Long,
+    producerEpoch: Short,
+    callback: ((Map[TopicPartition, Errors], Map[TopicPartition, VerificationGuard])) => Unit
+  ): Unit = {
+    // Skip verification if the request is not transactional or transaction verification is disabled.
+    if (transactionalId == null ||
+      !config.transactionPartitionVerificationEnable
+      || addPartitionsToTxnManager.isEmpty
+    ) {
+      callback((Map.empty[TopicPartition, Errors], Map.empty[TopicPartition, VerificationGuard]))
+      return
+    }
+
+    val verificationGuards = mutable.Map[TopicPartition, VerificationGuard]()
+    val errors = mutable.Map[TopicPartition, Errors]()
+
+    topicPartitionBatchInfo.map { case (topicPartition, baseSequence) =>
+      val errorOrGuard = maybeStartTransactionVerificationForPartition(
+        topicPartition,
+        producerId,
+        producerEpoch,
+        baseSequence
+      )
+
+      errorOrGuard match {
+        case Left(error) => errors.put(topicPartition, error)
+        case Right(verificationGuard) => if (verificationGuard != VerificationGuard.SENTINEL)
+          verificationGuards.put(topicPartition, verificationGuard)
       }
     }
-    // We should have exactly one producer ID for transactional records
-    if (transactionalProducerIds.size > 1) {
-      throw new InvalidPidMappingException("Transactional records contained more than one producer ID")
+
+    // No partitions require verification.
+    if (verificationGuards.isEmpty) {
+      callback((errors.toMap, Map.empty[TopicPartition, VerificationGuard]))
+      return
+    }
+
+    def invokeCallback(
+      verificationErrors: Map[TopicPartition, Errors]
+    ): Unit = {
+      callback((errors ++ verificationErrors, verificationGuards.toMap))
+    }
+
+    addPartitionsToTxnManager.foreach(_.verifyTransaction(
+      transactionalId = transactionalId,
+      producerId = producerId,
+      producerEpoch = producerEpoch,
+      topicPartitions = verificationGuards.keys.toSeq,
+      callback = invokeCallback
+    ))
+
+  }
+
+  private def maybeStartTransactionVerificationForPartition(
+    topicPartition: TopicPartition,
+    producerId: Long,
+    producerEpoch: Short,
+    baseSequence: Int
+  ): Either[Errors, VerificationGuard] = {
+    try {
+      val verificationGuard = getPartitionOrException(topicPartition)
+        .maybeStartTransactionVerification(producerId, baseSequence, producerEpoch)
+      Right(verificationGuard)
+    } catch {
+      case e: Exception =>
+        Left(Errors.forException(e))
     }
   }
 
@@ -1041,7 +1161,7 @@ class ReplicaManager(val config: KafkaConfig,
                 replicaAlterLogDirsManager.removeFetcherForPartitions(Set(topicPartition))
                 partition.removeFutureLocalReplica()
               }
-            case HostedPartition.Offline =>
+            case HostedPartition.Offline(_) =>
               throw new KafkaStorageException(s"Partition $topicPartition is offline")
 
             case HostedPartition.None => // Do nothing
@@ -1759,6 +1879,24 @@ class ReplicaManager(val config: KafkaConfig,
             s"Latest known controller epoch is $controllerEpoch")
           leaderAndIsrRequest.getErrorResponse(0, Errors.STALE_CONTROLLER_EPOCH.exception)
         } else {
+          // In migration mode, reconcile missed topic deletions when handling full LISR from KRaft controller.
+          // LISR "type" field was previously unspecified (0), so if we see it set to Full (2), then we know the
+          // request came from a KRaft controller.
+          //
+          // Note that we have to do this first, before anything else, since topics may be recreated with the same
+          // name, but a different ID. And in that case, we need to move aside the old version of those topics
+          // (with the obsolete topic ID) before doing anything else.
+          if (config.migrationEnabled &&
+            leaderAndIsrRequest.isKRaftController &&
+            leaderAndIsrRequest.requestType() == AbstractControlRequest.Type.FULL)
+          {
+            val strays = LogManager.findStrayReplicas(localBrokerId, leaderAndIsrRequest, logManager.allLogs)
+            stateChangeLogger.info(s"While handling full LeaderAndIsr request from KRaft " +
+              s"controller $controllerId with correlation id $correlationId, found ${strays.size} " +
+              "stray partition(s).")
+            updateStrayLogs(strays)
+          }
+
           val responseMap = new mutable.HashMap[TopicPartition, Errors]
           controllerEpoch = leaderAndIsrRequest.controllerEpoch
 
@@ -1773,7 +1911,7 @@ class ReplicaManager(val config: KafkaConfig,
             val topicPartition = new TopicPartition(partitionState.topicName, partitionState.partitionIndex)
             allTopicPartitionsInRequest += topicPartition
             val partitionOpt = getPartition(topicPartition) match {
-              case HostedPartition.Offline =>
+              case HostedPartition.Offline(_) =>
                 stateChangeLogger.warn(s"Ignoring LeaderAndIsr request from " +
                   s"controller $controllerId with correlation id $correlationId " +
                   s"epoch $controllerEpoch for partition $topicPartition as the local replica for the " +
@@ -1802,7 +1940,7 @@ class ReplicaManager(val config: KafkaConfig,
                   s" match the topic ID for partition $topicPartition received: " +
                   s"${requestTopicId.get}.")
                 responseMap.put(topicPartition, Errors.INCONSISTENT_TOPIC_ID)
-              } else if (requestLeaderEpoch > currentLeaderEpoch) {
+              } else if (requestLeaderEpoch > currentLeaderEpoch || (requestLeaderEpoch == currentLeaderEpoch && leaderAndIsrRequest.isKRaftController)) {
                 // If the leader epoch is valid record the epoch of the controller that made the leadership decision.
                 // This is useful while updating the isr to maintain the decision maker controller's epoch in the zookeeper path
                 if (partitionState.replicas.contains(localBrokerId)) {
@@ -1879,17 +2017,6 @@ class ReplicaManager(val config: KafkaConfig,
           // We initialize highwatermark thread after the first LeaderAndIsr request. This ensures that all the partitions
           // have been completely populated before starting the checkpointing there by avoiding weird race conditions
           startHighWatermarkCheckPointThread()
-
-          // In migration mode, reconcile missed topic deletions when handling full LISR from KRaft controller.
-          // LISR "type" field was previously unspecified (0), so if we see it set to Full (2), then we know the
-          // request came from a KRaft controller.
-          if (
-            config.migrationEnabled &&
-            leaderAndIsrRequest.isKRaftController &&
-            leaderAndIsrRequest.requestType() == AbstractControlRequest.Type.FULL
-          ) {
-            updateStrayLogs(findStrayPartitionsFromLeaderAndIsr(allTopicPartitionsInRequest))
-          }
 
           maybeAddLogDirFetchers(partitions, highWatermarkCheckpoints, topicIdFromRequest)
 
@@ -2284,10 +2411,12 @@ class ReplicaManager(val config: KafkaConfig,
   }
 
   def markPartitionOffline(tp: TopicPartition): Unit = replicaStateChangeLock synchronized {
-    allPartitions.put(tp, HostedPartition.Offline) match {
+    allPartitions.get(tp) match {
       case HostedPartition.Online(partition) =>
+        allPartitions.put(tp, HostedPartition.Offline(Some(partition)))
         partition.markOffline()
-      case _ => // Nothing
+      case _ =>
+        allPartitions.put(tp, HostedPartition.Offline(None))
     }
   }
 
@@ -2325,8 +2454,10 @@ class ReplicaManager(val config: KafkaConfig,
       warn(s"Broker $localBrokerId stopped fetcher for partitions ${newOfflinePartitions.mkString(",")} and stopped moving logs " +
            s"for partitions ${partitionsWithOfflineFutureReplica.mkString(",")} because they are in the failed log directory $dir.")
     }
+    // retrieve the UUID here because logManager.handleLogDirFailure handler removes it
+    val uuid = logManager.directoryId(dir)
     logManager.handleLogDirFailure(dir)
-    if (dir == config.metadataLogDir) {
+    if (dir == new File(config.metadataLogDir).getAbsolutePath && (config.processRoles.nonEmpty || config.migrationEnabled)) {
       fatal(s"Shutdown broker because the metadata log dir $dir has failed")
       Exit.halt(1)
     }
@@ -2337,7 +2468,6 @@ class ReplicaManager(val config: KafkaConfig,
         Exit.halt(1)
       }
       if (zkClient.isEmpty) {
-        val uuid = logManager.directoryId(dir)
         if (uuid.isDefined) {
           directoryEventHandler.handleFailure(uuid.get)
         } else {
@@ -2349,32 +2479,6 @@ class ReplicaManager(val config: KafkaConfig,
       }
     }
     warn(s"Stopped serving replicas in dir $dir")
-  }
-
-  /**
-   * Called when a topic partition is placed in a log directory.
-   * If a directory event listener is configured,
-   * and if the selected log directory has an assigned Uuid,
-   * then the listener is notified of the assignment.
-   */
-  def maybeNotifyPartitionAssignedToDirectory(tp: TopicPartition, dir: String): Unit = {
-    if (metadataCache.isInstanceOf[KRaftMetadataCache]) {
-      logManager.directoryId(dir) match {
-        case None => throw new IllegalStateException(s"Assignment into unidentified directory: ${dir}")
-        case Some(dirId) =>
-          getPartition(tp) match {
-            case HostedPartition.Offline | HostedPartition.None =>
-              throw new IllegalStateException("Assignment for a partition that is not online")
-            case HostedPartition.Online(partition) => partition.topicId match {
-              case None =>
-                throw new IllegalStateException(s"Assignment for topic without ID: ${tp.topic()}")
-              case Some(topicId) =>
-                val topicIdPartition = new common.TopicIdPartition(topicId, tp.partition())
-                directoryEventHandler.handleAssignment(topicIdPartition, dirId)
-            }
-          }
-        }
-    }
   }
 
   def removeMetrics(): Unit = {
@@ -2419,7 +2523,7 @@ class ReplicaManager(val config: KafkaConfig,
   }
 
   protected def createReplicaAlterLogDirsManager(quotaManager: ReplicationQuotaManager, brokerTopicStats: BrokerTopicStats) = {
-    new ReplicaAlterLogDirsManager(config, this, quotaManager, brokerTopicStats)
+    new ReplicaAlterLogDirsManager(config, this, quotaManager, brokerTopicStats, directoryEventHandler)
   }
 
   protected def createReplicaSelector(): Option[ReplicaSelector] = {
@@ -2449,7 +2553,7 @@ class ReplicaManager(val config: KafkaConfig,
               offsetForLeaderPartition.leaderEpoch,
               fetchOnlyFromLeader = true)
 
-          case HostedPartition.Offline =>
+          case HostedPartition.Offline(_) =>
             new EpochEndOffset()
               .setPartition(offsetForLeaderPartition.partition)
               .setErrorCode(Errors.KAFKA_STORAGE_ERROR.code)
@@ -2526,11 +2630,20 @@ class ReplicaManager(val config: KafkaConfig,
                                           delta: TopicsDelta,
                                           topicId: Uuid): Option[(Partition, Boolean)] = {
     getPartition(tp) match {
-      case HostedPartition.Offline =>
-        stateChangeLogger.warn(s"Unable to bring up new local leader $tp " +
-          s"with topic id $topicId because it resides in an offline log " +
-          "directory.")
-        None
+      case HostedPartition.Offline(offlinePartition) =>
+        if (offlinePartition.flatMap(p => p.topicId).contains(topicId)) {
+          stateChangeLogger.warn(s"Unable to bring up new local leader $tp " +
+            s"with topic id $topicId because it resides in an offline log " +
+            "directory.")
+          None
+        } else {
+          stateChangeLogger.info(s"Creating new partition $tp with topic id " + s"$topicId." +
+            s"A topic with the same name but different id exists but it resides in an offline log " +
+            s"directory.")
+          val partition = Partition(tp, time, this)
+          allPartitions.put(tp, HostedPartition.Online(partition))
+          Some(partition, true)
+        }
 
       case HostedPartition.Online(partition) =>
         if (partition.topicId.exists(_ != topicId)) {
@@ -2565,6 +2678,7 @@ class ReplicaManager(val config: KafkaConfig,
   def applyDelta(delta: TopicsDelta, newImage: MetadataImage): Unit = {
     // Before taking the lock, compute the local changes
     val localChanges = delta.localChanges(config.nodeId)
+    val metadataVersion = newImage.features().metadataVersion()
 
     replicaStateChangeLock.synchronized {
       // Handle deleted partitions. We need to do this first because we might subsequently
@@ -2597,10 +2711,10 @@ class ReplicaManager(val config: KafkaConfig,
         val leaderChangedPartitions = new mutable.HashSet[Partition]
         val followerChangedPartitions = new mutable.HashSet[Partition]
         if (!localChanges.leaders.isEmpty) {
-          applyLocalLeadersDelta(leaderChangedPartitions, delta, lazyOffsetCheckpoints, localChanges.leaders.asScala)
+          applyLocalLeadersDelta(leaderChangedPartitions, newImage, delta, lazyOffsetCheckpoints, localChanges.leaders.asScala, localChanges.directoryIds.asScala)
         }
         if (!localChanges.followers.isEmpty) {
-          applyLocalFollowersDelta(followerChangedPartitions, newImage, delta, lazyOffsetCheckpoints, localChanges.followers.asScala)
+          applyLocalFollowersDelta(followerChangedPartitions, newImage, delta, lazyOffsetCheckpoints, localChanges.followers.asScala, localChanges.directoryIds.asScala)
         }
 
         maybeAddLogDirFetchers(leaderChangedPartitions ++ followerChangedPartitions, lazyOffsetCheckpoints,
@@ -2611,14 +2725,21 @@ class ReplicaManager(val config: KafkaConfig,
 
         remoteLogManager.foreach(rlm => rlm.onLeadershipChange(leaderChangedPartitions.asJava, followerChangedPartitions.asJava, localChanges.topicIds()))
       }
+
+      if (metadataVersion.isDirectoryAssignmentSupported()) {
+        // We only want to update the directoryIds if DirectoryAssignment is supported!
+        localChanges.directoryIds.forEach(maybeUpdateTopicAssignment)
+      }
     }
   }
 
   private def applyLocalLeadersDelta(
     changedPartitions: mutable.Set[Partition],
+    newImage: MetadataImage,
     delta: TopicsDelta,
     offsetCheckpoints: OffsetCheckpoints,
-    localLeaders: mutable.Map[TopicPartition, LocalReplicaChanges.PartitionInfo]
+    localLeaders: mutable.Map[TopicPartition, LocalReplicaChanges.PartitionInfo],
+    directoryIds: mutable.Map[TopicIdPartition, Uuid]
   ): Unit = {
     stateChangeLogger.info(s"Transitioning ${localLeaders.size} partition(s) to " +
       "local leaders.")
@@ -2627,7 +2748,9 @@ class ReplicaManager(val config: KafkaConfig,
       getOrCreatePartition(tp, delta, info.topicId).foreach { case (partition, isNew) =>
         try {
           val state = info.partition.toLeaderAndIsrPartitionState(tp, isNew)
-          partition.makeLeader(state, offsetCheckpoints, Some(info.topicId))
+          val partitionAssignedDirectoryId = directoryIds.find(_._1.topicPartition() == tp).map(_._2)
+          partition.makeLeader(state, offsetCheckpoints, Some(info.topicId), partitionAssignedDirectoryId)
+
           changedPartitions.add(partition)
         } catch {
           case e: KafkaStorageException =>
@@ -2648,7 +2771,8 @@ class ReplicaManager(val config: KafkaConfig,
     newImage: MetadataImage,
     delta: TopicsDelta,
     offsetCheckpoints: OffsetCheckpoints,
-    localFollowers: mutable.Map[TopicPartition, LocalReplicaChanges.PartitionInfo]
+    localFollowers: mutable.Map[TopicPartition, LocalReplicaChanges.PartitionInfo],
+    directoryIds: mutable.Map[TopicIdPartition, Uuid]
   ): Unit = {
     stateChangeLogger.info(s"Transitioning ${localFollowers.size} partition(s) to " +
       "local followers.")
@@ -2666,7 +2790,8 @@ class ReplicaManager(val config: KafkaConfig,
           //   is unavailable. This is required to ensure that we include the partition's
           //   high watermark in the checkpoint file (see KAFKA-1647).
           val state = info.partition.toLeaderAndIsrPartitionState(tp, isNew)
-          val isNewLeaderEpoch = partition.makeFollower(state, offsetCheckpoints, Some(info.topicId))
+          val partitionAssignedDirectoryId = directoryIds.find(_._1.topicPartition() == tp).map(_._2)
+          val isNewLeaderEpoch = partition.makeFollower(state, offsetCheckpoints, Some(info.topicId), partitionAssignedDirectoryId)
 
           if (isInControlledShutdown && (info.partition.leader == NO_LEADER ||
               !info.partition.isr.contains(config.brokerId))) {
@@ -2736,21 +2861,17 @@ class ReplicaManager(val config: KafkaConfig,
     }
 
     if (partitionsToStopFetching.nonEmpty) {
-      stopPartitions(partitionsToStopFetching)
-      stateChangeLogger.info(s"Stopped fetchers as part of controlled shutdown for ${partitionsToStopFetching.size} partitions")
+      val partitionsToStop = partitionsToStopFetching.map { case (tp, deleteLocalLog) => StopPartition(tp, deleteLocalLog) }.toSet
+      stopPartitions(partitionsToStop)
+      stateChangeLogger.info(s"Stopped fetchers as part of controlled shutdown for ${partitionsToStop.size} partitions")
     }
   }
 
-  def deleteStrayReplicas(topicPartitions: Iterable[TopicPartition]): Unit = {
-    stopPartitions(topicPartitions.map(tp => tp -> true).toMap).forKeyValue { (topicPartition, exception) =>
-      exception match {
-        case e: KafkaStorageException =>
-          stateChangeLogger.error(s"Unable to delete stray replica $topicPartition because " +
-            s"the local replica for the partition is in an offline log directory: ${e.getMessage}.")
-        case e: Throwable =>
-          stateChangeLogger.error(s"Unable to delete stray replica $topicPartition because " +
-            s"we got an unexpected ${e.getClass.getName} exception: ${e.getMessage}", e)
-      }
-    }
+  private def maybeUpdateTopicAssignment(partition: TopicIdPartition, partitionDirectoryId: Uuid): Unit = {
+    for {
+      topicPartitionActualLog <- logManager.getLog(partition.topicPartition(), false)
+      topicPartitionActualDirectoryId <- logManager.directoryId(topicPartitionActualLog.dir.getParent)
+      if partitionDirectoryId != topicPartitionActualDirectoryId
+    } directoryEventHandler.handleAssignment(new common.TopicIdPartition(partition.topicId, partition.partition()), topicPartitionActualDirectoryId, () => ())
   }
 }

@@ -17,6 +17,7 @@
 
 package org.apache.kafka.metadata;
 
+import org.apache.kafka.common.DirectoryId;
 import org.apache.kafka.common.Endpoint;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.Uuid;
@@ -24,7 +25,6 @@ import org.apache.kafka.common.metadata.RegisterBrokerRecord;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.image.writer.ImageWriterOptions;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
-import org.apache.kafka.server.common.MetadataVersion;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
@@ -36,7 +36,6 @@ import java.util.Optional;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import static org.apache.kafka.metadata.util.MetadataFeatureUtil.withDirectoryAssignmentSupport;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
@@ -143,9 +142,7 @@ public class BrokerRegistrationTest {
     }
 
     private void testRoundTrip(BrokerRegistration registration) {
-        ImageWriterOptions options = new ImageWriterOptions.Builder().
-                setMetadataVersion(withDirectoryAssignmentSupport(MetadataVersion.latest())).
-                build();
+        ImageWriterOptions options = new ImageWriterOptions.Builder().build();
         ApiMessageAndVersion messageAndVersion = registration.
             toRecord(options);
         BrokerRegistration registration2 = BrokerRegistration.fromRecord(
@@ -170,8 +167,8 @@ public class BrokerRegistrationTest {
     }
 
     @Test
-    void testDirectoryListOrderDoesNotMatter() {
-        BrokerRegistration.Builder builder = new BrokerRegistration.Builder().
+    public void testDirectoriesAreSorted() {
+        BrokerRegistration registration = new BrokerRegistration.Builder().
                 setId(0).
                 setEpoch(0).
                 setIncarnationId(Uuid.fromString("ik32HZbLTW6ulw1yyrC8jQ")).
@@ -179,18 +176,49 @@ public class BrokerRegistrationTest {
                 setSupportedFeatures(Collections.singletonMap("foo", VersionRange.of((short) 1, (short) 2))).
                 setRack(Optional.empty()).
                 setFenced(false).
-                setInControlledShutdown(false);
-        Uuid dir1 = Uuid.fromString("apL5H78tQQqio31Od2xYRQ");
-        Uuid dir2 = Uuid.fromString("3b4Y3zHCScGAEnz4op4blg");
-        BrokerRegistration registration1 = builder.setDirectories(Arrays.asList(dir1, dir2)).build();
-        BrokerRegistration registration2 = builder.setDirectories(Arrays.asList(dir2, dir1)).build();
-        assertEquals(registration1, registration2);
-        assertEquals(registration1.hashCode(), registration2.hashCode());
-        assertTrue(registration1.hasOnlineDir(dir1));
-        assertTrue(registration1.hasOnlineDir(dir2));
-        assertTrue(registration2.hasOnlineDir(dir1));
-        assertTrue(registration2.hasOnlineDir(dir2));
-        assertFalse(registration1.hasOnlineDir(Uuid.fromString("sOwN7HH7S1maxpU1WzlzXg")));
-        assertFalse(registration2.hasOnlineDir(Uuid.fromString("sOwN7HH7S1maxpU1WzlzXg")));
+                setInControlledShutdown(false).
+                setDirectories(Arrays.asList(
+                    Uuid.fromString("3MWIBL9NR4eXhtdfBVA7Bw"),
+                    Uuid.fromString("SZQIVeLMQGiNi68StNSNZA"),
+                    Uuid.fromString("LWZsWPBrQruOMMrnEBj7bw"),
+                    Uuid.fromString("OpIJIaO6RKaOGvHlNmOEhA"),
+                    Uuid.fromString("JhYia5HRTLihf2FFJVxopQ"),
+                    Uuid.fromString("VNetSHnySxSbvjwKrBzpkw"))
+                ).
+                build();
+        assertEquals(Arrays.asList(
+                Uuid.fromString("3MWIBL9NR4eXhtdfBVA7Bw"),
+                Uuid.fromString("JhYia5HRTLihf2FFJVxopQ"),
+                Uuid.fromString("LWZsWPBrQruOMMrnEBj7bw"),
+                Uuid.fromString("OpIJIaO6RKaOGvHlNmOEhA"),
+                Uuid.fromString("SZQIVeLMQGiNi68StNSNZA"),
+                Uuid.fromString("VNetSHnySxSbvjwKrBzpkw")
+        ), registration.directories());
+    }
+
+    @Test
+    void testHasOnlineDir() {
+        BrokerRegistration registration = new BrokerRegistration.Builder().
+                setId(0).
+                setEpoch(0).
+                setIncarnationId(Uuid.fromString("m6CiJvfITZeKVC6UuhlZew")).
+                setListeners(Arrays.asList(new Endpoint("INTERNAL", SecurityProtocol.PLAINTEXT, "localhost", 9090))).
+                setSupportedFeatures(Collections.singletonMap("foo", VersionRange.of((short) 1, (short) 2))).
+                setRack(Optional.empty()).
+                setFenced(false).
+                setInControlledShutdown(false).
+                setDirectories(Arrays.asList(
+                    Uuid.fromString("dir1G6EtuR1OTdAzFw1AFQ"),
+                    Uuid.fromString("dir2gwpjTvKC7sMfcLNd8g"),
+                    Uuid.fromString("dir3Ir8mQ0mMxfv93RITDA")
+                )).
+                build();
+        assertTrue(registration.hasOnlineDir(Uuid.fromString("dir1G6EtuR1OTdAzFw1AFQ")));
+        assertTrue(registration.hasOnlineDir(Uuid.fromString("dir2gwpjTvKC7sMfcLNd8g")));
+        assertTrue(registration.hasOnlineDir(Uuid.fromString("dir3Ir8mQ0mMxfv93RITDA")));
+        assertTrue(registration.hasOnlineDir(DirectoryId.UNASSIGNED));
+        assertTrue(registration.hasOnlineDir(DirectoryId.MIGRATING));
+        assertFalse(registration.hasOnlineDir(Uuid.fromString("sOwN7HH7S1maxpU1WzlzXg")));
+        assertFalse(registration.hasOnlineDir(DirectoryId.LOST));
     }
 }

@@ -283,7 +283,7 @@ public class PartitionRegistrationTest {
         return Arrays.asList(
             MetadataVersion.IBP_3_7_IV1,
             MetadataVersion.IBP_3_7_IV2,
-            MetadataVersion.IBP_3_7_IV3
+            MetadataVersion.IBP_3_8_IV0
         ).stream().map(mv -> Arguments.of(mv));
     }
 
@@ -320,7 +320,7 @@ public class PartitionRegistrationTest {
         if (metadataVersion.isElrSupported()) {
             expectRecord.
                 setEligibleLeaderReplicas(Arrays.asList(2, 3)).
-                setLastKnownELR(Arrays.asList(4));
+                setLastKnownElr(Arrays.asList(4));
         }
         if (metadataVersion.isDirectoryAssignmentSupported()) {
             expectRecord.setDirectories(Arrays.asList(
@@ -369,7 +369,7 @@ public class PartitionRegistrationTest {
             setPartitionEpoch(0);
         List<UnwritableMetadataException> exceptions = new ArrayList<>();
         ImageWriterOptions options = new ImageWriterOptions.Builder().
-            setMetadataVersion(MetadataVersion.IBP_3_7_IV3).
+            setMetadataVersion(MetadataVersion.IBP_3_8_IV0).
             setLossHandler(exceptions::add).
             build();
         assertEquals(new ApiMessageAndVersion(expectRecord, (short) 2), partitionRegistration.toRecord(topicID, 0, options));

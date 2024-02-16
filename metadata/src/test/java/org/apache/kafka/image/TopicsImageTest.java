@@ -29,7 +29,6 @@ import org.apache.kafka.image.writer.RecordListWriter;
 import org.apache.kafka.metadata.LeaderRecoveryState;
 import org.apache.kafka.metadata.PartitionRegistration;
 import org.apache.kafka.metadata.RecordTestUtils;
-import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.server.immutable.ImmutableMap;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.junit.jupiter.api.Test;
@@ -49,7 +48,6 @@ import static org.apache.kafka.common.metadata.MetadataRecordType.PARTITION_CHAN
 import static org.apache.kafka.common.metadata.MetadataRecordType.PARTITION_RECORD;
 import static org.apache.kafka.common.metadata.MetadataRecordType.REMOVE_TOPIC_RECORD;
 import static org.apache.kafka.common.metadata.MetadataRecordType.TOPIC_RECORD;
-import static org.apache.kafka.metadata.util.MetadataFeatureUtil.withDirectoryAssignmentSupport;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -232,6 +230,10 @@ public class TopicsImageTest {
         );
         assertEquals(
             new HashSet<>(Arrays.asList(new TopicPartition("baz", 0))),
+            changes.electedLeaders().keySet()
+        );
+        assertEquals(
+            new HashSet<>(Arrays.asList(new TopicPartition("baz", 0))),
             changes.leaders().keySet()
         );
         assertEquals(
@@ -283,6 +285,7 @@ public class TopicsImageTest {
 
         LocalReplicaChanges changes = delta.localChanges(localId);
         assertEquals(new HashSet<>(Arrays.asList(new TopicPartition("zoo", 0))), changes.deletes());
+        assertEquals(Collections.emptyMap(), changes.electedLeaders());
         assertEquals(Collections.emptyMap(), changes.leaders());
         assertEquals(Collections.emptyMap(), changes.followers());
 
@@ -290,6 +293,43 @@ public class TopicsImageTest {
         List<ApiMessageAndVersion> imageRecords = getImageRecords(image);
         imageRecords.addAll(topicRecords);
         testToImage(finalImage, Optional.of(imageRecords));
+    }
+
+    @Test
+    public void testUpdatedLeaders() {
+        int localId = 3;
+        Uuid zooId = Uuid.fromString("0hHJ3X5ZQ-CFfQ5xgpj90w");
+
+        List<TopicImage> topics = new ArrayList<>();
+        topics.add(
+            newTopicImage(
+                "zoo",
+                zooId,
+                newPartition(new int[] {localId, 1, 2})
+            )
+        );
+        TopicsImage image = new TopicsImage(newTopicsByIdMap(topics),
+            newTopicsByNameMap(topics));
+
+        List<ApiMessageAndVersion> topicRecords = new ArrayList<>();
+        topicRecords.add(
+            new ApiMessageAndVersion(
+                new PartitionChangeRecord().setTopicId(zooId).setPartitionId(0).setIsr(Arrays.asList(localId, 1)),
+                PARTITION_CHANGE_RECORD.highestSupportedVersion()
+            )
+        );
+
+        TopicsDelta delta = new TopicsDelta(image);
+        RecordTestUtils.replayAll(delta, topicRecords);
+
+        LocalReplicaChanges changes = delta.localChanges(localId);
+        assertEquals(Collections.emptySet(), changes.deletes());
+        assertEquals(Collections.emptyMap(), changes.electedLeaders());
+        assertEquals(
+            new HashSet<>(Arrays.asList(new TopicPartition("zoo", 0))),
+            changes.leaders().keySet()
+        );
+        assertEquals(Collections.emptyMap(), changes.followers());
     }
 
     @Test
@@ -384,6 +424,10 @@ public class TopicsImageTest {
         );
         assertEquals(
             new HashSet<>(Arrays.asList(new TopicPartition("zoo", 0), new TopicPartition("zoo", 4))),
+            changes.electedLeaders().keySet()
+        );
+        assertEquals(
+            new HashSet<>(Arrays.asList(new TopicPartition("zoo", 0), new TopicPartition("zoo", 4))),
             changes.leaders().keySet()
         );
         assertEquals(
@@ -440,9 +484,7 @@ public class TopicsImageTest {
 
     private static List<ApiMessageAndVersion> getImageRecords(TopicsImage image) {
         RecordListWriter writer = new RecordListWriter();
-        image.write(writer, new ImageWriterOptions.Builder().
-                setMetadataVersion(withDirectoryAssignmentSupport(MetadataVersion.latest())).
-                build());
+        image.write(writer, new ImageWriterOptions.Builder().build());
         return writer.records();
     }
 

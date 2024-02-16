@@ -22,28 +22,27 @@ import kafka.coordinator.transaction.TransactionCoordinator
 import java.util.Collections.{singleton, singletonList, singletonMap}
 import java.util.Properties
 import java.util.concurrent.atomic.{AtomicInteger, AtomicReference}
-import kafka.log.{LogManager, UnifiedLog}
-import kafka.server.{BrokerServer, KafkaConfig, ReplicaManager}
+import kafka.log.LogManager
+import kafka.server.{BrokerLifecycleManager, BrokerServer, KafkaConfig, ReplicaManager}
 import kafka.testkit.{KafkaClusterTestKit, TestKitNodes}
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType.SET
 import org.apache.kafka.clients.admin.{Admin, AlterConfigOp, ConfigEntry, NewTopic}
 import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.config.ConfigResource.Type.BROKER
+import org.apache.kafka.common.metadata.FeatureLevelRecord
 import org.apache.kafka.common.utils.Exit
-import org.apache.kafka.common.{DirectoryId, TopicPartition, Uuid}
 import org.apache.kafka.coordinator.group.GroupCoordinator
-import org.apache.kafka.image.{MetadataDelta, MetadataImage, MetadataImageTest, MetadataProvenance, TopicImage, TopicsImage}
+import org.apache.kafka.image.{MetadataDelta, MetadataImage, MetadataImageTest, MetadataProvenance}
 import org.apache.kafka.image.loader.LogDeltaManifest
-import org.apache.kafka.metadata.LeaderRecoveryState
-import org.apache.kafka.metadata.PartitionRegistration
 import org.apache.kafka.raft.LeaderAndEpoch
+import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.server.fault.FaultHandler
 import org.junit.jupiter.api.Assertions.{assertEquals, assertNotNull, assertTrue}
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.mockito.ArgumentMatchers.any
 import org.mockito.Mockito
-import org.mockito.Mockito.{doThrow, mock, verify}
+import org.mockito.Mockito.{clearInvocations, doThrow, mock, times, verify, verifyNoInteractions}
 import org.mockito.invocation.InvocationOnMock
 import org.mockito.stubbing.Answer
 
@@ -85,100 +84,6 @@ class BrokerMetadataPublisherTest {
       "bar",
       MetadataImageTest.IMAGE1,
       MetadataImageTest.DELTA1).isDefined, "Expected to see delta for changed topic")
-  }
-
-  @Test
-  def testFindStrayReplicas(): Unit = {
-    val brokerId = 0
-
-    // Topic has been deleted
-    val deletedTopic = "a"
-    val deletedTopicId = Uuid.randomUuid()
-    val deletedTopicPartition1 = new TopicPartition(deletedTopic, 0)
-    val deletedTopicLog1 = mockLog(deletedTopicId, deletedTopicPartition1)
-    val deletedTopicPartition2 = new TopicPartition(deletedTopic, 1)
-    val deletedTopicLog2 = mockLog(deletedTopicId, deletedTopicPartition2)
-
-    // Topic was deleted and recreated
-    val recreatedTopic = "b"
-    val recreatedTopicPartition = new TopicPartition(recreatedTopic, 0)
-    val recreatedTopicLog = mockLog(Uuid.randomUuid(), recreatedTopicPartition)
-    val recreatedTopicImage = topicImage(Uuid.randomUuid(), recreatedTopic, Map(
-      recreatedTopicPartition.partition -> Seq(0, 1, 2)
-    ))
-
-    // Topic exists, but some partitions were reassigned
-    val reassignedTopic = "c"
-    val reassignedTopicId = Uuid.randomUuid()
-    val reassignedTopicPartition = new TopicPartition(reassignedTopic, 0)
-    val reassignedTopicLog = mockLog(reassignedTopicId, reassignedTopicPartition)
-    val retainedTopicPartition = new TopicPartition(reassignedTopic, 1)
-    val retainedTopicLog = mockLog(reassignedTopicId, retainedTopicPartition)
-
-    val reassignedTopicImage = topicImage(reassignedTopicId, reassignedTopic, Map(
-      reassignedTopicPartition.partition -> Seq(1, 2, 3),
-      retainedTopicPartition.partition -> Seq(0, 2, 3)
-    ))
-
-    val logs = Seq(
-      deletedTopicLog1,
-      deletedTopicLog2,
-      recreatedTopicLog,
-      reassignedTopicLog,
-      retainedTopicLog
-    )
-
-    val image = topicsImage(Seq(
-      recreatedTopicImage,
-      reassignedTopicImage
-    ))
-
-    val expectedStrayPartitions = Set(
-      deletedTopicPartition1,
-      deletedTopicPartition2,
-      recreatedTopicPartition,
-      reassignedTopicPartition
-    )
-
-    val strayPartitions = BrokerMetadataPublisher.findStrayPartitions(brokerId, image, logs).toSet
-    assertEquals(expectedStrayPartitions, strayPartitions)
-  }
-
-  private def mockLog(
-    topicId: Uuid,
-    topicPartition: TopicPartition
-  ): UnifiedLog = {
-    val log = Mockito.mock(classOf[UnifiedLog])
-    Mockito.when(log.topicId).thenReturn(Some(topicId))
-    Mockito.when(log.topicPartition).thenReturn(topicPartition)
-    log
-  }
-
-  private def topicImage(
-    topicId: Uuid,
-    topic: String,
-    partitions: Map[Int, Seq[Int]]
-  ): TopicImage = {
-    val partitionRegistrations = partitions.map { case (partitionId, replicas) =>
-      Int.box(partitionId) -> new PartitionRegistration.Builder().
-        setReplicas(replicas.toArray).
-        setDirectories(DirectoryId.unassignedArray(replicas.size)).
-        setIsr(replicas.toArray).
-        setLeader(replicas.head).
-        setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).
-        setLeaderEpoch(0).
-        setPartitionEpoch(0).
-        build()
-    }
-    new TopicImage(topic, topicId, partitionRegistrations.asJava)
-  }
-
-  private def topicsImage(
-    topics: Seq[TopicImage]
-  ): TopicsImage = {
-    var retval = TopicsImage.EMPTY
-    topics.foreach { t => retval = retval.including(t) }
-    retval
   }
 
   private def newMockDynamicConfigPublisher(
@@ -240,7 +145,9 @@ class BrokerMetadataPublisherTest {
     val cluster = new KafkaClusterTestKit.Builder(
       new TestKitNodes.Builder().
         setNumBrokerNodes(1).
-        setNumControllerNodes(1).build()).
+        setNumControllerNodes(1).
+        setBootstrapMetadataVersion(MetadataVersion.IBP_3_7_IV1).
+        build()).
       build()
     try {
       cluster.format()
@@ -293,7 +200,8 @@ class BrokerMetadataPublisherTest {
       mock(classOf[DelegationTokenPublisher]),
       mock(classOf[AclPublisher]),
       faultHandler,
-      faultHandler
+      faultHandler,
+      mock(classOf[BrokerLifecycleManager]),
     )
 
     val image = MetadataImage.EMPTY
@@ -311,5 +219,103 @@ class BrokerMetadataPublisherTest {
         .build());
 
     verify(groupCoordinator).onNewMetadataImage(image, delta)
+  }
+
+  @Test
+  def testMetadataVersionUpdateToIBP_3_7_IV2OrAboveTriggersBrokerReRegistration(): Unit = {
+    val config = KafkaConfig.fromProps(TestUtils.createBrokerConfig(0, ""))
+    val metadataCache = new KRaftMetadataCache(0)
+    val logManager = mock(classOf[LogManager])
+    val replicaManager = mock(classOf[ReplicaManager])
+    val groupCoordinator = mock(classOf[GroupCoordinator])
+    val faultHandler = mock(classOf[FaultHandler])
+    val brokerLifecycleManager = mock(classOf[BrokerLifecycleManager])
+
+    val metadataPublisher = new BrokerMetadataPublisher(
+      config,
+      metadataCache,
+      logManager,
+      replicaManager,
+      groupCoordinator,
+      mock(classOf[TransactionCoordinator]),
+      mock(classOf[DynamicConfigPublisher]),
+      mock(classOf[DynamicClientQuotaPublisher]),
+      mock(classOf[ScramPublisher]),
+      mock(classOf[DelegationTokenPublisher]),
+      mock(classOf[AclPublisher]),
+      faultHandler,
+      faultHandler,
+      brokerLifecycleManager,
+    )
+
+    var image = MetadataImage.EMPTY
+    var delta = new MetadataDelta.Builder()
+      .setImage(image)
+      .build()
+
+    // We first upgrade metadata version to 3_6_IV2
+    delta.replay(new FeatureLevelRecord().
+      setName(MetadataVersion.FEATURE_NAME).
+      setFeatureLevel(MetadataVersion.IBP_3_6_IV2.featureLevel()))
+    var newImage = delta.apply(new MetadataProvenance(100, 4, 2000))
+
+    metadataPublisher.onMetadataUpdate(delta, newImage,
+      LogDeltaManifest.newBuilder()
+        .provenance(MetadataProvenance.EMPTY)
+        .leaderAndEpoch(LeaderAndEpoch.UNKNOWN)
+        .numBatches(1)
+        .elapsedNs(100)
+        .numBytes(42)
+        .build());
+
+    // This should NOT trigger broker reregistration
+    verifyNoInteractions(brokerLifecycleManager)
+
+    // We then upgrade to IBP_3_7_IV2
+    image = newImage
+    delta = new MetadataDelta.Builder()
+      .setImage(image)
+      .build()
+    delta.replay(new FeatureLevelRecord().
+      setName(MetadataVersion.FEATURE_NAME).
+      setFeatureLevel(MetadataVersion.IBP_3_7_IV2.featureLevel()))
+    newImage = delta.apply(new MetadataProvenance(100, 4, 2000))
+
+    metadataPublisher.onMetadataUpdate(delta, newImage,
+      LogDeltaManifest.newBuilder()
+        .provenance(MetadataProvenance.EMPTY)
+        .leaderAndEpoch(LeaderAndEpoch.UNKNOWN)
+        .numBatches(1)
+        .elapsedNs(100)
+        .numBytes(42)
+        .build());
+
+    // This SHOULD trigger a broker registration
+    verify(brokerLifecycleManager, times(1)).handleKraftJBODMetadataVersionUpdate()
+    clearInvocations(brokerLifecycleManager)
+
+    // Finally upgrade to IBP_3_8_IV0
+    image = newImage
+    delta = new MetadataDelta.Builder()
+      .setImage(image)
+      .build()
+    delta.replay(new FeatureLevelRecord().
+      setName(MetadataVersion.FEATURE_NAME).
+      setFeatureLevel(MetadataVersion.IBP_3_8_IV0.featureLevel()))
+    newImage = delta.apply(new MetadataProvenance(200, 4, 3000))
+
+    metadataPublisher.onMetadataUpdate(delta, newImage,
+      LogDeltaManifest.newBuilder()
+        .provenance(MetadataProvenance.EMPTY)
+        .leaderAndEpoch(LeaderAndEpoch.UNKNOWN)
+        .numBatches(1)
+        .elapsedNs(100)
+        .numBytes(42)
+        .build());
+
+    // This should NOT trigger broker reregistration
+    verify(brokerLifecycleManager, times(0)).handleKraftJBODMetadataVersionUpdate()
+
+    metadataPublisher.close()
   }
 }
