@@ -32,8 +32,6 @@
               files="(ApiMessageType|FieldSpec|MessageDataGenerator|KafkaConsumerTest).java"/>
     <suppress checks="MethodLength"
               files="(FieldSpec|MessageDataGenerator).java"/>
-    <suppress id="dontUseSystemExit"
-              files="MessageGenerator.java"/>
 
     <!-- core -->
     <suppress checks="(NPathComplexity|ClassFanOutComplexity|CyclomaticComplexity|ClassDataAbstractionCoupling|FinalLocalVariable|LocalVariableName|MemberName|ParameterName|MethodLength|JavaNCSS|AvoidStarImport)"
