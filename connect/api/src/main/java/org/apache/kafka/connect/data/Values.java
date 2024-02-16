@@ -28,7 +28,7 @@ import java.math.RoundingMode;
 import java.nio.ByteBuffer;
 import java.text.CharacterIterator;
 import java.text.DateFormat;
-import java.text.ParseException;
+import java.text.ParsePosition;
 import java.text.SimpleDateFormat;
 import java.text.StringCharacterIterator;
 import java.util.ArrayList;
@@ -1044,23 +1044,21 @@ public class Values {
         token = token.replace("\\:", ":");
         int tokenLength = token.length();
         if (tokenLength == ISO_8601_TIME_LENGTH) {
-            try {
-                return new SchemaAndValue(Time.SCHEMA, new SimpleDateFormat(ISO_8601_TIME_FORMAT_PATTERN).parse(token));
-            } catch (ParseException e) {
-              // not a valid date
-            }
+            return parseAsTemporalType(token, Time.SCHEMA, ISO_8601_TIME_FORMAT_PATTERN);
         } else if (tokenLength == ISO_8601_TIMESTAMP_LENGTH) {
-            try {
-                return new SchemaAndValue(Timestamp.SCHEMA, new SimpleDateFormat(ISO_8601_TIMESTAMP_FORMAT_PATTERN).parse(token));
-            } catch (ParseException e) {
-              // not a valid date
-            }
+            return parseAsTemporalType(token, Timestamp.SCHEMA, ISO_8601_TIMESTAMP_FORMAT_PATTERN);
         } else if (tokenLength == ISO_8601_DATE_LENGTH) {
-            try {
-                return new SchemaAndValue(Date.SCHEMA, new SimpleDateFormat(ISO_8601_DATE_FORMAT_PATTERN).parse(token));
-            } catch (ParseException e) {
-                // not a valid date
-            }
+            return parseAsTemporalType(token, Date.SCHEMA, ISO_8601_DATE_FORMAT_PATTERN);
+        } else {
+            return null;
+        }
+    }
+
+    private static SchemaAndValue parseAsTemporalType(String token, Schema schema, String pattern) {
+        ParsePosition pos = new ParsePosition(0);
+        java.util.Date result = new SimpleDateFormat(pattern).parse(token, pos);
+        if (pos.getIndex() != 0) {
+            return new SchemaAndValue(schema, result);
         }
         return null;
     }
