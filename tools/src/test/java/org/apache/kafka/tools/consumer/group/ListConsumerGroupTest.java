@@ -25,7 +25,6 @@ import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
-import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.Arrays;
 import java.util.Collections;
@@ -46,18 +45,15 @@ public class ListConsumerGroupTest extends ConsumerGroupCommandTest {
     @MethodSource("getTestQuorumAndGroupProtocolParametersAll")
     public void testListConsumerGroupsWithoutFilters(String quorum, String groupProtocol) throws Exception {
         String simpleGroup = "simple-group";
-        String protocolGroup = "protocol-group";
-
-        createOffsetsTopic(listenerName(), new Properties());
 
         addSimpleGroupExecutor(simpleGroup);
         addConsumerGroupExecutor(1);
-        addConsumerGroupExecutor(1, protocolGroup, groupProtocol);
+        addConsumerGroupExecutor(1, PROTOCOL_GROUP, groupProtocol);
 
         String[] cgcArgs = new String[]{"--bootstrap-server", bootstrapServers(listenerName()), "--list"};
         ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(cgcArgs);
 
-        scala.collection.Set<String> expectedGroups = set(Arrays.asList(protocolGroup, GROUP, simpleGroup));
+        scala.collection.Set<String> expectedGroups = set(Arrays.asList(GROUP, simpleGroup, PROTOCOL_GROUP));
         final AtomicReference<scala.collection.Set> foundGroups = new AtomicReference<>();
 
         TestUtils.waitForCondition(() -> {
@@ -174,13 +170,12 @@ public class ListConsumerGroupTest extends ConsumerGroupCommandTest {
     @MethodSource("getTestQuorumAndGroupProtocolParametersConsumerGroupProtocolOnly")
     public void testListConsumerGroupsWithTypesConsumerProtocol(String quorum, String groupProtocol) throws Exception {
         String simpleGroup = "simple-group";
-        String protocolGroup = "protocol-group";
 
         createOffsetsTopic(listenerName(), new Properties());
 
         addSimpleGroupExecutor(simpleGroup);
         addConsumerGroupExecutor(1);
-        addConsumerGroupExecutor(1, protocolGroup, groupProtocol);
+        addConsumerGroupExecutor(1, PROTOCOL_GROUP, groupProtocol);
 
         String[] cgcArgs = new String[]{"--bootstrap-server", bootstrapServers(listenerName()), "--list"};
         ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(cgcArgs);
@@ -200,7 +195,7 @@ public class ListConsumerGroupTest extends ConsumerGroupCommandTest {
                 Optional.of(GroupType.CLASSIC)
             ),
             new ConsumerGroupListing(
-                protocolGroup,
+                PROTOCOL_GROUP,
                 false,
                 Optional.of(ConsumerGroupState.STABLE),
                 Optional.of(GroupType.CONSUMER)
@@ -213,7 +208,7 @@ public class ListConsumerGroupTest extends ConsumerGroupCommandTest {
         // New Group Coordinator returns groups according to the filter.
         expectedListing = new HashSet<>(Arrays.asList(
             new ConsumerGroupListing(
-                protocolGroup,
+                PROTOCOL_GROUP,
                 false,
                 Optional.of(ConsumerGroupState.STABLE),
                 Optional.of(GroupType.CONSUMER)
@@ -285,51 +280,6 @@ public class ListConsumerGroupTest extends ConsumerGroupCommandTest {
         assertThrows(IllegalArgumentException.class, () -> ConsumerGroupCommand.consumerGroupTypesFromString("   ,   ,"));
     }
 
-    @ParameterizedTest
-    @ValueSource(strings = {"zk", "kraft"})
-    public void testListGroupCommand(String quorum) throws Exception {
-        String simpleGroup = "simple-group";
-        addSimpleGroupExecutor(simpleGroup);
-        addConsumerGroupExecutor(1);
-        final AtomicReference<String> out = new AtomicReference<>("");
-
-        String[] cgcArgs1 = new String[]{"--bootstrap-server", bootstrapServers(listenerName()), "--list"};
-        TestUtils.waitForCondition(() -> {
-            out.set(kafka.utils.TestUtils.grabConsoleOutput(() -> {
-                ConsumerGroupCommand.main(cgcArgs1);
-                return null;
-            }));
-            return !out.get().contains("STATE") && out.get().contains(simpleGroup) && out.get().contains(GROUP);
-        }, "Expected to find " + simpleGroup + ", " + GROUP + " and no header, but found " + out.get());
-
-        String[] cgcArgs2 = new String[]{"--bootstrap-server", bootstrapServers(listenerName()), "--list", "--state"};
-        TestUtils.waitForCondition(() -> {
-            out.set(kafka.utils.TestUtils.grabConsoleOutput(() -> {
-                ConsumerGroupCommand.main(cgcArgs2);
-                return null;
-            }));
-            return out.get().contains("STATE") && out.get().contains(simpleGroup) && out.get().contains(GROUP);
-        }, "Expected to find " + simpleGroup + ", " + GROUP + " and the header, but found " + out.get());
-
-        String[] cgcArgs3 = new String[]{"--bootstrap-server", bootstrapServers(listenerName()), "--list", "--state", "Stable"};
-        TestUtils.waitForCondition(() -> {
-            out.set(kafka.utils.TestUtils.grabConsoleOutput(() -> {
-                ConsumerGroupCommand.main(cgcArgs3);
-                return null;
-            }));
-            return out.get().contains("STATE") && out.get().contains(GROUP) && out.get().contains("Stable");
-        }, "Expected to find " + GROUP + " in state Stable and the header, but found " + out.get());
-
-        String[] cgcArgs4 = new String[]{"--bootstrap-server", bootstrapServers(listenerName()), "--list", "--state", "stable"};
-        TestUtils.waitForCondition(() -> {
-            out.set(kafka.utils.TestUtils.grabConsoleOutput(() -> {
-                ConsumerGroupCommand.main(cgcArgs4);
-                return null;
-            }));
-            return out.get().contains("STATE") && out.get().contains(GROUP) && out.get().contains("Stable");
-        }, "Expected to find " + GROUP + " in state Stable and the header, but found " + out.get());
-    }
-
     @ParameterizedTest(name = TEST_WITH_PARAMETERIZED_QUORUM_AND_GROUP_PROTOCOL_NAMES)
     @MethodSource("getTestQuorumAndGroupProtocolParametersClassicGroupProtocolOnly")
     public void testListGroupCommandClassicProtocol(String quorum, String groupProtocol) throws Exception {
@@ -375,7 +325,7 @@ public class ListConsumerGroupTest extends ConsumerGroupCommandTest {
                 ConsumerGroupCommand.main(cgcArgs4);
                 return null;
             }));
-             return out.get().contains("TYPE") && out.get().contains("STATE") && out.get().contains(simpleGroup) && out.get().contains(GROUP);
+            return out.get().contains("TYPE") && out.get().contains("STATE") && out.get().contains(simpleGroup) && out.get().contains(GROUP);
         }, "Expected to find " + simpleGroup + ", " + GROUP + " and the header, but found " + out.get());
 
         String[] cgcArgs5 = new String[]{"--bootstrap-server", bootstrapServers(listenerName()), "--list", "--state", "Stable"};
@@ -421,12 +371,11 @@ public class ListConsumerGroupTest extends ConsumerGroupCommandTest {
     @MethodSource("getTestQuorumAndGroupProtocolParametersConsumerGroupProtocolOnly")
     public void testListGroupCommandConsumerProtocol(String quorum, String groupProtocol) throws Exception {
         String simpleGroup = "simple-group";
-        String protocolGroup = "protocol-group";
 
         createOffsetsTopic(listenerName(), new Properties());
 
         addSimpleGroupExecutor(simpleGroup);
-        addConsumerGroupExecutor(1, protocolGroup, groupProtocol);
+        addConsumerGroupExecutor(1, PROTOCOL_GROUP, groupProtocol);
 
         final AtomicReference<String> out = new AtomicReference<>("");
 
@@ -437,8 +386,8 @@ public class ListConsumerGroupTest extends ConsumerGroupCommandTest {
                 return null;
             }));
             return !out.get().contains("TYPE") && !out.get().contains("STATE") &&
-                out.get().contains(simpleGroup) && out.get().contains(protocolGroup);
-        }, "Expected to find " + simpleGroup + ", " + protocolGroup + " and no header, but found " + out.get());
+                out.get().contains(simpleGroup) && out.get().contains(PROTOCOL_GROUP);
+        }, "Expected to find " + simpleGroup + ", " + PROTOCOL_GROUP + " and no header, but found " + out.get());
 
         String[] cgcArgs2 = new String[]{"--bootstrap-server", bootstrapServers(listenerName()), "--list", "--state"};
         TestUtils.waitForCondition(() -> {
@@ -446,8 +395,8 @@ public class ListConsumerGroupTest extends ConsumerGroupCommandTest {
                 ConsumerGroupCommand.main(cgcArgs2);
                 return null;
             }));
-            return out.get().contains("STATE") && !out.get().contains("TYPE") && out.get().contains(simpleGroup) && out.get().contains(protocolGroup);
-        }, "Expected to find " + simpleGroup + ", " + protocolGroup + " and state header, but found " + out.get());
+            return out.get().contains("STATE") && !out.get().contains("TYPE") && out.get().contains(simpleGroup) && out.get().contains(PROTOCOL_GROUP);
+        }, "Expected to find " + simpleGroup + ", " + PROTOCOL_GROUP + " and state header, but found " + out.get());
 
         String[] cgcArgs3 = new String[]{"--bootstrap-server", bootstrapServers(listenerName()), "--list", "--type"};
         TestUtils.waitForCondition(() -> {
@@ -456,8 +405,8 @@ public class ListConsumerGroupTest extends ConsumerGroupCommandTest {
                 return null;
             }));
             return out.get().contains("TYPE") && out.get().contains("Consumer") && !out.get().contains("STATE") &&
-                out.get().contains(protocolGroup) && out.get().contains(simpleGroup);
-        }, "Expected to find " + simpleGroup + ", " + protocolGroup + " and type header, but found " + out.get());
+                out.get().contains(PROTOCOL_GROUP) && out.get().contains(simpleGroup);
+        }, "Expected to find " + simpleGroup + ", " + PROTOCOL_GROUP + " and type header, but found " + out.get());
 
         String[] cgcArgs4 = new String[]{"--bootstrap-server", bootstrapServers(listenerName()), "--list", "--type", "consumer"};
         TestUtils.waitForCondition(() -> {
@@ -465,8 +414,8 @@ public class ListConsumerGroupTest extends ConsumerGroupCommandTest {
                 ConsumerGroupCommand.main(cgcArgs4);
                 return null;
             }));
-            return out.get().contains("TYPE") && out.get().contains("Consumer") && !out.get().contains("STATE") && out.get().contains(protocolGroup);
-        }, "Expected to find " + protocolGroup + " with type header and Consumer type, but found " + out.get());
+            return out.get().contains("TYPE") && out.get().contains("Consumer") && !out.get().contains("STATE") && out.get().contains(PROTOCOL_GROUP);
+        }, "Expected to find " + PROTOCOL_GROUP + " with type header and Consumer type, but found " + out.get());
 
         String[] cgcArgs5 = new String[]{"--bootstrap-server", bootstrapServers(listenerName()), "--list", "--type", "consumer", "--state", "Stable"};
         TestUtils.waitForCondition(() -> {
@@ -475,8 +424,8 @@ public class ListConsumerGroupTest extends ConsumerGroupCommandTest {
                 return null;
             }));
             return out.get().contains("TYPE") && out.get().contains("Consumer") && out.get().contains("STATE") &&
-                out.get().contains("Stable") && out.get().contains(protocolGroup);
-        }, "Expected to find " + protocolGroup + " with type and state header, but found " + out.get());
+                out.get().contains("Stable") && out.get().contains(PROTOCOL_GROUP);
+        }, "Expected to find " + PROTOCOL_GROUP + " with type and state header, but found " + out.get());
     }
 
     private void assertGroupListing(
@@ -488,7 +437,7 @@ public class ListConsumerGroupTest extends ConsumerGroupCommandTest {
         final AtomicReference<scala.collection.Set> foundListing = new AtomicReference<>();
         TestUtils.waitForCondition(() -> {
             foundListing.set(service.listConsumerGroupsWithFilters(set(typeFilterSet), set(stateFilterSet)).toSet());
-            return Objects.equals(expectedListing, foundListing.get());
+            return Objects.equals(set(expectedListing), foundListing.get());
         }, "Expected to show groups " + expectedListing + ", but found " + foundListing.get() + ".");
     }
 }
