@@ -44,7 +44,7 @@
               files="(KafkaClusterTestKit).java"/>
 
     <!-- server tests -->
-    <suppress checks="MethodLength|JavaNCSS|NPath" files="DescribeTopicPartitionsRequestHandlerTest.java"/>
+    <suppress checks="MethodLength|JavaNCSS|NPathComplexity" files="DescribeTopicPartitionsRequestHandlerTest.java"/>
 
     <!-- Clients -->
     <suppress id="dontUseSystemExit"
@@ -53,7 +53,7 @@
               files="(AbstractFetch|Sender|SenderTest|ConsumerCoordinator|KafkaConsumer|KafkaProducer|Utils|TransactionManager|TransactionManagerTest|KafkaAdminClient|NetworkClient|Admin|KafkaRaftClient|KafkaRaftClientTest|RaftClientTestContext).java"/>
     <suppress checks="ClassFanOutComplexity"
               files="(SaslServerAuthenticator|SaslAuthenticatorTest).java"/>
-    <suppress checks="NPath"
+    <suppress checks="NPathComplexity"
               files="SaslServerAuthenticator.java"/>
     <suppress checks="ClassFanOutComplexity"
               files="Errors.java"/>
@@ -330,7 +330,7 @@
               files="(GroupMetadataManager|GroupMetadataManagerTest|GroupMetadataManagerTestContext|GroupCoordinatorService|GroupCoordinatorServiceTest).java"/>
     <suppress checks="ParameterNumber"
               files="(ConsumerGroupMember|GroupMetadataManager|GroupCoordinatorConfig).java"/>
-    <suppress checks="ClassDataAbstractionCouplingCheck"
+    <suppress checks="ClassDataAbstractionCoupling"
               files="(RecordHelpersTest|GroupMetadataManager|GroupMetadataManagerTest|OffsetMetadataManagerTest|GroupCoordinatorServiceTest|GroupCoordinatorShardTest).java"/>
     <suppress checks="JavaNCSS"
               files="GroupMetadataManagerTest.java"/>
