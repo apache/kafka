@@ -317,7 +317,7 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStore<S extends Seg
 
     // Visible for testing
     void restoreAllInternal(final Collection<ConsumerRecord<byte[], byte[]>> records) {
-        position.unlock();
+        position.lock();
         try {
             final Map<S, WriteBatch> writeBatchMap = getWriteBatches(records);
             for (final Map.Entry<S, WriteBatch> entry : writeBatchMap.entrySet()) {
