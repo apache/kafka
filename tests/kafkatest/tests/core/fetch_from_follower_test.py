@@ -71,14 +71,15 @@ class FetchFromFollowerTest(ProduceConsumeValidateTest):
 
     @cluster(num_nodes=9)
     @matrix(
-        metadata_quorum=[quorum.zk],
+        metadata_quorum=[quorum.zk, quorum.isolated_kraft],
         use_new_coordinator=[False]
     )
     @matrix(
         metadata_quorum=[quorum.isolated_kraft],
-        use_new_coordinator=[True, False]
+        use_new_coordinator=[True],
+        group_protocol=["classic", "consumer"]
     )
-    def test_consumer_preferred_read_replica(self, metadata_quorum=quorum.zk, use_new_coordinator=False):
+    def test_consumer_preferred_read_replica(self, metadata_quorum=quorum.zk, use_new_coordinator=False, group_protocol=None):
         """
         This test starts up brokers with "broker.rack" and "replica.selector.class" configurations set. The replica
         selector is set to the rack-aware implementation. One of the brokers has a different rack than the other two.
@@ -101,7 +102,11 @@ class FetchFromFollowerTest(ProduceConsumeValidateTest):
         self.consumer = ConsoleConsumer(self.test_context, self.num_consumers, self.kafka, self.topic,
                                         client_id="console-consumer", group_id="test-consumer-group-1",
                                         consumer_timeout_ms=60000, message_validator=is_int,
-                                        consumer_properties={"client.rack": non_leader_rack, "metadata.max.age.ms": self.METADATA_MAX_AGE_MS})
+                                        consumer_properties={
+                                            "client.rack": non_leader_rack,
+                                            "metadata.max.age.ms": self.METADATA_MAX_AGE_MS,
+                                            "group.protocol": group_protocol
+                                        })
 
         # Start up and let some data get produced
         self.start_producer_and_consumer()
