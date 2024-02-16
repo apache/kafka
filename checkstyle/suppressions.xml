@@ -49,7 +49,7 @@
     <suppress id="dontUseSystemExit"
               files="Exit.java"/>
     <suppress checks="ClassFanOutComplexity"
-              files="(Sender|SenderTest|ConsumerCoordinator|KafkaProducer|Utils|TransactionManager|TransactionManagerTest|KafkaAdminClient|NetworkClient|Admin|KafkaRaftClient|RaftClientTestContext|AsyncKafkaConsumer|LegacyKafkaConsumer).java"/>
+              files="(Sender|SenderTest|ConsumerCoordinator|KafkaProducer|Utils|TransactionManager|TransactionManagerTest|KafkaAdminClient|NetworkClient|Admin|ForwardingAdmin|KafkaRaftClient|RaftClientTestContext|AsyncKafkaConsumer|LegacyKafkaConsumer).java"/>
     <suppress checks="ClassFanOutComplexity"
               files="(SaslServerAuthenticator|SaslAuthenticatorTest).java"/>
     <suppress checks="NPathComplexity"
@@ -98,19 +98,21 @@
 
     <!-- Clients tests -->
     <suppress checks="ClassDataAbstractionCoupling"
-              files="(Sender|Fetcher|FetchRequestManager|OffsetFetcher|KafkaConsumer|RequestResponse|TransactionManager|KafkaAdminClient|Message|KafkaProducer)Test.java"/>
+              files="(ConsumerCoordinator|Sender|Fetcher|FetchRequestManager|OffsetFetcher|KafkaConsumer|AsyncKafkaConsumer|RequestResponse|TransactionManager|KafkaAdminClient|Message|KafkaProducer)Test.java"/>
 
     <suppress checks="ClassFanOutComplexity"
-              files="(ConsumerCoordinator|KafkaConsumer|RequestResponse|Fetcher|FetchRequestManager|KafkaAdminClient|Message|KafkaProducer)Test.java"/>
+              files="(ConsumerCoordinator|KafkaConsumer|AsyncKafkaConsumer|RequestResponse|Fetcher|OffsetFetcher|FetchRequestManager|KafkaAdminClient|Message|KafkaProducer)Test.java"/>
 
     <suppress checks="ClassFanOutComplexity"
-              files="MockAdminClient.java"/>
+              files="(IntegrationTestUtils|MockAdminClient).java"/>
 
     <suppress checks="CyclomaticComplexity"
               files="RequestResponseTest.java"/>
 
     <suppress checks="JavaNCSS"
               files="(RequestResponseTest|FetcherTest|FetchRequestManagerTest|KafkaAdminClientTest).java"/>
+
+    <suppress checks="NPathComplexity" files="MemoryRecordsTest.java"/>
 
     <suppress checks="MethodLength"
               files="ConsumerTestBuilder.java"/>
@@ -121,7 +123,7 @@
     <suppress checks="MethodLength"
               files="(DistributedHerder|DistributedConfig|Values|IncrementalCooperativeAssignor).java"/>
     <suppress checks="ParameterNumber"
-              files="Worker(SinkTask|SourceTask).java"/>
+              files="(WorkerSinkTask|WorkerSourceTask|AbstractWorkerSourceTask|ExactlyOnceWorkerSourceTask).java"/>
     <suppress checks="ParameterNumber"
               files="(Worker|DistributedHerder).java"/>
     <suppress checks="DefaultComesLast"
@@ -146,7 +148,7 @@
               files="(DistributedHerder|Worker)Test.java"/>
 
     <suppress checks="ClassFanOutComplexity"
-              files="(WorkerSink|WorkerSource|ErrorHandling)Task(|WithTopicCreation)Test.java"/>
+              files="(WorkerSource|AbstractWorkerSource|ExactlyOnceWorkerSource|ErrorHandling)TaskTest.java"/>
     <suppress checks="ClassFanOutComplexity"
               files="(DistributedHerder|Worker)Test.java"/>
 
