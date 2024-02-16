@@ -25,13 +25,14 @@ import org.slf4j.Logger;
 
 public final class StreamStreamJoinUtil {
 
-    private StreamStreamJoinUtil(){
+    private StreamStreamJoinUtil() {
     }
 
     public static <KIn, VIn, KOut, VOut> boolean skipRecord(
         final Record<KIn, VIn> record, final Logger logger,
         final Sensor droppedRecordsSensor,
-        final ProcessorContext<KOut, VOut> context) {
+        final ProcessorContext<KOut, VOut> context
+    ) {
         // we do join iff keys are equal, thus, if key is null we cannot join and just ignore the record
         //
         // we also ignore the record if value is null, because in a key-value data model a null-value indicates
@@ -39,22 +40,30 @@ public final class StreamStreamJoinUtil {
         // furthermore, on left/outer joins 'null' in ValueJoiner#apply() indicates a missing record --
         // thus, to be consistent and to avoid ambiguous null semantics, null values are ignored
         if (record.key() == null || record.value() == null) {
-            if (context.recordMetadata().isPresent()) {
-                final RecordMetadata recordMetadata = context.recordMetadata().get();
-                logger.warn(
-                    "Skipping record due to null key or value. "
-                        + "topic=[{}] partition=[{}] offset=[{}]",
-                    recordMetadata.topic(), recordMetadata.partition(), recordMetadata.offset()
-                );
-            } else {
-                logger.warn(
-                    "Skipping record due to null key or value. Topic, partition, and offset not known."
-                );
-            }
-            droppedRecordsSensor.record();
+            logSkip("Skipping record due to null key or value.", logger, droppedRecordsSensor, context);
             return true;
         } else {
             return false;
         }
+    }
+
+    public static <KOut, VOut> void logSkip(
+        final String reason,
+        final Logger logger,
+        final Sensor droppedRecordsSensor,
+        final ProcessorContext<KOut, VOut> context
+    ) {
+        if (context.recordMetadata().isPresent()) {
+            final RecordMetadata recordMetadata = context.recordMetadata().get();
+            logger.warn(
+                reason + " topic=[{}] partition=[{}] offset=[{}]",
+                recordMetadata.topic(),
+                recordMetadata.partition(),
+                recordMetadata.offset()
+            );
+        } else {
+            logger.warn(reason + " topic, partition, and offset not known.");
+        }
+        droppedRecordsSensor.record();
     }
 }
