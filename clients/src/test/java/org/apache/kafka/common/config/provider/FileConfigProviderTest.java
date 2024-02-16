@@ -19,27 +19,47 @@ package org.apache.kafka.common.config.provider;
 import org.apache.kafka.common.config.ConfigData;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
+import java.io.File;
 import java.io.IOException;
 import java.io.Reader;
 import java.io.StringReader;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.ServiceLoader;
 import java.util.stream.StreamSupport;
 
+import static org.apache.kafka.common.config.provider.DirectoryConfigProvider.ALLOWED_PATHS_CONFIG;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class FileConfigProviderTest {
 
     private FileConfigProvider configProvider;
+    @TempDir
+    private File parent;
+    private String dir;
+    private String dirFile;
+    private String siblingDir;
+    private String siblingDirFile;
 
     @BeforeEach
-    public void setup() {
+    public void setup() throws IOException {
         configProvider = new TestFileConfigProvider();
+        configProvider.configure(Collections.emptyMap());
+
+        dir = Files.createDirectory(Paths.get(parent.toString(), "dir")).toString();
+        dirFile = Files.createFile(Paths.get(dir, "dirFile")).toString();
+
+        siblingDir = Files.createDirectory(Paths.get(parent.toString(), "siblingDir")).toString();
+        siblingDirFile = Files.createFile(Paths.get(siblingDir, "siblingDirFile")).toString();
     }
 
     @Test
@@ -98,8 +118,98 @@ public class FileConfigProviderTest {
     public static class TestFileConfigProvider extends FileConfigProvider {
 
         @Override
-        protected Reader reader(String path) throws IOException {
+        protected Reader reader(Path path) throws IOException {
             return new StringReader("testKey=testResult\ntestKey2=testResult2");
         }
+    }
+
+    @Test
+    public void testAllowedDirPath() {
+        Map<String, String> configs = new HashMap<>();
+        configs.put(ALLOWED_PATHS_CONFIG, dir);
+        configProvider.configure(configs);
+
+        ConfigData configData = configProvider.get(dirFile);
+        Map<String, String> result = new HashMap<>();
+        result.put("testKey", "testResult");
+        result.put("testKey2", "testResult2");
+        assertEquals(result, configData.data());
+        assertNull(configData.ttl());
+    }
+
+    @Test
+    public void testAllowedFilePath() {
+        Map<String, String> configs = new HashMap<>();
+        configs.put(ALLOWED_PATHS_CONFIG, dirFile);
+        configProvider.configure(configs);
+
+        ConfigData configData = configProvider.get(dirFile);
+        Map<String, String> result = new HashMap<>();
+        result.put("testKey", "testResult");
+        result.put("testKey2", "testResult2");
+        assertEquals(result, configData.data());
+        assertNull(configData.ttl());
+    }
+
+    @Test
+    public void testMultipleAllowedPaths() {
+        Map<String, String> configs = new HashMap<>();
+        configs.put(ALLOWED_PATHS_CONFIG, dir + "," + siblingDir);
+        configProvider.configure(configs);
+
+        Map<String, String> result = new HashMap<>();
+        result.put("testKey", "testResult");
+        result.put("testKey2", "testResult2");
+
+        ConfigData configData = configProvider.get(dirFile);
+        assertEquals(result, configData.data());
+        assertNull(configData.ttl());
+
+        configData = configProvider.get(siblingDirFile);
+        assertEquals(result, configData.data());
+        assertNull(configData.ttl());
+    }
+
+    @Test
+    public void testNotAllowedDirPath() {
+        Map<String, String> configs = new HashMap<>();
+        configs.put(ALLOWED_PATHS_CONFIG, dir);
+        configProvider.configure(configs);
+
+        ConfigData configData = configProvider.get(siblingDirFile);
+        assertTrue(configData.data().isEmpty());
+        assertNull(configData.ttl());
+    }
+
+    @Test
+    public void testNotAllowedFilePath() throws IOException {
+        Map<String, String> configs = new HashMap<>();
+        configs.put(ALLOWED_PATHS_CONFIG, dirFile);
+        configProvider.configure(configs);
+
+        //another file under the same directory
+        Path dirFile2 = Files.createFile(Paths.get(dir, "dirFile2"));
+        ConfigData configData = configProvider.get(dirFile2.toString());
+        assertTrue(configData.data().isEmpty());
+        assertNull(configData.ttl());
+    }
+
+    @Test
+    public void testNoTraversal() {
+        Map<String, String> configs = new HashMap<>();
+        configs.put(ALLOWED_PATHS_CONFIG, dirFile);
+        configProvider.configure(configs);
+
+        // Check we can't escape outside the path directory
+        ConfigData configData = configProvider.get(Paths.get(dirFile, "..", "..", "siblingDir", "siblingDirFile").toString());
+        assertTrue(configData.data().isEmpty());
+        assertNull(configData.ttl());
+    }
+
+    @Test
+    public void testNonConfiguredProvider() {
+        FileConfigProvider provider2 = new FileConfigProvider();
+        IllegalStateException ise = assertThrows(IllegalStateException.class, () -> provider2.get(Paths.get(dirFile).toString()));
+        assertEquals("The provider has not been configured yet.", ise.getMessage());
     }
 }
