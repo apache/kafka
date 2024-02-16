@@ -24,8 +24,10 @@
     <!-- Note that [/\\] must be used as the path separator for cross-platform support -->
 
     <!-- Generator -->
-    <suppress checks="CyclomaticComplexity|BooleanExpressionComplexity"
+    <suppress checks="CyclomaticComplexity"
               files="(SchemaGenerator|MessageDataGenerator|FieldSpec|FieldType).java"/>
+    <suppress checks="BooleanExpressionComplexity"
+              files="MessageDataGenerator.java"/>
     <suppress checks="NPathComplexity"
               files="(MessageDataGenerator|FieldSpec|WorkerSinkTask).java"/>
     <suppress checks="JavaNCSS"
@@ -84,7 +86,7 @@
               files="(SaslAuthenticatorTest|AgentTest|NetworkClientTest).java"/>
 
     <suppress checks="BooleanExpressionComplexity"
-              files="(Utils|Topic|KafkaLZ4BlockOutputStream|AclData|JoinGroupRequest).java"/>
+              files="(ByteUtils|Topic|KafkaLZ4BlockOutputStream).java"/>
 
     <suppress checks="CyclomaticComplexity"
               files="(AbstractFetch|ConsumerCoordinator|CommitRequestManager|FetchCollector|OffsetFetcherUtils|KafkaProducer|Sender|ConfigDef|KerberosLogin|AbstractRequest|AbstractResponse|Selector|SslFactory|SslTransportLayer|SaslClientAuthenticator|SaslClientCallbackHandler|SaslServerAuthenticator|AbstractCoordinator|TransactionManager|AbstractStickyAssignor|DefaultSslEngineFactory|Authorizer|RecordAccumulator|MemoryRecords|FetchSessionHandler|MockAdminClient).java"/>
@@ -140,9 +142,6 @@
 
     <suppress checks="ClassDataAbstractionCoupling"
               files="(AbstractHerder|DistributedHerder|Worker).java"/>
-
-    <suppress checks="BooleanExpressionComplexity"
-              files="JsonConverter.java"/>
 
     <suppress checks="CyclomaticComplexity"
               files="(FileStreamSourceTask|DistributedHerder|KafkaConfigBackingStore).java"/>
@@ -257,8 +256,6 @@
     <!-- Tools -->
     <suppress checks="CyclomaticComplexity"
               files="(ConsoleConsumer|DefaultMessageFormatter|StreamsResetter|ProducerPerformance|Agent).java"/>
-    <suppress checks="BooleanExpressionComplexity"
-              files="StreamsResetter.java"/>
     <suppress checks="NPathComplexity"
               files="(DefaultMessageFormatter|ProducerPerformance|StreamsResetter|Agent|TransactionalMessageCopier|ReplicaVerificationTool).java"/>
     <suppress checks="ImportControl"
