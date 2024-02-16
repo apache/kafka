@@ -62,7 +62,7 @@
     <suppress checks="ParameterNumber"
               files="(NetworkClient|FieldSpec|KafkaRaftClient|KafkaProducer).java"/>
     <suppress checks="ParameterNumber"
-              files="(KafkaConsumer|ConsumerCoordinator).java"/>
+              files="(AsyncKafkaConsumer|ConsumerCoordinator).java"/>
     <suppress checks="ParameterNumber"
               files="(RecordAccumulator|Sender).java"/>
     <suppress checks="ParameterNumber"
@@ -128,9 +128,9 @@
     <suppress checks="MethodLength"
               files="(DistributedHerder|DistributedConfig|KafkaConfigBackingStore|Values|IncrementalCooperativeAssignor).java"/>
     <suppress checks="ParameterNumber"
-              files="Worker(SinkTask|SourceTask|Coordinator).java"/>
+              files="Worker(SinkTask|SourceTask).java"/>
     <suppress checks="ParameterNumber"
-              files="(Worker|ConfigKeyInfo|DistributedHerder).java"/>
+              files="(Worker|DistributedHerder).java"/>
     <suppress checks="DefaultComesLast"
               files="LoggingResource.java" />
 
@@ -256,8 +256,6 @@
     <suppress checks="ParameterNumber"
               files="ProduceBenchSpec.java"/>
     <suppress checks="ParameterNumber"
-              files="ConsumeBenchSpec.java"/>
-    <suppress checks="ParameterNumber"
               files="SustainedConnectionSpec.java"/>
     <suppress id="dontUseSystemExit"
               files="VerifiableConsumer.java"/>
@@ -325,7 +323,7 @@
     <suppress checks="NPathComplexity"
               files="(LogValidator|RemoteIndexCache).java"/>
     <suppress checks="ParameterNumber"
-              files="(LogAppendInfo|RemoteLogManagerConfig).java"/>
+              files="RemoteLogManagerConfig.java"/>
     <suppress checks="MethodLength"
               files="RemoteLogManager.java"/>
 
