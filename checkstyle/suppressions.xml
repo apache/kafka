@@ -79,9 +79,9 @@
               files="ClientUtils.java"/>
 
     <suppress checks="ClassDataAbstractionCoupling"
-              files="(KafkaConsumer|ConsumerCoordinator|AbstractFetch|KafkaProducer|AbstractRequest|AbstractResponse|TransactionManager|Admin|KafkaAdminClient|MockAdminClient|KafkaRaftClient|KafkaRaftClientTest).java"/>
+              files="(ConsumerCoordinator|KafkaProducer|Admin|KafkaAdminClient|MockAdminClient|KafkaRaftClient|AsyncKafkaConsumer).java"/>
     <suppress checks="ClassDataAbstractionCoupling"
-              files="(Errors|SaslAuthenticatorTest|AgentTest|CoordinatorTest|NetworkClientTest).java"/>
+              files="(SaslAuthenticatorTest|AgentTest|NetworkClientTest).java"/>
 
     <suppress checks="BooleanExpressionComplexity"
               files="(Utils|Topic|KafkaLZ4BlockOutputStream|AclData|JoinGroupRequest).java"/>
@@ -106,7 +106,7 @@
 
     <!-- Clients tests -->
     <suppress checks="ClassDataAbstractionCoupling"
-              files="(Sender|Fetcher|FetchRequestManager|OffsetFetcher|KafkaConsumer|Metrics|RequestResponse|TransactionManager|KafkaAdminClient|Message|KafkaProducer)Test.java"/>
+              files="(Sender|Fetcher|FetchRequestManager|OffsetFetcher|KafkaConsumer|RequestResponse|TransactionManager|KafkaAdminClient|Message|KafkaProducer)Test.java"/>
 
     <suppress checks="ClassFanOutComplexity"
               files="(ConsumerCoordinator|KafkaConsumer|RequestResponse|Fetcher|FetchRequestManager|KafkaAdminClient|Message|KafkaProducer)Test.java"/>
@@ -139,7 +139,7 @@
               files="LoggingResource.java" />
 
     <suppress checks="ClassDataAbstractionCoupling"
-              files="(RestServer|AbstractHerder|DistributedHerder|Worker).java"/>
+              files="(AbstractHerder|DistributedHerder|Worker).java"/>
 
     <suppress checks="BooleanExpressionComplexity"
               files="JsonConverter.java"/>
@@ -157,7 +157,7 @@
 
     <!-- connect tests-->
     <suppress checks="ClassDataAbstractionCoupling"
-              files="(DistributedHerder|KafkaBasedLog|WorkerSourceTaskWithTopicCreation|WorkerSourceTask|Worker)Test.java"/>
+              files="(DistributedHerder|Worker)Test.java"/>
 
     <suppress checks="ClassFanOutComplexity"
               files="(WorkerSink|WorkerSource|ErrorHandling)Task(|WithTopicCreation)Test.java"/>
@@ -255,8 +255,6 @@
               files="(PageViewTypedDemo|PipeDemo|TemperatureDemo|WordCountDemo|WordCountProcessorDemo|WordCountTransformerDemo).java"/>
 
     <!-- Tools -->
-    <suppress checks="ClassDataAbstractionCoupling"
-              files="VerifiableConsumer.java"/>
     <suppress checks="CyclomaticComplexity"
               files="(ConsoleConsumer|DefaultMessageFormatter|StreamsResetter|ProducerPerformance|Agent).java"/>
     <suppress checks="BooleanExpressionComplexity"
