@@ -178,13 +178,10 @@
               files="(KafkaStreams|StreamsPartitionAssignor|StreamThread|TaskManager|SubscriptionWrapperSerde|AssignorConfiguration).java"/>
 
     <suppress checks="NPathComplexity"
-              files="(KafkaStreams|StreamsPartitionAssignor|StreamThread|TaskManager|GlobalStateManagerImpl|KStreamImplJoin|TopologyConfig|KTableKTableOuterJoin).java"/>
+              files="(KafkaStreams|StreamsPartitionAssignor|StreamThread|TaskManager|KStreamImplJoin|TopologyConfig|KStreamSlidingWindowAggregate).java"/>
 
     <suppress checks="(FinalLocalVariable|UnnecessaryParentheses|BooleanExpressionComplexity|CyclomaticComplexity|WhitespaceAfter|LocalVariableName)"
               files="Murmur3.java"/>
-
-    <suppress checks="(NPathComplexity|CyclomaticComplexity)"
-              files="(KStreamSlidingWindowAggregate|RackAwareTaskAssignor).java"/>
 
     <!-- suppress FinalLocalVariable outside of the streams package. -->
     <suppress checks="FinalLocalVariable"
