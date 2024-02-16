@@ -423,7 +423,7 @@ public class AsyncKafkaConsumerTest {
     }
 
     @Test
-    public void testCommitInCommitCallback() {
+    public void testCommitInRebalanceCallback() {
         consumer = newConsumer();
         final String topicName = "foo";
         final int partition = 3;
