@@ -280,11 +280,11 @@ class PlaintextConsumerTest extends BaseConsumerTest {
 
     val initialAssignedCalls = listener.callsToAssigned
 
-    consumer.poll(Duration.ofMillis(2000));
+    consumer.poll(Duration.ofMillis(2000))
 
     // Give enough time to rejoin
-    consumer.poll(Duration.ofMillis(500));
-    consumer.poll(Duration.ofMillis(500));
+    consumer.poll(Duration.ofMillis(500))
+    consumer.poll(Duration.ofMillis(500))
 
     // Check that we did not rejoin
     assertEquals(initialAssignedCalls, listener.callsToAssigned)
