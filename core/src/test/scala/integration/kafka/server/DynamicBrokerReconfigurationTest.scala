@@ -19,7 +19,7 @@
 package kafka.server
 
 import java.io.{Closeable, File, IOException, Reader, StringReader}
-import java.nio.file.{Files, Paths, StandardCopyOption}
+import java.nio.file.{Files, Path, Paths, StandardCopyOption}
 import java.lang.management.ManagementFactory
 import java.security.KeyStore
 import java.time.Duration
@@ -2018,7 +2018,7 @@ class TestMetricsReporter extends MetricsReporter with Reconfigurable with Close
 
 class MockFileConfigProvider extends FileConfigProvider {
   @throws(classOf[IOException])
-  override def reader(path: String): Reader = {
+  override def reader(path: Path): Reader = {
     new StringReader("key=testKey\npassword=ServerPassword\ninterval=1000\nupdinterval=2000\nstoretype=JKS")
   }
 }

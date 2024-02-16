@@ -49,6 +49,7 @@ import org.apache.kafka.server.util.json.JsonObject;
 import org.apache.kafka.server.util.json.JsonValue;
 import org.apache.kafka.tools.TerseException;
 import org.apache.kafka.tools.ToolsUtils;
+import org.apache.kafka.tools.Tuple2;
 
 import java.io.IOException;
 import java.util.ArrayList;

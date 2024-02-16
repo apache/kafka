@@ -263,7 +263,9 @@ public class ConsumerTestBuilder implements Closeable {
                 fetchRequestManager,
                 coordinatorRequestManager,
                 commitRequestManager,
-                heartbeatRequestManager);
+                heartbeatRequestManager,
+                membershipManager
+            );
         this.applicationEventProcessor = spy(new ApplicationEventProcessor(
                 logContext,
                 applicationEventQueue,
