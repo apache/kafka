@@ -48,7 +48,6 @@ public class ZkConfig {
     // a map from the Kafka config to the corresponding ZooKeeper Java system property
     public static final Map<String, String> ZK_SSL_CONFIG_TO_SYSTEM_PROPERTY_MAP;
 
-    /** ********* Zookeeper Configuration ***********/
     public static final String ZK_CONNECT_DOC = "Specifies the ZooKeeper connection string in the form <code>hostname:port</code> where host and port are the " +
             "host and port of a ZooKeeper server. To allow connecting through other ZooKeeper nodes when that ZooKeeper machine is " +
             "down you can also specify multiple hosts in the form <code>hostname1:port1,hostname2:port2,hostname3:port3</code>.\n" +
@@ -73,7 +72,6 @@ public class ZkConfig {
     public static final String ZK_SSL_CRL_ENABLE_DOC;
     public static final String ZK_SSL_OCSP_ENABLE_DOC;
 
-    /** ********* Zookeeper Defaults *********/
     public static final int ZK_SESSION_TIMEOUT_MS = 18000;
     public static final boolean ZK_ENABLE_SECURE_ACLS = false;
     public static final int ZK_MAX_IN_FLIGHT_REQUESTS = 10;
