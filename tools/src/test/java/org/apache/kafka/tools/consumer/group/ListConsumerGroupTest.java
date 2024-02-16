@@ -46,6 +46,8 @@ public class ListConsumerGroupTest extends ConsumerGroupCommandTest {
     public void testListConsumerGroupsWithoutFilters(String quorum, String groupProtocol) throws Exception {
         String simpleGroup = "simple-group";
 
+        createOffsetsTopic(listenerName(), new Properties());
+
         addSimpleGroupExecutor(simpleGroup);
         addConsumerGroupExecutor(1);
         addConsumerGroupExecutor(1, PROTOCOL_GROUP, groupProtocol);
@@ -78,7 +80,7 @@ public class ListConsumerGroupTest extends ConsumerGroupCommandTest {
         addSimpleGroupExecutor(simpleGroup);
         addConsumerGroupExecutor(1);
 
-        String[] cgcArgs = new String[]{"--bootstrap-server", bootstrapServers(listenerName()), "--list"};
+        String[] cgcArgs = new String[]{"--bootstrap-server", bootstrapServers(listenerName()), "--list", "--state"};
         ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(cgcArgs);
 
         Set<ConsumerGroupListing> expectedListing = new HashSet<>(Arrays.asList(
