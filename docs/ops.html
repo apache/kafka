@@ -3935,6 +3935,12 @@ controller.listener.names=CONTROLLER</pre>
     The zookeeper configurations should be removed at this point.
   </p>
 
+  <p>
+    If your broker has authorization configured via the <code>authorizer.class.name</code> property
+    using <code>kafka.security.authorizer.AclAuthorizer</code>, this is also the time to change it
+    to use <code>org.apache.kafka.metadata.authorizer.StandardAuthorizer</code> instead.
+  </p>
+
   <pre>
 # Sample KRaft broker server.properties listening on 9092
 process.roles=broker
