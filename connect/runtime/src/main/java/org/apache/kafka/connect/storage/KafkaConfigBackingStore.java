@@ -289,12 +289,12 @@ public class KafkaConfigBackingStore extends KafkaTopicBasedBackingStore impleme
     // initialization as long as we always read the volatile variable "started" before we access the listener.
     private ConfigBackingStore.UpdateListener updateListener;
 
-    private final Map<String, Object> baseProducerProps;
+    private Map<String, Object> baseProducerProps;
 
-    private final String topic;
+    private String topic;
     // Data is passed to the log already serialized. We use a converter to handle translating to/from generic Connect
     // format to serialized form
-    private final KafkaBasedLog<String, byte[]> configLog;
+    private KafkaBasedLog<String, byte[]> configLog;
     // Connector -> # of tasks
     final Map<String, Integer> connectorTaskCounts = new HashMap<>();
     // Connector and task configs: name or id -> config map
@@ -323,11 +323,11 @@ public class KafkaConfigBackingStore extends KafkaTopicBasedBackingStore impleme
     final Map<String, Integer> connectorTaskConfigGenerations = new HashMap<>();
     final Set<String> connectorsPendingFencing = new HashSet<>();
 
-    private final WorkerConfigTransformer configTransformer;
+    private WorkerConfigTransformer configTransformer;
 
-    private final boolean usesFencableWriter;
+    private boolean usesFencableWriter;
     private volatile Producer<String, byte[]> fencableProducer;
-    private final Map<String, Object> fencableProducerProps;
+    private Map<String, Object> fencableProducerProps;
     private final Time time;
 
     @Deprecated
@@ -348,7 +348,10 @@ public class KafkaConfigBackingStore extends KafkaTopicBasedBackingStore impleme
         this.topicAdminSupplier = adminSupplier;
         this.clientId = Objects.requireNonNull(clientIdBase) + "configs";
         this.time = time;
-
+        this.configTransformer = configTransformer;
+    }
+    
+    public void configure(DistributedConfig config) {
         this.baseProducerProps = baseProducerProps(config);
         // By default, Connect disables idempotent behavior for all producers, even though idempotence became
         // default for Kafka producers. This is to ensure Connect continues to work with many Kafka broker versions, including older brokers that do not support
@@ -361,11 +364,10 @@ public class KafkaConfigBackingStore extends KafkaTopicBasedBackingStore impleme
 
         this.usesFencableWriter = config.transactionalLeaderEnabled();
         this.topic = config.getString(DistributedConfig.CONFIG_TOPIC_CONFIG);
-        if (this.topic == null || this.topic.trim().length() == 0)
+        if (this.topic == null || this.topic.trim().isEmpty())
             throw new ConfigException("Must specify topic for connector configuration.");
 
         configLog = setupAndCreateKafkaBasedLog(this.topic, config);
-        this.configTransformer = configTransformer;
     }
 
     @Override

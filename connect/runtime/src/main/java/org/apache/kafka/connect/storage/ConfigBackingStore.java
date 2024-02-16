@@ -19,6 +19,7 @@ package org.apache.kafka.connect.storage;
 import org.apache.kafka.connect.runtime.RestartRequest;
 import org.apache.kafka.connect.runtime.SessionKey;
 import org.apache.kafka.connect.runtime.TargetState;
+import org.apache.kafka.connect.runtime.distributed.DistributedConfig;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 
 import java.util.Collection;
@@ -114,6 +115,12 @@ public interface ConfigBackingStore {
      * @param taskCount number of tasks used by the connector
      */
     void putTaskCountRecord(String connector, int taskCount);
+
+    /**
+     * Configure class with the given key-value pairs
+     * @param config can be DistributedConfig or StandaloneConfig
+     */
+    void configure(DistributedConfig config);
 
     /**
      * Prepare to write to the backing config store. May be required by some implementations (such as those that only permit a single

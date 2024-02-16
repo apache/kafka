@@ -273,6 +273,7 @@ public class MirrorMaker {
                 configTransformer,
                 sharedAdmin,
                 clientIdBase);
+        configBackingStore.configure(distributedConfig);
         // Pass the shared admin to the distributed herder as an additional AutoCloseable object that should be closed when the
         // herder is stopped. MirrorMaker has multiple herders, and having the herder own the close responsibility is much easier than
         // tracking the various shared admin objects in this class.
