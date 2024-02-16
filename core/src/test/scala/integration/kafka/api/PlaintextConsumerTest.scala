@@ -492,53 +492,6 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     assertEquals(0, consumer.assignment().size)
   }
 
-  def testRE2JPatternSubscription(quorum: String, groupProtocol: String): Unit = {
-    val numRecords = 10000
-    val producer = createProducer()
-    sendRecords(producer, numRecords, tp)
-
-    val topic1 = "tblablac" // matches subscribed pattern
-    createTopic(topic1, 2, brokerCount)
-    sendRecords(producer, numRecords = 1000, new TopicPartition(topic1, 0))
-    sendRecords(producer, numRecords = 1000, new TopicPartition(topic1, 1))
-
-    val topic2 = "tblablak" // does not match subscribed pattern
-    createTopic(topic2, 2, brokerCount)
-    sendRecords(producer, numRecords = 1000, new TopicPartition(topic2, 0))
-    sendRecords(producer, numRecords = 1000, new TopicPartition(topic2, 1))
-
-    val topic3 = "tblab1" // does not match subscribed pattern
-    createTopic(topic3, 2, brokerCount)
-    sendRecords(producer, numRecords = 1000, new TopicPartition(topic3, 0))
-    sendRecords(producer, numRecords = 1000, new TopicPartition(topic3, 1))
-
-    val consumer = createConsumer()
-    assertEquals(0, consumer.assignment().size)
-
-    val pattern = Pattern.compile("t.*c")
-    consumer.subscribe(pattern, new TestConsumerReassignmentListener)
-
-    var assignment = Set(
-      new TopicPartition(topic, 0),
-      new TopicPartition(topic, 1),
-      new TopicPartition(topic1, 0),
-      new TopicPartition(topic1, 1))
-    awaitAssignment(consumer, assignment)
-
-    val topic4 = "tsomec" // matches subscribed pattern
-    createTopic(topic4, 2, brokerCount)
-    sendRecords(producer, numRecords = 1000, new TopicPartition(topic4, 0))
-    sendRecords(producer, numRecords = 1000, new TopicPartition(topic4, 1))
-
-    assignment ++= Set(
-      new TopicPartition(topic4, 0),
-      new TopicPartition(topic4, 1))
-    awaitAssignment(consumer, assignment)
-
-    consumer.unsubscribe()
-    assertEquals(0, consumer.assignment().size)
-  }
-
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
   @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
   def testCommitMetadata(quorum: String, groupProtocol: String): Unit = {

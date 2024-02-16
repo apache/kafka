@@ -485,6 +485,13 @@ public class KafkaConsumerTest {
         assertThrows(IllegalArgumentException.class,
             () -> consumer.subscribe((Pattern) null));
     }
+    @ParameterizedTest
+    @EnumSource(value = GroupProtocol.class, names = "CONSUMER")
+    public void testSubscriptionOnNullSubscriptionPattern(GroupProtocol groupProtocol) {
+        consumer = newConsumer(groupProtocol, groupId);
+        assertThrows(IllegalArgumentException.class,
+            () -> consumer.subscribe((SubscriptionPattern) null));
+    }
 
     @ParameterizedTest
     @EnumSource(GroupProtocol.class)
@@ -492,6 +499,14 @@ public class KafkaConsumerTest {
         consumer = newConsumer(groupProtocol, groupId);
         assertThrows(IllegalArgumentException.class,
             () -> consumer.subscribe(Pattern.compile("")));
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = GroupProtocol.class, names = "CONSUMER")
+    public void testSubscriptionOnEmptySubscriptionPattern(GroupProtocol groupProtocol) {
+        consumer = newConsumer(groupProtocol, groupId);
+        assertThrows(IllegalArgumentException.class,
+                () -> consumer.subscribe(new SubscriptionPattern("")));
     }
 
     @ParameterizedTest

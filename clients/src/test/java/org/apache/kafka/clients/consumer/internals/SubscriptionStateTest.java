@@ -22,6 +22,7 @@ import org.apache.kafka.clients.NodeApiVersions;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
+import org.apache.kafka.clients.consumer.SubscriptionPattern;
 import org.apache.kafka.clients.consumer.internals.SubscriptionState.LogTruncation;
 import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.Node;
@@ -184,6 +185,16 @@ public class SubscriptionStateTest {
         state.unsubscribe();
         // assigned partitions should immediately change
         assertTrue(state.assignedPartitions().isEmpty());
+        assertEquals(0, state.numAssignedPartitions());
+    }
+    @Test
+    public void testSubscriptionPatternInclusionInSubscriptionState() {
+        state.subscribe(new SubscriptionPattern("*t"), Optional.of(rebalanceListener));
+        assertTrue(state.assignedPartitions().isEmpty());
+        assertEquals(0, state.numAssignedPartitions());
+
+        state.unsubscribe();
+        assertEquals(state.subscriptionPattern(), null);
         assertEquals(0, state.numAssignedPartitions());
     }
 
