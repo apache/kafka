@@ -170,14 +170,13 @@ public class ListConsumerGroupTest extends ConsumerGroupCommandTest {
      * @param args              The arguments for the command line tool.
      * @param expectedHeader    The expected header as a list of strings; or an empty list
      *                          if a header is not expected.
-     * @param expectedGroups    The expected groups as a set of list of strings. The list
-     *                          of strings corresponds to the columns.
+     * @param expectedRows      The expected rows as a set of list of columns.
      * @throws InterruptedException
      */
     private static void validateListOutput(
         List<String> args,
         List<String> expectedHeader,
-        Set<List<String>> expectedGroups
+        Set<List<String>> expectedRows
     ) throws InterruptedException {
         final AtomicReference<String> out = new AtomicReference<>("");
         TestUtils.waitForCondition(() -> {
@@ -188,8 +187,8 @@ public class ListConsumerGroupTest extends ConsumerGroupCommandTest {
             String[] lines = output.split("\n");
 
             // Parse the header if one is expected.
-            if (expectedHeader.size() > 0) {
-                if (lines.length < 1) return false;
+            if (!expectedHeader.isEmpty()) {
+                if (lines.length == 0) return false;
                 List<String> header = Arrays.stream(lines[index++].split("\\s+")).collect(Collectors.toList());
                 if (!expectedHeader.equals(header)) {
                     return false;
@@ -201,8 +200,8 @@ public class ListConsumerGroupTest extends ConsumerGroupCommandTest {
             for (; index < lines.length; index++) {
                 groups.add(Arrays.stream(lines[index].split("\\s+")).collect(Collectors.toList()));
             }
-            return expectedGroups.equals(groups);
-        }, () -> String.format("Expected header=%s and groups=%s, but found:%n%s", expectedHeader, expectedGroups, out.get()));
+            return expectedRows.equals(groups);
+        }, () -> String.format("Expected header=%s and groups=%s, but found:%n%s", expectedHeader, expectedRows, out.get()));
     }
 
     private static String runAndGrabConsoleOutput(
