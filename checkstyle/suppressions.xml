@@ -236,11 +236,7 @@
     <suppress checks="CyclomaticComplexity"
               files="(ConsoleConsumer|DefaultMessageFormatter|StreamsResetter|ProducerPerformance).java"/>
     <suppress checks="NPathComplexity"
-              files="(DefaultMessageFormatter|ProducerPerformance|StreamsResetter|Agent|TransactionalMessageCopier|ReplicaVerificationTool).java"/>
-    <suppress checks="ImportControl"
-              files="SignalLogger.java"/>
-    <suppress checks="IllegalImport"
-              files="SignalLogger.java"/>
+              files="(DefaultMessageFormatter|ProducerPerformance|StreamsResetter|ReplicaVerificationTool).java"/>
     <suppress checks="ParameterNumber"
               files="ProduceBenchSpec.java"/>
     <suppress checks="ParameterNumber"
