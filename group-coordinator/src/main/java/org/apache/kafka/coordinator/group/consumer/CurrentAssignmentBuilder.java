@@ -154,11 +154,11 @@ public class CurrentAssignmentBuilder {
                 }
 
                 // If the member provides its owned partitions. We verify if it still
-                // owens any of the revoked partitions. If it does, we cannot progress.
+                // owns any of the revoked partitions. If it does, we cannot progress.
                 for (ConsumerGroupHeartbeatRequestData.TopicPartitions topicPartitions : ownedTopicPartitions) {
                     for (Integer partitionId : topicPartitions.partitions()) {
                         boolean stillHasRevokedPartition = member
-                            .revokedPartitions()
+                            .setPartitionsPendingRevocation()
                             .getOrDefault(topicPartitions.topicId(), Collections.emptySet())
                             .contains(partitionId);
                         if (stillHasRevokedPartition) {
@@ -226,15 +226,15 @@ public class CurrentAssignmentBuilder {
             Set<Integer> currentAssignedPartitions = memberAssignedPartitions
                 .getOrDefault(topicId, Collections.emptySet());
 
-            // Assigned_1 = Assigned_0 ∩ Target
+            // New Assigned Partitions = Previous Assigned Partitions ∩ Target
             Set<Integer> assignedPartitions = new HashSet<>(currentAssignedPartitions);
             assignedPartitions.retainAll(target);
 
-            // Pending_Revocation_1 = Assigned_0 - Assigned_1
+            // Partitions Pending Revocation = Previous Assigned Partitions - New Assigned Partitions
             Set<Integer> partitionsPendingRevocation = new HashSet<>(currentAssignedPartitions);
             partitionsPendingRevocation.removeAll(assignedPartitions);
 
-            // Pending_Assignment_1 = Target - Assigned_1 - Unreleased Partitions
+            // Partitions Pending Assignment = Target - New Assigned Partitions - Unreleased Partitions
             Set<Integer> partitionsPendingAssignment = new HashSet<>(target);
             partitionsPendingAssignment.removeAll(assignedPartitions);
             hasUnreleasedPartitions = partitionsPendingAssignment.removeIf(partitionId ->
@@ -263,7 +263,7 @@ public class CurrentAssignmentBuilder {
                 .setState(MemberState.UNREVOKED_PARTITIONS)
                 .updateMemberEpoch(memberEpoch)
                 .setAssignedPartitions(newAssignedPartitions)
-                .setRevokedPartitions(newPartitionsPendingRevocation)
+                .setPartitionsPendingRevocation(newPartitionsPendingRevocation)
                 .build();
         } else if (!newPartitionsPendingAssignment.isEmpty()) {
             // If there are partitions to be assigned, the member transitions to the
@@ -279,7 +279,7 @@ public class CurrentAssignmentBuilder {
                 .setState(newState)
                 .updateMemberEpoch(targetAssignmentEpoch)
                 .setAssignedPartitions(newAssignedPartitions)
-                .setRevokedPartitions(Collections.emptyMap())
+                .setPartitionsPendingRevocation(Collections.emptyMap())
                 .build();
         } else if (hasUnreleasedPartitions) {
             // If there are no partitions to be revoked nor to be assigned but some
@@ -289,7 +289,7 @@ public class CurrentAssignmentBuilder {
                 .setState(MemberState.UNRELEASED_PARTITIONS)
                 .updateMemberEpoch(targetAssignmentEpoch)
                 .setAssignedPartitions(newAssignedPartitions)
-                .setRevokedPartitions(Collections.emptyMap())
+                .setPartitionsPendingRevocation(Collections.emptyMap())
                 .build();
         } else {
             // Otherwise, the member transitions to the target epoch and to the
@@ -298,7 +298,7 @@ public class CurrentAssignmentBuilder {
                 .setState(MemberState.STABLE)
                 .updateMemberEpoch(targetAssignmentEpoch)
                 .setAssignedPartitions(newAssignedPartitions)
-                .setRevokedPartitions(Collections.emptyMap())
+                .setPartitionsPendingRevocation(Collections.emptyMap())
                 .build();
         }
     }

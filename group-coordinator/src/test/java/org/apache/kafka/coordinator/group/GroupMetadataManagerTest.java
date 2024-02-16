@@ -1782,7 +1782,7 @@ public class GroupMetadataManagerTest {
                 .setAssignedPartitions(mkAssignment(
                     mkTopicAssignment(fooTopicId, 0, 1),
                     mkTopicAssignment(barTopicId, 0)))
-                .setRevokedPartitions(mkAssignment(
+                .setPartitionsPendingRevocation(mkAssignment(
                     mkTopicAssignment(fooTopicId, 2),
                     mkTopicAssignment(barTopicId, 1)))
                 .build())),
@@ -1825,7 +1825,7 @@ public class GroupMetadataManagerTest {
                 .setAssignedPartitions(mkAssignment(
                     mkTopicAssignment(fooTopicId, 3),
                     mkTopicAssignment(barTopicId, 2)))
-                .setRevokedPartitions(mkAssignment(
+                .setPartitionsPendingRevocation(mkAssignment(
                     mkTopicAssignment(fooTopicId, 4, 5)))
                 .build())),
             result.records()
@@ -3210,7 +3210,7 @@ public class GroupMetadataManagerTest {
                     .setServerAssignorName("range")
                     .setAssignedPartitions(mkAssignment(
                         mkTopicAssignment(fooTopicId, 0, 1, 2)))
-                    .setRevokedPartitions(mkAssignment(
+                    .setPartitionsPendingRevocation(mkAssignment(
                         mkTopicAssignment(fooTopicId, 3, 4, 5)))
                     .build())
                 .withMember(new ConsumerGroupMember.Builder("foo-2")

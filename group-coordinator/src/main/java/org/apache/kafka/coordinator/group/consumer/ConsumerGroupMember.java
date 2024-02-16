@@ -63,7 +63,7 @@ public class ConsumerGroupMember {
         private String serverAssignorName = null;
         private List<ClientAssignor> clientAssignors = Collections.emptyList();
         private Map<Uuid, Set<Integer>> assignedPartitions = Collections.emptyMap();
-        private Map<Uuid, Set<Integer>> revokedPartitions = Collections.emptyMap();
+        private Map<Uuid, Set<Integer>> partitionsPendingRevocation = Collections.emptyMap();
 
         public Builder(String memberId) {
             this.memberId = Objects.requireNonNull(memberId);
@@ -86,7 +86,7 @@ public class ConsumerGroupMember {
             this.clientAssignors = member.clientAssignors;
             this.state = member.state;
             this.assignedPartitions = member.assignedPartitions;
-            this.revokedPartitions = member.revokedPartitions;
+            this.partitionsPendingRevocation = member.partitionsPendingRevocation;
         }
 
         public Builder updateMemberEpoch(int memberEpoch) {
@@ -198,8 +198,8 @@ public class ConsumerGroupMember {
             return this;
         }
 
-        public Builder setRevokedPartitions(Map<Uuid, Set<Integer>> revokedPartitions) {
-            this.revokedPartitions = revokedPartitions;
+        public Builder setPartitionsPendingRevocation(Map<Uuid, Set<Integer>> partitionsPendingRevocation) {
+            this.partitionsPendingRevocation = partitionsPendingRevocation;
             return this;
         }
 
@@ -223,7 +223,7 @@ public class ConsumerGroupMember {
             setPreviousMemberEpoch(record.previousMemberEpoch());
             setState(MemberState.fromValue(record.state()));
             setAssignedPartitions(assignmentFromTopicPartitions(record.assignedPartitions()));
-            setRevokedPartitions(assignmentFromTopicPartitions(record.revokedPartitions()));
+            setPartitionsPendingRevocation(assignmentFromTopicPartitions(record.partitionsPendingRevocation()));
             return this;
         }
 
@@ -251,7 +251,7 @@ public class ConsumerGroupMember {
                 clientAssignors,
                 state,
                 assignedPartitions,
-                revokedPartitions
+                partitionsPendingRevocation
             );
         }
     }
@@ -329,7 +329,7 @@ public class ConsumerGroupMember {
     /**
      * The partitions being revoked by this member.
      */
-    private final Map<Uuid, Set<Integer>> revokedPartitions;
+    private final Map<Uuid, Set<Integer>> partitionsPendingRevocation;
 
     private ConsumerGroupMember(
         String memberId,
@@ -346,7 +346,7 @@ public class ConsumerGroupMember {
         List<ClientAssignor> clientAssignors,
         MemberState state,
         Map<Uuid, Set<Integer>> assignedPartitions,
-        Map<Uuid, Set<Integer>> revokedPartitions
+        Map<Uuid, Set<Integer>> partitionsPendingRevocation
     ) {
         this.memberId = memberId;
         this.memberEpoch = memberEpoch;
@@ -362,7 +362,7 @@ public class ConsumerGroupMember {
         this.serverAssignorName = serverAssignorName;
         this.clientAssignors = clientAssignors;
         this.assignedPartitions = assignedPartitions;
-        this.revokedPartitions = revokedPartitions;
+        this.partitionsPendingRevocation = partitionsPendingRevocation;
     }
 
     /**
@@ -457,7 +457,7 @@ public class ConsumerGroupMember {
     }
 
     /**
-     * @return True of the member is in the Stable state and at the desired epoch.
+     * @return True if the member is in the Stable state and at the desired epoch.
      */
     public boolean isReconciledTo(int targetAssignmentEpoch) {
         return state == MemberState.STABLE && memberEpoch == targetAssignmentEpoch;
@@ -473,8 +473,8 @@ public class ConsumerGroupMember {
     /**
      * @return The set of partitions awaiting revocation from the member.
      */
-    public Map<Uuid, Set<Integer>> revokedPartitions() {
-        return revokedPartitions;
+    public Map<Uuid, Set<Integer>> setPartitionsPendingRevocation() {
+        return partitionsPendingRevocation;
     }
 
     /**
@@ -552,7 +552,7 @@ public class ConsumerGroupMember {
             && Objects.equals(serverAssignorName, that.serverAssignorName)
             && Objects.equals(clientAssignors, that.clientAssignors)
             && Objects.equals(assignedPartitions, that.assignedPartitions)
-            && Objects.equals(revokedPartitions, that.revokedPartitions);
+            && Objects.equals(partitionsPendingRevocation, that.partitionsPendingRevocation);
     }
 
     @Override
@@ -571,7 +571,7 @@ public class ConsumerGroupMember {
         result = 31 * result + Objects.hashCode(serverAssignorName);
         result = 31 * result + Objects.hashCode(clientAssignors);
         result = 31 * result + Objects.hashCode(assignedPartitions);
-        result = 31 * result + Objects.hashCode(revokedPartitions);
+        result = 31 * result + Objects.hashCode(partitionsPendingRevocation);
         return result;
     }
 
@@ -592,7 +592,7 @@ public class ConsumerGroupMember {
             ", serverAssignorName='" + serverAssignorName + '\'' +
             ", clientAssignors=" + clientAssignors +
             ", assignedPartitions=" + assignedPartitions +
-            ", revokedPartitions=" + revokedPartitions +
+            ", partitionsPendingRevocation=" + partitionsPendingRevocation +
             ')';
     }
 }

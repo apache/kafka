@@ -70,7 +70,7 @@ public class ConsumerGroupMemberTest {
                         ByteBuffer.allocate(0)))))
             .setAssignedPartitions(mkAssignment(
                 mkTopicAssignment(topicId1, 1, 2, 3)))
-            .setRevokedPartitions(mkAssignment(
+            .setPartitionsPendingRevocation(mkAssignment(
                 mkTopicAssignment(topicId2, 4, 5, 6)))
             .build();
 
@@ -97,7 +97,7 @@ public class ConsumerGroupMemberTest {
                         ByteBuffer.allocate(0)))),
             member.clientAssignors());
         assertEquals(mkAssignment(mkTopicAssignment(topicId1, 1, 2, 3)), member.assignedPartitions());
-        assertEquals(mkAssignment(mkTopicAssignment(topicId2, 4, 5, 6)), member.revokedPartitions());
+        assertEquals(mkAssignment(mkTopicAssignment(topicId2, 4, 5, 6)), member.setPartitionsPendingRevocation());
     }
 
     @Test
@@ -128,7 +128,7 @@ public class ConsumerGroupMemberTest {
                         ByteBuffer.allocate(0)))))
             .setAssignedPartitions(mkAssignment(
                 mkTopicAssignment(topicId1, 1, 2, 3)))
-            .setRevokedPartitions(mkAssignment(
+            .setPartitionsPendingRevocation(mkAssignment(
                 mkTopicAssignment(topicId2, 4, 5, 6)))
             .build();
 
@@ -154,7 +154,7 @@ public class ConsumerGroupMemberTest {
                         ByteBuffer.allocate(0)))))
             .setAssignedPartitions(mkAssignment(
                 mkTopicAssignment(topicId1, 1, 2, 3)))
-            .setRevokedPartitions(mkAssignment(
+            .setPartitionsPendingRevocation(mkAssignment(
                 mkTopicAssignment(topicId2, 4, 5, 6)))
             .build();
 
@@ -189,7 +189,7 @@ public class ConsumerGroupMemberTest {
                         ByteBuffer.allocate(0)))))
             .setAssignedPartitions(mkAssignment(
                 mkTopicAssignment(topicId1, 1, 2, 3)))
-            .setRevokedPartitions(mkAssignment(
+            .setPartitionsPendingRevocation(mkAssignment(
                 mkTopicAssignment(topicId2, 4, 5, 6)))
             .build();
 
@@ -280,7 +280,7 @@ public class ConsumerGroupMemberTest {
             .setAssignedPartitions(Collections.singletonList(new ConsumerGroupCurrentMemberAssignmentValue.TopicPartitions()
                 .setTopicId(topicId1)
                 .setPartitions(Arrays.asList(0, 1, 2))))
-            .setRevokedPartitions(Collections.singletonList(new ConsumerGroupCurrentMemberAssignmentValue.TopicPartitions()
+            .setPartitionsPendingRevocation(Collections.singletonList(new ConsumerGroupCurrentMemberAssignmentValue.TopicPartitions()
                 .setTopicId(topicId2)
                 .setPartitions(Arrays.asList(3, 4, 5))));
 
@@ -291,7 +291,7 @@ public class ConsumerGroupMemberTest {
         assertEquals(10, member.memberEpoch());
         assertEquals(9, member.previousMemberEpoch());
         assertEquals(mkAssignment(mkTopicAssignment(topicId1, 0, 1, 2)), member.assignedPartitions());
-        assertEquals(mkAssignment(mkTopicAssignment(topicId2, 3, 4, 5)), member.revokedPartitions());
+        assertEquals(mkAssignment(mkTopicAssignment(topicId2, 3, 4, 5)), member.setPartitionsPendingRevocation());
     }
 
     @Test
@@ -314,7 +314,7 @@ public class ConsumerGroupMemberTest {
             .setAssignedPartitions(Collections.singletonList(new ConsumerGroupCurrentMemberAssignmentValue.TopicPartitions()
                 .setTopicId(topicId1)
                 .setPartitions(assignedPartitions)))
-            .setRevokedPartitions(Collections.singletonList(new ConsumerGroupCurrentMemberAssignmentValue.TopicPartitions()
+            .setPartitionsPendingRevocation(Collections.singletonList(new ConsumerGroupCurrentMemberAssignmentValue.TopicPartitions()
                 .setTopicId(topicId2)
                 .setPartitions(Arrays.asList(3, 4, 5))));
         String memberId = Uuid.randomUuid().toString();

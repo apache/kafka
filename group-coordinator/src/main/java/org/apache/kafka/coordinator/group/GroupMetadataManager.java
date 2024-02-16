@@ -1240,7 +1240,7 @@ public class GroupMetadataManager {
             log.info("[GroupId {}] Member {} new assignment state: epoch={}, previousEpoch={}, state={}, "
                      + "assignedPartitions={} and revokedPartitions={}.",
                 groupId, updatedMember.memberId(), updatedMember.memberEpoch(), updatedMember.previousMemberEpoch(), updatedMember.state(),
-                formatAssignment(updatedMember.assignedPartitions()), formatAssignment(updatedMember.revokedPartitions()));
+                formatAssignment(updatedMember.assignedPartitions()), formatAssignment(updatedMember.setPartitionsPendingRevocation()));
 
             if (updatedMember.state() == MemberState.UNREVOKED_PARTITIONS) {
                 scheduleConsumerGroupRebalanceTimeout(
@@ -1355,7 +1355,7 @@ public class GroupMetadataManager {
         // We will write a member epoch of -2 for this departing static member.
         ConsumerGroupMember leavingStaticMember = new ConsumerGroupMember.Builder(member)
             .setMemberEpoch(LEAVE_GROUP_STATIC_MEMBER_EPOCH)
-            .setRevokedPartitions(Collections.emptyMap())
+            .setPartitionsPendingRevocation(Collections.emptyMap())
             .build();
         return Collections.singletonList(newCurrentAssignmentRecord(group.groupId(), leavingStaticMember));
     }
@@ -1812,7 +1812,7 @@ public class GroupMetadataManager {
                 .setMemberEpoch(LEAVE_GROUP_MEMBER_EPOCH)
                 .setPreviousMemberEpoch(LEAVE_GROUP_MEMBER_EPOCH)
                 .setAssignedPartitions(Collections.emptyMap())
-                .setRevokedPartitions(Collections.emptyMap())
+                .setPartitionsPendingRevocation(Collections.emptyMap())
                 .build();
             consumerGroup.updateMember(newMember);
         }

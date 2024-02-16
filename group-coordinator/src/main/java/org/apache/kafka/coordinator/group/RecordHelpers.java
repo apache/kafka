@@ -348,7 +348,7 @@ public class RecordHelpers {
                     .setPreviousMemberEpoch(member.previousMemberEpoch())
                     .setState(member.state().value())
                     .setAssignedPartitions(toTopicPartitions(member.assignedPartitions()))
-                    .setRevokedPartitions(toTopicPartitions(member.revokedPartitions())),
+                    .setPartitionsPendingRevocation(toTopicPartitions(member.setPartitionsPendingRevocation())),
                 (short) 0
             )
         );

@@ -877,7 +877,7 @@ public class ConsumerGroup implements Group {
     ) {
         maybeRemovePartitionEpoch(oldMember);
         addPartitionEpochs(newMember.assignedPartitions(), newMember.memberEpoch());
-        addPartitionEpochs(newMember.revokedPartitions(), newMember.memberEpoch());
+        addPartitionEpochs(newMember.setPartitionsPendingRevocation(), newMember.memberEpoch());
     }
 
     /**
@@ -890,7 +890,7 @@ public class ConsumerGroup implements Group {
     ) {
         if (oldMember != null) {
             removePartitionEpochs(oldMember.assignedPartitions(), oldMember.memberEpoch());
-            removePartitionEpochs(oldMember.revokedPartitions(), oldMember.memberEpoch());
+            removePartitionEpochs(oldMember.setPartitionsPendingRevocation(), oldMember.memberEpoch());
         }
     }
 

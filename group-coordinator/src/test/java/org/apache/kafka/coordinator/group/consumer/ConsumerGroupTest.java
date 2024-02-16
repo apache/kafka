@@ -175,7 +175,7 @@ public class ConsumerGroupTest {
             .setMemberEpoch(10)
             .setAssignedPartitions(mkAssignment(
                 mkTopicAssignment(fooTopicId, 1, 2, 3)))
-            .setRevokedPartitions(mkAssignment(
+            .setPartitionsPendingRevocation(mkAssignment(
                 mkTopicAssignment(barTopicId, 4, 5, 6)))
             .build();
 
@@ -195,7 +195,7 @@ public class ConsumerGroupTest {
             .setMemberEpoch(11)
             .setAssignedPartitions(mkAssignment(
                 mkTopicAssignment(barTopicId, 1, 2, 3)))
-            .setRevokedPartitions(mkAssignment(
+            .setPartitionsPendingRevocation(mkAssignment(
                 mkTopicAssignment(zarTopicId, 4, 5, 6)))
             .build();
 
@@ -222,7 +222,7 @@ public class ConsumerGroupTest {
         member = new ConsumerGroupMember.Builder("member")
             .setMemberEpoch(10)
             .setAssignedPartitions(Collections.emptyMap())
-            .setRevokedPartitions(mkAssignment(
+            .setPartitionsPendingRevocation(mkAssignment(
                 mkTopicAssignment(fooTopicId, 1)))
             .build();
 
@@ -234,7 +234,7 @@ public class ConsumerGroupTest {
             .setMemberEpoch(11)
             .setAssignedPartitions(mkAssignment(
                 mkTopicAssignment(fooTopicId, 1)))
-            .setRevokedPartitions(Collections.emptyMap())
+            .setPartitionsPendingRevocation(Collections.emptyMap())
             .build();
 
         consumerGroup.updateMember(member);
@@ -331,7 +331,7 @@ public class ConsumerGroupTest {
             .setMemberEpoch(10)
             .setAssignedPartitions(mkAssignment(
                 mkTopicAssignment(fooTopicId, 1, 2, 3)))
-            .setRevokedPartitions(mkAssignment(
+            .setPartitionsPendingRevocation(mkAssignment(
                 mkTopicAssignment(barTopicId, 4, 5, 6)))
             .build();
 

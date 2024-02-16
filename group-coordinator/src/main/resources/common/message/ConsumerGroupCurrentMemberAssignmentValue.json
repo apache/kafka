@@ -28,7 +28,7 @@
       "about": "The member state. See ConsumerGroupMember.MemberState for the possible values." },
     { "name": "AssignedPartitions", "versions": "0+", "type": "[]TopicPartitions",
       "about": "The partitions assigned to (or owned by) this member." },
-    { "name": "RevokedPartitions", "versions": "0+", "type": "[]TopicPartitions",
+    { "name": "PartitionsPendingRevocation", "versions": "0+", "type": "[]TopicPartitions",
       "about": "The partitions that must be revoked by this member." }
   ],
   "commonStructs": [

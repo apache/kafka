@@ -148,8 +148,8 @@ public class Assertions {
             // We transform those to Maps before comparing them.
             assertEquals(fromTopicPartitions(expectedValue.assignedPartitions()),
                 fromTopicPartitions(actualValue.assignedPartitions()));
-            assertEquals(fromTopicPartitions(expectedValue.revokedPartitions()),
-                fromTopicPartitions(actualValue.revokedPartitions()));
+            assertEquals(fromTopicPartitions(expectedValue.partitionsPendingRevocation()),
+                fromTopicPartitions(actualValue.partitionsPendingRevocation()));
         } else if (actual.message() instanceof ConsumerGroupPartitionMetadataValue) {
             // The order of the racks stored in the PartitionMetadata of the ConsumerGroupPartitionMetadataValue
             // is not always guaranteed. Therefore, we need a special comparator.

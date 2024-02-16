@@ -128,7 +128,7 @@ public class CurrentAssignmentBuilderTest {
                 .setAssignedPartitions(mkAssignment(
                     mkTopicAssignment(topicId1, 2, 3),
                     mkTopicAssignment(topicId2, 5, 6)))
-                .setRevokedPartitions(mkAssignment(
+                .setPartitionsPendingRevocation(mkAssignment(
                     mkTopicAssignment(topicId1, 1),
                     mkTopicAssignment(topicId2, 4)))
                 .build(),
@@ -182,7 +182,7 @@ public class CurrentAssignmentBuilderTest {
             .setAssignedPartitions(mkAssignment(
                 mkTopicAssignment(topicId1, 2, 3),
                 mkTopicAssignment(topicId2, 5, 6)))
-            .setRevokedPartitions(mkAssignment(
+            .setPartitionsPendingRevocation(mkAssignment(
                 mkTopicAssignment(topicId1, 1),
                 mkTopicAssignment(topicId2, 4)))
             .build();
@@ -226,7 +226,7 @@ public class CurrentAssignmentBuilderTest {
             .setAssignedPartitions(mkAssignment(
                 mkTopicAssignment(topicId1, 2, 3),
                 mkTopicAssignment(topicId2, 5, 6)))
-            .setRevokedPartitions(mkAssignment(
+            .setPartitionsPendingRevocation(mkAssignment(
                 mkTopicAssignment(topicId1, 1),
                 mkTopicAssignment(topicId2, 4)))
             .build();
@@ -283,7 +283,7 @@ public class CurrentAssignmentBuilderTest {
             .setAssignedPartitions(mkAssignment(
                 mkTopicAssignment(topicId1, 2, 3),
                 mkTopicAssignment(topicId2, 5, 6)))
-            .setRevokedPartitions(mkAssignment(
+            .setPartitionsPendingRevocation(mkAssignment(
                 mkTopicAssignment(topicId1, 1),
                 mkTopicAssignment(topicId2, 4)))
             .build();
@@ -310,7 +310,7 @@ public class CurrentAssignmentBuilderTest {
                 .setAssignedPartitions(mkAssignment(
                     mkTopicAssignment(topicId1, 3),
                     mkTopicAssignment(topicId2, 6)))
-                .setRevokedPartitions(mkAssignment(
+                .setPartitionsPendingRevocation(mkAssignment(
                     mkTopicAssignment(topicId1, 2),
                     mkTopicAssignment(topicId2, 5)))
                 .build(),
@@ -480,7 +480,7 @@ public class CurrentAssignmentBuilderTest {
                 .setAssignedPartitions(mkAssignment(
                     mkTopicAssignment(topicId1, 3),
                     mkTopicAssignment(topicId2, 6)))
-                .setRevokedPartitions(mkAssignment(
+                .setPartitionsPendingRevocation(mkAssignment(
                     mkTopicAssignment(topicId1, 2),
                     mkTopicAssignment(topicId2, 5)))
                 .build(),
@@ -500,7 +500,7 @@ public class CurrentAssignmentBuilderTest {
             .setAssignedPartitions(mkAssignment(
                 mkTopicAssignment(topicId1, 3),
                 mkTopicAssignment(topicId2, 6)))
-            .setRevokedPartitions(mkAssignment(
+            .setPartitionsPendingRevocation(mkAssignment(
                 mkTopicAssignment(topicId1, 2),
                 mkTopicAssignment(topicId2, 5)))
             .build();

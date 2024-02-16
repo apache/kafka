@@ -416,7 +416,7 @@ public class RecordHelpersTest {
                         new ConsumerGroupCurrentMemberAssignmentValue.TopicPartitions()
                             .setTopicId(topicId2)
                             .setPartitions(Arrays.asList(21, 22, 23))))
-                    .setRevokedPartitions(Arrays.asList(
+                    .setPartitionsPendingRevocation(Arrays.asList(
                         new ConsumerGroupCurrentMemberAssignmentValue.TopicPartitions()
                             .setTopicId(topicId1)
                             .setPartitions(Arrays.asList(14, 15, 16)),
@@ -432,7 +432,7 @@ public class RecordHelpersTest {
                 .setMemberEpoch(22)
                 .setPreviousMemberEpoch(21)
                 .setAssignedPartitions(assigned)
-                .setRevokedPartitions(revoking)
+                .setPartitionsPendingRevocation(revoking)
                 .build()
         ));
     }
