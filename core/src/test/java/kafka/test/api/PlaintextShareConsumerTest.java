@@ -57,12 +57,102 @@ import java.util.Map;
 import java.util.Properties;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.apache.kafka.test.TestUtils.DEFAULT_MAX_WAIT_MS;
 
 @Timeout(600)
 public class PlaintextShareConsumerTest extends AbstractConsumerTest {
     public static final String TEST_WITH_PARAMETERIZED_QUORUM_NAME = "{displayName}.quorum={argumentsWithNames}";
+
+    @ParameterizedTest(name = TEST_WITH_PARAMETERIZED_QUORUM_NAME)
+    @ValueSource(strings = {"kraft+kip932"})
+    public void testPollNoSubscribeFails(String quorum) {
+        KafkaShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(new ByteArrayDeserializer(), new ByteArrayDeserializer(),
+                new Properties(), CollectionConverters.asScala(Collections.<String>emptyList()).toList());
+        assertEquals(Collections.emptySet(), shareConsumer.subscription());
+        // "Consumer is not subscribed to any topics."
+        assertThrows(IllegalStateException.class, () -> shareConsumer.poll(Duration.ofMillis(2000)));
+        shareConsumer.close();
+    }
+
+    @ParameterizedTest(name = TEST_WITH_PARAMETERIZED_QUORUM_NAME)
+    @ValueSource(strings = {"kraft+kip932"})
+    public void testSubscribeAndPollNoRecords(String quorum) {
+        KafkaShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(new ByteArrayDeserializer(), new ByteArrayDeserializer(),
+                new Properties(), CollectionConverters.asScala(Collections.<String>emptyList()).toList());
+        Set<String> subscription = Collections.singleton(tp().topic());
+        shareConsumer.subscribe(subscription);
+        assertEquals(subscription, shareConsumer.subscription());
+        ConsumerRecords<byte[], byte[]> records = shareConsumer.poll(Duration.ofMillis(2000));
+        shareConsumer.close();
+        assertEquals(0, records.count());
+    }
+
+    @ParameterizedTest(name = TEST_WITH_PARAMETERIZED_QUORUM_NAME)
+    @ValueSource(strings = {"kraft+kip932"})
+    public void testSubscribePollUnsubscribe(String quorum) {
+        KafkaShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(new ByteArrayDeserializer(), new ByteArrayDeserializer(),
+                new Properties(), CollectionConverters.asScala(Collections.<String>emptyList()).toList());
+        Set<String> subscription = Collections.singleton(tp().topic());
+        shareConsumer.subscribe(subscription);
+        assertEquals(subscription, shareConsumer.subscription());
+        ConsumerRecords<byte[], byte[]> records = shareConsumer.poll(Duration.ofMillis(2000));
+        shareConsumer.unsubscribe();
+        assertEquals(Collections.emptySet(), shareConsumer.subscription());
+        shareConsumer.close();
+        assertEquals(0, records.count());
+    }
+
+    @ParameterizedTest(name = TEST_WITH_PARAMETERIZED_QUORUM_NAME)
+    @ValueSource(strings = {"kraft+kip932"})
+    public void testSubscribePollSubscribe(String quorum) {
+        KafkaShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(new ByteArrayDeserializer(), new ByteArrayDeserializer(),
+                new Properties(), CollectionConverters.asScala(Collections.<String>emptyList()).toList());
+        Set<String> subscription = Collections.singleton(tp().topic());
+        shareConsumer.subscribe(subscription);
+        assertEquals(subscription, shareConsumer.subscription());
+        ConsumerRecords<byte[], byte[]> records = shareConsumer.poll(Duration.ofMillis(2000));
+        shareConsumer.subscribe(subscription);
+        assertEquals(subscription, shareConsumer.subscription());
+        records = shareConsumer.poll(Duration.ofMillis(2000));
+        shareConsumer.close();
+        assertEquals(0, records.count());
+    }
+
+    @ParameterizedTest(name = TEST_WITH_PARAMETERIZED_QUORUM_NAME)
+    @ValueSource(strings = {"kraft+kip932"})
+    public void testSubscribeUnsubscribePollFails(String quorum) {
+        KafkaShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(new ByteArrayDeserializer(), new ByteArrayDeserializer(),
+                new Properties(), CollectionConverters.asScala(Collections.<String>emptyList()).toList());
+        Set<String> subscription = Collections.singleton(tp().topic());
+        shareConsumer.subscribe(subscription);
+        assertEquals(subscription, shareConsumer.subscription());
+        ConsumerRecords<byte[], byte[]> records = shareConsumer.poll(Duration.ofMillis(2000));
+        shareConsumer.unsubscribe();
+        assertEquals(Collections.emptySet(), shareConsumer.subscription());
+        // "Consumer is not subscribed to any topics."
+        assertThrows(IllegalStateException.class, () -> shareConsumer.poll(Duration.ofMillis(2000)));
+        shareConsumer.close();
+        assertEquals(0, records.count());
+    }
+
+    @ParameterizedTest(name = TEST_WITH_PARAMETERIZED_QUORUM_NAME)
+    @ValueSource(strings = {"kraft+kip932"})
+    public void testSubscribeSubscribeEmptyPollFails(String quorum) {
+        KafkaShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(new ByteArrayDeserializer(), new ByteArrayDeserializer(),
+                new Properties(), CollectionConverters.asScala(Collections.<String>emptyList()).toList());
+        Set<String> subscription = Collections.singleton(tp().topic());
+        shareConsumer.subscribe(subscription);
+        assertEquals(subscription, shareConsumer.subscription());
+        ConsumerRecords<byte[], byte[]> records = shareConsumer.poll(Duration.ofMillis(2000));
+        shareConsumer.subscribe(Collections.emptySet());
+        assertEquals(Collections.emptySet(), shareConsumer.subscription());
+        // "Consumer is not subscribed to any topics."
+        assertThrows(IllegalStateException.class, () -> shareConsumer.poll(Duration.ofMillis(2000)));
+        shareConsumer.close();
+        assertEquals(0, records.count());
+    }
 
     @ParameterizedTest(name = TEST_WITH_PARAMETERIZED_QUORUM_NAME)
     @ValueSource(strings = {"kraft+kip932"})
@@ -73,7 +163,7 @@ public class PlaintextShareConsumerTest extends AbstractConsumerTest {
         KafkaShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(new ByteArrayDeserializer(), new ByteArrayDeserializer(),
                 new Properties(), CollectionConverters.asScala(Collections.<String>emptyList()).toList());
         shareConsumer.subscribe(Collections.singleton(tp().topic()));
-        ConsumerRecords<byte[], byte[]> records = shareConsumer.poll(Duration.ofMillis(10000));
+        ConsumerRecords<byte[], byte[]> records = shareConsumer.poll(Duration.ofMillis(2000));
         shareConsumer.close();
         //TODO: the expected value should be changed to 1 and more verification should be added once the fetch functionality is in place
         assertEquals(0, records.count());

@@ -453,7 +453,9 @@ public class ShareMembershipManager implements RequestManager {
     private void updateSubscription(SortedSet<TopicIdPartition> assignedPartitions,
                                     boolean clearAssignments) {
         Collection<TopicPartition> assignedTopicPartitions = toTopicPartitionSet(assignedPartitions);
-        subscriptions.assignFromSubscribed(assignedTopicPartitions);
+        if (subscriptions.hasAutoAssignedPartitions()) {
+            subscriptions.assignFromSubscribed(assignedTopicPartitions);
+        }
         updateAssignmentLocally(assignedPartitions, clearAssignments);
     }
 
