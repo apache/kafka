@@ -18,7 +18,7 @@ package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.processor.ProcessorContext;
-import org.apache.kafka.streams.query.internals.SynchronizedPosition;
+import org.apache.kafka.streams.query.Position;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -44,7 +44,7 @@ abstract class AbstractSegments<S extends Segment> implements Segments<S> {
     private final long retentionPeriod;
     private final long segmentInterval;
     private final SimpleDateFormat formatter;
-    SynchronizedPosition position;
+    Position position;
 
     AbstractSegments(final String name, final long retentionPeriod, final long segmentInterval) {
         this.name = name;
@@ -55,7 +55,7 @@ abstract class AbstractSegments<S extends Segment> implements Segments<S> {
         this.formatter.setTimeZone(new SimpleTimeZone(0, "UTC"));
     }
 
-    public void setPosition(final SynchronizedPosition position) {
+    public void setPosition(final Position position) {
         this.position = position;
     }
 

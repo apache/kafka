@@ -33,7 +33,6 @@ import org.apache.kafka.streams.processor.internals.StoreToProcessorContextAdapt
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.processor.internals.metrics.TaskMetrics;
 import org.apache.kafka.streams.query.Position;
-import org.apache.kafka.streams.query.internals.SynchronizedPosition;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.rocksdb.RocksDBException;
 import org.rocksdb.WriteBatch;
@@ -62,7 +61,7 @@ public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements Se
     private Sensor expiredRecordSensor;
     private long observedStreamTime = ConsumerRecord.NO_TIMESTAMP;
     private boolean consistencyEnabled = false;
-    private SynchronizedPosition position;
+    private Position position;
     protected OffsetCheckpoint positionCheckpoint;
     private volatile boolean open;
 
@@ -267,12 +266,9 @@ public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements Se
             expiredRecordSensor.record(1.0d, context.currentSystemTimeMs());
             LOG.warn("Skipping record for expired segment.");
         } else {
-            position.lock();
-            try {
+            synchronized (position) {
                 StoreQueryUtils.updatePosition(position, stateStoreContext);
                 segment.put(key, value);
-            } finally {
-                position.unlock();
             }
         }
     }
@@ -369,19 +365,18 @@ public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements Se
 
     // Visible for testing
     void restoreAllInternal(final Collection<ConsumerRecord<byte[], byte[]>> records) {
-        position.lock();
-        try {
-            final Map<S, WriteBatch> writeBatchMap = getWriteBatches(records);
-            for (final Map.Entry<S, WriteBatch> entry : writeBatchMap.entrySet()) {
-                final S segment = entry.getKey();
-                final WriteBatch batch = entry.getValue();
-                segment.write(batch);
-                batch.close();
+        synchronized (position) {
+            try {
+                final Map<S, WriteBatch> writeBatchMap = getWriteBatches(records);
+                for (final Map.Entry<S, WriteBatch> entry : writeBatchMap.entrySet()) {
+                    final S segment = entry.getKey();
+                    final WriteBatch batch = entry.getValue();
+                    segment.write(batch);
+                    batch.close();
+                }
+            } catch (final RocksDBException e) {
+                throw new ProcessorStateException("Error restoring batch to store " + this.name, e);
             }
-        } catch (final RocksDBException e) {
-            throw new ProcessorStateException("Error restoring batch to store " + this.name, e);
-        } finally {
-            position.unlock();
         }
     }
 

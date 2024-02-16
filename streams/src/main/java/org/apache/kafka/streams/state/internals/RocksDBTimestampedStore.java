@@ -101,8 +101,7 @@ public class RocksDBTimestampedStore extends RocksDBStore implements Timestamped
         public void put(final DBAccessor accessor,
                         final byte[] key,
                         final byte[] valueWithTimestamp) {
-            position.lock();
-            try {
+            synchronized (position) {
                 if (valueWithTimestamp == null) {
                     try {
                         accessor.delete(oldColumnFamily, key);
@@ -131,8 +130,6 @@ public class RocksDBTimestampedStore extends RocksDBStore implements Timestamped
                         throw new ProcessorStateException("Error while putting key/value into store " + name, e);
                     }
                 }
-            } finally {
-                position.unlock();
             }
         }
 

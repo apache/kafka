@@ -38,7 +38,6 @@ import org.apache.kafka.streams.query.ResultOrder;
 import org.apache.kafka.streams.query.VersionedKeyQuery;
 import org.apache.kafka.streams.query.WindowKeyQuery;
 import org.apache.kafka.streams.query.WindowRangeQuery;
-import org.apache.kafka.streams.query.internals.SynchronizedPosition;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.SessionStore;
@@ -118,7 +117,7 @@ public final class StoreQueryUtils {
         final PositionBound positionBound,
         final QueryConfig config,
         final StateStore store,
-        final SynchronizedPosition position,
+        final Position position,
         final StateStoreContext context
     ) {
 
@@ -126,8 +125,7 @@ public final class StoreQueryUtils {
         final QueryResult<R> result;
 
         final QueryHandler handler = QUERY_HANDLER_MAP.get(query.getClass());
-        position.lock();
-        try {
+        synchronized (position) {
             if (handler == null) {
                 result = QueryResult.forUnknownQueryType(query, store);
             } else if (context == null || !isPermitted(position, positionBound, context.taskId().partition())) {
@@ -150,8 +148,6 @@ public final class StoreQueryUtils {
                 );
             }
             result.setPosition(position.copy());
-        } finally {
-            position.unlock();
         }
         return result;
     }
@@ -464,7 +460,7 @@ public final class StoreQueryUtils {
         }
     }
 
-    public static SynchronizedPosition readPositionFromCheckpoint(final OffsetCheckpoint checkpointFile) {
+    public static Position readPositionFromCheckpoint(final OffsetCheckpoint checkpointFile) {
         try {
             return topicPartitionMapToPosition(checkpointFile.read());
         } catch (final IOException e) {
@@ -485,14 +481,14 @@ public final class StoreQueryUtils {
         return topicPartitions;
     }
 
-    private static SynchronizedPosition topicPartitionMapToPosition(final Map<TopicPartition, Long> topicPartitions) {
+    private static Position topicPartitionMapToPosition(final Map<TopicPartition, Long> topicPartitions) {
         final Map<String, Map<Integer, Long>> pos = new HashMap<>();
         for (final Entry<TopicPartition, Long> e : topicPartitions.entrySet()) {
             pos
                 .computeIfAbsent(e.getKey().topic(), t -> new HashMap<>())
                 .put(e.getKey().partition(), e.getValue());
         }
-        return SynchronizedPosition.fromMap(pos);
+        return Position.fromMap(pos);
     }
 
     private static <R> String parseStoreException(final Exception e, final StateStore store, final Query<R> query) {

@@ -32,7 +32,6 @@ import org.apache.kafka.streams.query.PositionBound;
 import org.apache.kafka.streams.query.Query;
 import org.apache.kafka.streams.query.QueryConfig;
 import org.apache.kafka.streams.query.QueryResult;
-import org.apache.kafka.streams.query.internals.SynchronizedPosition;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.slf4j.Logger;
@@ -64,14 +63,14 @@ public class CachingKeyValueStore
     private InternalProcessorContext<?, ?> context;
     private Thread streamThread;
     private final ReadWriteLock lock = new ReentrantReadWriteLock();
-    private final SynchronizedPosition position;
+    private final Position position;
     private final boolean timestampedSchema;
 
     @FunctionalInterface
     public interface CacheQueryHandler {
         QueryResult<?> apply(
             final Query<?> query,
-            final SynchronizedPosition mergedPosition,
+            final Position mergedPosition,
             final PositionBound positionBound,
             final QueryConfig config,
             final StateStore store
@@ -91,7 +90,7 @@ public class CachingKeyValueStore
 
     CachingKeyValueStore(final KeyValueStore<Bytes, byte[]> underlying, final boolean timestampedSchema) {
         super(underlying);
-        position = SynchronizedPosition.emptyPosition();
+        position = Position.emptyPosition();
         this.timestampedSchema = timestampedSchema;
     }
 
@@ -120,18 +119,13 @@ public class CachingKeyValueStore
     @Override
     public Position getPosition() {
         // We return the merged position since the query uses the merged position as well
-        final SynchronizedPosition mergedPosition = SynchronizedPosition.emptyPosition();
-        mergedPosition.lock();
-        position.lock();
-        final SynchronizedPosition wrappedPosition = (SynchronizedPosition) wrapped().getPosition();
-        wrappedPosition.lock();
-        try {
-            mergedPosition.merge(position);
-            mergedPosition.merge(wrappedPosition);
-        } finally {
-            mergedPosition.unlock();
-            position.unlock();
-            wrappedPosition.unlock();
+        final Position mergedPosition = Position.emptyPosition();
+        final Position wrappedPosition = wrapped().getPosition();
+        synchronized (position) {
+            synchronized (wrappedPosition) {
+                mergedPosition.merge(position);
+                mergedPosition.merge(wrappedPosition);
+            }
         }
         return mergedPosition;
     }
@@ -155,7 +149,7 @@ public class CachingKeyValueStore
             lock.lock();
             try {
                 validateStoreOpen();
-                final SynchronizedPosition mergedPosition = (SynchronizedPosition) getPosition();
+                final Position mergedPosition = getPosition();
 
                 // We use the merged position since the cache and the store may be at different positions
                 if (!StoreQueryUtils.isPermitted(mergedPosition, positionBound, partition)) {
@@ -182,7 +176,7 @@ public class CachingKeyValueStore
 
     @SuppressWarnings("unchecked")
     private <R> QueryResult<R> runKeyQuery(final Query<R> query,
-                                           final SynchronizedPosition mergedPosition,
+                                           final Position mergedPosition,
                                            final PositionBound positionBound,
                                            final QueryConfig config) {
         QueryResult<R> result = null;
@@ -194,8 +188,7 @@ public class CachingKeyValueStore
 
         final Bytes key = keyQuery.getKey();
 
-        mergedPosition.lock();
-        try {
+        synchronized (mergedPosition) {
             if (context.cache() != null) {
                 final LRUCacheEntry lruCacheEntry = context.cache().get(cacheName, key);
                 if (lruCacheEntry != null) {
@@ -215,8 +208,6 @@ public class CachingKeyValueStore
                 result = wrapped().query(query, PositionBound.unbounded(), config);
             }
             result.setPosition(mergedPosition.copy());
-        } finally {
-            mergedPosition.unlock();
         }
         return result;
     }
@@ -292,8 +283,7 @@ public class CachingKeyValueStore
 
     private void putInternal(final Bytes key,
                              final byte[] value) {
-        position.lock();
-        try {
+        synchronized (position) {
             context.cache().put(
                 cacheName,
                 key,
@@ -307,8 +297,6 @@ public class CachingKeyValueStore
                     context.topic()));
 
             StoreQueryUtils.updatePosition(position, context);
-        } finally {
-            position.unlock();
         }
     }
 

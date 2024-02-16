@@ -32,7 +32,6 @@ import org.apache.kafka.streams.query.PositionBound;
 import org.apache.kafka.streams.query.Query;
 import org.apache.kafka.streams.query.QueryConfig;
 import org.apache.kafka.streams.query.QueryResult;
-import org.apache.kafka.streams.query.internals.SynchronizedPosition;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.slf4j.Logger;
@@ -53,7 +52,7 @@ public class InMemoryKeyValueStore implements KeyValueStore<Bytes, byte[]> {
 
     private final String name;
     private final NavigableMap<Bytes, byte[]> map = new TreeMap<>();
-    private final SynchronizedPosition position = SynchronizedPosition.emptyPosition();
+    private final Position position = Position.emptyPosition();
     private volatile boolean open = false;
     private StateStoreContext context;
 
@@ -80,8 +79,7 @@ public class InMemoryKeyValueStore implements KeyValueStore<Bytes, byte[]> {
             context.register(
                 root,
                 (RecordBatchingStateRestoreCallback) records -> {
-                    position.lock();
-                    try {
+                    synchronized (position) {
                         for (final ConsumerRecord<byte[], byte[]> record : records) {
                             put(Bytes.wrap(record.key()), record.value());
                             ChangelogRecordDeserializationHelper.applyChecksAndUpdatePosition(
@@ -90,8 +88,6 @@ public class InMemoryKeyValueStore implements KeyValueStore<Bytes, byte[]> {
                                 position
                             );
                         }
-                    } finally {
-                        position.unlock();
                     }
                 }
             );
@@ -158,8 +154,7 @@ public class InMemoryKeyValueStore implements KeyValueStore<Bytes, byte[]> {
 
     // the unlocked implementation of put method, to avoid multiple lock/unlock cost in `putAll` method
     private void putInternal(final Bytes key, final byte[] value) {
-        position.lock();
-        try {
+        synchronized (position) {
             if (value == null) {
                 map.remove(key);
             } else {
@@ -167,8 +162,6 @@ public class InMemoryKeyValueStore implements KeyValueStore<Bytes, byte[]> {
             }
 
             StoreQueryUtils.updatePosition(position, context);
-        } finally {
-            position.unlock();
         }
     }
 

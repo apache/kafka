@@ -37,7 +37,6 @@ import org.apache.kafka.streams.query.PositionBound;
 import org.apache.kafka.streams.query.Query;
 import org.apache.kafka.streams.query.QueryConfig;
 import org.apache.kafka.streams.query.QueryResult;
-import org.apache.kafka.streams.query.internals.SynchronizedPosition;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.SessionStore;
 import org.slf4j.Logger;
@@ -79,7 +78,7 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]> {
     private volatile boolean open = false;
 
     private StateStoreContext stateStoreContext;
-    private final SynchronizedPosition position;
+    private final Position position;
 
     InMemorySessionStore(final String name,
                          final long retentionPeriod,
@@ -87,7 +86,7 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]> {
         this.name = name;
         this.retentionPeriod = retentionPeriod;
         this.metricScope = metricScope;
-        this.position = SynchronizedPosition.emptyPosition();
+        this.position = Position.emptyPosition();
     }
 
     @Override
@@ -125,8 +124,7 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]> {
             context.register(
                 root,
                 (RecordBatchingStateRestoreCallback) records -> {
-                    position.lock();
-                    try {
+                    synchronized (position) {
                         for (final ConsumerRecord<byte[], byte[]> record : records) {
                             put(SessionKeySchema.from(Bytes.wrap(record.key())), record.value());
                             ChangelogRecordDeserializationHelper.applyChecksAndUpdatePosition(
@@ -135,8 +133,6 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]> {
                                 position
                             );
                         }
-                    } finally {
-                        position.unlock();
                     }
                 }
             );
@@ -163,8 +159,7 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]> {
         final long windowEndTimestamp = sessionKey.window().end();
         observedStreamTime = Math.max(observedStreamTime, windowEndTimestamp);
 
-        position.lock();
-        try {
+        synchronized (position) {
             if (windowEndTimestamp <= observedStreamTime - retentionPeriod) {
                 // The provided context is not required to implement InternalProcessorContext,
                 // If it doesn't, we can't record this metric (in fact, we wouldn't have even initialized it).
@@ -184,8 +179,6 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]> {
             }
 
             StoreQueryUtils.updatePosition(position, stateStoreContext);
-        } finally {
-            position.unlock();
         }
     }
 

@@ -20,7 +20,7 @@ import java.util.HashMap;
 import java.util.Map;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.internals.ProcessorContextUtils;
-import org.apache.kafka.streams.query.internals.SynchronizedPosition;
+import org.apache.kafka.streams.query.Position;
 import org.apache.kafka.streams.state.internals.metrics.RocksDBMetricsRecorder;
 
 /**
@@ -55,7 +55,7 @@ public class LogicalKeyValueSegments extends AbstractSegments<LogicalKeyValueSeg
     }
 
     @Override
-    public void setPosition(final SynchronizedPosition position) {
+    public void setPosition(final Position position) {
         this.physicalStore.position = position;
     }
 

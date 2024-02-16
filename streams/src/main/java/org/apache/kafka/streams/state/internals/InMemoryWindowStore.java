@@ -37,7 +37,6 @@ import org.apache.kafka.streams.query.PositionBound;
 import org.apache.kafka.streams.query.Query;
 import org.apache.kafka.streams.query.QueryConfig;
 import org.apache.kafka.streams.query.QueryResult;
-import org.apache.kafka.streams.query.internals.SynchronizedPosition;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.WindowStoreIterator;
@@ -80,7 +79,7 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]> {
 
     private volatile boolean open = false;
 
-    private final SynchronizedPosition position;
+    private final Position position;
     private StateStoreContext stateStoreContext;
 
     public InMemoryWindowStore(final String name,
@@ -93,7 +92,7 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]> {
         this.windowSize = windowSize;
         this.retainDuplicates = retainDuplicates;
         this.metricScope = metricScope;
-        this.position = SynchronizedPosition.emptyPosition();
+        this.position = Position.emptyPosition();
     }
 
     @Override
@@ -124,8 +123,7 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]> {
             context.register(
                 root,
                 (RecordBatchingStateRestoreCallback) records -> {
-                    position.lock();
-                    try {
+                    synchronized (position) {
                         for (final ConsumerRecord<byte[], byte[]> record : records) {
                             put(
                                 Bytes.wrap(extractStoreKeyBytes(record.key())),
@@ -138,8 +136,6 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]> {
                                 position
                             );
                         }
-                    } finally {
-                        position.unlock();
                     }
                 }
             );
@@ -164,8 +160,7 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]> {
         removeExpiredSegments();
         observedStreamTime = Math.max(observedStreamTime, windowStartTimestamp);
 
-        position.lock();
-        try {
+        synchronized (position) {
             if (windowStartTimestamp <= observedStreamTime - retentionPeriod) {
                 expiredRecordSensor.record(1.0d, context.currentSystemTimeMs());
                 LOG.warn("Skipping record for expired segment.");
@@ -188,8 +183,6 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]> {
             }
 
             StoreQueryUtils.updatePosition(position, stateStoreContext);
-        } finally {
-            position.unlock();
         }
     }
 

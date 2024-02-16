@@ -49,7 +49,6 @@ import org.apache.kafka.streams.query.Query;
 import org.apache.kafka.streams.query.QueryConfig;
 import org.apache.kafka.streams.query.QueryResult;
 import org.apache.kafka.streams.query.ResultOrder;
-import org.apache.kafka.streams.query.internals.SynchronizedPosition;
 import org.apache.kafka.streams.state.VersionedKeyValueStore;
 import org.apache.kafka.streams.state.VersionedRecord;
 import org.apache.kafka.streams.state.VersionedRecordIterator;
@@ -107,7 +106,7 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
     private Sensor expiredRecordSensor;
     private long observedStreamTime = ConsumerRecord.NO_TIMESTAMP;
     private boolean consistencyEnabled = false;
-    private SynchronizedPosition position;
+    private Position position;
     private OffsetCheckpoint positionCheckpoint;
     private volatile boolean open;
 
@@ -131,8 +130,7 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
         Objects.requireNonNull(key, "key cannot be null");
         validateStoreOpen();
 
-        position.lock();
-        try {
+        synchronized (position) {
             if (timestamp < observedStreamTime - gracePeriod) {
                 expiredRecordSensor.record(1.0d, context.currentSystemTimeMs());
                 LOG.warn("Skipping record for expired put.");
@@ -152,8 +150,6 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
             StoreQueryUtils.updatePosition(position, stateStoreContext);
 
             return foundTs;
-        } finally {
-            position.unlock();
         }
     }
 
@@ -162,8 +158,7 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
         Objects.requireNonNull(key, "key cannot be null");
         validateStoreOpen();
 
-        position.lock();
-        try {
+        synchronized (position) {
             if (timestamp < observedStreamTime - gracePeriod) {
                 expiredRecordSensor.record(1.0d, context.currentSystemTimeMs());
                 LOG.warn("Skipping record for expired delete.");
@@ -184,8 +179,6 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
             StoreQueryUtils.updatePosition(position, stateStoreContext);
 
             return existingRecord;
-        } finally {
-            position.unlock();
         }
     }
 
@@ -420,8 +413,7 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
         // "segment" entry -- restoring a single changelog entry could require loading multiple
         // records into memory. how high this memory amplification will be is very much dependent
         // on the specific workload and the value of the "segment interval" parameter.
-        position.lock();
-        try {
+        synchronized (position) {
             for (final ConsumerRecord<byte[], byte[]> record : records) {
                 if (record.timestamp() < observedStreamTime - gracePeriod) {
                     // record is older than grace period and was therefore never written to the store
@@ -452,8 +444,6 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
             } catch (final RocksDBException e) {
                 throw new ProcessorStateException("Error restoring batch to store " + name, e);
             }
-        } finally {
-            position.unlock();
         }
 
     }
