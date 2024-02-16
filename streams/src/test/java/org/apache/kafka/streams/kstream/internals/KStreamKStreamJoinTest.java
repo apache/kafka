@@ -16,15 +16,16 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
-import java.util.concurrent.atomic.AtomicReference;
 import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
+import org.apache.kafka.common.utils.LogCaptureAppender;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.KeyValueTimestamp;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.TopologyTestDriver;
 import org.apache.kafka.streams.TopologyWrapper;
@@ -38,29 +39,27 @@ import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.InternalTopicConfig;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
-import org.apache.kafka.common.utils.LogCaptureAppender;
-import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.streams.state.BuiltInDslStoreSuppliers;
 import org.apache.kafka.streams.state.DslWindowParams;
+import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.WindowBytesStoreSupplier;
 import org.apache.kafka.streams.state.WindowStore;
-import org.apache.kafka.streams.state.KeyValueStore;
-import org.apache.kafka.streams.state.internals.KeyValueStoreBuilder;
-import org.apache.kafka.streams.state.internals.TimestampedKeyAndJoinSide;
 import org.apache.kafka.streams.state.internals.InMemoryKeyValueBytesStoreSupplier;
+import org.apache.kafka.streams.state.internals.InMemoryWindowBytesStoreSupplier;
+import org.apache.kafka.streams.state.internals.KeyValueStoreBuilder;
+import org.apache.kafka.streams.state.internals.LeftOrRightValue;
+import org.apache.kafka.streams.state.internals.LeftOrRightValueSerde;
+import org.apache.kafka.streams.state.internals.TimestampedKeyAndJoinSide;
 import org.apache.kafka.streams.state.internals.TimestampedKeyAndJoinSideSerde;
 import org.apache.kafka.streams.state.internals.WindowStoreBuilder;
-import org.apache.kafka.streams.state.internals.LeftOrRightValueSerde;
-import org.apache.kafka.streams.state.internals.LeftOrRightValue;
-import org.apache.kafka.streams.state.internals.InMemoryWindowBytesStoreSupplier;
 import org.apache.kafka.streams.state.internals.WrappedStateStore;
+import org.apache.kafka.test.GenericInMemoryKeyValueStore;
 import org.apache.kafka.test.MockApiProcessor;
 import org.apache.kafka.test.MockApiProcessorSupplier;
-import org.apache.kafka.test.MockValueJoiner;
 import org.apache.kafka.test.MockInternalNewProcessorContext;
+import org.apache.kafka.test.MockValueJoiner;
 import org.apache.kafka.test.StreamsTestUtils;
-import org.apache.kafka.test.GenericInMemoryKeyValueStore;
 import org.junit.Test;
 import org.mockito.Mockito;
 
@@ -72,18 +71,18 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
-import java.util.Optional;
 import java.util.Spliterator;
 import java.util.Spliterators;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
 
 import static java.time.Duration.ofHours;
 import static java.time.Duration.ofMillis;
-
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.SUBTOPOLOGY_0;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.hasItem;
@@ -817,7 +816,7 @@ public class KStreamKStreamJoinTest {
         stream2 = builder.stream(topic2, consumed);
 
         final Duration timeDifference = ofMillis(100L);
-        final Duration grace = ofMillis(104);
+        final Duration grace = ofMillis(150);
         joined = stream1.join(
             stream2,
             MockValueJoiner.TOSTRING_JOINER,
@@ -1368,9 +1367,10 @@ public class KStreamKStreamJoinTest {
 
             //push two items with timestamp at grace edge; this should produce one join item, M0 is 'too late'
             final long currentStreamTime = 2104;
-            final long lowerBound = currentStreamTime - timeDifference.toMillis() - grace.toMillis();
-            inputTopic1.pipeInput(0, "M0", lowerBound - 1);
-            inputTopic1.pipeInput(1, "M1", lowerBound + 1);
+            final long graceBound = currentStreamTime - timeDifference.toMillis() - grace.toMillis();
+            inputTopic1.pipeInput(0, "M0", graceBound - 1);
+            final long windowL1LowerBound = 2001 - timeDifference.toMillis();
+            inputTopic1.pipeInput(1, "M1", Math.max(graceBound, windowL1LowerBound));
 
             processor.checkAndClearProcessResult(
                 new KeyValueTimestamp<>(1, "M1+l1", 2001L)
