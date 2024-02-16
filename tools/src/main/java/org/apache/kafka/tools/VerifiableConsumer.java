@@ -637,16 +637,20 @@ public class VerifiableConsumer implements Closeable, OffsetCommitCallback, Cons
         }
 
         String groupProtocol = res.getString("groupProtocol");
-        String assignmentStrategy = res.getString("assignmentStrategy");
-        String groupRemoteAssignor = res.getString("groupRemoteAssignor");
 
-        if (groupProtocol.equalsIgnoreCase(GroupProtocol.CLASSIC.name())) {
-            consumerProps.put(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG, assignmentStrategy);
-        } else if (groupRemoteAssignor != null) {
-            consumerProps.put(ConsumerConfig.GROUP_REMOTE_ASSIGNOR_CONFIG, groupRemoteAssignor);
+        // 3.7.0 includes support for KIP-848 which introduced a new implementation of the consumer group protocol.
+        // The two implementations use slightly different configuration, hence these arguments are conditional.
+        //
+        // See the Python class/method VerifiableConsumer.start_cmd() in verifiable_consumer.py for how the
+        // command line arguments are passed in by the system test framework.
+        if (groupProtocol.equalsIgnoreCase(GroupProtocol.CONSUMER.name())) {
+            consumerProps.put(ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol);
+            consumerProps.put(ConsumerConfig.GROUP_REMOTE_ASSIGNOR_CONFIG, res.getString("groupRemoteAssignor"));
+        } else {
+            // This means we're using the old consumer group protocol.
+            consumerProps.put(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG, res.getString("assignmentStrategy"));
         }
 
-        consumerProps.put(ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol);
         consumerProps.put(ConsumerConfig.GROUP_ID_CONFIG, res.getString("groupId"));
 
         String groupInstanceId = res.getString("groupInstanceId");

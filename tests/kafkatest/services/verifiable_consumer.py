@@ -195,6 +195,8 @@ class VerifiableConsumer(KafkaPathResolverMixin, VerifiableClientMixin, Backgrou
         self.session_timeout_sec = session_timeout_sec
         self.enable_autocommit = enable_autocommit
         self.assignment_strategy = assignment_strategy
+        self.group_protocol = group_protocol
+        self.group_remote_assignor = group_remote_assignor
         self.prop_file = ""
         self.stop_timeout_sec = stop_timeout_sec
         self.on_record_consumed = on_record_consumed
@@ -317,11 +319,20 @@ class VerifiableConsumer(KafkaPathResolverMixin, VerifiableClientMixin, Backgrou
             # if `None` is passed as the argument value
             cmd += " --group-instance-id None"
 
-        if node.version >= V_3_7_0 and self.supports_kip_848():
+        # 3.7.0 includes support for KIP-848 which introduced a new implementation of the consumer group protocol.
+        # The two implementations use slightly different configuration, hence these arguments are conditional.
+        #
+        # See the Java class/method VerifiableConsumer.createFromArgs() for how the command line arguments are
+        # parsed and used as configuration in the runner.
+        if node.version >= V_3_7_0 and self.is_consumer_group_protocol_enabled():
             cmd += " --group-protocol %s" % self.group_protocol
-            cmd += " --group-remote-assignor %s" % self.group_remote_assignor
-        elif self.assignment_strategy:
-            cmd += " --assignment-strategy %s" % self.assignment_strategy
+
+            if self.group_remote_assignor:
+                cmd += " --group-remote-assignor %s" % self.group_remote_assignor
+        else:
+            # Either we're an older consumer version or we're using the old consumer group protocol.
+            if self.assignment_strategy:
+                cmd += " --assignment-strategy %s" % self.assignment_strategy
 
         if self.enable_autocommit:
             cmd += " --enable-autocommit "
@@ -441,5 +452,5 @@ class VerifiableConsumer(KafkaPathResolverMixin, VerifiableClientMixin, Backgrou
             return [handler.node for handler in self.event_handlers.values()
                     if handler.state != ConsumerState.Dead]
 
-    def supports_kip_848(self):
+    def is_consumer_group_protocol_enabled(self):
         return self.group_protocol and self.group_protocol.upper() == "CONSUMER"
