@@ -72,13 +72,13 @@ public class ListConsumerGroupTest extends ConsumerGroupCommandTest {
 
     @ParameterizedTest(name = TEST_WITH_PARAMETERIZED_QUORUM_AND_GROUP_PROTOCOL_NAMES)
     @MethodSource("getTestQuorumAndGroupProtocolParametersClassicGroupProtocolOnly")
-    public void testListConsumerGroupsWithStates(String quorum, String groupProtocol) throws Exception {
+    public void testListConsumerGroupsWithStatesClassicProtocol(String quorum, String groupProtocol) throws Exception {
         String simpleGroup = "simple-group";
 
         createOffsetsTopic(listenerName(), new Properties());
 
         addSimpleGroupExecutor(simpleGroup);
-        addConsumerGroupExecutor(1, groupProtocol);
+        addConsumerGroupExecutor(1);
 
         String[] cgcArgs = new String[]{"--bootstrap-server", bootstrapServers(listenerName()), "--list", "--state"};
         ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(cgcArgs);
@@ -125,6 +125,65 @@ public class ListConsumerGroupTest extends ConsumerGroupCommandTest {
             service,
             Collections.emptySet(),
             new HashSet<>(Arrays.asList(ConsumerGroupState.PREPARING_REBALANCE)),
+            Collections.emptySet()
+        );
+    }
+
+    @ParameterizedTest(name = TEST_WITH_PARAMETERIZED_QUORUM_AND_GROUP_PROTOCOL_NAMES)
+    @MethodSource("getTestQuorumAndGroupProtocolParametersConsumerGroupProtocolOnly")
+    public void testListConsumerGroupsWithStatesConsumerProtocol(String quorum, String groupProtocol) throws Exception {
+        String simpleGroup = "simple-group";
+
+        createOffsetsTopic(listenerName(), new Properties());
+
+        addSimpleGroupExecutor(simpleGroup);
+        addConsumerGroupExecutor(1, groupProtocol);
+
+        String[] cgcArgs = new String[]{"--bootstrap-server", bootstrapServers(listenerName()), "--list", "--state"};
+        ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(cgcArgs);
+
+        Set<ConsumerGroupListing> expectedListing = new HashSet<>(Arrays.asList(
+            new ConsumerGroupListing(
+                simpleGroup,
+                true,
+                Optional.of(ConsumerGroupState.EMPTY),
+                Optional.of(GroupType.CLASSIC)
+            ),
+            new ConsumerGroupListing(
+                GROUP,
+                false,
+                Optional.of(ConsumerGroupState.STABLE),
+                Optional.of(GroupType.CONSUMER)
+            )
+        ));
+
+        assertGroupListing(
+            service,
+            Collections.emptySet(),
+            EnumSet.allOf(ConsumerGroupState.class),
+            expectedListing
+        );
+
+        expectedListing = new HashSet<>(Arrays.asList(
+            new ConsumerGroupListing(
+                GROUP,
+                false,
+                Optional.of(ConsumerGroupState.STABLE),
+                Optional.of(GroupType.CONSUMER)
+            )
+        ));
+
+        assertGroupListing(
+            service,
+            Collections.emptySet(),
+            new HashSet<>(Arrays.asList(ConsumerGroupState.STABLE)),
+            expectedListing
+        );
+
+        assertGroupListing(
+            service,
+            Collections.emptySet(),
+            new HashSet<>(Arrays.asList(ConsumerGroupState.ASSIGNING)),
             Collections.emptySet()
         );
     }

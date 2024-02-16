@@ -118,11 +118,12 @@ object BaseConsumerTest {
   // * KRaft with the new group coordinator enabled and the classic group protocol
   // * KRaft with the new group coordinator enabled and the consumer group protocol
   def getTestQuorumAndGroupProtocolParametersAll() : java.util.stream.Stream[Arguments] = {
-    java.util.stream.Stream.of(
+    util.Arrays.stream(Array(
         Arguments.of("zk", "classic"),
         Arguments.of("kraft", "classic"),
         Arguments.of("kraft+kip848", "classic"),
-        Arguments.of("kraft+kip848", "consumer"))
+        Arguments.of("kraft+kip848", "consumer")
+    ))
   }
 
   // In Scala 2.12, it is necessary to disambiguate the java.util.stream.Stream.of() method call
@@ -140,9 +141,9 @@ object BaseConsumerTest {
   // * KRaft with the new group coordinator enabled and the classic group protocol
   def getTestQuorumAndGroupProtocolParametersClassicGroupProtocolOnly() : java.util.stream.Stream[Arguments] = {
     util.Arrays.stream(Array(
-      Arguments.of("zk", "classic"),
-      Arguments.of("kraft", "classic"),
-      Arguments.of("kraft+kip848", "classic")
+        Arguments.of("zk", "classic"),
+        Arguments.of("kraft", "classic"),
+        Arguments.of("kraft+kip848", "classic")
     ))
   }
 
@@ -150,7 +151,7 @@ object BaseConsumerTest {
   // * KRaft with the new group coordinator enabled and the consumer group protocol
   def getTestQuorumAndGroupProtocolParametersConsumerGroupProtocolOnly(): java.util.stream.Stream[Arguments] = {
     util.Arrays.stream(Array(
-      Arguments.of("kraft+kip848", "consumer")
+        Arguments.of("kraft+kip848", "consumer")
     ))
   }
 
