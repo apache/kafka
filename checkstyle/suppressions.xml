@@ -83,7 +83,7 @@
               files="(ByteUtils|Topic|KafkaLZ4BlockOutputStream).java"/>
 
     <suppress checks="CyclomaticComplexity"
-              files="(AbstractFetch|ConsumerCoordinator|CommitRequestManager|FetchCollector|OffsetFetcherUtils|KafkaProducer|Sender|ConfigDef|KerberosLogin|AbstractRequest|AbstractResponse|Selector|SslFactory|SslTransportLayer|SaslClientAuthenticator|SaslClientCallbackHandler|SaslServerAuthenticator|AbstractCoordinator|TransactionManager|AbstractStickyAssignor|DefaultSslEngineFactory|Authorizer|RecordAccumulator|MemoryRecords|FetchSessionHandler|MockAdminClient).java"/>
+              files="(ConsumerCoordinator|CommitRequestManager|FetchCollector|OffsetFetcherUtils|KafkaProducer|Sender|ConfigDef|KerberosLogin|AbstractRequest|AbstractResponse|Selector|SslTransportLayer|SaslClientAuthenticator|SaslClientCallbackHandler|SaslServerAuthenticator|AbstractCoordinator|TransactionManager|AbstractStickyAssignor|Authorizer|FetchSessionHandler|MockAdminClient).java"/>
 
     <suppress checks="JavaNCSS"
               files="(AbstractRequest|AbstractResponse|KerberosLogin|WorkerSinkTaskTest|TransactionManagerTest|SenderTest|KafkaAdminClient|ConsumerCoordinatorTest|KafkaRaftClientTest).java"/>
@@ -111,7 +111,7 @@
               files="MockAdminClient.java"/>
 
     <suppress checks="CyclomaticComplexity"
-              files="(OffsetFetcher|RequestResponse)Test.java"/>
+              files="RequestResponseTest.java"/>
 
     <suppress checks="JavaNCSS"
               files="(RequestResponseTest|FetcherTest|FetchRequestManagerTest|KafkaAdminClientTest).java"/>
@@ -138,7 +138,7 @@
               files="(AbstractHerder|DistributedHerder|Worker).java"/>
 
     <suppress checks="CyclomaticComplexity"
-              files="(FileStreamSourceTask|DistributedHerder|KafkaConfigBackingStore).java"/>
+              files="(FileStreamSourceTask|DistributedHerder).java"/>
     <suppress checks="CyclomaticComplexity"
               files="(JsonConverter|Values|ConnectHeaders).java"/>
 
@@ -181,7 +181,7 @@
               files="(KafkaStreams|KStreamImpl|KTableImpl).java"/>
 
     <suppress checks="CyclomaticComplexity"
-              files="(KafkaStreams|StreamsPartitionAssignor|StreamThread|TaskManager|PartitionGroup|SubscriptionWrapperSerde|AssignorConfiguration).java"/>
+              files="(KafkaStreams|StreamsPartitionAssignor|StreamThread|TaskManager|SubscriptionWrapperSerde|AssignorConfiguration).java"/>
 
     <suppress checks="NPathComplexity"
               files="(KafkaStreams|StreamsPartitionAssignor|StreamThread|TaskManager|GlobalStateManagerImpl|KStreamImplJoin|TopologyConfig|KTableKTableOuterJoin).java"/>
@@ -246,7 +246,7 @@
 
     <!-- Tools -->
     <suppress checks="CyclomaticComplexity"
-              files="(ConsoleConsumer|DefaultMessageFormatter|StreamsResetter|ProducerPerformance|Agent).java"/>
+              files="(ConsoleConsumer|DefaultMessageFormatter|StreamsResetter|ProducerPerformance).java"/>
     <suppress checks="NPathComplexity"
               files="(DefaultMessageFormatter|ProducerPerformance|StreamsResetter|Agent|TransactionalMessageCopier|ReplicaVerificationTool).java"/>
     <suppress checks="ImportControl"
@@ -286,7 +286,7 @@
               files="ReplicationControlManagerTest.java"/>
     <suppress checks="ParameterNumber"
               files="(QuorumController).java"/>
-    <suppress checks="(CyclomaticComplexity|NPathComplexity)"
+    <suppress checks="NPathComplexity"
               files="(PartitionRegistration|PartitionChangeBuilder).java"/>
     <suppress checks="CyclomaticComplexity"
               files="(ClientQuotasImage|KafkaEventQueue|MetadataDelta|QuorumController|ReplicationControlManager|KRaftMigrationDriver|ClusterControlManager|MetaPropertiesEnsemble).java"/>
