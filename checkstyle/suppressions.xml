@@ -104,7 +104,7 @@
             files="clients[\\/]src[\\/](generated|generated-test)[\\/].+.java$"/>
 
     <suppress checks="NPathComplexity"
-            files="MessageTest.java|OffsetFetchRequest.java"/>
+            files="(MessageTest|OffsetFetchRequest).java"/>
 
     <!-- Clients tests -->
     <suppress checks="ClassDataAbstractionCoupling"
@@ -120,7 +120,7 @@
               files="(OffsetFetcher|RequestResponse)Test.java"/>
 
     <suppress checks="JavaNCSS"
-              files="RequestResponseTest.java|FetcherTest.java|FetchRequestManagerTest.java|KafkaAdminClientTest.java"/>
+              files="(RequestResponseTest|FetcherTest|FetchRequestManagerTest|KafkaAdminClientTest).java"/>
 
     <suppress checks="NPathComplexity"
               files="MemoryRecordsTest|MetricsTest|RequestResponseTest|TestSslUtils|AclAuthorizerBenchmark"/>
@@ -134,14 +134,14 @@
     <suppress checks="MethodLength"
               files="(DistributedHerder|DistributedConfig|KafkaConfigBackingStore|Values|IncrementalCooperativeAssignor).java"/>
     <suppress checks="ParameterNumber"
-              files="Worker(SinkTask|SourceTask|Coordinator)?.java"/>
+              files="Worker(SinkTask|SourceTask|Coordinator).java"/>
     <suppress checks="ParameterNumber"
-              files="(ConfigKeyInfo|DistributedHerder).java"/>
+              files="(Worker|ConfigKeyInfo|DistributedHerder).java"/>
     <suppress checks="DefaultComesLast"
               files="LoggingResource.java" />
 
     <suppress checks="ClassDataAbstractionCoupling"
-              files="(RestServer|AbstractHerder|DistributedHerder|Worker(Test)?).java"/>
+              files="(RestServer|AbstractHerder|DistributedHerder|Worker).java"/>
 
     <suppress checks="BooleanExpressionComplexity"
               files="JsonConverter.java"/>
@@ -159,7 +159,7 @@
 
     <!-- connect tests-->
     <suppress checks="ClassDataAbstractionCoupling"
-              files="(DistributedHerder|KafkaBasedLog|WorkerSourceTaskWithTopicCreation|WorkerSourceTask)Test.java"/>
+              files="(DistributedHerder|KafkaBasedLog|WorkerSourceTaskWithTopicCreation|WorkerSourceTask|Worker)Test.java"/>
 
     <suppress checks="ClassFanOutComplexity"
               files="(WorkerSink|WorkerSource|ErrorHandling)Task(|WithTopicCreation)Test.java"/>
@@ -254,7 +254,7 @@
 
     <!-- Streams examples -->
     <suppress id="dontUseSystemExit"
-              files="PageViewTypedDemo.java|PipeDemo.java|TemperatureDemo.java|WordCountDemo.java|WordCountProcessorDemo.java|WordCountTransformerDemo.java"/>
+              files="(PageViewTypedDemo|PipeDemo|TemperatureDemo|WordCountDemo|WordCountProcessorDemo|WordCountTransformerDemo).java"/>
 
     <!-- Tools -->
     <suppress checks="ClassDataAbstractionCoupling"
