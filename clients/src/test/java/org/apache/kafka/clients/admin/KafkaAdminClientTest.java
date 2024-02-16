@@ -138,6 +138,7 @@ import org.apache.kafka.common.message.OffsetDeleteResponseData.OffsetDeleteResp
 import org.apache.kafka.common.message.OffsetFetchRequestData;
 import org.apache.kafka.common.message.OffsetFetchRequestData.OffsetFetchRequestGroup;
 import org.apache.kafka.common.message.OffsetFetchRequestData.OffsetFetchRequestTopics;
+import org.apache.kafka.common.message.ShareGroupDescribeResponseData;
 import org.apache.kafka.common.message.UnregisterBrokerResponseData;
 import org.apache.kafka.common.message.WriteTxnMarkersResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
@@ -209,6 +210,7 @@ import org.apache.kafka.common.requests.OffsetFetchRequest;
 import org.apache.kafka.common.requests.OffsetFetchResponse;
 import org.apache.kafka.common.requests.OffsetFetchResponse.PartitionData;
 import org.apache.kafka.common.requests.RequestTestUtils;
+import org.apache.kafka.common.requests.ShareGroupDescribeResponse;
 import org.apache.kafka.common.requests.UnregisterBrokerResponse;
 import org.apache.kafka.common.requests.UpdateFeaturesRequest;
 import org.apache.kafka.common.requests.UpdateFeaturesResponse;
@@ -3445,18 +3447,13 @@ public class KafkaAdminClientTest {
             env.kafkaClient().prepareResponse(prepareFindCoordinatorResponse(Errors.COORDINATOR_LOAD_IN_PROGRESS,  Node.noNode()));
             env.kafkaClient().prepareResponse(prepareFindCoordinatorResponse(Errors.NONE, env.cluster().controller()));
 
-            DescribeGroupsResponseData data = new DescribeGroupsResponseData();
+            ShareGroupDescribeResponseData data = new ShareGroupDescribeResponseData();
 
             // Retriable errors should be retried
-            data.groups().add(DescribeGroupsResponse.groupMetadata(
-                GROUP_ID,
-                Errors.COORDINATOR_LOAD_IN_PROGRESS,
-                "",
-                "",
-                "",
-                Collections.emptyList(),
-                Collections.emptySet()));
-            env.kafkaClient().prepareResponse(new DescribeGroupsResponse(data));
+            data.groups().add(new ShareGroupDescribeResponseData.DescribedGroup()
+                    .setGroupId(GROUP_ID)
+                    .setErrorCode(Errors.COORDINATOR_LOAD_IN_PROGRESS.code()));
+            env.kafkaClient().prepareResponse(new ShareGroupDescribeResponse(data));
 
             /*
              * We need to return two responses here, one with NOT_COORDINATOR error when calling describe share group
@@ -3465,62 +3462,59 @@ public class KafkaAdminClientTest {
              *
              * And the same reason for COORDINATOR_NOT_AVAILABLE error response
              */
-            data = new DescribeGroupsResponseData();
-            data.groups().add(DescribeGroupsResponse.groupMetadata(
-                GROUP_ID,
-                Errors.NOT_COORDINATOR,
-                "",
-                "",
-                "",
-                Collections.emptyList(),
-                Collections.emptySet()));
-            env.kafkaClient().prepareResponse(new DescribeGroupsResponse(data));
+            data = new ShareGroupDescribeResponseData();
+            data.groups().add(new ShareGroupDescribeResponseData.DescribedGroup()
+                    .setGroupId(GROUP_ID)
+                    .setErrorCode(Errors.NOT_COORDINATOR.code()));
+            env.kafkaClient().prepareResponse(new ShareGroupDescribeResponse(data));
             env.kafkaClient().prepareResponse(prepareFindCoordinatorResponse(Errors.NONE, env.cluster().controller()));
 
-            data = new DescribeGroupsResponseData();
-            data.groups().add(DescribeGroupsResponse.groupMetadata(
-                GROUP_ID,
-                Errors.COORDINATOR_NOT_AVAILABLE,
-                "",
-                "",
-                "",
-                Collections.emptyList(),
-                Collections.emptySet()));
-            env.kafkaClient().prepareResponse(new DescribeGroupsResponse(data));
+            data = new ShareGroupDescribeResponseData();
+            data.groups().add(new ShareGroupDescribeResponseData.DescribedGroup()
+                    .setGroupId(GROUP_ID)
+                    .setErrorCode(Errors.COORDINATOR_NOT_AVAILABLE.code()));
+            env.kafkaClient().prepareResponse(new ShareGroupDescribeResponse(data));
             env.kafkaClient().prepareResponse(prepareFindCoordinatorResponse(Errors.NONE, env.cluster().controller()));
 
-            data = new DescribeGroupsResponseData();
-            TopicPartition myTopicPartition0 = new TopicPartition("my_topic", 0);
-            TopicPartition myTopicPartition1 = new TopicPartition("my_topic", 1);
-            TopicPartition myTopicPartition2 = new TopicPartition("my_topic", 2);
+            data = new ShareGroupDescribeResponseData();
+            ShareGroupDescribeResponseData.TopicPartitions topicPartitions = new ShareGroupDescribeResponseData.TopicPartitions()
+                    .setTopicName("my_topic")
+                    .setPartitions(asList(0, 1, 2));
+            ShareGroupDescribeResponseData.Assignment memberAssignment = new ShareGroupDescribeResponseData.Assignment()
+                    .setTopicPartitions(asList(topicPartitions));
+            ShareGroupDescribeResponseData.Member memberOne = new ShareGroupDescribeResponseData.Member()
+                    .setMemberId("0")
+                    .setClientId("clientId0")
+                    .setClientHost("clientHost")
+                    .setAssignment(memberAssignment);
+            ShareGroupDescribeResponseData.Member memberTwo = new ShareGroupDescribeResponseData.Member()
+                    .setMemberId("1")
+                    .setClientId("clientId1")
+                    .setClientHost("clientHost")
+                    .setAssignment(memberAssignment);
 
-            final List<TopicPartition> topicPartitions = new ArrayList<>();
-            topicPartitions.add(0, myTopicPartition0);
-            topicPartitions.add(1, myTopicPartition1);
-            topicPartitions.add(2, myTopicPartition2);
+            ShareGroupDescribeResponseData group0Data = new ShareGroupDescribeResponseData();
+            group0Data.groups().add(new ShareGroupDescribeResponseData.DescribedGroup()
+                    .setGroupId(GROUP_ID)
+                    .setGroupState(ShareGroupState.STABLE.toString())
+                    .setMembers(asList(memberOne, memberTwo)));
 
-            final ByteBuffer memberAssignment = ConsumerProtocol.serializeAssignment(new ConsumerPartitionAssignor.Assignment(topicPartitions));
-            byte[] memberAssignmentBytes = new byte[memberAssignment.remaining()];
-            memberAssignment.get(memberAssignmentBytes);
-
-            DescribedGroupMember memberOne = DescribeGroupsResponse.groupMember("0", "instance1", "clientId0", "clientHost", memberAssignmentBytes, null);
-            DescribedGroupMember memberTwo = DescribeGroupsResponse.groupMember("1", "instance2", "clientId1", "clientHost", memberAssignmentBytes, null);
+            final List<TopicPartition> expectedTopicPartitions = new ArrayList<>();
+            expectedTopicPartitions.add(0, new TopicPartition("my_topic", 0));
+            expectedTopicPartitions.add(1, new TopicPartition("my_topic", 1));
+            expectedTopicPartitions.add(2, new TopicPartition("my_topic", 2));
 
             List<MemberDescription> expectedMemberDescriptions = new ArrayList<>();
             expectedMemberDescriptions.add(convertToMemberDescriptions(memberOne,
-                new MemberAssignment(new HashSet<>(topicPartitions))));
+                new MemberAssignment(new HashSet<>(expectedTopicPartitions))));
             expectedMemberDescriptions.add(convertToMemberDescriptions(memberTwo,
-                new MemberAssignment(new HashSet<>(topicPartitions))));
-            data.groups().add(DescribeGroupsResponse.groupMetadata(
-                GROUP_ID,
-                Errors.NONE,
-                "",
-                ConsumerProtocol.PROTOCOL_TYPE,
-                "",
-                asList(memberOne, memberTwo),
-                Collections.emptySet()));
+                new MemberAssignment(new HashSet<>(expectedTopicPartitions))));
+            data.groups().add(new ShareGroupDescribeResponseData.DescribedGroup()
+                    .setGroupId(GROUP_ID)
+                    .setGroupState(ShareGroupState.STABLE.toString())
+                    .setMembers(asList(memberOne, memberTwo)));
 
-            env.kafkaClient().prepareResponse(new DescribeGroupsResponse(data));
+            env.kafkaClient().prepareResponse(new ShareGroupDescribeResponse(data));
 
             final DescribeShareGroupsResult result = env.adminClient().describeShareGroups(singletonList(GROUP_ID));
             final ShareGroupDescription groupDescription = result.describedGroups().get(GROUP_ID).get();
@@ -3540,17 +3534,13 @@ public class KafkaAdminClientTest {
             env.kafkaClient().prepareResponse(
                 prepareFindCoordinatorResponse(Errors.NONE, env.cluster().controller()));
 
-            DescribeGroupsResponseData data = new DescribeGroupsResponseData();
-            data.groups().add(DescribeGroupsResponse.groupMetadata(
-                GROUP_ID,
-                Errors.NONE,
-                "",
-                ConsumerProtocol.PROTOCOL_TYPE,
-                "",
-                Collections.emptyList(),
-                MetadataResponse.AUTHORIZED_OPERATIONS_OMITTED));
+            ShareGroupDescribeResponseData data = new ShareGroupDescribeResponseData();
 
-            env.kafkaClient().prepareResponse(new DescribeGroupsResponse(data));
+            data.groups().add(new ShareGroupDescribeResponseData.DescribedGroup()
+                    .setGroupId(GROUP_ID)
+                    .setAuthorizedOperations(MetadataResponse.AUTHORIZED_OPERATIONS_OMITTED));
+
+            env.kafkaClient().prepareResponse(new ShareGroupDescribeResponse(data));
 
             final DescribeShareGroupsResult result = env.adminClient().describeShareGroups(singletonList(GROUP_ID));
             final ShareGroupDescription groupDescription = result.describedGroups().get(GROUP_ID).get();
@@ -3566,51 +3556,49 @@ public class KafkaAdminClientTest {
 
             env.kafkaClient().prepareResponse(prepareFindCoordinatorResponse(Errors.NONE, env.cluster().controller()));
 
-            TopicPartition myTopicPartition0 = new TopicPartition("my_topic", 0);
-            TopicPartition myTopicPartition1 = new TopicPartition("my_topic", 1);
-            TopicPartition myTopicPartition2 = new TopicPartition("my_topic", 2);
+            ShareGroupDescribeResponseData.TopicPartitions topicPartitions = new ShareGroupDescribeResponseData.TopicPartitions()
+                    .setTopicName("my_topic")
+                    .setPartitions(asList(0, 1, 2));
+            final ShareGroupDescribeResponseData.Assignment memberAssignment = new ShareGroupDescribeResponseData.Assignment()
+                    .setTopicPartitions(asList(topicPartitions));
+            ShareGroupDescribeResponseData group0Data = new ShareGroupDescribeResponseData();
+            group0Data.groups().add(new ShareGroupDescribeResponseData.DescribedGroup()
+                    .setGroupId(GROUP_ID)
+                    .setGroupState(ShareGroupState.STABLE.toString())
+                    .setMembers(asList(
+                            new ShareGroupDescribeResponseData.Member()
+                                    .setMemberId("0")
+                                    .setClientId("clientId0")
+                                    .setClientHost("clientHost")
+                                    .setAssignment(memberAssignment),
+                            new ShareGroupDescribeResponseData.Member()
+                                    .setMemberId("1")
+                                    .setClientId("clientId1")
+                                    .setClientHost("clientHost")
+                                    .setAssignment(memberAssignment))));
 
-            final List<TopicPartition> topicPartitions = new ArrayList<>();
-            topicPartitions.add(0, myTopicPartition0);
-            topicPartitions.add(1, myTopicPartition1);
-            topicPartitions.add(2, myTopicPartition2);
+            ShareGroupDescribeResponseData group1Data = new ShareGroupDescribeResponseData();
+            group1Data.groups().add(new ShareGroupDescribeResponseData.DescribedGroup()
+                    .setGroupId("group-1")
+                    .setGroupState(ShareGroupState.STABLE.toString())
+                    .setMembers(asList(
+                            new ShareGroupDescribeResponseData.Member()
+                                    .setMemberId("0")
+                                    .setClientId("clientId0")
+                                    .setClientHost("clientHost")
+                                    .setAssignment(memberAssignment),
+                            new ShareGroupDescribeResponseData.Member()
+                                    .setMemberId("1")
+                                    .setClientId("clientId1")
+                                    .setClientHost("clientHost")
+                                    .setAssignment(memberAssignment))));
 
-            final ByteBuffer memberAssignment = ConsumerProtocol.serializeAssignment(new ConsumerPartitionAssignor.Assignment(topicPartitions));
-            byte[] memberAssignmentBytes = new byte[memberAssignment.remaining()];
-            memberAssignment.get(memberAssignmentBytes);
-
-            DescribeGroupsResponseData group0Data = new DescribeGroupsResponseData();
-            group0Data.groups().add(DescribeGroupsResponse.groupMetadata(
-                GROUP_ID,
-                Errors.NONE,
-                "",
-                ConsumerProtocol.PROTOCOL_TYPE,
-                "",
-                asList(
-                    DescribeGroupsResponse.groupMember("0", null, "clientId0", "clientHost", memberAssignmentBytes, null),
-                    DescribeGroupsResponse.groupMember("1", null, "clientId1", "clientHost", memberAssignmentBytes, null)
-                ),
-                Collections.emptySet()));
-
-            DescribeGroupsResponseData groupConnectData = new DescribeGroupsResponseData();
-            group0Data.groups().add(DescribeGroupsResponse.groupMetadata(
-                "group-connect-0",
-                Errors.NONE,
-                "",
-                "connect",
-                "",
-                asList(
-                    DescribeGroupsResponse.groupMember("0", null, "clientId0", "clientHost", memberAssignmentBytes, null),
-                    DescribeGroupsResponse.groupMember("1", null, "clientId1", "clientHost", memberAssignmentBytes, null)
-                ),
-                Collections.emptySet()));
-
-            env.kafkaClient().prepareResponse(new DescribeGroupsResponse(group0Data));
-            env.kafkaClient().prepareResponse(new DescribeGroupsResponse(groupConnectData));
+            env.kafkaClient().prepareResponse(new ShareGroupDescribeResponse(group0Data));
+            env.kafkaClient().prepareResponse(new ShareGroupDescribeResponse(group1Data));
 
             Collection<String> groups = new HashSet<>();
             groups.add(GROUP_ID);
-            groups.add("group-connect-0");
+            groups.add("group-1");
             final DescribeShareGroupsResult result = env.adminClient().describeShareGroups(groups);
             assertEquals(2, result.describedGroups().size());
             assertEquals(groups, result.describedGroups().keySet());
@@ -7679,6 +7667,15 @@ public class KafkaAdminClientTest {
                                                                  MemberAssignment assignment) {
         return new MemberDescription(member.memberId(),
                                      Optional.ofNullable(member.groupInstanceId()),
+                                     member.clientId(),
+                                     member.clientHost(),
+                                     assignment);
+    }
+
+    private static MemberDescription convertToMemberDescriptions(ShareGroupDescribeResponseData.Member member,
+                                                                 MemberAssignment assignment) {
+        return new MemberDescription(member.memberId(),
+                                     Optional.empty(),
                                      member.clientId(),
                                      member.clientHost(),
                                      assignment);

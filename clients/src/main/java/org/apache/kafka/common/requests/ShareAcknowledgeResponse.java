@@ -54,6 +54,7 @@ public class ShareAcknowledgeResponse extends AbstractResponse {
     @Override
     public Map<Errors, Integer> errorCounts() {
         HashMap<Errors, Integer> counts = new HashMap<>();
+        updateErrorCounts(counts, Errors.forCode(data.errorCode()));
         data.responses().forEach(
             topic -> topic.partitions().forEach(
                 partition -> updateErrorCounts(counts, Errors.forCode(partition.errorCode()))
