@@ -89,16 +89,13 @@
               files="(AbstractRequest|AbstractResponse|KerberosLogin|WorkerSinkTaskTest|TransactionManagerTest|SenderTest|KafkaAdminClient|ConsumerCoordinatorTest|KafkaRaftClientTest).java"/>
 
     <suppress checks="NPathComplexity"
-              files="(ConsumerCoordinator|BufferPool|MetricName|Node|ConfigDef|RecordBatch|SslFactory|SslTransportLayer|MetadataResponse|KerberosLogin|Selector|Sender|Serdes|TokenInformation|Values|PluginUtils|MiniTrogdorCluster|TasksRequest|KafkaProducer|AbstractStickyAssignor|KafkaRaftClient|Authorizer|FetchSessionHandler|RecordAccumulator).java"/>
+              files="(ConsumerCoordinator|BufferPool|AbstractLegacyRecordBatch|SslTransportLayer|KerberosLogin|Selector|Sender|Serdes|Values|PluginUtils|MiniTrogdorCluster|TasksRequest|KafkaProducer|KafkaRaftClient|Authorizer|FetchSessionHandler).java"/>
 
     <suppress checks="(JavaNCSS|CyclomaticComplexity|MethodLength)"
               files="CoordinatorClient.java"/>
 
     <suppress checks="(NPathComplexity|ClassFanOutComplexity|CyclomaticComplexity|ClassDataAbstractionCoupling|LocalVariableName|MemberName|ParameterName|MethodLength|JavaNCSS|AvoidStarImport)"
             files="clients[\\/]src[\\/](generated|generated-test)[\\/].+.java$"/>
-
-    <suppress checks="NPathComplexity"
-            files="(MessageTest|OffsetFetchRequest).java"/>
 
     <!-- Clients tests -->
     <suppress checks="ClassDataAbstractionCoupling"
@@ -115,9 +112,6 @@
 
     <suppress checks="JavaNCSS"
               files="(RequestResponseTest|FetcherTest|FetchRequestManagerTest|KafkaAdminClientTest).java"/>
-
-    <suppress checks="NPathComplexity"
-              files="MemoryRecordsTest|MetricsTest|RequestResponseTest|TestSslUtils|AclAuthorizerBenchmark"/>
 
     <suppress checks="MethodLength"
               files="ConsumerTestBuilder.java"/>
@@ -146,7 +140,7 @@
               files="(Values|ConnectMetricsRegistry).java"/>
 
     <suppress checks="NPathComplexity"
-              files="(DistributedHerder|AbstractHerder|RestClient|RestServer|JsonConverter|KafkaConfigBackingStore|FileStreamSourceTask|WorkerSourceTask|TopicAdmin).java"/>
+              files="(DistributedHerder|AbstractHerder|JsonConverter|FileStreamSourceTask|WorkerSourceTask|TopicAdmin).java"/>
 
     <!-- connect tests-->
     <suppress checks="ClassDataAbstractionCoupling"
@@ -291,7 +285,7 @@
     <suppress checks="CyclomaticComplexity"
               files="(ClientQuotasImage|KafkaEventQueue|MetadataDelta|QuorumController|ReplicationControlManager|KRaftMigrationDriver|ClusterControlManager|MetaPropertiesEnsemble).java"/>
     <suppress checks="NPathComplexity"
-              files="(ClientQuotasImage|KafkaEventQueue|ReplicationControlManager|FeatureControlManager|KRaftMigrationDriver|ScramControlManager|ClusterControlManager|MetadataDelta|MetaPropertiesEnsemble).java"/>
+              files="(ClientQuotasImage|KafkaEventQueue|ReplicationControlManager|KRaftMigrationDriver|ScramControlManager|ClusterControlManager|MetadataDelta|MetaPropertiesEnsemble).java"/>
     <suppress checks="(NPathComplexity|ClassFanOutComplexity|CyclomaticComplexity|ClassDataAbstractionCoupling|LocalVariableName|MemberName|ParameterName|MethodLength|JavaNCSS|AvoidStarImport)"
             files="metadata[\\/]src[\\/](generated|generated-test)[\\/].+.java$"/>
     <suppress checks="BooleanExpressionComplexity"
