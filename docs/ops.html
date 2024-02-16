@@ -3869,6 +3869,9 @@ zookeeper.metadata.migration.enable=true
 # ZooKeeper client configuration
 zookeeper.connect=localhost:2181
 
+# The inter broker listener in brokers to allow KRaft controller send RPCs to brokers
+inter.broker.listener.name=PLAINTEXT
+
 # Other configs ...</pre>
 
   <p><em>Note: The KRaft cluster <code>node.id</code> values must be different from any existing ZK broker <code>broker.id</code>.
