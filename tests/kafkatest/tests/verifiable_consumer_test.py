@@ -88,7 +88,7 @@ class VerifiableConsumerTest(KafkaTest):
         # Wait until all members have joined the group
         states = [ConsumerState.Joined]
 
-        if consumer.supports_kip_848():
+        if consumer.is_consumer_group_protocol_enabled():
             states.extend([ConsumerState.Started, ConsumerState.Rebalancing])
 
         timeout_sec = self.session_timeout_sec * 2
@@ -97,7 +97,7 @@ class VerifiableConsumerTest(KafkaTest):
     def await_all_members(self, consumer):
         states = [ConsumerState.Joined]
         timeout_sec = self.session_timeout_sec * 2
-        num_consumers = 1 if consumer.supports_kip_848() else self.num_consumers
+        num_consumers = 1 if consumer.is_consumer_group_protocol_enabled() else self.num_consumers
         self.await_members_in_state(consumer, num_consumers, states, timeout_sec)
 
     def await_members_in_state(self, consumer, num_consumers, states, timeout_sec):

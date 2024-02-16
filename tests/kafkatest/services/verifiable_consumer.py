@@ -13,6 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from enum import Enum
 import json
 import os
 
@@ -24,7 +25,7 @@ from kafkatest.services.verifiable_client import VerifiableClientMixin
 from kafkatest.version import DEV_BRANCH, V_2_3_0, V_2_3_1, V_3_7_0, V_0_10_0_0
 
 
-class ConsumerState:
+class ConsumerState(Enum):
     Started = 1
     Dead = 2
     Rebalancing = 3
