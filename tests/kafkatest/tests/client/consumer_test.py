@@ -39,9 +39,7 @@ class OffsetValidationTest(VerifiableConsumerTest):
             for node in consumer.nodes[keep_alive:]:
                 consumer.stop_node(node, clean_shutdown)
 
-                wait_until(lambda: len(consumer.dead_nodes()) == 1,
-                           timeout_sec=self.session_timeout_sec+5,
-                           err_msg="Timed out waiting for the consumer to shutdown")
+                self.await_members_in_state(consumer, 1, [ConsumerState.Dead], self.session_timeout_sec + 5)
 
                 consumer.start_node(node)
 
@@ -53,8 +51,10 @@ class OffsetValidationTest(VerifiableConsumerTest):
             for node in consumer.nodes[keep_alive:]:
                 consumer.stop_node(node, clean_shutdown)
 
-            wait_until(lambda: len(consumer.dead_nodes()) == self.num_consumers - keep_alive, timeout_sec=10,
-                       err_msg="Timed out waiting for the consumers to shutdown")
+            self.await_members_in_state(consumer,
+                                        self.num_consumers - keep_alive,
+                                        [ConsumerState.Dead],
+                                        10)
 
             for node in consumer.nodes[keep_alive:]:
                 consumer.start_node(node)
@@ -508,14 +508,14 @@ class OffsetValidationTest(VerifiableConsumerTest):
 
         for num_started, node in enumerate(consumer.nodes, 1):
             consumer.start_node(node)
-            self.await_members(consumer, num_started, group_protocol)
+            self.await_members(consumer, num_started)
             self.await_consumed_messages(consumer)
 
         for num_stopped, node in enumerate(consumer.nodes, 1):
             consumer.stop_node(node)
 
             if num_stopped < self.num_consumers:
-                self.await_members(consumer, self.num_consumers - num_stopped, group_protocol)
+                self.await_members(consumer, self.num_consumers - num_stopped)
                 self.await_consumed_messages(consumer)
 
         assert consumer.current_position(partition) == consumer.total_consumed(), \
@@ -574,5 +574,5 @@ class AssignmentValidationTest(VerifiableConsumerTest):
                                        group_remote_assignor=group_remote_assignor)
         for num_started, node in enumerate(consumer.nodes, 1):
             consumer.start_node(node)
-            self.await_members(consumer, num_started, group_protocol)
+            self.await_members(consumer, num_started)
             self.await_valid_assignment(consumer, self.TOPIC, self.NUM_PARTITIONS, num_started)

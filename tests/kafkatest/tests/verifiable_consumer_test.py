@@ -84,20 +84,21 @@ class VerifiableConsumerTest(KafkaTest):
 
         wait_until(lambda: _condition(), timeout_sec=timeout_sec, err_msg=_err_msg())
 
-    def await_members(self, consumer, num_consumers, require_joined=True):
+    def await_members(self, consumer, num_consumers):
         # Wait until all members have joined the group
         states = [ConsumerState.Joined]
 
-        if not require_joined:
+        if consumer.supports_kip_848():
             states.extend([ConsumerState.Started, ConsumerState.Rebalancing])
 
-        self.await_members_in_state(consumer, num_consumers, states, self.session_timeout_sec * 2)
+        timeout_sec = self.session_timeout_sec * 2
+        self.await_members_in_state(consumer, num_consumers, states, timeout_sec)
 
-    def await_all_members(self, consumer, require_joined=True):
-        if consumer.supports_kip_848():
-            self.await_members(consumer, 1, require_joined)
-        else:
-            self.await_members(consumer, self.num_consumers, require_joined)
+    def await_all_members(self, consumer):
+        states = [ConsumerState.Joined]
+        timeout_sec = self.session_timeout_sec * 2
+        num_consumers = 1 if consumer.supports_kip_848() else self.num_consumers
+        self.await_members_in_state(consumer, num_consumers, states, timeout_sec)
 
     def await_members_in_state(self, consumer, num_consumers, states, timeout_sec):
         def _count():
@@ -107,8 +108,8 @@ class VerifiableConsumerTest(KafkaTest):
             return _count() == num_consumers
 
         def _err_msg():
-            return ("Only %d out of %d consumers were in one of the expected states (%s) within the timeout of %d seconds" %
-                    (_count(), num_consumers, states, timeout_sec))
+            return ("Only %d out of %d consumers were in the expected state within the timeout of %d seconds" %
+                    (_count(), num_consumers, timeout_sec))
 
         wait_until(lambda: _condition(), timeout_sec=timeout_sec, err_msg=_err_msg())
 
