@@ -57,7 +57,7 @@
               files="SaslServerAuthenticator.java"/>
 
     <suppress checks="MethodLength"
-              files="(KerberosLogin|ConnectMetricsRegistry|KafkaConsumer|AbstractStickyAssignor|AbstractRequest|AbstractResponse).java"/>
+              files="(KerberosLogin|ConnectMetricsRegistry|AbstractRequest|AbstractResponse).java"/>
 
     <suppress checks="ParameterNumber"
               files="(NetworkClient|FieldSpec|KafkaRaftClient|KafkaProducer).java"/>
@@ -120,7 +120,7 @@
     <suppress checks="ClassFanOutComplexity"
               files="(AbstractHerder|DistributedHerder|Worker).java"/>
     <suppress checks="MethodLength"
-              files="(DistributedHerder|DistributedConfig|KafkaConfigBackingStore|Values|IncrementalCooperativeAssignor).java"/>
+              files="(DistributedHerder|DistributedConfig|Values|IncrementalCooperativeAssignor).java"/>
     <suppress checks="ParameterNumber"
               files="Worker(SinkTask|SourceTask).java"/>
     <suppress checks="ParameterNumber"
@@ -152,7 +152,7 @@
               files="(DistributedHerder|Worker)Test.java"/>
 
     <suppress checks="MethodLength"
-              files="(RequestResponse|WorkerSinkTask)Test.java"/>
+              files="WorkerSinkTaskTest.java"/>
 
     <suppress checks="JavaNCSS"
               files="(DistributedHerder|Worker)Test.java"/>
@@ -208,7 +208,7 @@
               files="(RecordCollectorTest|StreamsPartitionAssignorTest|StreamThreadTest|StreamTaskTest|TaskManagerTest|KafkaStreamsTest|EosIntegrationTest).java"/>
 
     <suppress checks="MethodLength"
-              files="(EosIntegrationTest|EosV2UpgradeIntegrationTest|KStreamKStreamJoinTest|RocksDBWindowStoreTest|StreamStreamJoinIntegrationTest).java"/>
+              files="(EosIntegrationTest|EosV2UpgradeIntegrationTest|KStreamKStreamJoinTest|RocksDBWindowStoreTest).java"/>
 
     <suppress checks="ClassDataAbstractionCoupling"
               files=".*[/\\]streams[/\\].*test[/\\].*.java"/>
