@@ -584,7 +584,7 @@ public class AsyncKafkaConsumerTest {
         assertEquals(1, listener.revokedCount);
     }
     @Test
-    public void testSubscribeToSubscriptionPattern() {
+    public void testSubscribeUsingSubscriptionPattern() {
         MockRebalanceListener listener = new MockRebalanceListener();
         SubscriptionState subscriptions = new SubscriptionState(new LogContext(), OffsetResetStrategy.NONE);
         consumer = newConsumer(
