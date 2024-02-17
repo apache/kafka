@@ -33,10 +33,13 @@ import java.util.HashSet;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Properties;
+import java.util.List;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.stream.Collectors;
 
 import static org.apache.kafka.tools.ToolsTestUtils.TEST_WITH_PARAMETERIZED_QUORUM_AND_GROUP_PROTOCOL_NAMES;
+import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
@@ -315,83 +318,77 @@ public class ListConsumerGroupTest extends ConsumerGroupCommandTest {
         createOffsetsTopic(listenerName(), new Properties());
 
         addSimpleGroupExecutor(simpleGroup);
-        addConsumerGroupExecutor(1, groupProtocol);
+        addConsumerGroupExecutor(1);
 
-        final AtomicReference<String> out = new AtomicReference<>("");
+        validateListOutput(
+            Arrays.asList("--bootstrap-server", bootstrapServers(listenerName()), "--list"),
+            Collections.emptyList(),
+            mkSet(
+                Collections.singletonList(GROUP),
+                Collections.singletonList(simpleGroup)
+            )
+        );
 
-        String[] cgcArgs1 = new String[]{"--bootstrap-server", bootstrapServers(listenerName()), "--list"};
-        TestUtils.waitForCondition(() -> {
-            out.set(kafka.utils.TestUtils.grabConsoleOutput(() -> {
-                ConsumerGroupCommand.main(cgcArgs1);
-                return null;
-            }));
-            return !out.get().contains("TYPE") && !out.get().contains("STATE") && out.get().contains(simpleGroup) && out.get().contains(GROUP);
-        }, "Expected to find " + simpleGroup + ", " + GROUP + " and no header, but found " + out.get());
+        validateListOutput(
+            Arrays.asList("--bootstrap-server", bootstrapServers(listenerName()), "--list", "--state"),
+            Arrays.asList("GROUP", "STATE"),
+            mkSet(
+                Arrays.asList(GROUP, "Stable"),
+                Arrays.asList(simpleGroup, "Empty")
+            )
+        );
 
-        String[] cgcArgs2 = new String[]{"--bootstrap-server", bootstrapServers(listenerName()), "--list", "--state"};
-        TestUtils.waitForCondition(() -> {
-            out.set(kafka.utils.TestUtils.grabConsoleOutput(() -> {
-                ConsumerGroupCommand.main(cgcArgs2);
-                return null;
-            }));
-            return out.get().contains("STATE") && out.get().contains(simpleGroup) && out.get().contains(GROUP);
-        }, "Expected to find " + simpleGroup + ", " + GROUP + " and the header, but found " + out.get());
+        validateListOutput(
+            Arrays.asList("--bootstrap-server", bootstrapServers(listenerName()), "--list", "--type"),
+            Arrays.asList("GROUP", "TYPE"),
+            mkSet(
+                Arrays.asList(GROUP, "Classic"),
+                Arrays.asList(simpleGroup, "Classic")
+            )
+        );
 
-        String[] cgcArgs3 = new String[]{"--bootstrap-server", bootstrapServers(listenerName()), "--list", "--type"};
-        TestUtils.waitForCondition(() -> {
-            out.set(kafka.utils.TestUtils.grabConsoleOutput(() -> {
-                ConsumerGroupCommand.main(cgcArgs3);
-                return null;
-            }));
-            return out.get().contains("TYPE") && !out.get().contains("STATE") && out.get().contains(simpleGroup) && out.get().contains(GROUP);
-        }, "Expected to find " + simpleGroup + ", " + GROUP + " and the header, but found " + out.get());
+        validateListOutput(
+            Arrays.asList("--bootstrap-server", bootstrapServers(listenerName()), "--list", "--type", "--state"),
+            Arrays.asList("GROUP", "TYPE", "STATE"),
+            mkSet(
+                Arrays.asList(GROUP, "Classic", "Stable"),
+                Arrays.asList(simpleGroup, "Classic", "Empty")
+            )
+        );
 
-        String[] cgcArgs4 = new String[]{"--bootstrap-server", bootstrapServers(listenerName()), "--list", "--state", "--type"};
-        TestUtils.waitForCondition(() -> {
-            out.set(kafka.utils.TestUtils.grabConsoleOutput(() -> {
-                ConsumerGroupCommand.main(cgcArgs4);
-                return null;
-            }));
-            return out.get().contains("TYPE") && out.get().contains("STATE") && out.get().contains(simpleGroup) && out.get().contains(GROUP);
-        }, "Expected to find " + simpleGroup + ", " + GROUP + " and the header, but found " + out.get());
+        validateListOutput(
+            Arrays.asList("--bootstrap-server", bootstrapServers(listenerName()), "--list", "--state", "Stable"),
+            Arrays.asList("GROUP", "STATE"),
+            mkSet(
+                Arrays.asList(GROUP, "Stable")
+            )
+        );
 
-        String[] cgcArgs5 = new String[]{"--bootstrap-server", bootstrapServers(listenerName()), "--list", "--state", "Stable"};
-        TestUtils.waitForCondition(() -> {
-            out.set(kafka.utils.TestUtils.grabConsoleOutput(() -> {
-                ConsumerGroupCommand.main(cgcArgs5);
-                return null;
-            }));
-            return out.get().contains("STATE") && out.get().contains(GROUP) && out.get().contains("Stable");
-        }, "Expected to find " + GROUP + " in state Stable and the header, but found " + out.get());
+        // Check case-insensitivity in state filter.
+        validateListOutput(
+            Arrays.asList("--bootstrap-server", bootstrapServers(listenerName()), "--list", "--state", "stable"),
+            Arrays.asList("GROUP", "STATE"),
+            mkSet(
+                Arrays.asList(GROUP, "Stable")
+            )
+        );
 
-        String[] cgcArgs6 = new String[]{"--bootstrap-server", bootstrapServers(listenerName()), "--list", "--state", "stable"};
-        TestUtils.waitForCondition(() -> {
-            out.set(kafka.utils.TestUtils.grabConsoleOutput(() -> {
-                ConsumerGroupCommand.main(cgcArgs6);
-                return null;
-            }));
-            return out.get().contains("STATE") && out.get().contains(GROUP) && out.get().contains("Stable");
-        }, "Expected to find " + GROUP + " in state Stable and the header, but found " + out.get());
+        validateListOutput(
+            Arrays.asList("--bootstrap-server", bootstrapServers(listenerName()), "--list", "--type", "Classic"),
+            Arrays.asList("GROUP", "TYPE"),
+            mkSet(
+                Arrays.asList(GROUP, "Classic")
+            )
+        );
 
-        String[] cgcArgs7 = new String[]{"--bootstrap-server", bootstrapServers(listenerName()), "--list", "--type", "Classic"};
-        TestUtils.waitForCondition(() -> {
-            out.set(kafka.utils.TestUtils.grabConsoleOutput(() -> {
-                ConsumerGroupCommand.main(cgcArgs7);
-                return null;
-            }));
-            return out.get().contains("TYPE") && out.get().contains("Classic") && !out.get().contains("STATE") &&
-                out.get().contains(simpleGroup) && out.get().contains(GROUP);
-        }, "Expected to find " + GROUP + " and the header, but found " + out.get());
-
-        String[] cgcArgs8 = new String[]{"--bootstrap-server", bootstrapServers(listenerName()), "--list", "--type", "classic"};
-        TestUtils.waitForCondition(() -> {
-            out.set(kafka.utils.TestUtils.grabConsoleOutput(() -> {
-                ConsumerGroupCommand.main(cgcArgs8);
-                return null;
-            }));
-            return out.get().contains("TYPE") && out.get().contains("Classic") && !out.get().contains("STATE") &&
-                out.get().contains(simpleGroup) && out.get().contains(GROUP);
-        }, "Expected to find " + GROUP + " and the header, but found " + out.get());
+        // Check case-insensitivity in type filter.
+        validateListOutput(
+            Arrays.asList("--bootstrap-server", bootstrapServers(listenerName()), "--list", "--type", "classic"),
+            Arrays.asList("GROUP", "TYPE"),
+            mkSet(
+                Arrays.asList(GROUP, "Classic")
+            )
+        );
     }
 
     @ParameterizedTest(name = TEST_WITH_PARAMETERIZED_QUORUM_AND_GROUP_PROTOCOL_NAMES)
@@ -406,53 +403,57 @@ public class ListConsumerGroupTest extends ConsumerGroupCommandTest {
 
         final AtomicReference<String> out = new AtomicReference<>("");
 
-        String[] cgcArgs1 = new String[]{"--bootstrap-server", bootstrapServers(listenerName()), "--list"};
-        TestUtils.waitForCondition(() -> {
-            out.set(kafka.utils.TestUtils.grabConsoleOutput(() -> {
-                ConsumerGroupCommand.main(cgcArgs1);
-                return null;
-            }));
-            return !out.get().contains("TYPE") && !out.get().contains("STATE") &&
-                out.get().contains(simpleGroup) && out.get().contains(PROTOCOL_GROUP);
-        }, "Expected to find " + simpleGroup + ", " + PROTOCOL_GROUP + " and no header, but found " + out.get());
+        validateListOutput(
+            Arrays.asList("--bootstrap-server", bootstrapServers(listenerName()), "--list"),
+            Collections.emptyList(),
+            mkSet(
+                Collections.singletonList(PROTOCOL_GROUP),
+                Collections.singletonList(simpleGroup)
+            )
+        );
 
-        String[] cgcArgs2 = new String[]{"--bootstrap-server", bootstrapServers(listenerName()), "--list", "--state"};
-        TestUtils.waitForCondition(() -> {
-            out.set(kafka.utils.TestUtils.grabConsoleOutput(() -> {
-                ConsumerGroupCommand.main(cgcArgs2);
-                return null;
-            }));
-            return out.get().contains("STATE") && !out.get().contains("TYPE") && out.get().contains(simpleGroup) && out.get().contains(PROTOCOL_GROUP);
-        }, "Expected to find " + simpleGroup + ", " + PROTOCOL_GROUP + " and state header, but found " + out.get());
+        validateListOutput(
+            Arrays.asList("--bootstrap-server", bootstrapServers(listenerName()), "--list", "--state"),
+            Arrays.asList("GROUP", "STATE"),
+            mkSet(
+                Arrays.asList(PROTOCOL_GROUP, "Stable"),
+                Arrays.asList(simpleGroup, "Empty")
+            )
+        );
 
-        String[] cgcArgs3 = new String[]{"--bootstrap-server", bootstrapServers(listenerName()), "--list", "--type"};
-        TestUtils.waitForCondition(() -> {
-            out.set(kafka.utils.TestUtils.grabConsoleOutput(() -> {
-                ConsumerGroupCommand.main(cgcArgs3);
-                return null;
-            }));
-            return out.get().contains("TYPE") && out.get().contains("Consumer") && !out.get().contains("STATE") &&
-                out.get().contains(PROTOCOL_GROUP) && out.get().contains(simpleGroup);
-        }, "Expected to find " + simpleGroup + ", " + PROTOCOL_GROUP + " and type header, but found " + out.get());
+        validateListOutput(
+            Arrays.asList("--bootstrap-server", bootstrapServers(listenerName()), "--list", "--type"),
+            Arrays.asList("GROUP", "TYPE"),
+            mkSet(
+                Arrays.asList(PROTOCOL_GROUP, "Consumer"),
+                Arrays.asList(simpleGroup, "Classic")
+            )
+        );
 
-        String[] cgcArgs4 = new String[]{"--bootstrap-server", bootstrapServers(listenerName()), "--list", "--type", "consumer"};
-        TestUtils.waitForCondition(() -> {
-            out.set(kafka.utils.TestUtils.grabConsoleOutput(() -> {
-                ConsumerGroupCommand.main(cgcArgs4);
-                return null;
-            }));
-            return out.get().contains("TYPE") && out.get().contains("Consumer") && !out.get().contains("STATE") && out.get().contains(PROTOCOL_GROUP);
-        }, "Expected to find " + PROTOCOL_GROUP + " with type header and Consumer type, but found " + out.get());
+        validateListOutput(
+            Arrays.asList("--bootstrap-server", bootstrapServers(listenerName()), "--list", "--type", "--state"),
+            Arrays.asList("GROUP", "TYPE", "STATE"),
+            mkSet(
+                Arrays.asList(PROTOCOL_GROUP, "Consumer", "Stable"),
+                Arrays.asList(simpleGroup, "Classic", "Empty")
+            )
+        );
 
-        String[] cgcArgs5 = new String[]{"--bootstrap-server", bootstrapServers(listenerName()), "--list", "--type", "consumer", "--state", "Stable"};
-        TestUtils.waitForCondition(() -> {
-            out.set(kafka.utils.TestUtils.grabConsoleOutput(() -> {
-                ConsumerGroupCommand.main(cgcArgs5);
-                return null;
-            }));
-            return out.get().contains("TYPE") && out.get().contains("Consumer") && out.get().contains("STATE") &&
-                out.get().contains("Stable") && out.get().contains(PROTOCOL_GROUP);
-        }, "Expected to find " + PROTOCOL_GROUP + " with type and state header, but found " + out.get());
+        validateListOutput(
+            Arrays.asList("--bootstrap-server", bootstrapServers(listenerName()), "--list", "--type", "consumer"),
+            Arrays.asList("GROUP", "TYPE"),
+            mkSet(
+                Arrays.asList(PROTOCOL_GROUP, "Consumer")
+            )
+        );
+
+        validateListOutput(
+            Arrays.asList("--bootstrap-server", bootstrapServers(listenerName()), "--list", "--type", "consumer", "--state", "Stable"),
+            Arrays.asList("GROUP", "TYPE", "STATE"),
+            mkSet(
+                Arrays.asList(PROTOCOL_GROUP, "Consumer", "Stable")
+            )
+        );
     }
 
     private static void assertGroupListing(
@@ -466,5 +467,54 @@ public class ListConsumerGroupTest extends ConsumerGroupCommandTest {
             foundListing.set(service.listConsumerGroupsWithFilters(set(typeFilterSet), set(stateFilterSet)).toSet());
             return Objects.equals(set(expectedListing), foundListing.get());
         }, "Expected to show groups " + expectedListing + ", but found " + foundListing.get() + ".");
+    }
+
+    /**
+     * Validates that the output of the list command corresponds to the expected values.
+     *
+     * @param args              The arguments for the command line tool.
+     * @param expectedHeader    The expected header as a list of strings; or an empty list
+     *                          if a header is not expected.
+     * @param expectedRows      The expected rows as a set of list of columns.
+     * @throws InterruptedException
+     */
+    private static void validateListOutput(
+        List<String> args,
+        List<String> expectedHeader,
+        Set<List<String>> expectedRows
+    ) throws InterruptedException {
+        final AtomicReference<String> out = new AtomicReference<>("");
+        TestUtils.waitForCondition(() -> {
+            String output = runAndGrabConsoleOutput(args);
+            out.set(output);
+
+            int index = 0;
+            String[] lines = output.split("\n");
+
+            // Parse the header if one is expected.
+            if (!expectedHeader.isEmpty()) {
+                if (lines.length == 0) return false;
+                List<String> header = Arrays.stream(lines[index++].split("\\s+")).collect(Collectors.toList());
+                if (!expectedHeader.equals(header)) {
+                    return false;
+                }
+            }
+
+            // Parse the groups.
+            Set<List<String>> groups = new HashSet<>();
+            for (; index < lines.length; index++) {
+                groups.add(Arrays.stream(lines[index].split("\\s+")).collect(Collectors.toList()));
+            }
+            return expectedRows.equals(groups);
+        }, () -> String.format("Expected header=%s and groups=%s, but found:%n%s", expectedHeader, expectedRows, out.get()));
+    }
+
+    private static String runAndGrabConsoleOutput(
+        List<String> args
+    ) {
+        return kafka.utils.TestUtils.grabConsoleOutput(() -> {
+            ConsumerGroupCommand.main(args.toArray(new String[0]));
+            return null;
+        });
     }
 }
