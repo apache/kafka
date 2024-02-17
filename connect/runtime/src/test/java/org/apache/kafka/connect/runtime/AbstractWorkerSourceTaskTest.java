@@ -691,7 +691,7 @@ public class AbstractWorkerSourceTaskTest {
         // aren't re-processed when we retry the call to sendRecords()
         verify(transformationChain, times(1)).apply(any(), eq(record1));
         verify(transformationChain, times(1)).apply(any(), eq(record2));
-        verify(transformationChain, times(2)).apply(any(), eq(record3));
+        verify(transformationChain, times(1)).apply(any(), eq(record3));
     }
 
     private void expectSendRecord(Headers headers) {
