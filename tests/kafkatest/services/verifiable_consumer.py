@@ -13,7 +13,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from enum import Enum
 import json
 import os
 
@@ -25,7 +24,7 @@ from kafkatest.services.verifiable_client import VerifiableClientMixin
 from kafkatest.version import DEV_BRANCH, V_2_3_0, V_2_3_1, V_3_7_0, V_0_10_0_0
 
 
-class ConsumerState(Enum):
+class ConsumerState:
     Started = 1
     Dead = 2
     Rebalancing = 3
@@ -103,6 +102,11 @@ class ConsumerEventHandler(object):
     def handle_partitions_revoked(self, event):
         self.revoked_count += 1
         self.state = ConsumerState.Rebalancing
+
+        # Keep the set of assigned partitions up to date when one or more partitions are revoked.
+        #
+        # It was observed that in some cases, one or more of the partitions in the event had not been previously
+        # assigned to this node. Therefore, be careful to remove the partition only if was assigned.
         for topic_partition in self._topic_partitions(event):
             if topic_partition in self.assignment:
                 self.assignment.remove(topic_partition)
@@ -111,6 +115,8 @@ class ConsumerEventHandler(object):
     def handle_partitions_assigned(self, event):
         self.assigned_count += 1
         self.state = ConsumerState.Joined
+
+        # Keep the set of assigned partitions up to date when one or more partitions are assigned.
         for topic_partition in self._topic_partitions(event):
             self.assignment.add(topic_partition)
 
