@@ -16,16 +16,15 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
+import java.util.concurrent.atomic.AtomicReference;
 import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
-import org.apache.kafka.common.utils.LogCaptureAppender;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.KeyValueTimestamp;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
-import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.TopologyTestDriver;
 import org.apache.kafka.streams.TopologyWrapper;
@@ -39,28 +38,31 @@ import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.InternalTopicConfig;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
+import org.apache.kafka.common.utils.LogCaptureAppender;
+import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.streams.state.BuiltInDslStoreSuppliers;
 import org.apache.kafka.streams.state.DslWindowParams;
-import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.WindowBytesStoreSupplier;
 import org.apache.kafka.streams.state.WindowStore;
-import org.apache.kafka.streams.state.internals.InMemoryKeyValueBytesStoreSupplier;
-import org.apache.kafka.streams.state.internals.InMemoryWindowBytesStoreSupplier;
+import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.internals.KeyValueStoreBuilder;
-import org.apache.kafka.streams.state.internals.LeftOrRightValue;
-import org.apache.kafka.streams.state.internals.LeftOrRightValueSerde;
 import org.apache.kafka.streams.state.internals.TimestampedKeyAndJoinSide;
+import org.apache.kafka.streams.state.internals.InMemoryKeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.internals.TimestampedKeyAndJoinSideSerde;
 import org.apache.kafka.streams.state.internals.WindowStoreBuilder;
+import org.apache.kafka.streams.state.internals.LeftOrRightValueSerde;
+import org.apache.kafka.streams.state.internals.LeftOrRightValue;
+import org.apache.kafka.streams.state.internals.InMemoryWindowBytesStoreSupplier;
 import org.apache.kafka.streams.state.internals.WrappedStateStore;
-import org.apache.kafka.test.GenericInMemoryKeyValueStore;
 import org.apache.kafka.test.MockApiProcessor;
 import org.apache.kafka.test.MockApiProcessorSupplier;
-import org.apache.kafka.test.MockInternalNewProcessorContext;
 import org.apache.kafka.test.MockValueJoiner;
+import org.apache.kafka.test.MockInternalNewProcessorContext;
 import org.apache.kafka.test.StreamsTestUtils;
+import org.apache.kafka.test.GenericInMemoryKeyValueStore;
 import org.junit.Test;
+import org.junit.jupiter.api.Assertions;
 import org.mockito.Mockito;
 
 import java.time.Duration;
@@ -71,19 +73,20 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
-import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
+import java.util.Optional;
 import java.util.Spliterator;
 import java.util.Spliterators;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
 
 import static java.time.Duration.ofHours;
 import static java.time.Duration.ofMillis;
+
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.SUBTOPOLOGY_0;
+import static org.apache.kafka.test.StreamsTestUtils.getMetricByName;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.hasItem;
 import static org.hamcrest.CoreMatchers.is;
@@ -815,12 +818,10 @@ public class KStreamKStreamJoinTest {
         stream1 = builder.stream(topic1, consumed);
         stream2 = builder.stream(topic2, consumed);
 
-        final Duration timeDifference = ofMillis(100L);
-        final Duration grace = ofMillis(150);
         joined = stream1.join(
             stream2,
             MockValueJoiner.TOSTRING_JOINER,
-            JoinWindows.ofTimeDifferenceAndGrace(timeDifference, grace),
+            JoinWindows.ofTimeDifferenceAndGrace(ofMillis(100L), ofMillis(150)),
             StreamJoined.with(Serdes.Integer(), Serdes.String(), Serdes.String())
         );
         joined.process(supplier);
@@ -1364,17 +1365,6 @@ public class KStreamKStreamJoinTest {
                 new KeyValueTimestamp<>(2, "L2+l2", 2002L),
                 new KeyValueTimestamp<>(3, "L3+l3", 2003L)
             );
-
-            //push two items with timestamp at grace edge; this should produce one join item, M0 is 'too late'
-            final long currentStreamTime = 2104;
-            final long graceBound = currentStreamTime - timeDifference.toMillis() - grace.toMillis();
-            inputTopic1.pipeInput(0, "M0", graceBound - 1);
-            final long windowL1LowerBound = 2001 - timeDifference.toMillis();
-            inputTopic1.pipeInput(1, "M1", Math.max(graceBound, windowL1LowerBound));
-
-            processor.checkAndClearProcessResult(
-                new KeyValueTimestamp<>(1, "M1+l1", 2001L)
-            );
         }
     }
 
@@ -1394,7 +1384,7 @@ public class KStreamKStreamJoinTest {
         joined = stream1.join(
             stream2,
             MockValueJoiner.TOSTRING_JOINER,
-            JoinWindows.ofTimeDifferenceAndGrace(ofMillis(0), ofMillis(4)).after(ofMillis(100)),
+            JoinWindows.ofTimeDifferenceAndGrace(ofMillis(0), ofMillis(150)).after(ofMillis(100)),
             StreamJoined.with(Serdes.Integer(),
                 Serdes.String(),
                 Serdes.String())
@@ -1663,7 +1653,7 @@ public class KStreamKStreamJoinTest {
         joined = stream1.join(
             stream2,
             MockValueJoiner.TOSTRING_JOINER,
-            JoinWindows.ofTimeDifferenceAndGrace(ofMillis(0), ofMillis(4)).before(ofMillis(100)),
+            JoinWindows.ofTimeDifferenceAndGrace(ofMillis(0), ofMillis(150)).before(ofMillis(100)),
             StreamJoined.with(Serdes.Integer(), Serdes.String(), Serdes.String())
         );
         joined.process(supplier);
@@ -1911,6 +1901,67 @@ public class KStreamKStreamJoinTest {
             }
             processor.checkAndClearProcessResult();
         }
+    }
+
+    @Test
+    public void recordsArrivingPostWindowCloseShouldBeDropped() {
+        final StreamsBuilder builder = new StreamsBuilder();
+
+        final KStream<Integer, String> joined = builder.stream(topic1, consumed).join(
+            builder.stream(topic2, consumed),
+            MockValueJoiner.TOSTRING_JOINER,
+            JoinWindows.ofTimeDifferenceAndGrace(ofMillis(10), ofMillis(5)),
+            StreamJoined.with(Serdes.Integer(), Serdes.String(), Serdes.String())
+        );
+        final MockApiProcessorSupplier<Integer, String, Void, Void> supplier = new MockApiProcessorSupplier<>();
+        joined.process(supplier);
+
+
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+            final TestInputTopic<Integer, String> left =
+                driver.createInputTopic(topic1, new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
+            final TestInputTopic<Integer, String> right =
+                driver.createInputTopic(topic2, new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
+            final MockApiProcessor<Integer, String, Void, Void> processor = supplier.theCapturedProcessor();
+
+            left.pipeInput(0, "left", 15);
+            right.pipeInput(-1, "bumpTime", 40);
+            assertRecordDropCount(0.0, processor);
+
+            right.pipeInput(0, "closesAt39", 24);
+            assertRecordDropCount(1.0, processor);
+
+            right.pipeInput(0, "closesAt40", 25);
+            assertRecordDropCount(1.0, processor);
+            processor.checkAndClearProcessResult(new KeyValueTimestamp<>(0, "left+closesAt40", 25));
+
+            right.pipeInput(-1, "bumpTime", 41);
+            right.pipeInput(0, "closesAt40", 25);
+            assertRecordDropCount(2.0, processor);
+            processor.checkAndClearProcessResult();
+
+
+            right.pipeInput(1, "right", 115);
+            left.pipeInput(-1, "bumpTime", 140);
+            left.pipeInput(1, "closesAt139", 124);
+            assertRecordDropCount(3.0, processor);
+            left.pipeInput(1, "closesAt140", 125);
+            assertRecordDropCount(3.0, processor);
+            processor.checkAndClearProcessResult(new KeyValueTimestamp<>(1, "closesAt140+right", 125));
+
+            left.pipeInput(-1, "bumpTime", 141);
+            left.pipeInput(1, "closesAt140", 125);
+            assertRecordDropCount(4.0, processor);
+        }
+    }
+
+    static void assertRecordDropCount(final double expected, final MockApiProcessor<Integer, String, Void, Void> processor) {
+        final String metricGroup = "stream-task-metrics";
+        final String metricName = "dropped-records-total";
+        Assertions.assertEquals(
+            expected,
+            getMetricByName(processor.context().metrics().metrics(), metricName, metricGroup).metricValue()
+        );
     }
 
     private void buildStreamsJoinThatShouldThrow(final StreamJoined<String, Integer, Integer> streamJoined,

@@ -22,12 +22,12 @@ import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.streams.KeyValueTimestamp;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig.InternalConfig;
+import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.streams.TopologyTestDriver;
 import org.apache.kafka.streams.TopologyWrapper;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.JoinWindows;
 import org.apache.kafka.streams.kstream.KStream;
-import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.streams.kstream.StreamJoined;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.WindowBytesStoreSupplier;
@@ -48,6 +48,7 @@ import java.util.Set;
 
 import static java.time.Duration.ZERO;
 import static java.time.Duration.ofMillis;
+import static org.apache.kafka.streams.kstream.internals.KStreamKStreamJoinTest.assertRecordDropCount;
 import static org.junit.Assert.assertEquals;
 
 public class KStreamKStreamLeftJoinTest {
@@ -887,12 +888,10 @@ public class KStreamKStreamLeftJoinTest {
         stream1 = builder.stream(topic1, consumed);
         stream2 = builder.stream(topic2, consumed);
 
-        final Duration grace = ofMillis(200);
-        final Duration timeDifference = ofMillis(100);
         joined = stream1.leftJoin(
             stream2,
             MockValueJoiner.TOSTRING_JOINER,
-            JoinWindows.ofTimeDifferenceAndGrace(timeDifference, grace),
+            JoinWindows.ofTimeDifferenceAndGrace(ofMillis(100), ofMillis(150)),
             StreamJoined.with(Serdes.Integer(), Serdes.String(), Serdes.String())
         );
         joined.process(supplier);
@@ -934,7 +933,7 @@ public class KStreamKStreamLeftJoinTest {
                 new KeyValueTimestamp<>(1, "A1+a1", 0L)
             );
             testUpperWindowBound(expectedKeys, driver, processor);
-            testLowerWindowBound(expectedKeys, driver, processor, timeDifference, grace);
+            testLowerWindowBound(expectedKeys, driver, processor);
             // push a dummy record to produce all left-join non-joined items
             inputTopic1.pipeInput(0, "dummy", Long.MAX_VALUE - 20_000L);
             processor.checkAndClearProcessResult(
@@ -1145,9 +1144,7 @@ public class KStreamKStreamLeftJoinTest {
 
     private void testLowerWindowBound(final int[] expectedKeys,
                                       final TopologyTestDriver driver,
-                                      final MockApiProcessor<Integer, String, Void, Void> processor,
-                                      final Duration timeDifference,
-                                      final Duration grace) {
+                                      final MockApiProcessor<Integer, String, Void, Void> processor) {
         long time;
         final TestInputTopic<Integer, String> inputTopic1 = driver.createInputTopic(topic1, new IntegerSerializer(), new StringSerializer());
 
@@ -1315,14 +1312,61 @@ public class KStreamKStreamLeftJoinTest {
             new KeyValueTimestamp<>(2, "K2+b2", 1002L),
             new KeyValueTimestamp<>(3, "K3+b3", 1003L)
         );
-
-        final long currentStreamTime = 1104;
-        final long lowerBound = currentStreamTime - timeDifference.toMillis() - grace.toMillis();
-        //push two items with timestamp at grace edge; this should produce one left-join item, L0 is 'too late'
-        inputTopic1.pipeInput(0, "L" + 0, lowerBound - 1);
-        inputTopic1.pipeInput(1, "L" + 1, lowerBound);
-        processor.checkAndClearProcessResult(
-            new KeyValueTimestamp<>(1, "L1+null", lowerBound)
-        );
     }
+
+    @Test
+    public void recordsArrivingPostWindowCloseShouldBeDropped() {
+        final StreamsBuilder builder = new StreamsBuilder();
+
+        final KStream<Integer, String> joined = builder.stream(topic1, consumed).leftJoin(
+            builder.stream(topic2, consumed),
+            MockValueJoiner.TOSTRING_JOINER,
+            JoinWindows.ofTimeDifferenceAndGrace(ofMillis(10), ofMillis(5)),
+            StreamJoined.with(Serdes.Integer(), Serdes.String(), Serdes.String())
+        );
+        final MockApiProcessorSupplier<Integer, String, Void, Void> supplier = new MockApiProcessorSupplier<>();
+        joined.process(supplier);
+
+
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), PROPS)) {
+            final TestInputTopic<Integer, String> left =
+                driver.createInputTopic(topic1, new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
+            final TestInputTopic<Integer, String> right =
+                driver.createInputTopic(topic2, new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
+            final MockApiProcessor<Integer, String, Void, Void> processor = supplier.theCapturedProcessor();
+
+            left.pipeInput(0, "left", 15);
+            right.pipeInput(-1, "bumpTime", 40);
+            assertRecordDropCount(0.0, processor);
+
+            right.pipeInput(0, "closesAt39", 24);
+            assertRecordDropCount(1.0, processor);
+
+            right.pipeInput(0, "closesAt40", 25);
+            assertRecordDropCount(1.0, processor);
+            processor.checkAndClearProcessResult(
+                new KeyValueTimestamp<>(0, "left+null", 15),
+                new KeyValueTimestamp<>(0, "left+closesAt40", 25)
+            );
+
+            right.pipeInput(-1, "bumpTime", 41);
+            right.pipeInput(0, "closesAt40", 25);
+            processor.checkAndClearProcessResult();
+            assertRecordDropCount(2.0, processor);
+
+
+            right.pipeInput(1, "right", 115);
+            left.pipeInput(-1, "bumpTime", 140);
+            left.pipeInput(1, "closesAt139", 124);
+            assertRecordDropCount(3.0, processor);
+            left.pipeInput(1, "closesAt140", 125);
+            assertRecordDropCount(3.0, processor);
+            processor.checkAndClearProcessResult(new KeyValueTimestamp<>(1, "closesAt140+right", 125));
+
+            left.pipeInput(-1, "bumpTime", 141);
+            left.pipeInput(1, "windowCloseAt140", 125);
+            assertRecordDropCount(4.0, processor);
+        }
+    }
+
 }
