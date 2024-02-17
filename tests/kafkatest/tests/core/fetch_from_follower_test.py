@@ -99,14 +99,18 @@ class FetchFromFollowerTest(ProduceConsumeValidateTest):
 
         self.producer = VerifiableProducer(self.test_context, self.num_producers, self.kafka, self.topic,
                                            throughput=self.producer_throughput)
+        consumer_properties = {
+            "client.rack": non_leader_rack,
+            "metadata.max.age.ms": self.METADATA_MAX_AGE_MS,
+        }
+
+        if group_protocol is not None:
+            consumer_properties["group.protocol"] = group_protocol
+
         self.consumer = ConsoleConsumer(self.test_context, self.num_consumers, self.kafka, self.topic,
                                         client_id="console-consumer", group_id="test-consumer-group-1",
                                         consumer_timeout_ms=60000, message_validator=is_int,
-                                        consumer_properties={
-                                            "client.rack": non_leader_rack,
-                                            "metadata.max.age.ms": self.METADATA_MAX_AGE_MS,
-                                            "group.protocol": group_protocol
-                                        })
+                                        consumer_properties=consumer_properties)
 
         # Start up and let some data get produced
         self.start_producer_and_consumer()
