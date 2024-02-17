@@ -125,7 +125,7 @@ class TestSnapshots(ProduceConsumeValidateTest):
             self.logger.debug("File %s was found" % file_path)
             return True
 
-    def validate_success(self, topic = None):
+    def validate_success(self, topic = None, group_protocol=None):
         if topic is None:
             # Create a new topic
             topic = "%s%d" % (TestSnapshots.TOPIC_NAME_PREFIX, self.topics_created)
@@ -136,9 +136,14 @@ class TestSnapshots(ProduceConsumeValidateTest):
                                            topic, throughput=self.producer_throughput,
                                            message_validator=is_int)
 
+        consumer_properties = {}
+
+        if group_protocol is not None:
+            consumer_properties["group.protocol"] = group_protocol
+
         self.consumer = ConsoleConsumer(self.test_context, self.num_consumers, self.kafka,
                                         topic, consumer_timeout_ms=30000,
-                                        message_validator=is_int)
+                                        message_validator=is_int, consumer_properties=consumer_properties)
         self.start_producer_and_consumer()
         self.stop_producer_and_consumer()
         self.validate()
@@ -146,9 +151,14 @@ class TestSnapshots(ProduceConsumeValidateTest):
     @cluster(num_nodes=9)
     @matrix(
         metadata_quorum=quorum.all_kraft,
-        use_new_coordinator=[True, False]
+        use_new_coordinator=[False],
     )
-    def test_broker(self, metadata_quorum=quorum.combined_kraft, use_new_coordinator=False):
+    @matrix(
+        metadata_quorum=quorum.all_kraft,
+        use_new_coordinator=[True],
+        group_protocol=["classic", "consumer"]
+    )
+    def test_broker(self, metadata_quorum=quorum.combined_kraft, use_new_coordinator=False, group_protocol=None):
         """ Test the ability of a broker to consume metadata snapshots
         and to recover the cluster metadata state using them
 
@@ -204,14 +214,19 @@ class TestSnapshots(ProduceConsumeValidateTest):
         self.kafka.create_topic(topic_cfg)
 
         # Produce to the newly created topic and make sure it works.
-        self.validate_success(broker_topic)
+        self.validate_success(broker_topic, group_protocol=group_protocol)
 
     @cluster(num_nodes=9)
     @matrix(
         metadata_quorum=quorum.all_kraft,
-        use_new_coordinator=[True, False]
+        use_new_coordinator=[False]
     )
-    def test_controller(self, metadata_quorum=quorum.combined_kraft, use_new_coordinator=False):
+    @matrix(
+        metadata_quorum=quorum.all_kraft,
+        use_new_coordinator=[True],
+        group_protocol=["classic", "consumer"]
+    )
+    def test_controller(self, metadata_quorum=quorum.combined_kraft, use_new_coordinator=False, group_protocol=None):
         """ Test the ability of controllers to consume metadata snapshots
         and to recover the cluster metadata state using them
 
@@ -254,4 +269,4 @@ class TestSnapshots(ProduceConsumeValidateTest):
             self.kafka.controller_quorum.start_node(node)
 
         # Produce to a newly created topic and make sure it works.
-        self.validate_success()
+        self.validate_success(group_protocol=group_protocol)
