@@ -66,6 +66,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -350,7 +351,7 @@ public abstract class TopicCommand {
             return !hasLeader() || !liveBrokers.contains(info.leader().id());
         }
 
-        public void printDescription(boolean printElr) {
+        public void printDescription() {
             System.out.print("\tTopic: " + topic);
             System.out.print("\tPartition: " + info.partition());
             System.out.print("\tLeader: " + (hasLeader() ? info.leader().id() : "none"));
@@ -368,14 +369,14 @@ public abstract class TopicCommand {
                     .map(node -> node.toString())
                     .collect(Collectors.joining(",")));
             }
-            if (printElr) {
-                System.out.print("\tElr: " + info.elr().stream()
-                    .map(node -> Integer.toString(node.id()))
-                    .collect(Collectors.joining(",")));
-                System.out.print("\tLastKnownElr: " + info.lastKnownElr().stream()
-                    .map(node -> Integer.toString(node.id()))
-                    .collect(Collectors.joining(",")));
-            }
+
+            System.out.print("\tElr: " + info.elr().stream()
+                .map(node -> Integer.toString(node.id()))
+                .collect(Collectors.joining(",")));
+            System.out.print("\tLastKnownElr: " + info.lastKnownElr().stream()
+                .map(node -> Integer.toString(node.id()))
+                .collect(Collectors.joining(",")));
+
             System.out.print(markedForDeletion ? "\tMarkedForDeletion: true" : "");
             System.out.println();
         }
@@ -423,7 +424,7 @@ public abstract class TopicCommand {
 
         public void maybePrintPartitionDescription(PartitionDescription desc) {
             if (shouldPrintTopicPartition(desc)) {
-                desc.printDescription(opts.useDescribeTopicsApi());
+                desc.printDescription();
             }
         }
     }
@@ -567,22 +568,53 @@ public abstract class TopicCommand {
             } else {
                 ensureTopicExists(topics, opts.topic().orElse(""), !opts.ifExists());
             }
-            List<org.apache.kafka.clients.admin.TopicDescription> topicDescriptions = new ArrayList<>();
 
             if (!topicIds.isEmpty()) {
                 Map<Uuid, org.apache.kafka.clients.admin.TopicDescription> descTopics =
                     adminClient.describeTopics(TopicCollection.ofTopicIds(topicIds)).allTopicIds().get();
-                topicDescriptions = new ArrayList<>(descTopics.values());
+                describeTopicsFollowUp(new ArrayList<>(descTopics.values()), opts);
+                return;
             }
 
             if (!topics.isEmpty()) {
-                Map<String, org.apache.kafka.clients.admin.TopicDescription> descTopics =
-                    adminClient.describeTopics(TopicCollection.ofTopicNames(topics),
-                        new DescribeTopicsOptions().useDescribeTopicsApi(opts.useDescribeTopicsApi())
-                            .partitionSizeLimitPerResponse(opts.partitionSizeLimitPerResponse().orElse(2000))).allTopicNames().get();
-                topicDescriptions = new ArrayList<>(descTopics.values());
+                final int partitionSizeLimit = opts.partitionSizeLimitPerResponse().orElse(2000);
+                try {
+                    Iterator<Map.Entry<String, KafkaFuture<org.apache.kafka.clients.admin.TopicDescription>>> descTopicIterator =
+                        adminClient.describeTopics(TopicCollection.ofTopicNames(topics),
+                            new DescribeTopicsOptions().useDescribeTopicsApi(true)
+                                .partitionSizeLimitPerResponse(partitionSizeLimit)).topicNameValuesIterator();
+                    while (descTopicIterator.hasNext()) {
+                        List<org.apache.kafka.clients.admin.TopicDescription> topicDescriptions = new ArrayList<>();
+                        for (int counter = 0; counter < partitionSizeLimit && descTopicIterator.hasNext();) {
+                            org.apache.kafka.clients.admin.TopicDescription topicDescription = descTopicIterator.next().getValue().get();
+                            topicDescriptions.add(topicDescription);
+                            counter += topicDescription.partitions().size();
+                        }
+                        describeTopicsFollowUp(topicDescriptions, opts);
+                    }
+                } catch (Exception e) {
+                    if (e.toString().contains("UnsupportedVersionException")) {
+                        // Retry the request with Metadata API.
+                        Map<String, org.apache.kafka.clients.admin.TopicDescription> descTopics =
+                            adminClient.describeTopics(TopicCollection.ofTopicNames(topics),
+                                new DescribeTopicsOptions().useDescribeTopicsApi(false)
+                                    .partitionSizeLimitPerResponse(opts.partitionSizeLimitPerResponse().orElse(2000))).allTopicNames().get();
+                        describeTopicsFollowUp(new ArrayList<>(descTopics.values()), opts);
+                        return;
+                    } else {
+                        throw e;
+                    }
+                }
+                return;
             }
 
+            describeTopicsFollowUp(Collections.emptyList(), opts);
+        }
+
+        private void describeTopicsFollowUp(
+            List<org.apache.kafka.clients.admin.TopicDescription> topicDescriptions,
+            TopicCommandOptions opts
+        ) throws ExecutionException, InterruptedException {
             List<String> topicNames = topicDescriptions.stream()
                 .map(org.apache.kafka.clients.admin.TopicDescription::name)
                 .collect(Collectors.toList());
@@ -727,8 +759,6 @@ public abstract class TopicCommand {
 
         private final OptionSpecBuilder excludeInternalTopicOpt;
 
-        private final OptionSpecBuilder useDescribeTopicsApiOpt;
-
         private final ArgumentAcceptingOptionSpec<Integer> partitionSizeLimitPerResponseOpt;
 
         private final Set<OptionSpec<?>> allTopicLevelOpts;
@@ -814,8 +844,6 @@ public abstract class TopicCommand {
                 "if set when creating topics, the action will only execute if the topic does not already exist.");
             excludeInternalTopicOpt = parser.accepts("exclude-internal",
                 "exclude internal topics when running list or describe command. The internal topics will be listed by default");
-            useDescribeTopicsApiOpt = parser.accepts("use-describe-topics-api",
-                "whether use the DescribeTopics API to describe topics. if false, use Metadata API.");
             partitionSizeLimitPerResponseOpt = parser.accepts("partition-size-limit-per-response",
                 "the maximum partition size to be included in one DescribeTopicPartitions response. Only valid if use-describe-topics-api is used")
                     .withRequiredArg()
@@ -938,10 +966,6 @@ public abstract class TopicCommand {
 
         public Boolean excludeInternalTopics() {
             return has(excludeInternalTopicOpt);
-        }
-
-        public Boolean useDescribeTopicsApi() {
-            return has(useDescribeTopicsApiOpt);
         }
 
         public Optional<Integer> partitionSizeLimitPerResponse() {

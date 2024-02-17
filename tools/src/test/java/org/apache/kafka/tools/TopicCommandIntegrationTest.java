@@ -614,8 +614,8 @@ public class TopicCommandIntegrationTest extends kafka.integration.KafkaServerTe
     }
 
     @ParameterizedTest(name = ToolsTestUtils.TEST_WITH_PARAMETERIZED_QUORUM_NAME)
-    @ValueSource(strings = {"quorum=kraft"})
-    public void testDescribeWithDescribeTopicsApi(String quorum) throws ExecutionException, InterruptedException {
+    @ValueSource(strings = {"quorum=zk", "quorum=kraft"})
+    public void testDescribeWithDescribeTopicPartitionsApi(String quorum) throws ExecutionException, InterruptedException {
         adminClient.createTopics(
             Collections.singletonList(new NewTopic(testTopicName, 3, (short) 2))).all().get();
         waitForTopicCreated(testTopicName);
@@ -625,7 +625,7 @@ public class TopicCommandIntegrationTest extends kafka.integration.KafkaServerTe
         waitForTopicCreated(secondTopicName);
 
         String output = captureDescribeTopicStandardOut(buildTopicCommandOptionsWithBootstrap(
-            "--describe", "--use-describe-topics-api", "--partition-size-limit-per-response=1"));
+            "--describe", "--partition-size-limit-per-response=1"));
         String[] rows = output.split("\n");
         assertEquals(8, rows.length, String.join("\n", rows));
         assertTrue(rows[2].contains("\tElr"), rows[2]);

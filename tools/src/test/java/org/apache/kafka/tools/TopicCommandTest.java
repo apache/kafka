@@ -177,7 +177,6 @@ public class TopicCommandTest {
         TopicCommand.TopicCommandOptions opts = new TopicCommand.TopicCommandOptions(
             new String[] {"--bootstrap-server", bootstrapServer,
                 "--describe",
-                "--use-describe-topics-api",
                 "--topic", topicName});
         assertTrue(opts.hasDescribeOption());
         assertEquals(topicName, opts.topic().get());
