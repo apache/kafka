@@ -39,7 +39,7 @@ class OffsetValidationTest(VerifiableConsumerTest):
             for node in consumer.nodes[keep_alive:]:
                 consumer.stop_node(node, clean_shutdown)
 
-                self.await_members_in_state(consumer, 1, [ConsumerState.Dead], self.session_timeout_sec + 5)
+                self.await_members_stopped(consumer, 1, self.session_timeout_sec + 5)
 
                 consumer.start_node(node)
 
@@ -51,10 +51,7 @@ class OffsetValidationTest(VerifiableConsumerTest):
             for node in consumer.nodes[keep_alive:]:
                 consumer.stop_node(node, clean_shutdown)
 
-            self.await_members_in_state(consumer,
-                                        self.num_consumers - keep_alive,
-                                        [ConsumerState.Dead],
-                                        10)
+            self.await_members_stopped(consumer, self.num_consumers - keep_alive, 10)
 
             for node in consumer.nodes[keep_alive:]:
                 consumer.start_node(node)
@@ -396,7 +393,7 @@ class OffsetValidationTest(VerifiableConsumerTest):
 
         # stop the partition owner and await its shutdown
         consumer.kill_node(partition_owner, clean_shutdown=clean_shutdown)
-        self.await_members_in_state(consumer, 1, [ConsumerState.Dead], self.session_timeout_sec * 2 + 5)
+        self.await_members_stopped(consumer, 1, self.session_timeout_sec * 2 + 5)
         self.await_partition_assigned(consumer, partition)
 
         # ensure that the remaining consumer does some work after rebalancing

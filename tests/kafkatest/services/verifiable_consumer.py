@@ -439,11 +439,6 @@ class VerifiableConsumer(KafkaPathResolverMixin, VerifiableClientMixin, Backgrou
             return [handler.node for handler in self.event_handlers.values()
                     if handler.state == ConsumerState.Joined]
 
-    def started_nodes(self):
-        with self.lock:
-            return [handler.node for handler in self.event_handlers.values()
-                    if handler.state == ConsumerState.Started]
-
     def rebalancing_nodes(self):
         with self.lock:
             return [handler.node for handler in self.event_handlers.values()

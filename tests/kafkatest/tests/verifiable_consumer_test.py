@@ -20,7 +20,6 @@ from kafkatest.services.verifiable_producer import VerifiableProducer
 from kafkatest.services.verifiable_consumer import ConsumerState, VerifiableConsumer
 from kafkatest.services.kafka import TopicPartition
 
-
 class VerifiableConsumerTest(KafkaTest):
     PRODUCER_REQUEST_TIMEOUT_SEC = 30
 
@@ -84,6 +83,9 @@ class VerifiableConsumerTest(KafkaTest):
 
         wait_until(lambda: _condition(), timeout_sec=timeout_sec, err_msg=_err_msg())
 
+    def await_members_stopped(self, consumer, num_consumers, timeout_sec):
+        self._await_members_in_state(consumer, num_consumers, "stopped", [ConsumerState.Dead], timeout_sec)
+
     def await_members(self, consumer, num_consumers):
         # Wait until all members have joined the group
         states = [ConsumerState.Joined]
@@ -92,26 +94,13 @@ class VerifiableConsumerTest(KafkaTest):
             states.extend([ConsumerState.Started, ConsumerState.Rebalancing])
 
         timeout_sec = self.session_timeout_sec * 2
-        self.await_members_in_state(consumer, num_consumers, states, timeout_sec)
+        self._await_members_in_state(consumer, num_consumers, "joined", states, timeout_sec)
 
     def await_all_members(self, consumer):
         states = [ConsumerState.Joined]
         timeout_sec = self.session_timeout_sec * 2
         num_consumers = 1 if consumer.is_consumer_group_protocol_enabled() else self.num_consumers
-        self.await_members_in_state(consumer, num_consumers, states, timeout_sec)
-
-    def await_members_in_state(self, consumer, num_consumers, states, timeout_sec):
-        def _count():
-            return len(consumer.nodes_in_state(states))
-
-        def _condition():
-            return _count() == num_consumers
-
-        def _err_msg():
-            return ("Only %d out of %d consumers were in the expected state within the timeout of %d seconds" %
-                    (_count(), num_consumers, timeout_sec))
-
-        wait_until(lambda: _condition(), timeout_sec=timeout_sec, err_msg=_err_msg())
+        self._await_members_in_state(consumer, num_consumers, "joined", states, timeout_sec)
 
     def await_partition_assigned(self, consumer, partition):
         # Wait until the partition has been (re-)assigned to a consumer.
@@ -139,5 +128,18 @@ class VerifiableConsumerTest(KafkaTest):
             assignment = consumer.current_assignment()
             assignments = [(str(node.account), a) for node, a in assignment.items()]
             return "Not all of the %d partitions for topic %s were assigned among the %d consumers within the timeout of %d seconds: %s" % (num_partitions, topic, num_consumers, timeout_sec, assignments),
+
+        wait_until(lambda: _condition(), timeout_sec=timeout_sec, err_msg=_err_msg())
+
+    def _await_members_in_state(self, consumer, num_consumers, state_string, states, timeout_sec):
+        def _count():
+            return len(consumer.nodes_in_state(states))
+
+        def _condition():
+            return _count() == num_consumers
+
+        def _err_msg():
+            return ("%d consumers %s within the timeout of %d seconds, expected %d" %
+                    (_count(), state_string, timeout_sec, num_consumers))
 
         wait_until(lambda: _condition(), timeout_sec=timeout_sec, err_msg=_err_msg())
