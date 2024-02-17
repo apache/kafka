@@ -121,7 +121,6 @@ public class StandaloneHerderTest {
 
     private StandaloneHerder herder;
 
-    private Connector connector;
     @Mock
     protected Worker worker;
     @Mock protected WorkerConfigTransformer transformer;
@@ -137,14 +136,10 @@ public class StandaloneHerderTest {
 
     @Before
     public void setup() throws ExecutionException, InterruptedException {
-        worker = mock(Worker.class);
         herder = mock(StandaloneHerder.class, withSettings()
             .useConstructor(worker, WORKER_ID, KAFKA_CLUSTER_ID, statusBackingStore, new MemoryConfigBackingStore(transformer), noneConnectorClientConfigOverridePolicy, new MockTime())
             .defaultAnswer(CALLS_REAL_METHODS));
         createCallback = new FutureCallback<>();
-        plugins = mock(Plugins.class);
-        pluginLoader = mock(PluginClassLoader.class);
-        loaderSwap = mock(LoaderSwap.class);
         final ArgumentCaptor<Map<String, String>> configCapture = ArgumentCaptor.forClass(Map.class);
         when(transformer.transform(eq(CONNECTOR_NAME), configCapture.capture())).thenAnswer(invocation -> configCapture.getValue());
     }
@@ -156,7 +151,6 @@ public class StandaloneHerderTest {
 
     @Test
     public void testCreateSourceConnector() throws Exception {
-        connector = mock(BogusSourceConnector.class);
         expectAdd(SourceSink.SOURCE);
 
         Map<String, String> config = connectorConfig(SourceSink.SOURCE);
@@ -171,7 +165,6 @@ public class StandaloneHerderTest {
     @Test
     public void testCreateConnectorFailedValidation() {
         // Basic validation should be performed and return an error, but should still evaluate the connector's config
-        connector = mock(BogusSourceConnector.class);
 
         Map<String, String> config = connectorConfig(SourceSink.SOURCE);
         config.remove(ConnectorConfig.NAME_CONFIG);
@@ -201,7 +194,6 @@ public class StandaloneHerderTest {
 
     @Test
     public void testCreateConnectorAlreadyExists() throws Throwable {
-        connector = mock(BogusSourceConnector.class);
         // First addition should succeed
         expectAdd(SourceSink.SOURCE);
 
@@ -226,7 +218,6 @@ public class StandaloneHerderTest {
 
     @Test
     public void testCreateSinkConnector() throws Exception {
-        connector = mock(BogusSinkConnector.class);
         expectAdd(SourceSink.SINK);
 
         Map<String, String> config = connectorConfig(SourceSink.SINK);
@@ -240,7 +231,6 @@ public class StandaloneHerderTest {
 
     @Test
     public void testCreateConnectorWithStoppedInitialState() throws Exception {
-        connector = mock(BogusSinkConnector.class);
         Map<String, String> config = connectorConfig(SourceSink.SINK);
         Connector connectorMock = mock(SinkConnector.class);
         expectConfigValidation(connectorMock, false, config);
@@ -268,7 +258,6 @@ public class StandaloneHerderTest {
 
     @Test
     public void testDestroyConnector() throws Exception {
-        connector = mock(BogusSourceConnector.class);
         expectAdd(SourceSink.SOURCE);
 
         Map<String, String> config = connectorConfig(SourceSink.SOURCE);
@@ -490,7 +479,6 @@ public class StandaloneHerderTest {
         RestartRequest restartRequest = new RestartRequest(CONNECTOR_NAME, false, true);
         doReturn(Optional.empty()).when(herder).buildRestartPlan(restartRequest);
 
-        connector = mock(BogusSinkConnector.class);
         expectAdd(SourceSink.SINK);
 
         Map<String, String> connectorConfig = connectorConfig(SourceSink.SINK);
@@ -518,7 +506,6 @@ public class StandaloneHerderTest {
         when(restartPlan.restartConnectorStateInfo()).thenReturn(connectorStateInfo);
         doReturn(Optional.of(restartPlan)).when(herder).buildRestartPlan(restartRequest);
 
-        connector = mock(BogusSinkConnector.class);
         expectAdd(SourceSink.SINK);
 
         Map<String, String> connectorConfig = connectorConfig(SourceSink.SINK);
@@ -544,7 +531,6 @@ public class StandaloneHerderTest {
         when(restartPlan.restartConnectorStateInfo()).thenReturn(connectorStateInfo);
         doReturn(Optional.of(restartPlan)).when(herder).buildRestartPlan(restartRequest);
 
-        connector = mock(BogusSinkConnector.class);
         expectAdd(SourceSink.SINK);
 
         Map<String, String> connectorConfig = connectorConfig(SourceSink.SINK);
@@ -585,7 +571,6 @@ public class StandaloneHerderTest {
         when(restartPlan.restartConnectorStateInfo()).thenReturn(connectorStateInfo);
         doReturn(Optional.of(restartPlan)).when(herder).buildRestartPlan(restartRequest);
 
-        connector = mock(BogusSinkConnector.class);
         expectAdd(SourceSink.SINK);
 
         Map<String, String> connectorConfig = connectorConfig(SourceSink.SINK);
@@ -638,7 +623,6 @@ public class StandaloneHerderTest {
 
         ArgumentCaptor<TaskStatus> taskStatus = ArgumentCaptor.forClass(TaskStatus.class);
 
-        connector = mock(BogusSinkConnector.class);
         expectAdd(SourceSink.SINK);
 
         Map<String, String> connectorConfig = connectorConfig(SourceSink.SINK);
@@ -686,7 +670,6 @@ public class StandaloneHerderTest {
 
     @Test
     public void testCreateAndStop() throws Exception {
-        connector = mock(BogusSourceConnector.class);
         expectAdd(SourceSink.SOURCE);
 
         Map<String, String> connectorConfig = connectorConfig(SourceSink.SOURCE);
@@ -726,7 +709,7 @@ public class StandaloneHerderTest {
         doNothing().when(connectorConfigCb).onCompletion(any(NotFoundException.class), isNull());
 
         // Create connector
-        connector = mock(BogusSourceConnector.class);
+        Connector connector = mock(BogusSourceConnector.class);
         expectAdd(SourceSink.SOURCE);
         expectConfigValidation(connector, true, connConfig);
 
@@ -773,7 +756,6 @@ public class StandaloneHerderTest {
         Callback<Map<String, String>> connectorConfigCb = mock(Callback.class);
 
         // Create
-        connector = mock(BogusSourceConnector.class);
         expectAdd(SourceSink.SOURCE);
         Connector connectorMock = mock(SourceConnector.class);
         expectConfigValidation(connectorMock, true, connConfig);
@@ -868,7 +850,6 @@ public class StandaloneHerderTest {
 
     @Test
     public void testTargetStates() throws Exception {
-        connector = mock(BogusSourceConnector.class);
         expectAdd(SourceSink.SOURCE);
 
         Map<String, String> connectorConfig = connectorConfig(SourceSink.SOURCE);
@@ -1003,7 +984,6 @@ public class StandaloneHerderTest {
 
     @Test()
     public void testRequestTaskReconfigurationDoesNotDeadlock() throws Exception {
-        connector = mock(BogusSourceConnector.class);
         expectAdd(SourceSink.SOURCE);
 
         // Start the connector
