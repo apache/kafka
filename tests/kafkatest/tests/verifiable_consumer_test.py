@@ -44,6 +44,23 @@ class VerifiableConsumerTest(KafkaTest):
             partitions += parts
         return partitions
 
+    def await_valid_assignment(self, consumer, topic, num_partitions, num_consumers):
+        # Wait until all assignments have settled
+        timeout_sec = self.session_timeout_sec * 2
+
+        def _condition():
+            assignment = consumer.current_assignment()
+            all_partitions = self._all_partitions(topic, num_partitions)
+            partitions = self._partitions(assignment)
+            return len(partitions) == num_partitions and set(partitions) == all_partitions
+
+        def _err_msg():
+            assignment = consumer.current_assignment()
+            assignments = [(str(node.account), a) for node, a in assignment.items()]
+            return "Not all of the %d partitions for topic %s were assigned among the %d consumers within the timeout of %d seconds: %s" % (num_partitions, topic, num_consumers, timeout_sec, assignments),
+
+        wait_until(lambda: _condition(), timeout_sec=timeout_sec, err_msg=_err_msg())
+
     def min_cluster_size(self):
         """Override this since we're adding services outside of the constructor"""
         return super(VerifiableConsumerTest, self).min_cluster_size() + self.num_consumers + self.num_producers
@@ -111,23 +128,6 @@ class VerifiableConsumerTest(KafkaTest):
 
         def _err_msg():
             return "Partition %s was not (re-)assigned within the timeout of %d seconds" % (partition, timeout_sec)
-
-        wait_until(lambda: _condition(), timeout_sec=timeout_sec, err_msg=_err_msg())
-
-    def await_valid_assignment(self, consumer, topic, num_partitions, num_consumers):
-        # Wait until all assignments have settled
-        timeout_sec = self.session_timeout_sec * 2
-
-        def _condition():
-            assignment = consumer.current_assignment()
-            all_partitions = self._all_partitions(topic, num_partitions)
-            partitions = self._partitions(assignment)
-            return len(partitions) == num_partitions and set(partitions) == all_partitions
-
-        def _err_msg():
-            assignment = consumer.current_assignment()
-            assignments = [(str(node.account), a) for node, a in assignment.items()]
-            return "Not all of the %d partitions for topic %s were assigned among the %d consumers within the timeout of %d seconds: %s" % (num_partitions, topic, num_consumers, timeout_sec, assignments),
 
         wait_until(lambda: _condition(), timeout_sec=timeout_sec, err_msg=_err_msg())
 

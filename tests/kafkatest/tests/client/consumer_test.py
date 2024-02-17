@@ -307,8 +307,14 @@ class OffsetValidationTest(VerifiableConsumerTest):
     @matrix(
         num_conflict_consumers=[1, 2],
         fencing_stage=["stable", "all"],
-        metadata_quorum=[quorum.zk, quorum.isolated_kraft],
-        use_new_coordinator=[False, True]
+        metadata_quorum=[quorum.zk],
+        use_new_coordinator=[False]
+    )
+    @matrix(
+        num_conflict_consumers=[1, 2],
+        fencing_stage=["stable", "all"],
+        metadata_quorum=[quorum.isolated_kraft],
+        use_new_coordinator=[True, False]
     )
     def test_fencing_static_consumer(self, num_conflict_consumers, fencing_stage, metadata_quorum=quorum.zk, use_new_coordinator=False):
         """
