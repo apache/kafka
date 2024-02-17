@@ -1080,6 +1080,7 @@ public class WorkerSinkTaskMockitoTest {
 
         workerTask.iteration(); // iter 2 -- deliver 2 records
 
+    // iter 3
         final Map<TopicPartition, OffsetAndMetadata> workerCurrentOffsets = new HashMap<>();
         workerCurrentOffsets.put(TOPIC_PARTITION, new OffsetAndMetadata(FIRST_OFFSET + 1));
         workerCurrentOffsets.put(TOPIC_PARTITION2, new OffsetAndMetadata(FIRST_OFFSET));
