@@ -49,7 +49,7 @@ public class MockProcessor<KIn, VIn, KOut, VOut> implements Processor<KIn, VIn, 
 
     @Override
     public void process(Record<KIn, VIn> record) {
-        delegate.process(new Record<>(record.key(), record.value(), record.timestamp(), record.headers()));
+        delegate.process(record);
     }
 
     public void checkAndClearProcessResult(final KeyValueTimestamp<?, ?>... expected) {
