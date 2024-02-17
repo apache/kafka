@@ -89,14 +89,14 @@ class VerifiableConsumerTest(KafkaTest):
     def await_consumed_messages(self, consumer, min_messages=1):
         timeout_sec = self.consumption_timeout_sec
         current_total = consumer.total_consumed()
-        lower_bound = current_total + min_messages
+        expected = current_total + min_messages
 
         def _condition():
-            return consumer.total_consumed() >= lower_bound
+            return consumer.total_consumed() >= expected
 
         def _err_msg():
             actual = consumer.total_consumed()
-            return "Consumers received only %d out of %d expected messages within the timeout of %d seconds" % (actual, lower_bound, timeout_sec)
+            return "%d messages received within the timeout of %d seconds, expected %d" % (actual, timeout_sec, expected)
 
         wait_until(lambda: _condition(), timeout_sec=timeout_sec, err_msg=_err_msg())
 
