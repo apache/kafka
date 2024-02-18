@@ -34,7 +34,7 @@ import org.apache.kafka.common.record._
 import org.apache.kafka.common.utils.{BufferSupplier, Time}
 import org.apache.kafka.server.metrics.KafkaMetricsGroup
 import org.apache.kafka.server.util.ShutdownableThread
-import org.apache.kafka.storage.internals.log.{AbortedTxn, CleanerConfig, LastRecord, LogDirFailureChannel, LogSegment, LogSegmentOffsetOverflowException, OffsetMap, SkimpyOffsetMap, TransactionIndex}
+import org.apache.kafka.storage.internals.log.{AbortedTxn, CleanerConfig, LastRecord, LogCleanerConfig, LogDirFailureChannel, LogSegment, LogSegmentOffsetOverflowException, OffsetMap, SkimpyOffsetMap, TransactionIndex}
 
 import scala.jdk.CollectionConverters._
 import scala.collection.mutable.ListBuffer
@@ -499,13 +499,13 @@ class LogCleaner(initialConfig: CleanerConfig,
 
 object LogCleaner {
   val ReconfigurableConfigs: Set[String] = Set(
-    KafkaConfig.LogCleanerThreadsProp,
-    KafkaConfig.LogCleanerDedupeBufferSizeProp,
-    KafkaConfig.LogCleanerDedupeBufferLoadFactorProp,
-    KafkaConfig.LogCleanerIoBufferSizeProp,
+    LogCleanerConfig.LOG_CLEANER_THREADS_PROP,
+    LogCleanerConfig.LOG_CLEANER_DEDUPE_BUFFER_SIZE_PROP,
+    LogCleanerConfig.LOG_CLEANER_DEDUPE_BUFFER_LOAD_FACTOR_PROP,
+    LogCleanerConfig.LOG_CLEANER_IO_BUFFER_SIZE_PROP,
     KafkaConfig.MessageMaxBytesProp,
-    KafkaConfig.LogCleanerIoMaxBytesPerSecondProp,
-    KafkaConfig.LogCleanerBackoffMsProp
+    LogCleanerConfig.LOG_CLEANER_IO_MAX_BYTES_PER_SECOND_PROP,
+    LogCleanerConfig.LOG_CLEANER_BACKOFF_MS_PROP
   )
 
   def cleanerConfig(config: KafkaConfig): CleanerConfig = {
