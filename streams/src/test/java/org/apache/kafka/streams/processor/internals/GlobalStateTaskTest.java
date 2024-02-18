@@ -252,7 +252,7 @@ public class GlobalStateTaskTest {
     @Test
     public void shouldCheckpointIfReceivedEnoughRecords() {
         final Map<TopicPartition, Long> expectedOffsets = new HashMap<>();
-        expectedOffsets.put(t1, 10051L); // t1 advanced with 10.001 records
+        expectedOffsets.put(t1, 10051L); // t1 advanced with 10001 records
         expectedOffsets.put(t2, 100L);
 
         globalStateTask.initialize();
