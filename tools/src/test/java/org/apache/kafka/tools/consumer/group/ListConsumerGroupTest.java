@@ -68,7 +68,7 @@ public class ListConsumerGroupTest extends ConsumerGroupCommandTest {
     }
 
     @Test
-    public void testListWithUnrecognizedNewConsumerOption() throws Exception {
+    public void testListWithUnrecognizedNewConsumerOption() {
         String[] cgcArgs = new String[]{"--new-consumer", "--bootstrap-server", bootstrapServers(listenerName()), "--list"};
         assertThrows(OptionException.class, () -> getConsumerGroupService(cgcArgs));
     }
@@ -108,7 +108,7 @@ public class ListConsumerGroupTest extends ConsumerGroupCommandTest {
             expectedListing
         );
 
-        expectedListing = new HashSet<>(Arrays.asList(
+        expectedListing = new HashSet<>(Collections.singletonList(
             new ConsumerGroupListing(
                 GROUP,
                 false,
@@ -120,14 +120,14 @@ public class ListConsumerGroupTest extends ConsumerGroupCommandTest {
         assertGroupListing(
             service,
             Collections.emptySet(),
-            new HashSet<>(Arrays.asList(ConsumerGroupState.STABLE)),
+            mkSet(ConsumerGroupState.STABLE),
             expectedListing
         );
 
         assertGroupListing(
             service,
             Collections.emptySet(),
-            new HashSet<>(Arrays.asList(ConsumerGroupState.PREPARING_REBALANCE)),
+            mkSet(ConsumerGroupState.PREPARING_REBALANCE),
             Collections.emptySet()
         );
     }
@@ -173,14 +173,14 @@ public class ListConsumerGroupTest extends ConsumerGroupCommandTest {
         // New Group Coordinator returns groups according to the filter.
         assertGroupListing(
             service,
-            new HashSet<>(Arrays.asList(GroupType.CONSUMER)),
+            mkSet(GroupType.CONSUMER),
             Collections.emptySet(),
             Collections.emptySet()
         );
 
         assertGroupListing(
             service,
-            new HashSet<>(Arrays.asList(GroupType.CLASSIC)),
+            mkSet(GroupType.CLASSIC),
             Collections.emptySet(),
             expectedListing
         );
@@ -222,11 +222,16 @@ public class ListConsumerGroupTest extends ConsumerGroupCommandTest {
             )
         ));
 
-        assertGroupListing(service, Collections.emptySet(), Collections.emptySet(), expectedListing);
+        assertGroupListing(
+            service,
+            Collections.emptySet(),
+            Collections.emptySet(),
+            expectedListing
+        );
 
         // When group type is mentioned:
         // New Group Coordinator returns groups according to the filter.
-        expectedListing = new HashSet<>(Arrays.asList(
+        expectedListing = new HashSet<>(Collections.singletonList(
             new ConsumerGroupListing(
                 PROTOCOL_GROUP,
                 false,
@@ -237,7 +242,7 @@ public class ListConsumerGroupTest extends ConsumerGroupCommandTest {
 
         assertGroupListing(
             service,
-            new HashSet<>(Arrays.asList(GroupType.CONSUMER)),
+            mkSet(GroupType.CONSUMER),
             Collections.emptySet(),
             expectedListing
         );
@@ -259,7 +264,7 @@ public class ListConsumerGroupTest extends ConsumerGroupCommandTest {
 
         assertGroupListing(
             service,
-            new HashSet<>(Arrays.asList(GroupType.CLASSIC)),
+            mkSet(GroupType.CLASSIC),
             Collections.emptySet(),
             expectedListing
         );
@@ -277,7 +282,7 @@ public class ListConsumerGroupTest extends ConsumerGroupCommandTest {
         assertEquals(set(Arrays.asList(ConsumerGroupState.DEAD, ConsumerGroupState.COMPLETING_REBALANCE)), result);
 
         result = ConsumerGroupCommand.consumerGroupStatesFromString("stable");
-        assertEquals(set(Arrays.asList(ConsumerGroupState.STABLE)), result);
+        assertEquals(set(Collections.singletonList(ConsumerGroupState.STABLE)), result);
 
         result = ConsumerGroupCommand.consumerGroupStatesFromString("stable, assigning");
         assertEquals(set(Arrays.asList(ConsumerGroupState.STABLE, ConsumerGroupState.ASSIGNING)), result);
@@ -293,7 +298,7 @@ public class ListConsumerGroupTest extends ConsumerGroupCommandTest {
     }
 
     @Test
-    public void testConsumerGroupTypesFromString() throws Exception {
+    public void testConsumerGroupTypesFromString() {
         scala.collection.Set<GroupType> result = ConsumerGroupCommand.consumerGroupTypesFromString("consumer");
         assertEquals(set(Collections.singleton(GroupType.CONSUMER)), result);
 
@@ -377,7 +382,8 @@ public class ListConsumerGroupTest extends ConsumerGroupCommandTest {
             Arrays.asList("--bootstrap-server", bootstrapServers(listenerName()), "--list", "--type", "Classic"),
             Arrays.asList("GROUP", "TYPE"),
             mkSet(
-                Arrays.asList(GROUP, "Classic")
+                Arrays.asList(GROUP, "Classic"),
+                Arrays.asList(simpleGroup, "Classic")
             )
         );
 
@@ -386,7 +392,8 @@ public class ListConsumerGroupTest extends ConsumerGroupCommandTest {
             Arrays.asList("--bootstrap-server", bootstrapServers(listenerName()), "--list", "--type", "classic"),
             Arrays.asList("GROUP", "TYPE"),
             mkSet(
-                Arrays.asList(GROUP, "Classic")
+                Arrays.asList(GROUP, "Classic"),
+                Arrays.asList(simpleGroup, "Classic")
             )
         );
     }
@@ -400,8 +407,6 @@ public class ListConsumerGroupTest extends ConsumerGroupCommandTest {
 
         addSimpleGroupExecutor(simpleGroup);
         addConsumerGroupExecutor(1, PROTOCOL_GROUP, groupProtocol);
-
-        final AtomicReference<String> out = new AtomicReference<>("");
 
         validateListOutput(
             Arrays.asList("--bootstrap-server", bootstrapServers(listenerName()), "--list"),
@@ -456,6 +461,14 @@ public class ListConsumerGroupTest extends ConsumerGroupCommandTest {
         );
     }
 
+    /**
+     * Validates the consumer group listings returned against expected values using specified filters.
+     *
+     * @param service           The service to list consumer groups.
+     * @param typeFilterSet     Filters for group types, empty for no filter.
+     * @param stateFilterSet    Filters for group states, empty for no filter.
+     * @param expectedListing   Expected consumer group listings.
+     */
     private static void assertGroupListing(
         ConsumerGroupCommand.ConsumerGroupService service,
         Set<GroupType> typeFilterSet,
@@ -466,7 +479,7 @@ public class ListConsumerGroupTest extends ConsumerGroupCommandTest {
         TestUtils.waitForCondition(() -> {
             foundListing.set(service.listConsumerGroupsWithFilters(set(typeFilterSet), set(stateFilterSet)).toSet());
             return Objects.equals(set(expectedListing), foundListing.get());
-        }, "Expected to show groups " + expectedListing + ", but found " + foundListing.get() + ".");
+        }, () -> "Expected to show groups " + expectedListing + ", but found " + foundListing.get() + ".");
     }
 
     /**
