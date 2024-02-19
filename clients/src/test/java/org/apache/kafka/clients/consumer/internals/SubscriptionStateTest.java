@@ -189,9 +189,12 @@ public class SubscriptionStateTest {
     }
     @Test
     public void testSubscriptionPatternInclusionInSubscriptionState() {
-        state.subscribe(new SubscriptionPattern("*t"), Optional.of(rebalanceListener));
+        SubscriptionPattern pattern = new SubscriptionPattern("*t");
+
+        state.subscribe(pattern, Optional.of(rebalanceListener));
         assertTrue(state.assignedPartitions().isEmpty());
         assertEquals(0, state.numAssignedPartitions());
+        assertTrue(state.subscriptionPattern().equals(pattern));
 
         state.unsubscribe();
         assertEquals(state.subscriptionPattern(), null);
