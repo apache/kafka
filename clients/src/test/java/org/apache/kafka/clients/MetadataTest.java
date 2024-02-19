@@ -1270,7 +1270,7 @@ public class MetadataTest {
      * snapshot & cluster contain the relevant updates.
      */
     @Test
-    public void testConcurrentUpdateAndFetchSnapshotAndCluster() throws InterruptedException {
+    public void testConcurrentUpdateAndFetchForSnapshotAndCluster() throws InterruptedException {
         Time time = new MockTime();
         metadata = new Metadata(refreshBackoffMs, refreshBackoffMaxMs, metadataExpireMs, new LogContext(), new ClusterResourceListeners());
 
