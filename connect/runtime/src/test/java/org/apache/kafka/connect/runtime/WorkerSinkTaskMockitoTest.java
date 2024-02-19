@@ -109,6 +109,7 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -381,9 +382,9 @@ public class WorkerSinkTaskMockitoTest {
                 .thenAnswer(expectConsumerPoll(0));
         expectConversionAndTransformation(null, new RecordHeaders());
 
-        doAnswer(invocation -> null)
+        doNothing()
                 .doThrow(new RetriableException("retry"))
-                .doAnswer(invocation -> null)
+                .doNothing()
                 .when(sinkTask).put(anyList());
 
         workerTask.iteration();
@@ -502,18 +503,19 @@ public class WorkerSinkTaskMockitoTest {
                 });
         expectConversionAndTransformation(null, new RecordHeaders());
 
-        // If a retriable exception is thrown, we should redeliver the same batch, pausing the consumer in the meantime
-        doThrow(new RetriableException("retry"))
+        doNothing()
+                // If a retriable exception is thrown, we should redeliver the same batch, pausing the consumer in the meantime
                 .doThrow(new RetriableException("retry"))
                 .doThrow(new RetriableException("retry"))
                 .doThrow(new RetriableException("retry"))
+                .doNothing()
                 .when(sinkTask).put(any(Collection.class));
 
         workerTask.iteration();
-        verify(consumer).pause(INITIAL_ASSIGNMENT);
 
         // Pause
         workerTask.iteration();
+        verify(consumer).pause(INITIAL_ASSIGNMENT);
 
         workerTask.iteration();
         verify(sinkTask).open(Collections.singleton(TOPIC_PARTITION3));
@@ -745,7 +747,7 @@ public class WorkerSinkTaskMockitoTest {
         final Map<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>();
         offsets.put(TOPIC_PARTITION, new OffsetAndMetadata(FIRST_OFFSET + 1));
         when(sinkTask.preCommit(offsets)).thenReturn(offsets);
-        doAnswer(invocation -> null).when(consumer).commitSync(offsets);
+        doNothing().when(consumer).commitSync(offsets);
 
         workerTask.iteration();
         verify(sinkTask).close(Collections.singleton(TOPIC_PARTITION));
@@ -800,7 +802,7 @@ public class WorkerSinkTaskMockitoTest {
         // first one raises wakeup
         doThrow(new WakeupException())
                 // and succeed the second time
-                .doAnswer(invocation -> null)
+                .doNothing()
                 .when(consumer).commitSync(eq(offsets));
 
         workerTask.iteration(); // first record delivered
@@ -864,7 +866,7 @@ public class WorkerSinkTaskMockitoTest {
         // fail the first time
         doThrow(new WakeupException())
                 // and succeed the second time
-                .doAnswer(invocation -> null)
+                .doNothing()
                 .when(consumer).commitSync(eq(offsets));
 
         workerTask.execute();
@@ -1064,7 +1066,6 @@ public class WorkerSinkTaskMockitoTest {
         expectPollInitialAssignment()
                 // iter 2
                 .thenAnswer(expectConsumerPoll(1))
-                // no actual consumer.commit() triggered
                 .thenAnswer(expectConsumerPoll(0));
 
         expectConversionAndTransformation(null, new RecordHeaders());
@@ -1088,6 +1089,7 @@ public class WorkerSinkTaskMockitoTest {
         when(sinkTask.preCommit(workerCurrentOffsets)).thenReturn(workerStartingOffsets);
 
         sinkTaskContext.getValue().requestCommit();
+        // no actual consumer.commit() triggered
         workerTask.iteration(); // iter 3 -- commit
     }
 
@@ -1134,9 +1136,7 @@ public class WorkerSinkTaskMockitoTest {
         final CountDownLatch latch = new CountDownLatch(1);
 
         doAnswer(invocation -> {
-            @SuppressWarnings("unchecked")
             final Map<TopicPartition, OffsetAndMetadata> offsets = invocation.getArgument(0);
-            @SuppressWarnings("unchecked")
             final OffsetCommitCallback callback = invocation.getArgument(1);
 
             executor.execute(() -> {
@@ -1184,9 +1184,7 @@ public class WorkerSinkTaskMockitoTest {
 
         expectConversionAndTransformation(null, new RecordHeaders());
 
-        doAnswer(invocation -> null)
-                // Throw an exception on the next put to trigger shutdown behavior
-                // This exception is the true "cause" of the failure
+        doNothing()
                 .doAnswer(invocation -> {
                     workerTask.stop();
                     return null;
@@ -1229,7 +1227,7 @@ public class WorkerSinkTaskMockitoTest {
         Throwable putException = new RuntimeException();
         Throwable closeException = new RuntimeException();
 
-        doAnswer(invocation -> null)
+        doNothing()
                 // Throw an exception on the next put to trigger shutdown behavior
                 // This exception is the true "cause" of the failure
                 .doThrow(putException)
@@ -1270,8 +1268,8 @@ public class WorkerSinkTaskMockitoTest {
 
         expectConversionAndTransformation(null, new RecordHeaders());
 
-        doAnswer(invocation -> null)
-                .doAnswer(invocation -> null)
+        doNothing()
+                .doNothing()
                 .doAnswer(invocation -> {
                     workerTask.stop();
                     workerTask.cancel();
@@ -1297,7 +1295,6 @@ public class WorkerSinkTaskMockitoTest {
     // rebalance occurs, the async callback does not reset the last committed offset from the rebalance.
     // See KAFKA-5731 for more information.
     @Test
-    @SuppressWarnings("unchecked")
     public void testCommitWithOutOfOrderCallback() {
         createTask(initialState);
 
@@ -1311,13 +1308,7 @@ public class WorkerSinkTaskMockitoTest {
             return ConsumerRecords.empty();
         };
 
-        Answer<Set<TopicPartition>> initialAssignment = invocation -> INITIAL_ASSIGNMENT;
-        Answer<Long> partition1InitialPosition = invocation -> FIRST_OFFSET;
-        Answer<Long> partition2InitialPosition = invocation -> FIRST_OFFSET;
-
         // iter 2
-        Answer<ConsumerRecords<byte[], byte[]>> consumerPoll = expectConsumerPoll(1);
-
         expectTaskGetTopic();
         expectConversionAndTransformation(null, new RecordHeaders());
 
@@ -1340,8 +1331,6 @@ public class WorkerSinkTaskMockitoTest {
         postRebalanceCurrentOffsets.put(TOPIC_PARTITION, new OffsetAndMetadata(FIRST_OFFSET + 3));
         postRebalanceCurrentOffsets.put(TOPIC_PARTITION2, new OffsetAndMetadata(FIRST_OFFSET));
         postRebalanceCurrentOffsets.put(TOPIC_PARTITION3, new OffsetAndMetadata(FIRST_OFFSET + 2));
-
-        Answer<Set<TopicPartition>> originalPartitionAssignment = invocation -> new HashSet<>(originalPartitions);
 
         // iter 3 - note that we return the current offset to indicate they should be committed
         when(sinkTask.preCommit(workerCurrentOffsets)).thenReturn(workerCurrentOffsets);
@@ -1408,11 +1397,11 @@ public class WorkerSinkTaskMockitoTest {
 
         // Setup mocks
         when(consumer.assignment())
-                .thenAnswer(initialAssignment)
-                .thenAnswer(initialAssignment)
-                .thenAnswer(initialAssignment)
-                .thenAnswer(originalPartitionAssignment)
-                .thenAnswer(originalPartitionAssignment)
+                .thenReturn(INITIAL_ASSIGNMENT)
+                .thenReturn(INITIAL_ASSIGNMENT)
+                .thenReturn(INITIAL_ASSIGNMENT)
+                .thenReturn(INITIAL_ASSIGNMENT)
+                .thenReturn(INITIAL_ASSIGNMENT)
                 .thenReturn(new HashSet<>(rebalancedPartitions))
                 .thenReturn(new HashSet<>(rebalancedPartitions))
                 .thenReturn(new HashSet<>(rebalancedPartitions))
@@ -1420,11 +1409,11 @@ public class WorkerSinkTaskMockitoTest {
                 .thenReturn(new HashSet<>(rebalancedPartitions));
 
         when(consumer.position(TOPIC_PARTITION))
-                .thenAnswer(partition1InitialPosition)
+                .thenReturn(FIRST_OFFSET)
                 .thenReturn(offsetTp1);
 
         when(consumer.position(TOPIC_PARTITION2))
-                .thenAnswer(partition2InitialPosition)
+                .thenReturn(FIRST_OFFSET)
                 .thenReturn(offsetTp2);
 
         when(consumer.position(TOPIC_PARTITION3))
@@ -1432,7 +1421,7 @@ public class WorkerSinkTaskMockitoTest {
 
         when(consumer.poll(any(Duration.class)))
                 .thenAnswer(consumerPollRebalance)
-                .thenAnswer(consumerPoll)
+                .thenAnswer(expectConsumerPoll(1))
                 .thenAnswer(consumerPollRebalanced)
                 .thenAnswer(expectConsumerPoll(1));
 
