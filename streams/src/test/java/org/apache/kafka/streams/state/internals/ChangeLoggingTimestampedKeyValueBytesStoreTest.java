@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.LogContext;
@@ -24,12 +23,13 @@ import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
-import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
+import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.test.InternalMockProcessorContext;
 import org.apache.kafka.test.MockRecordCollector;
 import org.apache.kafka.test.TestUtils;
+import org.easymock.Mock;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -60,6 +60,8 @@ public class ChangeLoggingTimestampedKeyValueBytesStoreTest {
     private final ValueAndTimestamp<byte[]> world = ValueAndTimestamp.make("world".getBytes(), 98L);
     // timestamp is 98 what is ASCII of 'b'
     private final byte[] rawWorld = "\0\0\0\0\0\0\0bworld".getBytes();
+    @Mock
+    private StreamsMetricsImpl mockStreamsMetrics;
 
     @Before
     public void before() {
@@ -74,7 +76,7 @@ public class ChangeLoggingTimestampedKeyValueBytesStoreTest {
             Serdes.String(),
             Serdes.Long(),
             collector,
-            new ThreadCache(new LogContext("testCache "), 0, new MockStreamsMetrics(new Metrics()))
+            new ThreadCache(new LogContext("testCache "), 0, this.mockStreamsMetrics)
         );
     }
 

@@ -21,7 +21,6 @@ import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeader;
 import org.apache.kafka.common.header.internals.RecordHeaders;
-import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.LogContext;
@@ -34,6 +33,7 @@ import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.To;
 import org.apache.kafka.streams.processor.api.FixedKeyRecord;
 import org.apache.kafka.streams.processor.api.Record;
+import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.query.Position;
 import org.apache.kafka.streams.state.RocksDBConfigSetter;
 import org.apache.kafka.streams.state.internals.ThreadCache;
@@ -41,6 +41,8 @@ import org.apache.kafka.streams.state.internals.ThreadCache.DirtyEntryFlushListe
 import org.apache.kafka.test.MockKeyValueStore;
 import org.junit.Before;
 import org.junit.Test;
+import org.mockito.Mock;
+import org.mockito.Mockito;
 
 import java.time.Duration;
 import java.util.Properties;
@@ -55,8 +57,9 @@ import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.fail;
 
 public class AbstractProcessorContextTest {
+    @Mock
+    private StreamsMetricsImpl metrics = Mockito.mock(StreamsMetricsImpl.class);
 
-    private final MockStreamsMetrics metrics = new MockStreamsMetrics(new Metrics());
     private final AbstractProcessorContext context = new TestProcessorContext(metrics);
     private final MockKeyValueStore stateStore = new MockKeyValueStore("store", false);
     private final Headers headers = new RecordHeaders(new Header[]{new RecordHeader("key", "value".getBytes())});
@@ -195,11 +198,11 @@ public class AbstractProcessorContextTest {
             config.put("user.supplied.config", "user-supplied-value");
         }
 
-        TestProcessorContext(final MockStreamsMetrics metrics) {
+        TestProcessorContext(final StreamsMetricsImpl metrics) {
             super(new TaskId(0, 0), new StreamsConfig(config), metrics, new ThreadCache(new LogContext("name "), 0, metrics));
         }
 
-        TestProcessorContext(final MockStreamsMetrics metrics, final Properties config) {
+        TestProcessorContext(final StreamsMetricsImpl metrics, final Properties config) {
             super(new TaskId(0, 0), new StreamsConfig(config), metrics, new ThreadCache(new LogContext("name "), 0, metrics));
         }
 

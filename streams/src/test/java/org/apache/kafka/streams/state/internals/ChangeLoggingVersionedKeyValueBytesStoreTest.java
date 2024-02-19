@@ -26,7 +26,6 @@ import static org.mockito.Mockito.verify;
 
 import java.util.Collections;
 import java.util.List;
-import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.serialization.StringSerializer;
@@ -35,12 +34,13 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStoreContext;
-import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
+import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.state.VersionedBytesStore;
 import org.apache.kafka.test.InternalMockProcessorContext;
 import org.apache.kafka.test.MockRecordCollector;
 import org.apache.kafka.test.TestUtils;
+import org.easymock.Mock;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -60,6 +60,8 @@ public class ChangeLoggingVersionedKeyValueBytesStoreTest {
     private InternalMockProcessorContext context;
     private VersionedBytesStore inner;
     private ChangeLoggingVersionedKeyValueBytesStore store;
+    @Mock
+    private StreamsMetricsImpl mockStreamsMetrics;
 
     @Before
     public void before() {
@@ -77,7 +79,7 @@ public class ChangeLoggingVersionedKeyValueBytesStoreTest {
             Serdes.String(),
             Serdes.Long(),
             collector,
-            new ThreadCache(new LogContext("testCache "), 0, new MockStreamsMetrics(new Metrics()))
+            new ThreadCache(new LogContext("testCache "), 0, this.mockStreamsMetrics)
         );
     }
 

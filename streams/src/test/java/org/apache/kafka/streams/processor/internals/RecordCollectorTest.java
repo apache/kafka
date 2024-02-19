@@ -23,8 +23,6 @@ import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
-import org.apache.kafka.common.Metric;
-import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
@@ -37,7 +35,7 @@ import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeader;
 import org.apache.kafka.common.header.internals.RecordHeaders;
-import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.serialization.LongSerializer;
 import org.apache.kafka.common.serialization.Serializer;
@@ -54,6 +52,8 @@ import org.apache.kafka.streams.errors.TaskMigratedException;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
+import org.apache.kafka.streams.processor.internals.metrics.TaskMetrics;
+import org.apache.kafka.streams.processor.internals.metrics.TopicMetrics;
 import org.apache.kafka.test.InternalMockProcessorContext;
 import org.apache.kafka.test.MockClientSupplier;
 import org.apache.log4j.Level;
@@ -61,6 +61,9 @@ import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
+import org.mockito.Mock;
+import org.mockito.MockedStatic;
+import org.mockito.Mockito;
 import org.mockito.junit.MockitoJUnitRunner;
 
 import java.util.Arrays;
@@ -83,7 +86,6 @@ import static java.util.Collections.singletonMap;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.streams.processor.internals.ClientUtils.producerRecordSizeInBytes;
-import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.TOPIC_LEVEL_GROUP;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.core.IsEqual.equalTo;
 import static org.hamcrest.core.IsInstanceOf.instanceOf;
@@ -91,6 +93,9 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
+import static org.mockito.Mockito.mockStatic;
+import static org.mockito.Mockito.anyLong;
+import static org.mockito.Mockito.eq;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.mock;
@@ -102,7 +107,8 @@ public class RecordCollectorTest {
     private final LogContext logContext = new LogContext("test ");
     private final TaskId taskId = new TaskId(0, 0);
     private final ProductionExceptionHandler productionExceptionHandler = new DefaultProductionExceptionHandler();
-    private final StreamsMetricsImpl streamsMetrics = new MockStreamsMetrics(new Metrics());
+    @Mock
+    private StreamsMetricsImpl mockStreamsMetrics = Mockito.mock(StreamsMetricsImpl.class);
     private final StreamsConfig config = new StreamsConfig(mkMap(
         mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, "appId"),
         mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy:1234")
@@ -138,11 +144,30 @@ public class RecordCollectorTest {
     private StreamsProducer streamsProducer;
     private ProcessorTopology topology;
     private final InternalProcessorContext<Void, Void> context = new InternalMockProcessorContext<>();
-
     private RecordCollectorImpl collector;
+    final Sensor mockSensor = Mockito.mock(Sensor.class);
 
     @Before
     public void setup() {
+
+        when(
+            mockStreamsMetrics.taskLevelSensor(
+                Mockito.anyString(),
+                Mockito.anyString(),
+                Mockito.anyString(),
+                Mockito.any(Sensor.RecordingLevel.class),
+                Mockito.any(Sensor[].class)
+            )).thenReturn(mockSensor);
+        when(mockStreamsMetrics.topicLevelSensor(
+                Mockito.anyString(),
+                Mockito.anyString(),
+                Mockito.anyString(),
+                Mockito.anyString(),
+                Mockito.anyString(),
+                Mockito.any(Sensor.RecordingLevel.class),
+                Mockito.any(Sensor[].class))
+        ).thenReturn(mockSensor);
+
         final MockClientSupplier clientSupplier = new MockClientSupplier();
         clientSupplier.setCluster(cluster);
         streamsProducer = new StreamsProducer(
@@ -175,7 +200,7 @@ public class RecordCollectorTest {
             taskId,
             streamsProducer,
             productionExceptionHandler,
-            streamsMetrics,
+            mockStreamsMetrics,
             topology
         );
     }
@@ -189,57 +214,24 @@ public class RecordCollectorTest {
     public void shouldRecordRecordsAndBytesProduced() {
         final Headers headers = new RecordHeaders(new Header[]{new RecordHeader("key", "value".getBytes())});
 
-        final String threadId = Thread.currentThread().getName();
-        final String processorNodeId = sinkNodeName;
-        final String topic = "topic";
-        final Metric recordsProduced = streamsMetrics.metrics().get(
-            new MetricName("records-produced-total",
-                           TOPIC_LEVEL_GROUP,
-                           "The total number of records produced from this topic",
-                           streamsMetrics.topicLevelTagMap(threadId, taskId.toString(), processorNodeId, topic))
-        );
-        final Metric bytesProduced = streamsMetrics.metrics().get(
-            new MetricName("bytes-produced-total",
-                           TOPIC_LEVEL_GROUP,
-                           "The total number of bytes produced from this topic",
-                           streamsMetrics.topicLevelTagMap(threadId, taskId.toString(), processorNodeId, topic))
-        );
+        try (final MockedStatic<TopicMetrics> topicMetrics = mockStatic(TopicMetrics.class)) {
+            when(TopicMetrics.producedSensor(
+               Mockito.anyString(),
+               Mockito.anyString(),
+               Mockito.anyString(),
+               Mockito.anyString(),
+               Mockito.any(StreamsMetricsImpl.class)
+            )).thenReturn(mockSensor);
 
-        double totalRecords = 0D;
-        double totalBytes = 0D;
+            collector.send(topic, "999", "0", null, 0, null, stringSerializer, stringSerializer, sinkNodeName, context);
+            final double bytesWithoutHeaders = producerRecordSizeInBytes(mockProducer.history().get(0));
 
-        assertThat(recordsProduced.metricValue(), equalTo(totalRecords));
-        assertThat(bytesProduced.metricValue(), equalTo(totalBytes));
+            collector.send(topic, "999", "0", headers, 1, null, stringSerializer, stringSerializer, sinkNodeName, context);
+            final double bytesWithHeaders = producerRecordSizeInBytes(mockProducer.history().get(1));
 
-        collector.send(topic, "999", "0", null, 0, null, stringSerializer, stringSerializer, sinkNodeName, context);
-        ++totalRecords;
-        totalBytes += producerRecordSizeInBytes(mockProducer.history().get(0));
-        assertThat(recordsProduced.metricValue(), equalTo(totalRecords));
-        assertThat(bytesProduced.metricValue(), equalTo(totalBytes));
-
-        collector.send(topic, "999", "0", headers, 1, null, stringSerializer, stringSerializer, sinkNodeName, context);
-        ++totalRecords;
-        totalBytes += producerRecordSizeInBytes(mockProducer.history().get(1));
-        assertThat(recordsProduced.metricValue(), equalTo(totalRecords));
-        assertThat(bytesProduced.metricValue(), equalTo(totalBytes));
-
-        collector.send(topic, "999", "0", null, 0, null, stringSerializer, stringSerializer, sinkNodeName, context);
-        ++totalRecords;
-        totalBytes += producerRecordSizeInBytes(mockProducer.history().get(2));
-        assertThat(recordsProduced.metricValue(), equalTo(totalRecords));
-        assertThat(bytesProduced.metricValue(), equalTo(totalBytes));
-
-        collector.send(topic, "999", "0", headers, 1, null, stringSerializer, stringSerializer, sinkNodeName, context);
-        ++totalRecords;
-        totalBytes += producerRecordSizeInBytes(mockProducer.history().get(3));
-        assertThat(recordsProduced.metricValue(), equalTo(totalRecords));
-        assertThat(bytesProduced.metricValue(), equalTo(totalBytes));
-
-        collector.send(topic, "999", "0", null, 0, null, stringSerializer, stringSerializer, sinkNodeName, context);
-        ++totalRecords;
-        totalBytes += producerRecordSizeInBytes(mockProducer.history().get(4));
-        assertThat(recordsProduced.metricValue(), equalTo(totalRecords));
-        assertThat(bytesProduced.metricValue(), equalTo(totalBytes));
+            Mockito.verify(mockSensor).record(eq(bytesWithoutHeaders), anyLong());
+            Mockito.verify(mockSensor).record(eq(bytesWithHeaders), anyLong());
+        }
     }
 
     @Test
@@ -340,7 +332,7 @@ public class RecordCollectorTest {
                 taskId,
                 streamsProducer,
                 productionExceptionHandler,
-                streamsMetrics,
+                mockStreamsMetrics,
                 topology
         );
 
@@ -407,7 +399,7 @@ public class RecordCollectorTest {
                 taskId,
                 streamsProducer,
                 productionExceptionHandler,
-                streamsMetrics,
+                mockStreamsMetrics,
                 topology
         );
 
@@ -452,66 +444,63 @@ public class RecordCollectorTest {
             }
         }
 
-        final DroppingPartitioner droppingPartitioner = new DroppingPartitioner();
+        try (final MockedStatic<TaskMetrics> taskMetrics = mockStatic(TaskMetrics.class)) {
+            final Sensor droppedRecordsSensor = Mockito.mock(Sensor.class);
+            when(TaskMetrics.droppedRecordsSensor(
+                    Mockito.anyString(),
+                    eq(taskId.toString()),
+                    eq(mockStreamsMetrics))
+            ).thenReturn(droppedRecordsSensor);
 
-        final SinkNode<?, ?> sinkNode = new SinkNode<>(
-                sinkNodeName,
-                new StaticTopicNameExtractor<>(topic),
-                stringSerializer,
-                byteArraySerializer,
-                droppingPartitioner);
-        topology = new ProcessorTopology(
-                emptyList(),
-                emptyMap(),
-                singletonMap(topic, sinkNode),
-                emptyList(),
-                emptyList(),
-                emptyMap(),
-                emptySet()
-        );
-        collector = new RecordCollectorImpl(
-                logContext,
-                taskId,
-                streamsProducer,
-                productionExceptionHandler,
-                streamsMetrics,
-                topology
-        );
+            final DroppingPartitioner droppingPartitioner = new DroppingPartitioner();
 
-        final String topic = "topic";
+            final SinkNode<?, ?> sinkNode = new SinkNode<>(
+                    sinkNodeName,
+                    new StaticTopicNameExtractor<>(topic),
+                    stringSerializer,
+                    byteArraySerializer,
+                    droppingPartitioner);
+            topology = new ProcessorTopology(
+                    emptyList(),
+                    emptyMap(),
+                    singletonMap(topic, sinkNode),
+                    emptyList(),
+                    emptyList(),
+                    emptyMap(),
+                    emptySet()
+            );
+            collector = new RecordCollectorImpl(
+                    logContext,
+                    taskId,
+                    streamsProducer,
+                    productionExceptionHandler,
+                    mockStreamsMetrics,
+                    topology
+            );
 
-        final Metric recordsDropped = streamsMetrics.metrics().get(new MetricName(
-                "dropped-records-total",
-                "stream-task-metrics",
-                "The total number of dropped records",
-                mkMap(
-                        mkEntry("thread-id", Thread.currentThread().getName()),
-                        mkEntry("task-id", taskId.toString())
-                )
-        ));
+            final String topic = "topic";
+            final Headers headers = new RecordHeaders(new Header[] {new RecordHeader("key", "value".getBytes())});
 
+            collector.send(topic, "3", "0", null, null, stringSerializer, stringSerializer, null, context, droppingPartitioner);
+            collector.send(topic, "9", "0", null, null, stringSerializer, stringSerializer, null, context, droppingPartitioner);
+            collector.send(topic, "27", "0", null, null, stringSerializer, stringSerializer, null, context, droppingPartitioner);
+            collector.send(topic, "81", "0", null, null, stringSerializer, stringSerializer, null, context, droppingPartitioner);
+            collector.send(topic, "243", "0", null, null, stringSerializer, stringSerializer, null, context, droppingPartitioner);
+            collector.send(topic, "28", "0", headers, null, stringSerializer, stringSerializer, null, context, droppingPartitioner);
+            collector.send(topic, "82", "0", headers, null, stringSerializer, stringSerializer, null, context, droppingPartitioner);
+            collector.send(topic, "244", "0", headers, null, stringSerializer, stringSerializer, null, context, droppingPartitioner);
+            collector.send(topic, "245", "0", null, null, stringSerializer, stringSerializer, null, context, droppingPartitioner);
 
-        final Headers headers = new RecordHeaders(new Header[] {new RecordHeader("key", "value".getBytes())});
+            final Map<TopicPartition, Long> offsets = collector.offsets();
+            assertTrue(offsets.isEmpty());
 
-        collector.send(topic, "3", "0", null, null, stringSerializer, stringSerializer, null, context, droppingPartitioner);
-        collector.send(topic, "9", "0", null, null, stringSerializer, stringSerializer, null, context, droppingPartitioner);
-        collector.send(topic, "27", "0", null, null, stringSerializer, stringSerializer, null, context, droppingPartitioner);
-        collector.send(topic, "81", "0", null, null, stringSerializer, stringSerializer, null, context, droppingPartitioner);
-        collector.send(topic, "243", "0", null, null, stringSerializer, stringSerializer, null, context, droppingPartitioner);
-        collector.send(topic, "28", "0", headers, null, stringSerializer, stringSerializer, null, context, droppingPartitioner);
-        collector.send(topic, "82", "0", headers, null, stringSerializer, stringSerializer, null, context, droppingPartitioner);
-        collector.send(topic, "244", "0", headers, null, stringSerializer, stringSerializer, null, context, droppingPartitioner);
-        collector.send(topic, "245", "0", null, null, stringSerializer, stringSerializer, null, context, droppingPartitioner);
+            assertEquals(0, mockProducer.history().size());
+            Mockito.verify(droppedRecordsSensor, Mockito.times(9)).record();
 
-        final Map<TopicPartition, Long> offsets = collector.offsets();
-        assertTrue(offsets.isEmpty());
-
-        assertEquals(0, mockProducer.history().size());
-        assertThat(recordsDropped.metricValue(), equalTo(9.0));
-
-        // returned offsets should not be modified
-        final TopicPartition topicPartition = new TopicPartition(topic, 0);
-        assertThrows(UnsupportedOperationException.class, () -> offsets.put(topicPartition, 50L));
+            // returned offsets should not be modified
+            final TopicPartition topicPartition = new TopicPartition(topic, 0);
+            assertThrows(UnsupportedOperationException.class, () -> offsets.put(topicPartition, 50L));
+        }
     }
 
     @Test
@@ -553,7 +542,7 @@ public class RecordCollectorTest {
                 taskId,
                 streamsProducer,
                 productionExceptionHandler,
-                streamsMetrics,
+                mockStreamsMetrics,
                 topology
         );
 
@@ -606,7 +595,7 @@ public class RecordCollectorTest {
                 taskId,
                 streamsProducer,
                 productionExceptionHandler,
-                streamsMetrics,
+                mockStreamsMetrics,
                 topology
         );
 
@@ -656,7 +645,7 @@ public class RecordCollectorTest {
                 taskId,
                 streamsProducer,
                 productionExceptionHandler,
-                streamsMetrics,
+                mockStreamsMetrics,
                 topology
         );
 
@@ -755,7 +744,7 @@ public class RecordCollectorTest {
             taskId,
             streamsProducer,
             productionExceptionHandler,
-            streamsMetrics, 
+                mockStreamsMetrics,
             topology
         );
 
@@ -774,7 +763,7 @@ public class RecordCollectorTest {
             taskId,
             streamsProducer,
             productionExceptionHandler,
-            streamsMetrics,
+                mockStreamsMetrics,
             topology
         );
 
@@ -814,7 +803,7 @@ public class RecordCollectorTest {
             taskId,
             streamsProducer,
             productionExceptionHandler,
-            streamsMetrics,
+            mockStreamsMetrics,
             topology
         );
         collector.send(
@@ -853,7 +842,7 @@ public class RecordCollectorTest {
             taskId,
             streamsProducer,
             productionExceptionHandler,
-            streamsMetrics,
+                mockStreamsMetrics,
             topology
         );
        
@@ -873,7 +862,7 @@ public class RecordCollectorTest {
             taskId,
             streamsProducer,
             productionExceptionHandler,
-            streamsMetrics,
+                mockStreamsMetrics,
             topology
         );
 
@@ -999,7 +988,7 @@ public class RecordCollectorTest {
             taskId,
             getExceptionalStreamProducerOnPartitionsFor(new KafkaException("Kaboom!")),
             productionExceptionHandler,
-            streamsMetrics,
+                mockStreamsMetrics,
             topology
         );
         collector.initialize();
@@ -1031,7 +1020,7 @@ public class RecordCollectorTest {
             taskId,
             getExceptionalStreamProducerOnPartitionsFor(runtimeException),
             productionExceptionHandler,
-            streamsMetrics,
+                mockStreamsMetrics,
             topology
         );
         collector.initialize();
@@ -1059,7 +1048,7 @@ public class RecordCollectorTest {
             taskId,
             getExceptionalStreamsProducerOnSend(exception),
             productionExceptionHandler,
-            streamsMetrics,
+                mockStreamsMetrics,
             topology
         );
         collector.initialize();
@@ -1089,7 +1078,7 @@ public class RecordCollectorTest {
             taskId,
             getExceptionalStreamsProducerOnSend(exception),
             productionExceptionHandler,
-            streamsMetrics,
+                mockStreamsMetrics,
             topology
         );
         collector.initialize();
@@ -1116,7 +1105,7 @@ public class RecordCollectorTest {
             taskId,
             getExceptionalStreamsProducerOnSend(exception),
             productionExceptionHandler,
-            streamsMetrics,
+                mockStreamsMetrics,
             topology
         );
         collector.initialize();
@@ -1135,7 +1124,7 @@ public class RecordCollectorTest {
             taskId,
             getExceptionalStreamsProducerOnSend(exception),
             productionExceptionHandler,
-            streamsMetrics,
+                mockStreamsMetrics,
             topology
         );
 
@@ -1162,7 +1151,7 @@ public class RecordCollectorTest {
             taskId,
             getExceptionalStreamsProducerOnSend(exception),
             productionExceptionHandler,
-            streamsMetrics,
+                mockStreamsMetrics,
             topology
         );
 
@@ -1186,7 +1175,7 @@ public class RecordCollectorTest {
             taskId,
             getExceptionalStreamsProducerOnSend(exception),
             productionExceptionHandler,
-            streamsMetrics,
+                mockStreamsMetrics,
             topology
         );
 
@@ -1210,7 +1199,7 @@ public class RecordCollectorTest {
             taskId,
             getExceptionalStreamsProducerOnSend(exception),
             new AlwaysContinueProductionExceptionHandler(),
-            streamsMetrics,
+                mockStreamsMetrics,
             topology
         );
 
@@ -1237,7 +1226,7 @@ public class RecordCollectorTest {
             taskId,
             getExceptionalStreamsProducerOnSend(exception),
             new AlwaysContinueProductionExceptionHandler(),
-            streamsMetrics,
+                mockStreamsMetrics,
             topology
         );
 
@@ -1261,7 +1250,7 @@ public class RecordCollectorTest {
             taskId,
             getExceptionalStreamsProducerOnSend(exception),
             new AlwaysContinueProductionExceptionHandler(),
-            streamsMetrics,
+                mockStreamsMetrics,
             topology
         );
 
@@ -1279,49 +1268,50 @@ public class RecordCollectorTest {
 
     @Test
     public void shouldNotThrowStreamsExceptionOnSubsequentCallIfASendFailsWithContinueExceptionHandler() {
-        final RecordCollector collector = new RecordCollectorImpl(
-            logContext,
-            taskId,
-            getExceptionalStreamsProducerOnSend(new Exception()),
-            new AlwaysContinueProductionExceptionHandler(),
-            streamsMetrics,
-            topology
-        );
+        try (final MockedStatic<TaskMetrics> taskMetrics = mockStatic(TaskMetrics.class)) {
+            final Sensor droppedRecordsSensor = Mockito.mock(Sensor.class);
+            when(TaskMetrics.droppedRecordsSensor(
+                    Mockito.anyString(),
+                    eq(taskId.toString()),
+                    eq(mockStreamsMetrics))
+            ).thenReturn(droppedRecordsSensor);
 
-        try (final LogCaptureAppender logCaptureAppender =
-                 LogCaptureAppender.createAndRegister(RecordCollectorImpl.class)) {
-            logCaptureAppender.setThreshold(Level.INFO);
+            final RecordCollector collector = new RecordCollectorImpl(
+                logContext,
+                taskId,
+                getExceptionalStreamsProducerOnSend(new Exception()),
+                new AlwaysContinueProductionExceptionHandler(),
+                mockStreamsMetrics,
+                topology
+            );
+
+            try (final LogCaptureAppender logCaptureAppender =
+                     LogCaptureAppender.createAndRegister(RecordCollectorImpl.class)) {
+                logCaptureAppender.setThreshold(Level.INFO);
+
+                collector.send(topic, "3", "0", null, null, stringSerializer, stringSerializer, null, null, streamPartitioner);
+                collector.flush();
+
+                final List<String> messages = logCaptureAppender.getMessages();
+                final StringBuilder errorMessage = new StringBuilder("Messages received:");
+                for (final String error : messages) {
+                    errorMessage.append("\n - ").append(error);
+                }
+                assertTrue(
+                    errorMessage.toString(),
+                    messages.get(messages.size() - 1)
+                            .endsWith("Exception handler choose to CONTINUE processing in spite of this error but written offsets would not be recorded.")
+                );
+            }
+
+            Mockito.verify(droppedRecordsSensor, Mockito.times(1)).record();
 
             collector.send(topic, "3", "0", null, null, stringSerializer, stringSerializer, null, null, streamPartitioner);
             collector.flush();
-
-            final List<String> messages = logCaptureAppender.getMessages();
-            final StringBuilder errorMessage = new StringBuilder("Messages received:");
-            for (final String error : messages) {
-                errorMessage.append("\n - ").append(error);
-            }
-            assertTrue(
-                errorMessage.toString(),
-                messages.get(messages.size() - 1)
-                    .endsWith("Exception handler choose to CONTINUE processing in spite of this error but written offsets would not be recorded.")
-            );
+            collector.closeClean();
         }
-
-        final Metric metric = streamsMetrics.metrics().get(new MetricName(
-            "dropped-records-total",
-            "stream-task-metrics",
-            "The total number of dropped records",
-            mkMap(
-                mkEntry("thread-id", Thread.currentThread().getName()),
-                mkEntry("task-id", taskId.toString())
-            )
-        ));
-        assertEquals(1.0, metric.metricValue());
-
-        collector.send(topic, "3", "0", null, null, stringSerializer, stringSerializer, null, null, streamPartitioner);
-        collector.flush();
-        collector.closeClean();
     }
+    
 
     @Test
     public void shouldNotAbortTxnOnEOSCloseDirtyIfNothingSent() {
@@ -1349,7 +1339,7 @@ public class RecordCollectorTest {
                 Time.SYSTEM
             ),
             productionExceptionHandler,
-            streamsMetrics,
+                mockStreamsMetrics,
             topology
         );
 
@@ -1382,7 +1372,7 @@ public class RecordCollectorTest {
                 Time.SYSTEM
             ),
             productionExceptionHandler,
-            streamsMetrics,
+                mockStreamsMetrics,
             topology
         );
         collector.initialize();
@@ -1418,7 +1408,7 @@ public class RecordCollectorTest {
                 Time.SYSTEM
             ),
             productionExceptionHandler,
-            streamsMetrics,
+                mockStreamsMetrics,
             topology
         );
 
@@ -1453,24 +1443,24 @@ public class RecordCollectorTest {
 
     @Test
     public void shouldDropRecordExceptionUsingAlwaysContinueExceptionHandler() {
-        try (final ErrorStringSerializer errorSerializer = new ErrorStringSerializer()) {
-            final RecordCollector collector = newRecordCollector(new AlwaysContinueProductionExceptionHandler());
-            collector.initialize();
+        try (final MockedStatic<TaskMetrics> taskMetrics = mockStatic(TaskMetrics.class)) {
+            final Sensor droppedRecordsSensor = Mockito.mock(Sensor.class);
+            when(TaskMetrics.droppedRecordsSensor(
+                    Mockito.anyString(),
+                    eq(taskId.toString()),
+                    eq(mockStreamsMetrics))
+            ).thenReturn(droppedRecordsSensor);
 
-            collector.send(topic, "key", "val", null, 0, null, errorSerializer, stringSerializer, sinkNodeName, context);
+            try (final ErrorStringSerializer errorSerializer = new ErrorStringSerializer()) {
+                final RecordCollector collector = newRecordCollector(new AlwaysContinueProductionExceptionHandler());
 
-            assertThat(mockProducer.history().isEmpty(), equalTo(true));
-            assertThat(
-                streamsMetrics.metrics().get(new MetricName(
-                    "dropped-records-total",
-                    "stream-task-metrics",
-                    "The total number of dropped records",
-                    mkMap(
-                        mkEntry("thread-id", Thread.currentThread().getName()),
-                        mkEntry("task-id", taskId.toString())
-                    ))).metricValue(),
-                equalTo(1.0)
-            );
+                collector.initialize();
+                collector.send(topic, "key", "val", null, 0, null, errorSerializer, stringSerializer, sinkNodeName, context);
+
+                assertThat(mockProducer.history().isEmpty(), equalTo(true));
+                Mockito.verify(droppedRecordsSensor, Mockito.times(1)).record();
+
+            }
         }
     }
 
@@ -1497,7 +1487,7 @@ public class RecordCollectorTest {
             taskId,
             streamsProducer,
             productionExceptionHandler,
-            streamsMetrics,
+                mockStreamsMetrics,
             topology
         );
     }

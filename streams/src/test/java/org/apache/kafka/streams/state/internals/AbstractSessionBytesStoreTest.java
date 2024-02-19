@@ -20,7 +20,6 @@ import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.header.internals.RecordHeaders;
-import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
@@ -33,8 +32,8 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.internals.SessionWindow;
 import org.apache.kafka.streams.processor.StateStoreContext;
-import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
+import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.query.Position;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.SessionStore;
@@ -46,6 +45,7 @@ import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.jupiter.api.Assertions;
+import org.mockito.Mock;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -79,6 +79,9 @@ public abstract class AbstractSessionBytesStoreTest {
     static final long SEGMENT_INTERVAL = 60_000L;
     static final long RETENTION_PERIOD = 10_000L;
 
+    @Mock
+    private StreamsMetricsImpl mockStreamsMetrics;
+
     enum StoreType {
         RocksDBSessionStore,
         RocksDBTimeOrderedSessionStoreWithIndex,
@@ -109,8 +112,7 @@ public abstract class AbstractSessionBytesStoreTest {
             recordCollector,
             new ThreadCache(
                 new LogContext("testCache"),
-                0,
-                new MockStreamsMetrics(new Metrics())));
+                0, mockStreamsMetrics));
         context.setTime(1L);
 
         sessionStore.init((StateStoreContext) context, sessionStore);

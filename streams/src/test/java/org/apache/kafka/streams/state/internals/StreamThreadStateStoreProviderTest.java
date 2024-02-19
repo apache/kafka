@@ -20,6 +20,7 @@ import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
@@ -33,7 +34,6 @@ import org.apache.kafka.streams.internals.StreamsConfigUtils;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
-import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
 import org.apache.kafka.streams.processor.internals.ProcessorContextImpl;
 import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
 import org.apache.kafka.streams.processor.internals.ProcessorTopology;
@@ -65,6 +65,7 @@ import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.Mock;
+import org.mockito.Mockito;
 import org.mockito.junit.MockitoJUnitRunner;
 
 import java.io.File;
@@ -100,9 +101,23 @@ public class StreamThreadStateStoreProviderTest {
     @Mock
     private StreamThread threadMock;
     private Map<TaskId, Task> tasks;
+    @Mock
+    private StreamsMetricsImpl mockStreamsMetrics;
 
     @Before
     public void before() {
+        this.mockStreamsMetrics = Mockito.mock(StreamsMetricsImpl.class);
+        final Sensor mockSensor = mock(Sensor.class);
+        when(mockStreamsMetrics.taskLevelSensor(Mockito.anyString(), Mockito.anyString(), Mockito.anyString(),
+                Mockito.any(Sensor.RecordingLevel.class), Mockito.any(Sensor[].class))).thenReturn(mockSensor);
+        when(this.mockStreamsMetrics.threadLevelSensor(Mockito.anyString(), Mockito.anyString(), Mockito.any(Sensor.RecordingLevel.class))).thenReturn(mockSensor);
+        when(this.mockStreamsMetrics.nodeLevelSensor(Mockito.anyString(), Mockito.anyString(), Mockito.anyString(), Mockito.anyString(), Mockito.any(Sensor.RecordingLevel.class)))
+                .thenReturn(mockSensor);
+        when(this.mockStreamsMetrics.topicLevelSensor(Mockito.anyString(), Mockito.anyString(), Mockito.anyString(), Mockito.anyString(), Mockito.anyString(), Mockito.any(Sensor.RecordingLevel.class)))
+                .thenReturn(mockSensor);
+        when(this.mockStreamsMetrics.storeLevelSensor(Mockito.anyString(), Mockito.anyString(), Mockito.anyString(), Mockito.any(Sensor.RecordingLevel.class)))
+                .thenReturn(mockSensor);
+
         final TopologyWrapper topology = new TopologyWrapper();
         topology.addSource("the-source", topicName);
         topology.addProcessor("the-processor", new MockApiProcessorSupplier<>(), "the-source");
@@ -439,10 +454,10 @@ public class StreamThreadStateStoreProviderTest {
                 Time.SYSTEM
             ),
             streamsConfig.defaultProductionExceptionHandler(),
-            new MockStreamsMetrics(metrics),
+            this.mockStreamsMetrics,
             topology
         );
-        final StreamsMetricsImpl streamsMetrics = new MockStreamsMetrics(metrics);
+        final StreamsMetricsImpl streamsMetrics = this.mockStreamsMetrics;
         final InternalProcessorContext context = new ProcessorContextImpl(
             taskId,
             streamsConfig,
