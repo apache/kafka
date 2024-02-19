@@ -720,18 +720,16 @@ public class MembershipManagerImpl implements MembershipManager {
     }
 
     /**
-     * @return True if the member should not send heartbeats, which would be one of the following
-     * cases:
-     * <ul>
-     * <li>Member is not subscribed to any topics</li>
-     * <li>Member has received a fatal error in a previous heartbeat response</li>
-     * <li>Member is stale, meaning that it has left the group due to expired poll timer</li>
-     * </ul>
+     * @return True if the member should not send heartbeats, which is the case when it is in a
+     * state where it is not an active member of the group.
      */
     @Override
     public boolean shouldSkipHeartbeat() {
         MemberState state = state();
-        return state == MemberState.UNSUBSCRIBED || state == MemberState.FATAL || state == MemberState.STALE;
+        return state == MemberState.UNSUBSCRIBED ||
+            state == MemberState.FATAL ||
+            state == MemberState.STALE ||
+            state == MemberState.FENCED;
     }
 
     /**
