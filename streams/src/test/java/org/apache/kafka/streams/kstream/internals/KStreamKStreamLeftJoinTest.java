@@ -1354,7 +1354,6 @@ public class KStreamKStreamLeftJoinTest {
             processor.checkAndClearProcessResult();
             assertRecordDropCount(2.0, processor);
 
-
             right.pipeInput(1, "right", 115);
             left.pipeInput(-1, "bumpTime", 140);
             left.pipeInput(1, "closesAt139", 124);
