@@ -103,9 +103,12 @@ public enum MemberState {
     FATAL,
 
     /**
-     * An intermediate state indicating the consumer is staled because the user has not polled the consumer
-     * within the <code>max.poll.interval.ms</code> time bound; therefore causing the member to leave the
-     * group. The member rejoins on the next poll.
+     * The member transitions to this state when the poll timer expires, indicating that there
+     * hasn't been a call to consumer.poll within the <code>max.poll.interval.ms</code>. While in
+     * this state, the member will send a heartbeat to leave the group, invoke the
+     * onPartitionsLost callback, and clear its assignments. The member will only transition
+     * out of this state on the next application poll event. The member will then transition
+     * to JOINING, to rejoin the group.
      */
     STALE;
 
