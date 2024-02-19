@@ -40,7 +40,7 @@ public final class StreamStreamJoinUtil {
         // furthermore, on left/outer joins 'null' in ValueJoiner#apply() indicates a missing record --
         // thus, to be consistent and to avoid ambiguous null semantics, null values are ignored
         if (record.key() == null || record.value() == null) {
-            logSkip("Skipping record due to null key or value.", logger, droppedRecordsSensor, context);
+            logSkip("null key or value", logger, droppedRecordsSensor, context);
             return true;
         } else {
             return false;
@@ -56,13 +56,14 @@ public final class StreamStreamJoinUtil {
         if (context.recordMetadata().isPresent()) {
             final RecordMetadata recordMetadata = context.recordMetadata().get();
             logger.warn(
-                reason + " topic=[{}] partition=[{}] offset=[{}]",
+                "Skipping record. reason=[{}] topic=[{}] partition=[{}] offset=[{}]",
+                reason,
                 recordMetadata.topic(),
                 recordMetadata.partition(),
                 recordMetadata.offset()
             );
         } else {
-            logger.warn(reason + " topic, partition, and offset not known.");
+            logger.warn("Skipping record. reason=[{}] topic, partition, and offset not known.", reason);
         }
         droppedRecordsSensor.record();
     }
