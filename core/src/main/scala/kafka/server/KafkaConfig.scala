@@ -89,7 +89,7 @@ object KafkaConfig {
   val ZkSslOcspEnableProp = "zookeeper.ssl.ocsp.enable"
 
   // a map from the Kafka config to the corresponding ZooKeeper Java system property
-  private[kafka] val ZkSslConfigToSystemPropertyMap: Map[String, String] = Map(
+  val ZkSslConfigToSystemPropertyMap: Map[String, String] = Map(
     ZkSslClientEnableProp -> ZKClientConfig.SECURE_CLIENT,
     ZkClientCnxnSocketProp -> ZKClientConfig.ZOOKEEPER_CLIENT_CNXN_SOCKET,
     ZkSslKeyStoreLocationProp -> "zookeeper.ssl.keyStore.location",
