@@ -277,13 +277,6 @@ public class ShareMembershipManager implements RequestManager {
     }
 
     /**
-     * @return True if the member is stale due to expired poll timer.
-     */
-    public boolean isStale() {
-        return state == MemberState.STALE;
-    }
-
-    /**
      * Update member info and transition member state based on a successful heartbeat response.
      *
      * @param response Heartbeat response to extract member info and errors from.
@@ -583,12 +576,6 @@ public class ShareMembershipManager implements RequestManager {
      */
     public void onHeartbeatRequestSent() {
         MemberState state = state();
-        if (isStale()) {
-            log.debug("Member {} is stale and is therefore leaving the group. It will rejoin upon the next poll.", memberEpoch);
-            transitionToJoining();
-            return;
-        }
-
         if (state == MemberState.ACKNOWLEDGING) {
             if (targetAssignmentReconciled()) {
                 transitionTo(MemberState.STABLE);
@@ -630,17 +617,32 @@ public class ShareMembershipManager implements RequestManager {
     }
 
     /**
-     * @return True if the member should skip sending the heartbeat to the coordinator. This
-     * could be the case then the member is not in a group, or when it failed with a fatal error.
+     * @return True if the member should not send heartbeats, which would be one of the following
+     * cases:
+     * <ul>
+     * <li>Member is not subscribed to any topics</li>
+     * <li>Member has received a fatal error in a previous heartbeat response</li>
+     * <li>Member is stale, meaning that it has left the group due to expired poll timer</li>
+     * </ul>
      */
     public boolean shouldSkipHeartbeat() {
         MemberState state = state();
-        return state == MemberState.UNSUBSCRIBED || state == MemberState.FATAL;
+        return state == MemberState.UNSUBSCRIBED || state == MemberState.FATAL || state == MemberState.STALE;
+    }
+
+    /**
+     * @return True if the member is preparing to leave the group (waiting for callbacks), or
+     * leaving (sending last heartbeat). This is used to skip proactively leaving the group when
+     * the consumer poll timer expires.
+     */
+    public boolean isLeavingGroup() {
+        MemberState state = state();
+        return state == MemberState.PREPARE_LEAVING || state == MemberState.LEAVING;
     }
 
     /**
      * Sets the epoch to the leave group epoch and clears the assignments. The member will rejoin with
-     * the existing subscriptions on the next time user polls.
+     * the existing subscriptions after the next application poll event.
      */
     public void transitionToStale() {
         memberEpoch = ShareGroupHeartbeatRequest.LEAVE_GROUP_MEMBER_EPOCH;

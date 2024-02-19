@@ -169,6 +169,14 @@ public class ShareConsumerImpl<K, V> implements ShareConsumer<K, V> {
     private final BackgroundEventProcessor backgroundEventProcessor;
     private final Deserializers<K, V> deserializers;
 
+    /**
+     * A thread-safe {@link ShareFetchBuffer fetch buffer} for the results that are populated in the
+     * {@link ConsumerNetworkThread network thread} when the results are available. Because of the interaction
+     * of the fetch buffer in the application thread and the network I/O thread, this is shared between the
+     * two threads and is thus designed to be thread-safe.
+     */
+    private final ShareFetchBuffer fetchBuffer;
+
     private final SubscriptionState subscriptions;
     private final ConsumerMetadata metadata;
     private final Metrics metrics;
@@ -237,6 +245,8 @@ public class ShareConsumerImpl<K, V> implements ShareConsumer<K, V> {
                     backgroundEventQueue
             );
 
+            // This FetchBuffer is shared between the application and network threads.
+            this.fetchBuffer = new ShareFetchBuffer(logContext);
             final Supplier<NetworkClientDelegate> networkClientDelegateSupplier = NetworkClientDelegate.supplier(
                     time,
                     logContext,
@@ -253,8 +263,10 @@ public class ShareConsumerImpl<K, V> implements ShareConsumer<K, V> {
                     backgroundEventHandler,
                     metadata,
                     subscriptions,
+                    fetchBuffer,
                     config,
                     groupRebalanceConfig,
+                    networkClientDelegateSupplier,
                     clientTelemetryReporter,
                     metrics
             );

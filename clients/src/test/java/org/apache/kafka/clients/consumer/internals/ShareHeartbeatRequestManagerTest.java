@@ -68,6 +68,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.spy;
@@ -468,6 +469,29 @@ public class ShareHeartbeatRequestManagerTest {
         heartbeatRequestManager.resetPollTimer(time.milliseconds());
         assertTrue(pollTimer.notExpired());
         assertHeartbeat(heartbeatRequestManager, heartbeatIntervalMs);
+    }
+
+    /**
+     * This is expected to be the case where a member is already leaving the group and the poll
+     * timer expires. The poll timer expiration should not transition the member to STALE, and
+     * the member should continue to send heartbeats while the ongoing leaving operation
+     * completes (send heartbeats while waiting for callbacks before leaving, or send last
+     * heartbeat to leave).
+     */
+    @Test
+    public void testPollTimerExpirationShouldNotMarkMemberStaleIfMemberAlreadyLeaving() {
+        when(membershipManager.shouldSkipHeartbeat()).thenReturn(false);
+        when(membershipManager.isLeavingGroup()).thenReturn(true);
+        doNothing().when(membershipManager).transitionToStale();
+
+        time.sleep(maxPollIntervalMs);
+        NetworkClientDelegate.PollResult result = heartbeatRequestManager.poll(time.milliseconds());
+
+        // No transition to STALE should be triggered, because the member is already leaving the group
+        verify(membershipManager, never()).transitionToStale();
+
+        assertEquals(1, result.unsentRequests.size(), "A heartbeat request should be generated to" +
+                " complete the ongoing leaving operation that was triggered before the poll timer expired.");
     }
 
     @Test
