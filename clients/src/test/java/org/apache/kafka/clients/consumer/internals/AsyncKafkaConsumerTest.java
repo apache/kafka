@@ -100,6 +100,7 @@ import java.util.concurrent.Future;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Supplier;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -1134,24 +1135,29 @@ public class AsyncKafkaConsumerTest {
     }
 
     @Test
-    public void testPollNotReturningRecordsIfGroupMetadataHasUnknownGenerationAndGroupManagementIsUsed() {
-        final String groupId = "consumerGroupA";
-        final ConsumerConfig config = new ConsumerConfig(requiredConsumerPropertiesAndGroupId(groupId));
-        consumer = newConsumer(config);
-        consumer.subscribe(singletonList("topic"));
-
-        consumer.poll(Duration.ZERO);
-
-        verify(fetchCollector, never()).collectFetch(any(FetchBuffer.class));
+    public void testPollNotReturningRecordsIfGenerationUnknownAndGroupManagementIsUsedWithTopics() {
+        testPollNotReturningRecordsIfGenerationUnknownAndGroupManagementIsUsed(() -> {
+            consumer.subscribe(singletonList("topic"));
+            return null;
+        });
     }
 
     @Test
-    public void testPollNotReturningRecordsIfGroupMetadataHasUnknownGenerationAndGroupManagementIsUsedWithPattern() {
+    public void testPollNotReturningRecordsIfGenerationUnknownAndGroupManagementIsUsedWithPattern() {
+        testPollNotReturningRecordsIfGenerationUnknownAndGroupManagementIsUsed(() -> {
+            when(metadata.fetch()).thenReturn(Cluster.empty());
+            consumer.subscribe(Pattern.compile("topic"));
+            return null;
+        });
+    }
+
+    private void testPollNotReturningRecordsIfGenerationUnknownAndGroupManagementIsUsed(
+        final Supplier<Void> subscription
+    ) {
         final String groupId = "consumerGroupA";
         final ConsumerConfig config = new ConsumerConfig(requiredConsumerPropertiesAndGroupId(groupId));
         consumer = newConsumer(config);
-        when(metadata.fetch()).thenReturn(Cluster.empty());
-        consumer.subscribe(Pattern.compile("topic"));
+        subscription.get();
 
         consumer.poll(Duration.ZERO);
 
@@ -1185,33 +1191,32 @@ public class AsyncKafkaConsumerTest {
     }
 
     @Test
-    public void testPollReturningRecordIfGroupMetadataHasKnownGenerationAndGroupManagementIsUsed() {
+    public void testPollReturningRecordIfGenerationKnownAndGroupManagementIsUsedWithTopics() {
         final String topic = "topic";
-        final ConsumerConfig config = new ConsumerConfig(requiredConsumerPropertiesAndGroupId("consumerGroupA"));
-        consumer = newConsumer(config);
-        consumer.subscribe(singletonList(topic));
-        final int generation = 1;
-        final String memberId = "newMemberId";
-        final GroupMetadataUpdateEvent groupMetadataUpdateEvent = new GroupMetadataUpdateEvent(
-            generation,
-            memberId
-        );
-        backgroundEventQueue.add(groupMetadataUpdateEvent);
-        final TopicPartition topicPartition = new TopicPartition(topic, 0);
-        final List<ConsumerRecord<String, String>> records = singletonList(
-            new ConsumerRecord<>(topic, 0, 2, "key1", "value1")
-        );
-        when(fetchCollector.collectFetch(any(FetchBuffer.class)))
-            .thenReturn(Fetch.forPartition(topicPartition, records, true));
-
-        consumer.poll(Duration.ZERO);
-
-        verify(fetchCollector).collectFetch(any(FetchBuffer.class));
+        testPollReturningRecordIfGenerationKnownAndGroupManagementIsUsed(
+            topic,
+            () -> {
+                consumer.subscribe(singletonList(topic));
+                return null;
+            });
     }
 
     @Test
-    public void testPollReturningRecordIfGroupMetadataHasValidGenerationAndGroupManagementIsUsedWithPattern() {
+    public void testPollReturningRecordIfGenerationKnownAndGroupManagementIsUsedWithPattern() {
         final String topic = "topic";
+        testPollReturningRecordIfGenerationKnownAndGroupManagementIsUsed(
+            topic,
+            () -> {
+                when(metadata.fetch()).thenReturn(Cluster.empty());
+                consumer.subscribe(Pattern.compile(topic));
+                return null;
+        });
+    }
+
+    public void testPollReturningRecordIfGenerationKnownAndGroupManagementIsUsed(
+        final String topic,
+        final Supplier<Void> subscription
+    ) {
         final ConsumerConfig config = new ConsumerConfig(requiredConsumerPropertiesAndGroupId("consumerGroupA"));
         final int generation = 1;
         final String memberId = "newMemberId";
@@ -1226,9 +1231,8 @@ public class AsyncKafkaConsumerTest {
         );
         when(fetchCollector.collectFetch(any(FetchBuffer.class)))
             .thenReturn(Fetch.forPartition(topicPartition, records, true));
-        when(metadata.fetch()).thenReturn(Cluster.empty());
         consumer = newConsumer(config);
-        consumer.subscribe(Pattern.compile(topic));
+        subscription.get();
 
         consumer.poll(Duration.ZERO);
 
