@@ -262,7 +262,7 @@ public class JmxReporter implements MetricsReporter {
                 try {
                     list.add(new Attribute(name, getAttribute(name)));
                 } catch (Exception e) {
-                    log.warn("Error getting JMX attribute '{}'", name, e);
+                    log.warn("Error getting JMX attribute '{}' in '{}'", name, this.objectName, e);
                 }
             }
             return list;
