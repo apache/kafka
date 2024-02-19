@@ -46,7 +46,7 @@ import scala.jdk.CollectionConverters._
 
 object ZkMigrationClient {
 
-  val MaxBatchSize = 100
+  private val MaxBatchSize = 100
 
   def apply(
     zkClient: KafkaZkClient,
@@ -295,17 +295,16 @@ class ZkMigrationClient(
     })
   }
 
-  def migrateDelegationTokens(
+  private def migrateDelegationTokens(
     recordConsumer: Consumer[util.List[ApiMessageAndVersion]]
   ): Unit = wrapZkException {
     val batch = new util.ArrayList[ApiMessageAndVersion]()
     val tokens = zkClient.getChildren(DelegationTokensZNode.path)
     for (tokenId <- tokens) {
       zkClient.getDelegationTokenInfo(tokenId) match {
-        case Some(tokenInformation) => {
+        case Some(tokenInformation) =>
           val newDelegationTokenData = new DelegationTokenData(tokenInformation)
           batch.add(new ApiMessageAndVersion(newDelegationTokenData.toRecord(), 0.toShort))
-        }
         case None =>
       }
     }
