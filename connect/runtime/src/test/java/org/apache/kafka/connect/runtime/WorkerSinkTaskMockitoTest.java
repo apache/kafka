@@ -16,6 +16,46 @@
  */
 package org.apache.kafka.connect.runtime;
 
+import static java.util.Arrays.asList;
+import static java.util.Collections.singleton;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotEquals;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertSame;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.anyMap;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.atLeastOnce;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+import java.time.Duration;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Function;
+import java.util.function.Supplier;
+import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
@@ -69,51 +109,6 @@ import org.mockito.junit.MockitoRule;
 import org.mockito.quality.Strictness;
 import org.mockito.stubbing.Answer;
 import org.mockito.stubbing.OngoingStubbing;
-
-import java.time.Duration;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-import java.util.Set;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicReference;
-import java.util.function.Function;
-import java.util.function.Supplier;
-import java.util.regex.Pattern;
-import java.util.stream.Collectors;
-
-import static java.util.Arrays.asList;
-import static java.util.Collections.singleton;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotEquals;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertSame;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyList;
-import static org.mockito.ArgumentMatchers.anyMap;
-import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.atLeastOnce;
-import static org.mockito.Mockito.doAnswer;
-import static org.mockito.Mockito.doNothing;
-import static org.mockito.Mockito.doThrow;
-import static org.mockito.Mockito.times;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
 
 @RunWith(MockitoJUnitRunner.StrictStubs.class)
 public class WorkerSinkTaskMockitoTest {
@@ -1128,43 +1123,23 @@ public class WorkerSinkTaskMockitoTest {
         // iter 3 - note that we return the current offset to indicate they should be committed
         when(sinkTask.preCommit(workerCurrentOffsets)).thenReturn(workerCurrentOffsets);
 
-        // We need to delay the result of trying to commit offsets to Kafka via the consumer.commitAsync
-        // method. We do this so that we can test that we do not erroneously mark a commit as timed out
-        // while it is still running and under time. To fake this for tests we have the commit run in a
-        // separate thread and wait for a latch which we control back in the main thread.
-        final ExecutorService executor = Executors.newSingleThreadExecutor();
-        final CountDownLatch latch = new CountDownLatch(1);
-
-        doAnswer(invocation -> {
-            final Map<TopicPartition, OffsetAndMetadata> offsets = invocation.getArgument(0);
-            final OffsetCommitCallback callback = invocation.getArgument(1);
-
-            executor.execute(() -> {
-                try {
-                    latch.await();
-                } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
-                }
-
-                callback.onComplete(offsets, null);
-            });
-
-            return null;
-        }).when(consumer).commitAsync(eq(workerCurrentOffsets), any(OffsetCommitCallback.class));
-
         sinkTaskContext.getValue().requestCommit();
         workerTask.iteration(); // iter 3 -- commit in progress
 
         // Make sure the "committing" flag didn't immediately get flipped back to false due to an incorrect timeout
         assertTrue("Expected worker to be in the process of committing offsets", workerTask.isCommitting());
 
-        // Let the async commit finish and wait for it to end
-        latch.countDown();
-        executor.shutdown();
-        executor.awaitTermination(30, TimeUnit.SECONDS);
+        // Delay the result of trying to commit offsets to Kafka via the consumer.commitAsync method.
+        ArgumentCaptor<OffsetCommitCallback> offsetCommitCallbackArgumentCaptor =
+            ArgumentCaptor.forClass(OffsetCommitCallback.class);
+        verify(consumer).commitAsync(eq(workerCurrentOffsets), offsetCommitCallbackArgumentCaptor.capture());
+
+        final OffsetCommitCallback callback = offsetCommitCallbackArgumentCaptor.getValue();
+        callback.onComplete(workerCurrentOffsets, null);
 
         assertEquals(workerCurrentOffsets, workerTask.currentOffsets());
         assertEquals(workerCurrentOffsets, workerTask.lastCommittedOffsets());
+        assertFalse(workerTask.isCommitting());
     }
 
     @SuppressWarnings("unchecked")
