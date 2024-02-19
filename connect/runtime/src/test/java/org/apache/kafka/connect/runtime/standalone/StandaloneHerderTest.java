@@ -124,14 +124,17 @@ public class StandaloneHerderTest {
 
     @Mock
     protected Worker worker;
-    @Mock protected WorkerConfigTransformer transformer;
-    @Mock private Plugins plugins;
+    @Mock
+    protected WorkerConfigTransformer transformer;
+    @Mock
+    private Plugins plugins;
     @Mock
     private PluginClassLoader pluginLoader;
     @Mock
     private LoaderSwap loaderSwap;
     protected FutureCallback<Herder.Created<ConnectorInfo>> createCallback;
-    @Mock protected StatusBackingStore statusBackingStore;
+    @Mock
+    protected StatusBackingStore statusBackingStore;
     private final SampleConnectorClientConfigOverridePolicy
             noneConnectorClientConfigOverridePolicy = new SampleConnectorClientConfigOverridePolicy();
 
@@ -148,6 +151,7 @@ public class StandaloneHerderTest {
     @After
     public void tearDown() {
         verifyNoMoreInteractions(worker, statusBackingStore);
+        herder.stop();
     }
 
     @Test
@@ -238,7 +242,7 @@ public class StandaloneHerderTest {
         when(plugins.newConnector(anyString())).thenReturn(connectorMock);
 
         // Only the connector should be created; we expect no tasks to be spawned for a connector created with a paused or stopped initial state
-        mockStartConnector(config, TargetState.STOPPED);
+        mockStartConnector(config, null, null, TargetState.STOPPED, null);
 
         when(worker.isRunning(CONNECTOR_NAME)).thenReturn(true);
         when(herder.connectorType(any())).thenReturn(ConnectorType.SINK);
@@ -293,7 +297,7 @@ public class StandaloneHerderTest {
         Connector connectorMock = mock(SourceConnector.class);
         expectConfigValidation(connectorMock, true, config);
 
-        mockStartConnector(config, TargetState.STARTED);
+        mockStartConnector(config, null, TargetState.STARTED, TargetState.STARTED, null);
 
         when(worker.connectorNames()).thenReturn(Collections.singleton(CONNECTOR_NAME));
         when(worker.getPlugins()).thenReturn(plugins);
@@ -324,7 +328,7 @@ public class StandaloneHerderTest {
         Herder.Created<ConnectorInfo> connectorInfo = createCallback.get(WAIT_TIME, TimeUnit.MILLISECONDS);
         assertEquals(createdInfo(SourceSink.SOURCE), connectorInfo.result());
 
-        mockStartConnector(config, TargetState.STARTED);
+        mockStartConnector(config, null, TargetState.STARTED, TargetState.STARTED, null);
 
         when(worker.connectorNames()).thenReturn(Collections.singleton(CONNECTOR_NAME));
         when(worker.getPlugins()).thenReturn(plugins);
@@ -353,7 +357,6 @@ public class StandaloneHerderTest {
 
         doNothing().when(worker).stopAndAwaitConnector(CONNECTOR_NAME);
 
-        final ArgumentCaptor<Callback<TargetState>> onStart = ArgumentCaptor.forClass(Callback.class);
 
         Exception exception = new ConnectException("Failed to start connector");
 
@@ -361,11 +364,7 @@ public class StandaloneHerderTest {
         Herder.Created<ConnectorInfo> connectorInfo = createCallback.get(WAIT_TIME, TimeUnit.MILLISECONDS);
         assertEquals(createdInfo(SourceSink.SOURCE), connectorInfo.result());
         FutureCallback<Void> restartCallback = new FutureCallback<>();
-        doAnswer(invocation -> {
-            onStart.getValue().onCompletion(exception, null);
-            return true;
-        }).when(worker).startConnector(eq(CONNECTOR_NAME), eq(config), any(HerderConnectorContext.class),
-                eq(herder), eq(TargetState.STARTED), onStart.capture());
+        mockStartConnector(config, null, null, TargetState.STARTED, exception);
         herder.restartConnector(CONNECTOR_NAME, restartCallback);
         try {
             restartCallback.get(WAIT_TIME, TimeUnit.MILLISECONDS);
@@ -524,7 +523,7 @@ public class StandaloneHerderTest {
 
         doNothing().when(worker).stopAndAwaitConnector(CONNECTOR_NAME);
 
-        mockStartConnector(connectorConfig, TargetState.STARTED);
+        mockStartConnector(connectorConfig, null, null, TargetState.STARTED, null);
 
         herder.putConnectorConfig(CONNECTOR_NAME, connectorConfig, false, createCallback);
         Herder.Created<ConnectorInfo> connectorInfo = createCallback.get(WAIT_TIME, TimeUnit.MILLISECONDS);
@@ -612,7 +611,7 @@ public class StandaloneHerderTest {
         doNothing().when(worker).stopAndAwaitConnector(CONNECTOR_NAME);
         doNothing().when(worker).stopAndAwaitTasks(Collections.singletonList(taskId));
 
-        mockStartConnector(connectorConfig, TargetState.STARTED);
+        mockStartConnector(connectorConfig, null, null, TargetState.STARTED, null);
 
         ClusterConfigState configState = new ClusterConfigState(
                 -1,
@@ -740,12 +739,7 @@ public class StandaloneHerderTest {
         // Update config, which requires stopping and restarting
         doNothing().when(worker).stopAndAwaitConnector(CONNECTOR_NAME);
         final ArgumentCaptor<Map<String, String>> capturedConfig = ArgumentCaptor.forClass(Map.class);
-        final ArgumentCaptor<Callback<TargetState>> onStart = ArgumentCaptor.forClass(Callback.class);
-        doAnswer(invocation -> {
-            onStart.getValue().onCompletion(null, TargetState.STARTED);
-            return true;
-        }).when(worker).startConnector(eq(CONNECTOR_NAME), capturedConfig.capture(), any(),
-                eq(herder), eq(TargetState.STARTED), onStart.capture());
+        mockStartConnector(null, capturedConfig, TargetState.STARTED, TargetState.STARTED, null);
         // Generate same task config, which should result in no additional action to restart tasks
         when(worker.connectorTaskConfigs(CONNECTOR_NAME, new SourceConnectorConfig(plugins, newConnConfig, true)))
                 .thenReturn(singletonList(taskConfig(SourceSink.SOURCE)));
@@ -979,12 +973,7 @@ public class StandaloneHerderTest {
         // Prepare for connector and task config update
         Map<String, String> newConfig = connectorConfig(SourceSink.SOURCE);
         newConfig.put("dummy-connector-property", "yes");
-        final ArgumentCaptor<Callback<TargetState>> onStart = ArgumentCaptor.forClass(Callback.class);
-        doAnswer(invocation -> {
-            onStart.getValue().onCompletion(null, TargetState.STARTED);
-            return true;
-        }).when(worker).startConnector(eq(CONNECTOR_NAME), eq(newConfig), any(HerderConnectorContext.class),
-                eq(herder), eq(TargetState.STARTED), onStart.capture());
+        mockStartConnector(newConfig, null, TargetState.STARTED, TargetState.STARTED, null);
 
         // Common invocations
         when(worker.startSourceTask(eq(new ConnectorTaskId(CONNECTOR_NAME, 0)), any(), any(), any(), eq(herder), eq(TargetState.STARTED))).thenReturn(true);
@@ -1019,12 +1008,7 @@ public class StandaloneHerderTest {
                 new SourceConnectorConfig(plugins, connectorProps, true) :
                 new SinkConnectorConfig(plugins, connectorProps);
 
-        final ArgumentCaptor<Callback<TargetState>> onStart = ArgumentCaptor.forClass(Callback.class);
-        doAnswer(invocation -> {
-            onStart.getValue().onCompletion(null, TargetState.STARTED);
-            return true;
-        }).when(worker).startConnector(eq(CONNECTOR_NAME), eq(connectorProps), any(HerderConnectorContext.class),
-                eq(herder), eq(TargetState.STARTED), onStart.capture());
+        mockStartConnector(connectorProps, null, TargetState.STARTED, TargetState.STARTED, null);
         when(worker.isRunning(CONNECTOR_NAME)).thenReturn(true);
         if (sourceSink == SourceSink.SOURCE) {
             when(worker.isTopicCreationEnabled()).thenReturn(true);
@@ -1163,12 +1147,13 @@ public class StandaloneHerderTest {
         assertEquals(AbstractStatus.State.RESTARTING, connectorStatus.getValue().state());
     }
 
-    private void mockStartConnector(Map<String, String> config, TargetState targetState) {
+    private void mockStartConnector(Map<String, String> config, ArgumentCaptor<Map<String, String>> capturedConfig, TargetState result, TargetState targetState, Exception exception) {
         final ArgumentCaptor<Callback<TargetState>> onStart = ArgumentCaptor.forClass(Callback.class);
         doAnswer(invocation -> {
-            onStart.getValue().onCompletion(null, targetState);
+            onStart.getValue().onCompletion(exception, result);
             return true;
-        }).when(worker).startConnector(eq(CONNECTOR_NAME), eq(config), any(HerderConnectorContext.class),
-                eq(herder), eq(TargetState.STOPPED), onStart.capture());
+        }).when(worker).startConnector(eq(CONNECTOR_NAME), capturedConfig != null ? capturedConfig.capture() :  eq(config),
+                capturedConfig != null ? any() : any(HerderConnectorContext.class),
+                eq(herder), eq(targetState), onStart.capture());
     }
 }
