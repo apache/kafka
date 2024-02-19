@@ -18,6 +18,7 @@ package org.apache.kafka.common.record;
 
 import org.apache.kafka.common.InvalidRecordException;
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.errors.CorruptRecordException;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.utils.BufferSupplier;
@@ -270,7 +271,7 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
     public InputStream recordInputStream(BufferSupplier bufferSupplier) {
         final ByteBuffer buffer = this.buffer.duplicate();
         buffer.position(RECORDS_OFFSET);
-        return compressionType().wrapForInput(buffer, magic(), bufferSupplier);
+        return Compression.of(compressionType()).build().wrapForInput(buffer, magic(), bufferSupplier);
     }
 
     private CloseableIterator<Record> compressedIterator(BufferSupplier bufferSupplier, boolean skipKeyValue) {

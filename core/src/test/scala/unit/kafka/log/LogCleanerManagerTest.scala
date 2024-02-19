@@ -23,6 +23,7 @@ import java.util.Properties
 import kafka.server.BrokerTopicStats
 import kafka.utils._
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.compress.Compression
 import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.utils.Utils
@@ -667,10 +668,10 @@ class LogCleanerManagerTest extends Logging {
     val producerId = 15L
     val producerEpoch = 0.toShort
     val sequence = 0
-    log.appendAsLeader(MemoryRecords.withTransactionalRecords(CompressionType.NONE, producerId, producerEpoch, sequence,
+    log.appendAsLeader(MemoryRecords.withTransactionalRecords(Compression.NONE, producerId, producerEpoch, sequence,
       new SimpleRecord(time.milliseconds(), "1".getBytes, "a".getBytes),
       new SimpleRecord(time.milliseconds(), "2".getBytes, "b".getBytes)), leaderEpoch = 0)
-    log.appendAsLeader(MemoryRecords.withTransactionalRecords(CompressionType.NONE, producerId, producerEpoch, sequence + 2,
+    log.appendAsLeader(MemoryRecords.withTransactionalRecords(Compression.NONE, producerId, producerEpoch, sequence + 2,
       new SimpleRecord(time.milliseconds(), "3".getBytes, "c".getBytes)), leaderEpoch = 0)
     log.roll()
     log.updateHighWatermark(3L)
@@ -853,7 +854,7 @@ class LogCleanerManagerTest extends Logging {
       new SimpleRecord(currentTimestamp, s"key-$offset".getBytes, s"value-$offset".getBytes)
     }
 
-    log.appendAsLeader(MemoryRecords.withRecords(CompressionType.NONE, records:_*), leaderEpoch = 1)
+    log.appendAsLeader(MemoryRecords.withRecords(Compression.NONE, records:_*), leaderEpoch = 1)
     log.maybeIncrementHighWatermark(log.logEndOffsetMetadata)
   }
 
@@ -876,6 +877,6 @@ class LogCleanerManagerTest extends Logging {
   }
 
   private def records(key: Int, value: Int, timestamp: Long) =
-    MemoryRecords.withRecords(CompressionType.NONE, new SimpleRecord(timestamp, key.toString.getBytes, value.toString.getBytes))
+    MemoryRecords.withRecords(Compression.NONE, new SimpleRecord(timestamp, key.toString.getBytes, value.toString.getBytes))
 
 }

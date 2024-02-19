@@ -21,11 +21,11 @@ import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.errors.RecordDeserializationException;
 import org.apache.kafka.common.message.FetchResponseData;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.ControlRecordType;
 import org.apache.kafka.common.record.EndTransactionMarker;
 import org.apache.kafka.common.record.MemoryRecords;
@@ -157,7 +157,7 @@ public class CompletedFetchTest {
     @Test
     public void testCorruptedMessage() {
         // Create one good record and then one "corrupted" record.
-        try (final MemoryRecordsBuilder builder = MemoryRecords.builder(ByteBuffer.allocate(1024), CompressionType.NONE, TimestampType.CREATE_TIME, 0);
+        try (final MemoryRecordsBuilder builder = MemoryRecords.builder(ByteBuffer.allocate(1024), Compression.NONE, TimestampType.CREATE_TIME, 0);
              final UUIDSerializer serializer = new UUIDSerializer()) {
             builder.append(new SimpleRecord(serializer.serialize(TOPIC_NAME, UUID.randomUUID())));
             builder.append(0L, "key".getBytes(), "value".getBytes());
@@ -223,7 +223,7 @@ public class CompletedFetchTest {
     }
 
     private Records newRecords(long baseOffset, int count, long firstMessageId) {
-        try (final MemoryRecordsBuilder builder = MemoryRecords.builder(ByteBuffer.allocate(1024), CompressionType.NONE, TimestampType.CREATE_TIME, baseOffset)) {
+        try (final MemoryRecordsBuilder builder = MemoryRecords.builder(ByteBuffer.allocate(1024), Compression.NONE, TimestampType.CREATE_TIME, baseOffset)) {
             for (int i = 0; i < count; i++)
                 builder.append(0L, "key".getBytes(), ("value-" + (firstMessageId + i)).getBytes());
             return builder.build();
@@ -236,7 +236,7 @@ public class CompletedFetchTest {
 
         try (MemoryRecordsBuilder builder = MemoryRecords.builder(buffer,
                 RecordBatch.CURRENT_MAGIC_VALUE,
-                CompressionType.NONE,
+                Compression.NONE,
                 TimestampType.CREATE_TIME,
                 0,
                 time.milliseconds(),

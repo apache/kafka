@@ -36,6 +36,7 @@ import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.MetadataSnapshot;
 import org.apache.kafka.clients.producer.Callback;
 import org.apache.kafka.clients.producer.RecordMetadata;
+import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.utils.ExponentialBackoff;
 import org.apache.kafka.common.utils.ProducerIdAndEpoch;
 import org.apache.kafka.common.Cluster;
@@ -48,7 +49,6 @@ import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.record.AbstractRecords;
 import org.apache.kafka.common.record.CompressionRatioEstimator;
-import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.MemoryRecordsBuilder;
 import org.apache.kafka.common.record.Record;
@@ -74,7 +74,7 @@ public class RecordAccumulator {
     private final AtomicInteger flushesInProgress;
     private final AtomicInteger appendsInProgress;
     private final int batchSize;
-    private final CompressionType compression;
+    private final Compression compression;
     private final int lingerMs;
     private final ExponentialBackoff retryBackoff;
     private final int deliveryTimeoutMs;
@@ -116,7 +116,7 @@ public class RecordAccumulator {
      */
     public RecordAccumulator(LogContext logContext,
                              int batchSize,
-                             CompressionType compression,
+                             Compression compression,
                              int lingerMs,
                              long retryBackoffMs,
                              long retryBackoffMaxMs,
@@ -176,7 +176,7 @@ public class RecordAccumulator {
      */
     public RecordAccumulator(LogContext logContext,
                              int batchSize,
-                             CompressionType compression,
+                             Compression compression,
                              int lingerMs,
                              long retryBackoffMs,
                              long retryBackoffMaxMs,
@@ -189,7 +189,7 @@ public class RecordAccumulator {
                              BufferPool bufferPool) {
         this(logContext,
             batchSize,
-            compression,
+                compression,
             lingerMs,
             retryBackoffMs,
             retryBackoffMaxMs,
@@ -344,7 +344,7 @@ public class RecordAccumulator {
 
                 if (buffer == null) {
                     byte maxUsableMagic = apiVersions.maxUsableProduceMagic();
-                    int size = Math.max(this.batchSize, AbstractRecords.estimateSizeInBytesUpperBound(maxUsableMagic, compression, key, value, headers));
+                    int size = Math.max(this.batchSize, AbstractRecords.estimateSizeInBytesUpperBound(maxUsableMagic, compression.type(), key, value, headers));
                     log.trace("Allocating a new {} byte message buffer for topic {} partition {} with remaining timeout {}ms", size, topic, partition, maxTimeToBlock);
                     // This call may block if we exhausted buffer space.
                     buffer = free.allocate(size, maxTimeToBlock);
@@ -533,7 +533,7 @@ public class RecordAccumulator {
         // Reset the estimated compression ratio to the initial value or the big batch compression ratio, whichever
         // is bigger. There are several different ways to do the reset. We chose the most conservative one to ensure
         // the split doesn't happen too often.
-        CompressionRatioEstimator.setEstimation(bigBatch.topicPartition.topic(), compression,
+        CompressionRatioEstimator.setEstimation(bigBatch.topicPartition.topic(), compression.type(),
                                                 Math.max(1.0f, (float) bigBatch.compressionRatio()));
         Deque<ProducerBatch> dq = bigBatch.split(this.batchSize);
         int numSplitBatches = dq.size();

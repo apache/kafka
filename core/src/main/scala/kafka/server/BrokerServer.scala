@@ -27,6 +27,7 @@ import kafka.raft.KafkaRaftManager
 import kafka.security.CredentialProvider
 import kafka.server.metadata.{AclPublisher, BrokerMetadataPublisher, ClientQuotaMetadataManager, DelegationTokenPublisher, DynamicClientQuotaPublisher, DynamicConfigPublisher, KRaftMetadataCache, ScramPublisher}
 import kafka.utils.CoreUtils
+import org.apache.kafka.common.compress.Compression
 import org.apache.kafka.common.config.ConfigException
 import org.apache.kafka.common.feature.SupportedVersionRange
 import org.apache.kafka.common.message.ApiMessageType.ListenerType
@@ -583,7 +584,7 @@ class BrokerServer(
       val writer = new CoordinatorPartitionWriter[group.Record](
         replicaManager,
         serde,
-        config.offsetsTopicCompressionType,
+        Compression.of(config.offsetsTopicCompressionType).build(),
         time
       )
       new GroupCoordinatorService.Builder(config.brokerId, groupCoordinatorConfig)

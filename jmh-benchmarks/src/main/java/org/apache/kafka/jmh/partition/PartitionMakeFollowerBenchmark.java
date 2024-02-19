@@ -29,8 +29,8 @@ import kafka.server.checkpoints.OffsetCheckpoints;
 import kafka.server.metadata.MockConfigRepository;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.message.LeaderAndIsrRequestData;
-import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.SimpleRecord;
 import org.apache.kafka.common.utils.Time;
@@ -133,7 +133,7 @@ public class PartitionMakeFollowerBenchmark {
             };
             int initialOffSet = 0;
             while (true) {
-                MemoryRecords memoryRecords =  MemoryRecords.withRecords(initialOffSet, CompressionType.NONE, 0, simpleRecords);
+                MemoryRecords memoryRecords =  MemoryRecords.withRecords(initialOffSet, Compression.NONE, 0, simpleRecords);
                 partition.appendRecordsToFollowerOrFutureReplica(memoryRecords, false);
                 initialOffSet = initialOffSet + 2;
             }

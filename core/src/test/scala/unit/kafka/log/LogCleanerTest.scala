@@ -21,6 +21,7 @@ import kafka.common._
 import kafka.server.{BrokerTopicStats, KafkaConfig}
 import kafka.utils._
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.compress.Compression
 import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.errors.CorruptRecordException
 import org.apache.kafka.common.record._
@@ -1116,7 +1117,7 @@ class LogCleanerTest extends Logging {
 
     val producerId2 = 2L
     val records = MemoryRecords.withTransactionalRecords(
-      CompressionType.NONE,
+      Compression.NONE,
       producerId2,
       producerEpoch,
       0,
@@ -1993,7 +1994,7 @@ class LogCleanerTest extends Logging {
 
   private def invalidCleanedMessage(initialOffset: Long,
                                     keysAndValues: Iterable[(Int, Int)],
-                                    codec: CompressionType = CompressionType.GZIP): MemoryRecords = {
+                                    compressionType: CompressionType = CompressionType.GZIP): MemoryRecords = {
     // this function replicates the old versions of the cleaner which under some circumstances
     // would write invalid compressed message sets with the outer magic set to 1 and the inner
     // magic set to 0
@@ -2004,6 +2005,7 @@ class LogCleanerTest extends Logging {
         kv._2.toString.getBytes))
 
     val buffer = ByteBuffer.allocate(math.min(math.max(records.map(_.sizeInBytes()).sum / 2, 1024), 1 << 16))
+    val codec: Compression = Compression.of(compressionType).build()
     val builder = MemoryRecords.builder(buffer, RecordBatch.MAGIC_VALUE_V1, codec, TimestampType.CREATE_TIME, initialOffset)
 
     var offset = initialOffset
@@ -2016,7 +2018,7 @@ class LogCleanerTest extends Logging {
   }
 
   private def messageWithOffset(key: Array[Byte], value: Array[Byte], offset: Long): MemoryRecords =
-    MemoryRecords.withRecords(offset, CompressionType.NONE, 0, new SimpleRecord(key, value))
+    MemoryRecords.withRecords(offset, Compression.NONE, 0, new SimpleRecord(key, value))
 
   private def messageWithOffset(key: Int, value: Int, offset: Long): MemoryRecords =
     messageWithOffset(key.toString.getBytes, value.toString.getBytes, offset)
@@ -2061,7 +2063,7 @@ class LogCleanerTest extends Logging {
              producerEpoch: Short = RecordBatch.NO_PRODUCER_EPOCH,
              sequence: Int = RecordBatch.NO_SEQUENCE,
              partitionLeaderEpoch: Int = RecordBatch.NO_PARTITION_LEADER_EPOCH): MemoryRecords = {
-    MemoryRecords.withIdempotentRecords(RecordBatch.CURRENT_MAGIC_VALUE, 0L, CompressionType.NONE, producerId, producerEpoch, sequence,
+    MemoryRecords.withIdempotentRecords(RecordBatch.CURRENT_MAGIC_VALUE, 0L, Compression.NONE, producerId, producerEpoch, sequence,
       partitionLeaderEpoch, new SimpleRecord(key.toString.getBytes, value.toString.getBytes))
   }
 
@@ -2097,9 +2099,9 @@ class LogCleanerTest extends Logging {
         new SimpleRecord(time.milliseconds(), keyBytes, keyBytes) // the value doesn't matter since we validate offsets
       }
       val records = if (isTransactional)
-        MemoryRecords.withTransactionalRecords(CompressionType.NONE, producerId, producerEpoch, sequence, simpleRecords.toArray: _*)
+        MemoryRecords.withTransactionalRecords(Compression.NONE, producerId, producerEpoch, sequence, simpleRecords.toArray: _*)
       else
-        MemoryRecords.withIdempotentRecords(CompressionType.NONE, producerId, producerEpoch, sequence, simpleRecords.toArray: _*)
+        MemoryRecords.withIdempotentRecords(Compression.NONE, producerId, producerEpoch, sequence, simpleRecords.toArray: _*)
       sequence += simpleRecords.size
       log.appendAsLeader(records, leaderEpoch, origin)
     }

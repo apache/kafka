@@ -27,10 +27,10 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.errors.ReplicaNotAvailableException;
 import org.apache.kafka.common.network.ListenerName;
-import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.FileRecords;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.RecordBatch;
@@ -1208,7 +1208,7 @@ public class RemoteLogManagerTest {
     private MemoryRecords records(long timestamp,
                                   long initialOffset,
                                   int partitionLeaderEpoch) {
-        return MemoryRecords.withRecords(initialOffset, CompressionType.NONE, partitionLeaderEpoch,
+        return MemoryRecords.withRecords(initialOffset, Compression.NONE, partitionLeaderEpoch,
             new SimpleRecord(timestamp - 1, "first message".getBytes()),
             new SimpleRecord(timestamp + 1, "second message".getBytes()),
             new SimpleRecord(timestamp + 2, "third message".getBytes())

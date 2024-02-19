@@ -19,10 +19,11 @@ package kafka.coordinator.group
 import kafka.server.ReplicaManager
 import kafka.utils.TestUtils
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.compress.Compression
 import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.errors.{NotLeaderOrFollowerException, RecordTooLargeException}
 import org.apache.kafka.common.protocol.Errors
-import org.apache.kafka.common.record.{CompressionType, ControlRecordType, MemoryRecords, RecordBatch}
+import org.apache.kafka.common.record.{ControlRecordType, MemoryRecords, RecordBatch}
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.requests.TransactionResult
 import org.apache.kafka.common.utils.{MockTime, Time}
@@ -59,7 +60,7 @@ class CoordinatorPartitionWriterTest {
     val partitionRecordWriter = new CoordinatorPartitionWriter(
       replicaManager,
       new StringKeyValueSerializer(),
-      CompressionType.NONE,
+      Compression.NONE,
       Time.SYSTEM
     )
 
@@ -91,7 +92,7 @@ class CoordinatorPartitionWriterTest {
     val partitionRecordWriter = new CoordinatorPartitionWriter(
       replicaManager,
       new StringKeyValueSerializer(),
-      CompressionType.NONE,
+      Compression.NONE,
       time
     )
 
@@ -167,7 +168,7 @@ class CoordinatorPartitionWriterTest {
     val partitionRecordWriter = new CoordinatorPartitionWriter(
       replicaManager,
       new StringKeyValueSerializer(),
-      CompressionType.NONE,
+      Compression.NONE,
       time
     )
     val verificationGuard = new VerificationGuard()
@@ -250,7 +251,7 @@ class CoordinatorPartitionWriterTest {
     val partitionRecordWriter = new CoordinatorPartitionWriter(
       replicaManager,
       new StringKeyValueSerializer(),
-      CompressionType.NONE,
+      Compression.NONE,
       time
     )
 
@@ -324,7 +325,7 @@ class CoordinatorPartitionWriterTest {
     val partitionRecordWriter = new CoordinatorPartitionWriter(
       replicaManager,
       new StringKeyValueSerializer(),
-      CompressionType.NONE,
+      Compression.NONE,
       time
     )
 
@@ -373,7 +374,7 @@ class CoordinatorPartitionWriterTest {
     val partitionRecordWriter = new CoordinatorPartitionWriter(
       replicaManager,
       new StringKeyValueSerializer(),
-      CompressionType.NONE,
+      Compression.NONE,
       time
     )
 
@@ -427,7 +428,7 @@ class CoordinatorPartitionWriterTest {
     val partitionRecordWriter = new CoordinatorPartitionWriter(
       replicaManager,
       new StringKeyValueSerializer(),
-      CompressionType.NONE,
+      Compression.NONE,
       Time.SYSTEM
     )
 
@@ -461,7 +462,7 @@ class CoordinatorPartitionWriterTest {
     val partitionRecordWriter = new CoordinatorPartitionWriter(
       replicaManager,
       new StringKeyValueSerializer(),
-      CompressionType.NONE,
+      Compression.NONE,
       Time.SYSTEM
     )
 
@@ -486,7 +487,7 @@ class CoordinatorPartitionWriterTest {
     val partitionRecordWriter = new CoordinatorPartitionWriter(
       replicaManager,
       new StringKeyValueSerializer(),
-      CompressionType.NONE,
+      Compression.NONE,
       Time.SYSTEM
     )
 

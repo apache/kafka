@@ -21,10 +21,11 @@ import kafka.internals.generated.TransactionLogKey
 import kafka.internals.generated.TransactionLogValue
 import kafka.utils.TestUtils
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.compress.Compression
 import org.apache.kafka.common.protocol.{ByteBufferAccessor, MessageUtil}
 import org.apache.kafka.common.protocol.types.Field.TaggedFieldsSection
 import org.apache.kafka.common.protocol.types.{CompactArrayOf, Field, Schema, Struct, Type}
-import org.apache.kafka.common.record.{CompressionType, MemoryRecords, SimpleRecord}
+import org.apache.kafka.common.record.{MemoryRecords, SimpleRecord}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertThrows, assertTrue}
 import org.junit.jupiter.api.Test
 
@@ -84,7 +85,7 @@ class TransactionLogTest {
       new SimpleRecord(keyBytes, valueBytes)
     }.toSeq
 
-    val records = MemoryRecords.withRecords(0, CompressionType.NONE, txnRecords: _*)
+    val records = MemoryRecords.withRecords(0, Compression.NONE, txnRecords: _*)
 
     var count = 0
     for (record <- records.records.asScala) {

@@ -27,11 +27,12 @@ import kafka.server.{BrokerTopicStats, KafkaRaftServer}
 import kafka.tools.DumpLogSegments.TimeIndexDumpErrors
 import kafka.utils.TestUtils
 import org.apache.kafka.common.Uuid
+import org.apache.kafka.common.compress.Compression
 import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.memory.MemoryPool
 import org.apache.kafka.common.metadata.{PartitionChangeRecord, RegisterBrokerRecord, TopicRecord}
 import org.apache.kafka.common.protocol.{ByteBufferAccessor, ObjectSerializationCache}
-import org.apache.kafka.common.record.{CompressionType, ControlRecordType, EndTransactionMarker, MemoryRecords, RecordVersion, SimpleRecord}
+import org.apache.kafka.common.record.{ControlRecordType, EndTransactionMarker, MemoryRecords, RecordVersion, SimpleRecord}
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.metadata.MetadataRecordSerde
 import org.apache.kafka.raft.{KafkaRaftClient, OffsetAndEpoch}
@@ -97,7 +98,7 @@ class DumpLogSegmentsTest {
     batches += BatchInfo(fourthBatchRecords, false, false)
 
     batches.foreach { batchInfo =>
-      log.appendAsLeader(MemoryRecords.withRecords(CompressionType.NONE, 0, batchInfo.records: _*),
+      log.appendAsLeader(MemoryRecords.withRecords(Compression.NONE, 0, batchInfo.records: _*),
         leaderEpoch = 0)
     }
     // Flush, but don't close so that the indexes are not trimmed and contain some zero entries
@@ -112,27 +113,27 @@ class DumpLogSegmentsTest {
 
   @Test
   def testBatchAndRecordMetadataOutput(): Unit = {
-    log.appendAsLeader(MemoryRecords.withRecords(CompressionType.NONE, 0,
+    log.appendAsLeader(MemoryRecords.withRecords(Compression.NONE, 0,
       new SimpleRecord("a".getBytes),
       new SimpleRecord("b".getBytes)
     ), leaderEpoch = 0)
 
-    log.appendAsLeader(MemoryRecords.withRecords(CompressionType.GZIP, 0,
+    log.appendAsLeader(MemoryRecords.withRecords(Compression.gzip().build(), 0,
       new SimpleRecord(time.milliseconds(), "c".getBytes, "1".getBytes),
       new SimpleRecord("d".getBytes)
     ), leaderEpoch = 3)
 
-    log.appendAsLeader(MemoryRecords.withRecords(CompressionType.NONE, 0,
+    log.appendAsLeader(MemoryRecords.withRecords(Compression.NONE, 0,
       new SimpleRecord("e".getBytes, null),
       new SimpleRecord(null, "f".getBytes),
       new SimpleRecord("g".getBytes)
     ), leaderEpoch = 3)
 
-    log.appendAsLeader(MemoryRecords.withIdempotentRecords(CompressionType.NONE, 29342342L, 15.toShort, 234123,
+    log.appendAsLeader(MemoryRecords.withIdempotentRecords(Compression.NONE, 29342342L, 15.toShort, 234123,
       new SimpleRecord("h".getBytes)
     ), leaderEpoch = 3)
 
-    log.appendAsLeader(MemoryRecords.withTransactionalRecords(CompressionType.GZIP, 98323L, 99.toShort, 266,
+    log.appendAsLeader(MemoryRecords.withTransactionalRecords(Compression.gzip().build(), 98323L, 99.toShort, 266,
       new SimpleRecord("i".getBytes),
       new SimpleRecord("j".getBytes)
     ), leaderEpoch = 5)
@@ -261,7 +262,7 @@ class DumpLogSegmentsTest {
       buf.flip()
       new SimpleRecord(null, buf.array)
     }).toArray
-    log.appendAsLeader(MemoryRecords.withRecords(CompressionType.NONE, records:_*), leaderEpoch = 1)
+    log.appendAsLeader(MemoryRecords.withRecords(Compression.NONE, records:_*), leaderEpoch = 1)
     log.flush(false)
 
     var output = runDumpLogSegments(Array("--cluster-metadata-decoder", "--files", logFilePath))
@@ -278,8 +279,8 @@ class DumpLogSegmentsTest {
     val writer = new ByteBufferAccessor(buf)
     writer.writeUnsignedVarint(10000)
     writer.writeUnsignedVarint(10000)
-    log.appendAsLeader(MemoryRecords.withRecords(CompressionType.NONE, new SimpleRecord(null, buf.array)), leaderEpoch = 2)
-    log.appendAsLeader(MemoryRecords.withRecords(CompressionType.NONE, records:_*), leaderEpoch = 2)
+    log.appendAsLeader(MemoryRecords.withRecords(Compression.NONE, new SimpleRecord(null, buf.array)), leaderEpoch = 2)
+    log.appendAsLeader(MemoryRecords.withRecords(Compression.NONE, records:_*), leaderEpoch = 2)
 
     output = runDumpLogSegments(Array("--cluster-metadata-decoder", "--skip-record-metadata", "--files", logFilePath))
     assertTrue(output.contains("TOPIC_RECORD"))
@@ -329,7 +330,7 @@ class DumpLogSegmentsTest {
         MemoryPool.NONE,
         new MockTime,
         lastContainedLogTimestamp,
-        CompressionType.NONE,
+        Compression.NONE,
         MetadataRecordSerde.INSTANCE,
       ).get()
     ) { snapshotWriter =>
