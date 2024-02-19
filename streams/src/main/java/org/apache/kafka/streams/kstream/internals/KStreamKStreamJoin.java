@@ -137,6 +137,11 @@ class KStreamKStreamJoin<K, V1, V2, VOut> implements ProcessorSupplier<K, V1, K,
                 return;
             }
 
+            // Emit all non-joined records which window has closed
+            if (inputRecordTimestamp == sharedTimeTracker.streamTime) {
+                outerJoinStore.ifPresent(store -> emitNonJoinedOuterRecords(store, record));
+            }
+
             boolean needOuterJoin = outer;
             try (final WindowStoreIterator<V2> iter = otherWindowStore.fetch(record.key(), timeFrom, timeTo)) {
                 while (iter.hasNext()) {
@@ -185,11 +190,6 @@ class KStreamKStreamJoin<K, V1, V2, VOut> implements ProcessorSupplier<K, V1, K,
                             LeftOrRightValue.make(isLeftSide, record.value())));
                     }
                 }
-            }
-
-            // Emit all non-joined records which window has closed
-            if (inputRecordTimestamp == sharedTimeTracker.streamTime) {
-                outerJoinStore.ifPresent(store -> emitNonJoinedOuterRecords(store, record));
             }
         }
 

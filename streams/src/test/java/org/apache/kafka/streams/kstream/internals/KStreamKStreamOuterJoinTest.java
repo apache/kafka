@@ -447,8 +447,8 @@ public class KStreamKStreamOuterJoinTest {
             // --> w2 = { 1:a1 (ts: 110) }
             inputTopic2.pipeInput(1, "a1", 110L);
             processor.checkAndClearProcessResult(
-                new KeyValueTimestamp<>(1, "A1+a1", 110L),
-                new KeyValueTimestamp<>(0, "A0+null", 0L)
+                new KeyValueTimestamp<>(0, "A0+null", 0L),
+                new KeyValueTimestamp<>(1, "A1+a1", 110L)
             );
         }
     }
