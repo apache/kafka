@@ -13,6 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//Version 1 added SubscribedTopicRegex to the request for KIP-848
+
 {
   "apiKey": 68,
   "type": "request",

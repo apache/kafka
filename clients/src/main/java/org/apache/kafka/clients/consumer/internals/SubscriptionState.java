@@ -177,12 +177,20 @@ public class SubscriptionState {
     public synchronized void subscribe(Pattern pattern, Optional<ConsumerRebalanceListener> listener) {
         registerRebalanceListener(listener);
         setSubscriptionType(SubscriptionType.AUTO_PATTERN);
+
+        if(!this.subscriptionPattern.equals(null)) {
+            this.subscriptionPattern = null;
+        }
         this.subscribedPattern = pattern;
     }
 
     public synchronized void subscribe(SubscriptionPattern pattern, Optional<ConsumerRebalanceListener> listener) {
         registerRebalanceListener(listener);
         setSubscriptionType(SubscriptionType.AUTO_PATTERN);
+
+        if(!this.subscribedPattern.equals(null)) {
+            this.subscribedPattern = null;
+        }
         this.subscriptionPattern = pattern;
     }
 
@@ -343,6 +351,10 @@ public class SubscriptionState {
 
     public synchronized SubscriptionPattern subscriptionPattern() {
         return this.subscriptionPattern;
+    }
+
+    public synchronized Pattern subscribedPattern() {
+        return this.subscribedPattern;
     }
 
     public synchronized Set<TopicPartition> pausedPartitions() {
