@@ -278,16 +278,16 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     // rebalance to get the initial assignment
     awaitRebalance(consumer, listener)
 
-    val initialAssignedCalls = listener.callsToAssigned
+    val callsToAssignedAfterFirstRebalance = listener.callsToAssigned
 
     consumer.poll(Duration.ofMillis(2000))
 
-    // Give enough time to rejoin
+    // If the poll poll above times out, it would trigger a rebalance.
+    // Leave some time for the rebalance to happen and check for the rebalance event.
     consumer.poll(Duration.ofMillis(500))
     consumer.poll(Duration.ofMillis(500))
 
-    // Check that we did not rejoin
-    assertEquals(initialAssignedCalls, listener.callsToAssigned)
+    assertEquals(callsToAssignedAfterFirstRebalance, listener.callsToAssigned)
   }
 
 
