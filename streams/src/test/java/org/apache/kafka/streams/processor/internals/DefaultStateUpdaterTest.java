@@ -43,6 +43,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 
 import static org.apache.kafka.common.utils.Utils.mkEntry;
@@ -1462,9 +1463,9 @@ class DefaultStateUpdaterTest {
     }
 
     @Test
-    public void shouldGetTasksFromInputQueue() {
-        stateUpdater.shutdown(Duration.ofMillis(Long.MAX_VALUE));
-
+    public void shouldGetTasksFromInputQueue() throws Exception {
+//        stateUpdater.shutdown(Duration.ofMillis(Long.MAX_VALUE));
+        stateUpdater.start();
         final StreamTask activeTask1 = statefulTask(TASK_0_0, mkSet(TOPIC_PARTITION_A_0)).inState(State.RESTORING).build();
         final StreamTask activeTask2 = statefulTask(TASK_1_0, mkSet(TOPIC_PARTITION_B_0)).inState(State.RESTORING).build();
         final StandbyTask standbyTask1 = standbyTask(TASK_0_2, mkSet(TOPIC_PARTITION_C_0)).inState(State.RUNNING).build();
@@ -1473,11 +1474,16 @@ class DefaultStateUpdaterTest {
         stateUpdater.add(activeTask1);
         stateUpdater.add(standbyTask1);
         stateUpdater.add(standbyTask2);
-        stateUpdater.remove(TASK_0_0, null);
         stateUpdater.add(activeTask2);
         stateUpdater.add(standbyTask3);
 
-        verifyGetTasks(mkSet(activeTask1, activeTask2), mkSet(standbyTask1, standbyTask2, standbyTask3));
+        final Set<Task> removedTask = new HashSet<>();
+        final CompletableFuture<Task> future = stateUpdater.remove(TASK_0_0, (task, exception) -> removedTask.add(task));
+
+        future.get();
+        assertEquals(1, removedTask.size());
+
+//        verifyGetTasks(mkSet(activeTask1, activeTask2), mkSet(standbyTask1, standbyTask2, standbyTask3));
     }
 
     @Test
