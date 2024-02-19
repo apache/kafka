@@ -17,43 +17,56 @@
 package org.apache.kafka.tools.config;
 
 import joptsimple.OptionSpec;
-import joptsimple.OptionSpecBuilder;
 import kafka.server.DynamicConfig;
-import kafka.server.KafkaConfig;
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.server.config.ConfigType;
+import org.apache.kafka.server.config.ZkConfig;
 import org.apache.kafka.server.util.CommandDefaultOptions;
+import org.apache.kafka.server.util.CommandLineUtils;
 import org.apache.kafka.storage.internals.log.LogConfig;
 
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashSet;
+import java.util.Iterator;
+import java.util.List;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
+
+import static org.apache.kafka.tools.config.ConfigCommand.BrokerLoggerConfigType;
+import static org.apache.kafka.tools.config.ConfigCommand.ZkSupportedConfigTypes;
 
 public class ConfigCommandOptions extends CommandDefaultOptions {
     public static final String nl = System.getProperty("line.separator");
 
-    OptionSpec<String> zkConnectOpt;
-    OptionSpec<String> bootstrapServerOpt;
-    OptionSpec<String> bootstrapControllerOpt;
-    OptionSpec<String> commandConfigOpt;
-    OptionSpecBuilder alterOpt;
-    OptionSpecBuilder describeOpt;
-    OptionSpecBuilder allOpt;
-    OptionSpec<String> entityType;
-    OptionSpec<String> entityName;
-    private OptionSpecBuilder entityDefault;
-    OptionSpec<String> addConfig;
-    OptionSpec<String> addConfigFile;
-    OptionSpec<String> deleteConfig;
-    OptionSpecBuilder forceOpt;
-    OptionSpec<String> topic;
-    OptionSpec<String> client;
-    private OptionSpec<?> clientDefaults;
-    OptionSpec<String> user;
-    private OptionSpec<?> userDefaults;
-    OptionSpec<String> broker;
-    private OptionSpec<?> brokerDefaults;
-    private OptionSpec<String> brokerLogger;
-    private OptionSpec<?> ipDefaults;
-    OptionSpec<String> ip;
-    OptionSpec<String> zkTlsConfigFile;
+    final OptionSpec<String> zkConnectOpt;
+    final OptionSpec<String> bootstrapServerOpt;
+    final OptionSpec<String> bootstrapControllerOpt;
+    final OptionSpec<String> commandConfigOpt;
+    final OptionSpec<?> alterOpt;
+    final OptionSpec<?> describeOpt;
+    final OptionSpec<?> allOpt;
+    final OptionSpec<String> entityType;
+    final OptionSpec<String> entityName;
+    private final OptionSpec<?> entityDefault;
+    final OptionSpec<String> addConfig;
+    final OptionSpec<String> addConfigFile;
+    final OptionSpec<String> deleteConfig;
+    final OptionSpec<?> forceOpt;
+    final OptionSpec<String> topic;
+    final OptionSpec<String> client;
+    private final OptionSpec<?> clientDefaults;
+    final OptionSpec<String> user;
+    private final OptionSpec<?> userDefaults;
+    final OptionSpec<String> broker;
+    private final OptionSpec<?> brokerDefaults;
+    private final OptionSpec<String> brokerLogger;
+    private final OptionSpec<?> ipDefaults;
+    final OptionSpec<String> ip;
+    final OptionSpec<String> zkTlsConfigFile;
+
+    final List<Tuple2<OptionSpec<String>, String>> entityFlags;
+    final List<Tuple2<OptionSpec<?>, String>> entityDefaultsFlags;
 
     public ConfigCommandOptions(String[] args) {
         super(args);
@@ -130,7 +143,150 @@ public class ConfigCommandOptions extends CommandDefaultOptions {
                 .ofType(String.class);
         zkTlsConfigFile = parser.accepts("zk-tls-config-file",
                         "Identifies the file where ZooKeeper client TLS connectivity properties are defined.  Any properties other than " +
-                                KafkaConfig.ZkSslConfigToSystemPropertyMap.keys.toList.sorted.mkString(", ") + " are ignored.")
+                                ZkConfig.ZK_SSL_CONFIG_TO_SYSTEM_PROPERTY_MAP.keySet().stream().sorted().collect(Collectors.joining(", ")) + " are ignored.")
                 .withRequiredArg().describedAs("ZooKeeper TLS configuration").ofType(String.class);
+
+        entityFlags = Arrays.asList(new Tuple2<>(topic, ConfigType.TOPIC),
+                new Tuple2<>(client, ConfigType.CLIENT),
+                new Tuple2<>(user, ConfigType.USER),
+                new Tuple2<>(broker, ConfigType.BROKER),
+                new Tuple2<>(brokerLogger, BrokerLoggerConfigType),
+                new Tuple2<>(ip, ConfigType.IP));
+
+        entityDefaultsFlags = Arrays.asList(new Tuple2<>(clientDefaults, ConfigType.CLIENT),
+                new Tuple2<>(userDefaults, ConfigType.USER),
+                new Tuple2<>(brokerDefaults, ConfigType.BROKER),
+                new Tuple2<>(ipDefaults, ConfigType.IP));
+
+        options = parser.parse(args);
+    }
+
+    List<String> entityTypes() {
+        List<String> res = new ArrayList<>(options.valuesOf(entityType));
+
+        Stream.concat(entityFlags.stream(), entityDefaultsFlags.stream())
+                .filter(entity -> options.has(entity.v1))
+                .map(t -> t.v2)
+                .forEach(res::add);
+
+        return res;
+    }
+
+    List<String> entityNames() {
+        Iterator<String> namesIterator = options.valuesOf(entityName).iterator();
+
+        List<String> res = options.specs().stream()
+            .filter(spec -> spec.options().contains("entity-name") || spec.options().contains("entity-default"))
+            .map(spec -> spec.options().contains("entity-name") ? namesIterator.next() : "")
+            .collect(Collectors.toList());
+
+        entityFlags.stream()
+            .filter(entity -> options.has(entity.v1))
+            .map(entity -> options.valueOf(entity.v1))
+            .forEach(res::add);
+
+        entityDefaultsFlags.stream()
+            .filter(entity -> options.has(entity.v1))
+            .map(r -> "")
+            .forEach(res::add);
+
+        return res;
+    }
+
+    public void checkArgs() {
+        // should have exactly one action
+        long actions = Stream.of(alterOpt, describeOpt).filter(options::has).count();
+        if (actions != 1)
+            CommandLineUtils.printUsageAndExit(parser, "Command must include exactly one action: --describe, --alter");
+        // check required args
+        CommandLineUtils.checkInvalidArgs(parser, options, alterOpt, describeOpt);
+        CommandLineUtils.checkInvalidArgs(parser, options, describeOpt, alterOpt, addConfig, deleteConfig);
+
+        List<String> entityTypeVals = entityTypes();
+        if (entityTypeVals.size() != Utils.mkSet(entityTypeVals).size())
+            throw new IllegalArgumentException("Duplicate entity type(s) specified: " + Utils.join(Utils.diff(HashSet::new, new HashSet<>(entityTypeVals), new HashSet<>(entityTypeVals)), ","));
+
+        List<String> allowedEntityTypes;
+        String connectOptString;
+
+        if (options.has(bootstrapServerOpt) || options.has(bootstrapControllerOpt)) {
+            allowedEntityTypes = ConfigCommand.BrokerSupportedConfigTypes;
+            connectOptString = "--bootstrap-server or --bootstrap-controller";
+        } else {
+            allowedEntityTypes = ZkSupportedConfigTypes;
+            connectOptString = "--zookeeper";
+        }
+
+        entityTypeVals.forEach(entityTypeVal -> {
+            if (!allowedEntityTypes.contains(entityTypeVal))
+                throw new IllegalArgumentException("Invalid entity type " + entityTypeVal + ", the entity type must be one of " + Utils.join(allowedEntityTypes, ", ") + " with a " + connectOptString + " argument");
+        });
+
+        if (entityTypeVals.isEmpty())
+            throw new IllegalArgumentException("At least one entity type must be specified");
+        else if (entityTypeVals.size() > 1 && !entityTypeVals.equals(Utils.mkSet(ConfigType.USER, ConfigType.CLIENT)))
+            throw new IllegalArgumentException("Only '" + ConfigType.USER + "' and '" + ConfigType.CLIENT + "' entity types may be specified together");
+
+        if ((options.has(entityName) || options.has(entityType) || options.has(entityDefault)) &&
+            (entityFlags.stream().anyMatch(entity -> options.has(entity.v1)) || entityDefaultsFlags.stream().anyMatch(entity -> options.has(entity.v1))))
+                throw new IllegalArgumentException("--entity-{type,name,default} should not be used in conjunction with specific entity flags");
+
+        boolean hasEntityName = entityNames().stream().anyMatch(n -> !n.isEmpty());
+        boolean hasEntityDefault = entityNames().stream().anyMatch(String::isEmpty);
+
+        int numConnectOptions = (options.has(bootstrapServerOpt) ? 1 : 0) +
+                (options.has(bootstrapControllerOpt) ? 1 : 0) +
+                (options.has(zkConnectOpt) ? 1 : 0);
+        if (numConnectOptions == 0)
+            throw new IllegalArgumentException("One of the required --bootstrap-server, --boostrap-controller, or --zookeeper arguments must be specified");
+        else if (numConnectOptions > 1)
+            throw new IllegalArgumentException("Only one of --bootstrap-server, --boostrap-controller, and --zookeeper can be specified");
+
+        if (options.has(allOpt) && options.has(zkConnectOpt)) {
+            throw new IllegalArgumentException("--bootstrap-server must be specified for --all");
+        }
+        if (options.has(zkTlsConfigFile) && !options.has(zkConnectOpt)) {
+            throw new IllegalArgumentException("Only the --zookeeper option can be used with the --zk-tls-config-file option.");
+        }
+        if (hasEntityName && (entityTypeVals.contains(ConfigType.BROKER) || entityTypeVals.contains(BrokerLoggerConfigType))) {
+            Stream.of(entityName, broker, brokerLogger).filter(o -> options.has(o)).map(o -> options.valueOf(o)).forEach(brokerId -> {
+                try {
+                    Integer.valueOf(brokerId);
+                } catch (NumberFormatException e) {
+                    throw new IllegalArgumentException("The entity name for " + entityTypeVals.get(0) + " must be a valid integer broker id, but it is: " + brokerId);
+                }
+            });
+        }
+
+        if (hasEntityName && entityTypeVals.contains(ConfigType.IP)) {
+            Stream.of(entityName, ip).filter(o -> options.has(o)).map(o -> options.valueOf(o)).forEach(ipEntity -> {
+                if (!DynamicConfig.Ip.isValidIpEntity(ipEntity))
+                    throw new IllegalArgumentException("The entity name for " + entityTypeVals.get(0) + " must be a valid IP or resolvable host, but it is: " + ipEntity);
+            });
+        }
+
+        if (options.has(describeOpt) && entityTypeVals.contains(BrokerLoggerConfigType) && !hasEntityName)
+            throw new IllegalArgumentException("an entity name must be specified with --describe of " + Utils.join(entityTypeVals, ","));
+
+        if (options.has(alterOpt)) {
+            if (entityTypeVals.contains(ConfigType.USER) ||
+                    entityTypeVals.contains(ConfigType.CLIENT) ||
+                    entityTypeVals.contains(ConfigType.BROKER) ||
+                    entityTypeVals.contains(ConfigType.IP)) {
+                if (!hasEntityName && !hasEntityDefault)
+                    throw new IllegalArgumentException("an entity-name or default entity must be specified with --alter of users, clients, brokers or ips");
+            } else if (!hasEntityName)
+                throw new IllegalArgumentException("an entity name must be specified with --alter of " + Utils.join(entityTypeVals, ","));
+
+            boolean isAddConfigPresent = options.has(addConfig);
+            boolean isAddConfigFilePresent = options.has(addConfigFile);
+            boolean isDeleteConfigPresent = options.has(deleteConfig);
+
+            if (isAddConfigPresent && isAddConfigFilePresent)
+                throw new IllegalArgumentException("Only one of --add-config or --add-config-file must be specified");
+
+            if (!isAddConfigPresent && !isAddConfigFilePresent && !isDeleteConfigPresent)
+                throw new IllegalArgumentException("At least one of --add-config, --add-config-file, or --delete-config must be specified with --alter");
+        }
     }
 }
