@@ -95,6 +95,8 @@ class LogConfigTest {
       case TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG => assertPropertyInvalid(name, "not_a_boolean")
       case TopicConfig.LOCAL_LOG_RETENTION_MS_CONFIG => assertPropertyInvalid(name, "not_a_number", "-3")
       case TopicConfig.LOCAL_LOG_RETENTION_BYTES_CONFIG => assertPropertyInvalid(name, "not_a_number", "-3")
+      case TopicConfig.COMPRESSION_GZIP_LEVEL_CONFIG => assertPropertyInvalid(name, "not_a_number", "-2")
+      case TopicConfig.COMPRESSION_ZSTD_LEVEL_CONFIG => assertPropertyInvalid(name, "not_a_number", "-0.1")
 
       case _ => assertPropertyInvalid(name, "not_a_number", "-1")
     })
@@ -215,7 +217,7 @@ class LogConfigTest {
     values.foreach((value) => {
       val props = new Properties
       props.setProperty(name, value.toString)
-      assertThrows(classOf[Exception], () => new LogConfig(props))
+      assertThrows(classOf[Exception], () => new LogConfig(props), () => s"Property $name should not allow $value")
     })
   }
 

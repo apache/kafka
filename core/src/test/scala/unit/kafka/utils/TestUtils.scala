@@ -51,6 +51,7 @@ import org.apache.kafka.clients.consumer.internals.AbstractCoordinator
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.{KafkaFuture, Node, TopicIdPartition, TopicPartition, Uuid}
 import org.apache.kafka.common.acl.{AccessControlEntry, AccessControlEntryFilter, AclBinding, AclBindingFilter}
+import org.apache.kafka.common.compress.Compression
 import org.apache.kafka.common.config.{ConfigException, ConfigResource}
 import org.apache.kafka.common.config.ConfigResource.Type.TOPIC
 import org.apache.kafka.common.errors.{KafkaStorageException, OperationNotAttemptedException, TopicExistsException, UnknownTopicOrPartitionException}
@@ -701,21 +702,21 @@ object TestUtils extends Logging {
    */
   def singletonRecords(value: Array[Byte],
                        key: Array[Byte] = null,
-                       codec: CompressionType = CompressionType.NONE,
+                       codec: Compression = Compression.NONE,
                        timestamp: Long = RecordBatch.NO_TIMESTAMP,
                        magicValue: Byte = RecordBatch.CURRENT_MAGIC_VALUE): MemoryRecords = {
     records(Seq(new SimpleRecord(timestamp, key, value)), magicValue = magicValue, codec = codec)
   }
 
   def recordsWithValues(magicValue: Byte,
-                        codec: CompressionType,
+                        codec: Compression,
                         values: Array[Byte]*): MemoryRecords = {
     records(values.map(value => new SimpleRecord(value)), magicValue, codec)
   }
 
   def records(records: Iterable[SimpleRecord],
               magicValue: Byte = RecordBatch.CURRENT_MAGIC_VALUE,
-              codec: CompressionType = CompressionType.NONE,
+              codec: Compression = Compression.NONE,
               producerId: Long = RecordBatch.NO_PRODUCER_ID,
               producerEpoch: Short = RecordBatch.NO_PRODUCER_EPOCH,
               sequence: Int = RecordBatch.NO_SEQUENCE,

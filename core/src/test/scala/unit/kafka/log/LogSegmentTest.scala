@@ -19,6 +19,7 @@ package kafka.log
 import kafka.utils.TestUtils
 import kafka.utils.TestUtils.checkEquals
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.compress.Compression
 import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.utils.{MockTime, Time, Utils}
@@ -53,7 +54,7 @@ class LogSegmentTest {
 
   /* create a ByteBufferMessageSet for the given messages starting from the given offset */
   def records(offset: Long, records: String*): MemoryRecords = {
-    MemoryRecords.withRecords(RecordBatch.MAGIC_VALUE_V1, offset, CompressionType.NONE, TimestampType.CREATE_TIME,
+    MemoryRecords.withRecords(RecordBatch.MAGIC_VALUE_V1, offset, Compression.NONE, TimestampType.CREATE_TIME,
       records.map { s => new SimpleRecord(offset * 10, s.getBytes) }: _*)
   }
 
@@ -347,15 +348,15 @@ class LogSegmentTest {
 
     // append transactional records from pid1
     segment.append(101L, RecordBatch.NO_TIMESTAMP,
-      100L, MemoryRecords.withTransactionalRecords(100L, CompressionType.NONE,
+      100L, MemoryRecords.withTransactionalRecords(100L, Compression.NONE,
         pid1, producerEpoch, sequence, partitionLeaderEpoch, new SimpleRecord("a".getBytes), new SimpleRecord("b".getBytes)))
 
     // append transactional records from pid2
-    segment.append(103L, RecordBatch.NO_TIMESTAMP, 102L, MemoryRecords.withTransactionalRecords(102L, CompressionType.NONE,
+    segment.append(103L, RecordBatch.NO_TIMESTAMP, 102L, MemoryRecords.withTransactionalRecords(102L, Compression.NONE,
         pid2, producerEpoch, sequence, partitionLeaderEpoch, new SimpleRecord("a".getBytes), new SimpleRecord("b".getBytes)))
 
     // append non-transactional records
-    segment.append(105L, RecordBatch.NO_TIMESTAMP, 104L, MemoryRecords.withRecords(104L, CompressionType.NONE,
+    segment.append(105L, RecordBatch.NO_TIMESTAMP, 104L, MemoryRecords.withRecords(104L, Compression.NONE,
         partitionLeaderEpoch, new SimpleRecord("a".getBytes), new SimpleRecord("b".getBytes)))
 
     // abort the transaction from pid2 (note LSO should be 100L since the txn from pid1 has not completed)
@@ -413,16 +414,16 @@ class LogSegmentTest {
     }
 
     val cache = new LeaderEpochFileCache(topicPartition, checkpoint)
-    seg.append(105L, RecordBatch.NO_TIMESTAMP, 104L, MemoryRecords.withRecords(104L, CompressionType.NONE, 0,
+    seg.append(105L, RecordBatch.NO_TIMESTAMP, 104L, MemoryRecords.withRecords(104L, Compression.NONE, 0,
         new SimpleRecord("a".getBytes), new SimpleRecord("b".getBytes)))
 
-    seg.append(107L, RecordBatch.NO_TIMESTAMP, 106L, MemoryRecords.withRecords(106L, CompressionType.NONE, 1,
+    seg.append(107L, RecordBatch.NO_TIMESTAMP, 106L, MemoryRecords.withRecords(106L, Compression.NONE, 1,
         new SimpleRecord("a".getBytes), new SimpleRecord("b".getBytes)))
 
-    seg.append(109L, RecordBatch.NO_TIMESTAMP, 108L, MemoryRecords.withRecords(108L, CompressionType.NONE, 1,
+    seg.append(109L, RecordBatch.NO_TIMESTAMP, 108L, MemoryRecords.withRecords(108L, Compression.NONE, 1,
         new SimpleRecord("a".getBytes), new SimpleRecord("b".getBytes)))
 
-    seg.append(111L, RecordBatch.NO_TIMESTAMP, 110, MemoryRecords.withRecords(110L, CompressionType.NONE, 2,
+    seg.append(111L, RecordBatch.NO_TIMESTAMP, 110, MemoryRecords.withRecords(110L, Compression.NONE, 2,
         new SimpleRecord("a".getBytes), new SimpleRecord("b".getBytes)))
 
     seg.recover(newProducerStateManager(), Optional.of(cache))
@@ -555,7 +556,7 @@ class LogSegmentTest {
     val offset = 40
 
     def records(offset: Long, record: String): MemoryRecords =
-      MemoryRecords.withRecords(RecordBatch.MAGIC_VALUE_V2, offset, CompressionType.NONE, TimestampType.CREATE_TIME,
+      MemoryRecords.withRecords(RecordBatch.MAGIC_VALUE_V2, offset, Compression.NONE, TimestampType.CREATE_TIME,
         new SimpleRecord(offset * 1000, record.getBytes))
 
     //Given two messages with a gap between them (e.g. mid offset compacted away)
@@ -576,7 +577,7 @@ class LogSegmentTest {
   @Test
   def testAppendFromFile(): Unit = {
     def records(offset: Long, size: Int): MemoryRecords =
-      MemoryRecords.withRecords(RecordBatch.MAGIC_VALUE_V2, offset, CompressionType.NONE, TimestampType.CREATE_TIME,
+      MemoryRecords.withRecords(RecordBatch.MAGIC_VALUE_V2, offset, Compression.NONE, TimestampType.CREATE_TIME,
         new SimpleRecord(new Array[Byte](size)))
 
     // create a log file in a separate directory to avoid conflicting with created segments

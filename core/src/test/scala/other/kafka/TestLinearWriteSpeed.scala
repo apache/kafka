@@ -26,6 +26,7 @@ import joptsimple._
 import kafka.log._
 import kafka.server.BrokerTopicStats
 import kafka.utils._
+import org.apache.kafka.common.compress.{Compression, GzipCompression, Lz4Compression, ZstdCompression}
 import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.utils.{Time, Utils}
@@ -34,7 +35,7 @@ import org.apache.kafka.server.util.{KafkaScheduler, Scheduler}
 import org.apache.kafka.server.util.CommandLineUtils
 import org.apache.kafka.storage.internals.log.{LogConfig, LogDirFailureChannel, ProducerStateManagerConfig}
 
-import scala.math._
+import scala.math.max
 
 /**
  * This test does linear writes using either a kafka log or a file and measures throughput and latency.
@@ -66,29 +67,34 @@ object TestLinearWriteSpeed {
                            .describedAs("num_files")
                            .ofType(classOf[java.lang.Integer])
                            .defaultsTo(1)
-   val reportingIntervalOpt = parser.accepts("reporting-interval", "The number of ms between updates.")
+    val reportingIntervalOpt = parser.accepts("reporting-interval", "The number of ms between updates.")
                            .withRequiredArg
                            .describedAs("ms")
                            .ofType(classOf[java.lang.Long])
                            .defaultsTo(1000L)
-   val maxThroughputOpt = parser.accepts("max-throughput-mb", "The maximum throughput.")
+    val maxThroughputOpt = parser.accepts("max-throughput-mb", "The maximum throughput.")
                            .withRequiredArg
                            .describedAs("mb")
                            .ofType(classOf[java.lang.Integer])
                            .defaultsTo(Integer.MAX_VALUE)
-   val flushIntervalOpt = parser.accepts("flush-interval", "The number of messages between flushes")
+    val flushIntervalOpt = parser.accepts("flush-interval", "The number of messages between flushes")
                            .withRequiredArg()
                            .describedAs("message_count")
                            .ofType(classOf[java.lang.Long])
                            .defaultsTo(Long.MaxValue)
-   val compressionCodecOpt = parser.accepts("compression", "The compression codec to use")
+    val compressionCodecOpt = parser.accepts("compression", "The compression codec to use")
                             .withRequiredArg
                             .describedAs("codec")
                             .ofType(classOf[java.lang.String])
                             .defaultsTo(CompressionType.NONE.name)
-   val mmapOpt = parser.accepts("mmap", "Do writes to memory-mapped files.")
-   val channelOpt = parser.accepts("channel", "Do writes to file channels.")
-   val logOpt = parser.accepts("log", "Do writes to kafka logs.")
+    val compressionLevelOpt = parser.accepts("level", "The compression level to use")
+                            .withRequiredArg
+                            .describedAs("level")
+                            .ofType(classOf[java.lang.Integer])
+                            .defaultsTo(0)
+    val mmapOpt = parser.accepts("mmap", "Do writes to memory-mapped files.")
+    val channelOpt = parser.accepts("channel", "Do writes to file channels.")
+    val logOpt = parser.accepts("log", "Do writes to kafka logs.")
 
     val options = parser.parse(args : _*)
 
@@ -104,13 +110,22 @@ object TestLinearWriteSpeed {
     val messageSize = options.valueOf(messageSizeOpt).intValue
     val flushInterval = options.valueOf(flushIntervalOpt).longValue
     val compressionType = CompressionType.forName(options.valueOf(compressionCodecOpt))
+    val compressionBuilder = Compression.of(compressionType)
+    val compressionLevel = options.valueOf(compressionLevelOpt)
+    compressionType match {
+      case CompressionType.GZIP => compressionBuilder.asInstanceOf[GzipCompression.Builder].level(compressionLevel)
+      case CompressionType.LZ4 => compressionBuilder.asInstanceOf[Lz4Compression.Builder].level(compressionLevel)
+      case CompressionType.ZSTD => compressionBuilder.asInstanceOf[ZstdCompression.Builder].level(compressionLevel)
+      case _ => //Noop
+    }
+    val compression = compressionBuilder.build()
     val rand = new Random
     rand.nextBytes(buffer.array)
     val numMessages = bufferSize / (messageSize + Records.LOG_OVERHEAD)
     val createTime = System.currentTimeMillis
     val messageSet = {
       val records = (0 until numMessages).map(_ => new SimpleRecord(createTime, null, new Array[Byte](messageSize)))
-      MemoryRecords.withRecords(compressionType, records: _*)
+      MemoryRecords.withRecords(compression, records: _*)
     }
 
     val writables = new Array[Writable](numFiles)
@@ -183,7 +198,7 @@ object TestLinearWriteSpeed {
     file.deleteOnExit()
     val raf = new RandomAccessFile(file, "rw")
     raf.setLength(size)
-    val buffer = raf.getChannel().map(FileChannel.MapMode.READ_WRITE, 0, raf.length())
+    val buffer: MappedByteBuffer = raf.getChannel.map(FileChannel.MapMode.READ_WRITE, 0, raf.length())
     def write(): Int = {
       buffer.put(content)
       content.rewind()
@@ -197,7 +212,7 @@ object TestLinearWriteSpeed {
 
   class ChannelWritable(val file: File, val content: ByteBuffer) extends Writable {
     file.deleteOnExit()
-    val channel = FileChannel.open(file.toPath, StandardOpenOption.CREATE, StandardOpenOption.READ,
+    val channel: FileChannel = FileChannel.open(file.toPath, StandardOpenOption.CREATE, StandardOpenOption.READ,
       StandardOpenOption.WRITE)
     def write(): Int = {
       channel.write(content)
@@ -212,7 +227,7 @@ object TestLinearWriteSpeed {
 
   class LogWritable(val dir: File, config: LogConfig, scheduler: Scheduler, val messages: MemoryRecords) extends Writable {
     Utils.delete(dir)
-    val log = UnifiedLog(
+    val log: UnifiedLog = UnifiedLog(
       dir = dir,
       config = config,
       logStartOffset = 0L,

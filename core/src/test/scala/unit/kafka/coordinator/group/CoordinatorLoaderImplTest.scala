@@ -20,8 +20,9 @@ import kafka.log.UnifiedLog
 import kafka.server.ReplicaManager
 import kafka.utils.TestUtils
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.compress.Compression
 import org.apache.kafka.common.errors.NotLeaderOrFollowerException
-import org.apache.kafka.common.record.{CompressionType, ControlRecordType, EndTransactionMarker, FileRecords, MemoryRecords, RecordBatch, SimpleRecord}
+import org.apache.kafka.common.record.{ControlRecordType, EndTransactionMarker, FileRecords, MemoryRecords, RecordBatch, SimpleRecord}
 import org.apache.kafka.common.requests.TransactionResult
 import org.apache.kafka.common.utils.{MockTime, Time}
 import org.apache.kafka.coordinator.group.runtime.CoordinatorLoader.UnknownRecordTypeException
@@ -639,13 +640,13 @@ class CoordinatorLoaderImplTest {
     val memoryRecords = if (producerId == RecordBatch.NO_PRODUCER_ID) {
       MemoryRecords.withRecords(
         startOffset,
-        CompressionType.NONE,
+        Compression.NONE,
         records: _*
       )
     } else {
       MemoryRecords.withTransactionalRecords(
         startOffset,
-        CompressionType.NONE,
+        Compression.NONE,
         producerId,
         producerEpoch,
         0,

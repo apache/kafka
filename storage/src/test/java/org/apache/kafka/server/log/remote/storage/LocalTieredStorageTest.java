@@ -19,7 +19,7 @@ package org.apache.kafka.server.log.remote.storage;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
-import org.apache.kafka.common.record.CompressionType;
+import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.record.FileRecords;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.MemoryRecordsBuilder;
@@ -623,7 +623,7 @@ public final class LocalTieredStorageTest {
                 final byte magic = RecordBatch.MAGIC_VALUE_V2;
 
                 MemoryRecordsBuilder builder = MemoryRecords.builder(
-                        buffer, magic, CompressionType.NONE, TimestampType.CREATE_TIME, baseOffset);
+                        buffer, magic, Compression.NONE, TimestampType.CREATE_TIME, baseOffset);
 
                 for (byte[] value : data) {
                     builder.append(System.currentTimeMillis(), null, value);

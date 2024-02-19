@@ -24,9 +24,10 @@ import java.util.regex.Pattern
 import java.util.Collections
 import kafka.server.KafkaConfig
 import kafka.utils.TestUtils
+import org.apache.kafka.common.compress.Compression
 import org.apache.kafka.common.{KafkaException, TopicPartition}
 import org.apache.kafka.common.errors.KafkaStorageException
-import org.apache.kafka.common.record.{CompressionType, MemoryRecords, Record, SimpleRecord}
+import org.apache.kafka.common.record.{MemoryRecords, Record, SimpleRecord}
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.server.util.{MockTime, Scheduler}
 import org.apache.kafka.storage.internals.log.{FetchDataInfo, LogConfig, LogDirFailureChannel, LogFileUtils, LogOffsetMetadata, LogSegment, LogSegments}
@@ -101,7 +102,7 @@ class LocalLogTest {
     log.append(lastOffset = initialOffset + records.size - 1,
       largestTimestamp = records.head.timestamp,
       shallowOffsetOfMaxTimestamp = initialOffset,
-      records = MemoryRecords.withRecords(initialOffset, CompressionType.NONE, 0, records.toList : _*))
+      records = MemoryRecords.withRecords(initialOffset, Compression.NONE, 0, records.toList : _*))
   }
 
   private def readRecords(log: LocalLog = log,

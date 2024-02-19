@@ -30,6 +30,7 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.errors.FencedInstanceIdException;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
 import org.apache.kafka.common.errors.InvalidTxnStateException;
@@ -52,7 +53,6 @@ import org.apache.kafka.common.message.InitProducerIdResponseData;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.MemoryRecordsBuilder;
 import org.apache.kafka.common.record.MutableRecordBatch;
@@ -182,7 +182,7 @@ public class TransactionManagerTest {
         String metricGrpName = "producer-metrics";
 
         this.brokerNode = new Node(0, "localhost", 2211);
-        this.accumulator = new RecordAccumulator(logContext, batchSize, CompressionType.NONE, 0, 0L, 0L,
+        this.accumulator = new RecordAccumulator(logContext, batchSize, Compression.NONE, 0, 0L, 0L,
                 deliveryTimeoutMs, metrics, metricGrpName, time, apiVersions, transactionManager,
                 new BufferPool(totalSize, batchSize, metrics, time, metricGrpName));
 
@@ -694,7 +694,7 @@ public class TransactionManagerTest {
         final int requestTimeout = 10000;
         final int deliveryTimeout = 15000;
 
-        RecordAccumulator accumulator = new RecordAccumulator(logContext, 16 * 1024, CompressionType.NONE, 0, 0L, 0L,
+        RecordAccumulator accumulator = new RecordAccumulator(logContext, 16 * 1024, Compression.NONE, 0, 0L, 0L,
                 deliveryTimeout, metrics, "", time, apiVersions, transactionManager,
                 new BufferPool(1024 * 1024, 16 * 1024, metrics, time, ""));
 
@@ -764,7 +764,7 @@ public class TransactionManagerTest {
 
     private ProducerBatch batchWithValue(TopicPartition tp, String value) {
         MemoryRecordsBuilder builder = MemoryRecords.builder(ByteBuffer.allocate(64),
-                CompressionType.NONE, TimestampType.CREATE_TIME, 0L);
+                Compression.NONE, TimestampType.CREATE_TIME, 0L);
         long currentTimeMs = time.milliseconds();
         ProducerBatch batch = new ProducerBatch(tp, builder, currentTimeMs);
         batch.tryAppend(currentTimeMs, new byte[0], value.getBytes(), new Header[0], null, currentTimeMs);

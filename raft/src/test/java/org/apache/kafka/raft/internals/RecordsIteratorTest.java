@@ -32,6 +32,7 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import net.jqwik.api.ForAll;
 import net.jqwik.api.Property;
+import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.errors.CorruptRecordException;
 import org.apache.kafka.common.memory.MemoryPool;
 import org.apache.kafka.common.message.LeaderChangeMessage;
@@ -153,7 +154,7 @@ public final class RecordsIteratorTest {
                 MemoryPool.NONE,
                 new MockTime(),
                 0,
-                CompressionType.NONE,
+                Compression.NONE,
                 STRING_SERDE
             )
         ) {
@@ -348,13 +349,14 @@ public final class RecordsIteratorTest {
         CompressionType compressionType,
         List<TestBatch<String>> batches
     ) {
+        Compression compression = Compression.of(compressionType).build();
         ByteBuffer buffer = ByteBuffer.allocate(102400);
 
         for (TestBatch<String> batch : batches) {
             BatchBuilder<String> builder = new BatchBuilder<>(
                 buffer,
                 STRING_SERDE,
-                compressionType,
+                compression,
                 batch.baseOffset,
                 batch.appendTimestamp,
                 false,

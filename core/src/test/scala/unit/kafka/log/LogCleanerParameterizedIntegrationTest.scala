@@ -23,6 +23,7 @@ import kafka.server.KafkaConfig
 import kafka.server.checkpoints.OffsetCheckpointFile
 import kafka.utils._
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.compress.Compression
 import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.record._
 import org.apache.kafka.server.common.MetadataVersion.{IBP_0_10_0_IV1, IBP_0_11_0_IV0, IBP_0_9_0}
@@ -48,7 +49,8 @@ class LogCleanerParameterizedIntegrationTest extends AbstractLogCleanerIntegrati
 
   @ParameterizedTest
   @ArgumentsSource(classOf[LogCleanerParameterizedIntegrationTest.AllCompressions])
-  def cleanerTest(codec: CompressionType): Unit = {
+  def cleanerTest(compressionType: CompressionType): Unit = {
+    val codec: Compression = Compression.of(compressionType).build()
     val largeMessageKey = 20
     val (largeMessageValue, largeMessageSet) = createLargeSingleMessageSet(largeMessageKey, RecordBatch.CURRENT_MAGIC_VALUE, codec)
     val maxMessageSize = largeMessageSet.sizeInBytes
@@ -91,7 +93,7 @@ class LogCleanerParameterizedIntegrationTest extends AbstractLogCleanerIntegrati
 
   @ParameterizedTest
   @ArgumentsSource(classOf[LogCleanerParameterizedIntegrationTest.AllCompressions])
-  def testCleansCombinedCompactAndDeleteTopic(codec: CompressionType): Unit = {
+  def testCleansCombinedCompactAndDeleteTopic(compressionType: CompressionType): Unit = {
     val logProps  = new Properties()
     val retentionMs: Integer = 100000
     logProps.put(TopicConfig.RETENTION_MS_CONFIG, retentionMs: Integer)
@@ -101,7 +103,7 @@ class LogCleanerParameterizedIntegrationTest extends AbstractLogCleanerIntegrati
       cleaner = makeCleaner(partitions = topicPartitions.take(1), propertyOverrides = logProps, backoffMs = 100L)
       val log = cleaner.logs.get(topicPartitions(0))
 
-      val messages = writeDups(numKeys = numKeys, numDups = 3, log = log, codec = codec)
+      val messages = writeDups(numKeys = numKeys, numDups = 3, log = log, codec = Compression.of(compressionType).build())
       val startSize = log.size
 
       log.updateHighWatermark(log.logEndOffset)
@@ -137,11 +139,12 @@ class LogCleanerParameterizedIntegrationTest extends AbstractLogCleanerIntegrati
   @nowarn("cat=deprecation")
   @ParameterizedTest
   @ArgumentsSource(classOf[LogCleanerParameterizedIntegrationTest.ExcludeZstd])
-  def testCleanerWithMessageFormatV0(codec: CompressionType): Unit = {
+  def testCleanerWithMessageFormatV0(compressionType: CompressionType): Unit = {
+    val codec: Compression = Compression.of(compressionType).build()
     val largeMessageKey = 20
     val (largeMessageValue, largeMessageSet) = createLargeSingleMessageSet(largeMessageKey, RecordBatch.MAGIC_VALUE_V0, codec)
     val maxMessageSize = codec match {
-      case CompressionType.NONE => largeMessageSet.sizeInBytes
+      case Compression.NONE => largeMessageSet.sizeInBytes
       case _ =>
         // the broker assigns absolute offsets for message format 0 which potentially causes the compressed size to
         // increase because the broker offsets are larger than the ones assigned by the client
@@ -192,6 +195,7 @@ class LogCleanerParameterizedIntegrationTest extends AbstractLogCleanerIntegrati
   @ParameterizedTest
   @ArgumentsSource(classOf[LogCleanerParameterizedIntegrationTest.ExcludeZstd])
   def testCleaningNestedMessagesWithV0AndV1(codec: CompressionType): Unit = {
+    val compression = Compression.of(codec).build()
     val maxMessageSize = 192
     cleaner = makeCleaner(partitions = topicPartitions, maxMessageSize = maxMessageSize, segmentSize = 256)
 
@@ -202,15 +206,15 @@ class LogCleanerParameterizedIntegrationTest extends AbstractLogCleanerIntegrati
 
     // with compression enabled, these messages will be written as a single message containing
     // all of the individual messages
-    var appendsV0 = writeDupsSingleMessageSet(numKeys = 2, numDups = 3, log = log, codec = codec, magicValue = RecordBatch.MAGIC_VALUE_V0)
-    appendsV0 ++= writeDupsSingleMessageSet(numKeys = 2, startKey = 3, numDups = 2, log = log, codec = codec, magicValue = RecordBatch.MAGIC_VALUE_V0)
+    var appendsV0 = writeDupsSingleMessageSet(numKeys = 2, numDups = 3, log = log, codec = compression, magicValue = RecordBatch.MAGIC_VALUE_V0)
+    appendsV0 ++= writeDupsSingleMessageSet(numKeys = 2, startKey = 3, numDups = 2, log = log, codec = compression, magicValue = RecordBatch.MAGIC_VALUE_V0)
 
     props.put(TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG, IBP_0_10_0_IV1.version)
     log.updateConfig(new LogConfig(props))
 
-    var appendsV1 = writeDupsSingleMessageSet(startKey = 4, numKeys = 2, numDups = 2, log = log, codec = codec, magicValue = RecordBatch.MAGIC_VALUE_V1)
-    appendsV1 ++= writeDupsSingleMessageSet(startKey = 4, numKeys = 2, numDups = 2, log = log, codec = codec, magicValue = RecordBatch.MAGIC_VALUE_V1)
-    appendsV1 ++= writeDupsSingleMessageSet(startKey = 6, numKeys = 2, numDups = 2, log = log, codec = codec, magicValue = RecordBatch.MAGIC_VALUE_V1)
+    var appendsV1 = writeDupsSingleMessageSet(startKey = 4, numKeys = 2, numDups = 2, log = log, codec = compression, magicValue = RecordBatch.MAGIC_VALUE_V1)
+    appendsV1 ++= writeDupsSingleMessageSet(startKey = 4, numKeys = 2, numDups = 2, log = log, codec = compression, magicValue = RecordBatch.MAGIC_VALUE_V1)
+    appendsV1 ++= writeDupsSingleMessageSet(startKey = 6, numKeys = 2, numDups = 2, log = log, codec = compression, magicValue = RecordBatch.MAGIC_VALUE_V1)
 
     val appends = appendsV0 ++ appendsV1
 
@@ -229,7 +233,8 @@ class LogCleanerParameterizedIntegrationTest extends AbstractLogCleanerIntegrati
 
   @ParameterizedTest
   @ArgumentsSource(classOf[LogCleanerParameterizedIntegrationTest.AllCompressions])
-  def cleanerConfigUpdateTest(codec: CompressionType): Unit = {
+  def cleanerConfigUpdateTest(compressionType: CompressionType): Unit = {
+    val codec: Compression = Compression.of(compressionType).build()
     val largeMessageKey = 20
     val (_, largeMessageSet) = createLargeSingleMessageSet(largeMessageKey, RecordBatch.CURRENT_MAGIC_VALUE, codec)
     val maxMessageSize = largeMessageSet.sizeInBytes
@@ -306,7 +311,7 @@ class LogCleanerParameterizedIntegrationTest extends AbstractLogCleanerIntegrati
     }
   }
 
-  private def writeDupsSingleMessageSet(numKeys: Int, numDups: Int, log: UnifiedLog, codec: CompressionType,
+  private def writeDupsSingleMessageSet(numKeys: Int, numDups: Int, log: UnifiedLog, codec: Compression,
                                         startKey: Int = 0, magicValue: Byte): Seq[(Int, String, Long)] = {
     val kvs = for (_ <- 0 until numDups; key <- startKey until (startKey + numKeys)) yield {
       val payload = counter.toString
