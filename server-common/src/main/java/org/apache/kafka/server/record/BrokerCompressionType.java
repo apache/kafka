@@ -16,51 +16,23 @@
  */
 package org.apache.kafka.server.record;
 
+import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.record.CompressionType;
 
 import java.util.List;
 import java.util.Locale;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 import static java.util.Arrays.asList;
 
 public enum BrokerCompressionType {
-    UNCOMPRESSED("uncompressed") {
-        @Override
-        public CompressionType targetCompressionType(CompressionType producerCompressionType) {
-            return CompressionType.NONE;
-        }
-    },
-    ZSTD("zstd") {
-        @Override
-        public CompressionType targetCompressionType(CompressionType producerCompressionType) {
-            return CompressionType.ZSTD;
-        }
-    },
-    LZ4("lz4") {
-        @Override
-        public CompressionType targetCompressionType(CompressionType producerCompressionType) {
-            return CompressionType.LZ4;
-        }
-    },
-    SNAPPY("snappy") {
-        @Override
-        public CompressionType targetCompressionType(CompressionType producerCompressionType) {
-            return CompressionType.SNAPPY;
-        }
-    },
-    GZIP("gzip") {
-        @Override
-        public CompressionType targetCompressionType(CompressionType producerCompressionType) {
-            return CompressionType.GZIP;
-        }
-    },
-    PRODUCER("producer") {
-        @Override
-        public CompressionType targetCompressionType(CompressionType producerCompressionType) {
-            return producerCompressionType;
-        }
-    };
+    UNCOMPRESSED("uncompressed"),
+    ZSTD("zstd"),
+    LZ4("lz4"),
+    SNAPPY("snappy"),
+    GZIP("gzip"),
+    PRODUCER("producer");
 
     private static final List<BrokerCompressionType> VALUES = asList(values());
 
@@ -70,7 +42,9 @@ public enum BrokerCompressionType {
         this.name = name;
     }
 
-    public abstract CompressionType targetCompressionType(CompressionType producerCompressionType);
+    public Compression targetCompression(Optional<Compression> logCompression, CompressionType producerCompressionType) {
+        return logCompression.orElseGet(() -> Compression.of(producerCompressionType).build());
+    }
 
     public static List<String> names() {
         return VALUES.stream().map(v -> v.name).collect(Collectors.toList());

@@ -20,6 +20,7 @@ import io.opentelemetry.proto.metrics.v1.MetricsData;
 
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.metrics.MetricsContext;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.CompressionType;
@@ -192,7 +193,8 @@ public class ClientTelemetryUtils {
 
     public static byte[] compress(byte[] raw, CompressionType compressionType) throws IOException {
         try (ByteBufferOutputStream compressedOut = new ByteBufferOutputStream(512)) {
-            try (OutputStream out = compressionType.wrapForOutput(compressedOut, RecordBatch.CURRENT_MAGIC_VALUE)) {
+            Compression compression = Compression.of(compressionType).build();
+            try (OutputStream out = compression.wrapForOutput(compressedOut, RecordBatch.CURRENT_MAGIC_VALUE)) {
                 out.write(raw);
                 out.flush();
             }
@@ -203,8 +205,9 @@ public class ClientTelemetryUtils {
 
     public static ByteBuffer decompress(byte[] metrics, CompressionType compressionType) {
         ByteBuffer data = ByteBuffer.wrap(metrics);
-        try (InputStream in = compressionType.wrapForInput(data, RecordBatch.CURRENT_MAGIC_VALUE, BufferSupplier.create());
-            ByteArrayOutputStream out = new ByteArrayOutputStream()) {
+        Compression compression = Compression.of(compressionType).build();
+        try (InputStream in = compression.wrapForInput(data, RecordBatch.CURRENT_MAGIC_VALUE, BufferSupplier.create());
+             ByteArrayOutputStream out = new ByteArrayOutputStream()) {
 
             byte[] bytes = new byte[data.capacity() * 2];
             int nRead;

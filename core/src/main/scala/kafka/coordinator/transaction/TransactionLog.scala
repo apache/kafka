@@ -21,8 +21,9 @@ import java.nio.ByteBuffer
 import java.nio.charset.StandardCharsets
 import kafka.internals.generated.{TransactionLogKey, TransactionLogValue}
 import org.apache.kafka.clients.consumer.ConsumerRecord
+import org.apache.kafka.common.compress.Compression
 import org.apache.kafka.common.protocol.{ByteBufferAccessor, MessageUtil}
-import org.apache.kafka.common.record.{CompressionType, Record, RecordBatch}
+import org.apache.kafka.common.record.{Record, RecordBatch}
 import org.apache.kafka.common.{MessageFormatter, TopicPartition}
 
 import scala.collection.mutable
@@ -43,7 +44,7 @@ object TransactionLog {
   //  2. compression = none
   //  3. unclean leader election = disabled
   //  4. required acks = -1 when writing
-  val EnforcedCompressionType: CompressionType = CompressionType.NONE
+  val EnforcedCompression: Compression = Compression.NONE
   val EnforcedRequiredAcks: Short = (-1).toShort
 
   /**

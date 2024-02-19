@@ -17,6 +17,7 @@
 package org.apache.kafka.common.record;
 
 import org.apache.kafka.common.InvalidRecordException;
+import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.errors.CorruptRecordException;
 import org.apache.kafka.common.utils.ByteBufferOutputStream;
 import org.apache.kafka.common.utils.Utils;
@@ -47,7 +48,8 @@ public class SimpleLegacyRecordTest {
     @Test
     public void testCompressedIterationWithEmptyRecords() throws Exception {
         ByteBuffer emptyCompressedValue = ByteBuffer.allocate(64);
-        OutputStream gzipOutput = CompressionType.GZIP.wrapForOutput(new ByteBufferOutputStream(emptyCompressedValue),
+        Compression gzip = Compression.gzip().build();
+        OutputStream gzipOutput = gzip.wrapForOutput(new ByteBufferOutputStream(emptyCompressedValue),
                 RecordBatch.MAGIC_VALUE_V1);
         gzipOutput.close();
         emptyCompressedValue.flip();
