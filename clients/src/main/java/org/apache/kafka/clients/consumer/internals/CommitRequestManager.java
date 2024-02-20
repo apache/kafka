@@ -287,12 +287,12 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
         CompletableFuture<Void> result = new CompletableFuture<>();
         OffsetCommitRequestState requestState =
             createOffsetCommitRequest(subscriptions.allConsumed(), Optional.of(retryExpirationTimeMs));
-        maybeAutoCommitSyncNowWithRetries(requestState, result);
+        autoCommitSyncNowWithRetries(requestState, result);
         return result;
     }
 
-    private void maybeAutoCommitSyncNowWithRetries(OffsetCommitRequestState requestAttempt,
-                                                   CompletableFuture<Void> result) {
+    private void autoCommitSyncNowWithRetries(OffsetCommitRequestState requestAttempt,
+                                              CompletableFuture<Void> result) {
         CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> commitAttempt = requestAutoCommit(requestAttempt);
         commitAttempt.whenComplete((committedOffsets, error) -> {
             if (error == null) {
@@ -306,7 +306,7 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
                         // Make sure the auto-commit is retries with the latest offsets
                         requestAttempt.offsets = subscriptions.allConsumed();
                         requestAttempt.resetFuture();
-                        maybeAutoCommitSyncNowWithRetries(requestAttempt, result);
+                        autoCommitSyncNowWithRetries(requestAttempt, result);
                     }
                 } else {
                     log.debug("Auto-commit sync failed with non-retriable error", error);
@@ -420,10 +420,8 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
                 result.complete(null);
             } else {
                 if (error instanceof RetriableException) {
-                    // if (error instanceof TimeoutException && requestAttempt.retryTimeoutExpired
-                    // (requestAttempt.lastReceivedMs)) {
                     if (error instanceof TimeoutException && requestAttempt.isExpired) {
-                        log.debug("OffsetCommit timeout expired so it won't be retried anymore");
+                        log.info("OffsetCommit timeout expired so it won't be retried anymore");
                         result.completeExceptionally(error);
                     } else {
                         requestAttempt.resetFuture();
@@ -500,8 +498,6 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
             } else {
                 if (error instanceof RetriableException || isStaleEpochErrorAndValidEpochAvailable(error)) {
                     if (error instanceof TimeoutException && fetchRequest.isExpired) {
-                        // result.completeExceptionally(new TimeoutException("OffsetFetch could
-                        // not complete before timeout expired."));
                         result.completeExceptionally(error);
                     } else {
                         fetchRequest.resetFuture();
