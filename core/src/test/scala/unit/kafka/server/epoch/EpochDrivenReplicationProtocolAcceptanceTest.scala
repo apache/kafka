@@ -17,7 +17,6 @@
 
 package kafka.server.epoch
 
-import kafka.log.CleanShutdownFileHandler
 import kafka.log.UnifiedLog
 import kafka.server.KafkaConfig._
 import kafka.server.{KafkaConfig, KafkaServer, QuorumTestHarness}
@@ -32,6 +31,7 @@ import org.apache.kafka.common.serialization.ByteArrayDeserializer
 import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.storage.internals.epoch.LeaderEpochFileCache
 import org.apache.kafka.storage.internals.log.EpochEntry
+import org.apache.kafka.storage.internals.checkpoint.CleanShutdownFileHandler
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo}
 
@@ -49,7 +49,7 @@ import scala.jdk.CollectionConverters._
   */
 class EpochDrivenReplicationProtocolAcceptanceTest extends QuorumTestHarness with Logging {
   // Set this to IBP_0_11_0_IV1 to demonstrate the tests failing in the pre-KIP-101 case
-  override def metadataVersion = MetadataVersion.latest
+  override def metadataVersion = MetadataVersion.latestTesting
   val topic = "topic1"
   val msg = new Array[Byte](1000)
   val msgBigger = new Array[Byte](10000)
@@ -246,6 +246,7 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends QuorumTestHarness wit
 
     //Are the files identical?
     assertEquals(getLogFile(brokers(0), 0).length, getLogFile(brokers(1), 0).length, "Log files should match Broker0 vs Broker 1")
+    consumer.close()
   }
 
   /**

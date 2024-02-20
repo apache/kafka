@@ -17,21 +17,25 @@
 
 package org.apache.kafka.controller;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.function.IntPredicate;
 import java.util.stream.Collectors;
 
+import org.apache.kafka.common.DirectoryId;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.AlterPartitionRequestData.BrokerState;
 import org.apache.kafka.common.metadata.PartitionChangeRecord;
 import org.apache.kafka.metadata.LeaderRecoveryState;
 import org.apache.kafka.metadata.PartitionRegistration;
 import org.apache.kafka.metadata.Replicas;
+import org.apache.kafka.metadata.placement.DefaultDirProvider;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.common.MetadataVersion;
 import org.slf4j.Logger;
@@ -48,12 +52,13 @@ public class PartitionChangeBuilder {
     public static boolean changeRecordIsNoOp(PartitionChangeRecord record) {
         if (record.isr() != null) return false;
         if (record.eligibleLeaderReplicas() != null) return false;
-        if (record.lastKnownELR() != null) return false;
+        if (record.lastKnownElr() != null) return false;
         if (record.leader() != NO_LEADER_CHANGE) return false;
         if (record.replicas() != null) return false;
         if (record.removingReplicas() != null) return false;
         if (record.addingReplicas() != null) return false;
         if (record.leaderRecoveryState() != LeaderRecoveryState.NO_CHANGE) return false;
+        if (record.directories() != null) return false;
         return true;
     }
 
@@ -80,6 +85,8 @@ public class PartitionChangeBuilder {
     private final int partitionId;
     private final IntPredicate isAcceptableLeader;
     private final MetadataVersion metadataVersion;
+    private final int minISR;
+    private final Map<Integer, Uuid> targetDirectories;
     private List<Integer> targetIsr;
     private List<Integer> targetReplicas;
     private List<Integer> targetRemoving;
@@ -91,8 +98,11 @@ public class PartitionChangeBuilder {
     private LeaderRecoveryState targetLeaderRecoveryState;
     private boolean zkMigrationEnabled;
     private boolean eligibleLeaderReplicasEnabled;
-    private int minISR;
+    private DefaultDirProvider defaultDirProvider;
 
+    // Whether allow electing last known leader in a Balanced recovery. Note, the last known leader will be stored in the
+    // lastKnownElr field if enabled.
+    private boolean useLastKnownLeaderInBalancedRecovery = true;
 
     public PartitionChangeBuilder(
         PartitionRegistration partition,
@@ -118,6 +128,10 @@ public class PartitionChangeBuilder {
         this.targetElr = Replicas.toList(partition.elr);
         this.targetLastKnownElr = Replicas.toList(partition.lastKnownElr);
         this.targetLeaderRecoveryState = partition.leaderRecoveryState;
+        this.targetDirectories = DirectoryId.createAssignmentMap(partition.replicas, partition.directories);
+        this.defaultDirProvider = uuid -> {
+            throw new IllegalStateException("DefaultDirProvider is not set");
+        };
     }
 
     public PartitionChangeBuilder setTargetIsr(List<Integer> targetIsr) {
@@ -174,6 +188,21 @@ public class PartitionChangeBuilder {
         return this;
     }
 
+    public PartitionChangeBuilder setUseLastKnownLeaderInBalancedRecovery(boolean useLastKnownLeaderInBalancedRecovery) {
+        this.useLastKnownLeaderInBalancedRecovery = useLastKnownLeaderInBalancedRecovery;
+        return this;
+    }
+
+    public PartitionChangeBuilder setDirectory(int brokerId, Uuid dir) {
+        this.targetDirectories.put(brokerId, dir);
+        return this;
+    }
+
+    public PartitionChangeBuilder setDefaultDirProvider(DefaultDirProvider defaultDirProvider) {
+        this.defaultDirProvider = defaultDirProvider;
+        return this;
+    }
+
     // VisibleForTesting
     static class ElectionResult {
         final int node;
@@ -221,6 +250,10 @@ public class PartitionChangeBuilder {
             return new ElectionResult(onlineLeader.get(), false);
         }
 
+        if (canElectLastKnownLeader()) {
+            return new ElectionResult(partition.lastKnownElr[0], true);
+        }
+
         return new ElectionResult(NO_LEADER, false);
     }
 
@@ -240,6 +273,10 @@ public class PartitionChangeBuilder {
             return new ElectionResult(onlineLeader.get(), false);
         }
 
+        if (canElectLastKnownLeader()) {
+            return new ElectionResult(partition.lastKnownElr[0], true);
+        }
+
         if (election == Election.UNCLEAN) {
             // Attempt unclean leader election
             Optional<Integer> uncleanLeader = targetReplicas.stream()
@@ -253,8 +290,43 @@ public class PartitionChangeBuilder {
         return new ElectionResult(NO_LEADER, false);
     }
 
+    private boolean canElectLastKnownLeader() {
+        if (!eligibleLeaderReplicasEnabled || !useLastKnownLeaderInBalancedRecovery) {
+            log.trace("Try to elect last known leader for " + topicId + "-" + partitionId +
+                " but elrEnabled=" + eligibleLeaderReplicasEnabled + ", useLastKnownLeaderInBalancedRecovery=" +
+                useLastKnownLeaderInBalancedRecovery);
+            return false;
+        }
+        if (!targetElr.isEmpty() || !targetIsr.isEmpty()) {
+            log.trace("Try to elect last known leader for " + topicId + "-" + partitionId +
+                " but ELR/ISR is not empty. ISR=" + targetIsr + ", ELR=" + targetElr);
+            return false;
+        }
+
+        // When the last known leader is enabled:
+        // 1. The targetLastKnownElr will only be used to store the last known leader, and it is updated after the
+        //    leader election. So we can only refer to the lastKnownElr in the existing partition registration.
+        // 2. When useLastKnownLeaderInBalancedRecovery=false, it intends to use other type of unclean leader election
+        //    and the lastKnownElr is populated with the real last known ELR members. Then it may have multiple members
+        //    in the field even if useLastKnownLeaderInBalancedRecovery is set to true again. In this case, we can't
+        //    refer to the lastKnownElr.
+        if (partition.lastKnownElr.length != 1) {
+            log.trace("Try to elect last known leader for " + topicId + "-" + partitionId +
+                " but lastKnownElr does not only have 1 member. lastKnownElr=" +
+                Arrays.toString(partition.lastKnownElr));
+            return false;
+        }
+        if (isAcceptableLeader.test(partition.lastKnownElr[0])) {
+            log.trace("Try to elect last known leader for " + topicId + "-" + partitionId +
+                " but last known leader is not alive. last known leader=" + partition.lastKnownElr[0]);
+        }
+        return true;
+    }
+
     private boolean isValidNewLeader(int replica) {
-        return targetIsr.contains(replica) && isAcceptableLeader.test(replica);
+        // The valid new leader should be in either ISR or in ELR when ISR is empty.
+        return (targetIsr.contains(replica) || (targetIsr.isEmpty() && targetElr.contains(replica))) &&
+            isAcceptableLeader.test(replica);
     }
 
     private void tryElection(PartitionChangeRecord record) {
@@ -262,8 +334,14 @@ public class PartitionChangeBuilder {
         if (electionResult.node != partition.leader) {
             // generating log messages for partition elections can get expensive on large clusters,
             // so only log clean elections at TRACE level; log unclean elections at INFO level
-            // to ensure the message is emitted since an unclean election can lead to data loss.
-            if (electionResult.unclean) {
+            // to ensure the message is emitted since an unclean election can lead to data loss;
+            if (targetElr.contains(electionResult.node)) {
+                targetIsr = Collections.singletonList(electionResult.node);
+                targetElr = targetElr.stream().filter(replica -> replica != electionResult.node)
+                    .collect(Collectors.toList());
+                log.trace("Setting new leader for topicId {}, partition {} to {} using ELR",
+                        topicId, partitionId, electionResult.node);
+            } else if (electionResult.unclean) {
                 log.info("Setting new leader for topicId {}, partition {} to {} using an unclean election",
                     topicId, partitionId, electionResult.node);
             } else {
@@ -361,11 +439,17 @@ public class PartitionChangeBuilder {
 
         maybeUpdateRecordElr(record);
 
-        if (record.isr() == null && !targetIsr.isEmpty() && !targetIsr.equals(Replicas.toList(partition.isr))) {
+        // If ELR is enabled, the ISR is allowed to be empty.
+        if (record.isr() == null && (!targetIsr.isEmpty() || eligibleLeaderReplicasEnabled) &&
+            !targetIsr.equals(Replicas.toList(partition.isr))) {
             // Set the new ISR if it is different from the current ISR and unclean leader election didn't already set it.
+            if (targetIsr.isEmpty()) {
+                log.debug("A partition will have an empty ISR. " + this);
+            }
             record.setIsr(targetIsr);
         }
 
+        maybeUpdateLastKnownLeader(record);
 
         setAssignmentChanges(record);
 
@@ -381,14 +465,34 @@ public class PartitionChangeBuilder {
     }
 
     private void setAssignmentChanges(PartitionChangeRecord record) {
-        if (!targetReplicas.isEmpty() && !targetReplicas.equals(Replicas.toList(partition.replicas))) {
-            record.setReplicas(targetReplicas);
+        if (!targetReplicas.isEmpty()) {
+            if (metadataVersion.isDirectoryAssignmentSupported()) {
+                List<Uuid> directories = new ArrayList<>(targetReplicas.size());
+                for (int replica : targetReplicas) {
+                    directories.add(this.targetDirectories.getOrDefault(replica, defaultDirProvider.defaultDir(replica)));
+                }
+                if (!directories.equals(Arrays.asList(partition.directories))) {
+                    record.setDirectories(directories);
+                }
+            }
+            if (!targetReplicas.equals(Replicas.toList(partition.replicas))) {
+                record.setReplicas(targetReplicas);
+            }
         }
         if (!targetRemoving.equals(Replicas.toList(partition.removingReplicas))) {
             record.setRemovingReplicas(targetRemoving);
         }
         if (!targetAdding.equals(Replicas.toList(partition.addingReplicas))) {
             record.setAddingReplicas(targetAdding);
+        }
+    }
+
+    private void maybeUpdateLastKnownLeader(PartitionChangeRecord record) {
+        if (!useLastKnownLeaderInBalancedRecovery || !eligibleLeaderReplicasEnabled) return;
+        if (record.isr() != null && record.isr().isEmpty() && (partition.lastKnownElr.length != 1 ||
+            partition.lastKnownElr[0] != partition.leader)) {
+            // Only update the last known leader when the first time the partition becomes leaderless.
+            record.setLastKnownElr(Arrays.asList(partition.leader));
         }
     }
 
@@ -406,15 +510,22 @@ public class PartitionChangeBuilder {
             record.setEligibleLeaderReplicas(targetElr);
         }
 
+        if (useLastKnownLeaderInBalancedRecovery && partition.lastKnownElr.length == 1 &&
+                (record.leader() == NO_LEADER || record.leader() == NO_LEADER_CHANGE && partition.leader == NO_LEADER)) {
+            // If the last known leader is stored in the lastKnownElr, the last known elr should not be updated when
+            // the partition does not have a leader.
+            targetLastKnownElr = Replicas.toList(partition.lastKnownElr);
+        }
+
         if (!targetLastKnownElr.equals(Replicas.toList(partition.lastKnownElr))) {
-            record.setLastKnownELR(targetLastKnownElr);
+            record.setLastKnownElr(targetLastKnownElr);
         }
     }
 
     private void maybePopulateTargetElr() {
         if (!eligibleLeaderReplicasEnabled) return;
 
-        // If the ISR is larger or equal to the min ISR, clear the ELR and lastKnownELR.
+        // If the ISR is larger or equal to the min ISR, clear the ELR and LastKnownElr.
         if (targetIsr.size() >= minISR) {
             targetElr = Collections.emptyList();
             targetLastKnownElr = Collections.emptyList();

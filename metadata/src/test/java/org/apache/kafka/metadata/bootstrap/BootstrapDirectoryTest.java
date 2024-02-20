@@ -48,7 +48,7 @@ public class BootstrapDirectoryTest {
     static class BootstrapTestDirectory implements AutoCloseable {
         File directory = null;
 
-        synchronized BootstrapTestDirectory createDirectory() throws Exception {
+        synchronized BootstrapTestDirectory createDirectory() {
             directory = TestUtils.tempDirectory("BootstrapTestDirectory");
             return this;
         }
@@ -73,7 +73,7 @@ public class BootstrapDirectoryTest {
     @Test
     public void testReadFromEmptyConfiguration() throws Exception {
         try (BootstrapTestDirectory testDirectory = new BootstrapTestDirectory().createDirectory()) {
-            assertEquals(BootstrapMetadata.fromVersion(MetadataVersion.latest(),
+            assertEquals(BootstrapMetadata.fromVersion(MetadataVersion.latestProduction(),
                     "the default bootstrap"),
                 new BootstrapDirectory(testDirectory.path(), Optional.empty()).read());
         }
@@ -98,7 +98,7 @@ public class BootstrapDirectoryTest {
     }
 
     @Test
-    public void testMissingDirectory() throws Exception {
+    public void testMissingDirectory() {
         assertEquals("No such directory as ./non/existent/directory",
             assertThrows(RuntimeException.class, () ->
                 new BootstrapDirectory("./non/existent/directory", Optional.empty()).read()).getMessage());

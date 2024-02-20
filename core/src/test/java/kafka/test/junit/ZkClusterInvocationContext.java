@@ -61,15 +61,16 @@ import java.util.stream.Stream;
  * <ul>
  *     <li>ClusterConfig (the same instance passed to the constructor)</li>
  *     <li>ClusterInstance (includes methods to expose underlying SocketServer-s)</li>
- *     <li>IntegrationTestHelper (helper methods)</li>
  * </ul>
  */
 public class ZkClusterInvocationContext implements TestTemplateInvocationContext {
 
+    private final String baseDisplayName;
     private final ClusterConfig clusterConfig;
     private final AtomicReference<IntegrationTestHarness> clusterReference;
 
-    public ZkClusterInvocationContext(ClusterConfig clusterConfig) {
+    public ZkClusterInvocationContext(String baseDisplayName, ClusterConfig clusterConfig) {
+        this.baseDisplayName = baseDisplayName;
         this.clusterConfig = clusterConfig;
         this.clusterReference = new AtomicReference<>();
     }
@@ -79,7 +80,7 @@ public class ZkClusterInvocationContext implements TestTemplateInvocationContext
         String clusterDesc = clusterConfig.nameTags().entrySet().stream()
             .map(Object::toString)
             .collect(Collectors.joining(", "));
-        return String.format("[%d] Type=ZK, %s", invocationIndex, clusterDesc);
+        return String.format("%s [%d] Type=ZK, %s", baseDisplayName, invocationIndex, clusterDesc);
     }
 
     @Override

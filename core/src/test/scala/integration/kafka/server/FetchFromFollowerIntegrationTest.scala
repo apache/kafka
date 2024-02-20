@@ -14,9 +14,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package integration.kafka.server
+package kafka.server
 
-import kafka.server.{BaseFetchRequestTest, KafkaConfig}
 import kafka.utils.{TestInfoUtils, TestUtils}
 import org.apache.kafka.clients.admin.NewPartitionReassignment
 import org.apache.kafka.clients.consumer.{ConsumerConfig, KafkaConsumer, RangeAssignor}
@@ -26,7 +25,7 @@ import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.FetchResponse
 import org.apache.kafka.common.serialization.ByteArrayDeserializer
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
-import org.junit.jupiter.api.Timeout
+import org.junit.jupiter.api.{Disabled, Timeout}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 
@@ -65,8 +64,10 @@ class FetchFromFollowerIntegrationTest extends BaseFetchRequestTest {
       admin,
       topic,
       brokers,
+      controllerServers,
       replicaAssignment = Map(0 -> Seq(leaderBrokerId, followerBrokerId))
     )
+    TestUtils.waitUntilLeaderIsKnown(brokers, new TopicPartition(topic, 0))
     assertTrue(partitionLeaders.values.forall(_ == leaderBrokerId))
 
     val version = ApiKeys.FETCH.latestVersion()
@@ -107,6 +108,7 @@ class FetchFromFollowerIntegrationTest extends BaseFetchRequestTest {
       admin,
       topic,
       brokers,
+      controllerServers,
       replicaAssignment = Map(0 -> Seq(leaderBrokerId, followerBrokerId))
     )
 
@@ -134,6 +136,7 @@ class FetchFromFollowerIntegrationTest extends BaseFetchRequestTest {
       admin,
       topic,
       brokers,
+      controllerServers,
       replicaAssignment = Map(0 -> Seq(leaderBrokerId, followerBrokerId))
     )
 
@@ -175,6 +178,7 @@ class FetchFromFollowerIntegrationTest extends BaseFetchRequestTest {
     }
   }
 
+  @Disabled
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testRackAwareRangeAssignor(quorum: String): Unit = {

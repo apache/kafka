@@ -35,7 +35,7 @@ class WorkerMetricsGroup {
     private final Sensor taskStartupFailures;
     private final Sensor taskStartupResults;
 
-    public WorkerMetricsGroup(final Map<String, WorkerConnector> connectors, Map<ConnectorTaskId, WorkerTask> tasks, ConnectMetrics connectMetrics) {
+    public WorkerMetricsGroup(final Map<String, WorkerConnector> connectors, Map<ConnectorTaskId, WorkerTask<?, ?>> tasks, ConnectMetrics connectMetrics) {
         ConnectMetricsRegistry registry = connectMetrics.registry();
         metricGroup = connectMetrics.group(registry.workerGroupName());
 

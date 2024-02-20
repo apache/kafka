@@ -19,11 +19,12 @@ package kafka.server.metadata
 
 import java.util.Properties
 import kafka.server.ConfigAdminManager.toLoggableProps
-import kafka.server.{ConfigEntityName, ConfigHandler, ConfigType, KafkaConfig}
+import kafka.server.{ConfigHandler, KafkaConfig}
 import kafka.utils.Logging
-import org.apache.kafka.common.config.ConfigResource.Type.{BROKER, TOPIC}
+import org.apache.kafka.common.config.ConfigResource.Type.{BROKER, CLIENT_METRICS, TOPIC}
 import org.apache.kafka.image.loader.LoaderManifest
 import org.apache.kafka.image.{MetadataDelta, MetadataImage}
+import org.apache.kafka.server.config.{ConfigEntityName, ConfigType}
 import org.apache.kafka.server.fault.FaultHandler
 
 
@@ -57,7 +58,7 @@ class DynamicConfigPublisher(
           val props = newImage.configs().configProperties(resource)
           resource.`type`() match {
             case TOPIC =>
-              dynamicConfigHandlers.get(ConfigType.Topic).foreach(topicConfigHandler =>
+              dynamicConfigHandlers.get(ConfigType.TOPIC).foreach(topicConfigHandler =>
                 try {
                   // Apply changes to a topic's dynamic configuration.
                   info(s"Updating topic ${resource.name()} with new configuration : " +
@@ -70,14 +71,14 @@ class DynamicConfigPublisher(
                 }
               )
             case BROKER =>
-              dynamicConfigHandlers.get(ConfigType.Broker).foreach(nodeConfigHandler =>
+              dynamicConfigHandlers.get(ConfigType.BROKER).foreach(nodeConfigHandler =>
                 if (resource.name().isEmpty) {
                   try {
                     // Apply changes to "cluster configs" (also known as default BROKER configs).
                     // These are stored in KRaft with an empty name field.
                     info("Updating cluster configuration : " +
                       toLoggableProps(resource, props).mkString(","))
-                    nodeConfigHandler.processConfigChanges(ConfigEntityName.Default, props)
+                    nodeConfigHandler.processConfigChanges(ConfigEntityName.DEFAULT, props)
                   } catch {
                     case t: Throwable => faultHandler.handleFault("Error updating " +
                       s"cluster with new configuration: ${toLoggableProps(resource, props).mkString(",")} " +
@@ -101,6 +102,18 @@ class DynamicConfigPublisher(
                   }
                 }
               )
+            case CLIENT_METRICS =>
+              // Apply changes to client metrics subscription.
+              dynamicConfigHandlers.get(ConfigType.CLIENT_METRICS).foreach(metricsConfigHandler =>
+                try {
+                  info(s"Updating client metrics ${resource.name()} with new configuration : " +
+                    toLoggableProps(resource, props).mkString(","))
+                  metricsConfigHandler.processConfigChanges(resource.name(), props)
+                } catch {
+                  case t: Throwable => faultHandler.handleFault("Error updating client metrics" +
+                    s"${resource.name()} with new configuration: ${toLoggableProps(resource, props).mkString(",")} " +
+                    s"in $deltaName", t)
+                })
             case _ => // nothing to do
           }
         }

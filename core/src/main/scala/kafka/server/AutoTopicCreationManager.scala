@@ -20,7 +20,6 @@ package kafka.server
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicReference
 import java.util.{Collections, Properties}
-
 import kafka.controller.KafkaController
 import kafka.coordinator.transaction.TransactionCoordinator
 import kafka.utils.Logging
@@ -34,8 +33,10 @@ import org.apache.kafka.common.message.MetadataResponseData.MetadataResponseTopi
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.{ApiError, CreateTopicsRequest, RequestContext, RequestHeader}
 import org.apache.kafka.coordinator.group.GroupCoordinator
+import org.apache.kafka.server.{ControllerRequestCompletionHandler, NodeToControllerChannelManager}
 
 import scala.collection.{Map, Seq, Set, mutable}
+import scala.compat.java8.OptionConverters._
 import scala.jdk.CollectionConverters._
 
 trait AutoTopicCreationManager {
@@ -50,15 +51,13 @@ trait AutoTopicCreationManager {
 object AutoTopicCreationManager {
 
   def apply(
-    config: KafkaConfig,
-    metadataCache: MetadataCache,
-    threadNamePrefix: Option[String],
-    channelManager: Option[NodeToControllerChannelManager],
-    adminManager: Option[ZkAdminManager],
-    controller: Option[KafkaController],
-    groupCoordinator: GroupCoordinator,
-    txnCoordinator: TransactionCoordinator,
-  ): AutoTopicCreationManager = {
+   config: KafkaConfig,
+   channelManager: Option[NodeToControllerChannelManager],
+   adminManager: Option[ZkAdminManager],
+   controller: Option[KafkaController],
+   groupCoordinator: GroupCoordinator,
+   txnCoordinator: TransactionCoordinator,
+ ): AutoTopicCreationManager = {
     new DefaultAutoTopicCreationManager(config, channelManager, adminManager,
       controller, groupCoordinator, txnCoordinator)
   }
@@ -193,7 +192,7 @@ class DefaultAutoTopicCreationManager(
 
     val request = metadataRequestContext.map { context =>
       val requestVersion =
-        channelManager.controllerApiVersions() match {
+        channelManager.controllerApiVersions.asScala match {
           case None =>
             // We will rely on the Metadata request to be retried in the case
             // that the latest version is not usable by the controller.

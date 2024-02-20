@@ -196,13 +196,13 @@ class FetchRequestTest extends BaseFetchRequestTest {
   }
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("zk"))
+  @ValueSource(strings = Array("zk", "kraft"))
   def testLastFetchedEpochValidation(quorum: String): Unit = {
     checkLastFetchedEpochValidation(ApiKeys.FETCH.latestVersion())
   }
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("zk"))
+  @ValueSource(strings = Array("zk", "kraft"))
   def testLastFetchedEpochValidationV12(quorum: String): Unit = {
     checkLastFetchedEpochValidation(12)
   }
@@ -211,6 +211,7 @@ class FetchRequestTest extends BaseFetchRequestTest {
     val topic = "topic"
     val topicPartition = new TopicPartition(topic, 0)
     val partitionToLeader = createTopic(topic, replicationFactor = 3)
+    TestUtils.waitUntilLeaderIsKnown(brokers, topicPartition)
     val firstLeaderId = partitionToLeader(topicPartition.partition)
     val firstLeaderEpoch = TestUtils.findLeaderEpoch(firstLeaderId, topicPartition, brokers)
 

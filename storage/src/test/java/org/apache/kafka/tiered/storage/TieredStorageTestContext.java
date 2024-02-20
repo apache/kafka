@@ -179,7 +179,7 @@ public final class TieredStorageTestContext implements AutoCloseable {
     }
 
     public void deleteTopic(String topic) {
-        TestUtils.deleteTopicWithAdmin(admin, topic, harness.brokers());
+        TestUtils.deleteTopicWithAdmin(admin, topic, harness.brokers(), harness.controllerServers());
     }
 
     /**

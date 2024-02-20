@@ -235,7 +235,7 @@ public class EventAccumulator<K, T extends EventAccumulator.Event<K>> implements
      */
     private void addAvailableKey(K key) {
         availableKeys.add(key);
-        condition.signalAll();
+        condition.signal();
     }
 
     /**

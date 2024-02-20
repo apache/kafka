@@ -28,6 +28,8 @@ import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.storage.internals.log.LogConfig;
 
 import java.io.ByteArrayOutputStream;
+import java.io.File;
+import java.io.IOException;
 import java.io.PrintStream;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -42,7 +44,7 @@ import java.util.stream.Collectors;
 
 public class ToolsTestUtils {
     /** @see TestInfoUtils#TestWithParameterizedQuorumName()  */
-    public static final String TEST_WITH_PARAMETERIZED_QUORUM_NAME = "{displayName}.quorum={0}";
+    public static final String TEST_WITH_PARAMETERIZED_QUORUM_NAME = "{displayName}.{argumentsWithNames}";
 
     private static int randomPort = 0;
 
@@ -196,6 +198,14 @@ public class ToolsTestUtils {
         return moves.entrySet().stream()
             .flatMap(entry -> entry.getValue().stream().map(replicaId -> entry.getKey().partition() + ":" + replicaId))
             .collect(Collectors.joining(","));
+    }
+
+    public static File tempPropertiesFile(Map<String, String> properties) throws IOException {
+        StringBuilder sb = new StringBuilder();
+        for (Map.Entry<String, String> entry : properties.entrySet()) {
+            sb.append(entry.getKey() + "=" + entry.getValue() + System.lineSeparator());
+        }
+        return org.apache.kafka.test.TestUtils.tempFile(sb.toString());
     }
 
     public static class MockExitProcedure implements Exit.Procedure {

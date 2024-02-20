@@ -148,6 +148,7 @@ class MetricsTest extends KafkaServerTestHarness with Logging {
     // The broker metrics for all topics should be greedily registered
     assertTrue(topicMetrics(None).nonEmpty, "General topic metrics don't exist")
     assertEquals(brokers.head.brokerTopicStats.allTopicsStats.metricMap.size, topicMetrics(None).size)
+    assertEquals(0, brokers.head.brokerTopicStats.allTopicsStats.metricGaugeMap.size)
     // topic metrics should be lazily registered
     assertTrue(topicMetricGroups(topic).isEmpty, "Topic metrics aren't lazily registered")
     TestUtils.generateAndProduceMessages(brokers, topic, nMessages)
@@ -196,15 +197,14 @@ class MetricsTest extends KafkaServerTestHarness with Logging {
     val initialBytesIn = TestUtils.meterCount(bytesIn)
     val initialBytesOut = TestUtils.meterCount(bytesOut)
 
-    // BytesOut doesn't include replication, so it shouldn't have changed
-    assertEquals(initialBytesOut, TestUtils.meterCount(bytesOut))
-
     // Produce a few messages to make the metrics tick
     TestUtils.generateAndProduceMessages(brokers, topic, nMessages)
 
     assertTrue(TestUtils.meterCount(replicationBytesIn) > initialReplicationBytesIn)
     assertTrue(TestUtils.meterCount(replicationBytesOut) > initialReplicationBytesOut)
     assertTrue(TestUtils.meterCount(bytesIn) > initialBytesIn)
+    // BytesOut doesn't include replication, so it shouldn't have changed
+    assertEquals(initialBytesOut, TestUtils.meterCount(bytesOut))
 
     // Consume messages to make bytesOut tick
     TestUtils.consumeTopicRecords(brokers, topic, nMessages)

@@ -19,6 +19,7 @@ package org.apache.kafka.clients.consumer.internals;
 import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.NodeApiVersions;
 import org.apache.kafka.clients.consumer.LogTruncationException;
+import org.apache.kafka.clients.consumer.NoOffsetForPartitionException;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetAndTimestamp;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
@@ -262,7 +263,7 @@ class OffsetFetcherUtils {
         else if (strategy == OffsetResetStrategy.LATEST)
             return ListOffsetsRequest.LATEST_TIMESTAMP;
         else
-            return null;
+            throw new NoOffsetForPartitionException(partition);
     }
 
     static Set<String> topicsForPartitions(Collection<TopicPartition> partitions) {

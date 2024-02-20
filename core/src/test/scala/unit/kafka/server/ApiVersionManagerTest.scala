@@ -30,8 +30,8 @@ import org.mockito.Mockito
 import scala.jdk.CollectionConverters._
 
 class ApiVersionManagerTest {
-  private val brokerFeatures = BrokerFeatures.createDefault()
-  private val metadataCache = new ZkMetadataCache(1, MetadataVersion.latest(), brokerFeatures)
+  private val brokerFeatures = BrokerFeatures.createDefault(true)
+  private val metadataCache = new ZkMetadataCache(1, MetadataVersion.latestTesting(), brokerFeatures)
 
   @ParameterizedTest
   @EnumSource(classOf[ListenerType])
