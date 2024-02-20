@@ -100,7 +100,6 @@ import java.util.concurrent.Future;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.function.Supplier;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -1204,7 +1203,7 @@ public class AsyncKafkaConsumerTest {
             () -> {
                 when(metadata.fetch()).thenReturn(Cluster.empty());
                 consumer.subscribe(Pattern.compile(topic));
-        });
+            });
     }
 
     public void testPollReturningRecordIfGenerationKnownAndGroupManagementIsUsed(final String topic,
