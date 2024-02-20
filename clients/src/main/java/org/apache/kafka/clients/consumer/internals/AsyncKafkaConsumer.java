@@ -698,9 +698,11 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                 throw new IllegalStateException("Consumer is not subscribed to any topics or assigned any partitions");
             }
 
-            applicationEventHandler.add(new PollApplicationEvent(timer.currentTimeMs()));
-
             do {
+
+                // Make sure to let the background thread know that we are still polling.
+                applicationEventHandler.add(new PollApplicationEvent(timer.currentTimeMs()));
+
                 // We must not allow wake-ups between polling for fetches and returning the records.
                 // If the polled fetches are not empty the consumed position has already been updated in the polling
                 // of the fetches. A wakeup between returned fetches and returning records would lead to never

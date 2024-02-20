@@ -265,6 +265,32 @@ class PlaintextConsumerTest extends BaseConsumerTest {
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
   @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
+  def testMaxPollIntervalMsShorterThanPollTimeout(quorum: String, groupProtocol: String): Unit = {
+    this.consumerConfig.setProperty(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, 1000.toString)
+    this.consumerConfig.setProperty(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, 500.toString)
+
+    val consumer = createConsumer()
+    val listener = new TestConsumerReassignmentListener
+    consumer.subscribe(List(topic).asJava, listener)
+
+    // rebalance to get the initial assignment
+    awaitRebalance(consumer, listener)
+
+    val callsToAssignedAfterFirstRebalance = listener.callsToAssigned
+
+    consumer.poll(Duration.ofMillis(2000))
+
+    // If the poll poll above times out, it would trigger a rebalance.
+    // Leave some time for the rebalance to happen and check for the rebalance event.
+    consumer.poll(Duration.ofMillis(500))
+    consumer.poll(Duration.ofMillis(500))
+
+    assertEquals(callsToAssignedAfterFirstRebalance, listener.callsToAssigned)
+  }
+
+
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
   def testAutoCommitOnClose(quorum: String, groupProtocol: String): Unit = {
     this.consumerConfig.setProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "true")
     val consumer = createConsumer()
