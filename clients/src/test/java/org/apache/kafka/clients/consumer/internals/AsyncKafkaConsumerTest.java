@@ -1138,7 +1138,6 @@ public class AsyncKafkaConsumerTest {
     public void testPollNotReturningRecordsIfGenerationUnknownAndGroupManagementIsUsedWithTopics() {
         testPollNotReturningRecordsIfGenerationUnknownAndGroupManagementIsUsed(() -> {
             consumer.subscribe(singletonList("topic"));
-            return null;
         });
     }
 
@@ -1147,17 +1146,14 @@ public class AsyncKafkaConsumerTest {
         testPollNotReturningRecordsIfGenerationUnknownAndGroupManagementIsUsed(() -> {
             when(metadata.fetch()).thenReturn(Cluster.empty());
             consumer.subscribe(Pattern.compile("topic"));
-            return null;
         });
     }
 
-    private void testPollNotReturningRecordsIfGenerationUnknownAndGroupManagementIsUsed(
-        final Supplier<Void> subscription
-    ) {
+    private void testPollNotReturningRecordsIfGenerationUnknownAndGroupManagementIsUsed(final Runnable subscription) {
         final String groupId = "consumerGroupA";
         final ConsumerConfig config = new ConsumerConfig(requiredConsumerPropertiesAndGroupId(groupId));
         consumer = newConsumer(config);
-        subscription.get();
+        subscription.run();
 
         consumer.poll(Duration.ZERO);
 
@@ -1197,7 +1193,6 @@ public class AsyncKafkaConsumerTest {
             topic,
             () -> {
                 consumer.subscribe(singletonList(topic));
-                return null;
             });
     }
 
@@ -1209,14 +1204,11 @@ public class AsyncKafkaConsumerTest {
             () -> {
                 when(metadata.fetch()).thenReturn(Cluster.empty());
                 consumer.subscribe(Pattern.compile(topic));
-                return null;
         });
     }
 
-    public void testPollReturningRecordIfGenerationKnownAndGroupManagementIsUsed(
-        final String topic,
-        final Supplier<Void> subscription
-    ) {
+    public void testPollReturningRecordIfGenerationKnownAndGroupManagementIsUsed(final String topic,
+                                                                                 final Runnable subscription) {
         final ConsumerConfig config = new ConsumerConfig(requiredConsumerPropertiesAndGroupId("consumerGroupA"));
         final int generation = 1;
         final String memberId = "newMemberId";
@@ -1232,7 +1224,7 @@ public class AsyncKafkaConsumerTest {
         when(fetchCollector.collectFetch(any(FetchBuffer.class)))
             .thenReturn(Fetch.forPartition(topicPartition, records, true));
         consumer = newConsumer(config);
-        subscription.get();
+        subscription.run();
 
         consumer.poll(Duration.ZERO);
 
