@@ -65,7 +65,6 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ExecutionException;
@@ -1643,7 +1642,7 @@ public class KafkaConfigBackingStoreTest {
         configStorage.setupAndCreateKafkaBasedLog(TOPIC, config);
 
         assertEquals(
-                IsolationLevel.READ_COMMITTED.name().toLowerCase(Locale.ROOT),
+                IsolationLevel.READ_COMMITTED.toString(),
                 capturedConsumerProps.getValue().get(ISOLATION_LEVEL_CONFIG)
         );
 
@@ -1653,7 +1652,7 @@ public class KafkaConfigBackingStoreTest {
     @Test
     public void testConsumerPropertiesOverrideUserSuppliedValuesWithExactlyOnceSourceEnabled() throws Exception {
         props.put(EXACTLY_ONCE_SOURCE_SUPPORT_CONFIG, "enabled");
-        props.put(ISOLATION_LEVEL_CONFIG, IsolationLevel.READ_UNCOMMITTED.name().toLowerCase(Locale.ROOT));
+        props.put(ISOLATION_LEVEL_CONFIG, IsolationLevel.READ_UNCOMMITTED.toString());
         createStore();
 
         expectConfigure();
@@ -1662,7 +1661,7 @@ public class KafkaConfigBackingStoreTest {
         configStorage.setupAndCreateKafkaBasedLog(TOPIC, config);
 
         assertEquals(
-                IsolationLevel.READ_COMMITTED.name().toLowerCase(Locale.ROOT),
+                IsolationLevel.READ_COMMITTED.toString(),
                 capturedConsumerProps.getValue().get(ISOLATION_LEVEL_CONFIG)
         );
 
@@ -1688,7 +1687,7 @@ public class KafkaConfigBackingStoreTest {
     @Test
     public void testConsumerPropertiesDoNotOverrideUserSuppliedValuesWithoutExactlyOnceSourceEnabled() throws Exception {
         props.put(EXACTLY_ONCE_SOURCE_SUPPORT_CONFIG, "preparing");
-        props.put(ISOLATION_LEVEL_CONFIG, IsolationLevel.READ_UNCOMMITTED.name().toLowerCase(Locale.ROOT));
+        props.put(ISOLATION_LEVEL_CONFIG, IsolationLevel.READ_UNCOMMITTED.toString());
         createStore();
 
         expectConfigure();
@@ -1697,7 +1696,7 @@ public class KafkaConfigBackingStoreTest {
         configStorage.setupAndCreateKafkaBasedLog(TOPIC, config);
 
         assertEquals(
-                IsolationLevel.READ_UNCOMMITTED.name().toLowerCase(Locale.ROOT),
+                IsolationLevel.READ_UNCOMMITTED.toString(),
                 capturedConsumerProps.getValue().get(ISOLATION_LEVEL_CONFIG)
         );
 

@@ -188,18 +188,18 @@ public class HeartbeatRequestManager implements RequestManager {
     @Override
     public NetworkClientDelegate.PollResult poll(long currentTimeMs) {
         if (!coordinatorRequestManager.coordinator().isPresent() ||
-            membershipManager.shouldSkipHeartbeat() ||
-            pollTimer.isExpired()) {
+            membershipManager.shouldSkipHeartbeat()) {
             membershipManager.onHeartbeatRequestSkipped();
             return NetworkClientDelegate.PollResult.EMPTY;
         }
         pollTimer.update(currentTimeMs);
-        if (pollTimer.isExpired()) {
-            logger.warn("consumer poll timeout has expired. This means the time between subsequent calls to poll() " +
-                "was longer than the configured max.poll.interval.ms, which typically implies that " +
-                "the poll loop is spending too much time processing messages. You can address this " +
-                "either by increasing max.poll.interval.ms or by reducing the maximum size of batches " +
-                "returned in poll() with max.poll.records.");
+        if (pollTimer.isExpired() && !membershipManager.isLeavingGroup()) {
+            logger.warn("Consumer poll timeout has expired. This means the time between " +
+                "subsequent calls to poll() was longer than the configured max.poll.interval.ms, " +
+                "which typically implies that the poll loop is spending too much time processing " +
+                "messages. You can address this either by increasing max.poll.interval.ms or by " +
+                "reducing the maximum size of batches returned in poll() with max.poll.records.");
+
             // This should trigger a heartbeat with leave group epoch
             membershipManager.transitionToStale();
             NetworkClientDelegate.UnsentRequest request = makeHeartbeatRequest(currentTimeMs, true);
@@ -232,22 +232,35 @@ public class HeartbeatRequestManager implements RequestManager {
      * are sent, so blocking for longer than the heartbeat interval might mean the application thread is not
      * responsive to changes.
      *
+     * Similarly, we may have to unblock the application thread to send a `PollApplicationEvent` to make sure
+     * our poll timer will not expire while we are polling.
+     *
      * <p>In the event that heartbeats are currently being skipped, this still returns the next heartbeat
      * delay rather than {@code Long.MAX_VALUE} so that the application thread remains responsive.
      */
     @Override
     public long maximumTimeToWait(long currentTimeMs) {
-        boolean heartbeatNow = membershipManager.shouldHeartbeatNow() && !heartbeatRequestState.requestInFlight();
-        return heartbeatNow ? 0L : heartbeatRequestState.nextHeartbeatMs(currentTimeMs);
+        pollTimer.update(currentTimeMs);
+        if (
+            pollTimer.isExpired() ||
+                (membershipManager.shouldHeartbeatNow() && !heartbeatRequestState.requestInFlight())
+        ) {
+            return 0L;
+        }
+        return Math.min(pollTimer.remainingMs() / 2, heartbeatRequestState.nextHeartbeatMs(currentTimeMs));
     }
 
     /**
-     * When consumer polls, we need to reset the pollTimer.  If the poll timer has expired, we rejoin when the user
-     * repoll the consumer.
+     * Reset the poll timer, indicating that the user has called consumer.poll(). If the member
+     * is in {@link MemberState#STALE} state due to expired poll timer, this will transition the
+     * member to {@link MemberState#JOINING}, so that it rejoins the group.
      */
     public void resetPollTimer(final long pollMs) {
         pollTimer.update(pollMs);
         pollTimer.reset(maxPollIntervalMs);
+        if (membershipManager.state() == MemberState.STALE) {
+            membershipManager.transitionToJoining();
+        }
     }
 
     private NetworkClientDelegate.UnsentRequest makeHeartbeatRequest(final long currentTimeMs,

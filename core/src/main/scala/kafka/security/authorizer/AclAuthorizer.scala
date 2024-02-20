@@ -48,23 +48,23 @@ import scala.util.{Failure, Random, Success, Try}
 object AclAuthorizer {
   // Optional override zookeeper cluster configuration where acls will be stored. If not specified,
   // acls will be stored in the same zookeeper where all other kafka broker metadata is stored.
-  val configPrefix = "authorizer."
-  val ZkUrlProp = s"${configPrefix}zookeeper.url"
-  val ZkConnectionTimeOutProp = s"${configPrefix}zookeeper.connection.timeout.ms"
-  val ZkSessionTimeOutProp = s"${configPrefix}zookeeper.session.timeout.ms"
-  val ZkMaxInFlightRequests = s"${configPrefix}zookeeper.max.in.flight.requests"
+  val configPrefix: String = "authorizer."
+  private val ZkUrlProp = s"${configPrefix}zookeeper.url"
+  private val ZkConnectionTimeOutProp = s"${configPrefix}zookeeper.connection.timeout.ms"
+  private val ZkSessionTimeOutProp = s"${configPrefix}zookeeper.session.timeout.ms"
+  private val ZkMaxInFlightRequests = s"${configPrefix}zookeeper.max.in.flight.requests"
 
   // Semi-colon separated list of users that will be treated as super users and will have access to all the resources
   // for all actions from all hosts, defaults to no super users.
-  val SuperUsersProp = "super.users"
+  val SuperUsersProp: String = "super.users"
   // If set to true when no acls are found for a resource, authorizer allows access to everyone. Defaults to false.
-  val AllowEveryoneIfNoAclIsFoundProp = "allow.everyone.if.no.acl.found"
+  val AllowEveryoneIfNoAclIsFoundProp: String = "allow.everyone.if.no.acl.found"
 
   case class VersionedAcls(acls: Set[AclEntry], zkVersion: Int) {
     def exists: Boolean = zkVersion != ZkVersion.UnknownVersion
   }
 
-  class AclSeqs(seqs: Seq[AclEntry]*) {
+  private class AclSeqs(seqs: Seq[AclEntry]*) {
     def find(p: AclEntry => Boolean): Option[AclEntry] = {
       // Lazily iterate through the inner `Seq` elements and stop as soon as we find a match
       val it = seqs.iterator.flatMap(_.find(p))
@@ -75,8 +75,8 @@ object AclAuthorizer {
     def isEmpty: Boolean = !seqs.exists(_.nonEmpty)
   }
 
-  val NoAcls = VersionedAcls(Set.empty, ZkVersion.UnknownVersion)
-  val WildcardHost = "*"
+  val NoAcls: VersionedAcls = VersionedAcls(Set.empty, ZkVersion.UnknownVersion)
+  val WildcardHost: String = "*"
 
   // Orders by resource type, then resource pattern type and finally reverse ordering by name.
   class ResourceOrdering extends Ordering[ResourcePattern] {
@@ -103,7 +103,7 @@ object AclAuthorizer {
     else {
       // start with the base config from the Kafka configuration
       // be sure to force creation since the zkSslClientEnable property in the kafkaConfig could be false
-      val zkClientConfig = KafkaServer.zkClientConfigFromKafkaConfig(kafkaConfig, true)
+      val zkClientConfig = KafkaServer.zkClientConfigFromKafkaConfig(kafkaConfig, forceZkSslClientEnable = true)
       // add in any prefixed overlays
       KafkaConfig.ZkSslConfigToSystemPropertyMap.forKeyValue { (kafkaProp, sysProp) =>
         configMap.get(AclAuthorizer.configPrefix + kafkaProp).foreach { prefixedValue =>
@@ -148,7 +148,7 @@ object AclAuthorizer {
     }
   }
 
-  def getAclsFromZk(zkClient: KafkaZkClient, resource: ResourcePattern): VersionedAcls = {
+  private def getAclsFromZk(zkClient: KafkaZkClient, resource: ResourcePattern): VersionedAcls = {
     zkClient.getVersionedAclsForResource(resource)
   }
 }
@@ -525,7 +525,7 @@ class AclAuthorizer extends Authorizer with Logging {
     if (authorized) AuthorizationResult.ALLOWED else AuthorizationResult.DENIED
   }
 
-  def isSuperUser(principal: KafkaPrincipal): Boolean = {
+  private def isSuperUser(principal: KafkaPrincipal): Boolean = {
     if (superUsers.contains(principal)) {
       authorizerLogger.debug(s"principal = $principal is a super user, allowing operation without checking acls.")
       true
@@ -596,7 +596,7 @@ class AclAuthorizer extends Authorizer with Logging {
     }
   }
 
-  def logAuditMessage(requestContext: AuthorizableRequestContext, action: Action, authorized: Boolean): Unit = {
+  private def logAuditMessage(requestContext: AuthorizableRequestContext, action: Action, authorized: Boolean): Unit = {
     def logMessage: String = {
       val principal = requestContext.principal
       val operation = SecurityUtils.operationName(action.operation)
@@ -753,7 +753,7 @@ class AclAuthorizer extends Authorizer with Logging {
     }
   }
 
-  object AclChangedNotificationHandler extends AclChangeNotificationHandler {
+  private object AclChangedNotificationHandler extends AclChangeNotificationHandler {
     override def processNotification(resource: ResourcePattern): Unit = {
       processAclChangeNotification(resource)
     }

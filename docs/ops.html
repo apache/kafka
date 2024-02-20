@@ -3869,6 +3869,9 @@ zookeeper.metadata.migration.enable=true
 # ZooKeeper client configuration
 zookeeper.connect=localhost:2181
 
+# The inter broker listener in brokers to allow KRaft controller send RPCs to brokers
+inter.broker.listener.name=PLAINTEXT
+
 # Other configs ...</pre>
 
   <p><em>Note: The KRaft cluster <code>node.id</code> values must be different from any existing ZK broker <code>broker.id</code>.
@@ -3930,6 +3933,12 @@ controller.listener.names=CONTROLLER</pre>
     broker configuration as an example, we would replace the <code>broker.id</code> with <code>node.id</code> and add
     <code>process.roles=broker</code>. It is important that the broker maintain the same Broker/Node ID when it is restarted.
     The zookeeper configurations should be removed at this point.
+  </p>
+
+  <p>
+    If your broker has authorization configured via the <code>authorizer.class.name</code> property
+    using <code>kafka.security.authorizer.AclAuthorizer</code>, this is also the time to change it
+    to use <code>org.apache.kafka.metadata.authorizer.StandardAuthorizer</code> instead.
   </p>
 
   <pre>
