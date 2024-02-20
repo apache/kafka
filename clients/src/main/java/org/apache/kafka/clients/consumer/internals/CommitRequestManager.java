@@ -1186,7 +1186,8 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
          * futures with a TimeoutException.
          */
         private void failAndRemoveExpiredCommitRequests(final long currentTimeMs) {
-            unsentOffsetCommits.forEach(req -> req.maybeExpire(currentTimeMs));
+            Queue<OffsetCommitRequestState> requestsToPurge = new LinkedList<>(unsentOffsetCommits);
+            requestsToPurge.forEach(req -> req.maybeExpire(currentTimeMs));
         }
 
         /**
@@ -1194,7 +1195,8 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
          * futures with a TimeoutException.
          */
         private void failAndRemoveExpiredFetchRequests(final long currentTimeMs) {
-            unsentOffsetFetches.forEach(req -> req.maybeExpire(currentTimeMs));
+            Queue<OffsetFetchRequestState> requestsToPurge = new LinkedList<>(unsentOffsetFetches);
+            requestsToPurge.forEach(req -> req.maybeExpire(currentTimeMs));
         }
 
         private void clearAll() {
