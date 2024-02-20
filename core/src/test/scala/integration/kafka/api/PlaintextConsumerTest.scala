@@ -197,10 +197,8 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     assertEquals(1, listener.callsToRevoked)
   }
 
-  // TODO: Enable this test for both protocols when the Jira tracking its failure (KAFKA-16009) is fixed. This
-  //       is done by setting the @MethodSource value to "getTestQuorumAndGroupProtocolParametersAll"
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersClassicGroupProtocolOnly"))
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
   def testMaxPollIntervalMsDelayInRevocation(quorum: String, groupProtocol: String): Unit = {
     this.consumerConfig.setProperty(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, 5000.toString)
     this.consumerConfig.setProperty(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, 500.toString)
@@ -264,6 +262,32 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     // We should still be in the group after this invocation
     ensureNoRebalance(consumer, listener)
   }
+
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
+  def testMaxPollIntervalMsShorterThanPollTimeout(quorum: String, groupProtocol: String): Unit = {
+    this.consumerConfig.setProperty(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, 1000.toString)
+    this.consumerConfig.setProperty(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, 500.toString)
+
+    val consumer = createConsumer()
+    val listener = new TestConsumerReassignmentListener
+    consumer.subscribe(List(topic).asJava, listener)
+
+    // rebalance to get the initial assignment
+    awaitRebalance(consumer, listener)
+
+    val callsToAssignedAfterFirstRebalance = listener.callsToAssigned
+
+    consumer.poll(Duration.ofMillis(2000))
+
+    // If the poll poll above times out, it would trigger a rebalance.
+    // Leave some time for the rebalance to happen and check for the rebalance event.
+    consumer.poll(Duration.ofMillis(500))
+    consumer.poll(Duration.ofMillis(500))
+
+    assertEquals(callsToAssignedAfterFirstRebalance, listener.callsToAssigned)
+  }
+
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
   @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
