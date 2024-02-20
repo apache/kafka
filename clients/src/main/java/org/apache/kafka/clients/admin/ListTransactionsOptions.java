@@ -35,7 +35,7 @@ public class ListTransactionsOptions extends AbstractOptions<ListTransactionsOpt
     private Set<TransactionState> filteredStates = Collections.emptySet();
     private Set<Long> filteredProducerIds = Collections.emptySet();
 
-    private long durationFilter = -1L;
+    private long filteredDuration = -1L;
     /**
      * Filter only the transactions that are in a specific set of states. If no filter
      * is specified or if the passed set of states is empty, then transactions in all
@@ -62,8 +62,16 @@ public class ListTransactionsOptions extends AbstractOptions<ListTransactionsOpt
         return this;
     }
 
-    public ListTransactionsOptions durationFilter(long durationMs) {
-        this.durationFilter = durationMs;
+    /**
+     * Filter only the transactions that are running longer than the specified duration.
+     * If no filter is specified or if the passed duration ms is less than 0,
+     * then the all transactions will be returned.
+     *
+     * @param durationMs the duration in milliseconds to filter by
+     * @return this object
+     */
+    public ListTransactionsOptions filterOnDuration(long durationMs) {
+        this.filteredDuration = durationMs;
         return this;
     }
 
@@ -87,8 +95,13 @@ public class ListTransactionsOptions extends AbstractOptions<ListTransactionsOpt
         return filteredProducerIds;
     }
 
-    public long getDurationFilter() {
-        return durationFilter;
+    /**
+     * Returns the duration ms value being filtered.
+     *
+     * @return the current duration filter value in ms (negative value means transactions are not filtered by duration)
+     */
+    public long filteredDuration() {
+        return filteredDuration;
     }
 
     @Override
@@ -96,7 +109,7 @@ public class ListTransactionsOptions extends AbstractOptions<ListTransactionsOpt
         return "ListTransactionsOptions(" +
             "filteredStates=" + filteredStates +
             ", filteredProducerIds=" + filteredProducerIds +
-            ", durationFilter=" + durationFilter +
+            ", filteredDuration=" + filteredDuration +
             ", timeoutMs=" + timeoutMs +
             ')';
     }
@@ -108,11 +121,11 @@ public class ListTransactionsOptions extends AbstractOptions<ListTransactionsOpt
         ListTransactionsOptions that = (ListTransactionsOptions) o;
         return Objects.equals(filteredStates, that.filteredStates) &&
             Objects.equals(filteredProducerIds, that.filteredProducerIds) &&
-            Objects.equals(durationFilter, that.durationFilter);
+            Objects.equals(filteredDuration, that.filteredDuration);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(filteredStates, filteredProducerIds, durationFilter);
+        return Objects.hash(filteredStates, filteredProducerIds, filteredDuration);
     }
 }

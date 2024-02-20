@@ -216,7 +216,7 @@ public class TransactionsCommandTest {
         ));
 
         if (hasDurationFilter) {
-            expectListTransactions(new ListTransactionsOptions().durationFilter(Long.MAX_VALUE), transactions);
+            expectListTransactions(new ListTransactionsOptions().filterOnDuration(Long.MAX_VALUE), transactions);
         } else {
             expectListTransactions(transactions);
         }
