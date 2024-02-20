@@ -2959,6 +2959,59 @@ public class KafkaRaftClientTest {
     }
 
     @Test
+    public void testHandleLeaderChangeFiresAfterUnattachedRegistration() throws Exception {
+        int localId = 0;
+        int otherNodeId = 1;
+        int epoch = 7;
+        Set<Integer> voters = Utils.mkSet(localId, otherNodeId);
+
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
+            .withUnknownLeader(epoch)
+            .build();
+
+        // Register another listener and verify that it is notified of latest epoch
+        RaftClientTestContext.MockListener secondListener = new RaftClientTestContext.MockListener(
+            OptionalInt.of(localId)
+        );
+        context.client.register(secondListener);
+        context.client.poll();
+
+        // Expected leader change notification
+        LeaderAndEpoch expectedLeaderAndEpoch = new LeaderAndEpoch(OptionalInt.empty(), epoch);
+        assertEquals(expectedLeaderAndEpoch, secondListener.currentLeaderAndEpoch());
+
+        // Transition to follower and observer leader change
+        context.deliverRequest(context.beginEpochRequest(epoch, otherNodeId));
+        context.pollUntilResponse();
+
+        // Expected leader change notification
+        expectedLeaderAndEpoch = new LeaderAndEpoch(OptionalInt.of(otherNodeId), epoch);
+        assertEquals(expectedLeaderAndEpoch, secondListener.currentLeaderAndEpoch());
+    }
+
+    @Test
+    public void testHandleLeaderChangeFiresAfterFollowerRegistration() throws Exception {
+        int localId = 0;
+        int otherNodeId = 1;
+        int epoch = 7;
+        Set<Integer> voters = Utils.mkSet(localId, otherNodeId);
+
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
+            .withElectedLeader(epoch, otherNodeId)
+            .build();
+
+        // Register another listener and verify that it is notified of latest epoch
+        RaftClientTestContext.MockListener secondListener = new RaftClientTestContext.MockListener(
+            OptionalInt.of(localId)
+        );
+        context.client.register(secondListener);
+        context.client.poll();
+
+        LeaderAndEpoch expectedLeaderAndEpoch = new LeaderAndEpoch(OptionalInt.of(otherNodeId), epoch);
+        assertEquals(expectedLeaderAndEpoch, secondListener.currentLeaderAndEpoch());
+    }
+
+    @Test
     public void testObserverFetchWithNoLocalId() throws Exception {
         // When no `localId` is defined, the client will behave as an observer.
         // This is designed for tooling/debugging use cases.
