@@ -25,7 +25,11 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.ShareFetchRequest;
 import org.apache.kafka.common.requests.ShareFetchResponse;
 
-import java.util.*;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
 public class SharePartitionManager {
@@ -48,7 +52,7 @@ public class SharePartitionManager {
 
     private SharePartition getSharePartition(String groupId, Uuid topicId, int partition) {
         SharePartitionKey sharePartitionKey = new SharePartitionKey(groupId, topicId, partition);
-        if(!sharePartitions.containsKey(sharePartitionKey))
+        if (!sharePartitions.containsKey(sharePartitionKey))
             //TODO: This line needs to be changed for constructor of SharePartition
             sharePartitions.put(sharePartitionKey, new SharePartition());
         return sharePartitions.get(sharePartitionKey);

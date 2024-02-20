@@ -167,8 +167,14 @@ public class ShareGroupsCommand {
     private void describeGroups() throws ExecutionException, InterruptedException {
       String group = opts.options.valueOf(opts.groupOpt);
       ShareGroupDescription description = getDescribeGroup(group);
+      if (description == null)
+        return;
       boolean shouldPrintState = opts.options.has(opts.stateOpt);
       boolean shouldPrintMemDetails = opts.options.has(opts.membersOpt);
+      if (shouldPrintMemDetails) {
+        printMemberDetails(description.members());
+        return;
+      }
       printGroupDescriptionTable(description, shouldPrintState, shouldPrintMemDetails);
     }
 
@@ -205,13 +211,6 @@ public class ShareGroupsCommand {
     }
 
     private void printGroupDescriptionTable(ShareGroupDescription description, boolean shouldPrintState, boolean shouldPrintMemDetails) throws ExecutionException, InterruptedException {
-      if (description == null) {
-        return;
-      }
-      if (shouldPrintMemDetails) {
-        printMemberDetails(description.members());
-        return;
-      }
       Map<TopicPartition, Long> offsets = getOffsetLag(description.members());
       boolean notOffset = offsets == null || offsets.size() == 0;
       if (notOffset) {

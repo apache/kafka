@@ -1,12 +1,12 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * the License. You may obtain a copy of the License at
  *
- * http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -26,24 +26,24 @@ public class SharePartitionKeyTest {
 
     @Test
     public void testEqualsFunctionality() {
-        SharePartitionKey sharePartitionKey_1 = new SharePartitionKey("mock-group-1",
+        SharePartitionKey sharePartitionKey1 = new SharePartitionKey("mock-group-1",
                 new Uuid(0L, 1L), 0);
-        SharePartitionKey sharePartitionKey_2 = new SharePartitionKey("mock-group-2",
+        SharePartitionKey sharePartitionKey2 = new SharePartitionKey("mock-group-2",
                 new Uuid(0L, 1L), 0);
-        SharePartitionKey sharePartitionKey_3 = new SharePartitionKey("mock-group-1",
+        SharePartitionKey sharePartitionKey3 = new SharePartitionKey("mock-group-1",
                 new Uuid(1L, 1L), 0);
-        SharePartitionKey sharePartitionKey_4 = new SharePartitionKey("mock-group-1",
+        SharePartitionKey sharePartitionKey4 = new SharePartitionKey("mock-group-1",
                 new Uuid(0L, 1L), 1);
-        SharePartitionKey sharePartitionKey_5 = new SharePartitionKey("mock-group-1",
+        SharePartitionKey sharePartitionKey5 = new SharePartitionKey("mock-group-1",
                 new Uuid(0L, 0L), 1);
-        SharePartitionKey sharePartitionKey_1_copy = new SharePartitionKey("mock-group-1",
+        SharePartitionKey sharePartitionKey1Copy = new SharePartitionKey("mock-group-1",
                 new Uuid(0L, 1L), 0);
 
-        assertEquals(sharePartitionKey_1, sharePartitionKey_1_copy);
-        assertNotEquals(sharePartitionKey_1, sharePartitionKey_2);
-        assertNotEquals(sharePartitionKey_1, sharePartitionKey_3);
-        assertNotEquals(sharePartitionKey_1, sharePartitionKey_4);
-        assertNotEquals(sharePartitionKey_1, sharePartitionKey_5);
-        assertNotEquals(sharePartitionKey_1, null);
+        assertEquals(sharePartitionKey1, sharePartitionKey1Copy);
+        assertNotEquals(sharePartitionKey1, sharePartitionKey2);
+        assertNotEquals(sharePartitionKey1, sharePartitionKey3);
+        assertNotEquals(sharePartitionKey1, sharePartitionKey4);
+        assertNotEquals(sharePartitionKey1, sharePartitionKey5);
+        assertNotEquals(sharePartitionKey1, null);
     }
 }
