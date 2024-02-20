@@ -355,13 +355,7 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
         CompletableFuture<Void> asyncCommitResult = new CompletableFuture<>();
         commitRequest.future.whenComplete((committedOffsets, error) -> {
             if (error != null) {
-                Throwable asyncCommitException;
-                if (error instanceof RetriableException) {
-                    asyncCommitException = new RetriableCommitFailedException(error.getMessage());
-                } else {
-                    asyncCommitException = error;
-                }
-                asyncCommitResult.completeExceptionally(asyncCommitException);
+                asyncCommitResult.completeExceptionally(commitAsyncExceptionForError(error));
             } else {
                 asyncCommitResult.complete(null);
             }
@@ -436,8 +430,15 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
 
     private Throwable commitSyncExceptionForError(Throwable error) {
         if (error instanceof StaleMemberEpochException) {
-            return new CommitFailedException("OffsetCommit failed with" +
-                " stale member epoch." + Errors.STALE_MEMBER_EPOCH.message());
+            return new CommitFailedException("OffsetCommit failed with stale member epoch."
+                + Errors.STALE_MEMBER_EPOCH.message());
+        }
+        return error;
+    }
+
+    private Throwable commitAsyncExceptionForError(Throwable error) {
+        if (error instanceof RetriableException) {
+            return new RetriableCommitFailedException(error.getMessage());
         }
         return error;
     }
