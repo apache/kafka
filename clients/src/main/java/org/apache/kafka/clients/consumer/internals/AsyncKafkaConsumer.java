@@ -756,7 +756,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         acquireAndEnsureOpen();
         try {
             // Commit without retry timeout (the commit request won't be retried)
-            CompletableFuture<Void> future = commit(offsets, false, Optional.empty());
+            CompletableFuture<Void> future = commit(offsets, Optional.empty());
             future.whenComplete((r, t) -> {
 
                 if (t == null) {
@@ -777,9 +777,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         }
     }
 
-    // Visible for testing
-    CompletableFuture<Void> commit(final Map<TopicPartition, OffsetAndMetadata> offsets,
-                                   final boolean isWakeupable,
+    private CompletableFuture<Void> commit(final Map<TopicPartition, OffsetAndMetadata> offsets,
                                    final Optional<Long> retryTimeoutMs) {
         maybeInvokeCommitCallbacks();
         maybeThrowFencedInstanceException();
@@ -793,10 +791,6 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         }
 
         final CommitApplicationEvent commitEvent = new CommitApplicationEvent(offsets, retryTimeoutMs);
-        if (isWakeupable) {
-            // the task can only be woken up if the top level API call is commitSync
-            wakeupTrigger.setActiveTask(commitEvent.future());
-        }
         applicationEventHandler.add(commitEvent);
         return commitEvent.future();
     }
@@ -1345,7 +1339,8 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             Timer requestTimer = time.timer(timeout.toMillis());
             // Commit with a retry timeout (the commit request will be retried until it gets a
             // successful response, non-retriable error, or the timeout expires)
-            CompletableFuture<Void> commitFuture = commit(offsets, true, Optional.of(timeout.toMillis()));
+            CompletableFuture<Void> commitFuture = commit(offsets, Optional.of(timeout.toMillis()));
+            wakeupTrigger.setActiveTask(commitFuture);
             ConsumerUtils.getResult(commitFuture, requestTimer);
             interceptors.onCommit(offsets);
         } finally {
