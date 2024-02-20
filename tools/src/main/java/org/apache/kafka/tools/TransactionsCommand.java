@@ -450,7 +450,7 @@ public abstract class TransactionsCommand {
         @Override
         public void execute(Admin admin, Namespace ns, PrintStream out) throws Exception {
             ListTransactionsOptions options = new ListTransactionsOptions();
-            Optional.ofNullable(ns.getLong("duration_filter")).ifPresent(options::durationFilter);
+            Optional.ofNullable(ns.getLong("duration_filter")).ifPresent(options::filterOnDuration);
 
             final Map<Integer, Collection<TransactionListing>> result;
 
