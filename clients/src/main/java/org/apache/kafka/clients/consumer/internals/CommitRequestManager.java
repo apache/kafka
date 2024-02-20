@@ -293,7 +293,6 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
 
     private void maybeAutoCommitSyncNowWithRetries(OffsetCommitRequestState requestAttempt,
                                                    CompletableFuture<Void> result) {
-        requestAttempt.resetFuture();
         CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> commitAttempt = requestAutoCommit(requestAttempt);
         commitAttempt.whenComplete((committedOffsets, error) -> {
             if (error == null) {
@@ -306,6 +305,7 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
                     } else {
                         // Make sure the auto-commit is retries with the latest offsets
                         requestAttempt.offsets = subscriptions.allConsumed();
+                        requestAttempt.resetFuture();
                         maybeAutoCommitSyncNowWithRetries(requestAttempt, result);
                     }
                 } else {
@@ -371,9 +371,10 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
 
     /**
      * Commit offsets, retrying on expected retriable errors while the retry timeout hasn't expired.
-     * @param offsets Offsets to commit
+     *
+     * @param offsets               Offsets to commit
      * @param retryExpirationTimeMs Time until which the request will be retried if it fails with
-     *                             an expected retriable error.
+     *                              an expected retriable error.
      * @return Future that will complete when a successful response
      */
     public CompletableFuture<Void> commitSync(final Map<TopicPartition, OffsetAndMetadata> offsets,
@@ -410,7 +411,6 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
 
     private void commitSyncWithRetries(OffsetCommitRequestState requestAttempt,
                                        CompletableFuture<Void> result) {
-        requestAttempt.resetFuture();
         pendingRequests.addOffsetCommitRequest(requestAttempt);
 
         // Retry the same commit request while it fails with RetriableException and the retry
@@ -426,6 +426,7 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
                         log.debug("OffsetCommit timeout expired so it won't be retried anymore");
                         result.completeExceptionally(error);
                     } else {
+                        requestAttempt.resetFuture();
                         commitSyncWithRetries(requestAttempt, result);
                     }
                 } else {
@@ -485,7 +486,6 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
 
     private void fetchOffsetsWithRetries(final OffsetFetchRequestState fetchRequest,
                                          final CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> result) {
-        fetchRequest.resetFuture();
         CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> currentResult = pendingRequests.addOffsetFetchRequest(fetchRequest);
 
         // Retry the same fetch request while it fails with RetriableException and the retry timeout hasn't expired.
@@ -504,6 +504,7 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
                         // not complete before timeout expired."));
                         result.completeExceptionally(error);
                     } else {
+                        fetchRequest.resetFuture();
                         fetchOffsetsWithRetries(fetchRequest, result);
                     }
                 } else
