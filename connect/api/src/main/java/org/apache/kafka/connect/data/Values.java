@@ -22,6 +22,7 @@ import org.apache.kafka.connect.errors.DataException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.Serializable;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.math.RoundingMode;
@@ -117,7 +118,17 @@ public class Values {
      * @throws DataException if the value could not be converted to a boolean
      */
     public static Boolean convertToBoolean(Schema schema, Object value) throws DataException {
-        return (Boolean) convertTo(Schema.OPTIONAL_BOOLEAN_SCHEMA, schema, value);
+        if (value == null) {
+            return null;
+        } else if (value instanceof Boolean) {
+            return (Boolean) value;
+        } else if (value instanceof String) {
+            SchemaAndValue parsed = parseString(value.toString());
+            if (parsed.value() instanceof Boolean) {
+                return (Boolean) parsed.value();
+            }
+        }
+        return asLong(value, schema, null) == 0L ? Boolean.FALSE : Boolean.TRUE;
     }
 
     /**
@@ -130,7 +141,12 @@ public class Values {
      * @throws DataException if the value could not be converted to a byte
      */
     public static Byte convertToByte(Schema schema, Object value) throws DataException {
-        return (Byte) convertTo(Schema.OPTIONAL_INT8_SCHEMA, schema, value);
+        if (value == null) {
+            return null;
+        } else if (value instanceof Byte) {
+            return (Byte) value;
+        }
+        return (byte) asLong(value, schema, null);
     }
 
     /**
@@ -143,7 +159,12 @@ public class Values {
      * @throws DataException if the value could not be converted to a short
      */
     public static Short convertToShort(Schema schema, Object value) throws DataException {
-        return (Short) convertTo(Schema.OPTIONAL_INT16_SCHEMA, schema, value);
+        if (value == null) {
+            return null;
+        } else if (value instanceof Short) {
+            return (Short) value;
+        }
+        return (short) asLong(value, schema, null);
     }
 
     /**
@@ -156,7 +177,12 @@ public class Values {
      * @throws DataException if the value could not be converted to an integer
      */
     public static Integer convertToInteger(Schema schema, Object value) throws DataException {
-        return (Integer) convertTo(Schema.OPTIONAL_INT32_SCHEMA, schema, value);
+        if (value == null) {
+            return null;
+        } else if (value instanceof Integer) {
+            return (Integer) value;
+        }
+        return (int) asLong(value, schema, null);
     }
 
     /**
@@ -169,7 +195,12 @@ public class Values {
      * @throws DataException if the value could not be converted to a long
      */
     public static Long convertToLong(Schema schema, Object value) throws DataException {
-        return (Long) convertTo(Schema.OPTIONAL_INT64_SCHEMA, schema, value);
+        if (value == null) {
+            return null;
+        } else if (value instanceof Long) {
+            return (Long) value;
+        }
+        return asLong(value, schema, null);
     }
 
     /**
@@ -182,7 +213,12 @@ public class Values {
      * @throws DataException if the value could not be converted to a float
      */
     public static Float convertToFloat(Schema schema, Object value) throws DataException {
-        return (Float) convertTo(Schema.OPTIONAL_FLOAT32_SCHEMA, schema, value);
+        if (value == null) {
+            return null;
+        } else if (value instanceof Float) {
+            return (Float) value;
+        }
+        return (float) asDouble(value, schema, null);
     }
 
     /**
@@ -195,7 +231,12 @@ public class Values {
      * @throws DataException if the value could not be converted to a double
      */
     public static Double convertToDouble(Schema schema, Object value) throws DataException {
-        return (Double) convertTo(Schema.OPTIONAL_FLOAT64_SCHEMA, schema, value);
+        if (value == null) {
+            return null;
+        } else if (value instanceof Double) {
+            return (Double) value;
+        }
+        return asDouble(value, schema, null);
     }
 
     /**
@@ -207,7 +248,12 @@ public class Values {
      * @return the representation as a string, or null if the supplied value was null
      */
     public static String convertToString(Schema schema, Object value) {
-        return (String) convertTo(Schema.OPTIONAL_STRING_SCHEMA, schema, value);
+        if (value == null) {
+            return null;
+        }
+        StringBuilder sb = new StringBuilder();
+        append(sb, value, false);
+        return sb.toString();
     }
 
     /**
@@ -224,7 +270,7 @@ public class Values {
      * @throws DataException if the value cannot be converted to a list value
      */
     public static List<?> convertToList(Schema schema, Object value) {
-        return (List<?>) convertTo(ARRAY_SELECTOR_SCHEMA, schema, value);
+        return convertToArray(ARRAY_SELECTOR_SCHEMA, value);
     }
 
     /**
@@ -240,7 +286,7 @@ public class Values {
      * @throws DataException if the value cannot be converted to a map value
      */
     public static Map<?, ?> convertToMap(Schema schema, Object value) {
-        return (Map<?, ?>) convertTo(MAP_SELECTOR_SCHEMA, schema, value);
+        return convertToMapInternal(MAP_SELECTOR_SCHEMA, value);
     }
 
     /**
@@ -255,7 +301,7 @@ public class Values {
      * @throws DataException if the value is not a struct
      */
     public static Struct convertToStruct(Schema schema, Object value) {
-        return (Struct) convertTo(STRUCT_SELECTOR_SCHEMA, schema, value);
+        return convertToStructInternal(STRUCT_SELECTOR_SCHEMA, value);
     }
 
     /**
@@ -268,7 +314,10 @@ public class Values {
      * @throws DataException if the value cannot be converted to a time value
      */
     public static java.util.Date convertToTime(Schema schema, Object value) {
-        return (java.util.Date) convertTo(Time.SCHEMA, schema, value);
+        if (value == null) {
+            throw new DataException("Unable to convert a null value to a schema that requires a value");
+        }
+        return convertToTime(Time.SCHEMA, schema, value);
     }
 
     /**
@@ -281,7 +330,10 @@ public class Values {
      * @throws DataException if the value cannot be converted to a date value
      */
     public static java.util.Date convertToDate(Schema schema, Object value) {
-        return (java.util.Date) convertTo(Date.SCHEMA, schema, value);
+        if (value == null) {
+            throw new DataException("Unable to convert a null value to a schema that requires a value");
+        }
+        return convertToDate(Date.SCHEMA, schema, value);
     }
 
     /**
@@ -294,7 +346,10 @@ public class Values {
      * @throws DataException if the value cannot be converted to a timestamp value
      */
     public static java.util.Date convertToTimestamp(Schema schema, Object value) {
-        return (java.util.Date) convertTo(Timestamp.SCHEMA, schema, value);
+        if (value == null) {
+            throw new DataException("Unable to convert a null value to a schema that requires a value");
+        }
+        return convertToTimestamp(Timestamp.SCHEMA, schema, value);
     }
 
     /**
@@ -307,7 +362,10 @@ public class Values {
      * @throws DataException if the value cannot be converted to a decimal value
      */
     public static BigDecimal convertToDecimal(Schema schema, Object value, int scale) {
-        return (BigDecimal) convertTo(Decimal.schema(scale), schema, value);
+        if (value == null) {
+            throw new DataException("Unable to convert a null value to a schema that requires a value");
+        }
+        return convertToDecimal(Decimal.schema(scale), value);
     }
 
     /**
@@ -395,7 +453,7 @@ public class Values {
      *
      * @param toSchema   the schema for the desired type; may not be null
      * @param fromSchema the schema for the supplied value; may be null if not known
-     * @return the converted value; never null
+     * @return the converted value; null if the passed-in schema was optional, and the input value was null.
      * @throws DataException if the value could not be converted to the desired type
      */
     protected static Object convertTo(Schema toSchema, Schema fromSchema, Object value) throws DataException {
@@ -407,23 +465,23 @@ public class Values {
         }
         switch (toSchema.type()) {
             case BYTES:
-                return convertToBytes(toSchema, value);
+                return convertMaybeLogicalBytes(toSchema, value);
             case STRING:
-                return convertToStringInternal(value);
+                return convertToString(fromSchema, value);
             case BOOLEAN:
-                return convertToBooleanInternal(fromSchema, value);
+                return convertToBoolean(fromSchema, value);
             case INT8:
-                return convertToInt8(fromSchema, value);
+                return convertToByte(fromSchema, value);
             case INT16:
-                return convertToInt16(fromSchema, value);
+                return convertToShort(fromSchema, value);
             case INT32:
-                return convertToInt32(toSchema, fromSchema, value);
+                return convertMaybeLogicalInteger(toSchema, fromSchema, value);
             case INT64:
-                return convertToInt64(toSchema, fromSchema, value);
+                return convertMaybeLogicalLong(toSchema, fromSchema, value);
             case FLOAT32:
-                return convertToFloat32(fromSchema, value);
+                return convertToFloat(fromSchema, value);
             case FLOAT64:
-                return convertToFloat64(fromSchema, value);
+                return convertToDouble(fromSchema, value);
             case ARRAY:
                 return convertToArray(toSchema, value);
             case MAP:
@@ -434,31 +492,40 @@ public class Values {
         throw new DataException("Unable to convert " + value + " (" + value.getClass() + ") to " + toSchema);
     }
 
-    private static Object convertToBytes(Schema toSchema, Object value) {
+    private static Serializable convertMaybeLogicalBytes(Schema toSchema, Object value) {
         if (Decimal.LOGICAL_NAME.equals(toSchema.name())) {
-            if (value instanceof ByteBuffer) {
-                value = Utils.toArray((ByteBuffer) value);
-            }
-            if (value instanceof byte[]) {
-                return Decimal.toLogical(toSchema, (byte[]) value);
-            }
-            if (value instanceof BigDecimal) {
-                return value;
-            }
-            if (value instanceof Number) {
-                // Not already a decimal, so treat it as a double ...
-                double converted = ((Number) value).doubleValue();
-                return BigDecimal.valueOf(converted);
-            }
-            if (value instanceof String) {
-                return new BigDecimal(value.toString());
-            }
+            return convertToDecimal(toSchema, value);
         }
+        return convertToBytes(toSchema, value);
+    }
+
+    private static BigDecimal convertToDecimal(Schema toSchema, Object value) {
+        if (value instanceof ByteBuffer) {
+            value = Utils.toArray((ByteBuffer) value);
+        }
+        if (value instanceof byte[]) {
+            return Decimal.toLogical(toSchema, (byte[]) value);
+        }
+        if (value instanceof BigDecimal) {
+            return (BigDecimal) value;
+        }
+        if (value instanceof Number) {
+            // Not already a decimal, so treat it as a double ...
+            double converted = ((Number) value).doubleValue();
+            return BigDecimal.valueOf(converted);
+        }
+        if (value instanceof String) {
+            return new BigDecimal(value.toString());
+        }
+        throw new DataException("Unable to convert " + value + " (" + value.getClass() + ") to " + toSchema);
+    }
+
+    private static byte[] convertToBytes(Schema toSchema, Object value) {
         if (value instanceof ByteBuffer) {
             return Utils.toArray((ByteBuffer) value);
         }
         if (value instanceof byte[]) {
-            return value;
+            return (byte[]) value;
         }
         if (value instanceof BigDecimal) {
             return Decimal.fromLogical(toSchema, (BigDecimal) value);
@@ -466,177 +533,145 @@ public class Values {
         throw new DataException("Unable to convert " + value + " (" + value.getClass() + ") to " + toSchema);
     }
 
-    private static Object convertToStringInternal(Object value) {
-        StringBuilder sb = new StringBuilder();
-        append(sb, value, false);
-        return sb.toString();
-    }
-
-    private static Object convertToBooleanInternal(Schema fromSchema, Object value) {
-        if (value instanceof Boolean) {
-            return value;
-        } else if (value instanceof String) {
-            SchemaAndValue parsed = parseString(value.toString());
-            if (parsed.value() instanceof Boolean) {
-                return parsed.value();
-            }
-        }
-        return asLong(value, fromSchema, null) == 0L ? Boolean.FALSE : Boolean.TRUE;
-    }
-
-    private static Object convertToInt8(Schema fromSchema, Object value) {
-        if (value instanceof Byte) {
-            return value;
-        } else {
-            return (byte) asLong(value, fromSchema, null);
-        }
-    }
-
-    private static Object convertToInt16(Schema fromSchema, Object value) {
-        if (value instanceof Short) {
-            return value;
-        } else {
-            return (short) asLong(value, fromSchema, null);
-        }
-    }
-
-    private static Object convertToInt32(Schema toSchema, Schema fromSchema, Object value) {
+    private static Serializable convertMaybeLogicalInteger(Schema toSchema, Schema fromSchema, Object value) {
         if (Date.LOGICAL_NAME.equals(toSchema.name())) {
-            if (value instanceof String) {
-                SchemaAndValue parsed = parseString(value.toString());
-                value = parsed.value();
-            }
-            if (value instanceof java.util.Date) {
-                if (fromSchema != null) {
-                    String fromSchemaName = fromSchema.name();
-                    if (Date.LOGICAL_NAME.equals(fromSchemaName)) {
-                        return value;
-                    }
-                    if (Timestamp.LOGICAL_NAME.equals(fromSchemaName)) {
-                        // Just get the number of days from this timestamp
-                        long millis = ((java.util.Date) value).getTime();
-                        int days = (int) (millis / MILLIS_PER_DAY); // truncates
-                        return Date.toLogical(toSchema, days);
-                    }
-                } else {
-                    // There is no fromSchema, so no conversion is needed
-                    return value;
-                }
-            }
-            long numeric = asLong(value, fromSchema, null);
-            return Date.toLogical(toSchema, (int) numeric);
+            return convertToDate(toSchema, fromSchema, value);
         }
         if (Time.LOGICAL_NAME.equals(toSchema.name())) {
-            if (value instanceof String) {
-                SchemaAndValue parsed = parseString(value.toString());
-                value = parsed.value();
-            }
-            if (value instanceof java.util.Date) {
-                if (fromSchema != null) {
-                    String fromSchemaName = fromSchema.name();
-                    if (Time.LOGICAL_NAME.equals(fromSchemaName)) {
-                        return value;
-                    }
-                    if (Timestamp.LOGICAL_NAME.equals(fromSchemaName)) {
-                        // Just get the time portion of this timestamp
-                        Calendar calendar = Calendar.getInstance(UTC);
-                        calendar.setTime((java.util.Date) value);
-                        calendar.set(Calendar.YEAR, 1970);
-                        calendar.set(Calendar.MONTH, 0); // Months are zero-based
-                        calendar.set(Calendar.DAY_OF_MONTH, 1);
-                        return Time.toLogical(toSchema, (int) calendar.getTimeInMillis());
-                    }
-                } else {
-                    // There is no fromSchema, so no conversion is needed
-                    return value;
-                }
-            }
-            long numeric = asLong(value, fromSchema, null);
-            return Time.toLogical(toSchema, (int) numeric);
+            return convertToTime(toSchema, fromSchema, value);
         }
-        if (value instanceof Integer) {
-            return value;
-        }
-        return (int) asLong(value, fromSchema, null);
+        return convertToInteger(fromSchema, value);
     }
 
-    private static Object convertToInt64(Schema toSchema, Schema fromSchema, Object value) {
+    private static java.util.Date convertToDate(Schema toSchema, Schema fromSchema, Object value) {
+        if (value == null) {
+            return null;
+        } else if (value instanceof String) {
+            SchemaAndValue parsed = parseString(value.toString());
+            value = parsed.value();
+        }
+        if (value instanceof java.util.Date) {
+            if (fromSchema != null) {
+                String fromSchemaName = fromSchema.name();
+                if (Date.LOGICAL_NAME.equals(fromSchemaName)) {
+                    return (java.util.Date) value;
+                }
+                if (Timestamp.LOGICAL_NAME.equals(fromSchemaName)) {
+                    // Just get the number of days from this timestamp
+                    long millis = ((java.util.Date) value).getTime();
+                    int days = (int) (millis / MILLIS_PER_DAY); // truncates
+                    return Date.toLogical(toSchema, days);
+                }
+            } else {
+                // There is no fromSchema, so no conversion is needed
+                return (java.util.Date) value;
+            }
+        }
+        long numeric = asLong(value, fromSchema, null);
+        return Date.toLogical(toSchema, (int) numeric);
+    }
+
+    private static java.util.Date convertToTime(Schema toSchema, Schema fromSchema, Object value) {
+        if (value == null) {
+            return null;
+        } else if (value instanceof String) {
+            SchemaAndValue parsed = parseString(value.toString());
+            value = parsed.value();
+        }
+        if (value instanceof java.util.Date) {
+            if (fromSchema != null) {
+                String fromSchemaName = fromSchema.name();
+                if (Time.LOGICAL_NAME.equals(fromSchemaName)) {
+                    return (java.util.Date) value;
+                }
+                if (Timestamp.LOGICAL_NAME.equals(fromSchemaName)) {
+                    // Just get the time portion of this timestamp
+                    Calendar calendar = Calendar.getInstance(UTC);
+                    calendar.setTime((java.util.Date) value);
+                    calendar.set(Calendar.YEAR, 1970);
+                    calendar.set(Calendar.MONTH, 0); // Months are zero-based
+                    calendar.set(Calendar.DAY_OF_MONTH, 1);
+                    return Time.toLogical(toSchema, (int) calendar.getTimeInMillis());
+                }
+            } else {
+                // There is no fromSchema, so no conversion is needed
+                return (java.util.Date) value;
+            }
+        }
+        long numeric = asLong(value, fromSchema, null);
+        return Time.toLogical(toSchema, (int) numeric);
+    }
+
+    private static Serializable convertMaybeLogicalLong(Schema toSchema, Schema fromSchema, Object value) {
         if (Timestamp.LOGICAL_NAME.equals(toSchema.name())) {
-            if (value instanceof String) {
-                SchemaAndValue parsed = parseString(value.toString());
-                value = parsed.value();
-            }
-            if (value instanceof java.util.Date) {
-                java.util.Date date = (java.util.Date) value;
-                if (fromSchema != null) {
-                    String fromSchemaName = fromSchema.name();
-                    if (Date.LOGICAL_NAME.equals(fromSchemaName)) {
-                        int days = Date.fromLogical(fromSchema, date);
-                        long millis = days * MILLIS_PER_DAY;
-                        return Timestamp.toLogical(toSchema, millis);
-                    }
-                    if (Time.LOGICAL_NAME.equals(fromSchemaName)) {
-                        long millis = Time.fromLogical(fromSchema, date);
-                        return Timestamp.toLogical(toSchema, millis);
-                    }
-                    if (Timestamp.LOGICAL_NAME.equals(fromSchemaName)) {
-                        return value;
-                    }
-                } else {
-                    // There is no fromSchema, so no conversion is needed
-                    return value;
+            return convertToTimestamp(toSchema, fromSchema, value);
+        }
+        return convertToLong(fromSchema, value);
+    }
+
+    private static java.util.Date convertToTimestamp(Schema toSchema, Schema fromSchema, Object value) {
+        if (value == null) {
+            return null;
+        } else if (value instanceof String) {
+            SchemaAndValue parsed = parseString(value.toString());
+            value = parsed.value();
+        }
+        if (value instanceof java.util.Date) {
+            java.util.Date date = (java.util.Date) value;
+            if (fromSchema != null) {
+                String fromSchemaName = fromSchema.name();
+                if (Date.LOGICAL_NAME.equals(fromSchemaName)) {
+                    int days = Date.fromLogical(fromSchema, date);
+                    long millis = days * MILLIS_PER_DAY;
+                    return Timestamp.toLogical(toSchema, millis);
                 }
+                if (Time.LOGICAL_NAME.equals(fromSchemaName)) {
+                    long millis = Time.fromLogical(fromSchema, date);
+                    return Timestamp.toLogical(toSchema, millis);
+                }
+                if (Timestamp.LOGICAL_NAME.equals(fromSchemaName)) {
+                    return date;
+                }
+            } else {
+                // There is no fromSchema, so no conversion is needed
+                return date;
             }
-            long numeric = asLong(value, fromSchema, null);
-            return Timestamp.toLogical(toSchema, numeric);
         }
-        if (value instanceof Long) {
-            return value;
-        }
-        return asLong(value, fromSchema, null);
+        long numeric = asLong(value, fromSchema, null);
+        return Timestamp.toLogical(toSchema, numeric);
     }
 
-    private static Object convertToFloat32(Schema fromSchema, Object value) {
-        if (value instanceof Float) {
-            return value;
-        } else {
-            return (float) asDouble(value, fromSchema, null);
-        }
-    }
-
-    private static Object convertToFloat64(Schema fromSchema, Object value) {
-        if (value instanceof Double) {
-            return value;
-        } else {
-            return asDouble(value, fromSchema, null);
-        }
-    }
-
-    private static Object convertToArray(Schema toSchema, Object value) {
-        if (value instanceof String) {
+    private static List<?> convertToArray(Schema toSchema, Object value) {
+        if (value == null) {
+            throw new DataException("Unable to convert a null value to a schema that requires a value");
+        } else if (value instanceof String) {
             SchemaAndValue schemaAndValue = parseString(value.toString());
             value = schemaAndValue.value();
         }
         if (value instanceof List) {
-            return value;
+            return (List<?>) value;
         }
         throw new DataException("Unable to convert " + value + " (" + value.getClass() + ") to " + toSchema);
     }
 
-    private static Object convertToMapInternal(Schema toSchema, Object value) {
-        if (value instanceof String) {
+    private static Map<?, ?> convertToMapInternal(Schema toSchema, Object value) {
+        if (value == null) {
+            throw new DataException("Unable to convert a null value to a schema that requires a value");
+        } else if (value instanceof String) {
             SchemaAndValue schemaAndValue = parseString(value.toString());
             value = schemaAndValue.value();
         }
         if (value instanceof Map) {
-            return value;
+            return (Map<?, ?>) value;
         }
         throw new DataException("Unable to convert " + value + " (" + value.getClass() + ") to " + toSchema);
     }
 
-    private static Object convertToStructInternal(Schema toSchema, Object value) {
-        if (value instanceof Struct) {
-            return value;
+    private static Struct convertToStructInternal(Schema toSchema, Object value) {
+        if (value == null) {
+            throw new DataException("Unable to convert a null value to a schema that requires a value");
+        } else if (value instanceof Struct) {
+            return (Struct) value;
         }
         throw new DataException("Unable to convert " + value + " (" + value.getClass() + ") to " + toSchema);
     }
