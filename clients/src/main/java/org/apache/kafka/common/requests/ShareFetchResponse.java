@@ -16,14 +16,22 @@
  */
 package org.apache.kafka.common.requests;
 
+import org.apache.kafka.common.Node;
+import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.message.ShareFetchResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.protocol.ObjectSerializationCache;
 
 import java.nio.ByteBuffer;
-import java.util.HashMap;
 import java.util.Map;
+import java.util.Iterator;
+import java.util.Collections;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+
 
 /**
  * Possible error codes.
@@ -82,5 +90,63 @@ public class ShareFetchResponse extends AbstractResponse {
         return new ShareFetchResponse(
                 new ShareFetchResponseData(new ByteBufferAccessor(buffer), version)
         );
+    }
+
+    private static boolean matchingTopic(ShareFetchResponseData.ShareFetchableTopicResponse previousTopic, TopicIdPartition currentTopic) {
+        if (previousTopic == null)
+            return false;
+        return previousTopic.topicId().equals(currentTopic.topicId());
+    }
+
+    /**
+     * Convenience method to find the size of a response.
+     *
+     * @param version       The version of the request
+     * @param partIterator  The partition iterator.
+     * @return              The response size in bytes.
+     */
+    public static int sizeOf(short version,
+                             Iterator<Map.Entry<TopicIdPartition, ShareFetchResponseData.PartitionData>> partIterator) {
+        // Since the throttleTimeMs and metadata field sizes are constant and fixed, we can
+        // use arbitrary values here without affecting the result.
+        ShareFetchResponseData data = toMessage(Errors.NONE, 0, partIterator, Collections.emptyList());
+        ObjectSerializationCache cache = new ObjectSerializationCache();
+        return 4 + data.size(cache, version);
+    }
+
+    public static ShareFetchResponseData toMessage(Errors error, int throttleTimeMs,
+                                                    Iterator<Map.Entry<TopicIdPartition, ShareFetchResponseData.PartitionData>> partIterator,
+                                                    List<Node> nodeEndpoints) {
+        List<ShareFetchResponseData.ShareFetchableTopicResponse> topicResponseList = new ArrayList<>();
+        while (partIterator.hasNext()) {
+            Map.Entry<TopicIdPartition, ShareFetchResponseData.PartitionData> entry = partIterator.next();
+            ShareFetchResponseData.PartitionData partitionData = entry.getValue();
+            // Since PartitionData alone doesn't know the partition ID, we set it here
+            partitionData.setPartitionIndex(entry.getKey().topicPartition().partition());
+            // We have to keep the order of input topic-partition. Hence, we batch the partitions only if the last
+            // batch is in the same topic group.
+            ShareFetchResponseData.ShareFetchableTopicResponse previousTopic = topicResponseList.isEmpty() ? null
+                    : topicResponseList.get(topicResponseList.size() - 1);
+            if (matchingTopic(previousTopic, entry.getKey()))
+                previousTopic.partitions().add(partitionData);
+            else {
+                List<ShareFetchResponseData.PartitionData> partitionResponses = new ArrayList<>();
+                partitionResponses.add(partitionData);
+                topicResponseList.add(new ShareFetchResponseData.ShareFetchableTopicResponse()
+                        .setTopicId(entry.getKey().topicId())
+                        .setPartitions(partitionResponses));
+            }
+        }
+        ShareFetchResponseData data = new ShareFetchResponseData();
+        // KafkaApis should only pass in node endpoints on error, otherwise this should be an empty list
+        nodeEndpoints.forEach(endpoint -> data.nodeEndpoints().add(
+                new ShareFetchResponseData.NodeEndpoint()
+                        .setNodeId(endpoint.id())
+                        .setHost(endpoint.host())
+                        .setPort(endpoint.port())
+                        .setRack(endpoint.rack())));
+        return data.setThrottleTimeMs(throttleTimeMs)
+                .setErrorCode(error.code())
+                .setResponses(topicResponseList);
     }
 }
