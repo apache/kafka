@@ -590,13 +590,6 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
          */
         private CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> future;
 
-        /**
-         * Time until which the request should be retried if it fails with retriable
-         * errors. If not present, the request is triggered without waiting for a response or
-         * retrying.
-         */
-        private final Optional<Long> expirationTimeMs;
-
         OffsetCommitRequestState(final Map<TopicPartition, OffsetAndMetadata> offsets,
                                  final String groupId,
                                  final Optional<String> groupInstanceId,
@@ -605,12 +598,11 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
                                  final long retryBackoffMaxMs,
                                  final MemberInfo memberInfo) {
             super(logContext, CommitRequestManager.class.getSimpleName(), retryBackoffMs,
-                retryBackoffMaxMs, memberInfo);
+                retryBackoffMaxMs, memberInfo, expirationTimeMs);
             this.offsets = offsets;
             this.groupId = groupId;
             this.groupInstanceId = groupInstanceId;
             this.future = new CompletableFuture<>();
-            this.expirationTimeMs = expirationTimeMs;
         }
 
         // Visible for testing
@@ -623,12 +615,11 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
                                  final double jitter,
                                  final MemberInfo memberInfo) {
             super(logContext, CommitRequestManager.class.getSimpleName(), retryBackoffMs, 2,
-                retryBackoffMaxMs, jitter, memberInfo);
+                retryBackoffMaxMs, jitter, memberInfo, expirationTimeMs);
             this.offsets = offsets;
             this.groupId = groupId;
             this.groupInstanceId = groupInstanceId;
             this.future = new CompletableFuture<>();
-            this.expirationTimeMs = expirationTimeMs;
         }
 
         public NetworkClientDelegate.UnsentRequest toUnsentRequest() {
@@ -759,11 +750,6 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
         }
 
         @Override
-        boolean retryTimeoutExpired(final long currentTimeMs) {
-            return expirationTimeMs.isPresent() && expirationTimeMs.get() <= currentTimeMs;
-        }
-
-        @Override
         void removeRequest() {
             if (!unsentOffsetCommitRequests().remove(this)) {
                 log.warn("OffsetCommit request to remove not found in the outbound buffer: {}", this);
@@ -783,6 +769,13 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
         final MemberInfo memberInfo;
 
         /**
+         * Time until which the request should be retried if it fails with retriable
+         * errors. If not present, the request is triggered without waiting for a response or
+         * retrying.
+         */
+        private final Optional<Long> expirationTimeMs;
+
+        /**
          * True if the request expiration time has been reached. This is set when validating the
          * request expiration on {@link #poll(long)} before sending it. It is used to know if a
          * request should be retried on TimeoutException.
@@ -790,16 +783,18 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
         boolean isExpired;
 
         RetriableRequestState(LogContext logContext, String owner, long retryBackoffMs,
-                              long retryBackoffMaxMs, MemberInfo memberInfo) {
+                              long retryBackoffMaxMs, MemberInfo memberInfo, Optional<Long> expirationTimeMs) {
             super(logContext, owner, retryBackoffMs, retryBackoffMaxMs);
             this.memberInfo = memberInfo;
+            this.expirationTimeMs = expirationTimeMs;
         }
 
         // Visible for testing
         RetriableRequestState(LogContext logContext, String owner, long retryBackoffMs, int retryBackoffExpBase,
-                              long retryBackoffMaxMs, double jitter, MemberInfo memberInfo) {
+                              long retryBackoffMaxMs, double jitter, MemberInfo memberInfo, Optional<Long> expirationTimeMs) {
             super(logContext, owner, retryBackoffMs, retryBackoffExpBase, retryBackoffMaxMs, jitter);
             this.memberInfo = memberInfo;
+            this.expirationTimeMs = expirationTimeMs;
         }
 
         /**
@@ -861,7 +856,9 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
 
         abstract void onResponse(final ClientResponse response);
 
-        abstract boolean retryTimeoutExpired(long currentTimeMs);
+        boolean retryTimeoutExpired(long currentTimeMs) {
+            return expirationTimeMs.isPresent() && expirationTimeMs.get() <= currentTimeMs;
+        }
 
         abstract void removeRequest();
     }
@@ -879,21 +876,15 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
          */
         private CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> future;
 
-        /**
-         * Time until which the request should be retried if it fails with retriable errors.
-         */
-        private final long expirationTimeMs;
-
         public OffsetFetchRequestState(final Set<TopicPartition> partitions,
                                        final long retryBackoffMs,
                                        final long retryBackoffMaxMs,
                                        final long expirationTimeMs,
                                        final MemberInfo memberInfo) {
             super(logContext, CommitRequestManager.class.getSimpleName(), retryBackoffMs,
-                retryBackoffMaxMs, memberInfo);
+                retryBackoffMaxMs, memberInfo, Optional.of(expirationTimeMs));
             this.requestedPartitions = partitions;
             this.future = new CompletableFuture<>();
-            this.expirationTimeMs = expirationTimeMs;
         }
 
         public OffsetFetchRequestState(final Set<TopicPartition> partitions,
@@ -903,10 +894,9 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
                                        final double jitter,
                                        final MemberInfo memberInfo) {
             super(logContext, CommitRequestManager.class.getSimpleName(), retryBackoffMs, 2,
-                retryBackoffMaxMs, jitter, memberInfo);
+                retryBackoffMaxMs, jitter, memberInfo, Optional.of(expirationTimeMs));
             this.requestedPartitions = partitions;
             this.future = new CompletableFuture<>();
-            this.expirationTimeMs = expirationTimeMs;
         }
 
         public boolean sameRequest(final OffsetFetchRequestState request) {
@@ -995,10 +985,6 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
 
         void resetFuture() {
             future = new CompletableFuture<>();
-        }
-
-        boolean retryTimeoutExpired(final long currentTimeMs) {
-            return expirationTimeMs <= currentTimeMs;
         }
 
         @Override
