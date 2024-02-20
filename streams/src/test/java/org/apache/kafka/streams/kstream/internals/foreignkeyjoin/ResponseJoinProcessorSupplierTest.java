@@ -27,6 +27,7 @@ import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.state.internals.Murmur3;
+import org.apache.kafka.test.MockInternalNewProcessorContext;
 import org.junit.Test;
 
 import java.util.HashMap;
@@ -88,7 +89,7 @@ public class ResponseJoinProcessorSupplierTest {
                 leftJoin
             );
         final Processor<String, SubscriptionResponseWrapper<String>, String, String> processor = processorSupplier.get();
-        final org.apache.kafka.streams.processor.api.MockProcessorContext<String, String> context = new org.apache.kafka.streams.processor.api.MockProcessorContext<>();
+        final MockInternalNewProcessorContext<String, String> context = new MockInternalNewProcessorContext<>();
         processor.init(context);
         context.setRecordMetadata("topic", 0, 0);
 
@@ -113,7 +114,7 @@ public class ResponseJoinProcessorSupplierTest {
                 leftJoin
             );
         final Processor<String, SubscriptionResponseWrapper<String>, String, String> processor = processorSupplier.get();
-        final MockProcessorContext<String, String> context = new MockProcessorContext<>();
+        final MockInternalNewProcessorContext<String, String> context = new MockInternalNewProcessorContext<>();
         processor.init(context);
         context.setRecordMetadata("topic", 0, 0);
 
@@ -138,7 +139,7 @@ public class ResponseJoinProcessorSupplierTest {
                 leftJoin
             );
         final Processor<String, SubscriptionResponseWrapper<String>, String, String> processor = processorSupplier.get();
-        final MockProcessorContext<String, String> context = new MockProcessorContext<>();
+        final MockInternalNewProcessorContext<String, String> context = new MockInternalNewProcessorContext<>();
         processor.init(context);
         context.setRecordMetadata("topic", 0, 0);
 
@@ -164,7 +165,7 @@ public class ResponseJoinProcessorSupplierTest {
                 leftJoin
             );
         final Processor<String, SubscriptionResponseWrapper<String>, String, String> processor = processorSupplier.get();
-        final MockProcessorContext<String, String> context = new MockProcessorContext<>();
+        final MockInternalNewProcessorContext<String, String> context = new MockInternalNewProcessorContext<>();
         processor.init(context);
         context.setRecordMetadata("topic", 0, 0);
 
@@ -190,7 +191,7 @@ public class ResponseJoinProcessorSupplierTest {
                 leftJoin
             );
         final Processor<String, SubscriptionResponseWrapper<String>, String, String> processor = processorSupplier.get();
-        final MockProcessorContext<String, String> context = new MockProcessorContext<>();
+        final MockInternalNewProcessorContext<String, String> context = new MockInternalNewProcessorContext<>();
         processor.init(context);
         context.setRecordMetadata("topic", 0, 0);
 
@@ -216,7 +217,7 @@ public class ResponseJoinProcessorSupplierTest {
                 leftJoin
             );
         final Processor<String, SubscriptionResponseWrapper<String>, String, String> processor = processorSupplier.get();
-        final MockProcessorContext<String, String> context = new MockProcessorContext<>();
+        final MockInternalNewProcessorContext<String, String> context = new MockInternalNewProcessorContext<>();
         processor.init(context);
         context.setRecordMetadata("topic", 0, 0);
 
