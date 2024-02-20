@@ -68,8 +68,12 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
     @Override
     public void process(ApplicationEvent event) {
         switch (event.type()) {
-            case COMMIT:
-                process((CommitApplicationEvent) event);
+            case COMMIT_ASYNC:
+                process((AsyncCommitApplicationEvent) event);
+                return;
+
+            case COMMIT_SYNC:
+                process((SyncCommitApplicationEvent) event);
                 return;
 
             case POLL:
@@ -138,23 +142,16 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
         requestManagers.heartbeatRequestManager.ifPresent(hrm -> hrm.resetPollTimer(event.pollTimeMs()));
     }
 
-    private void process(final CommitApplicationEvent event) {
-        if (!requestManagers.commitRequestManager.isPresent()) {
-            // Leaving this error handling here, but it is a bit strange as the commit API should enforce the group.id
-            // upfront, so we should never get to this block.
-            Exception exception = new KafkaException("Unable to commit offset. Most likely because the group.id wasn't set");
-            event.future().completeExceptionally(exception);
-            return;
-        }
-
+    private void process(final AsyncCommitApplicationEvent event) {
         CommitRequestManager manager = requestManagers.commitRequestManager.get();
-        CompletableFuture<Void> commitResult;
-        if (event.retryTimeoutMs().isPresent()) {
-            long expirationTimeoutMs = getExpirationTimeForTimeout(event.retryTimeoutMs().get());
-            commitResult = manager.commitSync(event.offsets(), expirationTimeoutMs);
-        } else {
-            commitResult = manager.commitAsync(event.offsets());
-        }
+        CompletableFuture<Void> commitResult = manager.commitAsync(event.offsets());
+        event.chain(commitResult);
+    }
+
+    private void process(final SyncCommitApplicationEvent event) {
+        CommitRequestManager manager = requestManagers.commitRequestManager.get();
+        long expirationTimeoutMs = getExpirationTimeForTimeout(event.retryTimeoutMs());
+        CompletableFuture<Void> commitResult = manager.commitSync(event.offsets(), expirationTimeoutMs);
         event.chain(commitResult);
     }
 
