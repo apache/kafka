@@ -25,6 +25,7 @@ import org.junit.jupiter.api.Timeout;
 
 import java.math.BigDecimal;
 import java.math.BigInteger;
+import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
@@ -742,6 +743,22 @@ public class ValuesTest {
         // Millis as long
         java.util.Date ts4 = Values.convertToTimestamp(Timestamp.SCHEMA, current.getTime());
         assertEquals(current, ts4);
+    }
+
+    @Test
+    public void shouldConvertDecimalValues() {
+        // Various forms of the same number should all be parsed to the same BigDecimal
+        Number number = 1.0f;
+        String string = number.toString();
+        BigDecimal value = new BigDecimal(string);
+        byte[] bytes = Decimal.fromLogical(Decimal.schema(1), value);
+        ByteBuffer buffer = ByteBuffer.wrap(bytes);
+
+        assertEquals(value, Values.convertToDecimal(null, number, 1));
+        assertEquals(value, Values.convertToDecimal(null, string, 1));
+        assertEquals(value, Values.convertToDecimal(null, value, 1));
+        assertEquals(value, Values.convertToDecimal(null, bytes, 1));
+        assertEquals(value, Values.convertToDecimal(null, buffer, 1));
     }
 
     @Test

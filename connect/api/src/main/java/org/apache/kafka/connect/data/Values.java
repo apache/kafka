@@ -424,7 +424,7 @@ public class Values {
                         return BigDecimal.valueOf(converted);
                     }
                     if (value instanceof String) {
-                        return new BigDecimal(value.toString()).doubleValue();
+                        return new BigDecimal(value.toString());
                     }
                 }
                 if (value instanceof ByteBuffer) {
