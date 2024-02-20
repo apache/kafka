@@ -46,6 +46,10 @@ public class ShareAcknowledgeResponse extends AbstractResponse {
         this.data = data;
     }
 
+    public Errors error() {
+        return Errors.forCode(data.errorCode());
+    }
+
     @Override
     public ShareAcknowledgeResponseData data() {
         return data;

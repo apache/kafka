@@ -47,6 +47,10 @@ public class ShareFetchResponse extends AbstractResponse {
         this.data = data;
     }
 
+    public Errors error() {
+        return Errors.forCode(data.errorCode());
+    }
+
     @Override
     public ShareFetchResponseData data() {
         return data;
