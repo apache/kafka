@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.integration;
 
-import kafka.tools.ConsoleConsumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.IntegerDeserializer;
@@ -62,6 +61,8 @@ import org.apache.kafka.streams.state.QueryableStoreTypes;
 import org.apache.kafka.streams.state.ReadOnlySessionStore;
 import org.apache.kafka.test.MockMapper;
 import org.apache.kafka.test.TestUtils;
+import org.apache.kafka.tools.consumer.ConsoleConsumer;
+import org.apache.kafka.tools.consumer.ConsoleConsumerOptions;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
@@ -1117,7 +1118,7 @@ public class KStreamAggregationIntegrationTest {
                                                                       final Deserializer<V> valueDeserializer,
                                                                       final Class innerClass,
                                                                       final int numMessages,
-                                                                      final boolean printTimestamp) {
+                                                                      final boolean printTimestamp) throws Exception {
         final ByteArrayOutputStream newConsole = new ByteArrayOutputStream();
         final PrintStream originalStream = System.out;
         try (final PrintStream newStream = new PrintStream(newConsole)) {
@@ -1139,8 +1140,7 @@ public class KStreamAggregationIntegrationTest {
                 "--property", "key.deserializer.window.size.ms=500",
             };
 
-            ConsoleConsumer.messageCount_$eq(0); //reset the message count
-            ConsoleConsumer.run(new ConsoleConsumer.ConsumerConfig(args));
+            ConsoleConsumer.run(new ConsoleConsumerOptions(args));
             newStream.flush();
             System.setOut(originalStream);
             return newConsole.toString();

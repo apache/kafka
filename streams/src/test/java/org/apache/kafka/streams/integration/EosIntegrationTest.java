@@ -88,7 +88,6 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
@@ -1119,6 +1118,7 @@ public class EosIntegrationTest {
         properties.put(StreamsConfig.STATESTORE_CACHE_MAX_BYTES_CONFIG, 0);
         properties.put(StreamsConfig.STATE_DIR_CONFIG, stateTmpDir + appDir);
         properties.put(StreamsConfig.APPLICATION_SERVER_CONFIG, dummyHostName + ":2142");
+        properties.put(InternalConfig.STATE_UPDATER_ENABLED, processingThreadsEnabled);
         properties.put(InternalConfig.PROCESSING_THREADS_ENABLED, processingThreadsEnabled);
 
         final Properties config = StreamsTestUtils.getStreamsConfig(
@@ -1170,7 +1170,7 @@ public class EosIntegrationTest {
                     valueDeserializer,
                     Utils.mkProperties(Collections.singletonMap(
                         ConsumerConfig.ISOLATION_LEVEL_CONFIG,
-                        IsolationLevel.READ_COMMITTED.name().toLowerCase(Locale.ROOT)))),
+                        IsolationLevel.READ_COMMITTED.toString()))),
                 topic,
                 numberOfRecords
             );
@@ -1202,7 +1202,7 @@ public class EosIntegrationTest {
                     valueDeserializer,
                     Utils.mkProperties(Collections.singletonMap(
                         ConsumerConfig.ISOLATION_LEVEL_CONFIG,
-                        IsolationLevel.READ_COMMITTED.name().toLowerCase(Locale.ROOT))
+                        IsolationLevel.READ_COMMITTED.toString())
                     )
                 ),
                 topic,

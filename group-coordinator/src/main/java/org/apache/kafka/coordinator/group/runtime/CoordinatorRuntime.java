@@ -723,13 +723,17 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
                         try {
                             // Apply the records to the state machine.
                             if (result.replayRecords()) {
-                                result.records().forEach(record ->
+                                // We compute the offset of the record based on the last written offset. The
+                                // coordinator is the single writer to the underlying partition so we can
+                                // deduce it like this.
+                                for (int i = 0; i < result.records().size(); i++) {
                                     context.coordinator.replay(
+                                        prevLastWrittenOffset + i,
                                         producerId,
                                         producerEpoch,
-                                        record
-                                    )
-                                );
+                                        result.records().get(i)
+                                    );
+                                }
                             }
 
                             // Write the records to the log and update the last written
@@ -1647,10 +1651,12 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
                                             ctx.transitionTo(CoordinatorState.ACTIVE);
                                             if (summary != null) {
                                                 runtimeMetrics.recordPartitionLoadSensor(summary.startTimeMs(), summary.endTimeMs());
+                                                log.info("Finished loading of metadata from {} with epoch {} in {}ms where {}ms " +
+                                                    "was spent in the scheduler. Loaded {} records which total to {} bytes.",
+                                                    tp, partitionEpoch, summary.endTimeMs() - summary.startTimeMs(),
+                                                    summary.schedulerQueueTimeMs(), summary.numRecords(), summary.numBytes()
+                                                );
                                             }
-                                            log.info("Finished loading of metadata from {} with epoch {} and LoadSummary={}.",
-                                                tp, partitionEpoch, summary
-                                            );
                                         } catch (Throwable ex) {
                                             log.error("Failed to load metadata from {} with epoch {} due to {}.",
                                                 tp, partitionEpoch, ex.toString()

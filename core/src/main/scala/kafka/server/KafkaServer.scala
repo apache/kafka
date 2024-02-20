@@ -133,7 +133,7 @@ class KafkaServer(
   var authorizer: Option[Authorizer] = None
   @volatile var socketServer: SocketServer = _
   var dataPlaneRequestHandlerPool: KafkaRequestHandlerPool = _
-  var controlPlaneRequestHandlerPool: KafkaRequestHandlerPool = _
+  private var controlPlaneRequestHandlerPool: KafkaRequestHandlerPool = _
 
   var logDirFailureChannel: LogDirFailureChannel = _
   @volatile private var _logManager: LogManager = _
@@ -144,7 +144,7 @@ class KafkaServer(
   var tokenManager: DelegationTokenManager = _
 
   var dynamicConfigHandlers: Map[String, ConfigHandler] = _
-  var dynamicConfigManager: ZkConfigManager = _
+  private var dynamicConfigManager: ZkConfigManager = _
   var credentialProvider: CredentialProvider = _
   var tokenCache: DelegationTokenCache = _
 
@@ -175,7 +175,7 @@ class KafkaServer(
   val correlationId: AtomicInteger = new AtomicInteger(0)
 
   private var _clusterId: String = _
-  @volatile var _brokerTopicStats: BrokerTopicStats = _
+  @volatile private var _brokerTopicStats: BrokerTopicStats = _
 
   private var _featureChangeListener: FinalizedFeatureChangeListener = _
 
@@ -514,8 +514,6 @@ class KafkaServer(
         /* start auto topic creation manager */
         this.autoTopicCreationManager = AutoTopicCreationManager(
           config,
-          metadataCache,
-          threadNamePrefix,
           autoTopicCreationChannel,
           Some(adminManager),
           Some(kafkaController),
@@ -644,7 +642,7 @@ class KafkaServer(
     }
   }
 
-  def createCurrentControllerIdMetric(): Unit = {
+  private def createCurrentControllerIdMetric(): Unit = {
     KafkaYammerMetrics.defaultRegistry().newGauge(MetadataLoaderMetrics.CURRENT_CONTROLLER_ID, () => {
       Option(metadataCache) match {
         case None => -1
@@ -656,13 +654,13 @@ class KafkaServer(
     })
   }
 
-  def unregisterCurrentControllerIdMetric(): Unit = {
+  private def unregisterCurrentControllerIdMetric(): Unit = {
     KafkaYammerMetrics.defaultRegistry().removeMetric(MetadataLoaderMetrics.CURRENT_CONTROLLER_ID)
   }
 
   protected def createRemoteLogManager(): Option[RemoteLogManager] = {
     if (config.remoteLogManagerConfig.enableRemoteStorageSystem()) {
-      if(config.logDirs.size > 1) {
+      if (config.logDirs.size > 1) {
         throw new KafkaException("Tiered storage is not supported with multiple log dirs.")
       }
 

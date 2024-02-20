@@ -180,6 +180,10 @@
       <allow pkg="org.apache.kafka.clients.admin" />
       <!-- for testing -->
       <allow pkg="org.apache.kafka.common.errors" />
+      <!-- for testing -->
+      <allow pkg="io.opentelemetry.proto"/>
+      <!-- for testing -->
+      <allow pkg="org.apache.kafka.common.telemetry" />
     </subpackage>
 
     <subpackage name="serialization">
@@ -316,6 +320,17 @@
     <allow pkg="javax.rmi.ssl"/>
     <allow pkg="kafka.utils" />
     <allow pkg="scala.collection" />
+
+    <subpackage name="consumer">
+      <allow pkg="org.apache.kafka.tools"/>
+
+      <subpackage name="group">
+        <allow pkg="kafka.api"/>
+        <allow pkg="org.apache.kafka.tools"/>
+        <allow pkg="org.apache.kafka.server.config" />
+        <allow pkg="scala"/>
+      </subpackage>
+    </subpackage>
 
     <subpackage name="reassign">
       <allow pkg="org.apache.kafka.admin"/>

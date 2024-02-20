@@ -51,15 +51,13 @@ trait AutoTopicCreationManager {
 object AutoTopicCreationManager {
 
   def apply(
-    config: KafkaConfig,
-    metadataCache: MetadataCache,
-    threadNamePrefix: Option[String],
-    channelManager: Option[NodeToControllerChannelManager],
-    adminManager: Option[ZkAdminManager],
-    controller: Option[KafkaController],
-    groupCoordinator: GroupCoordinator,
-    txnCoordinator: TransactionCoordinator,
-  ): AutoTopicCreationManager = {
+   config: KafkaConfig,
+   channelManager: Option[NodeToControllerChannelManager],
+   adminManager: Option[ZkAdminManager],
+   controller: Option[KafkaController],
+   groupCoordinator: GroupCoordinator,
+   txnCoordinator: TransactionCoordinator,
+ ): AutoTopicCreationManager = {
     new DefaultAutoTopicCreationManager(config, channelManager, adminManager,
       controller, groupCoordinator, txnCoordinator)
   }

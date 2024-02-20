@@ -33,19 +33,19 @@ object AclEntry {
   val WildcardHost: String = "*"
   val WildcardResource: String = ResourcePattern.WILDCARD_RESOURCE
 
-  val ResourceSeparator = ":"
+  val ResourceSeparator: String = ":"
   val ResourceTypes: Set[ResourceType] = ResourceType.values.toSet
     .filterNot(t => t == ResourceType.UNKNOWN || t == ResourceType.ANY)
   val AclOperations: Set[AclOperation] = AclOperation.values.toSet
     .filterNot(t => t == AclOperation.UNKNOWN || t == AclOperation.ANY)
 
-  val PrincipalKey = "principal"
-  val PermissionTypeKey = "permissionType"
-  val OperationKey = "operation"
-  val HostsKey = "host"
-  val VersionKey = "version"
-  val CurrentVersion = 1
-  val AclsKey = "acls"
+  private val PrincipalKey = "principal"
+  private val PermissionTypeKey = "permissionType"
+  private val OperationKey = "operation"
+  private val HostsKey = "host"
+  val VersionKey: String = "version"
+  val CurrentVersion: Int = 1
+  private val AclsKey = "acls"
 
   def apply(principal: KafkaPrincipal,
             permissionType: AclPermissionType,
