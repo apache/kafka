@@ -192,7 +192,9 @@ public class ConsumerGroupCommand {
                     ? Collections.emptySet()
                     : consumerGroupStatesFromString(stateValue);
                 List<ConsumerGroupListing> listings = listConsumerGroupsWithState(states);
-                printGroupStates(listings.stream().map(e -> new Tuple2<>(e.groupId(), e.state().toString())).collect(Collectors.toList()));
+                printGroupStates(listings.stream()
+                    .map(e -> new Tuple2<>(e.groupId(), e.state().map(ConsumerGroupState::toString).orElse(MISSING_COLUMN_VALUE)))
+                    .collect(Collectors.toList()));
             } else
                 listConsumerGroups().forEach(System.out::println);
         }
@@ -225,7 +227,7 @@ public class ConsumerGroupCommand {
             for (Tuple2<String, String> tuple : groupsAndStates) {
                 String groupId = tuple.v1;
                 String state = tuple.v2;
-                System.out.printf("%" + (-maxGroupLen) + "s %s", groupId, state);
+                System.out.printf("%n%" + (-maxGroupLen) + "s %s", groupId, state);
             }
         }
 

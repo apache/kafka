@@ -180,7 +180,7 @@ public class ListConsumerGroupTest extends ConsumerGroupCommandTest {
     ) throws InterruptedException {
         final AtomicReference<String> out = new AtomicReference<>("");
         TestUtils.waitForCondition(() -> {
-            String output = runAndGrabConsoleOutput(args);
+            String output = ToolsTestUtils.grabConsoleOutput(() -> ConsumerGroupCommand.main(args.toArray(new String[0])));
             out.set(output);
 
             int index = 0;
@@ -202,14 +202,5 @@ public class ListConsumerGroupTest extends ConsumerGroupCommandTest {
             }
             return expectedRows.equals(groups);
         }, () -> String.format("Expected header=%s and groups=%s, but found:%n%s", expectedHeader, expectedRows, out.get()));
-    }
-
-    private static String runAndGrabConsoleOutput(
-        List<String> args
-    ) {
-        return kafka.utils.TestUtils.grabConsoleOutput(() -> {
-            ConsumerGroupCommand.main(args.toArray(new String[0]));
-            return null;
-        });
     }
 }
