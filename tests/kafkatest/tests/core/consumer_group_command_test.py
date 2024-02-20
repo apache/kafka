@@ -20,7 +20,7 @@ from ducktape.mark import matrix
 from ducktape.mark.resource import cluster
 
 from kafkatest.services.zookeeper import ZookeeperService
-from kafkatest.services.kafka import KafkaService, quorum
+from kafkatest.services.kafka import KafkaService, quorum, consumer_group
 from kafkatest.services.console_consumer import ConsoleConsumer
 from kafkatest.services.security.security_config import SecurityConfig
 
@@ -104,7 +104,7 @@ class ConsumerGroupCommandTest(Test):
         security_protocol=['PLAINTEXT', 'SSL'],
         metadata_quorum=[quorum.isolated_kraft],
         use_new_coordinator=[True],
-        group_protocol=["classic", "consumer"]
+        group_protocol=consumer_group.all_group_protocols
     )
     def test_list_consumer_groups(self, security_protocol='PLAINTEXT', metadata_quorum=quorum.zk, use_new_coordinator=False, group_protocol=None):
         """
@@ -123,7 +123,7 @@ class ConsumerGroupCommandTest(Test):
         security_protocol=['PLAINTEXT', 'SSL'],
         metadata_quorum=[quorum.isolated_kraft],
         use_new_coordinator=[True],
-        group_protocol=["classic", "consumer"]
+        group_protocol=consumer_group.all_group_protocols
     )
     def test_describe_consumer_group(self, security_protocol='PLAINTEXT', metadata_quorum=quorum.zk, use_new_coordinator=False, group_protocol=None):
         """

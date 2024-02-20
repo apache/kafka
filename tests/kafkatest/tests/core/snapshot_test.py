@@ -21,6 +21,7 @@ from kafkatest.services.kafka import quorum
 from kafkatest.services.console_consumer import ConsoleConsumer
 from kafkatest.services.kafka import KafkaService
 from kafkatest.services.kafka import config_property
+from kafkatest.services.kafka import consumer_group
 from kafkatest.services.verifiable_producer import VerifiableProducer
 from kafkatest.tests.produce_consume_validate import ProduceConsumeValidateTest
 from kafkatest.utils import is_int
@@ -156,7 +157,7 @@ class TestSnapshots(ProduceConsumeValidateTest):
     @matrix(
         metadata_quorum=quorum.all_kraft,
         use_new_coordinator=[True],
-        group_protocol=["classic", "consumer"]
+        group_protocol=consumer_group.all_group_protocols
     )
     def test_broker(self, metadata_quorum=quorum.combined_kraft, use_new_coordinator=False, group_protocol=None):
         """ Test the ability of a broker to consume metadata snapshots
@@ -224,7 +225,7 @@ class TestSnapshots(ProduceConsumeValidateTest):
     @matrix(
         metadata_quorum=quorum.all_kraft,
         use_new_coordinator=[True],
-        group_protocol=["classic", "consumer"]
+        group_protocol=consumer_group.all_group_protocols
     )
     def test_controller(self, metadata_quorum=quorum.combined_kraft, use_new_coordinator=False, group_protocol=None):
         """ Test the ability of controllers to consume metadata snapshots

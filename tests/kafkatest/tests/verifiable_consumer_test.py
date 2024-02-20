@@ -18,7 +18,8 @@ from ducktape.utils.util import wait_until
 from kafkatest.tests.kafka_test import KafkaTest
 from kafkatest.services.verifiable_producer import VerifiableProducer
 from kafkatest.services.verifiable_consumer import ConsumerState, VerifiableConsumer
-from kafkatest.services.kafka import TopicPartition
+from kafkatest.services.kafka import TopicPartition, consumer_group
+
 
 class VerifiableConsumerTest(KafkaTest):
     PRODUCER_REQUEST_TIMEOUT_SEC = 30
@@ -107,7 +108,7 @@ class VerifiableConsumerTest(KafkaTest):
         # Wait until all members have joined the group
         states = [ConsumerState.Joined]
 
-        if consumer.is_consumer_group_protocol_enabled():
+        if consumer_group.is_consumer_group_protocol_enabled(consumer.group_protocol):
             states.extend([ConsumerState.Started, ConsumerState.Rebalancing])
 
         timeout_sec = self.session_timeout_sec * 2
@@ -116,7 +117,7 @@ class VerifiableConsumerTest(KafkaTest):
     def await_all_members(self, consumer):
         states = [ConsumerState.Joined]
         timeout_sec = self.session_timeout_sec * 2
-        num_consumers = 1 if consumer.is_consumer_group_protocol_enabled() else self.num_consumers
+        num_consumers = 1 if consumer_group.is_consumer_group_protocol_enabled(consumer.group_protocol) else self.num_consumers
         self._await_members_in_state(consumer, num_consumers, "joined", states, timeout_sec)
 
     def await_partition_assigned(self, consumer, partition):
