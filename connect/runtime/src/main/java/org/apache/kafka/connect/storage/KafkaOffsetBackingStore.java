@@ -47,7 +47,6 @@ import java.time.Duration;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -203,7 +202,7 @@ public class KafkaOffsetBackingStore extends KafkaTopicBasedBackingStore impleme
         ConnectUtils.addMetricsContextProperties(consumerProps, config, clusterId);
         if (config.exactlyOnceSourceEnabled()) {
             ConnectUtils.ensureProperty(
-                    consumerProps, ConsumerConfig.ISOLATION_LEVEL_CONFIG, IsolationLevel.READ_COMMITTED.name().toLowerCase(Locale.ROOT),
+                    consumerProps, ConsumerConfig.ISOLATION_LEVEL_CONFIG, IsolationLevel.READ_COMMITTED.toString(),
                     "for the worker offsets topic consumer when exactly-once source support is enabled",
                     false
             );
@@ -250,7 +249,7 @@ public class KafkaOffsetBackingStore extends KafkaTopicBasedBackingStore impleme
                         + "support for source connectors, or upgrade to a newer Kafka broker version.";
             } else {
                 message = "When " + ConsumerConfig.ISOLATION_LEVEL_CONFIG + "is set to "
-                        + IsolationLevel.READ_COMMITTED.name().toLowerCase(Locale.ROOT)
+                        + IsolationLevel.READ_COMMITTED.toString()
                         + ", a Kafka broker version that allows admin clients to read consumer offsets is required. "
                         + "Please either reconfigure the worker or connector, or upgrade to a newer Kafka broker version.";
             }
