@@ -19,7 +19,7 @@
 package kafka.server
 
 import java.io.{Closeable, File, IOException, Reader, StringReader}
-import java.nio.file.{Files, Paths, StandardCopyOption}
+import java.nio.file.{Files, Path, Paths, StandardCopyOption}
 import java.lang.management.ManagementFactory
 import java.security.KeyStore
 import java.time.Duration
@@ -59,6 +59,7 @@ import org.apache.kafka.common.requests.MetadataRequest
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.security.scram.ScramCredential
 import org.apache.kafka.common.serialization.{StringDeserializer, StringSerializer}
+import org.apache.kafka.security.PasswordEncoder
 import org.apache.kafka.server.config.ConfigType
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.apache.kafka.server.record.BrokerCompressionType
@@ -938,7 +939,6 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
   }
 
   @Test
-  @Disabled // TODO: To be re-enabled once we can make it less flaky (KAFKA-7957)
   def testMetricsReporterUpdate(): Unit = {
     // Add a new metrics reporter
     val newProps = new Properties
@@ -2018,7 +2018,7 @@ class TestMetricsReporter extends MetricsReporter with Reconfigurable with Close
 
 class MockFileConfigProvider extends FileConfigProvider {
   @throws(classOf[IOException])
-  override def reader(path: String): Reader = {
+  override def reader(path: Path): Reader = {
     new StringReader("key=testKey\npassword=ServerPassword\ninterval=1000\nupdinterval=2000\nstoretype=JKS")
   }
 }

@@ -33,7 +33,7 @@ import kafka.log._
 import kafka.server.QuotaFactory.{QuotaManagers, UnboundedQuota}
 import kafka.server.checkpoints.{LazyOffsetCheckpoints, OffsetCheckpointFile}
 import kafka.server.epoch.util.MockBlockingSender
-import kafka.utils.{Pool, TestInfoUtils, TestUtils}
+import kafka.utils.{Exit, Pool, TestInfoUtils, TestUtils}
 import org.apache.kafka.clients.FetchSessionHandler
 import org.apache.kafka.common.errors.{InvalidPidMappingException, KafkaStorageException}
 import org.apache.kafka.common.message.LeaderAndIsrRequestData
@@ -71,6 +71,7 @@ import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{EnumSource, ValueSource}
 import com.yammer.metrics.core.{Gauge, Meter}
 import kafka.log.remote.RemoteLogManager
+import kafka.zk.KafkaZkClient
 import org.apache.kafka.common.config.{AbstractConfig, TopicConfig}
 import org.apache.kafka.metadata.properties.{MetaProperties, MetaPropertiesEnsemble, MetaPropertiesVersion, PropertiesUtils}
 import org.apache.kafka.raft.RaftConfig
@@ -144,7 +145,7 @@ class ReplicaManagerTest {
     metrics.close()
     // validate that the shutdown is working correctly by ensuring no lingering threads.
     // assert at the very end otherwise the other tear down steps will not be performed
-    TestUtils.assertNoNonDaemonThreads(this.getClass.getName)
+    TestUtils.assertNoNonDaemonThreadsWithWaiting(this.getClass.getName)
   }
 
   @Test
@@ -672,7 +673,7 @@ class ReplicaManagerTest {
       val sequence = 9
       val records = MemoryRecords.withTransactionalRecords(CompressionType.NONE, producerId, epoch, sequence,
         new SimpleRecord(time.milliseconds(), s"message $sequence".getBytes))
-      appendRecords(replicaManager, new TopicPartition(topic, 0), records, transactionalId = transactionalId).onFire { response =>
+      handleProduceAppend(replicaManager, new TopicPartition(topic, 0), records, transactionalId = transactionalId).onFire { response =>
         assertEquals(Errors.NONE, response.error)
       }
       assertLateTransactionCount(Some(0))
@@ -736,7 +737,7 @@ class ReplicaManagerTest {
       for (sequence <- 0 until numRecords) {
         val records = MemoryRecords.withTransactionalRecords(CompressionType.NONE, producerId, epoch, sequence,
           new SimpleRecord(s"message $sequence".getBytes))
-        appendRecords(replicaManager, new TopicPartition(topic, 0), records, transactionalId = transactionalId).onFire { response =>
+        handleProduceAppend(replicaManager, new TopicPartition(topic, 0), records, transactionalId = transactionalId).onFire { response =>
           assertEquals(Errors.NONE, response.error)
         }
       }
@@ -857,7 +858,7 @@ class ReplicaManagerTest {
       for (sequence <- 0 until numRecords) {
         val records = MemoryRecords.withTransactionalRecords(CompressionType.NONE, producerId, epoch, sequence,
           new SimpleRecord(s"message $sequence".getBytes))
-        appendRecords(replicaManager, new TopicPartition(topic, 0), records, transactionalId = transactionalId).onFire { response =>
+        handleProduceAppend(replicaManager, new TopicPartition(topic, 0), records, transactionalId = transactionalId).onFire { response =>
           assertEquals(Errors.NONE, response.error)
         }
       }
@@ -2180,7 +2181,7 @@ class ReplicaManagerTest {
       // If we supply no transactional ID and idempotent records, we do not verify.
       val idempotentRecords = MemoryRecords.withIdempotentRecords(CompressionType.NONE, producerId, producerEpoch, sequence,
         new SimpleRecord("message".getBytes))
-      appendRecords(replicaManager, tp0, idempotentRecords)
+      handleProduceAppend(replicaManager, tp0, idempotentRecords, transactionalId = null)
       verify(addPartitionsToTxnManager, times(0)).verifyTransaction(any(), any(), any(), any(), any[AddPartitionsToTxnManager.AppendCallback]())
       assertEquals(VerificationGuard.SENTINEL, getVerificationGuard(replicaManager, tp0, producerId))
 
@@ -2190,7 +2191,7 @@ class ReplicaManagerTest {
 
       val idempotentRecords2 = MemoryRecords.withIdempotentRecords(CompressionType.NONE, producerId, producerEpoch, sequence,
         new SimpleRecord("message".getBytes))
-      appendRecordsToMultipleTopics(replicaManager, Map(tp0 -> transactionalRecords, tp1 -> idempotentRecords2), transactionalId)
+      handleProduceAppendToMultipleTopics(replicaManager, Map(tp0 -> transactionalRecords, tp1 -> idempotentRecords2), transactionalId)
       verify(addPartitionsToTxnManager, times(1)).verifyTransaction(
         ArgumentMatchers.eq(transactionalId),
         ArgumentMatchers.eq(producerId),
@@ -2225,7 +2226,7 @@ class ReplicaManagerTest {
         new SimpleRecord("message".getBytes))
 
       // We should add these partitions to the manager to verify.
-      val result = appendRecords(replicaManager, tp0, transactionalRecords, origin = appendOrigin, transactionalId = transactionalId)
+      val result = handleProduceAppend(replicaManager, tp0, transactionalRecords, origin = appendOrigin, transactionalId = transactionalId)
       val appendCallback = ArgumentCaptor.forClass(classOf[AddPartitionsToTxnManager.AppendCallback])
       verify(addPartitionsToTxnManager, times(1)).verifyTransaction(
         ArgumentMatchers.eq(transactionalId),
@@ -2244,7 +2245,7 @@ class ReplicaManagerTest {
       assertEquals(verificationGuard, getVerificationGuard(replicaManager, tp0, producerId))
 
       // This time verification is successful.
-      appendRecords(replicaManager, tp0, transactionalRecords, origin = appendOrigin, transactionalId = transactionalId)
+      handleProduceAppend(replicaManager, tp0, transactionalRecords, origin = appendOrigin, transactionalId = transactionalId)
       val appendCallback2 = ArgumentCaptor.forClass(classOf[AddPartitionsToTxnManager.AppendCallback])
       verify(addPartitionsToTxnManager, times(2)).verifyTransaction(
         ArgumentMatchers.eq(transactionalId),
@@ -2283,7 +2284,7 @@ class ReplicaManagerTest {
         new SimpleRecord("message".getBytes))
 
       // We should add these partitions to the manager to verify.
-      val result = appendRecords(replicaManager, tp0, transactionalRecords, transactionalId = transactionalId)
+      val result = handleProduceAppend(replicaManager, tp0, transactionalRecords, transactionalId = transactionalId)
       val appendCallback = ArgumentCaptor.forClass(classOf[AddPartitionsToTxnManager.AppendCallback])
       verify(addPartitionsToTxnManager, times(1)).verifyTransaction(
         ArgumentMatchers.eq(transactionalId),
@@ -2305,7 +2306,7 @@ class ReplicaManagerTest {
       val transactionalRecords2 = MemoryRecords.withTransactionalRecords(CompressionType.NONE, producerId, producerEpoch, sequence + 1,
         new SimpleRecord("message".getBytes))
 
-      val result2 = appendRecords(replicaManager, tp0, transactionalRecords2, transactionalId = transactionalId)
+      val result2 = handleProduceAppend(replicaManager, tp0, transactionalRecords2, transactionalId = transactionalId)
       val appendCallback2 = ArgumentCaptor.forClass(classOf[AddPartitionsToTxnManager.AppendCallback])
       verify(addPartitionsToTxnManager, times(2)).verifyTransaction(
         ArgumentMatchers.eq(transactionalId),
@@ -2348,7 +2349,7 @@ class ReplicaManagerTest {
       val transactionalRecords = MemoryRecords.withTransactionalRecords(CompressionType.NONE, producerId, producerEpoch, sequence,
         new SimpleRecord(s"message $sequence".getBytes))
 
-      appendRecordsToMultipleTopics(replicaManager, Map(tp0 -> transactionalRecords, tp1 -> transactionalRecords), transactionalId).onFire { responses =>
+      handleProduceAppendToMultipleTopics(replicaManager, Map(tp0 -> transactionalRecords, tp1 -> transactionalRecords), transactionalId).onFire { responses =>
         responses.foreach {
           entry => assertEquals(Errors.NONE, entry._2.error)
         }
@@ -2388,7 +2389,7 @@ class ReplicaManagerTest {
         new SimpleRecord(s"message $sequence".getBytes)))
 
       assertThrows(classOf[InvalidPidMappingException],
-        () => appendRecordsToMultipleTopics(replicaManager, transactionalRecords, transactionalId = transactionalId))
+        () => handleProduceAppendToMultipleTopics(replicaManager, transactionalRecords, transactionalId = transactionalId))
       // We should not add these partitions to the manager to verify.
       verify(addPartitionsToTxnManager, times(0)).verifyTransaction(any(), any(), any(), any(), any())
     } finally {
@@ -2411,7 +2412,7 @@ class ReplicaManagerTest {
         new SimpleRecord("message".getBytes))
 
       // We should not add these partitions to the manager to verify, but instead throw an error.
-      appendRecords(replicaManager, tp0, transactionalRecords, transactionalId = transactionalId).onFire { response =>
+      handleProduceAppend(replicaManager, tp0, transactionalRecords, transactionalId = transactionalId).onFire { response =>
         assertEquals(Errors.NOT_LEADER_OR_FOLLOWER, response.error)
       }
       verify(addPartitionsToTxnManager, times(0)).verifyTransaction(any(), any(), any(), any(), any())
@@ -2442,7 +2443,9 @@ class ReplicaManagerTest {
 
       val transactionalRecords = MemoryRecords.withTransactionalRecords(CompressionType.NONE, producerId, producerEpoch, sequence,
         new SimpleRecord(s"message $sequence".getBytes))
-      appendRecords(replicaManager, tp, transactionalRecords, transactionalId = transactionalId)
+      handleProduceAppend(replicaManager, tp, transactionalRecords, transactionalId = transactionalId).onFire { response =>
+        assertEquals(Errors.NONE, response.error)
+      }
       assertEquals(VerificationGuard.SENTINEL, getVerificationGuard(replicaManager, tp, producerId))
 
       // We should not add these partitions to the manager to verify.
@@ -2459,7 +2462,7 @@ class ReplicaManagerTest {
       val moreTransactionalRecords = MemoryRecords.withTransactionalRecords(CompressionType.NONE, producerId, producerEpoch, sequence + 1,
         new SimpleRecord("message".getBytes))
 
-      appendRecords(replicaManager, tp, moreTransactionalRecords, transactionalId = transactionalId)
+      handleProduceAppend(replicaManager, tp, moreTransactionalRecords, transactionalId = transactionalId)
       verify(addPartitionsToTxnManager, times(0)).verifyTransaction(any(), any(), any(), any(), any())
       assertEquals(VerificationGuard.SENTINEL, getVerificationGuard(replicaManager, tp, producerId))
       assertTrue(replicaManager.localLog(tp).get.hasOngoingTransaction(producerId))
@@ -2487,7 +2490,7 @@ class ReplicaManagerTest {
         new SimpleRecord("message".getBytes))
 
       // We should add these partitions to the manager to verify.
-      val result = appendRecords(replicaManager, tp0, transactionalRecords, transactionalId = transactionalId)
+      val result = handleProduceAppend(replicaManager, tp0, transactionalRecords, transactionalId = transactionalId)
       val appendCallback = ArgumentCaptor.forClass(classOf[AddPartitionsToTxnManager.AppendCallback])
       verify(addPartitionsToTxnManager, times(1)).verifyTransaction(
         ArgumentMatchers.eq(transactionalId),
@@ -2513,7 +2516,7 @@ class ReplicaManagerTest {
       assertEquals(verificationGuard, getVerificationGuard(replicaManager, tp0, producerId))
 
       // This time we do not verify
-      appendRecords(replicaManager, tp0, transactionalRecords, transactionalId = transactionalId)
+      handleProduceAppend(replicaManager, tp0, transactionalRecords, transactionalId = transactionalId)
       verify(addPartitionsToTxnManager, times(1)).verifyTransaction(any(), any(), any(), any(), any())
       assertEquals(VerificationGuard.SENTINEL, getVerificationGuard(replicaManager, tp0, producerId))
       assertTrue(replicaManager.localLog(tp0).get.hasOngoingTransaction(producerId))
@@ -2542,7 +2545,7 @@ class ReplicaManagerTest {
 
       // Start verification and return the coordinator related errors.
       val expectedMessage = s"Unable to verify the partition has been added to the transaction. Underlying error: ${error.toString}"
-      val result = appendRecords(replicaManager, tp0, transactionalRecords, transactionalId = transactionalId)
+      val result = handleProduceAppend(replicaManager, tp0, transactionalRecords, transactionalId = transactionalId)
       val appendCallback = ArgumentCaptor.forClass(classOf[AddPartitionsToTxnManager.AppendCallback])
       verify(addPartitionsToTxnManager, times(1)).verifyTransaction(
         ArgumentMatchers.eq(transactionalId),
@@ -2557,41 +2560,6 @@ class ReplicaManagerTest {
       callback(Map(tp0 -> error).toMap)
       assertEquals(Errors.NOT_ENOUGH_REPLICAS, result.assertFired.error)
       assertEquals(expectedMessage, result.assertFired.errorMessage)
-    } finally {
-      replicaManager.shutdown(checkpointHW = false)
-    }
-  }
-
-  @ParameterizedTest
-  @EnumSource(value = classOf[Errors], names = Array("NOT_COORDINATOR", "CONCURRENT_TRANSACTIONS", "COORDINATOR_LOAD_IN_PROGRESS", "COORDINATOR_NOT_AVAILABLE"))
-  def testMaybeVerificationErrorConversions(error: Errors): Unit = {
-    val tp0 = new TopicPartition(topic, 0)
-    val transactionalId = "txn-id"
-    val producerId = 24L
-    val producerEpoch = 0.toShort
-    val addPartitionsToTxnManager = mock(classOf[AddPartitionsToTxnManager])
-
-    val replicaManager = setUpReplicaManagerWithMockedAddPartitionsToTxnManager(addPartitionsToTxnManager, List(tp0))
-    try {
-      replicaManager.becomeLeaderOrFollower(1,
-        makeLeaderAndIsrRequest(topicIds(tp0.topic), tp0, Seq(0, 1), LeaderAndIsr(1, List(0, 1))),
-        (_, _) => ())
-
-      // Start verification and return the coordinator related errors.
-      val result = maybeStartTransactionVerificationForPartition(replicaManager, tp0, transactionalId, producerId, producerEpoch)
-      val appendCallback = ArgumentCaptor.forClass(classOf[AddPartitionsToTxnManager.AppendCallback])
-      verify(addPartitionsToTxnManager, times(1)).verifyTransaction(
-        ArgumentMatchers.eq(transactionalId),
-        ArgumentMatchers.eq(producerId),
-        ArgumentMatchers.eq(producerEpoch),
-        ArgumentMatchers.eq(Seq(tp0)),
-        appendCallback.capture()
-      )
-
-      // Confirm we did not write to the log and instead returned the converted error with the correct error message.
-      val callback: AddPartitionsToTxnManager.AppendCallback = appendCallback.getValue()
-      callback(Map(tp0 -> error).toMap)
-      assertEquals(Errors.NOT_ENOUGH_REPLICAS, result.assertFired.left.getOrElse(Errors.NONE))
     } finally {
       replicaManager.shutdown(checkpointHW = false)
     }
@@ -2740,9 +2708,16 @@ class ReplicaManagerTest {
       createHostedLogs("hosted-stray", numLogs = 10, replicaManager).toSet
       createStrayLogs(10, logManager)
 
-      val allReplicasFromLISR = Set(new TopicPartition("hosted-topic", 0), new TopicPartition("hosted-topic", 1))
+      val allReplicasFromLISR = Set(
+        new TopicPartition("hosted-topic", 0),
+        new TopicPartition("hosted-topic", 1)
+      ).map(p => new TopicIdPartition(new Uuid(p.topic().hashCode, p.topic().hashCode), p))
 
-      replicaManager.updateStrayLogs(replicaManager.findStrayPartitionsFromLeaderAndIsr(allReplicasFromLISR))
+      replicaManager.updateStrayLogs(
+        LogManager.findStrayReplicas(
+          config.nodeId,
+          LogManagerTest.createLeaderAndIsrRequestForStrayDetection(allReplicasFromLISR),
+          logManager.allLogs))
 
       assertEquals(validLogs, logManager.allLogs.toSet)
       assertEquals(validLogs.size, replicaManager.partitionCount.value)
@@ -2769,7 +2744,7 @@ class ReplicaManagerTest {
       val topicPartition = new TopicPartition(name, i)
       val partition = replicaManager.createPartition(topicPartition)
       partition.createLogIfNotExists(isNew = true, isFutureReplica = false,
-        new LazyOffsetCheckpoints(replicaManager.highWatermarkCheckpoints), topicId = None)
+        new LazyOffsetCheckpoints(replicaManager.highWatermarkCheckpoints), topicId = Some(new Uuid(name.hashCode, name.hashCode)))
       partition.log.get
     }
   }
@@ -2777,7 +2752,7 @@ class ReplicaManagerTest {
   private def createStrayLogs(numLogs: Int, logManager: LogManager): Seq[UnifiedLog] = {
     val name = "stray"
     for (i <- 0 until numLogs)
-      yield logManager.getOrCreateLog(new TopicPartition(name, i), topicId = None)
+      yield logManager.getOrCreateLog(new TopicPartition(name, i), topicId = Some(new Uuid(name.hashCode, name.hashCode)))
   }
 
   private def sendProducerAppend(
@@ -3027,8 +3002,7 @@ class ReplicaManagerTest {
                             partition: TopicPartition,
                             records: MemoryRecords,
                             origin: AppendOrigin = AppendOrigin.CLIENT,
-                            requiredAcks: Short = -1,
-                            transactionalId: String = null): CallbackResult[PartitionResponse] = {
+                            requiredAcks: Short = -1): CallbackResult[PartitionResponse] = {
     val result = new CallbackResult[PartitionResponse]()
     def appendCallback(responses: Map[TopicPartition, PartitionResponse]): Unit = {
       val response = responses.get(partition)
@@ -3043,31 +3017,56 @@ class ReplicaManagerTest {
       origin = origin,
       entriesPerPartition = Map(partition -> records),
       responseCallback = appendCallback,
-      transactionalId = transactionalId,
     )
 
     result
   }
 
-  private def appendRecordsToMultipleTopics(replicaManager: ReplicaManager,
-                                            entriesToAppend: Map[TopicPartition, MemoryRecords],
-                                            transactionalId: String,
-                                            origin: AppendOrigin = AppendOrigin.CLIENT,
-                                            requiredAcks: Short = -1): CallbackResult[Map[TopicPartition, PartitionResponse]] = {
+  private def handleProduceAppendToMultipleTopics(replicaManager: ReplicaManager,
+                                                  entriesToAppend: Map[TopicPartition, MemoryRecords],
+                                                  transactionalId: String,
+                                                  origin: AppendOrigin = AppendOrigin.CLIENT,
+                                                  requiredAcks: Short = -1): CallbackResult[Map[TopicPartition, PartitionResponse]] = {
     val result = new CallbackResult[Map[TopicPartition, PartitionResponse]]()
     def appendCallback(responses: Map[TopicPartition, PartitionResponse]): Unit = {
       responses.foreach( response => assertTrue(responses.get(response._1).isDefined))
       result.fire(responses)
     }
 
-    replicaManager.appendRecords(
+    replicaManager.handleProduceAppend(
       timeout = 1000,
       requiredAcks = requiredAcks,
       internalTopicsAllowed = false,
-      origin = origin,
+      transactionalId = transactionalId,
       entriesPerPartition = entriesToAppend,
       responseCallback = appendCallback,
+    )
+
+    result
+  }
+
+  private def handleProduceAppend(replicaManager: ReplicaManager,
+                                  partition: TopicPartition,
+                                  records: MemoryRecords,
+                                  origin: AppendOrigin = AppendOrigin.CLIENT,
+                                  requiredAcks: Short = -1,
+                                  transactionalId: String): CallbackResult[PartitionResponse] = {
+    val result = new CallbackResult[PartitionResponse]()
+
+    def appendCallback(responses: Map[TopicPartition, PartitionResponse]): Unit = {
+      val response = responses.get(partition)
+      assertTrue(response.isDefined)
+      result.fire(response.get)
+    }
+
+    val entriesPerPartition = Map(partition -> records)
+    replicaManager.handleProduceAppend(
+      timeout = 1000,
+      requiredAcks = requiredAcks,
+      internalTopicsAllowed = false,
       transactionalId = transactionalId,
+      entriesPerPartition = entriesPerPartition,
+      responseCallback = appendCallback,
     )
 
     result
@@ -3080,9 +3079,8 @@ class ReplicaManagerTest {
                                                             producerEpoch: Short,
                                                             baseSequence: Int = 0): CallbackResult[Either[Errors, VerificationGuard]] = {
     val result = new CallbackResult[Either[Errors, VerificationGuard]]()
-    def postVerificationCallback(error: Errors,
-                                 requestLocal: RequestLocal,
-                                 verificationGuard: VerificationGuard): Unit = {
+    def postVerificationCallback(errorAndGuard: (Errors, VerificationGuard)): Unit = {
+      val (error, verificationGuard) = errorAndGuard
       val errorOrGuard = if (error != Errors.NONE) Left(error) else Right(verificationGuard)
       result.fire(errorOrGuard)
     }
@@ -3093,7 +3091,6 @@ class ReplicaManagerTest {
       producerId,
       producerEpoch,
       baseSequence,
-      RequestLocal.NoCaching,
       postVerificationCallback
     )
     result
@@ -4390,6 +4387,9 @@ class ReplicaManagerTest {
 
   private def setupMockLog(path: String): UnifiedLog = {
     val mockLog = mock(classOf[UnifiedLog])
+    val partitionDir = new File(path, s"$topic-0")
+    partitionDir.mkdir()
+    when(mockLog.dir).thenReturn(partitionDir)
     when(mockLog.parentDir).thenReturn(path)
     when(mockLog.topicId).thenReturn(Some(topicId))
     when(mockLog.topicPartition).thenReturn(new TopicPartition(topic, 0))
@@ -4803,8 +4803,15 @@ class ReplicaManagerTest {
       )
 
       replicaManager.becomeLeaderOrFollower(0, request, (_, _) => ())
-
-      assertEquals(HostedPartition.Offline, replicaManager.getPartition(topicPartition))
+      val hostedPartition = replicaManager.getPartition(topicPartition)
+      assertEquals(
+        classOf[HostedPartition.Offline],
+        hostedPartition.getClass
+      )
+      assertEquals(
+        request.topicIds().get(topicPartition.topic()),
+        hostedPartition.asInstanceOf[HostedPartition.Offline].partition.flatMap(p => p.topicId).get
+      )
     } finally {
       replicaManager.shutdown(checkpointHW = false)
     }
@@ -4900,7 +4907,7 @@ class ReplicaManagerTest {
   @Test
   def testGetOrCreatePartition(): Unit = {
     val brokerId = 0
-    val replicaManager = setupReplicaManagerWithMockedPurgatories(new MockTimer(time), brokerId)
+    val replicaManager = setupReplicaManagerWithMockedPurgatories(new MockTimer(time), brokerId, shouldMockLog = true)
     try {
       val foo0 = new TopicPartition("foo", 0)
       val emptyDelta = new TopicsDelta(TopicsImage.EMPTY)
@@ -4912,7 +4919,16 @@ class ReplicaManagerTest {
       assertTrue(fooPart eq fooPart2)
       val bar1 = new TopicPartition("bar", 1)
       replicaManager.markPartitionOffline(bar1)
-      assertEquals(None, replicaManager.getOrCreatePartition(bar1, emptyDelta, BAR_UUID))
+      val (barPart, barNew) = replicaManager.getOrCreatePartition(bar1, emptyDelta, BAR_UUID).get
+      assertTrue(barNew)
+      assertEquals(bar1, barPart.topicPartition)
+
+      val mockLog = mock(classOf[UnifiedLog])
+      when(replicaManager.logManager.getLog(bar1)).thenReturn(Some(mockLog))
+      when(mockLog.topicId).thenReturn(Some(BAR_UUID))
+      replicaManager.markPartitionOffline(bar1)
+
+      assertTrue(replicaManager.getOrCreatePartition(bar1, emptyDelta, BAR_UUID).isEmpty)
     } finally {
       replicaManager.shutdown(checkpointHW = false)
     }
@@ -5563,7 +5579,15 @@ class ReplicaManagerTest {
       replicaManager.applyDelta(topicsDelta, leaderMetadataImage)
       verifyRLMOnLeadershipChange(Collections.emptySet(), Collections.emptySet())
 
-      assertEquals(HostedPartition.Offline, replicaManager.getPartition(topicPartition))
+      val hostedPartition = replicaManager.getPartition(topicPartition)
+      assertEquals(
+        classOf[HostedPartition.Offline],
+        hostedPartition.getClass
+      )
+      assertEquals(
+        FOO_UUID,
+        hostedPartition.asInstanceOf[HostedPartition.Offline].partition.flatMap(p => p.topicId).get
+      )
     } finally {
       replicaManager.shutdown(checkpointHW = false)
     }
@@ -6367,6 +6391,163 @@ class ReplicaManagerTest {
       verifyNoMoreInteractions(mockRemoteLogManager)
     } finally {
       replicaManager.shutdown(checkpointHW = false)
+    }
+  }
+
+
+  val foo0 = new TopicIdPartition(Uuid.fromString("Sl08ZXU2QW6uF5hIoSzc8w"), new TopicPartition("foo", 0))
+  val foo1 = new TopicIdPartition(Uuid.fromString("Sl08ZXU2QW6uF5hIoSzc8w"), new TopicPartition("foo", 1))
+  val newFoo0 = new TopicIdPartition(Uuid.fromString("JRCmVxWxQamFs4S8NXYufg"), new TopicPartition("foo", 0))
+  val bar0 = new TopicIdPartition(Uuid.fromString("69O438ZkTSeqqclTtZO2KA"), new TopicPartition("bar", 0))
+
+  def setupReplicaManagerForKRaftMigrationTest(): ReplicaManager = {
+    setupReplicaManagerWithMockedPurgatories(
+      brokerId = 3,
+      timer = new MockTimer(time),
+      aliveBrokerIds = Seq(0, 1, 2),
+      propsModifier = props => {
+        props.setProperty(KafkaConfig.MigrationEnabledProp, "true")
+        props.setProperty(KafkaConfig.QuorumVotersProp, "1000@localhost:9093")
+        props.setProperty(KafkaConfig.ControllerListenerNamesProp, "CONTROLLER")
+        props.setProperty(KafkaConfig.ListenerSecurityProtocolMapProp, "CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT")
+      },
+      defaultTopicRemoteLogStorageEnable = false)
+  }
+
+  def verifyPartitionIsOnlineAndHasId(
+    replicaManager: ReplicaManager,
+    topicIdPartition: TopicIdPartition
+  ): Unit = {
+    val partition = replicaManager.getPartition(topicIdPartition.topicPartition())
+    assertTrue(partition.isInstanceOf[HostedPartition.Online],
+      s"Expected ${topicIdPartition} to be in state: HostedPartition.Online. But was in state: ${partition}")
+    val hostedPartition = partition.asInstanceOf[HostedPartition.Online]
+    assertTrue(hostedPartition.partition.log.isDefined,
+      s"Expected ${topicIdPartition} to have a log set in ReplicaManager, but it did not.")
+    assertTrue(hostedPartition.partition.log.get.topicId.isDefined,
+      s"Expected the log for ${topicIdPartition} to topic ID set in LogManager, but it did not.")
+    assertEquals(topicIdPartition.topicId(), hostedPartition.partition.log.get.topicId.get)
+    assertEquals(topicIdPartition.topicPartition(), hostedPartition.partition.topicPartition)
+  }
+
+  def verifyPartitionIsOffline(
+    replicaManager: ReplicaManager,
+    topicIdPartition: TopicIdPartition
+  ): Unit = {
+    val partition = replicaManager.getPartition(topicIdPartition.topicPartition())
+    assertEquals(HostedPartition.None, partition, s"Expected ${topicIdPartition} to be offline, but it was: ${partition}")
+  }
+
+  @Test
+  def testFullLairDuringKRaftMigration(): Unit = {
+    val replicaManager = setupReplicaManagerForKRaftMigrationTest()
+    try {
+      val becomeLeaderRequest = LogManagerTest.createLeaderAndIsrRequestForStrayDetection(
+        Seq(foo0, foo1, bar0), Seq(3, 4, 3))
+      replicaManager.becomeLeaderOrFollower(1, becomeLeaderRequest, (_, _) => ())
+      verifyPartitionIsOnlineAndHasId(replicaManager, foo0)
+      verifyPartitionIsOnlineAndHasId(replicaManager, foo1)
+      verifyPartitionIsOnlineAndHasId(replicaManager, bar0)
+    } finally {
+      replicaManager.shutdown(checkpointHW = false)
+    }
+  }
+
+  @Test
+  def testFullLairDuringKRaftMigrationRemovesOld(): Unit = {
+    val replicaManager = setupReplicaManagerForKRaftMigrationTest()
+    try {
+      val becomeLeaderRequest1 = LogManagerTest.createLeaderAndIsrRequestForStrayDetection(
+        Seq(foo0, foo1, bar0), Seq(3, 4, 3))
+      replicaManager.becomeLeaderOrFollower(1, becomeLeaderRequest1, (_, _) => ())
+      val becomeLeaderRequest2 = LogManagerTest.createLeaderAndIsrRequestForStrayDetection(
+        Seq(bar0), Seq(3, 4, 3))
+      replicaManager.becomeLeaderOrFollower(2, becomeLeaderRequest2, (_, _) => ())
+
+      verifyPartitionIsOffline(replicaManager, foo0)
+      verifyPartitionIsOffline(replicaManager, foo1)
+      verifyPartitionIsOnlineAndHasId(replicaManager, bar0)
+    } finally {
+      replicaManager.shutdown(checkpointHW = false)
+    }
+  }
+
+  @Test
+  def testFullLairDuringKRaftMigrationWithTopicRecreations(): Unit = {
+    val replicaManager = setupReplicaManagerForKRaftMigrationTest()
+    try {
+      val becomeLeaderRequest1 = LogManagerTest.createLeaderAndIsrRequestForStrayDetection(
+        Seq(foo0, foo1, bar0), Seq(3, 4, 3))
+      replicaManager.becomeLeaderOrFollower(1, becomeLeaderRequest1, (_, _) => ())
+      val becomeLeaderRequest2 = LogManagerTest.createLeaderAndIsrRequestForStrayDetection(
+        Seq(newFoo0, bar0), Seq(3, 4, 3))
+      replicaManager.becomeLeaderOrFollower(2, becomeLeaderRequest2, (_, _) => ())
+
+      verifyPartitionIsOnlineAndHasId(replicaManager, newFoo0)
+      verifyPartitionIsOffline(replicaManager, foo1)
+      verifyPartitionIsOnlineAndHasId(replicaManager, bar0)
+    } finally {
+      replicaManager.shutdown(checkpointHW = false)
+    }
+  }
+
+  @Test
+  def testMetadataLogDirFailureInZkShouldNotHaltBroker(): Unit = {
+    // Given
+    val props = TestUtils.createBrokerConfig(1, TestUtils.MockZkConnect, logDirCount = 2)
+    val config = KafkaConfig.fromProps(props)
+    val logDirFiles = config.logDirs.map(new File(_))
+    val logDirFailureChannel = new LogDirFailureChannel(config.logDirs.size)
+    val logManager = TestUtils.createLogManager(logDirFiles, defaultConfig = new LogConfig(new Properties()), time = time)
+    val mockZkClient = mock(classOf[KafkaZkClient])
+    val replicaManager = new ReplicaManager(
+      metrics = metrics,
+      config = config,
+      time = time,
+      scheduler = time.scheduler,
+      logManager = logManager,
+      quotaManagers = quotaManager,
+      metadataCache = MetadataCache.zkMetadataCache(config.brokerId, config.interBrokerProtocolVersion),
+      logDirFailureChannel = logDirFailureChannel,
+      alterPartitionManager = alterPartitionManager,
+      threadNamePrefix = Option(this.getClass.getName),
+      zkClient = Option(mockZkClient),
+    )
+    try {
+      logManager.startup(Set.empty[String])
+      replicaManager.startup()
+
+      def haltProcedure(exitStatus: Int, message: Option[String]): Nothing = {
+        fail("Test failure, broker should not have halted")
+      }
+      Exit.setHaltProcedure(haltProcedure)
+
+      // When
+      logDirFailureChannel.maybeAddOfflineLogDir(logDirFiles.head.getAbsolutePath, "test failure", null)
+
+      // Then
+      TestUtils.retry(60000) {
+         verify(mockZkClient).propagateLogDirEvent(config.brokerId)
+      }
+    } finally {
+      Utils.tryAll(util.Arrays.asList[Callable[Void]](
+        () => {
+          replicaManager.shutdown(checkpointHW = false)
+          null
+        },
+        () => {
+          try {
+            logManager.shutdown()
+          } catch {
+            case _: Exception =>
+          }
+          null
+        },
+        () => {
+          quotaManager.shutdown()
+          null
+        }
+      ))
     }
   }
 }

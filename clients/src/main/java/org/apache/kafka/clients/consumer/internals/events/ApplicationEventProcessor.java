@@ -16,13 +16,13 @@
  */
 package org.apache.kafka.clients.consumer.internals.events;
 
+import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetAndTimestamp;
 import org.apache.kafka.clients.consumer.internals.CachedSupplier;
 import org.apache.kafka.clients.consumer.internals.CommitRequestManager;
 import org.apache.kafka.clients.consumer.internals.ConsumerMetadata;
 import org.apache.kafka.clients.consumer.internals.ConsumerNetworkThread;
 import org.apache.kafka.clients.consumer.internals.MembershipManager;
-import org.apache.kafka.clients.consumer.internals.RelaxedCompletableFuture;
 import org.apache.kafka.clients.consumer.internals.RequestManagers;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.PartitionInfo;
@@ -37,7 +37,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Optional;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Supplier;
@@ -70,16 +69,16 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
      * an event generates an error. In such cases, the processor will log an exception, but we do not want those
      * errors to be propagated to the caller.
      */
-    public List<RelaxedCompletableFuture<?>> process() {
-        List<RelaxedCompletableFuture<?>> futures = new ArrayList<>();
+    public List<CompletableFuture<?>> process() {
+        List<CompletableFuture<?>> futures = new ArrayList<>();
 
         process((event, error) -> {
             error.ifPresent(e -> log.warn("Error processing event {}", e.getMessage(), e));
 
             if (event instanceof CompletableApplicationEvent) {
-                RelaxedCompletableFuture<?> future = ((CompletableApplicationEvent<?>) event).future();
+                CompletableFuture<?> future = ((CompletableApplicationEvent<?>) event).future();
                 futures.add(future);
-            };
+            }
         });
 
         return futures;
@@ -88,8 +87,12 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
     @Override
     public void process(ApplicationEvent event) {
         switch (event.type()) {
-            case COMMIT:
-                process((CommitApplicationEvent) event);
+            case COMMIT_ASYNC:
+                process((AsyncCommitApplicationEvent) event);
+                return;
+
+            case COMMIT_SYNC:
+                process((SyncCommitApplicationEvent) event);
                 return;
 
             case POLL:
@@ -158,7 +161,7 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
         requestManagers.heartbeatRequestManager.ifPresent(hrm -> hrm.resetPollTimer(event.pollTimeMs()));
     }
 
-    private void process(final CommitApplicationEvent event) {
+    private void process(final AsyncCommitApplicationEvent event) {
         if (!requestManagers.commitRequestManager.isPresent()) {
             // Leaving this error handling here, but it is a bit strange as the commit API should enforce the group.id
             // upfront, so we should never get to this block.
@@ -167,21 +170,23 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
             return;
         }
 
-        final Optional<Timer> timer;
+        CommitRequestManager manager = requestManagers.commitRequestManager.get();
+        CompletableFuture<Void> commitResult = manager.commitAsync(event.offsets());
+        chain(commitResult, event.future());
+    }
 
-        if (event.allowsRetries()) {
-            Timer t = timer(event);
-
-            if (maybeTimeout(event, t, "Unable to commit offset due to exceeding timeout"))
-                return;
-
-            timer = Optional.of(t);
-        } else {
-            timer = Optional.empty();
+    private void process(final SyncCommitApplicationEvent event) {
+        if (!requestManagers.commitRequestManager.isPresent()) {
+            // Leaving this error handling here, but it is a bit strange as the commit API should enforce the group.id
+            // upfront, so we should never get to this block.
+            Exception exception = new KafkaException("Unable to commit offset. Most likely because the group.id wasn't set");
+            event.future().completeExceptionally(exception);
+            return;
         }
 
         CommitRequestManager manager = requestManagers.commitRequestManager.get();
-        event.chain(manager.addOffsetCommitRequest(event.offsets(), timer, false));
+        CompletableFuture<Void> commitResult = manager.commitSync(event.offsets(), event.deadlineMs());
+        chain(commitResult, event.future());
     }
 
     private void process(final FetchCommittedOffsetsApplicationEvent event) {
@@ -197,7 +202,9 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
             return;
 
         CommitRequestManager manager = requestManagers.commitRequestManager.get();
-        event.chain(manager.addOffsetFetchRequest(event.partitions(), timer));
+        long expirationTimeMs = getExpirationTimeForTimeout(event.deadlineMs());
+        CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> future = manager.fetchOffsets(event.partitions(), expirationTimeMs);
+        chain(future, event.future());
     }
 
     private void process(final NewTopicsMetadataUpdateRequestEvent ignored) {
@@ -215,7 +222,7 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
         }
         CommitRequestManager manager = requestManagers.commitRequestManager.get();
         manager.updateAutoCommitTimer(event.currentTimeMs());
-        manager.maybeAutoCommitAllConsumedAsync();
+        manager.maybeAutoCommitAsync();
     }
 
     private void process(final ListOffsetsApplicationEvent event) {
@@ -226,10 +233,9 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
 
         final CompletableFuture<Map<TopicPartition, OffsetAndTimestamp>> future = requestManagers.offsetsRequestManager.fetchOffsets(
                 event.timestampsToSearch(),
-                event.requireTimestamps(),
-                timer
+                event.requireTimestamps()
         );
-        event.chain(future);
+        chain(future, event.future());
     }
 
     /**
@@ -266,8 +272,8 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
         if (maybeTimeout(event, timer, "Unable to unsubscribe due to exceeding timeout"))
             return;
 
-        CompletableFuture<Void> result = membershipManager.leaveGroup(timer);
-        event.chain(result);
+        CompletableFuture<Void> result = membershipManager.leaveGroup();
+        chain(result, event.future());
     }
 
     private void process(final ResetPositionsApplicationEvent event) {
@@ -276,8 +282,8 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
         if (maybeTimeout(event, timer, "Unable to reset positions due to exceeding timeout"))
             return;
 
-        CompletableFuture<Void> result = requestManagers.offsetsRequestManager.resetPositionsIfNeeded(timer);
-        event.chain(result);
+        CompletableFuture<Void> result = requestManagers.offsetsRequestManager.resetPositionsIfNeeded();
+        chain(result, event.future());
     }
 
     private void process(final ValidatePositionsApplicationEvent event) {
@@ -286,8 +292,8 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
         if (maybeTimeout(event, timer, "Unable to validate positions due to exceeding timeout"))
             return;
 
-        CompletableFuture<Void> result = requestManagers.offsetsRequestManager.validatePositionsIfNeeded(timer);
-        event.chain(result);
+        CompletableFuture<Void> result = requestManagers.offsetsRequestManager.validatePositionsIfNeeded();
+        chain(result, event.future());
     }
 
     private void process(final TopicMetadataApplicationEvent event) {
@@ -299,12 +305,12 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
         final CompletableFuture<Map<String, List<PartitionInfo>>> future;
 
         if (event.isAllTopics()) {
-            future = requestManagers.topicMetadataRequestManager.requestAllTopicsMetadata(timer);
+            future = requestManagers.topicMetadataRequestManager.requestAllTopicsMetadata(event.deadlineMs());
         } else {
-            future = requestManagers.topicMetadataRequestManager.requestTopicMetadata(event.topic(), timer);
+            future = requestManagers.topicMetadataRequestManager.requestTopicMetadata(event.topic(), event.deadlineMs());
         }
 
-        event.chain(future);
+        chain(future, event.future());
     }
 
     private void process(final ConsumerRebalanceListenerCallbackCompletedEvent event) {
@@ -340,9 +346,9 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
         if (maybeTimeout(event, timer, "Unable to leave group due to exceeding timeout"))
             return;
 
-        CompletableFuture<Void> future = membershipManager.leaveGroup(timer);
+        CompletableFuture<Void> future = membershipManager.leaveGroup();
         // The future will be completed on heartbeat sent
-        event.chain(future);
+        chain(future, event.future());
     }
 
     /**
@@ -361,6 +367,38 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
         } else {
             return false;
         }
+    }
+
+    /**
+     * @return Expiration time in milliseconds calculated with the current time plus the given
+     * timeout. Returns Long.MAX_VALUE if the expiration overflows it.
+     * Visible for testing.
+     */
+    long getExpirationTimeForTimeout(final long timeoutMs) {
+        long expiration = System.currentTimeMillis() + timeoutMs;
+        if (expiration < 0) {
+            return Long.MAX_VALUE;
+        }
+        return expiration;
+    }
+
+    private <T> void chain(final CompletableFuture<T> primary, final CompletableFuture<T> secondary) {
+        Objects.requireNonNull(
+            primary,
+            () -> String.format("Could not chain the secondary future (%s) to the primary future because the primary future was null", secondary)
+        );
+        Objects.requireNonNull(
+            secondary,
+            () -> String.format("Could not chain the secondary future to the primary future (%s) because the secondary future was null", primary)
+        );
+
+        primary.whenComplete((value, exception) -> {
+            if (exception != null) {
+                secondary.completeExceptionally(exception);
+            } else {
+                secondary.complete(value);
+            }
+        });
     }
 
     /**

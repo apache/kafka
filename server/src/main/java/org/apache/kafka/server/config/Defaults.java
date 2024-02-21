@@ -29,9 +29,11 @@ import org.apache.kafka.common.security.auth.KafkaPrincipalBuilder;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.security.authenticator.DefaultKafkaPrincipalBuilder;
 import org.apache.kafka.coordinator.group.OffsetConfig;
+import org.apache.kafka.coordinator.group.assignor.UniformAssignor;
 import org.apache.kafka.coordinator.transaction.TransactionLogConfig;
 import org.apache.kafka.coordinator.transaction.TransactionStateManagerConfig;
 import org.apache.kafka.raft.RaftConfig;
+import org.apache.kafka.security.PasswordEncoderConfigs;
 import org.apache.kafka.server.common.MetadataVersion;
 
 import java.util.Arrays;
@@ -72,6 +74,7 @@ public class Defaults {
     /** ********* KRaft mode configs *********/
     public static final int EMPTY_NODE_ID = -1;
     public static final long SERVER_MAX_STARTUP_TIME_MS = Long.MAX_VALUE;
+    public static final int MIGRATION_METADATA_MIN_BATCH_SIZE = 200;
 
     /** ********* Authorizer Configuration *********/
     public static final String AUTHORIZER_CLASS_NAME = "";
@@ -161,7 +164,10 @@ public class Defaults {
     public static final int CONSUMER_GROUP_MIN_HEARTBEAT_INTERVAL_MS = 5000;
     public static final int CONSUMER_GROUP_MAX_HEARTBEAT_INTERVAL_MS = 15000;
     public static final int CONSUMER_GROUP_MAX_SIZE = Integer.MAX_VALUE;
-    public static final List<String> CONSUMER_GROUP_ASSIGNORS = Collections.singletonList(RangeAssignor.class.getName());
+    public static final List<String> CONSUMER_GROUP_ASSIGNORS = Arrays.asList(
+        UniformAssignor.class.getName(),
+        RangeAssignor.class.getName()
+    );
 
     /** ********* Offset management configuration *********/
     public static final int OFFSET_METADATA_MAX_SIZE = OffsetConfig.DEFAULT_MAX_METADATA_SIZE;
@@ -192,6 +198,9 @@ public class Defaults {
     /** ********* Fetch Configuration *********/
     public static final int MAX_INCREMENTAL_FETCH_SESSION_CACHE_SLOTS = 1000;
     public static final int FETCH_MAX_BYTES = 55 * 1024 * 1024;
+
+    /** ********* Request Limit Configuration ***********/
+    public static final int MAX_REQUEST_PARTITION_SIZE_LIMIT = 2000;
 
     /** ********* Quota Configuration *********/
     public static final int NUM_QUOTA_SAMPLES = ClientQuotaManagerConfig.DEFAULT_NUM_QUOTA_SAMPLES;
@@ -263,9 +272,9 @@ public class Defaults {
     public static final long DELEGATION_TOKEN_EXPIRY_CHECK_INTERVAL_MS = 1 * 60 * 60 * 1000L;
 
     /**  ********* Password Encryption Configuration for Dynamic Configs *********/
-    public static final String PASSWORD_ENCODER_CIPHER_ALGORITHM = "AES/CBC/PKCS5Padding";
-    public static final int PASSWORD_ENCODER_KEY_LENGTH = 128;
-    public static final int PASSWORD_ENCODER_ITERATIONS = 4096;
+    public static final String PASSWORD_ENCODER_CIPHER_ALGORITHM = PasswordEncoderConfigs.DEFAULT_CIPHER_ALGORITHM;
+    public static final int PASSWORD_ENCODER_KEY_LENGTH = PasswordEncoderConfigs.DEFAULT_KEY_LENGTH;
+    public static final int PASSWORD_ENCODER_ITERATIONS = PasswordEncoderConfigs.DEFAULT_ITERATIONS;
 
     /**  ********* Raft Quorum Configuration *********/
     public static final List<String> QUORUM_VOTERS = RaftConfig.DEFAULT_QUORUM_VOTERS;

@@ -60,7 +60,7 @@ import java.util.stream.Collectors;
  * Instances of this class are thread safe.
  * <p>
  */
-public class RetryWithToleranceOperator implements AutoCloseable {
+public class RetryWithToleranceOperator<T> implements AutoCloseable {
 
     private static final Logger log = LoggerFactory.getLogger(RetryWithToleranceOperator.class);
 
@@ -83,7 +83,7 @@ public class RetryWithToleranceOperator implements AutoCloseable {
     private final ErrorHandlingMetrics errorHandlingMetrics;
     private final CountDownLatch stopRequestedLatch;
     private volatile boolean stopping;   // indicates whether the operator has been asked to stop retrying
-    private List<ErrorReporter> reporters;
+    private List<ErrorReporter<T>> reporters;
 
     public RetryWithToleranceOperator(long errorRetryTimeout, long errorMaxDelayInMillis,
                                       ToleranceType toleranceType, Time time, ErrorHandlingMetrics errorHandlingMetrics) {
@@ -115,7 +115,7 @@ public class RetryWithToleranceOperator implements AutoCloseable {
      * @return A future which resolves when this failure has been persisted by all {@link ErrorReporter} instances
      * @throws ConnectException if the operation is not tolerated, and the overall pipeline should stop
      */
-    public Future<Void> executeFailed(ProcessingContext<?> context, Stage stage, Class<?> executingClass, Throwable error) {
+    public Future<Void> executeFailed(ProcessingContext<T> context, Stage stage, Class<?> executingClass, Throwable error) {
         markAsFailed();
         context.currentContext(stage, executingClass);
         context.error(error);
@@ -134,7 +134,7 @@ public class RetryWithToleranceOperator implements AutoCloseable {
      * @return A future which resolves when this failure has been persisted by all {@link ErrorReporter} instances
      */
     // Visible for testing
-    synchronized Future<Void> report(ProcessingContext<?> context) {
+    synchronized Future<Void> report(ProcessingContext<T> context) {
         if (reporters.size() == 1) {
             return new WorkerErrantRecordReporter.ErrantRecordFuture(Collections.singletonList(reporters.iterator().next().report(context)));
         }
@@ -167,7 +167,8 @@ public class RetryWithToleranceOperator implements AutoCloseable {
      * @return result of the operation, or null if a prior exception occurred, or the operation only threw retriable or tolerable exceptions
      * @throws ConnectException wrapper if any non-tolerated exception was thrown by the operation
      */
-    public <V> V execute(ProcessingContext<?> context, Operation<V> operation, Stage stage, Class<?> executingClass) {
+    public <V> V execute(ProcessingContext<T> context, Operation<V> operation, Stage stage, Class<?> executingClass) {
+        context.currentContext(stage, executingClass);
         if (context.failed()) {
             log.debug("ProcessingContext is already in failed state. Ignoring requested operation.");
             return null;
@@ -196,7 +197,7 @@ public class RetryWithToleranceOperator implements AutoCloseable {
      * @return the result of the operation if it succeeded, or null if the operation only threw retriable exceptions
      * @throws Exception rethrow if any non-retriable exception was thrown by the operation
      */
-    protected <V> V execAndRetry(ProcessingContext<?> context, Operation<V> operation) throws Exception {
+    protected <V> V execAndRetry(ProcessingContext<T> context, Operation<V> operation) throws Exception {
         int attempt = 0;
         long startTime = time.milliseconds();
         long deadline = (errorRetryTimeout >= 0) ? startTime + errorRetryTimeout : Long.MAX_VALUE;
@@ -238,7 +239,7 @@ public class RetryWithToleranceOperator implements AutoCloseable {
      * @throws ConnectException wrapper if any non-tolerated exception was thrown by the operation
      */
     // Visible for testing
-    protected <V> V execAndHandleError(ProcessingContext<?> context, Operation<V> operation, Class<? extends Exception> tolerated) {
+    protected <V> V execAndHandleError(ProcessingContext<T> context, Operation<V> operation, Class<? extends Exception> tolerated) {
         try {
             V result = execAndRetry(context, operation);
             if (context.failed()) {
@@ -330,7 +331,7 @@ public class RetryWithToleranceOperator implements AutoCloseable {
      *
      * @param reporters the error reporters (should not be null).
      */
-    public synchronized void reporters(List<ErrorReporter> reporters) {
+    public synchronized void reporters(List<ErrorReporter<T>> reporters) {
         this.reporters = Objects.requireNonNull(reporters, "reporters");
     }
 
@@ -348,7 +349,7 @@ public class RetryWithToleranceOperator implements AutoCloseable {
     @Override
     public synchronized void close() {
         ConnectException e = null;
-        for (ErrorReporter reporter : reporters) {
+        for (ErrorReporter<T> reporter : reporters) {
             try {
                 reporter.close();
             } catch (Throwable t) {

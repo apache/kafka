@@ -82,7 +82,9 @@ public class ApplicationEventProcessorTest {
             fetchRequestManager,
             Optional.of(coordinatorRequestManager),
             Optional.of(commitRequestManager),
-            Optional.of(heartbeatRequestManager));
+            Optional.of(heartbeatRequestManager),
+            Optional.of(membershipManager)
+        );
         processor = new ApplicationEventProcessor(
             logContext,
             time,
