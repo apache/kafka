@@ -1002,8 +1002,7 @@ public class InternalTopologyBuilder {
                                      new ArrayList<>(globalStateStores.values()),
                                      storeToChangelogTopic,
                                      repartitionTopics,
-                                     storeNameToReprocessOnRestore
-        );
+                                     storeNameToReprocessOnRestore);
     }
 
     private void buildSinkNode(final Map<String, ProcessorNode<?, ?, ?, ?>> processorMap,
