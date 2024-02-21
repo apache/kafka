@@ -36,6 +36,7 @@ import java.util
 import java.util.{Collections, Properties}
 import org.apache.kafka.common.Node
 import org.apache.kafka.coordinator.group.Group.GroupType
+import org.apache.kafka.coordinator.group.GroupProtocolMigrationConfig
 import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.server.common.MetadataVersion.{IBP_0_8_2, IBP_3_0_IV1}
 import org.apache.kafka.server.config.ServerTopicConfigSynonyms
@@ -1828,7 +1829,20 @@ class KafkaConfigTest {
     props.put(KafkaConfig.GroupCoordinatorRebalanceProtocolsProp, "classic,consumer")
     val config = KafkaConfig.fromProps(props)
     assertEquals(Set(GroupType.CLASSIC, GroupType.CONSUMER), config.groupCoordinatorRebalanceProtocols)
-    assertTrue(config.isNewGroupCoordinatorEnabled)
+  }
+
+  @Test
+  def testGroupProtocolMigrationConfig(): Unit = {
+    val props = new Properties()
+    props.putAll(kraftProps())
+
+    // Invalid GroupProtocolMigrationConfig value.
+    props.put(KafkaConfig.GroupProtocolMigrationProp, "foo")
+    assertThrows(classOf[ConfigException], () => KafkaConfig.fromProps(props))
+
+    props.put(KafkaConfig.GroupProtocolMigrationProp, "both")
+    val config = KafkaConfig.fromProps(props)
+    assertEquals(GroupProtocolMigrationConfig.BOTH, config.groupProtocolMigration)
   }
 
   @Test
