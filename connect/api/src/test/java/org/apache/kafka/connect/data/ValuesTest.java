@@ -801,14 +801,21 @@ public class ValuesTest {
         assertEquals(value, Values.convertToDecimal(null, buffer, 1));
     }
 
+    /**
+     * Test parsing distinct number-like types (strings containing numbers, and logical Decimals) in the same list
+     * The parser does not convert Numbers to Decimals, or Strings containing numbers to Numbers automatically.
+     */
     @Test
-    public void shouldConvertDecimalValuesInList() {
-        List<Object> decimals = Arrays.asList("\"1.0\"", BigDecimal.valueOf(Long.MAX_VALUE).add(BigDecimal.ONE), BigDecimal.valueOf(Long.MIN_VALUE).subtract(BigDecimal.ONE), BigDecimal.ONE, BigDecimal.ONE);
-        String strings = decimals.toString();
-        SchemaAndValue schemaAndValue = Values.parseString(strings);
+    public void shouldNotConvertArrayValuesToDecimal() {
+        List<Object> decimals = Arrays.asList("\"1.0\"", BigDecimal.valueOf(Long.MAX_VALUE).add(BigDecimal.ONE),
+                BigDecimal.valueOf(Long.MIN_VALUE).subtract(BigDecimal.ONE), (byte) 1, (byte) 1);
+        List<Object> expected = new ArrayList<>(decimals); // most values are directly reproduced with the same type
+        expected.set(0, "1.0"); // The quotes are parsed away, but the value remains a string
+        SchemaAndValue schemaAndValue = Values.parseString(decimals.toString());
         Schema schema = schemaAndValue.schema();
         assertEquals(Type.ARRAY, schema.type());
         assertNull(schema.valueSchema());
+        assertEquals(expected, schemaAndValue.value());
     }
 
     @Test
