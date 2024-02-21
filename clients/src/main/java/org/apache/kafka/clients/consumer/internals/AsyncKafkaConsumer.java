@@ -40,6 +40,7 @@ import org.apache.kafka.clients.consumer.internals.events.ApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEventHandler;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEventProcessor;
 import org.apache.kafka.clients.consumer.internals.events.AssignmentChangeApplicationEvent;
+import org.apache.kafka.clients.consumer.internals.events.AsyncCommitApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEventHandler;
 import org.apache.kafka.clients.consumer.internals.events.CommitApplicationEvent;
@@ -57,6 +58,7 @@ import org.apache.kafka.clients.consumer.internals.events.NewTopicsMetadataUpdat
 import org.apache.kafka.clients.consumer.internals.events.PollApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.ResetPositionsApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.SubscriptionChangeApplicationEvent;
+import org.apache.kafka.clients.consumer.internals.events.SyncCommitApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.TopicMetadataApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.UnsubscribeApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.ValidatePositionsApplicationEvent;
@@ -755,9 +757,8 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     public void commitAsync(Map<TopicPartition, OffsetAndMetadata> offsets, OffsetCommitCallback callback) {
         acquireAndEnsureOpen();
         try {
-            // Commit without timer to indicate that the commit should be triggered without
-            // waiting for a response.
-            CompletableFuture<Void> future = commit(offsets, false, Optional.empty());
+            AsyncCommitApplicationEvent asyncCommitEvent = new AsyncCommitApplicationEvent(offsets);
+            CompletableFuture<Void> future = commit(asyncCommitEvent);
             future.whenComplete((r, t) -> {
 
                 if (t == null) {
@@ -778,14 +779,12 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         }
     }
 
-    // Visible for testing
-    CompletableFuture<Void> commit(final Map<TopicPartition, OffsetAndMetadata> offsets,
-                                   final boolean isWakeupable,
-                                   final Optional<Long> retryTimeoutMs) {
+    private CompletableFuture<Void> commit(final CommitApplicationEvent commitEvent) {
         maybeInvokeCommitCallbacks();
         maybeThrowFencedInstanceException();
         maybeThrowInvalidGroupIdException();
 
+        Map<TopicPartition, OffsetAndMetadata> offsets = commitEvent.offsets();
         log.debug("Committing offsets: {}", offsets);
         offsets.forEach(this::updateLastSeenEpochIfNewer);
 
@@ -793,11 +792,6 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             return CompletableFuture.completedFuture(null);
         }
 
-        final CommitApplicationEvent commitEvent = new CommitApplicationEvent(offsets, retryTimeoutMs);
-        if (isWakeupable) {
-            // the task can only be woken up if the top level API call is commitSync
-            wakeupTrigger.setActiveTask(commitEvent.future());
-        }
         applicationEventHandler.add(commitEvent);
         return commitEvent.future();
     }
@@ -1344,9 +1338,9 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         long commitStart = time.nanoseconds();
         try {
             Timer requestTimer = time.timer(timeout.toMillis());
-            // Commit with a timer to control how long the request should be retried until it
-            // gets a successful response or non-retriable error.
-            CompletableFuture<Void> commitFuture = commit(offsets, true, Optional.of(timeout.toMillis()));
+            SyncCommitApplicationEvent syncCommitEvent = new SyncCommitApplicationEvent(offsets, timeout.toMillis());
+            CompletableFuture<Void> commitFuture = commit(syncCommitEvent);
+            wakeupTrigger.setActiveTask(commitFuture);
             ConsumerUtils.getResult(commitFuture, requestTimer);
             interceptors.onCommit(offsets);
         } finally {
