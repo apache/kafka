@@ -167,10 +167,8 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
                     "offset because the CommittedRequestManager is not available. Check if group.id was set correctly"));
             return;
         }
-
         CommitRequestManager manager = requestManagers.commitRequestManager.get();
-        long expirationTimeMs = getExpirationTimeForTimeout(event.deadlineMs());
-        CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> future = manager.fetchOffsets(event.partitions(), expirationTimeMs);
+        CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> future = manager.fetchOffsets(event.partitions(), event.deadlineMs());
         chain(future, event.future());
     }
 
@@ -193,10 +191,9 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
     }
 
     private void process(final ListOffsetsApplicationEvent event) {
-        final CompletableFuture<Map<TopicPartition, OffsetAndTimestamp>> future = requestManagers.offsetsRequestManager.fetchOffsets(
-                event.timestampsToSearch(),
-                event.requireTimestamps()
-        );
+        final CompletableFuture<Map<TopicPartition, OffsetAndTimestamp>> future =
+                requestManagers.offsetsRequestManager.fetchOffsets(event.timestampsToSearch(),
+                        event.requireTimestamps());
         chain(future, event.future());
     }
 
@@ -304,19 +301,6 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
         } else {
             return false;
         }
-    }
-
-    /**
-     * @return Expiration time in milliseconds calculated with the current time plus the given
-     * timeout. Returns Long.MAX_VALUE if the expiration overflows it.
-     * Visible for testing.
-     */
-    long getExpirationTimeForTimeout(final long timeoutMs) {
-        long expiration = System.currentTimeMillis() + timeoutMs;
-        if (expiration < 0) {
-            return Long.MAX_VALUE;
-        }
-        return expiration;
     }
 
     private <T> void chain(final CompletableFuture<T> primary, final CompletableFuture<T> secondary) {
