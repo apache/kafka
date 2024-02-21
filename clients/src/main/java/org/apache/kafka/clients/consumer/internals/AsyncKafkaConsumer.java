@@ -111,7 +111,6 @@ import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Future;
 import java.util.concurrent.LinkedBlockingQueue;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
@@ -737,16 +736,12 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     }
 
     private boolean isGenerationKnown() {
-        final AtomicBoolean generationIsValid = new AtomicBoolean(true);
         if (subscriptions.hasAutoAssignedPartitions()) {
-            groupMetadata.ifPresent(groupMetadata -> {
-                if (groupMetadata.generationId() == JoinGroupRequest.UNKNOWN_GENERATION_ID) {
-                    generationIsValid.set(false);
-                }
-            });
+            return groupMetadata.filter(g -> g.generationId() != JoinGroupRequest.UNKNOWN_GENERATION_ID).isPresent();
         }
-        return generationIsValid.get();
+        return true;
     }
+
     /**
      * Commit offsets returned on the last {@link #poll(Duration) poll()} for all the subscribed list of topics and
      * partitions.

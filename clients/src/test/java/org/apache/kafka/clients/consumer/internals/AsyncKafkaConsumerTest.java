@@ -1160,19 +1160,22 @@ public class AsyncKafkaConsumerTest {
     }
 
     @Test
-    public void testPollReturningRecordsIfGroupMetadataHasKnownGenerationAndGroupManagementIsNotUsed() {
+    public void testPollReturningRecordsIfGroupIdSetAndGroupManagementIsNotUsed() {
+        final ConsumerConfig config = new ConsumerConfig(requiredConsumerPropertiesAndGroupId("consumerGroupA"));
+        testPollReturningRecordsIfGroupMetadataHasUnknownGenerationAndGroupManagementIsNotUsed(config);
+    }
+
+    @Test
+    public void testPollReturningRecordsIfGroupIdNotSetAndGroupManagementIsNotUsed() {
+        final ConsumerConfig config = new ConsumerConfig(requiredConsumerProperties());
+        testPollReturningRecordsIfGroupMetadataHasUnknownGenerationAndGroupManagementIsNotUsed(config);
+    }
+
+    private void testPollReturningRecordsIfGroupMetadataHasUnknownGenerationAndGroupManagementIsNotUsed(final ConsumerConfig config) {
         final String topic = "topic";
         final TopicPartition topicPartition = new TopicPartition(topic, 0);
-        final ConsumerConfig config = new ConsumerConfig(requiredConsumerPropertiesAndGroupId("consumerGroupA"));
         consumer = newConsumer(config);
         consumer.assign(singletonList(topicPartition));
-        final int generation = 1;
-        final String memberId = "newMemberId";
-        final GroupMetadataUpdateEvent groupMetadataUpdateEvent = new GroupMetadataUpdateEvent(
-            generation,
-            memberId
-        );
-        backgroundEventQueue.add(groupMetadataUpdateEvent);
         final List<ConsumerRecord<String, String>> records = singletonList(
             new ConsumerRecord<>(topic, 0, 2, "key1", "value1")
         );
@@ -1206,8 +1209,8 @@ public class AsyncKafkaConsumerTest {
             });
     }
 
-    public void testPollReturningRecordIfGenerationKnownAndGroupManagementIsUsed(final String topic,
-                                                                                 final Runnable subscription) {
+    private void testPollReturningRecordIfGenerationKnownAndGroupManagementIsUsed(final String topic,
+                                                                                  final Runnable subscription) {
         final ConsumerConfig config = new ConsumerConfig(requiredConsumerPropertiesAndGroupId("consumerGroupA"));
         final int generation = 1;
         final String memberId = "newMemberId";
