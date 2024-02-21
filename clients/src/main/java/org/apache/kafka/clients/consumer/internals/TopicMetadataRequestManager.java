@@ -81,8 +81,8 @@ public class TopicMetadataRequestManager implements RequestManager {
     public NetworkClientDelegate.PollResult poll(final long currentTimeMs) {
         // Prune any requests which have timed out
         List<TopicMetadataRequestState> expiredRequests = inflightRequests.stream()
-            .filter(req -> req.isExpired(currentTimeMs))
-            .collect(Collectors.toList());
+                .filter(req -> req.isExpired(currentTimeMs))
+                .collect(Collectors.toList());
         expiredRequests.forEach(TopicMetadataRequestState::expire);
 
         List<NetworkClientDelegate.UnsentRequest> requests = inflightRequests.stream()
@@ -101,10 +101,10 @@ public class TopicMetadataRequestManager implements RequestManager {
      */
     public CompletableFuture<Map<String, List<PartitionInfo>>> requestAllTopicsMetadata(final long expirationTimeMs) {
         TopicMetadataRequestState newRequest = new TopicMetadataRequestState(
-            logContext,
-            expirationTimeMs,
-            retryBackoffMs,
-            retryBackoffMaxMs);
+                logContext,
+                expirationTimeMs,
+                retryBackoffMs,
+                retryBackoffMaxMs);
         inflightRequests.add(newRequest);
         return newRequest.future;
     }
@@ -117,11 +117,11 @@ public class TopicMetadataRequestManager implements RequestManager {
      */
     public CompletableFuture<Map<String, List<PartitionInfo>>> requestTopicMetadata(final String topic, final long expirationTimeMs) {
         TopicMetadataRequestState newRequest = new TopicMetadataRequestState(
-            logContext,
-            topic,
-            expirationTimeMs,
-            retryBackoffMs,
-            retryBackoffMaxMs);
+                logContext,
+                topic,
+                expirationTimeMs,
+                retryBackoffMs,
+                retryBackoffMaxMs);
         inflightRequests.add(newRequest);
         return newRequest.future;
     }
@@ -142,7 +142,7 @@ public class TopicMetadataRequestManager implements RequestManager {
                                          final long retryBackoffMs,
                                          final long retryBackoffMaxMs) {
             super(logContext, TopicMetadataRequestState.class.getSimpleName(), retryBackoffMs,
-                retryBackoffMaxMs);
+                    retryBackoffMaxMs);
             future = new CompletableFuture<>();
             this.topic = null;
             this.allTopics = true;
@@ -189,11 +189,11 @@ public class TopicMetadataRequestManager implements RequestManager {
 
         private void expire() {
             completeFutureAndRemoveRequest(
-                new TimeoutException("Timeout expired while fetching topic metadata"));
+                    new TimeoutException("Timeout expired while fetching topic metadata"));
         }
 
         private NetworkClientDelegate.UnsentRequest createUnsentRequest(
-            final MetadataRequest.Builder request) {
+                final MetadataRequest.Builder request) {
             NetworkClientDelegate.UnsentRequest unsent = new NetworkClientDelegate.UnsentRequest(
                 request,
                 Optional.empty());
