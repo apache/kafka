@@ -1829,6 +1829,7 @@ class KafkaConfigTest {
     props.put(KafkaConfig.GroupCoordinatorRebalanceProtocolsProp, "classic,consumer")
     val config = KafkaConfig.fromProps(props)
     assertEquals(Set(GroupType.CLASSIC, GroupType.CONSUMER), config.groupCoordinatorRebalanceProtocols)
+    assertTrue(config.isNewGroupCoordinatorEnabled)
   }
 
   @Test
