@@ -317,7 +317,7 @@ public class LogConfig extends AbstractConfig {
     public final boolean delete;
     public final boolean uncleanLeaderElectionEnable;
     public final int minInSyncReplicas;
-    public final String compressionType;
+    public final BrokerCompressionType compressionType;
     public final boolean preallocate;
 
     /* See `TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG` for details regarding the deprecation */
@@ -374,7 +374,7 @@ public class LogConfig extends AbstractConfig {
             .contains(TopicConfig.CLEANUP_POLICY_DELETE);
         this.uncleanLeaderElectionEnable = getBoolean(TopicConfig.UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG);
         this.minInSyncReplicas = getInt(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG);
-        this.compressionType = getString(TopicConfig.COMPRESSION_TYPE_CONFIG).toLowerCase(Locale.ROOT);
+        this.compressionType = BrokerCompressionType.forName(getString(TopicConfig.COMPRESSION_TYPE_CONFIG).toLowerCase(Locale.ROOT));
         this.preallocate = getBoolean(TopicConfig.PREALLOCATE_CONFIG);
         this.messageFormatVersion = MetadataVersion.fromVersionString(getString(TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG));
         this.messageTimestampType = TimestampType.forName(getString(TopicConfig.MESSAGE_TIMESTAMP_TYPE_CONFIG));
