@@ -34,6 +34,8 @@
 	<li>Kafka Streams ships multiple KIPs for IQv2 support.
             See the <a href="/{{version}}/documentation/streams/upgrade-guide#streams_api_changes_370">Kafka Streams upgrade section</a> for more details.
         </li>
+        <li>A serious bug found in RoundRobinPartitioner that it will only send to half of the partitions.
+            Please replace it with the default partitioner or other partitioner. See <a href="https://issues.apache.org/jira/browse/KAFKA-16283">KAFKA-16283</a> for more detail</li>
     </ul>
 
 <h4><a id="upgrade_3_6_0" href="#upgrade_3_6_0">Upgrading to 3.6.0 from any version 0.8.x through 3.5.x</a></h4>
