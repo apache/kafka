@@ -64,6 +64,10 @@ public class GlobalStoreNode<KIn, VIn, S extends StateStore> extends StateStoreN
 
     }
 
+    public boolean reprocessOnRestore() {
+        return reprocessOnRestore;
+    }
+
     @Override
     public String toString() {
         return "GlobalStoreNode{" +
