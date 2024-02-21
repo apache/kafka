@@ -579,6 +579,7 @@ public class HeartbeatRequestManagerTest {
         // should be sent to leave the group
         time.sleep(maxPollIntervalMs);
         assertHeartbeat(heartbeatRequestManager, heartbeatIntervalMs);
+        verify(membershipManager).transitionToSendingLeaveGroup();
         verify(heartbeatState).reset();
         verify(heartbeatRequestState).reset();
         verify(membershipManager).transitionToStale();
@@ -588,7 +589,7 @@ public class HeartbeatRequestManagerTest {
         assertNoHeartbeat(heartbeatRequestManager);
         heartbeatRequestManager.resetPollTimer(time.milliseconds());
         assertTrue(pollTimer.notExpired());
-        verify(membershipManager).transitionToJoining();
+        verify(membershipManager).maybeRejoinStaleMember();
         when(membershipManager.shouldSkipHeartbeat()).thenReturn(false);
         assertHeartbeat(heartbeatRequestManager, heartbeatIntervalMs);
     }

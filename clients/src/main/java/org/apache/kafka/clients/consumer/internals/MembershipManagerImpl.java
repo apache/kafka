@@ -257,6 +257,13 @@ public class MembershipManagerImpl implements MembershipManager {
      */
     private final BackgroundEventHandler backgroundEventHandler;
 
+    /**
+     * Future that will complete when a stale member completes releasing its assignment after
+     * leaving the group due to poll timer expired. Used to make sure that the member rejoins
+     * when the timer is reset, only when it completes releasing its assignment.
+     */
+    private CompletableFuture<Void> staleMemberAssignmentRelease;
+
     private final Time time;
 
     public MembershipManagerImpl(String groupId,
@@ -564,7 +571,7 @@ public class MembershipManagerImpl implements MembershipManager {
      */
     @Override
     public CompletableFuture<Void> leaveGroup() {
-        if (state == MemberState.UNSUBSCRIBED || state == MemberState.FATAL) {
+        if (state == MemberState.UNSUBSCRIBED || state == MemberState.FATAL || state == MemberState.STALE) {
             // Member is not part of the group. No-op and return completed future to avoid
             // unnecessary transitions.
             return CompletableFuture.completedFuture(null);
@@ -635,9 +642,9 @@ public class MembershipManagerImpl implements MembershipManager {
      * Reset member epoch to the value required for the leave the group heartbeat request, and
      * transition to the {@link MemberState#LEAVING} state so that a heartbeat
      * request is sent out with it.
-     * Visible for testing.
      */
-    void transitionToSendingLeaveGroup() {
+    @Override
+    public void transitionToSendingLeaveGroup() {
         if (state == MemberState.FATAL) {
             log.warn("Member {} with epoch {} won't send leave group request because it is in " +
                     "FATAL state", memberId, memberEpoch);
@@ -744,16 +751,34 @@ public class MembershipManagerImpl implements MembershipManager {
         return state == MemberState.PREPARE_LEAVING || state == MemberState.LEAVING;
     }
 
+    @Override
+    public void maybeRejoinStaleMember() {
+        if (state == MemberState.STALE) {
+            staleMemberAssignmentRelease.whenComplete((__, error) -> transitionToJoining());
+        }
+    }
+
     /**
-     * Sets the epoch to the leave group epoch and clears the assignments. The member will rejoin with
-     * the existing subscriptions after the next application poll event.
+     * Release assignments of a stale member that has left the group, by calling the
+     * onPartitionsLost callback. Once the callback completes, the member will remain stale until
+     * the poll timer is reset by an application poll event. See {@link #maybeRejoinStaleMember()}.
      */
     @Override
     public void transitionToStale() {
-        memberEpoch = ConsumerGroupHeartbeatRequest.LEAVE_GROUP_MEMBER_EPOCH;
-        // Clear the current assignment and subscribed partitions before member sending the leave group
-        updateSubscription(new TreeSet<>(TOPIC_ID_PARTITION_COMPARATOR), true);
         transitionTo(MemberState.STALE);
+
+        // Release assignment
+        CompletableFuture<Void> callbackResult = invokeOnPartitionsLostCallback(subscriptions.assignedPartitions());
+        staleMemberAssignmentRelease = callbackResult.whenComplete((result, error) -> {
+            if (error != null) {
+                log.error("onPartitionsLost callback invocation failed while releasing assignment" +
+                    " after member left group due to expired poll timer.", error);
+            }
+            updateSubscription(new TreeSet<>(TOPIC_ID_PARTITION_COMPARATOR), true);
+            log.debug("Member {} sent leave group heartbeat and released its assignment. It will remain " +
+                "in {} state until the poll timer is reset, and it will then rejoin the group",
+                memberId, MemberState.STALE);
+        });
     }
 
     /**
@@ -1186,8 +1211,7 @@ public class MembershipManagerImpl implements MembershipManager {
         }
     }
 
-    // Visible for testing
-    CompletableFuture<Void> invokeOnPartitionsLostCallback(Set<TopicPartition> partitionsLost) {
+    private CompletableFuture<Void> invokeOnPartitionsLostCallback(Set<TopicPartition> partitionsLost) {
         // This should not trigger the callback if partitionsLost is empty, to keep the current
         // behaviour.
         Optional<ConsumerRebalanceListener> listener = subscriptions.rebalanceListener();
