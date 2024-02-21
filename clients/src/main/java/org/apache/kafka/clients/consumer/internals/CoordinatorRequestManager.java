@@ -62,12 +62,12 @@ public class CoordinatorRequestManager implements RequestManager {
     private Node coordinator;
 
     public CoordinatorRequestManager(
-        final Time time,
-        final LogContext logContext,
-        final long retryBackoffMs,
-        final long retryBackoffMaxMs,
-        final BackgroundEventHandler errorHandler,
-        final String groupId
+            final Time time,
+            final LogContext logContext,
+            final long retryBackoffMs,
+            final long retryBackoffMaxMs,
+            final BackgroundEventHandler errorHandler,
+            final String groupId
     ) {
         Objects.requireNonNull(groupId);
         this.time = time;
@@ -75,10 +75,10 @@ public class CoordinatorRequestManager implements RequestManager {
         this.backgroundEventHandler = errorHandler;
         this.groupId = groupId;
         this.coordinatorRequestState = new RequestState(
-            logContext,
-            CoordinatorRequestManager.class.getSimpleName(),
-            retryBackoffMs,
-            retryBackoffMaxMs
+                logContext,
+                CoordinatorRequestManager.class.getSimpleName(),
+                retryBackoffMs,
+                retryBackoffMaxMs
         );
     }
 
@@ -108,11 +108,11 @@ public class CoordinatorRequestManager implements RequestManager {
     NetworkClientDelegate.UnsentRequest makeFindCoordinatorRequest(final long currentTimeMs) {
         coordinatorRequestState.onSendAttempt(currentTimeMs);
         FindCoordinatorRequestData data = new FindCoordinatorRequestData()
-            .setKeyType(FindCoordinatorRequest.CoordinatorType.GROUP.id())
-            .setKey(this.groupId);
+                .setKeyType(FindCoordinatorRequest.CoordinatorType.GROUP.id())
+                .setKey(this.groupId);
         NetworkClientDelegate.UnsentRequest unsentRequest = new NetworkClientDelegate.UnsentRequest(
-            new FindCoordinatorRequest.Builder(data),
-            Optional.empty()
+                new FindCoordinatorRequest.Builder(data),
+                Optional.empty()
         );
 
         return unsentRequest.whenComplete((clientResponse, throwable) -> {
@@ -134,7 +134,7 @@ public class CoordinatorRequestManager implements RequestManager {
     public void markCoordinatorUnknown(final String cause, final long currentTimeMs) {
         if (this.coordinator != null) {
             log.info("Group coordinator {} is unavailable or invalid due to cause: {}. "
-                + "Rediscovery will be attempted.", this.coordinator, cause);
+                    + "Rediscovery will be attempted.", this.coordinator, cause);
             this.coordinator = null;
             timeMarkedUnknownMs = currentTimeMs;
             totalDisconnectedMin = 0;
@@ -149,16 +149,16 @@ public class CoordinatorRequestManager implements RequestManager {
     }
 
     private void onSuccessfulResponse(
-        final long currentTimeMs,
-        final FindCoordinatorResponseData.Coordinator coordinator
+            final long currentTimeMs,
+            final FindCoordinatorResponseData.Coordinator coordinator
     ) {
         // use MAX_VALUE - node.id as the coordinator id to allow separate connections
         // for the coordinator in the underlying network client layer
         int coordinatorConnectionId = Integer.MAX_VALUE - coordinator.nodeId();
         this.coordinator = new Node(
-            coordinatorConnectionId,
-            coordinator.host(),
-            coordinator.port());
+                coordinatorConnectionId,
+                coordinator.host(),
+                coordinator.port());
         log.info("Discovered group coordinator {}", coordinator);
         coordinatorRequestState.onSuccessfulAttempt(currentTimeMs);
     }
@@ -192,8 +192,8 @@ public class CoordinatorRequestManager implements RequestManager {
      * @param response      the response for finding the coordinator. null if an exception is thrown.
      */
     private void onResponse(
-        final long currentTimeMs,
-        final FindCoordinatorResponse response
+            final long currentTimeMs,
+            final FindCoordinatorResponse response
     ) {
         // handles Runtime exception
         Optional<FindCoordinatorResponseData.Coordinator> coordinator = response.coordinatorByKey(this.groupId);
