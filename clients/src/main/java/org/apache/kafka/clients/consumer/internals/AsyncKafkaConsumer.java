@@ -712,14 +712,18 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                 wakeupTrigger.maybeTriggerWakeup();
 
                 updateAssignmentMetadataIfNeeded(timer);
-                final Fetch<K, V> fetch = pollForFetches(timer);
-                if (!fetch.isEmpty()) {
-                    if (fetch.records().isEmpty()) {
-                        log.trace("Returning empty records from `poll()` "
+                if (isGenerationKnownOrPartitionsUserAssigned()) {
+                    final Fetch<K, V> fetch = pollForFetches(timer);
+                    if (!fetch.isEmpty()) {
+                        if (fetch.records().isEmpty()) {
+                            log.trace("Returning empty records from `poll()` "
                                 + "since the consumer's position has advanced for at least one topic partition");
-                    }
+                        }
 
-                    return interceptors.onConsume(new ConsumerRecords<>(fetch.records()));
+                        return interceptors.onConsume(new ConsumerRecords<>(fetch.records()));
+                    }
+                } else {
+                    timer.update();
                 }
                 // We will wait for retryBackoffMs
             } while (timer.notExpired());
@@ -729,6 +733,13 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             kafkaConsumerMetrics.recordPollEnd(timer.currentTimeMs());
             release();
         }
+    }
+
+    private boolean isGenerationKnownOrPartitionsUserAssigned() {
+        if (subscriptions.hasAutoAssignedPartitions()) {
+            return groupMetadata.filter(g -> g.generationId() != JoinGroupRequest.UNKNOWN_GENERATION_ID).isPresent();
+        }
+        return true;
     }
 
     /**
@@ -1463,6 +1474,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                 } catch (TimeoutException e) {
                     log.error("Failed while waiting for the unsubscribe event to complete");
                 }
+                groupMetadata = initializeGroupMetadata(groupMetadata.get().groupId(), Optional.empty());
             }
             subscriptions.unsubscribe();
         } finally {
