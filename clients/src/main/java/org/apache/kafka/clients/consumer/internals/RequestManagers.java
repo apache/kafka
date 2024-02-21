@@ -152,7 +152,9 @@ public class RequestManagers implements Closeable {
                         fetchMetricsManager,
                         networkClientDelegate,
                         apiVersions);
-                final TopicMetadataRequestManager topic = new TopicMetadataRequestManager(logContext, config);
+                final TopicMetadataRequestManager topic = new TopicMetadataRequestManager(
+                        logContext,
+                        config);
                 HeartbeatRequestManager heartbeatRequestManager = null;
                 MembershipManager membershipManager = null;
                 CoordinatorRequestManager coordinator = null;

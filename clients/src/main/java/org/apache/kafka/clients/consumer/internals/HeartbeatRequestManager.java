@@ -274,9 +274,8 @@ public class HeartbeatRequestManager implements RequestManager {
 
     private NetworkClientDelegate.UnsentRequest makeHeartbeatRequest(final boolean ignoreResponse) {
         NetworkClientDelegate.UnsentRequest request = new NetworkClientDelegate.UnsentRequest(
-            new ConsumerGroupHeartbeatRequest.Builder(heartbeatState.buildRequestData()),
-            coordinatorRequestManager.coordinator()
-        );
+            new ConsumerGroupHeartbeatRequest.Builder(this.heartbeatState.buildRequestData()),
+            coordinatorRequestManager.coordinator());
         if (ignoreResponse)
             return logResponse(request);
         else

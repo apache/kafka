@@ -573,7 +573,7 @@ public class MembershipManagerImpl implements MembershipManager {
         if (state == MemberState.PREPARE_LEAVING || state == MemberState.LEAVING) {
             // Member already leaving. No-op and return existing leave group future that will
             // complete when the ongoing leave operation completes.
-            return leaveGroupInProgress.orElseThrow(() -> new IllegalStateException("Member already leaving, but no Future available"));
+            return leaveGroupInProgress.get();
         }
 
         transitionTo(MemberState.PREPARE_LEAVING);
