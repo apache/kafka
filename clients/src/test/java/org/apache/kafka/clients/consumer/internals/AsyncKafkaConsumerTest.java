@@ -1461,13 +1461,14 @@ public class AsyncKafkaConsumerTest {
         final TopicPartition tp = new TopicPartition("topic", 0);
         final List<ConsumerRecord<String, String>> records = singletonList(
                 new ConsumerRecord<>("topic", 0, 2, "key1", "value1"));
+        backgroundEventQueue.add(new GroupMetadataUpdateEvent(1, "memberId"));
         doAnswer(invocation -> Fetch.forPartition(tp, records, true))
                 .when(fetchCollector)
                 .collectFetch(Mockito.any(FetchBuffer.class));
 
         consumer.subscribe(singletonList("topic1"));
         consumer.poll(Duration.ofMillis(100));
-        verify(applicationEventHandler, atLeast(1)).add(any(PollApplicationEvent.class));
+        verify(applicationEventHandler).add(any(PollApplicationEvent.class));
     }
 
     private void testInvalidGroupId(final String groupId) {
