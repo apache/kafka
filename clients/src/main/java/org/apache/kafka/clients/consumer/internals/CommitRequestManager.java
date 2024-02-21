@@ -94,15 +94,15 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
     private final MemberInfo memberInfo;
 
     public CommitRequestManager(
-        final Time time,
-        final LogContext logContext,
-        final SubscriptionState subscriptions,
-        final ConsumerConfig config,
-        final CoordinatorRequestManager coordinatorRequestManager,
-        final OffsetCommitCallbackInvoker offsetCommitCallbackInvoker,
-        final String groupId,
-        final Optional<String> groupInstanceId,
-        final Metrics metrics) {
+            final Time time,
+            final LogContext logContext,
+            final SubscriptionState subscriptions,
+            final ConsumerConfig config,
+            final CoordinatorRequestManager coordinatorRequestManager,
+            final OffsetCommitCallbackInvoker offsetCommitCallbackInvoker,
+            final String groupId,
+            final Optional<String> groupInstanceId,
+            final Metrics metrics) {
         this(time,
             logContext,
             subscriptions,
@@ -327,7 +327,7 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
                 log.debug("Completed auto-commit of offsets {}", allConsumedOffsets);
             } else if (throwable instanceof RetriableCommitFailedException) {
                 log.debug("Auto-commit of offsets {} failed due to retriable error: {}",
-                    allConsumedOffsets, throwable.getMessage());
+                        allConsumedOffsets, throwable.getMessage());
             } else {
                 log.warn("Auto-commit of offsets {} failed", allConsumedOffsets, throwable);
             }
@@ -645,9 +645,9 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
             }
 
             OffsetCommitRequestData data = new OffsetCommitRequestData()
-                .setGroupId(this.groupId)
-                .setGroupInstanceId(groupInstanceId.orElse(null))
-                .setTopics(new ArrayList<>(requestTopicDataMap.values()));
+                    .setGroupId(this.groupId)
+                    .setGroupInstanceId(groupInstanceId.orElse(null))
+                    .setTopics(new ArrayList<>(requestTopicDataMap.values()));
             if (memberInfo.memberId.isPresent()) {
                 data = data.setMemberId(memberInfo.memberId.get());
             }
@@ -909,20 +909,20 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
             OffsetFetchRequest.Builder builder;
             if (memberInfo.memberId.isPresent() && memberInfo.memberEpoch.isPresent()) {
                 builder = new OffsetFetchRequest.Builder(
-                    groupId,
-                    memberInfo.memberId.get(),
-                    memberInfo.memberEpoch.get(),
-                    true,
-                    new ArrayList<>(this.requestedPartitions),
-                    throwOnFetchStableOffsetUnsupported);
+                        groupId,
+                        memberInfo.memberId.get(),
+                        memberInfo.memberEpoch.get(),
+                        true,
+                        new ArrayList<>(this.requestedPartitions),
+                        throwOnFetchStableOffsetUnsupported);
             } else {
                 // Building request without passing member ID/epoch to leave the logic to choose
                 // default values when not present on the request builder.
                 builder = new OffsetFetchRequest.Builder(
-                    groupId,
-                    true,
-                    new ArrayList<>(this.requestedPartitions),
-                    throwOnFetchStableOffsetUnsupported);
+                        groupId,
+                        true,
+                        new ArrayList<>(this.requestedPartitions),
+                        throwOnFetchStableOffsetUnsupported);
             }
             return buildRequestWithResponseHandling(builder);
         }
@@ -1005,7 +1005,7 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
                                final OffsetFetchResponse response) {
             Set<String> unauthorizedTopics = null;
             Map<TopicPartition, OffsetFetchResponse.PartitionData> responseData =
-                response.partitionDataMap(groupId);
+                    response.partitionDataMap(groupId);
             Map<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>(responseData.size());
             Set<TopicPartition> unstableTxnOffsetTopicPartitions = new HashSet<>();
             for (Map.Entry<TopicPartition, OffsetFetchResponse.PartitionData> entry : responseData.entrySet()) {
@@ -1030,7 +1030,7 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
                         // Fail with a non-retriable KafkaException for all unexpected partition
                         // errors (even if they are retriable)
                         future.completeExceptionally(new KafkaException("Unexpected error in fetch offset " +
-                            "response for partition " + tp + ": " + error.message()));
+                                "response for partition " + tp + ": " + error.message()));
                         return;
                     }
                 } else if (partitionData.offset >= 0) {
@@ -1048,10 +1048,10 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
             } else if (!unstableTxnOffsetTopicPartitions.isEmpty()) {
                 // TODO: Optimization question: Do we need to retry all partitions upon a single partition error?
                 log.info("The following partitions still have unstable offsets " +
-                    "which are not cleared on the broker side: {}" +
-                    ", this could be either " +
-                    "transactional offsets waiting for completion, or " +
-                    "normal offsets waiting for replication after appending to local log", unstableTxnOffsetTopicPartitions);
+                        "which are not cleared on the broker side: {}" +
+                        ", this could be either " +
+                        "transactional offsets waiting for completion, or " +
+                        "normal offsets waiting for replication after appending to local log", unstableTxnOffsetTopicPartitions);
                 future.completeExceptionally(new UnstableOffsetCommitException("There are " +
                     "unstable offsets for the requested topic partitions"));
             } else {
@@ -1061,7 +1061,7 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
         }
 
         private CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> chainFuture(
-            final CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> otherFuture) {
+                final CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> otherFuture) {
             return this.future.whenComplete((r, t) -> {
                 if (t != null) {
                     otherFuture.completeExceptionally(t);
@@ -1074,12 +1074,12 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
         @Override
         public String toString() {
             return "OffsetFetchRequestState{" +
-                "requestedPartitions=" + requestedPartitions +
-                ", memberId=" + memberInfo.memberId.orElse("undefined") +
-                ", memberEpoch=" + (memberInfo.memberEpoch.isPresent() ? memberInfo.memberEpoch.get() : "undefined") +
-                ", future=" + future +
-                ", " + toStringBase() +
-                '}';
+                    "requestedPartitions=" + requestedPartitions +
+                    ", memberId=" + memberInfo.memberId.orElse("undefined") +
+                    ", memberEpoch=" + (memberInfo.memberEpoch.isPresent() ? memberInfo.memberEpoch.get() : "undefined") +
+                    ", future=" + future +
+                    ", " + toStringBase() +
+                    '}';
         }
     }
 
@@ -1122,9 +1122,9 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
          */
         private CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> addOffsetFetchRequest(final OffsetFetchRequestState request) {
             Optional<OffsetFetchRequestState> dupe =
-                unsentOffsetFetches.stream().filter(r -> r.sameRequest(request)).findAny();
+                    unsentOffsetFetches.stream().filter(r -> r.sameRequest(request)).findAny();
             Optional<OffsetFetchRequestState> inflight =
-                inflightOffsetFetches.stream().filter(r -> r.sameRequest(request)).findAny();
+                    inflightOffsetFetches.stream().filter(r -> r.sameRequest(request)).findAny();
 
             if (dupe.isPresent() || inflight.isPresent()) {
                 log.info("Duplicated OffsetFetchRequest: " + request.requestedPartitions);
@@ -1153,16 +1153,16 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
 
             // Add all unsent offset commit requests to the unsentRequests list
             unsentRequests.addAll(
-                unsentOffsetCommits.stream()
-                    .filter(request -> request.canSendRequest(currentTimeMs))
-                    .peek(request -> request.onSendAttempt(currentTimeMs))
-                    .map(OffsetCommitRequestState::toUnsentRequest)
-                    .collect(Collectors.toList()));
+                    unsentOffsetCommits.stream()
+                        .filter(request -> request.canSendRequest(currentTimeMs))
+                        .peek(request -> request.onSendAttempt(currentTimeMs))
+                        .map(OffsetCommitRequestState::toUnsentRequest)
+                        .collect(Collectors.toList()));
 
             // Partition the unsent offset fetch requests into sendable and non-sendable lists
             Map<Boolean, List<OffsetFetchRequestState>> partitionedBySendability =
-                unsentOffsetFetches.stream()
-                    .collect(Collectors.partitioningBy(request -> request.canSendRequest(currentTimeMs)));
+                    unsentOffsetFetches.stream()
+                            .collect(Collectors.partitioningBy(request -> request.canSendRequest(currentTimeMs)));
 
             failAndRemoveExpiredFetchRequests(currentTimeMs);
 
@@ -1221,8 +1221,8 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
         private boolean hasInflightCommit;
 
         public AutoCommitState(
-            final Time time,
-            final long autoCommitInterval) {
+                final Time time,
+                final long autoCommitInterval) {
             this.autoCommitInterval = autoCommitInterval;
             this.timer = time.timer(autoCommitInterval);
             this.hasInflightCommit = false;
