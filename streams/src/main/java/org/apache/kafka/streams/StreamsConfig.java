@@ -566,7 +566,7 @@ public class StreamsConfig extends AbstractConfig {
     static final Class<?> DSL_STORE_SUPPLIERS_CLASS_DEFAULT = BuiltInDslStoreSuppliers.RocksDBDslStoreSuppliers.class;
 
     /** {@code default.windowed.key.serde.inner
-     * @deprecated since 3.0.0 Use windowed.inner.class.serde instead.} */
+     * @deprecated since 3.0.0 Use {@link #WINDOWED_INNER_CLASS_SERDE "windowed.inner.class.serde"} instead.} */
     @SuppressWarnings("WeakerAccess")
     @Deprecated
     public static final String DEFAULT_WINDOWED_KEY_SERDE_INNER_CLASS = "default.windowed.key.serde.inner";
