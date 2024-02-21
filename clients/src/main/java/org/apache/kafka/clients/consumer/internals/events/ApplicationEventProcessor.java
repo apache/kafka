@@ -33,7 +33,6 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
 import org.slf4j.Logger;
 
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -69,19 +68,8 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
      * an event generates an error. In such cases, the processor will log an exception, but we do not want those
      * errors to be propagated to the caller.
      */
-    public List<CompletableFuture<?>> process() {
-        List<CompletableFuture<?>> futures = new ArrayList<>();
-
-        process((event, error) -> {
-            error.ifPresent(e -> log.warn("Error processing event {}", e.getMessage(), e));
-
-            if (event instanceof CompletableApplicationEvent) {
-                CompletableFuture<?> future = ((CompletableApplicationEvent<?>) event).future();
-                futures.add(future);
-            }
-        });
-
-        return futures;
+    public boolean process() {
+        return process((event, error) -> error.ifPresent(e -> log.warn("Error processing event {}", e.getMessage(), e)));
     }
 
     @Override
@@ -162,28 +150,12 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
     }
 
     private void process(final AsyncCommitApplicationEvent event) {
-        if (!requestManagers.commitRequestManager.isPresent()) {
-            // Leaving this error handling here, but it is a bit strange as the commit API should enforce the group.id
-            // upfront, so we should never get to this block.
-            Exception exception = new KafkaException("Unable to commit offset. Most likely because the group.id wasn't set");
-            event.future().completeExceptionally(exception);
-            return;
-        }
-
         CommitRequestManager manager = requestManagers.commitRequestManager.get();
         CompletableFuture<Void> commitResult = manager.commitAsync(event.offsets());
         chain(commitResult, event.future());
     }
 
     private void process(final SyncCommitApplicationEvent event) {
-        if (!requestManagers.commitRequestManager.isPresent()) {
-            // Leaving this error handling here, but it is a bit strange as the commit API should enforce the group.id
-            // upfront, so we should never get to this block.
-            Exception exception = new KafkaException("Unable to commit offset. Most likely because the group.id wasn't set");
-            event.future().completeExceptionally(exception);
-            return;
-        }
-
         CommitRequestManager manager = requestManagers.commitRequestManager.get();
         CompletableFuture<Void> commitResult = manager.commitSync(event.offsets(), event.deadlineMs());
         chain(commitResult, event.future());
@@ -195,11 +167,6 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
                     "offset because the CommittedRequestManager is not available. Check if group.id was set correctly"));
             return;
         }
-
-        Timer timer = timer(event);
-
-        if (maybeTimeout(event, timer, "Unable to fetch committed offset due to exceeding timeout"))
-            return;
 
         CommitRequestManager manager = requestManagers.commitRequestManager.get();
         long expirationTimeMs = getExpirationTimeForTimeout(event.deadlineMs());
@@ -226,11 +193,6 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
     }
 
     private void process(final ListOffsetsApplicationEvent event) {
-        final Timer timer = timer(event);
-
-        if (maybeTimeout(event, timer, "Unable to list offsets due to exceeding timeout"))
-            return;
-
         final CompletableFuture<Map<TopicPartition, OffsetAndTimestamp>> future = requestManagers.offsetsRequestManager.fetchOffsets(
                 event.timestampsToSearch(),
                 event.requireTimestamps()
@@ -267,41 +229,21 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
             return;
         }
         MembershipManager membershipManager = requestManagers.heartbeatRequestManager.get().membershipManager();
-        Timer timer = timer(event);
-
-        if (maybeTimeout(event, timer, "Unable to unsubscribe due to exceeding timeout"))
-            return;
-
         CompletableFuture<Void> result = membershipManager.leaveGroup();
         chain(result, event.future());
     }
 
     private void process(final ResetPositionsApplicationEvent event) {
-        Timer timer = timer(event);
-
-        if (maybeTimeout(event, timer, "Unable to reset positions due to exceeding timeout"))
-            return;
-
         CompletableFuture<Void> result = requestManagers.offsetsRequestManager.resetPositionsIfNeeded();
         chain(result, event.future());
     }
 
     private void process(final ValidatePositionsApplicationEvent event) {
-        Timer timer = timer(event);
-
-        if (maybeTimeout(event, timer, "Unable to validate positions due to exceeding timeout"))
-            return;
-
         CompletableFuture<Void> result = requestManagers.offsetsRequestManager.validatePositionsIfNeeded();
         chain(result, event.future());
     }
 
     private void process(final TopicMetadataApplicationEvent event) {
-        Timer timer = timer(event);
-
-        if (maybeTimeout(event, timer, "Unable to retrieve topic metadata due to exceeding timeout"))
-            return;
-
         final CompletableFuture<Map<String, List<PartitionInfo>>> future;
 
         if (event.isAllTopics()) {
@@ -341,11 +283,6 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
             Objects.requireNonNull(requestManagers.heartbeatRequestManager.get().membershipManager(), "Expecting " +
                 "membership manager to be non-null");
         log.debug("Leaving group before closing");
-        final Timer timer = timer(event);
-
-        if (maybeTimeout(event, timer, "Unable to leave group due to exceeding timeout"))
-            return;
-
         CompletableFuture<Void> future = membershipManager.leaveGroup();
         // The future will be completed on heartbeat sent
         chain(future, event.future());
