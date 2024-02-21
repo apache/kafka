@@ -524,10 +524,10 @@ public class HeartbeatRequestManagerTest {
         assertEquals(memberId, data.memberId());
         assertEquals(0, data.memberEpoch());
         assertNull(data.instanceId());
-        assertEquals(-1, data.rebalanceTimeoutMs());
+        assertEquals(DEFAULT_MAX_POLL_INTERVAL_MS, data.rebalanceTimeoutMs());
         assertEquals(Collections.singletonList(topic), data.subscribedTopicNames());
-        assertNull(data.serverAssignor());
-        assertNull(data.topicPartitions());
+        assertEquals(ConsumerTestBuilder.DEFAULT_REMOTE_ASSIGNOR, data.serverAssignor());
+        assertEquals(Collections.emptyList(), data.topicPartitions());
         membershipManager.onHeartbeatRequestSent();
         assertEquals(MemberState.JOINING, membershipManager.state());
 

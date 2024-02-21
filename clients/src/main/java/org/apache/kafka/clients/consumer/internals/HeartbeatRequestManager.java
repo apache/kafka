@@ -545,6 +545,15 @@ public class HeartbeatRequestManager implements RequestManager {
             // MemberEpoch - always sent
             data.setMemberEpoch(membershipManager.memberEpoch());
 
+            // Sent all fields if the member is joining/rejoining the group
+            if (membershipManager.state() == MemberState.JOINING) {
+                data.setInstanceId(membershipManager.groupInstanceId().orElse(null));
+                data.setRebalanceTimeoutMs(rebalanceTimeoutMs);
+                data.setSubscribedTopicNames(new ArrayList<>(subscriptions.subscription()));
+                data.setServerAssignor(membershipManager.serverAssignor().orElse(null));
+                data.setTopicPartitions(buildTopicPartitionsList(membershipManager.currentAssignment()));
+            }
+
             // InstanceId - only sent if has changed since the last heartbeat
             membershipManager.groupInstanceId().ifPresent(groupInstanceId -> {
                 if (!groupInstanceId.equals(sentFields.instanceId)) {
