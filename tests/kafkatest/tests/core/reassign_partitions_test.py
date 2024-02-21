@@ -165,16 +165,11 @@ class ReassignPartitionsTest(ProduceConsumeValidateTest):
                                            self.kafka, self.topic,
                                            throughput=self.producer_throughput,
                                            enable_idempotence=True)
-        consumer_properties = {}
-
-        if group_protocol is not None:
-            consumer_properties["group.protocol"] = group_protocol
-
         self.consumer = ConsoleConsumer(self.test_context, self.num_consumers,
                                         self.kafka, self.topic,
                                         consumer_timeout_ms=60000,
                                         message_validator=is_int,
-                                        consumer_properties=consumer_properties)
+                                        consumer_properties=consumer_group.maybe_set_group_protocol(group_protocol))
 
         self.enable_idempotence=True
         self.run_produce_consume_validate(core_test_action=lambda: self.reassign_partitions(bounce_brokers))

@@ -137,14 +137,10 @@ class TestSnapshots(ProduceConsumeValidateTest):
                                            topic, throughput=self.producer_throughput,
                                            message_validator=is_int)
 
-        consumer_properties = {}
-
-        if group_protocol is not None:
-            consumer_properties["group.protocol"] = group_protocol
-
         self.consumer = ConsoleConsumer(self.test_context, self.num_consumers, self.kafka,
                                         topic, consumer_timeout_ms=30000,
-                                        message_validator=is_int, consumer_properties=consumer_properties)
+                                        message_validator=is_int,
+                                        consumer_properties=consumer_group.maybe_set_group_protocol(group_protocol))
         self.start_producer_and_consumer()
         self.stop_producer_and_consumer()
         self.validate()

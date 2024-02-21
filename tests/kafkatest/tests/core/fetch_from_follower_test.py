@@ -104,8 +104,7 @@ class FetchFromFollowerTest(ProduceConsumeValidateTest):
             "metadata.max.age.ms": self.METADATA_MAX_AGE_MS,
         }
 
-        if group_protocol is not None:
-            consumer_properties["group.protocol"] = group_protocol
+        consumer_group.maybe_add_group_protocol(consumer_properties, group_protocol)
 
         self.consumer = ConsoleConsumer(self.test_context, self.num_consumers, self.kafka, self.topic,
                                         client_id="console-consumer", group_id="test-consumer-group-1",
