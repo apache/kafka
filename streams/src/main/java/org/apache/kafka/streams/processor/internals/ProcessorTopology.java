@@ -42,6 +42,7 @@ public class ProcessorTopology {
     // the following contains entries for the entire topology, eg stores that do not belong to this ProcessorTopology
     private final List<StateStore> globalStateStores;
     private final Map<String, String> storeToChangelogTopic;
+    private final Map<String, Boolean> storeNameToReprocessOnRestore;
 
     public ProcessorTopology(final List<ProcessorNode<?, ?, ?, ?>> processorNodes,
                              final Map<String, SourceNode<?, ?>> sourceNodesByTopic,
@@ -49,7 +50,8 @@ public class ProcessorTopology {
                              final List<StateStore> stateStores,
                              final List<StateStore> globalStateStores,
                              final Map<String, String> storeToChangelogTopic,
-                             final Set<String> repartitionTopics) {
+                             final Set<String> repartitionTopics,
+                             final Map<String, Boolean> storeNameToReprocessOnRestore) {
         this.processorNodes = Collections.unmodifiableList(processorNodes);
         this.sourceNodesByTopic = new HashMap<>(sourceNodesByTopic);
         this.sinksByTopic = Collections.unmodifiableMap(sinksByTopic);
@@ -57,6 +59,7 @@ public class ProcessorTopology {
         this.globalStateStores = Collections.unmodifiableList(globalStateStores);
         this.storeToChangelogTopic = Collections.unmodifiableMap(storeToChangelogTopic);
         this.repartitionTopics = Collections.unmodifiableSet(repartitionTopics);
+        this.storeNameToReprocessOnRestore = storeNameToReprocessOnRestore;
 
         this.terminalNodes = new HashSet<>();
         for (final ProcessorNode<?, ?, ?, ?> node : processorNodes) {
@@ -101,6 +104,10 @@ public class ProcessorTopology {
 
     public List<StateStore> stateStores() {
         return stateStores;
+    }
+
+    public Map<String, Boolean> storeNameToReprocessOnRestore() {
+        return storeNameToReprocessOnRestore;
     }
 
     public List<StateStore> globalStateStores() {

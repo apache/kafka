@@ -113,7 +113,9 @@ public class GlobalStreamThreadTest {
             null,
             GLOBAL_STORE_TOPIC_NAME,
             "processorName",
-            processorSupplier);
+            processorSupplier,
+            false
+        );
 
         baseDirectoryName = TestUtils.tempDirectory().getAbsolutePath();
         final HashMap<String, Object> properties = new HashMap<>();

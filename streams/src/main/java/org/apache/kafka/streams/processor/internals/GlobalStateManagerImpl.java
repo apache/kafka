@@ -203,13 +203,22 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
         );
 
         try {
-            restoreState(
-                stateRestoreCallback,
-                topicPartitions,
-                highWatermarks,
-                store.name(),
-                converterForStore(store)
-            );
+            if (topology.storeNameToReprocessOnRestore().getOrDefault(store.name(), false)) {
+                globalConsumer.seekToBeginning(topicPartitions);
+                for (final TopicPartition topicPartition : topicPartitions) {
+                    stateRestoreListener.onRestoreStart(topicPartition, store.name(), 0L, 0L);
+                    stateRestoreListener.onRestoreEnd(topicPartition, store.name(), 0L);
+                    checkpointFileCache.put(topicPartition, 0L);
+                }
+            } else {
+                restoreState(
+                    stateRestoreCallback,
+                    topicPartitions,
+                    highWatermarks,
+                    store.name(),
+                    converterForStore(store)
+                );
+            }
         } finally {
             globalConsumer.unsubscribe();
         }

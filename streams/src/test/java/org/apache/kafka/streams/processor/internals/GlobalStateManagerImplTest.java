@@ -107,7 +107,8 @@ public class GlobalStateManagerImplTest {
                                      Collections.emptyList(),
                                      stateStores,
                                      storeToChangelogTopic,
-                                     Collections.emptySet());
+                                     Collections.emptySet(),
+                                     Collections.emptyMap());
     }
 
     @Before

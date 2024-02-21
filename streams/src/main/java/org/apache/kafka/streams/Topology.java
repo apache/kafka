@@ -783,7 +783,8 @@ public class Topology {
             valueDeserializer,
             topic,
             processorName,
-            () -> ProcessorAdapter.adapt(stateUpdateSupplier.get())
+            () -> ProcessorAdapter.adapt(stateUpdateSupplier.get()),
+            false
         );
         return this;
     }
@@ -835,7 +836,8 @@ public class Topology {
             valueDeserializer,
             topic,
             processorName,
-            () -> ProcessorAdapter.adapt(stateUpdateSupplier.get())
+            () -> ProcessorAdapter.adapt(stateUpdateSupplier.get()),
+            false
         );
         return this;
     }
@@ -878,7 +880,8 @@ public class Topology {
             valueDeserializer,
             topic,
             processorName,
-            stateUpdateSupplier
+            stateUpdateSupplier,
+            false
         );
         return this;
     }
@@ -923,7 +926,8 @@ public class Topology {
             valueDeserializer,
             topic,
             processorName,
-            stateUpdateSupplier
+            stateUpdateSupplier,
+            false
         );
         return this;
     }

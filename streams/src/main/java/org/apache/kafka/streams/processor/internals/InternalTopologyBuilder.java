@@ -123,6 +123,9 @@ public class InternalTopologyBuilder {
     // map from changelog topic name to its corresponding state store.
     private final Map<String, String> changelogTopicToStore = new HashMap<>();
 
+    // map of store name to restore behavior
+    private final Map<String, Boolean> storeNameToReprocessOnRestore = new HashMap<>();
+
     // all global topics
     private final Set<String> globalTopics = new HashSet<>();
 
@@ -584,7 +587,8 @@ public class InternalTopologyBuilder {
                                                 final Deserializer<VIn> valueDeserializer,
                                                 final String topic,
                                                 final String processorName,
-                                                final ProcessorSupplier<KIn, VIn, Void, Void> stateUpdateSupplier) {
+                                                final ProcessorSupplier<KIn, VIn, Void, Void> stateUpdateSupplier,
+                                                final boolean reprocessOnRestore) {
         Objects.requireNonNull(storeFactory, "store builder must not be null");
         ApiUtils.checkSupplier(stateUpdateSupplier);
         validateGlobalStoreArguments(sourceName,
@@ -613,6 +617,7 @@ public class InternalTopologyBuilder {
             keyDeserializer,
             valueDeserializer)
         );
+        storeNameToReprocessOnRestore.put(storeFactory.name(), reprocessOnRestore);
         nodeToSourceTopics.put(sourceName, Arrays.asList(topics));
         nodeGrouper.add(sourceName);
         nodeFactory.addStateStore(storeFactory.name());
@@ -996,7 +1001,9 @@ public class InternalTopologyBuilder {
                                      new ArrayList<>(stateStoreMap.values()),
                                      new ArrayList<>(globalStateStores.values()),
                                      storeToChangelogTopic,
-                                     repartitionTopics);
+                                     repartitionTopics,
+                                     storeNameToReprocessOnRestore
+        );
     }
 
     private void buildSinkNode(final Map<String, ProcessorNode<?, ?, ?, ?>> processorMap,
