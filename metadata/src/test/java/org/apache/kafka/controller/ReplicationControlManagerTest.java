@@ -1989,7 +1989,7 @@ public class ReplicationControlManagerTest {
                 new AlterPartitionReassignmentsRequestData().setTopics(asList(
                     new ReassignableTopic().setName("foo").setPartitions(asList(
                         new ReassignablePartition().setPartitionIndex(0).
-                            setReplicas(asList(1, 2, 3)),
+                            setReplicas(asList(1, 2, 4)),
                         new ReassignablePartition().setPartitionIndex(1).
                             setReplicas(asList(1, 2, 3, 0)),
                         new ReassignablePartition().setPartitionIndex(2).
@@ -2019,11 +2019,11 @@ public class ReplicationControlManagerTest {
                     setErrorMessage(null))))),
             alterResult.response());
         ctx.replay(alterResult.records());
-        assertEquals(new PartitionRegistration.Builder().setReplicas(new int[] {1, 2, 3}).setIsr(new int[] {1, 2}).
+        assertEquals(new PartitionRegistration.Builder().setReplicas(new int[] {1, 2, 4}).setIsr(new int[] {1, 2, 4}).
             setDirectories(new Uuid[] {
                     Uuid.fromString("TESTBROKER00001DIRAAAA"),
                     Uuid.fromString("TESTBROKER00002DIRAAAA"),
-                    Uuid.fromString("TESTBROKER00003DIRAAAA")
+                    Uuid.fromString("TESTBROKER00004DIRAAAA")
             }).
             setLeader(1).setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).setLeaderEpoch(1).setPartitionEpoch(2).build(), replication.getPartition(fooId, 0));
         assertEquals(new PartitionRegistration.Builder().setReplicas(new int[] {1, 2, 3, 0}).setIsr(new int[] {0, 1, 2}).
