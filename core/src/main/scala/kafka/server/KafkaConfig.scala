@@ -37,6 +37,7 @@ import org.apache.kafka.common.security.auth.KafkaPrincipalSerde
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.coordinator.group.Group.GroupType
+import org.apache.kafka.coordinator.group.GroupProtocolMigrationConfig
 import org.apache.kafka.coordinator.group.assignor.PartitionAssignor
 import org.apache.kafka.raft.RaftConfig
 import org.apache.kafka.security.authorizer.AuthorizerUtils
@@ -290,6 +291,7 @@ object KafkaConfig {
   val NewGroupCoordinatorEnableProp = "group.coordinator.new.enable"
   val GroupCoordinatorRebalanceProtocolsProp = "group.coordinator.rebalance.protocols"
   val GroupCoordinatorNumThreadsProp = "group.coordinator.threads"
+  val GroupProtocolMigrationProp = "group.protocol.migration"
 
   /** Consumer group configs */
   val ConsumerGroupSessionTimeoutMsProp = "group.consumer.session.timeout.ms"
@@ -780,6 +782,7 @@ object KafkaConfig {
   val GroupCoordinatorRebalanceProtocolsDoc = "The list of enabled rebalance protocols. Supported protocols: " + Utils.join(GroupType.values.toList.map(_.toString).asJava, ",") + ". " +
     s"The ${GroupType.CONSUMER} rebalance protocol is in early access and therefore must not be used in production."
   val GroupCoordinatorNumThreadsDoc = "The number of threads used by the group coordinator."
+  val GroupProtocolMigrationDoc = "The config that enables the group protocol upgrade/downgrade. The valid values are " + Utils.join(Utils.enumOptions(classOf[GroupProtocolMigrationConfig]), ", ") + "."
 
   /** Consumer group configs */
   val ConsumerGroupSessionTimeoutMsDoc = "The timeout to detect client failures when using the consumer group protocol."
@@ -1149,6 +1152,7 @@ object KafkaConfig {
       .define(GroupCoordinatorNumThreadsProp, INT, Defaults.GROUP_COORDINATOR_NUM_THREADS, atLeast(1), MEDIUM, GroupCoordinatorNumThreadsDoc)
       // Internal configuration used by integration and system tests.
       .defineInternal(NewGroupCoordinatorEnableProp, BOOLEAN, Defaults.NEW_GROUP_COORDINATOR_ENABLE, null, MEDIUM, NewGroupCoordinatorEnableDoc)
+      .define(GroupProtocolMigrationProp, STRING, Defaults.GROUP_PROTOCOL_MIGRATION, in(Utils.enumOptions(classOf[GroupProtocolMigrationConfig]):_*), MEDIUM, GroupProtocolMigrationDoc)
 
       /** Consumer groups configs */
       .define(ConsumerGroupSessionTimeoutMsProp, INT, Defaults.CONSUMER_GROUP_SESSION_TIMEOUT_MS, atLeast(1), MEDIUM, ConsumerGroupSessionTimeoutMsDoc)
@@ -1803,6 +1807,7 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
   val isNewGroupCoordinatorEnabled = getBoolean(KafkaConfig.NewGroupCoordinatorEnableProp) ||
     groupCoordinatorRebalanceProtocols.contains(GroupType.CONSUMER)
   val groupCoordinatorNumThreads = getInt(KafkaConfig.GroupCoordinatorNumThreadsProp)
+  val groupProtocolMigration = GroupProtocolMigrationConfig.parse(getString(KafkaConfig.GroupProtocolMigrationProp))
 
   /** Consumer group configs */
   val consumerGroupSessionTimeoutMs = getInt(KafkaConfig.ConsumerGroupSessionTimeoutMsProp)

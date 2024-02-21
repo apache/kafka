@@ -118,6 +118,11 @@ public class GroupCoordinatorConfig {
      */
     public final int offsetCommitTimeoutMs;
 
+    /**
+     * The config indicating whether group protocol upgrade/downgrade are allowed.
+     */
+    public final GroupProtocolMigrationConfig groupProtocolMigrationConfig;
+
     public GroupCoordinatorConfig(
         int numThreads,
         int consumerGroupSessionTimeoutMs,
@@ -133,7 +138,8 @@ public class GroupCoordinatorConfig {
         int classicGroupMaxSessionTimeoutMs,
         long offsetsRetentionCheckIntervalMs,
         long offsetsRetentionMs,
-        int offsetCommitTimeoutMs
+        int offsetCommitTimeoutMs,
+        GroupProtocolMigrationConfig groupProtocolMigrationConfig
     ) {
         this.numThreads = numThreads;
         this.consumerGroupSessionTimeoutMs = consumerGroupSessionTimeoutMs;
@@ -150,5 +156,6 @@ public class GroupCoordinatorConfig {
         this.offsetsRetentionCheckIntervalMs = offsetsRetentionCheckIntervalMs;
         this.offsetsRetentionMs = offsetsRetentionMs;
         this.offsetCommitTimeoutMs = offsetCommitTimeoutMs;
+        this.groupProtocolMigrationConfig = groupProtocolMigrationConfig;
     }
 }

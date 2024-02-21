@@ -18,6 +18,7 @@ package org.apache.kafka.server.config;
 
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.coordinator.group.Group;
+import org.apache.kafka.coordinator.group.GroupProtocolMigrationConfig;
 import org.apache.kafka.coordinator.group.assignor.RangeAssignor;
 import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.config.SslClientAuth;
@@ -155,6 +156,7 @@ public class Defaults {
     public static final boolean NEW_GROUP_COORDINATOR_ENABLE = false;
     public static final List<String> GROUP_COORDINATOR_REBALANCE_PROTOCOLS = Collections.singletonList(Group.GroupType.CLASSIC.toString());
     public static final int GROUP_COORDINATOR_NUM_THREADS = 1;
+    public static final String GROUP_PROTOCOL_MIGRATION = GroupProtocolMigrationConfig.NONE.toString();
 
     /** ********* Consumer group configs *********/
     public static final int CONSUMER_GROUP_SESSION_TIMEOUT_MS = 45000;
