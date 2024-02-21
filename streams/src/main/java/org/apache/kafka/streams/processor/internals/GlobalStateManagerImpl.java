@@ -204,6 +204,7 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
 
         try {
             if (topology.storeNameToReprocessOnRestore().getOrDefault(store.name(), false)) {
+                globalConsumer.assign(topicPartitions);
                 globalConsumer.seekToBeginning(topicPartitions);
                 for (final TopicPartition topicPartition : topicPartitions) {
                     stateRestoreListener.onRestoreStart(topicPartition, store.name(), 0L, 0L);
