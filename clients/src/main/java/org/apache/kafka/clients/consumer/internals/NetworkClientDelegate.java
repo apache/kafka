@@ -390,4 +390,3 @@ public class NetworkClientDelegate implements AutoCloseable {
         };
     }
 }
-

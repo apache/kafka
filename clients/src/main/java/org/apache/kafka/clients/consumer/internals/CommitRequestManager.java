@@ -1264,4 +1264,3 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
         }
     }
 }
-

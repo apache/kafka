@@ -661,4 +661,3 @@ public class OffsetsRequestManager implements RequestManager, ClusterResourceLis
         return requestsToSend.size();
     }
 }
-
