@@ -2550,8 +2550,7 @@ public class TransactionManagerTest {
         transactionManager.maybeAddPartition(tp0);
         accumulator.beginFlush();
 
-        drainedBatches = accumulator.drain(metadataMock, nodes, Integer.MAX_VALUE,
-            time.milliseconds());
+        drainedBatches = accumulator.drain(metadataCache, nodes, Integer.MAX_VALUE, time.milliseconds());
 
         // We still shouldn't drain batches because the partition call didn't complete yet.
         assertTrue(drainedBatches.containsKey(node1.id()));
