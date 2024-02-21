@@ -132,13 +132,13 @@ public class RequestManagers implements Closeable {
                 final FetchConfig fetchConfig = new FetchConfig(config);
                 long retryBackoffMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG);
                 long retryBackoffMaxMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MAX_MS_CONFIG);
-                final int defaultApiTimeoutMs = config.getInt(ConsumerConfig.DEFAULT_API_TIMEOUT_MS_CONFIG);
+                final int requestTimeoutMs = config.getInt(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG);
                 final OffsetsRequestManager listOffsets = new OffsetsRequestManager(subscriptions,
                         metadata,
                         fetchConfig.isolationLevel,
                         time,
                         retryBackoffMs,
-                        defaultApiTimeoutMs,
+                        requestTimeoutMs,
                         apiVersions,
                         networkClientDelegate,
                         backgroundEventHandler,
@@ -151,8 +151,7 @@ public class RequestManagers implements Closeable {
                         fetchBuffer,
                         fetchMetricsManager,
                         networkClientDelegate,
-                        apiVersions,
-                        defaultApiTimeoutMs);
+                        apiVersions);
                 final TopicMetadataRequestManager topic = new TopicMetadataRequestManager(logContext, config);
                 HeartbeatRequestManager heartbeatRequestManager = null;
                 MembershipManager membershipManager = null;

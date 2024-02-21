@@ -256,8 +256,7 @@ public class ConsumerTestBuilder implements Closeable {
                 fetchBuffer,
                 metricsManager,
                 networkClientDelegate,
-                apiVersions,
-                requestTimeoutMs));
+                apiVersions));
         this.requestManagers = new RequestManagers(logContext,
                 offsetsRequestManager,
                 topicMetadataRequestManager,
