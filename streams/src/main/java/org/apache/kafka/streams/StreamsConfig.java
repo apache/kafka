@@ -574,7 +574,7 @@ public class StreamsConfig extends AbstractConfig {
         "<code>org.apache.kafka.common.serialization.Serde</code> interface.";
 
     /** {@code default.windowed.value.serde.inner
-     * @deprecated since 3.0.0 Use windowed.inner.class.serde instead.} */
+     * @deprecated since 3.0.0 Use {@link #WINDOWED_INNER_CLASS_SERDE "windowed.inner.class.serde"} instead.} */
     @SuppressWarnings("WeakerAccess")
     @Deprecated
     public static final String DEFAULT_WINDOWED_VALUE_SERDE_INNER_CLASS = "default.windowed.value.serde.inner";
@@ -651,7 +651,7 @@ public class StreamsConfig extends AbstractConfig {
     public static final String METRICS_SAMPLE_WINDOW_MS_CONFIG = CommonClientConfigs.METRICS_SAMPLE_WINDOW_MS_CONFIG;
 
     /** {@code auto.include.jmx.reporter
-     * @deprecated and will removed in 4.0.0 Use org.apache.kafka.common.metrics.JmxReporter in metric.reporters instead.} */
+     * @deprecated and will removed in 4.0.0 Use {@link JMX_REPORTER "jmx.reporter"} instead.} */
     @Deprecated
     public static final String AUTO_INCLUDE_JMX_REPORTER_CONFIG = CommonClientConfigs.AUTO_INCLUDE_JMX_REPORTER_CONFIG;
 
