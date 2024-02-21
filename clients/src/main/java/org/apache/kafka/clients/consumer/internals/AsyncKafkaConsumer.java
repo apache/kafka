@@ -712,7 +712,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                 wakeupTrigger.maybeTriggerWakeup();
 
                 updateAssignmentMetadataIfNeeded(timer);
-                if (isGenerationKnown()) {
+                if (isGenerationKnownOrPartitionsUserAssigned()) {
                     final Fetch<K, V> fetch = pollForFetches(timer);
                     if (!fetch.isEmpty()) {
                         if (fetch.records().isEmpty()) {
@@ -735,7 +735,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         }
     }
 
-    private boolean isGenerationKnown() {
+    private boolean isGenerationKnownOrPartitionsUserAssigned() {
         if (subscriptions.hasAutoAssignedPartitions()) {
             return groupMetadata.filter(g -> g.generationId() != JoinGroupRequest.UNKNOWN_GENERATION_ID).isPresent();
         }
