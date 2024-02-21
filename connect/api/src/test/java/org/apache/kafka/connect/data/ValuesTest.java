@@ -364,33 +364,73 @@ public class ValuesTest {
     }
 
     /**
-     * The parsed array has byte values and one int value, so we should return list with single unified type of integers.
+     * We parse into different element types, but cannot infer a common element schema.
+     * This behavior should be independent of the order that the elements appear in the string
      */
     @Test
-    public void shouldConvertStringOfListWithMixedElementTypesIntoListWithDifferentElementTypes() {
-        String str = "[1, 2, \"three\"]";
-        List<?> list = Values.convertToList(Schema.STRING_SCHEMA, str);
-        assertEquals(3, list.size());
-        assertEquals(1, ((Number) list.get(0)).intValue());
-        assertEquals(2, ((Number) list.get(1)).intValue());
-        assertEquals("three", list.get(2));
+    public void shouldParseStringListWithMultipleElementTypes() {
+        assertParseStringArrayWithNoSchema(
+                Arrays.asList((byte) 1, (byte) 2, (short) 300, "four"),
+                "[1, 2, 300, \"four\"]");
+        assertParseStringArrayWithNoSchema(
+                Arrays.asList((byte) 2, (short) 300, "four", (byte) 1),
+                "[2, 300, \"four\", 1]");
+        assertParseStringArrayWithNoSchema(
+                Arrays.asList((short) 300, "four", (byte) 1, (byte) 2),
+                "[300, \"four\", 1, 2]");
+        assertParseStringArrayWithNoSchema(
+                Arrays.asList("four", (byte) 1, (byte) 2, (short) 300),
+                "[\"four\", 1, 2, 300]");
     }
 
-    /**
-     * We parse into different element types, but cannot infer a common element schema.
-     */
-    @Test
-    public void shouldParseStringListWithMultipleElementTypesAndReturnListWithNoSchema() {
-        String str = "[1, 2, 3, \"four\"]";
+    private void assertParseStringArrayWithNoSchema(List<Object> expected, String str) {
         SchemaAndValue result = Values.parseString(str);
         assertEquals(Type.ARRAY, result.schema().type());
         assertNull(result.schema().valueSchema());
         List<?> list = (List<?>) result.value();
-        assertEquals(4, list.size());
-        assertEquals(1, ((Number) list.get(0)).intValue());
-        assertEquals(2, ((Number) list.get(1)).intValue());
-        assertEquals(3, ((Number) list.get(2)).intValue());
-        assertEquals("four", list.get(3));
+        assertEquals(expected, list);
+    }
+
+    /**
+     * Maps with an inconsistent key type don't find a common type for the keys or the values
+     * This behavior should be independent of the order that the pairs appear in the string
+     */
+    @Test
+    public void shouldParseStringMapWithMultipleKeyTypes() {
+        Map<Object, Object> expected = new HashMap<>();
+        expected.put((byte) 1, (byte) 1);
+        expected.put((byte) 2, (byte) 1);
+        expected.put((short) 300, (short) 300);
+        expected.put("four", (byte) 1);
+        assertParseStringMapWithNoSchema(expected, "{1:1, 2:1, 300:300, \"four\":1}");
+        assertParseStringMapWithNoSchema(expected, "{2:1, 300:300, \"four\":1, 1:1}");
+        assertParseStringMapWithNoSchema(expected, "{300:300, \"four\":1, 1:1, 2:1}");
+        assertParseStringMapWithNoSchema(expected, "{\"four\":1, 1:1, 2:1, 300:300}");
+    }
+
+    /**
+     * Maps with a consistent key type may still not have a common type for the values
+     * This behavior should be independent of the order that the pairs appear in the string
+     */
+    @Test
+    public void shouldParseStringMapWithMultipleValueTypes() {
+        Map<Object, Object> expected = new HashMap<>();
+        expected.put((short) 1, (byte) 1);
+        expected.put((short) 2, (byte) 1);
+        expected.put((short) 300, (short) 300);
+        expected.put((short) 4, "four");
+        assertParseStringMapWithNoSchema(expected, "{1:1, 2:1, 300:300, 4:\"four\"}");
+        assertParseStringMapWithNoSchema(expected, "{2:1, 300:300, 4:\"four\", 1:1}");
+        assertParseStringMapWithNoSchema(expected, "{300:300, 4:\"four\", 1:1, 2:1}");
+        assertParseStringMapWithNoSchema(expected, "{4:\"four\", 1:1, 2:1, 300:300}");
+    }
+
+    private void assertParseStringMapWithNoSchema(Map<Object, Object> expected, String str) {
+        SchemaAndValue result = Values.parseString(str);
+        assertEquals(Type.MAP, result.schema().type());
+        assertNull(result.schema().valueSchema());
+        Map<?, ?> list = (Map<?, ?>) result.value();
+        assertEquals(expected, list);
     }
 
     /**
@@ -759,6 +799,16 @@ public class ValuesTest {
         assertEquals(value, Values.convertToDecimal(null, value, 1));
         assertEquals(value, Values.convertToDecimal(null, bytes, 1));
         assertEquals(value, Values.convertToDecimal(null, buffer, 1));
+    }
+
+    @Test
+    public void shouldConvertDecimalValuesInList() {
+        List<Object> decimals = Arrays.asList("\"1.0\"", BigDecimal.valueOf(Long.MAX_VALUE).add(BigDecimal.ONE), BigDecimal.valueOf(Long.MIN_VALUE).subtract(BigDecimal.ONE), BigDecimal.ONE, BigDecimal.ONE);
+        String strings = decimals.toString();
+        SchemaAndValue schemaAndValue = Values.parseString(strings);
+        Schema schema = schemaAndValue.schema();
+        assertEquals(Type.ARRAY, schema.type());
+        assertNull(schema.valueSchema());
     }
 
     @Test
