@@ -265,8 +265,8 @@ public class ClientTelemetryReporter implements MetricsReporter {
          These are the lower and upper bounds of the jitter that we apply to the initial push
          telemetry API call. This helps to avoid a flood of requests all coming at the same time.
         */
-        private final static double INITIAL_PUSH_JITTER_LOWER = 0.5;
-        private final static double INITIAL_PUSH_JITTER_UPPER = 1.5;
+        private static final double INITIAL_PUSH_JITTER_LOWER = 0.5;
+        private static final double INITIAL_PUSH_JITTER_UPPER = 1.5;
 
         private final ReadWriteLock lock = new ReentrantReadWriteLock();
         private final Condition subscriptionLoaded = lock.writeLock().newCondition();
@@ -341,7 +341,7 @@ public class ClientTelemetryReporter implements MetricsReporter {
                     break;
                 case TERMINATING_PUSH_IN_PROGRESS:
                     timeMs = Long.MAX_VALUE;
-                    msg = isTraceEnabled ? "" : String.format("the terminating push is in progress, disabling telemetry for further requests");
+                    msg = isTraceEnabled ? "" : "the terminating push is in progress, disabling telemetry for further requests";
                     break;
                 case TERMINATING_PUSH_NEEDED:
                     timeMs = 0;
