@@ -29,8 +29,6 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.MetadataRequest;
 import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.common.utils.LogContext;
-import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.common.utils.Timer;
 import org.slf4j.Logger;
 
 import java.util.Collections;
@@ -83,8 +81,8 @@ public class TopicMetadataRequestManager implements RequestManager {
     public NetworkClientDelegate.PollResult poll(final long currentTimeMs) {
         // Prune any requests which have timed out
         List<TopicMetadataRequestState> expiredRequests = inflightRequests.stream()
-                .filter(req -> req.timer.isExpired())
-                .collect(Collectors.toList());
+            .filter(req -> req.isExpired(currentTimeMs))
+            .collect(Collectors.toList());
         expiredRequests.forEach(TopicMetadataRequestState::expire);
 
         List<NetworkClientDelegate.UnsentRequest> requests = inflightRequests.stream()
@@ -101,12 +99,12 @@ public class TopicMetadataRequestManager implements RequestManager {
      *
      * @return the future of the metadata request.
      */
-    public CompletableFuture<Map<String, List<PartitionInfo>>> requestAllTopicsMetadata(final Timer timer) {
+    public CompletableFuture<Map<String, List<PartitionInfo>>> requestAllTopicsMetadata(final long expirationTimeMs) {
         TopicMetadataRequestState newRequest = new TopicMetadataRequestState(
-                logContext,
-                timer,
-                retryBackoffMs,
-                retryBackoffMaxMs);
+            logContext,
+            expirationTimeMs,
+            retryBackoffMs,
+            retryBackoffMaxMs);
         inflightRequests.add(newRequest);
         return newRequest.future;
     }
@@ -117,14 +115,13 @@ public class TopicMetadataRequestManager implements RequestManager {
      * @param topic to be requested.
      * @return the future of the metadata request.
      */
-    public CompletableFuture<Map<String, List<PartitionInfo>>> requestTopicMetadata(final String topic,
-                                                                                    final Timer timer) {
+    public CompletableFuture<Map<String, List<PartitionInfo>>> requestTopicMetadata(final String topic, final long expirationTimeMs) {
         TopicMetadataRequestState newRequest = new TopicMetadataRequestState(
-                logContext,
-                topic,
-                timer,
-                retryBackoffMs,
-                retryBackoffMaxMs);
+            logContext,
+            topic,
+            expirationTimeMs,
+            retryBackoffMs,
+            retryBackoffMaxMs);
         inflightRequests.add(newRequest);
         return newRequest.future;
     }
@@ -137,24 +134,24 @@ public class TopicMetadataRequestManager implements RequestManager {
     class TopicMetadataRequestState extends RequestState {
         private final String topic;
         private final boolean allTopics;
-        private final Timer timer;
+        private final long expirationTimeMs;
         CompletableFuture<Map<String, List<PartitionInfo>>> future;
 
         public TopicMetadataRequestState(final LogContext logContext,
-                                         final Timer timer,
+                                         final long expirationTimeMs,
                                          final long retryBackoffMs,
                                          final long retryBackoffMaxMs) {
             super(logContext, TopicMetadataRequestState.class.getSimpleName(), retryBackoffMs,
-                    retryBackoffMaxMs);
+                retryBackoffMaxMs);
             future = new CompletableFuture<>();
             this.topic = null;
             this.allTopics = true;
-            this.timer = timer;
+            this.expirationTimeMs = expirationTimeMs;
         }
 
         public TopicMetadataRequestState(final LogContext logContext,
                                          final String topic,
-                                         final Timer timer,
+                                         final long expirationTimeMs,
                                          final long retryBackoffMs,
                                          final long retryBackoffMaxMs) {
             super(logContext, TopicMetadataRequestState.class.getSimpleName(), retryBackoffMs,
@@ -162,7 +159,7 @@ public class TopicMetadataRequestManager implements RequestManager {
             future = new CompletableFuture<>();
             this.topic = topic;
             this.allTopics = false;
-            this.timer = timer;
+            this.expirationTimeMs = expirationTimeMs;
         }
 
         /**
@@ -170,7 +167,7 @@ public class TopicMetadataRequestManager implements RequestManager {
          * {@link org.apache.kafka.clients.consumer.internals.NetworkClientDelegate.UnsentRequest} if needed.
          */
         private Optional<NetworkClientDelegate.UnsentRequest> send(final long currentTimeMs) {
-            if (timer.isExpired()) {
+            if (currentTimeMs >= expirationTimeMs) {
                 return Optional.empty();
             }
 
@@ -186,18 +183,20 @@ public class TopicMetadataRequestManager implements RequestManager {
             return Optional.of(createUnsentRequest(request));
         }
 
+        private boolean isExpired(final long currentTimeMs) {
+            return currentTimeMs >= expirationTimeMs;
+        }
+
         private void expire() {
             completeFutureAndRemoveRequest(
-                    new TimeoutException("Timeout expired while fetching topic metadata"));
+                new TimeoutException("Timeout expired while fetching topic metadata"));
         }
 
         private NetworkClientDelegate.UnsentRequest createUnsentRequest(
-                final MetadataRequest.Builder request) {
+            final MetadataRequest.Builder request) {
             NetworkClientDelegate.UnsentRequest unsent = new NetworkClientDelegate.UnsentRequest(
                 request,
-                Optional.empty(),
-                timer
-            );
+                Optional.empty());
 
             return unsent.whenComplete((response, exception) -> {
                 if (response == null) {
@@ -211,7 +210,7 @@ public class TopicMetadataRequestManager implements RequestManager {
         private void handleError(final Throwable exception,
                                  final long completionTimeMs) {
             if (exception instanceof RetriableException) {
-                if (timer.isExpired()) {
+                if (completionTimeMs >= expirationTimeMs) {
                     completeFutureAndRemoveRequest(
                         new TimeoutException("Timeout expired while fetching topic metadata"));
                 } else {
@@ -229,7 +228,7 @@ public class TopicMetadataRequestManager implements RequestManager {
                 future.complete(res);
                 inflightRequests.remove(this);
             } catch (RetriableException e) {
-                if (timer.isExpired()) {
+                if (responseTimeMs >= expirationTimeMs) {
                     completeFutureAndRemoveRequest(
                         new TimeoutException("Timeout expired while fetching topic metadata"));
                 } else {

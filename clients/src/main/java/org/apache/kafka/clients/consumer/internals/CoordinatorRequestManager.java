@@ -29,7 +29,6 @@ import org.apache.kafka.common.requests.FindCoordinatorRequest;
 import org.apache.kafka.common.requests.FindCoordinatorResponse;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.common.utils.Timer;
 import org.slf4j.Logger;
 
 import java.util.Objects;
@@ -53,7 +52,6 @@ import static org.apache.kafka.clients.consumer.internals.NetworkClientDelegate.
 public class CoordinatorRequestManager implements RequestManager {
     private static final long COORDINATOR_DISCONNECT_LOGGING_INTERVAL_MS = 60 * 1000;
     private final Time time;
-    private final long defaultApiTimeoutMs;
     private final Logger log;
     private final BackgroundEventHandler backgroundEventHandler;
     private final String groupId;
@@ -66,7 +64,6 @@ public class CoordinatorRequestManager implements RequestManager {
     public CoordinatorRequestManager(
         final Time time,
         final LogContext logContext,
-        final long defaultApiTimeoutMs,
         final long retryBackoffMs,
         final long retryBackoffMaxMs,
         final BackgroundEventHandler errorHandler,
@@ -75,14 +72,13 @@ public class CoordinatorRequestManager implements RequestManager {
         Objects.requireNonNull(groupId);
         this.time = time;
         this.log = logContext.logger(this.getClass());
-        this.defaultApiTimeoutMs = defaultApiTimeoutMs;
         this.backgroundEventHandler = errorHandler;
         this.groupId = groupId;
         this.coordinatorRequestState = new RequestState(
-                logContext,
-                CoordinatorRequestManager.class.getSimpleName(),
-                retryBackoffMs,
-                retryBackoffMaxMs
+            logContext,
+            CoordinatorRequestManager.class.getSimpleName(),
+            retryBackoffMs,
+            retryBackoffMaxMs
         );
     }
 
@@ -112,13 +108,11 @@ public class CoordinatorRequestManager implements RequestManager {
     NetworkClientDelegate.UnsentRequest makeFindCoordinatorRequest(final long currentTimeMs) {
         coordinatorRequestState.onSendAttempt(currentTimeMs);
         FindCoordinatorRequestData data = new FindCoordinatorRequestData()
-                .setKeyType(FindCoordinatorRequest.CoordinatorType.GROUP.id())
-                .setKey(this.groupId);
-        Timer timer = time.timer(defaultApiTimeoutMs);
+            .setKeyType(FindCoordinatorRequest.CoordinatorType.GROUP.id())
+            .setKey(this.groupId);
         NetworkClientDelegate.UnsentRequest unsentRequest = new NetworkClientDelegate.UnsentRequest(
             new FindCoordinatorRequest.Builder(data),
-            Optional.empty(),
-            timer
+            Optional.empty()
         );
 
         return unsentRequest.whenComplete((clientResponse, throwable) -> {
@@ -140,7 +134,7 @@ public class CoordinatorRequestManager implements RequestManager {
     public void markCoordinatorUnknown(final String cause, final long currentTimeMs) {
         if (this.coordinator != null) {
             log.info("Group coordinator {} is unavailable or invalid due to cause: {}. "
-                    + "Rediscovery will be attempted.", this.coordinator, cause);
+                + "Rediscovery will be attempted.", this.coordinator, cause);
             this.coordinator = null;
             timeMarkedUnknownMs = currentTimeMs;
             totalDisconnectedMin = 0;
@@ -162,9 +156,9 @@ public class CoordinatorRequestManager implements RequestManager {
         // for the coordinator in the underlying network client layer
         int coordinatorConnectionId = Integer.MAX_VALUE - coordinator.nodeId();
         this.coordinator = new Node(
-                coordinatorConnectionId,
-                coordinator.host(),
-                coordinator.port());
+            coordinatorConnectionId,
+            coordinator.host(),
+            coordinator.port());
         log.info("Discovered group coordinator {}", coordinator);
         coordinatorRequestState.onSuccessfulAttempt(currentTimeMs);
     }

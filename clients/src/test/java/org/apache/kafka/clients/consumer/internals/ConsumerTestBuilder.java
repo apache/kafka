@@ -181,7 +181,6 @@ public class ConsumerTestBuilder implements Closeable {
             CoordinatorRequestManager coordinator = spy(new CoordinatorRequestManager(
                     time,
                     logContext,
-                    requestTimeoutMs,
                     DEFAULT_RETRY_BACKOFF_MS,
                     DEFAULT_RETRY_BACKOFF_MAX_MS,
                     backgroundEventHandler,

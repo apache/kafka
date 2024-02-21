@@ -18,35 +18,53 @@ package org.apache.kafka.clients.consumer.internals.events;
 
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.utils.Timer;
+
+import java.util.Collections;
 import java.util.Map;
+import java.util.Objects;
 
 /**
  * Event to commit offsets waiting for a response and retrying on expected retriable errors until
  * the timer expires.
  */
-public class SyncCommitApplicationEvent extends CommitApplicationEvent {
+public class SyncCommitApplicationEvent extends CompletableApplicationEvent<Void> {
 
     /**
-     * Time to wait for a response, retrying on retriable errors.
+     * Offsets to commit per partition.
      */
-    private final long retryTimeoutMs;
+    private final Map<TopicPartition, OffsetAndMetadata> offsets;
 
-    public SyncCommitApplicationEvent(final Map<TopicPartition, OffsetAndMetadata> offsets,
-                                      final long retryTimeoutMs) {
-        super(offsets, Type.COMMIT_SYNC);
-        this.retryTimeoutMs = retryTimeoutMs;
+    public SyncCommitApplicationEvent(final Map<TopicPartition, OffsetAndMetadata> offsets, final Timer timer) {
+        super(Type.COMMIT_SYNC, timer);
+        this.offsets = Collections.unmodifiableMap(offsets);
+
+        for (OffsetAndMetadata offsetAndMetadata : offsets.values()) {
+            if (offsetAndMetadata.offset() < 0) {
+                throw new IllegalArgumentException("Invalid offset: " + offsetAndMetadata.offset());
+            }
+        }
     }
 
-    public Long retryTimeoutMs() {
-        return retryTimeoutMs;
+    public Map<TopicPartition, OffsetAndMetadata> offsets() {
+        return offsets;
     }
 
     @Override
-    public String toString() {
-        return "SyncCommitApplicationEvent{" +
-            toStringBase() +
-            ", offsets=" + offsets() +
-            ", retryTimeout=" + retryTimeoutMs + "ms" +
-            '}';
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        if (!super.equals(o)) return false;
+
+        SyncCommitApplicationEvent that = (SyncCommitApplicationEvent) o;
+
+        return offsets.equals(that.offsets);
+    }
+
+    @Override
+    public int hashCode() {
+        int result = super.hashCode();
+        result = 31 * result + offsets.hashCode();
+        return result;
     }
 }

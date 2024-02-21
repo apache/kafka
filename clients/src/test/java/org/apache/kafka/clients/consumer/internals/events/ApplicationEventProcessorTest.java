@@ -107,9 +107,9 @@ public class ApplicationEventProcessorTest {
         Timer timer = time.timer(Long.MAX_VALUE);
         LeaveOnCloseApplicationEvent event = new LeaveOnCloseApplicationEvent(timer);
         when(heartbeatRequestManager.membershipManager()).thenReturn(membershipManager);
-        when(membershipManager.leaveGroup(any())).thenReturn(CompletableFuture.completedFuture(null));
+        when(membershipManager.leaveGroup()).thenReturn(CompletableFuture.completedFuture(null));
         processor.process(event);
-        verify(membershipManager).leaveGroup(any());
+        verify(membershipManager).leaveGroup();
         assertTrue(event.future().isDone());
     }
 

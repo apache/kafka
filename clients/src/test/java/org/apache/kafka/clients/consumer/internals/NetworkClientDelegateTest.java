@@ -44,6 +44,7 @@ import static org.apache.kafka.clients.consumer.ConsumerConfig.REQUEST_TIMEOUT_M
 import static org.apache.kafka.clients.consumer.ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -63,7 +64,7 @@ public class NetworkClientDelegateTest {
     @Test
     public void testSuccessfulResponse() throws Exception {
         try (NetworkClientDelegate ncd = newNetworkClientDelegate()) {
-            NetworkClientDelegate.UnsentRequest unsentRequest = newUnsentFindCoordinatorRequest(REQUEST_TIMEOUT_MS);
+            NetworkClientDelegate.UnsentRequest unsentRequest = newUnsentFindCoordinatorRequest();
             prepareFindCoordinatorResponse(Errors.NONE);
 
             ncd.add(unsentRequest);
@@ -78,7 +79,7 @@ public class NetworkClientDelegateTest {
     public void testTimeoutBeforeSend() throws Exception {
         try (NetworkClientDelegate ncd = newNetworkClientDelegate()) {
             client.setUnreachable(mockNode(), REQUEST_TIMEOUT_MS);
-            NetworkClientDelegate.UnsentRequest unsentRequest = newUnsentFindCoordinatorRequest(REQUEST_TIMEOUT_MS);
+            NetworkClientDelegate.UnsentRequest unsentRequest = newUnsentFindCoordinatorRequest();
             ncd.add(unsentRequest);
             ncd.poll(0, time.milliseconds());
             time.sleep(REQUEST_TIMEOUT_MS);
@@ -91,7 +92,7 @@ public class NetworkClientDelegateTest {
     @Test
     public void testTimeoutAfterSend() throws Exception {
         try (NetworkClientDelegate ncd = newNetworkClientDelegate()) {
-            NetworkClientDelegate.UnsentRequest unsentRequest = newUnsentFindCoordinatorRequest(REQUEST_TIMEOUT_MS);
+            NetworkClientDelegate.UnsentRequest unsentRequest = newUnsentFindCoordinatorRequest();
             ncd.add(unsentRequest);
             ncd.poll(0, time.milliseconds());
             time.sleep(REQUEST_TIMEOUT_MS);
@@ -103,7 +104,7 @@ public class NetworkClientDelegateTest {
 
     @Test
     public void testEnsureCorrectCompletionTimeOnFailure() {
-        NetworkClientDelegate.UnsentRequest unsentRequest = newUnsentFindCoordinatorRequest(REQUEST_TIMEOUT_MS);
+        NetworkClientDelegate.UnsentRequest unsentRequest = newUnsentFindCoordinatorRequest();
         long timeMs = time.milliseconds();
         unsentRequest.handler().onFailure(timeMs, new TimeoutException());
 
@@ -113,13 +114,30 @@ public class NetworkClientDelegateTest {
 
     @Test
     public void testEnsureCorrectCompletionTimeOnComplete() {
-        NetworkClientDelegate.UnsentRequest unsentRequest = newUnsentFindCoordinatorRequest(REQUEST_TIMEOUT_MS);
+        NetworkClientDelegate.UnsentRequest unsentRequest = newUnsentFindCoordinatorRequest();
         long timeMs = time.milliseconds();
         final ClientResponse response = mock(ClientResponse.class);
         when(response.receivedTimeMs()).thenReturn(timeMs);
         unsentRequest.handler().onComplete(response);
         time.sleep(100);
         assertEquals(timeMs, unsentRequest.handler().completionTimeMs());
+    }
+
+    @Test
+    public void testEnsureTimerSetOnAdd() {
+        NetworkClientDelegate ncd = newNetworkClientDelegate();
+        NetworkClientDelegate.UnsentRequest findCoordRequest = newUnsentFindCoordinatorRequest();
+        assertNull(findCoordRequest.timer());
+
+        // NetworkClientDelegate#add
+        ncd.add(findCoordRequest);
+        assertEquals(1, ncd.unsentRequests().size());
+        assertEquals(REQUEST_TIMEOUT_MS, ncd.unsentRequests().poll().timer().timeoutMs());
+
+        // NetworkClientDelegate#addAll
+        ncd.addAll(Collections.singletonList(findCoordRequest));
+        assertEquals(1, ncd.unsentRequests().size());
+        assertEquals(REQUEST_TIMEOUT_MS, ncd.unsentRequests().poll().timer().timeoutMs());
     }
 
     public NetworkClientDelegate newNetworkClientDelegate() {
@@ -132,15 +150,14 @@ public class NetworkClientDelegateTest {
         return new NetworkClientDelegate(this.time, new ConsumerConfig(properties), logContext, this.client);
     }
 
-    public NetworkClientDelegate.UnsentRequest newUnsentFindCoordinatorRequest(long timeoutMs) {
+    public NetworkClientDelegate.UnsentRequest newUnsentFindCoordinatorRequest() {
         Objects.requireNonNull(GROUP_ID);
         NetworkClientDelegate.UnsentRequest req = new NetworkClientDelegate.UnsentRequest(
-                new FindCoordinatorRequest.Builder(new FindCoordinatorRequestData()
-                    .setKey(GROUP_ID)
-                    .setKeyType(FindCoordinatorRequest.CoordinatorType.GROUP.id())
-                ),
-                Optional.empty(),
-                time.timer(timeoutMs)
+            new FindCoordinatorRequest.Builder(new FindCoordinatorRequestData()
+                .setKey(GROUP_ID)
+                .setKeyType(FindCoordinatorRequest.CoordinatorType.GROUP.id())
+            ),
+            Optional.empty()
         );
         return req;
     }

@@ -34,6 +34,7 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
 import java.util.function.Supplier;
 
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.DEFAULT_CLOSE_TIMEOUT_MS;
@@ -128,7 +129,7 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
         // Process the events—if any—that were produced by the application thread. It is possible that when processing
         // an event generates an error. In such cases, the processor will log an exception, but we do not want those
         // errors to be propagated to the caller.
-        List<RelaxedCompletableFuture<?>> futures = applicationEventProcessor.process();
+        List<CompletableFuture<?>> futures = applicationEventProcessor.process();
 
         final long currentTimeMs = time.milliseconds();
         final long pollWaitTimeMs = requestManagers.entries().stream()
@@ -145,7 +146,7 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
                 .map(rm -> rm.maximumTimeToWait(currentTimeMs))
                 .reduce(Long.MAX_VALUE, Math::min);
 
-        futures.forEach(RelaxedCompletableFuture::attempted);
+//        futures.forEach(RelaxedCompletableFuture::attempted);
     }
 
     /**

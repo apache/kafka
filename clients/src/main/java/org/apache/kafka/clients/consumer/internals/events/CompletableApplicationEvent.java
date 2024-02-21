@@ -31,7 +31,7 @@ import java.util.concurrent.CompletableFuture;
  */
 public abstract class CompletableApplicationEvent<T> extends ApplicationEvent implements CompletableEvent<T> {
 
-    private final RelaxedCompletableFuture<T> future;
+    private final CompletableFuture<T> future;
     private final Timer timer;
     private final long deadlineMs;
 
@@ -43,7 +43,7 @@ public abstract class CompletableApplicationEvent<T> extends ApplicationEvent im
     }
 
     @Override
-    public RelaxedCompletableFuture<T> future() {
+    public CompletableFuture<T> future() {
         return future;
     }
 
@@ -53,21 +53,6 @@ public abstract class CompletableApplicationEvent<T> extends ApplicationEvent im
 
     public T get() {
         return ConsumerUtils.getResult(future, timer);
-    }
-
-    public void chain(final CompletableFuture<T> providedFuture) {
-        Objects.requireNonNull(
-            providedFuture,
-            () -> String.format("Could not chain the event's future (%s) to the provided future because the provided future was null", this.future)
-        );
-
-        providedFuture.whenComplete((value, exception) -> {
-            if (exception != null) {
-                this.future.completeExceptionally(exception);
-            } else {
-                this.future.complete(value);
-            }
-        });
     }
 
     @Override

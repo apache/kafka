@@ -17,23 +17,60 @@
 package org.apache.kafka.clients.consumer.internals.events;
 
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
+import org.apache.kafka.clients.consumer.internals.RelaxedCompletableFuture;
 import org.apache.kafka.common.TopicPartition;
+
+import java.util.Collections;
 import java.util.Map;
 
 /**
  * Event to commit offsets without waiting for a response, so the request won't be retried.
  */
-public class AsyncCommitApplicationEvent extends CommitApplicationEvent {
+public class AsyncCommitApplicationEvent extends ApplicationEvent implements CompletableEvent<Void> {
+
+    private final RelaxedCompletableFuture<Void> future;
+
+    /**
+     * Offsets to commit per partition.
+     */
+    private final Map<TopicPartition, OffsetAndMetadata> offsets;
 
     public AsyncCommitApplicationEvent(final Map<TopicPartition, OffsetAndMetadata> offsets) {
-        super(offsets, Type.COMMIT_ASYNC);
+        super(Type.COMMIT_SYNC);
+        this.offsets = Collections.unmodifiableMap(offsets);
+        this.future = new RelaxedCompletableFuture<>();
+
+        for (OffsetAndMetadata offsetAndMetadata : offsets.values()) {
+            if (offsetAndMetadata.offset() < 0) {
+                throw new IllegalArgumentException("Invalid offset: " + offsetAndMetadata.offset());
+            }
+        }
     }
 
     @Override
-    public String toString() {
-        return "AsyncCommitApplicationEvent{" +
-            toStringBase() +
-            ", offsets=" + offsets() +
-            '}';
+    public RelaxedCompletableFuture<Void> future() {
+        return future;
+    }
+
+    public Map<TopicPartition, OffsetAndMetadata> offsets() {
+        return offsets;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        if (!super.equals(o)) return false;
+
+        AsyncCommitApplicationEvent that = (AsyncCommitApplicationEvent) o;
+
+        return offsets.equals(that.offsets);
+    }
+
+    @Override
+    public int hashCode() {
+        int result = super.hashCode();
+        result = 31 * result + offsets.hashCode();
+        return result;
     }
 }

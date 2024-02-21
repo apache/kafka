@@ -59,18 +59,20 @@ public class NetworkClientDelegate implements AutoCloseable {
     private final KafkaClient client;
     private final Time time;
     private final Logger log;
+    private final int requestTimeoutMs;
     private final Queue<UnsentRequest> unsentRequests;
     private final long retryBackoffMs;
 
     public NetworkClientDelegate(
-            final Time time,
-            final ConsumerConfig config,
-            final LogContext logContext,
-            final KafkaClient client) {
+        final Time time,
+        final ConsumerConfig config,
+        final LogContext logContext,
+        final KafkaClient client) {
         this.time = time;
         this.client = client;
         this.log = logContext.logger(getClass());
         this.unsentRequests = new ArrayDeque<>();
+        this.requestTimeoutMs = config.getInt(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG);
         this.retryBackoffMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG);
     }
 
@@ -233,6 +235,7 @@ public class NetworkClientDelegate implements AutoCloseable {
 
     public void add(final UnsentRequest r) {
         Objects.requireNonNull(r);
+        r.setTimer(this.time, this.requestTimeoutMs);
         unsentRequests.add(r);
     }
 
@@ -264,16 +267,19 @@ public class NetworkClientDelegate implements AutoCloseable {
         private final AbstractRequest.Builder<?> requestBuilder;
         private final FutureCompletionHandler handler;
         private final Optional<Node> node; // empty if random node can be chosen
-        private final Timer timer;
+
+        private Timer timer;
 
         public UnsentRequest(final AbstractRequest.Builder<?> requestBuilder,
-                             final Optional<Node> node,
-                             final Timer timer) {
+                             final Optional<Node> node) {
             Objects.requireNonNull(requestBuilder);
             this.requestBuilder = requestBuilder;
             this.node = node;
             this.handler = new FutureCompletionHandler();
-            this.timer = timer;
+        }
+
+        void setTimer(final Time time, final long requestTimeoutMs) {
+            this.timer = time.timer(requestTimeoutMs);
         }
 
         Timer timer() {
@@ -304,11 +310,11 @@ public class NetworkClientDelegate implements AutoCloseable {
         @Override
         public String toString() {
             return "UnsentRequest{" +
-                    "requestBuilder=" + requestBuilder +
-                    ", handler=" + handler +
-                    ", node=" + node +
-                    ", timer=" + timer +
-                    '}';
+                "requestBuilder=" + requestBuilder +
+                ", handler=" + handler +
+                ", node=" + node +
+                ", timer=" + timer +
+                '}';
         }
     }
 
@@ -370,15 +376,15 @@ public class NetworkClientDelegate implements AutoCloseable {
             @Override
             protected NetworkClientDelegate create() {
                 KafkaClient client = ClientUtils.createNetworkClient(config,
-                        metrics,
-                        CONSUMER_METRIC_GROUP_PREFIX,
-                        logContext,
-                        apiVersions,
-                        time,
-                        CONSUMER_MAX_INFLIGHT_REQUESTS_PER_CONNECTION,
-                        metadata,
-                        fetchMetricsManager.throttleTimeSensor(),
-                        clientTelemetrySender);
+                    metrics,
+                    CONSUMER_METRIC_GROUP_PREFIX,
+                    logContext,
+                    apiVersions,
+                    time,
+                    CONSUMER_MAX_INFLIGHT_REQUESTS_PER_CONNECTION,
+                    metadata,
+                    fetchMetricsManager.throttleTimeSensor(),
+                    clientTelemetrySender);
                 return new NetworkClientDelegate(time, config, logContext, client);
             }
         };

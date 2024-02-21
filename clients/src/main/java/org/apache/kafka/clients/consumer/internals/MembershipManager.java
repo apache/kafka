@@ -120,7 +120,7 @@ public interface MembershipManager extends RequestManager {
      * @return Future that will complete when the callback execution completes and the heartbeat
      * to leave the group has been sent out.
      */
-    CompletableFuture<Void> leaveGroup(Timer timer);
+    CompletableFuture<Void> leaveGroup();
 
     /**
      * @return True if the member should send heartbeat to the coordinator without waiting for

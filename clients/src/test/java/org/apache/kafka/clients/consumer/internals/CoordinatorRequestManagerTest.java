@@ -198,7 +198,6 @@ public class CoordinatorRequestManagerTest {
         return new CoordinatorRequestManager(
             time,
             new LogContext(),
-            DEFAULT_API_TIMEOUT_MS,
             RETRY_BACKOFF_MS,
             RETRY_BACKOFF_MS,
             this.backgroundEventHandler,
