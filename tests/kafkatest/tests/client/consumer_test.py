@@ -79,7 +79,7 @@ class OffsetValidationTest(VerifiableConsumerTest):
     @matrix(
         metadata_quorum=[quorum.isolated_kraft],
         use_new_coordinator=[True],
-        group_protocol=[consumer_group.all_group_protocols]
+        group_protocol=consumer_group.all_group_protocols
     )
     def test_broker_rolling_bounce(self, metadata_quorum=quorum.zk, use_new_coordinator=False, group_protocol=None):
         """
