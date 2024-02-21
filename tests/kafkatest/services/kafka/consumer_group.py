@@ -32,12 +32,12 @@ def is_consumer_group_protocol_enabled(group_protocol):
     return group_protocol is not None and group_protocol.lower() == consumer_group_protocol
 
 
-def maybe_set_group_protocol(group_protocol):
+def maybe_set_group_protocol(group_protocol, config=None):
     """Maybe include the KIP-848 group.protocol configuration if it's not None."""
-    return maybe_add_group_protocol({}, group_protocol)
+    if config is None:
+        config = {}
 
-
-def maybe_add_group_protocol(config, group_protocol):
-    """Maybe include the KIP-848 group.protocol configuration if it's not None."""
     if group_protocol is not None:
         config["group.protocol"] = group_protocol
+
+    return config

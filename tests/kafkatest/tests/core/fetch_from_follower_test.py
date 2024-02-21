@@ -99,13 +99,11 @@ class FetchFromFollowerTest(ProduceConsumeValidateTest):
 
         self.producer = VerifiableProducer(self.test_context, self.num_producers, self.kafka, self.topic,
                                            throughput=self.producer_throughput)
-        consumer_properties = {
-            "client.rack": non_leader_rack,
-            "metadata.max.age.ms": self.METADATA_MAX_AGE_MS,
-        }
-
-        consumer_group.maybe_add_group_protocol(consumer_properties, group_protocol)
-
+        consumer_properties = consumer_group.maybe_set_group_protocol(group_protocol,
+                                                                      config={
+                                                                          "client.rack": non_leader_rack,
+                                                                          "metadata.max.age.ms": self.METADATA_MAX_AGE_MS
+                                                                      })
         self.consumer = ConsoleConsumer(self.test_context, self.num_consumers, self.kafka, self.topic,
                                         client_id="console-consumer", group_id="test-consumer-group-1",
                                         consumer_timeout_ms=60000, message_validator=is_int,
