@@ -297,7 +297,8 @@ public class ProducerConfig extends AbstractConfig {
             "<p> 1) If no partition is specified but a key is present, choose a partition based on a hash of the key." +
             "<p> 2) If no partition or key is present, choose the sticky partition that changes when at least " + BATCH_SIZE_CONFIG + " bytes are produced to the partition." +
             "</li>" +
-            "<li><code>org.apache.kafka.clients.producer.RoundRobinPartitioner</code>: A partitioning strategy where " +
+            "<li><code>org.apache.kafka.clients.producer.RoundRobinPartitioner</code>: <b>Please do not use this because of a serious bug found " +
+            "that the partitioner will only send to half of the partitions. See KAFKA-16283 for more detail</b>. A partitioning strategy where " +
             "each record in a series of consecutive records is sent to a different partition, regardless of whether the 'key' is provided or not, " +
             "until partitions run out and the process starts over again. Note: There's a known issue that will cause uneven distribution when a new batch is created. " +
             "See KAFKA-9965 for more detail." +
