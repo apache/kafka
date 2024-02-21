@@ -64,10 +64,10 @@ public class NetworkClientDelegate implements AutoCloseable {
     private final long retryBackoffMs;
 
     public NetworkClientDelegate(
-        final Time time,
-        final ConsumerConfig config,
-        final LogContext logContext,
-        final KafkaClient client) {
+            final Time time,
+            final ConsumerConfig config,
+            final LogContext logContext,
+            final KafkaClient client) {
         this.time = time;
         this.client = client;
         this.log = logContext.logger(getClass());
@@ -310,11 +310,11 @@ public class NetworkClientDelegate implements AutoCloseable {
         @Override
         public String toString() {
             return "UnsentRequest{" +
-                "requestBuilder=" + requestBuilder +
-                ", handler=" + handler +
-                ", node=" + node +
-                ", timer=" + timer +
-                '}';
+                    "requestBuilder=" + requestBuilder +
+                    ", handler=" + handler +
+                    ", node=" + node +
+                    ", timer=" + timer +
+                    '}';
         }
     }
 
@@ -376,17 +376,18 @@ public class NetworkClientDelegate implements AutoCloseable {
             @Override
             protected NetworkClientDelegate create() {
                 KafkaClient client = ClientUtils.createNetworkClient(config,
-                    metrics,
-                    CONSUMER_METRIC_GROUP_PREFIX,
-                    logContext,
-                    apiVersions,
-                    time,
-                    CONSUMER_MAX_INFLIGHT_REQUESTS_PER_CONNECTION,
-                    metadata,
-                    fetchMetricsManager.throttleTimeSensor(),
-                    clientTelemetrySender);
+                        metrics,
+                        CONSUMER_METRIC_GROUP_PREFIX,
+                        logContext,
+                        apiVersions,
+                        time,
+                        CONSUMER_MAX_INFLIGHT_REQUESTS_PER_CONNECTION,
+                        metadata,
+                        fetchMetricsManager.throttleTimeSensor(),
+                        clientTelemetrySender);
                 return new NetworkClientDelegate(time, config, logContext, client);
             }
         };
     }
 }
+
