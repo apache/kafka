@@ -2121,10 +2121,8 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     assertThrows(classOf[KafkaException], () => createConsumer(configOverrides = consumer1Config))
   }
 
-  // TODO: Enable this test for both protocols when the Jira tracking its failure (KAFKA-16152) is fixed. This
-  //       is done by setting the @MethodSource value to "getTestQuorumAndGroupProtocolParametersAll"
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersClassicGroupProtocolOnly"))
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
   def testStaticConsumerDetectsNewPartitionCreatedAfterRestart(quorum:String, groupProtocol: String): Unit = {
     val foo = "foo"
     val foo0 = new TopicPartition(foo, 0)
