@@ -16,10 +16,8 @@
  */
 package org.apache.kafka.connect.mirror;
 
-import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
-import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
@@ -29,7 +27,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.Map;
 import java.util.Optional;
 import java.util.OptionalLong;
@@ -75,7 +72,7 @@ class OffsetSyncStore implements AutoCloseable {
         try {
             consumer = MirrorUtils.newConsumer(config.offsetSyncsTopicConsumerConfig());
             admin = new TopicAdmin(
-                    config.offsetSyncsTopicAdminConfig().get(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG),
+                    config.offsetSyncsTopicAdminConfig(),
                     config.forwardingAdmin(config.offsetSyncsTopicAdminConfig()));
             store = createBackingStore(config, consumer, admin);
         } catch (Throwable t) {
@@ -88,31 +85,16 @@ class OffsetSyncStore implements AutoCloseable {
     }
 
     private KafkaBasedLog<byte[], byte[]> createBackingStore(MirrorCheckpointConfig config, Consumer<byte[], byte[]> consumer, TopicAdmin admin) {
-        return new KafkaBasedLog<byte[], byte[]>(
+        return KafkaBasedLog.withExistingClients(
                 config.offsetSyncsTopic(),
-                Collections.emptyMap(),
-                Collections.emptyMap(),
-                () -> admin,
+                consumer,
+                null,
+                admin,
                 (error, record) -> this.handleRecord(record),
                 Time.SYSTEM,
-                ignored -> {
-                }
-        ) {
-            @Override
-            protected Producer<byte[], byte[]> createProducer() {
-                return null;
-            }
-
-            @Override
-            protected Consumer<byte[], byte[]> createConsumer() {
-                return consumer;
-            }
-
-            @Override
-            protected boolean readPartition(TopicPartition topicPartition) {
-                return topicPartition.partition() == 0;
-            }
-        };
+                ignored -> { },
+                topicPartition -> topicPartition.partition() == 0
+        );
     }
 
     OffsetSyncStore() {

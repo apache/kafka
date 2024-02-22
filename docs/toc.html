@@ -27,6 +27,7 @@
                 <li><a href="#quickstart">1.3 Quick Start</a>
                 <li><a href="#ecosystem">1.4 Ecosystem</a>
                 <li><a href="#upgrade">1.5 Upgrading</a>
+                <li><a href="#docker">1.6 Docker</a>
             </ul>
         </li>
         <li><a href="#api">2. APIs</a>
@@ -53,6 +54,7 @@
                 <li><a href="#adminclientconfigs">3.7 AdminClient Configs</a>
                 <li><a href="#mirrormakerconfigs">3.8 MirrorMaker Configs</a>
                 <li><a href="#systemproperties">3.9 System Properties</a>
+                <li><a href="#tieredstorageconfigs">3.10 Tiered Storage Configs</a></li>
             </ul>
         </li>
         <li><a href="#design">4. Design</a>
@@ -97,7 +99,7 @@
                     </ul>
                 </li>
                 <li><a href="#datacenters">6.2 Datacenters</a></li>
-                <li><a href="#georeplication">6.3 Geo-Replication (Cross-Cluster Data Mirroring)</a></li>
+                <li><a href="#georeplication">6.3 Geo-Replication (Cross-Cluster Data Mirroring)</a>
                     <ul>
                         <li><a href="#georeplication-overview">Geo-Replication Overview</a></li>
                         <li><a href="#georeplication-flows">What Are Replication Flows</a></li>
@@ -108,7 +110,7 @@
                         <li><a href="#georeplication-monitoring">Monitoring Geo-Replication</a></li>
                     </ul>
                 </li>
-                <li><a href="#multitenancy">6.4 Multi-Tenancy</a></li>
+                <li><a href="#multitenancy">6.4 Multi-Tenancy</a>
                     <ul>
                         <li><a href="#multitenancy-overview">Multi-Tenancy Overview</a></li>
                         <li><a href="#multitenancy-topic-naming">Creating User Spaces (Namespaces)</a></li>
@@ -140,6 +142,7 @@
                 <li><a href="#monitoring">6.8 Monitoring</a>
                     <ul>
                         <li><a href="#remote_jmx">Security Considerations for Remote Monitoring using JMX</a></li>
+                        <li><a href="#tiered_storage_monitoring">Tiered Storage Monitoring</a></li>
                         <li><a href="#kraft_monitoring">KRaft Monitoring</a></li>
                         <li><a href="#selector_monitoring">Selector Monitoring</a></li>
                         <li><a href="#common_node_monitoring">Common Node Monitoring</a></li>
@@ -167,6 +170,14 @@
                         <li><a href="#kraft_zk_migration">ZooKeeper to KRaft Migration</a></li>
                     </ul>
                 </li>
+                <li><a href="#tiered_storage">6.11 Tiered Storage</a>
+                    <ul>
+                        <li><a href="#tiered_storage_overview">Tiered Storage Overview</a></li>
+                        <li><a href="#tiered_storage_config">Configuration</a></li>
+                        <li><a href="#tiered_storage_config_ex">Quick Start Example</a></li>
+                        <li><a href="#tiered_storage_limitation">Limitations</a></li>
+                    </ul>
+                </li>
             </ul>
         </li>
         <li><a href="#security">7. Security</a>
@@ -177,9 +188,9 @@
                 <li><a href="#security_sasl">7.4 Authentication using SASL</a></li>
                 <li><a href="#security_authz">7.5 Authorization and ACLs</a></li>
                 <li><a href="#security_rolling_upgrade">7.6 Incorporating Security Features in a Running Cluster</a></li>
-                <li><a href="#zk_authz">7.7 ZooKeeper Authentication</a></li>
+                <li><a href="#zk_authz">7.7 ZooKeeper Authentication</a>
                 <ul>
-                    <li><a href="#zk_authz_new">New Clusters</a></li>
+                    <li><a href="#zk_authz_new">New Clusters</a>
                     <ul>
                         <li><a href="#zk_authz_new_sasl">ZooKeeper SASL Authentication</a></li>
                         <li><a href="#zk_authz_new_mtls">ZooKeeper Mutual TLS Authentication</a></li>
@@ -194,7 +205,7 @@
         <li><a href="#connect">8. Kafka Connect</a>
             <ul>
                 <li><a href="#connect_overview">8.1 Overview</a></li>
-                <li><a href="#connect_user">8.2 User Guide</a></li>
+                <li><a href="#connect_user">8.2 User Guide</a>
                 <ul>
                     <li><a href="#connect_running">Running Kafka Connect</a></li>
                     <li><a href="#connect_configuring">Configuring Connectors</a></li>
@@ -204,7 +215,15 @@
                     <li><a href="#connect_exactlyonce">Exactly-once support</a></li>
                     <li><a href="#connect_plugindiscovery">Plugin Discovery</a></li>
                 </ul>
-                <li><a href="#connect_development">8.3 Connector Development Guide</a></li>
+                <li><a href="#connect_development">8.3 Connector Development Guide</a>
+                <ul>
+                    <li><a href="#connect_concepts">Core Concepts and APIs</a></li>
+                    <li><a href="#connect_developing">Developing a Simple Connector</a></li>
+                    <li><a href="#connect_dynamicio">Dynamic Input/Output Streams</a></li>
+                    <li><a href="#connect_configs">Configuration Validation</a></li>
+                    <li><a href="#connect_schemas">Working with Schemas</a></li>
+                </ul>
+                <li><a href="#connect_administration">8.4 Administration</a></li>
             </ul>
         </li>
         <li><a href="/{{version}}/documentation/streams">9. Kafka Streams</a>

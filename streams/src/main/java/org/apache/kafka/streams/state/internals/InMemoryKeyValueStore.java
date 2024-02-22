@@ -79,13 +79,15 @@ public class InMemoryKeyValueStore implements KeyValueStore<Bytes, byte[]> {
             context.register(
                 root,
                 (RecordBatchingStateRestoreCallback) records -> {
-                    for (final ConsumerRecord<byte[], byte[]> record : records) {
-                        put(Bytes.wrap(record.key()), record.value());
-                        ChangelogRecordDeserializationHelper.applyChecksAndUpdatePosition(
-                            record,
-                            consistencyEnabled,
-                            position
-                        );
+                    synchronized (position) {
+                        for (final ConsumerRecord<byte[], byte[]> record : records) {
+                            put(Bytes.wrap(record.key()), record.value());
+                            ChangelogRecordDeserializationHelper.applyChecksAndUpdatePosition(
+                                record,
+                                consistencyEnabled,
+                                position
+                            );
+                        }
                     }
                 }
             );
@@ -152,13 +154,15 @@ public class InMemoryKeyValueStore implements KeyValueStore<Bytes, byte[]> {
 
     // the unlocked implementation of put method, to avoid multiple lock/unlock cost in `putAll` method
     private void putInternal(final Bytes key, final byte[] value) {
-        if (value == null) {
-            map.remove(key);
-        } else {
-            map.put(key, value);
-        }
+        synchronized (position) {
+            if (value == null) {
+                map.remove(key);
+            } else {
+                map.put(key, value);
+            }
 
-        StoreQueryUtils.updatePosition(position, context);
+            StoreQueryUtils.updatePosition(position, context);
+        }
     }
 
     @Override

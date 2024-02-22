@@ -36,8 +36,6 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.test.TestSslUtils;
 import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.condition.DisabledOnJre;
-import org.junit.jupiter.api.condition.JRE;
 import org.junit.jupiter.api.extension.ExtensionContext;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -195,7 +193,6 @@ public class SslTransportLayerTest {
      */
     @ParameterizedTest
     @ArgumentsSource(SslTransportLayerArgumentsProvider.class)
-    @DisabledOnJre(value = JRE.JAVA_20, disabledReason = "KAFKA-15117")
     public void testValidEndpointIdentificationCN(Args args) throws Exception {
         args.serverCertStores = certBuilder(true, "localhost", args.useInlinePem).build();
         args.clientCertStores = certBuilder(false, "localhost", args.useInlinePem).build();
@@ -502,7 +499,6 @@ public class SslTransportLayerTest {
         TestSslUtils.convertToPem(args.sslServerConfigs, !useInlinePem, true);
         TestSslUtils.convertToPem(args.sslClientConfigs, !useInlinePem, false);
         args.sslServerConfigs.put(BrokerSecurityConfigs.SSL_CLIENT_AUTH_CONFIG, "required");
-        server = createEchoServer(args, SecurityProtocol.SSL);
         verifySslConfigs(args);
     }
 
@@ -1052,8 +1048,10 @@ public class SslTransportLayerTest {
         // Verify that client with matching truststore can authenticate, send and receive
         String oldNode = "0";
         Selector oldClientSelector = createSelector(args.sslClientConfigs);
+        // take responsibility for closing oldClientSelector, so that we can keep it alive concurrent with the new one.
+        this.selector = null;
         oldClientSelector.connect(oldNode, addr, BUFFER_SIZE, BUFFER_SIZE);
-        NetworkTestUtils.checkClientConnection(selector, oldNode, 100, 10);
+        NetworkTestUtils.checkClientConnection(oldClientSelector, oldNode, 100, 10);
 
         CertStores newServerCertStores = certBuilder(true, "server", args.useInlinePem).addHostName("localhost").build();
         Map<String, Object> newKeystoreConfigs = newServerCertStores.keyStoreProps();
@@ -1090,6 +1088,8 @@ public class SslTransportLayerTest {
         // Verify that new connections continue to work with the server with previously configured keystore after failed reconfiguration
         newClientSelector.connect("3", addr, BUFFER_SIZE, BUFFER_SIZE);
         NetworkTestUtils.checkClientConnection(newClientSelector, "3", 100, 10);
+        // manually stop the oldClientSelector because the test harness doesn't manage it.
+        oldClientSelector.close();
     }
 
     @ParameterizedTest
@@ -1175,8 +1175,10 @@ public class SslTransportLayerTest {
         // Verify that client with matching keystore can authenticate, send and receive
         String oldNode = "0";
         Selector oldClientSelector = createSelector(args.sslClientConfigs);
+        // take responsibility for closing oldClientSelector, so that we can keep it alive concurrent with the new one.
+        this.selector = null;
         oldClientSelector.connect(oldNode, addr, BUFFER_SIZE, BUFFER_SIZE);
-        NetworkTestUtils.checkClientConnection(selector, oldNode, 100, 10);
+        NetworkTestUtils.checkClientConnection(oldClientSelector, oldNode, 100, 10);
 
         CertStores newClientCertStores = certBuilder(true, "client", args.useInlinePem).addHostName("localhost").build();
         args.sslClientConfigs = args.getTrustingConfig(newClientCertStores, args.serverCertStores);
@@ -1212,6 +1214,8 @@ public class SslTransportLayerTest {
         // Verify that new connections continue to work with the server with previously configured keystore after failed reconfiguration
         newClientSelector.connect("3", addr, BUFFER_SIZE, BUFFER_SIZE);
         NetworkTestUtils.checkClientConnection(newClientSelector, "3", 100, 10);
+        // manually stop the oldClientSelector because the test harness doesn't manage it.
+        oldClientSelector.close();
     }
 
     /**
@@ -1270,6 +1274,9 @@ public class SslTransportLayerTest {
         TestSslChannelBuilder channelBuilder = new TestSslChannelBuilder(Mode.CLIENT);
         channelBuilder.configureBufferSizes(netReadBufSize, netWriteBufSize, appBufSize);
         channelBuilder.configure(sslClientConfigs);
+        if (this.selector != null) {
+            this.selector.close();
+        }
         this.selector = new Selector(100 * 5000, new Metrics(), time, "MetricGroup", channelBuilder, new LogContext());
         return selector;
     }

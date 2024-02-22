@@ -57,9 +57,8 @@ public class ClientState {
     private final ClientStateTask previousActiveTasks = new ClientStateTask(null, new TreeMap<>());
     private final ClientStateTask previousStandbyTasks = new ClientStateTask(null, null);
     private final ClientStateTask revokingActiveTasks = new ClientStateTask(null, new TreeMap<>());
-
+    private final UUID processId;
     private int capacity;
-    private UUID processId;
 
     public ClientState() {
         this(null, 0);
@@ -124,7 +123,7 @@ public class ClientState {
         );
     }
 
-    int capacity() {
+    public int capacity() {
         return capacity;
     }
 
@@ -267,6 +266,10 @@ public class ClientState {
                 assignedStandbyTaskIds
             )
         );
+    }
+
+    public boolean previouslyOwnedStandby(final TaskId task) {
+        return previousStandbyTasks.taskIds().contains(task);
     }
 
     public int assignedTaskCount() {

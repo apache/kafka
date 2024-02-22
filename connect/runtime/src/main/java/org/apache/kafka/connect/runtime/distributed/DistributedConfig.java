@@ -210,7 +210,7 @@ public class DistributedConfig extends WorkerConfig {
         + "which must include the algorithm used for the " + INTER_WORKER_SIGNATURE_ALGORITHM_CONFIG + " property. "
         + "The algorithm(s) '" + INTER_WORKER_VERIFICATION_ALGORITHMS_DEFAULT + "' will be used as a default on JVMs that provide them; "
         + "on other JVMs, no default is used and a value for this property must be manually specified in the worker config.";
-    private Crypto crypto;
+    private final Crypto crypto;
 
     public enum ExactlyOnceSourceSupport {
         DISABLED(false),
@@ -372,10 +372,16 @@ public class DistributedConfig extends WorkerConfig {
                     CommonClientConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS_DOC)
             .define(CommonClientConfigs.RETRY_BACKOFF_MS_CONFIG,
                     ConfigDef.Type.LONG,
-                    100L,
+                    CommonClientConfigs.DEFAULT_RETRY_BACKOFF_MS,
                     atLeast(0L),
                     ConfigDef.Importance.LOW,
                     CommonClientConfigs.RETRY_BACKOFF_MS_DOC)
+            .define(CommonClientConfigs.RETRY_BACKOFF_MAX_MS_CONFIG,
+                    ConfigDef.Type.LONG,
+                    CommonClientConfigs.DEFAULT_RETRY_BACKOFF_MAX_MS,
+                    atLeast(0L),
+                    ConfigDef.Importance.LOW,
+                    CommonClientConfigs.RETRY_BACKOFF_MAX_MS_DOC)
             .define(CommonClientConfigs.REQUEST_TIMEOUT_MS_CONFIG,
                     ConfigDef.Type.INT,
                     Math.toIntExact(TimeUnit.SECONDS.toMillis(40)),
@@ -554,11 +560,18 @@ public class DistributedConfig extends WorkerConfig {
         return getString(GROUP_ID_CONFIG);
     }
 
+    @Override
+    protected Map<String, Object> postProcessParsedConfig(final Map<String, Object> parsedValues) {
+        CommonClientConfigs.warnDisablingExponentialBackoff(this);
+        return super.postProcessParsedConfig(parsedValues);
+    }
+
     public DistributedConfig(Map<String, String> props) {
         this(Crypto.SYSTEM, props);
     }
 
     // Visible for testing
+    @SuppressWarnings("this-escape")
     DistributedConfig(Crypto crypto, Map<String, String> props) {
         super(config(crypto), props);
         this.crypto = crypto;

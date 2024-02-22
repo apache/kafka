@@ -35,6 +35,7 @@ import java.net.InetSocketAddress
 import java.util
 import java.util.{Collections, Properties}
 import org.apache.kafka.common.Node
+import org.apache.kafka.coordinator.group.Group.GroupType
 import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.server.common.MetadataVersion.{IBP_0_8_2, IBP_3_0_IV1}
 import org.apache.kafka.server.config.ServerTopicConfigSynonyms
@@ -594,7 +595,7 @@ class KafkaConfigTest {
     props.setProperty(KafkaConfig.BrokerIdProp, "1")
     props.setProperty(KafkaConfig.ZkConnectProp, "localhost:2181")
     val conf = KafkaConfig.fromProps(props)
-    assertEquals(MetadataVersion.latest, conf.interBrokerProtocolVersion)
+    assertEquals(MetadataVersion.latestProduction, conf.interBrokerProtocolVersion)
 
     props.setProperty(KafkaConfig.InterBrokerProtocolVersionProp, "0.8.2.0")
     // We need to set the message format version to make the configuration valid.
@@ -610,7 +611,7 @@ class KafkaConfigTest {
     assertEquals(IBP_0_8_2, conf3.interBrokerProtocolVersion)
 
     //check that latest is newer than 0.8.2
-    assertTrue(MetadataVersion.latest.isAtLeast(conf3.interBrokerProtocolVersion))
+    assertTrue(MetadataVersion.latestTesting.isAtLeast(conf3.interBrokerProtocolVersion))
   }
 
   private def isValidKafkaConfig(props: Properties): Boolean = {
@@ -1745,6 +1746,20 @@ class KafkaConfigTest {
   }
 
   @Test
+  def testMigrationCannotBeEnabledWithJBOD(): Unit = {
+    val props = TestUtils.createBrokerConfig(1, TestUtils.MockZkConnect, port = TestUtils.MockZkPort, logDirCount = 2)
+    props.setProperty(KafkaConfig.MigrationEnabledProp, "true")
+    props.setProperty(KafkaConfig.QuorumVotersProp, "3000@localhost:9093")
+    props.setProperty(KafkaConfig.ControllerListenerNamesProp, "CONTROLLER")
+    props.setProperty(KafkaConfig.InterBrokerProtocolVersionProp, MetadataVersion.IBP_3_7_IV1.version())
+
+    assertEquals(
+      "requirement failed: Cannot enable ZooKeeper migration with multiple log directories " +
+      "(aka JBOD) without setting 'inter.broker.protocol.version' to 3.7-IV2 or higher",
+      assertThrows(classOf[IllegalArgumentException], () => KafkaConfig.fromProps(props)).getMessage)
+  }
+
+  @Test
   def testMigrationEnabledKRaftMode(): Unit = {
     val props = new Properties()
     props.putAll(kraftProps())
@@ -1794,6 +1809,26 @@ class KafkaConfigTest {
     assertThrows(classOf[IllegalArgumentException], () => KafkaConfig.fromProps(props))
     props.put(KafkaConfig.ConsumerGroupHeartbeatIntervalMsProp, "25")
     assertThrows(classOf[IllegalArgumentException], () => KafkaConfig.fromProps(props))
+  }
+
+  @Test
+  def testGroupCoordinatorRebalanceProtocols(): Unit = {
+    val props = new Properties()
+    props.putAll(kraftProps())
+
+    // Only classic and consumer are supported.
+    props.put(KafkaConfig.GroupCoordinatorRebalanceProtocolsProp, "foo")
+    assertThrows(classOf[ConfigException], () => KafkaConfig.fromProps(props))
+
+    // classic cannot be disabled.
+    props.put(KafkaConfig.GroupCoordinatorRebalanceProtocolsProp, "consumer")
+    assertThrows(classOf[ConfigException], () => KafkaConfig.fromProps(props))
+
+    // This is OK.
+    props.put(KafkaConfig.GroupCoordinatorRebalanceProtocolsProp, "classic,consumer")
+    val config = KafkaConfig.fromProps(props)
+    assertEquals(Set(GroupType.CLASSIC, GroupType.CONSUMER), config.groupCoordinatorRebalanceProtocols)
+    assertTrue(config.isNewGroupCoordinatorEnabled)
   }
 
   @Test

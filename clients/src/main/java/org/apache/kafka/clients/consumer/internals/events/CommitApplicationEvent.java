@@ -19,46 +19,46 @@ package org.apache.kafka.clients.consumer.internals.events;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
 
+import java.util.Collections;
 import java.util.Map;
-import java.util.Optional;
-import java.util.concurrent.CompletableFuture;
 
-public class CommitApplicationEvent extends ApplicationEvent {
-    final private CompletableFuture<Void> future;
-    final private Map<TopicPartition, OffsetAndMetadata> offsets;
+public abstract class CommitApplicationEvent extends CompletableApplicationEvent<Void> {
 
-    public CommitApplicationEvent(final Map<TopicPartition, OffsetAndMetadata> offsets) {
-        super(Type.COMMIT);
-        this.offsets = offsets;
-        Optional<Exception> exception = isValid(offsets);
-        if (exception.isPresent()) {
-            throw new RuntimeException(exception.get());
+    /**
+     * Offsets to commit per partition.
+     */
+    private final Map<TopicPartition, OffsetAndMetadata> offsets;
+
+    public CommitApplicationEvent(final Map<TopicPartition, OffsetAndMetadata> offsets, Type type) {
+        super(type);
+        this.offsets = Collections.unmodifiableMap(offsets);
+
+        for (OffsetAndMetadata offsetAndMetadata : offsets.values()) {
+            if (offsetAndMetadata.offset() < 0) {
+                throw new IllegalArgumentException("Invalid offset: " + offsetAndMetadata.offset());
+            }
         }
-        this.future = new CompletableFuture<>();
-    }
-
-    public CompletableFuture<Void> future() {
-        return future;
     }
 
     public Map<TopicPartition, OffsetAndMetadata> offsets() {
         return offsets;
     }
 
-    private Optional<Exception> isValid(final Map<TopicPartition, OffsetAndMetadata> offsets) {
-        for (Map.Entry<TopicPartition, OffsetAndMetadata> entry : offsets.entrySet()) {
-            TopicPartition topicPartition = entry.getKey();
-            OffsetAndMetadata offsetAndMetadata = entry.getValue();
-            if (offsetAndMetadata.offset() < 0) {
-                return Optional.of(new IllegalArgumentException("Invalid offset: " + offsetAndMetadata.offset()));
-            }
-        }
-        return Optional.empty();
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        if (!super.equals(o)) return false;
+
+        CommitApplicationEvent that = (CommitApplicationEvent) o;
+
+        return offsets.equals(that.offsets);
     }
 
     @Override
-    public String toString() {
-        return "CommitApplicationEvent("
-                + "offsets=" + offsets + ")";
+    public int hashCode() {
+        int result = super.hashCode();
+        result = 31 * result + offsets.hashCode();
+        return result;
     }
 }

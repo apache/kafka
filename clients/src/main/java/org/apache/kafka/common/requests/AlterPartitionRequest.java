@@ -85,12 +85,16 @@ public class AlterPartitionRequest extends AbstractRequest {
             if (version < 3) {
                 data.topics().forEach(topicData -> {
                     topicData.partitions().forEach(partitionData -> {
-                        List<Integer> newIsr = new ArrayList<>(partitionData.newIsrWithEpochs().size());
-                        partitionData.newIsrWithEpochs().forEach(brokerState -> {
-                            newIsr.add(brokerState.brokerId());
-                        });
-                        partitionData.setNewIsr(newIsr);
-                        partitionData.setNewIsrWithEpochs(Collections.emptyList());
+                        // The newIsrWithEpochs will be empty after build. Then we can skip the conversion if the build
+                        // is called again.
+                        if (partitionData.newIsrWithEpochs().size() > 0) {
+                            List<Integer> newIsr = new ArrayList<>(partitionData.newIsrWithEpochs().size());
+                            partitionData.newIsrWithEpochs().forEach(brokerState -> {
+                                newIsr.add(brokerState.brokerId());
+                            });
+                            partitionData.setNewIsr(newIsr);
+                            partitionData.setNewIsrWithEpochs(Collections.emptyList());
+                        }
                     });
                 });
             }

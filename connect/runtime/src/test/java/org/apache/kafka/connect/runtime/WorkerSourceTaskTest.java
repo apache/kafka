@@ -157,7 +157,7 @@ public class WorkerSourceTaskTest {
     @Mock
     private HeaderConverter headerConverter;
     @Mock
-    private TransformationChain<SourceRecord> transformationChain;
+    private TransformationChain<SourceRecord, SourceRecord> transformationChain;
     @Mock
     private KafkaProducer<byte[], byte[]> producer;
     @Mock
@@ -244,23 +244,23 @@ public class WorkerSourceTaskTest {
     }
 
     private void createWorkerTask() {
-        createWorkerTask(TargetState.STARTED, RetryWithToleranceOperatorTest.NOOP_OPERATOR);
+        createWorkerTask(TargetState.STARTED, RetryWithToleranceOperatorTest.noopOperator());
     }
 
     private void createWorkerTaskWithErrorToleration() {
-        createWorkerTask(TargetState.STARTED, RetryWithToleranceOperatorTest.ALL_OPERATOR);
+        createWorkerTask(TargetState.STARTED, RetryWithToleranceOperatorTest.allOperator());
     }
 
     private void createWorkerTask(TargetState initialState) {
-        createWorkerTask(initialState, RetryWithToleranceOperatorTest.NOOP_OPERATOR);
+        createWorkerTask(initialState, RetryWithToleranceOperatorTest.noopOperator());
     }
 
-    private void createWorkerTask(TargetState initialState, RetryWithToleranceOperator retryWithToleranceOperator) {
+    private void createWorkerTask(TargetState initialState, RetryWithToleranceOperator<SourceRecord> retryWithToleranceOperator) {
         createWorkerTask(initialState, keyConverter, valueConverter, headerConverter, retryWithToleranceOperator);
     }
 
     private void createWorkerTask(TargetState initialState, Converter keyConverter, Converter valueConverter,
-                                  HeaderConverter headerConverter, RetryWithToleranceOperator retryWithToleranceOperator) {
+                                  HeaderConverter headerConverter, RetryWithToleranceOperator<SourceRecord> retryWithToleranceOperator) {
         workerTask = new WorkerSourceTask(taskId, sourceTask, statusListener, initialState, keyConverter, valueConverter, errorHandlingMetrics, headerConverter,
                 transformationChain, producer, admin, TopicCreationGroup.configuredGroups(sourceConfig),
                 offsetReader, offsetWriter, offsetStore, config, clusterConfigState, metrics, plugins.delegatingLoader(), Time.SYSTEM,
@@ -603,7 +603,7 @@ public class WorkerSourceTaskTest {
         workerTask.toSend = Arrays.asList(record1, record2);
         assertThrows(ConnectException.class, () -> workerTask.sendRecords());
 
-        verify(transformationChain, times(2)).apply(any(SourceRecord.class));
+        verify(transformationChain, times(2)).apply(any(), any(SourceRecord.class));
         verify(keyConverter, times(2)).fromConnectData(anyString(), any(Headers.class), eq(KEY_SCHEMA), eq(KEY));
         verify(valueConverter, times(2)).fromConnectData(anyString(), any(Headers.class), eq(RECORD_SCHEMA), eq(RECORD));
     }
@@ -835,8 +835,8 @@ public class WorkerSourceTaskTest {
     }
 
     private void expectApplyTransformationChain() {
-        when(transformationChain.apply(any(SourceRecord.class)))
-                .thenAnswer(AdditionalAnswers.returnsFirstArg());
+        when(transformationChain.apply(any(), any(SourceRecord.class)))
+                .thenAnswer(AdditionalAnswers.returnsSecondArg());
     }
 
     private void expectTaskGetTopic() {
@@ -990,10 +990,10 @@ public class WorkerSourceTaskTest {
     private void assertShouldSkipCommit() {
         assertFalse(workerTask.shouldCommitOffsets());
 
-        LogCaptureAppender.setClassLoggerToTrace(SourceTaskOffsetCommitter.class);
-        LogCaptureAppender.setClassLoggerToTrace(WorkerSourceTask.class);
         try (LogCaptureAppender committerAppender = LogCaptureAppender.createAndRegister(SourceTaskOffsetCommitter.class);
              LogCaptureAppender taskAppender = LogCaptureAppender.createAndRegister(WorkerSourceTask.class)) {
+            committerAppender.setClassLoggerToTrace(SourceTaskOffsetCommitter.class);
+            taskAppender.setClassLoggerToTrace(WorkerSourceTask.class);
             SourceTaskOffsetCommitter.commit(workerTask);
             assertEquals(Collections.emptyList(), taskAppender.getMessages());
 

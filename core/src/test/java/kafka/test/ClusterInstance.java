@@ -89,6 +89,11 @@ public interface ClusterInstance {
     String bootstrapServers();
 
     /**
+     * The broker connect string which can be used by clients for bootstrapping to the controller quorum.
+     */
+    String bootstrapControllers();
+
+    /**
      * A collection of all brokers in the cluster. In ZK-based clusters this will also include the broker which is
      * acting as the controller (since ZK controllers serve both broker and controller roles).
      */

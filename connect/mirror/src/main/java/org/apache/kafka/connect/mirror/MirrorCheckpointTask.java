@@ -330,11 +330,20 @@ public class MirrorCheckpointTask extends SourceTask {
 
                 // if translated offset from upstream is smaller than the current consumer offset
                 // in the target, skip updating the offset for that partition
-                long latestDownstreamOffset = targetConsumerOffset.get(topicPartition).offset();
-                if (latestDownstreamOffset >= convertedOffset.offset()) {
-                    log.trace("latestDownstreamOffset {} is larger than or equal to convertedUpstreamOffset {} for "
-                        + "TopicPartition {}", latestDownstreamOffset, convertedOffset.offset(), topicPartition);
-                    continue;
+                OffsetAndMetadata targetOffsetAndMetadata = targetConsumerOffset.get(topicPartition);
+                if (targetOffsetAndMetadata != null) {
+                    long latestDownstreamOffset = targetOffsetAndMetadata.offset();
+                    if (latestDownstreamOffset >= convertedOffset.offset()) {
+                        log.trace("latestDownstreamOffset {} is larger than or equal to convertedUpstreamOffset {} for "
+                                + "TopicPartition {}", latestDownstreamOffset, convertedOffset.offset(), topicPartition);
+                        continue;
+                    }
+                } else {
+                    // It is possible that when resetting offsets are performed in the java kafka client, the reset to -1 will be intercepted.
+                    // However, there are some other types of clients such as sarama, which can magically reset the group offset to -1, which will cause
+                    // `targetOffsetAndMetadata` here is null. For this case, just sync the offset to target.
+                    log.warn("Group {} offset for partition {} may has been reset to a negative offset, just sync the offset to target.",
+                            consumerGroupId, topicPartition);
                 }
                 offsetToSync.put(topicPartition, convertedOffset);
             }

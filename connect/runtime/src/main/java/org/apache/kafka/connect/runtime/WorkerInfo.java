@@ -78,7 +78,7 @@ public class WorkerInfo {
     /**
      * Collect general runtime information.
      */
-    protected void addRuntimeInfo() {
+    protected final void addRuntimeInfo() {
         List<String> jvmArgs = RUNTIME.getInputArguments();
         values.put("jvm.args", Utils.join(jvmArgs, ", "));
         String[] jvmSpec = {
@@ -94,7 +94,7 @@ public class WorkerInfo {
     /**
      * Collect system information.
      */
-    protected void addSystemInfo() {
+    protected final void addSystemInfo() {
         String[] osInfo = {
                 OS.getName(),
                 OS.getArch(),

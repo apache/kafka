@@ -29,9 +29,12 @@ import org.apache.kafka.common.errors._
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.utils.{MockTime, Utils}
+import org.apache.kafka.server.config.Defaults
 import org.apache.kafka.storage.internals.log.{AppendOrigin, CompletedTxn, LogFileUtils, LogOffsetMetadata, ProducerAppendInfo, ProducerStateEntry, ProducerStateManager, ProducerStateManagerConfig, TxnMetadata, VerificationStateEntry}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.ValueSource
 import org.mockito.Mockito.{mock, when}
 
 import java.util
@@ -44,7 +47,7 @@ class ProducerStateManagerTest {
   private val partition = new TopicPartition("test", 0)
   private val producerId = 1L
   private val maxTransactionTimeoutMs = 5 * 60 * 1000
-  private val producerStateManagerConfig = new ProducerStateManagerConfig(kafka.server.Defaults.ProducerIdExpirationMs, true)
+  private val producerStateManagerConfig = new ProducerStateManagerConfig(Defaults.PRODUCER_ID_EXPIRATION_MS, true)
   private val lateTransactionTimeoutMs = maxTransactionTimeoutMs + ProducerStateManager.LATE_TRANSACTION_BUFFER_MS
   private val time = new MockTime
 
@@ -1137,9 +1140,14 @@ class ProducerStateManagerTest {
     verifyEntry(producerId, updatedEntryOldEpoch, 2, 1)
   }
 
-  @Test
-  def testThrowOutOfOrderSequenceWithVerificationSequenceCheck(): Unit = {
+  @ParameterizedTest
+  @ValueSource(booleans = Array(true, false))
+  def testThrowOutOfOrderSequenceWithVerificationSequenceCheck(dynamicallyDisable: Boolean): Unit = {
     val originalEntry = stateManager.maybeCreateVerificationStateEntry(producerId, 0, 0)
+
+    // Even if we dynamically disable, we should still execute the sequence check if we have an entry
+    if (dynamicallyDisable)
+      producerStateManagerConfig.setTransactionVerificationEnabled(false)
 
     // Trying to append with a higher sequence should fail
     assertThrows(classOf[OutOfOrderSequenceException], () => append(stateManager, producerId, 0, 4, offset = 0, isTransactional = true))

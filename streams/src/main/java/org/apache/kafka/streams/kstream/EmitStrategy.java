@@ -68,7 +68,8 @@ public interface EmitStrategy {
     }
 
     /**
-     * Returns the strategy type
+     * Returns the strategy type.
+     *
      * @return Emit strategy type
      */
     StrategyType type();
@@ -87,7 +88,7 @@ public interface EmitStrategy {
      * @see UnlimitedWindows
      * @see WindowUpdateStrategy
      *
-     * @return WindowCloseStrategy instance
+     * @return "window close" {@code EmitStrategy} instance
      */
     static EmitStrategy onWindowClose() {
         return new WindowCloseStrategy();
@@ -103,7 +104,7 @@ public interface EmitStrategy {
      * @see UnlimitedWindows
      * @see WindowCloseStrategy
      *
-     * @return WindowCloseStrategy instance
+     * @return "window update" {@code EmitStrategy} instance
      */
     static EmitStrategy onWindowUpdate() {
         return new WindowUpdateStrategy();

@@ -128,7 +128,7 @@ public class SnapshotEmitter implements SnapshotGenerator.Emitter {
         this.metrics = metrics;
     }
 
-    SnapshotEmitterMetrics metrics() {
+    public SnapshotEmitterMetrics metrics() {
         return metrics;
     }
 

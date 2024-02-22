@@ -36,11 +36,11 @@ public class BoundedList<E> implements List<E> {
     private final List<E> underlying;
 
     public static <E> BoundedList<E> newArrayBacked(int maxLength) {
-        return new BoundedList<>(maxLength, new ArrayList<E>());
+        return new BoundedList<>(maxLength, new ArrayList<>());
     }
 
     public static <E> BoundedList<E> newArrayBacked(int maxLength, int initialCapacity) {
-        return new BoundedList<>(maxLength, new ArrayList<E>(initialCapacity));
+        return new BoundedList<>(maxLength, new ArrayList<>(initialCapacity));
     }
 
     public BoundedList(int maxLength, List<E> underlying) {

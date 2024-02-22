@@ -31,6 +31,7 @@ import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.message.UpdateMetadataRequestData.UpdateMetadataPartitionState;
@@ -46,7 +47,9 @@ import org.apache.kafka.streams.StoreQueryParameters;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
+import org.apache.kafka.streams.processor.StandbyUpdateListener;
 import org.apache.kafka.streams.processor.StateRestoreListener;
+import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.StreamThread;
 import org.apache.kafka.streams.processor.internals.ThreadStateTransitionValidator;
 import org.apache.kafka.streams.processor.internals.assignment.AssignorConfiguration.AssignmentListener;
@@ -229,8 +232,9 @@ public class IntegrationTestUtils {
      * The name is safe even for parameterized methods.
      * Used by tests not yet migrated from JUnit 4.
      */
-    public static String safeUniqueTestName(final Class<?> testClass, final TestName testName) {
-        return safeUniqueTestName(testClass, testName.getMethodName());
+    public static String safeUniqueTestName(final TestName testName) {
+        final String methodName = testName.getMethodName();
+        return safeUniqueTestName(methodName);
     }
 
     /**
@@ -238,21 +242,25 @@ public class IntegrationTestUtils {
      * JUnit 5 instead of a TestName from JUnit 4.
      * Used by tests migrated to JUnit 5.
      */
-    public static String safeUniqueTestName(final Class<?> testClass, final TestInfo testInfo) {
-        final String displayName = testInfo.getDisplayName();
+    public static String safeUniqueTestName(final TestInfo testInfo) {
         final String methodName = testInfo.getTestMethod().map(Method::getName).orElse("unknownMethodName");
-        final String testName = displayName.contains(methodName) ? methodName : methodName + displayName;
-        return safeUniqueTestName(testClass, testName);
+        return safeUniqueTestName(methodName);
     }
 
-    private static String safeUniqueTestName(final Class<?> testClass, final String testName) {
-        return (testClass.getSimpleName() + testName)
-                .replace(':', '_')
-                .replace('.', '_')
-                .replace('[', '_')
-                .replace(']', '_')
-                .replace(' ', '_')
-                .replace('=', '_');
+    private static String safeUniqueTestName(final String testName) {
+        return sanitize(testName + Uuid.randomUuid().toString());
+    }
+
+    private static String sanitize(final String str) {
+        return str
+            // The `-` is used in Streams' thread name as a separator and some tests rely on this.
+            .replace('-', '_')
+            .replace(':', '_')
+            .replace('.', '_')
+            .replace('[', '_')
+            .replace(']', '_')
+            .replace(' ', '_')
+            .replace('=', '_');
     }
 
     /**
@@ -775,6 +783,7 @@ public class IntegrationTestUtils {
 
     /**
      * Wait until final key-value mappings have been consumed.
+     * Duplicate records are not considered in the comparison.
      *
      * @param consumerConfig     Kafka Consumer configuration
      * @param topic              Kafka topic to consume from
@@ -791,6 +800,7 @@ public class IntegrationTestUtils {
 
     /**
      * Wait until final key-value mappings have been consumed.
+     * Duplicate records are not considered in the comparison.
      *
      * @param consumerConfig     Kafka Consumer configuration
      * @param topic              Kafka topic to consume from
@@ -807,6 +817,7 @@ public class IntegrationTestUtils {
 
     /**
      * Wait until final key-value mappings have been consumed.
+     * Duplicate records are not considered in the comparison.
      *
      * @param consumerConfig     Kafka Consumer configuration
      * @param topic              Kafka topic to consume from
@@ -850,15 +861,19 @@ public class IntegrationTestUtils {
                 // still need to check that for each key, the ordering is expected
                 final Map<K, List<T>> finalAccumData = new HashMap<>();
                 for (final T kv : accumulatedActual) {
-                    finalAccumData.computeIfAbsent(
-                        withTimestamp ? ((KeyValueTimestamp<K, V>) kv).key() : ((KeyValue<K, V>) kv).key,
-                        key -> new ArrayList<>()).add(kv);
+                    final K key = withTimestamp ? ((KeyValueTimestamp<K, V>) kv).key() : ((KeyValue<K, V>) kv).key;
+                    final List<T> records = finalAccumData.computeIfAbsent(key, k -> new ArrayList<>());
+                    if (!records.contains(kv)) {
+                        records.add(kv);
+                    }
                 }
                 final Map<K, List<T>> finalExpected = new HashMap<>();
                 for (final T kv : expectedRecords) {
-                    finalExpected.computeIfAbsent(
-                        withTimestamp ? ((KeyValueTimestamp<K, V>) kv).key() : ((KeyValue<K, V>) kv).key,
-                        key -> new ArrayList<>()).add(kv);
+                    final K key = withTimestamp ? ((KeyValueTimestamp<K, V>) kv).key() : ((KeyValue<K, V>) kv).key;
+                    final List<T> records = finalExpected.computeIfAbsent(key, k -> new ArrayList<>());
+                    if (!records.contains(kv)) {
+                        records.add(kv);
+                    }
                 }
 
                 // returns true only if the remaining records in both lists are the same and in the same order
@@ -1037,8 +1052,8 @@ public class IntegrationTestUtils {
                 final long millisRemaining = expectedEnd - System.currentTimeMillis();
                 if (millisRemaining <= 0) {
                     fail(
-                        "Application did not reach a RUNNING state for all streams instances. " +
-                            "Non-running instances: " + nonRunningStreams
+                        nonRunningStreams.size() + " out of " + streamsList.size() + " Streams clients did not reach the RUNNING state. " +
+                            "Non-running Streams clients: " + nonRunningStreams
                     );
                 }
 
@@ -1298,7 +1313,6 @@ public class IntegrationTestUtils {
                                                                  final int maxMessages) {
         final List<ConsumerRecord<K, V>> consumerRecords;
         consumer.subscribe(singletonList(topic));
-        System.out.println("Got assignment:" + consumer.assignment());
         final int pollIntervalMs = 100;
         consumerRecords = new ArrayList<>();
         int totalPollTimeMs = 0;
@@ -1452,7 +1466,7 @@ public class IntegrationTestUtils {
     public static void waitUntilStreamsHasPolled(final KafkaStreams kafkaStreams, final int pollNumber)
         throws InterruptedException {
         final Double initialCount = getStreamsPollNumber(kafkaStreams);
-        retryOnExceptionWithTimeout(1000, () -> {
+        retryOnExceptionWithTimeout(10000, () -> {
             assertThat(getStreamsPollNumber(kafkaStreams), is(greaterThanOrEqualTo(initialCount + pollNumber)));
         });
     }
@@ -1535,6 +1549,28 @@ public class IntegrationTestUtils {
                 totalNumRestored += numRestored.get();
             }
             return totalNumRestored;
+        }
+    }
+
+    public static class TrackingStandbyUpdateListener implements StandbyUpdateListener {
+        public final List<TopicPartition> promotedPartitions = new ArrayList<>();
+
+
+        @Override
+        public void onUpdateStart(final TopicPartition topicPartition, final String storeName, final long startingOffset) {
+
+        }
+
+        @Override
+        public void onBatchLoaded(final TopicPartition topicPartition, final String storeName, final TaskId taskId, final long batchEndOffset, final long batchSize, final long currentEndOffset) {
+
+        }
+
+        @Override
+        public void onUpdateSuspended(final TopicPartition topicPartition, final String storeName, final long storeOffset, final long currentEndOffset, final SuspendReason reason) {
+            if (reason.equals(SuspendReason.PROMOTED)) {
+                promotedPartitions.add(topicPartition);
+            }
         }
     }
 

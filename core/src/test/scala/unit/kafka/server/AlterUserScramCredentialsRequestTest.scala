@@ -48,7 +48,7 @@ import scala.jdk.CollectionConverters._
  */
 class AlterUserScramCredentialsRequestTest extends BaseRequestTest {
 
-  protected var testMetadataVersion = MetadataVersion.latest
+  protected var testMetadataVersion = MetadataVersion.latestTesting
   override protected def metadataVersion = testMetadataVersion
 
   @BeforeEach
@@ -404,7 +404,7 @@ class AlterUserScramCredentialsRequestTest extends BaseRequestTest {
     val results = response.data.results
     assertEquals(1, results.size)
     checkAllErrorsAlteringCredentials(results, Errors.UNSUPPORTED_VERSION,
-                                      "when altering the credentials on unsupported IPB version")
+                                      "when altering the credentials on unsupported IBP version")
     assertEquals("The current metadata version does not support SCRAM", results.get(0).errorMessage)
   }
 

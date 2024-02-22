@@ -82,7 +82,6 @@ class ControllerDeletionClient(controller: KafkaController, zkClient: KafkaZkCli
  *    as well as from zookeeper. This is the only time the /brokers/topics/<topic> path gets deleted. On the other hand,
  *    if no replica is in TopicDeletionStarted state and at least one replica is in TopicDeletionFailed state, then
  *    it marks the topic for deletion retry.
- * @param controller
  */
 class TopicDeletionManager(config: KafkaConfig,
                            controllerContext: ControllerContext,
@@ -214,7 +213,7 @@ class TopicDeletionManager(config: KafkaConfig,
    * Topic deletion can be retried if -
    * 1. Topic deletion is not already complete
    * 2. Topic deletion is currently not in progress for that topic
-   * 3. Topic is currently marked ineligible for deletion
+   * 3. Topic is currently not marked ineligible for deletion
    * @param topic Topic
    * @return Whether or not deletion can be retried for the topic
    */
@@ -251,7 +250,7 @@ class TopicDeletionManager(config: KafkaConfig,
    * Invoked with the list of topics to be deleted
    * It invokes onPartitionDeletion for all partitions of a topic.
    * The updateMetadataRequest is also going to set the leader for the topics being deleted to
-   * {@link LeaderAndIsr#LeaderDuringDelete}. This lets each broker know that this topic is being deleted and can be
+   * [[kafka.api.LeaderAndIsr#LeaderDuringDelete]]. This lets each broker know that this topic is being deleted and can be
    * removed from their caches.
    */
   private def onTopicDeletion(topics: Set[String]): Unit = {

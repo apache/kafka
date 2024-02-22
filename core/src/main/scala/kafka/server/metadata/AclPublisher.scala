@@ -35,9 +35,9 @@ class AclPublisher(
 ) extends Logging with org.apache.kafka.image.publisher.MetadataPublisher {
   logIdent = s"[${name()}] "
 
-  override def name(): String = s"AclPublisher ${nodeType} id=${nodeId}"
+  override def name(): String = s"AclPublisher $nodeType id=$nodeId"
 
-  var completedInitialLoad = false
+  private var completedInitialLoad = false
 
   override def onMetadataUpdate(
     delta: MetadataDelta,

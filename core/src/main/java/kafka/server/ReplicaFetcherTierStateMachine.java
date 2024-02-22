@@ -69,8 +69,8 @@ import static org.apache.kafka.storage.internals.log.LogStartOffsetIncrementReas
 public class ReplicaFetcherTierStateMachine implements TierStateMachine {
     private static final Logger log = LoggerFactory.getLogger(ReplicaFetcherTierStateMachine.class);
 
-    private LeaderEndPoint leader;
-    private ReplicaManager replicaMgr;
+    private final LeaderEndPoint leader;
+    private final ReplicaManager replicaMgr;
 
     public ReplicaFetcherTierStateMachine(LeaderEndPoint leader,
                                           ReplicaManager replicaMgr) {
@@ -99,7 +99,17 @@ public class ReplicaFetcherTierStateMachine implements TierStateMachine {
         int epoch = epochAndLeaderLocalStartOffset.leaderEpoch();
         long leaderLocalStartOffset = epochAndLeaderLocalStartOffset.offset();
 
-        long offsetToFetch = buildRemoteLogAuxState(topicPartition, currentFetchState.currentLeaderEpoch(), leaderLocalStartOffset, epoch, fetchPartitionData.logStartOffset());
+        long offsetToFetch = 0;
+        replicaMgr.brokerTopicStats().topicStats(topicPartition.topic()).buildRemoteLogAuxStateRequestRate().mark();
+        replicaMgr.brokerTopicStats().allTopicsStats().buildRemoteLogAuxStateRequestRate().mark();
+
+        try {
+            offsetToFetch = buildRemoteLogAuxState(topicPartition, currentFetchState.currentLeaderEpoch(), leaderLocalStartOffset, epoch, fetchPartitionData.logStartOffset());
+        } catch (RemoteStorageException e) {
+            replicaMgr.brokerTopicStats().topicStats(topicPartition.topic()).failedBuildRemoteLogAuxStateRate().mark();
+            replicaMgr.brokerTopicStats().allTopicsStats().failedBuildRemoteLogAuxStateRate().mark();
+            throw e;
+        }
 
         OffsetAndEpoch fetchLatestOffsetResult = leader.fetchLatestOffset(topicPartition, currentFetchState.currentLeaderEpoch());
         long leaderEndOffset = fetchLatestOffsetResult.offset();
@@ -227,10 +237,13 @@ public class ReplicaFetcherTierStateMachine implements TierStateMachine {
 
                 // Truncate the existing local log before restoring the leader epoch cache and producer snapshots.
                 Partition partition = replicaMgr.getPartitionOrException(topicPartition);
-                partition.truncateFullyAndStartAt(nextOffset, false);
+                partition.truncateFullyAndStartAt(nextOffset, false, Option.apply(leaderLogStartOffset));
+
+                // Increment start offsets
+                unifiedLog.maybeIncrementLogStartOffset(leaderLogStartOffset, LeaderOffsetIncremented);
+                unifiedLog.maybeIncrementLocalLogStartOffset(nextOffset, LeaderOffsetIncremented);
 
                 // Build leader epoch cache.
-                unifiedLog.maybeIncrementLogStartOffset(leaderLogStartOffset, LeaderOffsetIncremented);
                 List<EpochEntry> epochs = readLeaderEpochCheckpoint(rlm, remoteLogSegmentMetadata);
                 if (unifiedLog.leaderEpochCache().isDefined()) {
                     unifiedLog.leaderEpochCache().get().assign(epochs);
