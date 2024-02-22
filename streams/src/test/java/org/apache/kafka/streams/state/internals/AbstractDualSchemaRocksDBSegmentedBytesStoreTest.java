@@ -1577,7 +1577,7 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStoreTest<S extends
 
 
     @Test
-    public void shouldLogAndMeasureExpiredRecords() {
+    public void shouldMeasureExpiredRecords() {
         final Properties streamsConfig = StreamsTestUtils.getStreamsConfig();
         final AbstractDualSchemaRocksDBSegmentedBytesStore<S> bytesStore = getBytesStore();
         final InternalMockProcessorContext context = new InternalMockProcessorContext(

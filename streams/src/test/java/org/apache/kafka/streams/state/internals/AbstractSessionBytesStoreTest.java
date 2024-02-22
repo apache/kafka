@@ -793,7 +793,7 @@ public abstract class AbstractSessionBytesStoreTest {
     }
 
     @Test
-    public void shouldLogAndMeasureExpiredRecords() {
+    public void shouldMeasureExpiredRecords() {
         final Properties streamsConfig = StreamsTestUtils.getStreamsConfig();
         final SessionStore<String, Long> sessionStore = buildSessionStore(RETENTION_PERIOD, Serdes.String(), Serdes.Long());
         final InternalMockProcessorContext context = new InternalMockProcessorContext(

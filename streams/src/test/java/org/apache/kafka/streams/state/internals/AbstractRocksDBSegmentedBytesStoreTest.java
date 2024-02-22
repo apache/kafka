@@ -782,7 +782,7 @@ public abstract class AbstractRocksDBSegmentedBytesStoreTest<S extends Segment> 
 
 
     @Test
-    public void shouldLogAndMeasureExpiredRecords() {
+    public void shouldMeasureExpiredRecords() {
         final Properties streamsConfig = StreamsTestUtils.getStreamsConfig();
         final AbstractRocksDBSegmentedBytesStore<S> bytesStore = getBytesStore();
         final InternalMockProcessorContext context = new InternalMockProcessorContext(

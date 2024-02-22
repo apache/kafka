@@ -984,7 +984,7 @@ public abstract class AbstractWindowBytesStoreTest {
     }
 
     @Test
-    public void shouldLogAndMeasureExpiredRecords() {
+    public void shouldMeasureExpiredRecords() {
         final Properties streamsConfig = StreamsTestUtils.getStreamsConfig();
         final WindowStore<Integer, String> windowStore =
             buildWindowStore(RETENTION_PERIOD, WINDOW_SIZE, false, Serdes.Integer(), Serdes.String());
