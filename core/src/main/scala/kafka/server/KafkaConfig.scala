@@ -303,6 +303,7 @@ object KafkaConfig {
 
   /** Share Group Configurations **/
   val ShareGroupEnableProp = "group.share.enable"
+  val ShareGroupRecordLockPartitionLimitProp = "group.share.record.lock.partition.limit"
 
   /** ********* Offset management configuration ***********/
   val OffsetMetadataMaxSizeProp = "offset.metadata.max.bytes"
@@ -796,6 +797,7 @@ object KafkaConfig {
 
   /** Share Group Configurations */
   val ShareGroupEnableDoc = "Enable share groups on the broker."
+  val ShareGroupRecordLockPartitionLimitDoc = "Share-group record lock limit per share-partition."
 
   /** ********* Offset management configuration ***********/
   val OffsetMetadataMaxSizeDoc = "The maximum size for a metadata entry associated with an offset commit."
@@ -1168,6 +1170,7 @@ object KafkaConfig {
 
       /** Share Group Configurations **/
       .define(ShareGroupEnableProp, BOOLEAN, Defaults.SHARE_GROUP_ENABLE, null, MEDIUM, ShareGroupEnableDoc)
+      .define(ShareGroupRecordLockPartitionLimitProp, SHORT, Defaults.SHARE_GROUP_RECORD_LOCK_PARTITION_LIMIT, between(100, 10000), MEDIUM, ShareGroupRecordLockPartitionLimitDoc)
 
       /** ********* Offset management configuration ***********/
       .define(OffsetMetadataMaxSizeProp, INT, Defaults.OFFSET_METADATA_MAX_SIZE, HIGH, OffsetMetadataMaxSizeDoc)
@@ -1825,6 +1828,7 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
 
   /** Share Group Configurations **/
   val isShareGroupEnabled = getBoolean(KafkaConfig.ShareGroupEnableProp)
+  val shareGroupRecordLockPartitionLimit = getShort(KafkaConfig.ShareGroupRecordLockPartitionLimitProp)
 
   /** ********* Offset management configuration ***********/
   val offsetMetadataMaxSize = getInt(KafkaConfig.OffsetMetadataMaxSizeProp)
