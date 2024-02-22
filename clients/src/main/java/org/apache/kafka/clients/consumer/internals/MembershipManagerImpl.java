@@ -777,6 +777,8 @@ public class MembershipManagerImpl implements MembershipManager {
     @Override
     public void maybeRejoinStaleMember() {
         if (state == MemberState.STALE) {
+            log.debug("Expired poll timer has been reset so stale member {} will rejoin the group" +
+                "when it completes releasing its previous assignment.", memberId);
             staleMemberAssignmentRelease.whenComplete((__, error) -> transitionToJoining());
         }
     }
