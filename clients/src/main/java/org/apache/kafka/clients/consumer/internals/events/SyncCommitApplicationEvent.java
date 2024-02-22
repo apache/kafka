@@ -20,51 +20,15 @@ import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.Timer;
 
-import java.util.Collections;
 import java.util.Map;
-import java.util.Objects;
 
 /**
  * Event to commit offsets waiting for a response and retrying on expected retriable errors until
  * the timer expires.
  */
-public class SyncCommitApplicationEvent extends CompletableApplicationEvent<Void> {
-
-    /**
-     * Offsets to commit per partition.
-     */
-    private final Map<TopicPartition, OffsetAndMetadata> offsets;
+public class SyncCommitApplicationEvent extends CommitApplicationEvent {
 
     public SyncCommitApplicationEvent(final Map<TopicPartition, OffsetAndMetadata> offsets, final Timer timer) {
-        super(Type.COMMIT_SYNC, timer);
-        this.offsets = Collections.unmodifiableMap(offsets);
-
-        for (OffsetAndMetadata offsetAndMetadata : offsets.values()) {
-            if (offsetAndMetadata.offset() < 0) {
-                throw new IllegalArgumentException("Invalid offset: " + offsetAndMetadata.offset());
-            }
-        }
-    }
-
-    public Map<TopicPartition, OffsetAndMetadata> offsets() {
-        return offsets;
-    }
-
-    @Override
-    public boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
-        if (!super.equals(o)) return false;
-
-        SyncCommitApplicationEvent that = (SyncCommitApplicationEvent) o;
-
-        return offsets.equals(that.offsets);
-    }
-
-    @Override
-    public int hashCode() {
-        int result = super.hashCode();
-        result = 31 * result + offsets.hashCode();
-        return result;
+        super(Type.COMMIT_SYNC, timer, offsets);
     }
 }

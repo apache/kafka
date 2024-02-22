@@ -17,7 +17,6 @@
 package org.apache.kafka.clients.consumer.internals.events;
 
 import org.apache.kafka.clients.consumer.internals.ConsumerUtils;
-import org.apache.kafka.clients.consumer.internals.RelaxedCompletableFuture;
 import org.apache.kafka.common.utils.Timer;
 
 import java.util.Objects;
@@ -37,7 +36,7 @@ public abstract class CompletableApplicationEvent<T> extends ApplicationEvent im
 
     protected CompletableApplicationEvent(Type type, Timer timer) {
         super(type);
-        this.future = new RelaxedCompletableFuture<>();
+        this.future = new CompletableFuture<>();
         this.timer = timer;
         this.deadlineMs = timer.remainingMs() + timer.currentTimeMs();
     }
@@ -68,7 +67,9 @@ public abstract class CompletableApplicationEvent<T> extends ApplicationEvent im
 
     @Override
     public int hashCode() {
-        return Objects.hash(future, deadlineMs);
+        int result = super.hashCode();
+        result = 31 * result + Objects.hash(future, deadlineMs);
+        return result;
     }
 
     @Override

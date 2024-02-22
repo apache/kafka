@@ -43,6 +43,7 @@ import org.apache.kafka.clients.consumer.internals.events.AssignmentChangeApplic
 import org.apache.kafka.clients.consumer.internals.events.AsyncCommitApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEventHandler;
+import org.apache.kafka.clients.consumer.internals.events.CommitApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.CommitOnCloseApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.CompletableApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.ConsumerRebalanceListenerCallbackCompletedEvent;
@@ -768,8 +769,9 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     public void commitAsync(Map<TopicPartition, OffsetAndMetadata> offsets, OffsetCommitCallback callback) {
         acquireAndEnsureOpen();
         try {
-            AsyncCommitApplicationEvent event = new AsyncCommitApplicationEvent(offsets);
-            CompletableFuture<Void> future = commit(event.offsets(), event, event.future());
+            Timer timer = time.timer(Long.MAX_VALUE);
+            AsyncCommitApplicationEvent asyncCommitEvent = new AsyncCommitApplicationEvent(offsets, timer);
+            CompletableFuture<Void> future = commit(asyncCommitEvent);
             future.whenComplete((r, t) -> {
 
                 if (t == null) {
@@ -790,13 +792,12 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         }
     }
 
-    private CompletableFuture<Void> commit(final Map<TopicPartition, OffsetAndMetadata> offsets,
-                                           final ApplicationEvent event,
-                                           final CompletableFuture<Void> future) {
+    private CompletableFuture<Void> commit(final CommitApplicationEvent commitEvent) {
         maybeInvokeCommitCallbacks();
         maybeThrowFencedInstanceException();
         maybeThrowInvalidGroupIdException();
 
+        Map<TopicPartition, OffsetAndMetadata> offsets = commitEvent.offsets();
         log.debug("Committing offsets: {}", offsets);
         offsets.forEach(this::updateLastSeenEpochIfNewer);
 
@@ -804,8 +805,8 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             return CompletableFuture.completedFuture(null);
         }
 
-        applicationEventHandler.add(event);
-        return future;
+        applicationEventHandler.add(commitEvent);
+        return commitEvent.future();
     }
 
     @Override
@@ -1355,10 +1356,10 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         long commitStart = time.nanoseconds();
         try {
             Timer requestTimer = time.timer(timeout.toMillis());
-            SyncCommitApplicationEvent event = new SyncCommitApplicationEvent(offsets, requestTimer);
-            CompletableFuture<Void> future = commit(event.offsets(), event, event.future());
-            wakeupTrigger.setActiveTask(future);
-            ConsumerUtils.getResult(future, requestTimer);
+            SyncCommitApplicationEvent syncCommitEvent = new SyncCommitApplicationEvent(offsets, requestTimer);
+            CompletableFuture<Void> commitFuture = commit(syncCommitEvent);
+            wakeupTrigger.setActiveTask(commitFuture);
+            ConsumerUtils.getResult(commitFuture, requestTimer);
             interceptors.onCommit(offsets);
         } finally {
             wakeupTrigger.clearTask();
