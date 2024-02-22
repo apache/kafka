@@ -71,8 +71,8 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyLong;
-import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.spy;
@@ -575,14 +575,14 @@ public class HeartbeatRequestManagerTest {
         when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(new Node(1, "localhost", 9999)));
         when(membershipManager.shouldSkipHeartbeat()).thenReturn(false);
 
-        // On poll timer expiration, the member should transition to stale and a last heartbeat 
-        // should be sent to leave the group
+        // On poll timer expiration, the member should send a last heartbeat to leave the group
+        // and notify the membership manager
         time.sleep(maxPollIntervalMs);
         assertHeartbeat(heartbeatRequestManager, heartbeatIntervalMs);
-        verify(membershipManager).transitionToSendingLeaveGroup();
+        verify(membershipManager).transitionToSendingLeaveGroup(true);
         verify(heartbeatState).reset();
         verify(heartbeatRequestState).reset();
-        verify(membershipManager).transitionToStale();
+        verify(membershipManager).onHeartbeatRequestSent();
 
         when(membershipManager.state()).thenReturn(MemberState.STALE);
         when(membershipManager.shouldSkipHeartbeat()).thenReturn(true);
@@ -605,13 +605,13 @@ public class HeartbeatRequestManagerTest {
     public void testPollTimerExpirationShouldNotMarkMemberStaleIfMemberAlreadyLeaving() {
         when(membershipManager.shouldSkipHeartbeat()).thenReturn(false);
         when(membershipManager.isLeavingGroup()).thenReturn(true);
-        doNothing().when(membershipManager).transitionToStale();
 
         time.sleep(maxPollIntervalMs);
         NetworkClientDelegate.PollResult result = heartbeatRequestManager.poll(time.milliseconds());
 
-        // No transition to STALE should be triggered, because the member is already leaving the group
-        verify(membershipManager, never()).transitionToStale();
+        // No transition to leave due to stale member should be triggered, because the member is
+        // already leaving the group
+        verify(membershipManager, never()).transitionToSendingLeaveGroup(anyBoolean());
 
         assertEquals(1, result.unsentRequests.size(), "A heartbeat request should be generated to" +
             " complete the ongoing leaving operation that was triggered before the poll timer expired.");

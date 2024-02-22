@@ -1658,70 +1658,59 @@ public class MembershipManagerImplTest {
         testOnPartitionsLost(Optional.of(new KafkaException("Intentional error for test")));
     }
 
-    @Test
-    public void testTransitionToStaleAfterSendingLeaveGroup() {
-        MembershipManagerImpl membershipManager = createMembershipManagerJoiningGroup();
-        ConsumerGroupHeartbeatResponse heartbeatResponse = createConsumerGroupHeartbeatResponse(null);
-        membershipManager.onHeartbeatResponseReceived(heartbeatResponse.data());
-        doNothing().when(subscriptionState).assignFromSubscribed(any());
-        assertEquals(MemberState.STABLE, membershipManager.state());
-
-        membershipManager.transitionToSendingLeaveGroup();
+    private void assertLeaveGroupDueToExpiredPollAndTransitionToStale(MembershipManagerImpl membershipManager) {
+        assertDoesNotThrow(() -> membershipManager.transitionToSendingLeaveGroup(true));
         assertEquals(LEAVE_GROUP_MEMBER_EPOCH, membershipManager.memberEpoch());
-
-        membershipManager.transitionToStale();
+        membershipManager.onHeartbeatRequestSent();
         assertStaleMemberLeavesGroupAndClearsAssignment(membershipManager);
     }
 
     @Test
-    public void testTransitionToLeavingWhileReconcilingOnStaleMember() {
+    public void testTransitionToLeavingWhileReconcilingDueToStaleMember() {
         MembershipManagerImpl membershipManager = memberJoinWithAssignment();
         clearInvocations(subscriptionState);
         assertEquals(MemberState.RECONCILING, membershipManager.state());
-
-        assertDoesNotThrow(membershipManager::transitionToSendingLeaveGroup);
+        assertLeaveGroupDueToExpiredPollAndTransitionToStale(membershipManager);
     }
 
     @Test
-    public void testTransitionToLeavingWhileJoiningOnStaleMember() {
+    public void testTransitionToLeavingWhileJoiningDueToStaleMember() {
         MembershipManagerImpl membershipManager = createMembershipManagerJoiningGroup();
         doNothing().when(subscriptionState).assignFromSubscribed(any());
         assertEquals(MemberState.JOINING, membershipManager.state());
-
-        assertDoesNotThrow(membershipManager::transitionToSendingLeaveGroup);
+        assertLeaveGroupDueToExpiredPollAndTransitionToStale(membershipManager);
     }
 
     @Test
-    public void testTransitionToStaleWhileStable() {
+    public void testTransitionToLeavingWhileStableDueToStaleMember() {
         MembershipManagerImpl membershipManager = createMembershipManagerJoiningGroup();
         ConsumerGroupHeartbeatResponse heartbeatResponse = createConsumerGroupHeartbeatResponse(null);
         membershipManager.onHeartbeatResponseReceived(heartbeatResponse.data());
         doNothing().when(subscriptionState).assignFromSubscribed(any());
         assertEquals(MemberState.STABLE, membershipManager.state());
-
-        assertDoesNotThrow(membershipManager::transitionToSendingLeaveGroup);
+        assertLeaveGroupDueToExpiredPollAndTransitionToStale(membershipManager);
     }
 
     @Test
-    public void testTransitionToStaleWhileAcknowledging() {
+    public void testTransitionToLeavingWhileAcknowledgingDueToStaleMember() {
         MembershipManagerImpl membershipManager = mockJoinAndReceiveAssignment(true);
         doNothing().when(subscriptionState).assignFromSubscribed(any());
         clearInvocations(subscriptionState);
         assertEquals(MemberState.ACKNOWLEDGING, membershipManager.state());
-
-        assertDoesNotThrow(membershipManager::transitionToSendingLeaveGroup);
+        assertLeaveGroupDueToExpiredPollAndTransitionToStale(membershipManager);
     }
 
     @Test
     public void testStaleMemberDoesNotSendHeartbeatAndAllowsTransitionToJoiningToRecover() {
         MembershipManagerImpl membershipManager = createMemberInStableState();
         doNothing().when(subscriptionState).assignFromSubscribed(any());
-        membershipManager.transitionToSendingLeaveGroup();
-        membershipManager.transitionToStale();
+        membershipManager.transitionToSendingLeaveGroup(true);
+        membershipManager.onHeartbeatRequestSent();
+        assertEquals(MemberState.STALE, membershipManager.state());
         assertTrue(membershipManager.shouldSkipHeartbeat(), "Stale member should not send heartbeats");
         // Check that a transition to joining is allowed, which is what is expected to happen
         // when the poll timer is reset.
-        assertDoesNotThrow(membershipManager::transitionToJoining);
+        assertDoesNotThrow(membershipManager::maybeRejoinStaleMember);
     }
 
     @Test
@@ -1746,8 +1735,8 @@ public class MembershipManagerImplTest {
         ConsumerRebalanceListenerInvoker invoker = consumerRebalanceListenerInvoker();
         when(subscriptionState.rebalanceListener()).thenReturn(Optional.of(listener));
 
-        membershipManager.transitionToSendingLeaveGroup();
-        membershipManager.transitionToStale();
+        membershipManager.transitionToSendingLeaveGroup(true);
+        membershipManager.onHeartbeatRequestSent();
 
         assertEquals(MemberState.STALE, membershipManager.state());
         verify(backgroundEventHandler).add(any(ConsumerRebalanceListenerCallbackNeededEvent.class));
@@ -1777,8 +1766,8 @@ public class MembershipManagerImplTest {
     private MembershipManagerImpl mockStaleMember() {
         MembershipManagerImpl membershipManager = createMemberInStableState();
         doNothing().when(subscriptionState).assignFromSubscribed(any());
-        membershipManager.transitionToSendingLeaveGroup();
-        membershipManager.transitionToStale();
+        membershipManager.transitionToSendingLeaveGroup(true);
+        membershipManager.onHeartbeatRequestSent();
         return membershipManager;
     }
     private void mockPartitionOwnedAndNewPartitionAdded(String topicName,
