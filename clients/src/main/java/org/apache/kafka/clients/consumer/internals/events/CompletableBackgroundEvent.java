@@ -33,6 +33,7 @@ public abstract class CompletableBackgroundEvent<T> extends BackgroundEvent impl
         this.future = new CompletableFuture<>();
     }
 
+    @Override
     public CompletableFuture<T> future() {
         return future;
     }

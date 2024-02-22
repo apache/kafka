@@ -41,6 +41,7 @@ import org.apache.kafka.common.requests.OffsetCommitRequest;
 import org.apache.kafka.common.requests.OffsetCommitResponse;
 import org.apache.kafka.common.requests.RequestTestUtils;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.Timer;
 import org.apache.kafka.test.TestCondition;
 import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.AfterEach;
@@ -153,7 +154,7 @@ public class ConsumerNetworkThreadTest {
 
     @Test
     public void testAsyncCommitEvent() {
-        ApplicationEvent e = new AsyncCommitApplicationEvent(new HashMap<>());
+        ApplicationEvent e = new AsyncCommitApplicationEvent(new HashMap<>(), time.timer(100L));
         applicationEventsQueue.add(e);
         consumerNetworkThread.runOnce();
         verify(applicationEventProcessor).process(any(AsyncCommitApplicationEvent.class));
@@ -161,7 +162,7 @@ public class ConsumerNetworkThreadTest {
 
     @Test
     public void testSyncCommitEvent() {
-        ApplicationEvent e = new SyncCommitApplicationEvent(new HashMap<>(), 100L);
+        ApplicationEvent e = new SyncCommitApplicationEvent(new HashMap<>(), time.timer(100L));
         applicationEventsQueue.add(e);
         consumerNetworkThread.runOnce();
         verify(applicationEventProcessor).process(any(SyncCommitApplicationEvent.class));
@@ -170,7 +171,7 @@ public class ConsumerNetworkThreadTest {
     @Test
     public void testListOffsetsEventIsProcessed() {
         Map<TopicPartition, Long> timestamps = Collections.singletonMap(new TopicPartition("topic1", 1), 5L);
-        ApplicationEvent e = new ListOffsetsApplicationEvent(timestamps, true);
+        ApplicationEvent e = new ListOffsetsApplicationEvent(timestamps, true, time.timer(1000));
         applicationEventsQueue.add(e);
         consumerNetworkThread.runOnce();
         verify(applicationEventProcessor).process(any(ListOffsetsApplicationEvent.class));
@@ -179,7 +180,7 @@ public class ConsumerNetworkThreadTest {
 
     @Test
     public void testResetPositionsEventIsProcessed() {
-        ResetPositionsApplicationEvent e = new ResetPositionsApplicationEvent();
+        ResetPositionsApplicationEvent e = new ResetPositionsApplicationEvent(time.timer(1000));
         applicationEventsQueue.add(e);
         consumerNetworkThread.runOnce();
         verify(applicationEventProcessor).process(any(ResetPositionsApplicationEvent.class));
@@ -190,7 +191,7 @@ public class ConsumerNetworkThreadTest {
     public void testResetPositionsProcessFailureIsIgnored() {
         doThrow(new NullPointerException()).when(offsetsRequestManager).resetPositionsIfNeeded();
 
-        ResetPositionsApplicationEvent event = new ResetPositionsApplicationEvent();
+        ResetPositionsApplicationEvent event = new ResetPositionsApplicationEvent(time.timer(1000));
         applicationEventsQueue.add(event);
         assertDoesNotThrow(() -> consumerNetworkThread.runOnce());
 
@@ -199,7 +200,7 @@ public class ConsumerNetworkThreadTest {
 
     @Test
     public void testValidatePositionsEventIsProcessed() {
-        ValidatePositionsApplicationEvent e = new ValidatePositionsApplicationEvent();
+        ValidatePositionsApplicationEvent e = new ValidatePositionsApplicationEvent(time.timer(1000));
         applicationEventsQueue.add(e);
         consumerNetworkThread.runOnce();
         verify(applicationEventProcessor).process(any(ValidatePositionsApplicationEvent.class));
@@ -224,7 +225,7 @@ public class ConsumerNetworkThreadTest {
 
     @Test
     void testFetchTopicMetadata() {
-        applicationEventsQueue.add(new TopicMetadataApplicationEvent("topic", Long.MAX_VALUE));
+        applicationEventsQueue.add(new TopicMetadataApplicationEvent("topic", time.timer(Long.MAX_VALUE)));
         consumerNetworkThread.runOnce();
         verify(applicationEventProcessor).process(any(TopicMetadataApplicationEvent.class));
     }
@@ -283,8 +284,9 @@ public class ConsumerNetworkThreadTest {
         coordinatorRequestManager.markCoordinatorUnknown("test", time.milliseconds());
         client.prepareResponse(FindCoordinatorResponse.prepareResponse(Errors.NONE, "group-id", node));
         prepareOffsetCommitRequest(new HashMap<>(), Errors.NONE, false);
-        CompletableApplicationEvent<Void> event1 = spy(new AsyncCommitApplicationEvent(Collections.emptyMap()));
-        ApplicationEvent event2 = new AsyncCommitApplicationEvent(Collections.emptyMap());
+        Timer timer = time.timer(1000);
+        CompletableApplicationEvent<Void> event1 = spy(new AsyncCommitApplicationEvent(Collections.emptyMap(), timer));
+        ApplicationEvent event2 = new AsyncCommitApplicationEvent(Collections.emptyMap(), timer);
         CompletableFuture<Void> future = new CompletableFuture<>();
         when(event1.future()).thenReturn(future);
         applicationEventsQueue.add(event1);

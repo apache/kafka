@@ -20,6 +20,8 @@ import org.apache.kafka.clients.KafkaClient;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEventProcessor;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
+import org.apache.kafka.clients.consumer.internals.events.CompletableApplicationEvent;
+import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.internals.IdempotentCloser;
 import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.utils.KafkaThread;
@@ -128,7 +130,7 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
         // Process the events—if any—that were produced by the application thread. It is possible that when processing
         // an event generates an error. In such cases, the processor will log an exception, but we do not want those
         // errors to be propagated to the caller.
-        applicationEventProcessor.process();
+        final List<ApplicationEvent> events = applicationEventProcessor.process();
 
         final long currentTimeMs = time.milliseconds();
         final long pollWaitTimeMs = requestManagers.entries().stream()
@@ -144,6 +146,23 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
                 .map(Optional::get)
                 .map(rm -> rm.maximumTimeToWait(currentTimeMs))
                 .reduce(Long.MAX_VALUE, Math::min);
+
+        events.stream()
+                .filter(e -> e instanceof CompletableApplicationEvent)
+                .map(e -> (CompletableApplicationEvent<?>) e)
+                .filter(e -> e.deadlineMs() < currentTimeMs && !e.future().isDone())
+                .forEach(e -> {
+                    long diff = currentTimeMs - e.deadlineMs();
+
+                    TimeoutException exception = new TimeoutException("Operation could not be completed");
+                    log.warn("Event {} had a deadline of {} but was not complete by {}, which is {} ms. past, completing with exception {}",
+                            e,
+                            e.deadlineMs(),
+                            currentTimeMs,
+                            diff,
+                            exception.getMessage());
+                    e.future().completeExceptionally(exception);
+                });
     }
 
     /**

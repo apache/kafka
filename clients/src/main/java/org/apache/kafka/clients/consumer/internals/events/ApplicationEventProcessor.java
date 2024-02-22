@@ -29,6 +29,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.LogContext;
 import org.slf4j.Logger;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -61,8 +62,15 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
      * an event generates an error. In such cases, the processor will log an exception, but we do not want those
      * errors to be propagated to the caller.
      */
-    public boolean process() {
-        return process((event, error) -> error.ifPresent(e -> log.warn("Error processing event {}", e.getMessage(), e)));
+    public List<ApplicationEvent> process() {
+        List<ApplicationEvent> events = new ArrayList<>();
+
+        process((event, error) -> {
+            events.add(event);
+            error.ifPresent(e -> log.warn("Error processing event {}", e.getMessage(), e));
+        });
+
+        return events;
     }
 
     @Override
@@ -150,7 +158,7 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
 
     private void process(final SyncCommitApplicationEvent event) {
         CommitRequestManager manager = requestManagers.commitRequestManager.get();
-        long expirationTimeoutMs = getExpirationTimeForTimeout(event.retryTimeoutMs());
+        long expirationTimeoutMs = event.deadlineMs();
         CompletableFuture<Void> commitResult = manager.commitSync(event.offsets(), expirationTimeoutMs);
         event.chain(commitResult);
     }
@@ -162,7 +170,7 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
             return;
         }
         CommitRequestManager manager = requestManagers.commitRequestManager.get();
-        long expirationTimeMs = getExpirationTimeForTimeout(event.timeout());
+        long expirationTimeMs = event.deadlineMs();
         event.chain(manager.fetchOffsets(event.partitions(), expirationTimeMs));
     }
 
@@ -237,7 +245,7 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
     private void process(final TopicMetadataApplicationEvent event) {
         final CompletableFuture<Map<String, List<PartitionInfo>>> future;
 
-        long expirationTimeMs = getExpirationTimeForTimeout(event.getTimeoutMs());
+        long expirationTimeMs = event.deadlineMs();
         if (event.isAllTopics()) {
             future = requestManagers.topicMetadataRequestManager.requestAllTopicsMetadata(expirationTimeMs);
         } else {
@@ -278,19 +286,6 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
         CompletableFuture<Void> future = membershipManager.leaveGroup();
         // The future will be completed on heartbeat sent
         event.chain(future);
-    }
-
-    /**
-     * @return Expiration time in milliseconds calculated with the current time plus the given
-     * timeout. Returns Long.MAX_VALUE if the expiration overflows it.
-     * Visible for testing.
-     */
-    long getExpirationTimeForTimeout(final long timeoutMs) {
-        long expiration = System.currentTimeMillis() + timeoutMs;
-        if (expiration < 0) {
-            return Long.MAX_VALUE;
-        }
-        return expiration;
     }
 
     /**

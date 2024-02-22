@@ -16,9 +16,9 @@
  */
 package org.apache.kafka.clients.consumer.internals.events;
 
-import org.apache.kafka.clients.consumer.internals.ConsumerUtils;
 import org.apache.kafka.common.utils.Timer;
 
+import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 
 /**
@@ -30,18 +30,21 @@ import java.util.concurrent.CompletableFuture;
 public abstract class CompletableApplicationEvent<T> extends ApplicationEvent implements CompletableEvent<T> {
 
     private final CompletableFuture<T> future;
+    private final long deadlineMs;
 
-    protected CompletableApplicationEvent(Type type) {
+    protected CompletableApplicationEvent(Type type, Timer timer) {
         super(type);
         this.future = new CompletableFuture<>();
+        this.deadlineMs = timer.remainingMs() + timer.currentTimeMs();
     }
 
+    @Override
     public CompletableFuture<T> future() {
         return future;
     }
 
-    public T get(Timer timer) {
-        return ConsumerUtils.getResult(future, timer);
+    public long deadlineMs() {
+        return deadlineMs;
     }
 
     public void chain(final CompletableFuture<T> providedFuture) {
@@ -62,19 +65,19 @@ public abstract class CompletableApplicationEvent<T> extends ApplicationEvent im
 
         CompletableApplicationEvent<?> that = (CompletableApplicationEvent<?>) o;
 
-        return future.equals(that.future);
+        return future.equals(that.future) && deadlineMs == that.deadlineMs;
     }
 
     @Override
     public int hashCode() {
         int result = super.hashCode();
-        result = 31 * result + future.hashCode();
+        result = 31 * result + Objects.hash(future, deadlineMs);
         return result;
     }
 
     @Override
     protected String toStringBase() {
-        return super.toStringBase() + ", future=" + future;
+        return super.toStringBase() + ", future=" + future + ", deadlineMs=" + deadlineMs;
     }
 
     @Override
