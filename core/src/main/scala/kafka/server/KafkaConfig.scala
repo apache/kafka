@@ -85,7 +85,7 @@ object KafkaConfig {
 
   // For ZooKeeper TLS client authentication to be enabled the client must (at a minimum) configure itself as using TLS
   // with both a client connection socket and a key store location explicitly set.
-  private[kafka] def zkTlsClientAuthEnabled(zkClientConfig: ZKClientConfig): Boolean = {
+  def zkTlsClientAuthEnabled(zkClientConfig: ZKClientConfig): Boolean = {
     zooKeeperClientProperty(zkClientConfig, ZkConfig.ZK_SSL_CLIENT_ENABLE_PROP).contains("true") &&
       zooKeeperClientProperty(zkClientConfig, ZkConfig.ZK_CLIENT_CNXN_SOCKET_PROP).isDefined &&
       zooKeeperClientProperty(zkClientConfig, ZkConfig.ZK_SSL_KEY_STORE_LOCATION_PROP).isDefined

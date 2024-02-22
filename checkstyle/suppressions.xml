@@ -360,4 +360,6 @@
     <suppress checks="(ClassDataAbstractionCoupling|ClassFanOutComplexity)"
               files="(ReplicaFetcherThreadBenchmark).java"/>
 
+    <suppress checks="ImportControl"
+              files="(ConfigCommand|ConfigCommandOptions|ConfigEntity|Entity|Tuple2).java"/>
 </suppressions>

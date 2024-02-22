@@ -33,11 +33,11 @@ import java.util.List;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import static org.apache.kafka.tools.config.ConfigCommand.BrokerLoggerConfigType;
-import static org.apache.kafka.tools.config.ConfigCommand.ZkSupportedConfigTypes;
+import static org.apache.kafka.tools.config.ConfigCommand.BROKER_LOGGER_CONFIG_TYPE;
+import static org.apache.kafka.tools.config.ConfigCommand.ZK_SUPPORTED_CONFIG_TYPES;
 
 public class ConfigCommandOptions extends CommandDefaultOptions {
-    public static final String nl = System.getProperty("line.separator");
+    private static final String NL = System.lineSeparator();
 
     final OptionSpec<String> zkConnectOpt;
     final OptionSpec<String> bootstrapServerOpt;
@@ -102,12 +102,12 @@ public class ConfigCommandOptions extends CommandDefaultOptions {
         entityDefault = parser.accepts("entity-default", "Default entity name for clients/users/brokers/ips (applies to corresponding entity type in command line)");
 
         addConfig = parser.accepts("add-config", "Key Value pairs of configs to add. Square brackets can be used to group values which contain commas: 'k1=v1,k2=[v1,v2,v2],k3=v3'. The following is a list of valid configurations: " +
-                        "For entity-type '" + ConfigType.TOPIC + "': " + LogConfig.configNames().stream().map(n -> "\t" + n).collect(Collectors.joining(nl, nl, nl)) +
-                        "For entity-type '" + ConfigType.BROKER + "': " + DynamicConfig.Broker.names().stream().sorted().map(n -> "\t" + n).collect(Collectors.joining(nl, nl, nl)) +
-                        "For entity-type '" + ConfigType.USER + "': " + DynamicConfig.User.names().stream().sorted().map(n -> "\t" + n).collect(Collectors.joining(nl, nl, nl)) +
-                        "For entity-type '" + ConfigType.CLIENT + "': " + DynamicConfig.Client.names().stream().sorted().map(n -> "\t" + n).collect(Collectors.joining(nl, nl, nl)) +
-                        "For entity-type '" + ConfigType.IP + "': " + DynamicConfig.Ip.names().stream().sorted().map(n -> "\t" + n).collect(Collectors.joining(nl, nl, nl)) +
-                        "For entity-type '" + ConfigType.CLIENT_METRICS + "': " + DynamicConfig.ClientMetrics.names().stream().sorted().map(n -> "\t" + n).collect(Collectors.joining(nl, nl, nl)) +
+                        "For entity-type '" + ConfigType.TOPIC + "': " + LogConfig.configNames().stream().map(n -> "\t" + n).collect(Collectors.joining(NL, NL, NL)) +
+                        "For entity-type '" + ConfigType.BROKER + "': " + DynamicConfig.Broker$.MODULE$.names().stream().sorted().map(n -> "\t" + n).collect(Collectors.joining(NL, NL, NL)) +
+                        "For entity-type '" + ConfigType.USER + "': " + DynamicConfig.User$.MODULE$.names().stream().sorted().map(n -> "\t" + n).collect(Collectors.joining(NL, NL, NL)) +
+                        "For entity-type '" + ConfigType.CLIENT + "': " + DynamicConfig.Client$.MODULE$.names().stream().sorted().map(n -> "\t" + n).collect(Collectors.joining(NL, NL, NL)) +
+                        "For entity-type '" + ConfigType.IP + "': " + DynamicConfig.Ip$.MODULE$.names().stream().sorted().map(n -> "\t" + n).collect(Collectors.joining(NL, NL, NL)) +
+                        "For entity-type '" + ConfigType.CLIENT_METRICS + "': " + DynamicConfig.ClientMetrics$.MODULE$.names().stream().sorted().map(n -> "\t" + n).collect(Collectors.joining(NL, NL, NL)) +
                         "Entity types '" + ConfigType.USER + "' and '" + ConfigType.CLIENT + "' may be specified together to update config for clients of a specific user.")
                 .withRequiredArg()
                 .ofType(String.class);
@@ -150,7 +150,7 @@ public class ConfigCommandOptions extends CommandDefaultOptions {
                 new Tuple2<>(client, ConfigType.CLIENT),
                 new Tuple2<>(user, ConfigType.USER),
                 new Tuple2<>(broker, ConfigType.BROKER),
-                new Tuple2<>(brokerLogger, BrokerLoggerConfigType),
+                new Tuple2<>(brokerLogger, BROKER_LOGGER_CONFIG_TYPE),
                 new Tuple2<>(ip, ConfigType.IP));
 
         entityDefaultsFlags = Arrays.asList(new Tuple2<>(clientDefaults, ConfigType.CLIENT),
@@ -193,6 +193,7 @@ public class ConfigCommandOptions extends CommandDefaultOptions {
         return res;
     }
 
+    @SuppressWarnings({"CyclomaticComplexity", "NPathComplexity"})
     public void checkArgs() {
         // should have exactly one action
         long actions = Stream.of(alterOpt, describeOpt).filter(options::has).count();
@@ -210,10 +211,10 @@ public class ConfigCommandOptions extends CommandDefaultOptions {
         String connectOptString;
 
         if (options.has(bootstrapServerOpt) || options.has(bootstrapControllerOpt)) {
-            allowedEntityTypes = ConfigCommand.BrokerSupportedConfigTypes;
+            allowedEntityTypes = ConfigCommand.BROKER_SUPPORTED_CONFIG_TYPES;
             connectOptString = "--bootstrap-server or --bootstrap-controller";
         } else {
-            allowedEntityTypes = ZkSupportedConfigTypes;
+            allowedEntityTypes = ZK_SUPPORTED_CONFIG_TYPES;
             connectOptString = "--zookeeper";
         }
 
@@ -224,7 +225,7 @@ public class ConfigCommandOptions extends CommandDefaultOptions {
 
         if (entityTypeVals.isEmpty())
             throw new IllegalArgumentException("At least one entity type must be specified");
-        else if (entityTypeVals.size() > 1 && !entityTypeVals.equals(Utils.mkSet(ConfigType.USER, ConfigType.CLIENT)))
+        else if (entityTypeVals.size() > 1 && !entityTypeVals.equals(Arrays.asList(ConfigType.USER, ConfigType.CLIENT)))
             throw new IllegalArgumentException("Only '" + ConfigType.USER + "' and '" + ConfigType.CLIENT + "' entity types may be specified together");
 
         if ((options.has(entityName) || options.has(entityType) || options.has(entityDefault)) &&
@@ -248,7 +249,7 @@ public class ConfigCommandOptions extends CommandDefaultOptions {
         if (options.has(zkTlsConfigFile) && !options.has(zkConnectOpt)) {
             throw new IllegalArgumentException("Only the --zookeeper option can be used with the --zk-tls-config-file option.");
         }
-        if (hasEntityName && (entityTypeVals.contains(ConfigType.BROKER) || entityTypeVals.contains(BrokerLoggerConfigType))) {
+        if (hasEntityName && (entityTypeVals.contains(ConfigType.BROKER) || entityTypeVals.contains(BROKER_LOGGER_CONFIG_TYPE))) {
             Stream.of(entityName, broker, brokerLogger).filter(o -> options.has(o)).map(o -> options.valueOf(o)).forEach(brokerId -> {
                 try {
                     Integer.valueOf(brokerId);
@@ -260,12 +261,12 @@ public class ConfigCommandOptions extends CommandDefaultOptions {
 
         if (hasEntityName && entityTypeVals.contains(ConfigType.IP)) {
             Stream.of(entityName, ip).filter(o -> options.has(o)).map(o -> options.valueOf(o)).forEach(ipEntity -> {
-                if (!DynamicConfig.Ip.isValidIpEntity(ipEntity))
+                if (!DynamicConfig.Ip$.MODULE$.isValidIpEntity(ipEntity))
                     throw new IllegalArgumentException("The entity name for " + entityTypeVals.get(0) + " must be a valid IP or resolvable host, but it is: " + ipEntity);
             });
         }
 
-        if (options.has(describeOpt) && entityTypeVals.contains(BrokerLoggerConfigType) && !hasEntityName)
+        if (options.has(describeOpt) && entityTypeVals.contains(BROKER_LOGGER_CONFIG_TYPE) && !hasEntityName)
             throw new IllegalArgumentException("an entity name must be specified with --describe of " + Utils.join(entityTypeVals, ","));
 
         if (options.has(alterOpt)) {
