@@ -36,6 +36,9 @@ import org.apache.kafka.common.utils.Time;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -52,6 +55,7 @@ import java.util.TreeSet;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import static org.apache.kafka.clients.consumer.internals.AsyncKafkaConsumer.invokeRebalanceCallbacks;
 import static org.apache.kafka.common.requests.ConsumerGroupHeartbeatRequest.LEAVE_GROUP_MEMBER_EPOCH;
@@ -118,21 +122,20 @@ public class MembershipManagerImplTest {
     }
 
     private MembershipManagerImpl createMembershipManagerJoiningGroup() {
-        MembershipManagerImpl manager = spy(new MembershipManagerImpl(
-                GROUP_ID, Optional.empty(), REBALANCE_TIMEOUT, Optional.empty(),
-                subscriptionState, commitRequestManager, metadata, logContext, Optional.empty(),
-                backgroundEventHandler, time));
+        return createMembershipManagerJoiningGroup(null);
+    }
+
+    private MembershipManagerImpl createMembershipManagerJoiningGroup(String groupInstanceId) {
+        MembershipManagerImpl manager = createMembershipManager(groupInstanceId);
         manager.transitionToJoining();
         return manager;
     }
 
-    private MembershipManagerImpl createMembershipManagerJoiningGroup(String groupInstanceId) {
-        MembershipManagerImpl manager = spy(new MembershipManagerImpl(
-                GROUP_ID, Optional.ofNullable(groupInstanceId), REBALANCE_TIMEOUT, Optional.empty(),
-                subscriptionState, commitRequestManager, metadata, logContext, Optional.empty(),
-                backgroundEventHandler, time));
-        manager.transitionToJoining();
-        return manager;
+    private MembershipManagerImpl createMembershipManager(String groupInstanceId) {
+        return spy(new MembershipManagerImpl(
+            GROUP_ID, Optional.ofNullable(groupInstanceId), REBALANCE_TIMEOUT, Optional.empty(),
+            subscriptionState, commitRequestManager, metadata, logContext, Optional.empty(),
+            backgroundEventHandler, time));
     }
 
     private MembershipManagerImpl createMembershipManagerJoiningGroup(String groupInstanceId,
@@ -714,6 +717,21 @@ public class MembershipManagerImplTest {
         assertTrue(membershipManager.currentAssignment().isEmpty());
         assertFalse(leaveResult.isDone(), "Leave group result should not complete until the " +
             "heartbeat request to leave is sent out.");
+    }
+
+    @ParameterizedTest
+    @MethodSource("notInGroupStates")
+    public void testIgnoreHeartbeatResponseWhenNotInGroup(MemberState state) {
+        MembershipManagerImpl membershipManager = createMembershipManager(null);
+        when(membershipManager.state()).thenReturn(state);
+        ConsumerGroupHeartbeatResponseData responseData = mock(ConsumerGroupHeartbeatResponseData.class);
+
+        membershipManager.onHeartbeatResponseReceived(responseData);
+
+        assertEquals(state, membershipManager.state());
+        verify(responseData, never()).memberId();
+        verify(responseData, never()).memberEpoch();
+        verify(responseData, never()).assignment();
     }
 
     @Test
@@ -2296,4 +2314,16 @@ public class MembershipManagerImplTest {
         assertFalse(membershipManager.currentAssignment().isEmpty());
         return membershipManager;
     }
+
+    /**
+     * @return States where the member is not part of the group.
+     */
+    private static Stream<Arguments> notInGroupStates() {
+        return Stream.of(
+            Arguments.of(MemberState.UNSUBSCRIBED),
+            Arguments.of(MemberState.FENCED),
+            Arguments.of(MemberState.FATAL),
+            Arguments.of(MemberState.STALE));
+    }
+
 }

@@ -354,9 +354,15 @@ public class MembershipManagerImpl implements MembershipManager {
             );
             throw new IllegalArgumentException(errorMessage);
         }
+        MemberState state = state();
         if (state == MemberState.LEAVING) {
             log.debug("Ignoring heartbeat response received from broker. Member {} with epoch {} is " +
                     "already leaving the group.", memberId, memberEpoch);
+            return;
+        }
+        if (isNotInGroup()) {
+            log.debug("Ignoring heartbeat response received from broker. Member {} is in {} state" +
+                " so it's not a member of the group. ", memberId, state);
             return;
         }
 
@@ -387,6 +393,16 @@ public class MembershipManagerImpl implements MembershipManager {
         } else if (targetAssignmentReconciled()) {
             transitionTo(MemberState.STABLE);
         }
+    }
+
+    /**
+     * @return True if the consumer is not a member of the group.
+     */
+    private boolean isNotInGroup() {
+        return state == MemberState.UNSUBSCRIBED ||
+            state == MemberState.FENCED ||
+            state == MemberState.FATAL ||
+            state == MemberState.STALE;
     }
 
     /**
