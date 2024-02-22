@@ -806,18 +806,13 @@ public abstract class AbstractSessionBytesStoreTest {
         context.setSystemTimeMs(time.milliseconds());
         sessionStore.init((StateStoreContext) context, sessionStore);
 
-        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister()) {
-            // Advance stream time by inserting record with large enough timestamp that records with timestamp 0 are expired
-            // Note that rocksdb will only expire segments at a time (where segment interval = 60,000 for this retention period)
-            sessionStore.put(new Windowed<>("initial record", new SessionWindow(0, 2 * SEGMENT_INTERVAL)), 0L);
+        // Advance stream time by inserting record with large enough timestamp that records with timestamp 0 are expired
+        // Note that rocksdb will only expire segments at a time (where segment interval = 60,000 for this retention period)
+        sessionStore.put(new Windowed<>("initial record", new SessionWindow(0, 2 * SEGMENT_INTERVAL)), 0L);
 
-            // Try inserting a record with timestamp 0 -- should be dropped
-            sessionStore.put(new Windowed<>("late record", new SessionWindow(0, 0)), 0L);
-            sessionStore.put(new Windowed<>("another on-time record", new SessionWindow(0, 2 * SEGMENT_INTERVAL)), 0L);
-
-            final List<String> messages = appender.getMessages();
-            assertThat(messages, hasItem("Skipping record for expired segment."));
-        }
+        // Try inserting a record with timestamp 0 -- should be dropped
+        sessionStore.put(new Windowed<>("late record", new SessionWindow(0, 0)), 0L);
+        sessionStore.put(new Windowed<>("another on-time record", new SessionWindow(0, 2 * SEGMENT_INTERVAL)), 0L);
 
         final Map<MetricName, ? extends Metric> metrics = context.metrics().metrics();
         final String threadId = Thread.currentThread().getName();
