@@ -62,11 +62,14 @@ import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 
+@SuppressWarnings("unchecked")
 public class ShareConsumerImplTest {
 
     private ShareConsumerImpl<String, String> consumer = null;
 
     private final Time time = new MockTime(1);
+    private final ShareFetchCollector<String, String> fetchCollector = mock(ShareFetchCollector.class);
+
     private final ApplicationEventHandler applicationEventHandler = mock(ApplicationEventHandler.class);
     private final LinkedBlockingQueue<BackgroundEvent> backgroundEventQueue = new LinkedBlockingQueue<>();
 
@@ -105,6 +108,7 @@ public class ShareConsumerImplTest {
                 new StringDeserializer(),
                 time,
                 (a, b, c, d, e, f) -> applicationEventHandler,
+                (a, b, c, d, e) -> fetchCollector,
                 backgroundEventQueue
         );
     }
@@ -125,6 +129,7 @@ public class ShareConsumerImplTest {
     public void testWakeupBeforeCallingPoll() {
         consumer = newConsumer();
         final String topicName = "foo";
+        doReturn(Fetch.empty()).when(fetchCollector).collectFetch(any(ShareFetchBuffer.class));
         consumer.subscribe(singletonList(topicName));
 
         consumer.wakeup();

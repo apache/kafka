@@ -22,14 +22,12 @@ import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
-import org.apache.kafka.common.message.FetchResponseData;
 import org.apache.kafka.common.message.ShareFetchResponseData;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.ShareFetchRequest;
 import org.apache.kafka.common.requests.ShareFetchResponse;
 import org.apache.kafka.common.utils.BufferSupplier;
 import org.apache.kafka.common.utils.LogContext;
-import org.apache.kafka.common.utils.Time;
 import org.slf4j.Logger;
 
 import java.util.HashMap;
@@ -55,34 +53,28 @@ public class ShareFetchRequestManager implements RequestManager {
     private final Logger log;
     private final LogContext logContext;
     private final String groupId;
-    private final Time time;
     private final ConsumerMetadata metadata;
     private final SubscriptionState subscriptions;
     private final FetchConfig fetchConfig;
     private final ShareFetchBuffer shareFetchBuffer;
-    private final NetworkClientDelegate networkClientDelegate;
     private final Map<Integer, ShareSessionHandler> sessionHandlers;
     private final Set<Integer> nodesWithPendingFetchRequests;
     private final FetchMetricsManager metricsManager;
 
     ShareFetchRequestManager(final LogContext logContext,
-                             final Time time,
                              final String groupId,
                              final ConsumerMetadata metadata,
                              final SubscriptionState subscriptions,
                              final FetchConfig fetchConfig,
                              final ShareFetchBuffer shareFetchBuffer,
-                             final NetworkClientDelegate networkClientDelegate,
                              final FetchMetricsManager metricsManager) {
         this.log = logContext.logger(AbstractFetch.class);
         this.logContext = logContext;
         this.groupId = groupId;
-        this.time = time;
         this.metadata = metadata;
         this.subscriptions = subscriptions;
         this.fetchConfig = fetchConfig;
         this.shareFetchBuffer = shareFetchBuffer;
-        this.networkClientDelegate = networkClientDelegate;
         this.metricsManager = metricsManager;
         this.sessionHandlers = new HashMap<>();
         this.nodesWithPendingFetchRequests = new HashSet<>();
@@ -141,35 +133,20 @@ public class ShareFetchRequestManager implements RequestManager {
                             responseData.put(new TopicIdPartition(topicResponse.topicId(), partition.partitionIndex(), name), partition));
                 }
             });
-            final Set<TopicPartition> partitions = responseData.keySet().stream().map(TopicIdPartition::topicPartition).collect(Collectors.toSet());
-            final FetchMetricsAggregator metricAggregator = new FetchMetricsAggregator(metricsManager, partitions);
-
 
             for (Map.Entry<TopicIdPartition, ShareFetchResponseData.PartitionData> entry : responseData.entrySet()) {
                 TopicIdPartition partition = entry.getKey();
 
                 ShareFetchResponseData.PartitionData partitionData = entry.getValue();
-                long fetchOffset = -1L;
 
                 log.debug("Share fetch {} for partition {} returned fetch data {}",
                         fetchConfig.isolationLevel, partition, partitionData);
 
-                // Making a FetchResponseData.PartitionData from ShareResponseData.PartitionData for now.
-                // This can be removed once we have a separate CompletedShareFetch which uses ShareResponseData.PartitionData
-                FetchResponseData.PartitionData partitionDataFetch = new FetchResponseData.PartitionData();
-                partitionDataFetch.setPartitionIndex(partitionData.partitionIndex())
-                        .setErrorCode(partitionData.errorCode())
-                        .setRecords(partitionData.records());
-
-
-                CompletedFetch completedFetch = new CompletedFetch(
+                CompletedShareFetch completedFetch = new CompletedShareFetch(
                         logContext,
-                        subscriptions,
                         BufferSupplier.create(),
-                        partition.topicPartition(),
-                        partitionDataFetch,
-                        metricAggregator,
-                        0L,
+                        partition,
+                        partitionData,
                         requestVersion);
                 shareFetchBuffer.add(completedFetch);
             }
@@ -272,6 +249,7 @@ public class ShareFetchRequestManager implements RequestManager {
 
     @Override
     public NetworkClientDelegate.PollResult pollOnClose() {
+        // This is where the final ShareFetch or ShareAcknowledge goes
         return EMPTY;
     }
 }

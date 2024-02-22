@@ -96,6 +96,7 @@ import static org.apache.kafka.common.utils.Utils.join;
  * {@link ApplicationEvent application events} so that the network I/O can be processed in a dedicated
  * {@link ConsumerNetworkThread network thread}.
  */
+@SuppressWarnings("ClassFanOutComplexity")
 public class ShareConsumerImpl<K, V> implements ShareConsumer<K, V> {
 
     private static final long NO_CURRENT_THREAD = -1L;
@@ -176,6 +177,7 @@ public class ShareConsumerImpl<K, V> implements ShareConsumer<K, V> {
      * two threads and is thus designed to be thread-safe.
      */
     private final ShareFetchBuffer fetchBuffer;
+    private final ShareFetchCollector<K, V> fetchCollector;
 
     private final SubscriptionState subscriptions;
     private final ConsumerMetadata metadata;
@@ -199,6 +201,7 @@ public class ShareConsumerImpl<K, V> implements ShareConsumer<K, V> {
                 valueDeserializer,
                 Time.SYSTEM,
                 ApplicationEventHandler::new,
+                ShareFetchCollector::new,
                 new LinkedBlockingQueue<>()
         );
     }
@@ -209,6 +212,7 @@ public class ShareConsumerImpl<K, V> implements ShareConsumer<K, V> {
                       final Deserializer<V> valueDeserializer,
                       final Time time,
                       final ApplicationEventHandlerFactory applicationEventHandlerFactory,
+                      final ShareFetchCollectorFactory<K, V> fetchCollectorFactory,
                       final LinkedBlockingQueue<BackgroundEvent> backgroundEventQueue) {
         try {
             GroupRebalanceConfig groupRebalanceConfig = new GroupRebalanceConfig(
@@ -290,6 +294,13 @@ public class ShareConsumerImpl<K, V> implements ShareConsumer<K, V> {
                     logContext,
                     backgroundEventQueue);
 
+            this.fetchCollector = fetchCollectorFactory.build(
+                    logContext,
+                    metadata,
+                    subscriptions,
+                    new FetchConfig(config),
+                    deserializers);
+
             this.kafkaConsumerMetrics = new KafkaConsumerMetrics(metrics, CONSUMER_METRIC_GROUP_PREFIX);
 
             config.logUnused();
@@ -316,6 +327,18 @@ public class ShareConsumerImpl<K, V> implements ShareConsumer<K, V> {
                 final Supplier<ApplicationEventProcessor> applicationEventProcessorSupplier,
                 final Supplier<NetworkClientDelegate> networkClientDelegateSupplier,
                 final Supplier<RequestManagers> requestManagersSupplier
+        );
+    }
+
+    // auxiliary interface for testing
+    interface ShareFetchCollectorFactory<K, V> {
+
+        ShareFetchCollector<K, V> build(
+                final LogContext logContext,
+                final ConsumerMetadata metadata,
+                final SubscriptionState subscriptions,
+                final FetchConfig fetchConfig,
+                final Deserializers<K, V> deserializers
         );
     }
 
@@ -405,6 +428,7 @@ public class ShareConsumerImpl<K, V> implements ShareConsumer<K, V> {
 
                 backgroundEventProcessor.process();
 
+                // Make sure the network thread can tell the application is actively polling
                 applicationEventHandler.add(new PollApplicationEvent(timer.currentTimeMs()));
 
                 final Fetch<K, V> fetch = pollForFetches(timer);
@@ -425,17 +449,30 @@ public class ShareConsumerImpl<K, V> implements ShareConsumer<K, V> {
     private Fetch<K, V> pollForFetches(Timer timer) {
         long pollTimeout = Math.min(applicationEventHandler.maximumTimeToWait(), timer.remainingMs());
 
+        // If data is available already, return it immediately
+        final Fetch<K, V> fetch = collectFetch();
+        if (!fetch.isEmpty()) {
+            return fetch;
+        }
+
         // Wait a bit - this is where we will fetch records
         Timer pollTimer = time.timer(pollTimeout);
         try {
-            pollTimer.sleep(pollTimeout);
+            fetchBuffer.awaitNotEmpty(pollTimer);
         } catch (InterruptException e) {
             log.trace("Timeout during fetch", e);
         } finally {
             timer.update(pollTimer.currentTimeMs());
         }
 
-        return Fetch.empty();
+        return collectFetch();
+    }
+
+    private Fetch<K, V> collectFetch() {
+        // Notify the network thread to wake up and start the next round of fetching
+//        applicationEventHandler.wakeupNetworkThread();
+
+        return fetchCollector.collectFetch(fetchBuffer);
     }
 
     /**
