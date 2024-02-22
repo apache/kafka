@@ -31,4 +31,11 @@ public class SyncCommitApplicationEvent extends CommitApplicationEvent {
     public SyncCommitApplicationEvent(final Map<TopicPartition, OffsetAndMetadata> offsets, final Timer timer) {
         super(Type.COMMIT_SYNC, timer, offsets);
     }
+
+    public String toString() {
+        return "SyncCommitApplicationEvent{" +
+            toStringBase() +
+            ", offsets=" + offsets() +
+            '}';
+    }
 }

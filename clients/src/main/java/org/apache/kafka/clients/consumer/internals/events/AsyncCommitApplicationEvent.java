@@ -30,4 +30,12 @@ public class AsyncCommitApplicationEvent extends CommitApplicationEvent {
     public AsyncCommitApplicationEvent(final Map<TopicPartition, OffsetAndMetadata> offsets, Timer timer) {
         super(Type.COMMIT_ASYNC, timer, offsets);
     }
+
+    @Override
+    public String toString() {
+        return "AsyncCommitApplicationEvent{" +
+            toStringBase() +
+            ", offsets=" + offsets() +
+            '}';
+    }
 }

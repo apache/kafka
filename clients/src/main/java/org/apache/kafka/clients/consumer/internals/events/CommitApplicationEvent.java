@@ -22,7 +22,6 @@ import org.apache.kafka.common.utils.Timer;
 
 import java.util.Collections;
 import java.util.Map;
-import java.util.Objects;
 
 public abstract class CommitApplicationEvent extends CompletableApplicationEvent<Void> {
 
@@ -35,19 +34,13 @@ public abstract class CommitApplicationEvent extends CompletableApplicationEvent
                                      final Timer timer,
                                      final Map<TopicPartition, OffsetAndMetadata> offsets) {
         super(type, timer);
-        this.offsets = validate(offsets);
-    }
-
-    private static Map<TopicPartition, OffsetAndMetadata> validate(final Map<TopicPartition, OffsetAndMetadata> offsets) {
-        Objects.requireNonNull(offsets, "Commit offsets should be non-null");
+        this.offsets = Collections.unmodifiableMap(offsets);
 
         for (OffsetAndMetadata offsetAndMetadata : offsets.values()) {
             if (offsetAndMetadata.offset() < 0) {
                 throw new IllegalArgumentException("Invalid offset: " + offsetAndMetadata.offset());
             }
         }
-
-        return Collections.unmodifiableMap(offsets);
     }
 
     public Map<TopicPartition, OffsetAndMetadata> offsets() {
