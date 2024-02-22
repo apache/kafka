@@ -128,12 +128,12 @@ public class ConsumerNetworkThreadTest {
         // There's a nonzero amount of time between starting the thread and having it
         // begin to execute our code. Wait for a bit before checking...
         TestUtils.waitForCondition(isStarted,
-            "The consumer network thread did not start within " + DEFAULT_MAX_WAIT_MS + " ms");
+              "The consumer network thread did not start within " + DEFAULT_MAX_WAIT_MS + " ms");
 
         consumerNetworkThread.close(Duration.ofMillis(DEFAULT_MAX_WAIT_MS));
 
         TestUtils.waitForCondition(isClosed,
-            "The consumer network thread did not stop within " + DEFAULT_MAX_WAIT_MS + " ms");
+               "The consumer network thread did not stop within " + DEFAULT_MAX_WAIT_MS + " ms");
     }
 
     @Test
@@ -238,22 +238,22 @@ public class ConsumerNetworkThreadTest {
     @Test
     void testPollResultTimer() {
         NetworkClientDelegate.UnsentRequest req = new NetworkClientDelegate.UnsentRequest(
-            new FindCoordinatorRequest.Builder(
-                new FindCoordinatorRequestData()
-                    .setKeyType(FindCoordinatorRequest.CoordinatorType.TRANSACTION.id())
-                    .setKey("foobar")),
-            Optional.empty());
+                new FindCoordinatorRequest.Builder(
+                        new FindCoordinatorRequestData()
+                                .setKeyType(FindCoordinatorRequest.CoordinatorType.TRANSACTION.id())
+                                .setKey("foobar")),
+                Optional.empty());
         req.setTimer(time, DEFAULT_REQUEST_TIMEOUT_MS);
 
         // purposely setting a non-MAX time to ensure it is returning Long.MAX_VALUE upon success
         NetworkClientDelegate.PollResult success = new NetworkClientDelegate.PollResult(
-            10,
-            Collections.singletonList(req));
+                10,
+                Collections.singletonList(req));
         assertEquals(10, networkClient.addAll(success));
 
         NetworkClientDelegate.PollResult failure = new NetworkClientDelegate.PollResult(
-            10,
-            new ArrayList<>());
+                10,
+                new ArrayList<>());
         assertEquals(10, networkClient.addAll(failure));
     }
 
