@@ -1587,28 +1587,28 @@ class ReplicaManager(val config: KafkaConfig,
     val traceEnabled = isTraceEnabled
 
     def checkAndPrepareFetchDataInfo(partition: Partition, readInfo: LogReadInfo) = {
-      val fetchDataInfo = readInfo.fetchedData
+      val givenFetchedDataInfo = readInfo.fetchedData
       if (params.isFromFollower && shouldLeaderThrottle(quota, partition, params.replicaId)) {
         // If the partition is being throttled, simply return an empty set.
-        new FetchDataInfo(fetchDataInfo.fetchOffsetMetadata, MemoryRecords.EMPTY)
-      } else if (!params.hardMaxBytesLimit && fetchDataInfo.firstEntryIncomplete) {
+        new FetchDataInfo(givenFetchedDataInfo.fetchOffsetMetadata, MemoryRecords.EMPTY)
+      } else if (!params.hardMaxBytesLimit && givenFetchedDataInfo.firstEntryIncomplete) {
         // For FetchRequest version 3, we replace incomplete message sets with an empty one as consumers can make
         // progress in such cases and don't need to report a `RecordTooLargeException`
-        new FetchDataInfo(fetchDataInfo.fetchOffsetMetadata, MemoryRecords.EMPTY)
+        new FetchDataInfo(givenFetchedDataInfo.fetchOffsetMetadata, MemoryRecords.EMPTY)
       } else {
         // For active segment we assume that it is hot enough to still have all data in page cache.
         // Most of fetch requests are fetching from the tail of the log, so this optimization should save
         // call of additional sendfile(2) targeting /dev/null for populating page cache significantly.
-        val isActiveSegment = readInfo.activeSegmentBaseOffset == fetchDataInfo.fetchOffsetMetadata.segmentBaseOffset
-        if (!isActiveSegment && fetchDataInfo.records.isInstanceOf[FileRecords]) {
+        val isActiveSegment = readInfo.activeSegmentBaseOffset == givenFetchedDataInfo.fetchOffsetMetadata.segmentBaseOffset
+        if (!isActiveSegment && givenFetchedDataInfo.records.isInstanceOf[FileRecords]) {
           try {
-            fetchDataInfo.records.asInstanceOf[FileRecords].prepareForRead()
+            givenFetchedDataInfo.records.asInstanceOf[FileRecords].prepareForRead()
           } catch {
             case e: Exception => debug("Failed to prepare cache for read for performance improvement. " +
               "This can be ignored if the fetch behavior works without any issue.", e)
           }
         }
-        fetchDataInfo
+        givenFetchedDataInfo
       }
     }
 
