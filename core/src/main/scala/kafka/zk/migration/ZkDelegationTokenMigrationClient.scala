@@ -36,7 +36,7 @@ class ZkDelegationTokenMigrationClient(
 
   val adminZkClient = new AdminZkClient(zkClient)
 
-  override def getDelegationTokens(): java.util.List[String] = {
+  override def getDelegationTokens: java.util.List[String] = {
       zkClient.getChildren(DelegationTokensZNode.path).asJava
   }
 
