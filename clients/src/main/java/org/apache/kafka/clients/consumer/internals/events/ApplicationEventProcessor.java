@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.clients.consumer.internals.events;
 
-import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetAndTimestamp;
 import org.apache.kafka.clients.consumer.internals.CachedSupplier;
 import org.apache.kafka.clients.consumer.internals.CommitRequestManager;
@@ -27,10 +26,8 @@ import org.apache.kafka.clients.consumer.internals.RequestManagers;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.common.utils.Timer;
 import org.slf4j.Logger;
 
 import java.util.List;
@@ -152,13 +149,14 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
     private void process(final AsyncCommitApplicationEvent event) {
         CommitRequestManager manager = requestManagers.commitRequestManager.get();
         CompletableFuture<Void> commitResult = manager.commitAsync(event.offsets());
-        chain(commitResult, event.future());
+        event.chain(commitResult);
     }
 
     private void process(final SyncCommitApplicationEvent event) {
         CommitRequestManager manager = requestManagers.commitRequestManager.get();
-        CompletableFuture<Void> commitResult = manager.commitSync(event.offsets(), event.deadlineMs());
-        chain(commitResult, event.future());
+        long expirationTimeoutMs = event.deadlineMs();
+        CompletableFuture<Void> commitResult = manager.commitSync(event.offsets(), expirationTimeoutMs);
+        event.chain(commitResult);
     }
 
     private void process(final FetchCommittedOffsetsApplicationEvent event) {
@@ -168,8 +166,8 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
             return;
         }
         CommitRequestManager manager = requestManagers.commitRequestManager.get();
-        CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> future = manager.fetchOffsets(event.partitions(), event.deadlineMs());
-        chain(future, event.future());
+        long expirationTimeoutMs = event.deadlineMs();
+        event.chain(manager.fetchOffsets(event.partitions(), expirationTimeoutMs));
     }
 
     private void process(final NewTopicsMetadataUpdateRequestEvent ignored) {
@@ -194,7 +192,7 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
         final CompletableFuture<Map<TopicPartition, OffsetAndTimestamp>> future =
                 requestManagers.offsetsRequestManager.fetchOffsets(event.timestampsToSearch(),
                         event.requireTimestamps());
-        chain(future, event.future());
+        event.chain(future);
     }
 
     /**
@@ -227,17 +225,17 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
         }
         MembershipManager membershipManager = requestManagers.heartbeatRequestManager.get().membershipManager();
         CompletableFuture<Void> result = membershipManager.leaveGroup();
-        chain(result, event.future());
+        event.chain(result);
     }
 
     private void process(final ResetPositionsApplicationEvent event) {
         CompletableFuture<Void> result = requestManagers.offsetsRequestManager.resetPositionsIfNeeded();
-        chain(result, event.future());
+        event.chain(result);
     }
 
     private void process(final ValidatePositionsApplicationEvent event) {
         CompletableFuture<Void> result = requestManagers.offsetsRequestManager.validatePositionsIfNeeded();
-        chain(result, event.future());
+        event.chain(result);
     }
 
     private void process(final TopicMetadataApplicationEvent event) {
@@ -249,7 +247,7 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
             future = requestManagers.topicMetadataRequestManager.requestTopicMetadata(event.topic(), event.deadlineMs());
         }
 
-        chain(future, event.future());
+        event.chain(future);
     }
 
     private void process(final ConsumerRebalanceListenerCallbackCompletedEvent event) {
@@ -282,44 +280,7 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
         log.debug("Leaving group before closing");
         CompletableFuture<Void> future = membershipManager.leaveGroup();
         // The future will be completed on heartbeat sent
-        chain(future, event.future());
-    }
-
-    /**
-     * Creates a {@link Timer time} for the network I/O thread that is <em>separate</em> from the timer for the
-     * application thread.
-     */
-    private Timer timer(CompletableApplicationEvent<?> event) {
-        return time.timer(event.deadlineMs() - time.milliseconds());
-    }
-
-    private boolean maybeTimeout(CompletableApplicationEvent<?> event, Timer timer, String timeoutMessage) {
-        if (timer.isExpired()) {
-            Exception exception = new TimeoutException(timeoutMessage);
-            event.future().completeExceptionally(exception);
-            return true;
-        } else {
-            return false;
-        }
-    }
-
-    private <T> void chain(final CompletableFuture<T> primary, final CompletableFuture<T> secondary) {
-        Objects.requireNonNull(
-            primary,
-            () -> String.format("Could not chain the secondary future (%s) to the primary future because the primary future was null", secondary)
-        );
-        Objects.requireNonNull(
-            secondary,
-            () -> String.format("Could not chain the secondary future to the primary future (%s) because the secondary future was null", primary)
-        );
-
-        primary.whenComplete((value, exception) -> {
-            if (exception != null) {
-                secondary.completeExceptionally(exception);
-            } else {
-                secondary.complete(value);
-            }
-        });
+        event.chain(future);
     }
 
     /**

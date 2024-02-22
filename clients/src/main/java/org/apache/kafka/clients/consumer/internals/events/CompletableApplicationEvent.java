@@ -54,6 +54,16 @@ public abstract class CompletableApplicationEvent<T> extends ApplicationEvent im
         return ConsumerUtils.getResult(future, timer);
     }
 
+    public void chain(final CompletableFuture<T> providedFuture) {
+        providedFuture.whenComplete((value, exception) -> {
+            if (exception != null) {
+                this.future.completeExceptionally(exception);
+            } else {
+                this.future.complete(value);
+            }
+        });
+    }
+
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
