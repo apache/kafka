@@ -31,13 +31,11 @@ import java.util.concurrent.CompletableFuture;
 public abstract class CompletableApplicationEvent<T> extends ApplicationEvent implements CompletableEvent<T> {
 
     private final CompletableFuture<T> future;
-    private final Timer timer;
     private final long deadlineMs;
 
     protected CompletableApplicationEvent(Type type, Timer timer) {
         super(type);
         this.future = new CompletableFuture<>();
-        this.timer = timer;
         this.deadlineMs = timer.remainingMs() + timer.currentTimeMs();
     }
 
@@ -50,7 +48,7 @@ public abstract class CompletableApplicationEvent<T> extends ApplicationEvent im
         return deadlineMs;
     }
 
-    public T get() {
+    public T get(Timer timer) {
         return ConsumerUtils.getResult(future, timer);
     }
 

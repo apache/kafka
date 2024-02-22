@@ -44,18 +44,15 @@ import java.util.function.Supplier;
 public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> {
 
     private final Logger log;
-    private final Time time;
     private final ConsumerMetadata metadata;
     private final RequestManagers requestManagers;
 
     public ApplicationEventProcessor(final LogContext logContext,
-                                     final Time time,
                                      final BlockingQueue<ApplicationEvent> applicationEventQueue,
                                      final RequestManagers requestManagers,
                                      final ConsumerMetadata metadata) {
         super(logContext, applicationEventQueue);
         this.log = logContext.logger(ApplicationEventProcessor.class);
-        this.time = time;
         this.requestManagers = requestManagers;
         this.metadata = metadata;
     }
@@ -166,8 +163,8 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
             return;
         }
         CommitRequestManager manager = requestManagers.commitRequestManager.get();
-        long expirationTimeoutMs = event.deadlineMs();
-        event.chain(manager.fetchOffsets(event.partitions(), expirationTimeoutMs));
+        long expirationTimeMs = event.deadlineMs();
+        event.chain(manager.fetchOffsets(event.partitions(), expirationTimeMs));
     }
 
     private void process(final NewTopicsMetadataUpdateRequestEvent ignored) {
@@ -241,10 +238,11 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
     private void process(final TopicMetadataApplicationEvent event) {
         final CompletableFuture<Map<String, List<PartitionInfo>>> future;
 
+        long expirationTimeMs = event.deadlineMs();
         if (event.isAllTopics()) {
-            future = requestManagers.topicMetadataRequestManager.requestAllTopicsMetadata(event.deadlineMs());
+            future = requestManagers.topicMetadataRequestManager.requestAllTopicsMetadata(expirationTimeMs);
         } else {
-            future = requestManagers.topicMetadataRequestManager.requestTopicMetadata(event.topic(), event.deadlineMs());
+            future = requestManagers.topicMetadataRequestManager.requestTopicMetadata(event.topic(), expirationTimeMs);
         }
 
         event.chain(future);
@@ -288,7 +286,6 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
      * {@link ConsumerNetworkThread}.
      */
     public static Supplier<ApplicationEventProcessor> supplier(final LogContext logContext,
-                                                               final Time time,
                                                                final ConsumerMetadata metadata,
                                                                final BlockingQueue<ApplicationEvent> applicationEventQueue,
                                                                final Supplier<RequestManagers> requestManagersSupplier) {
@@ -298,7 +295,6 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
                 RequestManagers requestManagers = requestManagersSupplier.get();
                 return new ApplicationEventProcessor(
                         logContext,
-                        time,
                         applicationEventQueue,
                         requestManagers,
                         metadata

@@ -22,6 +22,7 @@ import org.apache.kafka.clients.consumer.internals.RequestManagers;
 import org.apache.kafka.common.internals.IdempotentCloser;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.Timer;
 import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 
@@ -98,16 +99,17 @@ public class ApplicationEventHandler implements Closeable {
      *
      * <p/>
      *
-     * See {@link CompletableApplicationEvent#get()} and {@link Future#get(long, TimeUnit)} for more details.
+     * See {@link CompletableApplicationEvent#get(Timer)} and {@link Future#get(long, TimeUnit)} for more details.
      *
      * @param event A {@link CompletableApplicationEvent} created by the polling thread
+     * @param timer Timer for which to wait for the event to complete
      * @return      Value that is the result of the event
      * @param <T>   Type of return value of the event
      */
-    public <T> T addAndGet(final CompletableApplicationEvent<T> event) {
+    public <T> T addAndGet(final CompletableApplicationEvent<T> event, final Timer timer) {
         Objects.requireNonNull(event, "CompletableApplicationEvent provided to addAndGet must be non-null");
         add(event);
-        return event.get();
+        return event.get(timer);
     }
 
     @Override

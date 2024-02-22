@@ -383,7 +383,6 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                     metrics,
                     offsetCommitCallbackInvoker);
             final Supplier<ApplicationEventProcessor> applicationEventProcessorSupplier = ApplicationEventProcessor.supplier(logContext,
-                    time,
                     metadata,
                     applicationEventQueue,
                     requestManagersSupplier);
@@ -571,7 +570,6 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         );
         Supplier<ApplicationEventProcessor> applicationEventProcessorSupplier = ApplicationEventProcessor.supplier(
                 logContext,
-                time,
                 metadata,
                 applicationEventQueue,
                 requestManagersSupplier
@@ -944,7 +942,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                 timer);
             wakeupTrigger.setActiveTask(event.future());
             try {
-                final Map<TopicPartition, OffsetAndMetadata> committedOffsets = applicationEventHandler.addAndGet(event);
+                final Map<TopicPartition, OffsetAndMetadata> committedOffsets = applicationEventHandler.addAndGet(event, timer);
                 committedOffsets.forEach(this::updateLastSeenEpochIfNewer);
                 return committedOffsets;
             } catch (TimeoutException e) {
@@ -996,7 +994,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             wakeupTrigger.setActiveTask(topicMetadataApplicationEvent.future());
             try {
                 Map<String, List<PartitionInfo>> topicMetadata =
-                        applicationEventHandler.addAndGet(topicMetadataApplicationEvent);
+                        applicationEventHandler.addAndGet(topicMetadataApplicationEvent, timer);
 
                 return topicMetadata.getOrDefault(topic, Collections.emptyList());
             } finally {
@@ -1025,7 +1023,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                     new TopicMetadataApplicationEvent(timer);
             wakeupTrigger.setActiveTask(topicMetadataApplicationEvent.future());
             try {
-                return applicationEventHandler.addAndGet(topicMetadataApplicationEvent);
+                return applicationEventHandler.addAndGet(topicMetadataApplicationEvent, timer);
             } finally {
                 wakeupTrigger.clearTask();
             }
@@ -1104,7 +1102,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             if (timeout.toMillis() == 0L)
                 return listOffsetsEvent.emptyResult();
 
-            return applicationEventHandler.addAndGet(listOffsetsEvent);
+            return applicationEventHandler.addAndGet(listOffsetsEvent, timer);
         } finally {
             release();
         }
@@ -1151,7 +1149,8 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                 false,
                 timer);
             Map<TopicPartition, OffsetAndTimestamp> offsetAndTimestampMap = applicationEventHandler.addAndGet(
-                listOffsetsEvent);
+                listOffsetsEvent,
+                timer);
             return offsetAndTimestampMap
                 .entrySet()
                 .stream()
@@ -1278,7 +1277,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         completeQuietly(
             () -> {
                 maybeRevokePartitions();
-                applicationEventHandler.addAndGet(new LeaveOnCloseApplicationEvent(timer));
+                applicationEventHandler.addAndGet(new LeaveOnCloseApplicationEvent(timer), timer);
             },
             "Failed to send leaveGroup heartbeat with a timeout(ms)=" + timer.timeoutMs(), firstException);
     }
@@ -1574,7 +1573,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             // Validate positions using the partition leader end offsets, to detect if any partition
             // has been truncated due to a leader change. This will trigger an OffsetForLeaderEpoch
             // request, retrieve the partition end offsets, and validate the current position against it.
-            applicationEventHandler.addAndGet(new ValidatePositionsApplicationEvent(timer));
+            applicationEventHandler.addAndGet(new ValidatePositionsApplicationEvent(timer), timer);
 
             cachedSubscriptionHasAllFetchPositions = subscriptions.hasAllFetchPositions();
             if (cachedSubscriptionHasAllFetchPositions) return true;
@@ -1597,7 +1596,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             // which are awaiting reset. This will trigger a ListOffset request, retrieve the
             // partition offsets according to the strategy (ex. earliest, latest), and update the
             // positions.
-            applicationEventHandler.addAndGet(new ResetPositionsApplicationEvent(timer));
+            applicationEventHandler.addAndGet(new ResetPositionsApplicationEvent(timer), timer);
             return true;
         } catch (TimeoutException e) {
             return false;
@@ -1631,7 +1630,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                 new FetchCommittedOffsetsApplicationEvent(
                     initializingPartitions,
                     timer);
-            final Map<TopicPartition, OffsetAndMetadata> offsets = applicationEventHandler.addAndGet(event);
+            final Map<TopicPartition, OffsetAndMetadata> offsets = applicationEventHandler.addAndGet(event, timer);
             refreshCommittedOffsets(offsets, metadata, subscriptions);
             return true;
         } catch (TimeoutException e) {
