@@ -40,7 +40,6 @@ import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CompletableFuture;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
@@ -76,7 +75,7 @@ public class ApplicationEventProcessorTest {
         heartbeatRequestManager = mock(HeartbeatRequestManager.class);
         membershipManager = mock(MembershipManager.class);
         requestManagers = new RequestManagers(
-            logContext,
+            new LogContext(),
             offsetsRequestManager,
             topicMetadataRequestManager,
             fetchRequestManager,
