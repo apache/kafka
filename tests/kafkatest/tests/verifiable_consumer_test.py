@@ -17,8 +17,9 @@ from ducktape.utils.util import wait_until
 
 from kafkatest.tests.kafka_test import KafkaTest
 from kafkatest.services.verifiable_producer import VerifiableProducer
-from kafkatest.services.verifiable_consumer import VerifiableConsumer
-from kafkatest.services.kafka import TopicPartition
+from kafkatest.services.verifiable_consumer import ConsumerState, VerifiableConsumer
+from kafkatest.services.kafka import TopicPartition, consumer_group
+
 
 class VerifiableConsumerTest(KafkaTest):
     PRODUCER_REQUEST_TIMEOUT_SEC = 30
@@ -44,20 +45,33 @@ class VerifiableConsumerTest(KafkaTest):
             partitions += parts
         return partitions
 
-    def valid_assignment(self, topic, num_partitions, assignment):
-        all_partitions = self._all_partitions(topic, num_partitions)
-        partitions = self._partitions(assignment)
-        return len(partitions) == num_partitions and set(partitions) == all_partitions
+    def await_valid_assignment(self, consumer, topic, num_partitions, num_consumers):
+        # Wait until all assignments have settled
+        timeout_sec = self.session_timeout_sec * 2
+
+        def _condition():
+            assignment = consumer.current_assignment()
+            all_partitions = self._all_partitions(topic, num_partitions)
+            partitions = self._partitions(assignment)
+            return len(partitions) == num_partitions and set(partitions) == all_partitions
+
+        def _err_msg():
+            assignment = consumer.current_assignment()
+            assignments = [(str(node.account), a) for node, a in assignment.items()]
+            return "Not all of the %d partitions for topic %s were assigned among the %d consumers within the timeout of %d seconds: %s" % (num_partitions, topic, num_consumers, timeout_sec, assignments),
+
+        wait_until(lambda: _condition(), timeout_sec=timeout_sec, err_msg=_err_msg())
 
     def min_cluster_size(self):
         """Override this since we're adding services outside of the constructor"""
         return super(VerifiableConsumerTest, self).min_cluster_size() + self.num_consumers + self.num_producers
 
     def setup_consumer(self, topic, static_membership=False, enable_autocommit=False,
-                       assignment_strategy="org.apache.kafka.clients.consumer.RangeAssignor", **kwargs):
+                       assignment_strategy="org.apache.kafka.clients.consumer.RangeAssignor", group_remote_assignor="range", **kwargs):
         return VerifiableConsumer(self.test_context, self.num_consumers, self.kafka,
                                   topic, self.group_id, static_membership=static_membership, session_timeout_sec=self.session_timeout_sec,
                                   assignment_strategy=assignment_strategy, enable_autocommit=enable_autocommit,
+                                  group_remote_assignor=group_remote_assignor,
                                   log_level="TRACE", **kwargs)
 
     def setup_producer(self, topic, max_messages=-1, throughput=500):
@@ -72,16 +86,59 @@ class VerifiableConsumerTest(KafkaTest):
                    err_msg="Timeout awaiting messages to be produced and acked")
 
     def await_consumed_messages(self, consumer, min_messages=1):
+        timeout_sec = self.consumption_timeout_sec
         current_total = consumer.total_consumed()
-        wait_until(lambda: consumer.total_consumed() >= current_total + min_messages,
-                   timeout_sec=self.consumption_timeout_sec,
-                   err_msg="Timed out waiting for consumption")
+        expected = current_total + min_messages
+
+        def _condition():
+            return consumer.total_consumed() >= expected
+
+        def _err_msg():
+            actual = consumer.total_consumed()
+            return "%d messages received within the timeout of %d seconds, expected %d" % (actual, timeout_sec, expected)
+
+        wait_until(lambda: _condition(), timeout_sec=timeout_sec, err_msg=_err_msg())
+
+    def await_members_stopped(self, consumer, num_consumers, timeout_sec):
+        self._await_members_in_state(consumer, num_consumers, "stopped", [ConsumerState.Dead], timeout_sec)
 
     def await_members(self, consumer, num_consumers):
         # Wait until all members have joined the group
-        wait_until(lambda: len(consumer.joined_nodes()) == num_consumers,
-                   timeout_sec=self.session_timeout_sec*2,
-                   err_msg="Consumers failed to join in a reasonable amount of time")
-        
+        states = [ConsumerState.Joined]
+
+        if consumer_group.is_consumer_group_protocol_enabled(consumer.group_protocol):
+            states.extend([ConsumerState.Started, ConsumerState.Rebalancing])
+
+        timeout_sec = self.session_timeout_sec * 2
+        self._await_members_in_state(consumer, num_consumers, "joined", states, timeout_sec)
+
     def await_all_members(self, consumer):
-        self.await_members(consumer, self.num_consumers)
+        states = [ConsumerState.Joined]
+        timeout_sec = self.session_timeout_sec * 2
+        num_consumers = 1 if consumer_group.is_consumer_group_protocol_enabled(consumer.group_protocol) else self.num_consumers
+        self._await_members_in_state(consumer, num_consumers, "joined", states, timeout_sec)
+
+    def await_partition_assigned(self, consumer, partition):
+        # Wait until the partition has been (re-)assigned to a consumer.
+        timeout_sec = self.session_timeout_sec * 2 + 5
+
+        def _condition():
+            return consumer.owner(partition) is not None
+
+        def _err_msg():
+            return "Partition %s was not (re-)assigned within the timeout of %d seconds" % (partition, timeout_sec)
+
+        wait_until(lambda: _condition(), timeout_sec=timeout_sec, err_msg=_err_msg())
+
+    def _await_members_in_state(self, consumer, num_consumers, state_string, states, timeout_sec):
+        def _count():
+            return len(consumer.nodes_in_state(states))
+
+        def _condition():
+            return _count() == num_consumers
+
+        def _err_msg():
+            return ("%d consumers %s within the timeout of %d seconds, expected %d" %
+                    (_count(), state_string, timeout_sec, num_consumers))
+
+        wait_until(lambda: _condition(), timeout_sec=timeout_sec, err_msg=_err_msg())
