@@ -25,6 +25,7 @@ import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.Task.TaskType;
 
 import java.io.File;
+import java.util.Collections;
 import java.util.Map;
 import java.util.Set;
 
@@ -51,6 +52,11 @@ public class GlobalStateManagerStub implements GlobalStateManager {
     public Set<String> initialize() {
         initialized = true;
         return storeNames;
+    }
+
+    @Override
+    public Set<TopicPartition> topicPartitionsToReset() {
+        return Collections.emptySet();
     }
 
     @Override

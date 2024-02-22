@@ -86,7 +86,9 @@ public class GlobalStateUpdateTask implements GlobalStateMaintainer {
         }
         initTopology();
         processorContext.initialize();
-        return stateMgr.changelogOffsets();
+        final Map<TopicPartition, Long> partitionLongMap = new HashMap<>(stateMgr.changelogOffsets());
+        stateMgr.topicPartitionsToReset().forEach(t -> partitionLongMap.put(t, 0L));
+        return partitionLongMap;
     }
 
     @SuppressWarnings("unchecked")
