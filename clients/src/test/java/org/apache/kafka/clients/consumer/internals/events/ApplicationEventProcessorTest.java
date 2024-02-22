@@ -75,7 +75,7 @@ public class ApplicationEventProcessorTest {
         heartbeatRequestManager = mock(HeartbeatRequestManager.class);
         membershipManager = mock(MembershipManager.class);
         requestManagers = new RequestManagers(
-            new LogContext(),
+            logContext,
             offsetsRequestManager,
             topicMetadataRequestManager,
             fetchRequestManager,
@@ -85,7 +85,7 @@ public class ApplicationEventProcessorTest {
             Optional.of(membershipManager)
         );
         processor = new ApplicationEventProcessor(
-            logContext,
+            new LogContext(),
             applicationEventQueue,
             requestManagers,
             metadata
