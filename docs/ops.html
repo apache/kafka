@@ -4063,8 +4063,10 @@ listeners=CONTROLLER://:9093
           </ul>
         </td>
         <td>
-          It is important to perform the <code>zookeeper-shell.sh</code> step quickly, to minimize the amount of
-          time that the cluster lacks a controller.
+          It is important to perform the <code>zookeeper-shell.sh</code> step <b>quickly</b>, to minimize the amount of
+          time that the cluster lacks a controller. Until the <code> /controller</code> znode is deleted,
+          you can also ignore any errors in the broker log about failing to connect to the Kraft controller.
+          Those error logs should disappear after second roll to pure zookeeper mode.
         </td>
       </tr>
       <tr>
@@ -4072,7 +4074,8 @@ listeners=CONTROLLER://:9093
         <td>
           <ul>
             <li>
-              On each broker, remove the <code>process.roles</code> configuration, and
+              On each broker, remove the <code>process.roles</code> configuration,
+              replace the <code>node.id</code> with <code>broker.id</code> and
               restore the <code>zookeeper.connect</code> configuration to its previous value.
               If your cluster requires other ZooKeeper configurations for brokers, such as
               <code>zookeeper.ssl.protocol</code>, re-add those configurations as well.
@@ -4088,7 +4091,7 @@ listeners=CONTROLLER://:9093
             <li>
               On each broker, remove the <code>zookeeper.metadata.migration.enable</code>,
               <code>controller.listener.names</code>, and <code>controller.quorum.voters</code>
-              configurations. Replace <code>node.id</code> with <code>broker.id</code>.
+              configurations.
               Then perform a second rolling restart of all brokers.
             </li>
             <li>
@@ -4100,7 +4103,9 @@ listeners=CONTROLLER://:9093
           <ul>
             <li>
               It is important to perform the <code>zookeeper-shell.sh</code> step <b>quickly</b>, to minimize the amount of
-              time that the cluster lacks a controller.
+              time that the cluster lacks a controller. Until the <code> /controller</code> znode is deleted,
+              you can also ignore any errors in the broker log about failing to connect to the Kraft controller.
+              Those error logs should disappear after second roll to pure zookeeper mode.
             </li>
             <li>
               Make sure that on the first cluster roll, <code>zookeeper.metadata.migration.enable</code> remains set to
