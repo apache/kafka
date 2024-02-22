@@ -442,15 +442,15 @@ public abstract class AbstractStickyAssignorTest {
         assignment = assignor.assignPartitions(partitionsPerTopic, subscriptions);
 
         Map<TopicPartition, String> expectedPartitionsTransferringOwnership = new HashMap<>();
-        expectedPartitionsTransferringOwnership.put(tp(topic2, 1), consumer3);
+        expectedPartitionsTransferringOwnership.put(tp(topic1, 2), consumer3);
         expectedPartitionsTransferringOwnership.put(tp(topic2, 3), consumer3);
         expectedPartitionsTransferringOwnership.put(tp(topic2, 2), consumer4);
         assertEquals(expectedPartitionsTransferringOwnership, assignor.partitionsTransferringOwnership);
 
         verifyValidityAndBalance(subscriptions, assignment, partitionsPerTopic);
-        assertEquals(partitions(tp(topic1, 0), tp(topic1, 2)), assignment.get(consumer1));
-        assertEquals(partitions(tp(topic1, 1), tp(topic2, 0)), assignment.get(consumer2));
-        assertEquals(partitions(tp(topic2, 1), tp(topic2, 3)), assignment.get(consumer3));
+        assertEquals(partitions(tp(topic1, 0), tp(topic2, 1)), assignment.get(consumer1));
+        assertEquals(partitions(tp(topic2, 0), tp(topic1, 1)), assignment.get(consumer2));
+        assertEquals(partitions(tp(topic1, 2), tp(topic2, 3)), assignment.get(consumer3));
         assertEquals(partitions(tp(topic2, 2)), assignment.get(consumer4));
         assertTrue(isFullyBalanced(assignment));
 
@@ -460,8 +460,8 @@ public abstract class AbstractStickyAssignorTest {
         subscriptions.put(consumer3, buildSubscriptionV2Above(allTopics, assignment.get(consumer3), generationId, 2));
         subscriptions.put(consumer4, buildSubscriptionV2Above(allTopics, assignment.get(consumer4), generationId, 3));
         assignment = assignor.assignPartitions(partitionsPerTopic, subscriptions);
-        assertEquals(partitions(tp(topic2, 1), tp(topic2, 3), tp(topic1, 0), tp(topic2, 0)), assignment.get(consumer3));
-        assertEquals(partitions(tp(topic2, 2), tp(topic1, 1), tp(topic1, 2)), assignment.get(consumer4));
+        assertEquals(partitions(tp(topic1, 2), tp(topic2, 3), tp(topic1, 0), tp(topic2, 1)), assignment.get(consumer3));
+        assertEquals(partitions(tp(topic2, 2), tp(topic1, 1), tp(topic2, 0)), assignment.get(consumer4));
 
         assertTrue(assignor.partitionsTransferringOwnership.isEmpty());
 
