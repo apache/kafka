@@ -750,18 +750,18 @@ class ReplicaManager(val config: KafkaConfig,
         }
 
       def appendEntries(allEntries: Map[TopicPartition, MemoryRecords])(unverifiedEntries: Map[TopicPartition, Errors]): Unit = {
-        val verifiedEntries = 
+        val verifiedEntries =
           if (unverifiedEntries.isEmpty)
-            allEntries 
+            allEntries
           else
             allEntries.filter { case (tp, _) =>
               !unverifiedEntries.contains(tp)
             }
-        
+
         val localProduceResults = appendToLocalLog(internalTopicsAllowed = internalTopicsAllowed,
           origin, verifiedEntries, requiredAcks, requestLocal, verificationGuards.toMap)
         debug("Produce to local log in %d ms".format(time.milliseconds - sTime))
-        
+
         val unverifiedResults = unverifiedEntries.map { case (topicPartition, error) =>
           val message = if (error == Errors.INVALID_TXN_STATE) "Partition was not added to the transaction" else error.message()
           topicPartition -> LogAppendResult(
@@ -776,7 +776,7 @@ class ReplicaManager(val config: KafkaConfig,
             Some(error.exception())
           )
         }
-        
+
         val allResults = localProduceResults ++ unverifiedResults ++ errorResults
 
         val produceStatus = allResults.map { case (topicPartition, result) =>
@@ -1399,26 +1399,29 @@ class ReplicaManager(val config: KafkaConfig,
     readFromPurgatory: Boolean): Seq[(TopicIdPartition, LogReadResult)] = {
     val traceEnabled = isTraceEnabled
 
-    def checkAndPrepareFetchDataInfo(partition: Partition, givenFetchedDataInfo: FetchDataInfo) = {
+    def checkAndPrepareFetchDataInfo(partition: Partition, readInfo: LogReadInfo) = {
+      val fetchDataInfo = readInfo.fetchedData
       if (params.isFromFollower && shouldLeaderThrottle(quota, partition, params.replicaId)) {
         // If the partition is being throttled, simply return an empty set.
-        new FetchDataInfo(givenFetchedDataInfo.fetchOffsetMetadata, MemoryRecords.EMPTY)
-      } else if (!params.hardMaxBytesLimit && givenFetchedDataInfo.firstEntryIncomplete) {
+        new FetchDataInfo(fetchDataInfo.fetchOffsetMetadata, MemoryRecords.EMPTY)
+      } else if (!params.hardMaxBytesLimit && fetchDataInfo.firstEntryIncomplete) {
         // For FetchRequest version 3, we replace incomplete message sets with an empty one as consumers can make
         // progress in such cases and don't need to report a `RecordTooLargeException`
-        new FetchDataInfo(givenFetchedDataInfo.fetchOffsetMetadata, MemoryRecords.EMPTY)
+        new FetchDataInfo(fetchDataInfo.fetchOffsetMetadata, MemoryRecords.EMPTY)
       } else {
-        // For last entries we assume that it is hot enough to still have all data in page cache.
+        // For active segment we assume that it is hot enough to still have all data in page cache.
         // Most of fetch requests are fetching from the tail of the log, so this optimization should save
         // call of additional sendfile(2) targeting /dev/null for populating page cache significantly.
-        if (!givenFetchedDataInfo.isLastSegment && givenFetchedDataInfo.records.isInstanceOf[FileRecords]) {
+        val isActiveSegment = readInfo.activeSegmentBaseOffset == fetchDataInfo.fetchOffsetMetadata.segmentBaseOffset
+        if (!isActiveSegment && fetchDataInfo.records.isInstanceOf[FileRecords]) {
           try {
-            givenFetchedDataInfo.records.asInstanceOf[FileRecords].prepareForRead()
+            fetchDataInfo.records.asInstanceOf[FileRecords].prepareForRead()
           } catch {
-            case e: Exception => warn("failed to prepare cache for read", e)
+            case e: Exception => debug("Failed to prepare cache for read for performance improvement. " +
+              "This can be ignored if the fetch behavior works without any issue.", e)
           }
         }
-        givenFetchedDataInfo
+        fetchDataInfo
       }
     }
 
@@ -1477,7 +1480,7 @@ class ReplicaManager(val config: KafkaConfig,
             minOneMessage = minOneMessage,
             updateFetchState = !readFromPurgatory)
 
-          val fetchDataInfo = checkAndPrepareFetchDataInfo(partition, readInfo.fetchedData)
+          val fetchDataInfo = checkAndPrepareFetchDataInfo(partition, readInfo)
 
           LogReadResult(info = fetchDataInfo,
             divergingEpoch = readInfo.divergingEpoch.asScala,
@@ -1567,7 +1570,7 @@ class ReplicaManager(val config: KafkaConfig,
         val fetchDataInfo =
         new FetchDataInfo(new LogOffsetMetadata(offset), MemoryRecords.EMPTY, false, Optional.empty(),
           Optional.of(new RemoteStorageFetchInfo(adjustedMaxBytes, minOneMessage, tp.topicPartition(),
-            fetchInfo, params.isolation, params.hardMaxBytesLimit())), LogOffsetMetadata.UNKNOWN_OFFSET_METADATA)
+            fetchInfo, params.isolation, params.hardMaxBytesLimit())))
 
         LogReadResult(fetchDataInfo,
           divergingEpoch = None,

@@ -3736,15 +3736,13 @@ class ReplicaManagerTest {
       when(log.logStartOffset).thenReturn(startOffset)
       when(log.localLogStartOffset()).thenReturn(startOffset)
       when(log.logEndOffset).thenReturn(endOffset)
+      when(log.logEndOffsetMetadata).thenReturn(new LogOffsetMetadata(endOffset, 50, 25))
       when(log.endOffsetForEpoch(leaderEpoch)).thenReturn(Some(new OffsetAndEpoch(endOffset, leaderEpoch)))
 
-      val maxOffsetMetadata = new LogOffsetMetadata(75, 50, 25)
       val fetchDataInfo = if (fetchFromLastSegment) {
         new FetchDataInfo(new LogOffsetMetadata(50, 50, 0), records)
-          .withMaxOffsetMetadata(maxOffsetMetadata)
       } else {
         new FetchDataInfo(new LogOffsetMetadata(0, 0, 0), records)
-          .withMaxOffsetMetadata(maxOffsetMetadata)
       }
       when(log.read(anyLong(), anyInt(), any(), anyBoolean())).thenReturn(fetchDataInfo)
       val params = new FetchParams(ApiKeys.FETCH.latestVersion, 1, 1, 1000, 0, 100, FetchIsolation.LOG_END, None.asJava)

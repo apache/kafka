@@ -451,9 +451,8 @@ public class FileRecords extends AbstractRecords implements Closeable {
      */
     public void prepareForRead() throws IOException {
         if (DEVNULL_PATH != null) {
-            long size = Math.min(channel.size(), end) - start;
             try (FileChannel devnullChannel = FileChannel.open(DEVNULL_PATH, StandardOpenOption.WRITE)) {
-                channel.transferTo(start, size, devnullChannel);
+                channel.transferTo(start, sizeInBytes(), devnullChannel);
             }
         }
     }

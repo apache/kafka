@@ -29,7 +29,6 @@ public class FetchDataInfo {
     public final boolean firstEntryIncomplete;
     public final Optional<List<FetchResponseData.AbortedTransaction>> abortedTransactions;
     public final Optional<RemoteStorageFetchInfo> delayedRemoteStorageFetch;
-    public final LogOffsetMetadata maxOffsetMetadata;
 
     public FetchDataInfo(LogOffsetMetadata fetchOffsetMetadata,
                          Records records) {
@@ -40,40 +39,19 @@ public class FetchDataInfo {
                          Records records,
                          boolean firstEntryIncomplete,
                          Optional<List<FetchResponseData.AbortedTransaction>> abortedTransactions) {
-        this(fetchOffsetMetadata,
-             records,
-             firstEntryIncomplete,
-             abortedTransactions,
-             Optional.empty(),
-             LogOffsetMetadata.UNKNOWN_OFFSET_METADATA);
+        this(fetchOffsetMetadata, records, firstEntryIncomplete, abortedTransactions, Optional.empty());
     }
 
     public FetchDataInfo(LogOffsetMetadata fetchOffsetMetadata,
                          Records records,
                          boolean firstEntryIncomplete,
                          Optional<List<FetchResponseData.AbortedTransaction>> abortedTransactions,
-                         Optional<RemoteStorageFetchInfo> delayedRemoteStorageFetch,
-                         LogOffsetMetadata maxOffsetMetadata) {
+                         Optional<RemoteStorageFetchInfo> delayedRemoteStorageFetch) {
         this.fetchOffsetMetadata = fetchOffsetMetadata;
         this.records = records;
         this.firstEntryIncomplete = firstEntryIncomplete;
         this.abortedTransactions = abortedTransactions;
         this.delayedRemoteStorageFetch = delayedRemoteStorageFetch;
-        this.maxOffsetMetadata = maxOffsetMetadata;
-    }
-
-    public FetchDataInfo withMaxOffsetMetadata(LogOffsetMetadata maxOffsetMetadata) {
-        return new FetchDataInfo(fetchOffsetMetadata,
-                                 records,
-                                 firstEntryIncomplete,
-                                 abortedTransactions,
-                                 delayedRemoteStorageFetch,
-                                 maxOffsetMetadata);
-    }
-
-    public boolean isLastSegment() {
-        return maxOffsetMetadata != LogOffsetMetadata.UNKNOWN_OFFSET_METADATA &&
-               maxOffsetMetadata.segmentBaseOffset == fetchOffsetMetadata.segmentBaseOffset;
     }
 
     public static FetchDataInfo empty(long fetchOffset) {

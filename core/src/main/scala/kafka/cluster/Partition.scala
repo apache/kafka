@@ -1452,6 +1452,7 @@ class Partition(val topicPartition: TopicPartition,
     val initialLogStartOffset = localLog.logStartOffset
     val initialLogEndOffset = localLog.logEndOffset
     val initialLastStableOffset = localLog.lastStableOffset
+    val initialActiveSegmentBaseOffset = localLog.logEndOffsetMetadata.segmentBaseOffset
 
     lastFetchedEpoch.ifPresent { fetchEpoch =>
       val epochEndOffset = lastOffsetForLeaderEpoch(currentLeaderEpoch, fetchEpoch, fetchOnlyFromLeader = false)
@@ -1482,7 +1483,8 @@ class Partition(val topicPartition: TopicPartition,
           initialHighWatermark,
           initialLogStartOffset,
           initialLogEndOffset,
-          initialLastStableOffset)
+          initialLastStableOffset,
+          initialActiveSegmentBaseOffset)
       }
     }
 
@@ -1499,7 +1501,8 @@ class Partition(val topicPartition: TopicPartition,
       initialHighWatermark,
       initialLogStartOffset,
       initialLogEndOffset,
-      initialLastStableOffset
+      initialLastStableOffset,
+      initialActiveSegmentBaseOffset
     )
   }
 
