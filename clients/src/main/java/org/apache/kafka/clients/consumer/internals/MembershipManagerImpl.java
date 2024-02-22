@@ -485,7 +485,12 @@ public class MembershipManagerImpl implements MembershipManager {
                         " after member got fenced. Member will rejoin the group anyways.", error);
             }
             updateSubscription(new TreeSet<>(TOPIC_ID_PARTITION_COMPARATOR), true);
-            transitionToJoining();
+            if (state == MemberState.FENCED) {
+                transitionToJoining();
+            } else {
+                log.debug("Fenced member onPartitionsLost callback completed but the state has " +
+                    "already changed to {}, so the member won't rejoin the group", state);
+            }
         });
     }
 
@@ -587,9 +592,11 @@ public class MembershipManagerImpl implements MembershipManager {
      */
     @Override
     public CompletableFuture<Void> leaveGroup() {
-        if (state == MemberState.UNSUBSCRIBED || state == MemberState.FATAL || state == MemberState.STALE) {
-            // Member is not part of the group. No-op and return completed future to avoid
-            // unnecessary transitions.
+        if (isNotInGroup()) {
+            if (state == MemberState.FENCED) {
+                updateSubscription(new TreeSet<>(TOPIC_ID_PARTITION_COMPARATOR), true);
+                transitionTo(MemberState.UNSUBSCRIBED);
+            }
             return CompletableFuture.completedFuture(null);
         }
 

@@ -130,20 +130,12 @@ public enum MemberState {
         JOINING.previousValidStates = Arrays.asList(FENCED, UNSUBSCRIBED, STALE);
 
         PREPARE_LEAVING.previousValidStates = Arrays.asList(JOINING, STABLE, RECONCILING,
-                ACKNOWLEDGING, UNSUBSCRIBED, FENCED);
+                ACKNOWLEDGING, UNSUBSCRIBED);
 
-        // Transition from prepare leaving to leaving is the expected one in all close operations
-        // except for when the poll timer expires (ex. leave group due to unsubscribe or consumer
-        // close, where member triggers callbacks first while it continues sending heartbeat
-        // (PREPARE_LEAVE state) and  then sends the heartbeat to leave (LEAVING state).
-        // All other transitions directly to LEAVING are expected when the member leaves due to
-        // expired poll timer. In that case, the member sends the heartbeat to leave first, and
-        // then invokes callbacks to release assignment while STALE, not sending any more
-        // heartbeats while STALE because it has been already removed from the group on the broker.
         LEAVING.previousValidStates = Arrays.asList(PREPARE_LEAVING, JOINING, RECONCILING,
             ACKNOWLEDGING, STABLE);
 
-        UNSUBSCRIBED.previousValidStates = Arrays.asList(PREPARE_LEAVING, LEAVING);
+        UNSUBSCRIBED.previousValidStates = Arrays.asList(PREPARE_LEAVING, LEAVING, FENCED);
 
         STALE.previousValidStates = Arrays.asList(LEAVING);
     }

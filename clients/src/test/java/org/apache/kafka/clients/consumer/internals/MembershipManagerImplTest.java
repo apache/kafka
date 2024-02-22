@@ -823,6 +823,22 @@ public class MembershipManagerImplTest {
     }
 
     @Test
+    public void testLeaveGroupWhenMemberFenced() {
+        MembershipManagerImpl membershipManager = createMemberInStableState();
+        ConsumerRebalanceListenerInvoker invoker = consumerRebalanceListenerInvoker();
+        ConsumerRebalanceListenerCallbackCompletedEvent callbackEvent = mockFencedMemberStuckOnUserCallback(membershipManager, invoker);
+        assertEquals(MemberState.FENCED, membershipManager.state());
+
+        mockLeaveGroup();
+        membershipManager.leaveGroup();
+        assertEquals(MemberState.UNSUBSCRIBED, membershipManager.state());
+        verify(subscriptionState).assignFromSubscribed(Collections.emptySet());
+
+        completeCallback(callbackEvent, membershipManager);
+        assertEquals(MemberState.UNSUBSCRIBED, membershipManager.state());
+    }
+
+    @Test
     public void testLeaveGroupWhenMemberIsStale() {
         MembershipManagerImpl membershipManager = mockStaleMember();
         assertEquals(MemberState.STALE, membershipManager.state());
@@ -2238,6 +2254,29 @@ public class MembershipManagerImplTest {
             membershipManager,
             invoker,
             ConsumerRebalanceListenerMethodName.ON_PARTITIONS_REVOKED,
+            topicPartitions(ownedPartition.topic(), ownedPartition.partition()),
+            false
+        );
+    }
+
+    private ConsumerRebalanceListenerCallbackCompletedEvent mockFencedMemberStuckOnUserCallback(
+        MembershipManagerImpl membershipManager,
+        ConsumerRebalanceListenerInvoker invoker) {
+        String topicName = "topic1";
+        TopicPartition ownedPartition = new TopicPartition(topicName, 0);
+
+        // Fence member and block waiting for onPartitionsLost callback to complete
+        CounterConsumerRebalanceListener listener = new CounterConsumerRebalanceListener();
+        when(subscriptionState.assignedPartitions()).thenReturn(Collections.singleton(ownedPartition));
+        when(subscriptionState.hasAutoAssignedPartitions()).thenReturn(true);
+        when(subscriptionState.rebalanceListener()).thenReturn(Optional.of(listener));
+        // doNothing().when(subscriptionState).markPendingRevocation(anySet());
+        when(commitRequestManager.autoCommitEnabled()).thenReturn(false);
+        membershipManager.transitionToFenced();
+        return performCallback(
+            membershipManager,
+            invoker,
+            ConsumerRebalanceListenerMethodName.ON_PARTITIONS_LOST,
             topicPartitions(ownedPartition.topic(), ownedPartition.partition()),
             false
         );
