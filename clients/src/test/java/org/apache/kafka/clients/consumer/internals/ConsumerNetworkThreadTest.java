@@ -128,12 +128,12 @@ public class ConsumerNetworkThreadTest {
         // There's a nonzero amount of time between starting the thread and having it
         // begin to execute our code. Wait for a bit before checking...
         TestUtils.waitForCondition(isStarted,
-              "The consumer network thread did not start within " + DEFAULT_MAX_WAIT_MS + " ms");
+                "The consumer network thread did not start within " + DEFAULT_MAX_WAIT_MS + " ms");
 
         consumerNetworkThread.close(Duration.ofMillis(DEFAULT_MAX_WAIT_MS));
 
         TestUtils.waitForCondition(isClosed,
-               "The consumer network thread did not stop within " + DEFAULT_MAX_WAIT_MS + " ms");
+                "The consumer network thread did not stop within " + DEFAULT_MAX_WAIT_MS + " ms");
     }
 
     @Test
