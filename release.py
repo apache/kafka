@@ -203,7 +203,7 @@ def save_prefs(prefs):
     """Save preferences"""
     print("Saving preferences to %s" % PREFS_FILE)
     with open(PREFS_FILE, 'w') as prefs_fp:
-        prefs = json.dump(prefs, prefs_fp)
+        json.dump(prefs, prefs_fp)
 
 def get_jdk(prefs, version):
     """
