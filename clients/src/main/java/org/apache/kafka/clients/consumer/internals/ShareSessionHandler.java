@@ -22,6 +22,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.ShareAcknowledgeResponse;
+import org.apache.kafka.common.requests.ShareFetchMetadata;
 import org.apache.kafka.common.requests.ShareFetchResponse;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Utils;
@@ -30,11 +31,13 @@ import org.slf4j.Logger;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.Set;
 
 /**
  * ShareSessionHandler maintains the share session state for connecting to a broker.
@@ -61,102 +64,24 @@ public class ShareSessionHandler {
      */
     private LinkedHashMap<TopicPartition, TopicIdPartition> sessionPartitions;
 
+    /**
+     * All of the topic names mapped to topic ids for topics which exist in the fetch request session.
+     */
+    private Map<Uuid, String> sessionTopicNames = new HashMap<>(0);
+    public Map<Uuid, String> sessionTopicNames() {
+        return sessionTopicNames;
+    }
+
+    public Set<TopicPartition> sessionTopics() {
+        return sessionPartitions.keySet();
+    }
+
     public ShareSessionHandler(LogContext logContext, int node, Uuid memberId) {
         this.log = logContext.logger(ShareSessionHandler.class);
         this.node = node;
         this.memberId = memberId;
         this.nextMetadata = ShareFetchMetadata.initialEpoch(memberId);
         this.sessionPartitions = new LinkedHashMap<>();
-    }
-
-    public static class ShareFetchMetadata {
-        /**
-         * The first epoch. When used in a ShareFetch request, indicates that the client
-         * wants to create a session.
-         */
-        public static final int INITIAL_EPOCH = 0;
-
-        /**
-         * An invalid epoch. When used in a ShareFetch request, indicates that the client
-         * wants to close an existing session.
-         */
-        public static final int FINAL_EPOCH = -1;
-
-        /**
-         *
-         */
-        public boolean isNewSession() {
-            return epoch == INITIAL_EPOCH;
-        }
-
-        /**
-         * Returns the next epoch.
-         *
-         * @param prevEpoch The previous epoch.
-         * @return          The next epoch.
-         */
-        public static int nextEpoch(int prevEpoch) {
-            if (prevEpoch < 0) {
-                // The next epoch after FINAL_EPOCH is always FINAL_EPOCH itself.
-                return FINAL_EPOCH;
-            } else if (prevEpoch == Integer.MAX_VALUE) {
-                return 1;
-            } else {
-                return prevEpoch + 1;
-            }
-        }
-
-        /**
-         * The member ID.
-         */
-        private final Uuid memberId;
-
-        /**
-         * The share session epoch.
-         */
-        private final int epoch;
-
-        public ShareFetchMetadata(Uuid memberId, int epoch) {
-            this.memberId = memberId;
-            this.epoch = epoch;
-        }
-
-        public static ShareFetchMetadata initialEpoch(Uuid memberId) {
-            return new ShareFetchMetadata(memberId, INITIAL_EPOCH);
-        }
-
-        public ShareFetchMetadata nextEpoch() {
-            return new ShareFetchMetadata(memberId, nextEpoch(epoch));
-        }
-
-        public ShareFetchMetadata nextCloseExistingAttemptNew() {
-            return new ShareFetchMetadata(memberId, INITIAL_EPOCH);
-        }
-
-        public ShareFetchMetadata finalEpoch() {
-            return new ShareFetchMetadata(memberId, FINAL_EPOCH);
-        }
-
-        public Uuid memberId() {
-            return memberId;
-        }
-
-        public int epoch() {
-            return epoch;
-        }
-
-        public String toString() {
-            StringBuilder bld = new StringBuilder();
-            bld.append("(memberId=").append(memberId).append(", ");
-            if (epoch == INITIAL_EPOCH) {
-                bld.append("epoch=INITIAL)");
-            } else if (epoch == FINAL_EPOCH) {
-                bld.append("epoch=FINAL)");
-            } else {
-                bld.append("epoch=").append(epoch).append(")");
-            }
-            return bld.toString();
-        }
     }
 
     public static class ShareFetchRequestData {
@@ -222,19 +147,22 @@ public class ShareSessionHandler {
     public class Builder {
 
         private LinkedHashMap<TopicPartition, TopicIdPartition> next;
+        private Map<Uuid, String> topicNames;
 
         Builder() {
             this.next = new LinkedHashMap<>();
+            this.topicNames = new HashMap<>();
         }
 
         public void add(TopicIdPartition topicIdPartition) {
             next.put(topicIdPartition.topicPartition(), topicIdPartition);
+            topicNames.putIfAbsent(topicIdPartition.topicId(), topicIdPartition.topic());
         }
         public ShareFetchRequestData build() {
             if (nextMetadata.isNewSession()) {
                 sessionPartitions = next;
                 next = null;
-
+                sessionTopicNames = topicNames;
                 Map<TopicPartition, TopicIdPartition> toSend =
                         Collections.unmodifiableMap(new LinkedHashMap<>(sessionPartitions));
                 return new ShareFetchRequestData(toSend, Collections.emptyList(), Collections.emptyList(), sessionPartitions, nextMetadata);
@@ -273,6 +201,8 @@ public class ShareSessionHandler {
                 sessionPartitions.put(topicPartition, topicIdPartition);
                 added.add(topicIdPartition);
             }
+
+            sessionTopicNames = topicNames;
 
             if (log.isDebugEnabled()) {
                 log.debug("Build ShareFetch {} for node {}. Added {}, removed {}, replaced {} out of {}",
@@ -355,5 +285,18 @@ public class ShareSessionHandler {
         log.debug("Set the metadata for next ShareFetch request to close the share session memberId={}",
                 nextMetadata.memberId());
         nextMetadata = nextMetadata.finalEpoch();
+    }
+
+    /**
+     * Handle an error sending the prepared request.
+     *
+     * When a network error occurs, we close any existing fetch session on our next request,
+     * and try to create a new session.
+     *
+     * @param t     The exception.
+     */
+    public void handleError(Throwable t) {
+        log.info("Error sending fetch request {} to node {}:", nextMetadata, node, t);
+        nextMetadata = nextMetadata.nextCloseExistingAttemptNew();
     }
 }

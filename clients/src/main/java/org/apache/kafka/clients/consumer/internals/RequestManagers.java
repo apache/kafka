@@ -261,6 +261,7 @@ public class RequestManagers implements Closeable {
                                                      final ConsumerConfig config,
                                                      final GroupRebalanceConfig groupRebalanceConfig,
                                                      final Supplier<NetworkClientDelegate> networkClientDelegateSupplier,
+                                                     final FetchMetricsManager fetchMetricsManager,
                                                      final Optional<ClientTelemetryReporter> clientTelemetryReporter,
                                                      final Metrics metrics
     ) {
@@ -270,6 +271,7 @@ public class RequestManagers implements Closeable {
                 final NetworkClientDelegate networkClientDelegate = networkClientDelegateSupplier.get();
                 long retryBackoffMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG);
                 long retryBackoffMaxMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MAX_MS_CONFIG);
+                FetchConfig fetchConfig = new FetchConfig(config);
 
                 CoordinatorRequestManager coordinator = new CoordinatorRequestManager(time,
                         logContext,
@@ -297,10 +299,13 @@ public class RequestManagers implements Closeable {
                 ShareFetchRequestManager shareFetchRequestManager = new ShareFetchRequestManager(
                         logContext,
                         time,
+                        groupRebalanceConfig.groupId,
                         metadata,
                         subscriptions,
+                        fetchConfig,
                         fetchBuffer,
-                        networkClientDelegate);
+                        networkClientDelegate,
+                        fetchMetricsManager);
 
                 return new RequestManagers(
                         logContext,

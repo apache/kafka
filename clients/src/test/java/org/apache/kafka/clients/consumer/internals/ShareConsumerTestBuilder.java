@@ -148,10 +148,13 @@ public class ShareConsumerTestBuilder implements Closeable {
         ShareFetchRequestManager fetchRequestManager = spy(new ShareFetchRequestManager(
                 logContext,
                 time,
+                groupRebalanceConfig.groupId,
                 metadata,
                 subscriptions,
+                fetchConfig,
                 fetchBuffer,
-                networkClientDelegate));
+                networkClientDelegate,
+                metricsManager));
 
         ShareMembershipManager membershipManager = spy(new ShareMembershipManager(
                 groupInfo.groupId,

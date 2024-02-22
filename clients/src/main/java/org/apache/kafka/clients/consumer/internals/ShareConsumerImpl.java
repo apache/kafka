@@ -267,6 +267,7 @@ public class ShareConsumerImpl<K, V> implements ShareConsumer<K, V> {
                     config,
                     groupRebalanceConfig,
                     networkClientDelegateSupplier,
+                    fetchMetricsManager,
                     clientTelemetryReporter,
                     metrics
             );
