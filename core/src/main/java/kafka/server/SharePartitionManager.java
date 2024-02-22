@@ -24,8 +24,10 @@ import org.apache.kafka.common.message.ShareFetchResponseData;
 import org.apache.kafka.common.message.ShareFetchResponseData.PartitionData;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.FetchRequest;
+import org.apache.kafka.common.requests.ShareFetchMetadata;
 import org.apache.kafka.common.requests.ShareFetchRequest;
 import org.apache.kafka.common.requests.ShareFetchResponse;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.storage.internals.log.FetchParams;
 import org.apache.kafka.storage.internals.log.FetchPartitionData;
 
@@ -44,15 +46,20 @@ import scala.Tuple2;
 import scala.jdk.javaapi.CollectionConverters;
 import scala.runtime.BoxedUnit;
 
+import org.slf4j.LoggerFactory;
+
 public class SharePartitionManager {
 
     // TODO: May be use ImplicitLinkedHashCollection.
     private final Map<SharePartitionKey, SharePartition> partitionCacheMap;
-
     private final ReplicaManager replicaManager;
+    private final Time time;
+    private final ShareFetchSessionCache cache;
 
-    public SharePartitionManager(ReplicaManager replicaManager) {
+    public SharePartitionManager(ReplicaManager replicaManager, Time time, ShareFetchSessionCache cache) {
         this.replicaManager = replicaManager;
+        this.time = time;
+        this.cache = cache;
         partitionCacheMap = new ConcurrentHashMap<>();
     }
 
@@ -123,10 +130,32 @@ public class SharePartitionManager {
         throw new UnsupportedOperationException("Not implemented yet");
     }
 
-    public ShareFetchContext newContext(Map<TopicIdPartition, ShareFetchRequest.SharePartitionData> shareFetchData,
-        List<TopicIdPartition> forgottenTopics, Map<Uuid, String> topicNames) {
-        // TODO (Abhinav): Add Sessionless ShareFetchContext support for now.
-        throw new UnsupportedOperationException("Not implemented yet");
+    public ShareFetchContext newContext(Map<TopicIdPartition,
+            ShareFetchRequest.SharePartitionData> shareFetchData, List<TopicIdPartition> forgottenTopics,
+                                        Map<Uuid, String> topicNames, ShareFetchMetadata reqMetadata) {
+        ShareFetchContext context;
+        if (reqMetadata.isFull()) {
+            String removedFetchSessionStr = "";
+            // TODO: We will handle the case of INVALID_MEMBER_ID once we have a clear definition for it
+            /*
+            if (!Objects.equals(reqMetadata.memberId(), ShareFetchMetadata.INVALID_MEMBER_ID)) {
+                // Any session specified in a FULL share fetch request will be closed.
+                throw new UnsupportedOperationException("Not implemented yet");
+            }
+             */
+            String suffix = "";
+            if (reqMetadata.epoch() == ShareFetchMetadata.FINAL_EPOCH) {
+                // If the epoch is FINAL_EPOCH, don't try to create a new session.
+                suffix = " Will not try to create a new session.";
+                context = new SessionlessShareFetchContext(shareFetchData);
+            } else {
+                context = new FullShareFetchContext(time, cache, reqMetadata, shareFetchData);
+            }
+        } else {
+            // TODO: Implement getting ShareFetchContext using ShareFetchSession cache
+            throw new UnsupportedOperationException("Not implemented yet");
+        }
+        return context;
     }
 
     // TODO: Define share session class.
@@ -140,6 +169,7 @@ public class SharePartitionManager {
         private final Map<TopicIdPartition, ShareFetchRequest.SharePartitionData> shareFetchData;
 
         public SessionlessShareFetchContext(Map<TopicIdPartition, ShareFetchRequest.SharePartitionData> shareFetchData) {
+            this.log = LoggerFactory.getLogger(SessionlessShareFetchContext.class);
             this.shareFetchData = shareFetchData;
         }
 
@@ -166,6 +196,26 @@ public class SharePartitionManager {
      */
     // TODO: Implement FullShareFetchContext when you have share sessions available
     public static class FullShareFetchContext extends ShareFetchContext {
+
+        private Time time;
+        private ShareFetchSessionCache cache;
+        private ShareFetchMetadata reqMetadata;
+        private Map<TopicIdPartition, ShareFetchRequest.SharePartitionData> shareFetchData;
+
+        /**
+         * @param time               The clock to use.
+         * @param cache              The share fetch session cache.
+         * @param reqMetadata        The request metadata.
+         * @param shareFetchData     The share partition data from the share fetch request.
+         */
+        public FullShareFetchContext(Time time, ShareFetchSessionCache cache, ShareFetchMetadata reqMetadata,
+                                     Map<TopicIdPartition, ShareFetchRequest.SharePartitionData> shareFetchData) {
+            this.log = LoggerFactory.getLogger(FullShareFetchContext.class);
+            this.time = time;
+            this.cache = cache;
+            this.reqMetadata = reqMetadata;
+            this.shareFetchData = shareFetchData;
+        }
 
         @Override
         int responseSize(LinkedHashMap<TopicIdPartition, ShareFetchResponseData.PartitionData> updates,
@@ -255,6 +305,27 @@ public class SharePartitionManager {
                 SharePartitionKey that = (SharePartitionKey) obj;
                 return groupId.equals(that.groupId) && Objects.equals(topicIdPartition, that.topicIdPartition);
             }
+        }
+    }
+
+    /*
+     * Caches share fetch sessions.
+     *
+     * See tryEvict for an explanation of the cache eviction strategy.
+     *
+     * The ShareFetchSessionCache is thread-safe because all of its methods are synchronized.
+     * Note that individual share fetch sessions have their own locks which are separate from the
+     * ShareFetchSessionCache lock.  In order to avoid deadlock, the ShareFetchSessionCache lock
+     * must never be acquired while an individual ShareFetchSession lock is already held.
+     */
+    // TODO: Implement ShareFetchSessionCache class
+    public static class ShareFetchSessionCache {
+        private final int maxEntries;
+        private final long evictionMs;
+
+        public ShareFetchSessionCache(int maxEntries, long evictionMs) {
+            this.maxEntries = maxEntries;
+            this.evictionMs = evictionMs;
         }
     }
 }

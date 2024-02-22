@@ -31,7 +31,7 @@ import java.util.Map;
 
 public abstract class ShareFetchContext {
 
-    protected static final Logger log = LoggerFactory.getLogger(ShareFetchContext.class);
+    protected Logger log = LoggerFactory.getLogger(ShareFetchContext.class);
 
     String partitionsToLogString(Collection<TopicIdPartition> partitions) {
         return FetchSession.partitionsToLogString(partitions, log.isTraceEnabled());

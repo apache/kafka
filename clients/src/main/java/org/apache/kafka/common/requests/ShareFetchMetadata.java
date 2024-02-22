@@ -40,6 +40,13 @@ public class ShareFetchMetadata {
     }
 
     /**
+     * Returns true if this is a full share fetch request.
+     */
+    public boolean isFull() {
+        return (this.epoch == INITIAL_EPOCH) || (this.epoch == FINAL_EPOCH);
+    }
+
+    /**
      * Returns the next epoch.
      *
      * @param prevEpoch The previous epoch.
