@@ -170,9 +170,8 @@ public class ConsumerNetworkThreadTest {
 
     @Test
     public void testListOffsetsEventIsProcessed() {
-        Timer timer = time.timer(1000);
         Map<TopicPartition, Long> timestamps = Collections.singletonMap(new TopicPartition("topic1", 1), 5L);
-        ApplicationEvent e = new ListOffsetsApplicationEvent(timestamps, true, timer);
+        ApplicationEvent e = new ListOffsetsApplicationEvent(timestamps, true, time.timer(1000));
         applicationEventsQueue.add(e);
         consumerNetworkThread.runOnce();
         verify(applicationEventProcessor).process(any(ListOffsetsApplicationEvent.class));
@@ -181,8 +180,7 @@ public class ConsumerNetworkThreadTest {
 
     @Test
     public void testResetPositionsEventIsProcessed() {
-        Timer timer = time.timer(1000);
-        ResetPositionsApplicationEvent e = new ResetPositionsApplicationEvent(timer);
+        ResetPositionsApplicationEvent e = new ResetPositionsApplicationEvent(time.timer(1000));
         applicationEventsQueue.add(e);
         consumerNetworkThread.runOnce();
         verify(applicationEventProcessor).process(any(ResetPositionsApplicationEvent.class));
@@ -193,8 +191,7 @@ public class ConsumerNetworkThreadTest {
     public void testResetPositionsProcessFailureIsIgnored() {
         doThrow(new NullPointerException()).when(offsetsRequestManager).resetPositionsIfNeeded();
 
-        Timer timer = time.timer(1000);
-        ResetPositionsApplicationEvent event = new ResetPositionsApplicationEvent(timer);
+        ResetPositionsApplicationEvent event = new ResetPositionsApplicationEvent(time.timer(1000));
         applicationEventsQueue.add(event);
         assertDoesNotThrow(() -> consumerNetworkThread.runOnce());
 
@@ -203,8 +200,7 @@ public class ConsumerNetworkThreadTest {
 
     @Test
     public void testValidatePositionsEventIsProcessed() {
-        Timer timer = time.timer(1000);
-        ValidatePositionsApplicationEvent e = new ValidatePositionsApplicationEvent(timer);
+        ValidatePositionsApplicationEvent e = new ValidatePositionsApplicationEvent(time.timer(1000));
         applicationEventsQueue.add(e);
         consumerNetworkThread.runOnce();
         verify(applicationEventProcessor).process(any(ValidatePositionsApplicationEvent.class));
@@ -229,8 +225,7 @@ public class ConsumerNetworkThreadTest {
 
     @Test
     void testFetchTopicMetadata() {
-        Timer timer = time.timer(1000);
-        applicationEventsQueue.add(new TopicMetadataApplicationEvent("topic", timer));
+        applicationEventsQueue.add(new TopicMetadataApplicationEvent("topic", time.timer(Long.MAX_VALUE)));
         consumerNetworkThread.runOnce();
         verify(applicationEventProcessor).process(any(TopicMetadataApplicationEvent.class));
     }
@@ -285,11 +280,11 @@ public class ConsumerNetworkThreadTest {
 
     @Test
     void testEnsureEventsAreCompleted() {
-        Timer timer = time.timer(1000);
         Node node = metadata.fetch().nodes().get(0);
         coordinatorRequestManager.markCoordinatorUnknown("test", time.milliseconds());
         client.prepareResponse(FindCoordinatorResponse.prepareResponse(Errors.NONE, "group-id", node));
         prepareOffsetCommitRequest(new HashMap<>(), Errors.NONE, false);
+        Timer timer = time.timer(1000);
         CompletableApplicationEvent<Void> event1 = spy(new AsyncCommitApplicationEvent(Collections.emptyMap(), timer));
         ApplicationEvent event2 = new AsyncCommitApplicationEvent(Collections.emptyMap(), timer);
         CompletableFuture<Void> future = new CompletableFuture<>();
