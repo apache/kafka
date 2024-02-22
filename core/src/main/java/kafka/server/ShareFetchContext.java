@@ -33,16 +33,24 @@ public abstract class ShareFetchContext {
 
     protected static final Logger log = LoggerFactory.getLogger(ShareFetchContext.class);
 
+    String partitionsToLogString(Collection<TopicIdPartition> partitions) {
+        return FetchSession.partitionsToLogString(partitions, log.isTraceEnabled());
+    }
+
+    /**
+     * Return an empty throttled response due to quota violation.
+     */
+    ShareFetchResponse throttleResponse(int throttleTimeMs) {
+        return new ShareFetchResponse(ShareFetchResponse.toMessage(Errors.NONE, throttleTimeMs,
+            Collections.emptyIterator(), Collections.emptyList()));
+    }
+
     /**
      * Get the response size to be used for quota computation. Since we are returning an empty response in case of
      * throttling, we are not supposed to update the context until we know that we are not going to throttle.
      */
-    abstract int getResponseSize(LinkedHashMap<TopicIdPartition, ShareFetchResponseData.PartitionData> updates,
-                                 short version);
-
-    String partitionsToLogString(Collection<TopicIdPartition> partitions) {
-        return FetchSession.partitionsToLogString(partitions, log.isTraceEnabled());
-    }
+    abstract int responseSize(LinkedHashMap<TopicIdPartition, ShareFetchResponseData.PartitionData> updates,
+        short version);
 
     /**
      * Updates the share fetch context with new partition information. Generates response data.
@@ -50,14 +58,6 @@ public abstract class ShareFetchContext {
      */
     abstract ShareFetchResponse updateAndGenerateResponseData(LinkedHashMap<TopicIdPartition, ShareFetchResponseData.PartitionData> updates);
 
-    abstract Map<TopicIdPartition, ShareFetchRequest.SharePartitionData> getCachedPartitions();
-
-    /**
-     * Return an empty throttled response due to quota violation.
-     */
-    ShareFetchResponse getThrottledResponse(int throttleTimeMs) {
-        return new ShareFetchResponse(ShareFetchResponse.toMessage(Errors.NONE, throttleTimeMs,
-                Collections.emptyIterator(), Collections.emptyList()));
-    }
+    abstract Map<TopicIdPartition, ShareFetchRequest.SharePartitionData> cachedPartitions();
 
 }
