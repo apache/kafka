@@ -942,7 +942,8 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                 timer);
             wakeupTrigger.setActiveTask(event.future());
             try {
-                final Map<TopicPartition, OffsetAndMetadata> committedOffsets = applicationEventHandler.addAndGet(event, timer);
+                final Map<TopicPartition, OffsetAndMetadata> committedOffsets = applicationEventHandler.addAndGet(event,
+                    timer);
                 committedOffsets.forEach(this::updateLastSeenEpochIfNewer);
                 return committedOffsets;
             } catch (TimeoutException e) {

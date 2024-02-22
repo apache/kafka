@@ -28,8 +28,9 @@ import java.util.Map;
  */
 public class SyncCommitApplicationEvent extends CommitApplicationEvent {
 
-    public SyncCommitApplicationEvent(final Map<TopicPartition, OffsetAndMetadata> offsets, final Timer timer) {
-        super(Type.COMMIT_SYNC, timer, offsets);
+    public SyncCommitApplicationEvent(final Map<TopicPartition, OffsetAndMetadata> offsets,
+                                      final Timer timer) {
+        super(offsets, Type.COMMIT_SYNC, timer);
     }
 
     @Override

@@ -290,8 +290,8 @@ public class ConsumerNetworkThreadTest {
         coordinatorRequestManager.markCoordinatorUnknown("test", time.milliseconds());
         client.prepareResponse(FindCoordinatorResponse.prepareResponse(Errors.NONE, "group-id", node));
         prepareOffsetCommitRequest(new HashMap<>(), Errors.NONE, false);
-        CompletableApplicationEvent<Void> event1 = spy(new SyncCommitApplicationEvent(Collections.emptyMap(), timer));
-        ApplicationEvent event2 = new SyncCommitApplicationEvent(Collections.emptyMap(), timer);
+        CompletableApplicationEvent<Void> event1 = spy(new AsyncCommitApplicationEvent(Collections.emptyMap(), timer));
+        ApplicationEvent event2 = new AsyncCommitApplicationEvent(Collections.emptyMap(), timer);
         CompletableFuture<Void> future = new CompletableFuture<>();
         when(event1.future()).thenReturn(future);
         applicationEventsQueue.add(event1);

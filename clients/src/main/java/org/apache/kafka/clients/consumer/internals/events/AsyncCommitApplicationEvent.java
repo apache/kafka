@@ -28,7 +28,7 @@ import java.util.Map;
 public class AsyncCommitApplicationEvent extends CommitApplicationEvent {
 
     public AsyncCommitApplicationEvent(final Map<TopicPartition, OffsetAndMetadata> offsets, Timer timer) {
-        super(Type.COMMIT_ASYNC, timer, offsets);
+        super(offsets, Type.COMMIT_ASYNC, timer);
     }
 
     @Override

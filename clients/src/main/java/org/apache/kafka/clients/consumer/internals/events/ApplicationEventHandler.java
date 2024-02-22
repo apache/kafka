@@ -108,6 +108,7 @@ public class ApplicationEventHandler implements Closeable {
      */
     public <T> T addAndGet(final CompletableApplicationEvent<T> event, final Timer timer) {
         Objects.requireNonNull(event, "CompletableApplicationEvent provided to addAndGet must be non-null");
+        Objects.requireNonNull(timer, "Timer provided to addAndGet must be non-null");
         add(event);
         return event.get(timer);
     }

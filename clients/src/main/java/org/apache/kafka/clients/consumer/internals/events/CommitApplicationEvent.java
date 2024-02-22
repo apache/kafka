@@ -30,9 +30,9 @@ public abstract class CommitApplicationEvent extends CompletableApplicationEvent
      */
     private final Map<TopicPartition, OffsetAndMetadata> offsets;
 
-    protected CommitApplicationEvent(final Type type,
-                                     final Timer timer,
-                                     final Map<TopicPartition, OffsetAndMetadata> offsets) {
+    protected CommitApplicationEvent(final Map<TopicPartition, OffsetAndMetadata> offsets,
+                                     final Type type,
+                                     final Timer timer) {
         super(type, timer);
         this.offsets = Collections.unmodifiableMap(offsets);
 
