@@ -266,6 +266,14 @@ public class MembershipManagerImpl implements MembershipManager {
 
     private final Time time;
 
+    /**
+     * True if the poll timer has expired, signaled by a call to
+     * {@link #transitionToSendingLeaveGroup(boolean)} with dueToExpiredPollTimer param true. This
+     * will be used to determine that the member should transition to STALE after leaving the
+     * group, to release its assignment and wait for the timer to be reset.
+     */
+    private boolean isPollTimerExpired;
+
     public MembershipManagerImpl(String groupId,
                                  Optional<String> groupInstanceId,
                                  int rebalanceTimeoutMs,
@@ -618,7 +626,7 @@ public class MembershipManagerImpl implements MembershipManager {
             // Transition to ensure that a heartbeat request is sent out to effectively leave the
             // group (even in the case where the member had no assignment to release or when the
             // callback execution failed.)
-            transitionToSendingLeaveGroup();
+            transitionToSendingLeaveGroup(false);
         });
 
         // Return future to indicate that the leave group is done when the callbacks
@@ -663,11 +671,15 @@ public class MembershipManagerImpl implements MembershipManager {
 
     /**
      * Reset member epoch to the value required for the leave the group heartbeat request, and
-     * transition to the {@link MemberState#LEAVING} state so that a heartbeat
-     * request is sent out with it.
+     * transition to the {@link MemberState#LEAVING} state so that a heartbeat request is sent
+     * out with it.
+     *
+     * @param dueToExpiredPollTimer True if the leave group is due to an expired poll timer. This
+     *                              will indicate that the member must remain STALE after leaving,
+     *                              until it releases its assignment and the timer is reset.
      */
     @Override
-    public void transitionToSendingLeaveGroup() {
+    public void transitionToSendingLeaveGroup(boolean dueToExpiredPollTimer) {
         if (state == MemberState.FATAL) {
             log.warn("Member {} with epoch {} won't send leave group request because it is in " +
                     "FATAL state", memberId, memberEpoch);
@@ -677,6 +689,10 @@ public class MembershipManagerImpl implements MembershipManager {
             log.warn("Member {} won't send leave group request because it is already out of the group.",
                 memberId);
             return;
+        }
+
+        if (dueToExpiredPollTimer) {
+            this.isPollTimerExpired = true;
         }
         int leaveEpoch = groupInstanceId.isPresent() ?
                 ConsumerGroupHeartbeatRequest.LEAVE_GROUP_STATIC_MEMBER_EPOCH :
@@ -720,7 +736,11 @@ public class MembershipManagerImpl implements MembershipManager {
                 transitionTo(MemberState.RECONCILING);
             }
         } else if (state == MemberState.LEAVING) {
-            transitionToUnsubscribed();
+            if (isPollTimerExpired) {
+                transitionToStale();
+            } else {
+                transitionToUnsubscribed();
+            }
         }
     }
 
@@ -776,6 +796,7 @@ public class MembershipManagerImpl implements MembershipManager {
 
     @Override
     public void maybeRejoinStaleMember() {
+        isPollTimerExpired = false;
         if (state == MemberState.STALE) {
             log.debug("Expired poll timer has been reset so stale member {} will rejoin the group" +
                 "when it completes releasing its previous assignment.", memberId);
@@ -784,12 +805,12 @@ public class MembershipManagerImpl implements MembershipManager {
     }
 
     /**
-     * Release assignments of a stale member that has left the group, by calling the
-     * onPartitionsLost callback. Once the callback completes, the member will remain stale until
-     * the poll timer is reset by an application poll event. See {@link #maybeRejoinStaleMember()}.
+     * Transition to STALE to release assignments because the member has left the group due to
+     * expired poll timer. This will trigger the onPartitionsLost callback. Once the callback
+     * completes, the member will remain stale until the poll timer is reset by an application
+     * poll event. See {@link #maybeRejoinStaleMember()}.
      */
-    @Override
-    public void transitionToStale() {
+    private void transitionToStale() {
         transitionTo(MemberState.STALE);
 
         // Release assignment

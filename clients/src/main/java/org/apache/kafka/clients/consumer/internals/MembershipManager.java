@@ -161,13 +161,7 @@ public interface MembershipManager extends RequestManager {
     /**
      * Transition to the {@link MemberState#LEAVING} state to send a heartbeat to leave the group.
      */
-    void transitionToSendingLeaveGroup();
-
-    /**
-     * When the user stops polling the consumer and the <code>max.poll.interval.ms</code> timer expires, we transition
-     * the member to STALE.
-     */
-    void transitionToStale();
+    void transitionToSendingLeaveGroup(boolean dueToPollTimerExpired);
 
     /**
      * Register a listener that will be called whenever the member state changes due to

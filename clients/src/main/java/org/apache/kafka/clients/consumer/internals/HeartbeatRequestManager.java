@@ -200,9 +200,8 @@ public class HeartbeatRequestManager implements RequestManager {
                 "messages. You can address this either by increasing max.poll.interval.ms or by " +
                 "reducing the maximum size of batches returned in poll() with max.poll.records.");
 
-            membershipManager.transitionToSendingLeaveGroup();
+            membershipManager.transitionToSendingLeaveGroup(true);
             NetworkClientDelegate.UnsentRequest leaveHeartbeat = makeHeartbeatRequest(currentTimeMs, true);
-            membershipManager.transitionToStale();
 
             // We can ignore the leave response because we can join before or after receiving the response.
             heartbeatRequestState.reset();
@@ -216,7 +215,6 @@ public class HeartbeatRequestManager implements RequestManager {
         }
 
         NetworkClientDelegate.UnsentRequest request = makeHeartbeatRequest(currentTimeMs, false);
-        membershipManager.onHeartbeatRequestSent();
         return new NetworkClientDelegate.PollResult(heartbeatRequestState.heartbeatIntervalMs, Collections.singletonList(request));
     }
 
@@ -270,6 +268,7 @@ public class HeartbeatRequestManager implements RequestManager {
                                                                      final boolean ignoreResponse) {
         NetworkClientDelegate.UnsentRequest request = makeHeartbeatRequest(ignoreResponse);
         heartbeatRequestState.onSendAttempt(currentTimeMs);
+        membershipManager.onHeartbeatRequestSent();
         metricsManager.recordHeartbeatSentMs(currentTimeMs);
         return request;
     }
