@@ -32,6 +32,7 @@ public class SyncCommitApplicationEvent extends CommitApplicationEvent {
         super(Type.COMMIT_SYNC, timer, offsets);
     }
 
+    @Override
     public String toString() {
         return "SyncCommitApplicationEvent{" +
             toStringBase() +

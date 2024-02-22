@@ -130,11 +130,11 @@ public class HeartbeatRequestManagerTest {
         cleanup();
 
         ConsumerTestBuilder.GroupInformation gi = new ConsumerTestBuilder.GroupInformation(
-            DEFAULT_GROUP_ID,
-            groupInstanceId,
-            0,
-            0.0,
-            Optional.of(DEFAULT_REMOTE_ASSIGNOR)
+                DEFAULT_GROUP_ID,
+                groupInstanceId,
+                0,
+                0.0,
+                Optional.of(DEFAULT_REMOTE_ASSIGNOR)
         );
 
         setUp(Optional.of(gi));
@@ -179,7 +179,7 @@ public class HeartbeatRequestManagerTest {
         assertTrue(request.requestBuilder() instanceof ConsumerGroupHeartbeatRequest.Builder);
 
         ConsumerGroupHeartbeatRequest heartbeatRequest =
-            (ConsumerGroupHeartbeatRequest) request.requestBuilder().build(version);
+                (ConsumerGroupHeartbeatRequest) request.requestBuilder().build(version);
 
         // Should include epoch 0 to join and no member ID.
         assertTrue(heartbeatRequest.data().memberId().isEmpty());
@@ -303,8 +303,8 @@ public class HeartbeatRequestManagerTest {
         // Update membershipManager's memberId and memberEpoch
         ConsumerGroupHeartbeatResponse result =
             new ConsumerGroupHeartbeatResponse(new ConsumerGroupHeartbeatResponseData()
-                .setMemberId(memberId)
-                .setMemberEpoch(memberEpoch));
+            .setMemberId(memberId)
+            .setMemberEpoch(memberEpoch));
         membershipManager.onHeartbeatResponseReceived(result.data());
 
         // Create a ConsumerHeartbeatRequest and verify the payload
@@ -541,10 +541,10 @@ public class HeartbeatRequestManagerTest {
             new ConsumerGroupHeartbeatResponseData.Assignment();
         assignmentTopic1.setTopicPartitions(Collections.singletonList(tpTopic1));
         ConsumerGroupHeartbeatResponse rs1 = new ConsumerGroupHeartbeatResponse(new ConsumerGroupHeartbeatResponseData()
-            .setHeartbeatIntervalMs(DEFAULT_HEARTBEAT_INTERVAL_MS)
-            .setMemberId(memberId)
-            .setMemberEpoch(1)
-            .setAssignment(assignmentTopic1));
+                .setHeartbeatIntervalMs(DEFAULT_HEARTBEAT_INTERVAL_MS)
+                .setMemberId(memberId)
+                .setMemberEpoch(1)
+                .setAssignment(assignmentTopic1));
         when(metadata.topicNames()).thenReturn(Collections.singletonMap(topicId, "topic1"));
         membershipManager.onHeartbeatResponseReceived(rs1.data());
 
@@ -558,24 +558,24 @@ public class HeartbeatRequestManagerTest {
         membershipManager = mock(MembershipManager.class);
         heartbeatState = mock(HeartbeatRequestManager.HeartbeatState.class);
         heartbeatRequestState = spy(new HeartbeatRequestManager.HeartbeatRequestState(
-            new LogContext(),
-            time,
-            heartbeatIntervalMs,
-            retryBackoffMs,
-            retryBackoffMaxMs,
-            0));
+                new LogContext(),
+                time,
+                heartbeatIntervalMs,
+                retryBackoffMs,
+                retryBackoffMaxMs,
+                0));
         backgroundEventHandler = mock(BackgroundEventHandler.class);
 
         heartbeatRequestManager = createHeartbeatRequestManager(
-            coordinatorRequestManager,
-            membershipManager,
-            heartbeatState,
-            heartbeatRequestState,
-            backgroundEventHandler);
+                coordinatorRequestManager,
+                membershipManager,
+                heartbeatState,
+                heartbeatRequestState,
+                backgroundEventHandler);
         when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(new Node(1, "localhost", 9999)));
         when(membershipManager.shouldSkipHeartbeat()).thenReturn(false);
 
-        // On poll timer expiration, the member should transition to stale and a last heartbeat
+        // On poll timer expiration, the member should transition to stale and a last heartbeat 
         // should be sent to leave the group
         time.sleep(maxPollIntervalMs);
         assertHeartbeat(heartbeatRequestManager, heartbeatIntervalMs);
@@ -680,9 +680,9 @@ public class HeartbeatRequestManagerTest {
         membershipManager.onSubscriptionUpdated();
         // Heartbeat response without assignment to set the state to STABLE.
         ConsumerGroupHeartbeatResponse rs1 = new ConsumerGroupHeartbeatResponse(new ConsumerGroupHeartbeatResponseData()
-            .setHeartbeatIntervalMs(DEFAULT_HEARTBEAT_INTERVAL_MS)
-            .setMemberId(memberId)
-            .setMemberEpoch(memberEpoch));
+                .setHeartbeatIntervalMs(DEFAULT_HEARTBEAT_INTERVAL_MS)
+                .setMemberId(memberId)
+                .setMemberEpoch(memberEpoch));
         membershipManager.onHeartbeatResponseReceived(rs1.data());
         assertEquals(MemberState.STABLE, membershipManager.state());
     }
@@ -777,22 +777,22 @@ public class HeartbeatRequestManagerTest {
     }
 
     private HeartbeatRequestManager createHeartbeatRequestManager(
-        final CoordinatorRequestManager coordinatorRequestManager,
-        final MembershipManager membershipManager,
-        final HeartbeatRequestManager.HeartbeatState heartbeatState,
-        final HeartbeatRequestManager.HeartbeatRequestState heartbeatRequestState,
-        final BackgroundEventHandler backgroundEventHandler) {
+            final CoordinatorRequestManager coordinatorRequestManager,
+            final MembershipManager membershipManager,
+            final HeartbeatRequestManager.HeartbeatState heartbeatState,
+            final HeartbeatRequestManager.HeartbeatRequestState heartbeatRequestState,
+            final BackgroundEventHandler backgroundEventHandler) {
         LogContext logContext = new LogContext();
         pollTimer = time.timer(maxPollIntervalMs);
         return new HeartbeatRequestManager(
-            logContext,
-            pollTimer,
-            config(),
-            coordinatorRequestManager,
-            membershipManager,
-            heartbeatState,
-            heartbeatRequestState,
-            backgroundEventHandler,
-            metrics);
+                logContext,
+                pollTimer,
+                config(),
+                coordinatorRequestManager,
+                membershipManager,
+                heartbeatState,
+                heartbeatRequestState,
+                backgroundEventHandler,
+                metrics);
     }
 }
