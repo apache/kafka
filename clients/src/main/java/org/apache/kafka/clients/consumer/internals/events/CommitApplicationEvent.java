@@ -30,7 +30,9 @@ public abstract class CommitApplicationEvent extends CompletableApplicationEvent
      */
     private final Map<TopicPartition, OffsetAndMetadata> offsets;
 
-    protected CommitApplicationEvent(final Map<TopicPartition, OffsetAndMetadata> offsets, Type type, Timer timer) {
+    protected CommitApplicationEvent(final ApplicationEventType type,
+                                     final Timer timer,
+                                     final Map<TopicPartition, OffsetAndMetadata> offsets) {
         super(type, timer);
         this.offsets = Collections.unmodifiableMap(offsets);
 
@@ -45,21 +47,9 @@ public abstract class CommitApplicationEvent extends CompletableApplicationEvent
         return offsets;
     }
 
-    @Override
-    public boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
-        if (!super.equals(o)) return false;
-
-        CommitApplicationEvent that = (CommitApplicationEvent) o;
-
-        return offsets.equals(that.offsets);
-    }
 
     @Override
-    public int hashCode() {
-        int result = super.hashCode();
-        result = 31 * result + offsets.hashCode();
-        return result;
+    protected String toStringBase() {
+        return super.toStringBase() + ", offsets=" + offsets;
     }
 }

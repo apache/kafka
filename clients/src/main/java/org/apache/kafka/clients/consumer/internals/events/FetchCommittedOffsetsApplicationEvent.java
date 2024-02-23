@@ -24,6 +24,8 @@ import java.util.Collections;
 import java.util.Map;
 import java.util.Set;
 
+import static org.apache.kafka.clients.consumer.internals.events.ApplicationEventType.FETCH_COMMITTED_OFFSETS;
+
 public class FetchCommittedOffsetsApplicationEvent extends CompletableApplicationEvent<Map<TopicPartition, OffsetAndMetadata>> {
 
     /**
@@ -33,7 +35,7 @@ public class FetchCommittedOffsetsApplicationEvent extends CompletableApplicatio
 
     public FetchCommittedOffsetsApplicationEvent(final Set<TopicPartition> partitions,
                                                  final Timer timer) {
-        super(Type.FETCH_COMMITTED_OFFSETS, timer);
+        super(FETCH_COMMITTED_OFFSETS, timer);
         this.partitions = Collections.unmodifiableSet(partitions);
     }
 
@@ -42,28 +44,7 @@ public class FetchCommittedOffsetsApplicationEvent extends CompletableApplicatio
     }
 
     @Override
-    public boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
-        if (!super.equals(o)) return false;
-
-        FetchCommittedOffsetsApplicationEvent that = (FetchCommittedOffsetsApplicationEvent) o;
-
-        return partitions.equals(that.partitions);
-    }
-
-    @Override
-    public int hashCode() {
-        int result = super.hashCode();
-        result = 31 * result + partitions.hashCode();
-        return result;
-    }
-
-    @Override
-    public String toString() {
-        return getClass().getSimpleName() + "{" +
-                toStringBase() +
-                ", partitions=" + partitions +
-                '}';
+    public String toStringBase() {
+        return super.toStringBase() + ", partitions=" + partitions;
     }
 }

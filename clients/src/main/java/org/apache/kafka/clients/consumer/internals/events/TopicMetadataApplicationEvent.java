@@ -21,20 +21,22 @@ import org.apache.kafka.common.utils.Timer;
 
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
+
+import static org.apache.kafka.clients.consumer.internals.events.ApplicationEventType.TOPIC_METADATA;
 
 public class TopicMetadataApplicationEvent extends CompletableApplicationEvent<Map<String, List<PartitionInfo>>> {
+
     private final String topic;
     private final boolean allTopics;
 
     public TopicMetadataApplicationEvent(final Timer timer) {
-        super(Type.TOPIC_METADATA, timer);
+        super(TOPIC_METADATA, timer);
         this.topic = null;
         this.allTopics = true;
     }
 
     public TopicMetadataApplicationEvent(final String topic, final Timer timer) {
-        super(Type.TOPIC_METADATA, timer);
+        super(TOPIC_METADATA, timer);
         this.topic = topic;
         this.allTopics = false;
     }
@@ -48,25 +50,7 @@ public class TopicMetadataApplicationEvent extends CompletableApplicationEvent<M
     }
 
     @Override
-    public String toString() {
-        return getClass().getSimpleName() + " {" + toStringBase() +
-                ", topic=" + topic +
-                ", allTopics=" + allTopics + "}";
-    }
-
-    @Override
-    public boolean equals(Object o) {
-        if (this == o) return true;
-        if (!(o instanceof TopicMetadataApplicationEvent)) return false;
-        if (!super.equals(o)) return false;
-
-        TopicMetadataApplicationEvent that = (TopicMetadataApplicationEvent) o;
-
-        return topic.equals(that.topic) && (allTopics == that.allTopics);
-    }
-
-    @Override
-    public int hashCode() {
-        return Objects.hash(super.hashCode(), topic, allTopics);
+    public String toStringBase() {
+        return super.toStringBase() + ", topic=" + topic + ", allTopics=" + allTopics;
     }
 }

@@ -27,6 +27,8 @@ import java.util.Collections;
 import java.util.Objects;
 import java.util.SortedSet;
 
+import static org.apache.kafka.clients.consumer.internals.events.BackgroundEventType.CONSUMER_REBALANCE_LISTENER_CALLBACK_NEEDED;
+
 /**
  * Event that signifies that the network I/O thread wants to invoke one of the callback methods on the
  * {@link ConsumerRebalanceListener}. This event will be processed by the application thread when the next
@@ -41,7 +43,7 @@ public class ConsumerRebalanceListenerCallbackNeededEvent extends CompletableBac
     public ConsumerRebalanceListenerCallbackNeededEvent(ConsumerRebalanceListenerMethodName methodName,
                                                         SortedSet<TopicPartition> partitions,
                                                         Timer timer) {
-        super(Type.CONSUMER_REBALANCE_LISTENER_CALLBACK_NEEDED, timer);
+        super(CONSUMER_REBALANCE_LISTENER_CALLBACK_NEEDED, timer);
         this.methodName = Objects.requireNonNull(methodName);
         this.partitions = Collections.unmodifiableSortedSet(partitions);
     }
@@ -55,35 +57,9 @@ public class ConsumerRebalanceListenerCallbackNeededEvent extends CompletableBac
     }
 
     @Override
-    public boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
-        if (!super.equals(o)) return false;
-
-        ConsumerRebalanceListenerCallbackNeededEvent that = (ConsumerRebalanceListenerCallbackNeededEvent) o;
-
-        return methodName == that.methodName && partitions.equals(that.partitions);
-    }
-
-    @Override
-    public int hashCode() {
-        int result = super.hashCode();
-        result = 31 * result + methodName.hashCode();
-        result = 31 * result + partitions.hashCode();
-        return result;
-    }
-
-    @Override
     protected String toStringBase() {
         return super.toStringBase() +
                 ", methodName=" + methodName +
                 ", partitions=" + partitions;
-    }
-
-    @Override
-    public String toString() {
-        return getClass().getSimpleName() + "{" +
-                toStringBase() +
-                '}';
     }
 }

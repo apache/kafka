@@ -22,20 +22,14 @@ import org.apache.kafka.common.utils.Timer;
 
 import java.util.Map;
 
+import static org.apache.kafka.clients.consumer.internals.events.ApplicationEventType.COMMIT_ASYNC;
+
 /**
  * Event to commit offsets without waiting for a response, so the request won't be retried.
  */
 public class AsyncCommitApplicationEvent extends CommitApplicationEvent {
 
     public AsyncCommitApplicationEvent(final Map<TopicPartition, OffsetAndMetadata> offsets, Timer timer) {
-        super(offsets, Type.COMMIT_ASYNC, timer);
-    }
-
-    @Override
-    public String toString() {
-        return "AsyncCommitApplicationEvent{" +
-            toStringBase() +
-            ", offsets=" + offsets() +
-            '}';
+        super(COMMIT_ASYNC, timer, offsets);
     }
 }

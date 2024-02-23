@@ -19,6 +19,8 @@ package org.apache.kafka.clients.consumer.internals.events;
 
 import org.apache.kafka.common.utils.Timer;
 
+import static org.apache.kafka.clients.consumer.internals.events.ApplicationEventType.VALIDATE_POSITIONS;
+
 /**
  * Event for validating offsets for all assigned partitions for which a leader change has been
  * detected. This is an asynchronous event that generates OffsetForLeaderEpoch requests, and
@@ -27,6 +29,6 @@ import org.apache.kafka.common.utils.Timer;
 public class ValidatePositionsApplicationEvent extends CompletableApplicationEvent<Void> {
 
     public ValidatePositionsApplicationEvent(Timer timer) {
-        super(Type.VALIDATE_POSITIONS, timer);
+        super(VALIDATE_POSITIONS, timer);
     }
 }

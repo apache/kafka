@@ -24,6 +24,8 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
+import static org.apache.kafka.clients.consumer.internals.events.ApplicationEventType.LIST_OFFSETS;
+
 /**
  * Event for retrieving partition offsets by performing a
  * {@link org.apache.kafka.common.requests.ListOffsetsRequest ListOffsetsRequest}.
@@ -38,7 +40,7 @@ public class ListOffsetsApplicationEvent extends CompletableApplicationEvent<Map
     private final boolean requireTimestamps;
 
     public ListOffsetsApplicationEvent(Map<TopicPartition, Long> timestampToSearch, boolean requireTimestamps, Timer timer) {
-        super(Type.LIST_OFFSETS, timer);
+        super(LIST_OFFSETS, timer);
         this.timestampsToSearch = Collections.unmodifiableMap(timestampToSearch);
         this.requireTimestamps = requireTimestamps;
     }
@@ -65,31 +67,10 @@ public class ListOffsetsApplicationEvent extends CompletableApplicationEvent<Map
     }
 
     @Override
-    public boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
-        if (!super.equals(o)) return false;
-
-        ListOffsetsApplicationEvent that = (ListOffsetsApplicationEvent) o;
-
-        if (requireTimestamps != that.requireTimestamps) return false;
-        return timestampsToSearch.equals(that.timestampsToSearch);
-    }
-
-    @Override
-    public int hashCode() {
-        int result = super.hashCode();
-        result = 31 * result + timestampsToSearch.hashCode();
-        result = 31 * result + (requireTimestamps ? 1 : 0);
-        return result;
-    }
-
-    @Override
-    public String toString() {
-        return getClass().getSimpleName() + " {" +
-                toStringBase() +
-                ", timestampsToSearch=" + timestampsToSearch + ", " +
-                "requireTimestamps=" + requireTimestamps + '}';
+    public String toStringBase() {
+        return super.toStringBase() +
+                ", timestampsToSearch=" + timestampsToSearch +
+                ", requireTimestamps=" + requireTimestamps;
     }
 
 }

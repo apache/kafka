@@ -22,6 +22,8 @@ import org.apache.kafka.common.utils.Timer;
 
 import java.util.Map;
 
+import static org.apache.kafka.clients.consumer.internals.events.ApplicationEventType.COMMIT_SYNC;
+
 /**
  * Event to commit offsets waiting for a response and retrying on expected retriable errors until
  * the timer expires.
@@ -30,14 +32,11 @@ public class SyncCommitApplicationEvent extends CommitApplicationEvent {
 
     public SyncCommitApplicationEvent(final Map<TopicPartition, OffsetAndMetadata> offsets,
                                       final Timer timer) {
-        super(offsets, Type.COMMIT_SYNC, timer);
+        super(COMMIT_SYNC, timer, offsets);
     }
 
     @Override
-    public String toString() {
-        return "SyncCommitApplicationEvent{" +
-            toStringBase() +
-            ", offsets=" + offsets() +
-            '}';
+    public String toStringBase() {
+        return super.toStringBase() + ", offsets=" + offsets();
     }
 }

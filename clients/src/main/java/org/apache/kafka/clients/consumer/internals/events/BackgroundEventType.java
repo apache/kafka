@@ -16,11 +16,6 @@
  */
 package org.apache.kafka.clients.consumer.internals.events;
 
-import static org.apache.kafka.clients.consumer.internals.events.ApplicationEventType.COMMIT_ON_CLOSE;
-
-public class CommitOnCloseApplicationEvent extends ApplicationEvent {
-
-    public CommitOnCloseApplicationEvent() {
-        super(COMMIT_ON_CLOSE);
-    }
+public enum BackgroundEventType {
+    ERROR, CONSUMER_REBALANCE_LISTENER_CALLBACK_NEEDED, GROUP_METADATA_UPDATE
 }

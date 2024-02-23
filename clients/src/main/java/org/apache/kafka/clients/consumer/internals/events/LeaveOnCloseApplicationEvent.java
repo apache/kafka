@@ -18,15 +18,11 @@ package org.apache.kafka.clients.consumer.internals.events;
 
 import org.apache.kafka.common.utils.Timer;
 
-public class LeaveOnCloseApplicationEvent extends CompletableApplicationEvent<Void> {
-    public LeaveOnCloseApplicationEvent(Timer timer) {
-        super(Type.LEAVE_ON_CLOSE, timer);
-    }
+import static org.apache.kafka.clients.consumer.internals.events.ApplicationEventType.LEAVE_ON_CLOSE;
 
-    @Override
-    public String toString() {
-        return "LeaveOnCloseApplicationEvent{" +
-            toStringBase() +
-            '}';
+public class LeaveOnCloseApplicationEvent extends CompletableApplicationEvent<Void> {
+
+    public LeaveOnCloseApplicationEvent(Timer timer) {
+        super(LEAVE_ON_CLOSE, timer);
     }
 }

@@ -19,6 +19,8 @@ package org.apache.kafka.clients.consumer.internals.events;
 
 import org.apache.kafka.common.utils.Timer;
 
+import static org.apache.kafka.clients.consumer.internals.events.ApplicationEventType.UNSUBSCRIBE;
+
 /**
  * Application event triggered when a user calls the unsubscribe API. This will make the consumer
  * release all its assignments and send a heartbeat request to leave the consumer group.
@@ -29,7 +31,7 @@ import org.apache.kafka.common.utils.Timer;
 public class UnsubscribeApplicationEvent extends CompletableApplicationEvent<Void> {
 
     public UnsubscribeApplicationEvent(final Timer timer) {
-        super(Type.UNSUBSCRIBE, timer);
+        super(UNSUBSCRIBE, timer);
     }
 }
 
