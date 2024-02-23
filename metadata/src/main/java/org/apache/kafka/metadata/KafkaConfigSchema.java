@@ -113,14 +113,19 @@ public class KafkaConfigSchema {
         this.logConfigSynonyms = logConfigSynonyms;
     }
 
+    public ConfigDef.ConfigKey configKey(ConfigResource.Type type, String key) {
+        ConfigDef configDef = configDefs.get(type);
+        if (configDef == null) return null;
+        ConfigDef.ConfigKey configKey = configDef.configKeys().get(key);
+        if (configKey == null) return null;
+        return configKey;
+    }
+
     /**
      * Returns true if the configuration key specified is splittable (only lists are splittable.)
      */
     public boolean isSplittable(ConfigResource.Type type, String key) {
-        ConfigDef configDef = configDefs.get(type);
-        if (configDef == null) return false;
-        ConfigDef.ConfigKey configKey = configDef.configKeys().get(key);
-        if (configKey == null) return false;
+        ConfigDef.ConfigKey configKey = configKey(type, key);
         return configKey.type == ConfigDef.Type.LIST;
     }
 
