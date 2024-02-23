@@ -24,13 +24,13 @@ import org.apache.kafka.common.utils.LogContext;
 import org.slf4j.Logger;
 
 import java.io.Closeable;
-import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CompletableFuture;
+import java.util.function.Consumer;
 
 /**
  * An {@link EventProcessor} is the means by which events <em>produced</em> by thread <em>A</em> are
@@ -72,7 +72,8 @@ public abstract class EventProcessor<T> implements Closeable {
     protected boolean process(ProcessHandler<T> processHandler) {
         closer.assertOpen("The processor was previously closed, so no further processing can occur");
 
-        List<T> events = drain();
+        LinkedList<T> events = new LinkedList<>();
+        eventQueue.drainTo(events);
 
         if (events.isEmpty()) {
             log.trace("No events to process");
@@ -86,6 +87,10 @@ public abstract class EventProcessor<T> implements Closeable {
                 try {
                     Objects.requireNonNull(event, "Attempted to process a null event");
                     log.trace("Processing event: {}", event);
+
+                    if (event instanceof CompletableEvent)
+                        completableEvents.add((CompletableEvent<?>) event);
+
                     process(event);
                     processHandler.onProcess(event, Optional.empty());
                 } catch (Throwable t) {
@@ -101,42 +106,23 @@ public abstract class EventProcessor<T> implements Closeable {
     }
 
     public void completeExpiredEvents(long currentTimeMs) {
-        Iterator<CompletableEvent<?>> i = completableEvents.iterator();
+        log.trace("Removing expired events");
 
-        while (i.hasNext()) {
-            CompletableEvent<?> e = i.next();
-            CompletableFuture<?> future = e.future();
+        Consumer<CompletableEvent<?>> completeEvent = e -> {
+            log.debug("Completing event {} exceptionally since it expired {} ms ago", e, currentTimeMs - e.deadlineMs());
+            CompletableFuture<?> f = e.future();
+            f.completeExceptionally(new TimeoutException(String.format("%s could not be completed within its timeout", e.getClass().getSimpleName())));
+        };
 
-            if (future.isDone()) {
-                // If the event is done, remove it out of the list, so we don't hold a reference to it forever.
-                i.remove();
-                continue;
-            }
+        // Complete (exceptionally) any events that have recently passed their deadline.
+        completableEvents
+                .stream()
+                .filter(e -> !e.future().isDone() && currentTimeMs > e.deadlineMs())
+                .forEach(completeEvent);
 
-            // If the event isn't completed, check to see if it's expired
-            long deadlineMs = e.deadlineMs();
-
-            if (deadlineMs > currentTimeMs) {
-                // Our expiration is yet in the future, so skip this event for now.
-                continue;
-            }
-
-            // If we get to here that means that the event has expired, so complete the event's future with
-            // a TimeoutException.
-            long diff = currentTimeMs - deadlineMs;
-
-            TimeoutException exception = new TimeoutException(String.format("%s could not be completed", e.getClass().getSimpleName()));
-            log.warn("Event {} had a deadline of {} but was not complete by {}, which is {} ms. past, completing with exception: {}",
-                    e,
-                    deadlineMs,
-                    currentTimeMs,
-                    diff,
-                    exception.getMessage());
-            future.completeExceptionally(exception);
-
-            // The event is done, so we want to remove it from the list, so we don't hold a reference to it forever.
-            i.remove();
-        }
+        // Remove any events that are complete.
+        completableEvents.removeIf(e -> e.future().isDone());
+        log.trace("Finished removal of expired events");
     }
 
     /**
@@ -144,34 +130,31 @@ public abstract class EventProcessor<T> implements Closeable {
      * this case, we need to throw an exception to notify the user the consumer is closed.
      */
     private void closeInternal() {
-        log.trace("Closing event processor");
-        List<T> incompleteEvents = drain();
+        log.debug("Removing unprocessed and/or unfinished events because the consumer is closing");
 
-        if (incompleteEvents.isEmpty())
-            return;
+        Consumer<CompletableEvent<?>> completeEvent = e -> {
+            log.debug("Completing event {} exceptionally since the consumer is closing", e);
+            CompletableFuture<?> f = e.future();
+            f.completeExceptionally(new KafkaException("The consumer is closed"));
+        };
 
-        KafkaException exception = new KafkaException("The consumer is closed");
-
-        // Check each of the events and if it has a Future that is incomplete, complete it exceptionally.
-        incompleteEvents
+        // Check each of the unprocessed events and if it has a Future that is incomplete, complete it exceptionally.
+        eventQueue
                 .stream()
                 .filter(e -> e instanceof CompletableEvent)
-                .map(e -> ((CompletableEvent<?>) e).future())
-                .filter(f -> !f.isDone())
-                .forEach(f -> {
-                    log.debug("Completing {} with exception {}", f, exception.getMessage());
-                    f.completeExceptionally(exception);
-                });
+                .map(e -> (CompletableEvent<?>) e)
+                .filter(e -> !e.future().isDone())
+                .forEach(completeEvent);
+        eventQueue.clear();
 
-        log.debug("Discarding {} events because the consumer is closing", incompleteEvents.size());
-    }
+        // Check each of the completable events and if it has a Future that is incomplete, complete it exceptionally.
+        // In the case of shutdown, we don't take the deadline into consideration.
+        completableEvents
+                .stream()
+                .filter(e -> !e.future().isDone())
+                .forEach(completeEvent);
+        completableEvents.clear();
 
-    /**
-     * Moves all the events from the queue to the returned list.
-     */
-    private List<T> drain() {
-        LinkedList<T> events = new LinkedList<>();
-        eventQueue.drainTo(events);
-        return events;
+        log.debug("Finished removal of events that were unprocessed and/or unfinished");
     }
 }

@@ -184,9 +184,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
          * error, continue to process the remaining events, and then throw the first error that occurred.
          */
         public boolean process() {
-            log.warn("KIRK_DEBUG - process (a)");
             AtomicReference<KafkaException> firstError = new AtomicReference<>();
-            log.warn("KIRK_DEBUG - process (b)");
 
             ProcessHandler<BackgroundEvent> processHandler = (event, error) -> {
                 if (error.isPresent()) {
@@ -198,16 +196,11 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                 }
             };
 
-            log.warn("KIRK_DEBUG - process (c)");
             boolean hadEvents = process(processHandler);
-            log.warn("KIRK_DEBUG - process (d)");
 
-            if (firstError.get() != null) {
-                log.warn("KIRK_DEBUG - process (e) - firstError: {}", firstError.get().getMessage());
+            if (firstError.get() != null)
                 throw firstError.get();
-            }
 
-            log.warn("KIRK_DEBUG - process (f)");
             return hadEvents;
         }
 
@@ -697,9 +690,8 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     @Override
     public ConsumerRecords<K, V> poll(final Duration timeout) {
         Timer timer = time.timer(timeout);
-        log.warn("KIRK_DEBUG - poll (a) - remaining time: {}", timer.remainingMs());
+        log.warn("KIRK_DEBUG - poll - starting");
         acquireAndEnsureOpen();
-        log.warn("KIRK_DEBUG - poll (b) - remaining time: {}", timer.remainingMs());
 
         try {
             kafkaConsumerMetrics.recordPollStart(timer.currentTimeMs());
@@ -709,60 +701,39 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             }
 
             do {
-                log.warn("KIRK_DEBUG - poll (c) - remaining time: {}", timer.remainingMs());
 
                 // Make sure to let the background thread know that we are still polling.
                 applicationEventHandler.add(new PollApplicationEvent(timer.currentTimeMs()));
-                log.warn("KIRK_DEBUG - poll (d) - remaining time: {}", timer.remainingMs());
 
                 // We must not allow wake-ups between polling for fetches and returning the records.
                 // If the polled fetches are not empty the consumed position has already been updated in the polling
                 // of the fetches. A wakeup between returned fetches and returning records would lead to never
                 // returning the records in the fetches. Thus, we trigger a possible wake-up before we poll fetches.
                 wakeupTrigger.maybeTriggerWakeup();
-                log.warn("KIRK_DEBUG - poll (e) - remaining time: {}", timer.remainingMs());
 
                 updateAssignmentMetadataIfNeeded(timer);
-                log.warn("KIRK_DEBUG - poll (f) - remaining time: {}", timer.remainingMs());
                 if (isGenerationKnownOrPartitionsUserAssigned()) {
-                    log.warn("KIRK_DEBUG - poll (g) - remaining time: {}", timer.remainingMs());
                     final Fetch<K, V> fetch = pollForFetches(timer);
-                    log.warn("KIRK_DEBUG - poll (h) - remaining time: {}", timer.remainingMs());
                     if (!fetch.isEmpty()) {
-                        log.warn("KIRK_DEBUG - poll (i) - remaining time: {}", timer.remainingMs());
                         if (fetch.records().isEmpty()) {
                             log.trace("Returning empty records from `poll()` "
                                 + "since the consumer's position has advanced for at least one topic partition");
                         }
 
-                        log.warn("KIRK_DEBUG - poll (j) - remaining time: {}", timer.remainingMs());
-
-                        try {
-                            return interceptors.onConsume(new ConsumerRecords<>(fetch.records()));
-                        } finally {
-                            log.warn("KIRK_DEBUG - poll (k) - remaining time: {}", timer.remainingMs());
-                        }
-                    } else {
-                        log.warn("KIRK_DEBUG - poll (l) - remaining time: {}", timer.remainingMs());
+                        return interceptors.onConsume(new ConsumerRecords<>(fetch.records()));
                     }
                 } else {
-                    log.warn("KIRK_DEBUG - poll (m) - remaining time: {}", timer.remainingMs());
                     timer.update();
-                    log.warn("KIRK_DEBUG - poll (n) - remaining time: {}", timer.remainingMs());
                 }
 
-                log.warn("KIRK_DEBUG - poll (o) - remaining time: {}", timer.remainingMs());
                 // We will wait for retryBackoffMs
             } while (timer.notExpired());
 
-            log.warn("KIRK_DEBUG - poll (p) - remaining time: {}", timer.remainingMs());
             return ConsumerRecords.empty();
         } finally {
-            log.warn("KIRK_DEBUG - poll (q) - remaining time: {}", timer.remainingMs());
             kafkaConsumerMetrics.recordPollEnd(timer.currentTimeMs());
-            log.warn("KIRK_DEBUG - poll (r) - remaining time: {}", timer.remainingMs());
             release();
-            log.warn("KIRK_DEBUG - poll (s) - remaining time: {}", timer.remainingMs());
+            log.warn("KIRK_DEBUG - poll - finished remaining time: {}", timer.remainingMs());
         }
     }
 
@@ -828,16 +799,12 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         maybeThrowInvalidGroupIdException();
 
         Map<TopicPartition, OffsetAndMetadata> offsets = commitEvent.offsets();
-        log.debug("Committing offsets: {}", offsets, new Exception());
+        log.debug("Committing offsets: {}", offsets);
         offsets.forEach(this::updateLastSeenEpochIfNewer);
-        log.debug("commit (a)");
 
-        if (offsets.isEmpty()) {
-            log.debug("commit (b)");
+        if (offsets.isEmpty())
             return CompletableFuture.completedFuture(null);
-        }
 
-        log.debug("commit (c) - event: {}", commitEvent);
         applicationEventHandler.add(commitEvent);
         return commitEvent.future();
     }
@@ -1308,7 +1275,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             return;
 
         if (autoCommitEnabled)
-            maybeAutoCommitSync(timer, firstException);
+            maybeAutoCommitSync(timer);
 
         applicationEventHandler.add(new CommitOnCloseApplicationEvent());
         completeQuietly(
@@ -1320,8 +1287,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     }
 
     // Visible for testing
-    void maybeAutoCommitSync(final Timer timer,
-                             final AtomicReference<Throwable> firstException) {
+    void maybeAutoCommitSync(final Timer timer) {
         Map<TopicPartition, OffsetAndMetadata> allConsumed = subscriptions.allConsumed();
         log.debug("Sending synchronous auto-commit of offsets {} on closing", allConsumed);
         try {
@@ -1329,7 +1295,6 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         } catch (Exception e) {
             // consistent with async auto-commit failures, we do not propagate the exception
             log.warn("Synchronous auto-commit of offsets {} failed: {}", allConsumed, e.getMessage());
-            firstException.compareAndSet(null, e);
         }
         timer.update();
     }
@@ -1394,7 +1359,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             CompletableFuture<Void> commitFuture = commit(syncCommitEvent);
             wakeupTrigger.setActiveTask(commitFuture);
             log.info("commitSync - Before getResult - event {}", syncCommitEvent);
-            ConsumerUtils.getResult(commitFuture, time.timer(timeout.toMillis() + 5000));
+            ConsumerUtils.getResult(commitFuture, time.timer(timeout.toMillis() + 50));
             log.info("commitSync - after getResult");
             interceptors.onCommit(offsets);
         } finally {
@@ -1610,17 +1575,11 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             // Validate positions using the partition leader end offsets, to detect if any partition
             // has been truncated due to a leader change. This will trigger an OffsetForLeaderEpoch
             // request, retrieve the partition end offsets, and validate the current position against it.
-            log.warn("KIRK_DEBUG - updateFetchPositions (a) - remaining time: {}", timer.remainingMs());
             applicationEventHandler.addAndGet(new ValidatePositionsApplicationEvent(timer));
-            log.warn("KIRK_DEBUG - updateFetchPositions (b) - remaining time: {}", timer.remainingMs());
 
             cachedSubscriptionHasAllFetchPositions = subscriptions.hasAllFetchPositions();
-            log.warn("KIRK_DEBUG - updateFetchPositions (c) - remaining time: {}", timer.remainingMs());
-            if (cachedSubscriptionHasAllFetchPositions) {
-                log.warn("KIRK_DEBUG - updateFetchPositions (d) - remaining time: {}", timer.remainingMs());
+            if (cachedSubscriptionHasAllFetchPositions)
                 return true;
-            }
-            log.warn("KIRK_DEBUG - updateFetchPositions (e) - remaining time: {}", timer.remainingMs());
 
             // Reset positions using committed offsets retrieved from the group coordinator, for any
             // partitions which do not have a valid position and are not awaiting reset. This will
@@ -1628,30 +1587,22 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             // will only do a coordinator lookup if there are partitions which have missing
             // positions, so a consumer with manually assigned partitions can avoid a coordinator
             // dependence by always ensuring that assigned partitions have an initial position.
-            if (isCommittedOffsetsManagementEnabled() && !initWithCommittedOffsetsIfNeeded(timer)) {
-                log.warn("KIRK_DEBUG - updateFetchPositions (f) - remaining time: {}", timer.remainingMs());
+            if (isCommittedOffsetsManagementEnabled() && !initWithCommittedOffsetsIfNeeded(timer))
                 return false;
-            }
-            log.warn("KIRK_DEBUG - updateFetchPositions (g) - remaining time: {}", timer.remainingMs());
 
             // If there are partitions still needing a position and a reset policy is defined,
             // request reset using the default policy. If no reset strategy is defined and there
             // are partitions with a missing position, then we will raise a NoOffsetForPartitionException exception.
             subscriptions.resetInitializingPositions();
-            log.warn("KIRK_DEBUG - updateFetchPositions (h) - remaining time: {}", timer.remainingMs());
 
             // Reset positions using partition offsets retrieved from the leader, for any partitions
             // which are awaiting reset. This will trigger a ListOffset request, retrieve the
             // partition offsets according to the strategy (ex. earliest, latest), and update the
             // positions.
-            log.warn("KIRK_DEBUG - updateFetchPositions (i) - remaining time: {}", timer.remainingMs());
             applicationEventHandler.addAndGet(new ResetPositionsApplicationEvent(timer));
-            log.warn("KIRK_DEBUG - updateFetchPositions (j) - remaining time: {}", timer.remainingMs());
             return true;
         } catch (TimeoutException e) {
-            log.warn("KIRK_DEBUG - updateFetchPositions (k) - remaining time: {}", timer.remainingMs());
             log.debug("Timeout while updating fetch positions", e);
-            log.warn("KIRK_DEBUG - updateFetchPositions (l) - remaining time: {}", timer.remainingMs());
             return false;
         }
     }
@@ -1705,11 +1656,8 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
 
     @Override
     public boolean updateAssignmentMetadataIfNeeded(Timer timer) {
-        log.warn("KIRK_DEBUG - updateAssignmentMetadataIfNeeded (a) - remaining time: {}", timer.remainingMs());
         maybeInvokeCommitCallbacks();
-        log.warn("KIRK_DEBUG - updateAssignmentMetadataIfNeeded (b) - remaining time: {}", timer.remainingMs());
         maybeThrowFencedInstanceException();
-        log.warn("KIRK_DEBUG - updateAssignmentMetadataIfNeeded (c) - remaining time: {}", timer.remainingMs());
 
         try {
             backgroundEventProcessor.process();
@@ -1717,17 +1665,10 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             backgroundEventProcessor.completeExpiredEvents(time.milliseconds());
         }
 
-        log.warn("KIRK_DEBUG - updateAssignmentMetadataIfNeeded (d) - remaining time: {}", timer.remainingMs());
-
         // Keeping this updateAssignmentMetadataIfNeeded wrapping up the updateFetchPositions as
         // in the previous implementation, because it will eventually involve group coordination
         // logic
-        try {
-            log.warn("KIRK_DEBUG - updateAssignmentMetadataIfNeeded (e) - remaining time: {}", timer.remainingMs());
-            return updateFetchPositions(timer);
-        } finally {
-            log.warn("KIRK_DEBUG - updateAssignmentMetadataIfNeeded (f) - remaining time: {}", timer.remainingMs());
-        }
+        return updateFetchPositions(timer);
     }
 
     @Override
@@ -1992,9 +1933,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     }
 
     private void maybeInvokeCommitCallbacks() {
-        log.warn("KIRK_DEBUG - maybeInvokeCommitCallbacks (a)");
         offsetCommitCallbackInvoker.executeCallbacks();
-        log.warn("KIRK_DEBUG - maybeInvokeCommitCallbacks (b)");
     }
 
     // Visible for testing

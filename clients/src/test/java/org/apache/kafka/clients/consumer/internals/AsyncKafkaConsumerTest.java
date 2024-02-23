@@ -652,10 +652,8 @@ public class AsyncKafkaConsumerTest {
         consumer.subscribe(singleton("topic"), mock(ConsumerRebalanceListener.class));
         subscriptions.assignFromSubscribed(singleton(new TopicPartition("topic", 0)));
         subscriptions.seek(new TopicPartition("topic", 0), 100);
-        AtomicReference<Throwable> firstException = new AtomicReference<>();
-        consumer.maybeAutoCommitSync(time.timer(100), firstException);
+        consumer.maybeAutoCommitSync(time.timer(100));
         verify(applicationEventHandler).add(any(SyncCommitApplicationEvent.class));
-        assertNull(firstException.get());
     }
 
     @Test
