@@ -690,9 +690,8 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     @Override
     public ConsumerRecords<K, V> poll(final Duration timeout) {
         Timer timer = time.timer(timeout);
-        log.warn("KIRK_DEBUG - poll - starting");
-        acquireAndEnsureOpen();
 
+        acquireAndEnsureOpen();
         try {
             kafkaConsumerMetrics.recordPollStart(timer.currentTimeMs());
 
@@ -725,7 +724,6 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                 } else {
                     timer.update();
                 }
-
                 // We will wait for retryBackoffMs
             } while (timer.notExpired());
 
@@ -733,7 +731,6 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         } finally {
             kafkaConsumerMetrics.recordPollEnd(timer.currentTimeMs());
             release();
-            log.warn("KIRK_DEBUG - poll - finished remaining time: {}", timer.remainingMs());
         }
     }
 
@@ -802,8 +799,9 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         log.debug("Committing offsets: {}", offsets);
         offsets.forEach(this::updateLastSeenEpochIfNewer);
 
-        if (offsets.isEmpty())
+        if (offsets.isEmpty()) {
             return CompletableFuture.completedFuture(null);
+        }
 
         applicationEventHandler.add(commitEvent);
         return commitEvent.future();
@@ -1358,9 +1356,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             SyncCommitApplicationEvent syncCommitEvent = new SyncCommitApplicationEvent(offsets, requestTimer);
             CompletableFuture<Void> commitFuture = commit(syncCommitEvent);
             wakeupTrigger.setActiveTask(commitFuture);
-            log.info("commitSync - Before getResult - event {}", syncCommitEvent);
-            ConsumerUtils.getResult(commitFuture, time.timer(timeout.toMillis() + 50));
-            log.info("commitSync - after getResult");
+            ConsumerUtils.getResult(commitFuture);
             interceptors.onCommit(offsets);
         } finally {
             wakeupTrigger.clearTask();
