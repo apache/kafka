@@ -1705,6 +1705,8 @@ public class MembershipManagerImplTest {
         assertEquals(0, listener.assignedCount());
         assertEquals(0, listener.lostCount());
 
+        assertTrue(membershipManager.shouldSkipHeartbeat(), "Member should not send heartbeat while fenced");
+
         // Step 3: invoke the callback
         performCallback(
                 membershipManager,
