@@ -2202,6 +2202,14 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         quorum.highWatermark().ifPresent(highWatermarkMetadata -> {
             updateListenersProgress(highWatermarkMetadata.offset);
         });
+
+        // Notify the new listeners of the latest leader and epoch
+        Optional<LeaderState<T>> leaderState = quorum.maybeLeaderState();
+        if (leaderState.isPresent()) {
+            maybeFireLeaderChange(leaderState.get());
+        } else {
+            maybeFireLeaderChange();
+        }
     }
 
     private void processRegistration(Registration<T> registration) {
