@@ -243,7 +243,9 @@ public class ConsumeBenchWorker implements TaskWorker {
             long maxMessages = spec.maxMessages();
             try {
                 while (messagesConsumed < maxMessages) {
+                    log.info("KIRK_DEBUG: before poll");
                     ConsumerRecords<byte[], byte[]> records = consumer.poll();
+                    log.info("KIRK_DEBUG: after poll, records found: {}", records.count());
                     if (records.isEmpty()) {
                         continue;
                     }

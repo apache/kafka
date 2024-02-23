@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.clients.consumer.internals.events;
 
+import org.apache.kafka.common.Uuid;
+
 import java.util.Objects;
 
 /**
@@ -32,12 +34,19 @@ public abstract class ApplicationEvent {
 
     private final Type type;
 
+    private final Uuid id;
+
     protected ApplicationEvent(Type type) {
         this.type = Objects.requireNonNull(type);
+        this.id = Uuid.randomUuid();
     }
 
     public Type type() {
         return type;
+    }
+
+    public Uuid id() {
+        return id;
     }
 
     @Override
@@ -47,16 +56,16 @@ public abstract class ApplicationEvent {
 
         ApplicationEvent that = (ApplicationEvent) o;
 
-        return type == that.type;
+        return type == that.type && id.equals(that.id);
     }
 
     @Override
     public int hashCode() {
-        return type.hashCode();
+        return Objects.hash(type, id);
     }
 
     protected String toStringBase() {
-        return "type=" + type;
+        return "type=" + type + ", id=" + id;
     }
 
     @Override

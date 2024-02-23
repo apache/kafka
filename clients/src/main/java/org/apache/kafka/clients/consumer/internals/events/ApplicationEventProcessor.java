@@ -29,7 +29,6 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.LogContext;
 import org.slf4j.Logger;
 
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -62,15 +61,8 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
      * an event generates an error. In such cases, the processor will log an exception, but we do not want those
      * errors to be propagated to the caller.
      */
-    public List<ApplicationEvent> process() {
-        List<ApplicationEvent> events = new ArrayList<>();
-
-        process((event, error) -> {
-            events.add(event);
-            error.ifPresent(e -> log.warn("Error processing event {}", e.getMessage(), e));
-        });
-
-        return events;
+    public void process() {
+        process((event, error) -> error.ifPresent(e -> log.warn("Error processing event {}", e.getMessage(), e)));
     }
 
     @Override

@@ -18,16 +18,19 @@ package org.apache.kafka.clients.consumer.internals.events;
 
 import org.apache.kafka.clients.consumer.internals.ConsumerUtils;
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.internals.IdempotentCloser;
 import org.apache.kafka.common.utils.LogContext;
 import org.slf4j.Logger;
 
 import java.io.Closeable;
+import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.CompletableFuture;
 
 /**
  * An {@link EventProcessor} is the means by which events <em>produced</em> by thread <em>A</em> are
@@ -40,12 +43,14 @@ public abstract class EventProcessor<T> implements Closeable {
 
     private final Logger log;
     private final BlockingQueue<T> eventQueue;
+    private final List<CompletableEvent<?>> completableEvents;
     private final IdempotentCloser closer;
 
     protected EventProcessor(final LogContext logContext, final BlockingQueue<T> eventQueue) {
         this.log = logContext.logger(EventProcessor.class);
         this.eventQueue = eventQueue;
         this.closer = new IdempotentCloser();
+        this.completableEvents = new LinkedList<>();
     }
 
     protected abstract void process(T event);
@@ -93,6 +98,45 @@ public abstract class EventProcessor<T> implements Closeable {
         }
 
         return true;
+    }
+
+    public void completeExpiredEvents(long currentTimeMs) {
+        Iterator<CompletableEvent<?>> i = completableEvents.iterator();
+
+        while (i.hasNext()) {
+            CompletableEvent<?> e = i.next();
+            CompletableFuture<?> future = e.future();
+
+            if (future.isDone()) {
+                // If the event is done, remove it out of the list, so we don't hold a reference to it forever.
+                i.remove();
+                continue;
+            }
+
+            // If the event isn't completed, check to see if it's expired
+            long deadlineMs = e.deadlineMs();
+
+            if (deadlineMs > currentTimeMs) {
+                // Our expiration is yet in the future, so skip this event for now.
+                continue;
+            }
+
+            // If we get to here that means that the event has expired, so complete the event's future with
+            // a TimeoutException.
+            long diff = currentTimeMs - deadlineMs;
+
+            TimeoutException exception = new TimeoutException(String.format("%s could not be completed", e.getClass().getSimpleName()));
+            log.warn("Event {} had a deadline of {} but was not complete by {}, which is {} ms. past, completing with exception: {}",
+                    e,
+                    deadlineMs,
+                    currentTimeMs,
+                    diff,
+                    exception.getMessage());
+            future.completeExceptionally(exception);
+
+            // The event is done, so we want to remove it from the list, so we don't hold a reference to it forever.
+            i.remove();
+        }
     }
 
     /**

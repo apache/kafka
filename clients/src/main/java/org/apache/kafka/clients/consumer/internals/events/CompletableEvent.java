@@ -22,4 +22,6 @@ public interface CompletableEvent<T> {
 
     CompletableFuture<T> future();
 
+    long deadlineMs();
+
 }
