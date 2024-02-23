@@ -77,8 +77,6 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
     private final Set<String> globalStoreNames = new HashSet<>();
     private final Set<String> globalNonPersistentStoresTopics = new HashSet<>();
     private final FixedOrderMap<String, Optional<StateStore>> globalStores = new FixedOrderMap<>();
-    private final Set<TopicPartition> topicPartitionsToReset = new HashSet<>();
-
     private InternalProcessorContext globalProcessorContext;
 
     public GlobalStateManagerImpl(final LogContext logContext,
@@ -169,11 +167,6 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
     }
 
     @Override
-    public Set<TopicPartition> topicPartitionsToReset() {
-        return topicPartitionsToReset;
-    }
-
-    @Override
     public void registerStore(final StateStore store,
                               final StateRestoreCallback stateRestoreCallback,
                               final CommitCallback ignored) {
@@ -216,7 +209,6 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
                     stateRestoreListener.onRestoreStart(topicPartition, store.name(), 0L, 0L);
                     stateRestoreListener.onRestoreEnd(topicPartition, store.name(), 0L);
                     checkpointFileCache.put(topicPartition, 0L);
-                    topicPartitionsToReset.add(topicPartition);
                 }
             } else {
                 restoreState(

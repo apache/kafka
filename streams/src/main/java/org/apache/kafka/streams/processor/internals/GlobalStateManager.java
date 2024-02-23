@@ -31,5 +31,4 @@ public interface GlobalStateManager extends StateManager {
      */
     Set<String> initialize();
 
-    Set<TopicPartition> topicPartitionsToReset();
 }
