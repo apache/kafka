@@ -68,6 +68,14 @@ class ConsumeBenchTest(Test):
         self.logger.debug("Produce workload finished")
 
     @cluster(num_nodes=10)
+    # @matrix(
+    #     topics=[
+    #         ["consume_bench_topic[0-5]"], # topic subscription
+    #         ["consume_bench_topic[0-5]:[0-4]"] # manual topic assignment
+    #     ],
+    #     metadata_quorum=[quorum.zk, quorum.isolated_kraft],
+    #     use_new_coordinator=[False]
+    # )
     @matrix(
         topics=[
             ["consume_bench_topic[0-5]"], # topic subscription
@@ -99,26 +107,28 @@ class ConsumeBenchTest(Test):
         self.logger.info("TASKS: %s\n" % json.dumps(tasks, sort_keys=True, indent=2))
 
     @cluster(num_nodes=10)
-    @matrix(
-        metadata_quorum=[quorum.zk],
-        use_new_coordinator=[False]
-    )
+    # @matrix(
+    #     metadata_quorum=[quorum.zk, quorum.isolated_kraft],
+    #     use_new_coordinator=[False]
+    # )
     @matrix(
         metadata_quorum=[quorum.isolated_kraft],
-        use_new_coordinator=[True, False]
+        use_new_coordinator=[True],
+        group_protocol=consumer_group.all_group_protocols
     )
-    def test_single_partition(self, metadata_quorum=quorum.zk, use_new_coordinator=False):
+    def test_single_partition(self, metadata_quorum=quorum.zk, use_new_coordinator=False, group_protocol=None):
         """
         Run a ConsumeBench against a single partition
         """
         active_topics = {"consume_bench_topic": {"numPartitions": 2, "replicationFactor": 3}}
         self.produce_messages(active_topics, 5000)
+        consumer_conf = consumer_group.maybe_set_group_protocol(group_protocol)
         consume_spec = ConsumeBenchWorkloadSpec(0, TaskSpec.MAX_DURATION_MS,
                                                 self.consumer_workload_service.consumer_node,
                                                 self.consumer_workload_service.bootstrap_servers,
                                                 target_messages_per_sec=1000,
                                                 max_messages=2500,
-                                                consumer_conf={},
+                                                consumer_conf=consumer_conf,
                                                 admin_client_conf={},
                                                 common_client_conf={},
                                                 active_topics=["consume_bench_topic:1"])
@@ -129,26 +139,28 @@ class ConsumeBenchTest(Test):
         self.logger.info("TASKS: %s\n" % json.dumps(tasks, sort_keys=True, indent=2))
 
     @cluster(num_nodes=10)
-    @matrix(
-        metadata_quorum=[quorum.zk],
-        use_new_coordinator=[False]
-    )
+    # @matrix(
+    #     metadata_quorum=[quorum.zk, quorum.isolated_kraft],
+    #     use_new_coordinator=[False]
+    # )
     @matrix(
         metadata_quorum=[quorum.isolated_kraft],
-        use_new_coordinator=[True, False]
+        use_new_coordinator=[True],
+        group_protocol=consumer_group.all_group_protocols
     )
-    def test_multiple_consumers_random_group_topics(self, metadata_quorum=quorum.zk, use_new_coordinator=False):
+    def test_multiple_consumers_random_group_topics(self, metadata_quorum=quorum.zk, use_new_coordinator=False, group_protocol=None):
         """
         Runs multiple consumers group to read messages from topics.
         Since a consumerGroup isn't specified, each consumer should read from all topics independently
         """
         self.produce_messages(self.active_topics, max_messages=5000)
+        consumer_conf = consumer_group.maybe_set_group_protocol(group_protocol)
         consume_spec = ConsumeBenchWorkloadSpec(0, TaskSpec.MAX_DURATION_MS,
                                                 self.consumer_workload_service.consumer_node,
                                                 self.consumer_workload_service.bootstrap_servers,
                                                 target_messages_per_sec=1000,
                                                 max_messages=5000, # all should read exactly 5k messages
-                                                consumer_conf={},
+                                                consumer_conf=consumer_conf,
                                                 admin_client_conf={},
                                                 common_client_conf={},
                                                 threads_per_worker=5,
@@ -160,26 +172,28 @@ class ConsumeBenchTest(Test):
         self.logger.info("TASKS: %s\n" % json.dumps(tasks, sort_keys=True, indent=2))
 
     @cluster(num_nodes=10)
-    @matrix(
-        metadata_quorum=[quorum.zk],
-        use_new_coordinator=[False]
-    )
+    # @matrix(
+    #     metadata_quorum=[quorum.zk, quorum.isolated_kraft],
+    #     use_new_coordinator=[False]
+    # )
     @matrix(
         metadata_quorum=[quorum.isolated_kraft],
-        use_new_coordinator=[True, False]
+        use_new_coordinator=[True],
+        group_protocol=consumer_group.all_group_protocols
     )
-    def test_two_consumers_specified_group_topics(self, metadata_quorum=quorum.zk, use_new_coordinator=False):
+    def test_two_consumers_specified_group_topics(self, metadata_quorum=quorum.zk, use_new_coordinator=False, group_protocol=None):
         """
         Runs two consumers in the same consumer group to read messages from topics.
         Since a consumerGroup is specified, each consumer should dynamically get assigned a partition from group
         """
         self.produce_messages(self.active_topics)
+        consumer_conf = consumer_group.maybe_set_group_protocol(group_protocol)
         consume_spec = ConsumeBenchWorkloadSpec(0, TaskSpec.MAX_DURATION_MS,
                                                 self.consumer_workload_service.consumer_node,
                                                 self.consumer_workload_service.bootstrap_servers,
                                                 target_messages_per_sec=1000,
                                                 max_messages=2000, # both should read at least 2k messages
-                                                consumer_conf={},
+                                                consumer_conf=consumer_conf,
                                                 admin_client_conf={},
                                                 common_client_conf={},
                                                 threads_per_worker=2,
