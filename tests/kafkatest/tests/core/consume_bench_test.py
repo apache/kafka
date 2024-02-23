@@ -70,6 +70,7 @@ class ConsumeBenchTest(Test):
     @cluster(num_nodes=10)
     @matrix(
         topics=[
+            ["consume_bench_topic[0-5]"], # topic subscription
             ["consume_bench_topic[0-5]:[0-4]"] # manual topic assignment
         ],
         metadata_quorum=[quorum.isolated_kraft],
@@ -85,14 +86,14 @@ class ConsumeBenchTest(Test):
         consume_spec = ConsumeBenchWorkloadSpec(0, TaskSpec.MAX_DURATION_MS,
                                                 self.consumer_workload_service.consumer_node,
                                                 self.consumer_workload_service.bootstrap_servers,
-                                                target_messages_per_sec=10,
-                                                max_messages=100,
+                                                target_messages_per_sec=1000,
+                                                max_messages=10000,
                                                 consumer_conf=consumer_conf,
                                                 admin_client_conf={},
                                                 common_client_conf={},
                                                 active_topics=topics)
         consume_workload = self.trogdor.create_task("consume_workload", consume_spec)
-        consume_workload.wait_for_done(timeout_sec=120)
+        consume_workload.wait_for_done(timeout_sec=360)
         self.logger.debug("Consume workload finished")
         tasks = self.trogdor.tasks()
         self.logger.info("TASKS: %s\n" % json.dumps(tasks, sort_keys=True, indent=2))
