@@ -206,27 +206,29 @@ class ConsumeBenchTest(Test):
         self.logger.info("TASKS: %s\n" % json.dumps(tasks, sort_keys=True, indent=2))
 
     @cluster(num_nodes=10)
-    @matrix(
-        metadata_quorum=[quorum.zk],
-        use_new_coordinator=[False]
-    )
+    # @matrix(
+    #     metadata_quorum=[quorum.zk, quorum.isolated_kraft],
+    #     use_new_coordinator=[False]
+    # )
     @matrix(
         metadata_quorum=[quorum.isolated_kraft],
-        use_new_coordinator=[True, False]
+        use_new_coordinator=[True],
+        group_protocol=consumer_group.all_group_protocols
     )
-    def test_multiple_consumers_random_group_partitions(self, metadata_quorum=quorum.zk, use_new_coordinator=False):
+    def test_multiple_consumers_random_group_partitions(self, metadata_quorum=quorum.zk, use_new_coordinator=False, group_protocol=None):
         """
         Runs multiple consumers in to read messages from specific partitions.
         Since a consumerGroup isn't specified, each consumer will get assigned a random group
         and consume from all partitions
         """
         self.produce_messages(self.active_topics, max_messages=20000)
+        consumer_conf = consumer_group.maybe_set_group_protocol(group_protocol)
         consume_spec = ConsumeBenchWorkloadSpec(0, TaskSpec.MAX_DURATION_MS,
                                                 self.consumer_workload_service.consumer_node,
                                                 self.consumer_workload_service.bootstrap_servers,
                                                 target_messages_per_sec=1000,
                                                 max_messages=2000,
-                                                consumer_conf={},
+                                                consumer_conf=consumer_conf,
                                                 admin_client_conf={},
                                                 common_client_conf={},
                                                 threads_per_worker=4,
@@ -238,27 +240,29 @@ class ConsumeBenchTest(Test):
         self.logger.info("TASKS: %s\n" % json.dumps(tasks, sort_keys=True, indent=2))
 
     @cluster(num_nodes=10)
-    @matrix(
-        metadata_quorum=[quorum.zk],
-        use_new_coordinator=[False]
-    )
+    # @matrix(
+    #     metadata_quorum=[quorum.zk, quorum.isolated_kraft],
+    #     use_new_coordinator=[False]
+    # )
     @matrix(
         metadata_quorum=[quorum.isolated_kraft],
-        use_new_coordinator=[True, False]
+        use_new_coordinator=[True],
+        group_protocol=consumer_group.all_group_protocols
     )
-    def test_multiple_consumers_specified_group_partitions_should_raise(self, metadata_quorum=quorum.zk, use_new_coordinator=False):
+    def test_multiple_consumers_specified_group_partitions_should_raise(self, metadata_quorum=quorum.zk, use_new_coordinator=False, group_protocol=None):
         """
         Runs multiple consumers in the same group to read messages from specific partitions.
         It is an invalid configuration to provide a consumer group and specific partitions.
         """
         expected_error_msg = 'explicit partition assignment'
         self.produce_messages(self.active_topics, max_messages=20000)
+        consumer_conf = consumer_group.maybe_set_group_protocol(group_protocol)
         consume_spec = ConsumeBenchWorkloadSpec(0, TaskSpec.MAX_DURATION_MS,
                                                 self.consumer_workload_service.consumer_node,
                                                 self.consumer_workload_service.bootstrap_servers,
                                                 target_messages_per_sec=1000,
                                                 max_messages=2000,
-                                                consumer_conf={},
+                                                consumer_conf=consumer_conf,
                                                 admin_client_conf={},
                                                 common_client_conf={},
                                                 threads_per_worker=4,
