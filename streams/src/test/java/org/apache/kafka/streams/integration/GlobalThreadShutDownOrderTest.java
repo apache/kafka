@@ -30,10 +30,12 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.Consumed;
+import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
@@ -117,9 +119,10 @@ public class GlobalThreadShutDownOrderTest {
 
         final Consumed<String, Long> stringLongConsumed = Consumed.with(Serdes.String(), Serdes.Long());
 
-        builder.globalTable(globalStoreTopic, stringLongConsumed);
+        builder.globalTable(globalStoreTopic, stringLongConsumed, Materialized.as(globalStore));
 
-        builder.stream(streamTopic, stringLongConsumed)
+        builder
+            .stream(streamTopic, stringLongConsumed)
             .process(() -> new GlobalStoreProcessor(globalStore));
     }
 
@@ -179,7 +182,7 @@ public class GlobalThreadShutDownOrderTest {
 
     private class GlobalStoreProcessor implements Processor<String, Long, Void, Void> {
 
-        private KeyValueStore<String, Long> store;
+        private KeyValueStore<String, ValueAndTimestamp<Long>> store;
         private final String storeName;
 
         GlobalStoreProcessor(final String storeName) {
@@ -204,7 +207,7 @@ public class GlobalThreadShutDownOrderTest {
             for (final String key : keys) {
                 // need to simulate thread slow in closing
                 Utils.sleep(1000);
-                retrievedValuesList.add(store.get(key));
+                retrievedValuesList.add(store.get(key).value());
             }
         }
     }
