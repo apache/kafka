@@ -257,11 +257,7 @@ public class GlobalStreamThread extends Thread {
             final Map<TopicPartition, Long> partitionOffsets = stateMaintainer.initialize();
             globalConsumer.assign(partitionOffsets.keySet());
             for (final Map.Entry<TopicPartition, Long> entry : partitionOffsets.entrySet()) {
-                if (entry.getValue() == 0L) {
-                    globalConsumer.seekToBeginning(Collections.singleton(entry.getKey()));
-                } else {
-                    globalConsumer.seek(entry.getKey(), entry.getValue());
-                }
+                globalConsumer.seek(entry.getKey(), entry.getValue());
             }
             lastFlush = time.milliseconds();
         }
