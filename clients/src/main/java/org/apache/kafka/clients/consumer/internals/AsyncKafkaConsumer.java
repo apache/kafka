@@ -1394,7 +1394,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             CompletableFuture<Void> commitFuture = commit(syncCommitEvent);
             wakeupTrigger.setActiveTask(commitFuture);
             log.info("commitSync - Before getResult - event {}", syncCommitEvent);
-            ConsumerUtils.getResult(commitFuture);
+            ConsumerUtils.getResult(commitFuture, time.timer(timeout.toMillis() + 5000));
             log.info("commitSync - after getResult");
             interceptors.onCommit(offsets);
         } finally {
