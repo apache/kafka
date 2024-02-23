@@ -30,6 +30,7 @@ import kafka.server.MetadataCache;
 import kafka.server.MetadataSupport;
 import kafka.server.QuotaFactory.QuotaManagers;
 import kafka.server.ReplicaManager;
+import kafka.server.SharePartitionManager;
 import kafka.server.metadata.ConfigRepository;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.utils.Time;
@@ -58,6 +59,7 @@ public class KafkaApisBuilder {
     private Optional<Authorizer> authorizer = Optional.empty();
     private QuotaManagers quotas = null;
     private FetchManager fetchManager = null;
+    private Optional<SharePartitionManager> sharePartitionManager = Optional.empty();
     private BrokerTopicStats brokerTopicStats = null;
     private String clusterId = "clusterId";
     private Time time = Time.SYSTEM;
@@ -135,6 +137,11 @@ public class KafkaApisBuilder {
         return this;
     }
 
+    public KafkaApisBuilder setSharePartitionManager(Optional<SharePartitionManager> sharePartitionManager) {
+        this.sharePartitionManager = sharePartitionManager;
+        return this;
+    }
+
     public KafkaApisBuilder setBrokerTopicStats(BrokerTopicStats brokerTopicStats) {
         this.brokerTopicStats = brokerTopicStats;
         return this;
@@ -196,6 +203,7 @@ public class KafkaApisBuilder {
                              OptionConverters.toScala(authorizer),
                              quotas,
                              fetchManager,
+                             OptionConverters.toScala(sharePartitionManager),
                              brokerTopicStats,
                              clusterId,
                              time,

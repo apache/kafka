@@ -28,6 +28,8 @@ import org.apache.kafka.common.record.RecordBatch;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -99,6 +101,8 @@ public class ShareFetchRequest extends AbstractRequest {
     }
 
     private final ShareFetchRequestData data;
+    private volatile LinkedHashMap<TopicIdPartition, ShareFetchRequest.SharePartitionData> shareFetchData = null;
+    private volatile List<TopicIdPartition> toForget = null;
 
     public ShareFetchRequest(ShareFetchRequestData data, short version) {
         super(ApiKeys.SHARE_FETCH, version);
@@ -163,5 +167,71 @@ public class ShareFetchRequest extends AbstractRequest {
                     ", currentLeaderEpoch=" + currentLeaderEpoch +
                     ')';
         }
+    }
+
+    public int minBytes() {
+        return data.minBytes();
+    }
+
+    public int maxBytes() {
+        return data.maxBytes();
+    }
+
+    public int maxWait() {
+        return data.maxWaitMs();
+    }
+
+    private static Optional<Integer> optionalEpoch(int rawEpochValue) {
+        if (rawEpochValue < 0) {
+            return Optional.empty();
+        } else {
+            return Optional.of(rawEpochValue);
+        }
+    }
+
+    public Map<TopicIdPartition, ShareFetchRequest.SharePartitionData> shareFetchData(Map<Uuid, String> topicNames) {
+        if (shareFetchData == null) {
+            synchronized (this) {
+                if (shareFetchData == null) {
+                    // Assigning the lazy-initialized `shareFetchData` in the last step
+                    // to avoid other threads accessing a half-initialized object.
+                    final LinkedHashMap<TopicIdPartition, ShareFetchRequest.SharePartitionData> shareFetchDataTmp = new LinkedHashMap<>();
+                    data.topics().forEach(shareFetchTopic -> {
+                        String name = topicNames.get(shareFetchTopic.topicId());
+                        shareFetchTopic.partitions().forEach(shareFetchPartition ->
+                                // Topic name may be null here if the topic name was unable to be resolved using the topicNames map.
+                                shareFetchDataTmp.put(new TopicIdPartition(shareFetchTopic.topicId(), new TopicPartition(name, shareFetchPartition.partitionIndex())),
+                                        new ShareFetchRequest.SharePartitionData(
+                                                shareFetchTopic.topicId(),
+                                                shareFetchPartition.partitionMaxBytes(),
+                                                optionalEpoch(shareFetchPartition.currentLeaderEpoch())
+                                        )
+                                )
+                        );
+                    });
+                    shareFetchData = shareFetchDataTmp;
+                }
+            }
+        }
+        return shareFetchData;
+    }
+
+    public List<TopicIdPartition> forgottenTopics(Map<Uuid, String> topicNames) {
+        if (toForget == null) {
+            synchronized (this) {
+                if (toForget == null) {
+                    // Assigning the lazy-initialized `toForget` in the last step
+                    // to avoid other threads accessing a half-initialized object.
+                    final List<TopicIdPartition> toForgetTmp = new ArrayList<>();
+                    data.forgottenTopicsData().forEach(forgottenTopic -> {
+                        String name = topicNames.get(forgottenTopic.topicId());
+                        // Topic name may be null here if the topic name was unable to be resolved using the topicNames map.
+                        forgottenTopic.partitions().forEach(partitionId -> toForgetTmp.add(new TopicIdPartition(forgottenTopic.topicId(), new TopicPartition(name, partitionId))));
+                    });
+                    toForget = toForgetTmp;
+                }
+            }
+        }
+        return toForget;
     }
 }

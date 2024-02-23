@@ -35,6 +35,7 @@ import kafka.server.QuotaFactory;
 import kafka.server.RaftSupport;
 import kafka.server.ReplicaManager;
 import kafka.server.ReplicationQuotaManager;
+import kafka.server.SharePartitionManager;
 import kafka.server.SimpleApiVersionManager;
 import kafka.server.builders.KafkaApisBuilder;
 import kafka.server.metadata.KRaftMetadataCache;
@@ -112,6 +113,7 @@ public class KRaftMetadataRequestBenchmark {
             clientQuotaManager, clientRequestQuotaManager, controllerMutationQuotaManager, replicaQuotaManager,
             replicaQuotaManager, replicaQuotaManager, Option.empty());
     private final FetchManager fetchManager = Mockito.mock(FetchManager.class);
+    private final Optional<SharePartitionManager> sharePartitionManager = Optional.of(Mockito.mock(SharePartitionManager.class));
     private final BrokerTopicStats brokerTopicStats = new BrokerTopicStats(Optional.empty());
     private final KafkaPrincipal principal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "test-user");
     @Param({"500", "1000",  "5000"})
@@ -194,6 +196,7 @@ public class KRaftMetadataRequestBenchmark {
                 setAuthorizer(Optional.empty()).
                 setQuotas(quotaManagers).
                 setFetchManager(fetchManager).
+                setSharePartitionManager(sharePartitionManager).
                 setBrokerTopicStats(brokerTopicStats).
                 setClusterId("clusterId").
                 setTime(Time.SYSTEM).

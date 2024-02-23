@@ -27,6 +27,7 @@ import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.Records;
 
 import java.nio.ByteBuffer;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Iterator;
 import java.util.Collections;
@@ -140,6 +141,12 @@ public class ShareFetchResponse extends AbstractResponse {
         return partition.records() == null ? 0 : partition.records().sizeInBytes();
     }
 
+    public static ShareFetchResponse of(Errors error,
+                                   int throttleTimeMs,
+                                   LinkedHashMap<TopicIdPartition, ShareFetchResponseData.PartitionData> responseData,
+                                   List<Node> nodeEndpoints) {
+        return new ShareFetchResponse(toMessage(error, throttleTimeMs, responseData.entrySet().iterator(), nodeEndpoints));
+    }
     public static ShareFetchResponseData toMessage(Errors error, int throttleTimeMs,
                                                     Iterator<Map.Entry<TopicIdPartition, ShareFetchResponseData.PartitionData>> partIterator,
                                                     List<Node> nodeEndpoints) {
@@ -174,5 +181,15 @@ public class ShareFetchResponse extends AbstractResponse {
         return data.setThrottleTimeMs(throttleTimeMs)
                 .setErrorCode(error.code())
                 .setResponses(topicResponseList);
+    }
+
+    public static ShareFetchResponseData.PartitionData partitionResponse(TopicIdPartition topicIdPartition, Errors error) {
+        return partitionResponse(topicIdPartition.topicPartition().partition(), error);
+    }
+
+    public static ShareFetchResponseData.PartitionData partitionResponse(int partition, Errors error) {
+        return new ShareFetchResponseData.PartitionData()
+                .setPartitionIndex(partition)
+                .setErrorCode(error.code());
     }
 }

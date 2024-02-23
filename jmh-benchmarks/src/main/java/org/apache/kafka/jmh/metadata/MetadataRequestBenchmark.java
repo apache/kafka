@@ -22,6 +22,7 @@ import kafka.coordinator.transaction.TransactionCoordinator;
 import kafka.network.RequestChannel;
 import kafka.network.RequestConvertToJson;
 import kafka.server.AutoTopicCreationManager;
+import kafka.server.SharePartitionManager;
 import kafka.server.ZkBrokerEpochManager;
 import kafka.server.BrokerFeatures;
 import kafka.server.BrokerTopicStats;
@@ -117,6 +118,7 @@ public class MetadataRequestBenchmark {
         clientQuotaManager, clientRequestQuotaManager, controllerMutationQuotaManager, replicaQuotaManager,
         replicaQuotaManager, replicaQuotaManager, Option.empty());
     private final FetchManager fetchManager = Mockito.mock(FetchManager.class);
+    private final Optional<SharePartitionManager> sharePartitionManager = Optional.of(Mockito.mock(SharePartitionManager.class));
     private final BrokerTopicStats brokerTopicStats = new BrokerTopicStats(Optional.empty());
     private final KafkaPrincipal principal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "test-user");
     @Param({"500", "1000", "5000"})
@@ -195,6 +197,7 @@ public class MetadataRequestBenchmark {
             setAuthorizer(Optional.empty()).
             setQuotas(quotaManagers).
             setFetchManager(fetchManager).
+            setSharePartitionManager(sharePartitionManager).
             setBrokerTopicStats(brokerTopicStats).
             setClusterId("clusterId").
             setTime(Time.SYSTEM).
