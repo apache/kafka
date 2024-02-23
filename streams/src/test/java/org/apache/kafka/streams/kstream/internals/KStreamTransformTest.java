@@ -74,7 +74,7 @@ public class KStreamTransformTest {
 
         final int[] expectedKeys = {1, 10, 100, 1000};
 
-        final MockProcessorSupplier<Integer, Integer> processor = new MockProcessorSupplier<>();
+        final MockProcessorSupplier<Integer, Integer, Void, Void> processor = new MockProcessorSupplier<>();
         final KStream<Integer, Integer> stream = builder.stream(TOPIC_NAME, Consumed.with(Serdes.Integer(), Serdes.Integer()));
         stream.transform(transformerSupplier).process(processor);
 
@@ -136,7 +136,7 @@ public class KStreamTransformTest {
 
         final int[] expectedKeys = {1, 10, 100, 1000};
 
-        final MockProcessorSupplier<Integer, Integer> processor = new MockProcessorSupplier<>();
+        final MockProcessorSupplier<Integer, Integer, Void, Void> processor = new MockProcessorSupplier<>();
         final KStream<Integer, Integer> stream = builder.stream(TOPIC_NAME, Consumed.with(Serdes.Integer(), Serdes.Integer()));
         stream.transform(transformerSupplier).process(processor);
 

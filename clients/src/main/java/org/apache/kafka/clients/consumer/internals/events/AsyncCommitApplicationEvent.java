@@ -14,36 +14,26 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.common;
+package org.apache.kafka.clients.consumer.internals.events;
 
-import java.util.Locale;
+import org.apache.kafka.clients.consumer.OffsetAndMetadata;
+import org.apache.kafka.common.TopicPartition;
+import java.util.Map;
 
-public enum IsolationLevel {
-    READ_UNCOMMITTED((byte) 0), READ_COMMITTED((byte) 1);
+/**
+ * Event to commit offsets without waiting for a response, so the request won't be retried.
+ */
+public class AsyncCommitApplicationEvent extends CommitApplicationEvent {
 
-    private final byte id;
-
-    IsolationLevel(byte id) {
-        this.id = id;
-    }
-
-    public byte id() {
-        return id;
-    }
-
-    public static IsolationLevel forId(byte id) {
-        switch (id) {
-            case 0:
-                return READ_UNCOMMITTED;
-            case 1:
-                return READ_COMMITTED;
-            default:
-                throw new IllegalArgumentException("Unknown isolation level " + id);
-        }
+    public AsyncCommitApplicationEvent(final Map<TopicPartition, OffsetAndMetadata> offsets) {
+        super(offsets, Type.COMMIT_ASYNC);
     }
 
     @Override
     public String toString() {
-        return super.toString().toLowerCase(Locale.ROOT);
+        return "AsyncCommitApplicationEvent{" +
+            toStringBase() +
+            ", offsets=" + offsets() +
+            '}';
     }
 }
