@@ -79,11 +79,12 @@ public enum MemberState {
     FENCED,
 
     /**
-     * The member transitions to this state after a call to unsubscribe. While in this state, the
-     * member will stop sending heartbeats, will commit offsets if needed and release its
-     * assignment (calling user's callback for partitions revoked or lost). When all these
-     * actions complete, the member will transition out of this state into {@link #LEAVING} to
-     * effectively leave the group.
+     * The member transitions to this state before sending a heartbeat to leave the group,
+     * While in this state, the member will continue sending heartbeats while it release its
+     * assignment calling the user's callback. When callbacks complete, the member will transition
+     * out of this state into {@link #LEAVING} to send a heartbeat to leave the group. Note that
+     * if leaving due to expired poll timer, the member does not execute any callbacks while in
+     * this state and just transitions to {@link #LEAVING} and then {@link #STALE}
      */
     PREPARE_LEAVING,
 
@@ -132,8 +133,7 @@ public enum MemberState {
         PREPARE_LEAVING.previousValidStates = Arrays.asList(JOINING, STABLE, RECONCILING,
                 ACKNOWLEDGING, UNSUBSCRIBED);
 
-        LEAVING.previousValidStates = Arrays.asList(PREPARE_LEAVING, JOINING, RECONCILING,
-            ACKNOWLEDGING, STABLE);
+        LEAVING.previousValidStates = Arrays.asList(PREPARE_LEAVING);
 
         UNSUBSCRIBED.previousValidStates = Arrays.asList(PREPARE_LEAVING, LEAVING, FENCED);
 

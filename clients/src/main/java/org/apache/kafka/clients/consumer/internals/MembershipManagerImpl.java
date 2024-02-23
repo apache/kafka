@@ -693,6 +693,10 @@ public class MembershipManagerImpl implements MembershipManager {
 
         if (dueToExpiredPollTimer) {
             this.isPollTimerExpired = true;
+            // Briefly transition through prepare leaving. The member does not have to release
+            // any assignment before sending the leave group given that is stale. It will invoke
+            // onPartitionsLost after sending the leave group on the STALE state.
+            transitionTo(MemberState.PREPARE_LEAVING);
         }
         int leaveEpoch = groupInstanceId.isPresent() ?
                 ConsumerGroupHeartbeatRequest.LEAVE_GROUP_STATIC_MEMBER_EPOCH :
