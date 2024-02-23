@@ -34,9 +34,6 @@ import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.state.KeyValueStore;
-import org.apache.kafka.streams.state.Stores;
-import org.apache.kafka.streams.state.internals.KeyValueStoreBuilder;
-import org.apache.kafka.test.MockApiProcessorSupplier;
 import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
@@ -120,23 +117,10 @@ public class GlobalThreadShutDownOrderTest {
 
         final Consumed<String, Long> stringLongConsumed = Consumed.with(Serdes.String(), Serdes.Long());
 
-        final KeyValueStoreBuilder<String, Long> storeBuilder = new KeyValueStoreBuilder<>(
-            Stores.persistentKeyValueStore(globalStore),
-            Serdes.String(),
-            Serdes.Long(),
-            mockTime);
+        builder.globalTable(globalStoreTopic, stringLongConsumed);
 
-        builder.addGlobalStore(
-            storeBuilder,
-            globalStoreTopic,
-            Consumed.with(Serdes.String(), Serdes.Long()),
-            new MockApiProcessorSupplier<>()
-        );
-
-        builder
-            .stream(streamTopic, stringLongConsumed)
+        builder.stream(streamTopic, stringLongConsumed)
             .process(() -> new GlobalStoreProcessor(globalStore));
-
     }
 
     @AfterEach

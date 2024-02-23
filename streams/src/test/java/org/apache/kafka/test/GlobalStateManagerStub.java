@@ -55,11 +55,6 @@ public class GlobalStateManagerStub implements GlobalStateManager {
     }
 
     @Override
-    public Set<TopicPartition> topicPartitionsToReset() {
-        return Collections.emptySet();
-    }
-
-    @Override
     public File baseDir() {
         return baseDirectory;
     }
