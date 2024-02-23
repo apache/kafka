@@ -252,7 +252,7 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
         // with the measurements from Rocks DB
         setupStatistics(configs, dbOptions);
         openRocksDB(dbOptions, columnFamilyOptions);
-        dbAccessor = new DirectDBAccessor(db, fOptions);
+        dbAccessor = new DirectDBAccessor(db, fOptions, wOptions);
         open = true;
 
         addValueProvidersToMetricsRecorder();
@@ -748,10 +748,12 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
 
         private final RocksDB db;
         private final FlushOptions flushOptions;
+        private final WriteOptions wOptions;
 
-        DirectDBAccessor(final RocksDB db, final FlushOptions flushOptions) {
+        DirectDBAccessor(final RocksDB db, final FlushOptions flushOptions, final WriteOptions wOptions) {
             this.db = db;
             this.flushOptions = flushOptions;
+            this.wOptions = wOptions;
         }
 
         @Override
@@ -771,17 +773,17 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
 
         @Override
         public void put(final ColumnFamilyHandle columnFamily, final byte[] key, final byte[] value) throws RocksDBException {
-            db.put(columnFamily, key, value);
+            db.put(columnFamily, wOptions, key, value);
         }
 
         @Override
         public void delete(final ColumnFamilyHandle columnFamily, final byte[] key) throws RocksDBException {
-            db.delete(columnFamily, key);
+            db.delete(columnFamily, wOptions, key);
         }
 
         @Override
         public void deleteRange(final ColumnFamilyHandle columnFamily, final byte[] from, final byte[] to) throws RocksDBException {
-            db.deleteRange(columnFamily, from, to);
+            db.deleteRange(columnFamily, wOptions, from, to);
         }
 
         @Override

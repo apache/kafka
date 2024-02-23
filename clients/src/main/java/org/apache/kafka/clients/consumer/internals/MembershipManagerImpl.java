@@ -720,18 +720,16 @@ public class MembershipManagerImpl implements MembershipManager {
     }
 
     /**
-     * @return True if the member should not send heartbeats, which would be one of the following
-     * cases:
-     * <ul>
-     * <li>Member is not subscribed to any topics</li>
-     * <li>Member has received a fatal error in a previous heartbeat response</li>
-     * <li>Member is stale, meaning that it has left the group due to expired poll timer</li>
-     * </ul>
+     * @return True if the member should not send heartbeats, which is the case when it is in a
+     * state where it is not an active member of the group.
      */
     @Override
     public boolean shouldSkipHeartbeat() {
         MemberState state = state();
-        return state == MemberState.UNSUBSCRIBED || state == MemberState.FATAL || state == MemberState.STALE;
+        return state == MemberState.UNSUBSCRIBED ||
+            state == MemberState.FATAL ||
+            state == MemberState.STALE ||
+            state == MemberState.FENCED;
     }
 
     /**
@@ -837,12 +835,10 @@ public class MembershipManagerImpl implements MembershipManager {
         // best effort to commit the offsets in the case where the epoch might have changed while
         // the current reconciliation is in process. Note this is using the rebalance timeout as
         // it is the limit enforced by the broker to complete the reconciliation process.
-        commitResult = commitRequestManager.maybeAutoCommitAllConsumedNow(
-            Optional.of(getExpirationTimeForTimeout(rebalanceTimeoutMs)),
-            true);
+        commitResult = commitRequestManager.maybeAutoCommitSyncNow(getExpirationTimeForTimeout(rebalanceTimeoutMs));
 
         // Execute commit -> onPartitionsRevoked -> onPartitionsAssigned.
-        commitResult.whenComplete((commitReqResult, commitReqError) -> {
+        commitResult.whenComplete((__, commitReqError) -> {
             if (commitReqError != null) {
                 // The call to commit, that includes retry logic for retriable errors, failed to
                 // complete within the time boundaries (fatal error or retriable that did not
@@ -887,9 +883,6 @@ public class MembershipManagerImpl implements MembershipManager {
             revocationResult.thenCompose(__ -> {
                 boolean memberHasRejoined = memberEpochOnReconciliationStart != memberEpoch;
                 if (state == MemberState.RECONCILING && !memberHasRejoined) {
-                    // Reschedule the auto commit starting from now that member has a new assignment.
-                    commitRequestManager.resetAutoCommitTimer();
-
                     // Apply assignment
                     return assignPartitions(assignedTopicIdPartitions, addedPartitions);
                 } else {
@@ -916,6 +909,9 @@ public class MembershipManagerImpl implements MembershipManager {
             } else {
                 boolean memberHasRejoined = memberEpochOnReconciliationStart != memberEpoch;
                 if (state == MemberState.RECONCILING && !memberHasRejoined) {
+                    // Reschedule the auto commit starting from now that the member has a new assignment.
+                    commitRequestManager.resetAutoCommitTimer();
+
                     // Make assignment effective on the broker by transitioning to send acknowledge.
                     transitionTo(MemberState.ACKNOWLEDGING);
                 } else {

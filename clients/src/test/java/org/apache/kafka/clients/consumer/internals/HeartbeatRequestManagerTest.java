@@ -663,6 +663,33 @@ public class HeartbeatRequestManagerTest {
         assertEquals((double) randomSleepS, getMetric("last-heartbeat-seconds-ago").metricValue());
     }
 
+    @Test
+    public void testFencedMemberStopHeartbeatUntilItReleasesAssignmentToRejoin() {
+        mockStableMember();
+
+        time.sleep(DEFAULT_HEARTBEAT_INTERVAL_MS);
+        NetworkClientDelegate.PollResult result = heartbeatRequestManager.poll(time.milliseconds());
+        assertEquals(1, result.unsentRequests.size());
+
+        // Receive HB response fencing member
+        when(subscriptions.hasAutoAssignedPartitions()).thenReturn(true);
+        doNothing().when(membershipManager).transitionToFenced();
+        ClientResponse response = createHeartbeatResponse(result.unsentRequests.get(0), Errors.FENCED_MEMBER_EPOCH);
+        result.unsentRequests.get(0).handler().onComplete(response);
+
+        verify(membershipManager).transitionToFenced();
+        verify(heartbeatRequestState).onFailedAttempt(anyLong());
+        verify(heartbeatRequestState).reset();
+
+        when(membershipManager.state()).thenReturn(MemberState.FENCED);
+        result = heartbeatRequestManager.poll(time.milliseconds());
+        assertEquals(0, result.unsentRequests.size(), "Member should not send heartbeats while FENCED");
+
+        when(membershipManager.state()).thenReturn(MemberState.JOINING);
+        result = heartbeatRequestManager.poll(time.milliseconds());
+        assertEquals(1, result.unsentRequests.size(), "Fenced member should resume heartbeat after transitioning to JOINING");
+    }
+
     private void assertHeartbeat(HeartbeatRequestManager hrm, int nextPollMs) {
         NetworkClientDelegate.PollResult pollResult = hrm.poll(time.milliseconds());
         assertEquals(1, pollResult.unsentRequests.size());
