@@ -17,6 +17,9 @@
 
 package kafka.server
 
+import kafka.test.annotation.{ClusterTest, ClusterTestDefaults, Type}
+import kafka.test.junit.ClusterTestExtensions
+
 import java.util.{Optional, Properties}
 import java.util.concurrent.ExecutionException
 import kafka.utils.TestUtils
@@ -31,13 +34,15 @@ import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{UpdateFeaturesRequest, UpdateFeaturesResponse}
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.server.common.MetadataVersion.{IBP_2_7_IV0, IBP_3_2_IV0}
-import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertNotEquals, assertNotNull, assertThrows, assertTrue}
+import org.junit.jupiter.api.extension.ExtendWith
 
 import scala.jdk.CollectionConverters._
 import scala.reflect.ClassTag
 import scala.util.matching.Regex
 
+@ClusterTestDefaults(clusterType = Type.ALL)
+@ExtendWith(value = Array(classOf[ClusterTestExtensions]))
 class UpdateFeaturesTest extends BaseRequestTest {
 
   override def brokerCount = 3
@@ -172,7 +177,7 @@ class UpdateFeaturesTest extends BaseRequestTest {
   /**
    * Tests that an UpdateFeatures request sent to a non-Controller node fails as expected.
    */
-  @Test
+  @ClusterTest
   def testShouldFailRequestIfNotController(): Unit = {
     TestUtils.waitUntilControllerElected(zkClient)
 
@@ -206,7 +211,7 @@ class UpdateFeaturesTest extends BaseRequestTest {
    * Tests that an UpdateFeatures request fails in the Controller, when, for a feature the
    * allowDowngrade flag is not set during a downgrade request.
    */
-  @Test
+  @ClusterTest
   def testShouldFailRequestWhenDowngradeFlagIsNotSetDuringDowngrade(): Unit = {
     val targetMaxVersionLevel = (defaultFinalizedFeatures()("feature_1") - 1).asInstanceOf[Short]
     testWithInvalidFeatureUpdate[InvalidRequestException](
@@ -219,7 +224,7 @@ class UpdateFeaturesTest extends BaseRequestTest {
    * Tests that an UpdateFeatures request fails in the Controller, when, for a feature the downgrade
    * is attempted to a max version level higher than the existing max version level.
    */
-  @Test
+  @ClusterTest
   def testShouldFailRequestWhenDowngradeToHigherVersionLevelIsAttempted(): Unit = {
     val targetMaxVersionLevel = (defaultFinalizedFeatures()("feature_1") + 1).asInstanceOf[Short]
     testWithInvalidFeatureUpdate[InvalidRequestException](
@@ -232,7 +237,7 @@ class UpdateFeaturesTest extends BaseRequestTest {
    * Tests that an UpdateFeatures request fails in the Controller, when, a feature deletion is
    * attempted without setting the allowDowngrade flag.
    */
-  @Test
+  @ClusterTest
   def testShouldFailRequestInServerWhenDowngradeFlagIsNotSetDuringDeletion(): Unit = {
     TestUtils.waitUntilControllerElected(zkClient)
 
@@ -276,7 +281,7 @@ class UpdateFeaturesTest extends BaseRequestTest {
    * Tests that an UpdateFeatures request fails in the Controller, when, a feature version level
    * upgrade is attempted for a non-existing feature.
    */
-  @Test
+  @ClusterTest
   def testShouldFailRequestDuringDeletionOfNonExistingFeature(): Unit = {
     testWithInvalidFeatureUpdate[InvalidRequestException](
       "feature_non_existing",
@@ -288,7 +293,7 @@ class UpdateFeaturesTest extends BaseRequestTest {
    * Tests that an UpdateFeatures request fails in the Controller, when, a feature version level
    * upgrade is attempted to a version level same as the existing max version level.
    */
-  @Test
+  @ClusterTest
   def testShouldFailRequestWhenUpgradingToSameVersionLevel(): Unit = {
     val targetMaxVersionLevel = defaultFinalizedFeatures()("feature_1")
     testWithInvalidFeatureUpdate[InvalidRequestException](
@@ -350,7 +355,7 @@ class UpdateFeaturesTest extends BaseRequestTest {
    * feature, a version level upgrade introduces a version incompatibility with existing supported
    * features.
    */
-  @Test
+  @ClusterTest
   def testShouldFailRequestDuringBrokerMaxVersionLevelIncompatibilityForExistingFinalizedFeature(): Unit = {
     val feature = "feature_1"
     testShouldFailRequestDuringBrokerMaxVersionLevelIncompatibility(
@@ -364,7 +369,7 @@ class UpdateFeaturesTest extends BaseRequestTest {
    * feature, a version level upgrade introduces a version incompatibility with existing supported
    * features.
    */
-  @Test
+  @ClusterTest
   def testShouldFailRequestDuringBrokerMaxVersionLevelIncompatibilityWithNoExistingFinalizedFeature(): Unit = {
     val feature = "feature_1"
     testShouldFailRequestDuringBrokerMaxVersionLevelIncompatibility(
@@ -377,7 +382,7 @@ class UpdateFeaturesTest extends BaseRequestTest {
    * Tests that an UpdateFeatures request succeeds in the Controller, when, there are no existing
    * finalized features in FeatureZNode when the test starts.
    */
-  @Test
+  @ClusterTest
   def testSuccessfulFeatureUpgradeAndWithNoExistingFinalizedFeatures(): Unit = {
     TestUtils.waitUntilControllerElected(zkClient)
 
@@ -413,7 +418,7 @@ class UpdateFeaturesTest extends BaseRequestTest {
    * Tests that an UpdateFeatures request succeeds in the Controller, when, the request contains
    * both a valid feature version level upgrade as well as a downgrade request.
    */
-  @Test
+  @ClusterTest
   def testSuccessfulFeatureUpgradeAndDowngrade(): Unit = {
     TestUtils.waitUntilControllerElected(zkClient)
 
@@ -455,7 +460,7 @@ class UpdateFeaturesTest extends BaseRequestTest {
    * contains a valid feature version level upgrade and an invalid version level downgrade.
    * i.e. expect the upgrade operation to succeed, and the downgrade operation to fail.
    */
-  @Test
+  @ClusterTest
   def testPartialSuccessDuringValidFeatureUpgradeAndInvalidDowngrade(): Unit = {
     TestUtils.waitUntilControllerElected(zkClient)
 
@@ -505,7 +510,7 @@ class UpdateFeaturesTest extends BaseRequestTest {
    * contains an invalid feature version level upgrade and a valid version level downgrade.
    * i.e. expect the downgrade operation to succeed, and the upgrade operation to fail.
    */
-  @Test
+  @ClusterTest
   def testPartialSuccessDuringInvalidFeatureUpgradeAndValidDowngrade(): Unit = {
     TestUtils.waitUntilControllerElected(zkClient)
 
