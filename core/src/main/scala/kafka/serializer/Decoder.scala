@@ -43,8 +43,8 @@ class DefaultDecoder(props: VerifiableProperties = null) extends Decoder[Array[B
  * an optional property serializer.encoding to control this.
  */
 class StringDecoder(props: VerifiableProperties = null) extends Decoder[String] {
-  val encoding =
-    if(props == null)
+  val encoding: String =
+    if (props == null)
       StandardCharsets.UTF_8.name()
     else
       props.getString("serializer.encoding", StandardCharsets.UTF_8.name())

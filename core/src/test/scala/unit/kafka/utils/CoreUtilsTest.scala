@@ -45,7 +45,7 @@ class CoreUtilsTest extends Logging {
 
   @Test
   def testReadBytes(): Unit = {
-    for(testCase <- List("", "a", "abcd")) {
+    for (testCase <- List("", "a", "abcd")) {
       val bytes = testCase.getBytes
       assertTrue(Arrays.equals(bytes, Utils.readBytes(ByteBuffer.wrap(bytes))))
     }

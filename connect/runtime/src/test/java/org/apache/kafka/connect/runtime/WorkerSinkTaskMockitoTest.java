@@ -20,7 +20,10 @@ import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
+import org.apache.kafka.clients.consumer.MockConsumer;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
+import org.apache.kafka.clients.consumer.OffsetCommitCallback;
+import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.WakeupException;
@@ -33,6 +36,7 @@ import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaAndValue;
+import org.apache.kafka.connect.errors.RetriableException;
 import org.apache.kafka.connect.runtime.ConnectMetrics.MetricGroup;
 import org.apache.kafka.connect.runtime.WorkerSinkTask.SinkTaskMetricsGroup;
 import org.apache.kafka.connect.runtime.errors.ErrorHandlingMetrics;
@@ -49,6 +53,7 @@ import org.apache.kafka.connect.storage.ClusterConfigState;
 import org.apache.kafka.connect.storage.Converter;
 import org.apache.kafka.connect.storage.HeaderConverter;
 import org.apache.kafka.connect.storage.StatusBackingStore;
+import org.apache.kafka.connect.storage.StringConverter;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.junit.After;
 import org.junit.Before;
@@ -67,19 +72,25 @@ import org.mockito.stubbing.OngoingStubbing;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.function.Supplier;
+import java.util.regex.Pattern;
 
 import static java.util.Arrays.asList;
+import static java.util.Collections.singleton;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
@@ -300,7 +311,7 @@ public class WorkerSinkTaskMockitoTest {
         verify(statusListener).onResume(taskId);
         verify(consumer, times(2)).wakeup();
         INITIAL_ASSIGNMENT.forEach(tp -> {
-            verify(consumer).resume(Collections.singleton(tp));
+            verify(consumer).resume(singleton(tp));
         });
         verify(sinkTask, times(4)).put(anyList());
     }
@@ -341,6 +352,99 @@ public class WorkerSinkTaskMockitoTest {
         verify(sinkTask).stop();
         verify(consumer).close();
         verify(headerConverter).close();
+    }
+
+    @Test
+    public void testPollRedelivery() {
+        createTask(initialState);
+        expectTaskGetTopic();
+
+        workerTask.initialize(TASK_CONFIG);
+        workerTask.initializeAndStart();
+        verifyInitializeTask();
+
+        expectPollInitialAssignment()
+                // If a retriable exception is thrown, we should redeliver the same batch, pausing the consumer in the meantime
+                .thenAnswer(expectConsumerPoll(1))
+                // Retry delivery should succeed
+                .thenAnswer(expectConsumerPoll(0))
+                .thenAnswer(expectConsumerPoll(0));
+        expectConversionAndTransformation(null, new RecordHeaders());
+
+        doAnswer(invocation -> null)
+                .doThrow(new RetriableException("retry"))
+                .doAnswer(invocation -> null)
+                .when(sinkTask).put(anyList());
+
+        workerTask.iteration();
+        time.sleep(10000L);
+
+        verifyPollInitialAssignment();
+        verify(sinkTask).put(anyList());
+
+        assertSinkMetricValue("partition-count", 2);
+        assertSinkMetricValue("sink-record-read-total", 0.0);
+        assertSinkMetricValue("sink-record-send-total", 0.0);
+        assertSinkMetricValue("sink-record-active-count", 0.0);
+        assertSinkMetricValue("sink-record-active-count-max", 0.0);
+        assertSinkMetricValue("sink-record-active-count-avg", 0.0);
+        assertSinkMetricValue("offset-commit-seq-no", 0.0);
+        assertSinkMetricValue("offset-commit-completion-rate", 0.0);
+        assertSinkMetricValue("offset-commit-completion-total", 0.0);
+        assertSinkMetricValue("offset-commit-skip-rate", 0.0);
+        assertSinkMetricValue("offset-commit-skip-total", 0.0);
+        assertTaskMetricValue("status", "running");
+        assertTaskMetricValue("running-ratio", 1.0);
+        assertTaskMetricValue("pause-ratio", 0.0);
+        assertTaskMetricValue("batch-size-max", 0.0);
+        assertTaskMetricValue("batch-size-avg", 0.0);
+        assertTaskMetricValue("offset-commit-max-time-ms", Double.NaN);
+        assertTaskMetricValue("offset-commit-failure-percentage", 0.0);
+        assertTaskMetricValue("offset-commit-success-percentage", 0.0);
+
+        // Pause
+        workerTask.iteration();
+
+        verify(consumer, times(3)).assignment();
+        verify(consumer).pause(INITIAL_ASSIGNMENT);
+
+        // Retry delivery should succeed
+        workerTask.iteration();
+        time.sleep(30000L);
+
+        verify(sinkTask, times(3)).put(anyList());
+        INITIAL_ASSIGNMENT.forEach(tp -> {
+            verify(consumer).resume(Collections.singleton(tp));
+        });
+
+        assertSinkMetricValue("sink-record-read-total", 1.0);
+        assertSinkMetricValue("sink-record-send-total", 1.0);
+        assertSinkMetricValue("sink-record-active-count", 1.0);
+        assertSinkMetricValue("sink-record-active-count-max", 1.0);
+        assertSinkMetricValue("sink-record-active-count-avg", 0.5);
+        assertTaskMetricValue("status", "running");
+        assertTaskMetricValue("running-ratio", 1.0);
+        assertTaskMetricValue("batch-size-max", 1.0);
+        assertTaskMetricValue("batch-size-avg", 0.5);
+
+        // Expect commit
+        final Map<TopicPartition, OffsetAndMetadata> workerCurrentOffsets = new HashMap<>();
+        // Commit advance by one
+        workerCurrentOffsets.put(TOPIC_PARTITION, new OffsetAndMetadata(FIRST_OFFSET + 1));
+        // Nothing polled for this partition
+        workerCurrentOffsets.put(TOPIC_PARTITION2, new OffsetAndMetadata(FIRST_OFFSET));
+        when(sinkTask.preCommit(workerCurrentOffsets)).thenReturn(workerCurrentOffsets);
+
+        sinkTaskContext.getValue().requestCommit();
+        time.sleep(10000L);
+        workerTask.iteration();
+
+        final ArgumentCaptor<OffsetCommitCallback> callback = ArgumentCaptor.forClass(OffsetCommitCallback.class);
+        verify(consumer).commitAsync(eq(workerCurrentOffsets), callback.capture());
+        callback.getValue().onComplete(workerCurrentOffsets, null);
+
+        verify(sinkTask, times(4)).put(anyList());
+        assertSinkMetricValue("offset-commit-completion-total", 1.0);
     }
 
     @Test
@@ -455,18 +559,18 @@ public class WorkerSinkTaskMockitoTest {
                     return ConsumerRecords.empty();
                 })
                 .thenAnswer((Answer<ConsumerRecords<byte[], byte[]>>) invocation -> {
-                    rebalanceListener.getValue().onPartitionsRevoked(Collections.singleton(TOPIC_PARTITION));
+                    rebalanceListener.getValue().onPartitionsRevoked(singleton(TOPIC_PARTITION));
                     rebalanceListener.getValue().onPartitionsAssigned(Collections.emptySet());
                     return ConsumerRecords.empty();
                 })
                 .thenAnswer((Answer<ConsumerRecords<byte[], byte[]>>) invocation -> {
                     rebalanceListener.getValue().onPartitionsRevoked(Collections.emptySet());
-                    rebalanceListener.getValue().onPartitionsAssigned(Collections.singleton(TOPIC_PARTITION3));
+                    rebalanceListener.getValue().onPartitionsAssigned(singleton(TOPIC_PARTITION3));
                     return ConsumerRecords.empty();
                 })
                 .thenAnswer((Answer<ConsumerRecords<byte[], byte[]>>) invocation -> {
-                    rebalanceListener.getValue().onPartitionsLost(Collections.singleton(TOPIC_PARTITION3));
-                    rebalanceListener.getValue().onPartitionsAssigned(Collections.singleton(TOPIC_PARTITION));
+                    rebalanceListener.getValue().onPartitionsLost(singleton(TOPIC_PARTITION3));
+                    rebalanceListener.getValue().onPartitionsAssigned(singleton(TOPIC_PARTITION));
                     return ConsumerRecords.empty();
                 });
 
@@ -482,19 +586,186 @@ public class WorkerSinkTaskMockitoTest {
 
         // Second iteration--second call to poll, partial consumer revocation
         workerTask.iteration();
-        verify(sinkTask).close(Collections.singleton(TOPIC_PARTITION));
+        verify(sinkTask).close(singleton(TOPIC_PARTITION));
         verify(sinkTask, times(2)).put(Collections.emptyList());
 
         // Third iteration--third call to poll, partial consumer assignment
         workerTask.iteration();
-        verify(sinkTask).open(Collections.singleton(TOPIC_PARTITION3));
+        verify(sinkTask).open(singleton(TOPIC_PARTITION3));
         verify(sinkTask, times(3)).put(Collections.emptyList());
 
         // Fourth iteration--fourth call to poll, one partition lost; can't commit offsets for it, one new partition assigned
         workerTask.iteration();
-        verify(sinkTask).close(Collections.singleton(TOPIC_PARTITION3));
-        verify(sinkTask).open(Collections.singleton(TOPIC_PARTITION));
+        verify(sinkTask).close(singleton(TOPIC_PARTITION3));
+        verify(sinkTask).open(singleton(TOPIC_PARTITION));
         verify(sinkTask, times(4)).put(Collections.emptyList());
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    public void testTaskCancelPreventsFinalOffsetCommit() {
+        createTask(initialState);
+
+        workerTask.initialize(TASK_CONFIG);
+        workerTask.initializeAndStart();
+        verifyInitializeTask();
+
+        expectTaskGetTopic();
+        expectPollInitialAssignment()
+                // Put one message through the task to get some offsets to commit
+                .thenAnswer(expectConsumerPoll(1))
+                // the second put will return after the task is stopped and cancelled (asynchronously)
+                .thenAnswer(expectConsumerPoll(1));
+
+        expectConversionAndTransformation(null, new RecordHeaders());
+
+        doAnswer(invocation -> null)
+                .doAnswer(invocation -> null)
+                .doAnswer(invocation -> {
+                    workerTask.stop();
+                    workerTask.cancel();
+                    return null;
+                })
+                .when(sinkTask).put(anyList());
+
+        // task performs normal steps in advance of committing offsets
+        final Map<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>();
+        offsets.put(TOPIC_PARTITION, new OffsetAndMetadata(FIRST_OFFSET + 2));
+        offsets.put(TOPIC_PARTITION2, new OffsetAndMetadata(FIRST_OFFSET));
+        when(sinkTask.preCommit(offsets)).thenReturn(offsets);
+
+        workerTask.execute();
+
+        // stop wakes up the consumer
+        verify(consumer).wakeup();
+
+        verify(sinkTask).close(any());
+    }
+
+    @Test
+    public void testDeliveryWithMutatingTransform() {
+        createTask(initialState);
+
+        workerTask.initialize(TASK_CONFIG);
+        workerTask.initializeAndStart();
+        verifyInitializeTask();
+
+        expectTaskGetTopic();
+        expectPollInitialAssignment()
+                .thenAnswer(expectConsumerPoll(1))
+                .thenAnswer(expectConsumerPoll(0));
+
+        expectConversionAndTransformation("newtopic_", new RecordHeaders());
+
+        workerTask.iteration(); // initial assignment
+
+        workerTask.iteration(); // first record delivered
+
+        final Map<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>();
+        offsets.put(TOPIC_PARTITION, new OffsetAndMetadata(FIRST_OFFSET + 1));
+        offsets.put(TOPIC_PARTITION2, new OffsetAndMetadata(FIRST_OFFSET));
+        when(sinkTask.preCommit(offsets)).thenReturn(offsets);
+
+        sinkTaskContext.getValue().requestCommit();
+        assertTrue(sinkTaskContext.getValue().isCommitRequested());
+
+        assertNotEquals(offsets, workerTask.lastCommittedOffsets());
+        workerTask.iteration(); // triggers the commit
+
+        ArgumentCaptor<OffsetCommitCallback> callback = ArgumentCaptor.forClass(OffsetCommitCallback.class);
+        verify(consumer).commitAsync(eq(offsets), callback.capture());
+
+        callback.getValue().onComplete(offsets, null);
+
+        assertFalse(sinkTaskContext.getValue().isCommitRequested()); // should have been cleared
+        assertEquals(offsets, workerTask.lastCommittedOffsets());
+        assertEquals(0, workerTask.commitFailures());
+        assertEquals(1.0, metrics.currentMetricValueAsDouble(workerTask.taskMetricsGroup().metricGroup(), "batch-size-max"), 0.0001);
+    }
+
+    @Test
+    public void testMissingTimestampPropagation() {
+        createTask(initialState);
+        expectTaskGetTopic();
+
+        workerTask.initialize(TASK_CONFIG);
+        workerTask.initializeAndStart();
+        verifyInitializeTask();
+
+        expectPollInitialAssignment()
+                .thenAnswer(expectConsumerPoll(1, RecordBatch.NO_TIMESTAMP, TimestampType.CREATE_TIME, new RecordHeaders()));
+
+        expectConversionAndTransformation(null, new RecordHeaders());
+
+        workerTask.iteration(); // iter 1 -- initial assignment
+        workerTask.iteration(); // iter 2 -- deliver 1 record
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<Collection<SinkRecord>> records = ArgumentCaptor.forClass(Collection.class);
+        verify(sinkTask, times(2)).put(records.capture());
+
+        SinkRecord record = records.getValue().iterator().next();
+
+        // we expect null for missing timestamp, the sentinel value of Record.NO_TIMESTAMP is Kafka's API
+        assertNull(record.timestamp());
+        assertEquals(TimestampType.CREATE_TIME, record.timestampType());
+    }
+
+    @Test
+    public void testTimestampPropagation() {
+        final Long timestamp = System.currentTimeMillis();
+        final TimestampType timestampType = TimestampType.CREATE_TIME;
+
+        createTask(initialState);
+        expectTaskGetTopic();
+
+        workerTask.initialize(TASK_CONFIG);
+        workerTask.initializeAndStart();
+        verifyInitializeTask();
+
+        expectPollInitialAssignment()
+                .thenAnswer(expectConsumerPoll(1, timestamp, timestampType, new RecordHeaders()));
+
+        expectConversionAndTransformation(null, new RecordHeaders());
+
+        workerTask.iteration(); // iter 1 -- initial assignment
+        workerTask.iteration(); // iter 2 -- deliver 1 record
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<Collection<SinkRecord>> records = ArgumentCaptor.forClass(Collection.class);
+        verify(sinkTask, times(2)).put(records.capture());
+
+        SinkRecord record = records.getValue().iterator().next();
+
+        assertEquals(timestamp, record.timestamp());
+        assertEquals(timestampType, record.timestampType());
+    }
+
+    @Test
+    public void testTopicsRegex() {
+        Map<String, String> props = new HashMap<>(TASK_PROPS);
+        props.remove("topics");
+        props.put("topics.regex", "te.*");
+        TaskConfig taskConfig = new TaskConfig(props);
+
+        createTask(TargetState.PAUSED);
+
+        workerTask.initialize(taskConfig);
+        workerTask.initializeAndStart();
+
+        ArgumentCaptor<Pattern> topicsRegex = ArgumentCaptor.forClass(Pattern.class);
+
+        verify(consumer).subscribe(topicsRegex.capture(), rebalanceListener.capture());
+        assertEquals("te.*", topicsRegex.getValue().pattern());
+        verify(sinkTask).initialize(sinkTaskContext.capture());
+        verify(sinkTask).start(props);
+
+        expectPollInitialAssignment();
+
+        workerTask.iteration();
+        time.sleep(10000L);
+
+        verify(consumer).pause(INITIAL_ASSIGNMENT);
     }
 
     @Test
@@ -558,6 +829,143 @@ public class WorkerSinkTaskMockitoTest {
         assertEquals(30, metrics.currentMetricValueAsDouble(group1.metricGroup(), "put-batch-max-time-ms"), 0.001d);
     }
 
+    @Test
+    public void testHeaders() {
+        createTask(initialState);
+
+        workerTask.initialize(TASK_CONFIG);
+        workerTask.initializeAndStart();
+        verifyInitializeTask();
+
+        Headers headers = new RecordHeaders();
+        headers.add("header_key", "header_value".getBytes());
+
+        expectPollInitialAssignment()
+                .thenAnswer(expectConsumerPoll(1, headers));
+
+        expectConversionAndTransformation(null, headers);
+
+        workerTask.iteration(); // iter 1 -- initial assignment
+        workerTask.iteration(); // iter 2 -- deliver 1 record
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<Collection<SinkRecord>> recordCapture = ArgumentCaptor.forClass(Collection.class);
+        verify(sinkTask, times(2)).put(recordCapture.capture());
+
+        assertEquals(1, recordCapture.getValue().size());
+        SinkRecord record = recordCapture.getValue().iterator().next();
+
+        assertEquals("header_value", record.headers().lastWithName("header_key").value());
+    }
+
+    @Test
+    public void testHeadersWithCustomConverter() {
+        StringConverter stringConverter = new StringConverter();
+        SampleConverterWithHeaders testConverter = new SampleConverterWithHeaders();
+
+        createTask(initialState, stringConverter, testConverter, stringConverter);
+
+        workerTask.initialize(TASK_CONFIG);
+        workerTask.initializeAndStart();
+        verifyInitializeTask();
+
+        String keyA = "a";
+        String valueA = "Árvíztűrő tükörfúrógép";
+        Headers headersA = new RecordHeaders();
+        String encodingA = "latin2";
+        headersA.add("encoding", encodingA.getBytes());
+
+        String keyB = "b";
+        String valueB = "Тестовое сообщение";
+        Headers headersB = new RecordHeaders();
+        String encodingB = "koi8_r";
+        headersB.add("encoding", encodingB.getBytes());
+
+        expectPollInitialAssignment()
+                .thenAnswer((Answer<ConsumerRecords<byte[], byte[]>>) invocation -> {
+                    List<ConsumerRecord<byte[], byte[]>> records = Arrays.asList(
+                            new ConsumerRecord<>(TOPIC, PARTITION, FIRST_OFFSET + recordsReturnedTp1 + 1, RecordBatch.NO_TIMESTAMP, TimestampType.NO_TIMESTAMP_TYPE,
+                                    0, 0, keyA.getBytes(), valueA.getBytes(encodingA), headersA, Optional.empty()),
+                            new ConsumerRecord<>(TOPIC, PARTITION, FIRST_OFFSET + recordsReturnedTp1 + 2, RecordBatch.NO_TIMESTAMP, TimestampType.NO_TIMESTAMP_TYPE,
+                                    0, 0, keyB.getBytes(), valueB.getBytes(encodingB), headersB, Optional.empty())
+                    );
+                    return new ConsumerRecords<>(Collections.singletonMap(new TopicPartition(TOPIC, PARTITION), records));
+                });
+
+        expectTransformation(null);
+
+        workerTask.iteration(); // iter 1 -- initial assignment
+        workerTask.iteration(); // iter 2 -- deliver records
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<Collection<SinkRecord>> records = ArgumentCaptor.forClass(Collection.class);
+        verify(sinkTask, times(2)).put(records.capture());
+
+        Iterator<SinkRecord> iterator = records.getValue().iterator();
+
+        SinkRecord recordA = iterator.next();
+        assertEquals(keyA, recordA.key());
+        assertEquals(valueA, recordA.value());
+
+        SinkRecord recordB = iterator.next();
+        assertEquals(keyB, recordB.key());
+        assertEquals(valueB, recordB.value());
+    }
+
+    @Test
+    public void testOriginalTopicWithTopicMutatingTransformations() {
+        createTask(initialState);
+
+        workerTask.initialize(TASK_CONFIG);
+        workerTask.initializeAndStart();
+        verifyInitializeTask();
+
+        expectPollInitialAssignment()
+                .thenAnswer(expectConsumerPoll(1));
+
+        expectConversionAndTransformation("newtopic_", new RecordHeaders());
+
+        workerTask.iteration(); // initial assignment
+        workerTask.iteration(); // first record delivered
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<Collection<SinkRecord>> recordCapture = ArgumentCaptor.forClass(Collection.class);
+        verify(sinkTask, times(2)).put(recordCapture.capture());
+
+        assertEquals(1, recordCapture.getValue().size());
+        SinkRecord record = recordCapture.getValue().iterator().next();
+        assertEquals(TOPIC, record.originalTopic());
+        assertEquals("newtopic_" + TOPIC, record.topic());
+    }
+
+    @Test
+    public void testPartitionCountInCaseOfPartitionRevocation() {
+        MockConsumer<byte[], byte[]> mockConsumer = new MockConsumer<>(OffsetResetStrategy.EARLIEST);
+        // Setting up Worker Sink Task to check metrics
+        workerTask = new WorkerSinkTask(
+                taskId, sinkTask, statusListener, TargetState.PAUSED, workerConfig, ClusterConfigState.EMPTY, metrics,
+                keyConverter, valueConverter, errorHandlingMetrics, headerConverter,
+                transformationChain, mockConsumer, pluginLoader, time,
+                RetryWithToleranceOperatorTest.noopOperator(), null, statusBackingStore, Collections::emptyList);
+        mockConsumer.updateBeginningOffsets(
+                new HashMap<TopicPartition, Long>() {{
+                    put(TOPIC_PARTITION, 0L);
+                    put(TOPIC_PARTITION2, 0L);
+                }}
+        );
+        workerTask.initialize(TASK_CONFIG);
+        workerTask.initializeAndStart();
+        // Initial Re-balance to assign INITIAL_ASSIGNMENT which is "TOPIC_PARTITION" and "TOPIC_PARTITION2"
+        mockConsumer.rebalance(INITIAL_ASSIGNMENT);
+        assertSinkMetricValue("partition-count", 2);
+        // Revoked "TOPIC_PARTITION" and second re-balance with "TOPIC_PARTITION2"
+        mockConsumer.rebalance(Collections.singleton(TOPIC_PARTITION2));
+        assertSinkMetricValue("partition-count", 1);
+        // Closing the Worker Sink Task which will update the partition count as 0.
+        workerTask.close();
+        assertSinkMetricValue("partition-count", 0);
+    }
+
     private void expectRebalanceRevocationError(RuntimeException e) {
         when(sinkTask.preCommit(anyMap())).thenReturn(Collections.emptyMap());
         doThrow(e).when(sinkTask).close(INITIAL_ASSIGNMENT);
@@ -597,6 +1005,10 @@ public class WorkerSinkTaskMockitoTest {
 
     private Answer<ConsumerRecords<byte[], byte[]>> expectConsumerPoll(final int numMessages) {
         return expectConsumerPoll(numMessages, RecordBatch.NO_TIMESTAMP, TimestampType.NO_TIMESTAMP_TYPE, new RecordHeaders());
+    }
+
+    private Answer<ConsumerRecords<byte[], byte[]>> expectConsumerPoll(final int numMessages,  Headers headers) {
+        return expectConsumerPoll(numMessages, RecordBatch.NO_TIMESTAMP, TimestampType.NO_TIMESTAMP_TYPE, headers);
     }
 
     private Answer<ConsumerRecords<byte[], byte[]>> expectConsumerPoll(final int numMessages, final long timestamp, final TimestampType timestampType, Headers headers) {
