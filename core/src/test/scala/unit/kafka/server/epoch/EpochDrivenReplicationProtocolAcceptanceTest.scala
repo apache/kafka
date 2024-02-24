@@ -30,6 +30,7 @@ import org.apache.kafka.common.record.RecordBatch
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.serialization.ByteArrayDeserializer
 import org.apache.kafka.server.common.MetadataVersion
+import org.apache.kafka.server.common.MetadataVersion.IBP_3_3_IV0
 import org.apache.kafka.storage.internals.epoch.LeaderEpochFileCache
 import org.apache.kafka.storage.internals.log.EpochEntry
 import org.apache.kafka.storage.internals.checkpoint.CleanShutdownFileHandler
@@ -66,11 +67,17 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends QuorumTestHarness wit
 
   @BeforeEach
   override def setUp(testInfo: TestInfo): Unit = {
+    if (TestInfoUtils.isKRaft(testInfo) && metadataVersion.isLessThan(IBP_3_3_IV0)) {
+      return
+    }
     super.setUp(testInfo)
   }
 
   @AfterEach
   override def tearDown(): Unit = {
+    if (super.getTestInfo() == null) {
+      return
+    }
     producer.close()
     TestUtils.shutdownServers(brokers)
     super.tearDown()
@@ -141,6 +148,10 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends QuorumTestHarness wit
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def shouldNotAllowDivergentLogs(quorum: String): Unit = {
+    if (quorum == "kraft" && metadataVersion.isLessThan(IBP_3_3_IV0)) {
+      return
+    }
+
     //Given two brokers
     brokers = (100 to 101).map(createBrokerForId(_))
     val broker100 = brokers(0)
@@ -191,7 +202,9 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends QuorumTestHarness wit
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def offsetsShouldNotGoBackwards(quorum: String): Unit = {
-
+    if (quorum == "kraft" && metadataVersion.isLessThan(IBP_3_3_IV0)) {
+      return
+    }
     //Given two brokers
     brokers = (100 to 101).map(createBrokerForId(_))
 
@@ -267,6 +280,9 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends QuorumTestHarness wit
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def shouldSurviveFastLeaderChange(quorum: String): Unit = {
+    if (quorum == "kraft" && metadataVersion.isLessThan(IBP_3_3_IV0)) {
+      return
+    }
     val tp = new TopicPartition(topic, 0)
 
     //Given 2 brokers
@@ -308,7 +324,9 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends QuorumTestHarness wit
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def logsShouldNotDivergeOnUncleanLeaderElections(quorum: String): Unit = {
-
+    if (quorum == "kraft" && metadataVersion.isLessThan(IBP_3_3_IV0)) {
+      return
+    }
     // Given two brokers, unclean leader election is enabled
     brokers = (100 to 101).map(createBrokerForId(_, enableUncleanLeaderElection = true))
 
