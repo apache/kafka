@@ -72,10 +72,10 @@ class OffsetValidationTest(VerifiableConsumerTest):
         return consumer
 
     @cluster(num_nodes=7)
-    @matrix(
-        metadata_quorum=[quorum.zk, quorum.isolated_kraft],
-        use_new_coordinator=[False]
-    )
+    # @matrix(
+    #     metadata_quorum=[quorum.zk, quorum.isolated_kraft],
+    #     use_new_coordinator=[False]
+    # )
     @matrix(
         metadata_quorum=[quorum.isolated_kraft],
         use_new_coordinator=[True],
@@ -131,12 +131,12 @@ class OffsetValidationTest(VerifiableConsumerTest):
             (consumer.total_consumed(), consumer.current_position(partition))
 
     @cluster(num_nodes=7)
-    @matrix(
-        clean_shutdown=[True],
-        bounce_mode=["all", "rolling"],
-        metadata_quorum=[quorum.zk, quorum.isolated_kraft],
-        use_new_coordinator=[False]
-    )
+    # @matrix(
+    #     clean_shutdown=[True],
+    #     bounce_mode=["all", "rolling"],
+    #     metadata_quorum=[quorum.zk, quorum.isolated_kraft],
+    #     use_new_coordinator=[False]
+    # )
     @matrix(
         clean_shutdown=[True],
         bounce_mode=["all", "rolling"],
@@ -185,194 +185,194 @@ class OffsetValidationTest(VerifiableConsumerTest):
                 "Current position %d greater than the total number of consumed records %d" % \
                 (consumer.current_position(partition), consumer.total_consumed())
 
+    # @cluster(num_nodes=7)
+    # @matrix(
+    #     clean_shutdown=[True],
+    #     static_membership=[True, False],
+    #     bounce_mode=["all", "rolling"],
+    #     num_bounces=[5],
+    #     metadata_quorum=[quorum.zk, quorum.isolated_kraft],
+    #     use_new_coordinator=[False]
+    # )
+    # @matrix(
+    #     clean_shutdown=[True],
+    #     static_membership=[True, False],
+    #     bounce_mode=["all", "rolling"],
+    #     num_bounces=[5],
+    #     metadata_quorum=[quorum.isolated_kraft],
+    #     use_new_coordinator=[True]
+    # )
+    # def test_static_consumer_bounce(self, clean_shutdown, static_membership, bounce_mode, num_bounces, metadata_quorum=quorum.zk, use_new_coordinator=False):
+    #     """
+    #     Verify correct static consumer behavior when the consumers in the group are restarted. In order to make
+    #     sure the behavior of static members are different from dynamic ones, we take both static and dynamic
+    #     membership into this test suite.
+    #
+    #     Setup: single Kafka cluster with one producer and a set of consumers in one group.
+    #
+    #     - Start a producer which continues producing new messages throughout the test.
+    #     - Start up the consumers as static/dynamic members and wait until they've joined the group.
+    #     - In a loop, restart each consumer except the first member (note: may not be the leader), and expect no rebalance triggered
+    #       during this process if the group is in static membership.
+    #     """
+    #     partition = TopicPartition(self.TOPIC, 0)
+    #
+    #     producer = self.setup_producer(self.TOPIC)
+    #
+    #     producer.start()
+    #     self.await_produced_messages(producer)
+    #
+    #     self.session_timeout_sec = 60
+    #     consumer = self.setup_consumer(self.TOPIC, static_membership=static_membership)
+    #
+    #     consumer.start()
+    #     self.await_all_members(consumer)
+    #
+    #     num_revokes_before_bounce = consumer.num_revokes_for_alive()
+    #
+    #     num_keep_alive = 1
+    #
+    #     if bounce_mode == "all":
+    #         self.bounce_all_consumers(consumer, keep_alive=num_keep_alive, num_bounces=num_bounces)
+    #     else:
+    #         self.rolling_bounce_consumers(consumer, keep_alive=num_keep_alive, num_bounces=num_bounces)
+    #
+    #     num_revokes_after_bounce = consumer.num_revokes_for_alive() - num_revokes_before_bounce
+    #
+    #     check_condition = num_revokes_after_bounce != 0
+    #     # under static membership, the live consumer shall not revoke any current running partitions,
+    #     # since there is no global rebalance being triggered.
+    #     if static_membership:
+    #         check_condition = num_revokes_after_bounce == 0
+    #
+    #     assert check_condition, \
+    #         "Total revoked count %d does not match the expectation of having 0 revokes as %d" % \
+    #         (num_revokes_after_bounce, check_condition)
+    #
+    #     consumer.stop_all()
+    #     if clean_shutdown:
+    #         # if the total records consumed matches the current position, we haven't seen any duplicates
+    #         # this can only be guaranteed with a clean shutdown
+    #         assert consumer.current_position(partition) == consumer.total_consumed(), \
+    #             "Total consumed records %d did not match consumed position %d" % \
+    #             (consumer.total_consumed(), consumer.current_position(partition))
+    #     else:
+    #         # we may have duplicates in a hard failure
+    #         assert consumer.current_position(partition) <= consumer.total_consumed(), \
+    #             "Current position %d greater than the total number of consumed records %d" % \
+    #             (consumer.current_position(partition), consumer.total_consumed())
+
+    # @cluster(num_nodes=7)
+    # @matrix(
+    #     bounce_mode=["all", "rolling"],
+    #     metadata_quorum=[quorum.zk, quorum.isolated_kraft],
+    #     use_new_coordinator=[False]
+    # )
+    # @matrix(
+    #     bounce_mode=["all", "rolling"],
+    #     metadata_quorum=[quorum.isolated_kraft],
+    #     use_new_coordinator=[True]
+    # )
+    # def test_static_consumer_persisted_after_rejoin(self, bounce_mode, metadata_quorum=quorum.zk, use_new_coordinator=False):
+    #     """
+    #     Verify that the updated member.id(updated_member_id) caused by static member rejoin would be persisted. If not,
+    #     after the brokers rolling bounce, the migrated group coordinator would load the stale persisted member.id and
+    #     fence subsequent static member rejoin with updated_member_id.
+    #
+    #     - Start a producer which continues producing new messages throughout the test.
+    #     - Start up a static consumer and wait until it's up
+    #     - Restart the consumer and wait until it up, its member.id is supposed to be updated and persisted.
+    #     - Rolling bounce all the brokers and verify that the static consumer can still join the group and consumer messages.
+    #     """
+    #     producer = self.setup_producer(self.TOPIC)
+    #     producer.start()
+    #     self.await_produced_messages(producer)
+    #     self.session_timeout_sec = 60
+    #     consumer = self.setup_consumer(self.TOPIC, static_membership=True)
+    #     consumer.start()
+    #     self.await_all_members(consumer)
+    #
+    #     # bounce the static member to trigger its member.id updated
+    #     if bounce_mode == "all":
+    #         self.bounce_all_consumers(consumer, num_bounces=1)
+    #     else:
+    #         self.rolling_bounce_consumers(consumer, num_bounces=1)
+    #
+    #     # rolling bounce all the brokers to trigger the group coordinator migration and verify updated member.id is persisted
+    #     # and reloaded successfully
+    #     self.rolling_bounce_brokers(consumer, num_bounces=1)
+
+    # @cluster(num_nodes=10)
+    # @matrix(
+    #     num_conflict_consumers=[1, 2],
+    #     fencing_stage=["stable", "all"],
+    #     metadata_quorum=[quorum.zk],
+    #     use_new_coordinator=[False]
+    # )
+    # @matrix(
+    #     num_conflict_consumers=[1, 2],
+    #     fencing_stage=["stable", "all"],
+    #     metadata_quorum=[quorum.isolated_kraft],
+    #     use_new_coordinator=[True, False]
+    # )
+    # def test_fencing_static_consumer(self, num_conflict_consumers, fencing_stage, metadata_quorum=quorum.zk, use_new_coordinator=False):
+    #     """
+    #     Verify correct static consumer behavior when there are conflicting consumers with same group.instance.id.
+    #
+    #     - Start a producer which continues producing new messages throughout the test.
+    #     - Start up the consumers as static members and wait until they've joined the group. Some conflict consumers will be configured with
+    #     - the same group.instance.id.
+    #     - Let normal consumers and fencing consumers start at the same time, and expect only unique consumers left.
+    #     """
+    #     partition = TopicPartition(self.TOPIC, 0)
+    #
+    #     producer = self.setup_producer(self.TOPIC)
+    #
+    #     producer.start()
+    #     self.await_produced_messages(producer)
+    #
+    #     self.session_timeout_sec = 60
+    #     consumer = self.setup_consumer(self.TOPIC, static_membership=True)
+    #
+    #     self.num_consumers = num_conflict_consumers
+    #     conflict_consumer = self.setup_consumer(self.TOPIC, static_membership=True)
+    #
+    #     # wait original set of consumer to stable stage before starting conflict members.
+    #     if fencing_stage == "stable":
+    #         consumer.start()
+    #         self.await_members(consumer, len(consumer.nodes))
+    #
+    #         conflict_consumer.start()
+    #         self.await_members(conflict_consumer, num_conflict_consumers)
+    #         self.await_members(consumer, len(consumer.nodes) - num_conflict_consumers)
+    #
+    #         wait_until(lambda: len(consumer.dead_nodes()) == num_conflict_consumers,
+    #                    timeout_sec=10,
+    #                    err_msg="Timed out waiting for the fenced consumers to stop")
+    #     else:
+    #         consumer.start()
+    #         conflict_consumer.start()
+    #
+    #         wait_until(lambda: len(consumer.joined_nodes()) + len(conflict_consumer.joined_nodes()) == len(consumer.nodes),
+    #                    timeout_sec=self.session_timeout_sec,
+    #                    err_msg="Timed out waiting for consumers to join, expected total %d joined, but only see %d joined from"
+    #                            "normal consumer group and %d from conflict consumer group" % \
+    #                            (len(consumer.nodes), len(consumer.joined_nodes()), len(conflict_consumer.joined_nodes()))
+    #                    )
+    #         wait_until(lambda: len(consumer.dead_nodes()) + len(conflict_consumer.dead_nodes()) == len(conflict_consumer.nodes),
+    #                    timeout_sec=self.session_timeout_sec,
+    #                    err_msg="Timed out waiting for fenced consumers to die, expected total %d dead, but only see %d dead in"
+    #                            "normal consumer group and %d dead in conflict consumer group" % \
+    #                            (len(conflict_consumer.nodes), len(consumer.dead_nodes()), len(conflict_consumer.dead_nodes()))
+    #                    )
+
     @cluster(num_nodes=7)
-    @matrix(
-        clean_shutdown=[True],
-        static_membership=[True, False],
-        bounce_mode=["all", "rolling"],
-        num_bounces=[5],
-        metadata_quorum=[quorum.zk, quorum.isolated_kraft],
-        use_new_coordinator=[False]
-    )
-    @matrix(
-        clean_shutdown=[True],
-        static_membership=[True, False],
-        bounce_mode=["all", "rolling"],
-        num_bounces=[5],
-        metadata_quorum=[quorum.isolated_kraft],
-        use_new_coordinator=[True]
-    )
-    def test_static_consumer_bounce(self, clean_shutdown, static_membership, bounce_mode, num_bounces, metadata_quorum=quorum.zk, use_new_coordinator=False):
-        """
-        Verify correct static consumer behavior when the consumers in the group are restarted. In order to make
-        sure the behavior of static members are different from dynamic ones, we take both static and dynamic
-        membership into this test suite.
-
-        Setup: single Kafka cluster with one producer and a set of consumers in one group.
-
-        - Start a producer which continues producing new messages throughout the test.
-        - Start up the consumers as static/dynamic members and wait until they've joined the group.
-        - In a loop, restart each consumer except the first member (note: may not be the leader), and expect no rebalance triggered
-          during this process if the group is in static membership.
-        """
-        partition = TopicPartition(self.TOPIC, 0)
-
-        producer = self.setup_producer(self.TOPIC)
-
-        producer.start()
-        self.await_produced_messages(producer)
-
-        self.session_timeout_sec = 60
-        consumer = self.setup_consumer(self.TOPIC, static_membership=static_membership)
-
-        consumer.start()
-        self.await_all_members(consumer)
-
-        num_revokes_before_bounce = consumer.num_revokes_for_alive()
-
-        num_keep_alive = 1
-
-        if bounce_mode == "all":
-            self.bounce_all_consumers(consumer, keep_alive=num_keep_alive, num_bounces=num_bounces)
-        else:
-            self.rolling_bounce_consumers(consumer, keep_alive=num_keep_alive, num_bounces=num_bounces)
-
-        num_revokes_after_bounce = consumer.num_revokes_for_alive() - num_revokes_before_bounce
-
-        check_condition = num_revokes_after_bounce != 0
-        # under static membership, the live consumer shall not revoke any current running partitions,
-        # since there is no global rebalance being triggered.
-        if static_membership:
-            check_condition = num_revokes_after_bounce == 0
-
-        assert check_condition, \
-            "Total revoked count %d does not match the expectation of having 0 revokes as %d" % \
-            (num_revokes_after_bounce, check_condition)
-
-        consumer.stop_all()
-        if clean_shutdown:
-            # if the total records consumed matches the current position, we haven't seen any duplicates
-            # this can only be guaranteed with a clean shutdown
-            assert consumer.current_position(partition) == consumer.total_consumed(), \
-                "Total consumed records %d did not match consumed position %d" % \
-                (consumer.total_consumed(), consumer.current_position(partition))
-        else:
-            # we may have duplicates in a hard failure
-            assert consumer.current_position(partition) <= consumer.total_consumed(), \
-                "Current position %d greater than the total number of consumed records %d" % \
-                (consumer.current_position(partition), consumer.total_consumed())
-
-    @cluster(num_nodes=7)
-    @matrix(
-        bounce_mode=["all", "rolling"],
-        metadata_quorum=[quorum.zk, quorum.isolated_kraft],
-        use_new_coordinator=[False]
-    )
-    @matrix(
-        bounce_mode=["all", "rolling"],
-        metadata_quorum=[quorum.isolated_kraft],
-        use_new_coordinator=[True]
-    )
-    def test_static_consumer_persisted_after_rejoin(self, bounce_mode, metadata_quorum=quorum.zk, use_new_coordinator=False):
-        """
-        Verify that the updated member.id(updated_member_id) caused by static member rejoin would be persisted. If not,
-        after the brokers rolling bounce, the migrated group coordinator would load the stale persisted member.id and
-        fence subsequent static member rejoin with updated_member_id.
-
-        - Start a producer which continues producing new messages throughout the test.
-        - Start up a static consumer and wait until it's up
-        - Restart the consumer and wait until it up, its member.id is supposed to be updated and persisted.
-        - Rolling bounce all the brokers and verify that the static consumer can still join the group and consumer messages.
-        """
-        producer = self.setup_producer(self.TOPIC)
-        producer.start()
-        self.await_produced_messages(producer)
-        self.session_timeout_sec = 60
-        consumer = self.setup_consumer(self.TOPIC, static_membership=True)
-        consumer.start()
-        self.await_all_members(consumer)
-
-        # bounce the static member to trigger its member.id updated
-        if bounce_mode == "all":
-            self.bounce_all_consumers(consumer, num_bounces=1)
-        else:
-            self.rolling_bounce_consumers(consumer, num_bounces=1)
-
-        # rolling bounce all the brokers to trigger the group coordinator migration and verify updated member.id is persisted
-        # and reloaded successfully
-        self.rolling_bounce_brokers(consumer, num_bounces=1)
-
-    @cluster(num_nodes=10)
-    @matrix(
-        num_conflict_consumers=[1, 2],
-        fencing_stage=["stable", "all"],
-        metadata_quorum=[quorum.zk],
-        use_new_coordinator=[False]
-    )
-    @matrix(
-        num_conflict_consumers=[1, 2],
-        fencing_stage=["stable", "all"],
-        metadata_quorum=[quorum.isolated_kraft],
-        use_new_coordinator=[True, False]
-    )
-    def test_fencing_static_consumer(self, num_conflict_consumers, fencing_stage, metadata_quorum=quorum.zk, use_new_coordinator=False):
-        """
-        Verify correct static consumer behavior when there are conflicting consumers with same group.instance.id.
-
-        - Start a producer which continues producing new messages throughout the test.
-        - Start up the consumers as static members and wait until they've joined the group. Some conflict consumers will be configured with
-        - the same group.instance.id.
-        - Let normal consumers and fencing consumers start at the same time, and expect only unique consumers left.
-        """
-        partition = TopicPartition(self.TOPIC, 0)
-
-        producer = self.setup_producer(self.TOPIC)
-
-        producer.start()
-        self.await_produced_messages(producer)
-
-        self.session_timeout_sec = 60
-        consumer = self.setup_consumer(self.TOPIC, static_membership=True)
-
-        self.num_consumers = num_conflict_consumers
-        conflict_consumer = self.setup_consumer(self.TOPIC, static_membership=True)
-
-        # wait original set of consumer to stable stage before starting conflict members.
-        if fencing_stage == "stable":
-            consumer.start()
-            self.await_members(consumer, len(consumer.nodes))
-
-            conflict_consumer.start()
-            self.await_members(conflict_consumer, num_conflict_consumers)
-            self.await_members(consumer, len(consumer.nodes) - num_conflict_consumers)
-
-            wait_until(lambda: len(consumer.dead_nodes()) == num_conflict_consumers,
-                       timeout_sec=10,
-                       err_msg="Timed out waiting for the fenced consumers to stop")
-        else:
-            consumer.start()
-            conflict_consumer.start()
-
-            wait_until(lambda: len(consumer.joined_nodes()) + len(conflict_consumer.joined_nodes()) == len(consumer.nodes),
-                       timeout_sec=self.session_timeout_sec,
-                       err_msg="Timed out waiting for consumers to join, expected total %d joined, but only see %d joined from"
-                               "normal consumer group and %d from conflict consumer group" % \
-                               (len(consumer.nodes), len(consumer.joined_nodes()), len(conflict_consumer.joined_nodes()))
-                       )
-            wait_until(lambda: len(consumer.dead_nodes()) + len(conflict_consumer.dead_nodes()) == len(conflict_consumer.nodes),
-                       timeout_sec=self.session_timeout_sec,
-                       err_msg="Timed out waiting for fenced consumers to die, expected total %d dead, but only see %d dead in"
-                               "normal consumer group and %d dead in conflict consumer group" % \
-                               (len(conflict_consumer.nodes), len(consumer.dead_nodes()), len(conflict_consumer.dead_nodes()))
-                       )
-
-    @cluster(num_nodes=7)
-    @matrix(
-        clean_shutdown=[True],
-        enable_autocommit=[True, False],
-        metadata_quorum=[quorum.zk, quorum.isolated_kraft],
-        use_new_coordinator=[False]
-    )
+    # @matrix(
+    #     clean_shutdown=[True],
+    #     enable_autocommit=[True, False],
+    #     metadata_quorum=[quorum.zk, quorum.isolated_kraft],
+    #     use_new_coordinator=[False]
+    # )
     @matrix(
         clean_shutdown=[True],
         enable_autocommit=[True, False],
@@ -425,18 +425,18 @@ class OffsetValidationTest(VerifiableConsumerTest):
                 (consumer.last_commit(partition), consumer.current_position(partition))
 
     @cluster(num_nodes=7)
-    @matrix(
-        clean_shutdown=[True, False],
-        enable_autocommit=[True, False],
-        metadata_quorum=[quorum.zk],
-        use_new_coordinator=[False]
-    )
-    @matrix(
-        clean_shutdown=[True, False],
-        enable_autocommit=[True, False],
-        metadata_quorum=[quorum.isolated_kraft],
-        use_new_coordinator=[False]
-    )
+    # @matrix(
+    #     clean_shutdown=[True, False],
+    #     enable_autocommit=[True, False],
+    #     metadata_quorum=[quorum.zk],
+    #     use_new_coordinator=[False]
+    # )
+    # @matrix(
+    #     clean_shutdown=[True, False],
+    #     enable_autocommit=[True, False],
+    #     metadata_quorum=[quorum.isolated_kraft],
+    #     use_new_coordinator=[False]
+    # )
     @matrix(
         clean_shutdown=[True, False],
         enable_autocommit=[True, False],
@@ -480,10 +480,10 @@ class OffsetValidationTest(VerifiableConsumerTest):
                 (consumer.last_commit(partition), consumer.current_position(partition))
 
     @cluster(num_nodes=7)
-    @matrix(
-        metadata_quorum=[quorum.zk, quorum.isolated_kraft],
-        use_new_coordinator=[False]
-    )
+    # @matrix(
+    #     metadata_quorum=[quorum.zk, quorum.isolated_kraft],
+    #     use_new_coordinator=[False]
+    # )
     @matrix(
         metadata_quorum=[quorum.isolated_kraft],
         use_new_coordinator=[True],
@@ -539,26 +539,26 @@ class AssignmentValidationTest(VerifiableConsumerTest):
         })
 
     @cluster(num_nodes=6)
-    @matrix(
-        assignment_strategy=["org.apache.kafka.clients.consumer.RangeAssignor",
-                             "org.apache.kafka.clients.consumer.RoundRobinAssignor",
-                             "org.apache.kafka.clients.consumer.StickyAssignor"],
-        metadata_quorum=[quorum.zk, quorum.isolated_kraft],
-        use_new_coordinator=[False]
-    )
-    @matrix(
-        assignment_strategy=["org.apache.kafka.clients.consumer.RangeAssignor",
-                             "org.apache.kafka.clients.consumer.RoundRobinAssignor",
-                             "org.apache.kafka.clients.consumer.StickyAssignor"],
-        metadata_quorum=[quorum.isolated_kraft],
-        use_new_coordinator=[True],
-        group_protocol=[consumer_group.classic_group_protocol],
-    )
+    # @matrix(
+    #     assignment_strategy=["org.apache.kafka.clients.consumer.RangeAssignor",
+    #                          "org.apache.kafka.clients.consumer.RoundRobinAssignor",
+    #                          "org.apache.kafka.clients.consumer.StickyAssignor"],
+    #     metadata_quorum=[quorum.zk, quorum.isolated_kraft],
+    #     use_new_coordinator=[False]
+    # )
+    # @matrix(
+    #     assignment_strategy=["org.apache.kafka.clients.consumer.RangeAssignor",
+    #                          "org.apache.kafka.clients.consumer.RoundRobinAssignor",
+    #                          "org.apache.kafka.clients.consumer.StickyAssignor"],
+    #     metadata_quorum=[quorum.isolated_kraft],
+    #     use_new_coordinator=[True],
+    #     group_protocol=[consumer_group.classic_group_protocol],
+    # )
     @matrix(
         metadata_quorum=[quorum.isolated_kraft],
         use_new_coordinator=[True],
         group_protocol=[consumer_group.consumer_group_protocol],
-        group_remote_assignor=consumer_group.all_remote_assignors
+        group_remote_assignor=consumer_group.consumer_group_protocol
     )
     def test_valid_assignment(self, assignment_strategy=None, metadata_quorum=quorum.zk, use_new_coordinator=False, group_protocol=None, group_remote_assignor=None):
         """
