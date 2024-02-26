@@ -158,7 +158,7 @@ public class CurrentAssignmentBuilder {
                 for (ConsumerGroupHeartbeatRequestData.TopicPartitions topicPartitions : ownedTopicPartitions) {
                     for (Integer partitionId : topicPartitions.partitions()) {
                         boolean stillHasRevokedPartition = member
-                            .setPartitionsPendingRevocation()
+                            .partitionsPendingRevocation()
                             .getOrDefault(topicPartitions.topicId(), Collections.emptySet())
                             .contains(partitionId);
                         if (stillHasRevokedPartition) {
@@ -206,6 +206,9 @@ public class CurrentAssignmentBuilder {
     /**
      * Computes the next assignment.
      *
+     * @param memberEpoch               The epoch of the member to use. This may be different
+     *                                  from the epoch in {@link CurrentAssignmentBuilder#member}.
+     * @param memberAssignedPartitions  The assigned partitions of the member to use.
      * @return A new ConsumerGroupMember.
      */
     private ConsumerGroupMember computeNextAssignment(

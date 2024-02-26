@@ -93,7 +93,6 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -122,6 +121,7 @@ import static org.apache.kafka.coordinator.group.RecordHelpers.newGroupSubscript
 import static org.apache.kafka.coordinator.group.RecordHelpers.newMemberSubscriptionRecord;
 import static org.apache.kafka.coordinator.group.RecordHelpers.newMemberSubscriptionTombstoneRecord;
 import static org.apache.kafka.coordinator.group.RecordHelpers.newTargetAssignmentTombstoneRecord;
+import static org.apache.kafka.coordinator.group.Utils.assignmentToString;
 import static org.apache.kafka.coordinator.group.Utils.ofSentinel;
 import static org.apache.kafka.coordinator.group.classic.ClassicGroupMember.EMPTY_ASSIGNMENT;
 import static org.apache.kafka.coordinator.group.classic.ClassicGroupState.COMPLETING_REBALANCE;
@@ -129,6 +129,7 @@ import static org.apache.kafka.coordinator.group.classic.ClassicGroupState.DEAD;
 import static org.apache.kafka.coordinator.group.classic.ClassicGroupState.EMPTY;
 import static org.apache.kafka.coordinator.group.classic.ClassicGroupState.PREPARING_REBALANCE;
 import static org.apache.kafka.coordinator.group.classic.ClassicGroupState.STABLE;
+import static org.apache.kafka.coordinator.group.consumer.ConsumerGroupMember.hasAssignedPartitionsChanged;
 import static org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetrics.CLASSIC_GROUP_COMPLETED_REBALANCES_SENSOR_NAME;
 import static org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetrics.CONSUMER_GROUP_REBALANCES_SENSOR_NAME;
 
@@ -1168,8 +1169,8 @@ public class GroupMetadataManager {
             }
         }
 
-        // 3. Reconcile the member's assignment with the target assignment. This is only required if
-        // the member is not stable or if a new target assignment has been installed.
+        // 3. Reconcile the member's assignment with the target assignment if the member is not
+        // fully reconciled yet.
         updatedMember = maybeReconcile(
             groupId,
             updatedMember,
@@ -1240,7 +1241,7 @@ public class GroupMetadataManager {
             log.info("[GroupId {}] Member {} new assignment state: epoch={}, previousEpoch={}, state={}, "
                      + "assignedPartitions={} and revokedPartitions={}.",
                 groupId, updatedMember.memberId(), updatedMember.memberEpoch(), updatedMember.previousMemberEpoch(), updatedMember.state(),
-                formatAssignment(updatedMember.assignedPartitions()), formatAssignment(updatedMember.setPartitionsPendingRevocation()));
+                assignmentToString(updatedMember.assignedPartitions()), assignmentToString(updatedMember.partitionsPendingRevocation()));
 
             if (updatedMember.state() == MemberState.UNREVOKED_PARTITIONS) {
                 scheduleConsumerGroupRebalanceTimeout(
@@ -1255,34 +1256,6 @@ public class GroupMetadataManager {
         }
 
         return updatedMember;
-    }
-
-    private String formatAssignment(
-        Map<Uuid, Set<Integer>> assignment
-    ) {
-        StringBuilder builder = new StringBuilder("[");
-        Iterator<Map.Entry<Uuid, Set<Integer>>> topicsIterator = assignment.entrySet().iterator();
-        while (topicsIterator.hasNext()) {
-            Map.Entry<Uuid, Set<Integer>> entry = topicsIterator.next();
-            Iterator<Integer> partitionsIterator = entry.getValue().iterator();
-            while (partitionsIterator.hasNext()) {
-                builder.append(entry.getKey());
-                builder.append("-");
-                builder.append(partitionsIterator.next());
-                if (partitionsIterator.hasNext() || topicsIterator.hasNext()) {
-                    builder.append(", ");
-                }
-            }
-        }
-        builder.append("]");
-        return builder.toString();
-    }
-
-    private boolean hasAssignedPartitionsChanged(
-        ConsumerGroupMember member1,
-        ConsumerGroupMember member2
-    ) {
-        return !member1.assignedPartitions().equals(member2.assignedPartitions());
     }
 
     private void removeMemberAndCancelTimers(

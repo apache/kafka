@@ -41,6 +41,7 @@ import java.util.stream.Collectors;
  * by records stored in the __consumer_offsets topic.
  */
 public class ConsumerGroupMember {
+
     /**
      * A builder that facilitates the creation of a new member or the update of
      * an existing one.
@@ -473,7 +474,7 @@ public class ConsumerGroupMember {
     /**
      * @return The set of partitions awaiting revocation from the member.
      */
-    public Map<Uuid, Set<Integer>> setPartitionsPendingRevocation() {
+    public Map<Uuid, Set<Integer>> partitionsPendingRevocation() {
         return partitionsPendingRevocation;
     }
 
@@ -594,5 +595,15 @@ public class ConsumerGroupMember {
             ", assignedPartitions=" + assignedPartitions +
             ", partitionsPendingRevocation=" + partitionsPendingRevocation +
             ')';
+    }
+
+    /**
+     * @return True of the two provided members have different assigned partitions.
+     */
+    public static boolean hasAssignedPartitionsChanged(
+        ConsumerGroupMember member1,
+        ConsumerGroupMember member2
+    ) {
+        return !member1.assignedPartitions().equals(member2.assignedPartitions());
     }
 }

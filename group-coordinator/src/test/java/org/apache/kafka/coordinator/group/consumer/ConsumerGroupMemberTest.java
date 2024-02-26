@@ -97,7 +97,7 @@ public class ConsumerGroupMemberTest {
                         ByteBuffer.allocate(0)))),
             member.clientAssignors());
         assertEquals(mkAssignment(mkTopicAssignment(topicId1, 1, 2, 3)), member.assignedPartitions());
-        assertEquals(mkAssignment(mkTopicAssignment(topicId2, 4, 5, 6)), member.setPartitionsPendingRevocation());
+        assertEquals(mkAssignment(mkTopicAssignment(topicId2, 4, 5, 6)), member.partitionsPendingRevocation());
     }
 
     @Test
@@ -291,7 +291,7 @@ public class ConsumerGroupMemberTest {
         assertEquals(10, member.memberEpoch());
         assertEquals(9, member.previousMemberEpoch());
         assertEquals(mkAssignment(mkTopicAssignment(topicId1, 0, 1, 2)), member.assignedPartitions());
-        assertEquals(mkAssignment(mkTopicAssignment(topicId2, 3, 4, 5)), member.setPartitionsPendingRevocation());
+        assertEquals(mkAssignment(mkTopicAssignment(topicId2, 3, 4, 5)), member.partitionsPendingRevocation());
     }
 
     @Test
