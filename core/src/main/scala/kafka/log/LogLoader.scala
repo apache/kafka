@@ -283,7 +283,7 @@ class LogLoader(
             scheduler,
             logDirFailureChannel,
             logIdent)
-          deleteProducerSnapshotsAsync(result.deletedSegments)
+          deleteProducerSnapshotsAsync(result.getDeletedSegments.asScala)
       }
     }
     throw new IllegalStateException()
