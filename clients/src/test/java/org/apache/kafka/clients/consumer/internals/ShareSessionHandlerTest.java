@@ -37,6 +37,7 @@ import java.util.Map;
 
 import static org.apache.kafka.common.requests.ShareFetchMetadata.INITIAL_EPOCH;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
@@ -67,10 +68,10 @@ public class ShareSessionHandlerTest {
             if (!actualIter.hasNext()) {
                 fail("Element " + i + " not found.");
             }
-            Map.Entry<TopicPartition, TopicIdPartition> actuaLEntry = actualIter.next();
-            assertEquals(expectedEntry.getKey(), actuaLEntry.getKey(), "Element " + i +
+            Map.Entry<TopicPartition, TopicIdPartition> actualEntry = actualIter.next();
+            assertEquals(expectedEntry.getKey(), actualEntry.getKey(), "Element " + i +
                     " had a different TopicPartition than expected.");
-            assertEquals(expectedEntry.getValue(), actuaLEntry.getValue(), "Element " + i +
+            assertEquals(expectedEntry.getValue(), actualEntry.getValue(), "Element " + i +
                     " had different PartitionData than expected.");
             i++;
         }
@@ -163,8 +164,13 @@ public class ShareSessionHandlerTest {
                         new TopicIdPartition(fooId, 1, "foo"),
                         new TopicIdPartition(barId, 0, "bar")),
                 data2.sessionPartitions());
-        assertMapsEqual(reqMap(new TopicIdPartition(barId, 0, "bar")),
+        // Temporarily the broker is sessionless so we need to repeat all topic-partitions on every request
+        assertMapsEqual(reqMap(new TopicIdPartition(fooId, 0, "foo"),
+                        new TopicIdPartition(fooId, 1, "foo"),
+                        new TopicIdPartition(barId, 0, "bar")),
                 data2.toSend());
+//        assertMapsEqual(reqMap(new TopicIdPartition(barId, 0, "bar")),
+//                data2.toSend());
 
         ShareFetchResponse resp2 = new ShareFetchResponse(
                 new ShareFetchResponseData()
@@ -251,7 +257,7 @@ public class ShareSessionHandlerTest {
         assertEquals(1, data2.metadata().epoch());
         assertMapsEqual(reqMap(new TopicIdPartition(fooId, 1, "foo")),
                 data2.sessionPartitions());
-        assertTrue(data2.toSend().isEmpty());
+        assertFalse(data2.toSend().isEmpty());
         ArrayList<TopicIdPartition> expectedToForget2 = new ArrayList<>();
         expectedToForget2.add(new TopicIdPartition(fooId, 0, "foo"));
         expectedToForget2.add(new TopicIdPartition(barId, 0, "bar"));

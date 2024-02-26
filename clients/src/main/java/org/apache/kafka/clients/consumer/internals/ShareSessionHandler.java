@@ -212,10 +212,12 @@ public class ShareSessionHandler {
                         topicIdPartitionsToLogString(replaced),
                         topicIdPartitionsToLogString(sessionPartitions.values()));
             }
-            Map<TopicPartition, TopicIdPartition> toSend = Collections.unmodifiableMap(next);
+            // Temporarily the broker is sessionless so we need to repeat all topic-partitions on every request
+//            Map<TopicPartition, TopicIdPartition> toSend = Collections.unmodifiableMap(next);
             Map<TopicPartition, TopicIdPartition> curSessionPartitions = Collections.unmodifiableMap(sessionPartitions);
             next = null;
-            return new ShareFetchRequestData(toSend, removed, replaced, curSessionPartitions, nextMetadata);
+//            return new ShareFetchRequestData(toSend, removed, replaced, curSessionPartitions, nextMetadata);
+            return new ShareFetchRequestData(curSessionPartitions, removed, replaced, curSessionPartitions, nextMetadata);
         }
     }
 
