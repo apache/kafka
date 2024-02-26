@@ -996,7 +996,9 @@ project(':core') {
     testImplementation libs.junitJupiter
     testImplementation libs.slf4jlog4j
     testImplementation libs.caffeine
-    
+
+    testRuntimeOnly libs.nettyTcNative
+
     generator project(':generator')
   }
 
@@ -1451,6 +1453,7 @@ project(':clients') {
     testImplementation libs.log4j
     testImplementation libs.mockitoCore
     testImplementation libs.mockitoJunitJupiter // supports MockitoExtension
+    testImplementation libs.nettyHandler
 
     testRuntimeOnly libs.slf4jlog4j
     testRuntimeOnly libs.jacksonDatabind

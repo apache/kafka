@@ -77,18 +77,18 @@ public class DefaultSslEngineFactory implements SslEngineFactory {
     private static final Logger log = LoggerFactory.getLogger(DefaultSslEngineFactory.class);
     public static final String PEM_TYPE = "PEM";
 
-    private Map<String, ?> configs;
-    private String protocol;
-    private String provider;
-    private String kmfAlgorithm;
-    private String tmfAlgorithm;
-    private SecurityStore keystore;
-    private SecurityStore truststore;
-    private String[] cipherSuites;
-    private String[] enabledProtocols;
-    private SecureRandom secureRandomImplementation;
+    protected Map<String, ?> configs;
+    protected String protocol;
+    protected String provider;
+    protected String kmfAlgorithm;
+    protected String tmfAlgorithm;
+    protected SecurityStore keystore;
+    protected SecurityStore truststore;
+    protected String[] cipherSuites;
+    protected String[] enabledProtocols;
+    protected SecureRandom secureRandomImplementation;
     private SSLContext sslContext;
-    private SslClientAuth sslClientAuth;
+    protected SslClientAuth sslClientAuth;
 
 
     @Override
@@ -186,7 +186,7 @@ public class DefaultSslEngineFactory implements SslEngineFactory {
         return this.sslContext;
     }
 
-    private SSLEngine createSslEngine(Mode mode, String peerHost, int peerPort, String endpointIdentification) {
+    protected SSLEngine createSslEngine(Mode mode, String peerHost, int peerPort, String endpointIdentification) {
         SSLEngine sslEngine = sslContext.createSSLEngine(peerHost, peerPort);
         if (cipherSuites != null) sslEngine.setEnabledCipherSuites(cipherSuites);
         if (enabledProtocols != null) sslEngine.setEnabledProtocols(enabledProtocols);
@@ -213,7 +213,7 @@ public class DefaultSslEngineFactory implements SslEngineFactory {
         }
         return sslEngine;
     }
-    private static SslClientAuth createSslClientAuth(String key) {
+    protected static SslClientAuth createSslClientAuth(String key) {
         SslClientAuth auth = SslClientAuth.forConfig(key);
         if (auth != null) {
             return auth;
@@ -225,7 +225,7 @@ public class DefaultSslEngineFactory implements SslEngineFactory {
         return SslClientAuth.NONE;
     }
 
-    private static SecureRandom createSecureRandom(String key) {
+    protected static SecureRandom createSecureRandom(String key) {
         if (key == null) {
             return null;
         }
@@ -306,7 +306,7 @@ public class DefaultSslEngineFactory implements SslEngineFactory {
             return null; // path == null, clients may use this path with brokers that don't require client auth
     }
 
-    private static SecurityStore createTruststore(String type, String path, Password password, Password trustStoreCerts) {
+    protected static SecurityStore createTruststore(String type, String path, Password password, Password trustStoreCerts) {
         if (trustStoreCerts != null) {
             if (!PEM_TYPE.equals(type))
                 throw new InvalidConfigurationException("SSL trust store certs can be specified only for PEM, but trust store type is " + type + ".");
@@ -329,7 +329,7 @@ public class DefaultSslEngineFactory implements SslEngineFactory {
             return null;
     }
 
-    interface SecurityStore {
+    protected interface SecurityStore {
         KeyStore get();
         char[] keyPassword();
         boolean modified();
