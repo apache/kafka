@@ -54,7 +54,6 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Properties;
-import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.safeUniqueTestName;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -63,145 +62,144 @@ import static org.hamcrest.Matchers.containsString;
 @Timeout(600)
 @Tag("integration")
 public class GlobalStateReprocessTest {
-  private static final int NUM_BROKERS = 1;
-  private static final Properties BROKER_CONFIG;
+    private static final int NUM_BROKERS = 1;
+    private static final Properties BROKER_CONFIG;
 
-  static {
-    BROKER_CONFIG = new Properties();
-    BROKER_CONFIG.put("transaction.state.log.replication.factor", (short) 1);
-    BROKER_CONFIG.put("transaction.state.log.min.isr", 1);
-  }
+    static {
+        BROKER_CONFIG = new Properties();
+        BROKER_CONFIG.put("transaction.state.log.replication.factor", (short) 1);
+        BROKER_CONFIG.put("transaction.state.log.min.isr", 1);
+    }
 
-  public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(NUM_BROKERS, BROKER_CONFIG);
+    public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(NUM_BROKERS, BROKER_CONFIG);
 
-  @BeforeAll
-  public static void startCluster() throws IOException {
-    CLUSTER.start();
-  }
+    @BeforeAll
+    public static void startCluster() throws IOException {
+        CLUSTER.start();
+    }
 
-  @AfterAll
-  public static void closeCluster() {
-    CLUSTER.stop();
-  }
-
-
-  private final MockTime mockTime = CLUSTER.time;
-  private final String globalStore = "globalStore";
-  private StreamsBuilder builder;
-  private Properties streamsConfiguration;
-  private KafkaStreams kafkaStreams;
-  private String globalStoreTopic;
+    @AfterAll
+    public static void closeCluster() {
+        CLUSTER.stop();
+    }
 
 
-  @BeforeEach
-  public void before(final TestInfo testInfo) throws Exception {
-    builder = new StreamsBuilder();
+    private final MockTime mockTime = CLUSTER.time;
+    private final String globalStore = "globalStore";
+    private StreamsBuilder builder;
+    private Properties streamsConfiguration;
+    private KafkaStreams kafkaStreams;
+    private String globalStoreTopic;
 
-    createTopics();
-    streamsConfiguration = new Properties();
-    final String safeTestName = safeUniqueTestName(testInfo);
-    streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, "app-" + safeTestName);
-    streamsConfiguration.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
-    streamsConfiguration.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
-    streamsConfiguration.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath());
-    streamsConfiguration.put(StreamsConfig.STATESTORE_CACHE_MAX_BYTES_CONFIG, 0);
-    streamsConfiguration.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100L);
 
-    final KeyValueStoreBuilder<String, Long> storeBuilder = new KeyValueStoreBuilder<>(
-        Stores.persistentKeyValueStore(globalStore),
-        Serdes.String(),
-        Serdes.Long(),
-        mockTime);
+    @BeforeEach
+    public void before(final TestInfo testInfo) throws Exception {
+        builder = new StreamsBuilder();
 
-    final ProcessorSupplier<String, Long, Void, Void> processorSupplier;
-    processorSupplier = () -> new ContextualProcessor<String, Long, Void, Void>() {
-      @Override
-      public void process(final Record<String, Long> record) {
-        final KeyValueStore<String, Long> stateStore =
-            context().getStateStore(storeBuilder.name());
-        stateStore.put(
-            record.key() + "- this is the right value.",
-            record.value()
+        createTopics();
+        streamsConfiguration = new Properties();
+        final String safeTestName = safeUniqueTestName(testInfo);
+        streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, "app-" + safeTestName);
+        streamsConfiguration.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
+        streamsConfiguration.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
+        streamsConfiguration.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath());
+        streamsConfiguration.put(StreamsConfig.STATESTORE_CACHE_MAX_BYTES_CONFIG, 0);
+        streamsConfiguration.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100L);
+
+        final KeyValueStoreBuilder<String, Long> storeBuilder = new KeyValueStoreBuilder<>(
+            Stores.persistentKeyValueStore(globalStore),
+            Serdes.String(),
+            Serdes.Long(),
+            mockTime);
+
+        final ProcessorSupplier<String, Long, Void, Void> processorSupplier;
+        processorSupplier = () -> new ContextualProcessor<String, Long, Void, Void>() {
+            @Override
+            public void process(final Record<String, Long> record) {
+                final KeyValueStore<String, Long> stateStore =
+                    context().getStateStore(storeBuilder.name());
+                stateStore.put(
+                    record.key() + "- this is the right value.",
+                    record.value()
+                );
+            }
+        };
+
+        builder.addGlobalStore(
+            storeBuilder,
+            globalStoreTopic,
+            Consumed.with(Serdes.String(), Serdes.Long()),
+            processorSupplier
         );
-      }
-    };
-
-    builder.addGlobalStore(
-        storeBuilder,
-        globalStoreTopic,
-        Consumed.with(Serdes.String(), Serdes.Long()),
-        processorSupplier
-    );
-  }
-
-  @AfterEach
-  public void after() throws Exception {
-    if (kafkaStreams != null) {
-      kafkaStreams.close();
     }
-    IntegrationTestUtils.purgeLocalStreamsState(streamsConfiguration);
-  }
 
-  @Test
-  public void shouldReprocessWithUserProvidedStore() throws Exception {
-    kafkaStreams = new KafkaStreams(builder.build(), streamsConfiguration);
-    populateTopics(globalStoreTopic);
-
-    kafkaStreams.start();
-
-    TestUtils.waitForCondition(
-        () -> !storeContents(kafkaStreams).isEmpty(),
-        30000,
-        "Has not processed record within 30 seconds");
-
-    assertThat(storeContents(kafkaStreams).get(0), containsString("- this is the right value."));
-
-
-    kafkaStreams.close();
-    kafkaStreams.cleanUp();
-
-    kafkaStreams = new KafkaStreams(builder.build(), streamsConfiguration);
-    kafkaStreams.start();
-
-    TestUtils.waitForCondition(
-        () -> !storeContents(kafkaStreams).isEmpty(),
-        30000,
-        "Has not processed record within 30 seconds");
-
-    assertThat(storeContents(kafkaStreams).get(0), containsString("- this is the right value."));
-  }
-
-  private void createTopics() throws Exception {
-    globalStoreTopic = "global-store-topic";
-    CLUSTER.createTopic(globalStoreTopic);
-  }
-
-  private void populateTopics(final String topicName) throws Exception {
-    IntegrationTestUtils.produceKeyValuesSynchronously(
-        topicName,
-        Arrays.asList(
-            new KeyValue<>("A", 1L),
-            new KeyValue<>("B", 2L),
-            new KeyValue<>("C", 3L),
-            new KeyValue<>("D", 4L)),
-        TestUtils.producerConfig(
-            CLUSTER.bootstrapServers(),
-            StringSerializer.class,
-            LongSerializer.class,
-            new Properties()),
-        mockTime);
-  }
-
-  private List<String> storeContents(final KafkaStreams streams) {
-    ArrayList<String> keySet = new ArrayList<>();
-    ReadOnlyKeyValueStore<String, Long> keyValueStore =
-        streams.store(StoreQueryParameters.fromNameAndType(globalStore, QueryableStoreTypes.keyValueStore()));
-    KeyValueIterator<String, Long> range = keyValueStore.reverseAll();
-    while (range.hasNext()) {
-      KeyValue<String, Long> next = range.next();
-      keySet.add(next.key);
+    @AfterEach
+    public void after() throws Exception {
+        if (kafkaStreams != null) {
+            kafkaStreams.close();
+        }
+        IntegrationTestUtils.purgeLocalStreamsState(streamsConfiguration);
     }
-    range.close();
-    return keySet;
-  }
+
+    @Test
+    public void shouldReprocessWithUserProvidedStore() throws Exception {
+        kafkaStreams = new KafkaStreams(builder.build(), streamsConfiguration);
+        populateTopics(globalStoreTopic);
+
+        kafkaStreams.start();
+
+        TestUtils.waitForCondition(
+            () -> !storeContents(kafkaStreams).isEmpty(),
+            30000,
+            "Has not processed record within 30 seconds");
+
+        assertThat(storeContents(kafkaStreams).get(0), containsString("- this is the right value."));
+
+
+        kafkaStreams.close();
+        kafkaStreams.cleanUp();
+
+        kafkaStreams = new KafkaStreams(builder.build(), streamsConfiguration);
+        kafkaStreams.start();
+
+        TestUtils.waitForCondition(
+            () -> !storeContents(kafkaStreams).isEmpty(),
+            30000,
+            "Has not processed record within 30 seconds");
+
+        assertThat(storeContents(kafkaStreams).get(0), containsString("- this is the right value."));
+    }
+
+    private void createTopics() throws Exception {
+        globalStoreTopic = "global-store-topic";
+        CLUSTER.createTopic(globalStoreTopic);
+    }
+
+    private void populateTopics(final String topicName) throws Exception {
+        IntegrationTestUtils.produceKeyValuesSynchronously(
+            topicName,
+            Arrays.asList(
+                new KeyValue<>("A", 1L),
+                new KeyValue<>("B", 2L),
+                new KeyValue<>("C", 3L),
+                new KeyValue<>("D", 4L)),
+            TestUtils.producerConfig(
+                CLUSTER.bootstrapServers(),
+                StringSerializer.class,
+                LongSerializer.class,
+                new Properties()),
+            mockTime);
+    }
+
+    private List<String> storeContents(final KafkaStreams streams) {
+        final ArrayList<String> keySet = new ArrayList<>();
+        final ReadOnlyKeyValueStore<String, Long> keyValueStore =
+            streams.store(StoreQueryParameters.fromNameAndType(globalStore, QueryableStoreTypes.keyValueStore()));
+        final KeyValueIterator<String, Long> range = keyValueStore.reverseAll();
+        while (range.hasNext()) {
+            keySet.add(range.next().key);
+        }
+        range.close();
+        return keySet;
+    }
 }
