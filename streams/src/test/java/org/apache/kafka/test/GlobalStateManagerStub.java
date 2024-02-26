@@ -25,7 +25,6 @@ import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.Task.TaskType;
 
 import java.io.File;
-import java.util.Collections;
 import java.util.Map;
 import java.util.Set;
 
