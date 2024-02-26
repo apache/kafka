@@ -206,9 +206,13 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
                 globalConsumer.assign(topicPartitions);
                 globalConsumer.seekToBeginning(topicPartitions);
                 for (final TopicPartition topicPartition : topicPartitions) {
-                    stateRestoreListener.onRestoreStart(topicPartition, store.name(), 0L, 0L);
+                    stateRestoreListener.onRestoreStart(topicPartition, store.name(),
+                        checkpointFileCache.getOrDefault(topicPartition, 0L),
+                        checkpointFileCache.getOrDefault(topicPartition, 0L));
                     stateRestoreListener.onRestoreEnd(topicPartition, store.name(), 0L);
-                    checkpointFileCache.put(topicPartition, 0L);
+                    if (!checkpointFileCache.containsKey(topicPartition)) {
+                        checkpointFileCache.put(topicPartition, 0L);
+                    }
                 }
             } else {
                 restoreState(
