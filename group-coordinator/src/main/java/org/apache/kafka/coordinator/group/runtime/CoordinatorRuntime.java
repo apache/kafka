@@ -1192,11 +1192,17 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
         ) {
             log.debug("High watermark of {} incremented to {}.", tp, offset);
             scheduleInternalOperation("HighWatermarkUpdated(tp=" + tp + ", offset=" + offset + ")", tp, () -> {
-                withActiveContextOrThrow(tp, context -> {
-                    context.coordinator.updateLastCommittedOffset(offset);
-                    context.deferredEventQueue.completeUpTo(offset);
-                    coordinatorMetrics.onUpdateLastCommittedOffset(tp, offset);
-                });
+                CoordinatorContext context = coordinators.get(tp);
+                if (context != null && context.state == CoordinatorState.ACTIVE) {
+                    try {
+                        context.lock.lock();
+                        context.coordinator.updateLastCommittedOffset(offset);
+                        context.deferredEventQueue.completeUpTo(offset);
+                        coordinatorMetrics.onUpdateLastCommittedOffset(tp, offset);
+                    } finally {
+                        context.lock.unlock();
+                    }
+                }
             });
         }
     }
@@ -1698,16 +1704,14 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
                         log.info("Finished unloading metadata for {} with epoch {}.", tp, partitionEpoch);
                     } else {
                         log.info("Ignored unloading metadata for {} in epoch {} since current epoch is {}.",
-                            tp, partitionEpoch, context.epoch
-                        );
+                            tp, partitionEpoch, context.epoch);
                     }
                 } finally {
                     context.lock.unlock();
                 }
             } else {
                 log.info("Ignored unloading metadata for {} in epoch {} since metadata was never loaded.",
-                    tp, partitionEpoch
-                );
+                    tp, partitionEpoch);
             }
         });
     }
@@ -1731,15 +1735,19 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
         // Push an event for each coordinator.
         coordinators.keySet().forEach(tp -> {
             scheduleInternalOperation("UpdateImage(tp=" + tp + ", offset=" + newImage.offset() + ")", tp, () -> {
-                withContextOrThrow(tp, context -> {
-                    if (context.state == CoordinatorState.ACTIVE) {
+                CoordinatorContext context = coordinators.get(tp);
+                if (context != null && context.state == CoordinatorState.ACTIVE) {
+                    try {
+                        context.lock.lock();
                         log.debug("Applying new metadata image with offset {} to {}.", newImage.offset(), tp);
                         context.coordinator.onNewMetadataImage(newImage, delta);
-                    } else {
-                        log.debug("Ignoring new metadata image with offset {} for {} because the coordinator is not active.",
-                            newImage.offset(), tp);
+                    } finally {
+                        context.lock.unlock();
                     }
-                });
+                } else {
+                    log.debug("Ignoring new metadata image with offset {} for {} because the coordinator is not active.",
+                        newImage.offset(), tp);
+                }
             });
         });
     }
