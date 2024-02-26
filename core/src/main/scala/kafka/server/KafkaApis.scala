@@ -1100,7 +1100,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     }
     val authorizedTopics = authHelper.filterByAuthorized(request.context, READ, TOPIC, partitionDatas)(_._1.topicPartition.topic)
 
-    partitionDatas.foreach { case (topicIdPartition, data) =>
+    partitionDatas.foreach { case (topicIdPartition, _) =>
       if (!authorizedTopics.contains(topicIdPartition.topic))
         erroneous += topicIdPartition -> ShareFetchResponse.partitionResponse(topicIdPartition, Errors.TOPIC_AUTHORIZATION_FAILED)
       else if (!metadataCache.contains(topicIdPartition.topicPartition))
@@ -1254,14 +1254,16 @@ class KafkaApis(val requestChannel: RequestChannel,
         FetchIsolation.TXN_COMMITTED,
         clientMetadata
       )
+
       // call the share partition manager to fetch messages from the local replica
-      val future: CompletableFuture[java.util.Map[TopicIdPartition, ShareFetchResponseData.PartitionData]] = sharePartitionManager.fetchMessages(
+      sharePartitionManager.fetchMessages(
         params,
         interesting.asJava,
         groupId
-      )
-      future.whenComplete((responsePartitionData : java.util.Map[TopicIdPartition, ShareFetchResponseData.PartitionData], throwable : Throwable) => {
+      ).handle((responsePartitionData, throwable) => {
         if (throwable != null) {
+          debug(s"Share fetch request with correlation from client $clientId  " +
+            s"failed with error ${throwable.getMessage}")
           val errResponse: AbstractResponse = shareFetchRequest.getErrorResponse(AbstractResponse.DEFAULT_THROTTLE_TIME, throwable)
           requestChannel.sendResponse(request, errResponse, None)
         } else {

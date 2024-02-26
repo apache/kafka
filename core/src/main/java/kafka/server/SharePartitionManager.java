@@ -30,6 +30,7 @@ import org.apache.kafka.common.requests.ShareFetchResponse;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.storage.internals.log.FetchParams;
 import org.apache.kafka.storage.internals.log.FetchPartitionData;
+import org.slf4j.Logger;
 
 import java.util.Collections;
 import java.util.HashMap;
@@ -50,6 +51,8 @@ import org.slf4j.LoggerFactory;
 
 public class SharePartitionManager {
 
+    private final static Logger log = LoggerFactory.getLogger(SharePartitionManager.class);
+
     // TODO: May be use ImplicitLinkedHashCollection.
     private final Map<SharePartitionKey, SharePartition> partitionCacheMap;
     private final ReplicaManager replicaManager;
@@ -67,6 +70,8 @@ public class SharePartitionManager {
     //  partition data along TopicIdPartition.
     public CompletableFuture<Map<TopicIdPartition, PartitionData>> fetchMessages(FetchParams fetchParams,
         List<TopicIdPartition> topicIdPartitions, String groupId) {
+        log.debug("Fetch request for topicIdPartitions: {} with groupId: {} fetch params: {}",
+            topicIdPartitions, groupId, fetchParams);
         CompletableFuture<Map<TopicIdPartition, PartitionData>> future = new CompletableFuture<>();
 
         synchronized (this) {
@@ -286,8 +291,8 @@ public class SharePartitionManager {
         private final TopicIdPartition topicIdPartition;
 
         public SharePartitionKey(String groupId, TopicIdPartition topicIdPartition) {
-            this.groupId = groupId;
-            this.topicIdPartition = topicIdPartition;
+            this.groupId = Objects.requireNonNull(groupId);
+            this.topicIdPartition = Objects.requireNonNull(topicIdPartition);
         }
 
         @Override
