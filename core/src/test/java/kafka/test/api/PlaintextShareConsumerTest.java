@@ -163,10 +163,9 @@ public class PlaintextShareConsumerTest extends AbstractConsumerTest {
         KafkaShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(new ByteArrayDeserializer(), new ByteArrayDeserializer(),
                 new Properties(), CollectionConverters.asScala(Collections.<String>emptyList()).toList());
         shareConsumer.subscribe(Collections.singleton(tp().topic()));
-        ConsumerRecords<byte[], byte[]> records = shareConsumer.poll(Duration.ofMillis(2000));
+        ConsumerRecords<byte[], byte[]> records = shareConsumer.poll(Duration.ofMillis(5000));
         shareConsumer.close();
-        //TODO: the expected value should be changed to 1 and more verification should be added once the fetch functionality is in place
-        assertEquals(0, records.count());
+        assertEquals(1, records.count());
     }
 
     @Disabled("TODO: The consumer needs to be converted to share consumers once the functionality for this test is available")

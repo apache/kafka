@@ -72,7 +72,15 @@ public class ShareFetchRequest extends AbstractRequest {
                 fetchTopic.partitions().add(fetchPartition);
             }
 
-            return new Builder(data);
+            return new Builder(data, true);
+        }
+
+        public Builder forShareSession(String groupId, ShareFetchMetadata metadata) {
+            data.setGroupId(groupId);
+            if (metadata != null) {
+                data.setShareSessionEpoch(metadata.epoch());
+            }
+            return this;
         }
 
         @Override
@@ -83,15 +91,6 @@ public class ShareFetchRequest extends AbstractRequest {
         @Override
         public String toString() {
             return data.toString();
-        }
-
-        public Builder forShareSession(String groupId, ShareFetchMetadata metadata) {
-            if (metadata != null) {
-                data.setShareSessionEpoch(metadata.epoch());
-            } else {
-                data.setGroupId(groupId);
-            }
-            return this;
         }
 
         public Builder setMaxBytes(int maxBytes) {
