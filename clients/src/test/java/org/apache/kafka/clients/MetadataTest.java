@@ -1360,6 +1360,10 @@ public class MetadataTest {
                 .partitionCountForTopic(topic2);
             assertTrue(oldPartitionCount < newPartitionCountTopic2, "Unexpected value " + newPartitionCountTopic2);
         }
+
+        service.shutdown();
+        // Executor service should down much quickly, as all tasks are finished at this point.
+        assertTrue(service.awaitTermination(60, TimeUnit.SECONDS));
     }
 
     /**
