@@ -18,13 +18,13 @@
 package kafka.api
 
 import java.util.Properties
+
 import kafka.utils.TestUtils
 import org.apache.kafka.common.config.SslConfigs
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs
 import org.apache.kafka.common.network.Mode
 import org.apache.kafka.common.security.auth._
 import org.apache.kafka.common.security.authenticator.DefaultKafkaPrincipalBuilder
-import org.apache.kafka.common.security.ssl.NettySslEngineFactory
 import org.apache.kafka.common.utils.Java
 import org.junit.jupiter.api.{BeforeEach, TestInfo}
 
@@ -91,8 +91,4 @@ class SslEndToEndAuthorizationTest extends EndToEndAuthorizationTest {
     props.remove(SslConfigs.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG)
     props
   }
-}
-class NettySslEndToEndAuthorizationTest extends SslEndToEndAuthorizationTest {
-  this.serverConfig.setProperty(SslConfigs.SSL_ENGINE_FACTORY_CLASS_CONFIG, classOf[NettySslEngineFactory].getName)
-  this.serverConfig.setProperty(SslConfigs.SSL_PROVIDER_CONFIG, "OPENSSL")
 }
