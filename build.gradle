@@ -941,6 +941,7 @@ project(':core') {
 
     implementation libs.argparse4j
     implementation libs.commonsValidator
+    implementation libs.ipresource
     implementation libs.jacksonDatabind
     implementation libs.jacksonModuleScala
     implementation libs.jacksonDataformatCsv
@@ -1252,7 +1253,7 @@ project(':metadata') {
     implementation project(':server-common')
     implementation project(':clients')
     implementation project(':raft')
-    implementation libs.jacksonDatabind
+    implementation libs.ipresource
     implementation libs.jacksonJDK8Datatypes
     implementation libs.metrics
     compileOnly libs.log4j

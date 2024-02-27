@@ -17,6 +17,8 @@
 
 package org.apache.kafka.metadata.authorizer;
 
+import net.ripe.ipresource.IpAddress;
+import net.ripe.ipresource.IpRange;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.acl.AclBinding;
 import org.apache.kafka.common.acl.AclBindingFilter;
@@ -493,7 +495,10 @@ public class StandardAuthorizerData {
             return null;
         }
         // Check if the host matches. If it doesn't, return no result (null).
-        if (!acl.host().equals(WILDCARD) && !acl.host().equals(host)) {
+//        if (!acl.host().equals(WILDCARD) && !acl.host().equals(host)) {
+//            return null;
+//        }
+        if (!aclHostMatch(acl, host)) {
             return null;
         }
         // Check if the operation field matches. Here we hit a slight complication.
@@ -525,6 +530,28 @@ public class StandardAuthorizerData {
 
         return acl.permissionType().equals(ALLOW) ? ALLOWED : DENIED;
     }
+
+    /**
+     * Determine if host src is allowed based on host ACL.
+     *
+     * @param host               The input host.
+     * @param acl                The input ACL.
+     * @return                   null if the ACL does not match. The authorization result
+     *                           otherwise.
+     */
+    private static Boolean aclHostMatch(StandardAcl acl, String host) {
+        if (acl.host().equals(host) || acl.host().equals(WILDCARD)) {
+            return true;
+        }
+
+        try {
+            IpRange range = IpRange.parse(acl.host());
+            return range.contains(IpAddress.parse(host));
+        } catch  (Exception e) {
+            return false;
+        }
+    }
+
 
     /**
      * Creates a consistent Iterable on read-only copy of AclBindings data for the given filter.

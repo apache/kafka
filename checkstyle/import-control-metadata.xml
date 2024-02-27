@@ -165,6 +165,7 @@
         <allow pkg="org.apache.kafka.server.util"/>
         <allow pkg="org.apache.kafka.test" />
         <subpackage name="authorizer">
+            <allow pkg="net.ripe.ipresource" />
             <allow pkg="org.apache.kafka.common.acl" />
             <allow pkg="org.apache.kafka.common.requests" />
             <allow pkg="org.apache.kafka.common.resource" />
