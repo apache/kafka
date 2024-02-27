@@ -18,8 +18,8 @@ package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEventHandler;
-import org.apache.kafka.clients.consumer.internals.events.RebalanceListenerCallbackCompletedEvent;
-import org.apache.kafka.clients.consumer.internals.events.RebalanceListenerCallbackNeededEvent;
+import org.apache.kafka.clients.consumer.internals.events.ConsumerRebalanceListenerCallbackCompletedEvent;
+import org.apache.kafka.clients.consumer.internals.events.ConsumerRebalanceListenerCallbackNeededEvent;
 import org.apache.kafka.clients.consumer.internals.metrics.RebalanceCallbackMetricsManager;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicIdPartition;
@@ -342,7 +342,7 @@ public class MembershipManagerImplTest {
     public void testFencingWhenStateIsPrepareLeaving() {
         MembershipManagerImpl membershipManager = createMemberInStableState();
         ConsumerRebalanceListenerInvoker invoker = consumerRebalanceListenerInvoker();
-        RebalanceListenerCallbackCompletedEvent callbackEvent =
+        ConsumerRebalanceListenerCallbackCompletedEvent callbackEvent =
             mockPrepareLeavingStuckOnUserCallback(membershipManager, invoker);
         assertEquals(MemberState.PREPARE_LEAVING, membershipManager.state());
 
@@ -365,7 +365,7 @@ public class MembershipManagerImplTest {
     public void testNewAssignmentIgnoredWhenStateIsPrepareLeaving() {
         MembershipManagerImpl membershipManager = createMemberInStableState();
         ConsumerRebalanceListenerInvoker invoker = consumerRebalanceListenerInvoker();
-        RebalanceListenerCallbackCompletedEvent callbackEvent =
+        ConsumerRebalanceListenerCallbackCompletedEvent callbackEvent =
             mockPrepareLeavingStuckOnUserCallback(membershipManager, invoker);
         assertEquals(MemberState.PREPARE_LEAVING, membershipManager.state());
 
@@ -826,7 +826,7 @@ public class MembershipManagerImplTest {
     public void testLeaveGroupWhenMemberFenced() {
         MembershipManagerImpl membershipManager = createMemberInStableState();
         ConsumerRebalanceListenerInvoker invoker = consumerRebalanceListenerInvoker();
-        RebalanceListenerCallbackCompletedEvent callbackEvent = mockFencedMemberStuckOnUserCallback(membershipManager, invoker);
+        ConsumerRebalanceListenerCallbackCompletedEvent callbackEvent = mockFencedMemberStuckOnUserCallback(membershipManager, invoker);
         assertEquals(MemberState.FENCED, membershipManager.state());
 
         mockLeaveGroup();
@@ -871,7 +871,7 @@ public class MembershipManagerImplTest {
     public void testFatalFailureWhenStateIsPrepareLeaving() {
         MembershipManagerImpl membershipManager = createMemberInStableState();
         ConsumerRebalanceListenerInvoker invoker = consumerRebalanceListenerInvoker();
-        RebalanceListenerCallbackCompletedEvent callbackEvent =
+        ConsumerRebalanceListenerCallbackCompletedEvent callbackEvent =
             mockPrepareLeavingStuckOnUserCallback(membershipManager, invoker);
         assertEquals(MemberState.PREPARE_LEAVING, membershipManager.state());
 
@@ -1739,10 +1739,10 @@ public class MembershipManagerImplTest {
         membershipManager.onHeartbeatRequestSent();
 
         assertEquals(MemberState.STALE, membershipManager.state());
-        verify(backgroundEventHandler).add(any(RebalanceListenerCallbackNeededEvent.class));
+        verify(backgroundEventHandler).add(any(ConsumerRebalanceListenerCallbackNeededEvent.class));
 
         // Stale member triggers onPartitionLost callback that will not complete just yet
-        RebalanceListenerCallbackCompletedEvent callbackEvent = performCallback(
+        ConsumerRebalanceListenerCallbackCompletedEvent callbackEvent = performCallback(
             membershipManager,
             invoker,
             ConsumerRebalanceListenerMethodName.ON_PARTITIONS_LOST,
@@ -1880,21 +1880,21 @@ public class MembershipManagerImplTest {
         return Collections.singletonMap(topicId, topicIdPartitions);
     }
 
-    private RebalanceListenerCallbackCompletedEvent performCallback(MembershipManagerImpl membershipManager,
-                                                                    ConsumerRebalanceListenerInvoker invoker,
-                                                                    ConsumerRebalanceListenerMethodName expectedMethodName,
-                                                                    SortedSet<TopicPartition> expectedPartitions,
-                                                                    boolean complete) {
+    private ConsumerRebalanceListenerCallbackCompletedEvent performCallback(MembershipManagerImpl membershipManager,
+                                                                            ConsumerRebalanceListenerInvoker invoker,
+                                                                            ConsumerRebalanceListenerMethodName expectedMethodName,
+                                                                            SortedSet<TopicPartition> expectedPartitions,
+                                                                            boolean complete) {
         // We expect only our enqueued event in the background queue.
         assertEquals(1, backgroundEventQueue.size());
         assertNotNull(backgroundEventQueue.peek());
-        assertInstanceOf(RebalanceListenerCallbackNeededEvent.class, backgroundEventQueue.peek());
-        RebalanceListenerCallbackNeededEvent neededEvent = (RebalanceListenerCallbackNeededEvent) backgroundEventQueue.poll();
+        assertInstanceOf(ConsumerRebalanceListenerCallbackNeededEvent.class, backgroundEventQueue.peek());
+        ConsumerRebalanceListenerCallbackNeededEvent neededEvent = (ConsumerRebalanceListenerCallbackNeededEvent) backgroundEventQueue.poll();
         assertNotNull(neededEvent);
         assertEquals(expectedMethodName, neededEvent.methodName());
         assertEquals(expectedPartitions, neededEvent.partitions());
 
-        RebalanceListenerCallbackCompletedEvent invokedEvent = invokeRebalanceCallbacks(
+        ConsumerRebalanceListenerCallbackCompletedEvent invokedEvent = invokeRebalanceCallbacks(
                 invoker,
                 neededEvent.methodName(),
                 neededEvent.partitions(),
@@ -1907,7 +1907,7 @@ public class MembershipManagerImplTest {
         return invokedEvent;
     }
 
-    private void completeCallback(RebalanceListenerCallbackCompletedEvent callbackCompletedEvent,
+    private void completeCallback(ConsumerRebalanceListenerCallbackCompletedEvent callbackCompletedEvent,
                                   MembershipManagerImpl membershipManager) {
         membershipManager.consumerRebalanceListenerCallbackCompleted(callbackCompletedEvent);
     }
@@ -2227,7 +2227,7 @@ public class MembershipManagerImplTest {
         doNothing().when(subscriptionState).markPendingRevocation(anySet());
     }
 
-    private RebalanceListenerCallbackCompletedEvent mockPrepareLeavingStuckOnUserCallback(
+    private ConsumerRebalanceListenerCallbackCompletedEvent mockPrepareLeavingStuckOnUserCallback(
         MembershipManagerImpl membershipManager,
         ConsumerRebalanceListenerInvoker invoker) {
         String topicName = "topic1";
@@ -2250,7 +2250,7 @@ public class MembershipManagerImplTest {
         );
     }
 
-    private RebalanceListenerCallbackCompletedEvent mockFencedMemberStuckOnUserCallback(
+    private ConsumerRebalanceListenerCallbackCompletedEvent mockFencedMemberStuckOnUserCallback(
         MembershipManagerImpl membershipManager,
         ConsumerRebalanceListenerInvoker invoker) {
         String topicName = "topic1";

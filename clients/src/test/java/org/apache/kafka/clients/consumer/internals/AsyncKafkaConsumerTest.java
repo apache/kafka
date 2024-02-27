@@ -37,7 +37,7 @@ import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
 import org.apache.kafka.clients.consumer.internals.events.CommitOnCloseEvent;
 import org.apache.kafka.clients.consumer.internals.events.CompletableApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.CompletableBackgroundEvent;
-import org.apache.kafka.clients.consumer.internals.events.RebalanceListenerCallbackNeededEvent;
+import org.apache.kafka.clients.consumer.internals.events.ConsumerRebalanceListenerCallbackNeededEvent;
 import org.apache.kafka.clients.consumer.internals.events.ErrorEvent;
 import org.apache.kafka.clients.consumer.internals.events.EventProcessor;
 import org.apache.kafka.clients.consumer.internals.events.FetchCommittedOffsetsEvent;
@@ -435,7 +435,7 @@ public class AsyncKafkaConsumerTest {
         doAnswer(invocation -> Fetch.empty()).when(fetchCollector).collectFetch(Mockito.any(FetchBuffer.class));
         SortedSet<TopicPartition> sortedPartitions = new TreeSet<>(TOPIC_PARTITION_COMPARATOR);
         sortedPartitions.add(tp);
-        CompletableBackgroundEvent<Void> e = new RebalanceListenerCallbackNeededEvent(ON_PARTITIONS_REVOKED, sortedPartitions);
+        CompletableBackgroundEvent<Void> e = new ConsumerRebalanceListenerCallbackNeededEvent(ON_PARTITIONS_REVOKED, sortedPartitions);
         backgroundEventQueue.add(e);
         completeCommitSyncApplicationEventSuccessfully();
         final AtomicBoolean callbackExecuted = new AtomicBoolean(false);
@@ -1305,7 +1305,7 @@ public class AsyncKafkaConsumerTest {
         SortedSet<TopicPartition> partitions = Collections.emptySortedSet();
 
         for (ConsumerRebalanceListenerMethodName methodName : methodNames) {
-            CompletableBackgroundEvent<Void> e = new RebalanceListenerCallbackNeededEvent(methodName, partitions);
+            CompletableBackgroundEvent<Void> e = new ConsumerRebalanceListenerCallbackNeededEvent(methodName, partitions);
             backgroundEventQueue.add(e);
 
             // This will trigger the background event queue to process our background event message.

@@ -46,8 +46,8 @@ import org.apache.kafka.clients.consumer.internals.events.BackgroundEventHandler
 import org.apache.kafka.clients.consumer.internals.events.CommitEvent;
 import org.apache.kafka.clients.consumer.internals.events.CommitOnCloseEvent;
 import org.apache.kafka.clients.consumer.internals.events.CompletableApplicationEvent;
-import org.apache.kafka.clients.consumer.internals.events.RebalanceListenerCallbackCompletedEvent;
-import org.apache.kafka.clients.consumer.internals.events.RebalanceListenerCallbackNeededEvent;
+import org.apache.kafka.clients.consumer.internals.events.ConsumerRebalanceListenerCallbackCompletedEvent;
+import org.apache.kafka.clients.consumer.internals.events.ConsumerRebalanceListenerCallbackNeededEvent;
 import org.apache.kafka.clients.consumer.internals.events.ErrorEvent;
 import org.apache.kafka.clients.consumer.internals.events.EventProcessor;
 import org.apache.kafka.clients.consumer.internals.events.FetchCommittedOffsetsEvent;
@@ -217,7 +217,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                     break;
 
                 case CONSUMER_REBALANCE_LISTENER_CALLBACK_NEEDED:
-                    process((RebalanceListenerCallbackNeededEvent) event);
+                    process((ConsumerRebalanceListenerCallbackNeededEvent) event);
                     break;
 
                 default:
@@ -242,7 +242,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             }
         }
 
-        private void process(final RebalanceListenerCallbackNeededEvent event) {
+        private void process(final ConsumerRebalanceListenerCallbackNeededEvent event) {
             ApplicationEvent invokedEvent = invokeRebalanceCallbacks(
                 rebalanceListenerInvoker,
                 event.methodName(),
@@ -1799,10 +1799,10 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
      * rebalancing logic in the background thread. Critically, as part of this rebalancing work, the
      * {@link ConsumerRebalanceListener#onPartitionsRevoked(Collection)} callback needs to be invoked. However,
      * this callback must be executed on the application thread. To achieve this, the background thread enqueues a
-     * {@link RebalanceListenerCallbackNeededEvent} on its background event queue. That event queue is
+     * {@link ConsumerRebalanceListenerCallbackNeededEvent} on its background event queue. That event queue is
      * periodically queried by the application thread to see if there's work to be done. When the application thread
-     * sees {@link RebalanceListenerCallbackNeededEvent}, it is processed, and then a
-     * {@link RebalanceListenerCallbackCompletedEvent} is then enqueued by the application thread on the
+     * sees {@link ConsumerRebalanceListenerCallbackNeededEvent}, it is processed, and then a
+     * {@link ConsumerRebalanceListenerCallbackCompletedEvent} is then enqueued by the application thread on the
      * background event queue. Moments later, the background thread will see that event, process it, and continue
      * execution of the rebalancing logic. The rebalancing logic cannot complete until the
      * {@link ConsumerRebalanceListener} callback is performed.
@@ -1851,10 +1851,10 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         throw new TimeoutException("Operation timed out before completion");
     }
 
-    static RebalanceListenerCallbackCompletedEvent invokeRebalanceCallbacks(ConsumerRebalanceListenerInvoker rebalanceListenerInvoker,
-                                                                            ConsumerRebalanceListenerMethodName methodName,
-                                                                            SortedSet<TopicPartition> partitions,
-                                                                            CompletableFuture<Void> future) {
+    static ConsumerRebalanceListenerCallbackCompletedEvent invokeRebalanceCallbacks(ConsumerRebalanceListenerInvoker rebalanceListenerInvoker,
+                                                                                    ConsumerRebalanceListenerMethodName methodName,
+                                                                                    SortedSet<TopicPartition> partitions,
+                                                                                    CompletableFuture<Void> future) {
         final Exception e;
 
         switch (methodName) {
@@ -1881,7 +1881,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         else
             error = Optional.empty();
 
-        return new RebalanceListenerCallbackCompletedEvent(methodName, future, error);
+        return new ConsumerRebalanceListenerCallbackCompletedEvent(methodName, future, error);
     }
 
     @Override

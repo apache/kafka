@@ -117,7 +117,7 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
                 return;
 
             case CONSUMER_REBALANCE_LISTENER_CALLBACK_COMPLETED:
-                process((RebalanceListenerCallbackCompletedEvent) event);
+                process((ConsumerRebalanceListenerCallbackCompletedEvent) event);
                 return;
 
             case COMMIT_ON_CLOSE:
@@ -247,7 +247,7 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
         event.chain(future);
     }
 
-    private void process(final RebalanceListenerCallbackCompletedEvent event) {
+    private void process(final ConsumerRebalanceListenerCallbackCompletedEvent event) {
         if (!requestManagers.heartbeatRequestManager.isPresent()) {
             log.warn(
                 "An internal error occurred; the group membership manager was not present, so the notification of the {} callback execution could not be sent",

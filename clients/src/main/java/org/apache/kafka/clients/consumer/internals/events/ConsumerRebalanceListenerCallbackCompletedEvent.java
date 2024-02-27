@@ -16,46 +16,50 @@
  */
 package org.apache.kafka.clients.consumer.internals.events;
 
-import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.internals.ConsumerRebalanceListenerMethodName;
-import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.KafkaException;
 
-import java.time.Duration;
-import java.util.Collections;
 import java.util.Objects;
-import java.util.SortedSet;
+import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
 
 /**
- * Event that signifies that the network I/O thread wants to invoke one of the callback methods on the
- * {@link ConsumerRebalanceListener}. This event will be processed by the application thread when the next
- * {@link Consumer#poll(Duration)} call is performed by the user. When processed, the application thread should
- * invoke the appropriate callback method (based on {@link #methodName()}) with the given partitions.
+ * Event that signifies that the application thread has executed the {@link ConsumerRebalanceListener} callback. If
+ * the callback execution threw an error, it is included in the event should any event listener want to know.
  */
-public class RebalanceListenerCallbackNeededEvent extends CompletableBackgroundEvent<Void> {
+public class ConsumerRebalanceListenerCallbackCompletedEvent extends ApplicationEvent {
 
     private final ConsumerRebalanceListenerMethodName methodName;
-    private final SortedSet<TopicPartition> partitions;
+    private final CompletableFuture<Void> future;
+    private final Optional<KafkaException> error;
 
-    public RebalanceListenerCallbackNeededEvent(final ConsumerRebalanceListenerMethodName methodName,
-                                                final SortedSet<TopicPartition> partitions) {
-        super(Type.CONSUMER_REBALANCE_LISTENER_CALLBACK_NEEDED);
+    public ConsumerRebalanceListenerCallbackCompletedEvent(ConsumerRebalanceListenerMethodName methodName,
+                                                           CompletableFuture<Void> future,
+                                                           Optional<KafkaException> error) {
+        super(Type.CONSUMER_REBALANCE_LISTENER_CALLBACK_COMPLETED);
         this.methodName = Objects.requireNonNull(methodName);
-        this.partitions = Collections.unmodifiableSortedSet(partitions);
+        this.future = Objects.requireNonNull(future);
+        this.error = Objects.requireNonNull(error);
     }
 
     public ConsumerRebalanceListenerMethodName methodName() {
         return methodName;
     }
 
-    public SortedSet<TopicPartition> partitions() {
-        return partitions;
+    public CompletableFuture<Void> future() {
+        return future;
+    }
+
+    public Optional<KafkaException> error() {
+        return error;
     }
 
     @Override
     protected String toStringBase() {
         return super.toStringBase() +
                 ", methodName=" + methodName +
-                ", partitions=" + partitions;
+                ", future=" + future +
+                ", error=" + error;
     }
 }
