@@ -162,7 +162,7 @@ public class EventAccumulator<K, T extends EventAccumulator.Event<K>> implements
 
     /**
      * Returns the next {{@link Event}} available. This method blocks until an
-     * event is available or the thread is interrupted.
+     * event is available or accumulator is closed.
      *
      * @return The next event available or null.
      */
