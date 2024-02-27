@@ -22,6 +22,8 @@ import org.apache.kafka.common.TopicPartition;
 import java.util.Collections;
 import java.util.Map;
 
+import static org.apache.kafka.clients.consumer.internals.events.ApplicationEventType.ASSIGNMENT_CHANGE;
+
 public class AssignmentChangeApplicationEvent extends ApplicationEvent {
 
     private final Map<TopicPartition, OffsetAndMetadata> offsets;
@@ -29,7 +31,7 @@ public class AssignmentChangeApplicationEvent extends ApplicationEvent {
 
     public AssignmentChangeApplicationEvent(final Map<TopicPartition, OffsetAndMetadata> offsets,
                                             final long currentTimeMs) {
-        super(Type.ASSIGNMENT_CHANGE);
+        super(ASSIGNMENT_CHANGE);
         this.offsets = Collections.unmodifiableMap(offsets);
         this.currentTimeMs = currentTimeMs;
     }
@@ -43,31 +45,7 @@ public class AssignmentChangeApplicationEvent extends ApplicationEvent {
     }
 
     @Override
-    public boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
-        if (!super.equals(o)) return false;
-
-        AssignmentChangeApplicationEvent that = (AssignmentChangeApplicationEvent) o;
-
-        if (currentTimeMs != that.currentTimeMs) return false;
-        return offsets.equals(that.offsets);
-    }
-
-    @Override
-    public int hashCode() {
-        int result = super.hashCode();
-        result = 31 * result + offsets.hashCode();
-        result = 31 * result + (int) (currentTimeMs ^ (currentTimeMs >>> 32));
-        return result;
-    }
-
-    @Override
-    public String toString() {
-        return "AssignmentChangeApplicationEvent{" +
-                toStringBase() +
-                ", offsets=" + offsets +
-                ", currentTimeMs=" + currentTimeMs +
-                '}';
+    protected String toStringBase() {
+        return super.toStringBase() + ", offsets=" + offsets + ", currentTimeMs=" + currentTimeMs;
     }
 }

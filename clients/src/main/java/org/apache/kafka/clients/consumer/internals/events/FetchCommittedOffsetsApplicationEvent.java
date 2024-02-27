@@ -18,10 +18,13 @@ package org.apache.kafka.clients.consumer.internals.events;
 
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.utils.Timer;
 
 import java.util.Collections;
 import java.util.Map;
 import java.util.Set;
+
+import static org.apache.kafka.clients.consumer.internals.events.ApplicationEventType.FETCH_COMMITTED_OFFSETS;
 
 public class FetchCommittedOffsetsApplicationEvent extends CompletableApplicationEvent<Map<TopicPartition, OffsetAndMetadata>> {
 
@@ -30,50 +33,18 @@ public class FetchCommittedOffsetsApplicationEvent extends CompletableApplicatio
      */
     private final Set<TopicPartition> partitions;
 
-    /**
-     * Time until which the request will be retried if it fails with a retriable error.
-     */
-    private final long timeoutMs;
-
     public FetchCommittedOffsetsApplicationEvent(final Set<TopicPartition> partitions,
-                                                 final long timeoutMs) {
-        super(Type.FETCH_COMMITTED_OFFSETS);
+                                                 final Timer timer) {
+        super(FETCH_COMMITTED_OFFSETS, timer);
         this.partitions = Collections.unmodifiableSet(partitions);
-        this.timeoutMs = timeoutMs;
     }
 
     public Set<TopicPartition> partitions() {
         return partitions;
     }
 
-    public long timeout() {
-        return timeoutMs;
-    }
-
     @Override
-    public boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
-        if (!super.equals(o)) return false;
-
-        FetchCommittedOffsetsApplicationEvent that = (FetchCommittedOffsetsApplicationEvent) o;
-
-        return partitions.equals(that.partitions);
-    }
-
-    @Override
-    public int hashCode() {
-        int result = super.hashCode();
-        result = 31 * result + partitions.hashCode();
-        return result;
-    }
-
-    @Override
-    public String toString() {
-        return getClass().getSimpleName() + "{" +
-                toStringBase() +
-                ", partitions=" + partitions +
-                ", timeout=" + timeoutMs + "ms" +
-                '}';
+    public String toStringBase() {
+        return super.toStringBase() + ", partitions=" + partitions;
     }
 }

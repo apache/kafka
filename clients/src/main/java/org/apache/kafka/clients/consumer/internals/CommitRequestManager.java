@@ -774,7 +774,7 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
          * errors. If not present, the request is triggered without waiting for a response or
          * retrying.
          */
-        private final Optional<Long> expirationTimeMs;
+        final Optional<Long> expirationTimeMs;
 
         /**
          * True if the request expiration time has been reached. This is set when validating the
@@ -901,7 +901,7 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
         }
 
         public boolean sameRequest(final OffsetFetchRequestState request) {
-            return requestedPartitions.equals(request.requestedPartitions);
+            return requestedPartitions.equals(request.requestedPartitions) && expirationTimeMs.equals(request.expirationTimeMs);
         }
 
         public NetworkClientDelegate.UnsentRequest toUnsentRequest() {

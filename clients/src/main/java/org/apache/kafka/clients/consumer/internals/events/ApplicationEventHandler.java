@@ -17,12 +17,12 @@
 package org.apache.kafka.clients.consumer.internals.events;
 
 import org.apache.kafka.clients.consumer.internals.ConsumerNetworkThread;
+import org.apache.kafka.clients.consumer.internals.ConsumerUtils;
 import org.apache.kafka.clients.consumer.internals.NetworkClientDelegate;
 import org.apache.kafka.clients.consumer.internals.RequestManagers;
 import org.apache.kafka.common.internals.IdempotentCloser;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.common.utils.Timer;
 import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 
@@ -30,8 +30,6 @@ import java.io.Closeable;
 import java.time.Duration;
 import java.util.Objects;
 import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.Future;
-import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
 
 /**
@@ -97,20 +95,14 @@ public class ApplicationEventHandler implements Closeable {
      * Add a {@link CompletableApplicationEvent} to the handler. The method blocks waiting for the result, and will
      * return the result value upon successful completion; otherwise throws an error.
      *
-     * <p/>
-     *
-     * See {@link CompletableApplicationEvent#get(Timer)} and {@link Future#get(long, TimeUnit)} for more details.
-     *
      * @param event A {@link CompletableApplicationEvent} created by the polling thread
-     * @param timer Timer for which to wait for the event to complete
      * @return      Value that is the result of the event
      * @param <T>   Type of return value of the event
      */
-    public <T> T addAndGet(final CompletableApplicationEvent<T> event, final Timer timer) {
+    public <T> T addAndGet(final CompletableApplicationEvent<T> event) {
         Objects.requireNonNull(event, "CompletableApplicationEvent provided to addAndGet must be non-null");
-        Objects.requireNonNull(timer, "Timer provided to addAndGet must be non-null");
         add(event);
-        return event.get(timer);
+        return ConsumerUtils.getResult(event.future());
     }
 
     @Override

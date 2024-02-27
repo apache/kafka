@@ -16,39 +16,53 @@
  */
 package org.apache.kafka.clients.consumer.internals.events;
 
-import org.apache.kafka.common.utils.Timer;
+import org.apache.kafka.common.Uuid;
 
-import java.util.concurrent.CompletableFuture;
+import java.util.Objects;
 
 /**
- * Background event with a result in the form of a future, that can be retrieved within a
+ * Application event with a result in the form of a future, that can be retrieved within a
  * timeout based on completion.
  *
- * @param <T>
+ * @param <TYPE>
  */
-public abstract class CompletableBackgroundEvent<T> extends BackgroundEvent implements CompletableEvent<T> {
+public abstract class ConsumerEvent<TYPE extends Enum<TYPE>> {
 
-    private final CompletableFuture<T> future;
-    private final long deadlineMs;
+    private final TYPE type;
 
-    protected CompletableBackgroundEvent(BackgroundEventType type, Timer timer) {
-        super(type);
-        this.future = new CompletableFuture<>();
-        this.deadlineMs = timer.remainingMs() + timer.currentTimeMs();
+    private final Uuid id;
+
+    protected ConsumerEvent(TYPE type) {
+        this.type = Objects.requireNonNull(type);
+        this.id = Uuid.randomUuid();
+    }
+
+    public TYPE type() {
+        return type;
+    }
+
+    public Uuid id() {
+        return id;
     }
 
     @Override
-    public CompletableFuture<T> future() {
-        return future;
+    public final boolean equals(Object o) {
+        return this == o;
     }
 
     @Override
-    public long deadlineMs() {
-        return deadlineMs;
+    public final int hashCode() {
+        return Objects.hash(type, id);
     }
 
-    @Override
     protected String toStringBase() {
-        return super.toStringBase() + ", future=" + future + ", deadlineMs=" + deadlineMs;
+        return "type=" + type + ", id=" + id;
+    }
+
+    @Override
+    public final String toString() {
+        return getClass().getSimpleName() + "{" +
+                toStringBase() +
+                '}';
     }
 }

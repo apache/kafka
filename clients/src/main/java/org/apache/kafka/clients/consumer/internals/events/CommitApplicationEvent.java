@@ -18,6 +18,7 @@ package org.apache.kafka.clients.consumer.internals.events;
 
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.utils.Timer;
 
 import java.util.Collections;
 import java.util.Map;
@@ -29,8 +30,10 @@ public abstract class CommitApplicationEvent extends CompletableApplicationEvent
      */
     private final Map<TopicPartition, OffsetAndMetadata> offsets;
 
-    public CommitApplicationEvent(final Map<TopicPartition, OffsetAndMetadata> offsets, Type type) {
-        super(type);
+    protected CommitApplicationEvent(final ApplicationEventType type,
+                                     final Timer timer,
+                                     final Map<TopicPartition, OffsetAndMetadata> offsets) {
+        super(type, timer);
         this.offsets = Collections.unmodifiableMap(offsets);
 
         for (OffsetAndMetadata offsetAndMetadata : offsets.values()) {
@@ -44,21 +47,9 @@ public abstract class CommitApplicationEvent extends CompletableApplicationEvent
         return offsets;
     }
 
-    @Override
-    public boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
-        if (!super.equals(o)) return false;
-
-        CommitApplicationEvent that = (CommitApplicationEvent) o;
-
-        return offsets.equals(that.offsets);
-    }
 
     @Override
-    public int hashCode() {
-        int result = super.hashCode();
-        result = 31 * result + offsets.hashCode();
-        return result;
+    protected String toStringBase() {
+        return super.toStringBase() + ", offsets=" + offsets;
     }
 }
