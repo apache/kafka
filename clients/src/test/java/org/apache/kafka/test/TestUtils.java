@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.test;
 
+import org.apache.kafka.clients.MetadataSnapshot;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.Cluster;
@@ -29,10 +30,12 @@ import org.apache.kafka.common.message.ApiVersionsResponseData;
 import org.apache.kafka.common.network.NetworkReceive;
 import org.apache.kafka.common.network.Send;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.RecordVersion;
 import org.apache.kafka.common.record.UnalignedRecords;
 import org.apache.kafka.common.requests.ApiVersionsResponse;
 import org.apache.kafka.common.requests.ByteBufferChannel;
+import org.apache.kafka.common.requests.MetadataResponse.PartitionMetadata;
 import org.apache.kafka.common.requests.RequestHeader;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Utils;
@@ -121,6 +124,42 @@ public class TestUtils {
 
     public static Cluster clusterWith(final int nodes, final String topic, final int partitions) {
         return clusterWith(nodes, Collections.singletonMap(topic, partitions));
+    }
+
+    /**
+     * Test utility function to get MetadataSnapshot with configured nodes and partitions.
+     * @param nodes number of nodes in the cluster
+     * @param topicPartitionCounts map of topic -> # of partitions
+     * @return a MetadataSnapshot with number of nodes, partitions as per the input.
+     */
+
+    public static MetadataSnapshot metadataSnapshotWith(final int nodes, final Map<String, Integer> topicPartitionCounts) {
+        final Node[] ns = new Node[nodes];
+        Map<Integer, Node> nodesById = new HashMap<>();
+        for (int i = 0; i < nodes; i++) {
+            ns[i] = new Node(i, "localhost", 1969);
+            nodesById.put(ns[i].id(), ns[i]);
+        }
+        final List<PartitionMetadata> partsMetadatas = new ArrayList<>();
+        for (final Map.Entry<String, Integer> topicPartition : topicPartitionCounts.entrySet()) {
+            final String topic = topicPartition.getKey();
+            final int partitions = topicPartition.getValue();
+            for (int i = 0; i < partitions; i++) {
+                TopicPartition tp = new TopicPartition(topic, partitions);
+                Node node = ns[i % ns.length];
+                partsMetadatas.add(new PartitionMetadata(Errors.NONE, tp, Optional.of(node.id()), Optional.empty(), null, null, null));
+            }
+        }
+        return new MetadataSnapshot("kafka-cluster", nodesById, partsMetadatas, Collections.emptySet(), Collections.emptySet(), Collections.emptySet(), null, Collections.emptyMap());
+    }
+
+    /**
+     * Test utility function to get MetadataSnapshot of cluster with configured, and 0 partitions.
+     * @param nodes number of nodes in the cluster.
+     * @return a MetadataSnapshot of cluster with number of nodes in the input.
+     */
+    public static MetadataSnapshot metadataSnapshotWith(int nodes) {
+        return metadataSnapshotWith(nodes, new HashMap<>());
     }
 
     /**
