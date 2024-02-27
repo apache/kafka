@@ -34,9 +34,9 @@ public class ConsumerRebalanceListenerCallbackCompletedEvent extends Application
     private final CompletableFuture<Void> future;
     private final Optional<KafkaException> error;
 
-    public ConsumerRebalanceListenerCallbackCompletedEvent(ConsumerRebalanceListenerMethodName methodName,
-                                                           CompletableFuture<Void> future,
-                                                           Optional<KafkaException> error) {
+    public ConsumerRebalanceListenerCallbackCompletedEvent(final ConsumerRebalanceListenerMethodName methodName,
+                                                           final CompletableFuture<Void> future,
+                                                           final Optional<KafkaException> error) {
         super(Type.CONSUMER_REBALANCE_LISTENER_CALLBACK_COMPLETED);
         this.methodName = Objects.requireNonNull(methodName);
         this.future = Objects.requireNonNull(future);

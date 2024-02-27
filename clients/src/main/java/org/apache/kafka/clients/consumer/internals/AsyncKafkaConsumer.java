@@ -988,7 +988,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                 throw new TimeoutException();
             }
 
-            final TopicMetadataEvent topicMetadataEvent = new TopicMetadataEvent(topic, timeout.toMillis());
+            final TopicMetadataEvent topicMetadataEvent = new TopicMetadataEvent(Optional.of(topic), timeout.toMillis());
             wakeupTrigger.setActiveTask(topicMetadataEvent.future());
             try {
                 Map<String, List<PartitionInfo>> topicMetadata =
@@ -1016,7 +1016,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                 throw new TimeoutException();
             }
 
-            final TopicMetadataEvent topicMetadataEvent = new TopicMetadataEvent(timeout.toMillis());
+            final TopicMetadataEvent topicMetadataEvent = new TopicMetadataEvent(Optional.empty(), timeout.toMillis());
             wakeupTrigger.setActiveTask(topicMetadataEvent.future());
             try {
                 return applicationEventHandler.addAndGet(topicMetadataEvent, time.timer(timeout));

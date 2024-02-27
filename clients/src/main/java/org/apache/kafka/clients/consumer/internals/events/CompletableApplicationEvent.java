@@ -28,7 +28,7 @@ public abstract class CompletableApplicationEvent<T> extends ApplicationEvent im
 
     private final CompletableFuture<T> future;
 
-    protected CompletableApplicationEvent(Type type) {
+    protected CompletableApplicationEvent(final Type type) {
         super(type);
         this.future = new CompletableFuture<>();
     }
@@ -36,16 +36,6 @@ public abstract class CompletableApplicationEvent<T> extends ApplicationEvent im
     @Override
     public CompletableFuture<T> future() {
         return future;
-    }
-
-    public void chain(final CompletableFuture<T> providedFuture) {
-        providedFuture.whenComplete((value, exception) -> {
-            if (exception != null) {
-                this.future.completeExceptionally(exception);
-            } else {
-                this.future.complete(value);
-            }
-        });
     }
 
     @Override

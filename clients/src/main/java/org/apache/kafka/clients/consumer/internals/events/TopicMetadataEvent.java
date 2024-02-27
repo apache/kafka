@@ -28,14 +28,6 @@ public class TopicMetadataEvent extends CompletableApplicationEvent<Map<String, 
     private final Optional<String> topic;
     private final long timeoutMs;
 
-    public TopicMetadataEvent(final long timeoutMs) {
-        this(Optional.empty(), timeoutMs);
-    }
-
-    public TopicMetadataEvent(final String topic, final long timeoutMs) {
-        this(Optional.of(topic), timeoutMs);
-    }
-
     public TopicMetadataEvent(final Optional<String> topic, final long timeoutMs) {
         super(Type.TOPIC_METADATA);
         this.topic = Objects.requireNonNull(topic);

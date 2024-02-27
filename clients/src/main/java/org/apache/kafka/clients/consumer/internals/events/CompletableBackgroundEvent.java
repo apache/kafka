@@ -28,7 +28,7 @@ public abstract class CompletableBackgroundEvent<T> extends BackgroundEvent impl
 
     private final CompletableFuture<T> future;
 
-    protected CompletableBackgroundEvent(Type type) {
+    protected CompletableBackgroundEvent(final Type type) {
         super(type);
         this.future = new CompletableFuture<>();
     }
