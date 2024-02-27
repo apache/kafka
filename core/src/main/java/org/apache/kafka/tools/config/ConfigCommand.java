@@ -184,7 +184,7 @@ public class ConfigCommand {
         }
     }
 
-    private static void alterConfigWithZk(KafkaZkClient zkClient, ConfigCommandOptions opts, AdminZkClient adminZkClient) throws Exception {
+    static void alterConfigWithZk(KafkaZkClient zkClient, ConfigCommandOptions opts, AdminZkClient adminZkClient) throws Exception {
         Properties configsToBeAdded = parseConfigsToBeAdded(opts);
         List<String> configsToBeDeleted = parseConfigsToBeDeleted(opts);
         ConfigEntity entity = parseEntity(opts);
@@ -272,7 +272,7 @@ public class ConfigCommand {
         }
     }
 
-    private static PasswordEncoder createPasswordEncoder(Map<String, String> encoderConfigs) {
+    static PasswordEncoder createPasswordEncoder(Map<String, String> encoderConfigs) {
         encoderConfigs.get(PasswordEncoderConfigs.SECRET);
         String encoderSecret = encoderConfigs.get(PasswordEncoderConfigs.SECRET);
         if (encoderSecret == null)

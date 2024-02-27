@@ -276,7 +276,7 @@ class ZookeeperService(KafkaPathResolverMixin, Service):
         """
 
         kafka_run_class = self.path.script("kafka-run-class.sh", DEV_BRANCH)
-        cmd = "%s kafka.admin.ConfigCommand --zookeeper %s %s --describe --entity-type users --entity-default" % \
+        cmd = "%s org.apache.kafka.tools.config.ConfigCommand --zookeeper %s %s --describe --entity-type users --entity-default" % \
               (kafka_run_class, self.connect_setting(force_tls=self.zk_client_secure_port),
                self.zkTlsConfigFileOption())
         self.logger.debug(cmd)
