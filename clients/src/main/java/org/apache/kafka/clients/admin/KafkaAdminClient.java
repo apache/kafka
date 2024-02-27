@@ -2294,17 +2294,22 @@ public class KafkaAdminClient extends AdminClient {
         return new HashMap<>(topicFutures);
     }
 
+    // This is used in the describe topics path if using DescribeTopicPartitions API.
+    private Node replicaToFakeNode(int id) {
+        return new Node(id, "Dummy", 0);
+    }
+
     private TopicDescription getTopicDescriptionFromDescribeTopicsResponseTopic(DescribeTopicPartitionsResponseTopic topic) {
         List<DescribeTopicPartitionsResponsePartition> partitionInfos = topic.partitions();
         List<TopicPartitionInfo> partitions = new ArrayList<>(partitionInfos.size());
         for (DescribeTopicPartitionsResponsePartition partitionInfo : partitionInfos) {
             TopicPartitionInfo topicPartitionInfo = new TopicPartitionInfo(
-                    partitionInfo.partitionIndex(),
-                    replicaToFakeNode(partitionInfo.leaderId()),
-                    partitionInfo.replicaNodes().stream().map(id -> replicaToFakeNode(id)).collect(Collectors.toList()),
-                    partitionInfo.isrNodes().stream().map(id -> replicaToFakeNode(id)).collect(Collectors.toList()),
-                    partitionInfo.eligibleLeaderReplicas().stream().map(id -> replicaToFakeNode(id)).collect(Collectors.toList()),
-                    partitionInfo.lastKnownElr().stream().map(id -> replicaToFakeNode(id)).collect(Collectors.toList()));
+                partitionInfo.partitionIndex(),
+                replicaToFakeNode(partitionInfo.leaderId()),
+                partitionInfo.replicaNodes().stream().map(id -> replicaToFakeNode(id)).collect(Collectors.toList()),
+                partitionInfo.isrNodes().stream().map(id -> replicaToFakeNode(id)).collect(Collectors.toList()),
+                partitionInfo.eligibleLeaderReplicas().stream().map(id -> replicaToFakeNode(id)).collect(Collectors.toList()),
+                partitionInfo.lastKnownElr().stream().map(id -> replicaToFakeNode(id)).collect(Collectors.toList()));
             partitions.add(topicPartitionInfo);
         }
         partitions.sort(Comparator.comparingInt(TopicPartitionInfo::partition));
@@ -2332,22 +2337,21 @@ public class KafkaAdminClient extends AdminClient {
         return partitionInfo.leader();
     }
 
-    // This is used in the describe topics path if using DescribeTopics API.
-    private Node replicaToFakeNode(int id) {
-        return new Node(id, "Dummy", 0);
-    }
-
     @Override
     public void describeTopics(
         TopicCollection topics,
         DescribeTopicsOptions options,
         AdminResultsSubscriber<DescribeTopicPartitionsResult> subscriber) {
         if (topics instanceof TopicIdCollection) {
-            subscriber.onError(new IllegalArgumentException("Currently the describeTopics subscription mode does not support topic IDs right."));
+            subscriber.onError(
+                new IllegalArgumentException("Currently the describeTopics subscription mode does not support topic IDs.")
+            );
             return;
         }
         if (!(topics instanceof TopicNameCollection)) {
-            subscriber.onError(new IllegalArgumentException("The TopicCollection: " + topics + " provided did not match any supported classes for describeTopics."));
+            subscriber.onError(
+                new IllegalArgumentException("The TopicCollection: " + topics + " provided did not match any supported classes for describeTopics.")
+            );
             return;
         }
 
@@ -2360,11 +2364,12 @@ public class KafkaAdminClient extends AdminClient {
                 topicNames.add(topicName);
             }
         });
-        final long now = time.milliseconds();
 
-        // It is possible that the server does not allow the given partitionSizeLimitPerResponse. Then it could have
-        // multiple calls for one batch.
-        RecurringCall call = new RecurringCall("DescribeTopics-Recurring", calcDeadlineMs(now, options.timeoutMs()), runnable) {
+        RecurringCall call = new RecurringCall(
+            "DescribeTopics-Recurring",
+            calcDeadlineMs(time.milliseconds(), options.timeoutMs()),
+            runnable
+        ) {
 
             Map<String, TopicRequest> pendingTopics = new TreeMap<>();
             Iterator<String> pendingTopicIterator = topicNames.iterator();

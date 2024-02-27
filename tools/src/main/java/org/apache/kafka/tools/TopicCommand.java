@@ -575,7 +575,7 @@ public abstract class TopicCommand {
             if (!topicIds.isEmpty()) {
                 Map<Uuid, org.apache.kafka.clients.admin.TopicDescription> descTopics =
                     adminClient.describeTopics(TopicCollection.ofTopicIds(topicIds)).allTopicIds().get();
-                describeTopicsFollowUp(new ArrayList<>(descTopics.values()), opts);
+                printTopicDescriptions(new ArrayList<>(descTopics.values()), opts);
                 return;
             }
 
@@ -623,7 +623,7 @@ public abstract class TopicCommand {
 
                                     if (partitionCount < partitionSizeLimit) continue;
                                     try {
-                                        describeTopicsFollowUp(currentBatch, opts, previousPrintedTopic);
+                                        printTopicDescriptions(currentBatch, opts, previousPrintedTopic);
                                     } catch (Exception e) {
                                         LOG.error("Fail to do describe topic follow ups: " + e);
                                     } finally {
@@ -635,7 +635,7 @@ public abstract class TopicCommand {
 
                                 if (!currentBatch.isEmpty()) {
                                     try {
-                                        describeTopicsFollowUp(currentBatch, opts, previousPrintedTopic);
+                                        printTopicDescriptions(currentBatch, opts, previousPrintedTopic);
                                     } catch (Exception e) {
                                         LOG.error("Fail to do describe topic follow ups: " + e);
                                     }
@@ -649,7 +649,7 @@ public abstract class TopicCommand {
                                                 adminClient.describeTopics(TopicCollection.ofTopicNames(topics),
                                                     new DescribeTopicsOptions()
                                                         .partitionSizeLimitPerResponse(opts.partitionSizeLimitPerResponse().orElse(2000))).allTopicNames().get();
-                                            describeTopicsFollowUp(new ArrayList<>(descTopics.values()), opts);
+                                            printTopicDescriptions(new ArrayList<>(descTopics.values()), opts);
                                         } catch (Exception e) {
                                             LOG.error("Hit " + e + " during describe topics with Metadata API");
                                         }
@@ -661,6 +661,7 @@ public abstract class TopicCommand {
                                 throw e;
                             } catch (Exception e) {
                                 LOG.error("Hit " + exception + " in describe topics subscriber");
+                                e.printStackTrace();
                             } finally {
                                 queryFuture.complete(true);
                             }
@@ -678,16 +679,16 @@ public abstract class TopicCommand {
                 );
                 queryFuture.get();
             }
-            describeTopicsFollowUp(Collections.emptyList(), opts);
+            printTopicDescriptions(Collections.emptyList(), opts);
         }
 
-        private void describeTopicsFollowUp(
+        private void printTopicDescriptions(
                 List<org.apache.kafka.clients.admin.TopicDescription> topicDescriptions,
                 TopicCommandOptions opts
         ) throws ExecutionException, InterruptedException {
-            describeTopicsFollowUp(topicDescriptions, opts, "");
+            printTopicDescriptions(topicDescriptions, opts, "");
         }
-        private void describeTopicsFollowUp(
+        private void printTopicDescriptions(
             List<org.apache.kafka.clients.admin.TopicDescription> topicDescriptions,
             TopicCommandOptions opts,
             String previousPrintedTopic1
