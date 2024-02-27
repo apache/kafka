@@ -1073,9 +1073,16 @@ class KafkaApis(val requestChannel: RequestChannel,
    * Handle a shareFetch request
    */
   def handleShareFetchRequest(request: RequestChannel.Request): Unit = {
+    val shareFetchRequest = request.body[ShareFetchRequest]
+
+    if (!config.isShareGroupEnabled) {
+      // The API is not supported when the configuration `group.share.enable` has not been set
+      requestHelper.sendMaybeThrottle(request, shareFetchRequest.getErrorResponse(Errors.UNSUPPORTED_VERSION.exception))
+      CompletableFuture.completedFuture[Unit](())
+      return
+    }
     val versionId = request.header.apiVersion
     val clientId = request.header.clientId
-    val shareFetchRequest = request.body[ShareFetchRequest]
     val groupId = shareFetchRequest.data().groupId()
     val topicNames = metadataCache.topicIdsToNames()
     val shareFetchData = shareFetchRequest.shareFetchData(topicNames)
