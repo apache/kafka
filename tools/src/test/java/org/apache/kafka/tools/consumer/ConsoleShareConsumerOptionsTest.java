@@ -14,10 +14,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.tools;
+package org.apache.kafka.tools.consumer;
 
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.utils.Exit;
+import org.apache.kafka.tools.ToolsTestUtils;
 import org.junit.jupiter.api.Test;
 
 import java.io.File;
@@ -89,7 +90,7 @@ public class ConsoleShareConsumerOptionsTest {
         Map<String, String> configs = new HashMap<>();
         configs.put("request.timeout.ms", "1000");
         configs.put("group.id", "group1");
-        File propsFile = tempPropertiesFile(configs);
+        File propsFile = ToolsTestUtils.tempPropertiesFile(configs);
         String[] args = new String[]{
                 "--bootstrap-server", "localhost:9092",
                 "--topic", "test",
@@ -109,7 +110,7 @@ public class ConsoleShareConsumerOptionsTest {
         });
 
         // different in all three places
-        File propsFile = tempPropertiesFile(Collections.singletonMap("group.id", "group-from-file"));
+        File propsFile = ToolsTestUtils.tempPropertiesFile(Collections.singletonMap("group.id", "group-from-file"));
         final String[] args = new String[]{
                 "--bootstrap-server", "localhost:9092",
                 "--topic", "test",
@@ -121,7 +122,7 @@ public class ConsoleShareConsumerOptionsTest {
         assertThrows(IllegalArgumentException.class, () -> new ConsoleShareConsumerOptions(args));
 
         // the same in all three places
-        propsFile = tempPropertiesFile(Collections.singletonMap("group.id", "test-group"));
+        propsFile = ToolsTestUtils.tempPropertiesFile(Collections.singletonMap("group.id", "test-group"));
         final String[] args1 = new String[]{
                 "--bootstrap-server", "localhost:9092",
                 "--topic", "test",
@@ -135,7 +136,7 @@ public class ConsoleShareConsumerOptionsTest {
         assertEquals("test-group", props.getProperty("group.id"));
 
         // different via --consumer-property and --consumer.config
-        propsFile = tempPropertiesFile(Collections.singletonMap("group.id", "group-from-file"));
+        propsFile = ToolsTestUtils.tempPropertiesFile(Collections.singletonMap("group.id", "group-from-file"));
         final String[] args2 = new String[]{
                 "--bootstrap-server", "localhost:9092",
                 "--topic", "test",
@@ -156,7 +157,7 @@ public class ConsoleShareConsumerOptionsTest {
         assertThrows(IllegalArgumentException.class, () -> new ConsoleShareConsumerOptions(args3));
 
         // different via --group and --consumer.config
-        propsFile = tempPropertiesFile(Collections.singletonMap("group.id", "group-from-file"));
+        propsFile = ToolsTestUtils.tempPropertiesFile(Collections.singletonMap("group.id", "group-from-file"));
         final String[] args4 = new String[]{
                 "--bootstrap-server", "localhost:9092",
                 "--topic", "test",
@@ -221,19 +222,5 @@ public class ConsoleShareConsumerOptionsTest {
         Properties consumerProperties = config.consumerProps();
 
         assertEquals("console-share-consumer", consumerProperties.getProperty(ConsumerConfig.CLIENT_ID_CONFIG));
-    }
-
-    /**
-     * Temporary - This function is part of ToolsTestUtils in the PR -
-     * <a href="https://github.com/apache/kafka/pull/15274/files#">...</a>
-     * This function will be removed once the PR gets merged
-     */
-
-    private File tempPropertiesFile(Map<String, String> properties) throws IOException {
-        StringBuilder sb = new StringBuilder();
-        for (Map.Entry<String, String> entry : properties.entrySet()) {
-            sb.append(entry.getKey() + "=" + entry.getValue() + System.lineSeparator());
-        }
-        return org.apache.kafka.test.TestUtils.tempFile(sb.toString());
     }
 }

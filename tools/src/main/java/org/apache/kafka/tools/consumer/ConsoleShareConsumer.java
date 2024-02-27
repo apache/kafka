@@ -14,7 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.tools;
+package org.apache.kafka.tools.consumer;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.KafkaShareConsumer;
@@ -42,7 +42,7 @@ import java.util.concurrent.CountDownLatch;
  */
 public class ConsoleShareConsumer {
 
-    private static final Logger LOG = LoggerFactory.getLogger(org.apache.kafka.tools.ConsoleShareConsumer.class);
+    private static final Logger LOG = LoggerFactory.getLogger(ConsoleShareConsumer.class);
     private static final CountDownLatch SHUTDOWN_LATCH = new CountDownLatch(1);
 
     static int messageCount = 0;
