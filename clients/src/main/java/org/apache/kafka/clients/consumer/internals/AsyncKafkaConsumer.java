@@ -277,23 +277,6 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     private final AtomicLong currentThread = new AtomicLong(NO_CURRENT_THREAD);
     private final AtomicInteger refCount = new AtomicInteger(0);
 
-    private final InvalidGroupIdException invalidGroupIdException =
-        new InvalidGroupIdException("To use the group management or offset commit APIs, you must " +
-            "provide a valid " + ConsumerConfig.GROUP_ID_CONFIG + " in the consumer configuration.");
-
-    private void updateGroupMetadata(final Optional<Integer> memberEpoch, final Optional<String> memberId) {
-        groupMetadata.updateAndGet(
-            oldGroupMetadataOptional -> oldGroupMetadataOptional.map(
-                oldGroupMetadata -> new ConsumerGroupMetadata(
-                    oldGroupMetadata.groupId(),
-                    memberEpoch.orElse(oldGroupMetadata.generationId()),
-                    memberId.orElse(oldGroupMetadata.memberId()),
-                    oldGroupMetadata.groupInstanceId()
-                )
-            )
-        );
-    }
-
     AsyncKafkaConsumer(final ConsumerConfig config,
                        final Deserializer<K> keyDeserializer,
                        final Deserializer<V> valueDeserializer) {
@@ -669,6 +652,19 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         );
     }
 
+    private void updateGroupMetadata(final Optional<Integer> memberEpoch, final Optional<String> memberId) {
+        groupMetadata.updateAndGet(
+            oldGroupMetadataOptional -> oldGroupMetadataOptional.map(
+                oldGroupMetadata -> new ConsumerGroupMetadata(
+                    oldGroupMetadata.groupId(),
+                    memberEpoch.orElse(oldGroupMetadata.generationId()),
+                    memberId.orElse(oldGroupMetadata.memberId()),
+                    oldGroupMetadata.groupInstanceId()
+                )
+            )
+        );
+    }
+
     /**
      * poll implementation using {@link ApplicationEventHandler}.
      *  1. Poll for background events. If there's a fetch response event, process the record and return it. If it is
@@ -957,7 +953,8 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
 
     private void maybeThrowInvalidGroupIdException() {
         if (!groupMetadata.get().isPresent()) {
-            throw invalidGroupIdException;
+            throw new InvalidGroupIdException("To use the group management or offset commit APIs, you must " +
+                "provide a valid " + ConsumerConfig.GROUP_ID_CONFIG + " in the consumer configuration.");
         }
     }
 
@@ -1180,7 +1177,8 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     public ConsumerGroupMetadata groupMetadata() {
         acquireAndEnsureOpen();
         try {
-            return groupMetadata.get().orElseThrow(() -> invalidGroupIdException);
+            maybeThrowInvalidGroupIdException();
+            return groupMetadata.get().get();
         } finally {
             release();
         }

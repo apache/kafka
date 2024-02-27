@@ -1493,6 +1493,7 @@ public class MembershipManagerImpl implements MembershipManager {
         return PollResult.EMPTY;
     }
 
+    // visible for testing
     List<MemberStateListener> stateListeners() {
         return unmodifiableList(stateUpdatesListeners);
     }
