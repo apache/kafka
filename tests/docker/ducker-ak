@@ -477,7 +477,7 @@ ducker_test() {
     done
     
     must_pushd "${kafka_dir}"
-    (test -f ./gradlew || gradle) && ./gradlew systemTestLibs
+    ( (test -f ./gradlew || gradle) && ./gradlew systemTestLibs ) || die "ducker_test: Failed to build system test libraries, please check the error log."
     must_popd
     if [[ "${debug}" -eq 1 ]]; then
         local ducktape_cmd="python3 -m debugpy --listen 0.0.0.0:${debugpy_port} --wait-for-client /usr/local/bin/ducktape"
