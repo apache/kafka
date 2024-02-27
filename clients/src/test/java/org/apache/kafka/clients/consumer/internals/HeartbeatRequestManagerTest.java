@@ -21,6 +21,7 @@ import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEventHandler;
+import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent.Type;
 import org.apache.kafka.clients.consumer.internals.events.GroupMetadataUpdateEvent;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
@@ -328,12 +329,7 @@ public class HeartbeatRequestManagerTest {
     @Test
     public void testConsumerGroupMetadataFirstUpdate() {
         final GroupMetadataUpdateEvent groupMetadataUpdateEvent = makeFirstGroupMetadataUpdate(memberId, memberEpoch);
-
-        final GroupMetadataUpdateEvent expectedGroupMetadataUpdateEvent = new GroupMetadataUpdateEvent(
-            memberEpoch,
-            memberId
-        );
-        assertEquals(expectedGroupMetadataUpdateEvent, groupMetadataUpdateEvent);
+        assertGroupMetadataUpdateEvent(groupMetadataUpdateEvent, memberEpoch, memberId);
     }
 
     @Test
@@ -370,11 +366,7 @@ public class HeartbeatRequestManagerTest {
         final BackgroundEvent eventWithUpdatedMemberEpoch = backgroundEventQueue.poll();
         assertEquals(BackgroundEvent.Type.GROUP_METADATA_UPDATE, eventWithUpdatedMemberEpoch.type());
         final GroupMetadataUpdateEvent groupMetadataUpdateEvent = (GroupMetadataUpdateEvent) eventWithUpdatedMemberEpoch;
-        final GroupMetadataUpdateEvent expectedGroupMetadataUpdateEvent = new GroupMetadataUpdateEvent(
-            updatedMemberEpoch,
-            memberId
-        );
-        assertEquals(expectedGroupMetadataUpdateEvent, groupMetadataUpdateEvent);
+        assertGroupMetadataUpdateEvent(groupMetadataUpdateEvent, updatedMemberEpoch, memberId);
     }
 
     @Test
@@ -398,11 +390,7 @@ public class HeartbeatRequestManagerTest {
         final BackgroundEvent eventWithUpdatedMemberEpoch = backgroundEventQueue.poll();
         assertEquals(BackgroundEvent.Type.GROUP_METADATA_UPDATE, eventWithUpdatedMemberEpoch.type());
         final GroupMetadataUpdateEvent groupMetadataUpdateEvent = (GroupMetadataUpdateEvent) eventWithUpdatedMemberEpoch;
-        final GroupMetadataUpdateEvent expectedGroupMetadataUpdateEvent = new GroupMetadataUpdateEvent(
-            memberEpoch,
-            updatedMemberId
-        );
-        assertEquals(expectedGroupMetadataUpdateEvent, groupMetadataUpdateEvent);
+        assertGroupMetadataUpdateEvent(groupMetadataUpdateEvent, memberEpoch, updatedMemberId);
     }
 
     private GroupMetadataUpdateEvent makeFirstGroupMetadataUpdate(final String memberId, final int memberEpoch) {
@@ -703,6 +691,13 @@ public class HeartbeatRequestManagerTest {
     private void assertNoHeartbeat(HeartbeatRequestManager hrm) {
         NetworkClientDelegate.PollResult pollResult = hrm.poll(time.milliseconds());
         assertEquals(0, pollResult.unsentRequests.size());
+    }
+
+    private void assertGroupMetadataUpdateEvent(GroupMetadataUpdateEvent event,
+                                                int expectedMemberEpoch,
+                                                String expectedMemberId) {
+        assertEquals(expectedMemberEpoch, event.memberEpoch());
+        assertEquals(expectedMemberId, event.memberId());
     }
 
     private void mockStableMember() {
