@@ -691,7 +691,7 @@ public abstract class TopicCommand {
         private void printTopicDescriptions(
             List<org.apache.kafka.clients.admin.TopicDescription> topicDescriptions,
             TopicCommandOptions opts,
-            String previousPrintedTopic1
+            String previousPrintedTopic
         ) throws ExecutionException, InterruptedException {
             List<String> topicNames = topicDescriptions.stream()
                 .map(org.apache.kafka.clients.admin.TopicDescription::name)
@@ -704,7 +704,6 @@ public abstract class TopicCommand {
             ).values();
             KafkaFuture<Collection<Node>> liveBrokers = adminClient.describeCluster().nodes();
 
-            String previousPrintedTopic = previousPrintedTopic1;
             DescribeOptions describeOptions = new DescribeOptions(opts, new HashSet<>(liveBrokers.get().stream()
                 .map(Node::id)
                 .collect(Collectors.toList())));
