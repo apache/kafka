@@ -17,6 +17,7 @@
 package org.apache.kafka.test;
 
 import org.apache.kafka.streams.processor.PunctuationType;
+import org.apache.kafka.streams.processor.api.Processor;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -24,11 +25,11 @@ import java.util.List;
 import static org.junit.Assert.assertEquals;
 
 @SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.
-public class MockProcessorSupplier<K, V> implements org.apache.kafka.streams.processor.ProcessorSupplier<K, V> {
+public class MockProcessorSupplier<KIn, VIn, KOut, VOut> implements org.apache.kafka.streams.processor.api.ProcessorSupplier<KIn, VIn, KOut, VOut> {
 
     private final long scheduleInterval;
     private final PunctuationType punctuationType;
-    private final List<MockProcessor<K, V>> processors = new ArrayList<>();
+    private final List<MockProcessor<KIn, VIn, KOut, VOut>> processors = new ArrayList<>();
 
     public MockProcessorSupplier() {
         this(-1L);
@@ -44,8 +45,8 @@ public class MockProcessorSupplier<K, V> implements org.apache.kafka.streams.pro
     }
 
     @Override
-    public org.apache.kafka.streams.processor.Processor<K, V> get() {
-        final MockProcessor<K, V> processor = new MockProcessor<>(punctuationType, scheduleInterval);
+    public Processor<KIn, VIn, KOut, VOut> get() {
+        final MockProcessor<KIn, VIn, KOut, VOut> processor = new MockProcessor<>(punctuationType, scheduleInterval);
 
         // to keep tests simple, ignore calls from ApiUtils.checkSupplier
         if (!StreamsTestUtils.isCheckSupplierCall()) {
@@ -56,7 +57,7 @@ public class MockProcessorSupplier<K, V> implements org.apache.kafka.streams.pro
     }
 
     // get the captured processor assuming that only one processor gets returned from this supplier
-    public MockProcessor<K, V> theCapturedProcessor() {
+    public MockProcessor<KIn, VIn, KOut, VOut> theCapturedProcessor() {
         return capturedProcessors(1).get(0);
     }
 
@@ -65,7 +66,7 @@ public class MockProcessorSupplier<K, V> implements org.apache.kafka.streams.pro
     }
 
         // get the captured processors with the expected number
-    public List<MockProcessor<K, V>> capturedProcessors(final int expectedNumberOfProcessors) {
+    public List<MockProcessor<KIn, VIn, KOut, VOut>> capturedProcessors(final int expectedNumberOfProcessors) {
         assertEquals(expectedNumberOfProcessors, processors.size());
 
         return processors;
