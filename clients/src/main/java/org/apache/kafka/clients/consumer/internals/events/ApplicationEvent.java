@@ -16,12 +16,13 @@
  */
 package org.apache.kafka.clients.consumer.internals.events;
 
+import org.apache.kafka.clients.consumer.internals.AsyncKafkaConsumer;
 import org.apache.kafka.common.Uuid;
 
 import java.util.Objects;
 
 /**
- * This is the abstract definition of the events created by the KafkaConsumer API on the user's
+ * This is the abstract definition of the events created by the {@link AsyncKafkaConsumer} on the user's
  * application thread.
  */
 public abstract class ApplicationEvent {
