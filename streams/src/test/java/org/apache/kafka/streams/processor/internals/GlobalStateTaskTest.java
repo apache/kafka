@@ -241,7 +241,7 @@ public class GlobalStateTaskTest {
     @Test
     public void shouldNotCheckpointIfNotReceivedEnoughRecords() {
         globalStateTask.initialize();
-        globalStateTask.update(record(topic1, 1, 9000L, "foo".getBytes(), "foo".getBytes()));
+        globalStateTask.update(record(topic1, 1, 10049L, "foo".getBytes(), "foo".getBytes()));
         globalStateTask.maybeCheckpoint();
 
         assertEquals(offsets, stateMgr.changelogOffsets());
