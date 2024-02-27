@@ -1,0 +1,233 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements. See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License. You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.apache.kafka.clients.consumer.internals;
+
+import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.common.IsolationLevel;
+import org.apache.kafka.common.TopicIdPartition;
+import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.errors.RecordDeserializationException;
+import org.apache.kafka.common.message.ShareFetchResponseData;
+import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.record.CompressionType;
+import org.apache.kafka.common.record.ControlRecordType;
+import org.apache.kafka.common.record.EndTransactionMarker;
+import org.apache.kafka.common.record.MemoryRecords;
+import org.apache.kafka.common.record.MemoryRecordsBuilder;
+import org.apache.kafka.common.record.RecordBatch;
+import org.apache.kafka.common.record.Records;
+import org.apache.kafka.common.record.SimpleRecord;
+import org.apache.kafka.common.record.TimestampType;
+import org.apache.kafka.common.serialization.StringDeserializer;
+import org.apache.kafka.common.serialization.UUIDDeserializer;
+import org.apache.kafka.common.serialization.UUIDSerializer;
+import org.apache.kafka.common.utils.BufferSupplier;
+import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.common.utils.Time;
+import org.junit.jupiter.api.Test;
+
+import java.nio.ByteBuffer;
+import java.util.List;
+import java.util.UUID;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+
+public class CompletedShareFetchTest {
+
+    private final static String TOPIC_NAME = "test";
+    private final static TopicIdPartition TIP = new TopicIdPartition(Uuid.randomUuid(), 0, TOPIC_NAME);
+    private final static long PRODUCER_ID = 1000L;
+    private final static short PRODUCER_EPOCH = 0;
+
+    @Test
+    public void testSimple() {
+        long fetchOffset = 5;
+        int startingOffset = 10;
+        int numRecords = 11;        // Records for 10-20
+        ShareFetchResponseData.PartitionData partitionData = new ShareFetchResponseData.PartitionData()
+                .setRecords(newRecords(startingOffset, numRecords, fetchOffset));
+
+        Deserializers<String, String> deserializers = newStringDeserializers();
+        FetchConfig fetchConfig = newFetchConfig(true);
+
+        CompletedShareFetch completedFetch = newCompletedShareFetch(partitionData);
+
+        List<ConsumerRecord<String, String>> records = completedFetch.fetchRecords(fetchConfig, deserializers, 10);
+        assertEquals(10, records.size());
+        ConsumerRecord<String, String> record = records.get(0);
+        assertEquals(10, record.offset());
+
+        records = completedFetch.fetchRecords(fetchConfig, deserializers, 10);
+        assertEquals(1, records.size());
+        record = records.get(0);
+        assertEquals(20, record.offset());
+
+        records = completedFetch.fetchRecords(fetchConfig, deserializers, 10);
+        assertEquals(0, records.size());
+    }
+
+    @Test
+    public void testCommittedTransactionRecordsIncluded() {
+        int numRecords = 10;
+        Records rawRecords = newTransactionalRecords(numRecords);
+        ShareFetchResponseData.PartitionData partitionData = new ShareFetchResponseData.PartitionData()
+                .setRecords(rawRecords);
+        CompletedShareFetch completedFetch = newCompletedShareFetch(partitionData);
+        try (final Deserializers<String, String> deserializers = newStringDeserializers()) {
+            FetchConfig fetchConfig = newFetchConfig(true);
+            List<ConsumerRecord<String, String>> records = completedFetch.fetchRecords(fetchConfig, deserializers, 10);
+            assertEquals(10, records.size());
+        }
+    }
+
+    @Test
+    public void testNegativeFetchCount() {
+        long fetchOffset = 0;
+        int startingOffset = 0;
+        int numRecords = 10;
+        ShareFetchResponseData.PartitionData partitionData = new ShareFetchResponseData.PartitionData()
+                .setRecords(newRecords(startingOffset, numRecords, fetchOffset));
+
+        try (final Deserializers<String, String> deserializers = newStringDeserializers()) {
+            CompletedShareFetch completedFetch = newCompletedShareFetch(partitionData);
+            FetchConfig fetchConfig = newFetchConfig(true);
+
+            List<ConsumerRecord<String, String>> records = completedFetch.fetchRecords(fetchConfig, deserializers, -10);
+            assertEquals(0, records.size());
+        }
+    }
+
+    @Test
+    public void testNoRecordsInFetch() {
+        ShareFetchResponseData.PartitionData partitionData = new ShareFetchResponseData.PartitionData()
+                .setPartitionIndex(0);
+
+        CompletedShareFetch completedFetch = newCompletedShareFetch(partitionData);
+        try (final Deserializers<String, String> deserializers = newStringDeserializers()) {
+            FetchConfig fetchConfig = newFetchConfig(true);
+            List<ConsumerRecord<String, String>> records = completedFetch.fetchRecords(fetchConfig, deserializers, 10);
+            assertEquals(0, records.size());
+        }
+    }
+
+    @Test
+    public void testCorruptedMessage() {
+        // Create one good record and then one "corrupted" record.
+        try (final MemoryRecordsBuilder builder = MemoryRecords.builder(ByteBuffer.allocate(1024), CompressionType.NONE, TimestampType.CREATE_TIME, 0);
+             final UUIDSerializer serializer = new UUIDSerializer()) {
+            builder.append(new SimpleRecord(serializer.serialize(TOPIC_NAME, UUID.randomUUID())));
+            builder.append(0L, "key".getBytes(), "value".getBytes());
+            Records records = builder.build();
+
+            ShareFetchResponseData.PartitionData partitionData = new ShareFetchResponseData.PartitionData()
+                    .setPartitionIndex(0)
+                    .setRecords(records);
+
+            try (final Deserializers<UUID, UUID> deserializers = newUuidDeserializers()) {
+                FetchConfig fetchConfig = newFetchConfig(false);
+                CompletedShareFetch completedFetch = newCompletedShareFetch(partitionData);
+
+                completedFetch.fetchRecords(fetchConfig, deserializers, 10);
+
+                assertThrows(RecordDeserializationException.class,
+                        () -> completedFetch.fetchRecords(fetchConfig, deserializers, 10));
+            }
+        }
+    }
+
+    private CompletedShareFetch newCompletedShareFetch(ShareFetchResponseData.PartitionData partitionData) {
+        LogContext logContext = new LogContext();
+
+        return new CompletedShareFetch(
+                logContext,
+                BufferSupplier.create(),
+                TIP,
+                partitionData,
+                ApiKeys.SHARE_FETCH.latestVersion());
+    }
+
+    private static Deserializers<UUID, UUID> newUuidDeserializers() {
+        return new Deserializers<>(new UUIDDeserializer(), new UUIDDeserializer());
+    }
+
+    private static Deserializers<String, String> newStringDeserializers() {
+        return new Deserializers<>(new StringDeserializer(), new StringDeserializer());
+    }
+
+    private static FetchConfig newFetchConfig(boolean checkCRCs) {
+        return new FetchConfig(
+                ConsumerConfig.DEFAULT_FETCH_MIN_BYTES,
+                ConsumerConfig.DEFAULT_FETCH_MAX_BYTES,
+                ConsumerConfig.DEFAULT_FETCH_MAX_WAIT_MS,
+                ConsumerConfig.DEFAULT_MAX_PARTITION_FETCH_BYTES,
+                ConsumerConfig.DEFAULT_MAX_POLL_RECORDS,
+                checkCRCs,
+                ConsumerConfig.DEFAULT_CLIENT_RACK,
+                IsolationLevel.READ_UNCOMMITTED
+        );
+    }
+
+    private Records newRecords(long baseOffset, int count, long firstMessageId) {
+        try (final MemoryRecordsBuilder builder = MemoryRecords.builder(ByteBuffer.allocate(1024), CompressionType.NONE, TimestampType.CREATE_TIME, baseOffset)) {
+            for (int i = 0; i < count; i++)
+                builder.append(0L, "key".getBytes(), ("value-" + (firstMessageId + i)).getBytes());
+            return builder.build();
+        }
+    }
+
+    private Records newTransactionalRecords(int numRecords) {
+        Time time = new MockTime();
+        ByteBuffer buffer = ByteBuffer.allocate(1024);
+
+        try (MemoryRecordsBuilder builder = MemoryRecords.builder(buffer,
+                RecordBatch.CURRENT_MAGIC_VALUE,
+                CompressionType.NONE,
+                TimestampType.CREATE_TIME,
+                0,
+                time.milliseconds(),
+                PRODUCER_ID,
+                PRODUCER_EPOCH,
+                0,
+                true,
+                RecordBatch.NO_PARTITION_LEADER_EPOCH)) {
+            for (int i = 0; i < numRecords; i++)
+                builder.append(new SimpleRecord(time.milliseconds(), "key".getBytes(), "value".getBytes()));
+
+            builder.build();
+        }
+
+        writeTransactionMarker(buffer, numRecords, time);
+        buffer.flip();
+
+        return MemoryRecords.readableRecords(buffer);
+    }
+
+    private void writeTransactionMarker(ByteBuffer buffer,
+                                        int offset,
+                                        Time time) {
+        MemoryRecords.writeEndTransactionalMarker(buffer,
+                offset,
+                time.milliseconds(),
+                0,
+                PRODUCER_ID,
+                PRODUCER_EPOCH,
+                new EndTransactionMarker(ControlRecordType.COMMIT, 0));
+    }
+}
