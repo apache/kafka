@@ -23,6 +23,7 @@ import kafka.log.remote.RemoteLogManager
 import kafka.metrics.LinuxIoMetricsCollector
 import kafka.network.SocketServer
 import kafka.security.CredentialProvider
+import kafka.server.KafkaBroker.{BrokerStateMetricName, ClusterIdMetricName, LinuxDiskReadBytesMetricName, LinuxDiskWriteBytesMetricName, LinuxMetricNames, MetricNames, YammerMetricsCountMetricName}
 import kafka.utils.Logging
 import org.apache.kafka.common.ClusterResource
 import org.apache.kafka.common.internals.ClusterResourceListeners
@@ -69,6 +70,24 @@ object KafkaBroker {
    * you do change it, be sure to make it match that regex or the system tests will fail.
    */
   val STARTED_MESSAGE = "Kafka Server started"
+
+  private val BrokerStateMetricName = "BrokerState"
+  private val ClusterIdMetricName = "ClusterId"
+  private val YammerMetricsCountMetricName = "yammer-metrics-count"
+  private val LinuxDiskReadBytesMetricName = "linux-disk-read-bytes"
+  private val LinuxDiskWriteBytesMetricName = "linux-disk-write-bytes"
+
+  // Visible for testing
+  private[server] val MetricNames = Set(
+    BrokerStateMetricName,
+    ClusterIdMetricName,
+    YammerMetricsCountMetricName
+  )
+  // Visible for testing
+  private[server] val LinuxMetricNames = Set(
+    LinuxDiskReadBytesMetricName,
+    LinuxDiskWriteBytesMetricName
+  )
 }
 
 trait KafkaBroker extends Logging {
@@ -106,14 +125,22 @@ trait KafkaBroker extends Logging {
     }
   }
 
-  metricsGroup.newGauge("BrokerState", () => brokerState.value)
-  metricsGroup.newGauge("ClusterId", () => clusterId)
-  metricsGroup.newGauge("yammer-metrics-count", () =>  KafkaYammerMetrics.defaultRegistry.allMetrics.size)
+  metricsGroup.newGauge(BrokerStateMetricName, () => brokerState.value)
+  metricsGroup.newGauge(ClusterIdMetricName, () => clusterId)
+  metricsGroup.newGauge(YammerMetricsCountMetricName, () =>  KafkaYammerMetrics.defaultRegistry.allMetrics.size)
 
-  private val linuxIoMetricsCollector = new LinuxIoMetricsCollector("/proc", Time.SYSTEM, logger.underlying)
+  // Visible for testing
+  private[server] val linuxIoMetricsCollector = new LinuxIoMetricsCollector("/proc", Time.SYSTEM, logger.underlying)
 
   if (linuxIoMetricsCollector.usable()) {
-    metricsGroup.newGauge("linux-disk-read-bytes", () => linuxIoMetricsCollector.readBytes())
-    metricsGroup.newGauge("linux-disk-write-bytes", () => linuxIoMetricsCollector.writeBytes())
+    metricsGroup.newGauge(LinuxDiskReadBytesMetricName, () => linuxIoMetricsCollector.readBytes())
+    metricsGroup.newGauge(LinuxDiskWriteBytesMetricName, () => linuxIoMetricsCollector.writeBytes())
+  }
+
+  def removeMetrics(): Unit = {
+    MetricNames.foreach(metricsGroup.removeMetric(_))
+    if (linuxIoMetricsCollector.usable()) {
+      LinuxMetricNames.foreach(metricsGroup.removeMetric(_))
+    }
   }
 }

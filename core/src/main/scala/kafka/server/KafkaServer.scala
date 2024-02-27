@@ -1047,12 +1047,13 @@ class KafkaServer(
         shutdownLatch.countDown()
         info("shut down completed")
       }
-    }
-    catch {
+    } catch {
       case e: Throwable =>
         fatal("Fatal error during KafkaServer shutdown.", e)
         isShuttingDown.set(false)
         throw e
+    } finally {
+      removeMetrics()
     }
   }
 

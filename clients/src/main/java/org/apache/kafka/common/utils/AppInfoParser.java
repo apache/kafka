@@ -18,6 +18,8 @@ package org.apache.kafka.common.utils;
 
 import java.io.InputStream;
 import java.lang.management.ManagementFactory;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Properties;
 
 import javax.management.JMException;
@@ -35,6 +37,7 @@ public class AppInfoParser {
     private static final Logger log = LoggerFactory.getLogger(AppInfoParser.class);
     private static final String VERSION;
     private static final String COMMIT_ID;
+    private static final Map<String, String> VERSION_TAGS = new HashMap<>();
 
     protected static final String DEFAULT_VALUE = "unknown";
 
@@ -47,6 +50,8 @@ public class AppInfoParser {
         }
         VERSION = props.getProperty("version", DEFAULT_VALUE).trim();
         COMMIT_ID = props.getProperty("commitId", DEFAULT_VALUE).trim();
+        VERSION_TAGS.put("version", VERSION);
+        VERSION_TAGS.put("commitId", COMMIT_ID);
     }
 
     public static String getVersion() {
@@ -55,6 +60,10 @@ public class AppInfoParser {
 
     public static String getCommitId() {
         return COMMIT_ID;
+    }
+
+    public static Map<String, String> versionTags() {
+        return VERSION_TAGS;
     }
 
     public static synchronized void registerAppInfo(String prefix, String id, Metrics metrics, long nowMs) {
@@ -93,11 +102,15 @@ public class AppInfoParser {
         return metrics.metricName(name, "app-info", "Metric indicating " + name);
     }
 
+    private static MetricName metricName(Metrics metrics, String name, Map<String, String> tags) {
+        return metrics.metricName(name, "app-info", "Metric indicating " + name, tags);
+    }
+
     private static void registerMetrics(Metrics metrics, AppInfo appInfo) {
         if (metrics != null) {
             metrics.addMetric(metricName(metrics, "version"), new ImmutableValue<>(appInfo.getVersion()));
             metrics.addMetric(metricName(metrics, "commit-id"), new ImmutableValue<>(appInfo.getCommitId()));
-            metrics.addMetric(metricName(metrics, "start-time-ms"), new ImmutableValue<>(appInfo.getStartTimeMs()));
+            metrics.addMetric(metricName(metrics, "start-time-ms", AppInfoParser.versionTags()), new ImmutableValue<>(appInfo.getStartTimeMs()));
         }
     }
 
@@ -105,7 +118,7 @@ public class AppInfoParser {
         if (metrics != null) {
             metrics.removeMetric(metricName(metrics, "version"));
             metrics.removeMetric(metricName(metrics, "commit-id"));
-            metrics.removeMetric(metricName(metrics, "start-time-ms"));
+            metrics.removeMetric(metricName(metrics, "start-time-ms", AppInfoParser.versionTags()));
         }
     }
 
