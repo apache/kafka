@@ -16,9 +16,9 @@
  */
 package kafka.server;
 
-import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.message.ShareAcknowledgeRequestData;
 import org.apache.kafka.common.message.ShareAcknowledgeResponseData;
 import org.apache.kafka.common.message.ShareFetchResponseData;
 import org.apache.kafka.common.message.ShareFetchResponseData.PartitionData;
@@ -27,6 +27,7 @@ import org.apache.kafka.common.requests.FetchRequest;
 import org.apache.kafka.common.requests.ShareFetchMetadata;
 import org.apache.kafka.common.requests.ShareFetchRequest;
 import org.apache.kafka.common.requests.ShareFetchResponse;
+import org.apache.kafka.common.utils.ImplicitLinkedHashCollection;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.storage.internals.log.FetchParams;
 import org.apache.kafka.storage.internals.log.FetchPartitionData;
@@ -121,7 +122,8 @@ public class SharePartitionManager {
         return future;
     }
 
-    public CompletableFuture<ShareAcknowledgeResponseData> acknowledge(ShareSession session, PartitionInfo partitionInfo) {
+    public CompletableFuture<ShareAcknowledgeResponseData> acknowledge(String groupId, TopicIdPartition topicIdPartition,
+                                                                       List<ShareAcknowledgeRequestData.AcknowledgementBatch> ackBatches) {
         throw new UnsupportedOperationException("Not implemented yet");
     }
 
@@ -129,10 +131,14 @@ public class SharePartitionManager {
         return new SharePartitionKey(groupId, topicIdPartition);
     }
 
-    // TODO: Implement session. Initial implementation shall create new session on each call which can
-    //  be used in further API calls.
-    public ShareSession session() {
-        throw new UnsupportedOperationException("Not implemented yet");
+    private SharePartition sharePartition(SharePartitionKey sharePartitionKey) {
+        return partitionCacheMap.getOrDefault(sharePartitionKey, null);
+    }
+
+    // TODO: Function requires an in depth implementation in the future. For now, it returns a new share session everytime
+    public ShareSession session(Time time, String memberId, ShareFetchRequest request) {
+        return new ShareSession(memberId, new ImplicitLinkedHashCollection<>(),
+                time.milliseconds(), time.milliseconds(), ShareFetchMetadata.nextEpoch(ShareFetchMetadata.INITIAL_EPOCH));
     }
 
     public ShareFetchContext newContext(Map<TopicIdPartition,
@@ -166,7 +172,34 @@ public class SharePartitionManager {
     // TODO: Define share session class.
     public static class ShareSession {
 
+        private final String id;
+        private final ImplicitLinkedHashCollection<SharePartitionManager.CachedPartition> partitionMap;
+        private final long creationMs;
+        private final long lastUsedMs;
+        private final int epoch;
+
+        /**
+         * The share session.
+         * Each share session is protected by its own lock, which must be taken before mutable
+         * fields are read or modified.  This includes modification of the share session partition map.
+         *
+         * @param id                 The unique share session ID.
+         * @param partitionMap       The CachedPartitionMap.
+         * @param creationMs         The time in milliseconds when this share session was created.
+         * @param lastUsedMs         The last used time in milliseconds. This should only be updated by
+         *                           ShareSessionCache#touch.
+         * @param epoch              The share session sequence number.
+         */
+        public ShareSession(String id, ImplicitLinkedHashCollection<CachedPartition> partitionMap,
+                            long creationMs, long lastUsedMs, int epoch) {
+            this.id = id;
+            this.partitionMap = partitionMap;
+            this.creationMs = creationMs;
+            this.lastUsedMs = lastUsedMs;
+            this.epoch = epoch;
+        }
     }
+
     /**
      * The share fetch context for a sessionless share fetch request.
      */
@@ -331,6 +364,72 @@ public class SharePartitionManager {
         public ShareFetchSessionCache(int maxEntries, long evictionMs) {
             this.maxEntries = maxEntries;
             this.evictionMs = evictionMs;
+        }
+    }
+
+    /*
+     * A cached partition.
+     *
+     * The broker maintains a set of these objects for each share fetch session.
+     * When a share fetch request is made, any partitions which are not explicitly
+     * enumerated in the fetch request are loaded from the cache.  Similarly, when an
+     * share fetch response is being prepared, any partitions that have not changed and
+     * do not have errors are left out of the response.
+     *
+     * We store many of these objects, so it is important for them to be memory-efficient.
+     * That is why we store topic and partition separately rather than storing a TopicPartition
+     * object. The TP object takes up more memory because it is a separate JVM object, and
+     * because it stores the cached hash code in memory.
+     *
+     */
+    public static class CachedPartition implements ImplicitLinkedHashCollection.Element {
+        private final String topic;
+        private final Uuid topicId;
+        private final int partition, maxBytes;
+        private final Optional<Integer> leaderEpoch;
+
+        private int cachedNext = ImplicitLinkedHashCollection.INVALID_INDEX;
+        private int cachedPrev = ImplicitLinkedHashCollection.INVALID_INDEX;
+
+        private CachedPartition(String topic, Uuid topicId, int partition, int maxBytes, Optional<Integer> leaderEpoch) {
+            this.topic = topic;
+            this.topicId = topicId;
+            this.partition = partition;
+            this.maxBytes = maxBytes;
+            this.leaderEpoch = leaderEpoch;
+        }
+
+        private CachedPartition(String topic, Uuid topicId, int partition) {
+            this(topic, topicId, partition, -1, Optional.empty());
+        }
+
+        public CachedPartition(TopicIdPartition topicIdPartition) {
+            this(topicIdPartition.topic(), topicIdPartition.topicId(), topicIdPartition.partition());
+        }
+
+        public CachedPartition(TopicIdPartition topicIdPartition, ShareFetchRequest.SharePartitionData reqData) {
+            this(topicIdPartition.topic(), topicIdPartition.topicId(), topicIdPartition.partition(), reqData.maxBytes,
+                    reqData.currentLeaderEpoch);
+        }
+
+        @Override
+        public int prev() {
+            return cachedPrev;
+        }
+
+        @Override
+        public void setPrev(int prev) {
+            cachedPrev = prev;
+        }
+
+        @Override
+        public int next() {
+            return cachedNext;
+        }
+
+        @Override
+        public void setNext(int next) {
+            cachedNext = next;
         }
     }
 }
