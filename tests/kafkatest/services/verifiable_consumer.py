@@ -39,7 +39,7 @@ class ConsumerEventHandler(object):
         self.state = ConsumerState.Dead
         self.revoked_count = 0
         self.assigned_count = 0
-        self.assignment = set()
+        self.assignment = set()         # The set of partitions is updated on assign and revoke
         self.position = {}
         self.committed = {}
         self.total_consumed = 0

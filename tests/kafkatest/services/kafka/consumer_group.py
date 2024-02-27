@@ -24,7 +24,6 @@ consumer_group_protocol = 'consumer'
 # protocol, we'll leave this as-is.
 all_group_protocols = [classic_group_protocol]
 
-
 # These are the remote assignors used by the new group coordinator.
 range_remote_assignor = 'range'
 uniform_remote_assignor = 'uniform'
