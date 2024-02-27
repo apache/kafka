@@ -328,7 +328,8 @@ public class HeartbeatRequestManagerTest {
     @Test
     public void testConsumerGroupMetadataFirstUpdate() {
         final GroupMetadataUpdateEvent groupMetadataUpdateEvent = makeFirstGroupMetadataUpdate(memberId, memberEpoch);
-        assertGroupMetadataUpdateEvent(groupMetadataUpdateEvent, memberEpoch, memberId);
+        assertEquals(memberEpoch, groupMetadataUpdateEvent.memberEpoch());
+        assertEquals(memberId, groupMetadataUpdateEvent.memberId());
     }
 
     @Test
@@ -365,7 +366,8 @@ public class HeartbeatRequestManagerTest {
         final BackgroundEvent eventWithUpdatedMemberEpoch = backgroundEventQueue.poll();
         assertEquals(BackgroundEvent.Type.GROUP_METADATA_UPDATE, eventWithUpdatedMemberEpoch.type());
         final GroupMetadataUpdateEvent groupMetadataUpdateEvent = (GroupMetadataUpdateEvent) eventWithUpdatedMemberEpoch;
-        assertGroupMetadataUpdateEvent(groupMetadataUpdateEvent, updatedMemberEpoch, memberId);
+        assertEquals(updatedMemberEpoch, groupMetadataUpdateEvent.memberEpoch());
+        assertEquals(memberId, groupMetadataUpdateEvent.memberId());
     }
 
     @Test
@@ -389,7 +391,8 @@ public class HeartbeatRequestManagerTest {
         final BackgroundEvent eventWithUpdatedMemberEpoch = backgroundEventQueue.poll();
         assertEquals(BackgroundEvent.Type.GROUP_METADATA_UPDATE, eventWithUpdatedMemberEpoch.type());
         final GroupMetadataUpdateEvent groupMetadataUpdateEvent = (GroupMetadataUpdateEvent) eventWithUpdatedMemberEpoch;
-        assertGroupMetadataUpdateEvent(groupMetadataUpdateEvent, memberEpoch, updatedMemberId);
+        assertEquals(memberEpoch, groupMetadataUpdateEvent.memberEpoch());
+        assertEquals(updatedMemberId, groupMetadataUpdateEvent.memberId());
     }
 
     private GroupMetadataUpdateEvent makeFirstGroupMetadataUpdate(final String memberId, final int memberEpoch) {
@@ -690,13 +693,6 @@ public class HeartbeatRequestManagerTest {
     private void assertNoHeartbeat(HeartbeatRequestManager hrm) {
         NetworkClientDelegate.PollResult pollResult = hrm.poll(time.milliseconds());
         assertEquals(0, pollResult.unsentRequests.size());
-    }
-
-    private void assertGroupMetadataUpdateEvent(GroupMetadataUpdateEvent event,
-                                                int expectedMemberEpoch,
-                                                String expectedMemberId) {
-        assertEquals(expectedMemberEpoch, event.memberEpoch());
-        assertEquals(expectedMemberId, event.memberId());
     }
 
     private void mockStableMember() {
