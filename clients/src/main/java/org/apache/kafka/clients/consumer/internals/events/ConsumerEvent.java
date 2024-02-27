@@ -16,42 +16,53 @@
  */
 package org.apache.kafka.clients.consumer.internals.events;
 
-public class PollApplicationEvent extends ApplicationEvent {
+import org.apache.kafka.common.Uuid;
 
-    private final long pollTimeMs;
+import java.util.Objects;
 
-    public PollApplicationEvent(final long pollTimeMs) {
-        super(Type.POLL);
-        this.pollTimeMs = pollTimeMs;
+/**
+ * Application event with a result in the form of a future, that can be retrieved within a
+ * timeout based on completion.
+ *
+ * @param <TYPE>
+ */
+public abstract class ConsumerEvent<TYPE extends Enum<TYPE>> {
+
+    private final TYPE type;
+
+    private final Uuid id;
+
+    protected ConsumerEvent(TYPE type) {
+        this.type = Objects.requireNonNull(type);
+        this.id = Uuid.randomUuid();
     }
 
-    public long pollTimeMs() {
-        return pollTimeMs;
+    public TYPE type() {
+        return type;
+    }
+
+    public Uuid id() {
+        return id;
     }
 
     @Override
-    public boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
-        if (!super.equals(o)) return false;
-
-        PollApplicationEvent that = (PollApplicationEvent) o;
-
-        return pollTimeMs == that.pollTimeMs;
+    public final boolean equals(Object o) {
+        return this == o;
     }
 
     @Override
-    public int hashCode() {
-        int result = super.hashCode();
-        result = 31 * result + (int) (pollTimeMs ^ (pollTimeMs >>> 32));
-        return result;
+    public final int hashCode() {
+        return Objects.hash(type, id);
+    }
+
+    protected String toStringBase() {
+        return "type=" + type + ", id=" + id;
     }
 
     @Override
-    public String toString() {
-        return "PollApplicationEvent{" +
+    public final String toString() {
+        return getClass().getSimpleName() + "{" +
                 toStringBase() +
-                ", pollTimeMs=" + pollTimeMs +
                 '}';
     }
 }

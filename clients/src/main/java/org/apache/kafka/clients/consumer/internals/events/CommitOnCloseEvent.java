@@ -16,24 +16,9 @@
  */
 package org.apache.kafka.clients.consumer.internals.events;
 
-import org.apache.kafka.clients.consumer.OffsetAndMetadata;
-import org.apache.kafka.common.TopicPartition;
-import java.util.Map;
+public class CommitOnCloseEvent extends ApplicationEvent {
 
-/**
- * Event to commit offsets without waiting for a response, so the request won't be retried.
- */
-public class AsyncCommitApplicationEvent extends CommitApplicationEvent {
-
-    public AsyncCommitApplicationEvent(final Map<TopicPartition, OffsetAndMetadata> offsets) {
-        super(offsets, Type.COMMIT_ASYNC);
-    }
-
-    @Override
-    public String toString() {
-        return "AsyncCommitApplicationEvent{" +
-            toStringBase() +
-            ", offsets=" + offsets() +
-            '}';
+    public CommitOnCloseEvent() {
+        super(Type.COMMIT_ON_CLOSE);
     }
 }

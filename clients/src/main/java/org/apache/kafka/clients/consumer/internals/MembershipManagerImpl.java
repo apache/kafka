@@ -24,9 +24,9 @@ import org.apache.kafka.clients.consumer.internals.Utils.TopicIdPartitionCompara
 import org.apache.kafka.clients.consumer.internals.Utils.TopicPartitionComparator;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEventHandler;
 import org.apache.kafka.clients.consumer.internals.events.CompletableBackgroundEvent;
-import org.apache.kafka.clients.consumer.internals.events.ConsumerRebalanceListenerCallbackCompletedEvent;
-import org.apache.kafka.clients.consumer.internals.events.ConsumerRebalanceListenerCallbackNeededEvent;
-import org.apache.kafka.clients.consumer.internals.events.ErrorBackgroundEvent;
+import org.apache.kafka.clients.consumer.internals.events.RebalanceListenerCallbackCompletedEvent;
+import org.apache.kafka.clients.consumer.internals.events.RebalanceListenerCallbackNeededEvent;
+import org.apache.kafka.clients.consumer.internals.events.ErrorEvent;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
@@ -252,8 +252,8 @@ public class MembershipManagerImpl implements MembershipManager {
 
     /**
      * Serves as the conduit by which we can report events to the application thread. This is needed as we send
-     * {@link ConsumerRebalanceListenerCallbackNeededEvent callbacks} and, if needed,
-     * {@link ErrorBackgroundEvent errors} to the application thread.
+     * {@link RebalanceListenerCallbackNeededEvent callbacks} and, if needed,
+     * {@link ErrorEvent errors} to the application thread.
      */
     private final BackgroundEventHandler backgroundEventHandler;
 
@@ -1271,7 +1271,7 @@ public class MembershipManagerImpl implements MembershipManager {
     }
 
     /**
-     * Enqueue a {@link ConsumerRebalanceListenerCallbackNeededEvent} to trigger the execution of the
+     * Enqueue a {@link RebalanceListenerCallbackNeededEvent} to trigger the execution of the
      * appropriate {@link ConsumerRebalanceListener} {@link ConsumerRebalanceListenerMethodName method} on the
      * application thread.
      *
@@ -1288,14 +1288,14 @@ public class MembershipManagerImpl implements MembershipManager {
                                                                              Set<TopicPartition> partitions) {
         SortedSet<TopicPartition> sortedPartitions = new TreeSet<>(TOPIC_PARTITION_COMPARATOR);
         sortedPartitions.addAll(partitions);
-        CompletableBackgroundEvent<Void> event = new ConsumerRebalanceListenerCallbackNeededEvent(methodName, sortedPartitions);
+        CompletableBackgroundEvent<Void> event = new RebalanceListenerCallbackNeededEvent(methodName, sortedPartitions);
         backgroundEventHandler.add(event);
         log.debug("The event to trigger the {} method execution was enqueued successfully", methodName.fullyQualifiedMethodName());
         return event.future();
     }
 
     @Override
-    public void consumerRebalanceListenerCallbackCompleted(ConsumerRebalanceListenerCallbackCompletedEvent event) {
+    public void consumerRebalanceListenerCallbackCompleted(RebalanceListenerCallbackCompletedEvent event) {
         ConsumerRebalanceListenerMethodName methodName = event.methodName();
         Optional<KafkaException> error = event.error();
         CompletableFuture<Void> future = event.future();

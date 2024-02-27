@@ -28,15 +28,15 @@ import java.util.concurrent.CompletableFuture;
  * Event that signifies that the application thread has executed the {@link ConsumerRebalanceListener} callback. If
  * the callback execution threw an error, it is included in the event should any event listener want to know.
  */
-public class ConsumerRebalanceListenerCallbackCompletedEvent extends ApplicationEvent {
+public class RebalanceListenerCallbackCompletedEvent extends ApplicationEvent {
 
     private final ConsumerRebalanceListenerMethodName methodName;
     private final CompletableFuture<Void> future;
     private final Optional<KafkaException> error;
 
-    public ConsumerRebalanceListenerCallbackCompletedEvent(ConsumerRebalanceListenerMethodName methodName,
-                                                           CompletableFuture<Void> future,
-                                                           Optional<KafkaException> error) {
+    public RebalanceListenerCallbackCompletedEvent(ConsumerRebalanceListenerMethodName methodName,
+                                                   CompletableFuture<Void> future,
+                                                   Optional<KafkaException> error) {
         super(Type.CONSUMER_REBALANCE_LISTENER_CALLBACK_COMPLETED);
         this.methodName = Objects.requireNonNull(methodName);
         this.future = Objects.requireNonNull(future);
@@ -56,35 +56,10 @@ public class ConsumerRebalanceListenerCallbackCompletedEvent extends Application
     }
 
     @Override
-    public boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
-        if (!super.equals(o)) return false;
-
-        ConsumerRebalanceListenerCallbackCompletedEvent that = (ConsumerRebalanceListenerCallbackCompletedEvent) o;
-
-        return methodName == that.methodName &&
-                future.equals(that.future) &&
-                error.equals(that.error);
-    }
-
-    @Override
-    public int hashCode() {
-        return Objects.hash(methodName, future, error);
-    }
-
-    @Override
     protected String toStringBase() {
         return super.toStringBase() +
                 ", methodName=" + methodName +
                 ", future=" + future +
                 ", error=" + error;
-    }
-
-    @Override
-    public String toString() {
-        return getClass().getSimpleName() + "{" +
-                toStringBase() +
-                '}';
     }
 }

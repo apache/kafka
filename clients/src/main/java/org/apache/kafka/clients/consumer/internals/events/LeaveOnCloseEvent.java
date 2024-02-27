@@ -14,17 +14,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.clients.consumer.internals.events;
 
-/**
- * Application event indicating that the subscription state has changed, triggered when a user
- * calls the subscribe API. This will make the consumer join a consumer group if not part of it
- * yet, or just send the updated subscription to the broker if it's already a member of the group.
- */
-public class SubscriptionChangeApplicationEvent extends ApplicationEvent {
+public class LeaveOnCloseEvent extends CompletableApplicationEvent<Void> {
 
-    public SubscriptionChangeApplicationEvent() {
-        super(Type.SUBSCRIPTION_CHANGE);
+    public LeaveOnCloseEvent() {
+        super(Type.LEAVE_ON_CLOSE);
     }
 }

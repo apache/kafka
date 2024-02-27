@@ -16,15 +16,34 @@
  */
 package org.apache.kafka.clients.consumer.internals.events;
 
-public class LeaveOnCloseApplicationEvent extends CompletableApplicationEvent<Void> {
-    public LeaveOnCloseApplicationEvent() {
-        super(Type.LEAVE_ON_CLOSE);
+import org.apache.kafka.clients.consumer.OffsetAndMetadata;
+import org.apache.kafka.common.TopicPartition;
+
+import java.util.Map;
+
+/**
+ * Event to commit offsets waiting for a response and retrying on expected retriable errors until
+ * the timer expires.
+ */
+public class SyncCommitEvent extends CommitEvent {
+
+    /**
+     * Time to wait for a response, retrying on retriable errors.
+     */
+    private final long retryTimeoutMs;
+
+    public SyncCommitEvent(final Map<TopicPartition, OffsetAndMetadata> offsets,
+                           final long retryTimeoutMs) {
+        super(Type.COMMIT_SYNC, offsets);
+        this.retryTimeoutMs = retryTimeoutMs;
+    }
+
+    public Long retryTimeoutMs() {
+        return retryTimeoutMs;
     }
 
     @Override
-    public String toString() {
-        return "LeaveOnCloseApplicationEvent{" +
-            toStringBase() +
-            '}';
+    public String toStringBase() {
+        return super.toStringBase() + ", offsets=" + offsets() + ", retryTimeoutMs=" + retryTimeoutMs;
     }
 }

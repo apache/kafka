@@ -19,8 +19,6 @@ package org.apache.kafka.clients.consumer.internals.events;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.internals.ConsumerNetworkThread;
 
-import java.util.Objects;
-
 /**
  * This event is sent by the {@link ConsumerNetworkThread consumer's network thread} to the application thread
  * so that when the user calls the {@link Consumer#groupMetadata()} API, the information is up-to-date. The
@@ -29,11 +27,10 @@ import java.util.Objects;
  */
 public class GroupMetadataUpdateEvent extends BackgroundEvent {
 
-    final private int memberEpoch;
-    final private String memberId;
+    private final int memberEpoch;
+    private final String memberId;
 
-    public GroupMetadataUpdateEvent(final int memberEpoch,
-                                    final String memberId) {
+    public GroupMetadataUpdateEvent(final int memberEpoch, final String memberId) {
         super(Type.GROUP_METADATA_UPDATE);
         this.memberEpoch = memberEpoch;
         this.memberId = memberId;
@@ -48,32 +45,9 @@ public class GroupMetadataUpdateEvent extends BackgroundEvent {
     }
 
     @Override
-    public boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
-        if (!super.equals(o)) return false;
-        GroupMetadataUpdateEvent that = (GroupMetadataUpdateEvent) o;
-        return memberEpoch == that.memberEpoch &&
-            Objects.equals(memberId, that.memberId);
-    }
-
-    @Override
-    public int hashCode() {
-        return Objects.hash(super.hashCode(), memberEpoch, memberId);
-    }
-
-    @Override
     public String toStringBase() {
         return super.toStringBase() +
             ", memberEpoch=" + memberEpoch +
             ", memberId='" + memberId + '\'';
     }
-
-    @Override
-    public String toString() {
-        return "GroupMetadataUpdateEvent{" +
-            toStringBase() +
-            '}';
-    }
-
 }

@@ -69,19 +69,19 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
     public void process(ApplicationEvent event) {
         switch (event.type()) {
             case COMMIT_ASYNC:
-                process((AsyncCommitApplicationEvent) event);
+                process((AsyncCommitEvent) event);
                 return;
 
             case COMMIT_SYNC:
-                process((SyncCommitApplicationEvent) event);
+                process((SyncCommitEvent) event);
                 return;
 
             case POLL:
-                process((PollApplicationEvent) event);
+                process((PollEvent) event);
                 return;
 
             case FETCH_COMMITTED_OFFSETS:
-                process((FetchCommittedOffsetsApplicationEvent) event);
+                process((FetchCommittedOffsetsEvent) event);
                 return;
 
             case NEW_TOPICS_METADATA_UPDATE:
@@ -89,43 +89,43 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
                 return;
 
             case ASSIGNMENT_CHANGE:
-                process((AssignmentChangeApplicationEvent) event);
+                process((AssignmentChangeEvent) event);
                 return;
 
             case TOPIC_METADATA:
-                process((TopicMetadataApplicationEvent) event);
+                process((TopicMetadataEvent) event);
                 return;
 
             case LIST_OFFSETS:
-                process((ListOffsetsApplicationEvent) event);
+                process((ListOffsetsEvent) event);
                 return;
 
             case RESET_POSITIONS:
-                process((ResetPositionsApplicationEvent) event);
+                process((ResetPositionsEvent) event);
                 return;
 
             case VALIDATE_POSITIONS:
-                process((ValidatePositionsApplicationEvent) event);
+                process((ValidatePositionsEvent) event);
                 return;
 
             case SUBSCRIPTION_CHANGE:
-                process((SubscriptionChangeApplicationEvent) event);
+                process((SubscriptionChangeEvent) event);
                 return;
 
             case UNSUBSCRIBE:
-                process((UnsubscribeApplicationEvent) event);
+                process((UnsubscribeEvent) event);
                 return;
 
             case CONSUMER_REBALANCE_LISTENER_CALLBACK_COMPLETED:
-                process((ConsumerRebalanceListenerCallbackCompletedEvent) event);
+                process((RebalanceListenerCallbackCompletedEvent) event);
                 return;
 
             case COMMIT_ON_CLOSE:
-                process((CommitOnCloseApplicationEvent) event);
+                process((CommitOnCloseEvent) event);
                 return;
 
             case LEAVE_ON_CLOSE:
-                process((LeaveOnCloseApplicationEvent) event);
+                process((LeaveOnCloseEvent) event);
                 return;
 
             default:
@@ -133,7 +133,7 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
         }
     }
 
-    private void process(final PollApplicationEvent event) {
+    private void process(final PollEvent event) {
         if (!requestManagers.commitRequestManager.isPresent()) {
             return;
         }
@@ -142,20 +142,20 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
         requestManagers.heartbeatRequestManager.ifPresent(hrm -> hrm.resetPollTimer(event.pollTimeMs()));
     }
 
-    private void process(final AsyncCommitApplicationEvent event) {
+    private void process(final AsyncCommitEvent event) {
         CommitRequestManager manager = requestManagers.commitRequestManager.get();
         CompletableFuture<Void> commitResult = manager.commitAsync(event.offsets());
         event.chain(commitResult);
     }
 
-    private void process(final SyncCommitApplicationEvent event) {
+    private void process(final SyncCommitEvent event) {
         CommitRequestManager manager = requestManagers.commitRequestManager.get();
         long expirationTimeoutMs = getExpirationTimeForTimeout(event.retryTimeoutMs());
         CompletableFuture<Void> commitResult = manager.commitSync(event.offsets(), expirationTimeoutMs);
         event.chain(commitResult);
     }
 
-    private void process(final FetchCommittedOffsetsApplicationEvent event) {
+    private void process(final FetchCommittedOffsetsEvent event) {
         if (!requestManagers.commitRequestManager.isPresent()) {
             event.future().completeExceptionally(new KafkaException("Unable to fetch committed " +
                     "offset because the CommittedRequestManager is not available. Check if group.id was set correctly"));
@@ -175,7 +175,7 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
      * Commit all consumed if auto-commit is enabled. Note this will trigger an async commit,
      * that will not be retried if the commit request fails.
      */
-    private void process(final AssignmentChangeApplicationEvent event) {
+    private void process(final AssignmentChangeEvent event) {
         if (!requestManagers.commitRequestManager.isPresent()) {
             return;
         }
@@ -184,7 +184,7 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
         manager.maybeAutoCommitAsync();
     }
 
-    private void process(final ListOffsetsApplicationEvent event) {
+    private void process(final ListOffsetsEvent event) {
         final CompletableFuture<Map<TopicPartition, OffsetAndTimestamp>> future =
                 requestManagers.offsetsRequestManager.fetchOffsets(event.timestampsToSearch(),
                         event.requireTimestamps());
@@ -196,7 +196,7 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
      * consumer join the group if it is not part of it yet, or send the updated subscription if
      * it is already a member.
      */
-    private void process(final SubscriptionChangeApplicationEvent ignored) {
+    private void process(final SubscriptionChangeEvent ignored) {
         if (!requestManagers.heartbeatRequestManager.isPresent()) {
             log.warn("Group membership manager not present when processing a subscribe event");
             return;
@@ -213,7 +213,7 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
      *              execution for releasing the assignment completes, and the request to leave
      *              the group is sent out.
      */
-    private void process(final UnsubscribeApplicationEvent event) {
+    private void process(final UnsubscribeEvent event) {
         if (!requestManagers.heartbeatRequestManager.isPresent()) {
             KafkaException error = new KafkaException("Group membership manager not present when processing an unsubscribe event");
             event.future().completeExceptionally(error);
@@ -224,30 +224,30 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
         event.chain(result);
     }
 
-    private void process(final ResetPositionsApplicationEvent event) {
+    private void process(final ResetPositionsEvent event) {
         CompletableFuture<Void> result = requestManagers.offsetsRequestManager.resetPositionsIfNeeded();
         event.chain(result);
     }
 
-    private void process(final ValidatePositionsApplicationEvent event) {
+    private void process(final ValidatePositionsEvent event) {
         CompletableFuture<Void> result = requestManagers.offsetsRequestManager.validatePositionsIfNeeded();
         event.chain(result);
     }
 
-    private void process(final TopicMetadataApplicationEvent event) {
+    private void process(final TopicMetadataEvent event) {
         final CompletableFuture<Map<String, List<PartitionInfo>>> future;
 
-        long expirationTimeMs = getExpirationTimeForTimeout(event.getTimeoutMs());
-        if (event.isAllTopics()) {
-            future = requestManagers.topicMetadataRequestManager.requestAllTopicsMetadata(expirationTimeMs);
+        long expirationTimeMs = getExpirationTimeForTimeout(event.timeoutMs());
+        if (event.topic().isPresent()) {
+            future = requestManagers.topicMetadataRequestManager.requestTopicMetadata(event.topic().get(), expirationTimeMs);
         } else {
-            future = requestManagers.topicMetadataRequestManager.requestTopicMetadata(event.topic(), expirationTimeMs);
+            future = requestManagers.topicMetadataRequestManager.requestAllTopicsMetadata(expirationTimeMs);
         }
 
         event.chain(future);
     }
 
-    private void process(final ConsumerRebalanceListenerCallbackCompletedEvent event) {
+    private void process(final RebalanceListenerCallbackCompletedEvent event) {
         if (!requestManagers.heartbeatRequestManager.isPresent()) {
             log.warn(
                 "An internal error occurred; the group membership manager was not present, so the notification of the {} callback execution could not be sent",
@@ -259,14 +259,14 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
         manager.consumerRebalanceListenerCallbackCompleted(event);
     }
 
-    private void process(final CommitOnCloseApplicationEvent event) {
+    private void process(final CommitOnCloseEvent event) {
         if (!requestManagers.commitRequestManager.isPresent())
             return;
         log.debug("Signal CommitRequestManager closing");
         requestManagers.commitRequestManager.get().signalClose();
     }
 
-    private void process(final LeaveOnCloseApplicationEvent event) {
+    private void process(final LeaveOnCloseEvent event) {
         if (!requestManagers.heartbeatRequestManager.isPresent()) {
             event.future().complete(null);
             return;

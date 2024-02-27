@@ -16,10 +16,13 @@
  */
 package org.apache.kafka.clients.consumer.internals.events;
 
+import org.apache.kafka.common.Uuid;
+
 import java.util.Objects;
 
 /**
- * This is the abstract definition of the events created by the KafkaConsumer API
+ * This is the abstract definition of the events created by the KafkaConsumer API on the user's
+ * application thread.
  */
 public abstract class ApplicationEvent {
 
@@ -32,36 +35,38 @@ public abstract class ApplicationEvent {
 
     private final Type type;
 
+    private final Uuid id;
+
     protected ApplicationEvent(Type type) {
         this.type = Objects.requireNonNull(type);
+        this.id = Uuid.randomUuid();
     }
 
     public Type type() {
         return type;
     }
 
-    @Override
-    public boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
-
-        ApplicationEvent that = (ApplicationEvent) o;
-
-        return type == that.type;
+    public Uuid id() {
+        return id;
     }
 
     @Override
-    public int hashCode() {
-        return type.hashCode();
+    public final boolean equals(Object o) {
+        return this == o;
+    }
+
+    @Override
+    public final int hashCode() {
+        return Objects.hash(type, id);
     }
 
     protected String toStringBase() {
-        return "type=" + type;
+        return "type=" + type + ", id=" + id;
     }
 
     @Override
-    public String toString() {
-        return "ApplicationEvent{" +
+    public final String toString() {
+        return getClass().getSimpleName() + "{" +
                 toStringBase() +
                 '}';
     }
