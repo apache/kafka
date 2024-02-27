@@ -729,7 +729,7 @@ public class TaskManager {
                     final StandbyTask standbyTask = convertActiveToStandby((StreamTask) oldTask, inputPartitions);
                     if (stateUpdater != null) {
                         tasks.removeTask(oldTask);
-                        tasks.addPendingTasksToInit(Collections.singleton(standbyTask));
+                        addTaskToStateUpdater(standbyTask);
                     } else {
                         tasks.replaceActiveWithStandby(standbyTask);
                     }
