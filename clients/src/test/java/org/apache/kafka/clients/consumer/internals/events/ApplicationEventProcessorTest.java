@@ -27,9 +27,6 @@ import org.apache.kafka.clients.consumer.internals.OffsetsRequestManager;
 import org.apache.kafka.clients.consumer.internals.RequestManagers;
 import org.apache.kafka.clients.consumer.internals.TopicMetadataRequestManager;
 import org.apache.kafka.common.utils.LogContext;
-import org.apache.kafka.common.utils.MockTime;
-import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.common.utils.Timer;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -39,6 +36,7 @@ import java.util.Optional;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CompletableFuture;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
@@ -46,7 +44,6 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 public class ApplicationEventProcessorTest {
-    private Time time;
     private ApplicationEventProcessor processor;
     private BlockingQueue applicationEventQueue = mock(BlockingQueue.class);
     private RequestManagers requestManagers;
@@ -64,7 +61,6 @@ public class ApplicationEventProcessorTest {
     @BeforeEach
     @SuppressWarnings("unchecked")
     public void setup() {
-        time = new MockTime();
         LogContext logContext = new LogContext();
         offsetRequestManager = mock(OffsetsRequestManager.class);
         offsetsRequestManager = mock(OffsetsRequestManager.class);
@@ -101,9 +97,17 @@ public class ApplicationEventProcessorTest {
     }
 
     @Test
+    public void testExpirationCalculation() {
+        assertEquals(Long.MAX_VALUE, processor.getExpirationTimeForTimeout(Long.MAX_VALUE));
+        assertEquals(Long.MAX_VALUE, processor.getExpirationTimeForTimeout(Long.MAX_VALUE - 1));
+        long timeout = processor.getExpirationTimeForTimeout(1000);
+        assertTrue(timeout > 0);
+        assertTrue(timeout < Long.MAX_VALUE);
+    }
+
+    @Test
     public void testPrepClosingLeaveGroupEvent() {
-        Timer timer = time.timer(Long.MAX_VALUE);
-        LeaveOnCloseApplicationEvent event = new LeaveOnCloseApplicationEvent(timer);
+        LeaveOnCloseApplicationEvent event = new LeaveOnCloseApplicationEvent();
         when(heartbeatRequestManager.membershipManager()).thenReturn(membershipManager);
         when(membershipManager.leaveGroup()).thenReturn(CompletableFuture.completedFuture(null));
         processor.process(event);

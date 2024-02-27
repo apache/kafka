@@ -183,6 +183,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
          * could occur when processing the events. In such cases, the processor will take a reference to the first
          * error, continue to process the remaining events, and then throw the first error that occurred.
          */
+        @Override
         public boolean process() {
             AtomicReference<KafkaException> firstError = new AtomicReference<>();
 
@@ -767,8 +768,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     public void commitAsync(Map<TopicPartition, OffsetAndMetadata> offsets, OffsetCommitCallback callback) {
         acquireAndEnsureOpen();
         try {
-            Timer timer = time.timer(Long.MAX_VALUE);
-            AsyncCommitApplicationEvent asyncCommitEvent = new AsyncCommitApplicationEvent(offsets, timer);
+            AsyncCommitApplicationEvent asyncCommitEvent = new AsyncCommitApplicationEvent(offsets);
             CompletableFuture<Void> future = commit(asyncCommitEvent);
             future.whenComplete((r, t) -> {
 
@@ -936,13 +936,13 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                 return Collections.emptyMap();
             }
 
-            final Timer timer = time.timer(timeout);
             final FetchCommittedOffsetsApplicationEvent event = new FetchCommittedOffsetsApplicationEvent(
                 partitions,
-                timer);
+                timeout.toMillis());
             wakeupTrigger.setActiveTask(event.future());
             try {
-                final Map<TopicPartition, OffsetAndMetadata> committedOffsets = applicationEventHandler.addAndGet(event);
+                final Map<TopicPartition, OffsetAndMetadata> committedOffsets = applicationEventHandler.addAndGet(event,
+                    time.timer(timeout));
                 committedOffsets.forEach(this::updateLastSeenEpochIfNewer);
                 return committedOffsets;
             } catch (TimeoutException e) {
@@ -988,13 +988,12 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                 throw new TimeoutException();
             }
 
-            final Timer timer = time.timer(timeout);
             final TopicMetadataApplicationEvent topicMetadataApplicationEvent =
-                    new TopicMetadataApplicationEvent(topic, timer);
+                    new TopicMetadataApplicationEvent(topic, timeout.toMillis());
             wakeupTrigger.setActiveTask(topicMetadataApplicationEvent.future());
             try {
                 Map<String, List<PartitionInfo>> topicMetadata =
-                        applicationEventHandler.addAndGet(topicMetadataApplicationEvent);
+                        applicationEventHandler.addAndGet(topicMetadataApplicationEvent, time.timer(timeout));
 
                 return topicMetadata.getOrDefault(topic, Collections.emptyList());
             } finally {
@@ -1018,12 +1017,11 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                 throw new TimeoutException();
             }
 
-            final Timer timer = time.timer(timeout);
             final TopicMetadataApplicationEvent topicMetadataApplicationEvent =
-                    new TopicMetadataApplicationEvent(timer);
+                    new TopicMetadataApplicationEvent(timeout.toMillis());
             wakeupTrigger.setActiveTask(topicMetadataApplicationEvent.future());
             try {
-                return applicationEventHandler.addAndGet(topicMetadataApplicationEvent);
+                return applicationEventHandler.addAndGet(topicMetadataApplicationEvent, time.timer(timeout));
             } finally {
                 wakeupTrigger.clearTask();
             }
@@ -1091,18 +1089,16 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             if (timestampsToSearch.isEmpty()) {
                 return Collections.emptyMap();
             }
-            final Timer timer = time.timer(timeout);
             final ListOffsetsApplicationEvent listOffsetsEvent = new ListOffsetsApplicationEvent(
                 timestampsToSearch,
-                true,
-                timer);
+                true);
 
             // If timeout is set to zero return empty immediately; otherwise try to get the results
             // and throw timeout exception if it cannot complete in time.
             if (timeout.toMillis() == 0L)
                 return listOffsetsEvent.emptyResult();
 
-            return applicationEventHandler.addAndGet(listOffsetsEvent);
+            return applicationEventHandler.addAndGet(listOffsetsEvent, time.timer(timeout));
         } finally {
             release();
         }
@@ -1143,13 +1139,12 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             Map<TopicPartition, Long> timestampToSearch = partitions
                 .stream()
                 .collect(Collectors.toMap(Function.identity(), tp -> timestamp));
-            Timer timer = time.timer(timeout);
             ListOffsetsApplicationEvent listOffsetsEvent = new ListOffsetsApplicationEvent(
                 timestampToSearch,
-                false,
-                timer);
+                false);
             Map<TopicPartition, OffsetAndTimestamp> offsetAndTimestampMap = applicationEventHandler.addAndGet(
-                listOffsetsEvent);
+                listOffsetsEvent,
+                time.timer(timeout));
             return offsetAndTimestampMap
                 .entrySet()
                 .stream()
@@ -1276,7 +1271,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         completeQuietly(
             () -> {
                 maybeRevokePartitions();
-                applicationEventHandler.addAndGet(new LeaveOnCloseApplicationEvent(timer));
+                applicationEventHandler.addAndGet(new LeaveOnCloseApplicationEvent(), timer);
             },
             "Failed to send leaveGroup heartbeat with a timeout(ms)=" + timer.timeoutMs(), firstException);
     }
@@ -1354,10 +1349,10 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         long commitStart = time.nanoseconds();
         try {
             Timer requestTimer = time.timer(timeout.toMillis());
-            SyncCommitApplicationEvent syncCommitEvent = new SyncCommitApplicationEvent(offsets, requestTimer);
+            SyncCommitApplicationEvent syncCommitEvent = new SyncCommitApplicationEvent(offsets, timeout.toMillis());
             CompletableFuture<Void> commitFuture = commit(syncCommitEvent);
             wakeupTrigger.setActiveTask(commitFuture);
-            ConsumerUtils.getResult(commitFuture);
+            ConsumerUtils.getResult(commitFuture, requestTimer);
             interceptors.onCommit(offsets);
         } finally {
             wakeupTrigger.clearTask();
@@ -1468,13 +1463,13 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         try {
             fetchBuffer.retainAll(Collections.emptySet());
             if (groupMetadata.isPresent()) {
-                Timer timer = time.timer(defaultApiTimeoutMs);
-                UnsubscribeApplicationEvent unsubscribeApplicationEvent = new UnsubscribeApplicationEvent(timer);
+                UnsubscribeApplicationEvent unsubscribeApplicationEvent = new UnsubscribeApplicationEvent();
                 applicationEventHandler.add(unsubscribeApplicationEvent);
                 log.info("Unsubscribing all topics or patterns and assigned partitions");
+                Timer timer = time.timer(Long.MAX_VALUE);
 
                 try {
-                    processBackgroundEvents(unsubscribeApplicationEvent.future(), timer);
+                    processBackgroundEvents(backgroundEventProcessor, unsubscribeApplicationEvent.future(), timer);
                     log.info("Unsubscribed all topics or patterns and assigned partitions");
                 } catch (TimeoutException e) {
                     log.error("Failed while waiting for the unsubscribe event to complete");
@@ -1572,7 +1567,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             // Validate positions using the partition leader end offsets, to detect if any partition
             // has been truncated due to a leader change. This will trigger an OffsetForLeaderEpoch
             // request, retrieve the partition end offsets, and validate the current position against it.
-            applicationEventHandler.addAndGet(new ValidatePositionsApplicationEvent(timer));
+            applicationEventHandler.addAndGet(new ValidatePositionsApplicationEvent(), timer);
 
             cachedSubscriptionHasAllFetchPositions = subscriptions.hasAllFetchPositions();
             if (cachedSubscriptionHasAllFetchPositions) return true;
@@ -1595,7 +1590,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             // which are awaiting reset. This will trigger a ListOffset request, retrieve the
             // partition offsets according to the strategy (ex. earliest, latest), and update the
             // positions.
-            applicationEventHandler.addAndGet(new ResetPositionsApplicationEvent(timer));
+            applicationEventHandler.addAndGet(new ResetPositionsApplicationEvent(), timer);
             return true;
         } catch (TimeoutException e) {
             return false;
@@ -1628,8 +1623,8 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             final FetchCommittedOffsetsApplicationEvent event =
                 new FetchCommittedOffsetsApplicationEvent(
                     initializingPartitions,
-                    timer);
-            final Map<TopicPartition, OffsetAndMetadata> offsets = applicationEventHandler.addAndGet(event);
+                    timer.remainingMs());
+            final Map<TopicPartition, OffsetAndMetadata> offsets = applicationEventHandler.addAndGet(event, timer);
             refreshCommittedOffsets(offsets, metadata, subscriptions);
             return true;
         } catch (TimeoutException e) {
@@ -1814,17 +1809,20 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
      * execution of the rebalancing logic. The rebalancing logic cannot complete until the
      * {@link ConsumerRebalanceListener} callback is performed.
      *
+     * @param eventProcessor Event processor that contains the queue of events to process
      * @param future         Event that contains a {@link CompletableFuture}; it is on this future that the
      *                       application thread will wait for completion
      * @param timer          Overall timer that bounds how long to wait for the event to complete
      * @return {@code true} if the event completed within the timeout, {@code false} otherwise
      */
     // Visible for testing
-    <T> T processBackgroundEvents(Future<T> future, Timer timer) {
+    <T> T processBackgroundEvents(EventProcessor<?> eventProcessor,
+                                  Future<T> future,
+                                  Timer timer) {
         log.trace("Will wait up to {} ms for future {} to complete", timer.remainingMs(), future);
 
         do {
-            boolean hadEvents = backgroundEventProcessor.process();
+            boolean hadEvents = eventProcessor.process();
 
             try {
                 if (future.isDone()) {

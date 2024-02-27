@@ -48,6 +48,8 @@ public abstract class EventProcessor<T> implements Closeable {
         this.closer = new IdempotentCloser();
     }
 
+    public abstract boolean process();
+
     protected abstract void process(T event);
 
     @Override
