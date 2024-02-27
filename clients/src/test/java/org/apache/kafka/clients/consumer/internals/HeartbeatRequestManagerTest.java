@@ -72,6 +72,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.mock;
@@ -563,20 +564,21 @@ public class HeartbeatRequestManagerTest {
         when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(new Node(1, "localhost", 9999)));
         when(membershipManager.shouldSkipHeartbeat()).thenReturn(false);
 
-        // On poll timer expiration, the member should transition to stale and a last heartbeat 
-        // should be sent to leave the group
+        // On poll timer expiration, the member should send a last heartbeat to leave the group
+        // and notify the membership manager
         time.sleep(maxPollIntervalMs);
         assertHeartbeat(heartbeatRequestManager, heartbeatIntervalMs);
+        verify(membershipManager).transitionToSendingLeaveGroup(true);
         verify(heartbeatState).reset();
         verify(heartbeatRequestState).reset();
-        verify(membershipManager).transitionToStale();
+        verify(membershipManager).onHeartbeatRequestSent();
 
         when(membershipManager.state()).thenReturn(MemberState.STALE);
         when(membershipManager.shouldSkipHeartbeat()).thenReturn(true);
         assertNoHeartbeat(heartbeatRequestManager);
         heartbeatRequestManager.resetPollTimer(time.milliseconds());
         assertTrue(pollTimer.notExpired());
-        verify(membershipManager).transitionToJoining();
+        verify(membershipManager).maybeRejoinStaleMember();
         when(membershipManager.shouldSkipHeartbeat()).thenReturn(false);
         assertHeartbeat(heartbeatRequestManager, heartbeatIntervalMs);
     }
@@ -592,13 +594,13 @@ public class HeartbeatRequestManagerTest {
     public void testPollTimerExpirationShouldNotMarkMemberStaleIfMemberAlreadyLeaving() {
         when(membershipManager.shouldSkipHeartbeat()).thenReturn(false);
         when(membershipManager.isLeavingGroup()).thenReturn(true);
-        doNothing().when(membershipManager).transitionToStale();
 
         time.sleep(maxPollIntervalMs);
         NetworkClientDelegate.PollResult result = heartbeatRequestManager.poll(time.milliseconds());
 
-        // No transition to STALE should be triggered, because the member is already leaving the group
-        verify(membershipManager, never()).transitionToStale();
+        // No transition to leave due to stale member should be triggered, because the member is
+        // already leaving the group
+        verify(membershipManager, never()).transitionToSendingLeaveGroup(anyBoolean());
 
         assertEquals(1, result.unsentRequests.size(), "A heartbeat request should be generated to" +
             " complete the ongoing leaving operation that was triggered before the poll timer expired.");
@@ -649,6 +651,33 @@ public class HeartbeatRequestManagerTest {
         int randomSleepS = rand.nextInt(11);
         time.sleep(randomSleepS * 1000);
         assertEquals((double) randomSleepS, getMetric("last-heartbeat-seconds-ago").metricValue());
+    }
+
+    @Test
+    public void testFencedMemberStopHeartbeatUntilItReleasesAssignmentToRejoin() {
+        mockStableMember();
+
+        time.sleep(DEFAULT_HEARTBEAT_INTERVAL_MS);
+        NetworkClientDelegate.PollResult result = heartbeatRequestManager.poll(time.milliseconds());
+        assertEquals(1, result.unsentRequests.size());
+
+        // Receive HB response fencing member
+        when(subscriptions.hasAutoAssignedPartitions()).thenReturn(true);
+        doNothing().when(membershipManager).transitionToFenced();
+        ClientResponse response = createHeartbeatResponse(result.unsentRequests.get(0), Errors.FENCED_MEMBER_EPOCH);
+        result.unsentRequests.get(0).handler().onComplete(response);
+
+        verify(membershipManager).transitionToFenced();
+        verify(heartbeatRequestState).onFailedAttempt(anyLong());
+        verify(heartbeatRequestState).reset();
+
+        when(membershipManager.state()).thenReturn(MemberState.FENCED);
+        result = heartbeatRequestManager.poll(time.milliseconds());
+        assertEquals(0, result.unsentRequests.size(), "Member should not send heartbeats while FENCED");
+
+        when(membershipManager.state()).thenReturn(MemberState.JOINING);
+        result = heartbeatRequestManager.poll(time.milliseconds());
+        assertEquals(1, result.unsentRequests.size(), "Fenced member should resume heartbeat after transitioning to JOINING");
     }
 
     private void assertHeartbeat(HeartbeatRequestManager hrm, int nextPollMs) {

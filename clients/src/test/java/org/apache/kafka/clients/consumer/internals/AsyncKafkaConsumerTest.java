@@ -99,6 +99,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Future;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -442,11 +443,13 @@ public class AsyncKafkaConsumerTest {
         CompletableBackgroundEvent<Void> e = new ConsumerRebalanceListenerCallbackNeededEvent(ON_PARTITIONS_REVOKED, sortedPartitions, time.timer(1000));
         backgroundEventQueue.add(e);
         completeCommitSyncApplicationEventSuccessfully();
+        final AtomicBoolean callbackExecuted = new AtomicBoolean(false);
 
         ConsumerRebalanceListener listener = new ConsumerRebalanceListener() {
             @Override
             public void onPartitionsRevoked(final Collection<TopicPartition> partitions) {
                 assertDoesNotThrow(() -> consumer.commitSync(mkMap(mkEntry(tp, new OffsetAndMetadata(0)))));
+                callbackExecuted.set(true);
             }
 
             @Override
@@ -457,6 +460,7 @@ public class AsyncKafkaConsumerTest {
 
         consumer.subscribe(Collections.singletonList(topicName), listener);
         consumer.poll(Duration.ZERO);
+        assertTrue(callbackExecuted.get());
     }
 
     @Test
