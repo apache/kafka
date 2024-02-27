@@ -35,6 +35,10 @@ public abstract class ApplicationEvent {
 
     private final Type type;
 
+    /**
+     * This identifies a particular event. It is used to disambiguate events via {@link #hashCode()} and
+     * {@link #equals(Object)} and can be used in log messages when debugging.
+     */
     private final Uuid id;
 
     protected ApplicationEvent(Type type) {

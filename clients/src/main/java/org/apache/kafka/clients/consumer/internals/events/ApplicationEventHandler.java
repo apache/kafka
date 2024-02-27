@@ -31,6 +31,8 @@ import java.io.Closeable;
 import java.time.Duration;
 import java.util.Objects;
 import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
 
 /**
@@ -96,11 +98,15 @@ public class ApplicationEventHandler implements Closeable {
      * Add a {@link CompletableApplicationEvent} to the handler. The method blocks waiting for the result, and will
      * return the result value upon successful completion; otherwise throws an error.
      *
+     * <p/>
+     *
+     * See {@link ConsumerUtils#getResult(Future, Timer)} and {@link Future#get(long, TimeUnit)} for more details.
+     *
      * @param event A {@link CompletableApplicationEvent} created by the polling thread
      * @return      Value that is the result of the event
      * @param <T>   Type of return value of the event
      */
-    public <T> T addAndGet(final CompletableApplicationEvent<T> event, Timer timer) {
+    public <T> T addAndGet(final CompletableApplicationEvent<T> event, final Timer timer) {
         Objects.requireNonNull(event, "CompletableApplicationEvent provided to addAndGet must be non-null");
         add(event);
         return ConsumerUtils.getResult(event.future(), timer);
