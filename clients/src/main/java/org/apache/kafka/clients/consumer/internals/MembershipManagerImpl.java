@@ -351,8 +351,25 @@ public class MembershipManagerImpl implements MembershipManager {
             throw new IllegalStateException(String.format("Invalid state transition from %s to %s",
                     state, nextState));
         }
+
+        if (isCompletingRebalance(state, nextState)) {
+            metricsManager.recordRebalanceEnded(time.milliseconds());
+        }
+        if (isStartingRebalance(state, nextState)) {
+            metricsManager.recordRebalanceStarted(time.milliseconds());
+        }
+
         log.trace("Member {} with epoch {} transitioned from {} to {}.", memberId, memberEpoch, state, nextState);
         this.state = nextState;
+    }
+
+    private static boolean isCompletingRebalance(MemberState currentState, MemberState nextState) {
+        return currentState == MemberState.RECONCILING &&
+            (nextState == MemberState.STABLE || nextState == MemberState.ACKNOWLEDGING);
+    }
+
+    private static boolean isStartingRebalance(MemberState currentState, MemberState nextState) {
+        return currentState != MemberState.RECONCILING && nextState == MemberState.RECONCILING;
     }
 
     /**
@@ -391,7 +408,7 @@ public class MembershipManagerImpl implements MembershipManager {
      * {@inheritDoc}
      */
     @Override
-    public void onHeartbeatResponseReceived(ConsumerGroupHeartbeatResponseData response) {
+    public void onHeartbeatSuccess(ConsumerGroupHeartbeatResponseData response) {
         if (response.errorCode() != Errors.NONE.code()) {
             String errorMessage = String.format(
                     "Unexpected error in Heartbeat response. Expected no error, but received: %s",
@@ -441,7 +458,7 @@ public class MembershipManagerImpl implements MembershipManager {
     }
 
     @Override
-    public void onHeartbeatError() {
+    public void onHeartbeatFailure() {
         metricsManager.maybeRecordRebalanceFailed();
     }
 
@@ -466,7 +483,6 @@ public class MembershipManagerImpl implements MembershipManager {
     private void processAssignmentReceived(ConsumerGroupHeartbeatResponseData.Assignment assignment) {
         replaceTargetAssignmentWithNewAssignment(assignment);
         if (!targetAssignmentReconciled()) {
-            metricsManager.recordRebalanceStarted(time.milliseconds());
             // Transition the member to RECONCILING when receiving a new target
             // assignment from the broker, different from the current assignment. Note that the
             // reconciliation might not be triggered just yet because of missing metadata.
@@ -1030,7 +1046,6 @@ public class MembershipManagerImpl implements MembershipManager {
                     // Reschedule the auto commit starting from now that the member has a new assignment.
                     commitRequestManager.resetAutoCommitTimer();
 
-                    metricsManager.recordRebalanceEnded(time.milliseconds());
                     // Make assignment effective on the broker by transitioning to send acknowledge.
                     transitionTo(MemberState.ACKNOWLEDGING);
                 } else {
