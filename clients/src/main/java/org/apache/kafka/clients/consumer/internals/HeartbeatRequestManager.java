@@ -200,13 +200,13 @@ public class HeartbeatRequestManager implements RequestManager {
                 "messages. You can address this either by increasing max.poll.interval.ms or by " +
                 "reducing the maximum size of batches returned in poll() with max.poll.records.");
 
-            // This should trigger a heartbeat with leave group epoch
-            membershipManager.transitionToStale();
-            NetworkClientDelegate.UnsentRequest request = makeHeartbeatRequest(currentTimeMs, true);
+            membershipManager.transitionToSendingLeaveGroup(true);
+            NetworkClientDelegate.UnsentRequest leaveHeartbeat = makeHeartbeatRequest(currentTimeMs, true);
+
             // We can ignore the leave response because we can join before or after receiving the response.
             heartbeatRequestState.reset();
             heartbeatState.reset();
-            return new NetworkClientDelegate.PollResult(heartbeatRequestState.heartbeatIntervalMs, Collections.singletonList(request));
+            return new NetworkClientDelegate.PollResult(heartbeatRequestState.heartbeatIntervalMs, Collections.singletonList(leaveHeartbeat));
         }
 
         boolean heartbeatNow = membershipManager.shouldHeartbeatNow() && !heartbeatRequestState.requestInFlight();
@@ -256,11 +256,12 @@ public class HeartbeatRequestManager implements RequestManager {
      * member to {@link MemberState#JOINING}, so that it rejoins the group.
      */
     public void resetPollTimer(final long pollMs) {
+        if (pollTimer.isExpired()) {
+            logger.debug("Poll timer has been reset after it had expired");
+            membershipManager.maybeRejoinStaleMember();
+        }
         pollTimer.update(pollMs);
         pollTimer.reset(maxPollIntervalMs);
-        if (membershipManager.state() == MemberState.STALE) {
-            membershipManager.transitionToJoining();
-        }
     }
 
     private NetworkClientDelegate.UnsentRequest makeHeartbeatRequest(final long currentTimeMs,

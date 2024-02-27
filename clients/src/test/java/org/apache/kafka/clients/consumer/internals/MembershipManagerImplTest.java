@@ -36,6 +36,9 @@ import org.apache.kafka.common.utils.Time;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -52,6 +55,7 @@ import java.util.TreeSet;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import static org.apache.kafka.clients.consumer.internals.AsyncKafkaConsumer.invokeRebalanceCallbacks;
 import static org.apache.kafka.common.requests.ConsumerGroupHeartbeatRequest.LEAVE_GROUP_MEMBER_EPOCH;
@@ -59,6 +63,7 @@ import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.apache.kafka.common.utils.Utils.mkSortedSet;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
@@ -117,21 +122,20 @@ public class MembershipManagerImplTest {
     }
 
     private MembershipManagerImpl createMembershipManagerJoiningGroup() {
-        MembershipManagerImpl manager = spy(new MembershipManagerImpl(
-                GROUP_ID, Optional.empty(), REBALANCE_TIMEOUT, Optional.empty(),
-                subscriptionState, commitRequestManager, metadata, logContext, Optional.empty(),
-                backgroundEventHandler, time));
+        return createMembershipManagerJoiningGroup(null);
+    }
+
+    private MembershipManagerImpl createMembershipManagerJoiningGroup(String groupInstanceId) {
+        MembershipManagerImpl manager = createMembershipManager(groupInstanceId);
         manager.transitionToJoining();
         return manager;
     }
 
-    private MembershipManagerImpl createMembershipManagerJoiningGroup(String groupInstanceId) {
-        MembershipManagerImpl manager = spy(new MembershipManagerImpl(
-                GROUP_ID, Optional.ofNullable(groupInstanceId), REBALANCE_TIMEOUT, Optional.empty(),
-                subscriptionState, commitRequestManager, metadata, logContext, Optional.empty(),
-                backgroundEventHandler, time));
-        manager.transitionToJoining();
-        return manager;
+    private MembershipManagerImpl createMembershipManager(String groupInstanceId) {
+        return spy(new MembershipManagerImpl(
+            GROUP_ID, Optional.ofNullable(groupInstanceId), REBALANCE_TIMEOUT, Optional.empty(),
+            subscriptionState, commitRequestManager, metadata, logContext, Optional.empty(),
+            backgroundEventHandler, time));
     }
 
     private MembershipManagerImpl createMembershipManagerJoiningGroup(String groupInstanceId,
@@ -715,6 +719,21 @@ public class MembershipManagerImplTest {
             "heartbeat request to leave is sent out.");
     }
 
+    @ParameterizedTest
+    @MethodSource("notInGroupStates")
+    public void testIgnoreHeartbeatResponseWhenNotInGroup(MemberState state) {
+        MembershipManagerImpl membershipManager = createMembershipManager(null);
+        when(membershipManager.state()).thenReturn(state);
+        ConsumerGroupHeartbeatResponseData responseData = mock(ConsumerGroupHeartbeatResponseData.class);
+
+        membershipManager.onHeartbeatResponseReceived(responseData);
+
+        assertEquals(state, membershipManager.state());
+        verify(responseData, never()).memberId();
+        verify(responseData, never()).memberEpoch();
+        verify(responseData, never()).assignment();
+    }
+
     @Test
     public void testLeaveGroupWhenStateIsReconciling() {
         MembershipManager membershipManager = mockJoinAndReceiveAssignment(false);
@@ -801,6 +820,33 @@ public class MembershipManagerImplTest {
         assertEquals(MemberState.UNSUBSCRIBED, membershipManager.state());
         verify(subscriptionState, never()).rebalanceListener();
         verify(subscriptionState, never()).assignFromSubscribed(Collections.emptySet());
+    }
+
+    @Test
+    public void testLeaveGroupWhenMemberFenced() {
+        MembershipManagerImpl membershipManager = createMemberInStableState();
+        ConsumerRebalanceListenerInvoker invoker = consumerRebalanceListenerInvoker();
+        ConsumerRebalanceListenerCallbackCompletedEvent callbackEvent = mockFencedMemberStuckOnUserCallback(membershipManager, invoker);
+        assertEquals(MemberState.FENCED, membershipManager.state());
+
+        mockLeaveGroup();
+        membershipManager.leaveGroup();
+        assertEquals(MemberState.UNSUBSCRIBED, membershipManager.state());
+        verify(subscriptionState).assignFromSubscribed(Collections.emptySet());
+
+        completeCallback(callbackEvent, membershipManager);
+        assertEquals(MemberState.UNSUBSCRIBED, membershipManager.state());
+    }
+
+    @Test
+    public void testLeaveGroupWhenMemberIsStale() {
+        MembershipManagerImpl membershipManager = mockStaleMember();
+        assertEquals(MemberState.STALE, membershipManager.state());
+
+        mockLeaveGroup();
+        CompletableFuture<Void> leaveResult1 = membershipManager.leaveGroup();
+        assertTrue(leaveResult1.isDone());
+        assertEquals(MemberState.STALE, membershipManager.state());
     }
 
     @Test
@@ -1612,61 +1658,118 @@ public class MembershipManagerImplTest {
         testOnPartitionsLost(Optional.of(new KafkaException("Intentional error for test")));
     }
 
+    private void assertLeaveGroupDueToExpiredPollAndTransitionToStale(MembershipManagerImpl membershipManager) {
+        assertDoesNotThrow(() -> membershipManager.transitionToSendingLeaveGroup(true));
+        assertEquals(LEAVE_GROUP_MEMBER_EPOCH, membershipManager.memberEpoch());
+        membershipManager.onHeartbeatRequestSent();
+        assertStaleMemberLeavesGroupAndClearsAssignment(membershipManager);
+    }
+
     @Test
-    public void testTransitionToStaleWhileReconciling() {
+    public void testTransitionToLeavingWhileReconcilingDueToStaleMember() {
         MembershipManagerImpl membershipManager = memberJoinWithAssignment();
         clearInvocations(subscriptionState);
         assertEquals(MemberState.RECONCILING, membershipManager.state());
-
-        membershipManager.transitionToStale();
-        assertStaleMemberClearsAssignmentsAndLeaves(membershipManager);
+        assertLeaveGroupDueToExpiredPollAndTransitionToStale(membershipManager);
     }
 
     @Test
-    public void testTransitionToStaleWhileJoining() {
+    public void testTransitionToLeavingWhileJoiningDueToStaleMember() {
         MembershipManagerImpl membershipManager = createMembershipManagerJoiningGroup();
         doNothing().when(subscriptionState).assignFromSubscribed(any());
         assertEquals(MemberState.JOINING, membershipManager.state());
-
-        membershipManager.transitionToStale();
-        assertStaleMemberClearsAssignmentsAndLeaves(membershipManager);
+        assertLeaveGroupDueToExpiredPollAndTransitionToStale(membershipManager);
     }
 
     @Test
-    public void testTransitionToStaleWhileStable() {
+    public void testTransitionToLeavingWhileStableDueToStaleMember() {
         MembershipManagerImpl membershipManager = createMembershipManagerJoiningGroup();
         ConsumerGroupHeartbeatResponse heartbeatResponse = createConsumerGroupHeartbeatResponse(null);
         membershipManager.onHeartbeatResponseReceived(heartbeatResponse.data());
         doNothing().when(subscriptionState).assignFromSubscribed(any());
         assertEquals(MemberState.STABLE, membershipManager.state());
-
-        membershipManager.transitionToStale();
-        assertStaleMemberClearsAssignmentsAndLeaves(membershipManager);
+        assertLeaveGroupDueToExpiredPollAndTransitionToStale(membershipManager);
     }
 
     @Test
-    public void testTransitionToStaleWhileAcknowledging() {
+    public void testTransitionToLeavingWhileAcknowledgingDueToStaleMember() {
         MembershipManagerImpl membershipManager = mockJoinAndReceiveAssignment(true);
         doNothing().when(subscriptionState).assignFromSubscribed(any());
         clearInvocations(subscriptionState);
         assertEquals(MemberState.ACKNOWLEDGING, membershipManager.state());
-
-        membershipManager.transitionToStale();
-        assertStaleMemberClearsAssignmentsAndLeaves(membershipManager);
+        assertLeaveGroupDueToExpiredPollAndTransitionToStale(membershipManager);
     }
 
     @Test
     public void testStaleMemberDoesNotSendHeartbeatAndAllowsTransitionToJoiningToRecover() {
         MembershipManagerImpl membershipManager = createMemberInStableState();
         doNothing().when(subscriptionState).assignFromSubscribed(any());
-        membershipManager.transitionToStale();
-        assertTrue(membershipManager.shouldSkipHeartbeat(), "Stale member should not send " +
-            "heartbeats");
+        membershipManager.transitionToSendingLeaveGroup(true);
+        membershipManager.onHeartbeatRequestSent();
+        assertEquals(MemberState.STALE, membershipManager.state());
+        assertTrue(membershipManager.shouldSkipHeartbeat(), "Stale member should not send heartbeats");
         // Check that a transition to joining is allowed, which is what is expected to happen
         // when the poll timer is reset.
-        membershipManager.transitionToJoining();
+        assertDoesNotThrow(membershipManager::maybeRejoinStaleMember);
     }
 
+    @Test
+    public void testStaleMemberRejoinsWhenTimerResetsNoCallbacks() {
+        MembershipManagerImpl membershipManager = mockStaleMember();
+        assertStaleMemberLeavesGroupAndClearsAssignment(membershipManager);
+
+        membershipManager.maybeRejoinStaleMember();
+        assertEquals(MemberState.JOINING, membershipManager.state());
+    }
+
+    @Test
+    public void testStaleMemberWaitsForCallbackToRejoinWhenTimerReset() {
+        MembershipManagerImpl membershipManager = createMemberInStableState();
+        Uuid topicId = Uuid.randomUuid();
+        String topicName = "topic1";
+        int ownedPartition = 0;
+        TopicPartition tp = new TopicPartition(topicName, ownedPartition);
+        mockOwnedPartitionAndAssignmentReceived(membershipManager, topicId, topicName,
+            Collections.singletonList(new TopicIdPartition(topicId, tp)));
+        CounterConsumerRebalanceListener listener = new CounterConsumerRebalanceListener();
+        ConsumerRebalanceListenerInvoker invoker = consumerRebalanceListenerInvoker();
+        when(subscriptionState.rebalanceListener()).thenReturn(Optional.of(listener));
+
+        membershipManager.transitionToSendingLeaveGroup(true);
+        membershipManager.onHeartbeatRequestSent();
+
+        assertEquals(MemberState.STALE, membershipManager.state());
+        verify(backgroundEventHandler).add(any(ConsumerRebalanceListenerCallbackNeededEvent.class));
+
+        // Stale member triggers onPartitionLost callback that will not complete just yet
+        ConsumerRebalanceListenerCallbackCompletedEvent callbackEvent = performCallback(
+            membershipManager,
+            invoker,
+            ConsumerRebalanceListenerMethodName.ON_PARTITIONS_LOST,
+            topicPartitions(topicName, ownedPartition),
+            false
+        );
+
+        // Timer reset while callback hasn't completed. Member should stay in STALE while it
+        // completes releasing its assignment, and then transition to joining.
+        membershipManager.maybeRejoinStaleMember();
+        assertEquals(MemberState.STALE, membershipManager.state(), "Member should not transition " +
+            "out of the STALE state when the timer is reset if the callback has not completed.");
+        // Member should not clear its assignment to rejoin until the callback completes
+        verify(subscriptionState, never()).assignFromSubscribed(any());
+
+        completeCallback(callbackEvent, membershipManager);
+        assertEquals(MemberState.JOINING, membershipManager.state());
+        verify(subscriptionState).assignFromSubscribed(Collections.emptySet());
+    }
+
+    private MembershipManagerImpl mockStaleMember() {
+        MembershipManagerImpl membershipManager = createMemberInStableState();
+        doNothing().when(subscriptionState).assignFromSubscribed(any());
+        membershipManager.transitionToSendingLeaveGroup(true);
+        membershipManager.onHeartbeatRequestSent();
+        return membershipManager;
+    }
     private void mockPartitionOwnedAndNewPartitionAdded(String topicName,
                                                         int partitionOwned,
                                                         int partitionAdded,
@@ -1814,28 +1917,15 @@ public class MembershipManagerImplTest {
         verify(subscriptionState, never()).rebalanceListener();
     }
 
-    private void assertStaleMemberClearsAssignmentsAndLeaves(MembershipManagerImpl membershipManager) {
+    private void assertStaleMemberLeavesGroupAndClearsAssignment(MembershipManagerImpl membershipManager) {
         assertEquals(MemberState.STALE, membershipManager.state());
 
-        // Should clear subscriptions, current assignments, and reset epoch to leave the group
+        // Should reset epoch to leave the group and release the assignment (right away because
+        // there is no onPartitionsLost callback defined)
         verify(subscriptionState).assignFromSubscribed(Collections.emptySet());
         assertTrue(membershipManager.currentAssignment().isEmpty());
         assertTrue(membershipManager.topicsAwaitingReconciliation().isEmpty());
         assertEquals(LEAVE_GROUP_MEMBER_EPOCH, membershipManager.memberEpoch());
-    }
-
-    @Test
-    public void testHeartbeatSentOnStaleMember() {
-        MembershipManagerImpl membershipManager = createMemberInStableState();
-        subscriptionState.subscribe(Collections.singleton("topic"), Optional.empty());
-        subscriptionState.assignFromSubscribed(Collections.singleton(new TopicPartition("topic", 0)));
-        membershipManager.transitionToStale();
-        membershipManager.onHeartbeatRequestSent();
-        // Member should remain in STALE state. Only when the poll timer is reset the member will
-        // transition to JOINING.
-        assertEquals(MemberState.STALE, membershipManager.state());
-        assertTrue(membershipManager.currentAssignment().isEmpty());
-        assertTrue(subscriptionState.assignedPartitions().isEmpty());
     }
 
     @Test
@@ -2160,6 +2250,29 @@ public class MembershipManagerImplTest {
         );
     }
 
+    private ConsumerRebalanceListenerCallbackCompletedEvent mockFencedMemberStuckOnUserCallback(
+        MembershipManagerImpl membershipManager,
+        ConsumerRebalanceListenerInvoker invoker) {
+        String topicName = "topic1";
+        TopicPartition ownedPartition = new TopicPartition(topicName, 0);
+
+        // Fence member and block waiting for onPartitionsLost callback to complete
+        CounterConsumerRebalanceListener listener = new CounterConsumerRebalanceListener();
+        when(subscriptionState.assignedPartitions()).thenReturn(Collections.singleton(ownedPartition));
+        when(subscriptionState.hasAutoAssignedPartitions()).thenReturn(true);
+        when(subscriptionState.rebalanceListener()).thenReturn(Optional.of(listener));
+        // doNothing().when(subscriptionState).markPendingRevocation(anySet());
+        when(commitRequestManager.autoCommitEnabled()).thenReturn(false);
+        membershipManager.transitionToFenced();
+        return performCallback(
+            membershipManager,
+            invoker,
+            ConsumerRebalanceListenerMethodName.ON_PARTITIONS_LOST,
+            topicPartitions(ownedPartition.topic(), ownedPartition.partition()),
+            false
+        );
+    }
+
     private void testStateUpdateOnFatalFailure(MembershipManagerImpl membershipManager) {
         String memberId = membershipManager.memberId();
         int lastEpoch = membershipManager.memberEpoch();
@@ -2231,4 +2344,16 @@ public class MembershipManagerImplTest {
         assertFalse(membershipManager.currentAssignment().isEmpty());
         return membershipManager;
     }
+
+    /**
+     * @return States where the member is not part of the group.
+     */
+    private static Stream<Arguments> notInGroupStates() {
+        return Stream.of(
+            Arguments.of(MemberState.UNSUBSCRIBED),
+            Arguments.of(MemberState.FENCED),
+            Arguments.of(MemberState.FATAL),
+            Arguments.of(MemberState.STALE));
+    }
+
 }

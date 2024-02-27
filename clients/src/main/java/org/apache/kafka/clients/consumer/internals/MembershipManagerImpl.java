@@ -257,7 +257,22 @@ public class MembershipManagerImpl implements MembershipManager {
      */
     private final BackgroundEventHandler backgroundEventHandler;
 
+    /**
+     * Future that will complete when a stale member completes releasing its assignment after
+     * leaving the group due to poll timer expired. Used to make sure that the member rejoins
+     * when the timer is reset, only when it completes releasing its assignment.
+     */
+    private CompletableFuture<Void> staleMemberAssignmentRelease;
+
     private final Time time;
+
+    /**
+     * True if the poll timer has expired, signaled by a call to
+     * {@link #transitionToSendingLeaveGroup(boolean)} with dueToExpiredPollTimer param true. This
+     * will be used to determine that the member should transition to STALE after leaving the
+     * group, to release its assignment and wait for the timer to be reset.
+     */
+    private boolean isPollTimerExpired;
 
     public MembershipManagerImpl(String groupId,
                                  Optional<String> groupInstanceId,
@@ -347,9 +362,15 @@ public class MembershipManagerImpl implements MembershipManager {
             );
             throw new IllegalArgumentException(errorMessage);
         }
+        MemberState state = state();
         if (state == MemberState.LEAVING) {
             log.debug("Ignoring heartbeat response received from broker. Member {} with epoch {} is " +
                     "already leaving the group.", memberId, memberEpoch);
+            return;
+        }
+        if (isNotInGroup()) {
+            log.debug("Ignoring heartbeat response received from broker. Member {} is in {} state" +
+                " so it's not a member of the group. ", memberId, state);
             return;
         }
 
@@ -380,6 +401,16 @@ public class MembershipManagerImpl implements MembershipManager {
         } else if (targetAssignmentReconciled()) {
             transitionTo(MemberState.STABLE);
         }
+    }
+
+    /**
+     * @return True if the consumer is not a member of the group.
+     */
+    private boolean isNotInGroup() {
+        return state == MemberState.UNSUBSCRIBED ||
+            state == MemberState.FENCED ||
+            state == MemberState.FATAL ||
+            state == MemberState.STALE;
     }
 
     /**
@@ -462,7 +493,12 @@ public class MembershipManagerImpl implements MembershipManager {
                         " after member got fenced. Member will rejoin the group anyways.", error);
             }
             updateSubscription(new TreeSet<>(TOPIC_ID_PARTITION_COMPARATOR), true);
-            transitionToJoining();
+            if (state == MemberState.FENCED) {
+                transitionToJoining();
+            } else {
+                log.debug("Fenced member onPartitionsLost callback completed but the state has " +
+                    "already changed to {}, so the member won't rejoin the group", state);
+            }
         });
     }
 
@@ -564,9 +600,11 @@ public class MembershipManagerImpl implements MembershipManager {
      */
     @Override
     public CompletableFuture<Void> leaveGroup() {
-        if (state == MemberState.UNSUBSCRIBED || state == MemberState.FATAL) {
-            // Member is not part of the group. No-op and return completed future to avoid
-            // unnecessary transitions.
+        if (isNotInGroup()) {
+            if (state == MemberState.FENCED) {
+                updateSubscription(new TreeSet<>(TOPIC_ID_PARTITION_COMPARATOR), true);
+                transitionTo(MemberState.UNSUBSCRIBED);
+            }
             return CompletableFuture.completedFuture(null);
         }
 
@@ -588,7 +626,7 @@ public class MembershipManagerImpl implements MembershipManager {
             // Transition to ensure that a heartbeat request is sent out to effectively leave the
             // group (even in the case where the member had no assignment to release or when the
             // callback execution failed.)
-            transitionToSendingLeaveGroup();
+            transitionToSendingLeaveGroup(false);
         });
 
         // Return future to indicate that the leave group is done when the callbacks
@@ -633,11 +671,15 @@ public class MembershipManagerImpl implements MembershipManager {
 
     /**
      * Reset member epoch to the value required for the leave the group heartbeat request, and
-     * transition to the {@link MemberState#LEAVING} state so that a heartbeat
-     * request is sent out with it.
-     * Visible for testing.
+     * transition to the {@link MemberState#LEAVING} state so that a heartbeat request is sent
+     * out with it.
+     *
+     * @param dueToExpiredPollTimer True if the leave group is due to an expired poll timer. This
+     *                              will indicate that the member must remain STALE after leaving,
+     *                              until it releases its assignment and the timer is reset.
      */
-    void transitionToSendingLeaveGroup() {
+    @Override
+    public void transitionToSendingLeaveGroup(boolean dueToExpiredPollTimer) {
         if (state == MemberState.FATAL) {
             log.warn("Member {} with epoch {} won't send leave group request because it is in " +
                     "FATAL state", memberId, memberEpoch);
@@ -647,6 +689,14 @@ public class MembershipManagerImpl implements MembershipManager {
             log.warn("Member {} won't send leave group request because it is already out of the group.",
                 memberId);
             return;
+        }
+
+        if (dueToExpiredPollTimer) {
+            this.isPollTimerExpired = true;
+            // Briefly transition through prepare leaving. The member does not have to release
+            // any assignment before sending the leave group given that is stale. It will invoke
+            // onPartitionsLost after sending the leave group on the STALE state.
+            transitionTo(MemberState.PREPARE_LEAVING);
         }
         int leaveEpoch = groupInstanceId.isPresent() ?
                 ConsumerGroupHeartbeatRequest.LEAVE_GROUP_STATIC_MEMBER_EPOCH :
@@ -690,7 +740,11 @@ public class MembershipManagerImpl implements MembershipManager {
                 transitionTo(MemberState.RECONCILING);
             }
         } else if (state == MemberState.LEAVING) {
-            transitionToUnsubscribed();
+            if (isPollTimerExpired) {
+                transitionToStale();
+            } else {
+                transitionToUnsubscribed();
+            }
         }
     }
 
@@ -742,16 +796,37 @@ public class MembershipManagerImpl implements MembershipManager {
         return state == MemberState.PREPARE_LEAVING || state == MemberState.LEAVING;
     }
 
-    /**
-     * Sets the epoch to the leave group epoch and clears the assignments. The member will rejoin with
-     * the existing subscriptions after the next application poll event.
-     */
     @Override
-    public void transitionToStale() {
-        memberEpoch = ConsumerGroupHeartbeatRequest.LEAVE_GROUP_MEMBER_EPOCH;
-        // Clear the current assignment and subscribed partitions before member sending the leave group
-        updateSubscription(new TreeSet<>(TOPIC_ID_PARTITION_COMPARATOR), true);
+    public void maybeRejoinStaleMember() {
+        isPollTimerExpired = false;
+        if (state == MemberState.STALE) {
+            log.debug("Expired poll timer has been reset so stale member {} will rejoin the group" +
+                "when it completes releasing its previous assignment.", memberId);
+            staleMemberAssignmentRelease.whenComplete((__, error) -> transitionToJoining());
+        }
+    }
+
+    /**
+     * Transition to STALE to release assignments because the member has left the group due to
+     * expired poll timer. This will trigger the onPartitionsLost callback. Once the callback
+     * completes, the member will remain stale until the poll timer is reset by an application
+     * poll event. See {@link #maybeRejoinStaleMember()}.
+     */
+    private void transitionToStale() {
         transitionTo(MemberState.STALE);
+
+        // Release assignment
+        CompletableFuture<Void> callbackResult = invokeOnPartitionsLostCallback(subscriptions.assignedPartitions());
+        staleMemberAssignmentRelease = callbackResult.whenComplete((result, error) -> {
+            if (error != null) {
+                log.error("onPartitionsLost callback invocation failed while releasing assignment" +
+                    " after member left group due to expired poll timer.", error);
+            }
+            updateSubscription(new TreeSet<>(TOPIC_ID_PARTITION_COMPARATOR), true);
+            log.debug("Member {} sent leave group heartbeat and released its assignment. It will remain " +
+                "in {} state until the poll timer is reset, and it will then rejoin the group",
+                memberId, MemberState.STALE);
+        });
     }
 
     /**
@@ -1184,8 +1259,7 @@ public class MembershipManagerImpl implements MembershipManager {
         }
     }
 
-    // Visible for testing
-    CompletableFuture<Void> invokeOnPartitionsLostCallback(Set<TopicPartition> partitionsLost) {
+    private CompletableFuture<Void> invokeOnPartitionsLostCallback(Set<TopicPartition> partitionsLost) {
         // This should not trigger the callback if partitionsLost is empty, to keep the current
         // behaviour.
         Optional<ConsumerRebalanceListener> listener = subscriptions.rebalanceListener();
