@@ -40,6 +40,7 @@ import org.apache.kafka.clients.consumer.internals.events.ApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEventHandler;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEventProcessor;
 import org.apache.kafka.clients.consumer.internals.events.AssignmentChangeApplicationEvent;
+import org.apache.kafka.clients.consumer.internals.events.AsyncCommitApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEventHandler;
 import org.apache.kafka.clients.consumer.internals.events.CommitApplicationEvent;
@@ -57,6 +58,7 @@ import org.apache.kafka.clients.consumer.internals.events.NewTopicsMetadataUpdat
 import org.apache.kafka.clients.consumer.internals.events.PollApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.ResetPositionsApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.SubscriptionChangeApplicationEvent;
+import org.apache.kafka.clients.consumer.internals.events.SyncCommitApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.TopicMetadataApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.UnsubscribeApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.ValidatePositionsApplicationEvent;
@@ -698,9 +700,11 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                 throw new IllegalStateException("Consumer is not subscribed to any topics or assigned any partitions");
             }
 
-            applicationEventHandler.add(new PollApplicationEvent(timer.currentTimeMs()));
-
             do {
+
+                // Make sure to let the background thread know that we are still polling.
+                applicationEventHandler.add(new PollApplicationEvent(timer.currentTimeMs()));
+
                 // We must not allow wake-ups between polling for fetches and returning the records.
                 // If the polled fetches are not empty the consumed position has already been updated in the polling
                 // of the fetches. A wakeup between returned fetches and returning records would lead to never
@@ -708,14 +712,18 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                 wakeupTrigger.maybeTriggerWakeup();
 
                 updateAssignmentMetadataIfNeeded(timer);
-                final Fetch<K, V> fetch = pollForFetches(timer);
-                if (!fetch.isEmpty()) {
-                    if (fetch.records().isEmpty()) {
-                        log.trace("Returning empty records from `poll()` "
+                if (isGenerationKnownOrPartitionsUserAssigned()) {
+                    final Fetch<K, V> fetch = pollForFetches(timer);
+                    if (!fetch.isEmpty()) {
+                        if (fetch.records().isEmpty()) {
+                            log.trace("Returning empty records from `poll()` "
                                 + "since the consumer's position has advanced for at least one topic partition");
-                    }
+                        }
 
-                    return interceptors.onConsume(new ConsumerRecords<>(fetch.records()));
+                        return interceptors.onConsume(new ConsumerRecords<>(fetch.records()));
+                    }
+                } else {
+                    timer.update();
                 }
                 // We will wait for retryBackoffMs
             } while (timer.notExpired());
@@ -725,6 +733,13 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             kafkaConsumerMetrics.recordPollEnd(timer.currentTimeMs());
             release();
         }
+    }
+
+    private boolean isGenerationKnownOrPartitionsUserAssigned() {
+        if (subscriptions.hasAutoAssignedPartitions()) {
+            return groupMetadata.filter(g -> g.generationId() != JoinGroupRequest.UNKNOWN_GENERATION_ID).isPresent();
+        }
+        return true;
     }
 
     /**
@@ -753,9 +768,8 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     public void commitAsync(Map<TopicPartition, OffsetAndMetadata> offsets, OffsetCommitCallback callback) {
         acquireAndEnsureOpen();
         try {
-            // Commit without timer to indicate that the commit should be triggered without
-            // waiting for a response.
-            CompletableFuture<Void> future = commit(offsets, false, Optional.empty());
+            AsyncCommitApplicationEvent asyncCommitEvent = new AsyncCommitApplicationEvent(offsets);
+            CompletableFuture<Void> future = commit(asyncCommitEvent);
             future.whenComplete((r, t) -> {
 
                 if (t == null) {
@@ -776,14 +790,12 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         }
     }
 
-    // Visible for testing
-    CompletableFuture<Void> commit(final Map<TopicPartition, OffsetAndMetadata> offsets,
-                                   final boolean isWakeupable,
-                                   final Optional<Long> retryTimeoutMs) {
+    private CompletableFuture<Void> commit(final CommitApplicationEvent commitEvent) {
         maybeInvokeCommitCallbacks();
         maybeThrowFencedInstanceException();
         maybeThrowInvalidGroupIdException();
 
+        Map<TopicPartition, OffsetAndMetadata> offsets = commitEvent.offsets();
         log.debug("Committing offsets: {}", offsets);
         offsets.forEach(this::updateLastSeenEpochIfNewer);
 
@@ -791,11 +803,6 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             return CompletableFuture.completedFuture(null);
         }
 
-        final CommitApplicationEvent commitEvent = new CommitApplicationEvent(offsets, retryTimeoutMs);
-        if (isWakeupable) {
-            // the task can only be woken up if the top level API call is commitSync
-            wakeupTrigger.setActiveTask(commitEvent.future());
-        }
         applicationEventHandler.add(commitEvent);
         return commitEvent.future();
     }
@@ -1342,9 +1349,9 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         long commitStart = time.nanoseconds();
         try {
             Timer requestTimer = time.timer(timeout.toMillis());
-            // Commit with a timer to control how long the request should be retried until it
-            // gets a successful response or non-retriable error.
-            CompletableFuture<Void> commitFuture = commit(offsets, true, Optional.of(timeout.toMillis()));
+            SyncCommitApplicationEvent syncCommitEvent = new SyncCommitApplicationEvent(offsets, timeout.toMillis());
+            CompletableFuture<Void> commitFuture = commit(syncCommitEvent);
+            wakeupTrigger.setActiveTask(commitFuture);
             ConsumerUtils.getResult(commitFuture, requestTimer);
             interceptors.onCommit(offsets);
         } finally {
@@ -1467,6 +1474,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                 } catch (TimeoutException e) {
                     log.error("Failed while waiting for the unsubscribe event to complete");
                 }
+                groupMetadata = initializeGroupMetadata(groupMetadata.get().groupId(), Optional.empty());
             }
             subscriptions.unsubscribe();
         } finally {
