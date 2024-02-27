@@ -17,7 +17,7 @@
 
 package org.apache.kafka.clients.consumer.internals.events;
 
-import static org.apache.kafka.clients.consumer.internals.events.ApplicationEventType.SUBSCRIPTION_CHANGE;
+import static org.apache.kafka.clients.consumer.internals.events.ApplicationEvent.Type.SUBSCRIPTION_CHANGE;
 
 /**
  * Application event indicating that the subscription state has changed, triggered when a user

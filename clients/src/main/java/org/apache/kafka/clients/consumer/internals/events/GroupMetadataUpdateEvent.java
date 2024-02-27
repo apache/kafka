@@ -19,7 +19,7 @@ package org.apache.kafka.clients.consumer.internals.events;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.internals.ConsumerNetworkThread;
 
-import static org.apache.kafka.clients.consumer.internals.events.BackgroundEventType.GROUP_METADATA_UPDATE;
+import static org.apache.kafka.clients.consumer.internals.events.BackgroundEvent.Type.GROUP_METADATA_UPDATE;
 
 /**
  * This event is sent by the {@link ConsumerNetworkThread consumer's network thread} to the application thread

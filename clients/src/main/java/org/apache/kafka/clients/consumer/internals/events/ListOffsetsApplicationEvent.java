@@ -24,7 +24,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
-import static org.apache.kafka.clients.consumer.internals.events.ApplicationEventType.LIST_OFFSETS;
+import static org.apache.kafka.clients.consumer.internals.events.ApplicationEvent.Type.LIST_OFFSETS;
 
 /**
  * Event for retrieving partition offsets by performing a

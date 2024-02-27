@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.clients.consumer.internals.events;
 
-import static org.apache.kafka.clients.consumer.internals.events.ApplicationEventType.COMMIT_ON_CLOSE;
+import static org.apache.kafka.clients.consumer.internals.events.ApplicationEvent.Type.COMMIT_ON_CLOSE;
 
 public class CommitOnCloseApplicationEvent extends ApplicationEvent {
 

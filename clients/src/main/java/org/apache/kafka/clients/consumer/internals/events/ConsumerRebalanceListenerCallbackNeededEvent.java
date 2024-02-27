@@ -27,7 +27,7 @@ import java.util.Collections;
 import java.util.Objects;
 import java.util.SortedSet;
 
-import static org.apache.kafka.clients.consumer.internals.events.BackgroundEventType.CONSUMER_REBALANCE_LISTENER_CALLBACK_NEEDED;
+import static org.apache.kafka.clients.consumer.internals.events.BackgroundEvent.Type.CONSUMER_REBALANCE_LISTENER_CALLBACK_NEEDED;
 
 /**
  * Event that signifies that the network I/O thread wants to invoke one of the callback methods on the

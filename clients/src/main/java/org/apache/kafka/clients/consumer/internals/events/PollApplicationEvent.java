@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.clients.consumer.internals.events;
 
-import static org.apache.kafka.clients.consumer.internals.events.ApplicationEventType.POLL;
+import static org.apache.kafka.clients.consumer.internals.events.ApplicationEvent.Type.POLL;
 
 public class PollApplicationEvent extends ApplicationEvent {
 

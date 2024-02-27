@@ -22,7 +22,7 @@ import org.apache.kafka.common.utils.Timer;
 import java.util.List;
 import java.util.Map;
 
-import static org.apache.kafka.clients.consumer.internals.events.ApplicationEventType.TOPIC_METADATA;
+import static org.apache.kafka.clients.consumer.internals.events.ApplicationEvent.Type.TOPIC_METADATA;
 
 public class TopicMetadataApplicationEvent extends CompletableApplicationEvent<Map<String, List<PartitionInfo>>> {
 

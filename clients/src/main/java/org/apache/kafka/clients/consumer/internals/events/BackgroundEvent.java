@@ -17,13 +17,54 @@
 package org.apache.kafka.clients.consumer.internals.events;
 
 import org.apache.kafka.clients.consumer.internals.ConsumerNetworkThread;
+import org.apache.kafka.common.Uuid;
+
+import java.util.Objects;
 
 /**
  * This is the abstract definition of the events created by the {@link ConsumerNetworkThread network thread}.
  */
-public abstract class BackgroundEvent extends ConsumerEvent<BackgroundEventType> {
+public abstract class BackgroundEvent {
 
-    protected BackgroundEvent(BackgroundEventType type) {
-        super(type);
+    public enum Type {
+        ERROR, CONSUMER_REBALANCE_LISTENER_CALLBACK_NEEDED, GROUP_METADATA_UPDATE
+    }
+
+    private final Type type;
+
+    private final Uuid id;
+
+    protected BackgroundEvent(Type type) {
+        this.type = Objects.requireNonNull(type);
+        this.id = Uuid.randomUuid();
+    }
+
+    public Type type() {
+        return type;
+    }
+
+    public Uuid id() {
+        return id;
+    }
+
+    @Override
+    public final boolean equals(Object o) {
+        return this == o;
+    }
+
+    @Override
+    public final int hashCode() {
+        return Objects.hash(type, id);
+    }
+
+    protected String toStringBase() {
+        return "type=" + type + ", id=" + id;
+    }
+
+    @Override
+    public final String toString() {
+        return getClass().getSimpleName() + "{" +
+                toStringBase() +
+                '}';
     }
 }

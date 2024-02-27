@@ -22,7 +22,7 @@ import org.apache.kafka.common.TopicPartition;
 import java.util.Collections;
 import java.util.Map;
 
-import static org.apache.kafka.clients.consumer.internals.events.ApplicationEventType.ASSIGNMENT_CHANGE;
+import static org.apache.kafka.clients.consumer.internals.events.ApplicationEvent.Type.ASSIGNMENT_CHANGE;
 
 public class AssignmentChangeApplicationEvent extends ApplicationEvent {
 

@@ -19,7 +19,7 @@ package org.apache.kafka.clients.consumer.internals.events;
 
 import org.apache.kafka.common.utils.Timer;
 
-import static org.apache.kafka.clients.consumer.internals.events.ApplicationEventType.VALIDATE_POSITIONS;
+import static org.apache.kafka.clients.consumer.internals.events.ApplicationEvent.Type.VALIDATE_POSITIONS;
 
 /**
  * Event for validating offsets for all assigned partitions for which a leader change has been

@@ -16,13 +16,58 @@
  */
 package org.apache.kafka.clients.consumer.internals.events;
 
+import org.apache.kafka.common.Uuid;
+
+import java.util.Objects;
+
 /**
  * This is the abstract definition of the events created by the KafkaConsumer API on the user's
  * application thread.
  */
-public abstract class ApplicationEvent extends ConsumerEvent<ApplicationEventType> {
+public abstract class ApplicationEvent {
 
-    protected ApplicationEvent(ApplicationEventType type) {
-        super(type);
+    public enum Type {
+        COMMIT_ASYNC, COMMIT_SYNC, POLL, FETCH_COMMITTED_OFFSETS, NEW_TOPICS_METADATA_UPDATE, ASSIGNMENT_CHANGE,
+        LIST_OFFSETS, RESET_POSITIONS, VALIDATE_POSITIONS, TOPIC_METADATA, SUBSCRIPTION_CHANGE,
+        UNSUBSCRIBE, CONSUMER_REBALANCE_LISTENER_CALLBACK_COMPLETED,
+        COMMIT_ON_CLOSE, LEAVE_ON_CLOSE
+    }
+
+    private final Type type;
+
+    private final Uuid id;
+
+    protected ApplicationEvent(Type type) {
+        this.type = Objects.requireNonNull(type);
+        this.id = Uuid.randomUuid();
+    }
+
+    public Type type() {
+        return type;
+    }
+
+    public Uuid id() {
+        return id;
+    }
+
+    @Override
+    public final boolean equals(Object o) {
+        return this == o;
+    }
+
+    @Override
+    public final int hashCode() {
+        return Objects.hash(type, id);
+    }
+
+    protected String toStringBase() {
+        return "type=" + type + ", id=" + id;
+    }
+
+    @Override
+    public final String toString() {
+        return getClass().getSimpleName() + "{" +
+                toStringBase() +
+                '}';
     }
 }

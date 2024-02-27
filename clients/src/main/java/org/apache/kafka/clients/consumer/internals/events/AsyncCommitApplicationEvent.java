@@ -22,7 +22,7 @@ import org.apache.kafka.common.utils.Timer;
 
 import java.util.Map;
 
-import static org.apache.kafka.clients.consumer.internals.events.ApplicationEventType.COMMIT_ASYNC;
+import static org.apache.kafka.clients.consumer.internals.events.ApplicationEvent.Type.COMMIT_ASYNC;
 
 /**
  * Event to commit offsets without waiting for a response, so the request won't be retried.

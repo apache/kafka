@@ -24,7 +24,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 
-import static org.apache.kafka.clients.consumer.internals.events.ApplicationEventType.CONSUMER_REBALANCE_LISTENER_CALLBACK_COMPLETED;
+import static org.apache.kafka.clients.consumer.internals.events.ApplicationEvent.Type.CONSUMER_REBALANCE_LISTENER_CALLBACK_COMPLETED;
 
 /**
  * Event that signifies that the application thread has executed the {@link ConsumerRebalanceListener} callback. If

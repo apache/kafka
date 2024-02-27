@@ -22,7 +22,7 @@ import org.apache.kafka.common.utils.Timer;
 
 import java.util.Map;
 
-import static org.apache.kafka.clients.consumer.internals.events.ApplicationEventType.COMMIT_SYNC;
+import static org.apache.kafka.clients.consumer.internals.events.ApplicationEvent.Type.COMMIT_SYNC;
 
 /**
  * Event to commit offsets waiting for a response and retrying on expected retriable errors until

@@ -18,7 +18,7 @@ package org.apache.kafka.clients.consumer.internals.events;
 
 import org.apache.kafka.common.utils.Timer;
 
-import static org.apache.kafka.clients.consumer.internals.events.ApplicationEventType.LEAVE_ON_CLOSE;
+import static org.apache.kafka.clients.consumer.internals.events.ApplicationEvent.Type.LEAVE_ON_CLOSE;
 
 public class LeaveOnCloseApplicationEvent extends CompletableApplicationEvent<Void> {
 

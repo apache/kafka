@@ -24,7 +24,7 @@ import java.util.Collections;
 import java.util.Map;
 import java.util.Set;
 
-import static org.apache.kafka.clients.consumer.internals.events.ApplicationEventType.FETCH_COMMITTED_OFFSETS;
+import static org.apache.kafka.clients.consumer.internals.events.ApplicationEvent.Type.FETCH_COMMITTED_OFFSETS;
 
 public class FetchCommittedOffsetsApplicationEvent extends CompletableApplicationEvent<Map<TopicPartition, OffsetAndMetadata>> {
 

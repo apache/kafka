@@ -30,7 +30,7 @@ public abstract class CommitApplicationEvent extends CompletableApplicationEvent
      */
     private final Map<TopicPartition, OffsetAndMetadata> offsets;
 
-    protected CommitApplicationEvent(final ApplicationEventType type,
+    protected CommitApplicationEvent(final Type type,
                                      final Timer timer,
                                      final Map<TopicPartition, OffsetAndMetadata> offsets) {
         super(type, timer);

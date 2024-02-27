@@ -18,7 +18,7 @@ package org.apache.kafka.clients.consumer.internals.events;
 
 import org.apache.kafka.common.KafkaException;
 
-import static org.apache.kafka.clients.consumer.internals.events.BackgroundEventType.ERROR;
+import static org.apache.kafka.clients.consumer.internals.events.BackgroundEvent.Type.ERROR;
 
 public class ErrorBackgroundEvent extends BackgroundEvent {
 

@@ -19,7 +19,7 @@ package org.apache.kafka.clients.consumer.internals.events;
 
 import org.apache.kafka.common.utils.Timer;
 
-import static org.apache.kafka.clients.consumer.internals.events.ApplicationEventType.RESET_POSITIONS;
+import static org.apache.kafka.clients.consumer.internals.events.ApplicationEvent.Type.RESET_POSITIONS;
 
 /**
  * Event for resetting offsets for all assigned partitions that require it. This is an

@@ -19,7 +19,7 @@ package org.apache.kafka.clients.consumer.internals.events;
 
 import org.apache.kafka.common.utils.Timer;
 
-import static org.apache.kafka.clients.consumer.internals.events.ApplicationEventType.UNSUBSCRIBE;
+import static org.apache.kafka.clients.consumer.internals.events.ApplicationEvent.Type.UNSUBSCRIBE;
 
 /**
  * Application event triggered when a user calls the unsubscribe API. This will make the consumer

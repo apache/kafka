@@ -31,7 +31,7 @@ public abstract class CompletableApplicationEvent<T> extends ApplicationEvent im
     private final CompletableFuture<T> future;
     private final long deadlineMs;
 
-    protected CompletableApplicationEvent(ApplicationEventType type, Timer timer) {
+    protected CompletableApplicationEvent(Type type, Timer timer) {
         super(type);
         this.future = new CompletableFuture<>();
         this.deadlineMs = timer.remainingMs() + timer.currentTimeMs();
