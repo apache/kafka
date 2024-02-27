@@ -24,9 +24,7 @@ import org.apache.kafka.common.annotation.InterfaceStability;
 
 import java.util.Collection;
 import java.util.HashMap;
-import java.util.Iterator;
 import java.util.Map;
-import java.util.TreeMap;
 import java.util.concurrent.ExecutionException;
 
 /**
@@ -38,38 +36,28 @@ import java.util.concurrent.ExecutionException;
 public class DescribeTopicsResult {
     private final Map<Uuid, KafkaFuture<TopicDescription>> topicIdFutures;
     private final Map<String, KafkaFuture<TopicDescription>> nameFutures;
-    private final Iterator<Map.Entry<String, KafkaFuture<TopicDescription>>> nameFuturesIterator;
 
     @Deprecated
     protected DescribeTopicsResult(Map<String, KafkaFuture<TopicDescription>> futures) {
-        this(null, futures, null);
+        this(null, futures);
     }
 
     // VisibleForTesting
-    protected DescribeTopicsResult(
-        Map<Uuid, KafkaFuture<TopicDescription>> topicIdFutures,
-        Map<String, KafkaFuture<TopicDescription>> nameFutures,
-        Iterator<Map.Entry<String, KafkaFuture<TopicDescription>>> nameFuturesIterator
-    ) {
-        if (topicIdFutures != null && nameFutures != null && nameFuturesIterator != null)
-            throw new IllegalArgumentException("topicIdFutures and nameFutures and nameFutureIterator cannot both be specified.");
-        if (topicIdFutures == null && nameFutures == null && nameFuturesIterator == null)
-            throw new IllegalArgumentException("topicIdFutures and nameFutures and nameFutureIterator cannot both be null.");
+    protected DescribeTopicsResult(Map<Uuid, KafkaFuture<TopicDescription>> topicIdFutures, Map<String, KafkaFuture<TopicDescription>> nameFutures) {
+        if (topicIdFutures != null && nameFutures != null)
+            throw new IllegalArgumentException("topicIdFutures and nameFutures cannot both be specified.");
+        if (topicIdFutures == null && nameFutures == null)
+            throw new IllegalArgumentException("topicIdFutures and nameFutures cannot both be null.");
         this.topicIdFutures = topicIdFutures;
         this.nameFutures = nameFutures;
-        this.nameFuturesIterator = nameFuturesIterator;
     }
 
     static DescribeTopicsResult ofTopicIds(Map<Uuid, KafkaFuture<TopicDescription>> topicIdFutures) {
-        return new DescribeTopicsResult(topicIdFutures, null, null);
+        return new DescribeTopicsResult(topicIdFutures, null);
     }
 
     static DescribeTopicsResult ofTopicNames(Map<String, KafkaFuture<TopicDescription>> nameFutures) {
-        return new DescribeTopicsResult(null, nameFutures, null);
-    }
-
-    static DescribeTopicsResult ofTopicNameIterator(Iterator<Map.Entry<String, KafkaFuture<TopicDescription>>> nameFuturesIterator) {
-        return new DescribeTopicsResult(null, null, nameFuturesIterator);
+        return new DescribeTopicsResult(null, nameFutures);
     }
 
     /**
@@ -89,17 +77,7 @@ public class DescribeTopicsResult {
      *         individual topics if the request used topic names, otherwise return null.
      */
     public Map<String, KafkaFuture<TopicDescription>> topicNameValues() {
-        return getNameFutures();
-    }
-
-    /**
-     * Use when {@link Admin#describeTopics(TopicCollection, DescribeTopicsOptions)} used a TopicNameCollection
-     *
-     * @return an iterator from topic names to futures which can be used to check the status of
-     *         individual topics if the request used topic names, otherwise return null.
-     */
-    public Iterator<Map.Entry<String, KafkaFuture<TopicDescription>>> topicNameValuesIterator() {
-        return nameFuturesIterator;
+        return nameFutures;
     }
 
     /**
@@ -110,7 +88,7 @@ public class DescribeTopicsResult {
      */
     @Deprecated
     public Map<String, KafkaFuture<TopicDescription>> values() {
-        return getNameFutures();
+        return nameFutures;
     }
 
     /**
@@ -123,7 +101,7 @@ public class DescribeTopicsResult {
      */
     @Deprecated
     public KafkaFuture<Map<String, TopicDescription>> all() {
-        return all(getNameFutures());
+        return all(nameFutures);
     }
 
     /**
@@ -133,7 +111,7 @@ public class DescribeTopicsResult {
      *         topic descriptions succeed
      */
     public KafkaFuture<Map<String, TopicDescription>> allTopicNames() {
-        return all(getNameFutures());
+        return all(nameFutures);
     }
 
     /**
@@ -165,15 +143,5 @@ public class DescribeTopicsResult {
                 }
                 return descriptions;
             });
-    }
-
-    private Map<String, KafkaFuture<TopicDescription>> getNameFutures() {
-        if (nameFutures != null) return nameFutures;
-        Map<String, KafkaFuture<TopicDescription>> futures = new TreeMap<>();
-        while (nameFuturesIterator.hasNext()) {
-            Map.Entry<String, KafkaFuture<TopicDescription>> entry = nameFuturesIterator.next();
-            futures.put(entry.getKey(), entry.getValue());
-        }
-        return futures;
     }
 }

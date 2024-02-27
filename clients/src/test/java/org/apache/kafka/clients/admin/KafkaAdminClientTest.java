@@ -228,6 +228,8 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
+import org.mockito.ArgumentCaptor;
+import org.mockito.Mockito;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -276,6 +278,8 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 
 /**
  * A unit test for KafkaAdminClient.
@@ -1399,7 +1403,7 @@ public class KafkaAdminClientTest {
         }
     }
 
-    @SuppressWarnings("NPathComplexity")
+    @SuppressWarnings({"NPathComplexity", "unchecked"})
     @Test
     public void testDescribeTopicsWithDescribeTopicPartitionsApiBasic() {
         try (AdminClientUnitTestEnv env = mockClientEnv()) {
@@ -1478,31 +1482,51 @@ public class KafkaAdminClientTest {
 
                 return true;
             }, new DescribeTopicPartitionsResponse(dataSecondPart));
+
+            AdminResultsSubscriber<DescribeTopicPartitionsResult> subscriber = Mockito.mock(AdminResultsSubscriber.class);
+
             try {
-                DescribeTopicsResult result = env.adminClient().describeTopics(
-                    Arrays.asList(topicName0, topicName1),
-                    new DescribeTopicsOptions().useDescribeTopicsApi(true).partitionSizeLimitPerResponse(10));
-                Map<String, TopicDescription> topicDescriptions = result.allTopicNames().get();
-                assertEquals(2, topicDescriptions.size());
-                TopicDescription topicDescription = topicDescriptions.get(topicName0);
-                assertEquals(2, topicDescription.partitions().size());
-                assertEquals(0, topicDescription.partitions().get(0).partition());
-                assertEquals(1, topicDescription.partitions().get(1).partition());
-                topicDescription = topicDescriptions.get(topicName1);
+                env.adminClient().describeTopics(
+                    TopicCollection.ofTopicNames(Arrays.asList(topicName0, topicName1)),
+                    new DescribeTopicsOptions().partitionSizeLimitPerResponse(10),
+                    subscriber
+                );
+                ArgumentCaptor<DescribeTopicPartitionsResult> argument = ArgumentCaptor.forClass(DescribeTopicPartitionsResult.class);
+                verify(subscriber, times(3)).onNext(argument.capture());
+                List<DescribeTopicPartitionsResult> results = argument.getAllValues();
+                assertEquals(3, results.size());
+                DescribeTopicPartitionsResult result = results.get(0);
+                assertEquals(Errors.NONE.exception(), result.exception);
+                TopicDescription topicDescription = result.topicDescription;
+                assertEquals(topicName0, topicDescription.name());
                 assertEquals(1, topicDescription.partitions().size());
+                assertEquals(0, topicDescription.partitions().get(0).partition());
+
+                result = results.get(1);
+                topicDescription = result.topicDescription;
+                assertEquals(topicName0, topicDescription.name());
+                assertEquals(1, topicDescription.partitions().size());
+                assertEquals(1, topicDescription.partitions().get(0).partition());
+
+                result = results.get(2);
+                topicDescription = result.topicDescription;
+                assertEquals(topicName1, topicDescription.name());
+                assertEquals(1, topicDescription.partitions().size());
+                assertEquals(0, topicDescription.partitions().get(0).partition());
             } catch (Exception e) {
                 fail("describe using DescribeTopics API should not fail", e);
             }
         }
     }
 
-    @SuppressWarnings("NPathComplexity")
+    @SuppressWarnings({"NPathComplexity", "unchecked"})
     @Test
     public void testDescribeTopicsWithDescribeTopicPartitionsApiEdgeCase() {
         try (AdminClientUnitTestEnv env = mockClientEnv()) {
             env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
             String topicName0 = "test-0";
             String topicName1 = "test-1";
+            String topicNonExist = "test-0-non-exist";
             Map<String, Uuid> topics = new HashMap<>();
             topics.put(topicName0, Uuid.randomUuid());
             topics.put(topicName1, Uuid.randomUuid());
@@ -1528,9 +1552,10 @@ public class KafkaAdminClientTest {
                     .setPartitionIndex(0));
             env.kafkaClient().prepareResponse(body -> {
                 DescribeTopicPartitionsRequestData request = (DescribeTopicPartitionsRequestData) body.data();
-                if (request.topics().size() != 2) return false;
+                if (request.topics().size() != 3) return false;
                 if (!request.topics().get(0).name().equals(topicName0)) return false;
-                if (!request.topics().get(1).name().equals(topicName1)) return false;
+                if (!request.topics().get(1).name().equals(topicNonExist)) return false;
+                if (!request.topics().get(2).name().equals(topicName1)) return false;
                 if (request.cursor() != null) return false;
                 return true;
             }, new DescribeTopicPartitionsResponse(dataFirstPart));
@@ -1561,16 +1586,33 @@ public class KafkaAdminClientTest {
                 return true;
             }, new DescribeTopicPartitionsResponse(dataSecondPart));
             try {
-                DescribeTopicsResult result = env.adminClient().describeTopics(
-                    Arrays.asList(topicName1, topicName0),
-                    new DescribeTopicsOptions().useDescribeTopicsApi(true).partitionSizeLimitPerResponse(2));
-                Map<String, TopicDescription> topicDescriptions = result.allTopicNames().get();
-                assertEquals(2, topicDescriptions.size());
-                TopicDescription topicDescription = topicDescriptions.get(topicName0);
+                AdminResultsSubscriber<DescribeTopicPartitionsResult> subscriber = Mockito.mock(AdminResultsSubscriber.class);
+                env.adminClient().describeTopics(
+                    TopicCollection.ofTopicNames(Arrays.asList(topicName1, topicName0, topicNonExist)),
+                    new DescribeTopicsOptions().partitionSizeLimitPerResponse(10),
+                    subscriber
+                );
+                ArgumentCaptor<DescribeTopicPartitionsResult> argument = ArgumentCaptor.forClass(DescribeTopicPartitionsResult.class);
+                verify(subscriber, times(3)).onNext(argument.capture());
+                List<DescribeTopicPartitionsResult> results = argument.getAllValues();
+                assertEquals(3, results.size());
+
+                DescribeTopicPartitionsResult result = results.get(0);
+                assertEquals(Errors.NONE.exception(), result.exception);
+                TopicDescription topicDescription = result.topicDescription;
+                assertEquals(topicName0, topicDescription.name());
                 assertEquals(1, topicDescription.partitions().size());
                 assertEquals(0, topicDescription.partitions().get(0).partition());
-                topicDescription = topicDescriptions.get(topicName1);
+
+                result = results.get(1);
+                assertTrue(result.exception instanceof UnknownTopicOrPartitionException);
+
+                result = results.get(2);
+                assertEquals(Errors.NONE.exception(), result.exception);
+                topicDescription = result.topicDescription;
+                assertEquals(topicName1, topicDescription.name());
                 assertEquals(1, topicDescription.partitions().size());
+                assertEquals(0, topicDescription.partitions().get(0).partition());
             } catch (Exception e) {
                 fail("describe using DescribeTopics API should not fail", e);
             }

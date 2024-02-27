@@ -98,21 +98,21 @@ public class TopicPartitionInfo {
     /**
      * Return the eligible leader replicas of the partition. Note that the ordering of the result is unspecified.
      */
-    public List<Node> elr() {
+    public List<Node> eligibleLeaderReplicas() {
         return elr;
     }
 
     /**
      * Return the last known eligible leader replicas of the partition. Note that the ordering of the result is unspecified.
      */
-    public List<Node> lastKnownElr() {
+    public List<Node> lastKnownEligibleLeaderReplicas() {
         return lastKnownElr;
     }
 
     public String toString() {
         return "(partition=" + partition + ", leader=" + leader + ", replicas=" +
             Utils.join(replicas, ", ") + ", isr=" + Utils.join(isr, ", ") +
-            Utils.join(elr, ", ") + Utils.join(lastKnownElr, ", ") + ")";
+            ", elr=" +Utils.join(elr, ", ") + ", lastKnownElr=" + Utils.join(lastKnownElr, ", ") + ")";
     }
 
     @Override
