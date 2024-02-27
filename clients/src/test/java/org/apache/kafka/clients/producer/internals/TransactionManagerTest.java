@@ -2545,6 +2545,22 @@ public class TransactionManagerTest {
         // We shouldn't drain batches which haven't been added to the transaction yet.
         assertTrue(drainedBatches.containsKey(node1.id()));
         assertTrue(drainedBatches.get(node1.id()).isEmpty());
+
+        // Let's now add the partition, flush and try to drain again.
+        transactionManager.maybeAddPartition(tp0);
+        accumulator.beginFlush();
+
+        drainedBatches = accumulator.drain(metadataCache, nodes, Integer.MAX_VALUE, time.milliseconds());
+
+        // We still shouldn't drain batches because the partition call didn't complete yet.
+        assertTrue(drainedBatches.containsKey(node1.id()));
+        assertTrue(drainedBatches.get(node1.id()).isEmpty());
+        assertTrue(accumulator.hasUndrained());
+
+        // Now prepare response to complete the partition addition.
+        // We should now be able to drain the request.
+        prepareAddPartitionsToTxn(tp0, Errors.NONE);
+        runUntil(() -> !accumulator.hasUndrained());
     }
 
     @Test

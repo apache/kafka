@@ -21,24 +21,94 @@
 
 <h4><a id="upgrade_3_7_0" href="#upgrade_3_7_0">Upgrading to 3.7.0 from any version 0.8.x through 3.6.x</a></h4>
 
+
+    <h5><a id="upgrade_370_zk" href="#upgrade_370_zk">Upgrading ZooKeeper-based clusters</a></h5>
+    <p><b>If you are upgrading from a version prior to 2.1.x, please see the note in step 5 below about the change to the schema used to store consumer offsets.
+        Once you have changed the inter.broker.protocol.version to the latest version, it will not be possible to downgrade to a version prior to 2.1.</b></p>
+
+    <p><b>For a rolling upgrade:</b></p>
+
+    <ol>
+        <li>Update server.properties on all brokers and add the following properties. CURRENT_KAFKA_VERSION refers to the version you
+            are upgrading from. CURRENT_MESSAGE_FORMAT_VERSION refers to the message format version currently in use. If you have previously
+            overridden the message format version, you should keep its current value. Alternatively, if you are upgrading from a version prior
+            to 0.11.0.x, then CURRENT_MESSAGE_FORMAT_VERSION should be set to match CURRENT_KAFKA_VERSION.
+            <ul>
+                <li>inter.broker.protocol.version=CURRENT_KAFKA_VERSION (e.g. <code>3.6</code>, <code>3.5</code>, etc.)</li>
+                <li>log.message.format.version=CURRENT_MESSAGE_FORMAT_VERSION  (See <a href="#upgrade_10_performance_impact">potential performance impact
+                    following the upgrade</a> for the details on what this configuration does.)</li>
+            </ul>
+            If you are upgrading from version 0.11.0.x or above, and you have not overridden the message format, then you only need to override
+            the inter-broker protocol version.
+            <ul>
+                <li>inter.broker.protocol.version=CURRENT_KAFKA_VERSION (e.g. <code>3.6</code>, <code>3.5</code>, etc.)</li>
+            </ul>
+        </li>
+        <li>Upgrade the brokers one at a time: shut down the broker, update the code, and restart it. Once you have done so, the
+            brokers will be running the latest version and you can verify that the cluster's behavior and performance meets expectations.
+            It is still possible to downgrade at this point if there are any problems.
+        </li>
+        <li>Once the cluster's behavior and performance has been verified, bump the protocol version by editing
+            <code>inter.broker.protocol.version</code> and setting it to <code>3.7</code>.
+        </li>
+        <li>Restart the brokers one by one for the new protocol version to take effect. Once the brokers begin using the latest
+            protocol version, it will no longer be possible to downgrade the cluster to an older version.
+        </li>
+        <li>If you have overridden the message format version as instructed above, then you need to do one more rolling restart to
+            upgrade it to its latest version. Once all (or most) consumers have been upgraded to 0.11.0 or later,
+            change log.message.format.version to 3.7 on each broker and restart them one by one. Note that the older Scala clients,
+            which are no longer maintained, do not support the message format introduced in 0.11, so to avoid conversion costs
+            (or to take advantage of <a href="#upgrade_11_exactly_once_semantics">exactly once semantics</a>),
+            the newer Java clients must be used.
+        </li>
+    </ol>
+
+    <h5><a id="upgrade_370_kraft" href="#upgrade_370_kraft">Upgrading KRaft-based clusters</a></h5>
+    <p><b>If you are upgrading from a version prior to 3.3.0, please see the note in step 3 below. Once you have changed the metadata.version to the latest version, it will not be possible to downgrade to a version prior to 3.3-IV0.</b></p>
+
+    <p><b>For a rolling upgrade:</b></p>
+
+    <ol>
+        <li>Upgrade the brokers one at a time: shut down the broker, update the code, and restart it. Once you have done so, the
+            brokers will be running the latest version and you can verify that the cluster's behavior and performance meets expectations.
+        </li>
+        <li>Once the cluster's behavior and performance has been verified, bump the metadata.version by running
+            <code>
+                ./bin/kafka-features.sh upgrade --metadata 3.7
+            </code>
+        </li>
+        <li>Note that cluster metadata downgrade is not supported in this version since it has metadata changes.
+            Every <a href="https://github.com/apache/kafka/blob/trunk/server-common/src/main/java/org/apache/kafka/server/common/MetadataVersion.java">MetadataVersion</a>
+            after 3.2.x has a boolean parameter that indicates if there are metadata changes (i.e. <code>IBP_3_3_IV3(7, "3.3", "IV3", true)</code> means this version has metadata changes).
+            Given your current and target versions, a downgrade is only possible if there are no metadata changes in the versions between.</li>
+    </ol>
+
     <h5><a id="upgrade_370_notable" href="#upgrade_370_notable">Notable changes in 3.7.0</a></h5>
     <ul>
         <li>Java 11 support for the broker and tools has been deprecated and will be removed in Apache Kafka 4.0. This complements
             the previous deprecation of Java 8 for all components. Please refer to
             <a href="https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=284789510">KIP-1013</a> for more details.
         </li>
+        <li>Client APIs released prior to Apache Kafka 2.1 are now marked deprecated in 3.7 and will be removed in Apache Kafka 4.0. See <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-896%3A+Remove+old+client+protocol+API+versions+in+Kafka+4.0">KIP-896</a> for details and RPC versions that are now deprecated.
+        </li>
+        <li>Early access of the new simplified Consumer Rebalance Protocol is available, and it is not recommended for use in production environments.
+            You are encouraged to test it and provide feedback!
+            For more information about the early access feature, please check <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-848%3A+The+Next+Generation+of+the+Consumer+Rebalance+Protocol">KIP-848</a> and the <a href="https://cwiki.apache.org/confluence/display/KAFKA/The+Next+Generation+of+the+Consumer+Rebalance+Protocol+%28KIP-848%29+-+Early+Access+Release+Notes">Early Access Release Notes</a>.
+        </li>
         <li>More metrics related to Tiered Storage have been introduced. They should improve the operational experience
             of running Tiered Storage in production.
             For more detailed information, please refer to <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-963%3A+Additional+metrics+in+Tiered+Storage">KIP-963</a>.
         </li>
-	<li>Kafka Streams ships multiple KIPs for IQv2 support.
+        <li>Kafka Streams ships multiple KIPs for IQv2 support.
             See the <a href="/{{version}}/documentation/streams/upgrade-guide#streams_api_changes_370">Kafka Streams upgrade section</a> for more details.
+        </li>
+        <li>All the notable changes are present in the <a href="https://kafka.apache.org/blog#apache_kafka_370_release_announcement">blog post announcing the 3.7.0 release.</a>
         </li>
     </ul>
 
-<h4><a id="upgrade_3_6_0" href="#upgrade_3_6_0">Upgrading to 3.6.0 from any version 0.8.x through 3.5.x</a></h4>
+<h4><a id="upgrade_3_6_1" href="#upgrade_3_6_1">Upgrading to 3.6.1 from any version 0.8.x through 3.5.x</a></h4>
 
-    <h5><a id="upgrade_360_zk" href="#upgrade_360_zk">Upgrading ZooKeeper-based clusters</a></h5>
+    <h5><a id="upgrade_361_zk" href="#upgrade_361_zk">Upgrading ZooKeeper-based clusters</a></h5>
     <p><b>If you are upgrading from a version prior to 2.1.x, please see the note in step 5 below about the change to the schema used to store consumer offsets.
         Once you have changed the inter.broker.protocol.version to the latest version, it will not be possible to downgrade to a version prior to 2.1.</b></p>
 
@@ -79,7 +149,7 @@
         </li>
     </ol>
 
-    <h5><a id="upgrade_360_kraft" href="#upgrade_360_kraft">Upgrading KRaft-based clusters</a></h5>
+    <h5><a id="upgrade_361_kraft" href="#upgrade_361_kraft">Upgrading KRaft-based clusters</a></h5>
     <p><b>If you are upgrading from a version prior to 3.3.0, please see the note in step 3 below. Once you have changed the metadata.version to the latest version, it will not be possible to downgrade to a version prior to 3.3-IV0.</b></p>
 
     <p><b>For a rolling upgrade:</b></p>
@@ -139,6 +209,39 @@
             InvalidRecordExceptions and UnknownServerExceptions. Upgrading to 3.6.1 or newer or disabling the feature fixes the issue.
         </li>
     </ul>
+
+<h4><a id="upgrade_3_5_2" href="#upgrade_3_5_2">Upgrading to 3.5.2 from any version 0.8.x through 3.4.x</a></h4>
+    All upgrade steps remain same as <a href="#upgrade_3_5_0">upgrading to 3.5.0</a>
+    <h5><a id="upgrade_352_notable" href="#upgrade_352_notable">Notable changes in 3.5.2</a></h5>
+    <ul>
+    <li>
+        When migrating producer ID blocks from ZK to KRaft, there could be duplicate producer IDs being given to
+        transactional or idempotent producers. This can cause long term problems since the producer IDs are
+        persisted and reused for a long time.
+        See <a href="https://issues.apache.org/jira/browse/KAFKA-15552">KAFKA-15552</a> for more details.
+    </li>
+    <li>
+        In 3.5.0 and 3.5.1, there could be an issue that the empty ISR is returned from controller after AlterPartition request
+        during rolling upgrade. This issue will impact the availability of the topic partition.
+        See <a href="https://issues.apache.org/jira/browse/KAFKA-15353">KAFKA-15353</a> for more details.
+    </li>
+</ul>
+
+<h4><a id="upgrade_3_5_1" href="#upgrade_3_5_1">Upgrading to 3.5.1 from any version 0.8.x through 3.4.x</a></h4>
+    All upgrade steps remain same as <a href="#upgrade_3_5_0">upgrading to 3.5.0</a>
+    <h5><a id="upgrade_351_notable" href="#upgrade_351_notable">Notable changes in 3.5.1</a></h5>
+    <ul>
+    <li>
+        Upgraded the dependency, snappy-java, to a version which is not vulnerable to
+        <a href="https://nvd.nist.gov/vuln/detail/CVE-2023-34455">CVE-2023-34455.</a>
+        You can find more information about the CVE at <a href="https://kafka.apache.org/cve-list#CVE-2023-34455">Kafka CVE list.</a>
+    </li>
+    <li>
+        Fixed a regression introduced in 3.3.0, which caused <code>security.protocol</code> configuration values to be restricted to
+        upper case only. After the fix, <code>security.protocol</code> values are case insensitive.
+        See <a href="https://issues.apache.org/jira/browse/KAFKA-15053">KAFKA-15053</a> for details.
+    </li>
+</ul>
 
 <h4><a id="upgrade_3_5_0" href="#upgrade_3_5_0">Upgrading to 3.5.0 from any version 0.8.x through 3.4.x</a></h4>
 

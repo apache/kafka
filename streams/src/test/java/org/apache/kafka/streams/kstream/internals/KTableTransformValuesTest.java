@@ -84,7 +84,7 @@ public class KTableTransformValuesTest {
     private static final Consumed<String, String> CONSUMED = Consumed.with(Serdes.String(), Serdes.String());
 
     private TopologyTestDriver driver;
-    private MockProcessorSupplier<String, String> capture;
+    private MockProcessorSupplier<String, String, Void, Void> capture;
     private StreamsBuilder builder;
     @Mock
     private KTableImpl<String, String, String> parent;
