@@ -791,10 +791,13 @@ public class StreamsConfig extends AbstractConfig {
 
     private static final String[] NON_CONFIGURABLE_CONSUMER_DEFAULT_CONFIGS =
         new String[] {ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, ConsumerConfig.ALLOW_AUTO_CREATE_TOPICS_CONFIG};
+
     private static final String[] NON_CONFIGURABLE_CONSUMER_EOS_CONFIGS =
         new String[] {ConsumerConfig.ISOLATION_LEVEL_CONFIG};
+
     private static final String[] NON_CONFIGURABLE_PRODUCER_DEFAULT_CONFIGS =
         new String[] {ProducerConfig.PARTITIONER_CLASS_CONFIG};
+        
     private static final String[] NON_CONFIGURABLE_PRODUCER_EOS_CONFIGS =
         new String[] {
             ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG,
@@ -1479,12 +1482,7 @@ public class StreamsConfig extends AbstractConfig {
             if (clientProvidedProps.containsKey(config)) {
                 if (CONSUMER_DEFAULT_OVERRIDES.containsKey(config)) {
                     if (!clientProvidedProps.get(config).equals(CONSUMER_DEFAULT_OVERRIDES.get(config))) {
-                        log.warn(String.format(nonConfigurableConfigMessage, "consumer", config, "", clientProvidedProps.get(config),  CONSUMER_DEFAULT_OVERRIDES.get(config)));
-                        clientProvidedProps.remove(config);
-                    }
-                } else if (PRODUCER_DEFAULT_OVERRIDES.containsKey(config)) {
-                    if (!clientProvidedProps.get(config).equals(PRODUCER_DEFAULT_OVERRIDES.get(config))) {
-                        log.warn(String.format(nonConfigurableConfigMessage, "producer", config, "", clientProvidedProps.get(config),  PRODUCER_DEFAULT_OVERRIDES.get(config)));
+                        log.warn(String.format(nonConfigurableConfigMessage, "consumer", config, "", clientProvidedProps.get(config), CONSUMER_DEFAULT_OVERRIDES.get(config)));
                         clientProvidedProps.remove(config);
                     }
                 } else if (eosEnabled) {
@@ -1508,7 +1506,6 @@ public class StreamsConfig extends AbstractConfig {
                 }
             }
         }
-
         if (eosEnabled) {
             verifyMaxInFlightRequestPerConnection(clientProvidedProps.get(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION));
         }
@@ -1889,3 +1886,20 @@ public class StreamsConfig extends AbstractConfig {
         System.out.println(CONFIG.toHtml(4, config -> "streamsconfigs_" + config));
     }
 }
+
+
+    public Map<String, Object> getMainConsumerConfigs(...) {
+        // Fetch the props starting with "consumer." after cleaning
+        // any props that needed to be overwritten
+        final consumerProps = getCommonConsumerConfigs();
+
+        // Get main consumer override configs i.e. starting with "main.consumer."
+        // and merge the two maps.
+        final mainConsumerProps = originalsWithPrefix(MAIN_CONSUMER_PREFIX);
+        for (final entry: mainConsumerProps.entrySet()) {
+            consumerProps.put(entry.getKey(), entry.getValue());
+
+        // Continue processing and filling in other required configs
+        }
+
+

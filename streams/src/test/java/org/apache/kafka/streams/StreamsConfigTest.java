@@ -532,7 +532,7 @@ public class StreamsConfigTest {
 
     @Test
     public void shouldResetToDefaultIfConsumerAllowAutoCreateTopicsIsOverridden() {
-        props.put(StreamsConfig.consumerPrefix(ConsumerConfig.ALLOW_AUTO_CREATE_TOPICS_CONFIG), "true");
+        props.put(StreamsConfig.mainConsumerPrefix(ConsumerConfig.ALLOW_AUTO_CREATE_TOPICS_CONFIG), "true");
         final StreamsConfig streamsConfig = new StreamsConfig(props);
         final Map<String, Object> consumerConfigs = streamsConfig.getMainConsumerConfigs("a", "b", threadIdx);
         assertEquals("false", consumerConfigs.get("allow.auto.create.topics"));
