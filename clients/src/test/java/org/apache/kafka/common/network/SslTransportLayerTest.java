@@ -1478,7 +1478,11 @@ public class SslTransportLayerTest {
     }
 
     /**
-     * Refer KAFKA-16305.
+     * SSLEngine implementations may transition from NEED_UNWRAP to NEED_UNWRAP
+     * even after reading all the data from the socket. This test ensures we
+     * continue unwrapping and not break early.
+     * Please refer <a href="https://issues.apache.org/jira/browse/KAFKA-16305">KAFKA-16305</a>
+     * for more information.
      */
     @Test
     public void testHandshakeUnwrapContinuesUnwrappingOnNeedUnwrapAfterAllBytesRead() throws IOException {
