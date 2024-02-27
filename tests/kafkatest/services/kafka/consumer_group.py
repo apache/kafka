@@ -18,6 +18,10 @@
 # (eventually) be upgraded to test both of these consumer groups.
 classic_group_protocol = 'classic'
 consumer_group_protocol = 'consumer'
+
+# The name of this variable is currently a misnomer. We have updated many of the system tests
+# to parameterize the group protocol, but until those tests *pass* with the "consumer" group
+# protocol, we'll leave this as-is.
 all_group_protocols = [classic_group_protocol]
 
 
