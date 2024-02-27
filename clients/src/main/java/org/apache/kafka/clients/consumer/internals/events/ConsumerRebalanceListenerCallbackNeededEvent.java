@@ -41,9 +41,8 @@ public class ConsumerRebalanceListenerCallbackNeededEvent extends CompletableBac
     private final SortedSet<TopicPartition> partitions;
 
     public ConsumerRebalanceListenerCallbackNeededEvent(ConsumerRebalanceListenerMethodName methodName,
-                                                        SortedSet<TopicPartition> partitions,
-                                                        Timer timer) {
-        super(CONSUMER_REBALANCE_LISTENER_CALLBACK_NEEDED, timer);
+                                                        SortedSet<TopicPartition> partitions) {
+        super(CONSUMER_REBALANCE_LISTENER_CALLBACK_NEEDED);
         this.methodName = Objects.requireNonNull(methodName);
         this.partitions = Collections.unmodifiableSortedSet(partitions);
     }

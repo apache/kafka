@@ -31,10 +31,10 @@ public abstract class CompletableBackgroundEvent<T> extends BackgroundEvent impl
     private final CompletableFuture<T> future;
     private final long deadlineMs;
 
-    protected CompletableBackgroundEvent(Type type, Timer timer) {
+    protected CompletableBackgroundEvent(Type type) {
         super(type);
         this.future = new CompletableFuture<>();
-        this.deadlineMs = timer.remainingMs() + timer.currentTimeMs();
+        this.deadlineMs = Long.MAX_VALUE;
     }
 
     @Override
