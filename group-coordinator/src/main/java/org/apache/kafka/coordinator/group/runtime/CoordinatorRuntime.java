@@ -1627,7 +1627,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
                                             if (summary != null) {
                                                 runtimeMetrics.recordPartitionLoadSensor(summary.startTimeMs(), summary.endTimeMs());
                                                 log.info("Finished loading of metadata from {} with epoch {} in {}ms where {}ms " +
-                                                        "was spent in the scheduler. Loaded {} records which total to {} bytes.",
+                                                         "was spent in the scheduler. Loaded {} records which total to {} bytes.",
                                                     tp, partitionEpoch, summary.endTimeMs() - summary.startTimeMs(),
                                                     summary.schedulerQueueTimeMs(), summary.numRecords(), summary.numBytes());
                                             }
