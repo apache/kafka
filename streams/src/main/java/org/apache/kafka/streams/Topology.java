@@ -784,7 +784,7 @@ public class Topology {
             topic,
             processorName,
             () -> ProcessorAdapter.adapt(stateUpdateSupplier.get()),
-            false
+            true
         );
         return this;
     }
@@ -837,7 +837,7 @@ public class Topology {
             topic,
             processorName,
             () -> ProcessorAdapter.adapt(stateUpdateSupplier.get()),
-            false
+            true
         );
         return this;
     }
@@ -881,7 +881,7 @@ public class Topology {
             topic,
             processorName,
             stateUpdateSupplier,
-            false
+            true
         );
         return this;
     }
@@ -927,7 +927,7 @@ public class Topology {
             topic,
             processorName,
             stateUpdateSupplier,
-            false
+            true
         );
         return this;
     }
