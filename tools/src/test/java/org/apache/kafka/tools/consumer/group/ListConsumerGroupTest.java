@@ -86,7 +86,7 @@ public class ListConsumerGroupTest extends ConsumerGroupCommandTest {
         String[] cgcArgs = new String[]{"--bootstrap-server", bootstrapServers(listenerName()), "--list", "--state"};
         ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(cgcArgs);
 
-        Set<ConsumerGroupListing> expectedListing = new HashSet<>(Arrays.asList(
+        Set<ConsumerGroupListing> expectedListing = mkSet(
             new ConsumerGroupListing(
                 simpleGroup,
                 true,
@@ -99,7 +99,7 @@ public class ListConsumerGroupTest extends ConsumerGroupCommandTest {
                 Optional.of(ConsumerGroupState.STABLE),
                 Optional.of(GroupType.parse(groupProtocol))
             )
-        ));
+        );
 
         assertGroupListing(
             service,
@@ -108,14 +108,14 @@ public class ListConsumerGroupTest extends ConsumerGroupCommandTest {
             expectedListing
         );
 
-        expectedListing = new HashSet<>(Collections.singletonList(
+        expectedListing = mkSet(
             new ConsumerGroupListing(
                 GROUP,
                 false,
                 Optional.of(ConsumerGroupState.STABLE),
                 Optional.of(GroupType.parse(groupProtocol))
             )
-        ));
+        );
 
         assertGroupListing(
             service,
@@ -145,7 +145,7 @@ public class ListConsumerGroupTest extends ConsumerGroupCommandTest {
         String[] cgcArgs = new String[]{"--bootstrap-server", bootstrapServers(listenerName()), "--list"};
         ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(cgcArgs);
 
-        Set<ConsumerGroupListing> expectedListing = new HashSet<>(Arrays.asList(
+        Set<ConsumerGroupListing> expectedListing = mkSet(
             new ConsumerGroupListing(
                 simpleGroup,
                 true,
@@ -158,7 +158,7 @@ public class ListConsumerGroupTest extends ConsumerGroupCommandTest {
                 Optional.of(ConsumerGroupState.STABLE),
                 Optional.of(GroupType.CLASSIC)
             )
-        ));
+        );
 
         // No filters explicitly mentioned. Expectation is that all groups are returned.
         assertGroupListing(
@@ -201,7 +201,7 @@ public class ListConsumerGroupTest extends ConsumerGroupCommandTest {
         ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(cgcArgs);
 
         // No filters explicitly mentioned. Expectation is that all groups are returned.
-        Set<ConsumerGroupListing> expectedListing = new HashSet<>(Arrays.asList(
+        Set<ConsumerGroupListing> expectedListing = mkSet(
             new ConsumerGroupListing(
                 simpleGroup,
                 true,
@@ -220,7 +220,7 @@ public class ListConsumerGroupTest extends ConsumerGroupCommandTest {
                 Optional.of(ConsumerGroupState.STABLE),
                 Optional.of(GroupType.CONSUMER)
             )
-        ));
+        );
 
         assertGroupListing(
             service,
@@ -231,14 +231,14 @@ public class ListConsumerGroupTest extends ConsumerGroupCommandTest {
 
         // When group type is mentioned:
         // New Group Coordinator returns groups according to the filter.
-        expectedListing = new HashSet<>(Collections.singletonList(
+        expectedListing = mkSet(
             new ConsumerGroupListing(
                 PROTOCOL_GROUP,
                 false,
                 Optional.of(ConsumerGroupState.STABLE),
                 Optional.of(GroupType.CONSUMER)
             )
-        ));
+        );
 
         assertGroupListing(
             service,
@@ -247,7 +247,7 @@ public class ListConsumerGroupTest extends ConsumerGroupCommandTest {
             expectedListing
         );
 
-        expectedListing = new HashSet<>(Arrays.asList(
+        expectedListing = mkSet(
             new ConsumerGroupListing(
                 simpleGroup,
                 true,
@@ -260,7 +260,7 @@ public class ListConsumerGroupTest extends ConsumerGroupCommandTest {
                 Optional.of(ConsumerGroupState.STABLE),
                 Optional.of(GroupType.CLASSIC)
             )
-        ));
+        );
 
         assertGroupListing(
             service,
