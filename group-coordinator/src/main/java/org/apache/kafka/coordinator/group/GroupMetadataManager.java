@@ -50,6 +50,7 @@ import org.apache.kafka.common.message.SyncGroupResponseData;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.JoinGroupRequest;
 import org.apache.kafka.common.requests.RequestContext;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.ValidateException;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.coordinator.group.assignor.PartitionAssignor;
@@ -58,6 +59,7 @@ import org.apache.kafka.coordinator.group.consumer.Assignment;
 import org.apache.kafka.coordinator.group.consumer.ConsumerGroup;
 import org.apache.kafka.coordinator.group.consumer.ConsumerGroupMember;
 import org.apache.kafka.coordinator.group.consumer.CurrentAssignmentBuilder;
+import org.apache.kafka.coordinator.group.consumer.SubscribedTopicMetadata;
 import org.apache.kafka.coordinator.group.consumer.TargetAssignmentBuilder;
 import org.apache.kafka.coordinator.group.consumer.TopicMetadata;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupCurrentMemberAssignmentKey;
@@ -1015,6 +1017,9 @@ public class GroupMetadataManager {
 
         // Get or create the consumer group.
         boolean createIfNotExists = memberEpoch == 0;
+        if (validateOfflineUpgrade(groupId)) {
+            upgradeEmptyGroup(groupId, records);
+        }
         final ConsumerGroup group = getOrMaybeCreateConsumerGroup(groupId, createIfNotExists);
         throwIfConsumerGroupIsFull(group, memberId);
 
@@ -3498,6 +3503,58 @@ public class GroupMetadataManager {
         if (group != null && group.isEmpty()) {
             deleteGroup(groupId, records);
         }
+    }
+
+    /**
+     * A group can be upgraded offline if it's a classic group and empty.
+     *
+     * @param groupId The group to be validated.
+     * @return true if the offline upgrade is valid.
+     */
+    private boolean validateOfflineUpgrade(String groupId) {
+        Group group = groups.get(groupId);
+
+        if (group == null) {
+            return false;
+        }
+
+        if (group.type() == CONSUMER) {
+            return false;
+        } else {
+            ClassicGroup classicGroup = (ClassicGroup) group;
+            if (!classicGroup.isEmpty()) {
+                return false;
+            } else {
+                return true;
+            }
+        }
+    }
+
+    /**
+     * Upgrade the empty classic group to a consumer group.
+     *
+     * @param groupId The group id to be updated.
+     * @param records The list of records to delete the classic group and create the consumer group.
+     */
+    private void upgradeEmptyGroup(String groupId, List<Record> records) {
+        final long currentTimeMs = time.milliseconds();
+        ClassicGroup classicGroup = getOrMaybeCreateClassicGroup(groupId, false);
+        int groupEpoch = classicGroup.generationId();
+        // We don't create a classic group tombstone because the replay will remove the new consumer group.
+        removeGroup(groupId);
+
+        // Create a new consumer group.
+        ConsumerGroup consumerGroup = getOrMaybeCreateConsumerGroup(groupId, true);
+        groups.put(groupId, consumerGroup);
+        metrics.onConsumerGroupStateTransition(null, consumerGroup.state());
+
+        records.add(newGroupSubscriptionMetadataRecord(
+            groupId,
+            consumerGroup.computeSubscriptionMetadata(classicGroup.subscribedTopics(), metadataImage.topics(), metadataImage.cluster())
+        ));
+        records.add(newGroupEpochRecord(groupId, groupEpoch));
+
+        consumerGroup.setMetadataRefreshDeadline(currentTimeMs + consumerGroupMetadataRefreshIntervalMs, groupEpoch);
     }
 
     /**
