@@ -42,6 +42,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.mockito.ArgumentCaptor;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -770,6 +771,44 @@ public class MembershipManagerImplTest {
 
         testLeaveGroupReleasesAssignmentAndResetsEpochToSendLeaveGroup(membershipManager);
     }
+
+    @Test
+    public void testLeaveGroupWhenAssignmentEmpty() {
+        String topicName = "topic1";
+        TopicPartition ownedPartition = new TopicPartition(topicName, 0);
+        MembershipManager membershipManager = createMemberInStableState();
+
+        // We own a partition and rebalance listener is registered
+        when(subscriptionState.assignedPartitions()).thenReturn(Collections.singleton(ownedPartition));
+        when(subscriptionState.hasAutoAssignedPartitions()).thenReturn(true);
+        when(subscriptionState.rebalanceListener()).thenReturn(Optional.of(mock(ConsumerRebalanceListener.class)));
+        doNothing().when(subscriptionState).markPendingRevocation(anySet());
+
+        // Trigger leave group
+        CompletableFuture<Void> leaveResult1 = membershipManager.leaveGroup();
+
+        // Rebalance listener not yet triggered
+        final ArgumentCaptor<ConsumerRebalanceListenerCallbackNeededEvent> consumerRebalanceListener =
+            ArgumentCaptor.forClass(ConsumerRebalanceListenerCallbackNeededEvent.class);
+        verify(backgroundEventHandler).add(consumerRebalanceListener.capture());
+        final ConsumerRebalanceListenerCallbackNeededEvent callbackEvent = consumerRebalanceListener.getValue();
+        assertFalse(leaveResult1.isDone());
+        assertEquals(MemberState.PREPARE_LEAVING, membershipManager.state());
+
+        // Clear the assignment
+        when(subscriptionState.assignedPartitions()).thenReturn(Collections.emptySet());
+        when(subscriptionState.hasAutoAssignedPartitions()).thenReturn(false);
+
+        // Complete the callback
+        callbackEvent.future().complete(null);
+
+        // Completed the listener
+        assertFalse(leaveResult1.isDone());
+
+        // Make sure to never call `assignFromSubscribed` again
+        verify(subscriptionState, never()).assignFromSubscribed(Collections.emptySet());
+    }
+
 
     @Test
     public void testLeaveGroupWhenMemberAlreadyLeaving() {
