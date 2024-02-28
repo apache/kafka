@@ -22,12 +22,14 @@ import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.internals.IdempotentCloser;
 import org.apache.kafka.common.message.ShareFetchResponseData;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.ShareFetchRequest;
 import org.apache.kafka.common.requests.ShareFetchResponse;
 import org.apache.kafka.common.utils.BufferSupplier;
 import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 
 import java.util.HashMap;
@@ -56,10 +58,11 @@ public class ShareFetchRequestManager implements RequestManager {
     private final ConsumerMetadata metadata;
     private final SubscriptionState subscriptions;
     private final FetchConfig fetchConfig;
-    private final ShareFetchBuffer shareFetchBuffer;
+    protected final ShareFetchBuffer shareFetchBuffer;
     private final Map<Integer, ShareSessionHandler> sessionHandlers;
     private final Set<Integer> nodesWithPendingFetchRequests;
     private final FetchMetricsManager metricsManager;
+    private final IdempotentCloser idempotentCloser = new IdempotentCloser();
 
     ShareFetchRequestManager(final LogContext logContext,
                              final String groupId,
@@ -251,5 +254,17 @@ public class ShareFetchRequestManager implements RequestManager {
     public NetworkClientDelegate.PollResult pollOnClose() {
         // This is where the final ShareFetch or ShareAcknowledge goes
         return EMPTY;
+    }
+
+    boolean hasCompletedFetches() {
+        return !shareFetchBuffer.isEmpty();
+    }
+
+    protected void closeInternal() {
+        Utils.closeQuietly(shareFetchBuffer, "shareFetchBuffer");
+    }
+
+    public void close() {
+        idempotentCloser.close(this::closeInternal);
     }
 }
