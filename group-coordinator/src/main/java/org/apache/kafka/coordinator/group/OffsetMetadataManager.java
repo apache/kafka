@@ -474,6 +474,8 @@ public class OffsetMetadataManager {
         final List<Record> records = new ArrayList<>();
         final long currentTimeMs = time.milliseconds();
         final OptionalLong expireTimestampMs = expireTimestampMs(request.retentionTimeMs(), currentTimeMs);
+        groupMetadataManager.maybeUpgradeEmptyGroup(group.groupId(), records, true);
+        final int initialRecordsSize = records.size();
 
         request.topics().forEach(topic -> {
             final OffsetCommitResponseTopic topicResponse = new OffsetCommitResponseTopic().setName(topic.name());
@@ -510,7 +512,7 @@ public class OffsetMetadataManager {
             });
         });
 
-        if (!records.isEmpty()) {
+        if (records.size() > initialRecordsSize) {
             metrics.record(GroupCoordinatorMetrics.OFFSET_COMMITS_SENSOR_NAME, records.size());
         }
 
@@ -535,6 +537,8 @@ public class OffsetMetadataManager {
         final TxnOffsetCommitResponseData response = new TxnOffsetCommitResponseData();
         final List<Record> records = new ArrayList<>();
         final long currentTimeMs = time.milliseconds();
+        groupMetadataManager.maybeUpgradeEmptyGroup(request.groupId(), records, true);
+        final int initialRecordsSize = records.size();
 
         request.topics().forEach(topic -> {
             final TxnOffsetCommitResponseTopic topicResponse = new TxnOffsetCommitResponseTopic().setName(topic.name());
@@ -570,7 +574,7 @@ public class OffsetMetadataManager {
             });
         });
 
-        if (!records.isEmpty()) {
+        if (records.size() > initialRecordsSize) {
             metrics.record(GroupCoordinatorMetrics.OFFSET_COMMITS_SENSOR_NAME, records.size());
         }
 

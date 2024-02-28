@@ -1017,9 +1017,7 @@ public class GroupMetadataManager {
 
         // Get or create the consumer group.
         boolean createIfNotExists = memberEpoch == 0;
-        if (validateOfflineUpgrade(groupId)) {
-            upgradeEmptyGroup(groupId, records);
-        }
+        maybeUpgradeEmptyGroup(groupId, records, false);
         final ConsumerGroup group = getOrMaybeCreateConsumerGroup(groupId, createIfNotExists);
         throwIfConsumerGroupIsFull(group, memberId);
 
@@ -3531,30 +3529,35 @@ public class GroupMetadataManager {
     }
 
     /**
-     * Upgrade the empty classic group to a consumer group.
+     * Upgrade the empty classic group to a consumer group if it's valid.
      *
-     * @param groupId The group id to be updated.
-     * @param records The list of records to delete the classic group and create the consumer group.
+     * @param groupId       The group id to be updated.
+     * @param records       The list of records to delete the classic group and create the consumer group.
+     * @param isSimpleGroup The boolean indicating whether the group to be updated is a simple group.
      */
-    private void upgradeEmptyGroup(String groupId, List<Record> records) {
-        final long currentTimeMs = time.milliseconds();
-        ClassicGroup classicGroup = getOrMaybeCreateClassicGroup(groupId, false);
-        int groupEpoch = classicGroup.generationId();
-        // We don't create a classic group tombstone because the replay will remove the new consumer group.
-        removeGroup(groupId);
+    public void maybeUpgradeEmptyGroup(String groupId, List<Record> records, boolean isSimpleGroup) {
+        if (validateOfflineUpgrade(groupId)) {
+            final long currentTimeMs = time.milliseconds();
+            ClassicGroup classicGroup = getOrMaybeCreateClassicGroup(groupId, false);
+            int groupEpoch = classicGroup.generationId();
+            // We don't create a classic group tombstone because the replay will remove the new consumer group.
+            removeGroup(groupId);
 
-        // Create a new consumer group.
-        ConsumerGroup consumerGroup = getOrMaybeCreateConsumerGroup(groupId, true);
-        groups.put(groupId, consumerGroup);
-        metrics.onConsumerGroupStateTransition(null, consumerGroup.state());
+            // Create a new consumer group.
+            ConsumerGroup consumerGroup = getOrMaybeCreateConsumerGroup(groupId, true);
+            groups.put(groupId, consumerGroup);
+            metrics.onConsumerGroupStateTransition(null, consumerGroup.state());
 
-        records.add(newGroupSubscriptionMetadataRecord(
-            groupId,
-            consumerGroup.computeSubscriptionMetadata(classicGroup.subscribedTopics(), metadataImage.topics(), metadataImage.cluster())
-        ));
-        records.add(newGroupEpochRecord(groupId, groupEpoch));
+            if (!isSimpleGroup) {
+                records.add(newGroupSubscriptionMetadataRecord(
+                    groupId,
+                    consumerGroup.computeSubscriptionMetadata(classicGroup.subscribedTopics(), metadataImage.topics(), metadataImage.cluster())
+                ));
+                records.add(newGroupEpochRecord(groupId, groupEpoch));
 
-        consumerGroup.setMetadataRefreshDeadline(currentTimeMs + consumerGroupMetadataRefreshIntervalMs, groupEpoch);
+                consumerGroup.setMetadataRefreshDeadline(currentTimeMs + consumerGroupMetadataRefreshIntervalMs, groupEpoch);
+            }
+        }
     }
 
     /**
