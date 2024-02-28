@@ -3512,19 +3512,15 @@ public class GroupMetadataManager {
     private boolean validateOfflineUpgrade(String groupId) {
         Group group = groups.get(groupId);
 
-        if (group == null) {
+        if (group == null || group.type() == CONSUMER) {
             return false;
         }
 
-        if (group.type() == CONSUMER) {
+        ClassicGroup classicGroup = (ClassicGroup) group;
+        if (!classicGroup.isEmpty()) {
             return false;
         } else {
-            ClassicGroup classicGroup = (ClassicGroup) group;
-            if (!classicGroup.isEmpty()) {
-                return false;
-            } else {
-                return true;
-            }
+            return true;
         }
     }
 
