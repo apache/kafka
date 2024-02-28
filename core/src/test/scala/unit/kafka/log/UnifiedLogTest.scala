@@ -49,7 +49,9 @@ import org.mockito.Mockito.{doThrow, mock, spy, when}
 import java.io._
 import java.nio.ByteBuffer
 import java.nio.file.Files
+import java.util
 import java.util.concurrent.{Callable, ConcurrentHashMap, Executors}
+import java.util.stream.Collectors
 import java.util.{Optional, OptionalLong, Properties}
 import scala.annotation.nowarn
 import scala.collection.mutable.ListBuffer
@@ -3952,18 +3954,18 @@ class UnifiedLogTest {
     assertEquals(10, log.logSegments.size())
 
     {
-      val deletable = log.deletableSegments(
-        (segment: LogSegment, _: Option[LogSegment]) => segment.baseOffset <= 5)
-      val expected = log.nonActiveLogSegmentsFrom(0L).asScala.filter(segment => segment.baseOffset <= 5).toList
-      assertEquals(6, expected.length)
-      assertEquals(expected, deletable.toList)
+      val deletable = new util.ArrayList(
+        log.deletableSegments((segment: LogSegment, _: Optional[LogSegment]) => segment.baseOffset <= 5))
+      val expected = log.nonActiveLogSegmentsFrom(0L).stream().filter(segment => segment.baseOffset <= 5).collect(Collectors.toList())
+      assertEquals(6, expected.size)
+      assertEquals(expected, deletable)
     }
 
     {
-      val deletable = log.deletableSegments((_: LogSegment, _: Option[LogSegment]) => true)
-      val expected = log.nonActiveLogSegmentsFrom(0L).asScala.toList
-      assertEquals(9, expected.length)
-      assertEquals(expected, deletable.toList)
+      val deletable = new util.ArrayList(log.deletableSegments((_: LogSegment, _: Optional[LogSegment]) => true))
+      val expected = new util.ArrayList(log.nonActiveLogSegmentsFrom(0L))
+      assertEquals(9, expected.size())
+      assertEquals(expected, deletable)
     }
 
     {
@@ -3972,10 +3974,10 @@ class UnifiedLogTest {
       ))
       log.appendAsLeader(records, leaderEpoch = 0)
       log.maybeIncrementHighWatermark(log.logEndOffsetMetadata)
-      val deletable = log.deletableSegments((_: LogSegment, _: Option[LogSegment]) => true)
-      val expected = log.logSegments.asScala.toList
-      assertEquals(10, expected.length)
-      assertEquals(expected, deletable.toList)
+      val deletable = new util.ArrayList(log.deletableSegments((_: LogSegment, _: Optional[LogSegment]) => true))
+      val expected = new util.ArrayList(log.logSegments)
+      assertEquals(10, expected.size)
+      assertEquals(expected, deletable)
     }
   }
 
@@ -3996,7 +3998,7 @@ class UnifiedLogTest {
 
     var offset = 0
     val deletableSegments = log.deletableSegments(
-      (segment: LogSegment, nextSegmentOpt: Option[LogSegment]) => {
+      (segment: LogSegment, nextSegmentOpt: Optional[LogSegment]) => {
         assertEquals(offset, segment.baseOffset)
         val logSegments = new LogSegments(log.topicPartition)
         log.logSegments.forEach(segment => logSegments.add(segment))
@@ -4004,9 +4006,9 @@ class UnifiedLogTest {
         assertTrue(floorSegmentOpt.isPresent)
         assertEquals(floorSegmentOpt.get, segment)
         if (offset == log.logEndOffset) {
-          assertFalse(nextSegmentOpt.isDefined)
+          assertFalse(nextSegmentOpt.isPresent)
         } else {
-          assertTrue(nextSegmentOpt.isDefined)
+          assertTrue(nextSegmentOpt.isPresent)
           val higherSegmentOpt = logSegments.higherSegment(segment.baseOffset)
           assertTrue(higherSegmentOpt.isPresent)
           assertEquals(segment.baseOffset + 1, higherSegmentOpt.get.baseOffset)
@@ -4016,7 +4018,7 @@ class UnifiedLogTest {
         true
       })
     assertEquals(10L, log.logSegments.size())
-    assertEquals(log.nonActiveLogSegmentsFrom(0L).asScala.toSeq, deletableSegments.toSeq)
+    assertEquals(new util.ArrayList(log.nonActiveLogSegmentsFrom(0L)), deletableSegments)
   }
 
   @Test
