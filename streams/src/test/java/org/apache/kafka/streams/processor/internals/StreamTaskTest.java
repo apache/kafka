@@ -1664,17 +1664,18 @@ public class StreamTaskTest {
 
         EasyMock.expect(recordCollector.offsets()).andReturn(singletonMap(changelogPartition, offset)).anyTimes();
         stateManager.checkpoint();
-        EasyMock.expectLastCall().times(2);
+        EasyMock.expectLastCall().once();
         EasyMock.expect(stateManager.changelogOffsets())
             .andReturn(singletonMap(changelogPartition, 10L)) // restoration checkpoint
             .andReturn(singletonMap(changelogPartition, 10L))
             .andReturn(singletonMap(changelogPartition, 20L));
+        EasyMock.expectLastCall();
         EasyMock.replay(stateManager, recordCollector);
 
         task = createStatefulTask(createConfig("100"), true);
 
         task.initializeIfNeeded();
-        task.completeRestoration(noOpResetter -> { }); // should checkpoint
+        task.completeRestoration(noOpResetter -> { });
 
         task.prepareCommit();
         task.postCommit(true);   // should checkpoint
