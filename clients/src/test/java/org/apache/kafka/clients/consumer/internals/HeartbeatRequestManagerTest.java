@@ -306,7 +306,7 @@ public class HeartbeatRequestManagerTest {
             new ConsumerGroupHeartbeatResponse(new ConsumerGroupHeartbeatResponseData()
             .setMemberId(memberId)
             .setMemberEpoch(memberEpoch));
-        membershipManager.onHeartbeatResponseReceived(result.data());
+        membershipManager.onHeartbeatSuccess(result.data());
 
         // Create a ConsumerHeartbeatRequest and verify the payload
         NetworkClientDelegate.PollResult pollResult = heartbeatRequestManager.poll(time.milliseconds());
@@ -328,12 +328,8 @@ public class HeartbeatRequestManagerTest {
     @Test
     public void testConsumerGroupMetadataFirstUpdate() {
         final GroupMetadataUpdateEvent groupMetadataUpdateEvent = makeFirstGroupMetadataUpdate(memberId, memberEpoch);
-
-        final GroupMetadataUpdateEvent expectedGroupMetadataUpdateEvent = new GroupMetadataUpdateEvent(
-            memberEpoch,
-            memberId
-        );
-        assertEquals(expectedGroupMetadataUpdateEvent, groupMetadataUpdateEvent);
+        assertEquals(memberEpoch, groupMetadataUpdateEvent.memberEpoch());
+        assertEquals(memberId, groupMetadataUpdateEvent.memberId());
     }
 
     @Test
@@ -370,11 +366,8 @@ public class HeartbeatRequestManagerTest {
         final BackgroundEvent eventWithUpdatedMemberEpoch = backgroundEventQueue.poll();
         assertEquals(BackgroundEvent.Type.GROUP_METADATA_UPDATE, eventWithUpdatedMemberEpoch.type());
         final GroupMetadataUpdateEvent groupMetadataUpdateEvent = (GroupMetadataUpdateEvent) eventWithUpdatedMemberEpoch;
-        final GroupMetadataUpdateEvent expectedGroupMetadataUpdateEvent = new GroupMetadataUpdateEvent(
-            updatedMemberEpoch,
-            memberId
-        );
-        assertEquals(expectedGroupMetadataUpdateEvent, groupMetadataUpdateEvent);
+        assertEquals(updatedMemberEpoch, groupMetadataUpdateEvent.memberEpoch());
+        assertEquals(memberId, groupMetadataUpdateEvent.memberId());
     }
 
     @Test
@@ -398,11 +391,8 @@ public class HeartbeatRequestManagerTest {
         final BackgroundEvent eventWithUpdatedMemberEpoch = backgroundEventQueue.poll();
         assertEquals(BackgroundEvent.Type.GROUP_METADATA_UPDATE, eventWithUpdatedMemberEpoch.type());
         final GroupMetadataUpdateEvent groupMetadataUpdateEvent = (GroupMetadataUpdateEvent) eventWithUpdatedMemberEpoch;
-        final GroupMetadataUpdateEvent expectedGroupMetadataUpdateEvent = new GroupMetadataUpdateEvent(
-            memberEpoch,
-            updatedMemberId
-        );
-        assertEquals(expectedGroupMetadataUpdateEvent, groupMetadataUpdateEvent);
+        assertEquals(memberEpoch, groupMetadataUpdateEvent.memberEpoch());
+        assertEquals(updatedMemberId, groupMetadataUpdateEvent.memberId());
     }
 
     private GroupMetadataUpdateEvent makeFirstGroupMetadataUpdate(final String memberId, final int memberEpoch) {
@@ -441,7 +431,7 @@ public class HeartbeatRequestManagerTest {
         switch (error) {
             case NONE:
                 verify(backgroundEventHandler).add(any(GroupMetadataUpdateEvent.class));
-                verify(membershipManager, times(2)).onHeartbeatResponseReceived(mockResponse.data());
+                verify(membershipManager, times(2)).onHeartbeatSuccess(mockResponse.data());
                 assertEquals(DEFAULT_HEARTBEAT_INTERVAL_MS, heartbeatRequestState.nextHeartbeatMs(time.milliseconds()));
                 break;
 
@@ -547,7 +537,7 @@ public class HeartbeatRequestManagerTest {
                 .setMemberEpoch(1)
                 .setAssignment(assignmentTopic1));
         when(metadata.topicNames()).thenReturn(Collections.singletonMap(topicId, "topic1"));
-        membershipManager.onHeartbeatResponseReceived(rs1.data());
+        membershipManager.onHeartbeatSuccess(rs1.data());
 
         // We remain in RECONCILING state, as the assignment will be reconciled on the next poll
         assertEquals(MemberState.RECONCILING, membershipManager.state());
@@ -712,7 +702,7 @@ public class HeartbeatRequestManagerTest {
                 .setHeartbeatIntervalMs(DEFAULT_HEARTBEAT_INTERVAL_MS)
                 .setMemberId(memberId)
                 .setMemberEpoch(memberEpoch));
-        membershipManager.onHeartbeatResponseReceived(rs1.data());
+        membershipManager.onHeartbeatSuccess(rs1.data());
         assertEquals(MemberState.STABLE, membershipManager.state());
     }
 
