@@ -19,6 +19,7 @@ package org.apache.kafka.tools.consumer.group;
 import joptsimple.OptionException;
 import kafka.server.KafkaConfig;
 import org.apache.kafka.clients.consumer.Consumer;
+import org.apache.kafka.clients.consumer.GroupProtocol;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.TopicPartition;
@@ -150,7 +151,7 @@ public class ResetConsumerGroupOffsetTest extends ConsumerGroupCommandTest {
         produceMessages(TOPIC, 100);
         List<String> groups = IntStream.rangeClosed(1, 3).mapToObj(id -> GROUP + id).collect(Collectors.toList());
         for (String group : groups) {
-            ConsumerGroupExecutor executor = addConsumerGroupExecutor(1, TOPIC, group);
+            ConsumerGroupExecutor executor = addConsumerGroupExecutor(1, TOPIC, group, GroupProtocol.CLASSIC.name);
             awaitConsumerProgress(TOPIC, group, 100L);
             executor.shutdown();
         }
@@ -166,7 +167,7 @@ public class ResetConsumerGroupOffsetTest extends ConsumerGroupCommandTest {
         produceMessages(TOPIC, 100);
         for (int i = 1; i <= 3; i++) {
             String group = GROUP + i;
-            ConsumerGroupExecutor executor = addConsumerGroupExecutor(1, TOPIC, group);
+            ConsumerGroupExecutor executor = addConsumerGroupExecutor(1, TOPIC, group, GroupProtocol.CLASSIC.name);
             awaitConsumerProgress(TOPIC, group, 100L);
             executor.shutdown();
         }
@@ -184,7 +185,7 @@ public class ResetConsumerGroupOffsetTest extends ConsumerGroupCommandTest {
 
         for (String topic : topics) {
             for (String group : groups) {
-                ConsumerGroupExecutor executor = addConsumerGroupExecutor(3, topic, group);
+                ConsumerGroupExecutor executor = addConsumerGroupExecutor(3, topic, group, GroupProtocol.CLASSIC.name);
                 awaitConsumerProgress(topic, group, 100);
                 executor.shutdown();
             }
@@ -202,7 +203,7 @@ public class ResetConsumerGroupOffsetTest extends ConsumerGroupCommandTest {
 
         produceMessages(TOPIC, 100);
 
-        ConsumerGroupExecutor executor = addConsumerGroupExecutor(1, TOPIC, GROUP);
+        ConsumerGroupExecutor executor = addConsumerGroupExecutor(1, TOPIC, GROUP, GroupProtocol.CLASSIC.name);
         awaitConsumerProgress(TOPIC, GROUP, 100L);
         executor.shutdown();
 
@@ -218,7 +219,7 @@ public class ResetConsumerGroupOffsetTest extends ConsumerGroupCommandTest {
         Date checkpoint = new Date();
         produceMessages(TOPIC, 50);
 
-        ConsumerGroupExecutor executor = addConsumerGroupExecutor(1, TOPIC, GROUP);
+        ConsumerGroupExecutor executor = addConsumerGroupExecutor(1, TOPIC, GROUP, GroupProtocol.CLASSIC.name);
         awaitConsumerProgress(TOPIC, GROUP, 100L);
         executor.shutdown();
 
@@ -506,7 +507,7 @@ public class ResetConsumerGroupOffsetTest extends ConsumerGroupCommandTest {
 
     private void produceConsumeAndShutdown(String topic, String group, int totalMessages, int numConsumers) throws Exception {
         produceMessages(topic, totalMessages);
-        ConsumerGroupExecutor executor = addConsumerGroupExecutor(numConsumers, topic, group);
+        ConsumerGroupExecutor executor = addConsumerGroupExecutor(numConsumers, topic, group, GroupProtocol.CLASSIC.name);
         awaitConsumerProgress(topic, group, totalMessages);
         executor.shutdown();
     }

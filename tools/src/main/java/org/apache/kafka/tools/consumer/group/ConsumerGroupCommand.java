@@ -139,6 +139,7 @@ public class ConsumerGroupCommand {
         return parsedStates;
     }
 
+    @SuppressWarnings("Regexp")
     public static Set<GroupType> consumerGroupTypesFromString(String input) {
         Set<GroupType> parsedTypes = Stream.of(input.toLowerCase().split(",")).map(s -> GroupType.parse(s.trim())).collect(Collectors.toSet());
         if (parsedTypes.contains(GroupType.UNKNOWN)) {
@@ -227,15 +228,15 @@ public class ConsumerGroupCommand {
 
         private void printGroupInfo(List<ConsumerGroupListing> groups, boolean includeType, boolean includeState) {
             Function<ConsumerGroupListing, String> groupId = ConsumerGroupListing::groupId;
-            Function<ConsumerGroupListing, String> groupType = (groupListing) -> groupListing.type().orElse(GroupType.UNKNOWN).toString();
-            Function<ConsumerGroupListing, String> groupState = (groupListing) -> groupListing.state().orElse(ConsumerGroupState.UNKNOWN).toString();
+            Function<ConsumerGroupListing, String> groupType = groupListing -> groupListing.type().orElse(GroupType.UNKNOWN).toString();
+            Function<ConsumerGroupListing, String> groupState = groupListing -> groupListing.state().orElse(ConsumerGroupState.UNKNOWN).toString();
 
             OptionalInt maybeMax = groups.stream().mapToInt(groupListing -> Math.max(15, groupId.apply(groupListing).length())).max();
             int maxGroupLen = maybeMax.orElse(15) + 10;
             String format = "%-" + maxGroupLen + "s";
             List<String> header = new ArrayList<>();
             header.add("GROUP");
-            List<Function<ConsumerGroupListing,String>> extractors = new ArrayList<>();
+            List<Function<ConsumerGroupListing, String>> extractors = new ArrayList<>();
             extractors.add(groupId);
 
             if (includeType) {
@@ -250,7 +251,7 @@ public class ConsumerGroupCommand {
                 format += " %-20s";
             }
 
-            System.out.printf(format + "%n", header);
+            System.out.printf(format + "%n", header.toArray(new Object[0]));
 
             for (ConsumerGroupListing groupListing : groups) {
                 Object[] info = extractors.stream().map(extractor -> extractor.apply(groupListing)).toArray(Object[]::new);

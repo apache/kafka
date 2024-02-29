@@ -523,15 +523,6 @@ public class ListConsumerGroupTest extends ConsumerGroupCommandTest {
         }, () -> String.format("Expected header=%s and groups=%s, but found:%n%s", expectedHeader, expectedRows, out.get()));
     }
 
-    private static String runAndGrabConsoleOutput(
-        List<String> args
-    ) {
-        return kafka.utils.TestUtils.grabConsoleOutput(() -> {
-            ConsumerGroupCommand.main(args.toArray(new String[0]));
-            return null;
-        });
-    }
-
     public static <T> Set<T> set(Collection<T> set) {
         return new HashSet<>(set);
     }
