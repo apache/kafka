@@ -53,7 +53,10 @@ public abstract class BackgroundEvent {
 
     @Override
     public final boolean equals(Object o) {
-        return this == o;
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        BackgroundEvent that = (BackgroundEvent) o;
+        return type == that.type && id.equals(that.id);
     }
 
     @Override
