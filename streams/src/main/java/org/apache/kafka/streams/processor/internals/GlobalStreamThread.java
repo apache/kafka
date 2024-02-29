@@ -405,7 +405,9 @@ public class GlobalStreamThread extends Thread {
                     topology,
                     globalProcessorContext,
                     stateMgr,
-                    config.defaultDeserializationExceptionHandler()
+                    config.defaultDeserializationExceptionHandler(),
+                    time,
+                    config.getLong(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG)
                 ),
                 Duration.ofMillis(config.getLong(StreamsConfig.POLL_MS_CONFIG))
             );
