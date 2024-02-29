@@ -78,6 +78,9 @@ public class ConsumerGroupCommandOptions extends CommandDefaultOptions {
         "When specified with '--list', it displays the state of all groups. It can also be used to list groups with specific states." + NL +
         "Example: --bootstrap-server localhost:9092 --list --state stable,empty" + NL +
         "This option may be used with '--describe', '--list' and '--bootstrap-server' options only.";
+    private static final String TYPE_DOC = "When specified with '--list', it displays the types of all the groups. It can also be used to list groups with specific types." + NL +
+        "Example: --bootstrap-server localhost:9092 --list --type classic,consumer" + NL +
+        "This option may be used with the '--list' option only.";
     public static final String DELETE_OFFSETS_DOC = "Delete offsets of consumer group. Supports one consumer group at the time, and multiple topics.";
 
     public final OptionSpec<String> bootstrapServerOpt;
@@ -107,6 +110,7 @@ public class ConsumerGroupCommandOptions extends CommandDefaultOptions {
     public final OptionSpec<Void> verboseOpt;
     public final OptionSpec<Void> offsetsOpt;
     public final OptionSpec<String> stateOpt;
+    public final OptionSpec<String> typeOpt;
 
     public final Set<OptionSpec<?>> allGroupSelectionScopeOpts;
     public final Set<OptionSpec<?>> allConsumerGroupLevelOpts;
@@ -178,6 +182,10 @@ public class ConsumerGroupCommandOptions extends CommandDefaultOptions {
             .availableIf(describeOpt);
         stateOpt = parser.accepts("state", STATE_DOC)
             .availableIf(describeOpt, listOpt)
+            .withOptionalArg()
+            .ofType(String.class);
+        typeOpt = parser.accepts("type", TYPE_DOC)
+            .availableIf(listOpt)
             .withOptionalArg()
             .ofType(String.class);
 

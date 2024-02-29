@@ -27,6 +27,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
 
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.EnumSet;
 import java.util.HashSet;
@@ -58,11 +59,11 @@ public class ListConsumerGroupTest extends ConsumerGroupCommandTest {
         String[] cgcArgs = new String[]{"--bootstrap-server", bootstrapServers(listenerName()), "--list"};
         ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(cgcArgs);
 
-        scala.collection.Set<String> expectedGroups = set(Arrays.asList(GROUP, simpleGroup, PROTOCOL_GROUP));
-        final AtomicReference<scala.collection.Set> foundGroups = new AtomicReference<>();
+        Set<String> expectedGroups = set(Arrays.asList(GROUP, simpleGroup, PROTOCOL_GROUP));
+        final AtomicReference<Set> foundGroups = new AtomicReference<>();
 
         TestUtils.waitForCondition(() -> {
-            foundGroups.set(service.listConsumerGroups().toSet());
+            foundGroups.set(new HashSet<>(service.listConsumerGroups()));
             return Objects.equals(expectedGroups, foundGroups.get());
         }, "Expected --list to show groups " + expectedGroups + ", but found " + foundGroups.get() + ".");
     }
@@ -272,7 +273,7 @@ public class ListConsumerGroupTest extends ConsumerGroupCommandTest {
 
     @Test
     public void testConsumerGroupStatesFromString() {
-        scala.collection.Set<ConsumerGroupState> result = ConsumerGroupCommand.consumerGroupStatesFromString("Stable");
+        Set<ConsumerGroupState> result = ConsumerGroupCommand.consumerGroupStatesFromString("Stable");
         assertEquals(set(Collections.singleton(ConsumerGroupState.STABLE)), result);
 
         result = ConsumerGroupCommand.consumerGroupStatesFromString("Stable, PreparingRebalance");
@@ -299,7 +300,7 @@ public class ListConsumerGroupTest extends ConsumerGroupCommandTest {
 
     @Test
     public void testConsumerGroupTypesFromString() {
-        scala.collection.Set<GroupType> result = ConsumerGroupCommand.consumerGroupTypesFromString("consumer");
+        Set<GroupType> result = ConsumerGroupCommand.consumerGroupTypesFromString("consumer");
         assertEquals(set(Collections.singleton(GroupType.CONSUMER)), result);
 
         result = ConsumerGroupCommand.consumerGroupTypesFromString("consumer, classic");
@@ -475,9 +476,9 @@ public class ListConsumerGroupTest extends ConsumerGroupCommandTest {
         Set<ConsumerGroupState> stateFilterSet,
         Set<ConsumerGroupListing> expectedListing
     ) throws Exception {
-        final AtomicReference<scala.collection.Set> foundListing = new AtomicReference<>();
+        final AtomicReference<Set<ConsumerGroupListing>> foundListing = new AtomicReference<>();
         TestUtils.waitForCondition(() -> {
-            foundListing.set(service.listConsumerGroupsWithFilters(set(typeFilterSet), set(stateFilterSet)).toSet());
+            foundListing.set(new HashSet<>(service.listConsumerGroupsWithFilters(set(typeFilterSet), set(stateFilterSet))));
             return Objects.equals(set(expectedListing), foundListing.get());
         }, () -> "Expected to show groups " + expectedListing + ", but found " + foundListing.get() + ".");
     }
@@ -529,5 +530,9 @@ public class ListConsumerGroupTest extends ConsumerGroupCommandTest {
             ConsumerGroupCommand.main(args.toArray(new String[0]));
             return null;
         });
+    }
+
+    public static <T> Set<T> set(Collection<T> set) {
+        return new HashSet<>(set);
     }
 }

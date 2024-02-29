@@ -43,6 +43,7 @@ import org.apache.kafka.clients.admin.OffsetSpec;
 import org.apache.kafka.clients.admin.TopicDescription;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.ConsumerGroupState;
+import org.apache.kafka.common.GroupType;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.Node;
@@ -71,6 +72,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.OptionalInt;
 import java.util.Properties;
 import java.util.Set;
 import java.util.TreeMap;
@@ -137,6 +139,15 @@ public class ConsumerGroupCommand {
         return parsedStates;
     }
 
+    public static Set<GroupType> consumerGroupTypesFromString(String input) {
+        Set<GroupType> parsedTypes = Stream.of(input.toLowerCase().split(",")).map(s -> GroupType.parse(s.trim())).collect(Collectors.toSet());
+        if (parsedTypes.contains(GroupType.UNKNOWN)) {
+            List<String> validTypes = Arrays.stream(GroupType.values()).filter(t -> t != GroupType.UNKNOWN).map(Object::toString).collect(Collectors.toList());
+            throw new IllegalArgumentException("Invalid types list '" + input + "'. Valid types are: " + String.join(", ", validTypes));
+        }
+        return parsedTypes;
+    }
+
     public static void printError(String msg, Optional<Throwable> e) {
         System.out.println("\nError: " + msg);
         e.ifPresent(Throwable::printStackTrace);
@@ -186,17 +197,65 @@ public class ConsumerGroupCommand {
         }
 
         public void listGroups() throws ExecutionException, InterruptedException {
-            if (opts.options.has(opts.stateOpt)) {
-                String stateValue = opts.options.valueOf(opts.stateOpt);
-                Set<ConsumerGroupState> states = (stateValue == null || stateValue.isEmpty())
-                    ? Collections.emptySet()
-                    : consumerGroupStatesFromString(stateValue);
-                List<ConsumerGroupListing> listings = listConsumerGroupsWithState(states);
-                printGroupStates(listings.stream()
-                    .map(e -> new Tuple2<>(e.groupId(), e.state().map(ConsumerGroupState::toString).orElse(MISSING_COLUMN_VALUE)))
-                    .collect(Collectors.toList()));
-            } else
+            boolean includeType = opts.options.has(opts.typeOpt);
+            boolean includeState = opts.options.has(opts.stateOpt);
+
+            if (includeType || includeState) {
+                Set<GroupType> types = typeValues();
+                Set<ConsumerGroupState> states = stateValues();
+                List<ConsumerGroupListing> listings = listConsumerGroupsWithFilters(types, states);
+
+                printGroupInfo(listings, includeType, includeState);
+            } else {
                 listConsumerGroups().forEach(System.out::println);
+            }
+        }
+
+        private Set<ConsumerGroupState> stateValues() {
+            String stateValue = opts.options.valueOf(opts.stateOpt);
+            return (stateValue == null || stateValue.isEmpty())
+                ? Collections.emptySet()
+                : consumerGroupStatesFromString(stateValue);
+        }
+
+        private Set<GroupType> typeValues() {
+            String typeValue = opts.options.valueOf(opts.typeOpt);
+            return (typeValue == null || typeValue.isEmpty())
+                ? Collections.emptySet()
+                : consumerGroupTypesFromString(typeValue);
+        }
+
+        private void printGroupInfo(List<ConsumerGroupListing> groups, boolean includeType, boolean includeState) {
+            Function<ConsumerGroupListing, String> groupId = ConsumerGroupListing::groupId;
+            Function<ConsumerGroupListing, String> groupType = (groupListing) -> groupListing.type().orElse(GroupType.UNKNOWN).toString();
+            Function<ConsumerGroupListing, String> groupState = (groupListing) -> groupListing.state().orElse(ConsumerGroupState.UNKNOWN).toString();
+
+            OptionalInt maybeMax = groups.stream().mapToInt(groupListing -> Math.max(15, groupId.apply(groupListing).length())).max();
+            int maxGroupLen = maybeMax.orElse(15) + 10;
+            String format = "%-" + maxGroupLen + "s";
+            List<String> header = new ArrayList<>();
+            header.add("GROUP");
+            List<Function<ConsumerGroupListing,String>> extractors = new ArrayList<>();
+            extractors.add(groupId);
+
+            if (includeType) {
+                header.add("TYPE");
+                extractors.add(groupType);
+                format += " %-20s";
+            }
+
+            if (includeState) {
+                header.add("STATE");
+                extractors.add(groupState);
+                format += " %-20s";
+            }
+
+            System.out.printf(format + "%n", header);
+
+            for (ConsumerGroupListing groupListing : groups) {
+                Object[] info = extractors.stream().map(extractor -> extractor.apply(groupListing)).toArray(Object[]::new);
+                System.out.printf(format + "%n", info);
+            }
         }
 
         List<String> listConsumerGroups() {
@@ -209,26 +268,13 @@ public class ConsumerGroupCommand {
             }
         }
 
-        List<ConsumerGroupListing> listConsumerGroupsWithState(Set<ConsumerGroupState> states) throws ExecutionException, InterruptedException {
+        List<ConsumerGroupListing> listConsumerGroupsWithFilters(Set<GroupType> types, Set<ConsumerGroupState> states) throws ExecutionException, InterruptedException {
             ListConsumerGroupsOptions listConsumerGroupsOptions = withTimeoutMs(new ListConsumerGroupsOptions());
-            listConsumerGroupsOptions.inStates(states);
+            listConsumerGroupsOptions
+                .inStates(states)
+                .withTypes(types);
             ListConsumerGroupsResult result = adminClient.listConsumerGroups(listConsumerGroupsOptions);
             return new ArrayList<>(result.all().get());
-        }
-
-        private void printGroupStates(List<Tuple2<String, String>> groupsAndStates) {
-            // find proper columns width
-            int maxGroupLen = 15;
-            for (Tuple2<String, String> tuple : groupsAndStates) {
-                String groupId = tuple.v1;
-                maxGroupLen = Math.max(maxGroupLen, groupId.length());
-            }
-            System.out.printf("%" + (-maxGroupLen) + "s %s", "GROUP", "STATE");
-            for (Tuple2<String, String> tuple : groupsAndStates) {
-                String groupId = tuple.v1;
-                String state = tuple.v2;
-                System.out.printf("%n%" + (-maxGroupLen) + "s %s", groupId, state);
-            }
         }
 
         private boolean shouldPrintMemberState(String group, Optional<String> state, Optional<Integer> numRows) {
