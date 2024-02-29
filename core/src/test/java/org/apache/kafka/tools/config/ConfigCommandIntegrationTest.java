@@ -36,6 +36,7 @@ import scala.collection.JavaConverters;
 import scala.collection.Seq;
 
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -214,8 +215,13 @@ public class ConfigCommandIntegrationTest extends QuorumTestHarness {
         zkClient().registerBroker(brokerInfo);
     }
 
-    @SuppressWarnings({"deprecation"})
+    @SafeVarargs
     static <T> Seq<T> seq(T...seq) {
-        return JavaConverters.asScalaIteratorConverter(Arrays.asList(seq).iterator()).asScala().toSeq();
+        return seq(Arrays.asList(seq));
+    }
+
+    @SuppressWarnings({"deprecation"})
+    static <T> Seq<T> seq(Collection<T> seq) {
+        return JavaConverters.asScalaIteratorConverter(seq.iterator()).asScala().toSeq();
     }
 }

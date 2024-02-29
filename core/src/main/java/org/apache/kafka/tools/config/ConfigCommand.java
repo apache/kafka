@@ -68,7 +68,6 @@ import org.apache.zookeeper.client.ZKClientConfig;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
 import java.security.NoSuchAlgorithmException;
@@ -945,7 +944,7 @@ public class ConfigCommand {
         return adminClient.describeClientQuotas(ClientQuotaFilter.containsOnly(components)).entities().get(30, TimeUnit.SECONDS);
     }
 
-    private static ConfigEntity parseEntity(ConfigCommandOptions opts) {
+    static ConfigEntity parseEntity(ConfigCommandOptions opts) {
         List<String> entityTypes = opts.entityTypes();
         List<String> entityNames = opts.entityNames();
         if (Objects.equals(entityTypes.get(0), ConfigType.USER) || Objects.equals(entityTypes.get(0), ConfigType.CLIENT))
