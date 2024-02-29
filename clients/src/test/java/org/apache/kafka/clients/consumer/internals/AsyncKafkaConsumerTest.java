@@ -30,6 +30,7 @@ import org.apache.kafka.clients.consumer.OffsetCommitCallback;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.clients.consumer.RetriableCommitFailedException;
 import org.apache.kafka.clients.consumer.RoundRobinAssignor;
+import org.apache.kafka.clients.consumer.internals.events.ApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEventHandler;
 import org.apache.kafka.clients.consumer.internals.events.AssignmentChangeEvent;
 import org.apache.kafka.clients.consumer.internals.events.AsyncCommitEvent;
@@ -120,6 +121,7 @@ import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -127,7 +129,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.atLeast;
-import static org.mockito.Mockito.clearInvocations;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
@@ -902,13 +903,20 @@ public class AsyncKafkaConsumerTest {
         consumer.seek(tp, 10);
         consumer.wakeup();
 
-        clearInvocations(applicationEventHandler);
+        AtomicReference<SyncCommitEvent> capturedEvent = new AtomicReference<>();
+        doAnswer(invocation -> {
+            ApplicationEvent event = invocation.getArgument(0);
+            if (event instanceof SyncCommitEvent) {
+                capturedEvent.set((SyncCommitEvent) event);
+            }
+            return null;
+        }).when(applicationEventHandler).add(any());
+
         consumer.close(Duration.ZERO);
 
         // A commit was triggered and not completed exceptionally by the wakeup
-        final ArgumentCaptor<SyncCommitEvent> commitEventCaptor = ArgumentCaptor.forClass(SyncCommitEvent.class);
-        verify(applicationEventHandler).add(commitEventCaptor.capture());
-        assertFalse(commitEventCaptor.getValue().future().isCompletedExceptionally());
+        assertNotNull(capturedEvent.get());
+        assertFalse(capturedEvent.get().future().isCompletedExceptionally());
     }
 
     @Test
