@@ -16,16 +16,11 @@
  */
 package org.apache.kafka.clients.consumer.internals.events;
 
+import static org.apache.kafka.clients.consumer.internals.events.ApplicationEventType.NEW_TOPICS_METADATA_UPDATE;
+
 public class NewTopicsMetadataUpdateRequestEvent extends ApplicationEvent {
 
     public NewTopicsMetadataUpdateRequestEvent() {
-        super(Type.NEW_TOPICS_METADATA_UPDATE);
-    }
-
-    @Override
-    public String toString() {
-        return "NewTopicsMetadataUpdateRequestEvent{" +
-                toStringBase() +
-                '}';
+        super(NEW_TOPICS_METADATA_UPDATE);
     }
 }

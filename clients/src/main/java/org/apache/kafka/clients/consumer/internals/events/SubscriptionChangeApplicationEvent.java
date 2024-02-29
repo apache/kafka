@@ -17,6 +17,8 @@
 
 package org.apache.kafka.clients.consumer.internals.events;
 
+import static org.apache.kafka.clients.consumer.internals.events.ApplicationEventType.SUBSCRIPTION_CHANGE;
+
 /**
  * Application event indicating that the subscription state has changed, triggered when a user
  * calls the subscribe API. This will make the consumer join a consumer group if not part of it
@@ -25,6 +27,6 @@ package org.apache.kafka.clients.consumer.internals.events;
 public class SubscriptionChangeApplicationEvent extends ApplicationEvent {
 
     public SubscriptionChangeApplicationEvent() {
-        super(Type.SUBSCRIPTION_CHANGE);
+        super(SUBSCRIPTION_CHANGE);
     }
 }

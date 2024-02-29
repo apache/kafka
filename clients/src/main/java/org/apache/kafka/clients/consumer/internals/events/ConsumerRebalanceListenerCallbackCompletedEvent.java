@@ -24,6 +24,8 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 
+import static org.apache.kafka.clients.consumer.internals.events.ApplicationEventType.CONSUMER_REBALANCE_LISTENER_CALLBACK_COMPLETED;
+
 /**
  * Event that signifies that the application thread has executed the {@link ConsumerRebalanceListener} callback. If
  * the callback execution threw an error, it is included in the event should any event listener want to know.
@@ -37,7 +39,7 @@ public class ConsumerRebalanceListenerCallbackCompletedEvent extends Application
     public ConsumerRebalanceListenerCallbackCompletedEvent(ConsumerRebalanceListenerMethodName methodName,
                                                            CompletableFuture<Void> future,
                                                            Optional<KafkaException> error) {
-        super(Type.CONSUMER_REBALANCE_LISTENER_CALLBACK_COMPLETED);
+        super(CONSUMER_REBALANCE_LISTENER_CALLBACK_COMPLETED);
         this.methodName = Objects.requireNonNull(methodName);
         this.future = Objects.requireNonNull(future);
         this.error = Objects.requireNonNull(error);
@@ -56,35 +58,10 @@ public class ConsumerRebalanceListenerCallbackCompletedEvent extends Application
     }
 
     @Override
-    public boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
-        if (!super.equals(o)) return false;
-
-        ConsumerRebalanceListenerCallbackCompletedEvent that = (ConsumerRebalanceListenerCallbackCompletedEvent) o;
-
-        return methodName == that.methodName &&
-                future.equals(that.future) &&
-                error.equals(that.error);
-    }
-
-    @Override
-    public int hashCode() {
-        return Objects.hash(methodName, future, error);
-    }
-
-    @Override
     protected String toStringBase() {
         return super.toStringBase() +
                 ", methodName=" + methodName +
                 ", future=" + future +
                 ", error=" + error;
-    }
-
-    @Override
-    public String toString() {
-        return getClass().getSimpleName() + "{" +
-                toStringBase() +
-                '}';
     }
 }

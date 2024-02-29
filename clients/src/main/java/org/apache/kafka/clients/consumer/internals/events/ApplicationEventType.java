@@ -16,11 +16,9 @@
  */
 package org.apache.kafka.clients.consumer.internals.events;
 
-import static org.apache.kafka.clients.consumer.internals.events.ApplicationEventType.COMMIT_ON_CLOSE;
-
-public class CommitOnCloseApplicationEvent extends ApplicationEvent {
-
-    public CommitOnCloseApplicationEvent() {
-        super(COMMIT_ON_CLOSE);
-    }
+public enum ApplicationEventType {
+    COMMIT_ASYNC, COMMIT_SYNC, POLL, FETCH_COMMITTED_OFFSETS, NEW_TOPICS_METADATA_UPDATE, ASSIGNMENT_CHANGE,
+    LIST_OFFSETS, RESET_POSITIONS, VALIDATE_POSITIONS, TOPIC_METADATA, SUBSCRIPTION_CHANGE,
+    UNSUBSCRIBE, CONSUMER_REBALANCE_LISTENER_CALLBACK_COMPLETED,
+    COMMIT_ON_CLOSE, LEAVE_ON_CLOSE
 }
