@@ -362,5 +362,5 @@
               files="(ReplicaFetcherThreadBenchmark).java"/>
 
     <suppress checks="ImportControl"
-              files="(ConfigCommand|ConfigCommandOptions|ConfigEntity|Entity|Tuple2|ConfigCommandTest|ConfigCommandIntegrationTest).java"/>
+              files="(ConfigCommand|ConfigCommandOptions|ConfigEntity|Entity|Tuple2|ConfigCommandTest|ConfigCommandIntegrationTest|UserScramCredentialsCommandTest).java"/>
 </suppressions>

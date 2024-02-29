@@ -78,34 +78,33 @@ import scala.collection.mutable.ArrayBuffer
 import scala.jdk.CollectionConverters._
 import scala.collection.Seq
 
-object DynamicBrokerReconfigurationTest {
+object AbstractDynamicBrokerReconfigurationTest {
   val Plain = "PLAIN"
   val SecureInternal = "INTERNAL"
   val SecureExternal = "EXTERNAL"
 }
 
-class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup {
+class AbstractDynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup {
+  import AbstractDynamicBrokerReconfigurationTest._
 
-  import DynamicBrokerReconfigurationTest._
+  val servers = new ArrayBuffer[KafkaBroker]
+  val numServers = 3
+  val numPartitions = 10
+  val producers = new ArrayBuffer[KafkaProducer[String, String]]
+  val consumers = new ArrayBuffer[Consumer[String, String]]
+  val adminClients = new ArrayBuffer[Admin]()
+  val clientThreads = new ArrayBuffer[ShutdownableThread]()
+  val executors = new ArrayBuffer[ExecutorService]
+  val topic = "testtopic"
 
-  private val servers = new ArrayBuffer[KafkaBroker]
-  private val numServers = 3
-  private val numPartitions = 10
-  private val producers = new ArrayBuffer[KafkaProducer[String, String]]
-  private val consumers = new ArrayBuffer[Consumer[String, String]]
-  private val adminClients = new ArrayBuffer[Admin]()
-  private val clientThreads = new ArrayBuffer[ShutdownableThread]()
-  private val executors = new ArrayBuffer[ExecutorService]
-  private val topic = "testtopic"
+  val kafkaClientSaslMechanism = "PLAIN"
+  val kafkaServerSaslMechanisms = List("PLAIN")
 
-  private val kafkaClientSaslMechanism = "PLAIN"
-  private val kafkaServerSaslMechanisms = List("PLAIN")
-
-  private val trustStoreFile1 = TestUtils.tempFile("truststore", ".jks")
-  private val trustStoreFile2 = TestUtils.tempFile("truststore", ".jks")
-  private val sslProperties1 = TestUtils.sslConfigs(Mode.SERVER, clientCert = false, Some(trustStoreFile1), "kafka")
-  private val sslProperties2 = TestUtils.sslConfigs(Mode.SERVER, clientCert = false, Some(trustStoreFile2), "kafka")
-  private val invalidSslProperties = invalidSslConfigs
+  val trustStoreFile1 = TestUtils.tempFile("truststore", ".jks")
+  val trustStoreFile2 = TestUtils.tempFile("truststore", ".jks")
+  val sslProperties1 = TestUtils.sslConfigs(Mode.SERVER, clientCert = false, Some(trustStoreFile1), "kafka")
+  val sslProperties2 = TestUtils.sslConfigs(Mode.SERVER, clientCert = false, Some(trustStoreFile2), "kafka")
+  val invalidSslProperties = invalidSslConfigs
 
   @BeforeEach
   override def setUp(testInfo: TestInfo): Unit = {
@@ -180,6 +179,154 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
     super.tearDown()
     closeSasl()
   }
+
+  def securityProps(srcProps: Properties, propNames: util.Set[_], listenerPrefix: String = ""): Properties = {
+    val resultProps = new Properties
+    propNames.asScala.filter(srcProps.containsKey).foreach { propName =>
+      resultProps.setProperty(s"$listenerPrefix$propName", configValueAsString(srcProps.get(propName)))
+    }
+    resultProps
+  }
+
+  def configValueAsString(value: Any): String = {
+    value match {
+      case password: Password => password.value
+      case list: util.List[_] => list.asScala.map(_.toString).mkString(",")
+      case _ => value.toString
+    }
+  }
+
+  def configureDynamicKeystoreInZooKeeper(kafkaConfig: KafkaConfig, sslProperties: Properties): Unit = {
+    val externalListenerPrefix = listenerPrefix(SecureExternal)
+    val sslStoreProps = new Properties
+    sslStoreProps ++= securityProps(sslProperties, KEYSTORE_PROPS, externalListenerPrefix)
+    sslStoreProps.put(KafkaConfig.PasswordEncoderSecretProp, kafkaConfig.passwordEncoderSecret.map(_.value).orNull)
+    zkClient.makeSurePersistentPathExists(ConfigEntityChangeNotificationZNode.path)
+
+    val entityType = ConfigType.BROKER
+    val entityName = kafkaConfig.brokerId.toString
+
+    val passwordConfigs = sslStoreProps.asScala.keySet.filter(DynamicBrokerConfig.isPasswordConfig)
+    val passwordEncoder = createPasswordEncoder(kafkaConfig, kafkaConfig.passwordEncoderSecret)
+
+    if (passwordConfigs.nonEmpty) {
+      passwordConfigs.foreach { configName =>
+        val encodedValue = passwordEncoder.encode(new Password(sslStoreProps.getProperty(configName)))
+        sslStoreProps.setProperty(configName, encodedValue)
+      }
+    }
+    sslStoreProps.remove(KafkaConfig.PasswordEncoderSecretProp)
+    adminZkClient.changeConfigs(entityType, entityName, sslStoreProps)
+
+    val brokerProps = adminZkClient.fetchEntityConfig("brokers", kafkaConfig.brokerId.toString)
+    assertEquals(4, brokerProps.size)
+    assertEquals(sslProperties.get(SSL_KEYSTORE_TYPE_CONFIG),
+      brokerProps.getProperty(s"$externalListenerPrefix$SSL_KEYSTORE_TYPE_CONFIG"))
+    assertEquals(sslProperties.get(SSL_KEYSTORE_LOCATION_CONFIG),
+      brokerProps.getProperty(s"$externalListenerPrefix$SSL_KEYSTORE_LOCATION_CONFIG"))
+    assertEquals(sslProperties.get(SSL_KEYSTORE_PASSWORD_CONFIG),
+      passwordEncoder.decode(brokerProps.getProperty(s"$externalListenerPrefix$SSL_KEYSTORE_PASSWORD_CONFIG")))
+    assertEquals(sslProperties.get(SSL_KEY_PASSWORD_CONFIG),
+      passwordEncoder.decode(brokerProps.getProperty(s"$externalListenerPrefix$SSL_KEY_PASSWORD_CONFIG")))
+  }
+
+  def listenerPrefix(name: String): String = new ListenerName(name).configPrefix
+
+  def createPasswordEncoder(config: KafkaConfig, secret: Option[Password]): PasswordEncoder = {
+    val encoderSecret = secret.getOrElse(throw new IllegalStateException("Password encoder secret not configured"))
+    PasswordEncoder.encrypting(encoderSecret,
+      config.passwordEncoderKeyFactoryAlgorithm,
+      config.passwordEncoderCipherAlgorithm,
+      config.passwordEncoderKeyLength,
+      config.passwordEncoderIterations)
+  }
+
+  def clearLeftOverProcessorMetrics(): Unit = {
+    val metricsFromOldTests = KafkaYammerMetrics.defaultRegistry.allMetrics.keySet.asScala.filter(isProcessorMetric)
+    metricsFromOldTests.foreach(KafkaYammerMetrics.defaultRegistry.removeMetric)
+  }
+
+  def isProcessorMetric(metricName: MetricName): Boolean = {
+    val mbeanName = metricName.getMBeanName
+    mbeanName.contains(s"${Processor.NetworkProcessorMetricTag}=") || mbeanName.contains(s"${RequestChannel.ProcessorMetricTag}=")
+  }
+
+  def invalidSslConfigs: Properties = {
+    val props = new Properties
+    props.put(SSL_KEYSTORE_LOCATION_CONFIG, "invalid/file/path")
+    props.put(SSL_KEYSTORE_PASSWORD_CONFIG, new Password("invalid"))
+    props.put(SSL_KEY_PASSWORD_CONFIG, new Password("invalid"))
+    props.put(SSL_KEYSTORE_TYPE_CONFIG, "PKCS12")
+    props
+  }
+
+  def createAdminClient(securityProtocol: SecurityProtocol, listenerName: String): Admin = {
+    val config = clientProps(securityProtocol)
+    val bootstrapServers = TestUtils.bootstrapServers(servers, new ListenerName(listenerName))
+    config.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers)
+    config.put(AdminClientConfig.METADATA_MAX_AGE_CONFIG, "10")
+    val adminClient = Admin.create(config)
+    adminClients += adminClient
+    adminClient
+  }
+
+  def clientProps(securityProtocol: SecurityProtocol, saslMechanism: Option[String] = None): Properties = {
+    val props = new Properties
+    props.put(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, securityProtocol.name)
+    props.put(SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG, "HTTPS")
+    if (securityProtocol == SecurityProtocol.SASL_PLAINTEXT || securityProtocol == SecurityProtocol.SASL_SSL)
+      props ++= kafkaClientSaslProperties(saslMechanism.getOrElse(kafkaClientSaslMechanism), dynamicJaasConfig = true)
+    props ++= sslProperties1
+    securityProps(props, props.keySet)
+  }
+
+  def waitForConfig(propName: String, propValue: String, maxWaitMs: Long = 10000): Unit = {
+    servers.foreach { server => waitForConfigOnServer(server, propName, propValue, maxWaitMs) }
+  }
+
+  def waitForConfigOnServer(server: KafkaBroker, propName: String, propValue: String, maxWaitMs: Long = 10000): Unit = {
+    TestUtils.retry(maxWaitMs) {
+      assertEquals(propValue, server.config.originals.get(propName))
+    }
+  }
+
+  private def currentThreads: List[String] = {
+    Thread.getAllStackTraces.keySet.asScala.toList.map(_.getName)
+  }
+
+  def matchingThreads(threadPrefix: String): List[String] = {
+    currentThreads.filter(_.startsWith(threadPrefix))
+  }
+
+  def verifyThreads(threadPrefix: String, countPerBroker: Int, leftOverThreads: Int = 0): Unit = {
+    val expectedCount = countPerBroker * servers.size
+    val (threads, resized) = TestUtils.computeUntilTrue(matchingThreads(threadPrefix)) { matching =>
+      matching.size >= expectedCount &&  matching.size <= expectedCount + leftOverThreads
+    }
+    assertTrue(resized, s"Invalid threads: expected $expectedCount, got ${threads.size}: $threads")
+  }
+
+  def describeConfig(adminClient: Admin, servers: Seq[KafkaBroker] = this.servers): Config = {
+    val configResources = servers.map { server =>
+      new ConfigResource(ConfigResource.Type.BROKER, server.config.brokerId.toString)
+    }
+    val describeOptions = new DescribeConfigsOptions().includeSynonyms(true)
+    val describeResult = adminClient.describeConfigs(configResources.asJava, describeOptions).all.get
+    assertEquals(servers.size, describeResult.values.size)
+    val configDescription = describeResult.values.iterator.next
+    assertFalse(configDescription.entries.isEmpty, "Configs are empty")
+    configDescription
+  }
+
+  def fetchBrokerConfigsFromZooKeeper(server: KafkaBroker): Properties = {
+    val props = adminZkClient.fetchEntityConfig(ConfigType.BROKER, server.config.brokerId.toString)
+    server.config.dynamicConfig.fromPersistentProps(props, perBrokerConfig = true)
+  }
+}
+
+class DynamicBrokerReconfigurationTest extends AbstractDynamicBrokerReconfigurationTest {
+
+  import AbstractDynamicBrokerReconfigurationTest._
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
@@ -279,148 +426,6 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
       synonymsList(logRetentionHours))
     assertEquals(List((KafkaConfig.LogRollTimeHoursProp, ConfigSource.DEFAULT_CONFIG)), synonymsList(logRollHours))
     assertEquals(List((KafkaConfig.LogCleanerThreadsProp, ConfigSource.DEFAULT_CONFIG)), synonymsList(logCleanerThreads))
-  }
-
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("zk", "kraft"))
-  def testUpdatesUsingConfigProvider(quorum: String): Unit = {
-    val PollingIntervalVal = f"$${file:polling.interval:interval}"
-    val PollingIntervalUpdateVal = f"$${file:polling.interval:updinterval}"
-    val SslTruststoreTypeVal = f"$${file:ssl.truststore.type:storetype}"
-    val SslKeystorePasswordVal = f"$${file:ssl.keystore.password:password}"
-
-    val configPrefix = listenerPrefix(SecureExternal)
-    val brokerConfigs = describeConfig(adminClients.head, servers).entries.asScala
-    // the following are values before updated
-    assertFalse(brokerConfigs.exists(_.name == TestMetricsReporter.PollingIntervalProp), "Initial value of polling interval")
-    assertFalse(brokerConfigs.exists(_.name == configPrefix + KafkaConfig.SslTruststoreTypeProp), "Initial value of ssl truststore type")
-    assertNull(brokerConfigs.find(_.name == configPrefix+KafkaConfig.SslKeystorePasswordProp).get.value, "Initial value of ssl keystore password")
-
-    // setup ssl properties
-    val secProps = securityProps(sslProperties1, KEYSTORE_PROPS, configPrefix)
-
-    // configure config providers and properties need be updated
-    val updatedProps = new Properties
-    updatedProps.setProperty("config.providers", "file")
-    updatedProps.setProperty("config.providers.file.class", "kafka.server.MockFileConfigProvider")
-    updatedProps.put(KafkaConfig.MetricReporterClassesProp, classOf[TestMetricsReporter].getName)
-
-    // 1. update Integer property using config provider
-    updatedProps.put(TestMetricsReporter.PollingIntervalProp, PollingIntervalVal)
-
-    // 2. update String property using config provider
-    updatedProps.put(configPrefix+KafkaConfig.SslTruststoreTypeProp, SslTruststoreTypeVal)
-
-    // merge two properties
-    updatedProps ++= secProps
-
-    // 3. update password property using config provider
-    updatedProps.put(configPrefix+KafkaConfig.SslKeystorePasswordProp, SslKeystorePasswordVal)
-
-    alterConfigsUsingConfigCommand(updatedProps)
-    waitForConfig(TestMetricsReporter.PollingIntervalProp, "1000")
-    waitForConfig(configPrefix+KafkaConfig.SslTruststoreTypeProp, "JKS")
-    waitForConfig(configPrefix+KafkaConfig.SslKeystorePasswordProp, "ServerPassword")
-
-    // wait for MetricsReporter
-    val reporters = TestMetricsReporter.waitForReporters(servers.size)
-    reporters.foreach { reporter =>
-      reporter.verifyState(reconfigureCount = 0, deleteCount = 0, pollingInterval = 1000)
-      assertFalse(reporter.kafkaMetrics.isEmpty, "No metrics found")
-    }
-
-    if (!isKRaftTest()) {
-      // fetch from ZK, values should be unresolved
-      val props = fetchBrokerConfigsFromZooKeeper(servers.head)
-      assertTrue(props.getProperty(TestMetricsReporter.PollingIntervalProp) == PollingIntervalVal, "polling interval is not updated in ZK")
-      assertTrue(props.getProperty(configPrefix + KafkaConfig.SslTruststoreTypeProp) == SslTruststoreTypeVal, "store type is not updated in ZK")
-      assertTrue(props.getProperty(configPrefix + KafkaConfig.SslKeystorePasswordProp) == SslKeystorePasswordVal, "keystore password is not updated in ZK")
-    }
-
-    // verify the update
-    // 1. verify update not occurring if the value of property is same.
-    alterConfigsUsingConfigCommand(updatedProps)
-    waitForConfig(TestMetricsReporter.PollingIntervalProp, "1000")
-    reporters.foreach { reporter =>
-      reporter.verifyState(reconfigureCount = 0, deleteCount = 0, pollingInterval = 1000)
-    }
-
-    // 2. verify update occurring if the value of property changed.
-    updatedProps.put(TestMetricsReporter.PollingIntervalProp, PollingIntervalUpdateVal)
-    alterConfigsUsingConfigCommand(updatedProps)
-    waitForConfig(TestMetricsReporter.PollingIntervalProp, "2000")
-    reporters.foreach { reporter =>
-      reporter.verifyState(reconfigureCount = 1, deleteCount = 0, pollingInterval = 2000)
-    }
-  }
-
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("zk", "kraft"))
-  def testKeyStoreAlter(quorum: String): Unit = {
-    val topic2 = "testtopic2"
-    TestUtils.createTopicWithAdmin(adminClients.head, topic2, servers, controllerServers, numPartitions, replicationFactor = numServers)
-
-    // Start a producer and consumer that work with the current broker keystore.
-    // This should continue working while changes are made
-    val (producerThread, consumerThread) = startProduceConsume(retries = 0)
-    TestUtils.waitUntilTrue(() => consumerThread.received >= 10, "Messages not received")
-
-    // Producer with new truststore should fail to connect before keystore update
-    val producer1 = ProducerBuilder().trustStoreProps(sslProperties2).maxRetries(0).build()
-    verifyAuthenticationFailure(producer1)
-
-    // Update broker keystore for external listener
-    alterSslKeystoreUsingConfigCommand(sslProperties2, SecureExternal)
-
-    // New producer with old truststore should fail to connect
-    val producer2 = ProducerBuilder().trustStoreProps(sslProperties1).maxRetries(0).build()
-    verifyAuthenticationFailure(producer2)
-
-    // Produce/consume should work with new truststore with new producer/consumer
-    val producer = ProducerBuilder().trustStoreProps(sslProperties2).maxRetries(0).build()
-    // Start the new consumer in a separate group than the continuous consumer started at the beginning of the test so
-    // that it is not disrupted by rebalance.
-    val consumer = ConsumerBuilder("group2").trustStoreProps(sslProperties2).topic(topic2).build()
-    verifyProduceConsume(producer, consumer, 10, topic2)
-
-    // Broker keystore update for internal listener with incompatible keystore should fail without update
-    alterSslKeystore(sslProperties2, SecureInternal, expectFailure = true)
-    verifyProduceConsume(producer, consumer, 10, topic2)
-
-    // Broker keystore update for internal listener with compatible keystore should succeed
-    val sslPropertiesCopy = sslProperties1.clone().asInstanceOf[Properties]
-    val oldFile = new File(sslProperties1.getProperty(SSL_KEYSTORE_LOCATION_CONFIG))
-    val newFile = TestUtils.tempFile("keystore", ".jks")
-    Files.copy(oldFile.toPath, newFile.toPath, StandardCopyOption.REPLACE_EXISTING)
-    sslPropertiesCopy.setProperty(SSL_KEYSTORE_LOCATION_CONFIG, newFile.getPath)
-    alterSslKeystore(sslPropertiesCopy, SecureInternal)
-    verifyProduceConsume(producer, consumer, 10, topic2)
-
-    // Verify that keystores can be updated using same file name.
-    val reusableProps = sslProperties2.clone().asInstanceOf[Properties]
-    val reusableFile = TestUtils.tempFile("keystore", ".jks")
-    reusableProps.setProperty(SSL_KEYSTORE_LOCATION_CONFIG, reusableFile.getPath)
-    Files.copy(new File(sslProperties1.getProperty(SSL_KEYSTORE_LOCATION_CONFIG)).toPath,
-      reusableFile.toPath, StandardCopyOption.REPLACE_EXISTING)
-    alterSslKeystore(reusableProps, SecureExternal)
-    val producer3 = ProducerBuilder().trustStoreProps(sslProperties2).maxRetries(0).build()
-    verifyAuthenticationFailure(producer3)
-    // Now alter using same file name. We can't check if the update has completed by comparing config on
-    // the broker, so we wait for producer operation to succeed to verify that the update has been performed.
-    Files.copy(new File(sslProperties2.getProperty(SSL_KEYSTORE_LOCATION_CONFIG)).toPath,
-      reusableFile.toPath, StandardCopyOption.REPLACE_EXISTING)
-    reusableFile.setLastModified(System.currentTimeMillis() + 1000)
-    alterSslKeystore(reusableProps, SecureExternal)
-    TestUtils.waitUntilTrue(() => {
-      try {
-        producer3.partitionsFor(topic).size() == numPartitions
-      } catch {
-        case _: Exception  => false
-      }
-    }, "Keystore not updated")
-
-    // Verify that all messages sent with retries=0 while keystores were being altered were consumed
-    stopAndVerifyProduceConsume(producerThread, consumerThread)
   }
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
@@ -884,16 +889,6 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
     verifyMarkPartitionsForTruncation()
   }
 
-  private def isProcessorMetric(metricName: MetricName): Boolean = {
-    val mbeanName = metricName.getMBeanName
-    mbeanName.contains(s"${Processor.NetworkProcessorMetricTag}=") || mbeanName.contains(s"${RequestChannel.ProcessorMetricTag}=")
-  }
-
-  private def clearLeftOverProcessorMetrics(): Unit = {
-    val metricsFromOldTests = KafkaYammerMetrics.defaultRegistry.allMetrics.keySet.asScala.filter(isProcessorMetric)
-    metricsFromOldTests.foreach(KafkaYammerMetrics.defaultRegistry.removeMetric)
-  }
-
   // Verify that metrics from processors that were removed have been deleted.
   // Since processor ids are not reused, it is sufficient to check metrics count
   // based on the current number of processors
@@ -1256,38 +1251,6 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
     }
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("zk", "kraft"))
-  def testTransactionVerificationEnable(quorum: String): Unit = {
-    def verifyConfiguration(enabled: Boolean): Unit = {
-      servers.foreach { server =>
-        TestUtils.waitUntilTrue(() => server.logManager.producerStateManagerConfig.transactionVerificationEnabled == enabled, "Configuration was not updated.")
-      }
-      verifyThreads("AddPartitionsToTxnSenderThread-", 1)
-    }
-    // Verification enabled by default
-    verifyConfiguration(true)
-
-    // Dynamically turn verification off.
-    val configPrefix = listenerPrefix(SecureExternal)
-    val updatedProps = securityProps(sslProperties1, KEYSTORE_PROPS, configPrefix)
-    updatedProps.put(KafkaConfig.TransactionPartitionVerificationEnableProp, "false")
-    alterConfigsUsingConfigCommand(updatedProps)
-    verifyConfiguration(false)
-
-    // Ensure it remains off after shutdown.
-    val shutdownServer = servers.head
-    shutdownServer.shutdown()
-    shutdownServer.awaitShutdown()
-    shutdownServer.startup()
-    verifyConfiguration(false)
-
-    // Turn verification back on.
-    updatedProps.put(KafkaConfig.TransactionPartitionVerificationEnableProp, "true")
-    alterConfigsUsingConfigCommand(updatedProps)
-    verifyConfiguration(true)
-  }
-
   private def verifyAddListener(listenerName: String, securityProtocol: SecurityProtocol,
                                 saslMechanisms: Seq[String]): Unit = {
     addListener(servers, listenerName, securityProtocol, saslMechanisms)
@@ -1386,34 +1349,9 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
     server.socketServer.metrics.metrics.keySet.asScala.exists(_.tags.get("listener") == listenerName)
   }
 
-  private def fetchBrokerConfigsFromZooKeeper(server: KafkaBroker): Properties = {
-    val props = adminZkClient.fetchEntityConfig(ConfigType.BROKER, server.config.brokerId.toString)
-    server.config.dynamicConfig.fromPersistentProps(props, perBrokerConfig = true)
-  }
-
   private def awaitInitialPositions(consumer: Consumer[_, _]): Unit = {
     TestUtils.pollUntilTrue(consumer, () => !consumer.assignment.isEmpty, "Timed out while waiting for assignment")
     consumer.assignment.forEach(consumer.position(_))
-  }
-
-  private def clientProps(securityProtocol: SecurityProtocol, saslMechanism: Option[String] = None): Properties = {
-    val props = new Properties
-    props.put(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, securityProtocol.name)
-    props.put(SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG, "HTTPS")
-    if (securityProtocol == SecurityProtocol.SASL_PLAINTEXT || securityProtocol == SecurityProtocol.SASL_SSL)
-      props ++= kafkaClientSaslProperties(saslMechanism.getOrElse(kafkaClientSaslMechanism), dynamicJaasConfig = true)
-    props ++= sslProperties1
-    securityProps(props, props.keySet)
-  }
-
-  private def createAdminClient(securityProtocol: SecurityProtocol, listenerName: String): Admin = {
-    val config = clientProps(securityProtocol)
-    val bootstrapServers = TestUtils.bootstrapServers(servers, new ListenerName(listenerName))
-    config.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers)
-    config.put(AdminClientConfig.METADATA_MAX_AGE_CONFIG, "10")
-    val adminClient = Admin.create(config)
-    adminClients += adminClient
-    adminClient
   }
 
   private def verifyProduceConsume(producer: KafkaProducer[String, String],
@@ -1438,26 +1376,6 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
         case _: Error => false
       }
     }, "Did not fail authentication with invalid config")
-  }
-
-  private def describeConfig(adminClient: Admin, servers: Seq[KafkaBroker] = this.servers): Config = {
-    val configResources = servers.map { server =>
-      new ConfigResource(ConfigResource.Type.BROKER, server.config.brokerId.toString)
-    }
-    val describeOptions = new DescribeConfigsOptions().includeSynonyms(true)
-    val describeResult = adminClient.describeConfigs(configResources.asJava, describeOptions).all.get
-    assertEquals(servers.size, describeResult.values.size)
-    val configDescription = describeResult.values.iterator.next
-    assertFalse(configDescription.entries.isEmpty, "Configs are empty")
-    configDescription
-  }
-
-  private def securityProps(srcProps: Properties, propNames: util.Set[_], listenerPrefix: String = ""): Properties = {
-    val resultProps = new Properties
-    propNames.asScala.filter(srcProps.containsKey).foreach { propName =>
-      resultProps.setProperty(s"$listenerPrefix$propName", configValueAsString(srcProps.get(propName)))
-    }
-    resultProps
   }
 
   // Creates a new truststore with certificates from the provided stores and returns the properties of the new store
@@ -1493,13 +1411,6 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
     val newProps = securityProps(props, KEYSTORE_PROPS, configPrefix)
     reconfigureServers(newProps, perBrokerConfig = true,
       (s"$configPrefix$SSL_KEYSTORE_LOCATION_CONFIG", props.getProperty(SSL_KEYSTORE_LOCATION_CONFIG)), expectFailure)
-  }
-
-  private def alterSslKeystoreUsingConfigCommand(props: Properties, listener: String): Unit = {
-    val configPrefix = listenerPrefix(listener)
-    val newProps = securityProps(props, KEYSTORE_PROPS, configPrefix)
-    alterConfigsUsingConfigCommand(newProps)
-    waitForConfig(s"$configPrefix$SSL_KEYSTORE_LOCATION_CONFIG", props.getProperty(SSL_KEYSTORE_LOCATION_CONFIG))
   }
 
   private def serverEndpoints(adminClient: Admin): String = {
@@ -1587,91 +1498,11 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
       .getOrElse(throw new IllegalStateException(s"Config not found $configName"))
   }
 
-  private def listenerPrefix(name: String): String = new ListenerName(name).configPrefix
-
-  private def configureDynamicKeystoreInZooKeeper(kafkaConfig: KafkaConfig, sslProperties: Properties): Unit = {
-    val externalListenerPrefix = listenerPrefix(SecureExternal)
-    val sslStoreProps = new Properties
-    sslStoreProps ++= securityProps(sslProperties, KEYSTORE_PROPS, externalListenerPrefix)
-    sslStoreProps.put(KafkaConfig.PasswordEncoderSecretProp, kafkaConfig.passwordEncoderSecret.map(_.value).orNull)
-    zkClient.makeSurePersistentPathExists(ConfigEntityChangeNotificationZNode.path)
-
-    val entityType = ConfigType.BROKER
-    val entityName = kafkaConfig.brokerId.toString
-
-    val passwordConfigs = sslStoreProps.asScala.keySet.filter(DynamicBrokerConfig.isPasswordConfig)
-    val passwordEncoder = createPasswordEncoder(kafkaConfig, kafkaConfig.passwordEncoderSecret)
-
-    if (passwordConfigs.nonEmpty) {
-      passwordConfigs.foreach { configName =>
-        val encodedValue = passwordEncoder.encode(new Password(sslStoreProps.getProperty(configName)))
-        sslStoreProps.setProperty(configName, encodedValue)
-      }
-    }
-    sslStoreProps.remove(KafkaConfig.PasswordEncoderSecretProp)
-    adminZkClient.changeConfigs(entityType, entityName, sslStoreProps)
-
-    val brokerProps = adminZkClient.fetchEntityConfig("brokers", kafkaConfig.brokerId.toString)
-    assertEquals(4, brokerProps.size)
-    assertEquals(sslProperties.get(SSL_KEYSTORE_TYPE_CONFIG),
-      brokerProps.getProperty(s"$externalListenerPrefix$SSL_KEYSTORE_TYPE_CONFIG"))
-    assertEquals(sslProperties.get(SSL_KEYSTORE_LOCATION_CONFIG),
-      brokerProps.getProperty(s"$externalListenerPrefix$SSL_KEYSTORE_LOCATION_CONFIG"))
-    assertEquals(sslProperties.get(SSL_KEYSTORE_PASSWORD_CONFIG),
-      passwordEncoder.decode(brokerProps.getProperty(s"$externalListenerPrefix$SSL_KEYSTORE_PASSWORD_CONFIG")))
-    assertEquals(sslProperties.get(SSL_KEY_PASSWORD_CONFIG),
-      passwordEncoder.decode(brokerProps.getProperty(s"$externalListenerPrefix$SSL_KEY_PASSWORD_CONFIG")))
-  }
-
-  private def createPasswordEncoder(config: KafkaConfig, secret: Option[Password]): PasswordEncoder = {
-    val encoderSecret = secret.getOrElse(throw new IllegalStateException("Password encoder secret not configured"))
-    PasswordEncoder.encrypting(encoderSecret,
-      config.passwordEncoderKeyFactoryAlgorithm,
-      config.passwordEncoderCipherAlgorithm,
-      config.passwordEncoderKeyLength,
-      config.passwordEncoderIterations)
-  }
-
-  private def waitForConfig(propName: String, propValue: String, maxWaitMs: Long = 10000): Unit = {
-    servers.foreach { server => waitForConfigOnServer(server, propName, propValue, maxWaitMs) }
-  }
-
-  private def waitForConfigOnServer(server: KafkaBroker, propName: String, propValue: String, maxWaitMs: Long = 10000): Unit = {
-    TestUtils.retry(maxWaitMs) {
-      assertEquals(propValue, server.config.originals.get(propName))
-    }
-  }
-
   private def configureMetricsReporters(reporters: Seq[Class[_]], props: Properties,
                                         perBrokerConfig: Boolean = false): Unit = {
     val reporterStr = reporters.map(_.getName).mkString(",")
     props.put(KafkaConfig.MetricReporterClassesProp, reporterStr)
     reconfigureServers(props, perBrokerConfig, (KafkaConfig.MetricReporterClassesProp, reporterStr))
-  }
-
-  private def invalidSslConfigs: Properties = {
-    val props = new Properties
-    props.put(SSL_KEYSTORE_LOCATION_CONFIG, "invalid/file/path")
-    props.put(SSL_KEYSTORE_PASSWORD_CONFIG, new Password("invalid"))
-    props.put(SSL_KEY_PASSWORD_CONFIG, new Password("invalid"))
-    props.put(SSL_KEYSTORE_TYPE_CONFIG, "PKCS12")
-    props
-  }
-
-  private def currentThreads: List[String] = {
-    Thread.getAllStackTraces.keySet.asScala.toList.map(_.getName)
-  }
-
-  private def matchingThreads(threadPrefix: String): List[String] = {
-    currentThreads.filter(_.startsWith(threadPrefix))
-  }
-
-  private def verifyThreads(threadPrefix: String, countPerBroker: Int, leftOverThreads: Int = 0): Unit = {
-    val expectedCount = countPerBroker * servers.size
-    val (threads, resized) = TestUtils.computeUntilTrue(matchingThreads(threadPrefix)) { matching =>
-      matching.size >= expectedCount &&  matching.size <= expectedCount + leftOverThreads
-    }
-    assertTrue(resized, s"Invalid threads: expected $expectedCount, got ${threads.size}: $threads")
   }
 
   private def startProduceConsume(retries: Int, producerClientId: String = "test-producer"): (ProducerThread, ConsumerThread) = {
@@ -1726,14 +1557,6 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
     assertThrows(classOf[TimeoutException], () => future.get(100, TimeUnit.MILLISECONDS))
   }
 
-  private def configValueAsString(value: Any): String = {
-    value match {
-      case password: Password => password.value
-      case list: util.List[_] => list.asScala.map(_.toString).mkString(",")
-      case _ => value.toString
-    }
-  }
-
   private def addListenerPropsSsl(listenerName: String, props: Properties): Unit = {
     props ++= securityProps(sslProperties1, KEYSTORE_PROPS, listenerPrefix(listenerName))
     props ++= securityProps(sslProperties1, TRUSTSTORE_PROPS, listenerPrefix(listenerName))
@@ -1748,19 +1571,6 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
       val jaasSection = jaasSections(Seq(mechanism), None, KafkaSasl, "").head
       val jaasConfig = jaasSection.modules.head.toString
       props.put(listenerName.saslMechanismConfigPrefix(mechanism) + KafkaConfig.SaslJaasConfigProp, jaasConfig)
-    }
-  }
-
-  private def alterConfigsUsingConfigCommand(props: Properties): Unit = {
-    val propsFile = TestUtils.tempPropertiesFile(clientProps(SecurityProtocol.SSL))
-
-    servers.foreach { server =>
-      val args = Array("--bootstrap-server", TestUtils.bootstrapServers(servers, new ListenerName(SecureInternal)),
-        "--command-config", propsFile.getAbsolutePath,
-        "--alter", "--add-config", props.asScala.map { case (k, v) => s"$k=$v" }.mkString(","),
-        "--entity-type", "brokers",
-        "--entity-name", server.config.brokerId.toString)
-      ConfigCommand.main(args)
     }
   }
 
