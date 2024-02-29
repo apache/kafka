@@ -252,10 +252,10 @@ public class ConfigCommand {
         if (!matcher.matches())
             throw new IllegalArgumentException("Invalid credential property " + mechanism + "=" + credentialStr);
 
-        int iterations = Objects.equals(matcher.group(0), "-1")
-            ? Integer.parseInt(matcher.group(0))
+        int iterations = matcher.group(1) != null
+            ? Integer.parseInt(matcher.group(1))
             : DEFAULT_SCRAM_ITERATIONS;
-        String password = matcher.group(1);
+        String password = matcher.group(2);
 
         if (iterations < mechanism.minIterations())
             throw new IllegalArgumentException("Iterations " + iterations + " is less than the minimum " + mechanism.minIterations() + " required for " + mechanism);
@@ -422,7 +422,6 @@ public class ConfigCommand {
         List<String> entityNames = opts.entityNames();
         String entityTypeHead = entityTypes.get(0);
         String entityNameHead = entityNames.get(0);
-        // TODO: no need for mutability
         Map<String, String> configsToBeAddedMap = new HashMap<>();
         parseConfigsToBeAdded(opts).forEach((k, v) -> configsToBeAddedMap.put((String) k, (String) v));
         Map<String, ConfigEntry> configsToBeAdded = configsToBeAddedMap.entrySet().stream()
@@ -583,7 +582,7 @@ public class ConfigCommand {
                     .collect(Collectors.toMap(ConfigEntry::name, Function.identity()));
 
                 // fail the command if any of the configs to be deleted does not exist
-                invalidConfigs = configsToBeDeleted.stream().filter(oldConfig::containsKey)
+                invalidConfigs = configsToBeDeleted.stream().filter(cfg -> !oldConfig.containsKey(cfg))
                     .collect(Collectors.toList());
                 if (!invalidConfigs.isEmpty())
                     throw new InvalidConfigurationException("Invalid config(s): " + String.join(",", invalidConfigs));
@@ -606,7 +605,7 @@ public class ConfigCommand {
         }
 
         if (!entityNameHead.isEmpty())
-            System.out.println("Completed updating config for " + entityTypeHead.substring(0, entityNameHead.length() - 1) + " " + entityNameHead + ".");
+            System.out.println("Completed updating config for " + entityTypeHead.substring(0, entityTypeHead.length() - 1) + " " + entityNameHead + ".");
         else
             System.out.println("Completed updating default config for " + entityTypeHead + " in the cluster.");
     }
@@ -618,10 +617,10 @@ public class ConfigCommand {
             throw new IllegalArgumentException("Invalid credential property " + mechanism + "=" + credentialStr);
         }
 
-        int iterations = Objects.equals(matcher.group(0), "-1")
-            ? Integer.parseInt(matcher.group(0))
+        int iterations = matcher.group(1) != null
+            ? Integer.parseInt(matcher.group(1))
             : DEFAULT_SCRAM_ITERATIONS;
-        String password = matcher.group(1);
+        String password = matcher.group(2);
 
         if (iterations < mechanism.minIterations())
             throw new IllegalArgumentException("Iterations " + iterations + " is less than the minimum " + mechanism.minIterations() + " required for " + mechanism.mechanismName());
@@ -764,7 +763,7 @@ public class ConfigCommand {
                 System.out.println("Default configs for " + entityType + " in the cluster are:");
             } else {
                 String configSourceStr = describeAll ? "All" : "Dynamic";
-                System.out.println(configSourceStr + " configs for " + entityType.substring(0, entity.length() - 1) + " " + entity + " are:");
+                System.out.println(configSourceStr + " configs for " + entityType.substring(0, entityType.length() - 1) + " " + entity + " are:");
             }
             try {
                 getResourceConfig(adminClient, entityType, entity, true, describeAll).forEach(entry -> {

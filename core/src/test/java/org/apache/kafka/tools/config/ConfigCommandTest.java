@@ -368,7 +368,7 @@ public class ConfigCommandTest {
         String fileContents =
             "a=b\n" +
             "c = d\n" +
-            "json = {\" key \": \" ConfigCommandOptions \"}\n" +
+            "json = {\"key\": \"val\"}\n" +
             "nested = [[1, 2], [3, 4]]";
 
         File file = TestUtils.tempFile(fileContents);
@@ -684,7 +684,7 @@ public class ConfigCommandTest {
             @Override
             public DescribeClientQuotasResult describeClientQuotas(ClientQuotaFilter filter, DescribeClientQuotasOptions options) {
                 assertTrue(filter.strict());
-                assertEquals(expectedFilterComponents, filter.components());
+                assertEquals(expectedFilterComponents, new HashSet<>(filter.components()));
                 describedConfigs.set(true);
                 return describeResult;
             }
@@ -1517,6 +1517,8 @@ public class ConfigCommandTest {
                     String value = configChange.getProperty(mechanism);
                     assertEquals(-1, value.indexOf("password="));
                     ScramCredential scramCredential = ScramCredentialUtils.credentialFromString(value);
+                    if (iterations != scramCredential.iterations())
+                        System.out.println("CredentialChange.changeUserOrUserClientIdConfig");
                     assertEquals(iterations, scramCredential.iterations());
                     credentials.put(user, configChange);
                 }
@@ -1888,10 +1890,12 @@ public class ConfigCommandTest {
 
     @SafeVarargs
     public static <K, V> Map<K, V> concat(Map<K, V>...maps) {
-        return Stream.of(maps)
+        Map<K, V> res = new HashMap<>();
+        Stream.of(maps)
             .map(Map::entrySet)
             .flatMap(Collection::stream)
-            .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+            .forEach(e -> res.put(e.getKey(), e.getValue()));
+        return res;
     }
 
     static class DummyAdminZkClient extends AdminZkClient {

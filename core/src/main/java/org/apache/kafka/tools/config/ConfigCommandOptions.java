@@ -204,7 +204,7 @@ public class ConfigCommandOptions extends CommandDefaultOptions {
         CommandLineUtils.checkInvalidArgs(parser, options, describeOpt, alterOpt, addConfig, deleteConfig);
 
         List<String> entityTypeVals = entityTypes();
-        if (entityTypeVals.size() != Utils.mkSet(entityTypeVals).size())
+        if (entityTypeVals.size() != new HashSet<>(entityTypeVals).size())
             throw new IllegalArgumentException("Duplicate entity type(s) specified: " + Utils.join(Utils.diff(HashSet::new, new HashSet<>(entityTypeVals), new HashSet<>(entityTypeVals)), ","));
 
         List<String> allowedEntityTypes;
@@ -225,7 +225,7 @@ public class ConfigCommandOptions extends CommandDefaultOptions {
 
         if (entityTypeVals.isEmpty())
             throw new IllegalArgumentException("At least one entity type must be specified");
-        else if (entityTypeVals.size() > 1 && !entityTypeVals.equals(Arrays.asList(ConfigType.USER, ConfigType.CLIENT)))
+        else if (entityTypeVals.size() > 1 && !new HashSet<>(entityTypeVals).equals(new HashSet<>(Arrays.asList(ConfigType.USER, ConfigType.CLIENT))))
             throw new IllegalArgumentException("Only '" + ConfigType.USER + "' and '" + ConfigType.CLIENT + "' entity types may be specified together");
 
         if ((options.has(entityName) || options.has(entityType) || options.has(entityDefault)) &&

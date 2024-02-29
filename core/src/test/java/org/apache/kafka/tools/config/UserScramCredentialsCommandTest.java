@@ -47,7 +47,7 @@ public class UserScramCredentialsCommandTest extends BaseRequestTest {
         return 1;
     }
 
-    class ConfigCommandResult {
+    static class ConfigCommandResult {
         public final String stdout;
         public final OptionalInt exitStatus;
 
@@ -111,7 +111,7 @@ public class UserScramCredentialsCommandTest extends BaseRequestTest {
         assertEquals(alterConfigsUser1Out, result.stdout);
         String quotaConfigsUser1Out = "Quota configs for user-principal '" + user1 + "' are consumer_byte_rate=20000.0\n";
         TestUtils.waitForCondition(
-            () -> runConfigCommandViaBroker(toArray("--user", user1, "--describe")).stdout == quotaConfigsUser1Out + scramCredentialConfigsUser1Out,
+            () -> Objects.equals(runConfigCommandViaBroker(toArray("--user", user1, "--describe")).stdout, quotaConfigsUser1Out + scramCredentialConfigsUser1Out),
             () -> "Failed to describe Quota change for '" + user1 + "'");
 
         // now do the same thing for user2
@@ -150,7 +150,7 @@ public class UserScramCredentialsCommandTest extends BaseRequestTest {
         result = runConfigCommandViaBroker(toArray("--user", user2, "--alter", "--delete-config", "SCRAM-SHA-256"));
         assertEquals(alterConfigsUser2Out, result.stdout);
         TestUtils.waitForCondition(
-            () -> runConfigCommandViaBroker(toArray("--entity-type", "users", "--describe")).stdout == quotaConfigsUser2Out + scramCredentialConfigsUser1Out,
+            () -> Objects.equals(runConfigCommandViaBroker(toArray("--entity-type", "users", "--describe")).stdout, quotaConfigsUser2Out + scramCredentialConfigsUser1Out),
             () -> "Failed to describe Quota change for '" + user2 + "'");
 
         // now delete the rest of the configs, for user1 and user2, and describe
@@ -165,7 +165,7 @@ public class UserScramCredentialsCommandTest extends BaseRequestTest {
     @SuppressWarnings("dontUseSystemExit")
     @ParameterizedTest(name = TEST_WITH_PARAMETERIZED_QUORUM_NAME)
     @ValueSource(strings = {"kraft", "zk"})
-    public void testAlterWithEmptyPassword(String quorum) throws Exception {
+    public void testAlterWithEmptyPassword(String quorum) {
         String user1 = "user1";
         ConfigCommandResult result = runConfigCommandViaBroker(toArray("--user", user1, "--alter", "--add-config", "SCRAM-SHA-256=[iterations=4096,password=]"));
         assertTrue(result.exitStatus.isPresent(), "Expected System.exit() to be called with an empty password");
@@ -175,7 +175,7 @@ public class UserScramCredentialsCommandTest extends BaseRequestTest {
     @SuppressWarnings("dontUseSystemExit")
     @ParameterizedTest(name = TEST_WITH_PARAMETERIZED_QUORUM_NAME)
     @ValueSource(strings = {"kraft", "zk"})
-    public void testDescribeUnknownUser(String quorum) throws Exception {
+    public void testDescribeUnknownUser(String quorum) {
         String unknownUser = "unknownUser";
         ConfigCommandResult result = runConfigCommandViaBroker(toArray("--user", unknownUser, "--describe"));
         assertFalse(result.exitStatus.isPresent(), "Expected System.exit() to not be called with an unknown user");

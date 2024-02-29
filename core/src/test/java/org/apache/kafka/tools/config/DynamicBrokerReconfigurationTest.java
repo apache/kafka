@@ -34,6 +34,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 import java.io.File;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
@@ -97,7 +98,7 @@ public class DynamicBrokerReconfigurationTest extends AbstractDynamicBrokerRecon
 
     public void verifySslConfig(String prefix, Properties expectedProps, Config configDesc) {
         // Validate file-based SSL keystore configs
-        Set<String> keyStoreProps = new HashSet<String>(KEYSTORE_PROPS);
+        Set<String> keyStoreProps = new HashSet<>(KEYSTORE_PROPS);
         keyStoreProps.remove(SSL_KEYSTORE_KEY_CONFIG);
         keyStoreProps.remove(SSL_KEYSTORE_CERTIFICATE_CHAIN_CONFIG);
         keyStoreProps.forEach(configName -> {
@@ -155,8 +156,8 @@ public class DynamicBrokerReconfigurationTest extends AbstractDynamicBrokerRecon
                 new Tuple2<>(KafkaConfig.LogRetentionTimeHoursProp(), ConfigSource.STATIC_BROKER_CONFIG),
                 new Tuple2<>(KafkaConfig.LogRetentionTimeHoursProp(), ConfigSource.DEFAULT_CONFIG)),
             synonymsList.apply(logRetentionHours));
-        assertEquals(Arrays.asList(new Tuple2<>(KafkaConfig.LogRollTimeHoursProp(), ConfigSource.DEFAULT_CONFIG)), synonymsList.apply(logRollHours));
-        assertEquals(Arrays.asList(new Tuple2<>(KafkaConfig.LogCleanerThreadsProp(), ConfigSource.DEFAULT_CONFIG)), synonymsList.apply(logCleanerThreads));
+        assertEquals(Collections.singletonList(new Tuple2<>(KafkaConfig.LogRollTimeHoursProp(), ConfigSource.DEFAULT_CONFIG)), synonymsList.apply(logRollHours));
+        assertEquals(Collections.singletonList(new Tuple2<>(KafkaConfig.LogCleanerThreadsProp(), ConfigSource.DEFAULT_CONFIG)), synonymsList.apply(logCleanerThreads));
     }
 
     @ParameterizedTest(name = TEST_WITH_PARAMETERIZED_QUORUM_NAME)
@@ -219,9 +220,9 @@ public class DynamicBrokerReconfigurationTest extends AbstractDynamicBrokerRecon
         if (!isKRaftTest()) {
             // fetch from ZK, values should be unresolved
             Properties props = fetchBrokerConfigsFromZooKeeper(servers().head());
-            assertTrue(props.getProperty(TestMetricsReporter.PollingIntervalProp()) == pollingIntervalVal, "polling interval is not updated in ZK");
-            assertTrue(props.getProperty(configPrefix + KafkaConfig.SslTruststoreTypeProp()) == sslTruststoreTypeVal, "store type is not updated in ZK");
-            assertTrue(props.getProperty(configPrefix + KafkaConfig.SslKeystorePasswordProp()) == sslKeystorePasswordVal, "keystore password is not updated in ZK");
+            assertEquals(props.getProperty(TestMetricsReporter.PollingIntervalProp()), pollingIntervalVal, "polling interval is not updated in ZK");
+            assertEquals(props.getProperty(configPrefix + KafkaConfig.SslTruststoreTypeProp()), sslTruststoreTypeVal, "store type is not updated in ZK");
+            assertEquals(props.getProperty(configPrefix + KafkaConfig.SslKeystorePasswordProp()), sslKeystorePasswordVal, "keystore password is not updated in ZK");
         }
 
         // verify the update
