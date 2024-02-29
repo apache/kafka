@@ -1017,7 +1017,7 @@ public class GroupMetadataManager {
 
         // Get or create the consumer group.
         boolean createIfNotExists = memberEpoch == 0;
-        maybeUpgradeEmptyGroup(groupId, records, false);
+        maybeUpgradeEmptyGroup(groupId, records);
         final ConsumerGroup group = getOrMaybeCreateConsumerGroup(groupId, createIfNotExists);
         throwIfConsumerGroupIsFull(group, memberId);
 
@@ -3529,30 +3529,10 @@ public class GroupMetadataManager {
      *
      * @param groupId       The group id to be updated.
      * @param records       The list of records to delete the classic group and create the consumer group.
-     * @param isSimpleGroup The boolean indicating whether the group to be updated is a simple group.
      */
-    public void maybeUpgradeEmptyGroup(String groupId, List<Record> records, boolean isSimpleGroup) {
+    public void maybeUpgradeEmptyGroup(String groupId, List<Record> records) {
         if (validateOfflineUpgrade(groupId)) {
-            final long currentTimeMs = time.milliseconds();
-            ClassicGroup classicGroup = getOrMaybeCreateClassicGroup(groupId, false);
-            int groupEpoch = classicGroup.generationId();
-
-            // Replace the classic group with a new consumer group.
-            ConsumerGroup consumerGroup = getOrMaybeCreateConsumerGroup(groupId, true);
-            // We don't create the tombstone because the replay will remove the newly created consumer group.
-            removeGroup(groupId);
-            groups.put(groupId, consumerGroup);
-            metrics.onConsumerGroupStateTransition(null, consumerGroup.state());
-
-            if (!isSimpleGroup) {
-                records.add(newGroupSubscriptionMetadataRecord(
-                    groupId,
-                    consumerGroup.computeSubscriptionMetadata(classicGroup.subscribedTopics(), metadataImage.topics(), metadataImage.cluster())
-                ));
-                records.add(newGroupEpochRecord(groupId, groupEpoch));
-
-                consumerGroup.setMetadataRefreshDeadline(currentTimeMs + consumerGroupMetadataRefreshIntervalMs, groupEpoch);
-            }
+            deleteGroup(groupId, records);
         }
     }
 

@@ -47,8 +47,6 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
-import java.util.function.Function;
-import java.util.stream.Collectors;
 
 import static org.apache.kafka.coordinator.group.consumer.ConsumerGroup.ConsumerGroupState.ASSIGNING;
 import static org.apache.kafka.coordinator.group.consumer.ConsumerGroup.ConsumerGroupState.EMPTY;
@@ -583,44 +581,6 @@ public class ConsumerGroup implements Group {
         Map<String, Integer> subscribedTopicNames = new HashMap<>(this.subscribedTopicNames);
         maybeUpdateSubscribedTopicNames(subscribedTopicNames, oldMember, newMember);
 
-        return computeSubscriptionMetadata(topicsImage, clusterImage, subscribedTopicNames);
-    }
-
-    /**
-     * Computes the subscription metadata based on the current subscription and
-     * the classic group subscribed topic list for offline group protocol migration.
-     *
-     * @param subscribedTopics  The optional of the set of topics to which the consumer group members are subscribed to.
-     * @param topicsImage       The current metadata for all available topics.
-     * @param clusterImage      The current metadata for the Kafka cluster.
-     *
-     * @return An immutable map of subscription metadata for each topic that the consumer group is subscribed to.
-     */
-    public Map<String, TopicMetadata> computeSubscriptionMetadata(
-        Optional<Set<String>> subscribedTopics,
-        TopicsImage topicsImage,
-        ClusterImage clusterImage
-    ) {
-        Map<String, Integer> subscribedTopicNames = Collections.emptyMap();
-        if (subscribedTopics.isPresent()) {
-            subscribedTopicNames = subscribedTopics.get().stream().collect(Collectors.toMap(Function.identity(), t -> 0));;
-        }
-        return computeSubscriptionMetadata(topicsImage, clusterImage, subscribedTopicNames);
-    }
-
-    /**
-     * Computes the subscription metadata based on the current subscription.
-     *
-     * @param topicsImage   The current metadata for all available topics.
-     * @param clusterImage  The current metadata for the Kafka cluster.
-     *
-     * @return An immutable map of subscription metadata for each topic that the consumer group is subscribed to.
-     */
-    private Map<String, TopicMetadata> computeSubscriptionMetadata(
-        TopicsImage topicsImage,
-        ClusterImage clusterImage,
-        Map<String, Integer> subscribedTopicNames
-    ) {
         // Create the topic metadata for each subscribed topic.
         Map<String, TopicMetadata> newSubscriptionMetadata = new HashMap<>(subscribedTopicNames.size());
 
