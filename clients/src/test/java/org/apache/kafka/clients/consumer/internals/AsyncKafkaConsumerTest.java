@@ -127,6 +127,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.atLeast;
+import static org.mockito.Mockito.clearInvocations;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
@@ -676,7 +677,7 @@ public class AsyncKafkaConsumerTest {
         consumer.subscribe(singleton("topic"), mock(ConsumerRebalanceListener.class));
         subscriptions.assignFromSubscribed(singleton(new TopicPartition("topic", 0)));
         subscriptions.seek(new TopicPartition("topic", 0), 100);
-        consumer.maybeAutoCommitSync(true, time.timer(100), null);
+        consumer.maybeAutoCommitSync(true, time.timer(100));
         verify(applicationEventHandler).add(any(SyncCommitEvent.class));
     }
 
@@ -694,7 +695,7 @@ public class AsyncKafkaConsumerTest {
         consumer.subscribe(singleton("topic"), mock(ConsumerRebalanceListener.class));
         subscriptions.assignFromSubscribed(singleton(new TopicPartition("topic", 0)));
         subscriptions.seek(new TopicPartition("topic", 0), 100);
-        consumer.maybeAutoCommitSync(false, time.timer(100), null);
+        consumer.maybeAutoCommitSync(false, time.timer(100));
         verify(applicationEventHandler, never()).add(any(SyncCommitEvent.class));
     }
 
@@ -890,6 +891,24 @@ public class AsyncKafkaConsumerTest {
         consumer.wakeup();
         assertThrows(WakeupException.class, () -> consumer.committed(offsets.keySet()));
         assertNull(consumer.wakeupTrigger().getPendingTask());
+    }
+
+    @Test
+    public void testNoWakeupInCloseCommit() {
+        TopicPartition tp = new TopicPartition("topic1", 0);
+        consumer = newConsumer();
+        consumer.assign(Collections.singleton(tp));
+        doReturn(LeaderAndEpoch.noLeaderOrEpoch()).when(metadata).currentLeader(any());
+        consumer.seek(tp, 10);
+        consumer.wakeup();
+
+        clearInvocations(applicationEventHandler);
+        consumer.close(Duration.ZERO);
+
+        // A commit was triggered and not completed exceptionally by the wakeup
+        final ArgumentCaptor<SyncCommitEvent> commitEventCaptor = ArgumentCaptor.forClass(SyncCommitEvent.class);
+        verify(applicationEventHandler).add(commitEventCaptor.capture());
+        assertFalse(commitEventCaptor.getValue().future().isCompletedExceptionally());
     }
 
     @Test
