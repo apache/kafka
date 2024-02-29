@@ -89,7 +89,7 @@ public class KStreamKStreamWindowCloseTest {
 
     private static Arguments outerJoin() {
         final StreamsBuilder builder = new StreamsBuilder();
-        final KStream<Integer, String> stream = builder.stream(LEFT, CONSUMED).leftJoin(
+        final KStream<Integer, String> stream = builder.stream(LEFT, CONSUMED).outerJoin(
             builder.stream(RIGHT, CONSUMED),
             MockValueJoiner.TOSTRING_JOINER,
             WINDOW,
