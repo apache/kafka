@@ -3527,8 +3527,8 @@ public class GroupMetadataManager {
     /**
      * Upgrade the empty classic group to a consumer group if it's valid.
      *
-     * @param groupId       The group id to be updated.
-     * @param records       The list of records to delete the classic group and create the consumer group.
+     * @param groupId The group id to be updated.
+     * @param records The list of records to delete the classic group and create the consumer group.
      */
     public void maybeUpgradeEmptyGroup(String groupId, List<Record> records) {
         if (validateOfflineUpgrade(groupId)) {
