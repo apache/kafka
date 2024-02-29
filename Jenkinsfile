@@ -113,6 +113,7 @@ def reportFlakyTests() {
     List<Node> list = document.selectNodes("//testcase/@flakyFailure")
     currentBuild.description += "Flaky Report: \n"
     currentBuild.description += list.join("\n")
+  }
 }
 
 pipeline {
