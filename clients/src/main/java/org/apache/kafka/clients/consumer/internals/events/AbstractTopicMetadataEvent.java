@@ -16,23 +16,26 @@
  */
 package org.apache.kafka.clients.consumer.internals.events;
 
-import java.util.Objects;
+import org.apache.kafka.common.PartitionInfo;
 
-public class TopicMetadataEvent extends AbstractTopicMetadataEvent {
+import java.util.List;
+import java.util.Map;
 
-    private final String topic;
+public abstract class AbstractTopicMetadataEvent extends CompletableApplicationEvent<Map<String, List<PartitionInfo>>> {
 
-    public TopicMetadataEvent(final String topic, final long timeoutMs) {
-        super(Type.TOPIC_METADATA, timeoutMs);
-        this.topic = Objects.requireNonNull(topic);
+    private final long timeoutMs;
+
+    protected AbstractTopicMetadataEvent(final Type type, final long timeoutMs) {
+        super(type);
+        this.timeoutMs = timeoutMs;
     }
 
-    public String topic() {
-        return topic;
+    public long timeoutMs() {
+        return timeoutMs;
     }
 
     @Override
     public String toStringBase() {
-        return super.toStringBase() + ", topic=" + topic;
+        return super.toStringBase() + ", timeoutMs=" + timeoutMs;
     }
 }

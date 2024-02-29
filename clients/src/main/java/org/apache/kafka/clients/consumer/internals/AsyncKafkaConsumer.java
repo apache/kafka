@@ -36,6 +36,7 @@ import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetAndTimestamp;
 import org.apache.kafka.clients.consumer.OffsetCommitCallback;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
+import org.apache.kafka.clients.consumer.internals.events.AllTopicsMetadataEvent;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEventHandler;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEventProcessor;
@@ -988,7 +989,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                 throw new TimeoutException();
             }
 
-            final TopicMetadataEvent topicMetadataEvent = new TopicMetadataEvent(Optional.of(topic), timeout.toMillis());
+            final TopicMetadataEvent topicMetadataEvent = new TopicMetadataEvent(topic, timeout.toMillis());
             wakeupTrigger.setActiveTask(topicMetadataEvent.future());
             try {
                 Map<String, List<PartitionInfo>> topicMetadata =
@@ -1016,7 +1017,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                 throw new TimeoutException();
             }
 
-            final TopicMetadataEvent topicMetadataEvent = new TopicMetadataEvent(Optional.empty(), timeout.toMillis());
+            final AllTopicsMetadataEvent topicMetadataEvent = new AllTopicsMetadataEvent(timeout.toMillis());
             wakeupTrigger.setActiveTask(topicMetadataEvent.future());
             try {
                 return applicationEventHandler.addAndGet(topicMetadataEvent, time.timer(timeout));

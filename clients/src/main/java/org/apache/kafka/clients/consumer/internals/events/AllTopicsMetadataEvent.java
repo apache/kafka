@@ -16,23 +16,9 @@
  */
 package org.apache.kafka.clients.consumer.internals.events;
 
-import java.util.Objects;
+public class AllTopicsMetadataEvent extends AbstractTopicMetadataEvent {
 
-public class TopicMetadataEvent extends AbstractTopicMetadataEvent {
-
-    private final String topic;
-
-    public TopicMetadataEvent(final String topic, final long timeoutMs) {
-        super(Type.TOPIC_METADATA, timeoutMs);
-        this.topic = Objects.requireNonNull(topic);
-    }
-
-    public String topic() {
-        return topic;
-    }
-
-    @Override
-    public String toStringBase() {
-        return super.toStringBase() + ", topic=" + topic;
+    public AllTopicsMetadataEvent(final long timeoutMs) {
+        super(Type.ALL_TOPICS_METADATA, timeoutMs);
     }
 }

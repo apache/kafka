@@ -66,6 +66,7 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
         return process((event, error) -> error.ifPresent(e -> log.warn("Error processing event {}", e.getMessage(), e)));
     }
 
+    @SuppressWarnings({"CyclomaticComplexity"})
     @Override
     public void process(ApplicationEvent event) {
         switch (event.type()) {
@@ -95,6 +96,10 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
 
             case TOPIC_METADATA:
                 process((TopicMetadataEvent) event);
+                return;
+
+            case ALL_TOPICS_METADATA:
+                process((AllTopicsMetadataEvent) event);
                 return;
 
             case LIST_OFFSETS:
@@ -236,15 +241,16 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
     }
 
     private void process(final TopicMetadataEvent event) {
-        final CompletableFuture<Map<String, List<PartitionInfo>>> future;
+        final long expirationTimeMs = getExpirationTimeForTimeout(event.timeoutMs());
+        final CompletableFuture<Map<String, List<PartitionInfo>>> future =
+                requestManagers.topicMetadataRequestManager.requestTopicMetadata(event.topic(), expirationTimeMs);
+        chain(future, event.future());
+    }
 
-        long expirationTimeMs = getExpirationTimeForTimeout(event.timeoutMs());
-        if (!event.topic().isPresent()) {
-            future = requestManagers.topicMetadataRequestManager.requestAllTopicsMetadata(expirationTimeMs);
-        } else {
-            future = requestManagers.topicMetadataRequestManager.requestTopicMetadata(event.topic().get(), expirationTimeMs);
-        }
-
+    private void process(final AllTopicsMetadataEvent event) {
+        final long expirationTimeMs = getExpirationTimeForTimeout(event.timeoutMs());
+        final CompletableFuture<Map<String, List<PartitionInfo>>> future =
+                requestManagers.topicMetadataRequestManager.requestAllTopicsMetadata(expirationTimeMs);
         chain(future, event.future());
     }
 
