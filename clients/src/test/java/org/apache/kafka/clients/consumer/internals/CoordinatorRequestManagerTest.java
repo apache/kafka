@@ -18,7 +18,7 @@ package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEventHandler;
-import org.apache.kafka.clients.consumer.internals.events.ErrorBackgroundEvent;
+import org.apache.kafka.clients.consumer.internals.events.ErrorEvent;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
 import org.apache.kafka.common.errors.TimeoutException;
@@ -114,10 +114,10 @@ public class CoordinatorRequestManagerTest {
         expectFindCoordinatorRequest(coordinatorManager, Errors.GROUP_AUTHORIZATION_FAILED);
 
         verify(backgroundEventHandler).add(argThat(backgroundEvent -> {
-            if (!(backgroundEvent instanceof ErrorBackgroundEvent))
+            if (!(backgroundEvent instanceof ErrorEvent))
                 return false;
 
-            RuntimeException exception = ((ErrorBackgroundEvent) backgroundEvent).error();
+            RuntimeException exception = ((ErrorEvent) backgroundEvent).error();
 
             if (!(exception instanceof GroupAuthorizationException))
                 return false;

@@ -16,30 +16,23 @@
  */
 package org.apache.kafka.clients.consumer.internals.events;
 
-import java.util.concurrent.CompletableFuture;
+import java.util.Objects;
 
-/**
- * Background event with a result in the form of a future, that can be retrieved within a
- * timeout based on completion.
- *
- * @param <T>
- */
-public abstract class CompletableBackgroundEvent<T> extends BackgroundEvent implements CompletableEvent<T> {
+public class TopicMetadataEvent extends AbstractTopicMetadataEvent {
 
-    private final CompletableFuture<T> future;
+    private final String topic;
 
-    protected CompletableBackgroundEvent(final Type type) {
-        super(type);
-        this.future = new CompletableFuture<>();
+    public TopicMetadataEvent(final String topic, final long timeoutMs) {
+        super(Type.TOPIC_METADATA, timeoutMs);
+        this.topic = Objects.requireNonNull(topic);
+    }
+
+    public String topic() {
+        return topic;
     }
 
     @Override
-    public CompletableFuture<T> future() {
-        return future;
-    }
-
-    @Override
-    protected String toStringBase() {
-        return super.toStringBase() + ", future=" + future;
+    public String toStringBase() {
+        return super.toStringBase() + ", topic=" + topic;
     }
 }

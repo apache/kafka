@@ -18,11 +18,11 @@ package org.apache.kafka.clients.consumer.internals.events;
 
 import org.apache.kafka.common.KafkaException;
 
-public class ErrorBackgroundEvent extends BackgroundEvent {
+public class ErrorEvent extends BackgroundEvent {
 
     private final RuntimeException error;
 
-    public ErrorBackgroundEvent(Throwable t) {
+    public ErrorEvent(Throwable t) {
         super(Type.ERROR);
         this.error = t instanceof RuntimeException ? (RuntimeException) t : new KafkaException(t);
     }
@@ -32,28 +32,7 @@ public class ErrorBackgroundEvent extends BackgroundEvent {
     }
 
     @Override
-    public boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
-        if (!super.equals(o)) return false;
-
-        ErrorBackgroundEvent that = (ErrorBackgroundEvent) o;
-
-        return error.equals(that.error);
-    }
-
-    @Override
-    public int hashCode() {
-        int result = super.hashCode();
-        result = 31 * result + error.hashCode();
-        return result;
-    }
-
-    @Override
-    public String toString() {
-        return "ErrorBackgroundEvent{" +
-            toStringBase() +
-            ", error=" + error +
-            '}';
+    public String toStringBase() {
+        return super.toStringBase() + ", error=" + error;
     }
 }

@@ -14,32 +14,17 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.clients.consumer.internals.events;
 
-import java.util.concurrent.CompletableFuture;
-
 /**
- * Background event with a result in the form of a future, that can be retrieved within a
- * timeout based on completion.
- *
- * @param <T>
+ * Application event indicating that the subscription state has changed, triggered when a user
+ * calls the subscribe API. This will make the consumer join a consumer group if not part of it
+ * yet, or just send the updated subscription to the broker if it's already a member of the group.
  */
-public abstract class CompletableBackgroundEvent<T> extends BackgroundEvent implements CompletableEvent<T> {
+public class SubscriptionChangeEvent extends ApplicationEvent {
 
-    private final CompletableFuture<T> future;
-
-    protected CompletableBackgroundEvent(final Type type) {
-        super(type);
-        this.future = new CompletableFuture<>();
-    }
-
-    @Override
-    public CompletableFuture<T> future() {
-        return future;
-    }
-
-    @Override
-    protected String toStringBase() {
-        return super.toStringBase() + ", future=" + future;
+    public SubscriptionChangeEvent() {
+        super(Type.SUBSCRIPTION_CHANGE);
     }
 }
