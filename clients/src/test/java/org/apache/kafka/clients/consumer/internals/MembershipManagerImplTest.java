@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
-import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEventHandler;
 import org.apache.kafka.clients.consumer.internals.events.ConsumerRebalanceListenerCallbackCompletedEvent;
@@ -42,7 +41,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
-import org.mockito.ArgumentCaptor;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -773,37 +771,14 @@ public class MembershipManagerImplTest {
     }
 
     @Test
-    public void testLeaveGroupWhenAssignmentEmpty() {
-        String topicName = "topic1";
-        TopicPartition ownedPartition = new TopicPartition(topicName, 0);
+    public void testFencedWhenAssignmentEmpty() {
         MembershipManager membershipManager = createMemberInStableState();
-
-        // We own a partition and rebalance listener is registered
-        when(subscriptionState.assignedPartitions()).thenReturn(Collections.singleton(ownedPartition));
-        when(subscriptionState.hasAutoAssignedPartitions()).thenReturn(true);
-        when(subscriptionState.rebalanceListener()).thenReturn(Optional.of(mock(ConsumerRebalanceListener.class)));
-        doNothing().when(subscriptionState).markPendingRevocation(anySet());
-
-        // Trigger leave group
-        CompletableFuture<Void> leaveResult1 = membershipManager.leaveGroup();
-
-        // Rebalance listener not yet triggered
-        final ArgumentCaptor<ConsumerRebalanceListenerCallbackNeededEvent> consumerRebalanceListener =
-            ArgumentCaptor.forClass(ConsumerRebalanceListenerCallbackNeededEvent.class);
-        verify(backgroundEventHandler).add(consumerRebalanceListener.capture());
-        final ConsumerRebalanceListenerCallbackNeededEvent callbackEvent = consumerRebalanceListener.getValue();
-        assertFalse(leaveResult1.isDone());
-        assertEquals(MemberState.PREPARE_LEAVING, membershipManager.state());
 
         // Clear the assignment
         when(subscriptionState.assignedPartitions()).thenReturn(Collections.emptySet());
         when(subscriptionState.hasAutoAssignedPartitions()).thenReturn(false);
 
-        // Complete the callback
-        callbackEvent.future().complete(null);
-
-        // Completed the listener
-        assertFalse(leaveResult1.isDone());
+        membershipManager.transitionToFenced();
 
         // Make sure to never call `assignFromSubscribed` again
         verify(subscriptionState, never()).assignFromSubscribed(Collections.emptySet());
@@ -1717,6 +1692,7 @@ public class MembershipManagerImplTest {
     public void testTransitionToLeavingWhileReconcilingDueToStaleMember() {
         MembershipManagerImpl membershipManager = memberJoinWithAssignment();
         clearInvocations(subscriptionState);
+        when(subscriptionState.hasAutoAssignedPartitions()).thenReturn(true);
         assertEquals(MemberState.RECONCILING, membershipManager.state());
         assertLeaveGroupDueToExpiredPollAndTransitionToStale(membershipManager);
     }
@@ -1725,6 +1701,7 @@ public class MembershipManagerImplTest {
     public void testTransitionToLeavingWhileJoiningDueToStaleMember() {
         MembershipManagerImpl membershipManager = createMembershipManagerJoiningGroup();
         doNothing().when(subscriptionState).assignFromSubscribed(any());
+        when(subscriptionState.hasAutoAssignedPartitions()).thenReturn(true);
         assertEquals(MemberState.JOINING, membershipManager.state());
         assertLeaveGroupDueToExpiredPollAndTransitionToStale(membershipManager);
     }
@@ -1734,6 +1711,7 @@ public class MembershipManagerImplTest {
         MembershipManagerImpl membershipManager = createMembershipManagerJoiningGroup();
         ConsumerGroupHeartbeatResponse heartbeatResponse = createConsumerGroupHeartbeatResponse(null);
         membershipManager.onHeartbeatSuccess(heartbeatResponse.data());
+        when(subscriptionState.hasAutoAssignedPartitions()).thenReturn(true);
         doNothing().when(subscriptionState).assignFromSubscribed(any());
         assertEquals(MemberState.STABLE, membershipManager.state());
         assertLeaveGroupDueToExpiredPollAndTransitionToStale(membershipManager);
@@ -1744,6 +1722,7 @@ public class MembershipManagerImplTest {
         MembershipManagerImpl membershipManager = mockJoinAndReceiveAssignment(true);
         doNothing().when(subscriptionState).assignFromSubscribed(any());
         clearInvocations(subscriptionState);
+        when(subscriptionState.hasAutoAssignedPartitions()).thenReturn(true);
         assertEquals(MemberState.ACKNOWLEDGING, membershipManager.state());
         assertLeaveGroupDueToExpiredPollAndTransitionToStale(membershipManager);
     }
@@ -1814,6 +1793,7 @@ public class MembershipManagerImplTest {
     private MembershipManagerImpl mockStaleMember() {
         MembershipManagerImpl membershipManager = createMemberInStableState();
         doNothing().when(subscriptionState).assignFromSubscribed(any());
+        when(subscriptionState.hasAutoAssignedPartitions()).thenReturn(true);
         membershipManager.transitionToSendingLeaveGroup(true);
         membershipManager.onHeartbeatRequestSent();
         return membershipManager;
