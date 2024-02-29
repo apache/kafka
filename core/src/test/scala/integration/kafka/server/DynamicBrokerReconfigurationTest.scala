@@ -18,7 +18,7 @@
 
 package kafka.server
 
-import java.io.{Closeable, File, IOException, Reader, StringReader}
+import java.io.{Closeable, IOException, Reader, StringReader}
 import java.nio.file.{Files, Path, Paths, StandardCopyOption}
 import java.lang.management.ManagementFactory
 import java.security.KeyStore
@@ -28,7 +28,6 @@ import java.util.{Collections, Properties}
 import java.util.concurrent._
 import javax.management.ObjectName
 import com.yammer.metrics.core.MetricName
-import kafka.admin.ConfigCommand
 import kafka.api.{KafkaSasl, SaslSetup}
 import kafka.controller.{ControllerBrokerStateInfo, ControllerChannelManager}
 import kafka.log.UnifiedLog
@@ -39,7 +38,6 @@ import kafka.utils.TestUtils.TestControllerRequestCompletionHandler
 import kafka.zk.ConfigEntityChangeNotificationZNode
 import org.apache.kafka.clients.CommonClientConfigs
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType
-import org.apache.kafka.clients.admin.ConfigEntry.{ConfigSource, ConfigSynonym}
 import org.apache.kafka.clients.admin._
 import org.apache.kafka.clients.consumer.{Consumer, ConsumerConfig, ConsumerRecord, ConsumerRecords, KafkaConsumer}
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord}
@@ -322,111 +320,16 @@ class AbstractDynamicBrokerReconfigurationTest extends QuorumTestHarness with Sa
     val props = adminZkClient.fetchEntityConfig(ConfigType.BROKER, server.config.brokerId.toString)
     server.config.dynamicConfig.fromPersistentProps(props, perBrokerConfig = true)
   }
+
+  def configEntry(configDesc: Config, configName: String): ConfigEntry = {
+    configDesc.entries.asScala.find(cfg => cfg.name == configName)
+      .getOrElse(throw new IllegalStateException(s"Config not found $configName"))
+  }
 }
 
 class DynamicBrokerReconfigurationTest extends AbstractDynamicBrokerReconfigurationTest {
 
   import AbstractDynamicBrokerReconfigurationTest._
-
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("zk", "kraft"))
-  def testConfigDescribeUsingAdminClient(quorum: String): Unit = {
-
-    def verifyConfig(configName: String, configEntry: ConfigEntry, isSensitive: Boolean, isReadOnly: Boolean,
-                     expectedProps: Properties): Unit = {
-      if (isSensitive) {
-        assertTrue(configEntry.isSensitive, s"Value is sensitive: $configName")
-        assertNull(configEntry.value, s"Sensitive value returned for $configName")
-      } else {
-        assertFalse(configEntry.isSensitive, s"Config is not sensitive: $configName")
-        assertEquals(expectedProps.getProperty(configName), configEntry.value)
-      }
-      assertEquals(isReadOnly, configEntry.isReadOnly, s"isReadOnly incorrect for $configName: $configEntry")
-    }
-
-    def verifySynonym(configName: String, synonym: ConfigSynonym, isSensitive: Boolean,
-                      expectedPrefix: String, expectedSource: ConfigSource, expectedProps: Properties): Unit = {
-      if (isSensitive)
-        assertNull(synonym.value, s"Sensitive value returned for $configName")
-      else
-        assertEquals(expectedProps.getProperty(configName), synonym.value)
-      assertTrue(synonym.name.startsWith(expectedPrefix), s"Expected listener config, got $synonym")
-      assertEquals(expectedSource, synonym.source)
-    }
-
-    def verifySynonyms(configName: String, synonyms: util.List[ConfigSynonym], isSensitive: Boolean,
-                       prefix: String, defaultValue: Option[String]): Unit = {
-
-      val overrideCount = if (prefix.isEmpty) 0 else 2
-      assertEquals(1 + overrideCount + defaultValue.size, synonyms.size, s"Wrong synonyms for $configName: $synonyms")
-      if (overrideCount > 0) {
-        val listenerPrefix = "listener.name.external.ssl."
-        verifySynonym(configName, synonyms.get(0), isSensitive, listenerPrefix, ConfigSource.DYNAMIC_BROKER_CONFIG, sslProperties1)
-        verifySynonym(configName, synonyms.get(1), isSensitive, listenerPrefix, ConfigSource.STATIC_BROKER_CONFIG, sslProperties1)
-      }
-      verifySynonym(configName, synonyms.get(overrideCount), isSensitive, "ssl.", ConfigSource.STATIC_BROKER_CONFIG, invalidSslProperties)
-      defaultValue.foreach { value =>
-        val defaultProps = new Properties
-        defaultProps.setProperty(configName, value)
-        verifySynonym(configName, synonyms.get(overrideCount + 1), isSensitive, "ssl.", ConfigSource.DEFAULT_CONFIG, defaultProps)
-      }
-    }
-
-    def verifySslConfig(prefix: String, expectedProps: Properties, configDesc: Config): Unit = {
-      // Validate file-based SSL keystore configs
-      val keyStoreProps = new util.HashSet[String](KEYSTORE_PROPS)
-      keyStoreProps.remove(SSL_KEYSTORE_KEY_CONFIG)
-      keyStoreProps.remove(SSL_KEYSTORE_CERTIFICATE_CHAIN_CONFIG)
-      keyStoreProps.forEach { configName =>
-        val desc = configEntry(configDesc, s"$prefix$configName")
-        val isSensitive = configName.contains("password")
-        verifyConfig(configName, desc, isSensitive, isReadOnly = prefix.nonEmpty, expectedProps)
-        val defaultValue = if (configName == SSL_KEYSTORE_TYPE_CONFIG) Some("JKS") else None
-        verifySynonyms(configName, desc.synonyms, isSensitive, prefix, defaultValue)
-      }
-    }
-
-    val adminClient = adminClients.head
-    alterSslKeystoreUsingConfigCommand(sslProperties1, SecureExternal)
-
-    val configDesc = TestUtils.tryUntilNoAssertionError() {
-      val describeConfigsResult = describeConfig(adminClient)
-      verifySslConfig("listener.name.external.", sslProperties1, describeConfigsResult)
-      verifySslConfig("", invalidSslProperties, describeConfigsResult)
-      describeConfigsResult
-    }
-
-    // Verify a few log configs with and without synonyms
-    val expectedProps = new Properties
-    expectedProps.setProperty(KafkaConfig.LogRetentionTimeMillisProp, "1680000000")
-    expectedProps.setProperty(KafkaConfig.LogRetentionTimeHoursProp, "168")
-    expectedProps.setProperty(KafkaConfig.LogRollTimeHoursProp, "168")
-    expectedProps.setProperty(KafkaConfig.LogCleanerThreadsProp, "1")
-    val logRetentionMs = configEntry(configDesc, KafkaConfig.LogRetentionTimeMillisProp)
-    verifyConfig(KafkaConfig.LogRetentionTimeMillisProp, logRetentionMs,
-      isSensitive = false, isReadOnly = false, expectedProps)
-    val logRetentionHours = configEntry(configDesc, KafkaConfig.LogRetentionTimeHoursProp)
-    verifyConfig(KafkaConfig.LogRetentionTimeHoursProp, logRetentionHours,
-      isSensitive = false, isReadOnly = true, expectedProps)
-    val logRollHours = configEntry(configDesc, KafkaConfig.LogRollTimeHoursProp)
-    verifyConfig(KafkaConfig.LogRollTimeHoursProp, logRollHours,
-      isSensitive = false, isReadOnly = true, expectedProps)
-    val logCleanerThreads = configEntry(configDesc, KafkaConfig.LogCleanerThreadsProp)
-    verifyConfig(KafkaConfig.LogCleanerThreadsProp, logCleanerThreads,
-      isSensitive = false, isReadOnly = false, expectedProps)
-
-    def synonymsList(configEntry: ConfigEntry): List[(String, ConfigSource)] =
-      configEntry.synonyms.asScala.map(s => (s.name, s.source)).toList
-    assertEquals(List((KafkaConfig.LogRetentionTimeMillisProp, ConfigSource.STATIC_BROKER_CONFIG),
-      (KafkaConfig.LogRetentionTimeHoursProp, ConfigSource.STATIC_BROKER_CONFIG),
-      (KafkaConfig.LogRetentionTimeHoursProp, ConfigSource.DEFAULT_CONFIG)),
-      synonymsList(logRetentionMs))
-    assertEquals(List((KafkaConfig.LogRetentionTimeHoursProp, ConfigSource.STATIC_BROKER_CONFIG),
-      (KafkaConfig.LogRetentionTimeHoursProp, ConfigSource.DEFAULT_CONFIG)),
-      synonymsList(logRetentionHours))
-    assertEquals(List((KafkaConfig.LogRollTimeHoursProp, ConfigSource.DEFAULT_CONFIG)), synonymsList(logRollHours))
-    assertEquals(List((KafkaConfig.LogCleanerThreadsProp, ConfigSource.DEFAULT_CONFIG)), synonymsList(logCleanerThreads))
-  }
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
@@ -1491,11 +1394,6 @@ class DynamicBrokerReconfigurationTest extends AbstractDynamicBrokerReconfigurat
       alterResult.all.get
       waitForConfig(aPropToVerify._1, aPropToVerify._2)
     }
-  }
-
-  private def configEntry(configDesc: Config, configName: String): ConfigEntry = {
-    configDesc.entries.asScala.find(cfg => cfg.name == configName)
-      .getOrElse(throw new IllegalStateException(s"Config not found $configName"))
   }
 
   private def configureMetricsReporters(reporters: Seq[Class[_]], props: Properties,

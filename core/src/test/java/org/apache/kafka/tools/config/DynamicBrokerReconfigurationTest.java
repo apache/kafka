@@ -20,31 +20,145 @@ import kafka.server.AbstractDynamicBrokerReconfigurationTest;
 import kafka.server.KafkaBroker;
 import kafka.server.KafkaConfig;
 import kafka.server.TestMetricsReporter;
+import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.Config;
 import org.apache.kafka.clients.admin.ConfigEntry;
+import org.apache.kafka.clients.admin.ConfigEntry.ConfigSource;
+import org.apache.kafka.clients.admin.ConfigEntry.ConfigSynonym;
 import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
-import scala.collection.immutable.List;
 
 import java.io.File;
+import java.util.Arrays;
 import java.util.Collection;
+import java.util.HashSet;
+import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Properties;
+import java.util.Set;
 import java.util.function.Consumer;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
+import static org.apache.kafka.common.config.SslConfigs.SSL_KEYSTORE_CERTIFICATE_CHAIN_CONFIG;
+import static org.apache.kafka.common.config.SslConfigs.SSL_KEYSTORE_KEY_CONFIG;
 import static org.apache.kafka.common.config.SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG;
+import static org.apache.kafka.common.config.SslConfigs.SSL_KEYSTORE_TYPE_CONFIG;
 import static org.apache.kafka.common.network.CertStores.KEYSTORE_PROPS;
 import static org.apache.kafka.tools.config.ConfigCommandIntegrationTest.TEST_WITH_PARAMETERIZED_QUORUM_NAME;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class DynamicBrokerReconfigurationTest extends AbstractDynamicBrokerReconfigurationTest {
+    public void verifyConfig(String configName, ConfigEntry configEntry, boolean isSensitive, boolean isReadOnly,
+                     Properties expectedProps) {
+        if (isSensitive) {
+            assertTrue(configEntry.isSensitive(), "Value is sensitive: " + configName);
+            assertNull(configEntry.value(), "Sensitive value returned for " + configName);
+        } else {
+            assertFalse(configEntry.isSensitive(), "Config is not sensitive: " + configName);
+            assertEquals(expectedProps.getProperty(configName), configEntry.value());
+        }
+        assertEquals(isReadOnly, configEntry.isReadOnly(), "isReadOnly incorrect for " + configName + ": " + configEntry);
+    }
+
+    public void verifySynonym(String configName, ConfigSynonym synonym, boolean isSensitive,
+                              String expectedPrefix, ConfigSource expectedSource, Properties expectedProps) {
+        if (isSensitive)
+            assertNull(synonym.value(), "Sensitive value returned for " + configName);
+        else
+            assertEquals(expectedProps.getProperty(configName), synonym.value());
+        assertTrue(synonym.name().startsWith(expectedPrefix), "Expected listener config, got " + synonym);
+        assertEquals(expectedSource, synonym.source());
+    }
+
+    public void verifySynonyms(String configName, List<ConfigSynonym> synonyms, boolean isSensitive,
+                               String prefix, Optional<String> defaultValue) {
+        int overrideCount = prefix.isEmpty() ? 0 : 2;
+        assertEquals(1 + overrideCount + defaultValue.map(__ -> 1).orElse(0), synonyms.size(), "Wrong synonyms for " + configName + ": " + synonyms);
+        if (overrideCount > 0) {
+            String listenerPrefix = "listener.name.external.ssl.";
+            verifySynonym(configName, synonyms.get(0), isSensitive, listenerPrefix, ConfigSource.DYNAMIC_BROKER_CONFIG, sslProperties1());
+            verifySynonym(configName, synonyms.get(1), isSensitive, listenerPrefix, ConfigSource.STATIC_BROKER_CONFIG, sslProperties1());
+        }
+        verifySynonym(configName, synonyms.get(overrideCount), isSensitive, "ssl.", ConfigSource.STATIC_BROKER_CONFIG, invalidSslProperties());
+        defaultValue.ifPresent(value -> {
+            Properties defaultProps = new Properties();
+            defaultProps.setProperty(configName, value);
+            verifySynonym(configName, synonyms.get(overrideCount + 1), isSensitive, "ssl.", ConfigSource.DEFAULT_CONFIG, defaultProps);
+        });
+    }
+
+    public void verifySslConfig(String prefix, Properties expectedProps, Config configDesc) {
+        // Validate file-based SSL keystore configs
+        Set<String> keyStoreProps = new HashSet<String>(KEYSTORE_PROPS);
+        keyStoreProps.remove(SSL_KEYSTORE_KEY_CONFIG);
+        keyStoreProps.remove(SSL_KEYSTORE_CERTIFICATE_CHAIN_CONFIG);
+        keyStoreProps.forEach(configName -> {
+            ConfigEntry desc = configEntry(configDesc, prefix + configName);
+            boolean isSensitive = configName.contains("password");
+            verifyConfig(configName, desc, isSensitive, !prefix.isEmpty(), expectedProps);
+            Optional<String> defaultValue =
+                configName.equals(SSL_KEYSTORE_TYPE_CONFIG) ? Optional.of("JKS") : Optional.empty();
+            verifySynonyms(configName, desc.synonyms(), isSensitive, prefix, defaultValue);
+        });
+    }
+
+    @ParameterizedTest(name = TEST_WITH_PARAMETERIZED_QUORUM_NAME)
+    @ValueSource(strings = {"zk", "kraft"})
+    public void testConfigDescribeUsingAdminClient(String quorum) {
+        Admin adminClient = adminClients().head();
+        alterSslKeystoreUsingConfigCommand(sslProperties1(), SecureExternal());
+
+        Config configDesc = kafka.utils.TestUtils.tryUntilNoAssertionError(TestUtils.DEFAULT_MAX_WAIT_MS, 100, () -> {
+            Config describeConfigsResult = describeConfig(adminClient, servers());
+            verifySslConfig("listener.name.external.", sslProperties1(), describeConfigsResult);
+            verifySslConfig("", invalidSslProperties(), describeConfigsResult);
+            return describeConfigsResult;
+        });
+
+        // Verify a few log configs with and without synonyms
+        Properties expectedProps = new Properties();
+        expectedProps.setProperty(KafkaConfig.LogRetentionTimeMillisProp(), "1680000000");
+        expectedProps.setProperty(KafkaConfig.LogRetentionTimeHoursProp(), "168");
+        expectedProps.setProperty(KafkaConfig.LogRollTimeHoursProp(), "168");
+        expectedProps.setProperty(KafkaConfig.LogCleanerThreadsProp(), "1");
+        ConfigEntry logRetentionMs = configEntry(configDesc, KafkaConfig.LogRetentionTimeMillisProp());
+        verifyConfig(KafkaConfig.LogRetentionTimeMillisProp(), logRetentionMs,
+            false, false, expectedProps);
+        ConfigEntry logRetentionHours = configEntry(configDesc, KafkaConfig.LogRetentionTimeHoursProp());
+        verifyConfig(KafkaConfig.LogRetentionTimeHoursProp(), logRetentionHours,
+            false, true, expectedProps);
+        ConfigEntry logRollHours = configEntry(configDesc, KafkaConfig.LogRollTimeHoursProp());
+        verifyConfig(KafkaConfig.LogRollTimeHoursProp(), logRollHours,
+            false, true, expectedProps);
+        ConfigEntry logCleanerThreads = configEntry(configDesc, KafkaConfig.LogCleanerThreadsProp());
+        verifyConfig(KafkaConfig.LogCleanerThreadsProp(), logCleanerThreads,
+            false, false, expectedProps);
+
+        Function<ConfigEntry, List<Tuple2<String, ConfigSource>>> synonymsList =
+            configEntry -> configEntry.synonyms().stream()
+                .map(s -> new Tuple2<>(s.name(), s.source()))
+                .collect(Collectors.toList());
+        assertEquals(Arrays.asList(
+                new Tuple2<>(KafkaConfig.LogRetentionTimeMillisProp(), ConfigSource.STATIC_BROKER_CONFIG),
+                new Tuple2<>(KafkaConfig.LogRetentionTimeHoursProp(), ConfigSource.STATIC_BROKER_CONFIG),
+                new Tuple2<>(KafkaConfig.LogRetentionTimeHoursProp(), ConfigSource.DEFAULT_CONFIG)),
+            synonymsList.apply(logRetentionMs));
+        assertEquals(Arrays.asList(
+                new Tuple2<>(KafkaConfig.LogRetentionTimeHoursProp(), ConfigSource.STATIC_BROKER_CONFIG),
+                new Tuple2<>(KafkaConfig.LogRetentionTimeHoursProp(), ConfigSource.DEFAULT_CONFIG)),
+            synonymsList.apply(logRetentionHours));
+        assertEquals(Arrays.asList(new Tuple2<>(KafkaConfig.LogRollTimeHoursProp(), ConfigSource.DEFAULT_CONFIG)), synonymsList.apply(logRollHours));
+        assertEquals(Arrays.asList(new Tuple2<>(KafkaConfig.LogCleanerThreadsProp(), ConfigSource.DEFAULT_CONFIG)), synonymsList.apply(logCleanerThreads));
+    }
+
     @ParameterizedTest(name = TEST_WITH_PARAMETERIZED_QUORUM_NAME)
     @ValueSource(strings = {"zk", "kraft"})
     public void testUpdatesUsingConfigProvider(String quorum) {
@@ -95,7 +209,7 @@ public class DynamicBrokerReconfigurationTest extends AbstractDynamicBrokerRecon
         waitForConfig(configPrefix+KafkaConfig.SslKeystorePasswordProp(), "ServerPassword", 10000);
 
         // wait for MetricsReporter
-        List<TestMetricsReporter> reporters = TestMetricsReporter.waitForReporters(servers().size());
+        scala.collection.immutable.List<TestMetricsReporter> reporters = TestMetricsReporter.waitForReporters(servers().size());
         reporters.foreach(reporter -> {
             reporter.verifyState(0, 0, 1000);
             assertFalse(reporter.kafkaMetrics().isEmpty(), "No metrics found");
