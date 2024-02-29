@@ -163,16 +163,10 @@ public class DynamicBrokerReconfigurationTest extends AbstractDynamicBrokerRecon
     @ParameterizedTest(name = TEST_WITH_PARAMETERIZED_QUORUM_NAME)
     @ValueSource(strings = {"zk", "kraft"})
     public void testUpdatesUsingConfigProvider(String quorum) {
-/*
-        String PollingIntervalVal = f"$${file:polling.interval:interval}";
-        String PollingIntervalUpdateVal = f"$${file:polling.interval:updinterval}";
-        String SslTruststoreTypeVal = f"$${file:ssl.truststore.type:storetype}";
-        String SslKeystorePasswordVal = f"$${file:ssl.keystore.password:password}";
-*/
-        String pollingIntervalVal = "$${file:polling.interval:interval}";
-        String pollingIntervalUpdateVal = "$${file:polling.interval:updinterval}";
-        String sslTruststoreTypeVal = "$${file:ssl.truststore.type:storetype}";
-        String sslKeystorePasswordVal = "$${file:ssl.keystore.password:password}";
+        String pollingIntervalVal = "${file:polling.interval:interval}";
+        String pollingIntervalUpdateVal = "${file:polling.interval:updinterval}";
+        String sslTruststoreTypeVal = "${file:ssl.truststore.type:storetype}";
+        String sslKeystorePasswordVal = "${file:ssl.keystore.password:password}";
 
         String configPrefix = listenerPrefix(SecureExternal());
         Collection<ConfigEntry> brokerConfigs = describeConfig(adminClients().head(), servers()).entries();
