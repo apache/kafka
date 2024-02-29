@@ -326,7 +326,7 @@ public class ConfigCommand {
         }
     }
 
-    private static void describeConfigWithZk(KafkaZkClient zkClient, ConfigCommandOptions opts, AdminZkClient adminZkClient) {
+    static void describeConfigWithZk(KafkaZkClient zkClient, ConfigCommandOptions opts, AdminZkClient adminZkClient) {
         ConfigEntity configEntity = parseEntity(opts);
         String entityType = configEntity.root.entityType;
         boolean describeAllUsers = Objects.equals(entityType, ConfigType.USER) && !configEntity.root.sanitizedName.isPresent() && !configEntity.child.isPresent();
@@ -348,7 +348,7 @@ public class ConfigCommand {
         }
     }
 
-    private static Properties parseConfigsToBeAdded(ConfigCommandOptions opts) throws IOException {
+    static Properties parseConfigsToBeAdded(ConfigCommandOptions opts) throws Exception {
         Properties props = new Properties();
         if (opts.options.has(opts.addConfigFile)) {
             String file = opts.options.valueOf(opts.addConfigFile);
@@ -376,7 +376,7 @@ public class ConfigCommand {
         return props;
     }
 
-    private static List<String> parseConfigsToBeDeleted(ConfigCommandOptions opts) {
+    static List<String> parseConfigsToBeDeleted(ConfigCommandOptions opts) {
         return opts.options.has(opts.deleteConfig)
             ? opts.options.valuesOf(opts.deleteConfig).stream().map(String::trim).collect(Collectors.toList())
             : Collections.emptyList();
@@ -418,7 +418,7 @@ public class ConfigCommand {
     }
 
     @SuppressWarnings({"CyclomaticComplexity", "NPathComplexity", "JavaNCSS", "MethodLength"})
-    private static void alterConfig(Admin adminClient, ConfigCommandOptions opts) throws Exception {
+    static void alterConfig(Admin adminClient, ConfigCommandOptions opts) throws Exception {
         List<String> entityTypes = opts.entityTypes();
         List<String> entityNames = opts.entityNames();
         String entityTypeHead = entityTypes.get(0);
@@ -705,7 +705,7 @@ public class ConfigCommand {
             .all().get(60, TimeUnit.SECONDS);
     }
 
-    private static void describeConfig(Admin adminClient, ConfigCommandOptions opts) throws Exception {
+    static void describeConfig(Admin adminClient, ConfigCommandOptions opts) throws Exception {
         List<String> entityTypes = opts.entityTypes();
         List<String> entityNames = opts.entityNames();
         boolean describeAll = opts.options.has(opts.allOpt);
