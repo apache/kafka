@@ -327,7 +327,7 @@ public class HeartbeatRequestManager implements RequestManager {
             heartbeatRequestState.updateHeartbeatIntervalMs(response.data().heartbeatIntervalMs());
             heartbeatRequestState.onSuccessfulAttempt(currentTimeMs);
             heartbeatRequestState.resetTimer();
-            membershipManager.onHeartbeatResponseReceived(response.data());
+            membershipManager.onHeartbeatSuccess(response.data());
             maybeSendGroupMetadataUpdateEvent();
             return;
         }
@@ -357,6 +357,7 @@ public class HeartbeatRequestManager implements RequestManager {
 
         this.heartbeatState.reset();
         this.heartbeatRequestState.onFailedAttempt(currentTimeMs);
+        membershipManager.onHeartbeatFailure();
 
         switch (error) {
             case NOT_COORDINATOR:
