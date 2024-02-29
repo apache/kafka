@@ -168,10 +168,10 @@ public class DynamicBrokerReconfigurationTest extends AbstractDynamicBrokerRecon
         String SslTruststoreTypeVal = f"$${file:ssl.truststore.type:storetype}";
         String SslKeystorePasswordVal = f"$${file:ssl.keystore.password:password}";
 */
-        String PollingIntervalVal = "$${file:polling.interval:interval}";
-        String PollingIntervalUpdateVal = "$${file:polling.interval:updinterval}";
-        String SslTruststoreTypeVal = "$${file:ssl.truststore.type:storetype}";
-        String SslKeystorePasswordVal = "$${file:ssl.keystore.password:password}";
+        String pollingIntervalVal = "$${file:polling.interval:interval}";
+        String pollingIntervalUpdateVal = "$${file:polling.interval:updinterval}";
+        String sslTruststoreTypeVal = "$${file:ssl.truststore.type:storetype}";
+        String sslKeystorePasswordVal = "$${file:ssl.keystore.password:password}";
 
         String configPrefix = listenerPrefix(SecureExternal());
         Collection<ConfigEntry> brokerConfigs = describeConfig(adminClients().head(), servers()).entries();
@@ -192,21 +192,21 @@ public class DynamicBrokerReconfigurationTest extends AbstractDynamicBrokerRecon
         updatedProps.put(KafkaConfig.MetricReporterClassesProp(), TestMetricsReporter.class.getName());
 
         // 1. update Integer property using config provider
-        updatedProps.put(TestMetricsReporter.PollingIntervalProp(), PollingIntervalVal);
+        updatedProps.put(TestMetricsReporter.PollingIntervalProp(), pollingIntervalVal);
 
         // 2. update String property using config provider
-        updatedProps.put(configPrefix+KafkaConfig.SslTruststoreTypeProp(), SslTruststoreTypeVal);
+        updatedProps.put(configPrefix + KafkaConfig.SslTruststoreTypeProp(), sslTruststoreTypeVal);
 
         // merge two properties
         updatedProps.putAll(secProps);
 
         // 3. update password property using config provider
-        updatedProps.put(configPrefix+KafkaConfig.SslKeystorePasswordProp(), SslKeystorePasswordVal);
+        updatedProps.put(configPrefix + KafkaConfig.SslKeystorePasswordProp(), sslKeystorePasswordVal);
 
         alterConfigsUsingConfigCommand(updatedProps);
         waitForConfig(TestMetricsReporter.PollingIntervalProp(), "1000", 10000);
-        waitForConfig(configPrefix+KafkaConfig.SslTruststoreTypeProp(), "JKS", 10000);
-        waitForConfig(configPrefix+KafkaConfig.SslKeystorePasswordProp(), "ServerPassword", 10000);
+        waitForConfig(configPrefix + KafkaConfig.SslTruststoreTypeProp(), "JKS", 10000);
+        waitForConfig(configPrefix + KafkaConfig.SslKeystorePasswordProp(), "ServerPassword", 10000);
 
         // wait for MetricsReporter
         scala.collection.immutable.List<TestMetricsReporter> reporters = TestMetricsReporter.waitForReporters(servers().size());
@@ -219,9 +219,9 @@ public class DynamicBrokerReconfigurationTest extends AbstractDynamicBrokerRecon
         if (!isKRaftTest()) {
             // fetch from ZK, values should be unresolved
             Properties props = fetchBrokerConfigsFromZooKeeper(servers().head());
-            assertTrue(props.getProperty(TestMetricsReporter.PollingIntervalProp()) == PollingIntervalVal, "polling interval is not updated in ZK");
-            assertTrue(props.getProperty(configPrefix + KafkaConfig.SslTruststoreTypeProp()) == SslTruststoreTypeVal, "store type is not updated in ZK");
-            assertTrue(props.getProperty(configPrefix + KafkaConfig.SslKeystorePasswordProp()) == SslKeystorePasswordVal, "keystore password is not updated in ZK");
+            assertTrue(props.getProperty(TestMetricsReporter.PollingIntervalProp()) == pollingIntervalVal, "polling interval is not updated in ZK");
+            assertTrue(props.getProperty(configPrefix + KafkaConfig.SslTruststoreTypeProp()) == sslTruststoreTypeVal, "store type is not updated in ZK");
+            assertTrue(props.getProperty(configPrefix + KafkaConfig.SslKeystorePasswordProp()) == sslKeystorePasswordVal, "keystore password is not updated in ZK");
         }
 
         // verify the update
@@ -234,7 +234,7 @@ public class DynamicBrokerReconfigurationTest extends AbstractDynamicBrokerRecon
         });
 
         // 2. verify update occurring if the value of property changed.
-        updatedProps.put(TestMetricsReporter.PollingIntervalProp(), PollingIntervalUpdateVal);
+        updatedProps.put(TestMetricsReporter.PollingIntervalProp(), pollingIntervalUpdateVal);
         alterConfigsUsingConfigCommand(updatedProps);
         waitForConfig(TestMetricsReporter.PollingIntervalProp(), "2000", 10000);
         reporters.foreach(reporter -> {
@@ -246,7 +246,7 @@ public class DynamicBrokerReconfigurationTest extends AbstractDynamicBrokerRecon
     @ParameterizedTest(name = TEST_WITH_PARAMETERIZED_QUORUM_NAME)
     @ValueSource(strings = {"zk", "kraft"})
     public void testTransactionVerificationEnable(String quorum) {
-        Consumer<Boolean> verifyConfiguration = (enabled) -> {
+        Consumer<Boolean> verifyConfiguration = enabled -> {
             servers().foreach(server -> {
                 try {
                     TestUtils.waitForCondition(

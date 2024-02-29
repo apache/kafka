@@ -1309,13 +1309,6 @@ class DynamicBrokerReconfigurationTest extends AbstractDynamicBrokerReconfigurat
     newStoreProps
   }
 
-  private def alterSslKeystore(props: Properties, listener: String, expectFailure: Boolean  = false): Unit = {
-    val configPrefix = listenerPrefix(listener)
-    val newProps = securityProps(props, KEYSTORE_PROPS, configPrefix)
-    reconfigureServers(newProps, perBrokerConfig = true,
-      (s"$configPrefix$SSL_KEYSTORE_LOCATION_CONFIG", props.getProperty(SSL_KEYSTORE_LOCATION_CONFIG)), expectFailure)
-  }
-
   private def serverEndpoints(adminClient: Admin): String = {
     val nodes = adminClient.describeCluster().nodes().get
     nodes.asScala.map { node =>
