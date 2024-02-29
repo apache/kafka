@@ -1767,7 +1767,12 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
         Utils.closeQuietly(processor, "event processor");
         // Unload all the coordinators.
         coordinators.forEach((tp, context) -> {
-            context.transitionTo(CoordinatorState.CLOSED);
+            context.lock.lock();
+            try {
+                context.transitionTo(CoordinatorState.CLOSED);
+            } finally {
+                context.lock.unlock();
+            }
         });
         coordinators.clear();
         Utils.closeQuietly(runtimeMetrics, "runtime metrics");
