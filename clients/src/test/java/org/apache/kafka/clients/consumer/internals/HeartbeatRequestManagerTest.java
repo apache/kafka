@@ -328,12 +328,8 @@ public class HeartbeatRequestManagerTest {
     @Test
     public void testConsumerGroupMetadataFirstUpdate() {
         final GroupMetadataUpdateEvent groupMetadataUpdateEvent = makeFirstGroupMetadataUpdate(memberId, memberEpoch);
-
-        final GroupMetadataUpdateEvent expectedGroupMetadataUpdateEvent = new GroupMetadataUpdateEvent(
-            memberEpoch,
-            memberId
-        );
-        assertEquals(expectedGroupMetadataUpdateEvent, groupMetadataUpdateEvent);
+        assertEquals(memberEpoch, groupMetadataUpdateEvent.memberEpoch());
+        assertEquals(memberId, groupMetadataUpdateEvent.memberId());
     }
 
     @Test
@@ -370,11 +366,8 @@ public class HeartbeatRequestManagerTest {
         final BackgroundEvent eventWithUpdatedMemberEpoch = backgroundEventQueue.poll();
         assertEquals(BackgroundEvent.Type.GROUP_METADATA_UPDATE, eventWithUpdatedMemberEpoch.type());
         final GroupMetadataUpdateEvent groupMetadataUpdateEvent = (GroupMetadataUpdateEvent) eventWithUpdatedMemberEpoch;
-        final GroupMetadataUpdateEvent expectedGroupMetadataUpdateEvent = new GroupMetadataUpdateEvent(
-            updatedMemberEpoch,
-            memberId
-        );
-        assertEquals(expectedGroupMetadataUpdateEvent, groupMetadataUpdateEvent);
+        assertEquals(updatedMemberEpoch, groupMetadataUpdateEvent.memberEpoch());
+        assertEquals(memberId, groupMetadataUpdateEvent.memberId());
     }
 
     @Test
@@ -398,11 +391,8 @@ public class HeartbeatRequestManagerTest {
         final BackgroundEvent eventWithUpdatedMemberEpoch = backgroundEventQueue.poll();
         assertEquals(BackgroundEvent.Type.GROUP_METADATA_UPDATE, eventWithUpdatedMemberEpoch.type());
         final GroupMetadataUpdateEvent groupMetadataUpdateEvent = (GroupMetadataUpdateEvent) eventWithUpdatedMemberEpoch;
-        final GroupMetadataUpdateEvent expectedGroupMetadataUpdateEvent = new GroupMetadataUpdateEvent(
-            memberEpoch,
-            updatedMemberId
-        );
-        assertEquals(expectedGroupMetadataUpdateEvent, groupMetadataUpdateEvent);
+        assertEquals(memberEpoch, groupMetadataUpdateEvent.memberEpoch());
+        assertEquals(updatedMemberId, groupMetadataUpdateEvent.memberId());
     }
 
     private GroupMetadataUpdateEvent makeFirstGroupMetadataUpdate(final String memberId, final int memberEpoch) {

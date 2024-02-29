@@ -1890,10 +1890,10 @@ public class MembershipManagerImplTest {
     }
 
     private ConsumerRebalanceListenerCallbackCompletedEvent performCallback(MembershipManagerImpl membershipManager,
-                                 ConsumerRebalanceListenerInvoker invoker,
-                                 ConsumerRebalanceListenerMethodName expectedMethodName,
-                                 SortedSet<TopicPartition> expectedPartitions,
-                                 boolean complete) {
+                                                                            ConsumerRebalanceListenerInvoker invoker,
+                                                                            ConsumerRebalanceListenerMethodName expectedMethodName,
+                                                                            SortedSet<TopicPartition> expectedPartitions,
+                                                                            boolean complete) {
         // We expect only our enqueued event in the background queue.
         assertEquals(1, backgroundEventQueue.size());
         assertNotNull(backgroundEventQueue.peek());

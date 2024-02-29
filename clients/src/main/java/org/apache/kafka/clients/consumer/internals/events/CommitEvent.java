@@ -18,35 +18,34 @@ package org.apache.kafka.clients.consumer.internals.events;
 
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
+
+import java.util.Collections;
 import java.util.Map;
 
-/**
- * Event to commit offsets waiting for a response and retrying on expected retriable errors until
- * the timer expires.
- */
-public class SyncCommitApplicationEvent extends CommitApplicationEvent {
+public abstract class CommitEvent extends CompletableApplicationEvent<Void> {
 
     /**
-     * Time to wait for a response, retrying on retriable errors.
+     * Offsets to commit per partition.
      */
-    private final long retryTimeoutMs;
+    private final Map<TopicPartition, OffsetAndMetadata> offsets;
 
-    public SyncCommitApplicationEvent(final Map<TopicPartition, OffsetAndMetadata> offsets,
-                                      final long retryTimeoutMs) {
-        super(offsets, Type.COMMIT_SYNC);
-        this.retryTimeoutMs = retryTimeoutMs;
+    protected CommitEvent(final Type type, final Map<TopicPartition, OffsetAndMetadata> offsets) {
+        super(type);
+        this.offsets = Collections.unmodifiableMap(offsets);
+
+        for (OffsetAndMetadata offsetAndMetadata : offsets.values()) {
+            if (offsetAndMetadata.offset() < 0) {
+                throw new IllegalArgumentException("Invalid offset: " + offsetAndMetadata.offset());
+            }
+        }
     }
 
-    public Long retryTimeoutMs() {
-        return retryTimeoutMs;
+    public Map<TopicPartition, OffsetAndMetadata> offsets() {
+        return offsets;
     }
 
     @Override
-    public String toString() {
-        return "SyncCommitApplicationEvent{" +
-            toStringBase() +
-            ", offsets=" + offsets() +
-            ", retryTimeout=" + retryTimeoutMs + "ms" +
-            '}';
+    protected String toStringBase() {
+        return super.toStringBase() + ", offsets=" + offsets;
     }
 }
