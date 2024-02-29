@@ -4140,8 +4140,15 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   def handleShareAcknowledgeRequest(request: RequestChannel.Request): Unit = {
-    val clientId = request.header.clientId
     val shareAcknowledgeRequest = request.body[ShareAcknowledgeRequest]
+
+    if (!config.isShareGroupEnabled) {
+      // The API is not supported when the configuration `group.share.enable` has not been set
+      requestHelper.sendMaybeThrottle(request, shareAcknowledgeRequest.getErrorResponse(Errors.UNSUPPORTED_VERSION.exception))
+      CompletableFuture.completedFuture[Unit](())
+      return
+    }
+    val clientId = request.header.clientId
     val shareAcknowledgeRequestData = shareAcknowledgeRequest.data()
     val groupId = shareAcknowledgeRequest.data().groupId()
     val topicNames = metadataCache.topicIdsToNames()

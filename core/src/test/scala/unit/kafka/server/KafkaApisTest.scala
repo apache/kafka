@@ -8079,4 +8079,20 @@ class KafkaApisTest extends Logging {
     assertEquals(2, responseData.nodeEndpoints().asScala.head.nodeId())
   }
 
+  @Test
+  def testShareAcknowledgeReturnsUnsupportedVersion(): Unit = {
+    val shareAcknowledgeRequest = new ShareAcknowledgeRequestData().setGroupId("group")
+
+    val requestChannelRequest = buildRequest(new ShareAcknowledgeRequest.Builder(shareAcknowledgeRequest,
+      true).build())
+    metadataCache = MetadataCache.kRaftMetadataCache(brokerId)
+    kafkaApis = createKafkaApis(raftSupport = true)
+    kafkaApis.handle(requestChannelRequest, RequestLocal.NoCaching)
+
+    val expectedShareAcknowledgeResponse = new ShareAcknowledgeResponseData()
+      .setErrorCode(Errors.UNSUPPORTED_VERSION.code)
+    val response = verifyNoThrottling[ShareAcknowledgeResponse](requestChannelRequest)
+    assertEquals(expectedShareAcknowledgeResponse, response.data)
+  }
+
 }
