@@ -3536,11 +3536,11 @@ public class GroupMetadataManager {
             final long currentTimeMs = time.milliseconds();
             ClassicGroup classicGroup = getOrMaybeCreateClassicGroup(groupId, false);
             int groupEpoch = classicGroup.generationId();
-            // We don't create a classic group tombstone because the replay will remove the new consumer group.
-            removeGroup(groupId);
 
-            // Create a new consumer group.
+            // Replace the classic group with a new consumer group.
             ConsumerGroup consumerGroup = getOrMaybeCreateConsumerGroup(groupId, true);
+            // We don't create the tombstone because the replay will remove the newly created consumer group.
+            removeGroup(groupId);
             groups.put(groupId, consumerGroup);
             metrics.onConsumerGroupStateTransition(null, consumerGroup.state());
 
