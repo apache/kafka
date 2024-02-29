@@ -16,13 +16,19 @@
  */
 package org.apache.kafka.common.requests;
 
+import org.apache.kafka.common.Node;
+import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.message.ShareAcknowledgeResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
 
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.Iterator;
+import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -81,5 +87,64 @@ public class ShareAcknowledgeResponse extends AbstractResponse {
         return new ShareAcknowledgeResponse(
             new ShareAcknowledgeResponseData(new ByteBufferAccessor(buffer), version)
         );
+    }
+
+    private static boolean matchingTopic(ShareAcknowledgeResponseData.ShareAcknowledgeTopicResponse previousTopic, TopicIdPartition currentTopic) {
+        if (previousTopic == null)
+            return false;
+        return previousTopic.topicId().equals(currentTopic.topicId());
+    }
+
+    public static ShareAcknowledgeResponseData.PartitionData partitionResponse(TopicIdPartition topicIdPartition, Errors error) {
+        return partitionResponse(topicIdPartition.topicPartition().partition(), error);
+    }
+
+    public static ShareAcknowledgeResponseData.PartitionData partitionResponse(int partition, Errors error) {
+        return new ShareAcknowledgeResponseData.PartitionData()
+                .setPartitionIndex(partition)
+                .setErrorCode(error.code());
+    }
+
+    public static ShareAcknowledgeResponse of(Errors error,
+                                        int throttleTimeMs,
+                                        LinkedHashMap<TopicIdPartition, ShareAcknowledgeResponseData.PartitionData> responseData,
+                                        List<Node> nodeEndpoints) {
+        return new ShareAcknowledgeResponse(toMessage(error, throttleTimeMs, responseData.entrySet().iterator(), nodeEndpoints));
+    }
+
+    public static ShareAcknowledgeResponseData toMessage(Errors error, int throttleTimeMs,
+                                                   Iterator<Map.Entry<TopicIdPartition, ShareAcknowledgeResponseData.PartitionData>> partIterator,
+                                                   List<Node> nodeEndpoints) {
+        List<ShareAcknowledgeResponseData.ShareAcknowledgeTopicResponse> topicResponseList = new ArrayList<>();
+        while (partIterator.hasNext()) {
+            Map.Entry<TopicIdPartition, ShareAcknowledgeResponseData.PartitionData> entry = partIterator.next();
+            ShareAcknowledgeResponseData.PartitionData partitionData = entry.getValue();
+            // Since PartitionData alone doesn't know the partition ID, we set it here
+            partitionData.setPartitionIndex(entry.getKey().topicPartition().partition());
+            // We have to keep the order of input topic-partition. Hence, we batch the partitions only if the last
+            // batch is in the same topic group.
+            ShareAcknowledgeResponseData.ShareAcknowledgeTopicResponse previousTopic = topicResponseList.isEmpty() ? null
+                    : topicResponseList.get(topicResponseList.size() - 1);
+            if (matchingTopic(previousTopic, entry.getKey()))
+                previousTopic.partitions().add(partitionData);
+            else {
+                List<ShareAcknowledgeResponseData.PartitionData> partitionResponses = new ArrayList<>();
+                partitionResponses.add(partitionData);
+                topicResponseList.add(new ShareAcknowledgeResponseData.ShareAcknowledgeTopicResponse()
+                        .setTopicId(entry.getKey().topicId())
+                        .setPartitions(partitionResponses));
+            }
+        }
+        ShareAcknowledgeResponseData data = new ShareAcknowledgeResponseData();
+        // KafkaApis should only pass in node endpoints on error, otherwise this should be an empty list
+        nodeEndpoints.forEach(endpoint -> data.nodeEndpoints().add(
+                new ShareAcknowledgeResponseData.NodeEndpoint()
+                        .setNodeId(endpoint.id())
+                        .setHost(endpoint.host())
+                        .setPort(endpoint.port())
+                        .setRack(endpoint.rack())));
+        return data.setThrottleTimeMs(throttleTimeMs)
+                .setErrorCode(error.code())
+                .setResponses(topicResponseList);
     }
 }

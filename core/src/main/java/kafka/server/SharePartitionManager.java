@@ -21,7 +21,6 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.ShareAcknowledgeRequestData;
 import org.apache.kafka.common.message.ShareAcknowledgeResponseData;
 import org.apache.kafka.common.message.ShareFetchResponseData;
-import org.apache.kafka.common.message.ShareFetchResponseData.PartitionData;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.FetchRequest;
 import org.apache.kafka.common.requests.ShareFetchMetadata;
@@ -69,11 +68,11 @@ public class SharePartitionManager {
 
     // TODO: Move some part in share session context and change method signature to accept share
     //  partition data along TopicIdPartition.
-    public CompletableFuture<Map<TopicIdPartition, PartitionData>> fetchMessages(FetchParams fetchParams,
+    public CompletableFuture<Map<TopicIdPartition, ShareFetchResponseData.PartitionData>> fetchMessages(FetchParams fetchParams,
         List<TopicIdPartition> topicIdPartitions, String groupId) {
         log.debug("Fetch request for topicIdPartitions: {} with groupId: {} fetch params: {}",
             topicIdPartitions, groupId, fetchParams);
-        CompletableFuture<Map<TopicIdPartition, PartitionData>> future = new CompletableFuture<>();
+        CompletableFuture<Map<TopicIdPartition, ShareFetchResponseData.PartitionData>> future = new CompletableFuture<>();
 
         synchronized (this) {
             Map<TopicIdPartition, FetchRequest.PartitionData> topicPartitionData = new HashMap<>();
@@ -98,12 +97,12 @@ public class SharePartitionManager {
                 responsePartitionData -> {
                     List<Tuple2<TopicIdPartition, FetchPartitionData>> responseData = CollectionConverters.asJava(
                         responsePartitionData);
-                    Map<TopicIdPartition, PartitionData> result = new HashMap<>();
+                    Map<TopicIdPartition, ShareFetchResponseData.PartitionData> result = new HashMap<>();
                     responseData.forEach(data -> {
                         TopicIdPartition topicIdPartition = data._1;
                         FetchPartitionData fetchPartitionData = data._2;
 
-                        PartitionData partitionData = new PartitionData()
+                        ShareFetchResponseData.PartitionData partitionData = new ShareFetchResponseData.PartitionData()
                             .setPartitionIndex(topicIdPartition.partition())
                             .setRecords(fetchPartitionData.records)
                             .setErrorCode(fetchPartitionData.error.code())
@@ -122,8 +121,10 @@ public class SharePartitionManager {
         return future;
     }
 
-    public CompletableFuture<ShareAcknowledgeResponseData> acknowledge(String groupId, TopicIdPartition topicIdPartition,
-                                                                       List<ShareAcknowledgeRequestData.AcknowledgementBatch> ackBatches) {
+    public CompletableFuture<Map<TopicIdPartition, ShareAcknowledgeResponseData.PartitionData>> acknowledge(
+            String groupId,
+            Map<TopicIdPartition, ShareAcknowledgeRequestData.AcknowledgePartition> acknowledgeTopics
+    ) {
         throw new UnsupportedOperationException("Not implemented yet");
     }
 
