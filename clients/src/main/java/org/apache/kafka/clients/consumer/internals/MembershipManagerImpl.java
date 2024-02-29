@@ -27,11 +27,13 @@ import org.apache.kafka.clients.consumer.internals.events.CompletableBackgroundE
 import org.apache.kafka.clients.consumer.internals.events.ConsumerRebalanceListenerCallbackCompletedEvent;
 import org.apache.kafka.clients.consumer.internals.events.ConsumerRebalanceListenerCallbackNeededEvent;
 import org.apache.kafka.clients.consumer.internals.events.ErrorBackgroundEvent;
+import org.apache.kafka.clients.consumer.internals.metrics.RebalanceMetricsManager;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatResponseData;
+import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.ConsumerGroupHeartbeatRequest;
 import org.apache.kafka.common.telemetry.internals.ClientTelemetryProvider;
@@ -263,6 +265,11 @@ public class MembershipManagerImpl implements MembershipManager {
      * when the timer is reset, only when it completes releasing its assignment.
      */
     private CompletableFuture<Void> staleMemberAssignmentRelease;
+    
+    /*
+     * Measures successful rebalance latency and number of failed rebalances.
+     */
+    private final RebalanceMetricsManager metricsManager;
 
     private final Time time;
 
@@ -284,7 +291,35 @@ public class MembershipManagerImpl implements MembershipManager {
                                  LogContext logContext,
                                  Optional<ClientTelemetryReporter> clientTelemetryReporter,
                                  BackgroundEventHandler backgroundEventHandler,
-                                 Time time) {
+                                 Time time,
+                                 Metrics metrics) {
+        this(groupId,
+            groupInstanceId,
+            rebalanceTimeoutMs,
+            serverAssignor,
+            subscriptions,
+            commitRequestManager,
+            metadata,
+            logContext,
+            clientTelemetryReporter,
+            backgroundEventHandler,
+            time,
+            new RebalanceMetricsManager(metrics));
+    }
+
+    // Visible for testing
+    MembershipManagerImpl(String groupId,
+                          Optional<String> groupInstanceId,
+                          int rebalanceTimeoutMs,
+                          Optional<String> serverAssignor,
+                          SubscriptionState subscriptions,
+                          CommitRequestManager commitRequestManager,
+                          ConsumerMetadata metadata,
+                          LogContext logContext,
+                          Optional<ClientTelemetryReporter> clientTelemetryReporter,
+                          BackgroundEventHandler backgroundEventHandler,
+                          Time time,
+                          RebalanceMetricsManager metricsManager) {
         this.groupId = groupId;
         this.state = MemberState.UNSUBSCRIBED;
         this.serverAssignor = serverAssignor;
@@ -301,6 +336,7 @@ public class MembershipManagerImpl implements MembershipManager {
         this.rebalanceTimeoutMs = rebalanceTimeoutMs;
         this.backgroundEventHandler = backgroundEventHandler;
         this.time = time;
+        this.metricsManager = metricsManager;
     }
 
     /**
@@ -314,8 +350,25 @@ public class MembershipManagerImpl implements MembershipManager {
             throw new IllegalStateException(String.format("Invalid state transition from %s to %s",
                     state, nextState));
         }
+
+        if (isCompletingRebalance(state, nextState)) {
+            metricsManager.recordRebalanceEnded(time.milliseconds());
+        }
+        if (isStartingRebalance(state, nextState)) {
+            metricsManager.recordRebalanceStarted(time.milliseconds());
+        }
+
         log.trace("Member {} with epoch {} transitioned from {} to {}.", memberId, memberEpoch, state, nextState);
         this.state = nextState;
+    }
+
+    private static boolean isCompletingRebalance(MemberState currentState, MemberState nextState) {
+        return currentState == MemberState.RECONCILING &&
+            (nextState == MemberState.STABLE || nextState == MemberState.ACKNOWLEDGING);
+    }
+
+    private static boolean isStartingRebalance(MemberState currentState, MemberState nextState) {
+        return currentState != MemberState.RECONCILING && nextState == MemberState.RECONCILING;
     }
 
     /**
@@ -354,7 +407,7 @@ public class MembershipManagerImpl implements MembershipManager {
      * {@inheritDoc}
      */
     @Override
-    public void onHeartbeatResponseReceived(ConsumerGroupHeartbeatResponseData response) {
+    public void onHeartbeatSuccess(ConsumerGroupHeartbeatResponseData response) {
         if (response.errorCode() != Errors.NONE.code()) {
             String errorMessage = String.format(
                     "Unexpected error in Heartbeat response. Expected no error, but received: %s",
@@ -401,6 +454,11 @@ public class MembershipManagerImpl implements MembershipManager {
         } else if (targetAssignmentReconciled()) {
             transitionTo(MemberState.STABLE);
         }
+    }
+
+    @Override
+    public void onHeartbeatFailure() {
+        metricsManager.maybeRecordRebalanceFailed();
     }
 
     /**
