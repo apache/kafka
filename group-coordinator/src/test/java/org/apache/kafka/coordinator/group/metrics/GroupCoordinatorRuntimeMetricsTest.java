@@ -134,6 +134,27 @@ public class GroupCoordinatorRuntimeMetricsTest {
         }
     }
 
+    @Test
+    public void testEventProcessSensor() {
+        Time time = new MockTime();
+        Metrics metrics = new Metrics(time);
+
+        try (GroupCoordinatorRuntimeMetrics runtimeMetrics = new GroupCoordinatorRuntimeMetrics(metrics)) {
+            IntStream.range(0, 3).forEach(i -> runtimeMetrics.recordEventProcess());
+
+            org.apache.kafka.common.MetricName metricName = metrics.metricName(
+                "event-process-rate", METRICS_GROUP);
+
+            KafkaMetric metric = metrics.metrics().get(metricName);
+            assertEquals(3.0 / 30, metric.metricValue());
+
+            metricName = metrics.metricName(
+                "event-process-count", METRICS_GROUP);
+            metric = metrics.metrics().get(metricName);
+            assertEquals(3.0, metric.metricValue());
+        }
+    }
+
     private static void assertMetricGauge(Metrics metrics, org.apache.kafka.common.MetricName metricName, long count) {
         assertEquals(count, (long) metrics.metric(metricName).metricValue());
     }

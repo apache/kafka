@@ -513,4 +513,65 @@ public class MultiThreadedEventProcessorTest {
             assertTrue(average > 0.0 && average < 1.0);
         }
     }
+
+    @Test
+    public void testRecordEventProcess() throws Exception {
+        GroupCoordinatorRuntimeMetrics mockRuntimeMetrics = mock(GroupCoordinatorRuntimeMetrics.class);
+        Time mockTime = new MockTime();
+        AtomicInteger numEventsExecuted = new AtomicInteger(0);
+
+        // Special event which blocks until the latch is released.
+        FutureEvent<Integer> blockingEvent = new FutureEvent<>(
+            new TopicPartition("foo", 0), numEventsExecuted::incrementAndGet,
+            true,
+            mockTime.milliseconds()
+        );
+
+        try (MultiThreadedEventProcessor eventProcessor = new MultiThreadedEventProcessor(
+            new LogContext(),
+            "event-processor-",
+            1, // Use a single thread to block event in the processor.
+            mockTime,
+            mockRuntimeMetrics,
+            new DelayEventAccumulator(mockTime, 500L)
+        )) {
+            // Enqueue the blocking event.
+            eventProcessor.enqueue(blockingEvent);
+
+            // Ensure that the blocking event is executed.
+            waitForCondition(() -> numEventsExecuted.get() > 0,
+                "Blocking event not executed.");
+
+            // Enqueue the other event.
+            FutureEvent<Integer> otherEvent = new FutureEvent<>(
+                new TopicPartition("foo", 0), () -> {
+                verify(mockRuntimeMetrics, times(1)).recordEventProcess();
+                return numEventsExecuted.incrementAndGet();
+            },
+                false,
+                mockTime.milliseconds()
+            );
+
+            eventProcessor.enqueue(otherEvent);
+
+            // Events should not be completed.
+            assertFalse(otherEvent.future.isDone());
+            verify(mockRuntimeMetrics, times(0)).recordEventProcess();
+
+            // Release the blocking event to unblock the thread.
+            blockingEvent.release();
+
+            // The blocking event should be completed.
+            blockingEvent.future.get(DEFAULT_MAX_WAIT_MS, TimeUnit.SECONDS);
+            assertTrue(blockingEvent.future.isDone());
+            assertFalse(blockingEvent.future.isCompletedExceptionally());
+
+            // The other event should also be completed.
+            otherEvent.future.get(DEFAULT_MAX_WAIT_MS, TimeUnit.SECONDS);
+            assertTrue(otherEvent.future.isDone());
+            assertFalse(otherEvent.future.isCompletedExceptionally());
+            assertEquals(2, numEventsExecuted.get());
+            verify(mockRuntimeMetrics, times(2)).recordEventProcess();
+        }
+    }
 }

@@ -22,6 +22,7 @@ import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.Avg;
 import org.apache.kafka.common.metrics.stats.Max;
+import org.apache.kafka.common.metrics.stats.Meter;
 import org.apache.kafka.common.metrics.stats.Min;
 import org.apache.kafka.coordinator.group.runtime.CoordinatorRuntime.CoordinatorState;
 
@@ -79,6 +80,11 @@ public class GroupCoordinatorRuntimeMetrics implements CoordinatorRuntimeMetrics
      */
     private final Sensor threadIdleRatioSensor;
 
+    /**
+     * The event rate sensor.
+     */
+    private final Sensor eventProcessSensor;
+
     public GroupCoordinatorRuntimeMetrics(Metrics metrics) {
         this.metrics = Objects.requireNonNull(metrics);
 
@@ -133,6 +139,15 @@ public class GroupCoordinatorRuntimeMetrics implements CoordinatorRuntimeMetrics
                 METRICS_GROUP,
                 "The average thread idle ratio over the last 30 seconds."
             ), new Avg());
+
+        this.eventProcessSensor = metrics.sensor("EventProcess");
+        this.eventProcessSensor.add(new Meter(
+            metrics.metricName("event-process-rate",
+                METRICS_GROUP,
+                "The event processing rate"),
+            metrics.metricName("event-process-count",
+                METRICS_GROUP,
+                "The total number of events processed")));
     }
 
     /**
@@ -210,6 +225,11 @@ public class GroupCoordinatorRuntimeMetrics implements CoordinatorRuntimeMetrics
     @Override
     public void recordThreadIdleRatio(double ratio) {
         threadIdleRatioSensor.record(ratio);
+    }
+
+    @Override
+    public void recordEventProcess() {
+        eventProcessSensor.record();
     }
 
     @Override

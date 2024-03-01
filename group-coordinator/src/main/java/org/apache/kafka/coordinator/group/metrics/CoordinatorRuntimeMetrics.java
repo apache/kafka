@@ -65,4 +65,9 @@ public interface CoordinatorRuntimeMetrics extends AutoCloseable {
      * @param sizeSupplier The size supplier.
      */
     void registerEventQueueSizeGauge(Supplier<Integer> sizeSupplier);
+
+    /**
+     * Update the event rate.
+     */
+    void recordEventProcess();
 }
