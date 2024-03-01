@@ -42,6 +42,7 @@ class TestKRaftUpgrade(ProduceConsumeValidateTest):
         self.topic = "test_topic"
         self.partitions = 3
         self.replication_factor = 3
+        self.min_isr = min(2, self.replication_factor)
 
         # Producer and consumer
         self.producer_throughput = 1000
@@ -92,7 +93,7 @@ class TestKRaftUpgrade(ProduceConsumeValidateTest):
                                   version=fromKafkaVersion,
                                   topics={self.topic: {"partitions": self.partitions,
                                                        "replication-factor": self.replication_factor,
-                                                       'configs': {"min.insync.replicas": 2}}})
+                                                       'configs': {"min.insync.replicas": self.min_isr}}})
         self.kafka.start()
         self.producer = VerifiableProducer(self.test_context, self.num_producers, self.kafka,
                                            self.topic, throughput=self.producer_throughput,
@@ -114,7 +115,7 @@ class TestKRaftUpgrade(ProduceConsumeValidateTest):
             "topic": "test-topic-2",
             "partitions": self.partitions,
             "replication-factor": self.replication_factor,
-            "configs": {"min.insync.replicas": 2}
+            "configs": {"min.insync.replicas": self.min_isr}
         }
         self.kafka.create_topic(new_topic_cfg)
 
