@@ -24,6 +24,7 @@ import org.slf4j.Logger;
 
 import java.io.Closeable;
 import java.util.LinkedList;
+import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.BlockingQueue;
@@ -73,8 +74,7 @@ public abstract class EventProcessor<T> implements Closeable {
     protected boolean process(ProcessHandler<T> processHandler) {
         closer.assertOpen("The processor was previously closed, so no further processing can occur");
 
-        LinkedList<T> events = new LinkedList<>();
-        eventQueue.drainTo(events);
+        List<T> events = drain();
 
         if (events.isEmpty()) {
             log.trace("No events to process");
@@ -117,12 +117,21 @@ public abstract class EventProcessor<T> implements Closeable {
      * any remaining events.
      */
     protected void cancelIncompleteEvents() {
-        eventQueue
+        List<T> events = drain();
+        events
                 .stream()
                 .filter(e -> e instanceof CompletableEvent)
                 .map(e -> (CompletableEvent<?>) e)
                 .filter(e -> !e.future().isDone())
                 .forEach(INCOMPLETE_EVENT_CANCELLER);
-        eventQueue.clear();
+    }
+
+    /**
+     * Moves all the events from the queue to the returned list.
+     */
+    private List<T> drain() {
+        LinkedList<T> events = new LinkedList<>();
+        eventQueue.drainTo(events);
+        return events;
     }
 }
