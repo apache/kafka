@@ -1923,6 +1923,7 @@ public class GroupMetadataManager {
         CompletableFuture<JoinGroupResponseData> responseFuture
     ) {
         CoordinatorResult<Void, Record> result = EMPTY_RESULT;
+        List<Record> records = new ArrayList<>();
 
         String groupId = request.groupId();
         String memberId = request.memberId();
@@ -1940,6 +1941,7 @@ public class GroupMetadataManager {
             // Group is created if it does not exist and the member id is UNKNOWN. if member
             // is specified but group does not exist, request is rejected with GROUP_ID_NOT_FOUND
             ClassicGroup group;
+            maybeMigrateEmptyGroup(groupId, records, false);
             boolean isNewGroup = !groups.containsKey(groupId);
             try {
                 group = getOrMaybeCreateClassicGroup(groupId, isUnknownMember);
@@ -1988,7 +1990,7 @@ public class GroupMetadataManager {
                     }
                 });
 
-                List<Record> records = Collections.singletonList(
+                records.add(
                     RecordHelpers.newEmptyGroupMetadataRecord(group, metadataImage.features().metadataVersion())
                 );
 
