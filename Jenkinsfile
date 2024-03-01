@@ -111,7 +111,6 @@ def reportFlakyTests() {
   for (def file : files) {
     Document document = DocumentHelper.parseText(readFile(file.path))
     List<Node> list = document.selectNodes("//testcase/@flakyFailure")
-    currentBuild.description += "Flaky Report: \n"
     currentBuild.description += list.join("\n")
   }
 }
@@ -144,9 +143,7 @@ pipeline {
             doValidation()
             doTest(env)
             tryStreamsArchetype()
-            script {
-              reportFlakyTests()
-            }
+            reportFlakyTests()
           }
         }
 
@@ -166,9 +163,7 @@ pipeline {
             doValidation()
             doTest(env)
             echo 'Skipping Kafka Streams archetype test for Java 11'
-            script {
-              reportFlakyTests()
-            }
+            reportFlakyTests()
           }
         }
 
@@ -188,9 +183,7 @@ pipeline {
             doValidation()
             doTest(env)
             echo 'Skipping Kafka Streams archetype test for Java 17'
-            script {
-              reportFlakyTests()
-            }
+            reportFlakyTests()
           }
         }
 
@@ -210,9 +203,7 @@ pipeline {
             doValidation()
             doTest(env)
             echo 'Skipping Kafka Streams archetype test for Java 21'
-            script {
-              reportFlakyTests()
-            }
+            reportFlakyTests()
           }
         }
       }
