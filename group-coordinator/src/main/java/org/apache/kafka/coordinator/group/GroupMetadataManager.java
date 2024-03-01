@@ -3514,12 +3514,7 @@ public class GroupMetadataManager {
             return false;
         }
 
-        ClassicGroup classicGroup = (ClassicGroup) group;
-        if (!classicGroup.isEmpty()) {
-            return false;
-        } else {
-            return true;
-        }
+        return group.isEmpty();
     }
 
     /**
@@ -3531,6 +3526,8 @@ public class GroupMetadataManager {
     public void maybeUpgradeEmptyGroup(String groupId, List<Record> records) {
         if (validateOfflineUpgrade(groupId)) {
             deleteGroup(groupId, records);
+            removeGroup(groupId);
+            getOrMaybeCreateConsumerGroup(groupId, true);
         }
     }
 

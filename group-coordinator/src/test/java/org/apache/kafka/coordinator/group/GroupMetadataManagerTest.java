@@ -9607,6 +9607,80 @@ public class GroupMetadataManagerTest {
         verify(context.metrics, times(1)).onConsumerGroupStateTransition(ConsumerGroup.ConsumerGroupState.EMPTY, null);
     }
 
+    @Test
+    public void testMaybeUpgradeEmptyGroup() {
+        String classicGroupId = "classic-group-id";
+        String consumerGroupId = "consumer-group-id";
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .build();
+        ClassicGroup classicGroup = new ClassicGroup(
+            new LogContext(),
+            classicGroupId,
+            EMPTY,
+            context.time,
+            context.metrics
+        );
+        context.replay(RecordHelpers.newGroupMetadataRecord(classicGroup, classicGroup.groupAssignment(), MetadataVersion.latestTesting()));
+        context.replay(RecordHelpers.newGroupEpochRecord(consumerGroupId, 10));
+
+        List<Record> records = new ArrayList<>();
+        context.groupMetadataManager.maybeUpgradeEmptyGroup(consumerGroupId, records);
+        assertEquals(Collections.emptyList(), records);
+
+        context.groupMetadataManager.getOrMaybeCreateClassicGroup(classicGroupId, false).transitionTo(PREPARING_REBALANCE);
+        context.groupMetadataManager.maybeUpgradeEmptyGroup(classicGroupId, records);
+        assertEquals(Collections.emptyList(), records);
+
+        context.groupMetadataManager.getOrMaybeCreateClassicGroup(classicGroupId, false).transitionTo(EMPTY);
+        context.groupMetadataManager.maybeUpgradeEmptyGroup(classicGroupId, records);
+        assertEquals(Arrays.asList(RecordHelpers.newGroupMetadataTombstoneRecord(classicGroupId)), records);
+    }
+
+    @Test
+    public void testMemberJoinsEmptyClassicGroup() {
+        String classicGroupId = "classic-group-id";
+        String memberId = Uuid.randomUuid().toString();
+        MockPartitionAssignor assignor = new MockPartitionAssignor("range");
+        assignor.prepareGroupAssignment(new GroupAssignment(Collections.emptyMap()));
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withAssignors(Collections.singletonList(assignor))
+            .build();
+        ClassicGroup classicGroup = new ClassicGroup(
+            new LogContext(),
+            classicGroupId,
+            EMPTY,
+            context.time,
+            context.metrics
+        );
+        context.replay(RecordHelpers.newGroupMetadataRecord(classicGroup, classicGroup.groupAssignment(), MetadataVersion.latestTesting()));
+
+        context.groupMetadataManager.getOrMaybeCreateClassicGroup(classicGroupId, false).transitionTo(PREPARING_REBALANCE);
+        assertThrows(GroupIdNotFoundException.class, () ->
+            context.consumerGroupHeartbeat(
+                new ConsumerGroupHeartbeatRequestData()
+                    .setGroupId(classicGroupId)
+                    .setMemberId(memberId)
+                    .setMemberEpoch(0)
+                    .setServerAssignor("range")
+                    .setRebalanceTimeoutMs(5000)
+                    .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
+                    .setTopicPartitions(Collections.emptyList())));
+
+        context.groupMetadataManager.getOrMaybeCreateClassicGroup(classicGroupId, false).transitionTo(EMPTY);
+        CoordinatorResult<ConsumerGroupHeartbeatResponseData, Record> result2 = context.consumerGroupHeartbeat(
+            new ConsumerGroupHeartbeatRequestData()
+                .setGroupId(classicGroupId)
+                .setMemberId(memberId)
+                .setMemberEpoch(0)
+                .setServerAssignor("range")
+                .setRebalanceTimeoutMs(5000)
+                .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
+                .setTopicPartitions(Collections.emptyList()));
+        assertEquals(0, result2.response().errorCode());
+        assertEquals(Group.GroupType.CONSUMER,
+            context.groupMetadataManager.getOrMaybeCreateConsumerGroup(classicGroupId, false).type());
+    }
+
     private static void checkJoinGroupResponse(
         JoinGroupResponseData expectedResponse,
         JoinGroupResponseData actualResponse,
