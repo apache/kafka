@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.clients.consumer.internals.events;
 
+import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.internals.ConsumerUtils;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.internals.IdempotentCloser;
@@ -29,7 +30,6 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CompletableFuture;
-import java.util.function.Consumer;
 
 /**
  * An {@link EventProcessor} is the means by which events <em>produced</em> by thread <em>A</em> are
@@ -40,7 +40,7 @@ import java.util.function.Consumer;
  */
 public abstract class EventProcessor<T> implements Closeable {
 
-    protected final static Consumer<CompletableEvent<?>> INCOMPLETE_EVENT_CANCELLER = e -> {
+    protected final static java.util.function.Consumer<CompletableEvent<?>> INCOMPLETE_EVENT_CANCELLER = e -> {
         CompletableFuture<?> f = e.future();
         f.cancel(true);
     };
@@ -102,19 +102,10 @@ public abstract class EventProcessor<T> implements Closeable {
         return true;
     }
 
-    private void closeInternal() {
-        try {
-            log.debug("Removing unprocessed and/or unfinished events because the consumer is closing");
-            cancelIncompleteEvents();
-        } finally {
-            log.debug("Finished removal of events that were unprocessed and/or unfinished");
-        }
-    }
-
     /**
-     * It is possible for the consumer to close before complete processing all the events in the queue. In
-     * this case, we need to {@link CompletableFuture#completeExceptionally(Throwable) (exceptionally) complete}
-     * any remaining events.
+     * It is possible for the {@link Consumer#close() consumer to close} before completing the processing of all
+     * the events in the queue. In this case, we need to
+     * {@link CompletableFuture#completeExceptionally(Throwable) (exceptionally) complete} any remaining events.
      */
     protected void cancelIncompleteEvents() {
         List<T> events = drain();
@@ -124,6 +115,15 @@ public abstract class EventProcessor<T> implements Closeable {
                 .map(e -> (CompletableEvent<?>) e)
                 .filter(e -> !e.future().isDone())
                 .forEach(INCOMPLETE_EVENT_CANCELLER);
+    }
+
+    private void closeInternal() {
+        try {
+            log.debug("Removing unprocessed and/or unfinished events because the consumer is closing");
+            cancelIncompleteEvents();
+        } finally {
+            log.debug("Finished removal of events that were unprocessed and/or unfinished");
+        }
     }
 
     /**
