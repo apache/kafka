@@ -165,7 +165,7 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
         }
 
         CommitRequestManager manager = requestManagers.commitRequestManager.get();
-        long expirationTimeoutMs = getExpirationTimeForTimeout(event.retryTimeoutMs());
+        long expirationTimeoutMs = getExpirationTimeForTimeout(event.deadlineMs());
         CompletableFuture<Void> future = manager.commitSync(event.offsets(), expirationTimeoutMs);
         future.whenComplete(complete(event.future()));
     }
@@ -177,7 +177,7 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
             return;
         }
         CommitRequestManager manager = requestManagers.commitRequestManager.get();
-        long expirationTimeMs = getExpirationTimeForTimeout(event.timeout());
+        long expirationTimeMs = getExpirationTimeForTimeout(event.deadlineMs());
         CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> future = manager.fetchOffsets(event.partitions(), expirationTimeMs);
         future.whenComplete(complete(event.future()));
     }
@@ -250,16 +250,14 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
     }
 
     private void process(final TopicMetadataEvent event) {
-        final long expirationTimeMs = getExpirationTimeForTimeout(event.timeoutMs());
         final CompletableFuture<Map<String, List<PartitionInfo>>> future =
-                requestManagers.topicMetadataRequestManager.requestTopicMetadata(event.topic(), expirationTimeMs);
+                requestManagers.topicMetadataRequestManager.requestTopicMetadata(event.topic(), event.deadlineMs());
         future.whenComplete(complete(event.future()));
     }
 
     private void process(final AllTopicsMetadataEvent event) {
-        final long expirationTimeMs = getExpirationTimeForTimeout(event.timeoutMs());
         final CompletableFuture<Map<String, List<PartitionInfo>>> future =
-                requestManagers.topicMetadataRequestManager.requestAllTopicsMetadata(expirationTimeMs);
+                requestManagers.topicMetadataRequestManager.requestAllTopicsMetadata(event.deadlineMs());
         future.whenComplete(complete(event.future()));
     }
 
