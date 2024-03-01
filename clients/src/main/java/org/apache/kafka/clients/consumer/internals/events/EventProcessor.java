@@ -58,17 +58,7 @@ public abstract class EventProcessor<T> implements Closeable {
 
     @Override
     public void close() {
-        closer.close(
-                () -> {
-                    try {
-                        log.debug("Removing unprocessed and/or unfinished events because the consumer is closing");
-                        cancelIncompleteEvents();
-                    } finally {
-                        log.debug("Finished removal of events that were unprocessed and/or unfinished");
-                    }
-                },
-                () -> log.warn("The event processor was already closed")
-        );
+        closer.close(this::closeInternal, () -> log.warn("The event processor was already closed"));
     }
 
     protected interface ProcessHandler<T> {
@@ -98,8 +88,6 @@ public abstract class EventProcessor<T> implements Closeable {
                 try {
                     Objects.requireNonNull(event, "Attempted to process a null event");
                     log.trace("Processing event: {}", event);
-
-
                     process(event);
                     processHandler.onProcess(event, Optional.empty());
                 } catch (Throwable t) {
@@ -112,6 +100,15 @@ public abstract class EventProcessor<T> implements Closeable {
         }
 
         return true;
+    }
+
+    private void closeInternal() {
+        try {
+            log.debug("Removing unprocessed and/or unfinished events because the consumer is closing");
+            cancelIncompleteEvents();
+        } finally {
+            log.debug("Finished removal of events that were unprocessed and/or unfinished");
+        }
     }
 
     /**
