@@ -96,23 +96,22 @@ def tryStreamsArchetype() {
 currentBuild.description = ""
 
 def reportFlakyTests() {
-//   def testResultAction = currentBuild.rawBuild.getAction(hudson.tasks.junit.TestResultAction.class)
-//
-//   if (testResultAction != null && testResultAction instanceof TestResultAction) {
-//     def testResult = (TestResult) testResultAction.getResult()
-//     for (SuiteResult suiteResult : testResult.getSuites()) {
-//       Document document = DocumentHelper.parseText(readFile(suiteResult.getFile()))
-//       List<Node> list = document.selectNodes("//testcase/@flakyFailure")
-//       currentBuild.description += "Flaky Report: \n"
-//       currentBuild.description += list.join("\n")
-//     }
-//   }
-  def files = findFiles(glob: "**/build/test-results/**/TEST-*.xml")
-  for (def file : files) {
-    Document document = DocumentHelper.parseText(readFile(file.path))
-    List<Node> list = document.selectNodes("//testcase/@flakyFailure")
-    currentBuild.description += list.join("\n")
+  def testResultAction = currentBuild.rawBuild.getAction(hudson.tasks.junit.TestResultAction.class)
+
+  if (testResultAction != null && testResultAction instanceof TestResultAction) {
+    def testResult = (TestResult) testResultAction.getResult()
+    for (SuiteResult suiteResult : testResult.getSuites()) {
+      Document document = DocumentHelper.parseText(readFile(suiteResult.getFile()))
+      List<Node> list = document.selectNodes("//testcase/@flakyFailure")
+      currentBuild.description += list.join("\n")
+    }
   }
+//   def files = findFiles(glob: "**/build/test-results/**/TEST-*.xml")
+//   for (def file : files) {
+//     Document document = DocumentHelper.parseText(readFile(file.path))
+//     List<Node> list = document.selectNodes("//testcase/@flakyFailure")
+//     currentBuild.description += list.join("\n")
+//   }
 }
 
 pipeline {
