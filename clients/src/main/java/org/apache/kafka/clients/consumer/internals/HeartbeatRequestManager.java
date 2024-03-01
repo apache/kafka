@@ -21,7 +21,7 @@ import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.internals.NetworkClientDelegate.PollResult;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEventProcessor;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEventHandler;
-import org.apache.kafka.clients.consumer.internals.events.ErrorBackgroundEvent;
+import org.apache.kafka.clients.consumer.internals.events.ErrorEvent;
 import org.apache.kafka.clients.consumer.internals.events.GroupMetadataUpdateEvent;
 import org.apache.kafka.clients.consumer.internals.metrics.HeartbeatMetricsManager;
 import org.apache.kafka.common.Uuid;
@@ -327,7 +327,7 @@ public class HeartbeatRequestManager implements RequestManager {
             heartbeatRequestState.updateHeartbeatIntervalMs(response.data().heartbeatIntervalMs());
             heartbeatRequestState.onSuccessfulAttempt(currentTimeMs);
             heartbeatRequestState.resetTimer();
-            membershipManager.onHeartbeatResponseReceived(response.data());
+            membershipManager.onHeartbeatSuccess(response.data());
             maybeSendGroupMetadataUpdateEvent();
             return;
         }
@@ -357,6 +357,7 @@ public class HeartbeatRequestManager implements RequestManager {
 
         this.heartbeatState.reset();
         this.heartbeatRequestState.onFailedAttempt(currentTimeMs);
+        membershipManager.onHeartbeatFailure();
 
         switch (error) {
             case NOT_COORDINATOR:
@@ -445,7 +446,7 @@ public class HeartbeatRequestManager implements RequestManager {
     }
 
     private void handleFatalFailure(Throwable error) {
-        backgroundEventHandler.add(new ErrorBackgroundEvent(error));
+        backgroundEventHandler.add(new ErrorEvent(error));
         membershipManager.transitionToFatal();
     }
 

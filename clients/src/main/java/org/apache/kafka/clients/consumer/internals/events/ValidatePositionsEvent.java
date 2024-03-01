@@ -14,32 +14,17 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.clients.consumer.internals.events;
 
-import java.util.concurrent.CompletableFuture;
-
 /**
- * Background event with a result in the form of a future, that can be retrieved within a
- * timeout based on completion.
- *
- * @param <T>
+ * Event for validating offsets for all assigned partitions for which a leader change has been
+ * detected. This is an asynchronous event that generates OffsetForLeaderEpoch requests, and
+ * completes by validating in-memory positions against the offsets received in the responses.
  */
-public abstract class CompletableBackgroundEvent<T> extends BackgroundEvent implements CompletableEvent<T> {
+public class ValidatePositionsEvent extends CompletableApplicationEvent<Void> {
 
-    private final CompletableFuture<T> future;
-
-    protected CompletableBackgroundEvent(final Type type) {
-        super(type);
-        this.future = new CompletableFuture<>();
-    }
-
-    @Override
-    public CompletableFuture<T> future() {
-        return future;
-    }
-
-    @Override
-    protected String toStringBase() {
-        return super.toStringBase() + ", future=" + future;
+    public ValidatePositionsEvent() {
+        super(Type.VALIDATE_POSITIONS);
     }
 }
