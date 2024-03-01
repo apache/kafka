@@ -770,8 +770,8 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         acquireAndEnsureOpen();
         try {
             Timer timer = time.timer(Long.MAX_VALUE);
-            AsyncCommitEvent asyncCommitEvent = new AsyncCommitEvent(offsets, timer);
-            CompletableFuture<Void> future = commit(asyncCommitEvent);
+            AsyncCommitEvent event = new AsyncCommitEvent(offsets, timer);
+            CompletableFuture<Void> future = commit(event);
             future.whenComplete((r, t) -> {
 
                 if (t == null) {
@@ -939,9 +939,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             }
 
             final Timer timer = time.timer(timeout);
-            final FetchCommittedOffsetsEvent event = new FetchCommittedOffsetsEvent(
-                partitions,
-                timer);
+            final FetchCommittedOffsetsEvent event = new FetchCommittedOffsetsEvent(partitions, timer);
             wakeupTrigger.setActiveTask(event.future());
             try {
                 final Map<TopicPartition, OffsetAndMetadata> committedOffsets = applicationEventHandler.addAndGet(event);
@@ -1574,8 +1572,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             applicationEventHandler.addAndGet(new ValidatePositionsEvent(timer));
 
             cachedSubscriptionHasAllFetchPositions = subscriptions.hasAllFetchPositions();
-            if (cachedSubscriptionHasAllFetchPositions)
-                return true;
+            if (cachedSubscriptionHasAllFetchPositions) return true;
 
             // Reset positions using committed offsets retrieved from the group coordinator, for any
             // partitions which do not have a valid position and are not awaiting reset. This will
@@ -1651,12 +1648,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     public boolean updateAssignmentMetadataIfNeeded(Timer timer) {
         maybeInvokeCommitCallbacks();
         maybeThrowFencedInstanceException();
-
-        try {
-            backgroundEventProcessor.process();
-        } finally {
-            backgroundEventProcessor.completeExpiredEvents(time.milliseconds());
-        }
+        backgroundEventProcessor.process();
 
         // Keeping this updateAssignmentMetadataIfNeeded wrapping up the updateFetchPositions as
         // in the previous implementation, because it will eventually involve group coordination
@@ -1827,12 +1819,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         log.trace("Will wait up to {} ms for future {} to complete", timer.remainingMs(), future);
 
         do {
-            boolean hadEvents;
-            try {
-                hadEvents = backgroundEventProcessor.process();
-            } finally {
-                backgroundEventProcessor.completeExpiredEvents(time.milliseconds());
-            }
+            boolean hadEvents = backgroundEventProcessor.process();
 
             try {
                 if (future.isDone()) {

@@ -18,6 +18,7 @@ package org.apache.kafka.clients.consumer.internals.events;
 
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetAndTimestamp;
+import org.apache.kafka.clients.consumer.internals.AsyncKafkaConsumer;
 import org.apache.kafka.clients.consumer.internals.CachedSupplier;
 import org.apache.kafka.clients.consumer.internals.CommitRequestManager;
 import org.apache.kafka.clients.consumer.internals.ConsumerMetadata;
@@ -27,15 +28,19 @@ import org.apache.kafka.clients.consumer.internals.RequestManagers;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.utils.LogContext;
 import org.slf4j.Logger;
 
+import java.util.Collection;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.BiConsumer;
+import java.util.function.Consumer;
 import java.util.function.Supplier;
 
 /**
@@ -47,6 +52,7 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
     private final Logger log;
     private final ConsumerMetadata metadata;
     private final RequestManagers requestManagers;
+    private final List<CompletableApplicationEvent<?>> completableEvents;
 
     public ApplicationEventProcessor(final LogContext logContext,
                                      final BlockingQueue<ApplicationEvent> applicationEventQueue,
@@ -56,6 +62,7 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
         this.log = logContext.logger(ApplicationEventProcessor.class);
         this.requestManagers = requestManagers;
         this.metadata = metadata;
+        this.completableEvents = new LinkedList<>();
     }
 
     /**
@@ -64,7 +71,12 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
      * errors to be propagated to the caller.
      */
     public void process() {
-        process((event, error) -> error.ifPresent(e -> log.warn("Error processing event {}", e.getMessage(), e)));
+        process((event, error) -> {
+            if (event instanceof CompletableEvent)
+                completableEvents.add((CompletableApplicationEvent<?>) event);
+
+            error.ifPresent(e -> log.warn("Error processing event {}", e.getMessage(), e));
+        });
     }
 
     @SuppressWarnings({"CyclomaticComplexity"})
@@ -140,6 +152,39 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
         }
     }
 
+    /**
+     * We "complete" any of the {@link CompletableApplicationEvent}s that are either expired or done.
+     *
+     * <p/>
+     *
+     * <em>Note</em>: this cleanup step should be called <em>after</b> the user has processed the  {@link #process(ProcessHandler)} is executed.
+     * The reason for this is to emulate the behavior of the legacy consumer's handling of timeouts. The legacy
+     * consumer would
+     * difference between the so that we can perform this cleanup after  any events t
+     *
+     * @param currentTimeMs Current time
+     */
+    public void completeExpiredEvents(long currentTimeMs) {
+        log.trace("Removing expired events");
+
+        Consumer<CompletableApplicationEvent<?>> completeEvent = e -> {
+            long pastDueMs = currentTimeMs - e.deadlineMs();
+            log.debug("Completing event {} exceptionally since it expired {} ms ago", e, pastDueMs);
+            CompletableFuture<?> f = e.future();
+            f.completeExceptionally(new TimeoutException(String.format("%s could not be completed within its timeout", e.getClass().getSimpleName())));
+        };
+
+        // First, complete (exceptionally) any events that have passed their deadline.
+        completableEvents
+                .stream()
+                .filter(e -> !e.future().isDone() && currentTimeMs > e.deadlineMs())
+                .forEach(completeEvent);
+
+        // Second, remove any events that are already done, just to make sure we don't hold references.
+        completableEvents.removeIf(e -> e.future().isDone());
+        log.trace("Finished removal of expired events");
+    }
+
     private void process(final PollEvent event) {
         if (!requestManagers.commitRequestManager.isPresent()) {
             return;
@@ -165,8 +210,7 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
         }
 
         CommitRequestManager manager = requestManagers.commitRequestManager.get();
-        long expirationTimeoutMs = event.deadlineMs();
-        CompletableFuture<Void> future = manager.commitSync(event.offsets(), expirationTimeoutMs);
+        CompletableFuture<Void> future = manager.commitSync(event.offsets(), event.deadlineMs());
         future.whenComplete(complete(event.future()));
     }
 
@@ -177,8 +221,10 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
             return;
         }
         CommitRequestManager manager = requestManagers.commitRequestManager.get();
-        long expirationTimeMs = event.deadlineMs();
-        CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> future = manager.fetchOffsets(event.partitions(), expirationTimeMs);
+        CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> future = manager.fetchOffsets(
+            event.partitions(),
+            event.deadlineMs()
+        );
         future.whenComplete(complete(event.future()));
     }
 
@@ -200,9 +246,10 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
     }
 
     private void process(final ListOffsetsEvent event) {
-        final CompletableFuture<Map<TopicPartition, OffsetAndTimestamp>> future =
-                requestManagers.offsetsRequestManager.fetchOffsets(event.timestampsToSearch(),
-                        event.requireTimestamps());
+        final CompletableFuture<Map<TopicPartition, OffsetAndTimestamp>> future = requestManagers.offsetsRequestManager.fetchOffsets(
+            event.timestampsToSearch(),
+            event.requireTimestamps()
+        );
         future.whenComplete(complete(event.future()));
     }
 
@@ -301,6 +348,26 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
             else
                 f.complete(value);
         };
+    }
+
+    /**
+     * Check each of the {@link CompletableApplicationEvent completable events}, and for any that are
+     * incomplete, {@link CompletableFuture#completeExceptionally(Throwable) complete it exceptionally}.
+     *
+     * <p/>
+     *
+     * <em>Note</em>: because this is called in the context of {@link AsyncKafkaConsumer#close() closing consumer},
+     * don't take the deadline into consideration, just close it regardless.
+     */
+    @Override
+    protected void cancelIncompleteEvents() {
+        super.cancelIncompleteEvents();
+
+        completableEvents
+                .stream()
+                .filter(e -> !e.future().isDone())
+                .forEach(INCOMPLETE_EVENT_CANCELLER);
+        completableEvents.clear();
     }
 
     /**

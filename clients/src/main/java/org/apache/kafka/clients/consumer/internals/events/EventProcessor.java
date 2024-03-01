@@ -18,14 +18,12 @@ package org.apache.kafka.clients.consumer.internals.events;
 
 import org.apache.kafka.clients.consumer.internals.ConsumerUtils;
 import org.apache.kafka.common.KafkaException;
-import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.internals.IdempotentCloser;
 import org.apache.kafka.common.utils.LogContext;
 import org.slf4j.Logger;
 
 import java.io.Closeable;
 import java.util.LinkedList;
-import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.BlockingQueue;
@@ -41,23 +39,36 @@ import java.util.function.Consumer;
  */
 public abstract class EventProcessor<T> implements Closeable {
 
+    protected final static Consumer<CompletableEvent<?>> INCOMPLETE_EVENT_CANCELLER = e -> {
+        CompletableFuture<?> f = e.future();
+        f.cancel(true);
+    };
+
     private final Logger log;
     private final BlockingQueue<T> eventQueue;
-    private final List<CompletableEvent<?>> completableEvents;
     private final IdempotentCloser closer;
 
     protected EventProcessor(final LogContext logContext, final BlockingQueue<T> eventQueue) {
         this.log = logContext.logger(EventProcessor.class);
         this.eventQueue = eventQueue;
         this.closer = new IdempotentCloser();
-        this.completableEvents = new LinkedList<>();
     }
 
     protected abstract void process(T event);
 
     @Override
     public void close() {
-        closer.close(this::closeInternal, () -> log.warn("The event processor was already closed"));
+        closer.close(
+                () -> {
+                    try {
+                        log.debug("Removing unprocessed and/or unfinished events because the consumer is closing");
+                        cancelIncompleteEvents();
+                    } finally {
+                        log.debug("Finished removal of events that were unprocessed and/or unfinished");
+                    }
+                },
+                () -> log.warn("The event processor was already closed")
+        );
     }
 
     protected interface ProcessHandler<T> {
@@ -88,8 +99,6 @@ public abstract class EventProcessor<T> implements Closeable {
                     Objects.requireNonNull(event, "Attempted to process a null event");
                     log.trace("Processing event: {}", event);
 
-                    if (event instanceof CompletableEvent)
-                        completableEvents.add((CompletableEvent<?>) event);
 
                     process(event);
                     processHandler.onProcess(event, Optional.empty());
@@ -105,56 +114,18 @@ public abstract class EventProcessor<T> implements Closeable {
         return true;
     }
 
-    public void completeExpiredEvents(long currentTimeMs) {
-        log.trace("Removing expired events");
-
-        Consumer<CompletableEvent<?>> completeEvent = e -> {
-            log.debug("Completing event {} exceptionally since it expired {} ms ago", e, currentTimeMs - e.deadlineMs());
-            CompletableFuture<?> f = e.future();
-            f.completeExceptionally(new TimeoutException(String.format("%s could not be completed within its timeout", e.getClass().getSimpleName())));
-        };
-
-        // Complete (exceptionally) any events that have recently passed their deadline.
-        completableEvents
-                .stream()
-                .filter(e -> !e.future().isDone() && currentTimeMs > e.deadlineMs())
-                .forEach(completeEvent);
-
-        // Remove any events that are complete.
-        completableEvents.removeIf(e -> e.future().isDone());
-        log.trace("Finished removal of expired events");
-    }
-
     /**
      * It is possible for the consumer to close before complete processing all the events in the queue. In
-     * this case, we need to throw an exception to notify the user the consumer is closed.
+     * this case, we need to {@link CompletableFuture#completeExceptionally(Throwable) (exceptionally) complete}
+     * any remaining events.
      */
-    private void closeInternal() {
-        log.debug("Removing unprocessed and/or unfinished events because the consumer is closing");
-
-        Consumer<CompletableEvent<?>> completeEvent = e -> {
-            log.debug("Completing event {} exceptionally since the consumer is closing", e);
-            CompletableFuture<?> f = e.future();
-            f.completeExceptionally(new KafkaException("The consumer is closed"));
-        };
-
-        // Check each of the unprocessed events and if it has a Future that is incomplete, complete it exceptionally.
+    protected void cancelIncompleteEvents() {
         eventQueue
                 .stream()
                 .filter(e -> e instanceof CompletableEvent)
                 .map(e -> (CompletableEvent<?>) e)
                 .filter(e -> !e.future().isDone())
-                .forEach(completeEvent);
+                .forEach(INCOMPLETE_EVENT_CANCELLER);
         eventQueue.clear();
-
-        // Check each of the completable events and if it has a Future that is incomplete, complete it exceptionally.
-        // In the case of shutdown, we don't take the deadline into consideration.
-        completableEvents
-                .stream()
-                .filter(e -> !e.future().isDone())
-                .forEach(completeEvent);
-        completableEvents.clear();
-
-        log.debug("Finished removal of events that were unprocessed and/or unfinished");
     }
 }
