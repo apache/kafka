@@ -250,14 +250,16 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
     }
 
     private void process(final TopicMetadataEvent event) {
+        final long expirationTimeMs = getExpirationTimeForTimeout(event.deadlineMs());
         final CompletableFuture<Map<String, List<PartitionInfo>>> future =
-                requestManagers.topicMetadataRequestManager.requestTopicMetadata(event.topic(), event.deadlineMs());
+                requestManagers.topicMetadataRequestManager.requestTopicMetadata(event.topic(), expirationTimeMs);
         future.whenComplete(complete(event.future()));
     }
 
     private void process(final AllTopicsMetadataEvent event) {
+        final long expirationTimeMs = getExpirationTimeForTimeout(event.deadlineMs());
         final CompletableFuture<Map<String, List<PartitionInfo>>> future =
-                requestManagers.topicMetadataRequestManager.requestAllTopicsMetadata(event.deadlineMs());
+                requestManagers.topicMetadataRequestManager.requestAllTopicsMetadata(expirationTimeMs);
         future.whenComplete(complete(event.future()));
     }
 
