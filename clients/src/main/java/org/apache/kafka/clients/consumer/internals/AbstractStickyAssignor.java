@@ -663,6 +663,7 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
                 String consumer = consumerEntry.getKey();
                 List<TopicPartition> ownedPartitions = consumerEntry.getValue().stream()
                         .filter(tp -> !rackInfo.racksMismatch(consumer, tp))
+                        .sorted(Comparator.comparing(TopicPartition::partition).thenComparing(TopicPartition::topic))
                         .collect(Collectors.toList());
 
                 List<TopicPartition> consumerAssignment = assignment.get(consumer);

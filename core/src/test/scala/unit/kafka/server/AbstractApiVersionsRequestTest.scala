@@ -74,16 +74,17 @@ abstract class AbstractApiVersionsRequestTest(cluster: ClusterInstance) {
     apiVersionsResponse: ApiVersionsResponse,
     listenerName: ListenerName = cluster.clientListener(),
     enableUnstableLastVersion: Boolean = false,
+    clientTelemetryEnabled: Boolean = false,
     apiVersion: Short = ApiKeys.API_VERSIONS.latestVersion
   ): Unit = {
     if (cluster.isKRaftTest && apiVersion >= 3) {
       assertEquals(1, apiVersionsResponse.data().finalizedFeatures().size())
-      assertEquals(MetadataVersion.latest().featureLevel(), apiVersionsResponse.data().finalizedFeatures().find(MetadataVersion.FEATURE_NAME).minVersionLevel())
-      assertEquals(MetadataVersion.latest().featureLevel(), apiVersionsResponse.data().finalizedFeatures().find(MetadataVersion.FEATURE_NAME).maxVersionLevel())
+      assertEquals(MetadataVersion.latestTesting().featureLevel(), apiVersionsResponse.data().finalizedFeatures().find(MetadataVersion.FEATURE_NAME).minVersionLevel())
+      assertEquals(MetadataVersion.latestTesting().featureLevel(), apiVersionsResponse.data().finalizedFeatures().find(MetadataVersion.FEATURE_NAME).maxVersionLevel())
 
       assertEquals(1, apiVersionsResponse.data().supportedFeatures().size())
       assertEquals(MetadataVersion.MINIMUM_KRAFT_VERSION.featureLevel(), apiVersionsResponse.data().supportedFeatures().find(MetadataVersion.FEATURE_NAME).minVersion())
-      assertEquals(MetadataVersion.latest().featureLevel(), apiVersionsResponse.data().supportedFeatures().find(MetadataVersion.FEATURE_NAME).maxVersion())
+      assertEquals(MetadataVersion.latestTesting().featureLevel(), apiVersionsResponse.data().supportedFeatures().find(MetadataVersion.FEATURE_NAME).maxVersion())
     }
     val expectedApis = if (!cluster.isKRaftTest) {
       ApiVersionsResponse.collectApis(
@@ -100,7 +101,8 @@ abstract class AbstractApiVersionsRequestTest(cluster: ClusterInstance) {
         ApiMessageType.ListenerType.BROKER,
         RecordVersion.current,
         NodeApiVersions.create(ApiKeys.controllerApis().asScala.map(ApiVersionsResponse.toApiVersion).asJava).allSupportedApiVersions(),
-        enableUnstableLastVersion
+        enableUnstableLastVersion,
+        clientTelemetryEnabled
       )
     }
 
@@ -109,7 +111,7 @@ abstract class AbstractApiVersionsRequestTest(cluster: ClusterInstance) {
 
     val defaultApiVersionsResponse = if (!cluster.isKRaftTest) {
       TestUtils.defaultApiVersionsResponse(0, ListenerType.ZK_BROKER, enableUnstableLastVersion)
-    } else if(cluster.controllerListenerName().asScala.contains(listenerName)) {
+    } else if (cluster.controllerListenerName().asScala.contains(listenerName)) {
       TestUtils.defaultApiVersionsResponse(0, ListenerType.CONTROLLER, enableUnstableLastVersion)
     } else {
       TestUtils.createApiVersionsResponse(0, expectedApis)

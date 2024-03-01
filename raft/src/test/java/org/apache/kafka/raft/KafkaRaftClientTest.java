@@ -486,6 +486,76 @@ public class KafkaRaftClientTest {
     }
 
     @Test
+    public void testLeaderShouldResignLeadershipIfNotGetFetchRequestFromMajorityVoters() throws Exception {
+        int localId = 0;
+        int remoteId1 = 1;
+        int remoteId2 = 2;
+        int observerId3 = 3;
+        Set<Integer> voters = Utils.mkSet(localId, remoteId1, remoteId2);
+
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters).build();
+        int resignLeadershipTimeout = context.checkQuorumTimeoutMs;
+
+        context.becomeLeader();
+        int epoch = context.currentEpoch();
+        assertEquals(OptionalInt.of(localId), context.currentLeader());
+
+        // fetch timeout is not expired, the leader should not get resigned
+        context.time.sleep(resignLeadershipTimeout / 2);
+        context.client.poll();
+
+        assertFalse(context.client.quorum().isResigned());
+
+        // Received fetch request from a voter, the fetch timer should be reset.
+        context.deliverRequest(context.fetchRequest(epoch, remoteId1, 0, 0, 0));
+        context.pollUntilRequest();
+
+        // Since the fetch timer is reset, the leader should not get resigned
+        context.time.sleep(resignLeadershipTimeout / 2);
+        context.client.poll();
+
+        assertFalse(context.client.quorum().isResigned());
+
+        // Received fetch request from another voter, the fetch timer should be reset.
+        context.deliverRequest(context.fetchRequest(epoch, remoteId2, 0, 0, 0));
+        context.pollUntilRequest();
+
+        // Since the fetch timer is reset, the leader should not get resigned
+        context.time.sleep(resignLeadershipTimeout / 2);
+        context.client.poll();
+
+        assertFalse(context.client.quorum().isResigned());
+
+        // Received fetch request from an observer, but the fetch timer should not be reset.
+        context.deliverRequest(context.fetchRequest(epoch, observerId3, 0, 0, 0));
+        context.pollUntilRequest();
+
+        // After this sleep, the fetch timeout should expire since we don't receive fetch request from the majority voters within fetchTimeoutMs
+        context.time.sleep(resignLeadershipTimeout / 2);
+        context.client.poll();
+
+        // The leadership should get resigned now
+        assertTrue(context.client.quorum().isResigned());
+        context.assertResignedLeader(epoch, localId);
+    }
+
+    @Test
+    public void testLeaderShouldNotResignLeadershipIfOnlyOneVoters() throws Exception {
+        int localId = 0;
+        Set<Integer> voters = Utils.mkSet(localId);
+
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters).build();
+        assertEquals(OptionalInt.of(localId), context.currentLeader());
+
+        // checkQuorum timeout is expired without receiving fetch request from other voters, but since there is only 1 voter,
+        // the leader should not get resigned
+        context.time.sleep(context.checkQuorumTimeoutMs);
+        context.client.poll();
+
+        assertFalse(context.client.quorum().isResigned());
+    }
+
+    @Test
     public void testElectionTimeoutAfterUserInitiatedResign() throws Exception {
         int localId = 0;
         int otherNodeId = 1;
@@ -2886,6 +2956,66 @@ public class KafkaRaftClientTest {
         context.pollUntil(() -> secondListener.lastCommitOffset().equals(OptionalLong.of(9L)));
         assertEquals(OptionalLong.of(9L), secondListener.lastCommitOffset());
         assertEquals(OptionalInt.empty(), secondListener.currentClaimedEpoch());
+    }
+
+    @Test
+    public void testHandleLeaderChangeFiresAfterUnattachedRegistration() throws Exception {
+        // When registering a listener while the replica is unattached, it should get notified
+        // with the current epoch
+        // When transitioning to follower, expect another notification with the leader and epoch
+
+        int localId = 0;
+        int otherNodeId = 1;
+        int epoch = 7;
+        Set<Integer> voters = Utils.mkSet(localId, otherNodeId);
+
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
+            .withUnknownLeader(epoch)
+            .build();
+
+        // Register another listener and verify that it is notified of latest epoch
+        RaftClientTestContext.MockListener secondListener = new RaftClientTestContext.MockListener(
+            OptionalInt.of(localId)
+        );
+        context.client.register(secondListener);
+        context.client.poll();
+
+        // Expected leader change notification
+        LeaderAndEpoch expectedLeaderAndEpoch = new LeaderAndEpoch(OptionalInt.empty(), epoch);
+        assertEquals(expectedLeaderAndEpoch, secondListener.currentLeaderAndEpoch());
+
+        // Transition to follower and the expect a leader changed notification
+        context.deliverRequest(context.beginEpochRequest(epoch, otherNodeId));
+        context.pollUntilResponse();
+
+        // Expected leader change notification
+        expectedLeaderAndEpoch = new LeaderAndEpoch(OptionalInt.of(otherNodeId), epoch);
+        assertEquals(expectedLeaderAndEpoch, secondListener.currentLeaderAndEpoch());
+    }
+
+    @Test
+    public void testHandleLeaderChangeFiresAfterFollowerRegistration() throws Exception {
+        // When registering a listener while the replica is a follower, it should get notified with
+        // the current leader and epoch
+
+        int localId = 0;
+        int otherNodeId = 1;
+        int epoch = 7;
+        Set<Integer> voters = Utils.mkSet(localId, otherNodeId);
+
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
+            .withElectedLeader(epoch, otherNodeId)
+            .build();
+
+        // Register another listener and verify that it is notified of latest leader and epoch
+        RaftClientTestContext.MockListener secondListener = new RaftClientTestContext.MockListener(
+            OptionalInt.of(localId)
+        );
+        context.client.register(secondListener);
+        context.client.poll();
+
+        LeaderAndEpoch expectedLeaderAndEpoch = new LeaderAndEpoch(OptionalInt.of(otherNodeId), epoch);
+        assertEquals(expectedLeaderAndEpoch, secondListener.currentLeaderAndEpoch());
     }
 
     @Test

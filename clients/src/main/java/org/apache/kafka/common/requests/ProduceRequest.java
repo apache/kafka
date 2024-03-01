@@ -133,14 +133,15 @@ public class ProduceRequest extends AbstractRequest {
             // this method may be called by different thread (see the comment on data)
             synchronized (this) {
                 if (partitionSizes == null) {
-                    partitionSizes = new HashMap<>();
+                    Map<TopicPartition, Integer> tmpPartitionSizes = new HashMap<>();
                     data.topicData().forEach(topicData ->
                         topicData.partitionData().forEach(partitionData ->
-                            partitionSizes.compute(new TopicPartition(topicData.name(), partitionData.index()),
+                            tmpPartitionSizes.compute(new TopicPartition(topicData.name(), partitionData.index()),
                                 (ignored, previousValue) ->
                                     partitionData.records().sizeInBytes() + (previousValue == null ? 0 : previousValue))
                         )
                     );
+                    partitionSizes = tmpPartitionSizes;
                 }
             }
         }

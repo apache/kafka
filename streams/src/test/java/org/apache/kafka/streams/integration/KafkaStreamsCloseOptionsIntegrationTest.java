@@ -102,12 +102,14 @@ public class KafkaStreamsCloseOptionsIntegrationTest {
     public void before() throws Exception {
         mockTime = CLUSTER.time;
 
-        final String appID = IntegrationTestUtils.safeUniqueTestName(getClass(), testName);
+        final String appID = IntegrationTestUtils.safeUniqueTestName(testName);
 
         commonClientConfig = new Properties();
         commonClientConfig.put(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
 
         streamsConfig = new Properties();
+        streamsConfig.put(StreamsConfig.APPLICATION_ID_CONFIG, appID);
+        streamsConfig.put(ConsumerConfig.GROUP_INSTANCE_ID_CONFIG, "someGroupInstance");
         streamsConfig.put(StreamsConfig.STATE_DIR_CONFIG, testFolder.getRoot().getPath());
         streamsConfig.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.Long().getClass());
         streamsConfig.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass());
@@ -153,19 +155,14 @@ public class KafkaStreamsCloseOptionsIntegrationTest {
 
     @Test
     public void testCloseOptions() throws Exception {
-        final String appID = IntegrationTestUtils.safeUniqueTestName(getClass(), testName);
-        streamsConfig.put(StreamsConfig.APPLICATION_ID_CONFIG, appID);
-        streamsConfig.put(ConsumerConfig.GROUP_INSTANCE_ID_CONFIG, "someGroupInstance");
         // Test with two threads to show that each of the threads is being called to remove clients from the CG.
         streamsConfig.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 2);
-
-        // RUN
         streams = new KafkaStreams(setupTopologyWithoutIntermediateUserTopic(), streamsConfig);
         IntegrationTestUtils.startApplicationAndWaitUntilRunning(streams);
         IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(resultConsumerConfig, OUTPUT_TOPIC, 10);
 
         streams.close(new CloseOptions().leaveGroup(true).timeout(Duration.ofSeconds(30)));
-        waitForEmptyConsumerGroup(adminClient, appID, 0);
+        waitForEmptyConsumerGroup(adminClient, streamsConfig.getProperty(StreamsConfig.APPLICATION_ID_CONFIG), 0);
     }
 
     protected Topology setupTopologyWithoutIntermediateUserTopic() {

@@ -78,10 +78,12 @@ import java.util.Set;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
+import static org.apache.kafka.raft.LeaderState.CHECK_QUORUM_TIMEOUT_FACTOR;
 import static org.apache.kafka.raft.RaftUtil.hasValidTopicPartition;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public final class RaftClientTestContext {
@@ -91,6 +93,7 @@ public final class RaftClientTestContext {
     final int electionBackoffMaxMs = Builder.ELECTION_BACKOFF_MAX_MS;
     final int fetchMaxWaitMs = Builder.FETCH_MAX_WAIT_MS;
     final int fetchTimeoutMs = Builder.FETCH_TIMEOUT_MS;
+    final int checkQuorumTimeoutMs = (int) (fetchTimeoutMs * CHECK_QUORUM_TIMEOUT_FACTOR);
     final int retryBackoffMs = Builder.RETRY_BACKOFF_MS;
 
     private int electionTimeoutMs;
@@ -1193,6 +1196,11 @@ public final class RaftClientTestContext {
             // We record the current committed offset as the claimed epoch's start
             // offset. This is useful to verify that the `handleLeaderChange` callback
             // was not received early on the leader.
+            assertTrue(
+                leaderAndEpoch.epoch() >= currentLeaderAndEpoch.epoch(),
+                String.format("new epoch (%d) not >= than old epoch (%d)", leaderAndEpoch.epoch(), currentLeaderAndEpoch.epoch())
+            );
+            assertNotEquals(currentLeaderAndEpoch, leaderAndEpoch);
             this.currentLeaderAndEpoch = leaderAndEpoch;
 
             currentClaimedEpoch().ifPresent(claimedEpoch -> {

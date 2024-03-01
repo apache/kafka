@@ -65,6 +65,7 @@ import org.apache.kafka.streams.processor.api.FixedKeyProcessorSupplier;
 import org.apache.kafka.streams.processor.api.ProcessorSupplier;
 import org.apache.kafka.streams.processor.internals.InternalTopicProperties;
 import org.apache.kafka.streams.processor.internals.StaticTopicNameExtractor;
+import org.apache.kafka.streams.processor.internals.StoreBuilderWrapper;
 import org.apache.kafka.streams.state.KeyValueStore;
 
 import java.lang.reflect.Array;
@@ -950,7 +951,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
         KStreamImpl<K, V> joinThis = this;
         KStreamImpl<K, VO> joinOther = (KStreamImpl<K, VO>) otherStream;
 
-        final StreamJoinedInternal<K, V, VO> streamJoinedInternal = new StreamJoinedInternal<>(streamJoined);
+        final StreamJoinedInternal<K, V, VO> streamJoinedInternal = new StreamJoinedInternal<>(streamJoined, builder);
         final NamedInternal name = new NamedInternal(streamJoinedInternal.name());
         if (joinThis.repartitionRequired) {
             final String joinThisName = joinThis.name;
@@ -1268,7 +1269,9 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
                 throw new IllegalArgumentException("KTable must be versioned to use a grace period in a stream table join.");
             }
             bufferStoreName = Optional.of(name + "-Buffer");
-            builder.addStateStore(new RocksDBTimeOrderedKeyValueBuffer.Builder<>(bufferStoreName.get(), joined.gracePeriod(), name));
+            final RocksDBTimeOrderedKeyValueBuffer.Builder<Object, Object> storeBuilder =
+                    new RocksDBTimeOrderedKeyValueBuffer.Builder<>(bufferStoreName.get(), joined.gracePeriod(), name);
+            builder.addStateStore(new StoreBuilderWrapper(storeBuilder));
         }
 
         final ProcessorSupplier<K, V, K, ? extends VR> processorSupplier = new KStreamKTableJoin<>(

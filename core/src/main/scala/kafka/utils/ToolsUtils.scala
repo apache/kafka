@@ -25,14 +25,14 @@ import scala.collection.mutable
 object ToolsUtils {
 
   def validatePortOrDie(parser: OptionParser, hostPort: String): Unit = {
-    val hostPorts: Array[String] = if(hostPort.contains(','))
+    val hostPorts: Array[String] = if (hostPort.contains(','))
       hostPort.split(",")
     else
       Array(hostPort)
     val validHostPort = hostPorts.filter { hostPortData =>
       org.apache.kafka.common.utils.Utils.getPort(hostPortData) != null
     }
-    val isValid = !validHostPort.isEmpty && validHostPort.length == hostPorts.length
+    val isValid = validHostPort.nonEmpty && validHostPort.length == hostPorts.length
     if (!isValid)
       CommandLineUtils.printUsageAndExit(parser, "Please provide valid host:port like host1:9091,host2:9092\n ")
   }
@@ -69,8 +69,7 @@ object ToolsUtils {
   /**
    * This is a simple wrapper around `CommandLineUtils.printUsageAndExit`.
    * It is needed for tools migration (KAFKA-14525), as there is no Java equivalent for return type `Nothing`.
-   * Can be removed once [[kafka.admin.ConsumerGroupCommand]], [[kafka.tools.ConsoleConsumer]]
-   * and [[kafka.tools.ConsoleProducer]] are migrated.
+   * Can be removed once [[kafka.admin.ConsumerGroupCommand]] and [[kafka.tools.ConsoleProducer]] are migrated.
    *
    * @param parser Command line options parser.
    * @param message Error message.

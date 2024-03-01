@@ -29,6 +29,7 @@ import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetCommitCallback;
 import org.apache.kafka.clients.consumer.RetriableCommitFailedException;
 import org.apache.kafka.clients.consumer.internals.Utils.TopicPartitionComparator;
+import org.apache.kafka.clients.consumer.internals.metrics.RebalanceCallbackMetricsManager;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
@@ -47,7 +48,11 @@ import org.apache.kafka.common.message.JoinGroupRequestData;
 import org.apache.kafka.common.message.JoinGroupResponseData;
 import org.apache.kafka.common.message.OffsetCommitRequestData;
 import org.apache.kafka.common.message.OffsetCommitResponseData;
+import org.apache.kafka.common.metrics.Measurable;
 import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.metrics.Sensor;
+import org.apache.kafka.common.metrics.stats.Avg;
+import org.apache.kafka.common.metrics.stats.Max;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.RecordBatch;
@@ -56,6 +61,7 @@ import org.apache.kafka.common.requests.OffsetCommitRequest;
 import org.apache.kafka.common.requests.OffsetCommitResponse;
 import org.apache.kafka.common.requests.OffsetFetchRequest;
 import org.apache.kafka.common.requests.OffsetFetchResponse;
+import org.apache.kafka.common.telemetry.internals.ClientTelemetryReporter;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
@@ -83,6 +89,7 @@ import java.util.stream.Collectors;
 
 import static org.apache.kafka.clients.consumer.ConsumerConfig.ASSIGN_FROM_SUBSCRIBED_ASSIGNORS;
 import static org.apache.kafka.clients.consumer.CooperativeStickyAssignor.COOPERATIVE_STICKY_ASSIGNOR_NAME;
+import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.COORDINATOR_METRICS_SUFFIX;
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.refreshCommittedOffsets;
 
 /**
@@ -110,17 +117,15 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
     // this collection must be thread-safe because it is modified from the response handler
     // of offset commit requests, which may be invoked from the heartbeat thread
     private final ConcurrentLinkedQueue<OffsetCommitCompletion> completedOffsetCommits;
-
+    private final AtomicBoolean asyncCommitFenced;
+    private final boolean throwOnFetchStableOffsetsUnsupported;
+    private final Optional<String> rackId;
     private boolean isLeader = false;
     private Set<String> joinedSubscription;
     private MetadataSnapshot metadataSnapshot;
     private MetadataSnapshot assignmentSnapshot;
     private Timer nextAutoCommitTimer;
-    private AtomicBoolean asyncCommitFenced;
     private ConsumerGroupMetadata groupMetadata;
-    private final boolean throwOnFetchStableOffsetsUnsupported;
-    private final Optional<String> rackId;
-
     // hold onto request&future for committed offset requests to enable async calls.
     private PendingCommittedOffsetRequest pendingCommittedOffsetRequest = null;
 
@@ -168,13 +173,15 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                                int autoCommitIntervalMs,
                                ConsumerInterceptors<?, ?> interceptors,
                                boolean throwOnFetchStableOffsetsUnsupported,
-                               String rackId) {
+                               String rackId,
+                               Optional<ClientTelemetryReporter> clientTelemetryReporter) {
         super(rebalanceConfig,
               logContext,
               client,
               metrics,
               metricGrpPrefix,
-              time);
+              time,
+              clientTelemetryReporter);
         this.rebalanceConfig = rebalanceConfig;
         this.log = logContext.logger(ConsumerCoordinator.class);
         this.metadata = metadata;
@@ -186,7 +193,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         this.autoCommitIntervalMs = autoCommitIntervalMs;
         this.assignors = assignors;
         this.completedOffsetCommits = new ConcurrentLinkedQueue<>();
-        this.coordinatorMetrics = new ConsumerCoordinatorMetrics(subscriptions, metrics, metricGrpPrefix);
+        this.coordinatorMetrics = new ConsumerCoordinatorMetrics(metrics, metricGrpPrefix);
         this.interceptors = interceptors;
         this.inFlightAsyncCommits = new AtomicInteger();
         this.pendingAsyncCommits = new AtomicInteger();
@@ -228,7 +235,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             logContext,
             subscriptions,
             time,
-            coordinatorMetrics
+            new RebalanceCallbackMetricsManager(metrics, metricGrpPrefix)
         );
         this.metadata.requestUpdate(true);
     }
@@ -1184,7 +1191,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         return commitOffsetsAsync(allConsumedOffsets, (offsets, exception) -> {
             if (exception != null) {
                 if (exception instanceof RetriableCommitFailedException) {
-                    log.debug("Asynchronous auto-commit of offsets {} failed due to retriable error: {}", offsets,
+                    log.debug("Asynchronous auto-commit of offsets {} failed due to retriable error.", offsets,
                         exception);
                     nextAutoCommitTimer.updateAndReset(rebalanceConfig.retryBackoffMs);
                 } else {
@@ -1543,6 +1550,29 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         @Override
         public String toString() {
             return "(version" + version + ": " + partitionsPerTopic + ")";
+        }
+    }
+
+    private class ConsumerCoordinatorMetrics {
+        private final String metricGrpName;
+        private final Sensor commitSensor;
+
+        private ConsumerCoordinatorMetrics(Metrics metrics, String metricGrpPrefix) {
+            this.metricGrpName = metricGrpPrefix + COORDINATOR_METRICS_SUFFIX;
+
+            this.commitSensor = metrics.sensor("commit-latency");
+            this.commitSensor.add(metrics.metricName("commit-latency-avg",
+                this.metricGrpName,
+                "The average time taken for a commit request"), new Avg());
+            this.commitSensor.add(metrics.metricName("commit-latency-max",
+                this.metricGrpName,
+                "The max time taken for a commit request"), new Max());
+            this.commitSensor.add(createMeter(metrics, metricGrpName, "commit", "commit calls"));
+
+            Measurable numParts = (config, now) -> subscriptions.numAssignedPartitions();
+            metrics.addMetric(metrics.metricName("assigned-partitions",
+                this.metricGrpName,
+                "The number of partitions currently assigned to this consumer"), numParts);
         }
     }
 

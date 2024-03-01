@@ -182,9 +182,9 @@ class ProducerFailureHandlingTest extends KafkaServerTestHarness {
   }
 
   /**
-    * Send with invalid partition id should return ExecutionException caused by TimeoutException
-    * when partition is higher than the upper bound of partitions.
-    */
+   * Send with invalid partition id should return ExecutionException caused by TimeoutException
+   * when partition is higher than the upper bound of partitions.
+   */
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testInvalidPartition(quorum: String): Unit = {
@@ -229,20 +229,6 @@ class ProducerFailureHandlingTest extends KafkaServerTestHarness {
     val thrown = assertThrows(classOf[ExecutionException],
       () => producer2.send(new ProducerRecord(Topic.GROUP_METADATA_TOPIC_NAME, "test".getBytes, "test".getBytes)).get)
     assertTrue(thrown.getCause.isInstanceOf[InvalidTopicException], "Unexpected exception while sending to an invalid topic " + thrown.getCause)
-  }
-
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("zk", "kraft"))
-  def testNotEnoughReplicas(quorum: String): Unit = {
-    val topicName = "minisrtest"
-    val topicProps = new Properties()
-    topicProps.put("min.insync.replicas",(numServers+1).toString)
-
-    createTopic(topicName, replicationFactor = numServers, topicConfig = topicProps)
-
-    val record = new ProducerRecord(topicName, null, "key".getBytes, "value".getBytes)
-    val e = assertThrows(classOf[ExecutionException], () => producer3.send(record).get)
-    assertEquals(classOf[NotEnoughReplicasException], e.getCause.getClass)
   }
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)

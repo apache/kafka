@@ -60,7 +60,7 @@ import static org.apache.kafka.streams.processor.internals.StateManagerUtil.pars
  * stored. Handles creation/locking/unlocking/cleaning of the Task Directories. This class is not
  * thread-safe.
  */
-public class StateDirectory {
+public class StateDirectory implements AutoCloseable {
 
     private static final Pattern TASK_DIR_PATH_NAME = Pattern.compile("\\d+_\\d+");
     private static final Pattern NAMED_TOPOLOGY_DIR_PATH_NAME = Pattern.compile("__.+__"); // named topology dirs follow '__Topology-Name__'
@@ -377,6 +377,7 @@ public class StateDirectory {
         }
     }
 
+    @Override
     public void close() {
         if (hasPersistentStores) {
             try {

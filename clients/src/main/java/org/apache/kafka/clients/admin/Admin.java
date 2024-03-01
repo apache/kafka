@@ -1633,7 +1633,8 @@ public interface Admin extends AutoCloseable {
      * coordinators in the cluster and collect the state of all transactions. Users
      * should typically attempt to reduce the size of the result set using
      * {@link ListTransactionsOptions#filterProducerIds(Collection)} or
-     * {@link ListTransactionsOptions#filterStates(Collection)}
+     * {@link ListTransactionsOptions#filterStates(Collection)} or
+     * {@link ListTransactionsOptions#durationFilter(Long)}
      *
      * @param options Options to control the method behavior (including filters)
      * @return The result
@@ -1662,6 +1663,26 @@ public interface Admin extends AutoCloseable {
      */
     FenceProducersResult fenceProducers(Collection<String> transactionalIds,
                                         FenceProducersOptions options);
+
+    /**
+     * List the client metrics configuration resources available in the cluster.
+     *
+     * @param options The options to use when listing the client metrics resources.
+     * @return The ListClientMetricsResourcesResult.
+     */
+    ListClientMetricsResourcesResult listClientMetricsResources(ListClientMetricsResourcesOptions options);
+
+    /**
+     * List the client metrics configuration resources available in the cluster with the default options.
+     * <p>
+     * This is a convenience method for {@link #listClientMetricsResources(ListClientMetricsResourcesOptions)}
+     * with default options. See the overload for more details.
+     *
+     * @return The ListClientMetricsResourcesResult.
+     */
+    default ListClientMetricsResourcesResult listClientMetricsResources() {
+        return listClientMetricsResources(new ListClientMetricsResourcesOptions());
+    }
 
     /**
      * Determines the client's unique client instance ID used for telemetry. This ID is unique to

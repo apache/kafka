@@ -17,8 +17,8 @@
 
 package kafka.zk.migration
 
-import kafka.server.{ConfigEntityName, ConfigType, DynamicBrokerConfig, DynamicConfig, ZkAdminManager}
-import kafka.utils.{Logging, PasswordEncoder}
+import kafka.server.{DynamicBrokerConfig, DynamicConfig, ZkAdminManager}
+import kafka.utils.Logging
 import kafka.zk.ZkMigrationClient.{logAndRethrow, wrapZkException}
 import kafka.zk._
 import kafka.zookeeper.{CreateRequest, DeleteRequest, SetDataRequest}
@@ -31,8 +31,11 @@ import org.apache.kafka.common.quota.ClientQuotaEntity
 import org.apache.kafka.common.security.scram.internals.ScramCredentialUtils
 import org.apache.kafka.metadata.migration.ConfigMigrationClient.ClientQuotaVisitor
 import org.apache.kafka.metadata.migration.{ConfigMigrationClient, MigrationClientException, ZkMigrationLeadershipState}
+import org.apache.kafka.security.PasswordEncoder
+import org.apache.kafka.server.config.{ConfigEntityName, ConfigType}
 import org.apache.zookeeper.KeeperException.Code
 import org.apache.zookeeper.{CreateMode, KeeperException}
+
 
 import java.{lang, util}
 import java.util.Properties
@@ -54,7 +57,7 @@ class ZkConfigMigrationClient(
    * to the special KRaft string.
    */
   private def fromZkEntityName(entityName: String): String = {
-    if (entityName.equals(ConfigEntityName.Default)) {
+    if (entityName.equals(ConfigEntityName.DEFAULT)) {
       ""
     } else {
       entityName
@@ -63,7 +66,7 @@ class ZkConfigMigrationClient(
 
   private def toZkEntityName(entityName: String): String = {
     if (entityName.isEmpty) {
-      ConfigEntityName.Default
+      ConfigEntityName.DEFAULT
     } else {
       entityName
     }
@@ -102,14 +105,14 @@ class ZkConfigMigrationClient(
       }
     }
 
-    migrateEntityType(ConfigType.User, ClientQuotaEntity.USER)
-    migrateEntityType(ConfigType.Client, ClientQuotaEntity.CLIENT_ID)
+    migrateEntityType(ConfigType.USER, ClientQuotaEntity.USER)
+    migrateEntityType(ConfigType.CLIENT, ClientQuotaEntity.CLIENT_ID)
 
-    adminZkClient.fetchAllChildEntityConfigs(ConfigType.User, ConfigType.Client).foreach { case (name, props) =>
+    adminZkClient.fetchAllChildEntityConfigs(ConfigType.USER, ConfigType.CLIENT).foreach { case (name, props) =>
       // Taken from ZkAdminManager
       val components = name.split("/")
       if (components.size != 3 || components(1) != "clients")
-        throw new IllegalArgumentException(s"Unexpected config path: ${name}")
+        throw new IllegalArgumentException(s"Unexpected config path: $name")
       val entity = List(
         buildEntityData(ClientQuotaEntity.USER, components(0)),
         buildEntityData(ClientQuotaEntity.CLIENT_ID, components(2))
@@ -126,12 +129,12 @@ class ZkConfigMigrationClient(
       }
     }
 
-    migrateEntityType(ConfigType.Ip, ClientQuotaEntity.IP)
+    migrateEntityType(ConfigType.IP, ClientQuotaEntity.IP)
   }
 
   override def iterateBrokerConfigs(configConsumer: BiConsumer[String, util.Map[String, String]]): Unit = {
-    val brokerEntities = zkClient.getAllEntitiesWithConfig(ConfigType.Broker)
-    zkClient.getEntitiesConfigs(ConfigType.Broker, brokerEntities.toSet).foreach { case (broker, props) =>
+    val brokerEntities = zkClient.getAllEntitiesWithConfig(ConfigType.BROKER)
+    zkClient.getEntitiesConfigs(ConfigType.BROKER, brokerEntities.toSet).foreach { case (broker, props) =>
       val brokerResource = fromZkEntityName(broker)
       val decodedProps = props.asScala.map { case (key, value) =>
         if (DynamicBrokerConfig.isPasswordConfig(key))
@@ -147,7 +150,7 @@ class ZkConfigMigrationClient(
   }
 
   override def iterateTopicConfigs(configConsumer: BiConsumer[String, util.Map[String, String]]): Unit = {
-    val topicEntities = zkClient.getAllEntitiesWithConfig(ConfigType.Topic)
+    val topicEntities = zkClient.getAllEntitiesWithConfig(ConfigType.TOPIC)
     topicEntities.foreach { topic =>
       readTopicConfigs(topic, props => configConsumer.accept(topic, props))
     }
@@ -155,7 +158,7 @@ class ZkConfigMigrationClient(
 
   override def readTopicConfigs(topicName: String, configConsumer: Consumer[util.Map[String, String]]): Unit = {
     val topicResource = fromZkEntityName(topicName)
-    val props = zkClient.getEntityConfigs(ConfigType.Topic, topicResource)
+    val props = zkClient.getEntityConfigs(ConfigType.TOPIC, topicResource)
     val decodedProps = props.asScala.map { case (key, value) =>
       if (DynamicBrokerConfig.isPasswordConfig(key))
         key -> passwordEncoder.decode(value).value
@@ -174,8 +177,8 @@ class ZkConfigMigrationClient(
     state: ZkMigrationLeadershipState
   ): ZkMigrationLeadershipState = wrapZkException {
     val configType = configResource.`type`() match {
-      case ConfigResource.Type.BROKER => Some(ConfigType.Broker)
-      case ConfigResource.Type.TOPIC => Some(ConfigType.Topic)
+      case ConfigResource.Type.BROKER => Some(ConfigType.BROKER)
+      case ConfigResource.Type.TOPIC => Some(ConfigType.TOPIC)
       case _ => None
     }
 
@@ -213,8 +216,8 @@ class ZkConfigMigrationClient(
     state: ZkMigrationLeadershipState
   ): ZkMigrationLeadershipState = wrapZkException {
     val configType = configResource.`type`() match {
-      case ConfigResource.Type.BROKER => Some(ConfigType.Broker)
-      case ConfigResource.Type.TOPIC => Some(ConfigType.Topic)
+      case ConfigResource.Type.BROKER => Some(ConfigType.BROKER)
+      case ConfigResource.Type.TOPIC => Some(ConfigType.TOPIC)
       case _ => None
     }
 
@@ -254,14 +257,14 @@ class ZkConfigMigrationClient(
     val props = new Properties()
 
     val (configType, path, configKeys) = if (user.isDefined && client.isEmpty) {
-      (Some(ConfigType.User), user, DynamicConfig.User.configKeys)
+      (Some(ConfigType.USER), user, DynamicConfig.User.configKeys)
     } else if (user.isDefined && client.isDefined) {
-      (Some(ConfigType.User), Some(s"${user.get}/clients/${client.get}"),
+      (Some(ConfigType.USER), Some(s"${user.get}/clients/${client.get}"),
         DynamicConfig.User.configKeys)
     } else if (client.isDefined) {
-      (Some(ConfigType.Client), client, DynamicConfig.Client.configKeys)
+      (Some(ConfigType.CLIENT), client, DynamicConfig.Client.configKeys)
     } else if (ip.isDefined) {
-      (Some(ConfigType.Ip), ip, DynamicConfig.Ip.configKeys)
+      (Some(ConfigType.IP), ip, DynamicConfig.Ip.configKeys)
     } else {
       (None, None, Map.empty.asJava)
     }
@@ -275,7 +278,7 @@ class ZkConfigMigrationClient(
     quotas.forEach { case (key, value) =>
       val configKey = configKeys.get(key)
       if (configKey == null) {
-        throw new MigrationClientException(s"Invalid configuration key ${key}")
+        throw new MigrationClientException(s"Invalid configuration key $key")
       } else {
         configKey.`type` match {
           case ConfigDef.Type.DOUBLE =>
@@ -287,7 +290,7 @@ class ZkConfigMigrationClient(
             else
               (value + epsilon).toInt
             if ((intValue.toDouble - value).abs > epsilon)
-              throw new InvalidRequestException(s"Configuration ${key} must be a ${configKey.`type`} value")
+              throw new InvalidRequestException(s"Configuration $key must be a ${configKey.`type`} value")
             props.setProperty(key, intValue.toString)
           case _ =>
             throw new MigrationClientException(s"Unexpected config type ${configKey.`type`}")

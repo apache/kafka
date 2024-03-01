@@ -18,7 +18,7 @@
 package kafka.server
 
 import kafka.cluster.{Broker, EndPoint}
-import kafka.common.{GenerateBrokerIdException, InconsistentBrokerIdException, InconsistentClusterIdException}
+import kafka.common.GenerateBrokerIdException
 import kafka.controller.KafkaController
 import kafka.coordinator.group.GroupCoordinatorAdapter
 import kafka.coordinator.transaction.{ProducerIdManager, TransactionCoordinator}
@@ -47,11 +47,17 @@ import org.apache.kafka.common.security.{JaasContext, JaasUtils}
 import org.apache.kafka.common.utils.{AppInfoParser, LogContext, Time, Utils}
 import org.apache.kafka.common.{Endpoint, KafkaException, Node, TopicPartition}
 import org.apache.kafka.coordinator.group.GroupCoordinator
+import org.apache.kafka.image.loader.metrics.MetadataLoaderMetrics
+import org.apache.kafka.metadata.properties.MetaPropertiesEnsemble.VerificationFlag
+import org.apache.kafka.metadata.properties.MetaPropertiesEnsemble.VerificationFlag.REQUIRE_V0
+import org.apache.kafka.metadata.properties.{MetaProperties, MetaPropertiesEnsemble}
 import org.apache.kafka.metadata.{BrokerState, MetadataRecordSerde, VersionRange}
 import org.apache.kafka.raft.RaftConfig
+import org.apache.kafka.server.NodeToControllerChannelManager
 import org.apache.kafka.server.authorizer.Authorizer
 import org.apache.kafka.server.common.MetadataVersion._
 import org.apache.kafka.server.common.{ApiMessageAndVersion, MetadataVersion}
+import org.apache.kafka.server.config.ConfigType
 import org.apache.kafka.server.fault.LoggingFaultHandler
 import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
@@ -61,7 +67,9 @@ import org.apache.zookeeper.client.ZKClientConfig
 
 import java.io.{File, IOException}
 import java.net.{InetAddress, SocketTimeoutException}
-import java.util.OptionalLong
+import java.nio.file.{Files, Paths}
+import java.util
+import java.util.{Optional, OptionalInt, OptionalLong}
 import java.util.concurrent._
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger}
 import scala.collection.{Map, Seq}
@@ -69,9 +77,6 @@ import scala.compat.java8.OptionConverters.RichOptionForJava8
 import scala.jdk.CollectionConverters._
 
 object KafkaServer {
-
-  val brokerMetaPropsFile = "meta.properties"
-
   def zkClientConfigFromKafkaConfig(config: KafkaConfig, forceZkSslClientEnable: Boolean = false): ZKClientConfig = {
     val clientConfig = new ZKClientConfig
     if (config.zkSslClientEnable || forceZkSslClientEnable) {
@@ -128,7 +133,7 @@ class KafkaServer(
   var authorizer: Option[Authorizer] = None
   @volatile var socketServer: SocketServer = _
   var dataPlaneRequestHandlerPool: KafkaRequestHandlerPool = _
-  var controlPlaneRequestHandlerPool: KafkaRequestHandlerPool = _
+  private var controlPlaneRequestHandlerPool: KafkaRequestHandlerPool = _
 
   var logDirFailureChannel: LogDirFailureChannel = _
   @volatile private var _logManager: LogManager = _
@@ -139,7 +144,7 @@ class KafkaServer(
   var tokenManager: DelegationTokenManager = _
 
   var dynamicConfigHandlers: Map[String, ConfigHandler] = _
-  var dynamicConfigManager: ZkConfigManager = _
+  private var dynamicConfigManager: ZkConfigManager = _
   var credentialProvider: CredentialProvider = _
   var tokenCache: DelegationTokenCache = _
 
@@ -168,12 +173,9 @@ class KafkaServer(
   private var configRepository: ZkConfigRepository = _
 
   val correlationId: AtomicInteger = new AtomicInteger(0)
-  val brokerMetadataCheckpoints = config.logDirs.map { logDir =>
-    (logDir, new BrokerMetadataCheckpoint(new File(logDir + File.separator + KafkaServer.brokerMetaPropsFile)))
-  }.toMap
 
   private var _clusterId: String = _
-  @volatile var _brokerTopicStats: BrokerTopicStats = _
+  @volatile private var _brokerTopicStats: BrokerTopicStats = _
 
   private var _featureChangeListener: FinalizedFeatureChangeListener = _
 
@@ -186,7 +188,7 @@ class KafkaServer(
   // Visible for testing
   private[kafka] def zkClient = _zkClient
 
-  override def brokerTopicStats = _brokerTopicStats
+  override def brokerTopicStats: BrokerTopicStats = _brokerTopicStats
 
   private[kafka] def featureChangeListener = _featureChangeListener
 
@@ -197,6 +199,7 @@ class KafkaServer(
   def kafkaController: KafkaController = _kafkaController
 
   var lifecycleManager: BrokerLifecycleManager = _
+  private var raftManager: KafkaRaftManager[ApiMessageAndVersion] = _
 
   @volatile var brokerEpochManager: ZkBrokerEpochManager = _
 
@@ -229,29 +232,32 @@ class KafkaServer(
         info(s"Cluster ID = $clusterId")
 
         /* load metadata */
-        val (preloadedBrokerMetadataCheckpoint, initialOfflineDirs) =
-          BrokerMetadataCheckpoint.getBrokerMetadataAndOfflineDirs(config.logDirs, ignoreMissing = true, kraftMode = false)
-
-        if (preloadedBrokerMetadataCheckpoint.version != 0) {
-          throw new RuntimeException(s"Found unexpected version in loaded `meta.properties`: " +
-            s"$preloadedBrokerMetadataCheckpoint. Zk-based brokers only support version 0 " +
-            "(which is implicit when the `version` field is missing).")
+        val initialMetaPropsEnsemble = {
+          val loader = new MetaPropertiesEnsemble.Loader()
+          config.logDirs.foreach(loader.addLogDir)
+          loader.load()
         }
 
-        /* check cluster id */
-        if (preloadedBrokerMetadataCheckpoint.clusterId.isDefined && preloadedBrokerMetadataCheckpoint.clusterId.get != clusterId)
-          throw new InconsistentClusterIdException(
-            s"The Cluster ID $clusterId doesn't match stored clusterId ${preloadedBrokerMetadataCheckpoint.clusterId} in meta.properties. " +
-            s"The broker is trying to join the wrong cluster. Configured zookeeper.connect may be wrong.")
+        val verificationId = if (config.brokerId < 0) {
+          OptionalInt.empty()
+        } else {
+          OptionalInt.of(config.brokerId)
+        }
+        val verificationFlags = if (config.migrationEnabled) {
+          util.EnumSet.noneOf(classOf[VerificationFlag])
+        } else {
+          util.EnumSet.of(REQUIRE_V0)
+        }
+        initialMetaPropsEnsemble.verify(Optional.of(_clusterId), verificationId, verificationFlags)
 
         /* generate brokerId */
-        config.brokerId = getOrGenerateBrokerId(preloadedBrokerMetadataCheckpoint)
+        config.brokerId = getOrGenerateBrokerId(initialMetaPropsEnsemble)
         logContext = new LogContext(s"[KafkaServer id=${config.brokerId}] ")
         this.logIdent = logContext.logPrefix
 
         // initialize dynamic broker configs from ZooKeeper. Any updates made after this will be
         // applied after ZkConfigManager starts.
-        config.dynamicConfig.initialize(Some(zkClient))
+        config.dynamicConfig.initialize(Some(zkClient), clientMetricsReceiverPluginOpt = None)
 
         /* start scheduler */
         kafkaScheduler = new KafkaScheduler(config.backgroundThreads)
@@ -261,6 +267,7 @@ class KafkaServer(
         kafkaYammerMetrics = KafkaYammerMetrics.INSTANCE
         kafkaYammerMetrics.configure(config.originals)
         metrics = Server.initializeMetrics(config, time, clusterId)
+        createCurrentControllerIdMetric()
 
         /* register broker metrics */
         _brokerTopicStats = new BrokerTopicStats(java.util.Optional.of(config))
@@ -270,10 +277,38 @@ class KafkaServer(
 
         logDirFailureChannel = new LogDirFailureChannel(config.logDirs.size)
 
+        // Make sure all storage directories have meta.properties files.
+        val metaPropsEnsemble = {
+          val copier = new MetaPropertiesEnsemble.Copier(initialMetaPropsEnsemble)
+          initialMetaPropsEnsemble.nonFailedDirectoryProps().forEachRemaining(e => {
+            val logDir = e.getKey
+            val builder = new MetaProperties.Builder(e.getValue).
+              setClusterId(_clusterId).
+              setNodeId(config.brokerId)
+            if (!builder.directoryId().isPresent) {
+              if (config.migrationEnabled) {
+                builder.setDirectoryId(copier.generateValidDirectoryId())
+              }
+            }
+            copier.setLogDirProps(logDir, builder.build())
+          })
+          copier.emptyLogDirs().clear()
+          copier.setPreWriteHandler((logDir, _, _) => {
+            info(s"Rewriting $logDir${File.separator}meta.properties")
+            Files.createDirectories(Paths.get(logDir))
+          })
+          copier.setWriteErrorHandler((logDir, e) => {
+            logDirFailureChannel.maybeAddOfflineLogDir(logDir, s"Error while writing meta.properties to $logDir", e)
+          })
+          copier.writeLogDirChanges()
+          copier.copy()
+        }
+        metaPropsEnsemble.verify(Optional.of(_clusterId), OptionalInt.of(config.brokerId), verificationFlags)
+
         /* start log manager */
         _logManager = LogManager(
           config,
-          initialOfflineDirs,
+          metaPropsEnsemble.errorLogDirs().asScala.toSeq,
           configRepository,
           kafkaScheduler,
           time,
@@ -295,7 +330,8 @@ class KafkaServer(
           config.brokerId,
           config.interBrokerProtocolVersion,
           brokerFeatures,
-          kraftControllerNodes)
+          kraftControllerNodes,
+          config.migrationEnabled)
         val controllerNodeProvider = new MetadataCacheControllerNodeProvider(metadataCache, config)
 
         /* initialize feature change listener */
@@ -309,7 +345,7 @@ class KafkaServer(
         tokenCache = new DelegationTokenCache(ScramMechanism.mechanismNames)
         credentialProvider = new CredentialProvider(ScramMechanism.mechanismNames, tokenCache)
 
-        clientToControllerChannelManager = NodeToControllerChannelManager(
+        clientToControllerChannelManager = new NodeToControllerChannelManagerImpl(
           controllerNodeProvider = controllerNodeProvider,
           time = time,
           metrics = metrics,
@@ -332,7 +368,8 @@ class KafkaServer(
           config,
           forwardingManager,
           brokerFeatures,
-          metadataCache
+          metadataCache,
+          None
         )
 
         // Create and start the socket server acceptor threads so that the bound port is known.
@@ -367,10 +404,6 @@ class KafkaServer(
         val brokerInfo = createBrokerInfo
         val brokerEpoch = zkClient.registerBroker(brokerInfo)
 
-        // Now that the broker is successfully registered, checkpoint its metadata
-        val zkMetaProperties = ZkMetaProperties(clusterId, config.brokerId)
-        checkpointBrokerMetadata(zkMetaProperties)
-
         /* start token manager */
         tokenManager = new DelegationTokenManagerZk(config, tokenCache, time , zkClient)
         tokenManager.startup()
@@ -384,14 +417,14 @@ class KafkaServer(
           lifecycleManager = new BrokerLifecycleManager(config,
             time,
             s"zk-broker-${config.nodeId}-",
-            isZkBroker = true)
+            isZkBroker = true,
+            logManager.directoryIdsSet)
 
           // If the ZK broker is in migration mode, start up a RaftManager to learn about the new KRaft controller
-          val kraftMetaProps = MetaProperties(zkMetaProperties.clusterId, zkMetaProperties.brokerId)
           val controllerQuorumVotersFuture = CompletableFuture.completedFuture(
             RaftConfig.parseVoterConnections(config.quorumVoters))
-          val raftManager = new KafkaRaftManager[ApiMessageAndVersion](
-            kraftMetaProps,
+          raftManager = new KafkaRaftManager[ApiMessageAndVersion](
+            metaPropsEnsemble.clusterId().get(),
             config,
             new MetadataRecordSerde,
             KafkaRaftServer.MetadataPartition,
@@ -404,7 +437,7 @@ class KafkaServer(
           )
           val controllerNodes = RaftConfig.voterConnectionsToNodes(controllerQuorumVotersFuture.get()).asScala
           val quorumControllerNodeProvider = RaftControllerNodeProvider(raftManager, config, controllerNodes)
-          val brokerToQuorumChannelManager = NodeToControllerChannelManager(
+          val brokerToQuorumChannelManager = new NodeToControllerChannelManagerImpl(
             controllerNodeProvider = quorumControllerNodeProvider,
             time = time,
             metrics = metrics,
@@ -436,7 +469,7 @@ class KafkaServer(
           lifecycleManager.start(
             () => listener.highestOffset,
             brokerToQuorumChannelManager,
-            kraftMetaProps.clusterId,
+            clusterId,
             networkListeners,
             ibpAsFeature,
             OptionalLong.empty()
@@ -481,8 +514,6 @@ class KafkaServer(
         /* start auto topic creation manager */
         this.autoTopicCreationManager = AutoTopicCreationManager(
           config,
-          metadataCache,
-          threadNamePrefix,
           autoTopicCreationChannel,
           Some(adminManager),
           Some(kafkaController),
@@ -544,7 +575,8 @@ class KafkaServer(
           clusterId = clusterId,
           time = time,
           tokenManager = tokenManager,
-          apiVersionManager = apiVersionManager)
+          apiVersionManager = apiVersionManager,
+          clientMetricsManager = None)
 
         dataPlaneRequestProcessor = createKafkaApis(socketServer.dataPlaneRequestChannel)
 
@@ -564,11 +596,11 @@ class KafkaServer(
         Option(logManager.cleaner).foreach(config.dynamicConfig.addBrokerReconfigurable)
 
         /* start dynamic config manager */
-        dynamicConfigHandlers = Map[String, ConfigHandler](ConfigType.Topic -> new TopicConfigHandler(replicaManager, config, quotaManagers, Some(kafkaController)),
-                                                           ConfigType.Client -> new ClientIdConfigHandler(quotaManagers),
-                                                           ConfigType.User -> new UserConfigHandler(quotaManagers, credentialProvider),
-                                                           ConfigType.Broker -> new BrokerConfigHandler(config, quotaManagers),
-                                                           ConfigType.Ip -> new IpConfigHandler(socketServer.connectionQuotas))
+        dynamicConfigHandlers = Map[String, ConfigHandler](ConfigType.TOPIC -> new TopicConfigHandler(replicaManager, config, quotaManagers, Some(kafkaController)),
+                                                           ConfigType.CLIENT -> new ClientIdConfigHandler(quotaManagers),
+                                                           ConfigType.USER -> new UserConfigHandler(quotaManagers, credentialProvider),
+                                                           ConfigType.BROKER -> new BrokerConfigHandler(config, quotaManagers),
+                                                           ConfigType.IP -> new IpConfigHandler(socketServer.connectionQuotas))
 
         // Create the config manager. start listening to notifications
         dynamicConfigManager = new ZkConfigManager(zkClient, dynamicConfigHandlers)
@@ -611,10 +643,26 @@ class KafkaServer(
     }
   }
 
+  private def createCurrentControllerIdMetric(): Unit = {
+    KafkaYammerMetrics.defaultRegistry().newGauge(MetadataLoaderMetrics.CURRENT_CONTROLLER_ID, () => {
+      Option(metadataCache) match {
+        case None => -1
+        case Some(cache) => cache.getControllerId match {
+          case None => -1
+          case Some(id) => id.id
+        }
+      }
+    })
+  }
+
+  private def unregisterCurrentControllerIdMetric(): Unit = {
+    KafkaYammerMetrics.defaultRegistry().removeMetric(MetadataLoaderMetrics.CURRENT_CONTROLLER_ID)
+  }
+
   protected def createRemoteLogManager(): Option[RemoteLogManager] = {
     if (config.remoteLogManagerConfig.enableRemoteStorageSystem()) {
-      if(config.logDirs.size > 1) {
-        throw new KafkaException("Tiered storage is not supported with multiple log dirs.");
+      if (config.logDirs.size > 1) {
+        throw new KafkaException("Tiered storage is not supported with multiple log dirs.")
       }
 
       Some(new RemoteLogManager(config.remoteLogManagerConfig, config.brokerId, config.logDirs.head, clusterId, time,
@@ -624,7 +672,7 @@ class KafkaServer(
             log.updateLogStartOffsetFromRemoteTier(remoteLogStartOffset)
           }
       },
-        brokerTopicStats));
+        brokerTopicStats))
     } else {
       None
     }
@@ -976,6 +1024,7 @@ class KafkaServer(
         // avoid any failures (e.g. when metrics are recorded)
         if (socketServer != null)
           CoreUtils.swallow(socketServer.shutdown(), this)
+        unregisterCurrentControllerIdMetric()
         if (metrics != null)
           CoreUtils.swallow(metrics.close(), this)
         if (brokerTopicStats != null)
@@ -983,6 +1032,9 @@ class KafkaServer(
 
         // Clear all reconfigurable instances stored in DynamicBrokerConfig
         config.dynamicConfig.clear()
+
+        if (raftManager != null)
+          CoreUtils.swallow(raftManager.shutdown(), this)
 
         if (lifecycleManager != null) {
           lifecycleManager.close()
@@ -1021,24 +1073,6 @@ class KafkaServer(
   }
 
   /**
-   * Checkpoint the BrokerMetadata to all the online log.dirs
-   *
-   * @param brokerMetadata
-   */
-  private def checkpointBrokerMetadata(brokerMetadata: ZkMetaProperties) = {
-    for (logDir <- config.logDirs if logManager.isLogDirOnline(new File(logDir).getAbsolutePath)) {
-      val checkpoint = brokerMetadataCheckpoints(logDir)
-      try {
-        checkpoint.write(brokerMetadata.toProperties)
-      } catch {
-        case e: IOException =>
-          val dirPath = checkpoint.file.getAbsolutePath
-          logDirFailureChannel.maybeAddOfflineLogDir(dirPath, s"Error while writing meta.properties to $dirPath", e)
-      }
-    }
-  }
-
-  /**
    * Generates new brokerId if enabled or reads from meta.properties based on following conditions
    * <ol>
    * <li> config has no broker.id provided and broker id generation is enabled, generates a broker.id based on Zookeeper's sequence
@@ -1048,20 +1082,15 @@ class KafkaServer(
    *
    * @return The brokerId.
    */
-  private def getOrGenerateBrokerId(brokerMetadata: RawMetaProperties): Int = {
-    val brokerId = config.brokerId
-
-    if (brokerId >= 0 && brokerMetadata.brokerId.exists(_ != brokerId))
-      throw new InconsistentBrokerIdException(
-        s"Configured broker.id $brokerId doesn't match stored broker.id ${brokerMetadata.brokerId} in meta.properties. " +
-          s"If you moved your data, make sure your configured broker.id matches. " +
-          s"If you intend to create a new broker, you should remove all data in your data directories (log.dirs).")
-    else if (brokerMetadata.brokerId.isDefined)
-      brokerMetadata.brokerId.get
-    else if (brokerId < 0 && config.brokerIdGenerationEnable) // generate a new brokerId from Zookeeper
+  private def getOrGenerateBrokerId(metaPropsEnsemble: MetaPropertiesEnsemble): Int = {
+    if (config.brokerId >= 0) {
+      config.brokerId
+    } else if (metaPropsEnsemble.nodeId().isPresent) {
+      metaPropsEnsemble.nodeId().getAsInt
+    } else if (config.brokerIdGenerationEnable) {
       generateBrokerId()
-    else
-      brokerId
+    } else
+      throw new RuntimeException(s"No broker ID found, and ${config.brokerIdGenerationEnable} is disabled.")
   }
 
   /**

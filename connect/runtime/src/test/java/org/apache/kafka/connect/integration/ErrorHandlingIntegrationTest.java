@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.connect.integration;
 
+import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.common.config.ConfigDef;
@@ -38,10 +39,13 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
 import static org.apache.kafka.connect.runtime.ConnectorConfig.CONNECTOR_CLASS_CONFIG;
+import static org.apache.kafka.connect.runtime.ConnectorConfig.CONNECTOR_CLIENT_CONSUMER_OVERRIDES_PREFIX;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.ERRORS_LOG_ENABLE_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.ERRORS_LOG_INCLUDE_MESSAGES_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.ERRORS_RETRY_TIMEOUT_CONFIG;
@@ -75,9 +79,7 @@ public class ErrorHandlingIntegrationTest {
     private static final String DLQ_TOPIC = "my-connector-errors";
     private static final String CONNECTOR_NAME = "error-conn";
     private static final String TASK_ID = "error-conn-0";
-    private static final int NUM_RECORDS_PRODUCED = 20;
-    private static final int EXPECTED_CORRECT_RECORDS = 19;
-    private static final int EXPECTED_INCORRECT_RECORDS = 1;
+    private static final int NUM_RECORDS_PRODUCED = 1000;
     private static final int NUM_TASKS = 1;
     private static final long CONNECTOR_SETUP_DURATION_MS = TimeUnit.SECONDS.toMillis(60);
     private static final long CONSUME_MAX_DURATION_MS = TimeUnit.SECONDS.toMillis(30);
@@ -136,7 +138,7 @@ public class ErrorHandlingIntegrationTest {
         props.put(ERRORS_RETRY_TIMEOUT_CONFIG, "1000");
 
         // set expected records to successfully reach the task
-        connectorHandle.taskHandle(TASK_ID).expectedRecords(EXPECTED_CORRECT_RECORDS);
+        connectorHandle.taskHandle(TASK_ID).expectedRecords(NUM_RECORDS_PRODUCED - FaultyPassthrough.EXPECTED_INCORRECT_RECORDS);
 
         connect.configureConnector(CONNECTOR_NAME, props);
         connect.assertions().assertConnectorAndAtLeastNumTasksAreRunning(CONNECTOR_NAME, NUM_TASKS,
@@ -168,7 +170,7 @@ public class ErrorHandlingIntegrationTest {
 
         // consume failed records from dead letter queue topic
         log.info("Consuming records from test topic");
-        ConsumerRecords<byte[], byte[]> messages = connect.kafka().consume(EXPECTED_INCORRECT_RECORDS, CONSUME_MAX_DURATION_MS, DLQ_TOPIC);
+        ConsumerRecords<byte[], byte[]> messages = connect.kafka().consume(FaultyPassthrough.EXPECTED_INCORRECT_RECORDS, CONSUME_MAX_DURATION_MS, DLQ_TOPIC);
         for (ConsumerRecord<byte[], byte[]> recs : messages) {
             log.debug("Consumed record (key={}, value={}) from dead letter queue topic {}",
                     new String(recs.key()), new String(recs.value()), DLQ_TOPIC);
@@ -194,6 +196,8 @@ public class ErrorHandlingIntegrationTest {
         props.put(CONNECTOR_CLASS_CONFIG, ErrantRecordSinkConnector.class.getSimpleName());
         props.put(TASKS_MAX_CONFIG, String.valueOf(NUM_TASKS));
         props.put(TOPICS_CONFIG, "test-topic");
+        // Restrict the size of each poll so that the records are delivered across multiple polls
+        props.put(CONNECTOR_CLIENT_CONSUMER_OVERRIDES_PREFIX + ConsumerConfig.MAX_POLL_RECORDS_CONFIG, "5");
         props.put(KEY_CONVERTER_CLASS_CONFIG, StringConverter.class.getName());
         props.put(VALUE_CONVERTER_CLASS_CONFIG, StringConverter.class.getName());
 
@@ -213,7 +217,7 @@ public class ErrorHandlingIntegrationTest {
         props.put(ERRORS_RETRY_TIMEOUT_CONFIG, "1000");
 
         // set expected records to successfully reach the task
-        connectorHandle.taskHandle(TASK_ID).expectedRecords(EXPECTED_CORRECT_RECORDS);
+        connectorHandle.taskHandle(TASK_ID).expectedRecords(NUM_RECORDS_PRODUCED);
 
         connect.configureConnector(CONNECTOR_NAME, props);
         connect.assertions().assertConnectorAndAtLeastNumTasksAreRunning(CONNECTOR_NAME, NUM_TASKS,
@@ -245,7 +249,12 @@ public class ErrorHandlingIntegrationTest {
 
         // consume failed records from dead letter queue topic
         log.info("Consuming records from test topic");
-        ConsumerRecords<byte[], byte[]> messages = connect.kafka().consume(EXPECTED_INCORRECT_RECORDS, CONSUME_MAX_DURATION_MS, DLQ_TOPIC);
+        Set<String> keys = new HashSet<>();
+        for (ConsumerRecord<byte[], byte[]> rec : connect.kafka().consume(NUM_RECORDS_PRODUCED, CONSUME_MAX_DURATION_MS, DLQ_TOPIC)) {
+            String k = new String(rec.key());
+            keys.add(k);
+        }
+        assertEquals(NUM_RECORDS_PRODUCED, keys.size());
 
         connect.deleteConnector(CONNECTOR_NAME);
         connect.assertions().assertConnectorDoesNotExist(CONNECTOR_NAME,
@@ -297,6 +306,8 @@ public class ErrorHandlingIntegrationTest {
          * An arbitrary id which causes this transformation to fail with a {@link RetriableException}.
          */
         static final int BAD_RECORD_VAL = 7;
+        // Number of records that throw unrecoverable errors from this transformation.
+        private static final int EXPECTED_INCORRECT_RECORDS = 1;
 
         private boolean shouldFail = true;
 

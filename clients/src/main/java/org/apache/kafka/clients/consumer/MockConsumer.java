@@ -24,6 +24,7 @@ import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.utils.LogContext;
 
@@ -63,14 +64,18 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
     private final Map<TopicPartition, OffsetAndMetadata> committed;
     private final Queue<Runnable> pollTasks;
     private final Set<TopicPartition> paused;
+    private final AtomicBoolean wakeup;
 
-    private Map<TopicPartition, List<ConsumerRecord<K, V>>> records;
+    private final Map<TopicPartition, List<ConsumerRecord<K, V>>> records;
+
     private KafkaException pollException;
     private KafkaException offsetsException;
-    private AtomicBoolean wakeup;
     private Duration lastPollTimeout;
     private boolean closed;
     private boolean shouldRebalance;
+    private boolean telemetryDisabled = false;
+    private Uuid clientInstanceId;
+    private int injectTimeoutExceptionCounter;
 
     public MockConsumer(OffsetResetStrategy offsetResetStrategy) {
         this.subscriptions = new SubscriptionState(new LogContext(), offsetResetStrategy);
@@ -104,15 +109,13 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
 
         // rebalance
         this.records.clear();
-        this.subscriptions.assignFromSubscribed(newAssignment);
 
         // rebalance callbacks
-        if (!added.isEmpty()) {
-            this.subscriptions.rebalanceListener().ifPresent(crl -> crl.onPartitionsAssigned(added));
-        }
         if (!removed.isEmpty()) {
             this.subscriptions.rebalanceListener().ifPresent(crl -> crl.onPartitionsRevoked(removed));
         }
+        this.subscriptions.assignFromSubscribed(newAssignment);
+        this.subscriptions.rebalanceListener().ifPresent(crl -> crl.onPartitionsAssigned(added));
     }
 
     @Override
@@ -398,9 +401,38 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
         endOffsets.putAll(newOffsets);
     }
 
+    public void disableTelemetry() {
+        telemetryDisabled = true;
+    }
+
+    /**
+     * @param injectTimeoutExceptionCounter use -1 for infinite
+     */
+    public void injectTimeoutException(final int injectTimeoutExceptionCounter) {
+        this.injectTimeoutExceptionCounter = injectTimeoutExceptionCounter;
+    }
+
+    public void setClientInstanceId(final Uuid instanceId) {
+        clientInstanceId = instanceId;
+    }
+
     @Override
     public Uuid clientInstanceId(Duration timeout) {
-        throw new UnsupportedOperationException("Not implemented yet.");
+        if (telemetryDisabled) {
+            throw new IllegalStateException();
+        }
+        if (clientInstanceId == null) {
+            throw new UnsupportedOperationException("clientInstanceId not set");
+        }
+        if (injectTimeoutExceptionCounter != 0) {
+            // -1 is used as "infinite"
+            if (injectTimeoutExceptionCounter > 0) {
+                --injectTimeoutExceptionCounter;
+            }
+            throw new TimeoutException();
+        }
+
+        return clientInstanceId;
     }
 
     @Override

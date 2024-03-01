@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
+import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.FetchSessionHandler;
 import org.apache.kafka.clients.consumer.internals.NetworkClientDelegate.PollResult;
@@ -48,8 +49,9 @@ public class FetchRequestManager extends AbstractFetch implements RequestManager
                         final FetchConfig fetchConfig,
                         final FetchBuffer fetchBuffer,
                         final FetchMetricsManager metricsManager,
-                        final NetworkClientDelegate networkClientDelegate) {
-        super(logContext, metadata, subscriptions, fetchConfig, fetchBuffer, metricsManager, time);
+                        final NetworkClientDelegate networkClientDelegate,
+                        final ApiVersions apiVersions) {
+        super(logContext, metadata, subscriptions, fetchConfig, fetchBuffer, metricsManager, time, apiVersions);
         this.networkClientDelegate = networkClientDelegate;
     }
 
@@ -80,6 +82,7 @@ public class FetchRequestManager extends AbstractFetch implements RequestManager
      */
     @Override
     public PollResult pollOnClose() {
+        // TODO: move the logic to poll to handle signal close
         return pollInternal(
                 prepareCloseFetchSessionRequests(),
                 this::handleCloseFetchSessionSuccess,

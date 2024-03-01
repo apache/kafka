@@ -48,6 +48,7 @@ import org.apache.kafka.streams.processor.TimestampExtractor;
 import org.apache.kafka.streams.processor.internals.DefaultKafkaClientSupplier;
 import org.apache.kafka.streams.processor.internals.StreamsPartitionAssignor;
 import org.apache.kafka.streams.processor.internals.assignment.RackAwareTaskAssignor;
+import org.apache.kafka.streams.state.BuiltInDslStoreSuppliers;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -56,7 +57,6 @@ import java.time.Duration;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Properties;
@@ -407,6 +407,18 @@ public class StreamsConfig extends AbstractConfig {
     public static final String UPGRADE_FROM_34 = UpgradeFromValues.UPGRADE_FROM_34.toString();
 
     /**
+     * Config value for parameter {@link #UPGRADE_FROM_CONFIG "upgrade.from"} for upgrading an application from version {@code 3.5.x}.
+     */
+    @SuppressWarnings("WeakerAccess")
+    public static final String UPGRADE_FROM_35 = UpgradeFromValues.UPGRADE_FROM_35.toString();
+
+    /**
+     * Config value for parameter {@link #UPGRADE_FROM_CONFIG "upgrade.from"} for upgrading an application from version {@code 3.6.x}.
+     */
+    @SuppressWarnings("WeakerAccess")
+    public static final String UPGRADE_FROM_36 = UpgradeFromValues.UPGRADE_FROM_36.toString();
+
+    /**
      * Config value for parameter {@link #PROCESSING_GUARANTEE_CONFIG "processing.guarantee"} for at-least-once processing guarantees.
      */
     @SuppressWarnings("WeakerAccess")
@@ -495,8 +507,13 @@ public class StreamsConfig extends AbstractConfig {
     /** {@code client.id} */
     @SuppressWarnings("WeakerAccess")
     public static final String CLIENT_ID_CONFIG = CommonClientConfigs.CLIENT_ID_CONFIG;
-    private static final String CLIENT_ID_DOC = "An ID prefix string used for the client IDs of internal consumer, producer and restore-consumer," +
-        " with pattern <code>&lt;client.id&gt;-StreamThread-&lt;threadSequenceNumber$gt;-&lt;consumer|producer|restore-consumer&gt;</code>.";
+    private static final String CLIENT_ID_DOC = "An ID prefix string used for the client IDs of internal [main-|restore-|global-]consumer, producer, and admin clients" +
+        " with pattern <code>&lt;client.id&gt;-[Global]StreamThread[-&lt;threadSequenceNumber$gt;]-&lt;consumer|producer|restore-consumer|global-consumer&gt;</code>.";
+
+    /** {@code enable.metrics.push} */
+    @SuppressWarnings("WeakerAccess")
+    public static  final String ENABLE_METRICS_PUSH_CONFIG = CommonClientConfigs.ENABLE_METRICS_PUSH_CONFIG;
+    public static final String ENABLE_METRICS_PUSH_DOC = "Whether to enable pushing of internal [main-|restore-|global]consumer, producer, and admin client metrics to the cluster, if the cluster has a client metrics subscription which matches a client.";
 
     /** {@code commit.interval.ms} */
     @SuppressWarnings("WeakerAccess")
@@ -529,12 +546,23 @@ public class StreamsConfig extends AbstractConfig {
     private static final String DEFAULT_PRODUCTION_EXCEPTION_HANDLER_CLASS_DOC = "Exception handling class that implements the <code>org.apache.kafka.streams.errors.ProductionExceptionHandler</code> interface.";
 
     /** {@code default.dsl.store} */
+    @Deprecated
     @SuppressWarnings("WeakerAccess")
     public static final String DEFAULT_DSL_STORE_CONFIG = "default.dsl.store";
+    @Deprecated
     public static final String DEFAULT_DSL_STORE_DOC = "The default state store type used by DSL operators.";
 
+    @Deprecated
     public static final String ROCKS_DB = "rocksDB";
+    @Deprecated
     public static final String IN_MEMORY = "in_memory";
+    @Deprecated
+    public static final String DEFAULT_DSL_STORE = ROCKS_DB;
+
+    /** {@code dsl.store.suppliers.class } */
+    public static final String DSL_STORE_SUPPLIERS_CLASS_CONFIG = "dsl.store.suppliers.class";
+    static final String DSL_STORE_SUPPLIERS_CLASS_DOC = "Defines which store implementations to plug in to DSL operators. Must implement the <code>org.apache.kafka.streams.state.DslStoreSuppliers</code> interface.";
+    static final Class<?> DSL_STORE_SUPPLIERS_CLASS_DEFAULT = BuiltInDslStoreSuppliers.RocksDBDslStoreSuppliers.class;
 
     /** {@code default.windowed.key.serde.inner} */
     @SuppressWarnings("WeakerAccess")
@@ -720,7 +748,7 @@ public class StreamsConfig extends AbstractConfig {
     /** {@code state.dir} */
     @SuppressWarnings("WeakerAccess")
     public static final String STATE_DIR_CONFIG = "state.dir";
-    private static final String STATE_DIR_DOC = "Directory location for state store. This path must be unique for each streams instance sharing the same underlying filesystem.";
+    private static final String STATE_DIR_DOC = "Directory location for state store. This path must be unique for each streams instance sharing the same underlying filesystem. Note that if not configured, then the default location will be different in each environment as it is computed using System.getProperty(\"java.io.tmpdir\")";
 
     /** {@code task.timeout.ms} */
     public static final String TASK_TIMEOUT_MS_CONFIG = "task.timeout.ms";
@@ -745,7 +773,8 @@ public class StreamsConfig extends AbstractConfig {
         UPGRADE_FROM_22 + "\", \"" + UPGRADE_FROM_23 + "\", \"" + UPGRADE_FROM_24 + "\", \"" +
         UPGRADE_FROM_25 + "\", \"" + UPGRADE_FROM_26 + "\", \"" + UPGRADE_FROM_27 + "\", \"" +
         UPGRADE_FROM_28 + "\", \"" + UPGRADE_FROM_30 + "\", \"" + UPGRADE_FROM_31 + "\", \"" +
-        UPGRADE_FROM_32 + "\", \"" + UPGRADE_FROM_33 + "\", \"" + UPGRADE_FROM_34 + "\" (for upgrading from the corresponding old version).";
+        UPGRADE_FROM_32 + "\", \"" + UPGRADE_FROM_33 + "\", \"" + UPGRADE_FROM_34 + "\", \"" +
+        UPGRADE_FROM_35 + "\", \"" + UPGRADE_FROM_36 + "(for upgrading from the corresponding old version).";
 
     /** {@code windowstore.changelog.additional.retention.ms} */
     @SuppressWarnings("WeakerAccess")
@@ -759,13 +788,14 @@ public class StreamsConfig extends AbstractConfig {
 
     public static final String RACK_AWARE_ASSIGNMENT_STRATEGY_NONE = "none";
     public static final String RACK_AWARE_ASSIGNMENT_STRATEGY_MIN_TRAFFIC = "min_traffic";
+    public static final String RACK_AWARE_ASSIGNMENT_STRATEGY_BALANCE_SUBTOPOLOGY = "balance_subtopology";
 
     /** {@code } rack.aware.assignment.strategy */
     @SuppressWarnings("WeakerAccess")
     public static final String RACK_AWARE_ASSIGNMENT_STRATEGY_CONFIG = "rack.aware.assignment.strategy";
     public static final String RACK_AWARE_ASSIGNMENT_STRATEGY_DOC = "The strategy we use for rack aware assignment. Rack aware assignment will take <code>client.rack</code> and <code>racks</code> of <code>TopicPartition</code> into account when assigning"
         + " tasks to minimize cross rack traffic. Valid settings are : <code>" + RACK_AWARE_ASSIGNMENT_STRATEGY_NONE + "</code> (default), which will disable rack aware assignment; <code>" + RACK_AWARE_ASSIGNMENT_STRATEGY_MIN_TRAFFIC
-        + "</code>, which will compute minimum cross rack traffic assignment.";
+        + "</code>, which will compute minimum cross rack traffic assignment; <code>" + RACK_AWARE_ASSIGNMENT_STRATEGY_BALANCE_SUBTOPOLOGY + "</code>, which will compute minimum cross rack traffic and try to balance the tasks of same subtopolgies across different clients";
 
     @SuppressWarnings("WeakerAccess")
     public static final String RACK_AWARE_ASSIGNMENT_TRAFFIC_COST_CONFIG = "rack.aware.assignment.traffic_cost";
@@ -821,7 +851,8 @@ public class StreamsConfig extends AbstractConfig {
                     Type.STRING,
                     System.getProperty("java.io.tmpdir") + File.separator + "kafka-streams",
                     Importance.HIGH,
-                    STATE_DIR_DOC)
+                    STATE_DIR_DOC,
+                    "${java.io.tmpdir}")
 
             // MEDIUM
 
@@ -923,7 +954,7 @@ public class StreamsConfig extends AbstractConfig {
             .define(RACK_AWARE_ASSIGNMENT_STRATEGY_CONFIG,
                     Type.STRING,
                     RACK_AWARE_ASSIGNMENT_STRATEGY_NONE,
-                    in(RACK_AWARE_ASSIGNMENT_STRATEGY_NONE, RACK_AWARE_ASSIGNMENT_STRATEGY_MIN_TRAFFIC),
+                    in(RACK_AWARE_ASSIGNMENT_STRATEGY_NONE, RACK_AWARE_ASSIGNMENT_STRATEGY_MIN_TRAFFIC, RACK_AWARE_ASSIGNMENT_STRATEGY_BALANCE_SUBTOPOLOGY),
                     Importance.MEDIUM,
                     RACK_AWARE_ASSIGNMENT_STRATEGY_DOC)
             .define(RACK_AWARE_ASSIGNMENT_TAGS_CONFIG,
@@ -987,6 +1018,11 @@ public class StreamsConfig extends AbstractConfig {
                     atLeast(0),
                     Importance.LOW,
                     COMMIT_INTERVAL_MS_DOC)
+            .define(ENABLE_METRICS_PUSH_CONFIG,
+                    Type.BOOLEAN,
+                    true,
+                    Importance.LOW,
+                    ENABLE_METRICS_PUSH_DOC)
             .define(REPARTITION_PURGE_INTERVAL_MS_CONFIG,
                     Type.LONG,
                     DEFAULT_COMMIT_INTERVAL_MS,
@@ -1000,10 +1036,15 @@ public class StreamsConfig extends AbstractConfig {
                     CommonClientConfigs.CONNECTIONS_MAX_IDLE_MS_DOC)
             .define(DEFAULT_DSL_STORE_CONFIG,
                     Type.STRING,
-                    ROCKS_DB,
+                    DEFAULT_DSL_STORE,
                     in(ROCKS_DB, IN_MEMORY),
                     Importance.LOW,
                     DEFAULT_DSL_STORE_DOC)
+            .define(DSL_STORE_SUPPLIERS_CLASS_CONFIG,
+                    Type.CLASS,
+                    DSL_STORE_SUPPLIERS_CLASS_DEFAULT,
+                    Importance.LOW,
+                    DSL_STORE_SUPPLIERS_CLASS_DOC)
             .define(DEFAULT_CLIENT_SUPPLIER_CONFIG,
                     Type.CLASS,
                     DefaultKafkaClientSupplier.class.getName(),
@@ -1166,7 +1207,7 @@ public class StreamsConfig extends AbstractConfig {
     private static final Map<String, Object> CONSUMER_EOS_OVERRIDES;
     static {
         final Map<String, Object> tempConsumerDefaultOverrides = new HashMap<>(CONSUMER_DEFAULT_OVERRIDES);
-        tempConsumerDefaultOverrides.put(ConsumerConfig.ISOLATION_LEVEL_CONFIG, READ_COMMITTED.name().toLowerCase(Locale.ROOT));
+        tempConsumerDefaultOverrides.put(ConsumerConfig.ISOLATION_LEVEL_CONFIG, READ_COMMITTED.toString());
         CONSUMER_EOS_OVERRIDES = Collections.unmodifiableMap(tempConsumerDefaultOverrides);
     }
 
@@ -1198,7 +1239,7 @@ public class StreamsConfig extends AbstractConfig {
         public static final String STATE_UPDATER_ENABLED = "__state.updater.enabled__";
 
         public static boolean getStateUpdaterEnabled(final Map<String, Object> configs) {
-            return InternalConfig.getBoolean(configs, InternalConfig.STATE_UPDATER_ENABLED, true);
+            return InternalConfig.getBoolean(configs, InternalConfig.STATE_UPDATER_ENABLED, false);
         }
         
         // Private API to enable processing threads (i.e. polling is decoupled from processing)
