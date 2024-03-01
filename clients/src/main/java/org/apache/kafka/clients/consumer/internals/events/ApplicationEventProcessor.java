@@ -72,6 +72,7 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
      */
     public void process() {
         process((event, error) -> {
+            // Store any CompletableApplicationEvents so we can check them for expiration later.
             if (event instanceof CompletableEvent)
                 completableEvents.add((CompletableApplicationEvent<?>) event);
 
@@ -318,7 +319,7 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
         manager.consumerRebalanceListenerCallbackCompleted(event);
     }
 
-    private void process(final CommitOnCloseEvent event) {
+    private void process(@SuppressWarnings("unused") final CommitOnCloseEvent event) {
         if (!requestManagers.commitRequestManager.isPresent())
             return;
         log.debug("Signal CommitRequestManager closing");
