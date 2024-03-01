@@ -19,9 +19,9 @@ package kafka.raft
 import kafka.log.UnifiedLog
 import kafka.raft.KafkaMetadataLog.{RetentionMsBreach, RetentionSizeBreach, SnapshotDeletionReason}
 import kafka.server.KafkaConfig.{MetadataLogSegmentBytesProp, MetadataLogSegmentMinBytesProp}
-import kafka.server.{BrokerTopicStats, KafkaConfig, RequestLocal}
+import kafka.server.{BrokerTopicStats,RequestLocal}
 import kafka.utils.{CoreUtils, Logging}
-import org.apache.kafka.common.config.{AbstractConfig, TopicConfig}
+import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.errors.InvalidConfigurationException
 import org.apache.kafka.common.record.{MemoryRecords, Records}
 import org.apache.kafka.common.utils.Time
@@ -180,7 +180,7 @@ final class KafkaMetadataLog private (
         (false, mutable.TreeMap.empty[OffsetAndEpoch, Option[FileRawSnapshotReader]])
     }
 
-    removeSnapshots(forgottenSnapshots,RetentionMsBreach(log))
+    removeSnapshots(forgottenSnapshots,RetentionMsBreach())
     truncated
   }
 
@@ -340,7 +340,7 @@ final class KafkaMetadataLog private (
    *
    * This method is thread-safe
    */
-  def deleteBeforeSnapshot(snapshotId: OffsetAndEpoch, reason: SnapshotDeletionReason): Boolean = {
+  override def deleteBeforeSnapshot(snapshotId: OffsetAndEpoch): Boolean = {
     val (deleted, forgottenSnapshots) = snapshots synchronized {
       latestSnapshotId().asScala match {
         case Some(latestSnapshotId) if
@@ -349,15 +349,35 @@ final class KafkaMetadataLog private (
           snapshotId.offset <= latestSnapshotId.offset &&
           log.maybeIncrementLogStartOffset(snapshotId.offset, LogStartOffsetIncrementReason.SnapshotGenerated) =>
             // Delete all segments that have a "last offset" less than the log start offset
-            val deletedSegments = log.deleteOldSegments()
-            // Remove older snapshots from the snapshots cache
-            val forgottenSnapshots = forgetSnapshotsBefore(snapshotId)
-            (deletedSegments != 0 || forgottenSnapshots.nonEmpty, forgottenSnapshots)
+          log.deleteOldSegments()
+          // Remove older snapshots from the snapshots cache
+          (true, forgetSnapshotsBefore(snapshotId))
         case _ =>
             (false, mutable.TreeMap.empty[OffsetAndEpoch, Option[FileRawSnapshotReader]])
       }
     }
-    removeSnapshots(forgottenSnapshots,reason)
+    removeSnapshots(forgottenSnapshots)
+    deleted
+  }
+
+  def deleteBeforeSnapshot(snapshotId: OffsetAndEpoch,reason: SnapshotDeletionReason): Boolean = {
+    val (deleted, forgottenSnapshots) = snapshots synchronized {
+      latestSnapshotId().asScala match {
+        case Some(latestSnapshotId) if
+          snapshots.contains(snapshotId) &&
+            startOffset < snapshotId.offset &&
+            snapshotId.offset <= latestSnapshotId.offset &&
+            log.maybeIncrementLogStartOffset(snapshotId.offset, LogStartOffsetIncrementReason.SnapshotGenerated) =>
+          // Delete all segments that have a "last offset" less than the log start offset
+          val deletedSegments = log.deleteOldSegments()
+          // Remove older snapshots from the snapshots cache
+          val forgottenSnapshots = forgetSnapshotsBefore(snapshotId)
+          (deletedSegments != 0 || forgottenSnapshots.nonEmpty, forgottenSnapshots)
+        case _ =>
+          (false, mutable.TreeMap.empty[OffsetAndEpoch, Option[FileRawSnapshotReader]])
+      }
+    }
+    removeSnapshots(forgottenSnapshots, reason)
     deleted
   }
 
@@ -440,7 +460,7 @@ final class KafkaMetadataLog private (
       }
     }
 
-    cleanSnapshots(shouldClean, RetentionMsBreach(log))
+    cleanSnapshots(shouldClean, RetentionMsBreach())
   }
 
   private def cleanSnapshotsRetentionSize(): Boolean = {
@@ -463,7 +483,7 @@ final class KafkaMetadataLog private (
       }
     }
 
-    cleanSnapshots(shouldClean, RetentionSizeBreach(log))
+    cleanSnapshots(shouldClean, RetentionSizeBreach())
   }
 
   /**
@@ -486,6 +506,24 @@ final class KafkaMetadataLog private (
    * Rename the given snapshots on the log directory. Asynchronously, close and delete the
    * given snapshots after some delay.
    */
+
+  private def removeSnapshots(
+     expiredSnapshots: mutable.TreeMap[OffsetAndEpoch, Option[FileRawSnapshotReader]],
+ ): Unit = {
+    expiredSnapshots.foreach { case (snapshotId, _) =>
+      info(s"Marking snapshot $snapshotId for deletion")
+      Snapshots.markForDelete(log.dir.toPath, snapshotId)
+    }
+
+    if (expiredSnapshots.nonEmpty) {
+      scheduler.scheduleOnce(
+        "delete-snapshot-files",
+        () => KafkaMetadataLog.deleteSnapshotFiles(log.dir.toPath, expiredSnapshots, this),
+        config.fileDeleteDelayMs
+      )
+    }
+  }
+
   private def removeSnapshots(
     expiredSnapshots: mutable.TreeMap[OffsetAndEpoch, Option[FileRawSnapshotReader]],
     reason: SnapshotDeletionReason,
@@ -659,15 +697,15 @@ object KafkaMetadataLog extends Logging {
     def logReason(snapshotId: OffsetAndEpoch): Unit
   }
 
-  final case class RetentionMsBreach(log: UnifiedLog) extends SnapshotDeletionReason {
+  final case class RetentionMsBreach() extends SnapshotDeletionReason {
     override def logReason(snapshotId: OffsetAndEpoch): Unit = {
-      log.info(s"Marking snapshot $snapshotId for deletion because the age is too old")
+      info(s"Marking snapshot $snapshotId for deletion because the age is too old")
     }
   }
 
-  final case class RetentionSizeBreach(log: UnifiedLog) extends SnapshotDeletionReason {
+  final case class RetentionSizeBreach() extends SnapshotDeletionReason {
     override def logReason(snapshotId: OffsetAndEpoch): Unit = {
-      log.info(s"Marking snapshot $snapshotId for deletion because the size is too big")
+      info(s"Marking snapshot $snapshotId for deletion because the size is too big")
     }
   }
 }
