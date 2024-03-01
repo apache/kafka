@@ -24,6 +24,10 @@
   "fields": [
     { "name": "ProducerId", "type": "int64", "versions": "0+",
       "about": "Producer id in use by the transactional id"},
+    { "name": "PreviousProducerId", "type": "int64", "taggedVersions": "1+", "tag": 0, "default": -1,
+      "about": "Producer id used by the last committed transaction"},
+    { "name": "NextProducerId", "type": "int64", "taggedVersions": "1+", "tag": 1, "default": -1,
+      "about": "Latest producer ID sent to the producer for the given transactional ID"},
     { "name": "ProducerEpoch", "type": "int16", "versions": "0+",
       "about": "Epoch associated with the producer id"},
     { "name": "TransactionTimeoutMs", "type": "int32", "versions": "0+",

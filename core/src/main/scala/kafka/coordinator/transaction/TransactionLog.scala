@@ -74,6 +74,9 @@ object TransactionLog {
             .setPartitionIds(partitions.map(tp => Integer.valueOf(tp.partition)).toList.asJava)
         }.toList.asJava
 
+    // only set previous/next producer ids if we are in prepare/complete states
+    // only use txn version 1 if TV version is high enough
+
     // Serialize with the highest supported non-flexible version
     // until a tagged field is introduced or the version is bumped.
     MessageUtil.toVersionPrefixedBytes(0,
@@ -120,7 +123,8 @@ object TransactionLog {
         val transactionMetadata = new TransactionMetadata(
           transactionalId = transactionalId,
           producerId = value.producerId,
-          lastProducerId = RecordBatch.NO_PRODUCER_ID,
+          previousProducerId = value.previousProducerId,
+          nextProducerId = value.nextProducerId,
           producerEpoch = value.producerEpoch,
           lastProducerEpoch = RecordBatch.NO_PRODUCER_EPOCH,
           txnTimeoutMs = value.transactionTimeoutMs,

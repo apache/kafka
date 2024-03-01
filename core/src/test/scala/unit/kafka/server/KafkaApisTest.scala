@@ -2407,7 +2407,7 @@ class KafkaApisTest extends Logging {
       reset(replicaManager, clientRequestQuotaManager, requestChannel, txnCoordinator)
 
       val capturedResponse: ArgumentCaptor[EndTxnResponse] = ArgumentCaptor.forClass(classOf[EndTxnResponse])
-      val responseCallback: ArgumentCaptor[Errors => Unit] = ArgumentCaptor.forClass(classOf[Errors => Unit])
+      val responseCallback: ArgumentCaptor[(Errors, Long, Short) => Unit] = ArgumentCaptor.forClass(classOf[(Errors, Long, Short) => Unit])
 
       val transactionalId = "txnId"
       val producerId = 15L
@@ -2428,9 +2428,10 @@ class KafkaApisTest extends Logging {
         ArgumentMatchers.eq(producerId),
         ArgumentMatchers.eq(epoch),
         ArgumentMatchers.eq(TransactionResult.COMMIT),
+        ArgumentMatchers.eq(version >= 4),
         responseCallback.capture(),
         ArgumentMatchers.eq(requestLocal)
-      )).thenAnswer(_ => responseCallback.getValue.apply(Errors.PRODUCER_FENCED))
+      )).thenAnswer(_ => responseCallback.getValue.apply(Errors.PRODUCER_FENCED, RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH))
       val kafkaApis = createKafkaApis()
       try {
         kafkaApis.handleEndTxnRequest(request, requestLocal)
