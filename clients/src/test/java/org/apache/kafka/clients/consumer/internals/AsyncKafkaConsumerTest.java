@@ -29,6 +29,7 @@ import org.apache.kafka.clients.consumer.OffsetCommitCallback;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.clients.consumer.RetriableCommitFailedException;
 import org.apache.kafka.clients.consumer.RoundRobinAssignor;
+import org.apache.kafka.clients.consumer.internals.events.ApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEventHandler;
 import org.apache.kafka.clients.consumer.internals.events.AssignmentChangeEvent;
 import org.apache.kafka.clients.consumer.internals.events.AsyncCommitEvent;
@@ -852,6 +853,31 @@ public class AsyncKafkaConsumerTest {
         consumer.wakeup();
         assertThrows(WakeupException.class, () -> consumer.committed(offsets.keySet()));
         assertNull(consumer.wakeupTrigger().getPendingTask());
+    }
+
+    @Test
+    public void testNoWakeupInCloseCommit() {
+        TopicPartition tp = new TopicPartition("topic1", 0);
+        consumer = newConsumer();
+        consumer.assign(Collections.singleton(tp));
+        doReturn(LeaderAndEpoch.noLeaderOrEpoch()).when(metadata).currentLeader(any());
+        consumer.seek(tp, 10);
+        consumer.wakeup();
+
+        AtomicReference<SyncCommitEvent> capturedEvent = new AtomicReference<>();
+        doAnswer(invocation -> {
+            ApplicationEvent event = invocation.getArgument(0);
+            if (event instanceof SyncCommitEvent) {
+                capturedEvent.set((SyncCommitEvent) event);
+            }
+            return null;
+        }).when(applicationEventHandler).add(any());
+
+        consumer.close(Duration.ZERO);
+
+        // A commit was triggered and not completed exceptionally by the wakeup
+        assertNotNull(capturedEvent.get());
+        assertFalse(capturedEvent.get().future().isCompletedExceptionally());
     }
 
     @Test
