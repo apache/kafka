@@ -21,7 +21,7 @@ import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.internals.NetworkClientDelegate.PollResult;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEventProcessor;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEventHandler;
-import org.apache.kafka.clients.consumer.internals.events.ErrorBackgroundEvent;
+import org.apache.kafka.clients.consumer.internals.events.ErrorEvent;
 import org.apache.kafka.clients.consumer.internals.events.GroupMetadataUpdateEvent;
 import org.apache.kafka.clients.consumer.internals.metrics.HeartbeatMetricsManager;
 import org.apache.kafka.common.Uuid;
@@ -200,13 +200,13 @@ public class HeartbeatRequestManager implements RequestManager {
                 "messages. You can address this either by increasing max.poll.interval.ms or by " +
                 "reducing the maximum size of batches returned in poll() with max.poll.records.");
 
-            // This should trigger a heartbeat with leave group epoch
-            membershipManager.transitionToStale();
-            NetworkClientDelegate.UnsentRequest request = makeHeartbeatRequest(currentTimeMs, true);
+            membershipManager.transitionToSendingLeaveGroup(true);
+            NetworkClientDelegate.UnsentRequest leaveHeartbeat = makeHeartbeatRequest(currentTimeMs, true);
+
             // We can ignore the leave response because we can join before or after receiving the response.
             heartbeatRequestState.reset();
             heartbeatState.reset();
-            return new NetworkClientDelegate.PollResult(heartbeatRequestState.heartbeatIntervalMs, Collections.singletonList(request));
+            return new NetworkClientDelegate.PollResult(heartbeatRequestState.heartbeatIntervalMs, Collections.singletonList(leaveHeartbeat));
         }
 
         boolean heartbeatNow = membershipManager.shouldHeartbeatNow() && !heartbeatRequestState.requestInFlight();
@@ -256,11 +256,12 @@ public class HeartbeatRequestManager implements RequestManager {
      * member to {@link MemberState#JOINING}, so that it rejoins the group.
      */
     public void resetPollTimer(final long pollMs) {
+        if (pollTimer.isExpired()) {
+            logger.debug("Poll timer has been reset after it had expired");
+            membershipManager.maybeRejoinStaleMember();
+        }
         pollTimer.update(pollMs);
         pollTimer.reset(maxPollIntervalMs);
-        if (membershipManager.state() == MemberState.STALE) {
-            membershipManager.transitionToJoining();
-        }
     }
 
     private NetworkClientDelegate.UnsentRequest makeHeartbeatRequest(final long currentTimeMs,
@@ -326,7 +327,7 @@ public class HeartbeatRequestManager implements RequestManager {
             heartbeatRequestState.updateHeartbeatIntervalMs(response.data().heartbeatIntervalMs());
             heartbeatRequestState.onSuccessfulAttempt(currentTimeMs);
             heartbeatRequestState.resetTimer();
-            membershipManager.onHeartbeatResponseReceived(response.data());
+            membershipManager.onHeartbeatSuccess(response.data());
             maybeSendGroupMetadataUpdateEvent();
             return;
         }
@@ -356,6 +357,7 @@ public class HeartbeatRequestManager implements RequestManager {
 
         this.heartbeatState.reset();
         this.heartbeatRequestState.onFailedAttempt(currentTimeMs);
+        membershipManager.onHeartbeatFailure();
 
         switch (error) {
             case NOT_COORDINATOR:
@@ -444,7 +446,7 @@ public class HeartbeatRequestManager implements RequestManager {
     }
 
     private void handleFatalFailure(Throwable error) {
-        backgroundEventHandler.add(new ErrorBackgroundEvent(error));
+        backgroundEventHandler.add(new ErrorEvent(error));
         membershipManager.transitionToFatal();
     }
 

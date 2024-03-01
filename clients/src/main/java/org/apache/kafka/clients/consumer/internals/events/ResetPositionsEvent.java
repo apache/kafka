@@ -18,13 +18,13 @@
 package org.apache.kafka.clients.consumer.internals.events;
 
 /**
- * Event for validating offsets for all assigned partitions for which a leader change has been
- * detected. This is an asynchronous event that generates OffsetForLeaderEpoch requests, and
- * completes by validating in-memory positions against the offsets received in the responses.
+ * Event for resetting offsets for all assigned partitions that require it. This is an
+ * asynchronous event that generates ListOffsets requests, and completes by updating in-memory
+ * positions when responses are received.
  */
-public class ValidatePositionsApplicationEvent extends CompletableApplicationEvent<Void> {
+public class ResetPositionsEvent extends CompletableApplicationEvent<Void> {
 
-    public ValidatePositionsApplicationEvent() {
-        super(Type.VALIDATE_POSITIONS);
+    public ResetPositionsEvent() {
+        super(Type.RESET_POSITIONS);
     }
 }
