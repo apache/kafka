@@ -17,7 +17,7 @@
 package org.apache.kafka.raft.internals;
 
 import org.apache.kafka.common.metrics.MetricConfig;
-import org.apache.kafka.common.metrics.stats.TimeRatio;
+import org.apache.kafka.server.metrics.TimeRatio;
 import org.apache.kafka.common.utils.MockTime;
 import org.junit.jupiter.api.Test;
 
