@@ -70,59 +70,65 @@ public class DefaultMessageFormatterTest {
         formatter.writeTo(record, new PrintStream(out));
         assertEquals("NO_TIMESTAMP\tPartition:0\tOffset:123\tkey\tvalue\n", out.toString());
 
+        configs.put("print.delivery", "true");
+        formatter.configure(configs);
+        out = new ByteArrayOutputStream();
+        formatter.writeTo(record, new PrintStream(out));
+        assertEquals("NO_TIMESTAMP\tPartition:0\tOffset:123\tDelivery:NONE\tkey\tvalue\n", out.toString());
+
         configs.put("print.headers", "true");
         formatter.configure(configs);
         out = new ByteArrayOutputStream();
         formatter.writeTo(record, new PrintStream(out));
-        assertEquals("NO_TIMESTAMP\tPartition:0\tOffset:123\tNO_HEADERS\tkey\tvalue\n", out.toString());
+        assertEquals("NO_TIMESTAMP\tPartition:0\tOffset:123\tDelivery:NONE\tNO_HEADERS\tkey\tvalue\n", out.toString());
 
         RecordHeaders headers = new RecordHeaders();
         headers.add("h1", "v1".getBytes());
         headers.add("h2", "v2".getBytes());
         record = new ConsumerRecord<>("topic", 0, 123, 123L, TimestampType.CREATE_TIME, -1, -1, "key".getBytes(), "value".getBytes(),
-                headers, Optional.empty());
+                headers, Optional.empty(), Optional.of((short) 0));
         out = new ByteArrayOutputStream();
         formatter.writeTo(record, new PrintStream(out));
-        assertEquals("CreateTime:123\tPartition:0\tOffset:123\th1:v1,h2:v2\tkey\tvalue\n", out.toString());
+        assertEquals("CreateTime:123\tPartition:0\tOffset:123\tDelivery:0\th1:v1,h2:v2\tkey\tvalue\n", out.toString());
 
         configs.put("print.value", "false");
         formatter.configure(configs);
         out = new ByteArrayOutputStream();
         formatter.writeTo(record, new PrintStream(out));
-        assertEquals("CreateTime:123\tPartition:0\tOffset:123\th1:v1,h2:v2\tkey\n", out.toString());
+        assertEquals("CreateTime:123\tPartition:0\tOffset:123\tDelivery:0\th1:v1,h2:v2\tkey\n", out.toString());
 
         configs.put("key.separator", "<sep>");
         formatter.configure(configs);
         out = new ByteArrayOutputStream();
         formatter.writeTo(record, new PrintStream(out));
-        assertEquals("CreateTime:123<sep>Partition:0<sep>Offset:123<sep>h1:v1,h2:v2<sep>key\n", out.toString());
+        assertEquals("CreateTime:123<sep>Partition:0<sep>Offset:123<sep>Delivery:0<sep>h1:v1,h2:v2<sep>key\n", out.toString());
 
         configs.put("line.separator", "<end>");
         formatter.configure(configs);
         out = new ByteArrayOutputStream();
         formatter.writeTo(record, new PrintStream(out));
-        assertEquals("CreateTime:123<sep>Partition:0<sep>Offset:123<sep>h1:v1,h2:v2<sep>key<end>", out.toString());
+        assertEquals("CreateTime:123<sep>Partition:0<sep>Offset:123<sep>Delivery:0<sep>h1:v1,h2:v2<sep>key<end>", out.toString());
 
         configs.put("headers.separator", "|");
         formatter.configure(configs);
         out = new ByteArrayOutputStream();
         formatter.writeTo(record, new PrintStream(out));
-        assertEquals("CreateTime:123<sep>Partition:0<sep>Offset:123<sep>h1:v1|h2:v2<sep>key<end>", out.toString());
+        assertEquals("CreateTime:123<sep>Partition:0<sep>Offset:123<sep>Delivery:0<sep>h1:v1|h2:v2<sep>key<end>", out.toString());
 
         record = new ConsumerRecord<>("topic", 0, 123, 123L, TimestampType.CREATE_TIME, -1, -1, "key".getBytes(), "value".getBytes(),
-                headers, Optional.empty());
+                headers, Optional.empty(), Optional.of((short) 1));
 
         configs.put("key.deserializer", UpperCaseDeserializer.class.getName());
         formatter.configure(configs);
         out = new ByteArrayOutputStream();
         formatter.writeTo(record, new PrintStream(out));
-        assertEquals("CreateTime:123<sep>Partition:0<sep>Offset:123<sep>h1:v1|h2:v2<sep>KEY<end>", out.toString());
+        assertEquals("CreateTime:123<sep>Partition:0<sep>Offset:123<sep>Delivery:1<sep>h1:v1|h2:v2<sep>KEY<end>", out.toString());
 
         configs.put("headers.deserializer", UpperCaseDeserializer.class.getName());
         formatter.configure(configs);
         out = new ByteArrayOutputStream();
         formatter.writeTo(record, new PrintStream(out));
-        assertEquals("CreateTime:123<sep>Partition:0<sep>Offset:123<sep>h1:V1|h2:V2<sep>KEY<end>", out.toString());
+        assertEquals("CreateTime:123<sep>Partition:0<sep>Offset:123<sep>Delivery:1<sep>h1:V1|h2:V2<sep>KEY<end>", out.toString());
 
         record = new ConsumerRecord<>("topic", 0, 123, 123L, TimestampType.CREATE_TIME, -1, -1, "key".getBytes(), null,
                 headers, Optional.empty());
@@ -132,7 +138,7 @@ public class DefaultMessageFormatterTest {
         formatter.configure(configs);
         out = new ByteArrayOutputStream();
         formatter.writeTo(record, new PrintStream(out));
-        assertEquals("CreateTime:123<sep>Partition:0<sep>Offset:123<sep>h1:V1|h2:V2<sep>KEY<sep><null><end>", out.toString());
+        assertEquals("CreateTime:123<sep>Partition:0<sep>Offset:123<sep>Delivery:NONE<sep>h1:V1|h2:V2<sep>KEY<sep><null><end>", out.toString());
         formatter.close();
     }
 

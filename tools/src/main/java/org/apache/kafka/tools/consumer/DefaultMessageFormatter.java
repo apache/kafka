@@ -41,6 +41,7 @@ class DefaultMessageFormatter implements MessageFormatter {
     private boolean printValue = true;
     private boolean printPartition = false;
     private boolean printOffset = false;
+    private boolean printDelivery = false;
     private boolean printHeaders = false;
     private byte[] keySeparator = utfBytes("\t");
     private byte[] lineSeparator = utfBytes("\n");
@@ -61,6 +62,9 @@ class DefaultMessageFormatter implements MessageFormatter {
         }
         if (configs.containsKey("print.offset")) {
             printOffset = getBoolProperty(configs, "print.offset");
+        }
+        if (configs.containsKey("print.delivery")) {
+            printDelivery = getBoolProperty(configs, "print.delivery");
         }
         if (configs.containsKey("print.partition")) {
             printPartition = getBoolProperty(configs, "print.partition");
@@ -125,18 +129,28 @@ class DefaultMessageFormatter implements MessageFormatter {
                 } else {
                     output.print("NO_TIMESTAMP");
                 }
-                writeSeparator(output, printOffset || printPartition || printHeaders || printKey || printValue);
+                writeSeparator(output, printPartition || printOffset || printDelivery || printHeaders || printKey || printValue);
             }
 
             if (printPartition) {
                 output.print("Partition:");
                 output.print(consumerRecord.partition());
-                writeSeparator(output, printOffset || printHeaders || printKey || printValue);
+                writeSeparator(output, printOffset || printDelivery || printHeaders || printKey || printValue);
             }
 
             if (printOffset) {
                 output.print("Offset:");
                 output.print(consumerRecord.offset());
+                writeSeparator(output, printDelivery || printHeaders || printKey || printValue);
+            }
+
+            if (printDelivery) {
+                output.print("Delivery:");
+                if (consumerRecord.deliveryCount().isPresent()) {
+                    output.print(consumerRecord.deliveryCount().get());
+                } else {
+                    output.print("NONE");
+                }
                 writeSeparator(output, printHeaders || printKey || printValue);
             }
 

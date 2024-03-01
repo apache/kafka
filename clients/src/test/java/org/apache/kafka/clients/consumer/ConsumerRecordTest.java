@@ -47,6 +47,7 @@ public class ConsumerRecordTest {
         assertEquals(ConsumerRecord.NULL_SIZE, record.serializedKeySize());
         assertEquals(ConsumerRecord.NULL_SIZE, record.serializedValueSize());
         assertEquals(Optional.empty(), record.leaderEpoch());
+        assertEquals(Optional.empty(), record.deliveryCount());
         assertEquals(new RecordHeaders(), record.headers());
     }
 
