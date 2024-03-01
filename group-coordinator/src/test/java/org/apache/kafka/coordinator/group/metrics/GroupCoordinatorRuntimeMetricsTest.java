@@ -140,7 +140,7 @@ public class GroupCoordinatorRuntimeMetricsTest {
         Metrics metrics = new Metrics(time);
 
         try (GroupCoordinatorRuntimeMetrics runtimeMetrics = new GroupCoordinatorRuntimeMetrics(metrics)) {
-            IntStream.range(0, 3).forEach(i -> runtimeMetrics.recordEventProcess());
+            IntStream.range(0, 3).forEach(i -> runtimeMetrics.recordEventProcessSensor());
 
             org.apache.kafka.common.MetricName metricName = metrics.metricName(
                 "event-process-rate", METRICS_GROUP);
