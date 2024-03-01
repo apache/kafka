@@ -228,7 +228,7 @@ public class GroupCoordinatorRuntimeMetrics implements CoordinatorRuntimeMetrics
     }
 
     @Override
-    public void recordEventProcess() {
+    public void recordEventProcessSensor() {
         eventProcessSensor.record();
     }
 

@@ -136,7 +136,7 @@ public class MultiThreadedEventProcessor implements CoordinatorEventProcessor {
                         metrics.recordEventQueueTime(dequeuedTimeMs - event.createdTimeMs());
                         event.run();
                         metrics.recordEventQueueProcessingTime(time.milliseconds() - dequeuedTimeMs);
-                        metrics.recordEventProcess();
+                        metrics.recordEventProcessSensor();
                     } catch (Throwable t) {
                         log.error("Failed to run event {} due to: {}.", event, t.getMessage(), t);
                         event.complete(t);

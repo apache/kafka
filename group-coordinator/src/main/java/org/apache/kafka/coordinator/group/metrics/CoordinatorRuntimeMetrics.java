@@ -67,7 +67,7 @@ public interface CoordinatorRuntimeMetrics extends AutoCloseable {
     void registerEventQueueSizeGauge(Supplier<Integer> sizeSupplier);
 
     /**
-     * Update the event rate.
+     * Update the event process sensor.
      */
-    void recordEventProcess();
+    void recordEventProcessSensor();
 }

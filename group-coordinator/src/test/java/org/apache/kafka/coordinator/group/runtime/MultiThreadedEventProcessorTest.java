@@ -515,7 +515,7 @@ public class MultiThreadedEventProcessorTest {
     }
 
     @Test
-    public void testRecordEventProcess() throws Exception {
+    public void testRecordEventProcessSensor() throws Exception {
         GroupCoordinatorRuntimeMetrics mockRuntimeMetrics = mock(GroupCoordinatorRuntimeMetrics.class);
         Time mockTime = new MockTime();
         AtomicInteger numEventsExecuted = new AtomicInteger(0);
@@ -545,7 +545,7 @@ public class MultiThreadedEventProcessorTest {
             // Enqueue the other event.
             FutureEvent<Integer> otherEvent = new FutureEvent<>(
                 new TopicPartition("foo", 0), () -> {
-                verify(mockRuntimeMetrics, times(1)).recordEventProcess();
+                verify(mockRuntimeMetrics, times(1)).recordEventProcessSensor();
                 return numEventsExecuted.incrementAndGet();
             },
                 false,
@@ -556,7 +556,7 @@ public class MultiThreadedEventProcessorTest {
 
             // Events should not be completed.
             assertFalse(otherEvent.future.isDone());
-            verify(mockRuntimeMetrics, times(0)).recordEventProcess();
+            verify(mockRuntimeMetrics, times(0)).recordEventProcessSensor();
 
             // Release the blocking event to unblock the thread.
             blockingEvent.release();
@@ -571,7 +571,7 @@ public class MultiThreadedEventProcessorTest {
             assertTrue(otherEvent.future.isDone());
             assertFalse(otherEvent.future.isCompletedExceptionally());
             assertEquals(2, numEventsExecuted.get());
-            verify(mockRuntimeMetrics, times(2)).recordEventProcess();
+            verify(mockRuntimeMetrics, times(2)).recordEventProcessSensor();
         }
     }
 }
