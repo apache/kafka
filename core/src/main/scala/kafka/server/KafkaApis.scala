@@ -1084,7 +1084,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     }
     val versionId = request.header.apiVersion
     val clientId = request.header.clientId
-    val groupId = shareFetchRequest.data().groupId()
+    val groupId = shareFetchRequest.data.groupId
     val topicNames = metadataCache.topicIdsToNames()
     val shareFetchData = shareFetchRequest.shareFetchData(topicNames)
     val forgottenTopics = shareFetchRequest.forgottenTopics(topicNames)
@@ -1260,15 +1260,16 @@ class KafkaApis(val requestChannel: RequestChannel,
         shareFetchRequest.maxWait,
         fetchMinBytes,
         fetchMaxBytes,
-        FetchIsolation.TXN_COMMITTED,
+        FetchIsolation.HIGH_WATERMARK,
         clientMetadata
       )
 
       // call the share partition manager to fetch messages from the local replica
       sharePartitionManager.fetchMessages(
+        groupId,
+        shareFetchRequest.data.memberId,
         params,
-        interesting.asJava,
-        groupId
+        interesting.asJava
       ).whenComplete { (responsePartitionData, throwable) =>
         if (throwable != null) {
           debug(s"Share fetch request with correlation from client $clientId  " +

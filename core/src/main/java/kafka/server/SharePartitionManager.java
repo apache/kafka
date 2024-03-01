@@ -68,9 +68,12 @@ public class SharePartitionManager {
 
     // TODO: Move some part in share session context and change method signature to accept share
     //  partition data along TopicIdPartition.
-    public CompletableFuture<Map<TopicIdPartition, ShareFetchResponseData.PartitionData>> fetchMessages(FetchParams fetchParams,
-        List<TopicIdPartition> topicIdPartitions, String groupId) {
-        log.debug("Fetch request for topicIdPartitions: {} with groupId: {} fetch params: {}",
+    public CompletableFuture<Map<TopicIdPartition, ShareFetchResponseData.PartitionData>> fetchMessages(
+        String groupId,
+        String memberId,
+        FetchParams fetchParams,
+        List<TopicIdPartition> topicIdPartitions) {
+        log.trace("Fetch request for topicIdPartitions: {} with groupId: {} fetch params: {}",
             topicIdPartitions, groupId, fetchParams);
         CompletableFuture<Map<TopicIdPartition, ShareFetchResponseData.PartitionData>> future = new CompletableFuture<>();
 
@@ -110,7 +113,7 @@ public class SharePartitionManager {
                             .setAcknowledgeErrorCode(Errors.NONE.code());
 
                         SharePartition sharePartition = partitionCacheMap.get(sharePartitionKey(groupId, topicIdPartition));
-                        sharePartition.update(fetchPartitionData);
+                        sharePartition.update(memberId, fetchPartitionData);
 
                         result.put(topicIdPartition, partitionData);
                         future.complete(result);

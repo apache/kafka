@@ -4335,9 +4335,10 @@ class KafkaApisTest extends Logging {
       new SimpleRecord(1000, topicName.getBytes(StandardCharsets.UTF_8)))
 
     when(sharePartitionManager.fetchMessages(
+      anyString(),
+      anyString(),
       any[FetchParams],
-      any[util.List[TopicIdPartition]],
-      anyString()
+      any[util.List[TopicIdPartition]]
     )).thenReturn(CompletableFuture.completedFuture(Map[TopicIdPartition, ShareFetchResponseData.PartitionData](
       new TopicIdPartition(topicId, new TopicPartition(topicName, partitionIndex)) ->
         new ShareFetchResponseData.PartitionData()
@@ -4441,9 +4442,10 @@ class KafkaApisTest extends Logging {
       any[RequestChannel.Request](), anyDouble, anyLong)).thenReturn(0)
 
     when(sharePartitionManager.fetchMessages(
+      anyString(),
+      anyString(),
       any[FetchParams],
-      any[util.List[TopicIdPartition]],
-      anyString()
+      any[util.List[TopicIdPartition]]
     )).thenReturn(CompletableFuture.completedFuture(Map[TopicIdPartition, ShareFetchResponseData.PartitionData](
       new TopicIdPartition(topicId, new TopicPartition(topicName, partitionIndex)) ->
         new ShareFetchResponseData.PartitionData()
@@ -4503,9 +4505,10 @@ class KafkaApisTest extends Logging {
     future.completeExceptionally(new RuntimeException("Mocked exception"))
 
     when(sharePartitionManager.fetchMessages(
+      anyString(),
+      anyString(),
       any[FetchParams],
-      any[util.List[TopicIdPartition]],
-      anyString()
+      any[util.List[TopicIdPartition]]
     )).thenReturn(future)
 
     val shareFetchRequestData = new ShareFetchRequestData().
@@ -4599,9 +4602,10 @@ class KafkaApisTest extends Logging {
     )
 
     when(sharePartitionManager.fetchMessages(
+      anyString(),
+      anyString(),
       any[FetchParams],
-      any[util.List[TopicIdPartition]],
-      anyString()
+      any[util.List[TopicIdPartition]]
     )).thenReturn(CompletableFuture.completedFuture(Map[TopicIdPartition, ShareFetchResponseData.PartitionData](
       new TopicIdPartition(topicId, new TopicPartition(topicName, partitionIndex)) ->
         new ShareFetchResponseData.PartitionData()
