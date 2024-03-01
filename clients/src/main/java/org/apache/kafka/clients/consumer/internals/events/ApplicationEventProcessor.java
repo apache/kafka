@@ -24,6 +24,7 @@ import org.apache.kafka.clients.consumer.internals.CommitRequestManager;
 import org.apache.kafka.clients.consumer.internals.ConsumerMetadata;
 import org.apache.kafka.clients.consumer.internals.ConsumerNetworkThread;
 import org.apache.kafka.clients.consumer.internals.MembershipManager;
+import org.apache.kafka.clients.consumer.internals.NetworkClientDelegate;
 import org.apache.kafka.clients.consumer.internals.RequestManagers;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.PartitionInfo;
@@ -153,16 +154,14 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
     }
 
     /**
-     * We "complete" any of the {@link CompletableApplicationEvent}s that are either expired or done.
+     * This method "completes" any {@link CompletableApplicationEvent}s that have expired or completed. This cleanup
+     * step should only be called after the {@link ConsumerNetworkThread network I/O thread} has made at least
+     * one call to {@link NetworkClientDelegate#poll(long, long) poll}. This is done to emulate the behavior of the
+     * legacy consumer's handling of timeouts. The legacy consumer makes at least one attempt to satisfy any network
+     * requests before checking if a timeout has expired.
      *
-     * <p/>
-     *
-     * <em>Note</em>: this cleanup step should be called <em>after</b> the user has processed the  {@link #process(ProcessHandler)} is executed.
-     * The reason for this is to emulate the behavior of the legacy consumer's handling of timeouts. The legacy
-     * consumer would
-     * difference between the so that we can perform this cleanup after  any events t
-     *
-     * @param currentTimeMs Current time
+     * @param currentTimeMs <em>Current</em> time with which to compare against the
+     *                      <em>{@link CompletableApplicationEvent#deadlineMs() expiration time}</em>
      */
     public void completeExpiredEvents(long currentTimeMs) {
         log.trace("Removing expired events");
@@ -180,7 +179,7 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
                 .filter(e -> !e.future().isDone() && currentTimeMs > e.deadlineMs())
                 .forEach(completeEvent);
 
-        // Second, remove any events that are already done, just to make sure we don't hold references.
+        // Second, remove any events that are already complete, just to make sure we don't hold references.
         completableEvents.removeIf(e -> e.future().isDone());
         log.trace("Finished removal of expired events");
     }
