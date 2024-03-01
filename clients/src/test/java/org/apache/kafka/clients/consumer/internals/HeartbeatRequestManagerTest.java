@@ -80,6 +80,7 @@ import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.reset;
 
 public class HeartbeatRequestManagerTest {
     private long retryBackoffMs = DEFAULT_RETRY_BACKOFF_MS;
@@ -518,7 +519,26 @@ public class HeartbeatRequestManagerTest {
         assertEquals(DEFAULT_MAX_POLL_INTERVAL_MS, data.rebalanceTimeoutMs());
         assertEquals(Collections.singletonList(topic), data.subscribedTopicNames());
         assertEquals(ConsumerTestBuilder.DEFAULT_REMOTE_ASSIGNOR, data.serverAssignor());
-        assertEquals(Collections.emptyList(), data.topicPartitions());
+        assertNull(data.topicPartitions());
+        membershipManager.onHeartbeatRequestSent();
+        assertEquals(MemberState.JOINING, membershipManager.state());
+
+        // Explicitly change the subscription when gets fenced
+        String newTopic = "topic2";
+        when(membershipManager.state()).thenReturn(MemberState.FENCED);
+        subscriptions.subscribe(Collections.singleton(newTopic), Optional.empty());
+        membershipManager.onSubscriptionUpdated();
+        assertEquals(MemberState.FENCED, membershipManager.state());
+        reset(membershipManager);
+        data = heartbeatState.buildRequestData();
+        assertEquals(ConsumerTestBuilder.DEFAULT_GROUP_ID, data.groupId());
+        assertEquals(memberId, data.memberId());
+        assertEquals(0, data.memberEpoch());
+        assertNull(data.instanceId());
+        assertEquals(DEFAULT_MAX_POLL_INTERVAL_MS, data.rebalanceTimeoutMs());
+        assertEquals(Collections.singletonList(newTopic), data.subscribedTopicNames());
+        assertEquals(ConsumerTestBuilder.DEFAULT_REMOTE_ASSIGNOR, data.serverAssignor());
+        assertNull(data.topicPartitions());
         membershipManager.onHeartbeatRequestSent();
         assertEquals(MemberState.JOINING, membershipManager.state());
 

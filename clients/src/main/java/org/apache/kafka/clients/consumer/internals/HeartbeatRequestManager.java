@@ -547,26 +547,19 @@ public class HeartbeatRequestManager implements RequestManager {
             // MemberEpoch - always sent
             data.setMemberEpoch(membershipManager.memberEpoch());
 
-            // Sent all fields if the member is joining/rejoining the group
-            if (membershipManager.state() == MemberState.JOINING) {
-                data.setInstanceId(membershipManager.groupInstanceId().orElse(null));
-                data.setRebalanceTimeoutMs(rebalanceTimeoutMs);
-                data.setSubscribedTopicNames(new ArrayList<>(subscriptions.subscription()));
-                data.setServerAssignor(membershipManager.serverAssignor().orElse(null));
-                data.setTopicPartitions(buildTopicPartitionsList(membershipManager.currentAssignment()));
-            }
+            boolean sendAllFields =  membershipManager.state() == MemberState.JOINING;
 
             // InstanceId - only sent if has changed since the last heartbeat
             // Always send when leaving the group as a static member
             membershipManager.groupInstanceId().ifPresent(groupInstanceId -> {
-                if (!groupInstanceId.equals(sentFields.instanceId) || membershipManager.memberEpoch() == ConsumerGroupHeartbeatRequest.LEAVE_GROUP_STATIC_MEMBER_EPOCH) {
+                if (sendAllFields || !groupInstanceId.equals(sentFields.instanceId) || membershipManager.memberEpoch() == ConsumerGroupHeartbeatRequest.LEAVE_GROUP_STATIC_MEMBER_EPOCH) {
                     data.setInstanceId(groupInstanceId);
                     sentFields.instanceId = groupInstanceId;
                 }
             });
 
             // RebalanceTimeoutMs - only sent if has changed since the last heartbeat
-            if (sentFields.rebalanceTimeoutMs != rebalanceTimeoutMs) {
+            if (sendAllFields || sentFields.rebalanceTimeoutMs != rebalanceTimeoutMs) {
                 data.setRebalanceTimeoutMs(rebalanceTimeoutMs);
                 sentFields.rebalanceTimeoutMs = rebalanceTimeoutMs;
             }
@@ -574,7 +567,7 @@ public class HeartbeatRequestManager implements RequestManager {
             if (!this.subscriptions.hasPatternSubscription()) {
                 // SubscribedTopicNames - only sent if has changed since the last heartbeat
                 TreeSet<String> subscribedTopicNames = new TreeSet<>(this.subscriptions.subscription());
-                if (!subscribedTopicNames.equals(sentFields.subscribedTopicNames)) {
+                if (sendAllFields || !subscribedTopicNames.equals(sentFields.subscribedTopicNames)) {
                     data.setSubscribedTopicNames(new ArrayList<>(this.subscriptions.subscription()));
                     sentFields.subscribedTopicNames = subscribedTopicNames;
                 }
@@ -585,7 +578,7 @@ public class HeartbeatRequestManager implements RequestManager {
 
             // ServerAssignor - only sent if has changed since the last heartbeat
             this.membershipManager.serverAssignor().ifPresent(serverAssignor -> {
-                if (!serverAssignor.equals(sentFields.serverAssignor)) {
+                if (sendAllFields || !serverAssignor.equals(sentFields.serverAssignor)) {
                     data.setServerAssignor(serverAssignor);
                     sentFields.serverAssignor = serverAssignor;
                 }
