@@ -16,11 +16,11 @@
  */
 package org.apache.kafka.clients.consumer.internals.events;
 
-import java.util.concurrent.CompletableFuture;
+import org.apache.kafka.common.utils.Timer;
 
-public interface CompletableEvent<T> {
+public class LeaveOnCloseEvent extends CompletableApplicationEvent<Void> {
 
-    CompletableFuture<T> future();
-
-    long deadlineMs();
+    public LeaveOnCloseEvent(final Timer timer) {
+        super(Type.LEAVE_ON_CLOSE, timer);
+    }
 }

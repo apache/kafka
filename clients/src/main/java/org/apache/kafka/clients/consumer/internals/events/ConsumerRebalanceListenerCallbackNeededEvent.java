@@ -20,14 +20,11 @@ import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.internals.ConsumerRebalanceListenerMethodName;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.utils.Timer;
 
 import java.time.Duration;
 import java.util.Collections;
 import java.util.Objects;
 import java.util.SortedSet;
-
-import static org.apache.kafka.clients.consumer.internals.events.BackgroundEvent.Type.CONSUMER_REBALANCE_LISTENER_CALLBACK_NEEDED;
 
 /**
  * Event that signifies that the network I/O thread wants to invoke one of the callback methods on the
@@ -40,9 +37,9 @@ public class ConsumerRebalanceListenerCallbackNeededEvent extends CompletableBac
     private final ConsumerRebalanceListenerMethodName methodName;
     private final SortedSet<TopicPartition> partitions;
 
-    public ConsumerRebalanceListenerCallbackNeededEvent(ConsumerRebalanceListenerMethodName methodName,
-                                                        SortedSet<TopicPartition> partitions) {
-        super(CONSUMER_REBALANCE_LISTENER_CALLBACK_NEEDED);
+    public ConsumerRebalanceListenerCallbackNeededEvent(final ConsumerRebalanceListenerMethodName methodName,
+                                                        final SortedSet<TopicPartition> partitions) {
+        super(Type.CONSUMER_REBALANCE_LISTENER_CALLBACK_NEEDED);
         this.methodName = Objects.requireNonNull(methodName);
         this.partitions = Collections.unmodifiableSortedSet(partitions);
     }
@@ -57,8 +54,6 @@ public class ConsumerRebalanceListenerCallbackNeededEvent extends CompletableBac
 
     @Override
     protected String toStringBase() {
-        return super.toStringBase() +
-                ", methodName=" + methodName +
-                ", partitions=" + partitions;
+        return super.toStringBase() + ", methodName=" + methodName + ", partitions=" + partitions;
     }
 }

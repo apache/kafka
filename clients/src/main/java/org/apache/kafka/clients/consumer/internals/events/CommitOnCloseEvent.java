@@ -14,24 +14,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.clients.consumer.internals.events;
 
-import org.apache.kafka.common.utils.Timer;
+public class CommitOnCloseEvent extends ApplicationEvent {
 
-import static org.apache.kafka.clients.consumer.internals.events.ApplicationEvent.Type.UNSUBSCRIBE;
-
-/**
- * Application event triggered when a user calls the unsubscribe API. This will make the consumer
- * release all its assignments and send a heartbeat request to leave the consumer group.
- * This event holds a future that will complete when the invocation of callbacks to release
- * complete and the heartbeat to leave the group is sent out (minimal effort to send the
- * leave group heartbeat, without waiting for any response or considering timeouts).
- */
-public class UnsubscribeApplicationEvent extends CompletableApplicationEvent<Void> {
-
-    public UnsubscribeApplicationEvent(final Timer timer) {
-        super(UNSUBSCRIBE, timer);
+    public CommitOnCloseEvent() {
+        super(Type.COMMIT_ON_CLOSE);
     }
 }
-

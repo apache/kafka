@@ -21,10 +21,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.Timer;
 
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.Map;
-
-import static org.apache.kafka.clients.consumer.internals.events.ApplicationEvent.Type.LIST_OFFSETS;
 
 /**
  * Event for retrieving partition offsets by performing a
@@ -34,28 +31,15 @@ import static org.apache.kafka.clients.consumer.internals.events.ApplicationEven
  * {@link OffsetAndTimestamp} found (offset of the first message whose timestamp is greater than
  * or equals to the target timestamp)
  */
-public class ListOffsetsApplicationEvent extends CompletableApplicationEvent<Map<TopicPartition, OffsetAndTimestamp>> {
+public class ListOffsetsEvent extends CompletableApplicationEvent<Map<TopicPartition, OffsetAndTimestamp>> {
 
     private final Map<TopicPartition, Long> timestampsToSearch;
     private final boolean requireTimestamps;
 
-    public ListOffsetsApplicationEvent(Map<TopicPartition, Long> timestampToSearch, boolean requireTimestamps, Timer timer) {
-        super(LIST_OFFSETS, timer);
+    public ListOffsetsEvent(final Map<TopicPartition, Long> timestampToSearch, final boolean requireTimestamps, final Timer timer) {
+        super(Type.LIST_OFFSETS, timer);
         this.timestampsToSearch = Collections.unmodifiableMap(timestampToSearch);
         this.requireTimestamps = requireTimestamps;
-    }
-
-    /**
-     * Build result representing that no offsets were found as part of the current event.
-     *
-     * @return Map containing all the partitions the event was trying to get offsets for, and
-     * null {@link OffsetAndTimestamp} as value
-     */
-    public Map<TopicPartition, OffsetAndTimestamp> emptyResult() {
-        HashMap<TopicPartition, OffsetAndTimestamp> offsetsByTimes = new HashMap<>(timestampsToSearch.size());
-        for (Map.Entry<TopicPartition, Long> entry : timestampsToSearch.entrySet())
-            offsetsByTimes.put(entry.getKey(), null);
-        return offsetsByTimes;
     }
 
     public Map<TopicPartition, Long> timestampsToSearch() {
@@ -72,5 +56,4 @@ public class ListOffsetsApplicationEvent extends CompletableApplicationEvent<Map
                 ", timestampsToSearch=" + timestampsToSearch +
                 ", requireTimestamps=" + requireTimestamps;
     }
-
 }

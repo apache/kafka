@@ -32,6 +32,10 @@ public abstract class BackgroundEvent {
 
     private final Type type;
 
+    /**
+     * This identifies a particular event. It is used to disambiguate events via {@link #hashCode()} and
+     * {@link #equals(Object)} and can be used in log messages when debugging.
+     */
     private final Uuid id;
 
     protected BackgroundEvent(Type type) {
@@ -49,7 +53,10 @@ public abstract class BackgroundEvent {
 
     @Override
     public final boolean equals(Object o) {
-        return this == o;
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        BackgroundEvent that = (BackgroundEvent) o;
+        return type == that.type && id.equals(that.id);
     }
 
     @Override

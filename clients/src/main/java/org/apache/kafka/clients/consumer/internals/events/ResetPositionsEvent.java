@@ -19,16 +19,14 @@ package org.apache.kafka.clients.consumer.internals.events;
 
 import org.apache.kafka.common.utils.Timer;
 
-import static org.apache.kafka.clients.consumer.internals.events.ApplicationEvent.Type.VALIDATE_POSITIONS;
-
 /**
- * Event for validating offsets for all assigned partitions for which a leader change has been
- * detected. This is an asynchronous event that generates OffsetForLeaderEpoch requests, and
- * completes by validating in-memory positions against the offsets received in the responses.
+ * Event for resetting offsets for all assigned partitions that require it. This is an
+ * asynchronous event that generates ListOffsets requests, and completes by updating in-memory
+ * positions when responses are received.
  */
-public class ValidatePositionsApplicationEvent extends CompletableApplicationEvent<Void> {
+public class ResetPositionsEvent extends CompletableApplicationEvent<Void> {
 
-    public ValidatePositionsApplicationEvent(Timer timer) {
-        super(VALIDATE_POSITIONS, timer);
+    public ResetPositionsEvent(final Timer timer) {
+        super(Type.RESET_POSITIONS, timer);
     }
 }

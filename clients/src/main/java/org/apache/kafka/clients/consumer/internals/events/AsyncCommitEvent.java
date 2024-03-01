@@ -20,36 +20,16 @@ import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.Timer;
 
-import java.util.Collections;
 import java.util.Map;
 
-public abstract class CommitApplicationEvent extends CompletableApplicationEvent<Void> {
+import static org.apache.kafka.clients.consumer.internals.events.ApplicationEvent.Type.COMMIT_ASYNC;
 
-    /**
-     * Offsets to commit per partition.
-     */
-    private final Map<TopicPartition, OffsetAndMetadata> offsets;
+/**
+ * Event to commit offsets without waiting for a response, so the request won't be retried.
+ */
+public class AsyncCommitEvent extends CommitEvent {
 
-    protected CommitApplicationEvent(final Type type,
-                                     final Timer timer,
-                                     final Map<TopicPartition, OffsetAndMetadata> offsets) {
-        super(type, timer);
-        this.offsets = Collections.unmodifiableMap(offsets);
-
-        for (OffsetAndMetadata offsetAndMetadata : offsets.values()) {
-            if (offsetAndMetadata.offset() < 0) {
-                throw new IllegalArgumentException("Invalid offset: " + offsetAndMetadata.offset());
-            }
-        }
-    }
-
-    public Map<TopicPartition, OffsetAndMetadata> offsets() {
-        return offsets;
-    }
-
-
-    @Override
-    protected String toStringBase() {
-        return super.toStringBase() + ", offsets=" + offsets;
+    public AsyncCommitEvent(final Map<TopicPartition, OffsetAndMetadata> offsets, final Timer timer) {
+        super(Type.COMMIT_ASYNC, timer, offsets);
     }
 }

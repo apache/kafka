@@ -24,8 +24,6 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 
-import static org.apache.kafka.clients.consumer.internals.events.ApplicationEvent.Type.CONSUMER_REBALANCE_LISTENER_CALLBACK_COMPLETED;
-
 /**
  * Event that signifies that the application thread has executed the {@link ConsumerRebalanceListener} callback. If
  * the callback execution threw an error, it is included in the event should any event listener want to know.
@@ -36,10 +34,10 @@ public class ConsumerRebalanceListenerCallbackCompletedEvent extends Application
     private final CompletableFuture<Void> future;
     private final Optional<KafkaException> error;
 
-    public ConsumerRebalanceListenerCallbackCompletedEvent(ConsumerRebalanceListenerMethodName methodName,
-                                                           CompletableFuture<Void> future,
-                                                           Optional<KafkaException> error) {
-        super(CONSUMER_REBALANCE_LISTENER_CALLBACK_COMPLETED);
+    public ConsumerRebalanceListenerCallbackCompletedEvent(final ConsumerRebalanceListenerMethodName methodName,
+                                                           final CompletableFuture<Void> future,
+                                                           final Optional<KafkaException> error) {
+        super(Type.CONSUMER_REBALANCE_LISTENER_CALLBACK_COMPLETED);
         this.methodName = Objects.requireNonNull(methodName);
         this.future = Objects.requireNonNull(future);
         this.error = Objects.requireNonNull(error);

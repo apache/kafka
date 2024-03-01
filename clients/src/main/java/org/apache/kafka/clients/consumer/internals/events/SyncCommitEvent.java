@@ -20,31 +20,15 @@ import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.Timer;
 
-import java.util.Collections;
 import java.util.Map;
-import java.util.Set;
 
-import static org.apache.kafka.clients.consumer.internals.events.ApplicationEvent.Type.FETCH_COMMITTED_OFFSETS;
+/**
+ * Event to commit offsets waiting for a response and retrying on expected retriable errors until
+ * the timer expires.
+ */
+public class SyncCommitEvent extends CommitEvent {
 
-public class FetchCommittedOffsetsApplicationEvent extends CompletableApplicationEvent<Map<TopicPartition, OffsetAndMetadata>> {
-
-    /**
-     * Partitions to retrieve committed offsets for.
-     */
-    private final Set<TopicPartition> partitions;
-
-    public FetchCommittedOffsetsApplicationEvent(final Set<TopicPartition> partitions,
-                                                 final Timer timer) {
-        super(FETCH_COMMITTED_OFFSETS, timer);
-        this.partitions = Collections.unmodifiableSet(partitions);
-    }
-
-    public Set<TopicPartition> partitions() {
-        return partitions;
-    }
-
-    @Override
-    public String toStringBase() {
-        return super.toStringBase() + ", partitions=" + partitions;
+    public SyncCommitEvent(final Map<TopicPartition, OffsetAndMetadata> offsets, final Timer timer) {
+        super(Type.COMMIT_SYNC, timer, offsets);
     }
 }

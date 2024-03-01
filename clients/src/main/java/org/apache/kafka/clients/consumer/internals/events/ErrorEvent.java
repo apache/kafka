@@ -16,27 +16,26 @@
  */
 package org.apache.kafka.clients.consumer.internals.events;
 
-import org.apache.kafka.clients.consumer.OffsetAndMetadata;
-import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.utils.Timer;
+import org.apache.kafka.common.KafkaException;
 
-import java.util.Map;
+import java.util.Objects;
 
-import static org.apache.kafka.clients.consumer.internals.events.ApplicationEvent.Type.COMMIT_SYNC;
+public class ErrorEvent extends BackgroundEvent {
 
-/**
- * Event to commit offsets waiting for a response and retrying on expected retriable errors until
- * the timer expires.
- */
-public class SyncCommitApplicationEvent extends CommitApplicationEvent {
+    private final RuntimeException error;
 
-    public SyncCommitApplicationEvent(final Map<TopicPartition, OffsetAndMetadata> offsets,
-                                      final Timer timer) {
-        super(COMMIT_SYNC, timer, offsets);
+    public ErrorEvent(Throwable t) {
+        super(Type.ERROR);
+        Objects.requireNonNull(t);
+        this.error = t instanceof RuntimeException ? (RuntimeException) t : new KafkaException(t);
+    }
+
+    public RuntimeException error() {
+        return error;
     }
 
     @Override
     public String toStringBase() {
-        return super.toStringBase() + ", offsets=" + offsets();
+        return super.toStringBase() + ", error=" + error;
     }
 }

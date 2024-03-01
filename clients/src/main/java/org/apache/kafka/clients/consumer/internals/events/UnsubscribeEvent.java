@@ -19,16 +19,16 @@ package org.apache.kafka.clients.consumer.internals.events;
 
 import org.apache.kafka.common.utils.Timer;
 
-import static org.apache.kafka.clients.consumer.internals.events.ApplicationEvent.Type.RESET_POSITIONS;
-
 /**
- * Event for resetting offsets for all assigned partitions that require it. This is an
- * asynchronous event that generates ListOffsets requests, and completes by updating in-memory
- * positions when responses are received.
+ * Application event triggered when a user calls the unsubscribe API. This will make the consumer
+ * release all its assignments and send a heartbeat request to leave the consumer group.
+ * This event holds a future that will complete when the invocation of callbacks to release
+ * complete and the heartbeat to leave the group is sent out (minimal effort to send the
+ * leave group heartbeat, without waiting for any response or considering timeouts).
  */
-public class ResetPositionsApplicationEvent extends CompletableApplicationEvent<Void> {
+public class UnsubscribeEvent extends CompletableApplicationEvent<Void> {
 
-    public ResetPositionsApplicationEvent(Timer timer) {
-        super(RESET_POSITIONS, timer);
+    public UnsubscribeEvent(final Timer timer) {
+        super(Type.UNSUBSCRIBE, timer);
     }
 }

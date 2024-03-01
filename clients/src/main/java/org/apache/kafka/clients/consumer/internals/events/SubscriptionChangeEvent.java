@@ -14,15 +14,17 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.clients.consumer.internals.events;
 
-import org.apache.kafka.common.utils.Timer;
+/**
+ * Application event indicating that the subscription state has changed, triggered when a user
+ * calls the subscribe API. This will make the consumer join a consumer group if not part of it
+ * yet, or just send the updated subscription to the broker if it's already a member of the group.
+ */
+public class SubscriptionChangeEvent extends ApplicationEvent {
 
-import static org.apache.kafka.clients.consumer.internals.events.ApplicationEvent.Type.LEAVE_ON_CLOSE;
-
-public class LeaveOnCloseApplicationEvent extends CompletableApplicationEvent<Void> {
-
-    public LeaveOnCloseApplicationEvent(Timer timer) {
-        super(LEAVE_ON_CLOSE, timer);
+    public SubscriptionChangeEvent() {
+        super(Type.SUBSCRIPTION_CHANGE);
     }
 }

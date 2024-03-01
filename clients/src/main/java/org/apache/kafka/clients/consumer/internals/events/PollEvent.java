@@ -14,19 +14,23 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.clients.consumer.internals.events;
 
-import static org.apache.kafka.clients.consumer.internals.events.ApplicationEvent.Type.SUBSCRIPTION_CHANGE;
+public class PollEvent extends ApplicationEvent {
 
-/**
- * Application event indicating that the subscription state has changed, triggered when a user
- * calls the subscribe API. This will make the consumer join a consumer group if not part of it
- * yet, or just send the updated subscription to the broker if it's already a member of the group.
- */
-public class SubscriptionChangeApplicationEvent extends ApplicationEvent {
+    private final long pollTimeMs;
 
-    public SubscriptionChangeApplicationEvent() {
-        super(SUBSCRIPTION_CHANGE);
+    public PollEvent(final long pollTimeMs) {
+        super(Type.POLL);
+        this.pollTimeMs = pollTimeMs;
+    }
+
+    public long pollTimeMs() {
+        return pollTimeMs;
+    }
+
+    @Override
+    public String toStringBase() {
+        return super.toStringBase() + ", pollTimeMs=" + pollTimeMs;
     }
 }

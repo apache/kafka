@@ -16,25 +16,25 @@
  */
 package org.apache.kafka.clients.consumer.internals.events;
 
-import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.utils.Timer;
 
-import static org.apache.kafka.clients.consumer.internals.events.BackgroundEvent.Type.ERROR;
+import java.util.Objects;
 
-public class ErrorBackgroundEvent extends BackgroundEvent {
+public class TopicMetadataEvent extends AbstractTopicMetadataEvent {
 
-    private final RuntimeException error;
+    private final String topic;
 
-    public ErrorBackgroundEvent(Throwable t) {
-        super(ERROR);
-        this.error = t instanceof RuntimeException ? (RuntimeException) t : new KafkaException(t);
+    public TopicMetadataEvent(final String topic, final Timer timer) {
+        super(Type.TOPIC_METADATA, timer);
+        this.topic = Objects.requireNonNull(topic);
     }
 
-    public RuntimeException error() {
-        return error;
+    public String topic() {
+        return topic;
     }
 
     @Override
     public String toStringBase() {
-        return super.toStringBase() + ", error=" + error;
+        return super.toStringBase() + ", topic=" + topic;
     }
 }

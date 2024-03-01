@@ -16,23 +16,15 @@
  */
 package org.apache.kafka.clients.consumer.internals.events;
 
-import static org.apache.kafka.clients.consumer.internals.events.ApplicationEvent.Type.POLL;
+import org.apache.kafka.common.PartitionInfo;
+import org.apache.kafka.common.utils.Timer;
 
-public class PollApplicationEvent extends ApplicationEvent {
+import java.util.List;
+import java.util.Map;
 
-    private final long pollTimeMs;
+public abstract class AbstractTopicMetadataEvent extends CompletableApplicationEvent<Map<String, List<PartitionInfo>>> {
 
-    public PollApplicationEvent(final long pollTimeMs) {
-        super(POLL);
-        this.pollTimeMs = pollTimeMs;
-    }
-
-    public long pollTimeMs() {
-        return pollTimeMs;
-    }
-
-    @Override
-    public String toStringBase() {
-        return super.toStringBase() + ", pollTimeMs=" + pollTimeMs;
+    protected AbstractTopicMetadataEvent(final Type type, final Timer timer) {
+        super(type, timer);
     }
 }

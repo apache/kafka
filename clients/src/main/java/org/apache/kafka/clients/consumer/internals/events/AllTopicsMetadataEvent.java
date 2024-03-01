@@ -16,11 +16,11 @@
  */
 package org.apache.kafka.clients.consumer.internals.events;
 
-import static org.apache.kafka.clients.consumer.internals.events.ApplicationEvent.Type.COMMIT_ON_CLOSE;
+import org.apache.kafka.common.utils.Timer;
 
-public class CommitOnCloseApplicationEvent extends ApplicationEvent {
+public class AllTopicsMetadataEvent extends AbstractTopicMetadataEvent {
 
-    public CommitOnCloseApplicationEvent() {
-        super(COMMIT_ON_CLOSE);
+    public AllTopicsMetadataEvent(final Timer timer) {
+        super(Type.ALL_TOPICS_METADATA, timer);
     }
 }

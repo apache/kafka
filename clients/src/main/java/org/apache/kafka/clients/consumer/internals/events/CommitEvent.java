@@ -18,34 +18,35 @@ package org.apache.kafka.clients.consumer.internals.events;
 
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.utils.Timer;
 
 import java.util.Collections;
 import java.util.Map;
 
-import static org.apache.kafka.clients.consumer.internals.events.ApplicationEvent.Type.ASSIGNMENT_CHANGE;
+public abstract class CommitEvent extends CompletableApplicationEvent<Void> {
 
-public class AssignmentChangeApplicationEvent extends ApplicationEvent {
-
+    /**
+     * Offsets to commit per partition.
+     */
     private final Map<TopicPartition, OffsetAndMetadata> offsets;
-    private final long currentTimeMs;
 
-    public AssignmentChangeApplicationEvent(final Map<TopicPartition, OffsetAndMetadata> offsets,
-                                            final long currentTimeMs) {
-        super(ASSIGNMENT_CHANGE);
+    protected CommitEvent(final Type type, final Timer timer, final Map<TopicPartition, OffsetAndMetadata> offsets) {
+        super(type, timer);
         this.offsets = Collections.unmodifiableMap(offsets);
-        this.currentTimeMs = currentTimeMs;
+
+        for (OffsetAndMetadata offsetAndMetadata : offsets.values()) {
+            if (offsetAndMetadata.offset() < 0) {
+                throw new IllegalArgumentException("Invalid offset: " + offsetAndMetadata.offset());
+            }
+        }
     }
 
     public Map<TopicPartition, OffsetAndMetadata> offsets() {
         return offsets;
     }
 
-    public long currentTimeMs() {
-        return currentTimeMs;
-    }
-
     @Override
     protected String toStringBase() {
-        return super.toStringBase() + ", offsets=" + offsets + ", currentTimeMs=" + currentTimeMs;
+        return super.toStringBase() + ", offsets=" + offsets;
     }
 }

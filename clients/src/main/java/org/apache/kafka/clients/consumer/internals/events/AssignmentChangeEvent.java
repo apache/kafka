@@ -16,53 +16,33 @@
  */
 package org.apache.kafka.clients.consumer.internals.events;
 
-import org.apache.kafka.common.Uuid;
+import org.apache.kafka.clients.consumer.OffsetAndMetadata;
+import org.apache.kafka.common.TopicPartition;
 
-import java.util.Objects;
+import java.util.Collections;
+import java.util.Map;
 
-/**
- * Application event with a result in the form of a future, that can be retrieved within a
- * timeout based on completion.
- *
- * @param <TYPE>
- */
-public abstract class ConsumerEvent<TYPE extends Enum<TYPE>> {
+public class AssignmentChangeEvent extends ApplicationEvent {
 
-    private final TYPE type;
+    private final Map<TopicPartition, OffsetAndMetadata> offsets;
+    private final long currentTimeMs;
 
-    private final Uuid id;
-
-    protected ConsumerEvent(TYPE type) {
-        this.type = Objects.requireNonNull(type);
-        this.id = Uuid.randomUuid();
+    public AssignmentChangeEvent(final Map<TopicPartition, OffsetAndMetadata> offsets, final long currentTimeMs) {
+        super(Type.ASSIGNMENT_CHANGE);
+        this.offsets = Collections.unmodifiableMap(offsets);
+        this.currentTimeMs = currentTimeMs;
     }
 
-    public TYPE type() {
-        return type;
+    public Map<TopicPartition, OffsetAndMetadata> offsets() {
+        return offsets;
     }
 
-    public Uuid id() {
-        return id;
+    public long currentTimeMs() {
+        return currentTimeMs;
     }
 
     @Override
-    public final boolean equals(Object o) {
-        return this == o;
-    }
-
-    @Override
-    public final int hashCode() {
-        return Objects.hash(type, id);
-    }
-
     protected String toStringBase() {
-        return "type=" + type + ", id=" + id;
-    }
-
-    @Override
-    public final String toString() {
-        return getClass().getSimpleName() + "{" +
-                toStringBase() +
-                '}';
+        return super.toStringBase() + ", offsets=" + offsets + ", currentTimeMs=" + currentTimeMs;
     }
 }

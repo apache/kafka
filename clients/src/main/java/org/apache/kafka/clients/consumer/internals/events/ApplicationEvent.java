@@ -16,25 +16,30 @@
  */
 package org.apache.kafka.clients.consumer.internals.events;
 
+import org.apache.kafka.clients.consumer.internals.AsyncKafkaConsumer;
 import org.apache.kafka.common.Uuid;
 
 import java.util.Objects;
 
 /**
- * This is the abstract definition of the events created by the KafkaConsumer API on the user's
+ * This is the abstract definition of the events created by the {@link AsyncKafkaConsumer} on the user's
  * application thread.
  */
 public abstract class ApplicationEvent {
 
     public enum Type {
         COMMIT_ASYNC, COMMIT_SYNC, POLL, FETCH_COMMITTED_OFFSETS, NEW_TOPICS_METADATA_UPDATE, ASSIGNMENT_CHANGE,
-        LIST_OFFSETS, RESET_POSITIONS, VALIDATE_POSITIONS, TOPIC_METADATA, SUBSCRIPTION_CHANGE,
+        LIST_OFFSETS, RESET_POSITIONS, VALIDATE_POSITIONS, TOPIC_METADATA, ALL_TOPICS_METADATA, SUBSCRIPTION_CHANGE,
         UNSUBSCRIBE, CONSUMER_REBALANCE_LISTENER_CALLBACK_COMPLETED,
         COMMIT_ON_CLOSE, LEAVE_ON_CLOSE
     }
 
     private final Type type;
 
+    /**
+     * This identifies a particular event. It is used to disambiguate events via {@link #hashCode()} and
+     * {@link #equals(Object)} and can be used in log messages when debugging.
+     */
     private final Uuid id;
 
     protected ApplicationEvent(Type type) {
@@ -52,7 +57,10 @@ public abstract class ApplicationEvent {
 
     @Override
     public final boolean equals(Object o) {
-        return this == o;
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        ApplicationEvent that = (ApplicationEvent) o;
+        return type == that.type && id.equals(that.id);
     }
 
     @Override

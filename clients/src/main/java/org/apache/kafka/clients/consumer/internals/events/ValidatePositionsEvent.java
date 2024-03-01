@@ -14,22 +14,19 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.clients.consumer.internals.events;
 
-import org.apache.kafka.clients.consumer.OffsetAndMetadata;
-import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.Timer;
 
-import java.util.Map;
-
-import static org.apache.kafka.clients.consumer.internals.events.ApplicationEvent.Type.COMMIT_ASYNC;
-
 /**
- * Event to commit offsets without waiting for a response, so the request won't be retried.
+ * Event for validating offsets for all assigned partitions for which a leader change has been
+ * detected. This is an asynchronous event that generates OffsetForLeaderEpoch requests, and
+ * completes by validating in-memory positions against the offsets received in the responses.
  */
-public class AsyncCommitApplicationEvent extends CommitApplicationEvent {
+public class ValidatePositionsEvent extends CompletableApplicationEvent<Void> {
 
-    public AsyncCommitApplicationEvent(final Map<TopicPartition, OffsetAndMetadata> offsets, Timer timer) {
-        super(COMMIT_ASYNC, timer, offsets);
+    public ValidatePositionsEvent(final Timer timer) {
+        super(Type.VALIDATE_POSITIONS, timer);
     }
 }

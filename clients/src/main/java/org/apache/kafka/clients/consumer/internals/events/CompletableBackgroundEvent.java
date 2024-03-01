@@ -16,8 +16,6 @@
  */
 package org.apache.kafka.clients.consumer.internals.events;
 
-import org.apache.kafka.common.utils.Timer;
-
 import java.util.concurrent.CompletableFuture;
 
 /**
@@ -31,7 +29,7 @@ public abstract class CompletableBackgroundEvent<T> extends BackgroundEvent impl
     private final CompletableFuture<T> future;
     private final long deadlineMs;
 
-    protected CompletableBackgroundEvent(Type type) {
+    protected CompletableBackgroundEvent(final Type type) {
         super(type);
         this.future = new CompletableFuture<>();
         this.deadlineMs = Long.MAX_VALUE;
@@ -49,6 +47,6 @@ public abstract class CompletableBackgroundEvent<T> extends BackgroundEvent impl
 
     @Override
     protected String toStringBase() {
-        return super.toStringBase() + ", future=" + future + ", deadlineMs=" + deadlineMs;
+        return super.toStringBase() + ", future=" + future;
     }
 }

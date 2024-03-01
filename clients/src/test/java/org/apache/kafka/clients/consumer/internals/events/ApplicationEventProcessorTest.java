@@ -46,17 +46,9 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 public class ApplicationEventProcessorTest {
+
     private Time time;
     private ApplicationEventProcessor processor;
-    private BlockingQueue applicationEventQueue = mock(BlockingQueue.class);
-    private RequestManagers requestManagers;
-    private ConsumerMetadata metadata = mock(ConsumerMetadata.class);
-    private NetworkClientDelegate networkClientDelegate = mock(NetworkClientDelegate.class);
-    private OffsetsRequestManager offsetRequestManager;
-    private OffsetsRequestManager offsetsRequestManager;
-    private TopicMetadataRequestManager topicMetadataRequestManager;
-    private FetchRequestManager fetchRequestManager;
-    private CoordinatorRequestManager coordinatorRequestManager;
     private CommitRequestManager commitRequestManager;
     private HeartbeatRequestManager heartbeatRequestManager;
     private MembershipManager membershipManager;
@@ -66,15 +58,16 @@ public class ApplicationEventProcessorTest {
     public void setup() {
         time = new MockTime();
         LogContext logContext = new LogContext();
-        offsetRequestManager = mock(OffsetsRequestManager.class);
-        offsetsRequestManager = mock(OffsetsRequestManager.class);
-        topicMetadataRequestManager = mock(TopicMetadataRequestManager.class);
-        fetchRequestManager = mock(FetchRequestManager.class);
-        coordinatorRequestManager = mock(CoordinatorRequestManager.class);
+        ConsumerMetadata metadata = mock(ConsumerMetadata.class);
+        BlockingQueue<ApplicationEvent> applicationEventQueue = mock(BlockingQueue.class);
+        OffsetsRequestManager offsetsRequestManager = mock(OffsetsRequestManager.class);
+        TopicMetadataRequestManager topicMetadataRequestManager = mock(TopicMetadataRequestManager.class);
+        FetchRequestManager fetchRequestManager = mock(FetchRequestManager.class);
+        CoordinatorRequestManager coordinatorRequestManager = mock(CoordinatorRequestManager.class);
         commitRequestManager = mock(CommitRequestManager.class);
         heartbeatRequestManager = mock(HeartbeatRequestManager.class);
         membershipManager = mock(MembershipManager.class);
-        requestManagers = new RequestManagers(
+        RequestManagers requestManagers = new RequestManagers(
             logContext,
             offsetsRequestManager,
             topicMetadataRequestManager,
@@ -94,24 +87,20 @@ public class ApplicationEventProcessorTest {
 
     @Test
     public void testPrepClosingCommitEvents() {
-        List<NetworkClientDelegate.UnsentRequest> results = mockCommitResults();
+        List<NetworkClientDelegate.UnsentRequest> results = Collections.singletonList(mock(NetworkClientDelegate.UnsentRequest.class));
         doReturn(new NetworkClientDelegate.PollResult(100, results)).when(commitRequestManager).pollOnClose();
-        processor.process(new CommitOnCloseApplicationEvent());
+        processor.process(new CommitOnCloseEvent());
         verify(commitRequestManager).signalClose();
     }
 
     @Test
     public void testPrepClosingLeaveGroupEvent() {
         Timer timer = time.timer(Long.MAX_VALUE);
-        LeaveOnCloseApplicationEvent event = new LeaveOnCloseApplicationEvent(timer);
+        LeaveOnCloseEvent event = new LeaveOnCloseEvent(timer);
         when(heartbeatRequestManager.membershipManager()).thenReturn(membershipManager);
         when(membershipManager.leaveGroup()).thenReturn(CompletableFuture.completedFuture(null));
         processor.process(event);
         verify(membershipManager).leaveGroup();
         assertTrue(event.future().isDone());
-    }
-
-    private List<NetworkClientDelegate.UnsentRequest> mockCommitResults() {
-        return Collections.singletonList(mock(NetworkClientDelegate.UnsentRequest.class));
     }
 }

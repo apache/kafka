@@ -16,41 +16,32 @@
  */
 package org.apache.kafka.clients.consumer.internals.events;
 
-import org.apache.kafka.common.PartitionInfo;
+import org.apache.kafka.clients.consumer.OffsetAndMetadata;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.Timer;
 
-import java.util.List;
+import java.util.Collections;
 import java.util.Map;
+import java.util.Set;
 
-import static org.apache.kafka.clients.consumer.internals.events.ApplicationEvent.Type.TOPIC_METADATA;
+public class FetchCommittedOffsetsEvent extends CompletableApplicationEvent<Map<TopicPartition, OffsetAndMetadata>> {
 
-public class TopicMetadataApplicationEvent extends CompletableApplicationEvent<Map<String, List<PartitionInfo>>> {
+    /**
+     * Partitions to retrieve committed offsets for.
+     */
+    private final Set<TopicPartition> partitions;
 
-    private final String topic;
-    private final boolean allTopics;
-
-    public TopicMetadataApplicationEvent(final Timer timer) {
-        super(TOPIC_METADATA, timer);
-        this.topic = null;
-        this.allTopics = true;
+    public FetchCommittedOffsetsEvent(final Set<TopicPartition> partitions, final Timer timer) {
+        super(Type.FETCH_COMMITTED_OFFSETS, timer);
+        this.partitions = Collections.unmodifiableSet(partitions);
     }
 
-    public TopicMetadataApplicationEvent(final String topic, final Timer timer) {
-        super(TOPIC_METADATA, timer);
-        this.topic = topic;
-        this.allTopics = false;
-    }
-
-    public String topic() {
-        return topic;
-    }
-
-    public boolean isAllTopics() {
-        return allTopics;
+    public Set<TopicPartition> partitions() {
+        return partitions;
     }
 
     @Override
     public String toStringBase() {
-        return super.toStringBase() + ", topic=" + topic + ", allTopics=" + allTopics;
+        return super.toStringBase() + ", partitions=" + partitions;
     }
 }

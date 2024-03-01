@@ -29,7 +29,7 @@ import org.apache.kafka.clients.admin._
 import org.apache.kafka.clients.consumer.OffsetAndMetadata
 import org.apache.kafka.clients.CommonClientConfigs
 import org.apache.kafka.common.utils.Utils
-import org.apache.kafka.common.{KafkaException, Node, TopicPartition}
+import org.apache.kafka.common.{ConsumerGroupState, GroupType, KafkaException, Node, TopicPartition}
 import org.apache.kafka.server.util.{CommandDefaultOptions, CommandLineUtils}
 
 import scala.jdk.CollectionConverters._
@@ -41,7 +41,6 @@ import org.apache.kafka.common.protocol.Errors
 
 import scala.collection.immutable.TreeMap
 import scala.reflect.ClassTag
-import org.apache.kafka.common.ConsumerGroupState
 import org.apache.kafka.common.requests.ListOffsetsResponse
 
 object ConsumerGroupCommand extends Logging {
@@ -104,6 +103,15 @@ object ConsumerGroupCommand extends Logging {
     parsedStates
   }
 
+  def consumerGroupTypesFromString(input: String): Set[GroupType] = {
+    val parsedTypes = input.toLowerCase.split(',').map(s => GroupType.parse(s.trim)).toSet
+    if (parsedTypes.contains(GroupType.UNKNOWN)) {
+      val validTypes = GroupType.values().filter(_ != GroupType.UNKNOWN)
+      throw new IllegalArgumentException(s"Invalid types list '$input'. Valid types are: ${validTypes.mkString(", ")}")
+    }
+    parsedTypes
+  }
+
   val MISSING_COLUMN_VALUE = "-"
 
   private def printError(msg: String, e: Option[Throwable] = None): Unit = {
@@ -135,7 +143,7 @@ object ConsumerGroupCommand extends Logging {
   private[admin] case class MemberAssignmentState(group: String, consumerId: String, host: String, clientId: String, groupInstanceId: String,
                                              numPartitions: Int, assignment: List[TopicPartition])
 
-  case class GroupState(group: String, coordinator: Node, assignmentStrategy: String, state: String, numMembers: Int)
+  private[admin] case class GroupState(group: String, coordinator: Node, assignmentStrategy: String, state: String, numMembers: Int)
 
   private[admin] sealed trait CsvRecord
   private[admin] case class CsvRecordWithGroup(group: String, topic: String, partition: Int, offset: Long) extends CsvRecord
@@ -189,16 +197,65 @@ object ConsumerGroupCommand extends Logging {
     }
 
     def listGroups(): Unit = {
-      if (opts.options.has(opts.stateOpt)) {
-        val stateValue = opts.options.valueOf(opts.stateOpt)
-        val states = if (stateValue == null || stateValue.isEmpty)
-          Set[ConsumerGroupState]()
-        else
-          consumerGroupStatesFromString(stateValue)
-        val listings = listConsumerGroupsWithState(states)
-        printGroupStates(listings.map(e => (e.groupId, e.state.get.toString)))
-      } else
+      val includeType = opts.options.has(opts.typeOpt)
+      val includeState = opts.options.has(opts.stateOpt)
+
+      if (includeType || includeState) {
+        val types = typeValues()
+        val states = stateValues()
+        val listings = listConsumerGroupsWithFilters(types, states)
+
+        printGroupInfo(listings, includeType, includeState)
+
+      } else {
         listConsumerGroups().foreach(println(_))
+      }
+    }
+
+    private def stateValues(): Set[ConsumerGroupState] = {
+      val stateValue = opts.options.valueOf(opts.stateOpt)
+      if (stateValue == null || stateValue.isEmpty)
+        Set[ConsumerGroupState]()
+      else
+        consumerGroupStatesFromString(stateValue)
+    }
+
+    private def typeValues(): Set[GroupType] = {
+      val typeValue = opts.options.valueOf(opts.typeOpt)
+      if (typeValue == null || typeValue.isEmpty)
+        Set[GroupType]()
+      else
+        consumerGroupTypesFromString(typeValue)
+    }
+
+    private def printGroupInfo(groups: List[ConsumerGroupListing], includeType: Boolean, includeState: Boolean): Unit = {
+      def groupId(groupListing: ConsumerGroupListing): String = groupListing.groupId
+      def groupType(groupListing: ConsumerGroupListing): String = groupListing.`type`().orElse(GroupType.UNKNOWN).toString
+      def groupState(groupListing: ConsumerGroupListing): String = groupListing.state.orElse(ConsumerGroupState.UNKNOWN).toString
+
+      val maxGroupLen = groups.foldLeft(15)((maxLen, groupListing) => Math.max(maxLen, groupId(groupListing).length)) + 10
+      var format = s"%-${maxGroupLen}s"
+      var header = List("GROUP")
+      var extractors: List[ConsumerGroupListing => String] = List(groupId)
+
+      if (includeType) {
+        header = header :+ "TYPE"
+        extractors = extractors :+ groupType _
+        format += " %-20s"
+      }
+
+      if (includeState) {
+        header = header :+ "STATE"
+        extractors = extractors :+ groupState _
+        format += " %-20s"
+      }
+
+      println(format.format(header: _*))
+
+      groups.foreach { groupListing =>
+        val info = extractors.map(extractor => extractor(groupListing))
+        println(format.format(info: _*))
+      }
     }
 
     def listConsumerGroups(): List[String] = {
@@ -207,24 +264,13 @@ object ConsumerGroupCommand extends Logging {
       listings.map(_.groupId).toList
     }
 
-    def listConsumerGroupsWithState(states: Set[ConsumerGroupState]): List[ConsumerGroupListing] = {
+    def listConsumerGroupsWithFilters(types: Set[GroupType], states: Set[ConsumerGroupState]): List[ConsumerGroupListing] = {
       val listConsumerGroupsOptions = withTimeoutMs(new ListConsumerGroupsOptions())
-      listConsumerGroupsOptions.inStates(states.asJava)
+      listConsumerGroupsOptions
+        .inStates(states.asJava)
+        .withTypes(types.asJava)
       val result = adminClient.listConsumerGroups(listConsumerGroupsOptions)
       result.all.get.asScala.toList
-    }
-
-    private def printGroupStates(groupsAndStates: List[(String, String)]): Unit = {
-      // find proper columns width
-      var maxGroupLen = 15
-      for ((groupId, _) <- groupsAndStates) {
-        maxGroupLen = Math.max(maxGroupLen, groupId.length)
-      }
-      val format = s"%${-maxGroupLen}s %s"
-      println(format.format("GROUP", "STATE"))
-      for ((groupId, state) <- groupsAndStates) {
-        println(format.format(groupId, state))
-      }
     }
 
     private def shouldPrintMemberState(group: String, state: Option[String], numRows: Option[Int]): Boolean = {
@@ -1024,6 +1070,9 @@ object ConsumerGroupCommand extends Logging {
       "When specified with '--list', it displays the state of all groups. It can also be used to list groups with specific states." + nl +
       "Example: --bootstrap-server localhost:9092 --list --state stable,empty" + nl +
       "This option may be used with '--describe', '--list' and '--bootstrap-server' options only."
+    private val TypeDoc = "When specified with '--list', it displays the types of all the groups. It can also be used to list groups with specific types." + nl +
+      "Example: --bootstrap-server localhost:9092 --list --type classic,consumer" + nl +
+      "This option may be used with the '--list' option only."
     private val DeleteOffsetsDoc = "Delete offsets of consumer group. Supports one consumer group at the time, and multiple topics."
 
     val bootstrapServerOpt: OptionSpec[String] = parser.accepts("bootstrap-server", BootstrapServerDoc)
@@ -1090,6 +1139,10 @@ object ConsumerGroupCommand extends Logging {
                          .availableIf(describeOpt, listOpt)
                          .withOptionalArg()
                          .ofType(classOf[String])
+    val typeOpt: OptionSpec[String] = parser.accepts("type", TypeDoc)
+                        .availableIf(listOpt)
+                        .withOptionalArg()
+                        .ofType(classOf[String])
 
     options = parser.parse(args : _*)
 

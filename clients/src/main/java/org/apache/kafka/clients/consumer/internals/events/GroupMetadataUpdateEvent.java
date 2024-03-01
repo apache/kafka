@@ -19,8 +19,6 @@ package org.apache.kafka.clients.consumer.internals.events;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.internals.ConsumerNetworkThread;
 
-import static org.apache.kafka.clients.consumer.internals.events.BackgroundEvent.Type.GROUP_METADATA_UPDATE;
-
 /**
  * This event is sent by the {@link ConsumerNetworkThread consumer's network thread} to the application thread
  * so that when the user calls the {@link Consumer#groupMetadata()} API, the information is up-to-date. The
@@ -33,7 +31,7 @@ public class GroupMetadataUpdateEvent extends BackgroundEvent {
     private final String memberId;
 
     public GroupMetadataUpdateEvent(final int memberEpoch, final String memberId) {
-        super(GROUP_METADATA_UPDATE);
+        super(Type.GROUP_METADATA_UPDATE);
         this.memberEpoch = memberEpoch;
         this.memberId = memberId;
     }
