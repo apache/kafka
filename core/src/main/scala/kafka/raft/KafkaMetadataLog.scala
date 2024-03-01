@@ -519,32 +519,6 @@ final class KafkaMetadataLog private (
   }
 }
 
-object MetadataLogConfig {
-  def apply(config: AbstractConfig, maxBatchSizeInBytes: Int, maxFetchSizeInBytes: Int): MetadataLogConfig = {
-    new MetadataLogConfig(
-      config.getInt(KafkaConfig.MetadataLogSegmentBytesProp),
-      config.getInt(KafkaConfig.MetadataLogSegmentMinBytesProp),
-      config.getLong(KafkaConfig.MetadataLogSegmentMillisProp),
-      config.getLong(KafkaConfig.MetadataMaxRetentionBytesProp),
-      config.getLong(KafkaConfig.MetadataMaxRetentionMillisProp),
-      maxBatchSizeInBytes,
-      maxFetchSizeInBytes,
-      LogConfig.DEFAULT_FILE_DELETE_DELAY_MS,
-      config.getInt(KafkaConfig.NodeIdProp)
-    )
-  }
-}
-
-case class MetadataLogConfig(logSegmentBytes: Int,
-                             logSegmentMinBytes: Int,
-                             logSegmentMillis: Long,
-                             retentionMaxBytes: Long,
-                             retentionMillis: Long,
-                             maxBatchSizeInBytes: Int,
-                             maxFetchSizeInBytes: Int,
-                             fileDeleteDelayMs: Long,
-                             nodeId: Int)
-
 object KafkaMetadataLog extends Logging {
   def apply(
     topicPartition: TopicPartition,
