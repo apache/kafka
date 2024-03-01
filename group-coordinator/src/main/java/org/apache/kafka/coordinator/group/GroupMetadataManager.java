@@ -3509,12 +3509,7 @@ public class GroupMetadataManager {
      */
     private boolean validateOfflineUpgrade(String groupId) {
         Group group = groups.get(groupId);
-
-        if (group == null || group.type() == CONSUMER) {
-            return false;
-        }
-
-        return group.isEmpty();
+        return group != null && group.type() != CONSUMER && group.isEmpty();
     }
 
     /**
