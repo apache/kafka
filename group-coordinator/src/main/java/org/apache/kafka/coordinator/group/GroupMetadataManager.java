@@ -1015,7 +1015,7 @@ public class GroupMetadataManager {
 
         // Get or create the consumer group.
         boolean createIfNotExists = memberEpoch == 0;
-        maybeUpgradeEmptyGroup(groupId, records);
+        maybeMigrateEmptyGroup(groupId, records, true);
         final ConsumerGroup group = getOrMaybeCreateConsumerGroup(groupId, createIfNotExists);
         throwIfConsumerGroupIsFull(group, memberId);
 
@@ -3509,20 +3509,31 @@ public class GroupMetadataManager {
      */
     private boolean validateOfflineUpgrade(String groupId) {
         Group group = groups.get(groupId);
-        return group != null && group.type() != CONSUMER && group.isEmpty();
+        return group != null && group.type() == CLASSIC && group.isEmpty();
     }
 
     /**
-     * Upgrade the empty classic group to a consumer group if it's valid.
+     * A group can be downgraded offline if it's a consumer group and empty.
      *
-     * @param groupId The group id to be updated.
-     * @param records The list of records to delete the classic group and create the consumer group.
+     * @param groupId The group to be validated.
+     * @return true if the offline downgrade is valid.
      */
-    public void maybeUpgradeEmptyGroup(String groupId, List<Record> records) {
-        if (validateOfflineUpgrade(groupId)) {
+    private boolean validateOfflineDowngrade(String groupId) {
+        Group group = groups.get(groupId);
+        return group != null && group.type() == CONSUMER && group.isEmpty();
+    }
+
+    /**
+     * Upgrade/Downgrade the empty group if it's valid.
+     *
+     * @param groupId The group id to be migrated.
+     * @param records The list of records to delete the previous group.
+     */
+    public void maybeMigrateEmptyGroup(String groupId, List<Record> records, boolean isUpgrade) {
+        if ((isUpgrade && validateOfflineUpgrade(groupId)) ||
+            (!isUpgrade && validateOfflineDowngrade(groupId))) {
             deleteGroup(groupId, records);
             removeGroup(groupId);
-            getOrMaybeCreateConsumerGroup(groupId, true);
         }
     }
 
