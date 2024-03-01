@@ -33,7 +33,6 @@ import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.utils.LogContext;
 import org.slf4j.Logger;
 
-import java.util.Collection;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
