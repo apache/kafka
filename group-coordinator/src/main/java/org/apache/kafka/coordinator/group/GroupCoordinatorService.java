@@ -230,9 +230,10 @@ public class GroupCoordinatorService implements GroupCoordinator {
 
     /**
      *
-     * @param logContext
-     * @param config
-     * @param runtime
+     * @param logContext                The log context.
+     * @param config                    The group coordinator config.
+     * @param runtime                   The runtime.
+     * @param groupCoordinatorMetrics   The group coordinator metrics.
      */
     GroupCoordinatorService(
         LogContext logContext,
@@ -240,7 +241,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
         CoordinatorRuntime<GroupCoordinatorShard, Record> runtime,
         GroupCoordinatorMetrics groupCoordinatorMetrics
     ) {
-        this.log = logContext.logger(CoordinatorLoader.class);
+        this.log = logContext.logger(GroupCoordinatorService.class);
         this.config = config;
         this.runtime = runtime;
         this.groupCoordinatorMetrics = groupCoordinatorMetrics;

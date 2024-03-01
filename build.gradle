@@ -2333,6 +2333,8 @@ project(':streams:streams-scala') {
 
     testImplementation libs.junitJupiter
     testImplementation libs.easymock
+    testImplementation libs.mockitoCore
+    testImplementation libs.mockitoJunitJupiter // supports MockitoExtension
     testImplementation libs.hamcrest
     testRuntimeOnly libs.slf4jlog4j
   }

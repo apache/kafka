@@ -22,43 +22,27 @@ import org.apache.kafka.common.TopicPartition;
 import java.util.Collections;
 import java.util.Map;
 
-public abstract class CommitApplicationEvent extends CompletableApplicationEvent<Void> {
+public class AssignmentChangeEvent extends ApplicationEvent {
 
-    /**
-     * Offsets to commit per partition.
-     */
     private final Map<TopicPartition, OffsetAndMetadata> offsets;
+    private final long currentTimeMs;
 
-    public CommitApplicationEvent(final Map<TopicPartition, OffsetAndMetadata> offsets, Type type) {
-        super(type);
+    public AssignmentChangeEvent(final Map<TopicPartition, OffsetAndMetadata> offsets, final long currentTimeMs) {
+        super(Type.ASSIGNMENT_CHANGE);
         this.offsets = Collections.unmodifiableMap(offsets);
-
-        for (OffsetAndMetadata offsetAndMetadata : offsets.values()) {
-            if (offsetAndMetadata.offset() < 0) {
-                throw new IllegalArgumentException("Invalid offset: " + offsetAndMetadata.offset());
-            }
-        }
+        this.currentTimeMs = currentTimeMs;
     }
 
     public Map<TopicPartition, OffsetAndMetadata> offsets() {
         return offsets;
     }
 
-    @Override
-    public boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
-        if (!super.equals(o)) return false;
-
-        CommitApplicationEvent that = (CommitApplicationEvent) o;
-
-        return offsets.equals(that.offsets);
+    public long currentTimeMs() {
+        return currentTimeMs;
     }
 
     @Override
-    public int hashCode() {
-        int result = super.hashCode();
-        result = 31 * result + offsets.hashCode();
-        return result;
+    protected String toStringBase() {
+        return super.toStringBase() + ", offsets=" + offsets + ", currentTimeMs=" + currentTimeMs;
     }
 }
