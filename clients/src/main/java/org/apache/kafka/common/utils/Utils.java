@@ -31,6 +31,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.PrintWriter;
 import java.io.StringWriter;
+import java.io.InputStreamReader;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Modifier;
@@ -684,7 +685,7 @@ public final class Utils {
 
         if (filename != null) {
             try (InputStream propStream = Files.newInputStream(Paths.get(filename))) {
-                props.load(propStream);
+                props.load(new InputStreamReader(propStream, "UTF-8"));
             }
         } else {
             System.out.println("Did not load any properties since the property file is not specified");
