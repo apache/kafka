@@ -36,6 +36,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.regex.Pattern;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -74,8 +75,8 @@ public class ConsoleConsumerTest {
         };
 
         ConsoleConsumer.ConsumerWrapper consumer = new ConsoleConsumer.ConsumerWrapper(
-                new ConsoleConsumerOptions(args),
-                mockConsumer
+            new ConsoleConsumerOptions(args),
+            mockConsumer
         );
 
         assertThrows(TimeoutException.class, consumer::receive);
@@ -99,8 +100,8 @@ public class ConsoleConsumerTest {
         };
 
         ConsoleConsumer.ConsumerWrapper consumer = new ConsoleConsumer.ConsumerWrapper(
-                new ConsoleConsumerOptions(args),
-                mockConsumer
+            new ConsoleConsumerOptions(args),
+            mockConsumer
         );
 
         mockConsumer.rebalance(Arrays.asList(tp1, tp2));
@@ -178,8 +179,8 @@ public class ConsoleConsumerTest {
         };
 
         ConsoleConsumer.ConsumerWrapper consumer = new ConsoleConsumer.ConsumerWrapper(
-                new ConsoleConsumerOptions(args),
-                mockConsumer
+            new ConsoleConsumerOptions(args),
+            mockConsumer
         );
 
         verify(mockConsumer).assign(eq(Collections.singletonList(tp0)));
@@ -216,5 +217,24 @@ public class ConsoleConsumerTest {
         verify(mockConsumer).seekToBeginning(eq(Collections.singletonList(tp0)));
         consumer.cleanup();
         reset(mockConsumer);
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    public void shouldWorkWithoutTopicOption() throws IOException {
+        Consumer<byte[], byte[]> mockConsumer = mock(Consumer.class);
+
+        String[] args = new String[]{
+            "--bootstrap-server", "localhost:9092",
+            "--include", "includeTest*",
+            "--from-beginning"
+        };
+
+        new ConsoleConsumer.ConsumerWrapper(
+            new ConsoleConsumerOptions(args),
+            mockConsumer
+        );
+
+        verify(mockConsumer).subscribe(any(Pattern.class));
     }
 }
