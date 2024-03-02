@@ -230,10 +230,7 @@ public class ConsoleConsumerTest {
             "--from-beginning"
         };
 
-        new ConsoleConsumer.ConsumerWrapper(
-            new ConsoleConsumerOptions(args),
-            mockConsumer
-        );
+        new ConsoleConsumer.ConsumerWrapper(new ConsoleConsumerOptions(args), mockConsumer);
 
         verify(mockConsumer).subscribe(any(Pattern.class));
     }
