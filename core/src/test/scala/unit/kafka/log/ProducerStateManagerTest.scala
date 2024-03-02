@@ -30,7 +30,7 @@ import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.utils.{MockTime, Utils}
 import org.apache.kafka.server.config.Defaults
-import org.apache.kafka.storage.internals.log.{AppendOrigin, CompletedTxn, LogFileUtils, LogOffsetMetadata, ProducerAppendInfo, ProducerStateEntry, ProducerStateManager, ProducerStateManagerConfig, TxnMetadata, VerificationStateEntry}
+import org.apache.kafka.storage.internals.log.{AppendOrigin, CompletedTxn, LogFileUtils, LogOffsetMetadata, ProducerAppendInfo, ProducerStateEntry, ProducerStateManager, ProducerStateManagerConfig, SnapshotFile, TxnMetadata, VerificationStateEntry}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.junit.jupiter.params.ParameterizedTest
@@ -577,6 +577,12 @@ class ProducerStateManagerTest {
     // Check that file exists and it is not empty
     assertEquals(1, logDir.list().length, "Directory doesn't contain a single file as expected")
     assertTrue(logDir.list().head.nonEmpty, "Snapshot file is empty")
+  }
+
+  @Test
+  def testFetchSnapshotEmptySnapShot(): Unit = {
+    val offset = 1
+    assertEquals(Optional.empty(), stateManager.fetchSnapshot(offset))
   }
 
   @Test
