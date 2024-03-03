@@ -236,6 +236,70 @@ public class GetOffsetShellTest {
     }
 
     @ClusterTest
+    public void testGetOffsetsByMaxTimestampWithTimeStampSpecifiedMessageFailed(){
+        cluster.config().serverProperties().put("auto.create.topics.enable", false);
+        cluster.config().serverProperties().put("offsets.topic.replication.factor", "1");
+        cluster.config().serverProperties().put("offsets.topic.num.partitions", String.valueOf(offsetTopicPartitionCount));
+
+        try (Admin admin = Admin.create(cluster.config().adminClientProperties())) {
+            List<NewTopic> topics = new ArrayList<>();
+
+            IntStream.range(0, topicCount + 1).forEach(i -> topics.add(new NewTopic(getTopicName(i), i, (short) 1)));
+
+            admin.createTopics(topics);
+        }
+
+        long time = System.currentTimeMillis();
+        Properties props = new Properties();
+        props.put(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, cluster.config().producerProperties().get("bootstrap.servers"));
+        props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
+        props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
+
+        try (KafkaProducer<String, String> producer = new KafkaProducer<>(props)) {
+            producer.send(new ProducerRecord<>(getTopicName(1), 0, time + 100, null, "val20"));
+            producer.send(new ProducerRecord<>(getTopicName(1), 0, time + 400, null, "val15"));
+            producer.send(new ProducerRecord<>(getTopicName(1), 0, time + 250, null, "val15"));
+            producer.flush();
+        }
+
+        List<Row> offsets = executeAndParse("--topic-partitions", "topic1", "--time", "-3");
+        assertEquals(1, offsets.get(0).timestamp);
+    }
+
+    @ClusterTest
+    public void testGetOffsetsByMaxTimestampWithTimeStampSpecifiedMessageSucceed(){
+        cluster.config().serverProperties().put("auto.create.topics.enable", false);
+        cluster.config().serverProperties().put("offsets.topic.replication.factor", "1");
+        cluster.config().serverProperties().put("offsets.topic.num.partitions", String.valueOf(offsetTopicPartitionCount));
+
+        try (Admin admin = Admin.create(cluster.config().adminClientProperties())) {
+            List<NewTopic> topics = new ArrayList<>();
+
+            IntStream.range(0, topicCount + 1).forEach(i -> topics.add(new NewTopic(getTopicName(i), i, (short) 1)));
+
+            admin.createTopics(topics);
+        }
+
+        long time = System.currentTimeMillis();
+        Properties props = new Properties();
+        props.put(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, cluster.config().producerProperties().get("bootstrap.servers"));
+        props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
+        props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
+
+        try (KafkaProducer<String, String> producer = new KafkaProducer<>(props)) {
+            producer.send(new ProducerRecord<>(getTopicName(1), 0, time + 100, null, "val20"));
+            producer.flush();
+            producer.send(new ProducerRecord<>(getTopicName(1), 0, time + 400, null, "val15"));
+            producer.flush();
+            producer.send(new ProducerRecord<>(getTopicName(1), 0, time + 250, null, "val15"));
+            producer.flush();
+        }
+
+        List<Row> offsets = executeAndParse("--topic-partitions", "topic1", "--time", "-3");
+        assertEquals(1, offsets.get(0).timestamp);
+    }
+
+    @ClusterTest
     public void testGetOffsetsByTimestamp() {
         setUp();
 
