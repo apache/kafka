@@ -13,7 +13,7 @@
 package kafka.api
 
 /**
- * Abstract Sasl test to be used both in scala and java test of SASL.
+ * Abstract Sasl test to be used both in scala and java tests of SASL.
  * Separate class required to overcome issues related to usage of scala trait in java code.
  * @see SaslClientsWithInvalidCredentialsTest
  */
