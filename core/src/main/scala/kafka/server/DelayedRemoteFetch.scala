@@ -82,11 +82,13 @@ class DelayedRemoteFetch(remoteFetchTask: Future[Void],
   }
 
   override def onExpiration(): Unit = {
+    System.out.println("[6333] enter onExpiration")
     // cancel the remote storage read task, if it has not been executed yet
     val cancelled = remoteFetchTask.cancel(true)
     if (!cancelled) debug(s"Remote fetch task for RemoteStorageFetchInfo: $remoteFetchInfo could not be cancelled and its isDone value is ${remoteFetchTask.isDone}")
 
     DelayedRemoteFetchMetrics.expiredRequestMeter.mark()
+    System.out.println("[6333] DelayedRemoteFetchMetrics mark")
   }
 
   /**
