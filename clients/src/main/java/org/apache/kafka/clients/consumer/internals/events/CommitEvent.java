@@ -30,10 +30,19 @@ public abstract class CommitEvent extends CompletableApplicationEvent<Void> {
      */
     private final Map<TopicPartition, OffsetAndMetadata> offsets;
 
-    protected CommitEvent(final Type type, final Timer timer, final Map<TopicPartition, OffsetAndMetadata> offsets) {
+    protected CommitEvent(final Type type, final Map<TopicPartition, OffsetAndMetadata> offsets, final Timer timer) {
         super(type, timer);
         this.offsets = Collections.unmodifiableMap(offsets);
+        validate(this.offsets);
+    }
 
+    protected CommitEvent(final Type type, final Map<TopicPartition, OffsetAndMetadata> offsets, final long timer) {
+        super(type, timer);
+        this.offsets = Collections.unmodifiableMap(offsets);
+        validate(this.offsets);
+    }
+
+    private static void validate(final Map<TopicPartition, OffsetAndMetadata> offsets) {
         for (OffsetAndMetadata offsetAndMetadata : offsets.values()) {
             if (offsetAndMetadata.offset() < 0) {
                 throw new IllegalArgumentException("Invalid offset: " + offsetAndMetadata.offset());

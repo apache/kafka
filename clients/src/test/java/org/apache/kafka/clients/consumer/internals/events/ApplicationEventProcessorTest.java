@@ -39,7 +39,6 @@ import java.util.Optional;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CompletableFuture;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
@@ -98,15 +97,6 @@ public class ApplicationEventProcessorTest {
         doReturn(new NetworkClientDelegate.PollResult(100, results)).when(commitRequestManager).pollOnClose();
         processor.process(new CommitOnCloseEvent());
         verify(commitRequestManager).signalClose();
-    }
-
-    @Test
-    public void testExpirationCalculation() {
-        assertEquals(Long.MAX_VALUE, processor.getExpirationTimeForTimeout(Long.MAX_VALUE));
-        assertEquals(Long.MAX_VALUE, processor.getExpirationTimeForTimeout(Long.MAX_VALUE - 1));
-        long timeout = processor.getExpirationTimeForTimeout(1000);
-        assertTrue(timeout > 0);
-        assertTrue(timeout < Long.MAX_VALUE);
     }
 
     @Test

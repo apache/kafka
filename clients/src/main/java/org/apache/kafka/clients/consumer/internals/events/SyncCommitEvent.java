@@ -29,6 +29,6 @@ import java.util.Map;
 public class SyncCommitEvent extends CommitEvent {
 
     public SyncCommitEvent(final Map<TopicPartition, OffsetAndMetadata> offsets, final Timer timer) {
-        super(Type.COMMIT_SYNC, timer, offsets);
+        super(Type.COMMIT_SYNC, offsets, timer);
     }
 }
