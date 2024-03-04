@@ -1015,7 +1015,7 @@ public class GroupMetadataManager {
 
         // Get or create the consumer group.
         boolean createIfNotExists = memberEpoch == 0;
-        maybeMigrateEmptyGroup(groupId, records, true);
+        maybeUpgradeEmptyGroup(groupId, records);
         final ConsumerGroup group = getOrMaybeCreateConsumerGroup(groupId, createIfNotExists);
         throwIfConsumerGroupIsFull(group, memberId);
 
@@ -1941,7 +1941,7 @@ public class GroupMetadataManager {
             // Group is created if it does not exist and the member id is UNKNOWN. if member
             // is specified but group does not exist, request is rejected with GROUP_ID_NOT_FOUND
             ClassicGroup group;
-            maybeMigrateEmptyGroup(groupId, records, false);
+            maybeDowngradeEmptyGroup(groupId, records);
             boolean isNewGroup = !groups.containsKey(groupId);
             try {
                 group = getOrMaybeCreateClassicGroup(groupId, isUnknownMember);
@@ -3526,14 +3526,28 @@ public class GroupMetadataManager {
     }
 
     /**
-     * Upgrade/Downgrade the empty group if it's valid.
+     * Upgrade the empty group if it's valid.
      *
      * @param groupId The group id to be migrated.
      * @param records The list of records to delete the previous group.
      */
-    public void maybeMigrateEmptyGroup(String groupId, List<Record> records, boolean isUpgrade) {
-        if ((isUpgrade && validateOfflineUpgrade(groupId)) ||
-            (!isUpgrade && validateOfflineDowngrade(groupId))) {
+    public void maybeUpgradeEmptyGroup(String groupId, List<Record> records) {
+        if (validateOfflineUpgrade(groupId)) {
+            deleteGroup(groupId, records);
+            removeGroup(groupId);
+        }
+    }
+
+    /**
+     * Downgrade the empty group if it's valid.
+     *
+     * @param groupId The group id to be migrated.
+     * @param records The list of records to delete the previous group.
+     */
+    public void maybeDowngradeEmptyGroup(String groupId, List<Record> records) {
+        if (validateOfflineDowngrade(groupId)) {
+            // Add tombstones for the previous consumer group. The tombstones won't actually be
+            // replayed because its coordinator result has a non-null appendFuture.
             deleteGroup(groupId, records);
             removeGroup(groupId);
         }
