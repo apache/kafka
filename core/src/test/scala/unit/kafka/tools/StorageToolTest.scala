@@ -33,6 +33,8 @@ import org.apache.kafka.common.metadata.UserScramCredentialRecord
 import org.apache.kafka.metadata.properties.{MetaProperties, MetaPropertiesEnsemble, MetaPropertiesVersion, PropertiesUtils}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertThrows, assertTrue}
 import org.junit.jupiter.api.{Test, Timeout}
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.ValueSource
 
 import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
@@ -171,13 +173,13 @@ Found problem:
         setNodeId(2).
         build()
       val stream = new ByteArrayOutputStream()
-      val bootstrapMetadata = StorageTool.buildBootstrapMetadata(MetadataVersion.latest(), None, "test format command")
+      val bootstrapMetadata = StorageTool.buildBootstrapMetadata(MetadataVersion.latestTesting(), None, "test format command")
       assertEquals(0, StorageTool.
-        formatCommand(new PrintStream(stream), Seq(tempDir.toString), metaProperties, bootstrapMetadata, MetadataVersion.latest(), ignoreFormatted = false))
+        formatCommand(new PrintStream(stream), Seq(tempDir.toString), metaProperties, bootstrapMetadata, MetadataVersion.latestTesting(), ignoreFormatted = false))
       assertTrue(stream.toString().startsWith("Formatting %s".format(tempDir)))
 
       try assertEquals(1, StorageTool.
-        formatCommand(new PrintStream(new ByteArrayOutputStream()), Seq(tempDir.toString), metaProperties, bootstrapMetadata, MetadataVersion.latest(), ignoreFormatted = false)) catch {
+        formatCommand(new PrintStream(new ByteArrayOutputStream()), Seq(tempDir.toString), metaProperties, bootstrapMetadata, MetadataVersion.latestTesting(), ignoreFormatted = false)) catch {
         case e: TerseFailure => assertEquals(s"Log directory ${tempDir} is already " +
           "formatted. Use --ignore-formatted to ignore this directory and format the " +
           "others.", e.getMessage)
@@ -185,7 +187,7 @@ Found problem:
 
       val stream2 = new ByteArrayOutputStream()
       assertEquals(0, StorageTool.
-        formatCommand(new PrintStream(stream2), Seq(tempDir.toString), metaProperties, bootstrapMetadata, MetadataVersion.latest(), ignoreFormatted = true))
+        formatCommand(new PrintStream(stream2), Seq(tempDir.toString), metaProperties, bootstrapMetadata, MetadataVersion.latestTesting(), ignoreFormatted = true))
       assertEquals("All of the log directories are already formatted.%n".format(), stream2.toString())
     } finally Utils.delete(tempDir)
   }
@@ -203,8 +205,8 @@ Found problem:
   def testDefaultMetadataVersion(): Unit = {
     val namespace = StorageTool.parseArguments(Array("format", "-c", "config.props", "-t", "XcZZOzUqS4yHOjhMQB6JLQ"))
     val mv = StorageTool.getMetadataVersion(namespace, defaultVersionString = None)
-    assertEquals(MetadataVersion.latest().featureLevel(), mv.featureLevel(),
-      "Expected the default metadata.version to be the latest version")
+    assertEquals(MetadataVersion.LATEST_PRODUCTION.featureLevel(), mv.featureLevel(),
+      "Expected the default metadata.version to be the latest production version")
   }
 
   @Test
@@ -377,9 +379,9 @@ Found problem:
         setNodeId(2).
         build()
       val bootstrapMetadata = StorageTool.
-        buildBootstrapMetadata(MetadataVersion.latest(), None, "test format command")
+        buildBootstrapMetadata(MetadataVersion.latestTesting(), None, "test format command")
       assertEquals(0, StorageTool.
-        formatCommand(new PrintStream(NullOutputStream.NULL_OUTPUT_STREAM), Seq(tempDir.toString), metaProperties, bootstrapMetadata, MetadataVersion.latest(), ignoreFormatted = false))
+        formatCommand(new PrintStream(NullOutputStream.NULL_OUTPUT_STREAM), Seq(tempDir.toString), metaProperties, bootstrapMetadata, MetadataVersion.latestTesting(), ignoreFormatted = false))
 
       val metaPropertiesFile = Paths.get(tempDir.toURI).resolve(MetaPropertiesEnsemble.META_PROPERTIES_NAME).toFile
       assertTrue(metaPropertiesFile.exists())
@@ -389,5 +391,46 @@ Found problem:
       assertTrue(metaProps.directoryId().isPresent())
       assertFalse(DirectoryId.reserved(metaProps.directoryId().get()))
     } finally Utils.delete(tempDir)
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = Array(false, true))
+  def testFormattingUnstableMetadataVersionBlocked(enableUnstable: Boolean): Unit = {
+    var exitString: String = ""
+    var exitStatus: Int = 1
+    def exitProcedure(status: Int, message: Option[String]) : Nothing = {
+      exitStatus = status
+      exitString = message.getOrElse("")
+      throw new StorageToolTestException(exitString)
+    }
+    Exit.setExitProcedure(exitProcedure)
+    val properties = newSelfManagedProperties()
+    val propsFile = TestUtils.tempFile()
+    val propsStream = Files.newOutputStream(propsFile.toPath)
+    try {
+      properties.setProperty(KafkaConfig.LogDirsProp, TestUtils.tempDir().toString)
+      properties.setProperty(KafkaConfig.UnstableMetadataVersionsEnableProp, enableUnstable.toString)
+      properties.store(propsStream, "config.props")
+    } finally {
+      propsStream.close()
+    }
+    val args = Array("format", "-c", s"${propsFile.toPath}",
+      "-t", "XcZZOzUqS4yHOjhMQB6JLQ",
+      "--release-version", MetadataVersion.latestTesting().toString)
+    try {
+      StorageTool.main(args)
+    } catch {
+      case _: StorageToolTestException =>
+    } finally {
+      Exit.resetExitProcedure()
+    }
+    if (enableUnstable) {
+      assertEquals("", exitString)
+      assertEquals(0, exitStatus)
+    } else {
+      assertEquals(s"Metadata version ${MetadataVersion.latestTesting().toString} is not ready for " +
+        "production use yet.", exitString)
+      assertEquals(1, exitStatus)
+    }
   }
 }

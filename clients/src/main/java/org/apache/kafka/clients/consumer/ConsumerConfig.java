@@ -109,10 +109,10 @@ public class ConsumerConfig extends AbstractConfig {
      * <code>group.protocol</code>
      */
     public static final String GROUP_PROTOCOL_CONFIG = "group.protocol";
-    public static final String DEFAULT_GROUP_PROTOCOL = GroupProtocol.GENERIC.name().toLowerCase(Locale.ROOT);
+    public static final String DEFAULT_GROUP_PROTOCOL = GroupProtocol.CLASSIC.name().toLowerCase(Locale.ROOT);
     public static final String GROUP_PROTOCOL_DOC = "The group protocol consumer should use. We currently " +
-        "support \"generic\" or \"consumer\". If \"consumer\" is specified, then the consumer group protocol will be " +
-        "used. Otherwise, the generic group protocol will be used.";
+        "support \"classic\" or \"consumer\". If \"consumer\" is specified, then the consumer group protocol will be " +
+        "used. Otherwise, the classic group protocol will be used.";
 
     /**
     * <code>group.remote.assignor</code>
@@ -363,7 +363,7 @@ public class ConsumerConfig extends AbstractConfig {
             " consumers will not be able to read up to the high watermark when there are in flight transactions.</p><p> Further, when in <code>read_committed</code> the seekToEnd method will" +
             " return the LSO</p>";
 
-    public static final String DEFAULT_ISOLATION_LEVEL = IsolationLevel.READ_UNCOMMITTED.toString().toLowerCase(Locale.ROOT);
+    public static final String DEFAULT_ISOLATION_LEVEL = IsolationLevel.READ_UNCOMMITTED.toString();
 
     /** <code>allow.auto.create.topics</code> */
     public static final String ALLOW_AUTO_CREATE_TOPICS_CONFIG = "allow.auto.create.topics";
@@ -620,7 +620,7 @@ public class ConsumerConfig extends AbstractConfig {
                                 .define(ISOLATION_LEVEL_CONFIG,
                                         Type.STRING,
                                         DEFAULT_ISOLATION_LEVEL,
-                                        in(IsolationLevel.READ_COMMITTED.toString().toLowerCase(Locale.ROOT), IsolationLevel.READ_UNCOMMITTED.toString().toLowerCase(Locale.ROOT)),
+                                        in(IsolationLevel.READ_COMMITTED.toString(), IsolationLevel.READ_UNCOMMITTED.toString()),
                                         Importance.MEDIUM,
                                         ISOLATION_LEVEL_DOC)
                                 .define(ALLOW_AUTO_CREATE_TOPICS_CONFIG,
@@ -662,6 +662,7 @@ public class ConsumerConfig extends AbstractConfig {
         CommonClientConfigs.warnDisablingExponentialBackoff(this);
         Map<String, Object> refinedConfigs = CommonClientConfigs.postProcessReconnectBackoffConfigs(this, parsedValues);
         maybeOverrideClientId(refinedConfigs);
+        maybeOverrideEnableAutoCommit(refinedConfigs);
         return refinedConfigs;
     }
 
@@ -695,17 +696,17 @@ public class ConsumerConfig extends AbstractConfig {
         return newConfigs;
     }
 
-    boolean maybeOverrideEnableAutoCommit() {
+    private void maybeOverrideEnableAutoCommit(Map<String, Object> configs) {
         Optional<String> groupId = Optional.ofNullable(getString(CommonClientConfigs.GROUP_ID_CONFIG));
-        boolean enableAutoCommit = getBoolean(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG);
+        Map<String, Object> originals = originals();
+        boolean enableAutoCommit = originals.containsKey(ENABLE_AUTO_COMMIT_CONFIG) ? getBoolean(ENABLE_AUTO_COMMIT_CONFIG) : false;
         if (!groupId.isPresent()) { // overwrite in case of default group id where the config is not explicitly provided
-            if (!originals().containsKey(ENABLE_AUTO_COMMIT_CONFIG)) {
-                enableAutoCommit = false;
+            if (!originals.containsKey(ENABLE_AUTO_COMMIT_CONFIG)) {
+                configs.put(ENABLE_AUTO_COMMIT_CONFIG, false);
             } else if (enableAutoCommit) {
-                throw new InvalidConfigurationException(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG + " cannot be set to true when default group id (null) is used.");
+                throw new InvalidConfigurationException(ENABLE_AUTO_COMMIT_CONFIG + " cannot be set to true when default group id (null) is used.");
             }
         }
-        return enableAutoCommit;
     }
 
     public ConsumerConfig(Properties props) {

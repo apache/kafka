@@ -17,17 +17,17 @@
 
 package kafka.server
 
-import java.io.{ByteArrayOutputStream, File, PrintStream}
+import java.io.File
 import java.net.InetSocketAddress
 import java.util
 import java.util.{Collections, Optional, OptionalInt, Properties}
 import java.util.concurrent.{CompletableFuture, TimeUnit}
 import javax.security.auth.login.Configuration
-import kafka.tools.StorageTool
 import kafka.utils.{CoreUtils, Logging, TestInfoUtils, TestUtils}
 import kafka.zk.{AdminZkClient, EmbeddedZookeeper, KafkaZkClient}
+import org.apache.kafka.clients.consumer.GroupProtocol
 import org.apache.kafka.common.metrics.Metrics
-import org.apache.kafka.common.Uuid
+import org.apache.kafka.common.{DirectoryId, Uuid}
 import org.apache.kafka.common.security.JaasUtils
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.utils.{Exit, Time}
@@ -110,6 +110,7 @@ class KRaftQuorumImplementation(
           setVersion(MetaPropertiesVersion.V1).
           setClusterId(clusterId).
           setNodeId(config.nodeId).
+          setDirectoryId(DirectoryId.random()).
           build())
       })
       copier.setPreWriteHandler((logDir, _, _) => {
@@ -174,10 +175,10 @@ abstract class QuorumTestHarness extends Logging {
     Seq(new Properties())
   }
 
-  protected def metadataVersion: MetadataVersion = MetadataVersion.latest()
+  protected def metadataVersion: MetadataVersion = MetadataVersion.latestTesting()
 
   private var testInfo: TestInfo = _
-  private var implementation: QuorumImplementation = _
+  protected var implementation: QuorumImplementation = _
 
   val bootstrapRecords: ListBuffer[ApiMessageAndVersion] = ListBuffer()
 
@@ -187,6 +188,14 @@ abstract class QuorumTestHarness extends Logging {
 
   def isZkMigrationTest(): Boolean = {
     TestInfoUtils.isZkMigrationTest(testInfo)
+  }
+
+  def isNewGroupCoordinatorEnabled(): Boolean = {
+    TestInfoUtils.isNewGroupCoordinatorEnabled(testInfo)
+  }
+
+  def maybeGroupProtocolSpecified(testInfo: TestInfo): Option[GroupProtocol] = {
+    TestInfoUtils.maybeGroupProtocolSpecified(testInfo)
   }
 
   def checkIsZKTest(): Unit = {
@@ -300,33 +309,20 @@ abstract class QuorumTestHarness extends Logging {
 
   def optionalMetadataRecords: Option[ArrayBuffer[ApiMessageAndVersion]] = None
 
-  private def formatDirectories(directories: immutable.Seq[String],
-                                metaProperties: MetaProperties): Unit = {
-    val stream = new ByteArrayOutputStream()
-    var out: PrintStream = null
-    try {
-      out = new PrintStream(stream)
-      val bootstrapMetadata = StorageTool.buildBootstrapMetadata(metadataVersion,
-                                                                 optionalMetadataRecords, "format command")
-      if (StorageTool.formatCommand(out, directories, metaProperties, bootstrapMetadata, metadataVersion,
-                                    ignoreFormatted = false) != 0) {
-        throw new RuntimeException(stream.toString())
-      }
-      debug(s"Formatted storage directory(ies) ${directories}")
-    } finally {
-      if (out != null) out.close()
-      stream.close()
-    }
+  private def newKRaftQuorum(testInfo: TestInfo): KRaftQuorumImplementation = {
+    newKRaftQuorum(new Properties())
   }
 
-  private def newKRaftQuorum(testInfo: TestInfo): KRaftQuorumImplementation = {
+  protected def newKRaftQuorum(overridingProps: Properties): KRaftQuorumImplementation = {
     val propsList = kraftControllerConfigs()
     if (propsList.size != 1) {
       throw new RuntimeException("Only one KRaft controller is supported for now.")
     }
     val props = propsList(0)
+    props.putAll(overridingProps)
     props.setProperty(KafkaConfig.ServerMaxStartupTimeMsProp, TimeUnit.MINUTES.toMillis(10).toString)
     props.setProperty(KafkaConfig.ProcessRolesProp, "controller")
+    props.setProperty(KafkaConfig.UnstableMetadataVersionsEnableProp, "true")
     if (props.getProperty(KafkaConfig.NodeIdProp) == null) {
       props.setProperty(KafkaConfig.NodeIdProp, "1000")
     }
@@ -337,7 +333,7 @@ abstract class QuorumTestHarness extends Logging {
       setClusterId(Uuid.randomUuid().toString).
       setNodeId(nodeId).
       build()
-    formatDirectories(immutable.Seq(metadataDir.getAbsolutePath), metaProperties)
+    TestUtils.formatDirectories(immutable.Seq(metadataDir.getAbsolutePath), metaProperties, metadataVersion, optionalMetadataRecords)
 
     val metadataRecords = new util.ArrayList[ApiMessageAndVersion]
     metadataRecords.add(new ApiMessageAndVersion(new FeatureLevelRecord().
@@ -435,11 +431,11 @@ abstract class QuorumTestHarness extends Logging {
 
   @AfterEach
   def tearDown(): Unit = {
-    Exit.resetExitProcedure()
-    Exit.resetHaltProcedure()
     if (implementation != null) {
       implementation.shutdown()
     }
+    Exit.resetExitProcedure()
+    Exit.resetHaltProcedure()
     TestUtils.clearYammerMetrics()
     System.clearProperty(JaasUtils.JAVA_LOGIN_CONFIG_PARAM)
     Configuration.setConfiguration(null)

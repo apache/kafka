@@ -18,30 +18,30 @@ package org.apache.kafka.common;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
 public class DirectoryId {
-
     /**
-     * A Uuid that is used to identify new or unknown dir assignments.
-     */
-    public static final Uuid UNASSIGNED = new Uuid(0L, 0L);
-
-    /**
-     * A Uuid that is used to represent unspecified offline dirs.
-     */
-    public static final Uuid LOST = new Uuid(0L, 1L);
-
-    /**
-     * A Uuid that is used to represent and unspecified log directory,
+     * A Uuid that is used to represent an unspecified log directory,
      * that is expected to have been previously selected to host an
      * associated replica. This contrasts with {@code UNASSIGNED_DIR},
      * which is associated with (typically new) replicas that may not
      * yet have been placed in any log directory.
      */
-    public static final Uuid MIGRATING = new Uuid(0L, 2L);
+    public static final Uuid MIGRATING = new Uuid(0L, 0L);
+
+    /**
+     * A Uuid that is used to represent directories that are pending an assignment.
+     */
+    public static final Uuid UNASSIGNED = new Uuid(0L, 1L);
+
+    /**
+     * A Uuid that is used to represent unspecified offline dirs.
+     */
+    public static final Uuid LOST = new Uuid(0L, 2L);
 
     /**
      * Static factory to generate a directory ID.
@@ -121,8 +121,48 @@ public class DirectoryId {
      * Create an array with the specified number of entries set to {@link #UNASSIGNED}.
      */
     public static Uuid[] unassignedArray(int length) {
+        return array(length, UNASSIGNED);
+    }
+
+    /**
+     * Create an array with the specified number of entries set to {@link #MIGRATING}.
+     */
+    public static Uuid[] migratingArray(int length) {
+        return array(length, MIGRATING);
+    }
+
+    /**
+     * Create an array with the specified number of entries set to the specified value.
+     */
+    private static Uuid[] array(int length, Uuid value) {
         Uuid[] array = new Uuid[length];
-        Arrays.fill(array, UNASSIGNED);
+        Arrays.fill(array, value);
         return array;
+    }
+
+    /**
+     * Check if a directory is online, given a sorted list of online directories.
+     * @param dir              The directory to check
+     * @param sortedOnlineDirs The sorted list of online directories
+     * @return                 true if the directory is considered online, false otherwise
+     */
+    public static boolean isOnline(Uuid dir, List<Uuid> sortedOnlineDirs) {
+        if (UNASSIGNED.equals(dir) || MIGRATING.equals(dir)) {
+            return true;
+        }
+        if (LOST.equals(dir)) {
+            return false;
+        }
+
+        // The only time we should have a size be 0 is if we were at a MV prior to 3.7-IV2
+        // and the system was upgraded. In this case the original list of directories was purged
+        // during broker registration so we don't know if the directory is online. We assume
+        // that a broker will halt if all its log directories are down. Eventually the broker
+        // will send another registration request with information about all log directories.
+        // Refer KAFKA-16162 for more information
+        if (sortedOnlineDirs.isEmpty()) {
+            return true;
+        }
+        return Collections.binarySearch(sortedOnlineDirs, dir) >= 0;
     }
 }

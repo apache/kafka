@@ -78,7 +78,7 @@ class RequestState {
             return true;
         }
 
-        if (this.lastReceivedMs == -1 || this.lastReceivedMs < this.lastSentMs) {
+        if (requestInFlight()) {
             log.trace("An inflight request already exists for {}", this);
             return false;
         }
@@ -93,8 +93,16 @@ class RequestState {
         }
     }
 
+    /**
+     * @return True if no response has been received after the last send, indicating that there
+     * is a request in-flight.
+     */
+    public boolean requestInFlight() {
+        return this.lastSentMs > -1 && this.lastReceivedMs < this.lastSentMs;
+    }
+
     public void onSendAttempt(final long currentTimeMs) {
-        // Here we update the timer everytime we try to send a request. Also increment number of attempts.
+        // Here we update the timer everytime we try to send a request.
         this.lastSentMs = currentTimeMs;
     }
 

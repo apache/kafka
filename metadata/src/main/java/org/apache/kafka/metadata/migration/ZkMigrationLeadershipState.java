@@ -26,10 +26,15 @@ import java.util.Objects;
  * that no migration has been started.
  */
 public class ZkMigrationLeadershipState {
+    /**
+     * A Kafka-internal constant used to indicate that the znode version is unknown. See ZkVersion.UnknownVersion.
+     */
+    public static final int UNKNOWN_ZK_VERSION = -2;
 
     // Use -2 as sentinel for "unknown version" for ZK versions to avoid sending an actual -1 "any version"
     // when doing ZK writes
-    public static final ZkMigrationLeadershipState EMPTY = new ZkMigrationLeadershipState(-1, -1, -1, -1, -1, -2, -1, -2);
+    public static final ZkMigrationLeadershipState EMPTY =
+        new ZkMigrationLeadershipState(-1, -1, -1, -1, -1, -2, -1, UNKNOWN_ZK_VERSION);
 
     private final int kraftControllerId;
 
@@ -110,7 +115,7 @@ public class ZkMigrationLeadershipState {
         return kraftMetadataOffset;
     }
 
-    public long kraftMetadataEpoch() {
+    public int kraftMetadataEpoch() {
         return kraftMetadataEpoch;
     }
 

@@ -39,6 +39,7 @@ import kafka.network.RequestChannel
 import kafka.server._
 import kafka.server.checkpoints.OffsetCheckpointFile
 import kafka.server.metadata.{ConfigRepository, MockConfigRepository}
+import kafka.tools.StorageTool
 import kafka.utils.Implicits._
 import kafka.zk._
 import org.apache.kafka.admin.BrokerMetadata
@@ -69,8 +70,11 @@ import org.apache.kafka.common.serialization.{ByteArrayDeserializer, ByteArraySe
 import org.apache.kafka.common.utils.Utils._
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.controller.QuorumController
+import org.apache.kafka.metadata.properties.MetaProperties
+import org.apache.kafka.server.ControllerRequestCompletionHandler
 import org.apache.kafka.server.authorizer.{AuthorizableRequestContext, Authorizer => JAuthorizer}
-import org.apache.kafka.server.common.MetadataVersion
+import org.apache.kafka.server.common.{ApiMessageAndVersion, MetadataVersion}
+import org.apache.kafka.server.config.Defaults
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.apache.kafka.server.util.MockTime
 import org.apache.kafka.storage.internals.log.{CleanerConfig, LogConfig, LogDirFailureChannel, ProducerStateManagerConfig}
@@ -84,7 +88,7 @@ import org.mockito.Mockito
 
 import scala.annotation.nowarn
 import scala.collection.mutable.{ArrayBuffer, ListBuffer}
-import scala.collection.{Map, Seq, mutable}
+import scala.collection.{Map, Seq, immutable, mutable}
 import scala.concurrent.duration.FiniteDuration
 import scala.concurrent.{Await, ExecutionContext, Future}
 import scala.jdk.CollectionConverters._
@@ -328,6 +332,7 @@ object TestUtils extends Logging {
     }.mkString(",")
 
     val props = new Properties
+    props.put(KafkaConfig.UnstableMetadataVersionsEnableProp, "true")
     if (zkConnect == null) {
       props.setProperty(KafkaConfig.ServerMaxStartupTimeMsProp, TimeUnit.MINUTES.toMillis(10).toString)
       props.put(KafkaConfig.NodeIdProp, nodeId.toString)
@@ -501,6 +506,33 @@ object TestUtils extends Logging {
     }.toMap
   }
 
+  def increasePartitions[B <: KafkaBroker](admin: Admin,
+                                              topic: String,
+                                              totalPartitionCount: Int,
+                                              brokersToValidate: Seq[B]
+                                            ): Unit = {
+
+    try {
+      val newPartitionSet: Map[String, NewPartitions] = Map.apply(topic -> NewPartitions.increaseTo(totalPartitionCount))
+      admin.createPartitions(newPartitionSet.asJava)
+    } catch {
+      case e: ExecutionException =>
+        throw e
+    }
+
+    if (brokersToValidate.size > 0) {
+      // wait until we've propagated all partitions metadata to all brokers
+      val allPartitionsMetadata = waitForAllPartitionsMetadata(brokersToValidate, topic, totalPartitionCount)
+
+      (0 until totalPartitionCount - 1).map { i =>
+        i -> allPartitionsMetadata.get(new TopicPartition(topic, i)).map(_.leader()).getOrElse(
+          throw new IllegalStateException(s"Cannot get the partition leader for topic: $topic, partition: $i in server metadata cache"))
+      }.toMap
+    } else {
+      Map.empty
+    }
+  }
+
   def describeTopic(
     admin: Admin,
     topic: String
@@ -593,10 +625,10 @@ object TestUtils extends Logging {
    * Wait until the leader is elected and the metadata is propagated to all brokers.
    * Return the leader for each partition.
    */
-  def createTopic(zkClient: KafkaZkClient,
+  def createTopic[B <: KafkaBroker](zkClient: KafkaZkClient,
                   topic: String,
                   partitionReplicaAssignment: collection.Map[Int, Seq[Int]],
-                  servers: Seq[KafkaBroker]): scala.collection.immutable.Map[Int, Int] = {
+                  servers: Seq[B]): scala.collection.immutable.Map[Int, Int] = {
     createTopic(zkClient, topic, partitionReplicaAssignment, servers, new Properties())
   }
 
@@ -720,7 +752,7 @@ object TestUtils extends Logging {
    */
   def checkEquals(b1: ByteBuffer, b2: ByteBuffer): Unit = {
     assertEquals(b1.limit() - b1.position(), b2.limit() - b2.position(), "Buffers should have equal length")
-    for(i <- 0 until b1.limit() - b1.position())
+    for (i <- 0 until b1.limit() - b1.position())
       assertEquals(b1.get(b1.position() + i), b2.get(b1.position() + i), "byte " + i + " byte not equal.")
   }
 
@@ -742,7 +774,7 @@ object TestUtils extends Logging {
    * different messages on their Nth element
    */
   def checkEquals[T](s1: java.util.Iterator[T], s2: java.util.Iterator[T]): Unit = {
-    while(s1.hasNext && s2.hasNext)
+    while (s1.hasNext && s2.hasNext)
       assertEquals(s1.next, s2.next)
     assertFalse(s1.hasNext, "Iterators have uneven length--first has more")
     assertFalse(s2.hasNext, "Iterators have uneven length--second has more")
@@ -783,7 +815,7 @@ object TestUtils extends Logging {
    */
   def hexString(buffer: ByteBuffer): String = {
     val builder = new StringBuilder("0x")
-    for(i <- 0 until buffer.limit())
+    for (i <- 0 until buffer.limit())
       builder.append(String.format("%x", Integer.valueOf(buffer.get(buffer.position() + i))))
     builder.toString
   }
@@ -913,7 +945,7 @@ object TestUtils extends Logging {
       Broker(b.id, Seq(EndPoint("localhost", 6667, listenerName, protocol)), if (b.rack.isPresent) Some(b.rack.get()) else None)
     }
     brokers.foreach(b => zkClient.registerBroker(BrokerInfo(Broker(b.id, b.endPoints, rack = b.rack),
-      MetadataVersion.latest, jmxPort = -1)))
+      MetadataVersion.latestTesting, jmxPort = -1)))
     brokers
   }
 
@@ -1054,7 +1086,7 @@ object TestUtils extends Logging {
   def retry(maxWaitMs: Long)(block: => Unit): Unit = {
     var wait = 1L
     val startTime = System.currentTimeMillis()
-    while(true) {
+    while (true) {
       try {
         block
         return
@@ -1309,6 +1341,11 @@ object TestUtils extends Logging {
     controllerId.getOrElse(throw new AssertionError(s"Controller not elected after $timeout ms"))
   }
 
+  def waitUntilQuorumLeaderElected(controllerServer: ControllerServer, timeout: Long = JTestUtils.DEFAULT_MAX_WAIT_MS): Int = {
+    val (leaderAndEpoch, _) = computeUntilTrue(controllerServer.raftManager.leaderAndEpoch, waitTime = timeout)(_.leaderId().isPresent)
+    leaderAndEpoch.leaderId().orElseThrow(() => new AssertionError(s"Quorum Controller leader not elected after $timeout ms"))
+  }
+
   def awaitLeaderChange[B <: KafkaBroker](
       brokers: Seq[B],
       tp: TopicPartition,
@@ -1325,6 +1362,22 @@ object TestUtils extends Logging {
       s"Did not observe leader change for partition $tp after $timeout ms", waitTimeMs = timeout)
 
     newLeaderExists.get
+  }
+
+  def getLeaderIdForPartition[B <: KafkaBroker](
+      brokers: Seq[B],
+      tp: TopicPartition,
+      timeout: Long = JTestUtils.DEFAULT_MAX_WAIT_MS): Int = {
+    def leaderExists: Option[Int] = {
+      brokers.find { broker =>
+          broker.replicaManager.onlinePartition(tp).exists(_.leaderLogIfLocal.isDefined)
+      }.map(_.config.brokerId)
+    }
+
+    waitUntilTrue(() => leaderExists.isDefined,
+      s"Did not find a leader for partition $tp after $timeout ms", waitTimeMs = timeout)
+
+    leaderExists.get
   }
 
   def waitUntilLeaderIsKnown[B <: KafkaBroker](
@@ -1398,6 +1451,17 @@ object TestUtils extends Logging {
     assertEquals(0, threadCount, s"Found unexpected $threadCount NonDaemon threads=${nonDaemonThreads.map(t => t.getName).mkString(", ")}")
   }
 
+  // Some threads are closed, but the state didn't reflect in the JVM immediately, so add some wait time for it
+  def assertNoNonDaemonThreadsWithWaiting(threadNamePrefix: String, waitTimeMs: Long = 500L): Unit = {
+    var nonDemonThreads: mutable.Set[Thread] = mutable.Set.empty[Thread]
+    waitUntilTrue(() => {
+      nonDemonThreads = Thread.getAllStackTraces.keySet.asScala.filter { t =>
+        !t.isDaemon && t.isAlive && t.getName.startsWith(threadNamePrefix)
+      }
+      0 == nonDemonThreads.size
+    }, s"Found unexpected ${nonDemonThreads.size} NonDaemon threads=${nonDemonThreads.map(t => t.getName).mkString(", ")}", waitTimeMs)
+  }
+
   def numThreadsRunning(threadNamePrefix: String, isDaemon: Boolean): mutable.Set[Thread] = {
     Thread.getAllStackTraces.keySet.asScala.filter { t =>
       isDaemon && t.isAlive && t.getName.startsWith(threadNamePrefix)
@@ -1410,6 +1474,27 @@ object TestUtils extends Logging {
     }.mkString("\n")
   }
 
+  def formatDirectories(
+    directories: immutable.Seq[String],
+    metaProperties: MetaProperties,
+    metadataVersion: MetadataVersion,
+    optionalMetadataRecords: Option[ArrayBuffer[ApiMessageAndVersion]]
+  ): Unit = {
+    val stream = new ByteArrayOutputStream()
+    var out: PrintStream = null
+    try {
+      out = new PrintStream(stream)
+      val bootstrapMetadata = StorageTool.buildBootstrapMetadata(metadataVersion, optionalMetadataRecords, "format command")
+      if (StorageTool.formatCommand(out, directories, metaProperties, bootstrapMetadata, metadataVersion, ignoreFormatted = false) != 0) {
+        throw new RuntimeException(stream.toString())
+      }
+      debug(s"Formatted storage directory(ies) ${directories}")
+    } finally {
+      if (out != null) out.close()
+      stream.close()
+    }
+  }
+
   /**
    * Create new LogManager instance with default configuration for testing
    */
@@ -1418,7 +1503,7 @@ object TestUtils extends Logging {
                        configRepository: ConfigRepository = new MockConfigRepository,
                        cleanerConfig: CleanerConfig = new CleanerConfig(false),
                        time: MockTime = new MockTime(),
-                       interBrokerProtocolVersion: MetadataVersion = MetadataVersion.latest,
+                       interBrokerProtocolVersion: MetadataVersion = MetadataVersion.latestTesting,
                        recoveryThreadsPerDataDir: Int = 4,
                        transactionVerificationEnabled: Boolean = false,
                        log: Option[UnifiedLog] = None,
@@ -1434,8 +1519,8 @@ object TestUtils extends Logging {
                    flushStartOffsetCheckpointMs = 10000L,
                    retentionCheckMs = 1000L,
                    maxTransactionTimeoutMs = 5 * 60 * 1000,
-                   producerStateManagerConfig = new ProducerStateManagerConfig(kafka.server.Defaults.ProducerIdExpirationMs, transactionVerificationEnabled),
-                   producerIdExpirationCheckIntervalMs = kafka.server.Defaults.ProducerIdExpirationCheckIntervalMs,
+                   producerStateManagerConfig = new ProducerStateManagerConfig(Defaults.PRODUCER_ID_EXPIRATION_MS, transactionVerificationEnabled),
+                   producerIdExpirationCheckIntervalMs = Defaults.PRODUCER_ID_EXPIRATION_CHECK_INTERVAL_MS,
                    scheduler = time.scheduler,
                    time = time,
                    brokerTopicStats = new BrokerTopicStats,
@@ -1446,7 +1531,7 @@ object TestUtils extends Logging {
 
     if (log.isDefined) {
       val spyLogManager = Mockito.spy(logManager)
-      Mockito.doReturn(log.get, Nil: _*).when(spyLogManager).getOrCreateLog(any(classOf[TopicPartition]), anyBoolean(), anyBoolean(), any(classOf[Option[Uuid]]))
+      Mockito.doReturn(log.get, Nil: _*).when(spyLogManager).getOrCreateLog(any(classOf[TopicPartition]), anyBoolean(), anyBoolean(), any(classOf[Option[Uuid]]), any(classOf[Option[Uuid]]))
       spyLogManager
     } else
       logManager
@@ -1510,6 +1595,7 @@ object TestUtils extends Logging {
     override def markIsrShrink(): Unit = shrinks.incrementAndGet()
 
     override def markFailed(): Unit = failures.incrementAndGet()
+
 
     def reset(): Unit = {
       expands.set(0)
@@ -1615,7 +1701,7 @@ object TestUtils extends Logging {
   }
 
 
-  def causeLogDirFailure(failureType: LogDirFailureType, leaderBroker: KafkaBroker, partition: TopicPartition): Unit = {
+  def causeLogDirFailure(failureType: LogDirFailureType, leaderBroker: KafkaBroker, partition: TopicPartition): File = {
     // Make log directory of the partition on the leader broker inaccessible by replacing it with a file
     val localLog = leaderBroker.replicaManager.localLogOrException(partition)
     val logDir = localLog.dir.getParentFile
@@ -1632,6 +1718,7 @@ object TestUtils extends Logging {
     // Wait for ReplicaHighWatermarkCheckpoint to happen so that the log directory of the topic will be offline
     waitUntilTrue(() => !leaderBroker.logManager.isLogDirOnline(logDir.getAbsolutePath), "Expected log directory offline", 3000L)
     assertTrue(leaderBroker.replicaManager.localLog(partition).isEmpty)
+    logDir
   }
 
   /**
@@ -2161,13 +2248,15 @@ object TestUtils extends Logging {
   }
 
   def meterCount(metricName: String): Long = {
+    meterCountOpt(metricName).getOrElse(fail(s"Unable to find metric $metricName"))
+  }
+
+  def meterCountOpt(metricName: String): Option[Long] = {
     KafkaYammerMetrics.defaultRegistry.allMetrics.asScala
       .filter { case (k, _) => k.getMBeanName.endsWith(metricName) }
       .values
       .headOption
-      .getOrElse(fail(s"Unable to find metric $metricName"))
-      .asInstanceOf[Meter]
-      .count
+      .map(_.asInstanceOf[Meter].count)
   }
 
   def metersCount(metricName: String): Long = {
@@ -2183,6 +2272,14 @@ object TestUtils extends Logging {
   def clearYammerMetrics(): Unit = {
     for (metricName <- KafkaYammerMetrics.defaultRegistry.allMetrics.keySet.asScala)
       KafkaYammerMetrics.defaultRegistry.removeMetric(metricName)
+  }
+
+  def clearYammerMetricsExcept(names: Set[String]): Unit = {
+    for (metricName <- KafkaYammerMetrics.defaultRegistry.allMetrics.keySet.asScala) {
+      if (!names.contains(metricName.getMBeanName)) {
+        KafkaYammerMetrics.defaultRegistry.removeMetric(metricName)
+      }
+    }
   }
 
   def stringifyTopicPartitions(partitions: Set[TopicPartition]): String = {
@@ -2370,7 +2467,7 @@ object TestUtils extends Logging {
 
     RequestHeader.parse(envelopeBuffer)
 
-    val envelopeContext = new RequestContext(envelopeHeader, "1", InetAddress.getLocalHost,
+    val envelopeContext = new RequestContext(envelopeHeader, "1", InetAddress.getLocalHost, Optional.empty(),
       KafkaPrincipal.ANONYMOUS, listenerName, SecurityProtocol.PLAINTEXT, ClientInformation.EMPTY,
       fromPrivilegedListener, Optional.of(principalSerde))
 

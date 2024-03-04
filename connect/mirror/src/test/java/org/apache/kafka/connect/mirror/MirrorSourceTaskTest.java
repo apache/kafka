@@ -31,25 +31,33 @@ import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.connect.mirror.MirrorSourceTask.PartitionState;
 import org.apache.kafka.connect.source.SourceRecord;
 
+import org.apache.kafka.connect.source.SourceTaskContext;
+import org.apache.kafka.connect.storage.OffsetStorageReader;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.Semaphore;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
+
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.verifyNoInteractions;
 
@@ -215,6 +223,61 @@ public class MirrorSourceTaskTest {
     }
 
     @Test
+    public void testSeekBehaviorDuringStart() {
+        // Setting up mock behavior.
+        @SuppressWarnings("unchecked")
+        KafkaConsumer<byte[], byte[]> mockConsumer = mock(KafkaConsumer.class);
+
+        SourceTaskContext mockSourceTaskContext = mock(SourceTaskContext.class);
+        OffsetStorageReader mockOffsetStorageReader = mock(OffsetStorageReader.class);
+        when(mockSourceTaskContext.offsetStorageReader()).thenReturn(mockOffsetStorageReader);
+
+        Set<TopicPartition> topicPartitions = new HashSet<>(Arrays.asList(
+                new TopicPartition("previouslyReplicatedTopic", 8),
+                new TopicPartition("previouslyReplicatedTopic1", 0),
+                new TopicPartition("previouslyReplicatedTopic", 1),
+                new TopicPartition("newTopicToReplicate1", 1),
+                new TopicPartition("newTopicToReplicate1", 4),
+                new TopicPartition("newTopicToReplicate2", 0)
+        ));
+
+        long arbitraryCommittedOffset = 4L;
+        long offsetToSeek = arbitraryCommittedOffset + 1L;
+        when(mockOffsetStorageReader.offset(anyMap())).thenAnswer(testInvocation -> {
+            Map<String, Object> topicPartitionOffsetMap = testInvocation.getArgument(0);
+            String topicName = topicPartitionOffsetMap.get("topic").toString();
+
+            // Only return the offset for previously replicated topics.
+            // For others, there is no value set.
+            if (topicName.startsWith("previouslyReplicatedTopic")) {
+                topicPartitionOffsetMap.put("offset", arbitraryCommittedOffset);
+            }
+            return topicPartitionOffsetMap;
+        });
+
+        MirrorSourceTask mirrorSourceTask = new MirrorSourceTask(mockConsumer, null, null,
+                new DefaultReplicationPolicy(), 50, null, null, null, null);
+        mirrorSourceTask.initialize(mockSourceTaskContext);
+
+        // Call test subject
+        mirrorSourceTask.initializeConsumer(topicPartitions);
+
+        // Verifications
+        // Ensure all the topic partitions are assigned to consumer
+        verify(mockConsumer, times(1)).assign(topicPartitions);
+
+        // Ensure seek is only called for previously committed topic partitions.
+        verify(mockConsumer, times(1))
+                .seek(new TopicPartition("previouslyReplicatedTopic", 8), offsetToSeek);
+        verify(mockConsumer, times(1))
+                .seek(new TopicPartition("previouslyReplicatedTopic", 1), offsetToSeek);
+        verify(mockConsumer, times(1))
+                .seek(new TopicPartition("previouslyReplicatedTopic1", 0), offsetToSeek);
+
+        verifyNoMoreInteractions(mockConsumer);
+    }
+
+    @Test
     public void testCommitRecordWithNullMetadata() {
         // Create a consumer mock
         byte[] key1 = "abc".getBytes();
@@ -344,10 +407,34 @@ public class MirrorSourceTaskTest {
         mirrorSourceTask.commitRecord(sourceRecord, recordMetadata);
         // We should have dispatched this sync to the producer
         verify(producer, times(4)).send(any(), any());
+        // Ack the latest sync immediately
+        producerCallback.getValue().onCompletion(null, null);
 
         mirrorSourceTask.commit();
         // No more syncs should take place; we've been able to publish all of them so far
         verify(producer, times(4)).send(any(), any());
+
+        // Don't skip the upstream record, so that the offset.lag.max determines whether the offset is emitted.
+        recordOffset = 7;
+        metadataOffset = 107;
+        recordMetadata = new RecordMetadata(sourceTopicPartition, metadataOffset, 0, 0, 0, recordPartition);
+        sourceRecord = mirrorSourceTask.convertRecord(new ConsumerRecord<>(topicName, recordPartition,
+                recordOffset, System.currentTimeMillis(), TimestampType.CREATE_TIME, recordKey.length,
+                recordValue.length, recordKey, recordValue, headers, Optional.empty()));
+
+        mirrorSourceTask.commitRecord(sourceRecord, recordMetadata);
+        // We should not have dispatched any more syncs to the producer; this sync was within offset.lag.max of the previous one.
+        verify(producer, times(4)).send(any(), any());
+
+        mirrorSourceTask.commit();
+        // We should dispatch the offset sync that was delayed until the next periodic offset commit.
+        verify(producer, times(5)).send(any(), any());
+        // Ack the latest sync immediately
+        producerCallback.getValue().onCompletion(null, null);
+
+        mirrorSourceTask.commit();
+        // No more syncs should take place; we've been able to publish all of them so far
+        verify(producer, times(5)).send(any(), any());
     }
 
     private void compareHeaders(List<Header> expectedHeaders, List<org.apache.kafka.connect.header.Header> taskHeaders) {

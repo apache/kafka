@@ -193,17 +193,19 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStore<S extends Seg
             expiredRecordSensor.record(1.0d, context.currentSystemTimeMs());
             LOG.warn("Skipping record for expired segment.");
         } else {
-            StoreQueryUtils.updatePosition(position, stateStoreContext);
+            synchronized (position) {
+                StoreQueryUtils.updatePosition(position, stateStoreContext);
 
-            // Put to index first so that if put to base failed, when we iterate index, we will
-            // find no base value. If put to base first but putting to index fails, when we iterate
-            // index, we can't find the key but if we iterate over base store, we can find the key
-            // which lead to inconsistency.
-            if (hasIndex()) {
-                final KeyValue<Bytes, byte[]> indexKeyValue = getIndexKeyValue(rawBaseKey, value);
-                segment.put(indexKeyValue.key, indexKeyValue.value);
+                // Put to index first so that if put to base failed, when we iterate index, we will
+                // find no base value. If put to base first but putting to index fails, when we iterate
+                // index, we can't find the key but if we iterate over base store, we can find the key
+                // which lead to inconsistency.
+                if (hasIndex()) {
+                    final KeyValue<Bytes, byte[]> indexKeyValue = getIndexKeyValue(rawBaseKey, value);
+                    segment.put(indexKeyValue.key, indexKeyValue.value);
+                }
+                segment.put(rawBaseKey, value);
             }
-            segment.put(rawBaseKey, value);
         }
     }
 
@@ -254,11 +256,12 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStore<S extends Seg
             metrics
         );
 
-        segments.openExisting(context, observedStreamTime);
-
         final File positionCheckpointFile = new File(context.stateDir(), name() + ".position");
         this.positionCheckpoint = new OffsetCheckpoint(positionCheckpointFile);
         this.position = StoreQueryUtils.readPositionFromCheckpoint(positionCheckpoint);
+        segments.setPosition(this.position);
+
+        segments.openExisting(context, observedStreamTime);
 
         // register and possibly restore the state from the logs
         stateStoreContext.register(
@@ -310,16 +313,18 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStore<S extends Seg
 
     // Visible for testing
     void restoreAllInternal(final Collection<ConsumerRecord<byte[], byte[]>> records) {
-        try {
-            final Map<S, WriteBatch> writeBatchMap = getWriteBatches(records);
-            for (final Map.Entry<S, WriteBatch> entry : writeBatchMap.entrySet()) {
-                final S segment = entry.getKey();
-                final WriteBatch batch = entry.getValue();
-                segment.write(batch);
-                batch.close();
+        synchronized (position) {
+            try {
+                final Map<S, WriteBatch> writeBatchMap = getWriteBatches(records);
+                for (final Map.Entry<S, WriteBatch> entry : writeBatchMap.entrySet()) {
+                    final S segment = entry.getKey();
+                    final WriteBatch batch = entry.getValue();
+                    segment.write(batch);
+                    batch.close();
+                }
+            } catch (final RocksDBException e) {
+                throw new ProcessorStateException("Error restoring batch to store " + this.name, e);
             }
-        } catch (final RocksDBException e) {
-            throw new ProcessorStateException("Error restoring batch to store " + this.name, e);
         }
     }
 

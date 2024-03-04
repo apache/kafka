@@ -75,7 +75,6 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
@@ -1067,7 +1066,7 @@ public class EosV2UpgradeIntegrationTest {
                     LongDeserializer.class,
                     Utils.mkProperties(Collections.singletonMap(
                         ConsumerConfig.ISOLATION_LEVEL_CONFIG,
-                        IsolationLevel.READ_COMMITTED.name().toLowerCase(Locale.ROOT))
+                        IsolationLevel.READ_COMMITTED.toString())
                     )
                 ),
                 MULTI_PARTITION_OUTPUT_TOPIC,

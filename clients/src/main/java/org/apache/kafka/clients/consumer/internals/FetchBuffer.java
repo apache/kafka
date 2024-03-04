@@ -29,6 +29,7 @@ import java.util.HashSet;
 import java.util.Set;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
@@ -51,6 +52,8 @@ public class FetchBuffer implements AutoCloseable {
     private final Lock lock;
     private final Condition notEmptyCondition;
     private final IdempotentCloser idempotentCloser = new IdempotentCloser();
+
+    private final AtomicBoolean wokenup = new AtomicBoolean(false);
 
     private CompletedFetch nextInLineFetch;
 
@@ -166,7 +169,7 @@ public class FetchBuffer implements AutoCloseable {
         try {
             lock.lock();
 
-            while (isEmpty()) {
+            while (isEmpty() && !wokenup.compareAndSet(true, false)) {
                 // Update the timer before we head into the loop in case it took a while to get the lock.
                 timer.update();
 
@@ -182,6 +185,16 @@ public class FetchBuffer implements AutoCloseable {
         } finally {
             lock.unlock();
             timer.update();
+        }
+    }
+
+    void wakeup() {
+        wokenup.set(true);
+        try {
+            lock.lock();
+            notEmptyCondition.signalAll();
+        } finally {
+            lock.unlock();
         }
     }
 

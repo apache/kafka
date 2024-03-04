@@ -16,19 +16,25 @@
  */
 package org.apache.kafka.coordinator.group.consumer;
 
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.GroupNotEmptyException;
 import org.apache.kafka.common.errors.StaleMemberEpochException;
 import org.apache.kafka.common.errors.UnknownMemberIdException;
+import org.apache.kafka.common.message.ConsumerGroupDescribeResponseData;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
-import org.apache.kafka.coordinator.group.GroupMetadataManagerTest;
+import org.apache.kafka.coordinator.group.Group;
+import org.apache.kafka.coordinator.group.MetadataImageBuilder;
 import org.apache.kafka.coordinator.group.OffsetAndMetadata;
 import org.apache.kafka.coordinator.group.OffsetExpirationCondition;
 import org.apache.kafka.coordinator.group.OffsetExpirationConditionImpl;
+import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetricsShard;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.timeline.SnapshotRegistry;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.Arrays;
 import java.util.Collections;
@@ -46,12 +52,20 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 
 public class ConsumerGroupTest {
 
     private ConsumerGroup createConsumerGroup(String groupId) {
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
-        return new ConsumerGroup(snapshotRegistry, groupId);
+        return new ConsumerGroup(
+            snapshotRegistry,
+            groupId,
+            mock(GroupCoordinatorMetricsShard.class)
+        );
     }
 
     @Test
@@ -88,6 +102,34 @@ public class ConsumerGroupTest {
     }
 
     @Test
+    public void testNoStaticMember() {
+        ConsumerGroup consumerGroup = createConsumerGroup("foo");
+
+        // Create a new member which is not static
+        consumerGroup.getOrMaybeCreateMember("member", true);
+        assertNull(consumerGroup.staticMember("instance-id"));
+    }
+
+    @Test
+    public void testGetStaticMemberByInstanceId() {
+        ConsumerGroup consumerGroup = createConsumerGroup("foo");
+        ConsumerGroupMember member;
+
+        member = consumerGroup.getOrMaybeCreateMember("member", true);
+
+        member = new ConsumerGroupMember.Builder(member)
+            .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
+            .setInstanceId("instance")
+            .build();
+
+        consumerGroup.updateMember(member);
+
+        assertEquals(member, consumerGroup.staticMember("instance"));
+        assertEquals(member, consumerGroup.getOrMaybeCreateMember("member", false));
+        assertEquals(member.memberId(), consumerGroup.staticMemberId("instance"));
+    }
+
+    @Test
     public void testRemoveMember() {
         ConsumerGroup consumerGroup = createConsumerGroup("foo");
 
@@ -97,6 +139,27 @@ public class ConsumerGroupTest {
         consumerGroup.removeMember("member");
         assertFalse(consumerGroup.hasMember("member"));
 
+    }
+
+    @Test
+    public void testRemoveStaticMember() {
+        ConsumerGroup consumerGroup = createConsumerGroup("foo");
+
+        ConsumerGroupMember member;
+        member = consumerGroup.getOrMaybeCreateMember("member", true);
+        assertTrue(consumerGroup.hasMember("member"));
+
+        member = new ConsumerGroupMember.Builder(member)
+            .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
+            .setInstanceId("instance")
+            .build();
+
+        consumerGroup.updateMember(member);
+
+        consumerGroup.removeMember("member");
+        assertFalse(consumerGroup.hasMember("member"));
+        assertNull(consumerGroup.staticMember("instance"));
+        assertNull(consumerGroup.staticMemberId("instance"));
     }
 
     @Test
@@ -151,6 +214,112 @@ public class ConsumerGroupTest {
         assertEquals(-1, consumerGroup.currentPartitionEpoch(fooTopicId, 7));
         assertEquals(-1, consumerGroup.currentPartitionEpoch(fooTopicId, 8));
         assertEquals(-1, consumerGroup.currentPartitionEpoch(fooTopicId, 9));
+    }
+
+    @Test
+    public void testUpdatingMemberUpdatesPartitionEpochWhenPartitionIsReassignedBeforeBeingRevoked() {
+        Uuid fooTopicId = Uuid.randomUuid();
+
+        ConsumerGroup consumerGroup = createConsumerGroup("foo");
+        ConsumerGroupMember member;
+
+        member = new ConsumerGroupMember.Builder("member")
+            .setMemberEpoch(10)
+            .setAssignedPartitions(Collections.emptyMap())
+            .setPartitionsPendingRevocation(mkAssignment(
+                mkTopicAssignment(fooTopicId, 1)))
+            .build();
+
+        consumerGroup.updateMember(member);
+
+        assertEquals(10, consumerGroup.currentPartitionEpoch(fooTopicId, 1));
+
+        member = new ConsumerGroupMember.Builder(member)
+            .setMemberEpoch(11)
+            .setAssignedPartitions(mkAssignment(
+                mkTopicAssignment(fooTopicId, 1)))
+            .setPartitionsPendingRevocation(Collections.emptyMap())
+            .build();
+
+        consumerGroup.updateMember(member);
+
+        assertEquals(11, consumerGroup.currentPartitionEpoch(fooTopicId, 1));
+    }
+
+    @Test
+    public void testUpdatingMemberUpdatesPartitionEpochWhenPartitionIsNotReleased() {
+        Uuid fooTopicId = Uuid.randomUuid();
+        ConsumerGroup consumerGroup = createConsumerGroup("foo");
+
+        ConsumerGroupMember m1 = new ConsumerGroupMember.Builder("m1")
+            .setMemberEpoch(10)
+            .setAssignedPartitions(mkAssignment(
+                mkTopicAssignment(fooTopicId, 1)))
+            .build();
+
+        consumerGroup.updateMember(m1);
+
+        ConsumerGroupMember m2 = new ConsumerGroupMember.Builder("m2")
+            .setMemberEpoch(10)
+            .setAssignedPartitions(mkAssignment(
+                mkTopicAssignment(fooTopicId, 1)))
+            .build();
+
+        // m2 should not be able to acquire foo-1 because the partition is
+        // still owned by another member.
+        assertThrows(IllegalStateException.class, () -> consumerGroup.updateMember(m2));
+    }
+
+    @Test
+    public void testRemovePartitionEpochs() {
+        Uuid fooTopicId = Uuid.randomUuid();
+        ConsumerGroup consumerGroup = createConsumerGroup("foo");
+
+        // Removing should fail because there is no epoch set.
+        assertThrows(IllegalStateException.class, () -> consumerGroup.removePartitionEpochs(
+            mkAssignment(
+                mkTopicAssignment(fooTopicId, 1)
+            ),
+            10
+        ));
+
+        ConsumerGroupMember m1 = new ConsumerGroupMember.Builder("m1")
+            .setMemberEpoch(10)
+            .setAssignedPartitions(mkAssignment(
+                mkTopicAssignment(fooTopicId, 1)))
+            .build();
+
+        consumerGroup.updateMember(m1);
+
+        // Removing should fail because the expected epoch is incorrect.
+        assertThrows(IllegalStateException.class, () -> consumerGroup.removePartitionEpochs(
+            mkAssignment(
+                mkTopicAssignment(fooTopicId, 1)
+            ),
+            11
+        ));
+    }
+
+    @Test
+    public void testAddPartitionEpochs() {
+        Uuid fooTopicId = Uuid.randomUuid();
+        ConsumerGroup consumerGroup = createConsumerGroup("foo");
+
+        consumerGroup.addPartitionEpochs(
+            mkAssignment(
+                mkTopicAssignment(fooTopicId, 1)
+            ),
+            10
+        );
+
+        // Changing the epoch should fail because the owner of the partition
+        // should remove it first.
+        assertThrows(IllegalStateException.class, () -> consumerGroup.addPartitionEpochs(
+            mkAssignment(
+                mkTopicAssignment(fooTopicId, 1)
+            ),
+            11
+        ));
     }
 
     @Test
@@ -274,6 +443,18 @@ public class ConsumerGroupTest {
         consumerGroup.removeMember("member2");
 
         assertEquals(ConsumerGroup.ConsumerGroupState.EMPTY, consumerGroup.state());
+    }
+
+    @Test
+    public void testGroupTypeFromString() {
+
+        assertEquals(Group.GroupType.parse("classic"), Group.GroupType.CLASSIC);
+
+        // Test case insensitivity.
+        assertEquals(Group.GroupType.parse("Consumer"), Group.GroupType.CONSUMER);
+
+        // Test with invalid group type.
+        assertEquals(Group.GroupType.parse("Invalid"), Group.GroupType.UNKNOWN);
     }
 
     @Test
@@ -402,7 +583,7 @@ public class ConsumerGroupTest {
         Uuid barTopicId = Uuid.randomUuid();
         Uuid zarTopicId = Uuid.randomUuid();
 
-        MetadataImage image = new GroupMetadataManagerTest.MetadataImageBuilder()
+        MetadataImage image = new MetadataImageBuilder()
             .addTopic(fooTopicId, "foo", 1)
             .addTopic(barTopicId, "bar", 2)
             .addTopic(zarTopicId, "zar", 3)
@@ -612,37 +793,43 @@ public class ConsumerGroupTest {
         assertEquals(0, group.metadataRefreshDeadline().epoch);
     }
 
-    @Test
-    public void testValidateOffsetCommit() {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void testValidateOffsetCommit(boolean isTransactional) {
         ConsumerGroup group = createConsumerGroup("group-foo");
 
         // Simulate a call from the admin client without member id and member epoch.
         // This should pass only if the group is empty.
-        group.validateOffsetCommit("", "", -1);
+        group.validateOffsetCommit("", "", -1, isTransactional);
 
         // The member does not exist.
         assertThrows(UnknownMemberIdException.class, () ->
-            group.validateOffsetCommit("member-id", null, 0));
+            group.validateOffsetCommit("member-id", null, 0, isTransactional));
 
         // Create a member.
         group.getOrMaybeCreateMember("member-id", true);
 
         // A call from the admin client should fail as the group is not empty.
         assertThrows(UnknownMemberIdException.class, () ->
-            group.validateOffsetCommit("", "", -1));
+            group.validateOffsetCommit("", "", -1, isTransactional));
 
         // The member epoch is stale.
         assertThrows(StaleMemberEpochException.class, () ->
-            group.validateOffsetCommit("member-id", "", 10));
+            group.validateOffsetCommit("member-id", "", 10, isTransactional));
 
         // This should succeed.
-        group.validateOffsetCommit("member-id", "", 0);
+        group.validateOffsetCommit("member-id", "", 0, isTransactional);
     }
 
     @Test
     public void testAsListedGroup() {
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
-        ConsumerGroup group = new ConsumerGroup(snapshotRegistry, "group-foo");
+        GroupCoordinatorMetricsShard metricsShard = new GroupCoordinatorMetricsShard(
+            snapshotRegistry,
+            Collections.emptyMap(),
+            new TopicPartition("__consumer_offsets", 0)
+        );
+        ConsumerGroup group = new ConsumerGroup(snapshotRegistry, "group-foo", metricsShard);
         snapshotRegistry.getOrCreateSnapshot(0);
         assertEquals(ConsumerGroup.ConsumerGroupState.EMPTY.toString(), group.stateAsString(0));
         group.updateMember(new ConsumerGroupMember.Builder("member1")
@@ -656,7 +843,11 @@ public class ConsumerGroupTest {
     @Test
     public void testValidateOffsetFetch() {
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
-        ConsumerGroup group = new ConsumerGroup(snapshotRegistry, "group-foo");
+        ConsumerGroup group = new ConsumerGroup(
+            snapshotRegistry,
+            "group-foo",
+            mock(GroupCoordinatorMetricsShard.class)
+        );
 
         // Simulate a call from the admin client without member id and member epoch.
         group.validateOffsetFetch(null, -1, Long.MAX_VALUE);
@@ -715,7 +906,7 @@ public class ConsumerGroupTest {
         long commitTimestamp = 20000L;
         long offsetsRetentionMs = 10000L;
         OffsetAndMetadata offsetAndMetadata = new OffsetAndMetadata(15000L, OptionalInt.empty(), "", commitTimestamp, OptionalLong.empty());
-        ConsumerGroup group = new ConsumerGroup(new SnapshotRegistry(new LogContext()), "group-id");
+        ConsumerGroup group = new ConsumerGroup(new SnapshotRegistry(new LogContext()), "group-id", mock(GroupCoordinatorMetricsShard.class));
 
         Optional<OffsetExpirationCondition> offsetExpirationCondition = group.offsetExpirationCondition();
         assertTrue(offsetExpirationCondition.isPresent());
@@ -730,7 +921,7 @@ public class ConsumerGroupTest {
         Uuid fooTopicId = Uuid.randomUuid();
         Uuid barTopicId = Uuid.randomUuid();
 
-        MetadataImage image = new GroupMetadataManagerTest.MetadataImageBuilder()
+        MetadataImage image = new MetadataImageBuilder()
             .addTopic(fooTopicId, "foo", 1)
             .addTopic(barTopicId, "bar", 2)
             .addRacks()
@@ -769,5 +960,103 @@ public class ConsumerGroupTest {
 
         consumerGroup.removeMember("member2");
         assertFalse(consumerGroup.isSubscribedToTopic("bar"));
+    }
+
+    @Test
+    public void testAsDescribedGroup() {
+        SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
+        ConsumerGroup group = new ConsumerGroup(snapshotRegistry, "group-id-1", mock(GroupCoordinatorMetricsShard.class));
+        snapshotRegistry.getOrCreateSnapshot(0);
+        assertEquals(ConsumerGroup.ConsumerGroupState.EMPTY.toString(), group.stateAsString(0));
+
+        group.updateMember(new ConsumerGroupMember.Builder("member1")
+                .setSubscribedTopicNames(Collections.singletonList("foo"))
+                .setServerAssignorName("assignorName")
+                .build());
+        group.updateMember(new ConsumerGroupMember.Builder("member2")
+                .build());
+        snapshotRegistry.getOrCreateSnapshot(1);
+
+        ConsumerGroupDescribeResponseData.DescribedGroup expected = new ConsumerGroupDescribeResponseData.DescribedGroup()
+            .setGroupId("group-id-1")
+            .setGroupState(ConsumerGroup.ConsumerGroupState.STABLE.toString())
+            .setGroupEpoch(0)
+            .setAssignmentEpoch(0)
+            .setAssignorName("assignorName")
+            .setMembers(Arrays.asList(
+                new ConsumerGroupDescribeResponseData.Member()
+                    .setMemberId("member1")
+                    .setSubscribedTopicNames(Collections.singletonList("foo"))
+                    .setSubscribedTopicRegex(""),
+                new ConsumerGroupDescribeResponseData.Member().setMemberId("member2")
+                    .setSubscribedTopicRegex("")
+            ));
+        ConsumerGroupDescribeResponseData.DescribedGroup actual = group.asDescribedGroup(1, "",
+            new MetadataImageBuilder().build().topics());
+
+        assertEquals(expected, actual);
+    }
+
+    @Test
+    public void testStateTransitionMetrics() {
+        // Confirm metrics is not updated when a new ConsumerGroup is created but only when the group transitions
+        // its state.
+        GroupCoordinatorMetricsShard metrics = mock(GroupCoordinatorMetricsShard.class);
+        ConsumerGroup consumerGroup = new ConsumerGroup(
+            new SnapshotRegistry(new LogContext()),
+            "group-id",
+            metrics
+        );
+
+        assertEquals(ConsumerGroup.ConsumerGroupState.EMPTY, consumerGroup.state());
+        verify(metrics, times(0)).onConsumerGroupStateTransition(null, ConsumerGroup.ConsumerGroupState.EMPTY);
+
+        ConsumerGroupMember member = new ConsumerGroupMember.Builder("member")
+            .setMemberEpoch(1)
+            .setPreviousMemberEpoch(0)
+            .setTargetMemberEpoch(1)
+            .build();
+
+        consumerGroup.updateMember(member);
+
+        assertEquals(ConsumerGroup.ConsumerGroupState.RECONCILING, consumerGroup.state());
+        verify(metrics, times(1)).onConsumerGroupStateTransition(ConsumerGroup.ConsumerGroupState.EMPTY, ConsumerGroup.ConsumerGroupState.RECONCILING);
+
+        consumerGroup.setGroupEpoch(1);
+
+        assertEquals(ConsumerGroup.ConsumerGroupState.ASSIGNING, consumerGroup.state());
+        verify(metrics, times(1)).onConsumerGroupStateTransition(ConsumerGroup.ConsumerGroupState.RECONCILING, ConsumerGroup.ConsumerGroupState.ASSIGNING);
+
+        consumerGroup.setTargetAssignmentEpoch(1);
+
+        assertEquals(ConsumerGroup.ConsumerGroupState.STABLE, consumerGroup.state());
+        verify(metrics, times(1)).onConsumerGroupStateTransition(ConsumerGroup.ConsumerGroupState.ASSIGNING, ConsumerGroup.ConsumerGroupState.STABLE);
+
+        consumerGroup.removeMember("member");
+
+        assertEquals(ConsumerGroup.ConsumerGroupState.EMPTY, consumerGroup.state());
+        verify(metrics, times(1)).onConsumerGroupStateTransition(ConsumerGroup.ConsumerGroupState.STABLE, ConsumerGroup.ConsumerGroupState.EMPTY);
+    }
+
+    @Test
+    public void testIsInStatesCaseInsensitive() {
+        SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
+        GroupCoordinatorMetricsShard metricsShard = new GroupCoordinatorMetricsShard(
+            snapshotRegistry,
+            Collections.emptyMap(),
+            new TopicPartition("__consumer_offsets", 0)
+        );
+        ConsumerGroup group = new ConsumerGroup(snapshotRegistry, "group-foo", metricsShard);
+        snapshotRegistry.getOrCreateSnapshot(0);
+        assertTrue(group.isInStates(Collections.singleton("empty"), 0));
+        assertFalse(group.isInStates(Collections.singleton("Empty"), 0));
+
+        group.updateMember(new ConsumerGroupMember.Builder("member1")
+            .setSubscribedTopicNames(Collections.singletonList("foo"))
+            .build());
+        snapshotRegistry.getOrCreateSnapshot(1);
+        assertTrue(group.isInStates(Collections.singleton("empty"), 0));
+        assertTrue(group.isInStates(Collections.singleton("stable"), 1));
+        assertFalse(group.isInStates(Collections.singleton("empty"), 1));
     }
 }
