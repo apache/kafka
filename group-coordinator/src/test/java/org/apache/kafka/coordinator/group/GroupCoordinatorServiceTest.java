@@ -91,8 +91,6 @@ import java.util.concurrent.CompletionException;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
-import java.util.stream.Collectors;
-import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
 import static org.apache.kafka.common.requests.JoinGroupRequest.UNKNOWN_MEMBER_ID;
@@ -2038,7 +2036,6 @@ public class GroupCoordinatorServiceTest {
 
     @Test
     public void testOnPartitionsDeleted() {
-        int partitionCount = 3;
         CoordinatorRuntime<GroupCoordinatorShard, Record> runtime = mockRuntime();
         GroupCoordinatorService service = new GroupCoordinatorService(
             new LogContext(),
@@ -2046,36 +2043,17 @@ public class GroupCoordinatorServiceTest {
             runtime,
             new GroupCoordinatorMetrics()
         );
+        service.startup(() -> 3);
 
-        service.startup(() -> partitionCount);
-
-        when(runtime.partitions()).thenReturn(
-            IntStream
-                .range(0, partitionCount)
-                .mapToObj(i -> new TopicPartition("__consumer_offsets", i))
-                .collect(Collectors.toSet())
-        );
-
-        List<CompletableFuture<Void>> futures = IntStream
-            .range(0, partitionCount)
-            .mapToObj(__ -> new CompletableFuture<Void>())
-            .collect(Collectors.toList());
-
-        IntStream.range(0, partitionCount).forEach(i -> {
-            CompletableFuture<Void> future = futures.get(i);
-            when(runtime.scheduleWriteOperation(
-                ArgumentMatchers.eq("on-partition-deleted"),
-                ArgumentMatchers.eq(new TopicPartition("__consumer_offsets", i)),
-                ArgumentMatchers.eq(Duration.ofMillis(5000)),
-                ArgumentMatchers.any()
-            )).thenAnswer(__ -> future);
-        });
-
-        IntStream.range(0, partitionCount - 1).forEach(i -> {
-            futures.get(i).complete(null);
-        });
-
-        futures.get(partitionCount - 1).completeExceptionally(Errors.COORDINATOR_LOAD_IN_PROGRESS.exception());
+        when(runtime.scheduleWriteAllOperation(
+            ArgumentMatchers.eq("on-partition-deleted"),
+            ArgumentMatchers.eq(Duration.ofMillis(5000)),
+            ArgumentMatchers.any()
+        )).thenReturn(Arrays.asList(
+            CompletableFuture.completedFuture(null),
+            CompletableFuture.completedFuture(null),
+            FutureUtils.failedFuture(Errors.COORDINATOR_LOAD_IN_PROGRESS.exception())
+        ));
 
         // The exception is logged and swallowed.
         assertDoesNotThrow(() ->

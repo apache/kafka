@@ -1449,6 +1449,32 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
     }
 
     /**
+     * Schedule a write operation for each coordinator.
+     *
+     * @param name      The name of the write operation.
+     * @param timeout   The write operation timeout.
+     * @param op        The write operation.
+     *
+     * @return A list of futures where each future will be completed with the result of the write operation
+     * when the operation is completed or an exception if the write operation failed.
+     *
+     * @param <T> The type of the result.
+     */
+    public <T> List<CompletableFuture<T>> scheduleWriteAllOperation(
+        String name,
+        Duration timeout,
+        CoordinatorWriteOperation<S, T, U> op
+    ) {
+        throwIfNotRunning();
+        log.debug("Scheduled execution of write all operation {}.", name);
+        return coordinators
+            .keySet()
+            .stream()
+            .map(tp -> scheduleWriteOperation(name, tp, timeout, op))
+            .collect(Collectors.toList());
+    }
+
+    /**
      * Schedules a transactional write operation.
      *
      * @param name              The name of the write operation.
@@ -1559,13 +1585,13 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
     }
 
     /**
-     * Schedules a read operation for all the coordinators.
+     * Schedules a read operation for each coordinator.
      *
      * @param name  The name of the read operation.
      * @param op    The read operation.
      *
-     * @return A list of futures that will be completed with the result of the read operations
-     * when the operations complete or an exception if they fail.
+     * @return A list of futures where each future will be completed with the result of the read operation
+     * when the operation is completed or an exception if the read operation failed.
      *
      * @param <T> The type of the result.
      */

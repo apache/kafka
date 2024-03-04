@@ -80,7 +80,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.OptionalInt;
 import java.util.Properties;
-import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.ExecutionException;
@@ -951,23 +950,18 @@ public class GroupCoordinatorService implements GroupCoordinator {
     ) throws ExecutionException, InterruptedException {
         throwIfNotActive();
 
-        final Set<TopicPartition> existingPartitionSet = runtime.partitions();
-        final List<CompletableFuture<Void>> futures = new ArrayList<>(existingPartitionSet.size());
-
-        existingPartitionSet.forEach(partition -> futures.add(
-            runtime.scheduleWriteOperation(
+        CompletableFuture.allOf(
+            runtime.scheduleWriteAllOperation(
                 "on-partition-deleted",
-                partition,
                 Duration.ofMillis(config.offsetCommitTimeoutMs),
                 coordinator -> coordinator.onPartitionsDeleted(topicPartitions)
-            ).exceptionally(exception -> {
-                log.error("Could not delete offsets for deleted partitions {} in coordinator {} due to: {}.",
-                    partition, partition, exception.getMessage(), exception);
+            ).stream().map(future -> future.exceptionally(exception -> {
+                log.error("Could not delete offsets for deleted partitions {} due to: {}.",
+                    topicPartitions, exception.getMessage(), exception
+                );
                 return null;
             })
-        ));
-
-        CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).get();
+        ).toArray(CompletableFuture[]::new)).get();
     }
 
     /**
