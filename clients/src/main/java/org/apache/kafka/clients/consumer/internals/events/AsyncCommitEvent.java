@@ -14,17 +14,19 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.clients.consumer.internals.events;
 
-/**
- * Application event indicating that the subscription state has changed, triggered when a user
- * calls the subscribe API. This will make the consumer join a consumer group if not part of it
- * yet, or just send the updated subscription to the broker if it's already a member of the group.
- */
-public class SubscriptionChangeApplicationEvent extends ApplicationEvent {
+import org.apache.kafka.clients.consumer.OffsetAndMetadata;
+import org.apache.kafka.common.TopicPartition;
 
-    public SubscriptionChangeApplicationEvent() {
-        super(Type.SUBSCRIPTION_CHANGE);
+import java.util.Map;
+
+/**
+ * Event to commit offsets without waiting for a response, so the request won't be retried.
+ */
+public class AsyncCommitEvent extends CommitEvent {
+
+    public AsyncCommitEvent(final Map<TopicPartition, OffsetAndMetadata> offsets) {
+        super(Type.COMMIT_ASYNC, offsets);
     }
 }

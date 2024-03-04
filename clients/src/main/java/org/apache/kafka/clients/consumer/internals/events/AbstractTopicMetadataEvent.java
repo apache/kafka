@@ -14,19 +14,28 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.clients.consumer.internals.events;
 
-/**
- * Application event triggered when a user calls the unsubscribe API. This will make the consumer
- * release all its assignments and send a heartbeat request to leave the consumer group.
- * This event holds a future that will complete when the invocation of callbacks to release
- * complete and the heartbeat to leave the group is sent out (minimal effort to send the
- * leave group heartbeat, without waiting for any response or considering timeouts).
- */
-public class UnsubscribeApplicationEvent extends CompletableApplicationEvent<Void> {
-    public UnsubscribeApplicationEvent() {
-        super(Type.UNSUBSCRIBE);
+import org.apache.kafka.common.PartitionInfo;
+
+import java.util.List;
+import java.util.Map;
+
+public abstract class AbstractTopicMetadataEvent extends CompletableApplicationEvent<Map<String, List<PartitionInfo>>> {
+
+    private final long timeoutMs;
+
+    protected AbstractTopicMetadataEvent(final Type type, final long timeoutMs) {
+        super(type);
+        this.timeoutMs = timeoutMs;
+    }
+
+    public long timeoutMs() {
+        return timeoutMs;
+    }
+
+    @Override
+    public String toStringBase() {
+        return super.toStringBase() + ", timeoutMs=" + timeoutMs;
     }
 }
-

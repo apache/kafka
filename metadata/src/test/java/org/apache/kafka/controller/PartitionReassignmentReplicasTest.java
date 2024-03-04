@@ -197,6 +197,16 @@ public class PartitionReassignmentReplicasTest {
     }
 
     @Test
+    public void testDoesNotCompleteReassignmentIfIsrDoesNotHaveAllTargetReplicas() {
+        PartitionReassignmentReplicas replicas = new PartitionReassignmentReplicas(
+            new PartitionAssignment(Arrays.asList(0, 1, 2)), new PartitionAssignment(Arrays.asList(0, 1, 3)));
+        assertTrue(replicas.isReassignmentInProgress());
+        Optional<PartitionReassignmentReplicas.CompletedReassignment> reassignmentOptional =
+            replicas.maybeCompleteReassignment(Arrays.asList(3));
+        assertFalse(reassignmentOptional.isPresent());
+    }
+
+    @Test
     public void testOriginalReplicas() {
         PartitionReassignmentReplicas replicas = new PartitionReassignmentReplicas(
             new PartitionAssignment(Arrays.asList(0, 1, 2)), new PartitionAssignment(Arrays.asList(0, 1, 3)));
