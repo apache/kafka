@@ -30,6 +30,7 @@ import org.apache.kafka.clients.consumer.OffsetCommitCallback;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.clients.consumer.RetriableCommitFailedException;
 import org.apache.kafka.clients.consumer.RoundRobinAssignor;
+import org.apache.kafka.clients.consumer.internals.events.ApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEventHandler;
 import org.apache.kafka.clients.consumer.internals.events.AssignmentChangeEvent;
 import org.apache.kafka.clients.consumer.internals.events.AsyncCommitEvent;
@@ -120,6 +121,7 @@ import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -676,7 +678,7 @@ public class AsyncKafkaConsumerTest {
         consumer.subscribe(singleton("topic"), mock(ConsumerRebalanceListener.class));
         subscriptions.assignFromSubscribed(singleton(new TopicPartition("topic", 0)));
         subscriptions.seek(new TopicPartition("topic", 0), 100);
-        consumer.maybeAutoCommitSync(true, time.timer(100), null);
+        consumer.maybeAutoCommitSync(true, time.timer(100));
         verify(applicationEventHandler).add(any(SyncCommitEvent.class));
     }
 
@@ -694,7 +696,7 @@ public class AsyncKafkaConsumerTest {
         consumer.subscribe(singleton("topic"), mock(ConsumerRebalanceListener.class));
         subscriptions.assignFromSubscribed(singleton(new TopicPartition("topic", 0)));
         subscriptions.seek(new TopicPartition("topic", 0), 100);
-        consumer.maybeAutoCommitSync(false, time.timer(100), null);
+        consumer.maybeAutoCommitSync(false, time.timer(100));
         verify(applicationEventHandler, never()).add(any(SyncCommitEvent.class));
     }
 
@@ -890,6 +892,31 @@ public class AsyncKafkaConsumerTest {
         consumer.wakeup();
         assertThrows(WakeupException.class, () -> consumer.committed(offsets.keySet()));
         assertNull(consumer.wakeupTrigger().getPendingTask());
+    }
+
+    @Test
+    public void testNoWakeupInCloseCommit() {
+        TopicPartition tp = new TopicPartition("topic1", 0);
+        consumer = newConsumer();
+        consumer.assign(Collections.singleton(tp));
+        doReturn(LeaderAndEpoch.noLeaderOrEpoch()).when(metadata).currentLeader(any());
+        consumer.seek(tp, 10);
+        consumer.wakeup();
+
+        AtomicReference<SyncCommitEvent> capturedEvent = new AtomicReference<>();
+        doAnswer(invocation -> {
+            ApplicationEvent event = invocation.getArgument(0);
+            if (event instanceof SyncCommitEvent) {
+                capturedEvent.set((SyncCommitEvent) event);
+            }
+            return null;
+        }).when(applicationEventHandler).add(any());
+
+        consumer.close(Duration.ZERO);
+
+        // A commit was triggered and not completed exceptionally by the wakeup
+        assertNotNull(capturedEvent.get());
+        assertFalse(capturedEvent.get().future().isCompletedExceptionally());
     }
 
     @Test

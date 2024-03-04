@@ -1228,6 +1228,9 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         log.trace("Closing the Kafka consumer");
         AtomicReference<Throwable> firstException = new AtomicReference<>();
 
+        // We are already closing with a timeout, don't allow wake-ups from here on.
+        wakeupTrigger.disableWakeups();
+
         final Timer closeTimer = time.timer(timeout);
         clientTelemetryReporter.ifPresent(reporter -> reporter.initiateClose(timeout.toMillis()));
         closeTimer.update();
@@ -1265,7 +1268,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     void prepareShutdown(final Timer timer, final AtomicReference<Throwable> firstException) {
         if (!groupMetadata.isPresent())
             return;
-        maybeAutoCommitSync(autoCommitEnabled, timer, firstException);
+        maybeAutoCommitSync(autoCommitEnabled, timer);
         applicationEventHandler.add(new CommitOnCloseEvent());
         completeQuietly(
             () -> {
@@ -1277,8 +1280,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
 
     // Visible for testing
     void maybeAutoCommitSync(final boolean shouldAutoCommit,
-                             final Timer timer,
-                             final AtomicReference<Throwable> firstException) {
+                             final Timer timer) {
         if (!shouldAutoCommit)
             return;
         Map<TopicPartition, OffsetAndMetadata> allConsumed = subscriptions.allConsumed();
