@@ -77,7 +77,6 @@ import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.NullSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentMatchers;
-import org.mockito.internal.util.collections.Sets;
 
 import java.net.InetAddress;
 import java.time.Duration;
@@ -1670,12 +1669,6 @@ public class GroupCoordinatorServiceTest {
             result2.duplicate(),
             result3.duplicate(),
             result1.duplicate()
-        ));
-
-        when(runtime.partitions()).thenReturn(Sets.newSet(
-            new TopicPartition("__consumer_offsets", 0),
-            new TopicPartition("__consumer_offsets", 1),
-            new TopicPartition("__consumer_offsets", 2)
         ));
 
         when(runtime.scheduleWriteOperation(

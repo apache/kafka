@@ -41,13 +41,11 @@ import org.slf4j.Logger;
 
 import java.time.Duration;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.OptionalInt;
 import java.util.OptionalLong;
-import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.RejectedExecutionException;
@@ -1622,15 +1620,6 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
     ) {
         log.debug("Scheduled execution of internal operation {}.", name);
         enqueue(new CoordinatorInternalEvent(name, tp, op));
-    }
-
-    /**
-     * @return The topic partitions of the coordinators currently registered in the
-     * runtime.
-     */
-    public Set<TopicPartition> partitions() {
-        throwIfNotRunning();
-        return new HashSet<>(coordinators.keySet());
     }
 
     /**
