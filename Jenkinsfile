@@ -29,8 +29,8 @@ def isChangeRequest(env) {
   env.CHANGE_ID != null && !env.CHANGE_ID.isEmpty()
 }
 
-def doTest(env, target = "test") {
-  sh """./gradlew -PscalaVersion=$SCALA_VERSION ${target} \
+def doTest(env, target = "streams:test") {
+  sh """./gradlew -PscalaVersion=$SCALA_VERSION ${target} --tests EosV2UpgradeIntegrationTest \
       --profile --continue -PkeepAliveMode="session" -PtestLoggingEvents=started,passed,skipped,failed \
       -PignoreFailures=true -PmaxParallelForks=2 -PmaxTestRetries=1 -PmaxTestRetryFailures=10"""
   junit '**/build/test-results/**/TEST-*.xml'
