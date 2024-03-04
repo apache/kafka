@@ -575,8 +575,8 @@ class AssignmentValidationTest(VerifiableConsumerTest):
         - Validate assignment after every expected rebalance
         """
         consumer = self.setup_consumer(self.TOPIC,
-                                       group_protocol=group_protocol,
                                        assignment_strategy=assignment_strategy,
+                                       group_protocol=group_protocol,
                                        group_remote_assignor=group_remote_assignor)
         for num_started, node in enumerate(consumer.nodes, 1):
             consumer.start_node(node)
