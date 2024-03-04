@@ -43,6 +43,7 @@ import java.time.Duration;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
 import java.util.OptionalInt;
 import java.util.OptionalLong;
@@ -54,6 +55,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Consumer;
+import java.util.stream.Collectors;
 
 /**
  * The CoordinatorRuntime provides a framework to implement coordinators such as the group coordinator
@@ -1535,12 +1537,12 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
     /**
      * Schedules a read operation.
      *
-     * @param name  The name of the write operation.
+     * @param name  The name of the read operation.
      * @param tp    The address of the coordinator (aka its topic-partitions).
      * @param op    The read operation.
      *
      * @return A future that will be completed with the result of the read operation
-     * when the operation is completed or an exception if the write operation failed.
+     * when the operation is completed or an exception if the read operation failed.
      *
      * @param <T> The type of the result.
      */
@@ -1554,6 +1556,30 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
         CoordinatorReadEvent<T> event = new CoordinatorReadEvent<>(name, tp, op);
         enqueue(event);
         return event.future;
+    }
+
+    /**
+     * Schedules a read operation for all the coordinators.
+     *
+     * @param name  The name of the read operation.
+     * @param op    The read operation.
+     *
+     * @return A list of futures that will be completed with the result of the read operations
+     * when the operations complete or an exception if they fail.
+     *
+     * @param <T> The type of the result.
+     */
+    public <T> List<CompletableFuture<T>> scheduleReadAllOperation(
+        String name,
+        CoordinatorReadOperation<S, T> op
+    ) {
+        throwIfNotRunning();
+        log.debug("Scheduled execution of read all operation {}.", name);
+        return coordinators
+            .keySet()
+            .stream()
+            .map(tp -> scheduleReadOperation(name, tp, op))
+            .collect(Collectors.toList());
     }
 
     /**

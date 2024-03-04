@@ -498,29 +498,17 @@ public class GroupCoordinatorService implements GroupCoordinator {
             );
         }
 
-        final Set<TopicPartition> existingPartitionSet = runtime.partitions();
-
-        if (existingPartitionSet.isEmpty()) {
-            return CompletableFuture.completedFuture(new ListGroupsResponseData());
-        }
-
-        final List<CompletableFuture<List<ListGroupsResponseData.ListedGroup>>> futures =
-            new ArrayList<>();
-
-        for (TopicPartition tp : existingPartitionSet) {
-            futures.add(runtime.scheduleReadOperation(
-                "list-groups",
-                tp,
-                (coordinator, lastCommittedOffset) -> coordinator.listGroups(request.statesFilter(), request.typesFilter(), lastCommittedOffset)
-            ).exceptionally(exception -> {
-                exception = Errors.maybeUnwrapException(exception);
-                if (exception instanceof NotCoordinatorException) {
-                    return Collections.emptyList();
-                } else {
-                    throw new CompletionException(exception);
-                }
-            }));
-        }
+        final List<CompletableFuture<List<ListGroupsResponseData.ListedGroup>>> futures = runtime.scheduleReadAllOperation(
+            "list-groups",
+            (coordinator, lastCommittedOffset) -> coordinator.listGroups(request.statesFilter(), request.typesFilter(), lastCommittedOffset)
+        ).stream().map(future -> future.exceptionally(exception -> {
+            exception = Errors.maybeUnwrapException(exception);
+            if (exception instanceof NotCoordinatorException) {
+                return Collections.emptyList();
+            } else {
+                throw new CompletionException(exception);
+            }
+        })).collect(Collectors.toList());
 
         return FutureUtils
             .combineFutures(futures, ArrayList::new, List::addAll)

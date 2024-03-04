@@ -43,6 +43,7 @@ import org.junit.jupiter.params.provider.EnumSource;
 import org.mockito.ArgumentMatcher;
 
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
@@ -1741,6 +1742,58 @@ public class CoordinatorRuntimeTest {
             throw new IllegalArgumentException("error");
         });
         assertFutureThrows(read, IllegalArgumentException.class);
+    }
+
+    @Test
+    public void testScheduleReadAllOp() throws ExecutionException, InterruptedException, TimeoutException {
+        MockTimer timer = new MockTimer();
+        MockPartitionWriter writer = new MockPartitionWriter();
+
+        CoordinatorRuntime<MockCoordinatorShard, String> runtime =
+            new CoordinatorRuntime.Builder<MockCoordinatorShard, String>()
+                .withTime(timer.time())
+                .withTimer(timer)
+                .withDefaultWriteTimeOut(DEFAULT_WRITE_TIMEOUT)
+                .withLoader(new MockCoordinatorLoader())
+                .withEventProcessor(new DirectEventProcessor())
+                .withPartitionWriter(writer)
+                .withCoordinatorShardBuilderSupplier(new MockCoordinatorShardBuilderSupplier())
+                .withCoordinatorRuntimeMetrics(mock(GroupCoordinatorRuntimeMetrics.class))
+                .withCoordinatorMetrics(mock(GroupCoordinatorMetrics.class))
+                .build();
+
+        TopicPartition coordinator0 = new TopicPartition("__consumer_offsets", 0);
+        TopicPartition coordinator1 = new TopicPartition("__consumer_offsets", 1);
+        TopicPartition coordinator2 = new TopicPartition("__consumer_offsets", 2);
+
+        // Loads the coordinators.
+        runtime.scheduleLoadOperation(coordinator0, 10);
+        runtime.scheduleLoadOperation(coordinator1, 10);
+        runtime.scheduleLoadOperation(coordinator2, 10);
+
+        // Writes
+        runtime.scheduleWriteOperation("write#0", coordinator0, DEFAULT_WRITE_TIMEOUT,
+            state -> new CoordinatorResult<>(Collections.singletonList("record0"), "response0"));
+        runtime.scheduleWriteOperation("write#1", coordinator1, DEFAULT_WRITE_TIMEOUT,
+            state -> new CoordinatorResult<>(Collections.singletonList("record1"), "response1"));
+        runtime.scheduleWriteOperation("write#2", coordinator2, DEFAULT_WRITE_TIMEOUT,
+            state -> new CoordinatorResult<>(Collections.singletonList("record2"), "response2"));
+
+        // Commit writes.
+        writer.commit(coordinator0);
+        writer.commit(coordinator1);
+        writer.commit(coordinator2);
+
+        // Read.
+        List<CompletableFuture<List<String>>> responses = runtime.scheduleReadAllOperation(
+            "read",
+            (state, offset) -> new ArrayList<>(state.records)
+        );
+
+        assertEquals(
+            Arrays.asList("record0", "record1", "record2"),
+            FutureUtils.combineFutures(responses, ArrayList::new, List::addAll).get(5, TimeUnit.SECONDS)
+        );
     }
 
     @Test
