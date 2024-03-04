@@ -31,12 +31,12 @@ import java.util.Map;
  * {@link OffsetAndTimestamp} found (offset of the first message whose timestamp is greater than
  * or equals to the target timestamp)
  */
-public class ListOffsetsApplicationEvent extends CompletableApplicationEvent<Map<TopicPartition, OffsetAndTimestamp>> {
+public class ListOffsetsEvent extends CompletableApplicationEvent<Map<TopicPartition, OffsetAndTimestamp>> {
 
     private final Map<TopicPartition, Long> timestampsToSearch;
     private final boolean requireTimestamps;
 
-    public ListOffsetsApplicationEvent(Map<TopicPartition, Long> timestampToSearch, boolean requireTimestamps) {
+    public ListOffsetsEvent(final Map<TopicPartition, Long> timestampToSearch, final boolean requireTimestamps) {
         super(Type.LIST_OFFSETS);
         this.timestampsToSearch = Collections.unmodifiableMap(timestampToSearch);
         this.requireTimestamps = requireTimestamps;
@@ -64,31 +64,10 @@ public class ListOffsetsApplicationEvent extends CompletableApplicationEvent<Map
     }
 
     @Override
-    public boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
-        if (!super.equals(o)) return false;
-
-        ListOffsetsApplicationEvent that = (ListOffsetsApplicationEvent) o;
-
-        if (requireTimestamps != that.requireTimestamps) return false;
-        return timestampsToSearch.equals(that.timestampsToSearch);
-    }
-
-    @Override
-    public int hashCode() {
-        int result = super.hashCode();
-        result = 31 * result + timestampsToSearch.hashCode();
-        result = 31 * result + (requireTimestamps ? 1 : 0);
-        return result;
-    }
-
-    @Override
-    public String toString() {
-        return getClass().getSimpleName() + " {" +
-                toStringBase() +
-                ", timestampsToSearch=" + timestampsToSearch + ", " +
-                "requireTimestamps=" + requireTimestamps + '}';
+    public String toStringBase() {
+        return super.toStringBase() +
+                ", timestampsToSearch=" + timestampsToSearch +
+                ", requireTimestamps=" + requireTimestamps;
     }
 
 }

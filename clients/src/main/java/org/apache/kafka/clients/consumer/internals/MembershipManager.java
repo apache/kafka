@@ -68,7 +68,12 @@ public interface MembershipManager extends RequestManager {
      *
      * @param response Heartbeat response to extract member info and errors from.
      */
-    void onHeartbeatResponseReceived(ConsumerGroupHeartbeatResponseData response);
+    void onHeartbeatSuccess(ConsumerGroupHeartbeatResponseData response);
+
+    /**
+     * Notify the member that an error heartbeat response was received.
+     */
+    void onHeartbeatFailure();
 
     /**
      * Update state when a heartbeat is sent out. This will transition out of the states that end

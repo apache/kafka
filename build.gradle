@@ -2184,8 +2184,6 @@ project(':streams') {
     testImplementation libs.junitJupiter
     testImplementation libs.junitVintageEngine
     testImplementation libs.easymock
-    testImplementation libs.powermockJunit4
-    testImplementation libs.powermockEasymock
     testImplementation libs.bcpkix
     testImplementation libs.hamcrest
     testImplementation libs.mockitoCore
@@ -2333,7 +2331,6 @@ project(':streams:streams-scala') {
     testImplementation project(':streams:test-utils')
 
     testImplementation libs.junitJupiter
-    testImplementation libs.easymock
     testImplementation libs.mockitoCore
     testImplementation libs.mockitoJunitJupiter // supports MockitoExtension
     testImplementation libs.hamcrest
@@ -2870,7 +2867,6 @@ project(':connect:transforms') {
 
     implementation libs.slf4jApi
 
-    testImplementation libs.easymock
     testImplementation libs.junitJupiter
 
     testRuntimeOnly libs.slf4jlog4j
@@ -2910,8 +2906,7 @@ project(':connect:json') {
     api libs.jacksonAfterburner
 
     implementation libs.slf4jApi
-
-    testImplementation libs.easymock
+    
     testImplementation libs.junitJupiter
 
     testRuntimeOnly libs.slf4jlog4j
