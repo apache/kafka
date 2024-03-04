@@ -18,21 +18,12 @@
 # (eventually) be upgraded to test both of these consumer groups.
 classic_group_protocol = 'classic'
 consumer_group_protocol = 'consumer'
-
-# The name of this variable is currently a misnomer. We have updated many of the system tests
-# to parameterize the group protocol, but until those tests *pass* with the "consumer" group
-# protocol, we'll leave this as-is.
-all_group_protocols = [classic_group_protocol]
+all_group_protocols = [classic_group_protocol, consumer_group_protocol]
 
 # These are the remote assignors used by the new group coordinator.
 range_remote_assignor = 'range'
 uniform_remote_assignor = 'uniform'
 all_remote_assignors = [range_remote_assignor, uniform_remote_assignor]
-
-
-def is_consumer_group_protocol_enabled(group_protocol):
-    """Check if the KIP-848 consumer group protocol is enabled."""
-    return group_protocol is not None and group_protocol.lower() == consumer_group_protocol
 
 
 def maybe_set_group_protocol(group_protocol, config=None):
