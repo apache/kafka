@@ -75,7 +75,7 @@ public class SubscriptionState {
     private final Logger log;
 
     private enum SubscriptionType {
-        NONE, AUTO_TOPICS, AUTO_PATTERN, USER_ASSIGNED
+        NONE, AUTO_TOPICS, AUTO_PATTERN, USER_ASSIGNED, AUTO_TOPICS_SHARE
     }
 
     /* the type of subscription */
@@ -124,6 +124,8 @@ public class SubscriptionState {
                 return "Subscribe(" + subscribedPattern + ")";
             case USER_ASSIGNED:
                 return "Assign(" + assignedPartitions() + " , id=" + assignmentId + ")";
+            case AUTO_TOPICS_SHARE:
+                return "Subscribe to Share Group(" + String.join(",", subscription) + ")";
             default:
                 throw new IllegalStateException("Unrecognized subscription type: " + subscriptionType);
         }
@@ -172,6 +174,12 @@ public class SubscriptionState {
         registerRebalanceListener(listener);
         setSubscriptionType(SubscriptionType.AUTO_PATTERN);
         this.subscribedPattern = pattern;
+    }
+
+    public synchronized boolean subscribeToShareGroup(Set<String> topics) {
+        registerRebalanceListener(Optional.empty());
+        setSubscriptionType(SubscriptionType.AUTO_TOPICS_SHARE);
+        return changeSubscription(topics);
     }
 
     public synchronized boolean subscribeFromPattern(Set<String> topics) {
@@ -426,7 +434,8 @@ public class SubscriptionState {
         List<TopicPartition> result = new ArrayList<>();
         assignment.forEach((topicPartition, topicPartitionState) -> {
             // Cheap check is first to avoid evaluating the predicate if possible
-            if (topicPartitionState.isFetchable() && isAvailable.test(topicPartition)) {
+            if ((subscriptionType.equals(SubscriptionType.AUTO_TOPICS_SHARE) || topicPartitionState.isFetchable())
+                    && isAvailable.test(topicPartition)) {
                 result.add(topicPartition);
             }
         });
@@ -434,7 +443,8 @@ public class SubscriptionState {
     }
 
     public synchronized boolean hasAutoAssignedPartitions() {
-        return this.subscriptionType == SubscriptionType.AUTO_TOPICS || this.subscriptionType == SubscriptionType.AUTO_PATTERN;
+        return this.subscriptionType == SubscriptionType.AUTO_TOPICS || this.subscriptionType == SubscriptionType.AUTO_PATTERN
+                || this.subscriptionType == SubscriptionType.AUTO_TOPICS_SHARE;
     }
 
     public synchronized void position(TopicPartition tp, FetchPosition position) {
@@ -1153,7 +1163,6 @@ public class SubscriptionState {
 
     /**
      * Represents the position of a partition subscription.
-     *
      * This includes the offset and epoch from the last record in
      * the batch from a FetchResponse. It also includes the leader epoch at the time the batch was consumed.
      */

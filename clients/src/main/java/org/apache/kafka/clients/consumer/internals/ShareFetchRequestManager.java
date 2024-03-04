@@ -177,15 +177,10 @@ public class ShareFetchRequestManager implements RequestManager {
         Map<String, Uuid> topicIds = metadata.topicIds();
 
         for (TopicPartition partition : fetchablePartitions()) {
-            SubscriptionState.FetchPosition position = subscriptions.position(partition);
-
-            if (position == null)
-                throw new IllegalStateException("Missing position for fetchable partition " + partition);
-
-            Optional<Node> leaderOpt = position.currentLeader.leader;
+            Optional<Node> leaderOpt = metadata.currentLeader(partition).leader;
 
             if (!leaderOpt.isPresent()) {
-                log.debug("Requesting metadata update for partition {} since the position {} is missing the current leader node", partition, position);
+                log.debug("Requesting metadata update for partition {} since current leader node is missing", partition);
                 metadata.requestUpdate(false);
                 continue;
             }
@@ -202,8 +197,8 @@ public class ShareFetchRequestManager implements RequestManager {
                 Uuid topicId = topicIds.getOrDefault(partition.topic(), Uuid.ZERO_UUID);
                 builder.add(new TopicIdPartition(topicId, partition));
 
-                log.debug("Added {} fetch request for partition {} at position {} to node {}", fetchConfig.isolationLevel,
-                        partition, position, node);
+                log.debug("Added {} fetch request for partition {} to node {}", fetchConfig.isolationLevel,
+                        partition, node);
             }
         }
 
