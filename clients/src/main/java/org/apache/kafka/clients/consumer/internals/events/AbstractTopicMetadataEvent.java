@@ -16,24 +16,26 @@
  */
 package org.apache.kafka.clients.consumer.internals.events;
 
-import org.apache.kafka.clients.consumer.OffsetAndMetadata;
-import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.PartitionInfo;
+
+import java.util.List;
 import java.util.Map;
 
-/**
- * Event to commit offsets without waiting for a response, so the request won't be retried.
- */
-public class AsyncCommitApplicationEvent extends CommitApplicationEvent {
+public abstract class AbstractTopicMetadataEvent extends CompletableApplicationEvent<Map<String, List<PartitionInfo>>> {
 
-    public AsyncCommitApplicationEvent(final Map<TopicPartition, OffsetAndMetadata> offsets) {
-        super(offsets, Type.COMMIT_ASYNC);
+    private final long timeoutMs;
+
+    protected AbstractTopicMetadataEvent(final Type type, final long timeoutMs) {
+        super(type);
+        this.timeoutMs = timeoutMs;
+    }
+
+    public long timeoutMs() {
+        return timeoutMs;
     }
 
     @Override
-    public String toString() {
-        return "AsyncCommitApplicationEvent{" +
-            toStringBase() +
-            ", offsets=" + offsets() +
-            '}';
+    public String toStringBase() {
+        return super.toStringBase() + ", timeoutMs=" + timeoutMs;
     }
 }

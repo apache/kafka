@@ -16,30 +16,34 @@
  */
 package org.apache.kafka.clients.consumer.internals.events;
 
-import java.util.concurrent.CompletableFuture;
+import org.apache.kafka.clients.consumer.OffsetAndMetadata;
+import org.apache.kafka.common.TopicPartition;
+
+import java.util.Map;
 
 /**
- * Background event with a result in the form of a future, that can be retrieved within a
- * timeout based on completion.
- *
- * @param <T>
+ * Event to commit offsets waiting for a response and retrying on expected retriable errors until
+ * the timer expires.
  */
-public abstract class CompletableBackgroundEvent<T> extends BackgroundEvent implements CompletableEvent<T> {
+public class SyncCommitEvent extends CommitEvent {
 
-    private final CompletableFuture<T> future;
+    /**
+     * Time to wait for a response, retrying on retriable errors.
+     */
+    private final long retryTimeoutMs;
 
-    protected CompletableBackgroundEvent(final Type type) {
-        super(type);
-        this.future = new CompletableFuture<>();
+    public SyncCommitEvent(final Map<TopicPartition, OffsetAndMetadata> offsets,
+                           final long retryTimeoutMs) {
+        super(Type.COMMIT_SYNC, offsets);
+        this.retryTimeoutMs = retryTimeoutMs;
+    }
+
+    public Long retryTimeoutMs() {
+        return retryTimeoutMs;
     }
 
     @Override
-    public CompletableFuture<T> future() {
-        return future;
-    }
-
-    @Override
-    protected String toStringBase() {
-        return super.toStringBase() + ", future=" + future;
+    public String toStringBase() {
+        return super.toStringBase() + ", offsets=" + offsets() + ", retryTimeoutMs=" + retryTimeoutMs;
     }
 }

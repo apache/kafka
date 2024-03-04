@@ -16,15 +16,9 @@
  */
 package org.apache.kafka.clients.consumer.internals.events;
 
-public class LeaveOnCloseApplicationEvent extends CompletableApplicationEvent<Void> {
-    public LeaveOnCloseApplicationEvent() {
-        super(Type.LEAVE_ON_CLOSE);
-    }
+public class CommitOnCloseEvent extends ApplicationEvent {
 
-    @Override
-    public String toString() {
-        return "LeaveOnCloseApplicationEvent{" +
-            toStringBase() +
-            '}';
+    public CommitOnCloseEvent() {
+        super(Type.COMMIT_ON_CLOSE);
     }
 }

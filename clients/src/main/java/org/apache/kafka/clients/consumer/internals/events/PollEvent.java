@@ -16,11 +16,11 @@
  */
 package org.apache.kafka.clients.consumer.internals.events;
 
-public class PollApplicationEvent extends ApplicationEvent {
+public class PollEvent extends ApplicationEvent {
 
     private final long pollTimeMs;
 
-    public PollApplicationEvent(final long pollTimeMs) {
+    public PollEvent(final long pollTimeMs) {
         super(Type.POLL);
         this.pollTimeMs = pollTimeMs;
     }
@@ -30,28 +30,7 @@ public class PollApplicationEvent extends ApplicationEvent {
     }
 
     @Override
-    public boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
-        if (!super.equals(o)) return false;
-
-        PollApplicationEvent that = (PollApplicationEvent) o;
-
-        return pollTimeMs == that.pollTimeMs;
-    }
-
-    @Override
-    public int hashCode() {
-        int result = super.hashCode();
-        result = 31 * result + (int) (pollTimeMs ^ (pollTimeMs >>> 32));
-        return result;
-    }
-
-    @Override
-    public String toString() {
-        return "PollApplicationEvent{" +
-                toStringBase() +
-                ", pollTimeMs=" + pollTimeMs +
-                '}';
+    public String toStringBase() {
+        return super.toStringBase() + ", pollTimeMs=" + pollTimeMs;
     }
 }
