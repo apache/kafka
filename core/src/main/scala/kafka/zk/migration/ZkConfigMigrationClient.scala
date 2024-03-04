@@ -112,7 +112,7 @@ class ZkConfigMigrationClient(
       // Taken from ZkAdminManager
       val components = name.split("/")
       if (components.size != 3 || components(1) != "clients")
-        throw new IllegalArgumentException(s"Unexpected config path: ${name}")
+        throw new IllegalArgumentException(s"Unexpected config path: $name")
       val entity = List(
         buildEntityData(ClientQuotaEntity.USER, components(0)),
         buildEntityData(ClientQuotaEntity.CLIENT_ID, components(2))
@@ -278,7 +278,7 @@ class ZkConfigMigrationClient(
     quotas.forEach { case (key, value) =>
       val configKey = configKeys.get(key)
       if (configKey == null) {
-        throw new MigrationClientException(s"Invalid configuration key ${key}")
+        throw new MigrationClientException(s"Invalid configuration key $key")
       } else {
         configKey.`type` match {
           case ConfigDef.Type.DOUBLE =>
@@ -290,7 +290,7 @@ class ZkConfigMigrationClient(
             else
               (value + epsilon).toInt
             if ((intValue.toDouble - value).abs > epsilon)
-              throw new InvalidRequestException(s"Configuration ${key} must be a ${configKey.`type`} value")
+              throw new InvalidRequestException(s"Configuration $key must be a ${configKey.`type`} value")
             props.setProperty(key, intValue.toString)
           case _ =>
             throw new MigrationClientException(s"Unexpected config type ${configKey.`type`}")

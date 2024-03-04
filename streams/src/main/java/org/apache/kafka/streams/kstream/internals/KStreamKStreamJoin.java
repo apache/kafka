@@ -120,15 +120,30 @@ class KStreamKStreamJoin<K, V1, V2, VOut> implements ProcessorSupplier<K, V1, K,
                     )
                 );
             }
+            System.out.println("### internalProcessorContext.currentSystemTimeMs: " + internalProcessorContext.currentSystemTimeMs());
+            System.out.println("### sharedTimeTracker.nextTimeToEmit: " + sharedTimeTracker.nextTimeToEmit);
+            
         }
 
         @SuppressWarnings("unchecked")
         @Override
         public void process(final Record<K, V1> record) {
+            System.out.println("### process: " + record);
+            System.out.println("### internalProcessorContext.currentSystemTimeMs: " + internalProcessorContext.currentSystemTimeMs());
             final long inputRecordTimestamp = record.timestamp();
             final long timeFrom = Math.max(0L, inputRecordTimestamp - joinBeforeMs);
             final long timeTo = Math.max(0L, inputRecordTimestamp + joinAfterMs);
             sharedTimeTracker.advanceStreamTime(inputRecordTimestamp);
+            System.out.println("### internalProcessorContext.currentSystemTimeMs: " + internalProcessorContext.currentSystemTimeMs());
+            System.out.println("### inputRecordTimestamp: " + inputRecordTimestamp);
+            System.out.println("### timeFrom: " + timeFrom);
+            System.out.println("### timeTo: " + timeTo);
+            System.out.println("### sharedTimeTracker: " + sharedTimeTracker.streamTime);
+            System.out.println("### outer: " + outer);
+            System.out.println("### record.key(): " + record.key());
+            System.out.println("### record.value(): " + record.value());
+            System.out.println("### isLeftSide: " + isLeftSide);
+            
 
             if (outer && record.key() == null && record.value() != null) {
                 context().forward(record.withValue(joiner.apply(record.key(), record.value(), null)));
@@ -137,11 +152,14 @@ class KStreamKStreamJoin<K, V1, V2, VOut> implements ProcessorSupplier<K, V1, K,
                 return;
             }
 
+            System.out.println("### trying to emit: " + sharedTimeTracker.streamTime + " == ?" + inputRecordTimestamp);
+
             // Emit all non-joined records which window has closed
             if (inputRecordTimestamp == sharedTimeTracker.streamTime) {
                 outerJoinStore.ifPresent(store -> emitNonJoinedOuterRecords(store, record));
             }
 
+            System.out.println("### otherWindowStore: " + otherWindowStore);
             boolean needOuterJoin = outer;
             try (final WindowStoreIterator<V2> iter = otherWindowStore.fetch(record.key(), timeFrom, timeTo)) {
                 while (iter.hasNext()) {
@@ -158,11 +176,13 @@ class KStreamKStreamJoin<K, V1, V2, VOut> implements ProcessorSupplier<K, V1, K,
                         store.putIfAbsent(TimestampedKeyAndJoinSide.make(!isLeftSide, record.key(), otherRecordTimestamp), null);
                     });
 
+                    System.out.println("### context().forward ");
                     context().forward(
                         record.withValue(joiner.apply(record.key(), record.value(), otherRecord.value))
                                .withTimestamp(Math.max(inputRecordTimestamp, otherRecordTimestamp)));
                 }
 
+                System.out.println("### needOuterJoin " + needOuterJoin);
                 if (needOuterJoin) {
                     // The maxStreamTime contains the max time observed in both sides of the join.
                     // Having access to the time observed in the other join side fixes the following
@@ -181,6 +201,7 @@ class KStreamKStreamJoin<K, V1, V2, VOut> implements ProcessorSupplier<K, V1, K,
                     //
                     // This condition below allows us to process the out-of-order records without the need
                     // to hold it in the temporary outer store
+                    System.out.println("### !outerJoinStore.isPresent() " + !outerJoinStore.isPresent());
                     if (!outerJoinStore.isPresent() || timeTo < sharedTimeTracker.streamTime) {
                         context().forward(record.withValue(joiner.apply(record.key(), record.value(), null)));
                     } else {
@@ -198,28 +219,42 @@ class KStreamKStreamJoin<K, V1, V2, VOut> implements ProcessorSupplier<K, V1, K,
             final KeyValueStore<TimestampedKeyAndJoinSide<K>, LeftOrRightValue<V1, V2>> store,
             final Record<K, V1> record) {
 
+            System.out.println("### emitNonJoinedOuterRecords " + store + " " + record);
+            System.out.println("### internalProcessorContext.currentSystemTimeMs: " + internalProcessorContext.currentSystemTimeMs());
+
             // calling `store.all()` creates an iterator what is an expensive operation on RocksDB;
             // to reduce runtime cost, we try to avoid paying those cost
 
             // only try to emit left/outer join results if there _might_ be any result records
             if (sharedTimeTracker.minTime + joinAfterMs + joinGraceMs >= sharedTimeTracker.streamTime) {
+                System.out.println("### sharedTimeTracker.minTime " + sharedTimeTracker.minTime);
+                System.out.println("### joinAfterMs " + joinAfterMs);
+                System.out.println("### joinGraceMs " + joinGraceMs);
+                System.out.println("### sharedTimeTracker.minTime " + sharedTimeTracker.minTime);
+                System.out.println("### sharedTimeTracker.minTime + joinAfterMs + joinGraceMs >= sharedTimeTracker.streamTime " + (sharedTimeTracker.minTime + joinAfterMs + joinGraceMs) + " >= " +  sharedTimeTracker.streamTime);
                 return;
             }
             // throttle the emit frequency to a (configurable) interval;
             // we use processing time to decouple from data properties,
             // as throttling is a non-functional performance optimization
             if (internalProcessorContext.currentSystemTimeMs() < sharedTimeTracker.nextTimeToEmit) {
+                System.out.println("### internalProcessorContext.currentSystemTimeMs " + internalProcessorContext.currentSystemTimeMs());
+                System.out.println("### sharedTimeTracker.nextTimeToEmit " + sharedTimeTracker.nextTimeToEmit);
                 return;
             }
 
             // Ensure `nextTimeToEmit` is synced with `currentSystemTimeMs`, if we dont set it everytime,
             // they can get out of sync during a clock drift
+            System.out.println("###1 sharedTimeTracker.nextTimeToEmit: " + sharedTimeTracker.nextTimeToEmit);
             sharedTimeTracker.nextTimeToEmit = internalProcessorContext.currentSystemTimeMs();
+            System.out.println("###2 sharedTimeTracker.nextTimeToEmit: " + sharedTimeTracker.nextTimeToEmit);
             sharedTimeTracker.advanceNextTimeToEmit();
+            System.out.println("###3 sharedTimeTracker.advanceNextTimeToEmit: " + sharedTimeTracker.nextTimeToEmit);
 
             // reset to MAX_VALUE in case the store is empty
             sharedTimeTracker.minTime = Long.MAX_VALUE;
 
+            System.out.println("### try ");
             try (final KeyValueIterator<TimestampedKeyAndJoinSide<K>, LeftOrRightValue<V1, V2>> it = store.all()) {
                 TimestampedKeyAndJoinSide<K> prevKey = null;
 
@@ -229,6 +264,7 @@ class KStreamKStreamJoin<K, V1, V2, VOut> implements ProcessorSupplier<K, V1, K,
                     final KeyValue<TimestampedKeyAndJoinSide<K>, LeftOrRightValue<V1, V2>> next = it.next();
                     final TimestampedKeyAndJoinSide<K> timestampedKeyAndJoinSide = next.key;
                     final LeftOrRightValue<V1, V2> value = next.value;
+                    System.out.println("### next key: " + timestampedKeyAndJoinSide + "next.value: " + value);
                     final K key = timestampedKeyAndJoinSide.getKey();
                     final long timestamp = timestampedKeyAndJoinSide.getTimestamp();
                     sharedTimeTracker.minTime = timestamp;

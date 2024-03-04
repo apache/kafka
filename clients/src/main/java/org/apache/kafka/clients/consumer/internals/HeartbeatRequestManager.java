@@ -21,8 +21,7 @@ import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.internals.NetworkClientDelegate.PollResult;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEventProcessor;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEventHandler;
-import org.apache.kafka.clients.consumer.internals.events.ErrorBackgroundEvent;
-import org.apache.kafka.clients.consumer.internals.events.GroupMetadataUpdateEvent;
+import org.apache.kafka.clients.consumer.internals.events.ErrorEvent;
 import org.apache.kafka.clients.consumer.internals.metrics.HeartbeatMetricsManager;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
@@ -110,7 +109,6 @@ public class HeartbeatRequestManager implements RequestManager {
      * sending heartbeat until the next poll.
      */
     private final Timer pollTimer;
-    private GroupMetadataUpdateEvent previousGroupMetadataUpdateEvent = null;
 
     /**
      * Holding the heartbeat sensor to measure heartbeat timing and response latency
@@ -200,13 +198,13 @@ public class HeartbeatRequestManager implements RequestManager {
                 "messages. You can address this either by increasing max.poll.interval.ms or by " +
                 "reducing the maximum size of batches returned in poll() with max.poll.records.");
 
-            // This should trigger a heartbeat with leave group epoch
-            membershipManager.transitionToStale();
-            NetworkClientDelegate.UnsentRequest request = makeHeartbeatRequest(currentTimeMs, true);
+            membershipManager.transitionToSendingLeaveGroup(true);
+            NetworkClientDelegate.UnsentRequest leaveHeartbeat = makeHeartbeatRequest(currentTimeMs, true);
+
             // We can ignore the leave response because we can join before or after receiving the response.
             heartbeatRequestState.reset();
             heartbeatState.reset();
-            return new NetworkClientDelegate.PollResult(heartbeatRequestState.heartbeatIntervalMs, Collections.singletonList(request));
+            return new NetworkClientDelegate.PollResult(heartbeatRequestState.heartbeatIntervalMs, Collections.singletonList(leaveHeartbeat));
         }
 
         boolean heartbeatNow = membershipManager.shouldHeartbeatNow() && !heartbeatRequestState.requestInFlight();
@@ -232,13 +230,22 @@ public class HeartbeatRequestManager implements RequestManager {
      * are sent, so blocking for longer than the heartbeat interval might mean the application thread is not
      * responsive to changes.
      *
+     * Similarly, we may have to unblock the application thread to send a `PollApplicationEvent` to make sure
+     * our poll timer will not expire while we are polling.
+     *
      * <p>In the event that heartbeats are currently being skipped, this still returns the next heartbeat
      * delay rather than {@code Long.MAX_VALUE} so that the application thread remains responsive.
      */
     @Override
     public long maximumTimeToWait(long currentTimeMs) {
-        boolean heartbeatNow = membershipManager.shouldHeartbeatNow() && !heartbeatRequestState.requestInFlight();
-        return heartbeatNow ? 0L : heartbeatRequestState.nextHeartbeatMs(currentTimeMs);
+        pollTimer.update(currentTimeMs);
+        if (
+            pollTimer.isExpired() ||
+                (membershipManager.shouldHeartbeatNow() && !heartbeatRequestState.requestInFlight())
+        ) {
+            return 0L;
+        }
+        return Math.min(pollTimer.remainingMs() / 2, heartbeatRequestState.nextHeartbeatMs(currentTimeMs));
     }
 
     /**
@@ -247,11 +254,12 @@ public class HeartbeatRequestManager implements RequestManager {
      * member to {@link MemberState#JOINING}, so that it rejoins the group.
      */
     public void resetPollTimer(final long pollMs) {
+        if (pollTimer.isExpired()) {
+            logger.debug("Poll timer has been reset after it had expired");
+            membershipManager.maybeRejoinStaleMember();
+        }
         pollTimer.update(pollMs);
         pollTimer.reset(maxPollIntervalMs);
-        if (membershipManager.state() == MemberState.STALE) {
-            membershipManager.transitionToJoining();
-        }
     }
 
     private NetworkClientDelegate.UnsentRequest makeHeartbeatRequest(final long currentTimeMs,
@@ -317,26 +325,10 @@ public class HeartbeatRequestManager implements RequestManager {
             heartbeatRequestState.updateHeartbeatIntervalMs(response.data().heartbeatIntervalMs());
             heartbeatRequestState.onSuccessfulAttempt(currentTimeMs);
             heartbeatRequestState.resetTimer();
-            membershipManager.onHeartbeatResponseReceived(response.data());
-            maybeSendGroupMetadataUpdateEvent();
+            membershipManager.onHeartbeatSuccess(response.data());
             return;
         }
         onErrorResponse(response, currentTimeMs);
-    }
-
-    private void maybeSendGroupMetadataUpdateEvent() {
-        if (previousGroupMetadataUpdateEvent == null ||
-            !previousGroupMetadataUpdateEvent.memberId().equals(membershipManager.memberId()) ||
-            previousGroupMetadataUpdateEvent.memberEpoch() != membershipManager.memberEpoch()) {
-
-            final GroupMetadataUpdateEvent currentGroupMetadataUpdateEvent = new GroupMetadataUpdateEvent(
-                membershipManager.memberEpoch(),
-                previousGroupMetadataUpdateEvent != null && membershipManager.memberId() == null ?
-                    previousGroupMetadataUpdateEvent.memberId() : membershipManager.memberId()
-            );
-            this.backgroundEventHandler.add(currentGroupMetadataUpdateEvent);
-            previousGroupMetadataUpdateEvent = currentGroupMetadataUpdateEvent;
-        }
     }
 
     private void onErrorResponse(final ConsumerGroupHeartbeatResponse response,
@@ -347,6 +339,7 @@ public class HeartbeatRequestManager implements RequestManager {
 
         this.heartbeatState.reset();
         this.heartbeatRequestState.onFailedAttempt(currentTimeMs);
+        membershipManager.onHeartbeatFailure();
 
         switch (error) {
             case NOT_COORDINATOR:
@@ -435,7 +428,7 @@ public class HeartbeatRequestManager implements RequestManager {
     }
 
     private void handleFatalFailure(Throwable error) {
-        backgroundEventHandler.add(new ErrorBackgroundEvent(error));
+        backgroundEventHandler.add(new ErrorEvent(error));
         membershipManager.transitionToFatal();
     }
 
@@ -537,8 +530,9 @@ public class HeartbeatRequestManager implements RequestManager {
             data.setMemberEpoch(membershipManager.memberEpoch());
 
             // InstanceId - only sent if has changed since the last heartbeat
+            // Always send when leaving the group as a static member
             membershipManager.groupInstanceId().ifPresent(groupInstanceId -> {
-                if (!groupInstanceId.equals(sentFields.instanceId)) {
+                if (!groupInstanceId.equals(sentFields.instanceId) || membershipManager.memberEpoch() == ConsumerGroupHeartbeatRequest.LEAVE_GROUP_STATIC_MEMBER_EPOCH) {
                     data.setInstanceId(groupInstanceId);
                     sentFields.instanceId = groupInstanceId;
                 }
