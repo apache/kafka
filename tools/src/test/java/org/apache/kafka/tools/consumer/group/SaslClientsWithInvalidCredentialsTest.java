@@ -17,6 +17,7 @@
 package org.apache.kafka.tools.consumer.group;
 
 import kafka.admin.ConsumerGroupCommand;
+import kafka.api.AbstractSaslTest;
 import kafka.api.Both$;
 import kafka.utils.JaasTestUtils;
 import kafka.utils.TestUtils;
@@ -48,7 +49,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-public class SaslClientsWithInvalidCredentialsTest extends kafka.api.AbstractSaslClientsWithInvalidCredentialsTest {
+public class SaslClientsWithInvalidCredentialsTest extends AbstractSaslTest {
     private static final String TOPIC = "topic";
     public static final int NUM_PARTITIONS = 1;
     public static final int BROKER_COUNT = 1;

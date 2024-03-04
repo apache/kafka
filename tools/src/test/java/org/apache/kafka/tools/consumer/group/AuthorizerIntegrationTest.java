@@ -21,24 +21,23 @@ import kafka.security.authorizer.AclEntry;
 import org.apache.kafka.common.acl.AccessControlEntry;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
-import scala.collection.JavaConverters;
 import scala.collection.immutable.Map$;
 
-import java.util.HashSet;
+import java.util.Collections;
 import java.util.Properties;
 
-import static java.util.Arrays.asList;
 import static org.apache.kafka.common.acl.AclOperation.DESCRIBE;
 import static org.apache.kafka.common.acl.AclPermissionType.ALLOW;
 import static org.apache.kafka.tools.ToolsTestUtils.TEST_WITH_PARAMETERIZED_QUORUM_NAME;
+import static org.apache.kafka.tools.consumer.group.ConsumerGroupCommandTest.set;
 
 public class AuthorizerIntegrationTest extends kafka.api.AbstractAuthorizerIntegrationTest {
     @ParameterizedTest(name = TEST_WITH_PARAMETERIZED_QUORUM_NAME)
     @ValueSource(strings = {"zk", "kraft"})
-    public void testDescribeGroupCliWithGroupDescribe(String quorum) throws Exception {
+    public void testDescribeGroupCliWithGroupDescribe(String quorum) {
         createTopicWithBrokerPrincipal(topic());
-        addAndVerifyAcls(set(new AccessControlEntry(ClientPrincipal().toString(), AclEntry.WildcardHost(), DESCRIBE, ALLOW)), groupResource());
-        addAndVerifyAcls(set(new AccessControlEntry(ClientPrincipal().toString(), AclEntry.WildcardHost(), DESCRIBE, ALLOW)), topicResource());
+        addAndVerifyAcls(set(Collections.singleton(new AccessControlEntry(ClientPrincipal().toString(), AclEntry.WildcardHost(), DESCRIBE, ALLOW))), groupResource());
+        addAndVerifyAcls(set(Collections.singleton(new AccessControlEntry(ClientPrincipal().toString(), AclEntry.WildcardHost(), DESCRIBE, ALLOW))), topicResource());
 
         String[] cgcArgs = new String[]{"--bootstrap-server", bootstrapServers(listenerName()), "--describe", "--group", group()};
         ConsumerGroupCommand.ConsumerGroupCommandOptions opts = new ConsumerGroupCommand.ConsumerGroupCommandOptions(cgcArgs);
@@ -58,10 +57,5 @@ public class AuthorizerIntegrationTest extends kafka.api.AbstractAuthorizerInteg
             interBrokerListenerName(),
             new Properties()
         );
-    }
-
-    @SuppressWarnings({"deprecation", "unchecked"})
-    private static <T> scala.collection.immutable.Set<T> set(final T...set) {
-        return JavaConverters.asScalaSet(new HashSet<>(asList(set))).toSet();
     }
 }
