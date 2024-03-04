@@ -52,6 +52,9 @@ object AbstractAuthorizerIntegrationTest {
   }
 }
 
+/**
+ * Abstract authorizer test to be used both in scala and java test of authorizer.
+ */
 class AbstractAuthorizerIntegrationTest extends BaseRequestTest {
   import AbstractAuthorizerIntegrationTest._
 
