@@ -52,7 +52,6 @@ import org.apache.kafka.clients.consumer.internals.events.ConsumerRebalanceListe
 import org.apache.kafka.clients.consumer.internals.events.ErrorEvent;
 import org.apache.kafka.clients.consumer.internals.events.EventProcessor;
 import org.apache.kafka.clients.consumer.internals.events.FetchCommittedOffsetsEvent;
-import org.apache.kafka.clients.consumer.internals.events.GroupMetadataUpdateEvent;
 import org.apache.kafka.clients.consumer.internals.events.LeaveOnCloseEvent;
 import org.apache.kafka.clients.consumer.internals.events.ListOffsetsEvent;
 import org.apache.kafka.clients.consumer.internals.events.NewTopicsMetadataUpdateRequestEvent;
@@ -213,10 +212,6 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                     process((ErrorEvent) event);
                     break;
 
-                case GROUP_METADATA_UPDATE:
-                    process((GroupMetadataUpdateEvent) event);
-                    break;
-
                 case CONSUMER_REBALANCE_LISTENER_CALLBACK_NEEDED:
                     process((ConsumerRebalanceListenerCallbackNeededEvent) event);
                     break;
@@ -229,18 +224,6 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
 
         private void process(final ErrorEvent event) {
             throw event.error();
-        }
-
-        private void process(final GroupMetadataUpdateEvent event) {
-            if (AsyncKafkaConsumer.this.groupMetadata.isPresent()) {
-                final ConsumerGroupMetadata currentGroupMetadata = AsyncKafkaConsumer.this.groupMetadata.get();
-                AsyncKafkaConsumer.this.groupMetadata = Optional.of(new ConsumerGroupMetadata(
-                    currentGroupMetadata.groupId(),
-                    event.memberEpoch(),
-                    event.memberId(),
-                    currentGroupMetadata.groupInstanceId()
-                ));
-            }
         }
 
         private void process(final ConsumerRebalanceListenerCallbackNeededEvent event) {
@@ -256,7 +239,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
 
     private final ApplicationEventHandler applicationEventHandler;
     private final Time time;
-    private Optional<ConsumerGroupMetadata> groupMetadata = Optional.empty();
+    private final AtomicReference<Optional<ConsumerGroupMetadata>> groupMetadata = new AtomicReference<>(Optional.empty());
     private final KafkaConsumerMetrics kafkaConsumerMetrics;
     private Logger log;
     private final String clientId;
@@ -370,6 +353,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                     fetchMetricsManager,
                     clientTelemetryReporter.map(ClientTelemetryReporter::telemetrySender).orElse(null));
             this.offsetCommitCallbackInvoker = new OffsetCommitCallbackInvoker(interceptors);
+            this.groupMetadata.set(initializeGroupMetadata(config, groupRebalanceConfig));
             final Supplier<RequestManagers> requestManagersSupplier = RequestManagers.supplier(time,
                     logContext,
                     backgroundEventHandler,
@@ -383,7 +367,9 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                     networkClientDelegateSupplier,
                     clientTelemetryReporter,
                     metrics,
-                    offsetCommitCallbackInvoker);
+                    offsetCommitCallbackInvoker,
+                    this::updateGroupMetadata
+            );
             final Supplier<ApplicationEventProcessor> applicationEventProcessorSupplier = ApplicationEventProcessor.supplier(logContext,
                     metadata,
                     applicationEventQueue,
@@ -413,8 +399,6 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                     config.originals(Collections.singletonMap(ConsumerConfig.CLIENT_ID_CONFIG, clientId))
             );
 
-            this.groupMetadata = initializeGroupMetadata(config, groupRebalanceConfig);
-
             // The FetchCollector is only used on the application thread.
             this.fetchCollector = fetchCollectorFactory.build(logContext,
                     metadata,
@@ -426,7 +410,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
 
             this.kafkaConsumerMetrics = new KafkaConsumerMetrics(metrics, CONSUMER_METRIC_GROUP_PREFIX);
 
-            if (groupMetadata.isPresent() &&
+            if (groupMetadata.get().isPresent() &&
                 GroupProtocol.of(config.getString(ConsumerConfig.GROUP_PROTOCOL_CONFIG)) == GroupProtocol.CONSUMER) {
                 config.ignore(ConsumerConfig.GROUP_REMOTE_ASSIGNOR_CONFIG); // Used by background thread
             }
@@ -478,7 +462,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                 rebalanceListenerInvoker
         );
         this.metrics = metrics;
-        this.groupMetadata = initializeGroupMetadata(groupId, Optional.empty());
+        this.groupMetadata.set(initializeGroupMetadata(groupId, Optional.empty()));
         this.metadata = metadata;
         this.retryBackoffMs = retryBackoffMs;
         this.defaultApiTimeoutMs = defaultApiTimeoutMs;
@@ -532,7 +516,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             GroupRebalanceConfig.ProtocolType.CONSUMER
         );
 
-        this.groupMetadata = initializeGroupMetadata(config, groupRebalanceConfig);
+        this.groupMetadata.set(initializeGroupMetadata(config, groupRebalanceConfig));
 
         BlockingQueue<ApplicationEvent> applicationEventQueue = new LinkedBlockingQueue<>();
         BlockingQueue<BackgroundEvent> backgroundEventQueue = new LinkedBlockingQueue<>();
@@ -568,7 +552,8 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             networkClientDelegateSupplier,
             clientTelemetryReporter,
             metrics,
-            offsetCommitCallbackInvoker
+            offsetCommitCallbackInvoker,
+            this::updateGroupMetadata
         );
         Supplier<ApplicationEventProcessor> applicationEventProcessorSupplier = ApplicationEventProcessor.supplier(
                 logContext,
@@ -651,15 +636,33 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                 throw new InvalidGroupIdException("The configured " + ConsumerConfig.GROUP_ID_CONFIG
                     + " should not be an empty string or whitespace.");
             } else {
-                return Optional.of(new ConsumerGroupMetadata(
-                    groupId,
-                    JoinGroupRequest.UNKNOWN_GENERATION_ID,
-                    JoinGroupRequest.UNKNOWN_MEMBER_ID,
-                    groupInstanceId
-                ));
+                return Optional.of(initializeConsumerGroupMetadata(groupId, groupInstanceId));
             }
         }
         return Optional.empty();
+    }
+
+    private ConsumerGroupMetadata initializeConsumerGroupMetadata(final String groupId,
+                                                                  final Optional<String> groupInstanceId) {
+        return new ConsumerGroupMetadata(
+            groupId,
+            JoinGroupRequest.UNKNOWN_GENERATION_ID,
+            JoinGroupRequest.UNKNOWN_MEMBER_ID,
+            groupInstanceId
+        );
+    }
+
+    private void updateGroupMetadata(final Optional<Integer> memberEpoch, final Optional<String> memberId) {
+        groupMetadata.updateAndGet(
+            oldGroupMetadataOptional -> oldGroupMetadataOptional.map(
+                oldGroupMetadata -> new ConsumerGroupMetadata(
+                    oldGroupMetadata.groupId(),
+                    memberEpoch.orElse(oldGroupMetadata.generationId()),
+                    memberId.orElse(oldGroupMetadata.memberId()),
+                    oldGroupMetadata.groupInstanceId()
+                )
+            )
+        );
     }
 
     /**
@@ -713,18 +716,14 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                 wakeupTrigger.maybeTriggerWakeup();
 
                 updateAssignmentMetadataIfNeeded(timer);
-                if (isGenerationKnownOrPartitionsUserAssigned()) {
-                    final Fetch<K, V> fetch = pollForFetches(timer);
-                    if (!fetch.isEmpty()) {
-                        if (fetch.records().isEmpty()) {
-                            log.trace("Returning empty records from `poll()` "
-                                + "since the consumer's position has advanced for at least one topic partition");
-                        }
-
-                        return interceptors.onConsume(new ConsumerRecords<>(fetch.records()));
+                final Fetch<K, V> fetch = pollForFetches(timer);
+                if (!fetch.isEmpty()) {
+                    if (fetch.records().isEmpty()) {
+                        log.trace("Returning empty records from `poll()` "
+                            + "since the consumer's position has advanced for at least one topic partition");
                     }
-                } else {
-                    timer.update();
+
+                    return interceptors.onConsume(new ConsumerRecords<>(fetch.records()));
                 }
                 // We will wait for retryBackoffMs
             } while (timer.notExpired());
@@ -734,13 +733,6 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             kafkaConsumerMetrics.recordPollEnd(timer.currentTimeMs());
             release();
         }
-    }
-
-    private boolean isGenerationKnownOrPartitionsUserAssigned() {
-        if (subscriptions.hasAutoAssignedPartitions()) {
-            return groupMetadata.filter(g -> g.generationId() != JoinGroupRequest.UNKNOWN_GENERATION_ID).isPresent();
-        }
-        return true;
     }
 
     /**
@@ -960,7 +952,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     }
 
     private void maybeThrowInvalidGroupIdException() {
-        if (!groupMetadata.isPresent()) {
+        if (!groupMetadata.get().isPresent()) {
             throw new InvalidGroupIdException("To use the group management or offset commit APIs, you must " +
                 "provide a valid " + ConsumerConfig.GROUP_ID_CONFIG + " in the consumer configuration.");
         }
@@ -1186,7 +1178,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         acquireAndEnsureOpen();
         try {
             maybeThrowInvalidGroupIdException();
-            return groupMetadata.get();
+            return groupMetadata.get().get();
         } finally {
             release();
         }
@@ -1266,7 +1258,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
      * 3. if partition revocation completes successfully, send leave group
      */
     void prepareShutdown(final Timer timer, final AtomicReference<Throwable> firstException) {
-        if (!groupMetadata.isPresent())
+        if (!groupMetadata.get().isPresent())
             return;
         maybeAutoCommitSync(autoCommitEnabled, timer);
         applicationEventHandler.add(new CommitOnCloseEvent());
@@ -1463,7 +1455,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         acquireAndEnsureOpen();
         try {
             fetchBuffer.retainAll(Collections.emptySet());
-            if (groupMetadata.isPresent()) {
+            if (groupMetadata.get().isPresent()) {
                 UnsubscribeEvent unsubscribeEvent = new UnsubscribeEvent();
                 applicationEventHandler.add(unsubscribeEvent);
                 log.info("Unsubscribing all topics or patterns and assigned partitions");
@@ -1475,12 +1467,22 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                 } catch (TimeoutException e) {
                     log.error("Failed while waiting for the unsubscribe event to complete");
                 }
-                groupMetadata = initializeGroupMetadata(groupMetadata.get().groupId(), Optional.empty());
+                resetGroupMetadata();
             }
             subscriptions.unsubscribe();
         } finally {
             release();
         }
+    }
+
+    private void resetGroupMetadata() {
+        groupMetadata.updateAndGet(
+            oldGroupMetadataOptional -> oldGroupMetadataOptional
+                .map(oldGroupMetadata -> initializeConsumerGroupMetadata(
+                    oldGroupMetadata.groupId(),
+                    oldGroupMetadata.groupInstanceId()
+                ))
+        );
     }
 
     @Override
@@ -1604,7 +1606,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
      * according to config {@link CommonClientConfigs#GROUP_ID_CONFIG}
      */
     private boolean isCommittedOffsetsManagementEnabled() {
-        return groupMetadata.isPresent();
+        return groupMetadata.get().isPresent();
     }
 
     /**
@@ -1905,12 +1907,12 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     private void maybeThrowFencedInstanceException() {
         if (offsetCommitCallbackInvoker.hasFencedException()) {
             String groupInstanceId = "unknown";
-            if (!groupMetadata.isPresent()) {
+            if (!groupMetadata.get().isPresent()) {
                 log.error("No group metadata found although a group ID was provided. This is a bug!");
-            } else if (!groupMetadata.get().groupInstanceId().isPresent()) {
+            } else if (!groupMetadata.get().get().groupInstanceId().isPresent()) {
                 log.error("No group instance ID found although the consumer is fenced. This is a bug!");
             } else {
-                groupInstanceId = groupMetadata.get().groupInstanceId().get();
+                groupInstanceId = groupMetadata.get().get().groupInstanceId().get();
             }
             throw new FencedInstanceIdException("Get fenced exception for group.instance.id " + groupInstanceId);
         }
