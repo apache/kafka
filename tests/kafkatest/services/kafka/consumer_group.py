@@ -24,14 +24,3 @@ all_group_protocols = [classic_group_protocol, consumer_group_protocol]
 range_remote_assignor = 'range'
 uniform_remote_assignor = 'uniform'
 all_remote_assignors = [range_remote_assignor, uniform_remote_assignor]
-
-
-def maybe_set_group_protocol(group_protocol, config=None):
-    """Maybe include the KIP-848 group.protocol configuration if it's not None."""
-    if config is None:
-        config = {}
-
-    if group_protocol is not None:
-        config["group.protocol"] = group_protocol
-
-    return config
