@@ -17,6 +17,7 @@
 package org.apache.kafka.tools.consumer.group;
 
 import kafka.admin.ConsumerGroupCommand;
+import kafka.api.AbstractAuthorizerIntegrationTest;
 import kafka.security.authorizer.AclEntry;
 import org.apache.kafka.common.acl.AccessControlEntry;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -31,7 +32,7 @@ import static org.apache.kafka.common.acl.AclPermissionType.ALLOW;
 import static org.apache.kafka.tools.ToolsTestUtils.TEST_WITH_PARAMETERIZED_QUORUM_NAME;
 import static org.apache.kafka.tools.consumer.group.ConsumerGroupCommandTest.set;
 
-public class AuthorizerIntegrationTest extends kafka.api.AbstractAuthorizerIntegrationTest {
+public class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
     @ParameterizedTest(name = TEST_WITH_PARAMETERIZED_QUORUM_NAME)
     @ValueSource(strings = {"zk", "kraft"})
     public void testDescribeGroupCliWithGroupDescribe(String quorum) {
