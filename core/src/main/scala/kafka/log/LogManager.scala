@@ -1178,28 +1178,32 @@ class LogManager(logDirs: Seq[File],
     }
   }
 
-  def maybeRecoverAbandonedFutureLog(topicPartition: TopicPartition, partitionAssignedDirectoryId: Option[Uuid]): Boolean = {
-    logCreationOrDeletionLock synchronized {
-      for {
-        sourceLog <- getLog(topicPartition, isFuture = true)
-        sourceLogDir <- directoryId(sourceLog.parentDir)
-        assignedDirId <- partitionAssignedDirectoryId
-        if sourceLogDir == assignedDirId
-      } {
-        info(s"Attempting to rename abandoned future replica $sourceLog for $topicPartition")
+  def recoverAbandonedFutureLogs(brokerId: Int, newTopicsImage: TopicsImage): Unit = {
+    val abandonedFutureLogs = findAbandonedFutureLogs(brokerId, newTopicsImage)
+    abandonedFutureLogs.foreach { log =>
+      val tp = log.topicPartition
 
-        sourceLog.renameDir(UnifiedLog.logDirName(topicPartition), shouldReinitialize = true)
-        sourceLog.removeLogMetrics()
+      log.renameDir(UnifiedLog.logDirName(tp), shouldReinitialize = true)
+      log.removeLogMetrics()
+      futureLogs.remove(tp)
 
-        futureLogs.remove(topicPartition)
-        currentLogs.put(topicPartition, sourceLog)
+      currentLogs.put(tp, log)
+      log.newMetrics()
 
-        sourceLog.newMetrics()
+      info(s"Successfully renamed abandoned future log for $tp")
+    }
+  }
 
-        info(s"The abandoned future replica is successfully renamed for $topicPartition")
-        return true
+  private def findAbandonedFutureLogs(brokerId: Int, newTopicsImage: TopicsImage): Iterable[UnifiedLog] = {
+    futureLogs.values.flatMap { log =>
+      val topicId = log.topicId.getOrElse {
+        throw new RuntimeException(s"The log dir $log does not have a topic ID, " +
+          "which is not allowed when running in KRaft mode.")
       }
-      false
+      val partitionId = log.topicPartition.partition()
+      Option(newTopicsImage.getPartition(topicId, partitionId))
+        .filter(pr => directoryId(log.parentDir).contains(pr.directory(brokerId)))
+        .map(_ => log)
     }
   }
 

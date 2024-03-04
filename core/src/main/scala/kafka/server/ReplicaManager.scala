@@ -2642,10 +2642,7 @@ class ReplicaManager(val config: KafkaConfig,
 
   private[kafka] def getOrCreatePartition(tp: TopicPartition,
                                           delta: TopicsDelta,
-                                          topicId: Uuid,
-                                          isLocalFollower: Boolean = false,
-                                          partitionAssignedDirectoryId: Option[Uuid] = None,
-                                         ): Option[(Partition, Boolean)] = {
+                                          topicId: Uuid): Option[(Partition, Boolean)] = {
     getPartition(tp) match {
       case HostedPartition.Offline(offlinePartition) =>
         if (offlinePartition.flatMap(p => p.topicId).contains(topicId)) {
@@ -2672,11 +2669,6 @@ class ReplicaManager(val config: KafkaConfig,
         Some(partition, false)
 
       case HostedPartition.None =>
-        val isNew = if (isLocalFollower) {
-          !logManager.maybeRecoverAbandonedFutureLog(tp, partitionAssignedDirectoryId)
-        } else {
-          true
-        }
         if (delta.image().topicsById().containsKey(topicId)) {
           stateChangeLogger.error(s"Expected partition $tp with topic id " +
             s"$topicId to exist, but it was missing. Creating...")
@@ -2687,7 +2679,7 @@ class ReplicaManager(val config: KafkaConfig,
         // it's a partition that we don't know about yet, so create it and mark it online
         val partition = Partition(new TopicIdPartition(topicId, tp), time, this)
         allPartitions.put(tp, HostedPartition.Online(partition))
-        Some(partition, isNew)
+        Some(partition, true)
     }
   }
 
@@ -2768,7 +2760,7 @@ class ReplicaManager(val config: KafkaConfig,
     replicaFetcherManager.removeFetcherForPartitions(localLeaders.keySet)
     localLeaders.forKeyValue { (tp, info) =>
       val partitionAssignedDirectoryId = directoryIds.find(_._1.topicPartition() == tp).map(_._2)
-      getOrCreatePartition(tp, delta, info.topicId, isLocalFollower = false, partitionAssignedDirectoryId).foreach { case (partition, isNew) =>
+      getOrCreatePartition(tp, delta, info.topicId).foreach { case (partition, isNew) =>
         try {
           val state = info.partition.toLeaderAndIsrPartitionState(tp, isNew)
           partition.makeLeader(state, offsetCheckpoints, Some(info.topicId), partitionAssignedDirectoryId)
@@ -2803,7 +2795,7 @@ class ReplicaManager(val config: KafkaConfig,
     val followerTopicSet = new mutable.HashSet[String]
     localFollowers.forKeyValue { (tp, info) =>
       val partitionAssignedDirectoryId = directoryIds.find(_._1.topicPartition() == tp).map(_._2)
-      getOrCreatePartition(tp, delta, info.topicId, isLocalFollower = true, partitionAssignedDirectoryId).foreach { case (partition, isNew) =>
+      getOrCreatePartition(tp, delta, info.topicId).foreach { case (partition, isNew) =>
         try {
           followerTopicSet.add(tp.topic)
 

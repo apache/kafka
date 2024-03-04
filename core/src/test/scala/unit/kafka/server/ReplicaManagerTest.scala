@@ -4391,7 +4391,7 @@ class ReplicaManagerTest {
     }
   }
 
-  private def setupMockLog(path: String, isFuture: Boolean = false): UnifiedLog = {
+  private def setupMockLog(path: String): UnifiedLog = {
     val mockLog = mock(classOf[UnifiedLog])
     val partitionDir = new File(path, s"$topic-0")
     partitionDir.mkdir()
@@ -5726,54 +5726,6 @@ class ReplicaManagerTest {
             initOffset = 1
           ))
         )
-    } finally {
-      replicaManager.shutdown(checkpointHW = false)
-    }
-  }
-
-  @ParameterizedTest
-  @ValueSource(booleans = Array(true, false))
-  def testDeltaFollowerRecoverAbandonedFutureReplica(enableRemoteStorage: Boolean): Unit = {
-    // Given
-    val localId = 1
-    val topicPartition = new TopicPartition("foo", 0)
-
-    val mockReplicaFetcherManager = mock(classOf[ReplicaFetcherManager])
-    val mockReplicaAlterLogDirsManager = mock(classOf[ReplicaAlterLogDirsManager])
-    val replicaManager = setupReplicaManagerWithMockedPurgatories(
-      timer = new MockTimer(time),
-      brokerId = localId,
-      mockReplicaFetcherManager = Some(mockReplicaFetcherManager),
-      mockReplicaAlterLogDirsManager = Some(mockReplicaAlterLogDirsManager),
-      enableRemoteStorage = enableRemoteStorage,
-      shouldMockLog = true
-    )
-
-    val directoryId1 = Uuid.randomUuid()
-    val directoryId2 = Uuid.randomUuid()
-    val mockFutureLog = setupMockLog("/KAFKA-16082-test", isFuture = true)
-
-    val mockLogMgr = replicaManager.logManager
-    when(mockLogMgr.getLog(topicPartition, isFuture = true)).thenReturn(Some(mockFutureLog))
-    when(mockLogMgr.getLog(topicPartition)).thenReturn(None)
-
-    when(mockLogMgr.directoryId(mockFutureLog.parentDir)).thenReturn(Some(directoryId1))
-
-    doAnswer(_ => {
-      when(mockLogMgr.getLog(topicPartition, isFuture = true)).thenReturn(None)
-      true
-    }).when(mockLogMgr).maybeRecoverAbandonedFutureLog(topicPartition, Some(directoryId1))
-
-    try {
-      val followerTopicsDelta = topicsCreateDelta(localId, false, directoryIds = List(directoryId1, directoryId2))
-      val followerMetadataImage = imageFromTopics(followerTopicsDelta.apply())
-
-      // When
-      replicaManager.applyDelta(followerTopicsDelta, followerMetadataImage)
-
-      // Then
-      verify(mockLogMgr).maybeRecoverAbandonedFutureLog(topicPartition, Some(directoryId1))
-      verify(replicaManager.replicaAlterLogDirsManager, never()).addFetcherForPartitions(any())
     } finally {
       replicaManager.shutdown(checkpointHW = false)
     }

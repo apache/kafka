@@ -17,6 +17,7 @@
 
 package kafka.server
 
+import kafka.log.UnifiedLog
 import kafka.network.SocketServer
 import kafka.server.IntegrationTestUtils.connectAndReceive
 import kafka.testkit.{BrokerNode, KafkaClusterTestKit, TestKitNodes}
@@ -1394,6 +1395,59 @@ class KRaftClusterTest {
           val info = broker1.metadataCache.getPartitionInfo("foo", 0)
           assertTrue(info.isDefined)
           assertEquals(Set(0, 1, 2), info.get.isr().asScala.toSet)
+        }
+      } finally {
+        admin.close()
+      }
+    } finally {
+      cluster.close()
+    }
+  }
+
+  @Test
+  def testAbandonedFutureReplicaRecovered(): Unit = {
+    val cluster = new KafkaClusterTestKit.Builder(
+      new TestKitNodes.Builder().
+        setBootstrapMetadataVersion(MetadataVersion.IBP_3_7_IV2).
+        setNumBrokerNodes(3).
+        setNumControllerNodes(1).build()).
+      build()
+    try {
+      cluster.format()
+      cluster.startup()
+      val admin = Admin.create(cluster.clientProperties())
+      try {
+        val broker0 = cluster.brokers().get(0)
+        val broker1 = cluster.brokers().get(1)
+        val foo0 = new TopicPartition("foo", 0)
+
+        admin.createTopics(Arrays.asList(
+          new NewTopic("foo", 3, 3.toShort))).all().get()
+
+        // Wait until foo-0 is created on broker0.
+        TestUtils.retry(60000) {
+          assertTrue(broker0.logManager.getLog(foo0).isDefined)
+        }
+
+        // Shut down broker0 and wait until the ISR of foo-0 is set to [1, 2]
+        broker0.shutdown()
+        TestUtils.retry(60000) {
+          val info = broker1.metadataCache.getPartitionInfo("foo", 0)
+          assertTrue(info.isDefined)
+          assertEquals(Set(1, 2), info.get.isr().asScala.toSet)
+        }
+
+        // Modify foo-0 so that it refers to a future replica
+        val log = broker0.logManager.getLog(foo0).get
+        log.renameDir(UnifiedLog.logFutureDirName(foo0), shouldReinitialize = false)
+
+        // Start up broker0 and wait until the ISR of foo-0 is set to [0, 1, 2]
+        broker0.startup()
+        TestUtils.retry(60000) {
+          val info = broker1.metadataCache.getPartitionInfo("foo", 0)
+          assertTrue(info.isDefined)
+          assertEquals(Set(0, 1, 2), info.get.isr().asScala.toSet)
+          assertTrue(broker0.logManager.getLog(foo0, isFuture = true).isEmpty)
         }
       } finally {
         admin.close()
