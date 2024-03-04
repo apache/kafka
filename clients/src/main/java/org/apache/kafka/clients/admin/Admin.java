@@ -1634,7 +1634,7 @@ public interface Admin extends AutoCloseable {
      * should typically attempt to reduce the size of the result set using
      * {@link ListTransactionsOptions#filterProducerIds(Collection)} or
      * {@link ListTransactionsOptions#filterStates(Collection)} or
-     * {@link ListTransactionsOptions#durationFilter(Long)}
+     * {@link ListTransactionsOptions#filterOnDuration(long)}.
      *
      * @param options Options to control the method behavior (including filters)
      * @return The result

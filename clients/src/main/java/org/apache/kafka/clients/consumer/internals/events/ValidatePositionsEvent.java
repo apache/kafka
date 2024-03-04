@@ -14,26 +14,17 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.streams.processor.internals;
 
-import org.apache.kafka.clients.consumer.ConsumerRecord;
-import org.apache.kafka.common.TopicPartition;
-
-import java.io.IOException;
-import java.util.Map;
+package org.apache.kafka.clients.consumer.internals.events;
 
 /**
- * Interface for maintaining global state stores. see {@link GlobalStateUpdateTask}
+ * Event for validating offsets for all assigned partitions for which a leader change has been
+ * detected. This is an asynchronous event that generates OffsetForLeaderEpoch requests, and
+ * completes by validating in-memory positions against the offsets received in the responses.
  */
-interface GlobalStateMaintainer {
+public class ValidatePositionsEvent extends CompletableApplicationEvent<Void> {
 
-    Map<TopicPartition, Long> initialize();
-
-    void flushState();
-
-    void close(final boolean wipeStateStore) throws IOException;
-
-    void update(ConsumerRecord<byte[], byte[]> record);
-
-    void maybeCheckpoint();
+    public ValidatePositionsEvent() {
+        super(Type.VALIDATE_POSITIONS);
+    }
 }

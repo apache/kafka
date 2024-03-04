@@ -14,26 +14,36 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.streams.processor.internals;
+package org.apache.kafka.clients.consumer.internals.events;
 
-import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
 
-import java.io.IOException;
 import java.util.Map;
 
 /**
- * Interface for maintaining global state stores. see {@link GlobalStateUpdateTask}
+ * Event to commit offsets waiting for a response and retrying on expected retriable errors until
+ * the timer expires.
  */
-interface GlobalStateMaintainer {
+public class SyncCommitEvent extends CommitEvent {
 
-    Map<TopicPartition, Long> initialize();
+    /**
+     * Time to wait for a response, retrying on retriable errors.
+     */
+    private final long retryTimeoutMs;
 
-    void flushState();
+    public SyncCommitEvent(final Map<TopicPartition, OffsetAndMetadata> offsets,
+                           final long retryTimeoutMs) {
+        super(Type.COMMIT_SYNC, offsets);
+        this.retryTimeoutMs = retryTimeoutMs;
+    }
 
-    void close(final boolean wipeStateStore) throws IOException;
+    public Long retryTimeoutMs() {
+        return retryTimeoutMs;
+    }
 
-    void update(ConsumerRecord<byte[], byte[]> record);
-
-    void maybeCheckpoint();
+    @Override
+    public String toStringBase() {
+        return super.toStringBase() + ", offsets=" + offsets() + ", retryTimeoutMs=" + retryTimeoutMs;
+    }
 }

@@ -14,26 +14,25 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.streams.processor.internals;
+package org.apache.kafka.clients.consumer.internals.events;
 
-import org.apache.kafka.clients.consumer.ConsumerRecord;
-import org.apache.kafka.common.TopicPartition;
+import java.util.Objects;
 
-import java.io.IOException;
-import java.util.Map;
+public class TopicMetadataEvent extends AbstractTopicMetadataEvent {
 
-/**
- * Interface for maintaining global state stores. see {@link GlobalStateUpdateTask}
- */
-interface GlobalStateMaintainer {
+    private final String topic;
 
-    Map<TopicPartition, Long> initialize();
+    public TopicMetadataEvent(final String topic, final long timeoutMs) {
+        super(Type.TOPIC_METADATA, timeoutMs);
+        this.topic = Objects.requireNonNull(topic);
+    }
 
-    void flushState();
+    public String topic() {
+        return topic;
+    }
 
-    void close(final boolean wipeStateStore) throws IOException;
-
-    void update(ConsumerRecord<byte[], byte[]> record);
-
-    void maybeCheckpoint();
+    @Override
+    public String toStringBase() {
+        return super.toStringBase() + ", topic=" + topic;
+    }
 }
