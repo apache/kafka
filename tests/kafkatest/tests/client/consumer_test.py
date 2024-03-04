@@ -194,7 +194,7 @@ class OffsetValidationTest(VerifiableConsumerTest):
         static_membership=[True, False],
         bounce_mode=["all", "rolling"],
         num_bounces=[5],
-        metadata_quorum=[quorum.zk, quorum.isolated_kraft],
+        metadata_quorum=[quorum.zk],
         use_new_coordinator=[False]
     )
     @matrix(
@@ -203,7 +203,7 @@ class OffsetValidationTest(VerifiableConsumerTest):
         bounce_mode=["all", "rolling"],
         num_bounces=[5],
         metadata_quorum=[quorum.isolated_kraft],
-        use_new_coordinator=[True]
+        use_new_coordinator=[True, False]
     )
     def test_static_consumer_bounce(self, clean_shutdown, static_membership, bounce_mode, num_bounces, metadata_quorum=quorum.zk, use_new_coordinator=False):
         """
