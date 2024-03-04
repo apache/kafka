@@ -39,7 +39,7 @@ class ConsumerEventHandler(object):
         self.state = ConsumerState.Dead
         self.revoked_count = 0
         self.assigned_count = 0
-        self.assignment = set()         # The set of partitions is updated on assign and revoke
+        self.assignment = []
         self.position = {}
         self.committed = {}
         self.total_consumed = 0
@@ -47,7 +47,7 @@ class ConsumerEventHandler(object):
 
     def handle_shutdown_complete(self):
         self.state = ConsumerState.Dead
-        self.assignment = set()
+        self.assignment = []
         self.position = {}
 
     def handle_startup_complete(self):
@@ -102,23 +102,17 @@ class ConsumerEventHandler(object):
     def handle_partitions_revoked(self, event):
         self.revoked_count += 1
         self.state = ConsumerState.Rebalancing
-
-        # Keep the set of assigned partitions up to date when one or more partitions are revoked.
-        #
-        # It was observed that in some cases, one or more of the partitions in the event had not been previously
-        # assigned to this node. Therefore, be careful to remove the partition only if was assigned.
-        for topic_partition in self._topic_partitions(event):
-            if topic_partition in self.assignment:
-                self.assignment.remove(topic_partition)
         self.position = {}
 
     def handle_partitions_assigned(self, event):
         self.assigned_count += 1
         self.state = ConsumerState.Joined
-
-        # Keep the set of assigned partitions up to date when one or more partitions are assigned.
-        for topic_partition in self._topic_partitions(event):
-            self.assignment.add(topic_partition)
+        assignment = []
+        for topic_partition in event["partitions"]:
+            topic = topic_partition["topic"]
+            partition = topic_partition["partition"]
+            assignment.append(TopicPartition(topic, partition))
+        self.assignment = assignment
 
     def handle_kill_process(self, clean_shutdown):
         # if the shutdown was clean, then we expect the explicit
@@ -141,16 +135,6 @@ class ConsumerEventHandler(object):
         else:
             return None
 
-    def _topic_partitions(self, event):
-        tps = []
-
-        for topic_partition in event["partitions"]:
-            topic = topic_partition["topic"]
-            partition = topic_partition["partition"]
-            tp = TopicPartition(topic, partition)
-            tps.append(tp)
-
-        return tps
 
 class VerifiableConsumer(KafkaPathResolverMixin, VerifiableClientMixin, BackgroundThreadService):
     """This service wraps org.apache.kafka.tools.VerifiableConsumer for use in
@@ -428,11 +412,6 @@ class VerifiableConsumer(KafkaPathResolverMixin, VerifiableClientMixin, Backgrou
         with self.lock:
             return max(handler.revoked_count for handler in self.event_handlers.values()
                        if handler.idx <= keep_alive)
-
-    def nodes_in_state(self, states):
-        with self.lock:
-            return [handler.node for handler in self.event_handlers.values()
-                    if handler.state in states]
 
     def joined_nodes(self):
         with self.lock:
