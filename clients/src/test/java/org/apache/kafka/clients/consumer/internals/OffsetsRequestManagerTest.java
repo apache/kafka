@@ -24,7 +24,7 @@ import org.apache.kafka.clients.consumer.OffsetAndTimestamp;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEventHandler;
-import org.apache.kafka.clients.consumer.internals.events.ErrorBackgroundEvent;
+import org.apache.kafka.clients.consumer.internals.events.ErrorEvent;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.ClusterResource;
 import org.apache.kafka.common.IsolationLevel;
@@ -553,8 +553,8 @@ public class OffsetsRequestManagerTest {
         assertNotNull(event);
 
         // Check that the event itself is of the expected type
-        assertInstanceOf(ErrorBackgroundEvent.class, event);
-        ErrorBackgroundEvent errorEvent = (ErrorBackgroundEvent) event;
+        assertInstanceOf(ErrorEvent.class, event);
+        ErrorEvent errorEvent = (ErrorEvent) event;
         assertNotNull(errorEvent.error());
 
         // Check that the error held in the event is of the expected type

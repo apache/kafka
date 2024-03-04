@@ -6499,7 +6499,7 @@ class KafkaApisTest extends Logging {
     when(clientRequestQuotaManager.maybeRecordAndGetThrottleTimeMs(any[RequestChannel.Request](),
       any[Long])).thenReturn(0)
 
-    when(txnCoordinator.handleListTransactions(Set.empty[Long], Set.empty[String]))
+    when(txnCoordinator.handleListTransactions(Set.empty[Long], Set.empty[String], -1L))
       .thenReturn(new ListTransactionsResponseData()
         .setErrorCode(Errors.COORDINATOR_LOAD_IN_PROGRESS.code))
     kafkaApis = createKafkaApis()
@@ -6529,7 +6529,7 @@ class KafkaApisTest extends Logging {
       .setProducerId(98765)
       .setTransactionState("PrepareAbort"))
 
-    when(txnCoordinator.handleListTransactions(Set.empty[Long], Set.empty[String]))
+    when(txnCoordinator.handleListTransactions(Set.empty[Long], Set.empty[String], -1L))
       .thenReturn(new ListTransactionsResponseData()
         .setErrorCode(Errors.NONE.code)
         .setTransactionStates(transactionStates))

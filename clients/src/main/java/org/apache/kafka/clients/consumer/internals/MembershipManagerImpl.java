@@ -19,20 +19,21 @@ package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
+import org.apache.kafka.clients.consumer.internals.NetworkClientDelegate.PollResult;
 import org.apache.kafka.clients.consumer.internals.Utils.TopicIdPartitionComparator;
 import org.apache.kafka.clients.consumer.internals.Utils.TopicPartitionComparator;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEventHandler;
 import org.apache.kafka.clients.consumer.internals.events.CompletableBackgroundEvent;
 import org.apache.kafka.clients.consumer.internals.events.ConsumerRebalanceListenerCallbackCompletedEvent;
 import org.apache.kafka.clients.consumer.internals.events.ConsumerRebalanceListenerCallbackNeededEvent;
-import org.apache.kafka.clients.consumer.internals.events.ErrorBackgroundEvent;
-import org.apache.kafka.common.ClusterResource;
-import org.apache.kafka.common.ClusterResourceListener;
+import org.apache.kafka.clients.consumer.internals.events.ErrorEvent;
+import org.apache.kafka.clients.consumer.internals.metrics.RebalanceMetricsManager;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatResponseData;
+import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.ConsumerGroupHeartbeatRequest;
 import org.apache.kafka.common.telemetry.internals.ClientTelemetryProvider;
@@ -56,6 +57,7 @@ import java.util.TreeSet;
 import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 
+import static java.util.Collections.unmodifiableList;
 import static org.apache.kafka.clients.consumer.internals.ConsumerRebalanceListenerMethodName.ON_PARTITIONS_ASSIGNED;
 import static org.apache.kafka.clients.consumer.internals.ConsumerRebalanceListenerMethodName.ON_PARTITIONS_LOST;
 import static org.apache.kafka.clients.consumer.internals.ConsumerRebalanceListenerMethodName.ON_PARTITIONS_REVOKED;
@@ -112,7 +114,7 @@ import static org.apache.kafka.clients.consumer.internals.ConsumerRebalanceListe
  * the user if the callbacks fail. This manager is only concerned about the callbacks completion to
  * know that it can proceed with the reconciliation.
  */
-public class MembershipManagerImpl implements MembershipManager, ClusterResourceListener {
+public class MembershipManagerImpl implements MembershipManager {
 
     /**
      * TopicPartition comparator based on topic name and partition id.
@@ -215,9 +217,9 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
      */
     private final Map<Uuid, SortedSet<Integer>> currentTargetAssignment;
 
-    /**
+    /**     
      * If there is a reconciliation running (triggering commit, callbacks) for the
-     * assignmentReadyToReconcile. This will be true if {@link #reconcile()} has been triggered
+     * assignmentReadyToReconcile. This will be true if {@link #maybeReconcile()} has been triggered
      * after receiving a heartbeat response, or a metadata update.
      */
     private boolean reconciliationInProgress;
@@ -238,14 +240,6 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
     private Optional<CompletableFuture<Void>> leaveGroupInProgress = Optional.empty();
 
     /**
-     * True if the member has registered to be notified when the cluster metadata is updated.
-     * This is initially false, as the member that is not part of a consumer group does not
-     * require metadata updated. This becomes true the first time the member joins on the
-     * {@link #transitionToJoining()}
-     */
-    private boolean isRegisteredForMetadataUpdates;
-
-    /**
      * Registered listeners that will be notified whenever the memberID/epoch gets updated (valid
      * values received from the broker, or values cleared due to member leaving the group, getting
      * fenced or failing).
@@ -262,11 +256,31 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
     /**
      * Serves as the conduit by which we can report events to the application thread. This is needed as we send
      * {@link ConsumerRebalanceListenerCallbackNeededEvent callbacks} and, if needed,
-     * {@link ErrorBackgroundEvent errors} to the application thread.
+     * {@link ErrorEvent errors} to the application thread.
      */
     private final BackgroundEventHandler backgroundEventHandler;
 
+    /**
+     * Future that will complete when a stale member completes releasing its assignment after
+     * leaving the group due to poll timer expired. Used to make sure that the member rejoins
+     * when the timer is reset, only when it completes releasing its assignment.
+     */
+    private CompletableFuture<Void> staleMemberAssignmentRelease;
+    
+    /*
+     * Measures successful rebalance latency and number of failed rebalances.
+     */
+    private final RebalanceMetricsManager metricsManager;
+
     private final Time time;
+
+    /**
+     * True if the poll timer has expired, signaled by a call to
+     * {@link #transitionToSendingLeaveGroup(boolean)} with dueToExpiredPollTimer param true. This
+     * will be used to determine that the member should transition to STALE after leaving the
+     * group, to release its assignment and wait for the timer to be reset.
+     */
+    private boolean isPollTimerExpired;
 
     public MembershipManagerImpl(String groupId,
                                  Optional<String> groupInstanceId,
@@ -278,7 +292,35 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
                                  LogContext logContext,
                                  Optional<ClientTelemetryReporter> clientTelemetryReporter,
                                  BackgroundEventHandler backgroundEventHandler,
-                                 Time time) {
+                                 Time time,
+                                 Metrics metrics) {
+        this(groupId,
+            groupInstanceId,
+            rebalanceTimeoutMs,
+            serverAssignor,
+            subscriptions,
+            commitRequestManager,
+            metadata,
+            logContext,
+            clientTelemetryReporter,
+            backgroundEventHandler,
+            time,
+            new RebalanceMetricsManager(metrics));
+    }
+
+    // Visible for testing
+    MembershipManagerImpl(String groupId,
+                          Optional<String> groupInstanceId,
+                          int rebalanceTimeoutMs,
+                          Optional<String> serverAssignor,
+                          SubscriptionState subscriptions,
+                          CommitRequestManager commitRequestManager,
+                          ConsumerMetadata metadata,
+                          LogContext logContext,
+                          Optional<ClientTelemetryReporter> clientTelemetryReporter,
+                          BackgroundEventHandler backgroundEventHandler,
+                          Time time,
+                          RebalanceMetricsManager metricsManager) {
         this.groupId = groupId;
         this.state = MemberState.UNSUBSCRIBED;
         this.serverAssignor = serverAssignor;
@@ -295,6 +337,7 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
         this.rebalanceTimeoutMs = rebalanceTimeoutMs;
         this.backgroundEventHandler = backgroundEventHandler;
         this.time = time;
+        this.metricsManager = metricsManager;
     }
 
     /**
@@ -308,8 +351,25 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
             throw new IllegalStateException(String.format("Invalid state transition from %s to %s",
                     state, nextState));
         }
+
+        if (isCompletingRebalance(state, nextState)) {
+            metricsManager.recordRebalanceEnded(time.milliseconds());
+        }
+        if (isStartingRebalance(state, nextState)) {
+            metricsManager.recordRebalanceStarted(time.milliseconds());
+        }
+
         log.trace("Member {} with epoch {} transitioned from {} to {}.", memberId, memberEpoch, state, nextState);
         this.state = nextState;
+    }
+
+    private static boolean isCompletingRebalance(MemberState currentState, MemberState nextState) {
+        return currentState == MemberState.RECONCILING &&
+            (nextState == MemberState.STABLE || nextState == MemberState.ACKNOWLEDGING);
+    }
+
+    private static boolean isStartingRebalance(MemberState currentState, MemberState nextState) {
+        return currentState != MemberState.RECONCILING && nextState == MemberState.RECONCILING;
     }
 
     /**
@@ -344,22 +404,28 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
         return memberEpoch;
     }
 
-    @Override
-    public boolean isStaled() {
-        return state == MemberState.STALE;
-    }
-
     /**
      * {@inheritDoc}
      */
     @Override
-    public void onHeartbeatResponseReceived(ConsumerGroupHeartbeatResponseData response) {
+    public void onHeartbeatSuccess(ConsumerGroupHeartbeatResponseData response) {
         if (response.errorCode() != Errors.NONE.code()) {
             String errorMessage = String.format(
                     "Unexpected error in Heartbeat response. Expected no error, but received: %s",
                     Errors.forCode(response.errorCode())
             );
             throw new IllegalArgumentException(errorMessage);
+        }
+        MemberState state = state();
+        if (state == MemberState.LEAVING) {
+            log.debug("Ignoring heartbeat response received from broker. Member {} with epoch {} is " +
+                    "already leaving the group.", memberId, memberEpoch);
+            return;
+        }
+        if (isNotInGroup()) {
+            log.debug("Ignoring heartbeat response received from broker. Member {} is in {} state" +
+                " so it's not a member of the group. ", memberId, state);
+            return;
         }
 
         // Update the group member id label in the client telemetry reporter if the member id has
@@ -391,11 +457,26 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
         }
     }
 
+    @Override
+    public void onHeartbeatFailure() {
+        metricsManager.maybeRecordRebalanceFailed();
+    }
+
+    /**
+     * @return True if the consumer is not a member of the group.
+     */
+    private boolean isNotInGroup() {
+        return state == MemberState.UNSUBSCRIBED ||
+            state == MemberState.FENCED ||
+            state == MemberState.FATAL ||
+            state == MemberState.STALE;
+    }
+
     /**
      * This will process the assignment received if it is different from the member's current
-     * assignment. If a new assignment is received, this will try to resolve the topic names from
-     * metadata, reconcile the resolved assignment, and keep the unresolved to be reconciled when
-     * metadata is discovered.
+     * assignment. If a new assignment is received, this will make sure reconciliation is attempted
+     * on the next call of `poll`. If another reconciliation is currently in process, the first `poll`
+     * after that reconciliation will trigger the new reconciliation.
      *
      * @param assignment Assignment received from the broker.
      */
@@ -406,7 +487,6 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
             // assignment from the broker, different from the current assignment. Note that the
             // reconciliation might not be triggered just yet because of missing metadata.
             transitionTo(MemberState.RECONCILING);
-            reconcile();
         } else {
             // Same assignment received, nothing to reconcile.
             log.debug("Target assignment {} received from the broker is equals to the member " +
@@ -471,8 +551,13 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
                 log.error("onPartitionsLost callback invocation failed while releasing assignment" +
                         " after member got fenced. Member will rejoin the group anyways.", error);
             }
-            updateSubscription(new TreeSet<>(TOPIC_ID_PARTITION_COMPARATOR), true);
-            transitionToJoining();
+            clearSubscription();
+            if (state == MemberState.FENCED) {
+                transitionToJoining();
+            } else {
+                log.debug("Fenced member onPartitionsLost callback completed but the state has " +
+                    "already changed to {}, so the member won't rejoin the group", state);
+            }
         });
     }
 
@@ -499,7 +584,7 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
                 log.error("onPartitionsLost callback invocation failed while releasing assignment" +
                         "after member failed with fatal error.", error);
             }
-            updateSubscription(new TreeSet<>(TOPIC_ID_PARTITION_COMPARATOR), true);
+            clearSubscription();
         });
     }
 
@@ -513,16 +598,14 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
     }
 
     /**
-     * Update a new assignment by setting the assigned partitions in the member subscription.
-     *
-     * @param assignedPartitions Topic partitions to take as the new subscription assignment
-     * @param clearAssignments   True if the pending assignments and metadata cache should be cleared
+     * Clear the assigned partitions in the member subscription, pending assignments and metadata cache.
      */
-    private void updateSubscription(SortedSet<TopicIdPartition> assignedPartitions,
-                                    boolean clearAssignments) {
-        Collection<TopicPartition> assignedTopicPartitions = toTopicPartitionSet(assignedPartitions);
-        subscriptions.assignFromSubscribed(assignedTopicPartitions);
-        updateAssignmentLocally(assignedPartitions, clearAssignments);
+    private void clearSubscription() {
+        if (subscriptions.hasAutoAssignedPartitions()) {
+            subscriptions.assignFromSubscribed(Collections.emptySet());
+        }
+        updateCurrentAssignment(Collections.emptySet());
+        clearPendingAssignmentsAndLocalNamesCache();
     }
 
     /**
@@ -537,18 +620,7 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
                                                     SortedSet<TopicPartition> addedPartitions) {
         Collection<TopicPartition> assignedTopicPartitions = toTopicPartitionSet(assignedPartitions);
         subscriptions.assignFromSubscribedAwaitingCallback(assignedTopicPartitions, addedPartitions);
-        updateAssignmentLocally(assignedPartitions, false);
-    }
-
-    /**
-     * Make assignment effective on the group manager.
-     */
-    private void updateAssignmentLocally(SortedSet<TopicIdPartition> assignedPartitions,
-                                         boolean clearAssignments) {
         updateCurrentAssignment(assignedPartitions);
-        if (clearAssignments) {
-            clearPendingAssignmentsAndLocalNamesCache();
-        }
     }
 
     /**
@@ -567,18 +639,6 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
         resetEpoch();
         transitionTo(MemberState.JOINING);
         clearPendingAssignmentsAndLocalNamesCache();
-        registerForMetadataUpdates();
-    }
-
-    /**
-     * Register to get notified when the cluster metadata is updated, via the
-     * {@link #onUpdate(ClusterResource)}. Register only if the manager is not register already.
-     */
-    private void registerForMetadataUpdates() {
-        if (!isRegisteredForMetadataUpdates) {
-            this.metadata.addClusterUpdateListener(this);
-            isRegisteredForMetadataUpdates = true;
-        }
     }
 
     /**
@@ -586,9 +646,11 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
      */
     @Override
     public CompletableFuture<Void> leaveGroup() {
-        if (state == MemberState.UNSUBSCRIBED || state == MemberState.FATAL) {
-            // Member is not part of the group. No-op and return completed future to avoid
-            // unnecessary transitions.
+        if (isNotInGroup()) {
+            if (state == MemberState.FENCED) {
+                clearSubscription();
+                transitionTo(MemberState.UNSUBSCRIBED);
+            }
             return CompletableFuture.completedFuture(null);
         }
 
@@ -605,12 +667,12 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
         CompletableFuture<Void> callbackResult = invokeOnPartitionsRevokedOrLostToReleaseAssignment();
         callbackResult.whenComplete((result, error) -> {
             // Clear the subscription, no matter if the callback execution failed or succeeded.
-            updateSubscription(new TreeSet<>(TOPIC_ID_PARTITION_COMPARATOR), true);
+            clearSubscription();
 
             // Transition to ensure that a heartbeat request is sent out to effectively leave the
             // group (even in the case where the member had no assignment to release or when the
             // callback execution failed.)
-            transitionToSendingLeaveGroup();
+            transitionToSendingLeaveGroup(false);
         });
 
         // Return future to indicate that the leave group is done when the callbacks
@@ -655,11 +717,15 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
 
     /**
      * Reset member epoch to the value required for the leave the group heartbeat request, and
-     * transition to the {@link MemberState#LEAVING} state so that a heartbeat
-     * request is sent out with it.
-     * Visible for testing.
+     * transition to the {@link MemberState#LEAVING} state so that a heartbeat request is sent
+     * out with it.
+     *
+     * @param dueToExpiredPollTimer True if the leave group is due to an expired poll timer. This
+     *                              will indicate that the member must remain STALE after leaving,
+     *                              until it releases its assignment and the timer is reset.
      */
-    void transitionToSendingLeaveGroup() {
+    @Override
+    public void transitionToSendingLeaveGroup(boolean dueToExpiredPollTimer) {
         if (state == MemberState.FATAL) {
             log.warn("Member {} with epoch {} won't send leave group request because it is in " +
                     "FATAL state", memberId, memberEpoch);
@@ -669,6 +735,14 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
             log.warn("Member {} won't send leave group request because it is already out of the group.",
                 memberId);
             return;
+        }
+
+        if (dueToExpiredPollTimer) {
+            this.isPollTimerExpired = true;
+            // Briefly transition through prepare leaving. The member does not have to release
+            // any assignment before sending the leave group given that is stale. It will invoke
+            // onPartitionsLost after sending the leave group on the STALE state.
+            transitionTo(MemberState.PREPARE_LEAVING);
         }
         int leaveEpoch = groupInstanceId.isPresent() ?
                 ConsumerGroupHeartbeatRequest.LEAVE_GROUP_STATIC_MEMBER_EPOCH :
@@ -702,13 +776,6 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
     @Override
     public void onHeartbeatRequestSent() {
         MemberState state = state();
-        if (isStaled()) {
-            log.debug("Member {} is staled and is therefore leaving the group.  It will rejoin upon the next poll.", memberEpoch);
-            // TODO: Integrate partition revocation/loss callback
-            transitionToJoining();
-            return;
-        }
-
         if (state == MemberState.ACKNOWLEDGING) {
             if (targetAssignmentReconciled()) {
                 transitionTo(MemberState.STABLE);
@@ -719,7 +786,11 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
                 transitionTo(MemberState.RECONCILING);
             }
         } else if (state == MemberState.LEAVING) {
-            transitionToUnsubscribed();
+            if (isPollTimerExpired) {
+                transitionToStale();
+            } else {
+                transitionToUnsubscribed();
+            }
         }
     }
 
@@ -748,34 +819,75 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
         return currentAssignment.equals(currentTargetAssignment);
     }
 
+    /**
+     * @return True if the member should not send heartbeats, which is the case when it is in a
+     * state where it is not an active member of the group.
+     */
     @Override
     public boolean shouldSkipHeartbeat() {
         MemberState state = state();
-        return state == MemberState.UNSUBSCRIBED || state == MemberState.FATAL;
+        return state == MemberState.UNSUBSCRIBED ||
+            state == MemberState.FATAL ||
+            state == MemberState.STALE ||
+            state == MemberState.FENCED;
     }
 
     /**
-     * Sets the epoch to the leave group epoch and clears the assignments. The member will rejoin with
-     * the existing subscriptions on the next time user polls.
+     * @return True if the member is preparing to leave the group (waiting for callbacks), or
+     * leaving (sending last heartbeat). This is used to skip proactively leaving the group when
+     * the consumer poll timer expires.
      */
+    public boolean isLeavingGroup() {
+        MemberState state = state();
+        return state == MemberState.PREPARE_LEAVING || state == MemberState.LEAVING;
+    }
+
     @Override
-    public void transitionToStale() {
-        memberEpoch = ConsumerGroupHeartbeatRequest.LEAVE_GROUP_MEMBER_EPOCH;
-        // Clear the current assignment and subscribed partitions before member sending the leave group
-        updateSubscription(new TreeSet<>(TOPIC_ID_PARTITION_COMPARATOR), true);
+    public void maybeRejoinStaleMember() {
+        isPollTimerExpired = false;
+        if (state == MemberState.STALE) {
+            log.debug("Expired poll timer has been reset so stale member {} will rejoin the group" +
+                "when it completes releasing its previous assignment.", memberId);
+            staleMemberAssignmentRelease.whenComplete((__, error) -> transitionToJoining());
+        }
+    }
+
+    /**
+     * Transition to STALE to release assignments because the member has left the group due to
+     * expired poll timer. This will trigger the onPartitionsLost callback. Once the callback
+     * completes, the member will remain stale until the poll timer is reset by an application
+     * poll event. See {@link #maybeRejoinStaleMember()}.
+     */
+    private void transitionToStale() {
         transitionTo(MemberState.STALE);
+
+        // Release assignment
+        CompletableFuture<Void> callbackResult = invokeOnPartitionsLostCallback(subscriptions.assignedPartitions());
+        staleMemberAssignmentRelease = callbackResult.whenComplete((result, error) -> {
+            if (error != null) {
+                log.error("onPartitionsLost callback invocation failed while releasing assignment" +
+                    " after member left group due to expired poll timer.", error);
+            }
+            clearSubscription();
+            log.debug("Member {} sent leave group heartbeat and released its assignment. It will remain " +
+                "in {} state until the poll timer is reset, and it will then rejoin the group",
+                memberId, MemberState.STALE);
+        });
     }
 
     /**
      * Reconcile the assignment that has been received from the server. If for some topics, the
      * topic ID cannot be matched to a topic name, a metadata update will be triggered and only
      * the subset of topics that are resolvable will be reconciled. Reconciliation will trigger the
-     * callbacks and update the subscription state. Note that only one reconciliation
-     * can be in progress at a time. If there is already another one in progress when this is
-     * triggered, it will be no-op, and the assignment will be reconciled on the next
-     * reconciliation loop.
+     * callbacks and update the subscription state.
+     *
+     * There are three conditions under which no reconciliation will be triggered:
+     *  - We have already reconciled the assignment (the target assignment is the same as the current assignment).
+     *  - Another reconciliation is already in progress.
+     *  - There are topics that haven't been added to the current assignment yet, but all their topic IDs
+     *    are missing from the target assignment.
      */
-    void reconcile() {
+    void maybeReconcile() {
         if (targetAssignmentReconciled()) {
             log.debug("Ignoring reconciliation attempt. Target assignment is equal to the " +
                     "current assignment.");
@@ -844,12 +956,10 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
         // best effort to commit the offsets in the case where the epoch might have changed while
         // the current reconciliation is in process. Note this is using the rebalance timeout as
         // it is the limit enforced by the broker to complete the reconciliation process.
-        commitResult = commitRequestManager.maybeAutoCommitAllConsumedNow(
-            Optional.of(getExpirationTimeForTimeout(rebalanceTimeoutMs)),
-            true);
+        commitResult = commitRequestManager.maybeAutoCommitSyncNow(getExpirationTimeForTimeout(rebalanceTimeoutMs));
 
         // Execute commit -> onPartitionsRevoked -> onPartitionsAssigned.
-        commitResult.whenComplete((commitReqResult, commitReqError) -> {
+        commitResult.whenComplete((__, commitReqError) -> {
             if (commitReqError != null) {
                 // The call to commit, that includes retry logic for retriable errors, failed to
                 // complete within the time boundaries (fatal error or retriable that did not
@@ -894,9 +1004,6 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
             revocationResult.thenCompose(__ -> {
                 boolean memberHasRejoined = memberEpochOnReconciliationStart != memberEpoch;
                 if (state == MemberState.RECONCILING && !memberHasRejoined) {
-                    // Reschedule the auto commit starting from now that member has a new assignment.
-                    commitRequestManager.resetAutoCommitTimer();
-
                     // Apply assignment
                     return assignPartitions(assignedTopicIdPartitions, addedPartitions);
                 } else {
@@ -923,6 +1030,9 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
             } else {
                 boolean memberHasRejoined = memberEpochOnReconciliationStart != memberEpoch;
                 if (state == MemberState.RECONCILING && !memberHasRejoined) {
+                    // Reschedule the auto commit starting from now that the member has a new assignment.
+                    commitRequestManager.resetAutoCommitTimer();
+
                     // Make assignment effective on the broker by transitioning to send acknowledge.
                     transitionTo(MemberState.ACKNOWLEDGING);
                 } else {
@@ -1195,8 +1305,7 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
         }
     }
 
-    // Visible for testing
-    CompletableFuture<Void> invokeOnPartitionsLostCallback(Set<TopicPartition> partitionsLost) {
+    private CompletableFuture<Void> invokeOnPartitionsLostCallback(Set<TopicPartition> partitionsLost) {
         // This should not trigger the callback if partitionsLost is empty, to keep the current
         // behaviour.
         Optional<ConsumerRebalanceListener> listener = subscriptions.rebalanceListener();
@@ -1356,27 +1465,10 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
 
     /**
      * @return If there is a reconciliation in process now. Note that reconciliation is triggered
-     * by a call to {@link #reconcile()}. Visible for testing.
+     * by a call to {@link #maybeReconcile()}. Visible for testing.
      */
     boolean reconciliationInProgress() {
         return reconciliationInProgress;
-    }
-
-    /**
-     * When cluster metadata is updated, try to resolve topic names for topic IDs received in
-     * assignment that hasn't been resolved yet.
-     * <ul>
-     *     <li>Try to find topic names for all assignments</li>
-     *     <li>Add discovered topic names to the local topic names cache</li>
-     *     <li>If any topics are resolved, trigger a reconciliation process</li>
-     *     <li>If some topics still remain unresolved, request another metadata update</li>
-     * </ul>
-     */
-    @Override
-    public void onUpdate(ClusterResource clusterResource) {
-        if (state == MemberState.RECONCILING) {
-            reconcile();
-        }
     }
 
     /**
@@ -1391,5 +1483,18 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
             throw new IllegalArgumentException("State updates listener cannot be null");
         }
         this.stateUpdatesListeners.add(listener);
+    }
+
+    @Override
+    public PollResult poll(final long currentTimeMs) {
+        if (state == MemberState.RECONCILING) {
+            maybeReconcile();
+        }
+        return PollResult.EMPTY;
+    }
+
+    // visible for testing
+    List<MemberStateListener> stateListeners() {
+        return unmodifiableList(stateUpdatesListeners);
     }
 }
