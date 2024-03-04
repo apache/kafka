@@ -14,26 +14,17 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.streams.processor.internals;
 
-import org.apache.kafka.clients.consumer.ConsumerRecord;
-import org.apache.kafka.common.TopicPartition;
-
-import java.io.IOException;
-import java.util.Map;
+package org.apache.kafka.clients.consumer.internals.events;
 
 /**
- * Interface for maintaining global state stores. see {@link GlobalStateUpdateTask}
+ * Application event indicating that the subscription state has changed, triggered when a user
+ * calls the subscribe API. This will make the consumer join a consumer group if not part of it
+ * yet, or just send the updated subscription to the broker if it's already a member of the group.
  */
-interface GlobalStateMaintainer {
+public class SubscriptionChangeEvent extends ApplicationEvent {
 
-    Map<TopicPartition, Long> initialize();
-
-    void flushState();
-
-    void close(final boolean wipeStateStore) throws IOException;
-
-    void update(ConsumerRecord<byte[], byte[]> record);
-
-    void maybeCheckpoint();
+    public SubscriptionChangeEvent() {
+        super(Type.SUBSCRIPTION_CHANGE);
+    }
 }

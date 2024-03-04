@@ -92,7 +92,7 @@ public class ApplicationEventProcessorTest {
     public void testPrepClosingCommitEvents() {
         List<NetworkClientDelegate.UnsentRequest> results = mockCommitResults();
         doReturn(new NetworkClientDelegate.PollResult(100, results)).when(commitRequestManager).pollOnClose();
-        processor.process(new CommitOnCloseApplicationEvent());
+        processor.process(new CommitOnCloseEvent());
         verify(commitRequestManager).signalClose();
     }
 
@@ -107,7 +107,7 @@ public class ApplicationEventProcessorTest {
 
     @Test
     public void testPrepClosingLeaveGroupEvent() {
-        LeaveOnCloseApplicationEvent event = new LeaveOnCloseApplicationEvent();
+        LeaveOnCloseEvent event = new LeaveOnCloseEvent();
         when(heartbeatRequestManager.membershipManager()).thenReturn(membershipManager);
         when(membershipManager.leaveGroup()).thenReturn(CompletableFuture.completedFuture(null));
         processor.process(event);
