@@ -140,7 +140,7 @@ object ConsumerGroupCommand extends Logging {
                                                 consumerId: Option[String], host: Option[String],
                                                 clientId: Option[String], logEndOffset: Option[Long])
 
-  case class MemberAssignmentState(group: String, consumerId: String, host: String, clientId: String, groupInstanceId: String,
+  private[admin] case class MemberAssignmentState(group: String, consumerId: String, host: String, clientId: String, groupInstanceId: String,
                                              numPartitions: Int, assignment: List[TopicPartition])
 
   private[admin] case class GroupState(group: String, coordinator: Node, assignmentStrategy: String, state: String, numMembers: Int)
