@@ -30,6 +30,7 @@ import org.apache.kafka.clients.consumer.OffsetCommitCallback;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.clients.consumer.RetriableCommitFailedException;
 import org.apache.kafka.clients.consumer.RoundRobinAssignor;
+import org.apache.kafka.clients.consumer.internals.events.ApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEventHandler;
 import org.apache.kafka.clients.consumer.internals.events.AssignmentChangeEvent;
 import org.apache.kafka.clients.consumer.internals.events.AsyncCommitEvent;
@@ -41,7 +42,6 @@ import org.apache.kafka.clients.consumer.internals.events.ConsumerRebalanceListe
 import org.apache.kafka.clients.consumer.internals.events.ErrorEvent;
 import org.apache.kafka.clients.consumer.internals.events.EventProcessor;
 import org.apache.kafka.clients.consumer.internals.events.FetchCommittedOffsetsEvent;
-import org.apache.kafka.clients.consumer.internals.events.GroupMetadataUpdateEvent;
 import org.apache.kafka.clients.consumer.internals.events.LeaveOnCloseEvent;
 import org.apache.kafka.clients.consumer.internals.events.ListOffsetsEvent;
 import org.apache.kafka.clients.consumer.internals.events.NewTopicsMetadataUpdateRequestEvent;
@@ -51,7 +51,6 @@ import org.apache.kafka.clients.consumer.internals.events.SubscriptionChangeEven
 import org.apache.kafka.clients.consumer.internals.events.SyncCommitEvent;
 import org.apache.kafka.clients.consumer.internals.events.UnsubscribeEvent;
 import org.apache.kafka.clients.consumer.internals.events.ValidatePositionsEvent;
-import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.Node;
@@ -80,6 +79,7 @@ import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.ArgumentMatchers;
+import org.mockito.MockedStatic;
 import org.mockito.Mockito;
 
 import java.time.Duration;
@@ -102,7 +102,6 @@ import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -117,10 +116,13 @@ import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.THROW_ON
 import static org.apache.kafka.clients.consumer.internals.MembershipManagerImpl.TOPIC_PARTITION_COMPARATOR;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
+import static org.apache.kafka.test.TestUtils.requiredConsumerConfig;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -132,6 +134,7 @@ import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -163,19 +166,19 @@ public class AsyncKafkaConsumerTest {
     }
 
     private AsyncKafkaConsumer<String, String> newConsumer() {
-        final Properties props = requiredConsumerProperties();
+        final Properties props = requiredConsumerConfig();
         props.put(ConsumerConfig.GROUP_ID_CONFIG, "group-id");
         return newConsumer(props);
     }
 
     private AsyncKafkaConsumer<String, String> newConsumerWithoutGroupId() {
-        final Properties props = requiredConsumerProperties();
+        final Properties props = requiredConsumerConfig();
         return newConsumer(props);
     }
 
     @SuppressWarnings("UnusedReturnValue")
     private AsyncKafkaConsumer<String, String> newConsumerWithEmptyGroupId() {
-        final Properties props = requiredConsumerPropertiesAndGroupId("");
+        final Properties props = requiredConsumerConfigAndGroupId("");
         return newConsumer(props);
     }
 
@@ -699,7 +702,7 @@ public class AsyncKafkaConsumerTest {
         consumer.subscribe(singleton("topic"), mock(ConsumerRebalanceListener.class));
         subscriptions.assignFromSubscribed(singleton(new TopicPartition("topic", 0)));
         subscriptions.seek(new TopicPartition("topic", 0), 100);
-        consumer.maybeAutoCommitSync(true, time.timer(100), null);
+        consumer.maybeAutoCommitSync(true, time.timer(100));
         verify(applicationEventHandler).add(any(SyncCommitEvent.class));
     }
 
@@ -717,7 +720,7 @@ public class AsyncKafkaConsumerTest {
         consumer.subscribe(singleton("topic"), mock(ConsumerRebalanceListener.class));
         subscriptions.assignFromSubscribed(singleton(new TopicPartition("topic", 0)));
         subscriptions.seek(new TopicPartition("topic", 0), 100);
-        consumer.maybeAutoCommitSync(false, time.timer(100), null);
+        consumer.maybeAutoCommitSync(false, time.timer(100));
         verify(applicationEventHandler, never()).add(any(SyncCommitEvent.class));
     }
 
@@ -916,8 +919,33 @@ public class AsyncKafkaConsumerTest {
     }
 
     @Test
+    public void testNoWakeupInCloseCommit() {
+        TopicPartition tp = new TopicPartition("topic1", 0);
+        consumer = newConsumer();
+        consumer.assign(Collections.singleton(tp));
+        doReturn(LeaderAndEpoch.noLeaderOrEpoch()).when(metadata).currentLeader(any());
+        consumer.seek(tp, 10);
+        consumer.wakeup();
+
+        AtomicReference<SyncCommitEvent> capturedEvent = new AtomicReference<>();
+        doAnswer(invocation -> {
+            ApplicationEvent event = invocation.getArgument(0);
+            if (event instanceof SyncCommitEvent) {
+                capturedEvent.set((SyncCommitEvent) event);
+            }
+            return null;
+        }).when(applicationEventHandler).add(any());
+
+        consumer.close(Duration.ZERO);
+
+        // A commit was triggered and not completed exceptionally by the wakeup
+        assertNotNull(capturedEvent.get());
+        assertFalse(capturedEvent.get().future().isCompletedExceptionally());
+    }
+
+    @Test
     public void testInterceptorAutoCommitOnClose() {
-        Properties props = requiredConsumerPropertiesAndGroupId("test-id");
+        Properties props = requiredConsumerConfigAndGroupId("test-id");
         props.setProperty(ConsumerConfig.INTERCEPTOR_CLASSES_CONFIG, MockConsumerInterceptor.class.getName());
         props.setProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "true");
 
@@ -933,7 +961,7 @@ public class AsyncKafkaConsumerTest {
 
     @Test
     public void testInterceptorCommitSync() {
-        Properties props = requiredConsumerPropertiesAndGroupId("test-id");
+        Properties props = requiredConsumerConfigAndGroupId("test-id");
         props.setProperty(ConsumerConfig.INTERCEPTOR_CLASSES_CONFIG, MockConsumerInterceptor.class.getName());
         props.setProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false");
 
@@ -948,7 +976,7 @@ public class AsyncKafkaConsumerTest {
 
     @Test
     public void testNoInterceptorCommitSyncFailed() {
-        Properties props = requiredConsumerPropertiesAndGroupId("test-id");
+        Properties props = requiredConsumerConfigAndGroupId("test-id");
         props.setProperty(ConsumerConfig.INTERCEPTOR_CLASSES_CONFIG, MockConsumerInterceptor.class.getName());
         props.setProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false");
 
@@ -964,7 +992,7 @@ public class AsyncKafkaConsumerTest {
 
     @Test
     public void testInterceptorCommitAsync() {
-        Properties props = requiredConsumerPropertiesAndGroupId("test-id");
+        Properties props = requiredConsumerConfigAndGroupId("test-id");
         props.setProperty(ConsumerConfig.INTERCEPTOR_CLASSES_CONFIG, MockConsumerInterceptor.class.getName());
         props.setProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false");
 
@@ -981,7 +1009,7 @@ public class AsyncKafkaConsumerTest {
 
     @Test
     public void testNoInterceptorCommitAsyncFailed() {
-        Properties props = requiredConsumerPropertiesAndGroupId("test-id");
+        Properties props = requiredConsumerConfigAndGroupId("test-id");
         props.setProperty(ConsumerConfig.INTERCEPTOR_CLASSES_CONFIG, MockConsumerInterceptor.class.getName());
         props.setProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false");
 
@@ -1081,7 +1109,7 @@ public class AsyncKafkaConsumerTest {
 
     @Test
     public void testGroupMetadataAfterCreationWithGroupIdIsNull() {
-        final Properties props = requiredConsumerProperties();
+        final Properties props = requiredConsumerConfig();
         final ConsumerConfig config = new ConsumerConfig(props);
         consumer = newConsumer(config);
 
@@ -1098,7 +1126,7 @@ public class AsyncKafkaConsumerTest {
     @Test
     public void testGroupMetadataAfterCreationWithGroupIdIsNotNull() {
         final String groupId = "consumerGroupA";
-        final ConsumerConfig config = new ConsumerConfig(requiredConsumerPropertiesAndGroupId(groupId));
+        final ConsumerConfig config = new ConsumerConfig(requiredConsumerConfigAndGroupId(groupId));
         consumer = newConsumer(config);
 
         final ConsumerGroupMetadata groupMetadata = consumer.groupMetadata();
@@ -1113,7 +1141,7 @@ public class AsyncKafkaConsumerTest {
     public void testGroupMetadataAfterCreationWithGroupIdIsNotNullAndGroupInstanceIdSet() {
         final String groupId = "consumerGroupA";
         final String groupInstanceId = "groupInstanceId1";
-        final Properties props = requiredConsumerPropertiesAndGroupId(groupId);
+        final Properties props = requiredConsumerConfigAndGroupId(groupId);
         props.put(ConsumerConfig.GROUP_INSTANCE_ID_CONFIG, groupInstanceId);
         final ConsumerConfig config = new ConsumerConfig(props);
         consumer = newConsumer(config);
@@ -1126,164 +1154,65 @@ public class AsyncKafkaConsumerTest {
         assertEquals(JoinGroupRequest.UNKNOWN_MEMBER_ID, groupMetadata.memberId());
     }
 
+    private MemberStateListener captureGroupMetadataUpdateListener(final MockedStatic<RequestManagers> requestManagers) {
+        ArgumentCaptor<MemberStateListener> applicationThreadMemberStateListener = ArgumentCaptor.forClass(MemberStateListener.class);
+        requestManagers.verify(() -> RequestManagers.supplier(
+            any(),
+            any(),
+            any(),
+            any(),
+            any(),
+            any(),
+            any(),
+            any(),
+            any(),
+            any(),
+            any(),
+            any(),
+            any(),
+            any(),
+            applicationThreadMemberStateListener.capture()
+        ));
+        return applicationThreadMemberStateListener.getValue();
+    }
+
     @Test
-    public void testGroupMetadataUpdateSingleCall() {
+    public void testGroupMetadataUpdate() {
         final String groupId = "consumerGroupA";
-        final ConsumerConfig config = new ConsumerConfig(requiredConsumerPropertiesAndGroupId(groupId));
-        consumer = newConsumer(config);
-
-        doReturn(Fetch.empty()).when(fetchCollector).collectFetch(any(FetchBuffer.class));
-        completeFetchedCommittedOffsetApplicationEventSuccessfully(mkMap());
-
-        final int generation = 1;
-        final String memberId = "newMemberId";
-        final ConsumerGroupMetadata expectedGroupMetadata = new ConsumerGroupMetadata(
-            groupId,
-            generation,
-            memberId,
-            Optional.empty()
-        );
-        final GroupMetadataUpdateEvent groupMetadataUpdateEvent = new GroupMetadataUpdateEvent(
-            generation,
-            memberId
-        );
-        backgroundEventQueue.add(groupMetadataUpdateEvent);
-        consumer.assign(singletonList(new TopicPartition("topic", 0)));
-        consumer.poll(Duration.ZERO);
-
-        final ConsumerGroupMetadata actualGroupMetadata = consumer.groupMetadata();
-
-        assertEquals(expectedGroupMetadata, actualGroupMetadata);
-
-        final ConsumerGroupMetadata secondActualGroupMetadataWithoutUpdate = consumer.groupMetadata();
-
-        assertEquals(expectedGroupMetadata, secondActualGroupMetadataWithoutUpdate);
-    }
-
-    @Test
-    public void testPollNotReturningRecordsIfGenerationUnknownAndGroupManagementIsUsedWithTopics() {
-        testPollNotReturningRecordsIfGenerationUnknownAndGroupManagementIsUsed(() -> {
-            consumer.subscribe(singletonList("topic"));
-        });
-    }
-
-    @Test
-    public void testPollNotReturningRecordsIfGenerationUnknownAndGroupManagementIsUsedWithPattern() {
-        testPollNotReturningRecordsIfGenerationUnknownAndGroupManagementIsUsed(() -> {
-            when(metadata.fetch()).thenReturn(Cluster.empty());
-            consumer.subscribe(Pattern.compile("topic"));
-        });
-    }
-
-    private void testPollNotReturningRecordsIfGenerationUnknownAndGroupManagementIsUsed(final Runnable subscription) {
-        final String groupId = "consumerGroupA";
-        final ConsumerConfig config = new ConsumerConfig(requiredConsumerPropertiesAndGroupId(groupId));
-        consumer = newConsumer(config);
-        subscription.run();
-
-        consumer.poll(Duration.ZERO);
-
-        verify(fetchCollector, never()).collectFetch(any(FetchBuffer.class));
-    }
-
-    @Test
-    public void testPollReturningRecordsIfGroupIdSetAndGroupManagementIsNotUsed() {
-        final ConsumerConfig config = new ConsumerConfig(requiredConsumerPropertiesAndGroupId("consumerGroupA"));
-        testPollReturningRecordsIfGroupMetadataHasUnknownGenerationAndGroupManagementIsNotUsed(config);
-    }
-
-    @Test
-    public void testPollReturningRecordsIfGroupIdNotSetAndGroupManagementIsNotUsed() {
-        final ConsumerConfig config = new ConsumerConfig(requiredConsumerProperties());
-        testPollReturningRecordsIfGroupMetadataHasUnknownGenerationAndGroupManagementIsNotUsed(config);
-    }
-
-    private void testPollReturningRecordsIfGroupMetadataHasUnknownGenerationAndGroupManagementIsNotUsed(final ConsumerConfig config) {
-        final String topic = "topic";
-        final TopicPartition topicPartition = new TopicPartition(topic, 0);
-        consumer = newConsumer(config);
-        consumer.assign(singletonList(topicPartition));
-        final List<ConsumerRecord<String, String>> records = singletonList(
-            new ConsumerRecord<>(topic, 0, 2, "key1", "value1")
-        );
-        when(fetchCollector.collectFetch(any(FetchBuffer.class)))
-            .thenReturn(Fetch.forPartition(topicPartition, records, true));
-        completeFetchedCommittedOffsetApplicationEventSuccessfully(mkMap());
-
-        consumer.poll(Duration.ZERO);
-
-        verify(fetchCollector).collectFetch(any(FetchBuffer.class));
-    }
-
-    @Test
-    public void testPollReturningRecordIfGenerationKnownAndGroupManagementIsUsedWithTopics() {
-        final String topic = "topic";
-        testPollReturningRecordIfGenerationKnownAndGroupManagementIsUsed(
-            topic,
-            () -> {
-                consumer.subscribe(singletonList(topic));
-            });
-    }
-
-    @Test
-    public void testPollReturningRecordIfGenerationKnownAndGroupManagementIsUsedWithPattern() {
-        final String topic = "topic";
-        testPollReturningRecordIfGenerationKnownAndGroupManagementIsUsed(
-            topic,
-            () -> {
-                when(metadata.fetch()).thenReturn(Cluster.empty());
-                consumer.subscribe(Pattern.compile(topic));
-            });
-    }
-
-    private void testPollReturningRecordIfGenerationKnownAndGroupManagementIsUsed(final String topic,
-                                                                                  final Runnable subscription) {
-        final ConsumerConfig config = new ConsumerConfig(requiredConsumerPropertiesAndGroupId("consumerGroupA"));
-        final int generation = 1;
-        final String memberId = "newMemberId";
-        final GroupMetadataUpdateEvent groupMetadataUpdateEvent = new GroupMetadataUpdateEvent(
-            generation,
-            memberId
-        );
-        backgroundEventQueue.add(groupMetadataUpdateEvent);
-        final TopicPartition topicPartition = new TopicPartition(topic, 0);
-        final List<ConsumerRecord<String, String>> records = singletonList(
-            new ConsumerRecord<>(topic, 0, 2, "key1", "value1")
-        );
-        when(fetchCollector.collectFetch(any(FetchBuffer.class)))
-            .thenReturn(Fetch.forPartition(topicPartition, records, true));
-        consumer = newConsumer(config);
-        subscription.run();
-
-        consumer.poll(Duration.ZERO);
-
-        verify(fetchCollector).collectFetch(any(FetchBuffer.class));
+        final ConsumerConfig config = new ConsumerConfig(requiredConsumerConfigAndGroupId(groupId));
+        try (final MockedStatic<RequestManagers> requestManagers = mockStatic(RequestManagers.class)) {
+            consumer = newConsumer(config);
+            final ConsumerGroupMetadata oldGroupMetadata = consumer.groupMetadata();
+            final MemberStateListener groupMetadataUpdateListener = captureGroupMetadataUpdateListener(requestManagers);
+            final int expectedMemberEpoch = 42;
+            final String expectedMemberId = "memberId";
+            groupMetadataUpdateListener.onMemberEpochUpdated(
+                Optional.of(expectedMemberEpoch),
+                Optional.of(expectedMemberId)
+            );
+            final ConsumerGroupMetadata newGroupMetadata = consumer.groupMetadata();
+            assertEquals(oldGroupMetadata.groupId(), newGroupMetadata.groupId());
+            assertEquals(expectedMemberId, newGroupMetadata.memberId());
+            assertEquals(expectedMemberEpoch, newGroupMetadata.generationId());
+            assertEquals(oldGroupMetadata.groupInstanceId(), newGroupMetadata.groupInstanceId());
+        }
     }
 
     @Test
     public void testGroupMetadataIsResetAfterUnsubscribe() {
         final String groupId = "consumerGroupA";
-        final ConsumerConfig config = new ConsumerConfig(requiredConsumerPropertiesAndGroupId(groupId));
-        consumer = newConsumer(config);
-        consumer.subscribe(singletonList("topic"));
-        final int generation = 1;
-        final String memberId = "newMemberId";
-        final ConsumerGroupMetadata groupMetadataAfterSubscription = new ConsumerGroupMetadata(
-            groupId,
-            generation,
-            memberId,
-            Optional.empty()
-        );
-        final GroupMetadataUpdateEvent groupMetadataUpdateEvent = new GroupMetadataUpdateEvent(
-            generation,
-            memberId
-        );
-        backgroundEventQueue.add(groupMetadataUpdateEvent);
-        when(fetchCollector.collectFetch(any(FetchBuffer.class))).thenReturn(Fetch.empty());
-        consumer.poll(Duration.ZERO);
-
-        assertEquals(groupMetadataAfterSubscription, consumer.groupMetadata());
-
+        final ConsumerConfig config = new ConsumerConfig(requiredConsumerConfigAndGroupId(groupId));
+        try (final MockedStatic<RequestManagers> requestManagers = mockStatic(RequestManagers.class)) {
+            consumer = newConsumer(config);
+            final MemberStateListener groupMetadataUpdateListener = captureGroupMetadataUpdateListener(requestManagers);
+            consumer.subscribe(singletonList("topic"));
+            final int memberEpoch = 42;
+            final String memberId = "memberId";
+            groupMetadataUpdateListener.onMemberEpochUpdated(Optional.of(memberEpoch), Optional.of(memberId));
+            final ConsumerGroupMetadata groupMetadata = consumer.groupMetadata();
+            assertNotEquals(JoinGroupRequest.UNKNOWN_GENERATION_ID, groupMetadata.generationId());
+            assertNotEquals(JoinGroupRequest.UNKNOWN_MEMBER_ID, groupMetadata.memberId());
+        }
         completeUnsubscribeApplicationEventSuccessfully();
 
         consumer.unsubscribe();
@@ -1294,7 +1223,6 @@ public class AsyncKafkaConsumerTest {
             JoinGroupRequest.UNKNOWN_MEMBER_ID,
             Optional.empty()
         );
-
         assertEquals(groupMetadataAfterUnsubscription, consumer.groupMetadata());
     }
 
@@ -1375,7 +1303,7 @@ public class AsyncKafkaConsumerTest {
     @Test
     public void testBackgroundError() {
         final String groupId = "consumerGroupA";
-        final ConsumerConfig config = new ConsumerConfig(requiredConsumerPropertiesAndGroupId(groupId));
+        final ConsumerConfig config = new ConsumerConfig(requiredConsumerConfigAndGroupId(groupId));
         consumer = newConsumer(config);
 
         final KafkaException expectedException = new KafkaException("Nobody expects the Spanish Inquisition");
@@ -1390,7 +1318,7 @@ public class AsyncKafkaConsumerTest {
     @Test
     public void testMultipleBackgroundErrors() {
         final String groupId = "consumerGroupA";
-        final ConsumerConfig config = new ConsumerConfig(requiredConsumerPropertiesAndGroupId(groupId));
+        final ConsumerConfig config = new ConsumerConfig(requiredConsumerConfigAndGroupId(groupId));
         consumer = newConsumer(config);
 
         final KafkaException expectedException1 = new KafkaException("Nobody expects the Spanish Inquisition");
@@ -1408,7 +1336,7 @@ public class AsyncKafkaConsumerTest {
 
     @Test
     public void testGroupRemoteAssignorUnusedIfGroupIdUndefined() {
-        final Properties props = requiredConsumerProperties();
+        final Properties props = requiredConsumerConfig();
         props.put(ConsumerConfig.GROUP_REMOTE_ASSIGNOR_CONFIG, "someAssignor");
         final ConsumerConfig config = new ConsumerConfig(props);
         consumer = newConsumer(config);
@@ -1418,7 +1346,7 @@ public class AsyncKafkaConsumerTest {
 
     @Test
     public void testGroupRemoteAssignorUnusedInGenericProtocol() {
-        final Properties props = requiredConsumerProperties();
+        final Properties props = requiredConsumerConfig();
         props.put(ConsumerConfig.GROUP_ID_CONFIG, "consumerGroupA");
         props.put(ConsumerConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.CLASSIC.name().toLowerCase(Locale.ROOT));
         props.put(ConsumerConfig.GROUP_REMOTE_ASSIGNOR_CONFIG, "someAssignor");
@@ -1430,7 +1358,7 @@ public class AsyncKafkaConsumerTest {
 
     @Test
     public void testGroupRemoteAssignorUsedInConsumerProtocol() {
-        final Properties props = requiredConsumerProperties();
+        final Properties props = requiredConsumerConfig();
         props.put(ConsumerConfig.GROUP_ID_CONFIG, "consumerGroupA");
         props.put(ConsumerConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.CONSUMER.name().toLowerCase(Locale.ROOT));
         props.put(ConsumerConfig.GROUP_REMOTE_ASSIGNOR_CONFIG, "someAssignor");
@@ -1442,7 +1370,7 @@ public class AsyncKafkaConsumerTest {
 
     @Test
     public void testGroupIdNull() {
-        final Properties props = requiredConsumerProperties();
+        final Properties props = requiredConsumerConfig();
         props.put(ConsumerConfig.AUTO_COMMIT_INTERVAL_MS_CONFIG, 10000);
         props.put(THROW_ON_FETCH_STABLE_OFFSET_UNSUPPORTED, true);
         final ConsumerConfig config = new ConsumerConfig(props);
@@ -1454,7 +1382,7 @@ public class AsyncKafkaConsumerTest {
 
     @Test
     public void testGroupIdNotNullAndValid() {
-        final Properties props = requiredConsumerPropertiesAndGroupId("consumerGroupA");
+        final Properties props = requiredConsumerConfigAndGroupId("consumerGroupA");
         props.put(ConsumerConfig.AUTO_COMMIT_INTERVAL_MS_CONFIG, 10000);
         props.put(THROW_ON_FETCH_STABLE_OFFSET_UNSUPPORTED, true);
         final ConsumerConfig config = new ConsumerConfig(props);
@@ -1488,7 +1416,6 @@ public class AsyncKafkaConsumerTest {
         final TopicPartition tp = new TopicPartition("topic", 0);
         final List<ConsumerRecord<String, String>> records = singletonList(
                 new ConsumerRecord<>("topic", 0, 2, "key1", "value1"));
-        backgroundEventQueue.add(new GroupMetadataUpdateEvent(1, "memberId"));
         doAnswer(invocation -> Fetch.forPartition(tp, records, true))
                 .when(fetchCollector)
                 .collectFetch(Mockito.any(FetchBuffer.class));
@@ -1499,7 +1426,7 @@ public class AsyncKafkaConsumerTest {
     }
 
     private void testInvalidGroupId(final String groupId) {
-        final Properties props = requiredConsumerPropertiesAndGroupId(groupId);
+        final Properties props = requiredConsumerConfigAndGroupId(groupId);
         final ConsumerConfig config = new ConsumerConfig(props);
 
         final Exception exception = assertThrows(
@@ -1510,17 +1437,9 @@ public class AsyncKafkaConsumerTest {
         assertEquals("Failed to construct kafka consumer", exception.getMessage());
     }
 
-    private Properties requiredConsumerPropertiesAndGroupId(final String groupId) {
-        final Properties props = requiredConsumerProperties();
+    private Properties requiredConsumerConfigAndGroupId(final String groupId) {
+        final Properties props = requiredConsumerConfig();
         props.put(ConsumerConfig.GROUP_ID_CONFIG, groupId);
-        return props;
-    }
-
-    private Properties requiredConsumerProperties() {
-        final Properties props = new Properties();
-        props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
-        props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
-        props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9091");
         return props;
     }
 
@@ -1584,13 +1503,6 @@ public class AsyncKafkaConsumerTest {
             new ConsumerRecord<>(topicName, partition, 3, "key2", "value2")
         );
 
-        final int generation = 1;
-        final String memberId = "newMemberId";
-        final GroupMetadataUpdateEvent groupMetadataUpdateEvent = new GroupMetadataUpdateEvent(
-            generation,
-            memberId
-        );
-        backgroundEventQueue.add(groupMetadataUpdateEvent);
         // On the first iteration, return no data; on the second, return two records
         doAnswer(invocation -> {
             // Mock the subscription being assigned as the first fetch is collected
