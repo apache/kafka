@@ -38,7 +38,9 @@ class OffsetValidationTest(VerifiableConsumerTest):
             for node in consumer.nodes[keep_alive:]:
                 consumer.stop_node(node, clean_shutdown)
 
-                self.await_members_stopped(consumer, 1, self.session_timeout_sec + 5)
+                wait_until(lambda: len(consumer.dead_nodes()) == 1,
+                           timeout_sec=self.session_timeout_sec+5,
+                           err_msg="Timed out waiting for the consumer to shutdown")
 
                 consumer.start_node(node)
 
@@ -50,7 +52,8 @@ class OffsetValidationTest(VerifiableConsumerTest):
             for node in consumer.nodes[keep_alive:]:
                 consumer.stop_node(node, clean_shutdown)
 
-            self.await_members_stopped(consumer, self.num_consumers - keep_alive, 10)
+            wait_until(lambda: len(consumer.dead_nodes()) == self.num_consumers - keep_alive, timeout_sec=10,
+                       err_msg="Timed out waiting for the consumers to shutdown")
 
             for node in consumer.nodes[keep_alive:]:
                 consumer.start_node(node)
@@ -398,8 +401,9 @@ class OffsetValidationTest(VerifiableConsumerTest):
 
         # stop the partition owner and await its shutdown
         consumer.kill_node(partition_owner, clean_shutdown=clean_shutdown)
-        self.await_members_stopped(consumer, 1, self.session_timeout_sec * 2 + 5)
-        self.await_partition_assigned(consumer, partition)
+        wait_until(lambda: len(consumer.joined_nodes()) == (self.num_consumers - 1) and consumer.owner(partition) is not None,
+                   timeout_sec=self.session_timeout_sec*2+5,
+                   err_msg="Timed out waiting for consumer to close")
 
         # ensure that the remaining consumer does some work after rebalancing
         self.await_consumed_messages(consumer, min_messages=1000)
@@ -577,4 +581,7 @@ class AssignmentValidationTest(VerifiableConsumerTest):
         for num_started, node in enumerate(consumer.nodes, 1):
             consumer.start_node(node)
             self.await_members(consumer, num_started)
-            self.await_valid_assignment(consumer, self.TOPIC, self.NUM_PARTITIONS, num_started)
+            assert self.valid_assignment(self.TOPIC, self.NUM_PARTITIONS, consumer.current_assignment()), \
+                "expected valid assignments of %d partitions when num_started %d: %s" % \
+                (self.NUM_PARTITIONS, num_started, \
+                 [(str(node.account), a) for node, a in consumer.current_assignment().items()])
