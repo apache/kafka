@@ -200,6 +200,7 @@ object AbstractCoordinatorConcurrencyTest {
       producerId: Long,
       producerEpoch: Short,
       baseSequence: Int,
+      shouldAddPartition: Boolean,
       callback: ((Errors, VerificationGuard)) => Unit
     ): Unit = {
       // Skip verification

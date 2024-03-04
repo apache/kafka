@@ -1188,7 +1188,8 @@ public class CoordinatorRuntimeTest {
             TP,
             "transactional-id",
             100L,
-            (short) 50
+            (short) 50,
+            false
         )).thenReturn(CompletableFuture.completedFuture(guard));
 
         // Schedule a transactional write.
@@ -1199,7 +1200,8 @@ public class CoordinatorRuntimeTest {
             100L,
             (short) 50,
             Duration.ofMillis(5000),
-            state -> new CoordinatorResult<>(Arrays.asList("record1", "record2"), "response")
+            state -> new CoordinatorResult<>(Arrays.asList("record1", "record2"), "response"),
+            false
         );
 
         // Verify that the writer got the records with the correct
@@ -1270,7 +1272,8 @@ public class CoordinatorRuntimeTest {
             TP,
             "transactional-id",
             100L,
-            (short) 50
+            (short) 50,
+            false
         )).thenReturn(FutureUtils.failedFuture(Errors.NOT_ENOUGH_REPLICAS.exception()));
 
         // Schedule a transactional write.
@@ -1281,7 +1284,8 @@ public class CoordinatorRuntimeTest {
             100L,
             (short) 50,
             Duration.ofMillis(5000),
-            state -> new CoordinatorResult<>(Arrays.asList("record1", "record2"), "response")
+            state -> new CoordinatorResult<>(Arrays.asList("record1", "record2"), "response"),
+            false
         );
 
         // Verify that the future is failed with the expected exception.
@@ -1333,7 +1337,8 @@ public class CoordinatorRuntimeTest {
             100L,
             (short) 5,
             DEFAULT_WRITE_TIMEOUT,
-            state -> new CoordinatorResult<>(Arrays.asList("record1", "record2"), "response1")
+            state -> new CoordinatorResult<>(Arrays.asList("record1", "record2"), "response1"),
+            false
         );
 
         // Verify that the write is not committed yet.
@@ -1498,7 +1503,8 @@ public class CoordinatorRuntimeTest {
             100L,
             (short) 5,
             DEFAULT_WRITE_TIMEOUT,
-            state -> new CoordinatorResult<>(Arrays.asList("record1", "record2"), "response1"));
+            state -> new CoordinatorResult<>(Arrays.asList("record1", "record2"), "response1"),
+            false);
 
         // Verify that the state has been updated.
         assertEquals(2L, ctx.coordinator.lastWrittenOffset());
@@ -1580,7 +1586,8 @@ public class CoordinatorRuntimeTest {
             100L,
             (short) 5,
             DEFAULT_WRITE_TIMEOUT,
-            state -> new CoordinatorResult<>(Arrays.asList("record1", "record2"), "response1"));
+            state -> new CoordinatorResult<>(Arrays.asList("record1", "record2"), "response1"),
+            false);
 
         // Verify that the state has been updated.
         assertEquals(2L, ctx.coordinator.lastWrittenOffset());

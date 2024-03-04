@@ -343,6 +343,7 @@ class CoordinatorPartitionWriterTest {
       ArgumentMatchers.eq(10L),
       ArgumentMatchers.eq(5.toShort),
       ArgumentMatchers.eq(RecordBatch.NO_SEQUENCE),
+      ArgumentMatchers.eq(false),
       callbackCapture.capture()
     )).thenAnswer(_ => {
       callbackCapture.getValue.apply((
@@ -355,7 +356,8 @@ class CoordinatorPartitionWriterTest {
       tp,
       "transactional-id",
       10L,
-      5.toShort
+      5.toShort,
+      false
     )
 
     if (error == Errors.NONE) {

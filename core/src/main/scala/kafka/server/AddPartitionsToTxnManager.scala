@@ -73,11 +73,12 @@ class AddPartitionsToTxnManager(
   private val verificationFailureRate = metricsGroup.newMeter(VerificationFailureRateMetricName, "failures", TimeUnit.SECONDS)
   private val verificationTimeMs = metricsGroup.newHistogram(VerificationTimeMsMetricName)
 
-  def verifyTransaction(
+  def addOrVerifyTransaction(
     transactionalId: String,
     producerId: Long,
     producerEpoch: Short,
     topicPartitions: Seq[TopicPartition],
+    shouldAddPartition: Boolean,
     callback: AddPartitionsToTxnManager.AppendCallback
   ): Unit = {
     val (error, node) = getTransactionCoordinator(partitionFor(transactionalId))
@@ -96,7 +97,7 @@ class AddPartitionsToTxnManager(
         .setTransactionalId(transactionalId)
         .setProducerId(producerId)
         .setProducerEpoch(producerEpoch)
-        .setVerifyOnly(true)
+        .setVerifyOnly(!shouldAddPartition)
         .setTopics(topicCollection)
 
       addTxnData(node, transactionData, callback)

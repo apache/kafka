@@ -124,10 +124,11 @@ public interface PartitionWriter<T> {
     /**
      * Verify the transaction.
      *
-     * @param tp                The partition to write records to.
-     * @param transactionalId   The transactional id.
-     * @param producerId        The producer id.
-     * @param producerEpoch     The producer epoch.
+     * @param tp                      The partition to write records to.
+     * @param transactionalId         The transactional id.
+     * @param producerId              The producer id.
+     * @param producerEpoch           The producer epoch.
+     * @param transactionV2Requested  Whether the caller request to use transaction V2.
      * @return A future failed with any error encountered; or the {@link VerificationGuard}
      *         if the transaction required verification and {@link VerificationGuard#SENTINEL}
      *         if it did not.
@@ -137,6 +138,7 @@ public interface PartitionWriter<T> {
         TopicPartition tp,
         String transactionalId,
         long producerId,
-        short producerEpoch
+        short producerEpoch,
+        boolean transactionV2Requested
     ) throws KafkaException;
 }

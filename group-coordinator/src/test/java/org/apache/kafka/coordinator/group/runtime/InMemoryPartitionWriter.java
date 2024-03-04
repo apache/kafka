@@ -274,7 +274,8 @@ public class InMemoryPartitionWriter<T> implements PartitionWriter<T> {
         TopicPartition tp,
         String transactionalId,
         long producerId,
-        short producerEpoch
+        short producerEpoch,
+        boolean transactionV2Requested
     ) throws KafkaException {
         return CompletableFuture.completedFuture(new VerificationGuard());
     }
