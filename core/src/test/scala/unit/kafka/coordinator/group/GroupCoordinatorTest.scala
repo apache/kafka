@@ -3823,6 +3823,7 @@ class GroupCoordinatorTest {
     assertTrue(groupCoordinator.tryCompleteHeartbeat(group, leaderMemberId, false, () => true))
   }
 
+  //TODO(caliu) add a new test case with the correct error mapping.
   @Test
   def testVerificationErrorsForTxnOffsetCommits(): Unit = {
     val tip1 = new TopicIdPartition(Uuid.randomUuid(), 0, "topic-1")

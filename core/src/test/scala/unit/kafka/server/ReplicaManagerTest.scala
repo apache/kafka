@@ -17,24 +17,19 @@
 
 package kafka.server
 
-import java.io.File
-import java.io.ByteArrayInputStream
-import java.net.InetAddress
-import java.nio.file.{Files, Paths}
-import java.util
-import java.util.concurrent.atomic.{AtomicBoolean, AtomicLong, AtomicReference}
-import java.util.concurrent.{Callable, CountDownLatch, TimeUnit}
-import java.util.stream.IntStream
-import java.util.{Collections, Optional, OptionalLong, Properties}
+import com.yammer.metrics.core.{Gauge, Meter}
 import kafka.api._
 import kafka.cluster.PartitionTest.MockPartitionListener
 import kafka.cluster.{BrokerEndPoint, Partition}
 import kafka.log._
+import kafka.log.remote.RemoteLogManager
 import kafka.server.QuotaFactory.{QuotaManagers, UnboundedQuota}
 import kafka.server.checkpoints.{LazyOffsetCheckpoints, OffsetCheckpointFile}
 import kafka.server.epoch.util.MockBlockingSender
 import kafka.utils.{Exit, Pool, TestInfoUtils, TestUtils}
+import kafka.zk.KafkaZkClient
 import org.apache.kafka.clients.FetchSessionHandler
+import org.apache.kafka.common.config.{AbstractConfig, TopicConfig}
 import org.apache.kafka.common.errors.{InvalidPidMappingException, KafkaStorageException}
 import org.apache.kafka.common.message.LeaderAndIsrRequestData
 import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrPartitionState
@@ -45,44 +40,47 @@ import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.record._
-import org.apache.kafka.common.replica.{ClientMetadata, PartitionView, ReplicaSelector, ReplicaView}
 import org.apache.kafka.common.replica.ClientMetadata.DefaultClientMetadata
 import org.apache.kafka.common.replica.ReplicaView.DefaultReplicaView
+import org.apache.kafka.common.replica.{ClientMetadata, PartitionView, ReplicaSelector, ReplicaView}
 import org.apache.kafka.common.requests.FetchRequest.PartitionData
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.utils.{LogContext, Time, Utils}
-import org.apache.kafka.common.{DirectoryId, IsolationLevel, Node, TopicIdPartition, TopicPartition, Uuid}
+import org.apache.kafka.common._
 import org.apache.kafka.image._
 import org.apache.kafka.metadata.LeaderConstants.NO_LEADER
 import org.apache.kafka.metadata.LeaderRecoveryState
 import org.apache.kafka.metadata.migration.ZkMigrationState
-import org.apache.kafka.server.common.{DirectoryEventHandler, OffsetAndEpoch}
-import org.apache.kafka.server.common.MetadataVersion
+import org.apache.kafka.metadata.properties.{MetaProperties, MetaPropertiesEnsemble, MetaPropertiesVersion, PropertiesUtils}
+import org.apache.kafka.raft.RaftConfig
 import org.apache.kafka.server.common.MetadataVersion.IBP_2_6_IV0
-import org.apache.kafka.server.log.remote.storage.{NoOpRemoteLogMetadataManager, NoOpRemoteStorageManager, RemoteLogManagerConfig, RemoteLogSegmentMetadata, RemoteStorageException, RemoteStorageManager}
+import org.apache.kafka.server.common.{DirectoryEventHandler, MetadataVersion, OffsetAndEpoch}
+import org.apache.kafka.server.log.remote.storage._
 import org.apache.kafka.server.metrics.{KafkaMetricsGroup, KafkaYammerMetrics}
+import org.apache.kafka.server.util.timer.MockTimer
 import org.apache.kafka.server.util.{MockScheduler, MockTime}
-import org.apache.kafka.storage.internals.log.{AppendOrigin, FetchDataInfo, FetchIsolation, FetchParams, FetchPartitionData, LogConfig, LogDirFailureChannel, LogOffsetMetadata, LogOffsetSnapshot, LogSegments, LogStartOffsetIncrementReason, ProducerStateManager, ProducerStateManagerConfig, RemoteStorageFetchInfo, VerificationGuard}
+import org.apache.kafka.storage.internals.checkpoint.PartitionMetadataFile
+import org.apache.kafka.storage.internals.log._
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterAll, AfterEach, BeforeEach, Test}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{EnumSource, ValueSource}
-import com.yammer.metrics.core.{Gauge, Meter}
-import kafka.log.remote.RemoteLogManager
-import kafka.zk.KafkaZkClient
-import org.apache.kafka.common.config.{AbstractConfig, TopicConfig}
-import org.apache.kafka.metadata.properties.{MetaProperties, MetaPropertiesEnsemble, MetaPropertiesVersion, PropertiesUtils}
-import org.apache.kafka.raft.RaftConfig
-import org.apache.kafka.server.util.timer.MockTimer
-import org.apache.kafka.storage.internals.checkpoint.PartitionMetadataFile
+import org.mockito.ArgumentMatchers._
+import org.mockito.Mockito._
 import org.mockito.invocation.InvocationOnMock
 import org.mockito.stubbing.Answer
 import org.mockito.{ArgumentCaptor, ArgumentMatchers}
-import org.mockito.ArgumentMatchers.{any, anyBoolean, anyInt, anyLong, anyMap, anySet, anyString}
-import org.mockito.Mockito.{atLeastOnce, doAnswer, doReturn, mock, mockConstruction, never, reset, spy, times, verify, verifyNoInteractions, verifyNoMoreInteractions, when}
 
+import java.io.{ByteArrayInputStream, File}
+import java.net.InetAddress
+import java.nio.file.{Files, Paths}
+import java.util
+import java.util.concurrent.atomic.{AtomicBoolean, AtomicLong, AtomicReference}
+import java.util.concurrent.{Callable, CountDownLatch, TimeUnit}
+import java.util.stream.IntStream
+import java.util.{Collections, Optional, OptionalLong, Properties}
 import scala.collection.{Map, Seq, mutable}
 import scala.compat.java8.OptionConverters.RichOptionForJava8
 import scala.jdk.CollectionConverters._
@@ -133,7 +131,7 @@ class ReplicaManagerTest {
     addPartitionsToTxnManager = mock(classOf[AddPartitionsToTxnManager])
 
     // Anytime we try to verify, just automatically run the callback as though the transaction was verified.
-    when(addPartitionsToTxnManager.verifyTransaction(any(), any(), any(), any(), any(), any())).thenAnswer { invocationOnMock =>
+    when(addPartitionsToTxnManager.addOrVerifyTransaction(any(), any(), any(), any(), any(), any())).thenAnswer { invocationOnMock =>
       val callback = invocationOnMock.getArgument(4, classOf[AddPartitionsToTxnManager.AppendCallback])
       callback(Map.empty[TopicPartition, Errors].toMap)
     }
@@ -2183,7 +2181,7 @@ class ReplicaManagerTest {
       val idempotentRecords = MemoryRecords.withIdempotentRecords(CompressionType.NONE, producerId, producerEpoch, sequence,
         new SimpleRecord("message".getBytes))
       handleProduceAppend(replicaManager, tp0, idempotentRecords, transactionalId = null)
-      verify(addPartitionsToTxnManager, times(0)).verifyTransaction(any(), any(), any(), any(), any[AddPartitionsToTxnManager.AppendCallback](), any())
+      verify(addPartitionsToTxnManager, times(0)).addOrVerifyTransaction(any(), any(), any(), any(), any[AddPartitionsToTxnManager.AppendCallback](), any())
       assertEquals(VerificationGuard.SENTINEL, getVerificationGuard(replicaManager, tp0, producerId))
 
       // If we supply a transactional ID and some transactional and some idempotent records, we should only verify the topic partition with transactional records.
@@ -2193,7 +2191,7 @@ class ReplicaManagerTest {
       val idempotentRecords2 = MemoryRecords.withIdempotentRecords(CompressionType.NONE, producerId, producerEpoch, sequence,
         new SimpleRecord("message".getBytes))
       handleProduceAppendToMultipleTopics(replicaManager, Map(tp0 -> transactionalRecords, tp1 -> idempotentRecords2), transactionalId)
-      verify(addPartitionsToTxnManager, times(1)).verifyTransaction(
+      verify(addPartitionsToTxnManager, times(1)).addOrVerifyTransaction(
         ArgumentMatchers.eq(transactionalId),
         ArgumentMatchers.eq(producerId),
         ArgumentMatchers.eq(producerEpoch),
@@ -2230,7 +2228,7 @@ class ReplicaManagerTest {
       // We should add these partitions to the manager to verify.
       val result = handleProduceAppend(replicaManager, tp0, transactionalRecords, origin = appendOrigin, transactionalId = transactionalId)
       val appendCallback = ArgumentCaptor.forClass(classOf[AddPartitionsToTxnManager.AppendCallback])
-      verify(addPartitionsToTxnManager, times(1)).verifyTransaction(
+      verify(addPartitionsToTxnManager, times(1)).addOrVerifyTransaction(
         ArgumentMatchers.eq(transactionalId),
         ArgumentMatchers.eq(producerId),
         ArgumentMatchers.eq(producerEpoch),
@@ -2250,7 +2248,7 @@ class ReplicaManagerTest {
       // This time verification is successful.
       handleProduceAppend(replicaManager, tp0, transactionalRecords, origin = appendOrigin, transactionalId = transactionalId)
       val appendCallback2 = ArgumentCaptor.forClass(classOf[AddPartitionsToTxnManager.AppendCallback])
-      verify(addPartitionsToTxnManager, times(2)).verifyTransaction(
+      verify(addPartitionsToTxnManager, times(2)).addOrVerifyTransaction(
         ArgumentMatchers.eq(transactionalId),
         ArgumentMatchers.eq(producerId),
         ArgumentMatchers.eq(producerEpoch),
@@ -2290,7 +2288,7 @@ class ReplicaManagerTest {
       // We should add these partitions to the manager to verify.
       val result = handleProduceAppend(replicaManager, tp0, transactionalRecords, transactionalId = transactionalId)
       val appendCallback = ArgumentCaptor.forClass(classOf[AddPartitionsToTxnManager.AppendCallback])
-      verify(addPartitionsToTxnManager, times(1)).verifyTransaction(
+      verify(addPartitionsToTxnManager, times(1)).addOrVerifyTransaction(
         ArgumentMatchers.eq(transactionalId),
         ArgumentMatchers.eq(producerId),
         ArgumentMatchers.eq(producerEpoch),
@@ -2313,7 +2311,7 @@ class ReplicaManagerTest {
 
       val result2 = handleProduceAppend(replicaManager, tp0, transactionalRecords2, transactionalId = transactionalId)
       val appendCallback2 = ArgumentCaptor.forClass(classOf[AddPartitionsToTxnManager.AppendCallback])
-      verify(addPartitionsToTxnManager, times(2)).verifyTransaction(
+      verify(addPartitionsToTxnManager, times(2)).addOrVerifyTransaction(
         ArgumentMatchers.eq(transactionalId),
         ArgumentMatchers.eq(producerId),
         ArgumentMatchers.eq(producerEpoch),
@@ -2397,7 +2395,7 @@ class ReplicaManagerTest {
       assertThrows(classOf[InvalidPidMappingException],
         () => handleProduceAppendToMultipleTopics(replicaManager, transactionalRecords, transactionalId = transactionalId))
       // We should not add these partitions to the manager to verify.
-      verify(addPartitionsToTxnManager, times(0)).verifyTransaction(any(), any(), any(), any(), any(), any())
+      verify(addPartitionsToTxnManager, times(0)).addOrVerifyTransaction(any(), any(), any(), any(), any(), any())
     } finally {
       replicaManager.shutdown(checkpointHW = false)
     }
@@ -2421,7 +2419,7 @@ class ReplicaManagerTest {
       handleProduceAppend(replicaManager, tp0, transactionalRecords, transactionalId = transactionalId).onFire { response =>
         assertEquals(Errors.NOT_LEADER_OR_FOLLOWER, response.error)
       }
-      verify(addPartitionsToTxnManager, times(0)).verifyTransaction(any(), any(), any(), any(), any(), any())
+      verify(addPartitionsToTxnManager, times(0)).addOrVerifyTransaction(any(), any(), any(), any(), any(), any())
     } finally {
       replicaManager.shutdown(checkpointHW = false)
     }
@@ -2455,7 +2453,7 @@ class ReplicaManagerTest {
       assertEquals(VerificationGuard.SENTINEL, getVerificationGuard(replicaManager, tp, producerId))
 
       // We should not add these partitions to the manager to verify.
-      verify(addPartitionsToTxnManager, times(0)).verifyTransaction(any(), any(), any(), any(), any(), any())
+      verify(addPartitionsToTxnManager, times(0)).addOrVerifyTransaction(any(), any(), any(), any(), any(), any())
 
       // Dynamically enable verification.
       config.dynamicConfig.initialize(None, None)
@@ -2469,7 +2467,7 @@ class ReplicaManagerTest {
         new SimpleRecord("message".getBytes))
 
       handleProduceAppend(replicaManager, tp, moreTransactionalRecords, transactionalId = transactionalId)
-      verify(addPartitionsToTxnManager, times(0)).verifyTransaction(any(), any(), any(), any(), any(), any())
+      verify(addPartitionsToTxnManager, times(0)).addOrVerifyTransaction(any(), any(), any(), any(), any(), any())
       assertEquals(VerificationGuard.SENTINEL, getVerificationGuard(replicaManager, tp, producerId))
       assertTrue(replicaManager.localLog(tp).get.hasOngoingTransaction(producerId))
     } finally {
@@ -2498,7 +2496,7 @@ class ReplicaManagerTest {
       // We should add these partitions to the manager to verify.
       val result = handleProduceAppend(replicaManager, tp0, transactionalRecords, transactionalId = transactionalId)
       val appendCallback = ArgumentCaptor.forClass(classOf[AddPartitionsToTxnManager.AppendCallback])
-      verify(addPartitionsToTxnManager, times(1)).verifyTransaction(
+      verify(addPartitionsToTxnManager, times(1)).addOrVerifyTransaction(
         ArgumentMatchers.eq(transactionalId),
         ArgumentMatchers.eq(producerId),
         ArgumentMatchers.eq(producerEpoch),
@@ -2524,7 +2522,7 @@ class ReplicaManagerTest {
 
       // This time we do not verify
       handleProduceAppend(replicaManager, tp0, transactionalRecords, transactionalId = transactionalId)
-      verify(addPartitionsToTxnManager, times(1)).verifyTransaction(any(), any(), any(), any(), any(), any())
+      verify(addPartitionsToTxnManager, times(1)).addOrVerifyTransaction(any(), any(), any(), any(), any(), any())
       assertEquals(VerificationGuard.SENTINEL, getVerificationGuard(replicaManager, tp0, producerId))
       assertTrue(replicaManager.localLog(tp0).get.hasOngoingTransaction(producerId))
     } finally {
@@ -2563,7 +2561,7 @@ class ReplicaManagerTest {
       val expectedMessage = s"Unable to verify the partition has been added to the transaction. Underlying error: ${error.toString}"
       val result = handleProduceAppend(replicaManager, tp0, transactionalRecords, transactionalId = transactionalId)
       val appendCallback = ArgumentCaptor.forClass(classOf[AddPartitionsToTxnManager.AppendCallback])
-      verify(addPartitionsToTxnManager, times(1)).verifyTransaction(
+      verify(addPartitionsToTxnManager, times(1)).addOrVerifyTransaction(
         ArgumentMatchers.eq(transactionalId),
         ArgumentMatchers.eq(producerId),
         ArgumentMatchers.eq(producerEpoch),
@@ -2594,7 +2592,7 @@ class ReplicaManagerTest {
     try {
       val result = maybeStartTransactionVerificationForPartition(replicaManager, tp0, transactionalId, producerId, producerEpoch)
       val appendCallback = ArgumentCaptor.forClass(classOf[AddPartitionsToTxnManager.AppendCallback])
-      verify(addPartitionsToTxnManager, times(0)).verifyTransaction(
+      verify(addPartitionsToTxnManager, times(0)).addOrVerifyTransaction(
         ArgumentMatchers.eq(transactionalId),
         ArgumentMatchers.eq(producerId),
         ArgumentMatchers.eq(producerEpoch),

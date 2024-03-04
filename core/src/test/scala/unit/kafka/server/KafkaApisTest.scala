@@ -1716,6 +1716,37 @@ class KafkaApisTest extends Logging {
   }
 
   @Test
+  def testTxnOffsetCommitWithTransactionV2NotEnabled(): Unit = {
+    addTopicToMetadataCache("foo", numPartitions = 1)
+
+    val txnOffsetCommitRequest = new TxnOffsetCommitRequestData()
+      .setGroupId("group")
+      .setMemberId("member")
+      .setGenerationId(10)
+      .setProducerId(20)
+      .setProducerEpoch(30)
+      .setGroupInstanceId("instance-id")
+      .setTransactionalId("transactional-id")
+      .setTopics(List(
+        new TxnOffsetCommitRequestData.TxnOffsetCommitRequestTopic()
+          .setName("foo")
+          .setPartitions(List(
+            new TxnOffsetCommitRequestData.TxnOffsetCommitRequestPartition()
+              .setPartitionIndex(0)
+              .setCommittedOffset(10)).asJava)).asJava)
+
+    val requestChannelRequest = buildRequest(new TxnOffsetCommitRequest.Builder(txnOffsetCommitRequest).build())
+    metadataCache = MetadataCache.kRaftMetadataCache(brokerId)
+    kafkaApis = createKafkaApis(interBrokerProtocolVersion = MetadataVersion.IBP_3_8_IV0, raftSupport = true)
+    kafkaApis.handle(
+      requestChannelRequest,
+      RequestLocal.NoCaching
+    )
+    val response = verifyNoThrottling[TxnOffsetCommitResponse](requestChannelRequest)
+    assertEquals(1, response.errorCounts().get(Errors.UNSUPPORTED_VERSION))
+  }
+
+  @Test
   def testHandleTxnOffsetCommitRequest(): Unit = {
     addTopicToMetadataCache("foo", numPartitions = 1)
 
@@ -2691,6 +2722,7 @@ class KafkaApisTest extends Logging {
       when(metadataCache.contains(tp)).thenAnswer(_ => true)
       when(metadataCache.getPartitionInfo(tp.topic(), tp.partition())).thenAnswer(_ => Option.empty)
       when(metadataCache.getAliveBrokerNode(any(), any())).thenReturn(Option.empty)
+      when(metadataCache.metadataVersion()).thenReturn(MetadataVersion.IBP_100_1_IV0)
       kafkaApis = createKafkaApis()
       kafkaApis.handleProduceRequest(request, RequestLocal.withThreadConfinedCaching)
 
@@ -2751,6 +2783,48 @@ class KafkaApisTest extends Logging {
       } finally {
         kafkaApis.close()
       }
+    }
+  }
+
+  @Test
+  def testTransactionalV2ProduceRequestRejectedIfNotEnabled(): Unit = {
+    val topic = "topic"
+    val transactionalId = "txn1"
+    metadataCache = MetadataCache.kRaftMetadataCache(brokerId)
+
+    addTopicToMetadataCache(topic, numPartitions = 2)
+
+    reset(replicaManager, clientQuotaManager, clientRequestQuotaManager, requestChannel, txnCoordinator)
+
+    val tp = new TopicPartition("topic", 0)
+
+    val produceRequest = ProduceRequest.forCurrentMagic(new ProduceRequestData()
+        .setTopicData(new ProduceRequestData.TopicProduceDataCollection(
+          Collections.singletonList(new ProduceRequestData.TopicProduceData()
+              .setName(tp.topic).setPartitionData(Collections.singletonList(
+                new ProduceRequestData.PartitionProduceData()
+                  .setIndex(tp.partition)
+                  .setRecords(MemoryRecords.withTransactionalRecords(CompressionType.NONE, 0, 0, 0, new SimpleRecord("test".getBytes))))))
+            .iterator))
+        .setAcks(1.toShort)
+        .setTransactionalId(transactionalId)
+        .setTimeoutMs(5000))
+      .build(11)
+    val request = buildRequest(produceRequest)
+
+    val kafkaApis = createKafkaApis(interBrokerProtocolVersion = MetadataVersion.IBP_3_8_IV0, raftSupport = true)
+    try {
+      val capturedResponse: ArgumentCaptor[ProduceResponse] = ArgumentCaptor.forClass(classOf[ProduceResponse])
+      kafkaApis.handleProduceRequest(request, RequestLocal.withThreadConfinedCaching)
+      verify(requestChannel).sendResponse(
+        ArgumentMatchers.eq(request),
+        capturedResponse.capture(),
+        ArgumentMatchers.eq(None)
+      )
+      val response = capturedResponse.getValue
+      assertEquals(1, response.errorCounts().get(Errors.UNSUPPORTED_VERSION));
+    } finally {
+      kafkaApis.close()
     }
   }
 

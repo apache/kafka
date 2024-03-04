@@ -202,7 +202,9 @@ public enum MetadataVersion {
     IBP_3_7_IV4(19, "3.7", "IV4", false),
 
     // Add ELR related supports (KIP-966).
-    IBP_3_8_IV0(20, "3.8", "IV0", true);
+    IBP_3_8_IV0(20, "3.8", "IV0", true),
+
+    IBP_100_1_IV0(100, "100.1", "IV0", false);
 
     // NOTES when adding a new version:
     //   Update the default version in @ClusterTest annotation to point to the latest version
@@ -338,6 +340,10 @@ public enum MetadataVersion {
         } else {
             return RecordVersion.V2;
         }
+    }
+
+    public boolean isTransactionV2Enabled() {
+        return this.isAtLeast(IBP_100_1_IV0);
     }
 
     public boolean isBrokerRegistrationChangeRecordSupported() {

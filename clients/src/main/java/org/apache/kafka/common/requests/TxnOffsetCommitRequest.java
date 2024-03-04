@@ -42,6 +42,8 @@ public class TxnOffsetCommitRequest extends AbstractRequest {
 
     private final TxnOffsetCommitRequestData data;
 
+    final static short transactionV2MinimalVersion = 4;
+
     public static class Builder extends AbstractRequest.Builder<TxnOffsetCommitRequest> {
 
         public final TxnOffsetCommitRequestData data;
@@ -156,6 +158,10 @@ public class TxnOffsetCommitRequest extends AbstractRequest {
         return data;
     }
 
+    public boolean isTransactionV2Requested() {
+        return version() >= transactionV2MinimalVersion;
+    }
+
     static List<TxnOffsetCommitResponseTopic> getErrorResponseTopics(List<TxnOffsetCommitRequestTopic> requestTopics,
                                                                      Errors e) {
         List<TxnOffsetCommitResponseTopic> responseTopicData = new ArrayList<>();
@@ -211,6 +217,10 @@ public class TxnOffsetCommitRequest extends AbstractRequest {
     public static TxnOffsetCommitRequest parse(ByteBuffer buffer, short version) {
         return new TxnOffsetCommitRequest(new TxnOffsetCommitRequestData(
             new ByteBufferAccessor(buffer), version), version);
+    }
+
+    public static boolean isTransactionV2Requested(short version) {
+        return version >= transactionV2MinimalVersion;
     }
 
     public static class CommittedOffset {
