@@ -572,10 +572,54 @@ public class AsyncKafkaConsumerTest {
     }
 
     @Test
-    public void testCommitAsyncPropagatesFencedException() {
+    public void testCommitAsyncTriggersFencedExceptionFromCommitAsync() {
         final String groupId = "consumerGroupA";
         final String groupInstanceId = "groupInstanceId1";
-        final Properties props = requiredConsumerPropertiesAndGroupId(groupId);
+        final Properties props = requiredConsumerConfigAndGroupId(groupId);
+        props.put(ConsumerConfig.GROUP_INSTANCE_ID_CONFIG, groupInstanceId);
+        final ConsumerConfig config = new ConsumerConfig(props);
+        consumer = newConsumer(config);
+        completeCommitAsyncApplicationEventExceptionally(Errors.FENCED_INSTANCE_ID.exception());
+        doReturn(Fetch.empty()).when(fetchCollector).collectFetch(any(FetchBuffer.class));
+        completeFetchedCommittedOffsetApplicationEventSuccessfully(mkMap());
+        doReturn(LeaderAndEpoch.noLeaderOrEpoch()).when(metadata).currentLeader(any());
+        final TopicPartition tp = new TopicPartition("foo", 0);
+        consumer.assign(Collections.singleton(tp));
+        consumer.seek(tp, 20);
+
+        assertDoesNotThrow(() -> consumer.commitAsync());
+
+        Exception e = assertThrows(FencedInstanceIdException.class, () -> consumer.commitAsync());
+        assertEquals("Get fenced exception for group.instance.id groupInstanceId1", e.getMessage());
+    }
+
+    @Test
+    public void testCommitSyncTriggersFencedExceptionFromCommitAsync() {
+        final String groupId = "consumerGroupA";
+        final String groupInstanceId = "groupInstanceId1";
+        final Properties props = requiredConsumerConfigAndGroupId(groupId);
+        props.put(ConsumerConfig.GROUP_INSTANCE_ID_CONFIG, groupInstanceId);
+        final ConsumerConfig config = new ConsumerConfig(props);
+        consumer = newConsumer(config);
+        completeCommitAsyncApplicationEventExceptionally(Errors.FENCED_INSTANCE_ID.exception());
+        doReturn(Fetch.empty()).when(fetchCollector).collectFetch(any(FetchBuffer.class));
+        completeFetchedCommittedOffsetApplicationEventSuccessfully(mkMap());
+        doReturn(LeaderAndEpoch.noLeaderOrEpoch()).when(metadata).currentLeader(any());
+        final TopicPartition tp = new TopicPartition("foo", 0);
+        consumer.assign(Collections.singleton(tp));
+        consumer.seek(tp, 20);
+
+        assertDoesNotThrow(() -> consumer.commitAsync());
+
+        Exception e =  assertThrows(FencedInstanceIdException.class, () -> consumer.commitSync());
+        assertEquals("Get fenced exception for group.instance.id groupInstanceId1", e.getMessage());
+    }
+
+    @Test
+    public void testPollTriggersFencedExceptionFromCommitAsync() {
+        final String groupId = "consumerGroupA";
+        final String groupInstanceId = "groupInstanceId1";
+        final Properties props = requiredConsumerConfigAndGroupId(groupId);
         props.put(ConsumerConfig.GROUP_INSTANCE_ID_CONFIG, groupInstanceId);
         final ConsumerConfig config = new ConsumerConfig(props);
         consumer = newConsumer(config);
