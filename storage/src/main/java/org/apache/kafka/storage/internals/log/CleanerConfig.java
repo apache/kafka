@@ -32,14 +32,14 @@ public class CleanerConfig {
     public static final int LOG_CLEANER_BACKOFF_MS = 15 * 1000;
     public static final boolean LOG_CLEANER_ENABLE = true;
 
-    public static final String LOG_CLEANER_THREADS_PROP = ServerTopicConfigSynonyms.LOG_PREFIX + "cleaner.threads";
-    public static final String LOG_CLEANER_IO_MAX_BYTES_PER_SECOND_PROP = ServerTopicConfigSynonyms.LOG_PREFIX + "cleaner.io.max.bytes.per.second";
-    public static final String LOG_CLEANER_DEDUPE_BUFFER_SIZE_PROP = ServerTopicConfigSynonyms.LOG_PREFIX + "cleaner.dedupe.buffer.size";
-    public static final String LOG_CLEANER_IO_BUFFER_SIZE_PROP = ServerTopicConfigSynonyms.LOG_PREFIX + "cleaner.io.buffer.size";
-    public static final String LOG_CLEANER_DEDUPE_BUFFER_LOAD_FACTOR_PROP = ServerTopicConfigSynonyms.LOG_PREFIX + "cleaner.io.buffer.load.factor";
-    public static final String LOG_CLEANER_BACKOFF_MS_PROP = ServerTopicConfigSynonyms.LOG_PREFIX + "cleaner.backoff.ms";
+    public static final String LOG_CLEANER_THREADS_PROP = ServerTopicConfigSynonyms.LOG_CLEANER_PREFIX + "threads";
+    public static final String LOG_CLEANER_IO_MAX_BYTES_PER_SECOND_PROP = ServerTopicConfigSynonyms.LOG_CLEANER_PREFIX + "io.max.bytes.per.second";
+    public static final String LOG_CLEANER_DEDUPE_BUFFER_SIZE_PROP = ServerTopicConfigSynonyms.LOG_CLEANER_PREFIX + "dedupe.buffer.size";
+    public static final String LOG_CLEANER_IO_BUFFER_SIZE_PROP = ServerTopicConfigSynonyms.LOG_CLEANER_PREFIX + "io.buffer.size";
+    public static final String LOG_CLEANER_DEDUPE_BUFFER_LOAD_FACTOR_PROP = ServerTopicConfigSynonyms.LOG_CLEANER_PREFIX + "io.buffer.load.factor";
+    public static final String LOG_CLEANER_BACKOFF_MS_PROP = ServerTopicConfigSynonyms.LOG_CLEANER_PREFIX + "backoff.ms";
     public static final String LOG_CLEANER_MIN_CLEAN_RATIO_PROP = ServerTopicConfigSynonyms.serverSynonym(TopicConfig.MIN_CLEANABLE_DIRTY_RATIO_CONFIG);
-    public static final String LOG_CLEANER_ENABLE_PROP = ServerTopicConfigSynonyms.LOG_PREFIX + "cleaner.enable";
+    public static final String LOG_CLEANER_ENABLE_PROP = ServerTopicConfigSynonyms.LOG_CLEANER_PREFIX + "enable";
     public static final String LOG_CLEANER_DELETE_RETENTION_MS_PROP = ServerTopicConfigSynonyms.serverSynonym(TopicConfig.DELETE_RETENTION_MS_CONFIG);
     public static final String LOG_CLEANER_MIN_COMPACTION_LAG_MS_PROP = ServerTopicConfigSynonyms.serverSynonym(TopicConfig.MIN_COMPACTION_LAG_MS_CONFIG);
     public static final String LOG_CLEANER_MAX_COMPACTION_LAG_MS_PROP = ServerTopicConfigSynonyms.serverSynonym(TopicConfig.MAX_COMPACTION_LAG_MS_CONFIG);
