@@ -595,8 +595,8 @@ public abstract class TopicCommand {
             }
 
             List<String> topicNames = topicDescriptions.stream()
-                        .map(org.apache.kafka.clients.admin.TopicDescription::name)
-                        .collect(Collectors.toList());
+                .map(org.apache.kafka.clients.admin.TopicDescription::name)
+                .collect(Collectors.toList());
             Map<ConfigResource, KafkaFuture<Config>> allConfigs = adminClient.describeConfigs(
                 topicNames.stream()
                     .map(name -> new ConfigResource(ConfigResource.Type.TOPIC, name))

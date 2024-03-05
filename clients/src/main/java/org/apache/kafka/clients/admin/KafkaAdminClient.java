@@ -1001,36 +1001,6 @@ public class KafkaAdminClient extends AdminClient {
         }
     }
 
-    abstract class RecurringCall {
-        private final String name;
-        final long deadlineMs;
-        private final AdminClientRunnable runnable;
-        KafkaFutureImpl<Boolean> nextRun;
-        abstract Call generateCall();
-
-        public RecurringCall(String name, long deadlineMs, AdminClientRunnable runnable) {
-            this.name = name;
-            this.deadlineMs = deadlineMs;
-            this.runnable = runnable;
-        }
-
-        public String toString() {
-            return "RecurCall(name=" + name + ", deadlineMs=" + deadlineMs + ")";
-        }
-
-        public void run() {
-            try {
-                do {
-                    nextRun = new KafkaFutureImpl<>();
-                    Call call = generateCall();
-                    runnable.call(call, time.milliseconds());
-                } while (nextRun.get());
-            } catch (Exception e) {
-                log.info("Stop the recurring call " + name + " because " + e);
-            }
-        }
-    }
-
     static class TimeoutProcessorFactory {
         TimeoutProcessor create(long now) {
             return new TimeoutProcessor(now);
@@ -2170,9 +2140,8 @@ public class KafkaAdminClient extends AdminClient {
             }
         }
         final long now = time.milliseconds();
-
         Call call = new Call("describeTopics", calcDeadlineMs(now, options.timeoutMs()),
-                new LeastLoadedNodeProvider()) {
+            new LeastLoadedNodeProvider()) {
 
             private boolean supportsDisablingTopicCreation = true;
 
@@ -2180,9 +2149,9 @@ public class KafkaAdminClient extends AdminClient {
             MetadataRequest.Builder createRequest(int timeoutMs) {
                 if (supportsDisablingTopicCreation)
                     return new MetadataRequest.Builder(new MetadataRequestData()
-                            .setTopics(convertToMetadataRequestTopic(topicNamesList))
-                            .setAllowAutoTopicCreation(false)
-                            .setIncludeTopicAuthorizedOperations(options.includeAuthorizedOperations()));
+                        .setTopics(convertToMetadataRequestTopic(topicNamesList))
+                        .setAllowAutoTopicCreation(false)
+                        .setIncludeTopicAuthorizedOperations(options.includeAuthorizedOperations()));
                 else
                     return MetadataRequest.Builder.allTopics();
             }
@@ -2226,7 +2195,6 @@ public class KafkaAdminClient extends AdminClient {
                 completeAllExceptionally(topicFutures.values(), throwable);
             }
         };
-
         if (!topicNamesList.isEmpty()) {
             runnable.call(call, now);
         }
@@ -2250,12 +2218,12 @@ public class KafkaAdminClient extends AdminClient {
         }
         final long now = time.milliseconds();
         Call call = new Call("describeTopics", calcDeadlineMs(now, options.timeoutMs()),
-                new LeastLoadedNodeProvider()) {
+            new LeastLoadedNodeProvider()) {
             Map<String, TopicRequest> pendingTopics =
                 topicNamesList.stream().map(topicName -> new TopicRequest().setName(topicName))
                     .collect(Collectors.toMap(topicRequest -> topicRequest.name(), topicRequest -> topicRequest, (t1, t2) -> t1, TreeMap::new));
 
-            DescribeTopicPartitionsRequestData.Cursor previousCursor = null;
+            DescribeTopicPartitionsRequestData.Cursor requestCursor = null;
             TopicDescription partiallyFinishedTopicDescription = null;
 
             @Override
@@ -2263,14 +2231,14 @@ public class KafkaAdminClient extends AdminClient {
                 DescribeTopicPartitionsRequestData request = new DescribeTopicPartitionsRequestData()
                     .setTopics(new ArrayList<>(pendingTopics.values()))
                     .setResponsePartitionLimit(options.partitionSizeLimitPerResponse());
-                request.setCursor(previousCursor);
+                request.setCursor(requestCursor);
                 return new DescribeTopicPartitionsRequest.Builder(request);
             }
 
             @Override
             void handleResponse(AbstractResponse abstractResponse) {
                 DescribeTopicPartitionsResponse response = (DescribeTopicPartitionsResponse) abstractResponse;
-                DescribeTopicPartitionsResponseData.Cursor currentCursor = response.data().nextCursor();
+                DescribeTopicPartitionsResponseData.Cursor responseCursor = response.data().nextCursor();
 
                 for (DescribeTopicPartitionsResponseTopic topic : response.data().topics()) {
                     String topicName = topic.name();
@@ -2281,15 +2249,15 @@ public class KafkaAdminClient extends AdminClient {
                         future.completeExceptionally(error.exception());
                         topicFutures.remove(topicName);
                         pendingTopics.remove(topicName);
-                        if (currentCursor != null && currentCursor.topicName().equals(topicName)) {
-                            currentCursor = null;
+                        if (responseCursor != null && responseCursor.topicName().equals(topicName)) {
+                            responseCursor = null;
                         }
                         continue;
                     }
 
                     TopicDescription currentTopicDescription = getTopicDescriptionFromDescribeTopicsResponseTopic(topic);
 
-                    if (previousCursor != null && previousCursor.topicName().equals(topicName)) {
+                    if (requestCursor != null && requestCursor.topicName().equals(topicName)) {
                         if (partiallyFinishedTopicDescription == null) {
                             // The previous round cursor can point to the partition 0 of the next topic.
                             partiallyFinishedTopicDescription = currentTopicDescription;
@@ -2297,7 +2265,7 @@ public class KafkaAdminClient extends AdminClient {
                             partiallyFinishedTopicDescription.partitions().addAll(currentTopicDescription.partitions());
                         }
 
-                        if (currentCursor == null || !currentCursor.topicName().equals(topicName)) {
+                        if (responseCursor == null || !responseCursor.topicName().equals(topicName)) {
                             // The partially finished topic can be closed in this round.
                             pendingTopics.remove(topicName);
                             future.complete(partiallyFinishedTopicDescription);
@@ -2306,7 +2274,7 @@ public class KafkaAdminClient extends AdminClient {
                         continue;
                     }
 
-                    if (currentCursor != null && currentCursor.topicName().equals(topicName)) {
+                    if (responseCursor != null && responseCursor.topicName().equals(topicName)) {
                         // This is the first time this topic being pointed by the cursor.
                         partiallyFinishedTopicDescription = currentTopicDescription;
                         continue;
@@ -2315,13 +2283,12 @@ public class KafkaAdminClient extends AdminClient {
                     pendingTopics.remove(topicName);
                     future.complete(currentTopicDescription);
                 }
-                if (currentCursor != null) {
-                    // Convert the response cursor to request cursor.
-                    previousCursor = new DescribeTopicPartitionsRequestData.Cursor()
-                        .setTopicName(currentCursor.topicName())
-                        .setPartitionIndex(currentCursor.partitionIndex());
+                if (responseCursor != null) {
+                    requestCursor = new DescribeTopicPartitionsRequestData.Cursor()
+                        .setTopicName(responseCursor.topicName())
+                        .setPartitionIndex(responseCursor.partitionIndex());
                 } else {
-                    previousCursor = null;
+                    requestCursor = null;
                 }
                 if (!pendingTopics.isEmpty()) {
                     runnable.call(this, time.milliseconds());
@@ -2415,12 +2382,12 @@ public class KafkaAdminClient extends AdminClient {
         List<TopicPartitionInfo> partitions = new ArrayList<>(partitionInfos.size());
         for (DescribeTopicPartitionsResponsePartition partitionInfo : partitionInfos) {
             TopicPartitionInfo topicPartitionInfo = new TopicPartitionInfo(
-                    partitionInfo.partitionIndex(),
-                    replicaToFakeNode(partitionInfo.leaderId()),
-                    partitionInfo.replicaNodes().stream().map(id -> replicaToFakeNode(id)).collect(Collectors.toList()),
-                    partitionInfo.isrNodes().stream().map(id -> replicaToFakeNode(id)).collect(Collectors.toList()),
-                    partitionInfo.eligibleLeaderReplicas().stream().map(id -> replicaToFakeNode(id)).collect(Collectors.toList()),
-                    partitionInfo.lastKnownElr().stream().map(id -> replicaToFakeNode(id)).collect(Collectors.toList()));
+                partitionInfo.partitionIndex(),
+                replicaToFakeNode(partitionInfo.leaderId()),
+                partitionInfo.replicaNodes().stream().map(id -> replicaToFakeNode(id)).collect(Collectors.toList()),
+                partitionInfo.isrNodes().stream().map(id -> replicaToFakeNode(id)).collect(Collectors.toList()),
+                partitionInfo.eligibleLeaderReplicas().stream().map(id -> replicaToFakeNode(id)).collect(Collectors.toList()),
+                partitionInfo.lastKnownElr().stream().map(id -> replicaToFakeNode(id)).collect(Collectors.toList()));
             partitions.add(topicPartitionInfo);
         }
         partitions.sort(Comparator.comparingInt(TopicPartitionInfo::partition));

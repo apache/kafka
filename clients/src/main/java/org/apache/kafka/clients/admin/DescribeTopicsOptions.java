@@ -59,6 +59,8 @@ public class DescribeTopicsOptions extends AbstractOptions<DescribeTopicsOptions
         return this;
     }
 
+    // Note that, partitionSizeLimitPerResponse will not be effective if it is larger than the config
+    // max.request.partition.size.limit on the server side.
     public DescribeTopicsOptions partitionSizeLimitPerResponse(int partitionSizeLimitPerResponse) {
         this.partitionSizeLimitPerResponse = partitionSizeLimitPerResponse;
         return this;
