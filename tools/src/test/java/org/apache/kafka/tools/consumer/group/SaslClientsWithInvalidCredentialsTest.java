@@ -20,13 +20,13 @@ import kafka.admin.ConsumerGroupCommand;
 import kafka.api.AbstractSaslTest;
 import kafka.api.Both$;
 import kafka.utils.JaasTestUtils;
-import kafka.utils.TestUtils;
 import kafka.zk.ConfigEntityChangeNotificationZNode;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.common.errors.SaslAuthenticationException;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
+import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -39,10 +39,10 @@ import scala.collection.Seq;
 import scala.collection.immutable.Map$;
 
 import java.io.File;
+import java.io.IOException;
 import java.time.Duration;
 import java.util.Collections;
 import java.util.Properties;
-import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.apache.kafka.tools.consumer.group.ConsumerGroupCommandTest.seq;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -123,7 +123,7 @@ public class SaslClientsWithInvalidCredentialsTest extends AbstractSaslTest {
     }
 
     @Test
-    public void testConsumerGroupServiceWithAuthenticationFailure() {
+    public void testConsumerGroupServiceWithAuthenticationFailure() throws Exception {
         ConsumerGroupCommand.ConsumerGroupService consumerGroupService = prepareConsumerGroupService();
         try (Consumer<byte[], byte[]> consumer = createConsumer()) {
             consumer.subscribe(Collections.singletonList(TOPIC));
@@ -135,25 +135,30 @@ public class SaslClientsWithInvalidCredentialsTest extends AbstractSaslTest {
     }
 
     @Test
-    public void testConsumerGroupServiceWithAuthenticationSuccess() {
+    public void testConsumerGroupServiceWithAuthenticationSuccess() throws Exception {
         createScramCredentialsViaPrivilegedAdminClient(JaasTestUtils.KafkaScramUser2(), JaasTestUtils.KafkaScramPassword2());
         ConsumerGroupCommand.ConsumerGroupService consumerGroupService = prepareConsumerGroupService();
         try (Consumer<byte[], byte[]> consumer = createConsumer()) {
             consumer.subscribe(Collections.singletonList(TOPIC));
 
-            verifyWithRetry(() -> consumer.poll(Duration.ofMillis(1000)));
+            TestUtils.waitForCondition(() -> {
+                try {
+                    consumer.poll(Duration.ofMillis(1000));
+                    return true;
+                } catch (SaslAuthenticationException ignored) {
+                    return false;
+                }
+            }, "failed to poll data with authentication");
             assertEquals(1, consumerGroupService.listConsumerGroups().size());
         } finally {
             consumerGroupService.close();
         }
     }
 
-    private ConsumerGroupCommand.ConsumerGroupService prepareConsumerGroupService() {
-        Properties properties = new Properties();
-        properties.put("security.protocol", "SASL_PLAINTEXT");
-        properties.put("sasl.mechanism", KAFKA_CLIENT_SASL_MECHANISM);
-
-        File propsFile = TestUtils.tempPropertiesFile(properties);
+    private ConsumerGroupCommand.ConsumerGroupService prepareConsumerGroupService() throws IOException {
+        File propsFile = TestUtils.tempFile(
+            "security.protocol=SASL_PLAINTEXT\n" +
+            "sasl.mechanism=" + KAFKA_CLIENT_SASL_MECHANISM);
 
         String[] cgcArgs = new String[]{"--bootstrap-server", bootstrapServers(listenerName()),
             "--describe",
@@ -168,24 +173,5 @@ public class SaslClientsWithInvalidCredentialsTest extends AbstractSaslTest {
         assertThrows(Exception.class, action);
         long elapsedMs = System.currentTimeMillis() - startMs;
         assertTrue(elapsedMs <= 5000, "Poll took too long, elapsed=" + elapsedMs);
-    }
-
-    private void verifyWithRetry(Executable action) {
-        AtomicInteger attempts = new AtomicInteger();
-        TestUtils.waitUntilTrue(
-            () -> {
-                try {
-                    attempts.incrementAndGet();
-                    action.execute();
-                    return true;
-                } catch (SaslAuthenticationException __) {
-                    return false;
-                } catch (Throwable e) {
-                    throw new RuntimeException(e);
-                }
-            },
-            () -> "Operation did not succeed within timeout after " + attempts,
-            org.apache.kafka.test.TestUtils.DEFAULT_MAX_WAIT_MS,
-            100);
     }
 }
