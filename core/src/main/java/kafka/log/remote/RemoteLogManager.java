@@ -58,6 +58,7 @@ import org.apache.kafka.server.metrics.KafkaMetricsGroup;
 import org.apache.kafka.storage.internals.checkpoint.InMemoryLeaderEpochCheckpoint;
 import org.apache.kafka.storage.internals.epoch.LeaderEpochFileCache;
 import org.apache.kafka.storage.internals.log.AbortedTxn;
+import org.apache.kafka.storage.internals.log.CorruptIndexException;
 import org.apache.kafka.storage.internals.log.EpochEntry;
 import org.apache.kafka.storage.internals.log.FetchDataInfo;
 import org.apache.kafka.storage.internals.log.FetchIsolation;
@@ -526,9 +527,9 @@ public class RemoteLogManager implements Closeable {
             while (iterator.hasNext()) {
                 RemoteLogSegmentMetadata rlsMetadata = iterator.next();
                 if (rlsMetadata.maxTimestampMs() >= timestamp
-                    && rlsMetadata.endOffset() >= startingOffset
-                    && isRemoteSegmentWithinLeaderEpochs(rlsMetadata, unifiedLog.logEndOffset(), epochWithOffsets)
-                    && rlsMetadata.state().equals(RemoteLogSegmentState.COPY_SEGMENT_FINISHED)) {
+                        && rlsMetadata.endOffset() >= startingOffset
+                        && isRemoteSegmentWithinLeaderEpochs(rlsMetadata, unifiedLog.logEndOffset(), epochWithOffsets)
+                        && rlsMetadata.state().equals(RemoteLogSegmentState.COPY_SEGMENT_FINISHED)) {
                     return lookupTimestamp(rlsMetadata, timestamp, startingOffset);
                 }
             }
@@ -632,7 +633,7 @@ public class RemoteLogManager implements Closeable {
                 // epoch cache then it starts copying the segments from the earliest epoch entry's offset.
                 copiedOffsetOption = Optional.of(findHighestRemoteOffset(topicIdPartition, log));
                 logger.info("Found the highest copiedRemoteOffset: {} for partition: {} after becoming leader, " +
-                                "leaderEpoch: {}", copiedOffsetOption, topicIdPartition, leaderEpoch);
+                        "leaderEpoch: {}", copiedOffsetOption, topicIdPartition, leaderEpoch);
                 copiedOffsetOption.ifPresent(offsetAndEpoch ->  log.updateHighestOffsetInRemoteStorage(offsetAndEpoch.offset()));
             }
         }
@@ -707,6 +708,8 @@ public class RemoteLogManager implements Closeable {
                 this.cancel();
             } catch (InterruptedException | RetriableException ex) {
                 throw ex;
+            } catch (CorruptIndexException ex) {
+                logger.error("Error occurred while copying log segments. Index appeared to be corrupted for partition: {}  ", topicIdPartition, ex);
             } catch (Exception ex) {
                 if (!isCancelled()) {
                     brokerTopicStats.topicStats(log.topicPartition().topic()).failedRemoteCopyRequestRate().mark();
@@ -721,6 +724,13 @@ public class RemoteLogManager implements Closeable {
                 CustomMetadataSizeLimitExceededException {
             File logFile = segment.log().file();
             String logFileName = logFile.getName();
+
+            // Corrupted indexes should not be uploaded to remote storage
+            // Example case: Local storage was filled, what caused index corruption
+            // We should avoid uploading such segments
+            segment.timeIndex().sanityCheck();
+            segment.offsetIndex().sanityCheck();
+            segment.txnIndex().sanityCheck();
 
             logger.info("Copying {} to remote storage.", logFileName);
             RemoteLogSegmentId id = RemoteLogSegmentId.generateNew(topicIdPartition);
@@ -771,7 +781,7 @@ public class RemoteLogManager implements Closeable {
 
             remoteLogMetadataManager.updateRemoteLogSegmentMetadata(copySegmentFinishedRlsm).get();
             brokerTopicStats.topicStats(log.topicPartition().topic())
-                .remoteCopyBytesRate().mark(copySegmentStartedRlsm.segmentSizeInBytes());
+                    .remoteCopyBytesRate().mark(copySegmentStartedRlsm.segmentSizeInBytes());
             brokerTopicStats.allTopicsStats().remoteCopyBytesRate().mark(copySegmentStartedRlsm.segmentSizeInBytes());
 
             // `epochEntries` cannot be empty, there is a pre-condition validation in RemoteLogSegmentMetadata
@@ -904,7 +914,7 @@ public class RemoteLogManager implements Closeable {
                 }
                 if (shouldDeleteSegment) {
                     logger.info("About to delete remote log segment {} due to log-start-offset {} breach. " +
-                            "Current earliest-epoch-entry: {}, segment-end-offset: {} and segment-epochs: {}",
+                                    "Current earliest-epoch-entry: {}, segment-end-offset: {} and segment-epochs: {}",
                             metadata.remoteLogSegmentId(), logStartOffset, leaderEpochEntries.firstEntry(),
                             metadata.endOffset(), metadata.segmentLeaderEpochs());
                 }
@@ -1533,7 +1543,7 @@ public class RemoteLogManager implements Closeable {
                     long highestRemoteOffset = highestRemoteOffsetOpt.get();
                     if (endOffset <= highestRemoteOffset) {
                         LOGGER.info("The end-offset for epoch {}: ({}, {}) is less than or equal to the " +
-                                "highest-remote-offset: {} for partition: {}", epoch, requestedEpoch, endOffset,
+                                        "highest-remote-offset: {} for partition: {}", epoch, requestedEpoch, endOffset,
                                 highestRemoteOffset, topicIdPartition);
                         offsetAndEpoch = new OffsetAndEpoch(endOffset - 1, requestedEpoch);
                     } else {
