@@ -293,11 +293,11 @@ public class LogValidator {
 
         if (timestampType == TimestampType.LOG_APPEND_TIME) {
             maxTimestamp = now;
-            offsetOfMaxTimestamp = initialOffset;
-        }
-
-        if (toMagic >= RecordBatch.MAGIC_VALUE_V2) {
-            offsetOfMaxTimestamp = offsetCounter.value - 1;
+            if (toMagic >= RecordBatch.MAGIC_VALUE_V2) {
+                offsetOfMaxTimestamp = offsetCounter.value - 1;
+            } else {
+                offsetOfMaxTimestamp = initialOffset;
+            }
         }
 
         return new ValidationResult(
