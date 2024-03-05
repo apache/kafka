@@ -439,8 +439,8 @@ public class KStreamKStreamOuterJoinTest {
             processor.checkAndClearProcessResult();
 
             // push one item to the other window that has a join;
-            // this should produce the joined record first;
-            // then the not-joined record
+            // this should produce the not-joined record first;
+            // then the joined record
             // w1 = { 0:A0 (ts: 0), 1:A1 (ts: 100) }
             // w2 = { }
             // --> w1 = { 0:A0 (ts: 0), 1:A1 (ts: 100) }
@@ -888,7 +888,6 @@ public class KStreamKStreamOuterJoinTest {
 
             // push one item to the first stream;
             // this should produce one inner-join item;
-            // and a right-joined item for a3
             // w1 = { 0:A0 (ts: 0), 1:A1 (ts: 1) }
             // w2 = { 1:a1 (ts: 1), 2:a2 (ts: 101), 3:a3 (ts: 101) }
             // --> w1 = { 0:A0 (ts: 0), 1:A1 (ts: 1), 2:A2 (ts: 201) }
