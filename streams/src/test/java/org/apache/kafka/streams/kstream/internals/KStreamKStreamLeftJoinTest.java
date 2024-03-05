@@ -481,7 +481,7 @@ public class KStreamKStreamLeftJoinTest {
             // w2 = {}
             // --> w1 = { 0:A0 (ts: 1000), 1:A1 (ts: 1001), 2:A2 (ts: 1002), 3:A3 (ts: 1003) }
             //     w2 = {}
-            final long time = 1000L;
+            long time = 1000L;
             for (int i = 0; i < expectedKeys.length; i++) {
                 inputTopic1.pipeInput(expectedKeys[i], "A" + expectedKeys[i], time + i);
             }
