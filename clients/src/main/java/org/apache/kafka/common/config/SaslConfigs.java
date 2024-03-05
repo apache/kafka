@@ -195,7 +195,7 @@ public class SaslConfigs {
     public static final String SASL_OAUTHBEARER_HEADER_URLENCODE_ENABLE = "sasl.oauthbearer.header.urlencode.enable";
     public static final boolean DEFAULT_SASL_OAUTHBEARER_HEADER_URLENCODE_ENABLE = false;
     public static final String SASL_OAUTHBEARER_HEADER_URLENCODE_ENABLE_DOC = "The (optional) setting to enable oauthbearer client to urlencode client_id and client_secret in the authorization header"
-        	+ " in accordance with RFC6749, see https://datatracker.ietf.org/doc/html/rfc6749#section-2.3.1 for more detail. The default value is set to 'false' for backward compatibility";
+            + " in accordance with RFC6749, see https://datatracker.ietf.org/doc/html/rfc6749#section-2.3.1 for more detail. The default value is set to 'false' for backward compatibility";
 
 
     public static void addClientSaslSupport(ConfigDef config) {
@@ -227,6 +227,6 @@ public class SaslConfigs {
                 .define(SaslConfigs.SASL_OAUTHBEARER_CLOCK_SKEW_SECONDS, ConfigDef.Type.INT, DEFAULT_SASL_OAUTHBEARER_CLOCK_SKEW_SECONDS, ConfigDef.Importance.LOW, SASL_OAUTHBEARER_CLOCK_SKEW_SECONDS_DOC)
                 .define(SaslConfigs.SASL_OAUTHBEARER_EXPECTED_AUDIENCE, ConfigDef.Type.LIST, null, ConfigDef.Importance.LOW, SASL_OAUTHBEARER_EXPECTED_AUDIENCE_DOC)
                 .define(SaslConfigs.SASL_OAUTHBEARER_EXPECTED_ISSUER, ConfigDef.Type.STRING, null, ConfigDef.Importance.LOW, SASL_OAUTHBEARER_EXPECTED_ISSUER_DOC)
-				.define(SaslConfigs.SASL_OAUTHBEARER_HEADER_URLENCODE_ENABLE, ConfigDef.Type.BOOLEAN, DEFAULT_SASL_OAUTHBEARER_HEADER_URLENCODE_ENABLE, ConfigDef.Importance.LOW, SASL_OAUTHBEARER_HEADER_URLENCODE_ENABLE_DOC);
+                .define(SaslConfigs.SASL_OAUTHBEARER_HEADER_URLENCODE_ENABLE, ConfigDef.Type.BOOLEAN, DEFAULT_SASL_OAUTHBEARER_HEADER_URLENCODE_ENABLE, ConfigDef.Importance.LOW, SASL_OAUTHBEARER_HEADER_URLENCODE_ENABLE_DOC);
     }
 }
