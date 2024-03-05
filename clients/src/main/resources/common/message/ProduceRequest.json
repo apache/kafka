@@ -35,7 +35,10 @@
   // Version 9 enables flexible versions.
   //
   // Version 10 is the same as version 9 (KIP-951).
-  "validVersions": "0-10",
+  //
+  // Version 11 is schematically same as Version 10. It will only enable the server to know that
+  // the new client will use implicitly add the partitions to the transaction.
+  "validVersions": "0-11",
   "deprecatedVersions": "0-6",
   "flexibleVersions": "9+",
   "fields": [
