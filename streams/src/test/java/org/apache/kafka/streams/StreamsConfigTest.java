@@ -674,18 +674,18 @@ public class StreamsConfigTest {
         final Map<String, Object> consumerConfigs = streamsConfig.getMainConsumerConfigs(groupId, clientId, threadIdx);
         assertThat(
             consumerConfigs.get(ConsumerConfig.ISOLATION_LEVEL_CONFIG),
-            equalTo(READ_COMMITTED.name().toLowerCase(Locale.ROOT))
+            equalTo(READ_COMMITTED.toString())
         );
     }
 
     @Test
     public void shouldAllowSettingConsumerIsolationLevelIfEosDisabled() {
-        props.put(ConsumerConfig.ISOLATION_LEVEL_CONFIG, READ_UNCOMMITTED.name().toLowerCase(Locale.ROOT));
+        props.put(ConsumerConfig.ISOLATION_LEVEL_CONFIG, READ_UNCOMMITTED.toString());
         final StreamsConfig streamsConfig = new StreamsConfig(props);
         final Map<String, Object> consumerConfigs = streamsConfig.getMainConsumerConfigs(groupId, clientId, threadIdx);
         assertThat(
             consumerConfigs.get(ConsumerConfig.ISOLATION_LEVEL_CONFIG),
-            equalTo(READ_UNCOMMITTED.name().toLowerCase(Locale.ROOT))
+            equalTo(READ_UNCOMMITTED.toString())
         );
     }
 
@@ -752,7 +752,7 @@ public class StreamsConfigTest {
 
         assertThat(
             consumerConfigs.get(ConsumerConfig.ISOLATION_LEVEL_CONFIG),
-            equalTo(READ_COMMITTED.name().toLowerCase(Locale.ROOT))
+            equalTo(READ_COMMITTED.toString())
         );
         assertTrue((Boolean) producerConfigs.get(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG));
         assertThat(producerConfigs.get(ProducerConfig.DELIVERY_TIMEOUT_MS_CONFIG), equalTo(Integer.MAX_VALUE));

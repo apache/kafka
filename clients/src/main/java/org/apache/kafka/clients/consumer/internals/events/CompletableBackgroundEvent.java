@@ -28,42 +28,18 @@ public abstract class CompletableBackgroundEvent<T> extends BackgroundEvent impl
 
     private final CompletableFuture<T> future;
 
-    protected CompletableBackgroundEvent(Type type) {
+    protected CompletableBackgroundEvent(final Type type) {
         super(type);
         this.future = new CompletableFuture<>();
     }
 
+    @Override
     public CompletableFuture<T> future() {
         return future;
     }
 
     @Override
-    public boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
-        if (!super.equals(o)) return false;
-
-        CompletableBackgroundEvent<?> that = (CompletableBackgroundEvent<?>) o;
-
-        return future.equals(that.future);
-    }
-
-    @Override
-    public int hashCode() {
-        int result = super.hashCode();
-        result = 31 * result + future.hashCode();
-        return result;
-    }
-
-    @Override
     protected String toStringBase() {
         return super.toStringBase() + ", future=" + future;
-    }
-
-    @Override
-    public String toString() {
-        return getClass().getSimpleName() + "{" +
-                toStringBase() +
-                '}';
     }
 }
