@@ -30,7 +30,9 @@ import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Exit;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.extension.ExtendWith;
 
 import java.util.ArrayList;
@@ -52,20 +54,27 @@ public class GetOffsetShellTest {
     private final int topicCount = 4;
     private final int offsetTopicPartitionCount = 4;
     private final ClusterInstance cluster;
+    private final String topicName = "topic";
 
     public GetOffsetShellTest(ClusterInstance cluster) {
         this.cluster = cluster;
     }
 
     private String getTopicName(int i) {
-        return "topic" + i;
+        return topicName + i;
     }
 
-    public void setUp() {
+    @BeforeEach
+    public void before(TestInfo testInfo) {
         cluster.config().serverProperties().put("auto.create.topics.enable", false);
         cluster.config().serverProperties().put("offsets.topic.replication.factor", "1");
         cluster.config().serverProperties().put("offsets.topic.num.partitions", String.valueOf(offsetTopicPartitionCount));
+        if (testInfo.getDisplayName().contains("testGetOffsetsByMaxTimestampWithCompressedMessagesAndNotSameCompressionType")) {
+            cluster.config().serverProperties().put("compression.type", "lz4");
+        }
+    }
 
+    public void setUp() {
         try (Admin admin = Admin.create(cluster.config().adminClientProperties())) {
             List<NewTopic> topics = new ArrayList<>();
 
@@ -235,6 +244,46 @@ public class GetOffsetShellTest {
         }
     }
 
+    private void verifyOffsetOfMaxTimestamp() {
+        try (Admin admin = Admin.create(cluster.config().adminClientProperties())) {
+            List<NewTopic> topics = Arrays.asList(new NewTopic(topicName, 1, (short) 1));
+            admin.createTopics(topics);
+        }
+
+        Properties props = new Properties();
+        props.put(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, cluster.config().producerProperties().get("bootstrap.servers"));
+        props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
+        props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
+        props.put(ProducerConfig.COMPRESSION_TYPE_CONFIG, "gzip");
+
+        try (KafkaProducer<String, String> producer = new KafkaProducer<>(props)) {
+            // sent 2 batches with out-of-order timestamp records.
+            producer.send(new ProducerRecord<>(topicName, 0, 100L, null, "val"));
+            producer.send(new ProducerRecord<>(topicName, 0, 400L, null, "val"));
+            producer.send(new ProducerRecord<>(topicName, 0, 250L, null, "val"));
+            producer.flush();
+            producer.send(new ProducerRecord<>(topicName, 0, 1100L, null, "val"));
+            producer.send(new ProducerRecord<>(topicName, 0, 1400L, null, "val"));
+            producer.send(new ProducerRecord<>(topicName, 0, 1250L, null, "val"));
+            producer.flush();
+        }
+        // We should be able to get the offset of 4 as the max timestamp
+        List<Row> offsets = executeAndParse("--topic-partitions", topicName, "--time", "-3");
+        assertEquals(4, offsets.get(0).timestamp);
+    }
+
+    @ClusterTest
+    public void testGetOffsetsByMaxTimestampWithTimeStampOutOfOrderMessages() {
+        verifyOffsetOfMaxTimestamp();
+    }
+
+    @ClusterTest
+    public void testGetOffsetsByMaxTimestampWithCompressedMessagesAndNotSameCompressionType() {
+        // The server will add "compression.type=lz4", which is different from the producer one.
+        // Under this case, the server should still be able to return the expected offset
+        verifyOffsetOfMaxTimestamp();
+    }
+
     @ClusterTest
     public void testGetOffsetsByTimestamp() {
         setUp();
@@ -333,7 +382,7 @@ public class GetOffsetShellTest {
     }
 
     private List<Row> expectedOffsetsWithInternal() {
-        List<Row> consOffsets = IntStream.range(0, offsetTopicPartitionCount + 1)
+        List<Row> consOffsets = IntStream.range(0, offsetTopicPartitionCount)
                 .mapToObj(i -> new Row("__consumer_offsets", i, 0L))
                 .collect(Collectors.toList());
 

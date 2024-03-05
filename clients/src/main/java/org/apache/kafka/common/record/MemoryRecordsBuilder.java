@@ -246,8 +246,7 @@ public class MemoryRecordsBuilder implements AutoCloseable {
      * If the log append time is used, the offset will be the last offset unless no compression is used and
      * the message format version is 0 or 1, in which case, it will be the first offset.
      *
-     * If create time is used, the offset will be the last offset unless no compression is used and the message
-     * format version is 0 or 1, in which case, it will be the offset of the record with the max timestamp.
+     * If create time is used, the offset will always be the offset of the record with the max timestamp.
      *
      * @return The max timestamp and its offset
      */
@@ -263,13 +262,8 @@ public class MemoryRecordsBuilder implements AutoCloseable {
         } else if (maxTimestamp == RecordBatch.NO_TIMESTAMP) {
             return new RecordsInfo(RecordBatch.NO_TIMESTAMP, lastOffset);
         } else {
-            long shallowOffsetOfMaxTimestamp;
-            // Use the last offset when dealing with record batches
-            if (compressionType != CompressionType.NONE || magic >= RecordBatch.MAGIC_VALUE_V2)
-                shallowOffsetOfMaxTimestamp = lastOffset;
-            else
-                shallowOffsetOfMaxTimestamp = offsetOfMaxTimestamp;
-            return new RecordsInfo(maxTimestamp, shallowOffsetOfMaxTimestamp);
+            // For create time, we always use offsetOfMaxTimestamp for the correct time -> offset mapping
+            return new RecordsInfo(maxTimestamp, offsetOfMaxTimestamp);
         }
     }
 
