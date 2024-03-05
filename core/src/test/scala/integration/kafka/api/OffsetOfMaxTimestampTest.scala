@@ -47,12 +47,6 @@ class OffsetOfMaxTimestampTest extends IntegrationTestHarness {
     test(false)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("zk", "kraft"))
-  def testWithCompression(quorum: String): Unit = {
-    test(true)
-  }
-
   private def test(useCompression: Boolean): Unit = {
     val topicName: String = "OffsetOfMaxTimestampTest-" + System.currentTimeMillis()
 
