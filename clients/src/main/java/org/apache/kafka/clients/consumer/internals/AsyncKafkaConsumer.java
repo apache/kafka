@@ -111,6 +111,7 @@ import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Future;
 import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
@@ -271,6 +272,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     private boolean cachedSubscriptionHasAllFetchPositions;
     private final WakeupTrigger wakeupTrigger = new WakeupTrigger();
     private final OffsetCommitCallbackInvoker offsetCommitCallbackInvoker;
+    private final AtomicBoolean asyncCommitFenced;
 
     // currentThread holds the threadId of the current thread accessing the AsyncKafkaConsumer
     // and is used to prevent multithreaded access
@@ -353,6 +355,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                     fetchMetricsManager,
                     clientTelemetryReporter.map(ClientTelemetryReporter::telemetrySender).orElse(null));
             this.offsetCommitCallbackInvoker = new OffsetCommitCallbackInvoker(interceptors);
+            this.asyncCommitFenced = new AtomicBoolean(false);
             this.groupMetadata.set(initializeGroupMetadata(config, groupRebalanceConfig));
             final Supplier<RequestManagers> requestManagersSupplier = RequestManagers.supplier(time,
                     logContext,
@@ -473,6 +476,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         this.clientTelemetryReporter = Optional.empty();
         this.autoCommitEnabled = autoCommitEnabled;
         this.offsetCommitCallbackInvoker = new OffsetCommitCallbackInvoker(interceptors);
+        this.asyncCommitFenced = new AtomicBoolean(false);
     }
 
     AsyncKafkaConsumer(LogContext logContext,
@@ -538,6 +542,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             client
         );
         this.offsetCommitCallbackInvoker = new OffsetCommitCallbackInvoker(interceptors);
+        this.asyncCommitFenced = new AtomicBoolean(false);
         Supplier<RequestManagers> requestManagersSupplier = RequestManagers.supplier(
             time,
             logContext,
@@ -769,6 +774,10 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                     offsetCommitCallbackInvoker.enqueueInterceptorInvocation(offsets);
                 }
 
+                if (t instanceof FencedInstanceIdException) {
+                    asyncCommitFenced.set(true);
+                }
+
                 if (callback == null) {
                     if (t != null) {
                         log.error("Offset commit with offsets {} failed", offsets, t);
@@ -784,8 +793,8 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     }
 
     private CompletableFuture<Void> commit(final CommitEvent commitEvent) {
-        maybeInvokeCommitCallbacks();
         maybeThrowFencedInstanceException();
+        maybeInvokeCommitCallbacks();
         maybeThrowInvalidGroupIdException();
 
         Map<TopicPartition, OffsetAndMetadata> offsets = commitEvent.offsets();
@@ -1649,8 +1658,8 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
 
     @Override
     public boolean updateAssignmentMetadataIfNeeded(Timer timer) {
-        maybeInvokeCommitCallbacks();
         maybeThrowFencedInstanceException();
+        maybeInvokeCommitCallbacks();
         backgroundEventProcessor.process();
 
         // Keeping this updateAssignmentMetadataIfNeeded wrapping up the updateFetchPositions as
@@ -1905,7 +1914,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     }
 
     private void maybeThrowFencedInstanceException() {
-        if (offsetCommitCallbackInvoker.hasFencedException()) {
+        if (asyncCommitFenced.get()) {
             String groupInstanceId = "unknown";
             if (!groupMetadata.get().isPresent()) {
                 log.error("No group metadata found although a group ID was provided. This is a bug!");
