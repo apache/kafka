@@ -410,6 +410,7 @@
       <allow pkg="com.fasterxml.jackson" />
       <allow pkg="org.apache.kafka.tools" />
       <allow pkg="org.apache.kafka.server.config" />
+      <allow class="org.apache.kafka.storage.internals.log.CleanerConfig" />
     </subpackage>
 
     <subpackage name="test">
@@ -601,6 +602,7 @@
         <allow pkg="com.fasterxml.jackson.core.type" />
         <allow pkg="org.apache.kafka.metadata" />
         <allow pkg="org.eclipse.jetty.client"/>
+        <allow class="org.apache.kafka.storage.internals.log.CleanerConfig" />
       </subpackage>
     </subpackage>
 
