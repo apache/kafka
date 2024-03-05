@@ -279,14 +279,12 @@ public class Metrics implements Closeable {
         }
         StringBuilder b = new StringBuilder();
         b.append("<table class=\"data-table\">\n<tbody>\n");
-
+        b.append("<tr>\n");
+        b.append("<th>Metric/Attribute name</th>\n");
+        b.append("<th>Description</th>\n");
+        b.append("<th>Mbean name</th>\n");
+        b.append("</tr>\n");
         for (Entry<String, Map<String, String>> e : beansAndAttributes.entrySet()) {
-            b.append("<tr>\n");
-            b.append("<th>Metric/Attribute name</th>\n");
-            b.append("<th>Description</th>\n");
-            b.append("<th>Mbean name</th>\n");
-            b.append("</tr>\n");
-            
             for (Entry<String, String> e2 : e.getValue().entrySet()) {
                 b.append("<tr>\n");
                 b.append("<td>");
@@ -300,7 +298,6 @@ public class Metrics implements Closeable {
                 b.append("</td>\n");
                 b.append("</tr>\n");
             }
-    
         }
         b.append("</tbody></table>");
         return b.toString();
