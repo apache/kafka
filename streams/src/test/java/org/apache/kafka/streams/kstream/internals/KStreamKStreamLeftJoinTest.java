@@ -437,7 +437,7 @@ public class KStreamKStreamLeftJoinTest {
     }
 
     @Test
-    public void testLeftNonJoinedRecordsWithZeroAfterAreEmitted() {
+    public void testLeftJoinedRecordsWithZeroAfterAreEmitted() {
         final StreamsBuilder builder = new StreamsBuilder();
 
         final int[] expectedKeys = new int[] {0, 1, 2, 3};
@@ -473,61 +473,6 @@ public class KStreamKStreamLeftJoinTest {
             final MockApiProcessor<Integer, String, Void, Void> processor = supplier.theCapturedProcessor();
 
             processor.init(null);
-            // push four items with increasing timestamps to the primary stream; this should emit null-joined items
-            // w1 = {}
-            // w2 = {}
-            // --> w1 = { 0:B0 (ts: 1000), 1:B1 (ts: 1001), 2:B2 (ts: 1002), 3:B3 (ts: 1003) }
-            //     w2 = {}
-            final long time = 1000L;
-            for (int i = 0; i < expectedKeys.length; i++) {
-                inputTopic1.pipeInput(expectedKeys[i], "B" + expectedKeys[i], time + i);
-            }
-            processor.checkAndClearProcessResult(
-                    new KeyValueTimestamp<>(0, "B0+null", 1000L),
-                    new KeyValueTimestamp<>(1, "B1+null", 1001L),
-                    new KeyValueTimestamp<>(2, "B2+null", 1002L)
-            );
-        }
-    }    
-    
-    @Test
-    public void testLeftJoinedRecordsWithZeroAfterAreEmitted() {
-        final StreamsBuilder builder = new StreamsBuilder();
-
-        final int[] expectedKeys = new int[] {0, 1, 2, 3};
-        final int[] expectedKeysNotJoined = new int[] {10, 11, 12, 13};
-
-        final KStream<Integer, String> stream1;
-        final KStream<Integer, String> stream2;
-        final KStream<Integer, String> joined;
-        final MockApiProcessorSupplier<Integer, String, Void, Void> supplier = new MockApiProcessorSupplier<>();
-        stream1 = builder.stream(topic1, consumed);
-        stream2 = builder.stream(topic2, consumed);
-        
-        joined = stream1.leftJoin(
-            stream2,
-            MockValueJoiner.TOSTRING_JOINER,
-            JoinWindows.ofTimeDifferenceWithNoGrace(ofMillis(100)).after(Duration.ZERO),
-            StreamJoined.with(Serdes.Integer(),
-                Serdes.String(),
-                Serdes.String())
-        );
-        joined.process(supplier);
-
-        final Collection<Set<String>> copartitionGroups =
-            TopologyWrapper.getInternalTopologyBuilder(builder.build()).copartitionGroups();
-
-        assertEquals(1, copartitionGroups.size());
-        assertEquals(new HashSet<>(Arrays.asList(topic1, topic2)), copartitionGroups.iterator().next());
-
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), PROPS)) {
-            final TestInputTopic<Integer, String> inputTopic1 =
-                    driver.createInputTopic(topic1, new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
-            final TestInputTopic<Integer, String> inputTopic2 =
-                    driver.createInputTopic(topic2, new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
-            final MockApiProcessor<Integer, String, Void, Void> processor = supplier.theCapturedProcessor();
-
-            processor.init(null);
             
             // push four items with increasing timestamps to the primary stream; the other window is empty; 
             // this should emit the first three left-joined items;
@@ -536,7 +481,7 @@ public class KStreamKStreamLeftJoinTest {
             // w2 = {}
             // --> w1 = { 0:A0 (ts: 1000), 1:A1 (ts: 1001), 2:A2 (ts: 1002), 3:A3 (ts: 1003) }
             //     w2 = {}
-            long time = 1000L;
+            final long time = 1000L;
             for (int i = 0; i < expectedKeys.length; i++) {
                 inputTopic1.pipeInput(expectedKeys[i], "A" + expectedKeys[i], time + i);
             }
