@@ -17,6 +17,7 @@
 
 package org.apache.kafka.metadata.placement;
 
+import static org.apache.kafka.metadata.placement.PartitionAssignmentTest.partitionAssignment;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 
@@ -33,8 +34,8 @@ public class TopicAssignmentTest {
         List<Integer> replicasP0 = Arrays.asList(0, 1, 2);
         List<Integer> replicasP1 = Arrays.asList(1, 2, 0);
         List<PartitionAssignment> partitionAssignments = Arrays.asList(
-            new PartitionAssignment(replicasP0),
-            new PartitionAssignment(replicasP1)
+            partitionAssignment(replicasP0),
+            partitionAssignment(replicasP1)
         );
         assertEquals(partitionAssignments, new TopicAssignment(partitionAssignments).assignments());
     }
@@ -44,14 +45,14 @@ public class TopicAssignmentTest {
         List<TopicAssignment> topicAssignments = Arrays.asList(
             new TopicAssignment(
                 Arrays.asList(
-                    new PartitionAssignment(
+                    partitionAssignment(
                         Arrays.asList(0, 1, 2)
                     )
                 )
             ),
             new TopicAssignment(
                 Arrays.asList(
-                    new PartitionAssignment(
+                    partitionAssignment(
                         Arrays.asList(1, 2, 0)
                     )
                 )

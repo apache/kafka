@@ -34,6 +34,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
+import static org.apache.kafka.metadata.placement.PartitionAssignmentTest.partitionAssignment;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
@@ -105,7 +106,7 @@ public class StripedReplicaPlacerTest {
 
             @Override
             public Uuid defaultDir(int brokerId) {
-                return DirectoryId.UNASSIGNED;
+                return DirectoryId.MIGRATING;
             }
         });
     }
@@ -118,9 +119,9 @@ public class StripedReplicaPlacerTest {
     public void testMultiPartitionTopicPlacementOnSingleUnfencedBroker() {
         MockRandom random = new MockRandom();
         StripedReplicaPlacer placer = new StripedReplicaPlacer(random);
-        assertEquals(new TopicAssignment(Arrays.asList(new PartitionAssignment(Arrays.asList(0)),
-                new PartitionAssignment(Arrays.asList(0)),
-                new PartitionAssignment(Arrays.asList(0)))),
+        assertEquals(new TopicAssignment(Arrays.asList(partitionAssignment(Arrays.asList(0)),
+                partitionAssignment(Arrays.asList(0)),
+                partitionAssignment(Arrays.asList(0)))),
                 place(placer, 0, 3, (short) 1, Arrays.asList(
                         new UsableBroker(0, Optional.empty(), false),
                         new UsableBroker(1, Optional.empty(), true))));
@@ -224,11 +225,11 @@ public class StripedReplicaPlacerTest {
     public void testSuccessfulPlacement() {
         MockRandom random = new MockRandom();
         StripedReplicaPlacer placer = new StripedReplicaPlacer(random);
-        assertEquals(new TopicAssignment(Arrays.asList(new PartitionAssignment(Arrays.asList(2, 3, 0)),
-                new PartitionAssignment(Arrays.asList(3, 0, 1)),
-                new PartitionAssignment(Arrays.asList(0, 1, 2)),
-                new PartitionAssignment(Arrays.asList(1, 2, 3)),
-                new PartitionAssignment(Arrays.asList(1, 0, 2)))),
+        assertEquals(new TopicAssignment(Arrays.asList(partitionAssignment(Arrays.asList(2, 3, 0)),
+                partitionAssignment(Arrays.asList(3, 0, 1)),
+                partitionAssignment(Arrays.asList(0, 1, 2)),
+                partitionAssignment(Arrays.asList(1, 2, 3)),
+                partitionAssignment(Arrays.asList(1, 0, 2)))),
             place(placer, 0, 5, (short) 3, Arrays.asList(
                 new UsableBroker(0, Optional.empty(), false),
                 new UsableBroker(3, Optional.empty(), false),
