@@ -432,7 +432,6 @@ public class ConnectMetrics {
      * @param args the arguments
      */
     public static void main(String[] args) {
-        LogManager.shutdown();
         ConnectMetricsRegistry metrics = new ConnectMetricsRegistry();
         System.out.println(Metrics.toHtmlTable(JMX_PREFIX, metrics.getAllTemplates()));
     }
