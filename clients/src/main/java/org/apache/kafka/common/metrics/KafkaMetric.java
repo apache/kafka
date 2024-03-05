@@ -20,6 +20,27 @@ import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.utils.Time;
 
+/**
+ * A registry of sensors and metrics.
+ * <p>
+ * A metric is a named, numerical measurement. A sensor is a handle to record numerical measurements as they occur. Each
+ * Sensor has zero or more associated metrics.
+ * <p>
+ * Usage looks something like this:
+ *
+ * <pre>
+ * // set up metrics:
+ * Metrics metrics = new Metrics(); // this is the global repository of metrics and sensors
+ * Sensor sensor = metrics.sensor(&quot;message-sizes&quot;);
+ * MetricName metricName = new MetricName(&quot;message-size-avg&quot;, &quot;producer-metrics&quot;);
+ * sensor.add(metricName, new Avg());
+ * metricName = new MetricName(&quot;message-size-max&quot;, &quot;producer-metrics&quot;);
+ * sensor.add(metricName, new Max());
+ *
+ * // as messages are sent we record the sizes
+ * sensor.record(messageSize);
+ * </pre>
+ */
 public final class KafkaMetric implements Metric {
 
     private final MetricName metricName;
