@@ -27,6 +27,7 @@ import org.apache.kafka.clients.admin.ConfigEntry.ConfigSource;
 import org.apache.kafka.clients.admin.ConfigEntry.ConfigSynonym;
 import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
+import org.apache.kafka.storage.internals.log.CleanerConfig;
 import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -129,7 +130,7 @@ public class DynamicBrokerReconfigurationTest extends AbstractDynamicBrokerRecon
         expectedProps.setProperty(KafkaConfig.LogRetentionTimeMillisProp(), "1680000000");
         expectedProps.setProperty(KafkaConfig.LogRetentionTimeHoursProp(), "168");
         expectedProps.setProperty(KafkaConfig.LogRollTimeHoursProp(), "168");
-        expectedProps.setProperty(KafkaConfig.LogCleanerThreadsProp(), "1");
+        expectedProps.setProperty(CleanerConfig.LOG_CLEANER_THREADS_PROP, "1");
         ConfigEntry logRetentionMs = configEntry(configDesc, KafkaConfig.LogRetentionTimeMillisProp());
         verifyConfig(KafkaConfig.LogRetentionTimeMillisProp(), logRetentionMs,
             false, false, expectedProps);
@@ -139,8 +140,8 @@ public class DynamicBrokerReconfigurationTest extends AbstractDynamicBrokerRecon
         ConfigEntry logRollHours = configEntry(configDesc, KafkaConfig.LogRollTimeHoursProp());
         verifyConfig(KafkaConfig.LogRollTimeHoursProp(), logRollHours,
             false, true, expectedProps);
-        ConfigEntry logCleanerThreads = configEntry(configDesc, KafkaConfig.LogCleanerThreadsProp());
-        verifyConfig(KafkaConfig.LogCleanerThreadsProp(), logCleanerThreads,
+        ConfigEntry logCleanerThreads = configEntry(configDesc, CleanerConfig.LOG_CLEANER_THREADS_PROP);
+        verifyConfig(CleanerConfig.LOG_CLEANER_THREADS_PROP, logCleanerThreads,
             false, false, expectedProps);
 
         Function<ConfigEntry, List<Tuple2<String, ConfigSource>>> synonymsList =
@@ -157,7 +158,7 @@ public class DynamicBrokerReconfigurationTest extends AbstractDynamicBrokerRecon
                 new Tuple2<>(KafkaConfig.LogRetentionTimeHoursProp(), ConfigSource.DEFAULT_CONFIG)),
             synonymsList.apply(logRetentionHours));
         assertEquals(Collections.singletonList(new Tuple2<>(KafkaConfig.LogRollTimeHoursProp(), ConfigSource.DEFAULT_CONFIG)), synonymsList.apply(logRollHours));
-        assertEquals(Collections.singletonList(new Tuple2<>(KafkaConfig.LogCleanerThreadsProp(), ConfigSource.DEFAULT_CONFIG)), synonymsList.apply(logCleanerThreads));
+        assertEquals(Collections.singletonList(new Tuple2<>(CleanerConfig.LOG_CLEANER_THREADS_PROP, ConfigSource.DEFAULT_CONFIG)), synonymsList.apply(logCleanerThreads));
     }
 
     @ParameterizedTest(name = TEST_WITH_PARAMETERIZED_QUORUM_NAME)

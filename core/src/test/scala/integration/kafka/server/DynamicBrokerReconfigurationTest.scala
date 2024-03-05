@@ -249,38 +249,6 @@ class AbstractDynamicBrokerReconfigurationTest extends QuorumTestHarness with Sa
     mbeanName.contains(s"${Processor.NetworkProcessorMetricTag}=") || mbeanName.contains(s"${RequestChannel.ProcessorMetricTag}=")
   }
 
-    // Verify a few log configs with and without synonyms
-    val expectedProps = new Properties
-    expectedProps.setProperty(KafkaConfig.LogRetentionTimeMillisProp, "1680000000")
-    expectedProps.setProperty(KafkaConfig.LogRetentionTimeHoursProp, "168")
-    expectedProps.setProperty(KafkaConfig.LogRollTimeHoursProp, "168")
-    expectedProps.setProperty(CleanerConfig.LOG_CLEANER_THREADS_PROP, "1")
-    val logRetentionMs = configEntry(configDesc, KafkaConfig.LogRetentionTimeMillisProp)
-    verifyConfig(KafkaConfig.LogRetentionTimeMillisProp, logRetentionMs,
-      isSensitive = false, isReadOnly = false, expectedProps)
-    val logRetentionHours = configEntry(configDesc, KafkaConfig.LogRetentionTimeHoursProp)
-    verifyConfig(KafkaConfig.LogRetentionTimeHoursProp, logRetentionHours,
-      isSensitive = false, isReadOnly = true, expectedProps)
-    val logRollHours = configEntry(configDesc, KafkaConfig.LogRollTimeHoursProp)
-    verifyConfig(KafkaConfig.LogRollTimeHoursProp, logRollHours,
-      isSensitive = false, isReadOnly = true, expectedProps)
-    val logCleanerThreads = configEntry(configDesc, CleanerConfig.LOG_CLEANER_THREADS_PROP)
-    verifyConfig(CleanerConfig.LOG_CLEANER_THREADS_PROP, logCleanerThreads,
-      isSensitive = false, isReadOnly = false, expectedProps)
-
-    def synonymsList(configEntry: ConfigEntry): List[(String, ConfigSource)] =
-      configEntry.synonyms.asScala.map(s => (s.name, s.source)).toList
-    assertEquals(List((KafkaConfig.LogRetentionTimeMillisProp, ConfigSource.STATIC_BROKER_CONFIG),
-      (KafkaConfig.LogRetentionTimeHoursProp, ConfigSource.STATIC_BROKER_CONFIG),
-      (KafkaConfig.LogRetentionTimeHoursProp, ConfigSource.DEFAULT_CONFIG)),
-      synonymsList(logRetentionMs))
-    assertEquals(List((KafkaConfig.LogRetentionTimeHoursProp, ConfigSource.STATIC_BROKER_CONFIG),
-      (KafkaConfig.LogRetentionTimeHoursProp, ConfigSource.DEFAULT_CONFIG)),
-      synonymsList(logRetentionHours))
-    assertEquals(List((KafkaConfig.LogRollTimeHoursProp, ConfigSource.DEFAULT_CONFIG)), synonymsList(logRollHours))
-    assertEquals(List((CleanerConfig.LOG_CLEANER_THREADS_PROP, ConfigSource.DEFAULT_CONFIG)), synonymsList(logCleanerThreads))
-  }
-
   def invalidSslConfigs: Properties = {
     val props = new Properties
     props.put(SSL_KEYSTORE_LOCATION_CONFIG, "invalid/file/path")
