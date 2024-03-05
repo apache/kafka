@@ -86,6 +86,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 public class OffsetsRequestManagerTest {
+
     private OffsetsRequestManager requestManager;
     private ConsumerMetadata metadata;
     private SubscriptionState subscriptionState;
