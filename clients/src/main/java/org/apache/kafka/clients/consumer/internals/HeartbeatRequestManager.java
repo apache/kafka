@@ -22,7 +22,6 @@ import org.apache.kafka.clients.consumer.internals.NetworkClientDelegate.PollRes
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEventProcessor;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEventHandler;
 import org.apache.kafka.clients.consumer.internals.events.ErrorEvent;
-import org.apache.kafka.clients.consumer.internals.events.GroupMetadataUpdateEvent;
 import org.apache.kafka.clients.consumer.internals.metrics.HeartbeatMetricsManager;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
@@ -110,7 +109,6 @@ public class HeartbeatRequestManager implements RequestManager {
      * sending heartbeat until the next poll.
      */
     private final Timer pollTimer;
-    private GroupMetadataUpdateEvent previousGroupMetadataUpdateEvent = null;
 
     /**
      * Holding the heartbeat sensor to measure heartbeat timing and response latency
@@ -328,25 +326,9 @@ public class HeartbeatRequestManager implements RequestManager {
             heartbeatRequestState.onSuccessfulAttempt(currentTimeMs);
             heartbeatRequestState.resetTimer();
             membershipManager.onHeartbeatSuccess(response.data());
-            maybeSendGroupMetadataUpdateEvent();
             return;
         }
         onErrorResponse(response, currentTimeMs);
-    }
-
-    private void maybeSendGroupMetadataUpdateEvent() {
-        if (previousGroupMetadataUpdateEvent == null ||
-            !previousGroupMetadataUpdateEvent.memberId().equals(membershipManager.memberId()) ||
-            previousGroupMetadataUpdateEvent.memberEpoch() != membershipManager.memberEpoch()) {
-
-            final GroupMetadataUpdateEvent currentGroupMetadataUpdateEvent = new GroupMetadataUpdateEvent(
-                membershipManager.memberEpoch(),
-                previousGroupMetadataUpdateEvent != null && membershipManager.memberId() == null ?
-                    previousGroupMetadataUpdateEvent.memberId() : membershipManager.memberId()
-            );
-            this.backgroundEventHandler.add(currentGroupMetadataUpdateEvent);
-            previousGroupMetadataUpdateEvent = currentGroupMetadataUpdateEvent;
-        }
     }
 
     private void onErrorResponse(final ConsumerGroupHeartbeatResponse response,
