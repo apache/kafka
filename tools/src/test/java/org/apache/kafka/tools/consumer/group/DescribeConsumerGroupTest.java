@@ -24,8 +24,6 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.test.TestUtils;
-import org.apache.kafka.tools.ToolsTestUtils;
-import org.apache.kafka.tools.Tuple2;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -45,7 +43,6 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
-import static org.apache.kafka.test.TestUtils.DEFAULT_MAX_WAIT_MS;
 import static org.apache.kafka.test.TestUtils.RANDOM;
 import static org.apache.kafka.tools.ToolsTestUtils.TEST_WITH_PARAMETERIZED_QUORUM_AND_GROUP_PROTOCOL_NAMES;
 import static org.apache.kafka.tools.ToolsTestUtils.TEST_WITH_PARAMETERIZED_QUORUM_NAME;
@@ -442,31 +439,19 @@ public class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
         // stop the consumer so the group has no active member anymore
         executor.shutdown();
 
-        Tuple2<scala.Tuple2<Option<String>, Option<Seq<ConsumerGroupCommand.PartitionAssignmentState>>>, Boolean> res = ToolsTestUtils.computeUntilTrue(
-            () -> {
-                try {
-                    return service.collectGroupOffsets(GROUP);
-                } catch (Exception e) {
-                    throw new RuntimeException(e);
-                }
-            },
-            DEFAULT_MAX_WAIT_MS,
-            100,
-            offsets -> {
-                Option<String> state = offsets._1;
-                Option<Seq<ConsumerGroupCommand.PartitionAssignmentState>> assignments = offsets._2;
-
-                @SuppressWarnings("unchecked")
-                Seq<ConsumerGroupCommand.PartitionAssignmentState> testGroupAssignments = assignments.get().filter(a -> Objects.equals(a.group(), GROUP)).toSeq();
-                ConsumerGroupCommand.PartitionAssignmentState assignment = testGroupAssignments.head();
-                return state.map(s -> s.contains("Empty")).getOrElse(() -> false) &&
-                    testGroupAssignments.size() == 1 &&
-                    assignment.consumerId().map(c -> c.trim().equals(ConsumerGroupCommand.MISSING_COLUMN_VALUE())).getOrElse(() -> false) && // the member should be gone
-                    assignment.clientId().map(c -> c.trim().equals(ConsumerGroupCommand.MISSING_COLUMN_VALUE())).getOrElse(() -> false) &&
-                    assignment.host().map(c -> c.trim().equals(ConsumerGroupCommand.MISSING_COLUMN_VALUE())).getOrElse(() -> false);
-            });
-
-        assertTrue(res.v2, "Expected no active member in describe group results, state: " + res.v1._1 + ", assignments: " + res.v1._2);
+        TestUtils.waitForCondition(() -> {
+            scala.Tuple2<Option<String>, Option<Seq<ConsumerGroupCommand.PartitionAssignmentState>>> offsets = service.collectGroupOffsets(GROUP);
+            Option<String> state = offsets._1;
+            Option<Seq<ConsumerGroupCommand.PartitionAssignmentState>> assignments = offsets._2;
+            @SuppressWarnings("unchecked")
+            Seq<ConsumerGroupCommand.PartitionAssignmentState> testGroupAssignments = assignments.get().filter(a -> Objects.equals(a.group(), GROUP)).toSeq();
+            ConsumerGroupCommand.PartitionAssignmentState assignment = testGroupAssignments.head();
+            return state.map(s -> s.contains("Empty")).getOrElse(() -> false) &&
+                testGroupAssignments.size() == 1 &&
+                assignment.consumerId().map(c -> c.trim().equals(ConsumerGroupCommand.MISSING_COLUMN_VALUE())).getOrElse(() -> false) && // the member should be gone
+                assignment.clientId().map(c -> c.trim().equals(ConsumerGroupCommand.MISSING_COLUMN_VALUE())).getOrElse(() -> false) &&
+                assignment.host().map(c -> c.trim().equals(ConsumerGroupCommand.MISSING_COLUMN_VALUE())).getOrElse(() -> false);
+        }, "failed to collect group offsets");
     }
 
     @ParameterizedTest(name = TEST_WITH_PARAMETERIZED_QUORUM_AND_GROUP_PROTOCOL_NAMES)
