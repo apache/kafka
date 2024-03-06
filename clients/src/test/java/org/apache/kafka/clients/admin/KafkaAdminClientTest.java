@@ -1598,6 +1598,66 @@ public class KafkaAdminClientTest {
         }
     }
 
+    @SuppressWarnings("NPathComplexity")
+    @Test
+    public void testDescribeTopicsWithDescribeTopicPartitionsApiErrorHandling() {
+        try (AdminClientUnitTestEnv env = mockClientEnv()) {
+            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
+            String topicName0 = "test-0";
+            String topicName1 = "test-1";
+            Map<String, Uuid> topics = new HashMap<>();
+            topics.put(topicName0, Uuid.randomUuid());
+            topics.put(topicName1, Uuid.randomUuid());
+
+            env.kafkaClient().prepareResponse(
+                prepareDescribeClusterResponse(0,
+                    env.cluster().nodes(),
+                    env.cluster().clusterResource().clusterId(),
+                    2,
+                    MetadataResponse.AUTHORIZED_OPERATIONS_OMITTED)
+            );
+
+            DescribeTopicPartitionsResponseData dataFirstPart = new DescribeTopicPartitionsResponseData();
+            dataFirstPart.topics().add(new DescribeTopicPartitionsResponseTopic()
+                .setErrorCode((short) 0)
+                .setTopicId(topics.get(topicName0))
+                .setName(topicName0)
+                .setIsInternal(false)
+                .setPartitions(Arrays.asList(new DescribeTopicPartitionsResponsePartition()
+                    .setIsrNodes(Arrays.asList(0))
+                    .setErrorCode((short) 0)
+                    .setLeaderEpoch(0)
+                    .setLeaderId(0)
+                    .setEligibleLeaderReplicas(Arrays.asList(1))
+                    .setLastKnownElr(Arrays.asList(2))
+                    .setPartitionIndex(0)
+                    .setReplicaNodes(Arrays.asList(0, 1, 2))))
+            );
+            dataFirstPart.topics().add(new DescribeTopicPartitionsResponseTopic()
+                .setErrorCode((short) 29)
+                .setTopicId(Uuid.ZERO_UUID)
+                .setName(topicName1)
+                .setIsInternal(false)
+            );
+            env.kafkaClient().prepareResponse(body -> {
+                DescribeTopicPartitionsRequestData request = (DescribeTopicPartitionsRequestData) body.data();
+                if (request.topics().size() != 2) return false;
+                if (!request.topics().get(0).name().equals(topicName0)) return false;
+                if (!request.topics().get(1).name().equals(topicName1)) return false;
+                if (request.cursor() != null) return false;
+                return true;
+            }, new DescribeTopicPartitionsResponse(dataFirstPart));
+            DescribeTopicsResult result = env.adminClient().describeTopics(
+                Arrays.asList(topicName1, topicName0), new DescribeTopicsOptions()
+            );
+            try {
+                TestUtils.assertFutureError(result.allTopicNames(), TopicAuthorizationException.class);
+            } catch (Exception e) {
+                fail("describe using DescribeTopics API should not have other exceptions", e);
+            }
+        }
+    }
+
     @Test
     public void testMetadataRetries() throws Exception {
         // We should continue retrying on metadata update failures in spite of retry configuration

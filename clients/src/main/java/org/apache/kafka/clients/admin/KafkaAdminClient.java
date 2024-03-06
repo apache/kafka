@@ -2192,7 +2192,7 @@ public class KafkaAdminClient extends AdminClient {
             if (topicNameIsUnrepresentable(topicName)) {
                 KafkaFutureImpl<TopicDescription> future = new KafkaFutureImpl<>();
                 future.completeExceptionally(new InvalidTopicException("The given topic name '" +
-                        topicName + "' cannot be represented in a request."));
+                    topicName + "' cannot be represented in a request."));
                 topicFutures.put(topicName, future);
             } else if (!topicFutures.containsKey(topicName)) {
                 topicFutures.put(topicName, new KafkaFutureImpl<>());
@@ -2245,7 +2245,6 @@ public class KafkaAdminClient extends AdminClient {
                     KafkaFutureImpl<TopicDescription> future = topicFutures.get(topicName);
                     if (error != Errors.NONE) {
                         future.completeExceptionally(error.exception());
-                        topicFutures.remove(topicName);
                         pendingTopics.remove(topicName);
                         if (responseCursor != null && responseCursor.topicName().equals(topicName)) {
                             responseCursor = null;
