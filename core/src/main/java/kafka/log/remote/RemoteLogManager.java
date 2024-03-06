@@ -710,6 +710,8 @@ public class RemoteLogManager implements Closeable {
                 throw ex;
             } catch (CorruptIndexException ex) {
                 logger.error("Error occurred while copying log segments. Index appeared to be corrupted for partition: {}  ", topicIdPartition, ex);
+                brokerTopicStats.topicStats(log.topicPartition().topic()).failedRemoteCopyRequestRate().mark();
+                brokerTopicStats.allTopicsStats().failedRemoteCopyRequestRate().mark();
             } catch (Exception ex) {
                 if (!isCancelled()) {
                     brokerTopicStats.topicStats(log.topicPartition().topic()).failedRemoteCopyRequestRate().mark();
