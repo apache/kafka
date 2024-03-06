@@ -2115,31 +2115,13 @@ public class KafkaAdminClient extends AdminClient {
     public DescribeTopicsResult describeTopics(final TopicCollection topics, DescribeTopicsOptions options) {
         if (topics instanceof TopicIdCollection)
             return DescribeTopicsResult.ofTopicIds(handleDescribeTopicsByIds(((TopicIdCollection) topics).topicIds(), options));
-        else if (topics instanceof TopicNameCollection) {
-            if (options.useDescribeTopicPartitionsApi()) {
-                return DescribeTopicsResult.ofTopicNames(handleDescribeTopicsByNamesWithDescribeTopicPartitionsApi(((TopicNameCollection) topics).topicNames(), options));
-            }
-            return DescribeTopicsResult.ofTopicNames(handleDescribeTopicsByNames(((TopicNameCollection) topics).topicNames(), options));
-        } else
+        else if (topics instanceof TopicNameCollection)
+            return DescribeTopicsResult.ofTopicNames(handleDescribeTopicsByNamesWithDescribeTopicPartitionsApi(((TopicNameCollection) topics).topicNames(), options));
+        else
             throw new IllegalArgumentException("The TopicCollection: " + topics + " provided did not match any supported classes for describeTopics.");
     }
 
-    @SuppressWarnings("MethodLength")
-    private Map<String, KafkaFuture<TopicDescription>> handleDescribeTopicsByNames(final Collection<String> topicNames, DescribeTopicsOptions options) {
-        final Map<String, KafkaFutureImpl<TopicDescription>> topicFutures = new HashMap<>(topicNames.size());
-        final ArrayList<String> topicNamesList = new ArrayList<>();
-        for (String topicName : topicNames) {
-            if (topicNameIsUnrepresentable(topicName)) {
-                KafkaFutureImpl<TopicDescription> future = new KafkaFutureImpl<>();
-                future.completeExceptionally(new InvalidTopicException("The given topic name '" +
-                    topicName + "' cannot be represented in a request."));
-                topicFutures.put(topicName, future);
-            } else if (!topicFutures.containsKey(topicName)) {
-                topicFutures.put(topicName, new KafkaFutureImpl<>());
-                topicNamesList.add(topicName);
-            }
-        }
-        final long now = time.milliseconds();
+    Call generateDescribeTopicsCallWithMetadataAPI(List<String> topicNamesList, Map<String, KafkaFutureImpl<TopicDescription>> topicFutures, DescribeTopicsOptions options, long now) {
         Call call = new Call("describeTopics", calcDeadlineMs(now, options.timeoutMs()),
             new LeastLoadedNodeProvider()) {
 
@@ -2195,10 +2177,7 @@ public class KafkaAdminClient extends AdminClient {
                 completeAllExceptionally(topicFutures.values(), throwable);
             }
         };
-        if (!topicNamesList.isEmpty()) {
-            runnable.call(call, now);
-        }
-        return new HashMap<>(topicFutures);
+        return call;
     }
 
     @SuppressWarnings("MethodLength")
@@ -2217,7 +2196,7 @@ public class KafkaAdminClient extends AdminClient {
             }
         }
         final long now = time.milliseconds();
-        Call call = new Call("describeTopics", calcDeadlineMs(now, options.timeoutMs()),
+        Call call = new Call("describeTopicPartitions", calcDeadlineMs(now, options.timeoutMs()),
             new LeastLoadedNodeProvider()) {
             Map<String, TopicRequest> pendingTopics =
                 topicNamesList.stream().map(topicName -> new TopicRequest().setName(topicName))
@@ -2297,12 +2276,17 @@ public class KafkaAdminClient extends AdminClient {
 
             @Override
             boolean handleUnsupportedVersionException(UnsupportedVersionException exception) {
+                final long now = time.milliseconds();
+                log.warn("The DescribeTopicPartitions API is not supported, using Metadata API to describe topics.");
+                runnable.call(generateDescribeTopicsCallWithMetadataAPI(topicNamesList, topicFutures, options, now), now);
                 return false;
             }
 
             @Override
             void handleFailure(Throwable throwable) {
-                completeAllExceptionally(topicFutures.values(), throwable);
+                if (!(throwable instanceof UnsupportedVersionException)) {
+                    completeAllExceptionally(topicFutures.values(), throwable);
+                }
             }
         };
         if (!topicNamesList.isEmpty()) {
@@ -2402,7 +2386,7 @@ public class KafkaAdminClient extends AdminClient {
         for (PartitionInfo partitionInfo : partitionInfos) {
             TopicPartitionInfo topicPartitionInfo = new TopicPartitionInfo(
                     partitionInfo.partition(), leader(partitionInfo), Arrays.asList(partitionInfo.replicas()),
-                    Arrays.asList(partitionInfo.inSyncReplicas()), Collections.emptyList(), Collections.emptyList());
+                    Arrays.asList(partitionInfo.inSyncReplicas()));
             partitions.add(topicPartitionInfo);
         }
         partitions.sort(Comparator.comparingInt(TopicPartitionInfo::partition));
@@ -2415,7 +2399,7 @@ public class KafkaAdminClient extends AdminClient {
         return partitionInfo.leader();
     }
 
-    // This is used in the describe topics path if using DescribeTopics API.
+    // This is used in the describe topics path if using DescribeTopicPartitions API.
     private Node replicaToFakeNode(int id) {
         return new Node(id, "Dummy", 0);
     }

@@ -1485,7 +1485,7 @@ public class KafkaAdminClientTest {
             }, new DescribeTopicPartitionsResponse(dataSecondPart));
             try {
                 DescribeTopicsResult result = env.adminClient().describeTopics(
-                    Arrays.asList(topicName0, topicName1), new DescribeTopicsOptions().useDescribeTopicPartitionsApi(true)
+                    Arrays.asList(topicName0, topicName1), new DescribeTopicsOptions()
                 );
                 Map<String, TopicDescription> topicDescriptions = result.allTopicNames().get();
                 assertEquals(2, topicDescriptions.size());
@@ -1567,7 +1567,7 @@ public class KafkaAdminClientTest {
             }, new DescribeTopicPartitionsResponse(dataSecondPart));
             try {
                 DescribeTopicsResult result = env.adminClient().describeTopics(
-                    Arrays.asList(topicName1, topicName0), new DescribeTopicsOptions().useDescribeTopicPartitionsApi(true)
+                    Arrays.asList(topicName1, topicName0), new DescribeTopicsOptions()
                 );
                 Map<String, TopicDescription> topicDescriptions = result.allTopicNames().get();
                 assertEquals(2, topicDescriptions.size());

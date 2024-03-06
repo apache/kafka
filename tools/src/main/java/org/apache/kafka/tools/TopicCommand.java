@@ -368,12 +368,22 @@ public abstract class TopicCommand {
                     .map(node -> node.toString())
                     .collect(Collectors.joining(",")));
             }
-            System.out.print("\tElr: " + info.elr().stream()
-                .map(node -> Integer.toString(node.id()))
-                .collect(Collectors.joining(",")));
-            System.out.print("\tLastKnownElr: " + info.lastKnownElr().stream()
-                .map(node -> Integer.toString(node.id()))
-                .collect(Collectors.joining(",")));
+
+            if (info.elr() != null) {
+                System.out.print("\tElr: " + info.elr().stream()
+                    .map(node -> Integer.toString(node.id()))
+                    .collect(Collectors.joining(",")));
+            } else {
+                System.out.print("\tElr: N/A");
+            }
+
+            if (info.lastKnownElr() != null) {
+                System.out.print("\tLastKnownElr: " + info.lastKnownElr().stream()
+                    .map(node -> Integer.toString(node.id()))
+                    .collect(Collectors.joining(",")));
+            } else {
+                System.out.print("\tLastKnownElr: N/A");
+            }
             System.out.print(markedForDeletion ? "\tMarkedForDeletion: true" : "");
             System.out.println();
         }
@@ -544,18 +554,6 @@ public abstract class TopicCommand {
         }
 
         public void describeTopic(TopicCommandOptions opts) throws ExecutionException, InterruptedException {
-            try {
-                describeTopic(opts, true);
-            } catch (Exception e) {
-                if (e.getMessage().contains("UnsupportedVersionException")) {
-                    describeTopic(opts, false);
-                } else {
-                    throw e;
-                }
-            }
-        }
-
-        public void describeTopic(TopicCommandOptions opts, boolean useDescribeTopicPartitionsApi) throws ExecutionException, InterruptedException {
             // If topicId is provided and not zero, will use topicId regardless of topic name
             Optional<Uuid> inputTopicId = opts.topicId()
                 .map(Uuid::fromString).filter(uuid -> uuid != Uuid.ZERO_UUID);
@@ -589,7 +587,6 @@ public abstract class TopicCommand {
                 Map<String, org.apache.kafka.clients.admin.TopicDescription> descTopics =
                     adminClient.describeTopics(TopicCollection.ofTopicNames(topics),
                         new DescribeTopicsOptions()
-                            .useDescribeTopicPartitionsApi(useDescribeTopicPartitionsApi)
                             .partitionSizeLimitPerResponse(opts.partitionSizeLimitPerResponse().orElse(2000))).allTopicNames().get();
                 topicDescriptions = new ArrayList<>(descTopics.values());
             }

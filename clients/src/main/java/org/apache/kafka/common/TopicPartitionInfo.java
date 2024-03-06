@@ -22,6 +22,7 @@ import org.apache.kafka.common.utils.Utils;
 import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 
 /**
  * A class containing leadership, replicas and ISR information for a topic partition.
@@ -60,8 +61,8 @@ public class TopicPartitionInfo {
         this.leader = leader;
         this.replicas = Collections.unmodifiableList(replicas);
         this.isr = Collections.unmodifiableList(isr);
-        this.elr = Collections.emptyList();
-        this.lastKnownElr = Collections.emptyList();
+        this.elr = null;
+        this.lastKnownElr = null;
     }
 
     /**
@@ -110,9 +111,11 @@ public class TopicPartitionInfo {
     }
 
     public String toString() {
+        String elrString = elr != null ? Utils.join(elr, ", ") : "N/A";
+        String lastKnownElrString = lastKnownElr != null ? Utils.join(lastKnownElr, ", ") : "N/A";
         return "(partition=" + partition + ", leader=" + leader + ", replicas=" +
             Utils.join(replicas, ", ") + ", isr=" + Utils.join(isr, ", ") +
-            ", elr=" + Utils.join(elr, ", ") + ", lastKnownElr=" + Utils.join(lastKnownElr, ", ") + ")";
+            ", elr=" + elrString + ", lastKnownElr=" + lastKnownElrString + ")";
     }
 
     @Override
