@@ -18,6 +18,7 @@
 package org.apache.kafka.tools;
 
 import kafka.test.ClusterInstance;
+import kafka.test.annotation.ClusterConfigProperty;
 import kafka.test.annotation.ClusterTest;
 import kafka.test.annotation.ClusterTestDefaults;
 import kafka.test.annotation.Type;
@@ -33,7 +34,6 @@ import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.server.common.MetadataVersion;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
-import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.extension.ExtendWith;
 
 import java.util.ArrayList;
@@ -66,16 +66,10 @@ public class GetOffsetShellTest {
     }
 
     @BeforeEach
-    public void before(TestInfo testInfo) {
+    public void before() {
         cluster.config().serverProperties().put("auto.create.topics.enable", false);
         cluster.config().serverProperties().put("offsets.topic.replication.factor", "1");
         cluster.config().serverProperties().put("offsets.topic.num.partitions", String.valueOf(offsetTopicPartitionCount));
-        if (testInfo.getDisplayName().contains("MessageConversion")) {
-            cluster.config().serverProperties().put("log.message.format.version", "0.10.0");
-        }
-        if (testInfo.getDisplayName().contains("testGetOffsetsByMaxTimestampWithCompressedMessagesAndNotSameCompressionType")) {
-            cluster.config().serverProperties().put("compression.type", "lz4");
-        }
     }
 
     public void setUp() {
@@ -280,12 +274,16 @@ public class GetOffsetShellTest {
         assertEquals(4, offsets.get(0).timestamp);
     }
 
-    @ClusterTest(metadataVersion = MetadataVersion.IBP_0_10_0_IV1)
+    @ClusterTest(metadataVersion = MetadataVersion.IBP_0_10_0_IV1, serverProperties = {
+            @ClusterConfigProperty(key = "log.message.format.version", value = "0.10.0")
+    })
     public void testGetOffsetsByMaxTimestampWithMessageConversion() {
         verifyOffsetOfMaxTimestamp(false);
     }
 
-    @ClusterTest(metadataVersion = MetadataVersion.IBP_0_10_0_IV1)
+    @ClusterTest(metadataVersion = MetadataVersion.IBP_0_10_0_IV1, serverProperties = {
+            @ClusterConfigProperty(key = "log.message.format.version", value = "0.10.0")
+    })
     public void testGetOffsetsByMaxTimestampWithCompressedMessageAndMessageConversion() {
         verifyOffsetOfMaxTimestamp(true);
     }
@@ -294,8 +292,9 @@ public class GetOffsetShellTest {
     public void testGetOffsetsByMaxTimestampWithCompressedMessages() {
         verifyOffsetOfMaxTimestamp(true);
     }
-
-    @ClusterTest
+    @ClusterTest(serverProperties = {
+            @ClusterConfigProperty(key = "compression.type", value = "lz4")
+    })
     public void testGetOffsetsByMaxTimestampWithCompressedMessagesAndNotSameCompressionType() {
         // The server will add "compression.type=lz4", which is different from the producer one.
         // Under this case, the server should still be able to return the expected offset
