@@ -579,6 +579,12 @@ class ProducerStateManagerTest {
   }
 
   @Test
+  def testFetchSnapshotEmptySnapShot(): Unit = {
+    val offset = 1
+    assertEquals(Optional.empty(), stateManager.fetchSnapshot(offset))
+  }
+
+  @Test
   def testRecoverFromSnapshotUnfinishedTransaction(): Unit = {
     val epoch = 0.toShort
     append(stateManager, producerId, epoch, 0, 0L, isTransactional = true)
