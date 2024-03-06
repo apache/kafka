@@ -98,9 +98,7 @@ public class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
         });
         String[] cgcArgs = new String[]{"--bootstrap-server", bootstrapServers(listenerName()), "--describe", "--group", GROUP, "--members", "--state"};
         try {
-            ConsumerGroupCommand.main(cgcArgs);
-        } catch (RuntimeException e) {
-            //expected
+            assertThrows(RuntimeException.class, () -> ConsumerGroupCommand.main(cgcArgs));
         } finally {
             Exit.resetExitProcedure();
         }
@@ -120,9 +118,7 @@ public class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
         });
         String[] cgcArgs = new String[]{"--bootstrap-server", bootstrapServers(listenerName()), "--describe", "--all-groups", "--state", "Stable"};
         try {
-            ConsumerGroupCommand.main(cgcArgs);
-        } catch (RuntimeException e) {
-            //expected
+            assertThrows(RuntimeException.class, () -> ConsumerGroupCommand.main(cgcArgs));
         } finally {
             Exit.resetExitProcedure();
         }
@@ -282,19 +278,19 @@ public class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
             Function1<ConsumerGroupCommand.PartitionAssignmentState, Object> isGrp = s -> Objects.equals(s.group(), GROUP);
 
             boolean res = state.map(s -> s.contains("Stable")).getOrElse(() -> false) &&
-                    assignments.isDefined() &&
-                    assignments.get().count(isGrp) == 1;
+                assignments.isDefined() &&
+                assignments.get().count(isGrp) == 1;
 
             if (!res)
                 return false;
 
             @SuppressWarnings("cast")
             ConsumerGroupCommand.PartitionAssignmentState partitionState =
-                    (ConsumerGroupCommand.PartitionAssignmentState) assignments.get().filter(isGrp).head();
+                (ConsumerGroupCommand.PartitionAssignmentState) assignments.get().filter(isGrp).head();
 
             return !partitionState.consumerId().map(s0 -> s0.trim().equals(ConsumerGroupCommand.MISSING_COLUMN_VALUE())).getOrElse(() -> false) &&
-                    !partitionState.clientId().map(s0 -> s0.trim().equals(ConsumerGroupCommand.MISSING_COLUMN_VALUE())).getOrElse(() -> false) &&
-                    !partitionState.host().map(h -> h.trim().equals(ConsumerGroupCommand.MISSING_COLUMN_VALUE())).getOrElse(() -> false);
+                !partitionState.clientId().map(s0 -> s0.trim().equals(ConsumerGroupCommand.MISSING_COLUMN_VALUE())).getOrElse(() -> false) &&
+                !partitionState.host().map(h -> h.trim().equals(ConsumerGroupCommand.MISSING_COLUMN_VALUE())).getOrElse(() -> false);
         }, "Expected a 'Stable' group status, rows and valid values for consumer id / client id / host columns in describe results for group " + GROUP + ".");
     }
 
@@ -316,19 +312,19 @@ public class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
             Function1<ConsumerGroupCommand.MemberAssignmentState, Object> isGrp = s -> Objects.equals(s.group(), GROUP);
 
             boolean res = state.map(s -> s.contains("Stable")).getOrElse(() -> false) &&
-                    assignments.isDefined() &&
-                    assignments.get().count(s -> Objects.equals(s.group(), GROUP)) == 1;
+                assignments.isDefined() &&
+                assignments.get().count(s -> Objects.equals(s.group(), GROUP)) == 1;
 
             if (!res)
                 return false;
 
             @SuppressWarnings("cast")
             ConsumerGroupCommand.MemberAssignmentState assignmentState =
-                    (ConsumerGroupCommand.MemberAssignmentState) assignments.get().filter(isGrp).head();
+                (ConsumerGroupCommand.MemberAssignmentState) assignments.get().filter(isGrp).head();
 
             return !Objects.equals(assignmentState.consumerId(), ConsumerGroupCommand.MISSING_COLUMN_VALUE()) &&
-                    !Objects.equals(assignmentState.clientId(), ConsumerGroupCommand.MISSING_COLUMN_VALUE()) &&
-                    !Objects.equals(assignmentState.host(), ConsumerGroupCommand.MISSING_COLUMN_VALUE());
+                !Objects.equals(assignmentState.clientId(), ConsumerGroupCommand.MISSING_COLUMN_VALUE()) &&
+                !Objects.equals(assignmentState.host(), ConsumerGroupCommand.MISSING_COLUMN_VALUE());
         }, "Expected a 'Stable' group status, rows and valid member information for group " + GROUP + ".");
 
         scala.Tuple2<Option<String>, Option<Seq<ConsumerGroupCommand.MemberAssignmentState>>> res = service.collectGroupMembers(GROUP, true);
@@ -720,15 +716,8 @@ public class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
         cgcArgs.addAll(Arrays.asList(describeType));
         ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(cgcArgs.toArray(new String[0]));
 
-        Throwable e = null;
-        try {
-            service.describeGroups();
-            fail("describeGroups must fail");
-        } catch (Exception err) {
-            assertInstanceOf(ExecutionException.class, err);
-            e = err;
-        }
-        assertEquals(TimeoutException.class, e.getCause().getClass());
+        ExecutionException e = assertThrows(ExecutionException.class, service::describeGroups);
+        assertInstanceOf(TimeoutException.class, e.getCause());
     }
 
     @ParameterizedTest(name = TEST_WITH_PARAMETERIZED_QUORUM_AND_GROUP_PROTOCOL_NAMES)
@@ -811,19 +800,19 @@ public class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
             Function1<ConsumerGroupCommand.PartitionAssignmentState, Object> isGrp = s -> Objects.equals(s.group(), GROUP);
 
             boolean res = groupOffsets._1.map(s -> s.contains("Stable")).getOrElse(() -> false) &&
-                    groupOffsets._2.isDefined() &&
-                    groupOffsets._2.get().count(isGrp) == 1;
+                groupOffsets._2.isDefined() &&
+                groupOffsets._2.get().count(isGrp) == 1;
 
             if (!res)
                 return false;
 
             @SuppressWarnings("cast")
             ConsumerGroupCommand.PartitionAssignmentState assignmentState =
-                    (ConsumerGroupCommand.PartitionAssignmentState) groupOffsets._2.get().filter(isGrp).head();
+                (ConsumerGroupCommand.PartitionAssignmentState) groupOffsets._2.get().filter(isGrp).head();
 
             return assignmentState.consumerId().map(c -> !c.trim().equals(ConsumerGroupCommand.MISSING_COLUMN_VALUE())).getOrElse(() -> false) &&
-                    assignmentState.clientId().map(c -> !c.trim().equals(ConsumerGroupCommand.MISSING_COLUMN_VALUE())).getOrElse(() -> false) &&
-                    assignmentState.host().map(h -> !h.trim().equals(ConsumerGroupCommand.MISSING_COLUMN_VALUE())).getOrElse(() -> false);
+                assignmentState.clientId().map(c -> !c.trim().equals(ConsumerGroupCommand.MISSING_COLUMN_VALUE())).getOrElse(() -> false) &&
+                assignmentState.host().map(h -> !h.trim().equals(ConsumerGroupCommand.MISSING_COLUMN_VALUE())).getOrElse(() -> false);
         }, "Expected a 'Stable' group status, rows and valid values for consumer id / client id / host columns in describe results for non-offset-committing group " + GROUP + ".");
     }
 
