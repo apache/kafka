@@ -3048,7 +3048,7 @@ project(':connect:runtime') {
   }
 
   task genConnectMetricsDocs(type: JavaExec) {
-    classpath = sourceSets.test.runtimeClasspath
+    classpath = sourceSets.main.runtimeClasspath
     mainClass = 'org.apache.kafka.connect.runtime.ConnectMetrics'
     if( !generatedDocsDir.exists() ) { generatedDocsDir.mkdirs() }
     standardOutput = new File(generatedDocsDir, "connect_metrics.html").newOutputStream()
