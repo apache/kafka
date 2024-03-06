@@ -277,40 +277,30 @@ public class Metrics implements Closeable {
                 }
             }
         }
-        
         StringBuilder b = new StringBuilder();
-        b.append("<table class=\"data-table\"><tbody>\n");
-    
+        b.append("<table class=\"data-table\">\n<tbody>\n");
+        b.append("<tr>\n");
+        b.append("<th>Metric/Attribute name</th>\n");
+        b.append("<th>Description</th>\n");
+        b.append("<th>Mbean name</th>\n");
+        b.append("</tr>\n");
         for (Entry<String, Map<String, String>> e : beansAndAttributes.entrySet()) {
-            b.append("<tr>\n");
-            b.append("<td colspan=3 class=\"mbeanName\" style=\"background-color:#ccc; font-weight: bold;\">");
-            b.append(e.getKey());
-            b.append("</td>");
-            b.append("</tr>\n");
-            
-            b.append("<tr>\n");
-            b.append("<th style=\"width: 90px\"></th>\n");
-            b.append("<th>Attribute name</th>\n");
-            b.append("<th>Description</th>\n");
-            b.append("</tr>\n");
-            
             for (Entry<String, String> e2 : e.getValue().entrySet()) {
                 b.append("<tr>\n");
-                b.append("<td></td>");
                 b.append("<td>");
                 b.append(e2.getKey());
-                b.append("</td>");
+                b.append("</td>\n");
                 b.append("<td>");
                 b.append(e2.getValue());
-                b.append("</td>");
+                b.append("</td>\n");
+                b.append("<td>");
+                b.append(e.getKey());
+                b.append("</td>\n");
                 b.append("</tr>\n");
             }
-    
         }
         b.append("</tbody></table>");
-    
         return b.toString();
-    
     }
 
     public MetricConfig config() {
