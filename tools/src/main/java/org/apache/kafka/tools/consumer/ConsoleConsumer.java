@@ -150,10 +150,9 @@ public class ConsoleConsumer {
         Iterator<ConsumerRecord<byte[], byte[]>> recordIter = Collections.emptyIterator();
 
         public ConsumerWrapper(ConsoleConsumerOptions opts, Consumer<byte[], byte[]> consumer) {
-            Optional<String> topic = Optional.ofNullable(opts.topicArg());
-            Optional<String> includedTopics = Optional.ofNullable(opts.includedTopicsArg());
             this.consumer = consumer;
-            timeoutMs = opts.timeoutMs() >= 0 ? opts.timeoutMs() : Long.MAX_VALUE;
+            timeoutMs = opts.timeoutMs();
+            Optional<String> topic = opts.topicArg();
 
             if (topic.isPresent()) {
                 if (opts.partitionArg().isPresent()) {
@@ -162,7 +161,7 @@ public class ConsoleConsumer {
                     consumer.subscribe(Collections.singletonList(topic.get()));
                 }
             } else {
-                includedTopics.ifPresent(topics -> consumer.subscribe(Pattern.compile(topics)));
+                opts.includedTopicsArg().ifPresent(topics -> consumer.subscribe(Pattern.compile(topics)));
             }
         }
 
