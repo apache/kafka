@@ -35,6 +35,7 @@ import scala.runtime.BoxedUnit;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -53,19 +54,19 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
 public class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
-    private static final String[][] DESCRIBE_TYPE_OFFSETS = new String[][]{new String[]{""}, new String[]{"--offsets"}};
-    private static final String[][] DESCRIBE_TYPE_MEMBERS = new String[][]{new String[]{"--members"}, new String[]{"--members", "--verbose"}};
-    private static final String[][] DESCRIBE_TYPE_STATE = new String[][]{new String[]{"--state"}};
-    private static final String[][] DESCRIBE_TYPES;
+    private static final List<List<String>> DESCRIBE_TYPE_OFFSETS = Arrays.asList(Collections.singletonList(""), Collections.singletonList("--offsets"));
+    private static final List<List<String>> DESCRIBE_TYPE_MEMBERS = Arrays.asList(Collections.singletonList("--members"), Arrays.asList("--members", "--verbose"));
+    private static final List<List<String>> DESCRIBE_TYPE_STATE = Collections.singletonList(Collections.singletonList("--state"));
+    private static final List<List<String>> DESCRIBE_TYPES;
 
     static {
-        List<String[]> describeTypes = new ArrayList<>();
+        List<List<String>> describeTypes = new ArrayList<>();
 
-        describeTypes.addAll(Arrays.asList(DESCRIBE_TYPE_OFFSETS));
-        describeTypes.addAll(Arrays.asList(DESCRIBE_TYPE_MEMBERS));
-        describeTypes.addAll(Arrays.asList(DESCRIBE_TYPE_STATE));
+        describeTypes.addAll(DESCRIBE_TYPE_OFFSETS);
+        describeTypes.addAll(DESCRIBE_TYPE_MEMBERS);
+        describeTypes.addAll(DESCRIBE_TYPE_STATE);
 
-        DESCRIBE_TYPES = describeTypes.toArray(new String[0][0]);
+        DESCRIBE_TYPES = describeTypes;
     }
 
     @ParameterizedTest(name = TEST_WITH_PARAMETERIZED_QUORUM_AND_GROUP_PROTOCOL_NAMES)
@@ -74,10 +75,10 @@ public class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
         createOffsetsTopic(listenerName(), new Properties());
         String missingGroup = "missing.group";
 
-        for (String[] describeType : DESCRIBE_TYPES) {
+        for (List<String> describeType : DESCRIBE_TYPES) {
             // note the group to be queried is a different (non-existing) group
             List<String> cgcArgs = new ArrayList<>(Arrays.asList("--bootstrap-server", bootstrapServers(listenerName()), "--describe", "--group", missingGroup));
-            cgcArgs.addAll(Arrays.asList(describeType));
+            cgcArgs.addAll(describeType);
             ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(cgcArgs.toArray(new String[0]));
 
             String output = kafka.utils.TestUtils.grabConsoleOutput(describeGroups(service));
@@ -188,12 +189,12 @@ public class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
     public void testDescribeExistingGroup(String quorum, String groupProtocol) throws Exception {
         createOffsetsTopic(listenerName(), new Properties());
 
-        for (String[] describeType : DESCRIBE_TYPES) {
+        for (List<String> describeType : DESCRIBE_TYPES) {
             String group = GROUP + String.join("", describeType);
             // run one consumer in the group consuming from a single-partition topic
             addConsumerGroupExecutor(1, TOPIC, group, groupProtocol);
             List<String> cgcArgs = new ArrayList<>(Arrays.asList("--bootstrap-server", bootstrapServers(listenerName()), "--describe", "--group", group));
-            cgcArgs.addAll(Arrays.asList(describeType));
+            cgcArgs.addAll(describeType);
             ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(cgcArgs.toArray(new String[0]));
 
             TestUtils.waitForCondition(() -> {
@@ -211,18 +212,18 @@ public class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
         // Create N single-threaded consumer groups from a single-partition topic
         List<String> groups = new ArrayList<>();
 
-        for (String[] describeType : DESCRIBE_TYPES) {
+        for (List<String> describeType : DESCRIBE_TYPES) {
             String group = GROUP + String.join("", describeType);
             addConsumerGroupExecutor(1, TOPIC, group, groupProtocol);
             groups.addAll(Arrays.asList("--group", group));
         }
 
-        int expectedNumLines = DESCRIBE_TYPES.length * 2;
+        int expectedNumLines = DESCRIBE_TYPES.size() * 2;
 
-        for (String[] describeType : DESCRIBE_TYPES) {
+        for (List<String> describeType : DESCRIBE_TYPES) {
             List<String> cgcArgs = new ArrayList<>(Arrays.asList("--bootstrap-server", bootstrapServers(listenerName()), "--describe"));
             cgcArgs.addAll(groups);
-            cgcArgs.addAll(Arrays.asList(describeType));
+            cgcArgs.addAll(describeType);
             ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(cgcArgs.toArray(new String[0]));
 
             TestUtils.waitForCondition(() -> {
@@ -239,16 +240,16 @@ public class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
         createOffsetsTopic(listenerName(), new Properties());
 
         // Create N single-threaded consumer groups from a single-partition topic
-        for (String[] describeType : DESCRIBE_TYPES) {
+        for (List<String> describeType : DESCRIBE_TYPES) {
             String group = GROUP + String.join("", describeType);
             addConsumerGroupExecutor(1, TOPIC, group, groupProtocol);
         }
 
-        int expectedNumLines = DESCRIBE_TYPES.length * 2;
+        int expectedNumLines = DESCRIBE_TYPES.size() * 2;
 
-        for (String[] describeType : DESCRIBE_TYPES) {
+        for (List<String> describeType : DESCRIBE_TYPES) {
             List<String> cgcArgs = new ArrayList<>(Arrays.asList("--bootstrap-server", bootstrapServers(listenerName()), "--describe", "--all-groups"));
-            cgcArgs.addAll(Arrays.asList(describeType));
+            cgcArgs.addAll(describeType);
             ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(cgcArgs.toArray(new String[0]));
 
             TestUtils.waitForCondition(() -> {
@@ -394,12 +395,12 @@ public class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
     public void testDescribeExistingGroupWithNoMembers(String quorum, String groupProtocol) throws Exception {
         createOffsetsTopic(listenerName(), new Properties());
 
-        for (String[] describeType : DESCRIBE_TYPES) {
+        for (List<String> describeType : DESCRIBE_TYPES) {
             String group = GROUP + String.join("", describeType);
             // run one consumer in the group consuming from a single-partition topic
             ConsumerGroupExecutor executor = addConsumerGroupExecutor(1, TOPIC, group, groupProtocol);
             List<String> cgcArgs = new ArrayList<>(Arrays.asList("--bootstrap-server", bootstrapServers(listenerName()), "--describe", "--group", group));
-            cgcArgs.addAll(Arrays.asList(describeType));
+            cgcArgs.addAll(describeType);
             ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(cgcArgs.toArray(new String[0]));
 
             TestUtils.waitForCondition(() -> {
@@ -509,17 +510,17 @@ public class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
     public void testDescribeWithConsumersWithoutAssignedPartitions(String quorum, String groupProtocol) throws Exception {
         createOffsetsTopic(listenerName(), new Properties());
 
-        for (String[] describeType : DESCRIBE_TYPES) {
+        for (List<String> describeType : DESCRIBE_TYPES) {
             String group = GROUP + String.join("", describeType);
             // run two consumers in the group consuming from a single-partition topic
             addConsumerGroupExecutor(2, TOPIC, group, groupProtocol);
             List<String> cgcArgs = new ArrayList<>(Arrays.asList("--bootstrap-server", bootstrapServers(listenerName()), "--describe", "--group", group));
-            cgcArgs.addAll(Arrays.asList(describeType));
+            cgcArgs.addAll(describeType);
             ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(cgcArgs.toArray(new String[0]));
 
             TestUtils.waitForCondition(() -> {
                 scala.Tuple2<String, String> res = kafka.utils.TestUtils.grabConsoleOutputAndError(describeGroups(service));
-                int expectedNumRows = Arrays.asList(DESCRIBE_TYPE_MEMBERS).contains(describeType) ? 3 : 2;
+                int expectedNumRows = DESCRIBE_TYPE_MEMBERS.contains(describeType) ? 3 : 2;
                 return res._2.isEmpty() && res._1.trim().split("\n").length == expectedNumRows;
             }, "Expected a single data row in describe group result with describe type '" + String.join(" ", describeType) + "'");
         }
@@ -596,17 +597,17 @@ public class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
         String topic2 = "foo2";
         createTopic(topic2, 2, 1, new Properties(), listenerName(), new Properties());
 
-        for (String[] describeType : DESCRIBE_TYPES) {
+        for (List<String> describeType : DESCRIBE_TYPES) {
             String group = GROUP + String.join("", describeType);
             // run two consumers in the group consuming from a two-partition topic
             addConsumerGroupExecutor(2, topic2, group, groupProtocol);
             List<String> cgcArgs = new ArrayList<>(Arrays.asList("--bootstrap-server", bootstrapServers(listenerName()), "--describe", "--group", group));
-            cgcArgs.addAll(Arrays.asList(describeType));
+            cgcArgs.addAll(describeType);
             ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(cgcArgs.toArray(new String[0]));
 
             TestUtils.waitForCondition(() -> {
                 scala.Tuple2<String, String> res = kafka.utils.TestUtils.grabConsoleOutputAndError(describeGroups(service));
-                int expectedNumRows = Arrays.asList(DESCRIBE_TYPE_STATE).contains(describeType) ? 2 : 3;
+                int expectedNumRows = DESCRIBE_TYPE_STATE.contains(describeType) ? 2 : 3;
                 return res._2.isEmpty() && res._1.trim().split("\n").length == expectedNumRows;
             }, "Expected a single data row in describe group result with describe type '" + String.join(" ", describeType) + "'");
         }
@@ -707,13 +708,13 @@ public class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
         // Let creation of the offsets topic happen during group initialization to ensure that initialization doesn't
         // complete before the timeout expires
 
-        String[] describeType = DESCRIBE_TYPES[RANDOM.nextInt(DESCRIBE_TYPES.length)];
+        List<String> describeType = DESCRIBE_TYPES.get(RANDOM.nextInt(DESCRIBE_TYPES.size()));
         String group = GROUP + String.join("", describeType);
         // run one consumer in the group consuming from a single-partition topic
         addConsumerGroupExecutor(1, groupProtocol);
         // set the group initialization timeout too low for the group to stabilize
         List<String> cgcArgs = new ArrayList<>(Arrays.asList("--bootstrap-server", bootstrapServers(listenerName()), "--describe", "--timeout", "1", "--group", group));
-        cgcArgs.addAll(Arrays.asList(describeType));
+        cgcArgs.addAll(describeType);
         ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(cgcArgs.toArray(new String[0]));
 
         ExecutionException e = assertThrows(ExecutionException.class, service::describeGroups);
