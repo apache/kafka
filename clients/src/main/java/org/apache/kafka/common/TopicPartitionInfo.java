@@ -22,7 +22,6 @@ import org.apache.kafka.common.utils.Utils;
 import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
-import java.util.Optional;
 
 /**
  * A class containing leadership, replicas and ISR information for a topic partition.

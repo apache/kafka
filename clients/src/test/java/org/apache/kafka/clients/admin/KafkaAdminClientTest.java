@@ -1415,6 +1415,14 @@ public class KafkaAdminClientTest {
             topics.put(topicName0, Uuid.randomUuid());
             topics.put(topicName1, Uuid.randomUuid());
 
+            env.kafkaClient().prepareResponse(
+                prepareDescribeClusterResponse(0,
+                    env.cluster().nodes(),
+                    env.cluster().clusterResource().clusterId(),
+                    2,
+                    MetadataResponse.AUTHORIZED_OPERATIONS_OMITTED)
+            );
+
             DescribeTopicPartitionsResponseData dataFirstPart = new DescribeTopicPartitionsResponseData();
             dataFirstPart.topics().add(new DescribeTopicPartitionsResponseTopic()
                 .setErrorCode((short) 0)
@@ -1467,11 +1475,11 @@ public class KafkaAdminClientTest {
                     .setIsrNodes(Arrays.asList(3))
                     .setErrorCode((short) 0)
                     .setLeaderEpoch(0)
-                    .setLeaderId(3)
+                    .setLeaderId(0)
                     .setEligibleLeaderReplicas(Arrays.asList(1))
                     .setLastKnownElr(Arrays.asList(2))
                     .setPartitionIndex(0)
-                    .setReplicaNodes(Arrays.asList(3, 1, 2)))));
+                    .setReplicaNodes(Arrays.asList(0, 1, 2)))));
             env.kafkaClient().prepareResponse(body -> {
                 DescribeTopicPartitionsRequestData request = (DescribeTopicPartitionsRequestData) body.data();
                 if (request.topics().size() != 2) return false;
@@ -1512,6 +1520,14 @@ public class KafkaAdminClientTest {
             topics.put(topicName0, Uuid.randomUuid());
             topics.put(topicName1, Uuid.randomUuid());
 
+            env.kafkaClient().prepareResponse(
+                prepareDescribeClusterResponse(0,
+                    env.cluster().nodes(),
+                    env.cluster().clusterResource().clusterId(),
+                    2,
+                    MetadataResponse.AUTHORIZED_OPERATIONS_OMITTED)
+            );
+
             DescribeTopicPartitionsResponseData dataFirstPart = new DescribeTopicPartitionsResponseData();
             dataFirstPart.topics().add(new DescribeTopicPartitionsResponseTopic()
                 .setErrorCode((short) 0)
@@ -1550,11 +1566,11 @@ public class KafkaAdminClientTest {
                     .setIsrNodes(Arrays.asList(3))
                     .setErrorCode((short) 0)
                     .setLeaderEpoch(0)
-                    .setLeaderId(3)
+                    .setLeaderId(0)
                     .setEligibleLeaderReplicas(Arrays.asList(1))
                     .setLastKnownElr(Arrays.asList(2))
                     .setPartitionIndex(0)
-                    .setReplicaNodes(Arrays.asList(3, 1, 2)))));
+                    .setReplicaNodes(Arrays.asList(0, 1, 2)))));
             env.kafkaClient().prepareResponse(body -> {
                 DescribeTopicPartitionsRequestData request = (DescribeTopicPartitionsRequestData) body.data();
                 if (request.topics().size() != 1) return false;

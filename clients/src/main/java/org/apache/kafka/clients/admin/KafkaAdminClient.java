@@ -269,6 +269,7 @@ import java.util.Optional;
 import java.util.OptionalLong;
 import java.util.Set;
 import java.util.TreeMap;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
@@ -2181,7 +2182,10 @@ public class KafkaAdminClient extends AdminClient {
     }
 
     @SuppressWarnings("MethodLength")
-    private Map<String, KafkaFuture<TopicDescription>> handleDescribeTopicsByNamesWithDescribeTopicPartitionsApi(final Collection<String> topicNames, DescribeTopicsOptions options) {
+    private Map<String, KafkaFuture<TopicDescription>> handleDescribeTopicsByNamesWithDescribeTopicPartitionsApi(
+        final Collection<String> topicNames,
+        DescribeTopicsOptions options
+    ) {
         final Map<String, KafkaFutureImpl<TopicDescription>> topicFutures = new HashMap<>(topicNames.size());
         final ArrayList<String> topicNamesList = new ArrayList<>();
         for (String topicName : topicNames) {
@@ -2195,6 +2199,21 @@ public class KafkaAdminClient extends AdminClient {
                 topicNamesList.add(topicName);
             }
         }
+
+        if (topicNamesList.isEmpty()) {
+            return new HashMap<>(topicFutures);
+        }
+
+        // First, we need to retrieve the node info.
+        DescribeClusterResult clusterResult = describeCluster();
+        Map<Integer, Node> nodes;
+        try {
+            nodes = clusterResult.nodes().get().stream().collect(Collectors.toMap(Node::id, node -> node));
+        } catch (InterruptedException | ExecutionException e) {
+            completeAllExceptionally(topicFutures.values(), e);
+            return new HashMap<>(topicFutures);
+        }
+
         final long now = time.milliseconds();
         Call call = new Call("describeTopicPartitions", calcDeadlineMs(now, options.timeoutMs()),
             new LeastLoadedNodeProvider()) {
@@ -2234,7 +2253,7 @@ public class KafkaAdminClient extends AdminClient {
                         continue;
                     }
 
-                    TopicDescription currentTopicDescription = getTopicDescriptionFromDescribeTopicsResponseTopic(topic);
+                    TopicDescription currentTopicDescription = getTopicDescriptionFromDescribeTopicsResponseTopic(topic, nodes);
 
                     if (requestCursor != null && requestCursor.topicName().equals(topicName)) {
                         if (partiallyFinishedTopicDescription == null) {
@@ -2289,9 +2308,7 @@ public class KafkaAdminClient extends AdminClient {
                 }
             }
         };
-        if (!topicNamesList.isEmpty()) {
-            runnable.call(call, now);
-        }
+        runnable.call(call, now);
 
         return new HashMap<>(topicFutures);
     }
@@ -2361,17 +2378,20 @@ public class KafkaAdminClient extends AdminClient {
         return new HashMap<>(topicFutures);
     }
 
-    private TopicDescription getTopicDescriptionFromDescribeTopicsResponseTopic(DescribeTopicPartitionsResponseTopic topic) {
+    private TopicDescription getTopicDescriptionFromDescribeTopicsResponseTopic(
+        DescribeTopicPartitionsResponseTopic topic,
+        Map<Integer, Node> nodes
+    ) {
         List<DescribeTopicPartitionsResponsePartition> partitionInfos = topic.partitions();
         List<TopicPartitionInfo> partitions = new ArrayList<>(partitionInfos.size());
         for (DescribeTopicPartitionsResponsePartition partitionInfo : partitionInfos) {
             TopicPartitionInfo topicPartitionInfo = new TopicPartitionInfo(
                 partitionInfo.partitionIndex(),
-                replicaToFakeNode(partitionInfo.leaderId()),
-                partitionInfo.replicaNodes().stream().map(id -> replicaToFakeNode(id)).collect(Collectors.toList()),
-                partitionInfo.isrNodes().stream().map(id -> replicaToFakeNode(id)).collect(Collectors.toList()),
-                partitionInfo.eligibleLeaderReplicas().stream().map(id -> replicaToFakeNode(id)).collect(Collectors.toList()),
-                partitionInfo.lastKnownElr().stream().map(id -> replicaToFakeNode(id)).collect(Collectors.toList()));
+                nodes.get(partitionInfo.leaderId()),
+                partitionInfo.replicaNodes().stream().map(id -> nodes.get(id)).collect(Collectors.toList()),
+                partitionInfo.isrNodes().stream().map(id -> nodes.get(id)).collect(Collectors.toList()),
+                partitionInfo.eligibleLeaderReplicas().stream().map(id -> nodes.get(id)).collect(Collectors.toList()),
+                partitionInfo.lastKnownElr().stream().map(id -> nodes.get(id)).collect(Collectors.toList()));
             partitions.add(topicPartitionInfo);
         }
         partitions.sort(Comparator.comparingInt(TopicPartitionInfo::partition));
@@ -2397,11 +2417,6 @@ public class KafkaAdminClient extends AdminClient {
         if (partitionInfo.leader() == null || partitionInfo.leader().id() == Node.noNode().id())
             return null;
         return partitionInfo.leader();
-    }
-
-    // This is used in the describe topics path if using DescribeTopicPartitions API.
-    private Node replicaToFakeNode(int id) {
-        return new Node(id, "Dummy", 0);
     }
 
     @Override
