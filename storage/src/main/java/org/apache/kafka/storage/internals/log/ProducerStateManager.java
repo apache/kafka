@@ -605,7 +605,7 @@ public class ProducerStateManager {
     }
 
     public Optional<File> fetchSnapshot(long offset) {
-        return Optional.of(snapshots.get(offset)).map(x -> x.file());
+        return Optional.ofNullable(snapshots.get(offset)).map(x -> x.file());
     }
 
     private Optional<SnapshotFile> oldestSnapshotFile() {

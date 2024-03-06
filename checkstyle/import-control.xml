@@ -326,6 +326,8 @@
 
       <subpackage name="group">
         <allow pkg="kafka.api"/>
+        <allow pkg="kafka.security"/>
+        <allow pkg="kafka.zk" />
         <allow pkg="org.apache.kafka.tools"/>
         <allow pkg="org.apache.kafka.server.config" />
         <allow pkg="scala"/>

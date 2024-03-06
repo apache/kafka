@@ -643,7 +643,7 @@ public class GroupMetadataManagerTestContext {
 
         JoinGroupResponseData leaderJoinResponse =
             joinClassicGroupAsDynamicMemberAndCompleteJoin(new JoinGroupRequestBuilder()
-                .withGroupId("group-id")
+                .withGroupId(groupId)
                 .withMemberId(UNKNOWN_MEMBER_ID)
                 .withDefaultProtocolTypeAndProtocols()
                 .withRebalanceTimeoutMs(10000)
@@ -654,7 +654,7 @@ public class GroupMetadataManagerTestContext {
         assertTrue(group.isInState(COMPLETING_REBALANCE));
 
         SyncResult syncResult = sendClassicGroupSync(new SyncGroupRequestBuilder()
-            .withGroupId("group-id")
+            .withGroupId(groupId)
             .withMemberId(leaderJoinResponse.memberId())
             .withGenerationId(leaderJoinResponse.generationId())
             .build());
@@ -804,7 +804,7 @@ public class GroupMetadataManagerTestContext {
         int rebalanceTimeoutMs,
         int sessionTimeoutMs
     ) throws Exception {
-        ClassicGroup group = createClassicGroup("group-id");
+        ClassicGroup group = createClassicGroup(groupId);
 
         JoinGroupRequestData joinRequest = new JoinGroupRequestBuilder()
             .withGroupId(groupId)
@@ -901,7 +901,7 @@ public class GroupMetadataManagerTestContext {
     public PendingMemberGroupResult setupGroupWithPendingMember(ClassicGroup group) throws Exception {
         // Add the first member
         JoinGroupRequestData joinRequest = new JoinGroupRequestBuilder()
-            .withGroupId("group-id")
+            .withGroupId(group.groupId())
             .withMemberId(UNKNOWN_MEMBER_ID)
             .withDefaultProtocolTypeAndProtocols()
             .withRebalanceTimeoutMs(10000)
@@ -914,7 +914,7 @@ public class GroupMetadataManagerTestContext {
         List<SyncGroupRequestData.SyncGroupRequestAssignment> assignment = new ArrayList<>();
         assignment.add(new SyncGroupRequestData.SyncGroupRequestAssignment().setMemberId(leaderJoinResponse.memberId()));
         SyncGroupRequestData syncRequest = new SyncGroupRequestBuilder()
-            .withGroupId("group-id")
+            .withGroupId(group.groupId())
             .withMemberId(leaderJoinResponse.memberId())
             .withGenerationId(leaderJoinResponse.generationId())
             .withAssignment(assignment)
@@ -1191,7 +1191,7 @@ public class GroupMetadataManagerTestContext {
 
         assertEquals(
             Collections.singletonList(new DescribeGroupsResponseData.DescribedGroup()
-                .setGroupId("group-id")
+                .setGroupId(groupId)
                 .setGroupState(DEAD.toString())
             ),
             describedGroups
