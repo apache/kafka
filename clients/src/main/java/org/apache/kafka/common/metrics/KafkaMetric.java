@@ -21,25 +21,35 @@ import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.utils.Time;
 
 /**
- * A registry of sensors and metrics.
+ * An implementation of {@link Metric} interface.
  * <p>
- * A metric is a named, numerical measurement. A sensor is a handle to record numerical measurements as they occur. Each
- * Sensor has zero or more associated metrics.
+ * A KafkaMetric is a named metric for monitoring purpose. The metric value can be a {@link Measurable} or a {@link Gauge}.
+ * <pre>
+ * <b>metricName</b> The name of the metric
+ * <b>lock</b> A lock used for reading the metric value in case of race condition
+ * <b>time</b> The POSIX time in milliseconds the metric is being taken
+ * <b>metricValueProvider</b> The metric collecting implementation that implements {@link MetricValueProvider}
+ * <b>config</b> The metric configuration which is a {@link MetricConfig}
+ * </pre>
  * <p>
  * Usage looks something like this:
  *
- * <pre>
+ * <pre>{@code
  * // set up metrics:
- * Metrics metrics = new Metrics(); // this is the global repository of metrics and sensors
- * Sensor sensor = metrics.sensor(&quot;message-sizes&quot;);
- * MetricName metricName = new MetricName(&quot;message-size-avg&quot;, &quot;producer-metrics&quot;);
- * sensor.add(metricName, new Avg());
- * metricName = new MetricName(&quot;message-size-max&quot;, &quot;producer-metrics&quot;);
- * sensor.add(metricName, new Max());
  *
- * // as messages are sent we record the sizes
- * sensor.record(messageSize);
- * </pre>
+ * Map<String, String> tags = new HashMap<>();
+ * tags.put("key1", "value1");
+ *
+ * MetricConfig config = new MetricConfig().tags(metricTags);
+ * Time time = new SystemTime();
+ * metricName = new MetricName(&quot;message-size-max&quot;, &quot;producer-metrics&quot;);
+ *
+ * KafkaMetric m = new KafkaMetric(new Object(),
+ *                                 Objects.requireNonNull(metricName),
+ *                                 (Gauge<Integer>) (config, now) -> 1,
+ *                                 config,
+ *                                 time);
+ * }</pre>
  */
 public final class KafkaMetric implements Metric {
 
