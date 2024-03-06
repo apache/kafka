@@ -87,7 +87,6 @@ import org.apache.kafka.metadata.LeaderRecoveryState;
 import org.apache.kafka.metadata.PartitionRegistration;
 import org.apache.kafka.metadata.RecordTestUtils;
 import org.apache.kafka.metadata.Replicas;
-import org.apache.kafka.metadata.placement.PartitionAssignment;
 import org.apache.kafka.metadata.placement.StripedReplicaPlacer;
 import org.apache.kafka.metadata.placement.UsableBroker;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
@@ -148,6 +147,7 @@ import static org.apache.kafka.controller.ControllerRequestContextUtil.QUOTA_EXC
 import static org.apache.kafka.controller.ControllerRequestContextUtil.anonymousContextFor;
 import static org.apache.kafka.controller.ControllerRequestContextUtil.anonymousContextWithMutationQuotaExceededFor;
 import static org.apache.kafka.metadata.LeaderConstants.NO_LEADER;
+import static org.apache.kafka.metadata.placement.PartitionAssignmentTest.partitionAssignment;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -1584,13 +1584,13 @@ public class ReplicationControlManagerTest {
     public void testValidateGoodManualPartitionAssignments() throws Exception {
         ReplicationControlTestContext ctx = new ReplicationControlTestContext.Builder().build();
         ctx.registerBrokers(1, 2, 3);
-        ctx.replicationControl.validateManualPartitionAssignment(new PartitionAssignment(asList(1)),
+        ctx.replicationControl.validateManualPartitionAssignment(partitionAssignment(asList(1)),
             OptionalInt.of(1));
-        ctx.replicationControl.validateManualPartitionAssignment(new PartitionAssignment(asList(1)),
+        ctx.replicationControl.validateManualPartitionAssignment(partitionAssignment(asList(1)),
             OptionalInt.empty());
-        ctx.replicationControl.validateManualPartitionAssignment(new PartitionAssignment(asList(1, 2, 3)),
+        ctx.replicationControl.validateManualPartitionAssignment(partitionAssignment(asList(1, 2, 3)),
             OptionalInt.of(3));
-        ctx.replicationControl.validateManualPartitionAssignment(new PartitionAssignment(asList(1, 2, 3)),
+        ctx.replicationControl.validateManualPartitionAssignment(partitionAssignment(asList(1, 2, 3)),
             OptionalInt.empty());
     }
 
@@ -1600,20 +1600,20 @@ public class ReplicationControlManagerTest {
         ctx.registerBrokers(1, 2);
         assertEquals("The manual partition assignment includes an empty replica list.",
             assertThrows(InvalidReplicaAssignmentException.class, () ->
-                ctx.replicationControl.validateManualPartitionAssignment(new PartitionAssignment(asList()),
+                ctx.replicationControl.validateManualPartitionAssignment(partitionAssignment(asList()),
                     OptionalInt.empty())).getMessage());
         assertEquals("The manual partition assignment includes broker 3, but no such " +
             "broker is registered.", assertThrows(InvalidReplicaAssignmentException.class, () ->
-                ctx.replicationControl.validateManualPartitionAssignment(new PartitionAssignment(asList(1, 2, 3)),
+                ctx.replicationControl.validateManualPartitionAssignment(partitionAssignment(asList(1, 2, 3)),
                     OptionalInt.empty())).getMessage());
         assertEquals("The manual partition assignment includes the broker 2 more than " +
             "once.", assertThrows(InvalidReplicaAssignmentException.class, () ->
-                ctx.replicationControl.validateManualPartitionAssignment(new PartitionAssignment(asList(1, 2, 2)),
+                ctx.replicationControl.validateManualPartitionAssignment(partitionAssignment(asList(1, 2, 2)),
                     OptionalInt.empty())).getMessage());
         assertEquals("The manual partition assignment includes a partition with 2 " +
             "replica(s), but this is not consistent with previous partitions, which have " +
                 "3 replica(s).", assertThrows(InvalidReplicaAssignmentException.class, () ->
-                    ctx.replicationControl.validateManualPartitionAssignment(new PartitionAssignment(asList(1, 2)),
+                    ctx.replicationControl.validateManualPartitionAssignment(partitionAssignment(asList(1, 2)),
                         OptionalInt.of(3))).getMessage());
     }
 
