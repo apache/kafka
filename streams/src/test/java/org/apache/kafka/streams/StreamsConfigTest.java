@@ -1321,6 +1321,33 @@ public class StreamsConfigTest {
     }
 
     @Test
+    public void testStateStoreMaxUncommittedBytesShouldAllowUnbounded() {
+        props.put(StreamsConfig.STATESTORE_UNCOMMITTED_MAX_BYTES_CONFIG, -1);
+        final StreamsConfig config = new StreamsConfig(props);
+        assertEquals(Long.valueOf(-1), config.getLong(StreamsConfig.STATESTORE_UNCOMMITTED_MAX_BYTES_CONFIG));
+    }
+
+    @Test
+    public void testStateStoreMaxUncommittedBytesShouldAllowPositive() {
+        props.put(StreamsConfig.STATESTORE_UNCOMMITTED_MAX_BYTES_CONFIG, 2);
+        final StreamsConfig config = new StreamsConfig(props);
+        assertEquals(Long.valueOf(2), config.getLong(StreamsConfig.STATESTORE_UNCOMMITTED_MAX_BYTES_CONFIG));
+    }
+
+    @Test
+    public void shouldUseDefaultStateStoreMaxUncommittedBytesConfigWhenNoConfigIsSet() {
+        final StreamsConfig config = new StreamsConfig(props);
+        assertEquals(Long.valueOf(64 * 1024 * 1024), config.getLong(StreamsConfig.STATESTORE_UNCOMMITTED_MAX_BYTES_CONFIG));
+    }
+
+    @Test
+    public void shouldNotAllowNegativeStateStoreMaxUncommittedBytesConfig() {
+        props.put(StreamsConfig.STATESTORE_UNCOMMITTED_MAX_BYTES_CONFIG, -2);
+        final ConfigException ce = assertThrows(ConfigException.class, () -> new StreamsConfig(props));
+        assertTrue(ce.getMessage().contains(StreamsConfig.STATESTORE_UNCOMMITTED_MAX_BYTES_CONFIG));
+    }
+
+    @Test
     public void testCaseInsensitiveSecurityProtocol() {
         final String saslSslLowerCase = SecurityProtocol.SASL_SSL.name.toLowerCase(Locale.ROOT);
         props.put(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, saslSslLowerCase);

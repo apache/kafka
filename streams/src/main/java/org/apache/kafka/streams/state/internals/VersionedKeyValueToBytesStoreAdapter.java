@@ -99,6 +99,11 @@ public class VersionedKeyValueToBytesStoreAdapter implements VersionedBytesStore
     }
 
     @Override
+    public long approximateNumUncommittedBytes() {
+        return inner.approximateNumUncommittedBytes();
+    }
+
+    @Override
     public void flush() {
         inner.flush();
     }

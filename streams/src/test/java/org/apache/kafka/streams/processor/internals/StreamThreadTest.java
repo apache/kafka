@@ -166,6 +166,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.atMostOnce;
+import static org.mockito.Mockito.clearInvocations;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.lenient;
@@ -338,7 +339,8 @@ public class StreamThreadTest {
             new MockStandbyUpdateListener(),
             threadIdx,
             null,
-            HANDLER
+            HANDLER,
+            -1L
         );
     }
 
@@ -743,7 +745,8 @@ public class StreamThreadTest {
             new MockStandbyUpdateListener(),
             threadIdx,
             null,
-            mockExceptionHandler
+            mockExceptionHandler,
+            -1L
         );
 
         mockClientSupplier.nextRebalanceMs().set(mockTime.milliseconds() - 1L);
@@ -805,7 +808,8 @@ public class StreamThreadTest {
             new MockStandbyUpdateListener(),
             threadIdx,
             null,
-            null
+            null,
+            -1L
         );
 
         mockClientSupplier.nextRebalanceMs().set(mockTime.milliseconds() - 1L);
@@ -1041,7 +1045,8 @@ public class StreamThreadTest {
             null,
             null,
             null,
-            null
+            null,
+            -1L
         ) {
             @Override
             int commit(final Collection<Task> tasksToCommit) {
@@ -1071,6 +1076,48 @@ public class StreamThreadTest {
         thread.setNow(mockTime.milliseconds());
         thread.maybeCommit();
         assertTrue(committed.get());
+    }
+
+    @Test
+    public void shouldCommitEarlyIfNeeded() {
+        final long commitInterval = 1000L;
+        final Properties props = configProps(false);
+        props.setProperty(StreamsConfig.STATE_DIR_CONFIG, stateDir);
+        props.setProperty(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, Long.toString(commitInterval));
+
+        final StreamsConfig config = new StreamsConfig(props);
+        final ConsumerGroupMetadata consumerGroupMetadata = mock(ConsumerGroupMetadata.class);
+        when(consumer.groupMetadata()).thenReturn(consumerGroupMetadata);
+        when(consumerGroupMetadata.groupInstanceId()).thenReturn(Optional.empty());
+        final Task runningTask = mock(Task.class);
+        final TaskManager taskManager = mockTaskManagerCommit(runningTask, 2);
+        when(taskManager.transactionBuffersWillExceedCapacity()).thenReturn(false);
+
+        final TopologyMetadata topologyMetadata = new TopologyMetadata(internalTopologyBuilder, config);
+        topologyMetadata.buildAndRewriteTopology();
+        thread = buildStreamThread(consumer, taskManager, config, topologyMetadata);
+
+        // initial commit because no commit since start of application
+        when(taskManager.transactionBuffersWillExceedCapacity()).thenReturn(false);
+        thread.setNow(mockTime.milliseconds());
+        thread.maybeCommit();
+        verify(taskManager).commit(mkSet(runningTask));
+
+        // early commit requested, despite interval not having passed
+        clearInvocations(taskManager);
+        when(taskManager.transactionBuffersWillExceedCapacity()).thenReturn(true);
+        mockTime.sleep(commitInterval - 20L);
+        thread.setNow(mockTime.milliseconds());
+        thread.maybeCommit();
+        verify(taskManager).commit(mkSet(runningTask));
+
+        // no commit because interval has not passed and no early commit requested
+        clearInvocations(taskManager);
+        when(taskManager.transactionBuffersWillExceedCapacity()).thenReturn(false);
+        mockTime.sleep(10L);
+        thread.setNow(mockTime.milliseconds());
+        thread.maybeCommit();
+        verify(taskManager, times(0)).commit(mkSet(runningTask));
     }
 
     @Test
@@ -1146,7 +1193,8 @@ public class StreamThreadTest {
             null,
             null,
             stateUpdater,
-            schedulingTaskManager
+            schedulingTaskManager,
+            -1L
         ) {
             @Override
             int commit(final Collection<Task> tasksToCommit) {
@@ -1953,7 +2001,8 @@ public class StreamThreadTest {
             new MockStandbyUpdateListener(),
             threadIdx,
             null,
-            HANDLER
+            HANDLER,
+            -1L
         );
 
         thread.setState(StreamThread.State.STARTING);

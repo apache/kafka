@@ -141,6 +141,7 @@ public class TaskExecutor {
     int commitTasksAndMaybeUpdateCommittableOffsets(final Collection<Task> tasksToCommit,
                                                     final Map<Task, Map<TopicPartition, OffsetAndMetadata>> consumedOffsetsAndMetadata) {
         int committed = 0;
+        final boolean enforceCheckpoint = taskManager.transactionBuffersExceedCapacity();
         for (final Task task : tasksToCommit) {
             // we need to call commitNeeded first since we need to update committable offsets
             if (task.commitNeeded()) {
@@ -157,7 +158,8 @@ public class TaskExecutor {
             if (task.commitNeeded()) {
                 task.clearTaskTimeout();
                 ++committed;
-                task.postCommit(false);
+                // under EOS, we need to enforce a checkpoint if our transaction buffers will exceeded their capacity
+                task.postCommit(enforceCheckpoint);
             }
         }
 

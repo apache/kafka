@@ -113,6 +113,11 @@ public class LogicalKeyValueSegments extends AbstractSegments<LogicalKeyValueSeg
     }
 
     @Override
+    public long approximateNumUncommittedBytes() {
+        return physicalStore.approximateNumUncommittedBytes();
+    }
+
+    @Override
     public void flush() {
         physicalStore.flush();
     }

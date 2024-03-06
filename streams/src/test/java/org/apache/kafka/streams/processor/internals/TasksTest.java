@@ -22,6 +22,7 @@ import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.Task.State;
 import org.junit.jupiter.api.Test;
 
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.Set;
@@ -39,6 +40,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.when;
 
 public class TasksTest {
 
@@ -345,5 +347,23 @@ public class TasksTest {
         tasks.addPendingTaskToRecycle(TASK_0_0, mkSet(TOPIC_PARTITION_A_0));
         assertNull(tasks.removePendingTaskToCloseReviveAndUpdateInputPartitions(TASK_0_0));
         assertNotNull(tasks.removePendingTaskToRecycle(TASK_0_0));
+    }
+
+    @Test
+    public void shouldHaveNoUncommittedBytesWhenNoActiveTasks() {
+        tasks.addStandbyTasks(Collections.singleton(standbyTask(TASK_0_1, Collections.singleton(TOPIC_PARTITION_A_0)).inState(State.RUNNING).build()));
+        assertEquals(0, tasks.approximateUncommittedStateBytes());
+    }
+
+    @Test
+    public void shouldSumUncommittedBytesFromActiveTasks() {
+        final Task activeTask1 = statefulTask(TASK_0_1, Collections.singleton(TOPIC_PARTITION_A_0)).inState(State.RUNNING).build();
+        final Task activeTask2 = statefulTask(TASK_1_1, Collections.singleton(TOPIC_PARTITION_B_0)).inState(State.RUNNING).build();
+        final StateManager stateManager1 = activeTask1.stateManager();
+        final StateManager stateManager2 = activeTask2.stateManager();
+        when(stateManager1.approximateNumUncommittedBytes()).thenReturn(100L);
+        when(stateManager2.approximateNumUncommittedBytes()).thenReturn(200L);
+        tasks.addActiveTasks(Arrays.asList(activeTask1, activeTask2));
+        assertEquals(300L, tasks.approximateUncommittedStateBytes());
     }
 }

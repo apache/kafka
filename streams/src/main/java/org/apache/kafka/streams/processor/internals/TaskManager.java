@@ -31,6 +31,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.LockException;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskCorruptedException;
@@ -100,6 +101,10 @@ public class TaskManager {
     private final StandbyTaskCreator standbyTaskCreator;
     private final StateUpdater stateUpdater;
     private final DefaultTaskManager schedulingTaskManager;
+    private final long maxUncommittedStateBytes;
+    private long lastUncommittedBytes = 0L;
+    private boolean transactionBuffersExceedCapacity = false;
+
     TaskManager(final Time time,
                 final ChangelogReader changelogReader,
                 final UUID processId,
@@ -111,7 +116,8 @@ public class TaskManager {
                 final Admin adminClient,
                 final StateDirectory stateDirectory,
                 final StateUpdater stateUpdater,
-                final DefaultTaskManager schedulingTaskManager
+                final DefaultTaskManager schedulingTaskManager,
+                final long maxUncommittedStateBytes
                 ) {
         this.time = time;
         this.processId = processId;
@@ -136,6 +142,8 @@ public class TaskManager {
             topologyMetadata.taskExecutionMetadata(),
             logContext
         );
+
+        this.maxUncommittedStateBytes = maxUncommittedStateBytes;
     }
 
     void setMainConsumer(final Consumer<byte[], byte[]> mainConsumer) {
@@ -1834,6 +1842,34 @@ public class TaskManager {
         if (schedulingTaskManager != null) {
             maybeThrowTaskExceptions(schedulingTaskManager.drainUncaughtExceptions());
         }
+    }
+
+    boolean transactionBuffersExceedCapacity() {
+        return transactionBuffersExceedCapacity;
+    }
+
+    boolean transactionBuffersWillExceedCapacity() {
+        final boolean transactionBuffersAreUnbounded = maxUncommittedStateBytes == StreamsConfig.UNBOUNDED_STATESTORE_UNCOMMITTED_BYTES;
+        if (transactionBuffersAreUnbounded) {
+            return false;
+        }
+
+        // force an early commit if the uncommitted bytes exceeds or is *likely to exceed* the configured threshold
+        final long uncommittedBytes = tasks.approximateUncommittedStateBytes();
+
+        final long deltaBytes = Math.max(0, uncommittedBytes - lastUncommittedBytes);
+
+        final boolean needsCommit = uncommittedBytes + deltaBytes > maxUncommittedStateBytes;
+        if (needsCommit) {
+            log.debug(
+                "Needs commit because we will exceed max uncommitted bytes before next commit. max: {}, last: {}, current: {}, delta: {}",
+                maxUncommittedStateBytes, lastUncommittedBytes, uncommittedBytes, deltaBytes
+            );
+        }
+
+        transactionBuffersExceedCapacity = needsCommit;
+        lastUncommittedBytes = uncommittedBytes;
+        return needsCommit;
     }
 
     /**

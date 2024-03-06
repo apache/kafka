@@ -234,10 +234,19 @@ public class TaskManagerTest {
         return setUpTaskManager(processingMode, tasks, stateUpdaterEnabled, false);
     }
 
+
     private TaskManager setUpTaskManager(final ProcessingMode processingMode,
                                          final TasksRegistry tasks,
                                          final boolean stateUpdaterEnabled,
                                          final boolean processingThreadsEnabled) {
+        return setUpTaskManager(processingMode, tasks, stateUpdaterEnabled, processingThreadsEnabled, -1L);
+    }
+
+    private TaskManager setUpTaskManager(final ProcessingMode processingMode,
+                                         final TasksRegistry tasks,
+                                         final boolean stateUpdaterEnabled,
+                                         final boolean processingThreadsEnabled,
+                                         final long maxUncommittedStateBytes) {
         topologyMetadata = new TopologyMetadata(topologyBuilder, new DummyStreamsConfig(processingMode));
         final TaskManager taskManager = new TaskManager(
             time,
@@ -251,7 +260,8 @@ public class TaskManagerTest {
             adminClient,
             stateDirectory,
             stateUpdaterEnabled ? stateUpdater : null,
-            processingThreadsEnabled ? schedulingTaskManager : null
+            processingThreadsEnabled ? schedulingTaskManager : null,
+            maxUncommittedStateBytes
         );
         taskManager.setMainConsumer(consumer);
         return taskManager;
@@ -5133,6 +5143,116 @@ public class TaskManagerTest {
         topologyMetadata.pauseTopology(UNNAMED_TOPOLOGY);
 
         assertEquals(taskManager.notPausedTasks().size(), 0);
+    }
+
+    @Test
+    public void shouldNeverFlagTransactionBuffersAsExceededWhenCapacityIsInfinite() {
+        final Tasks tasks = mock(Tasks.class);
+        taskManager = setUpTaskManager(
+                StreamsConfigUtils.ProcessingMode.AT_LEAST_ONCE,
+                tasks,
+                false,
+                false,
+                -1L
+        );
+
+        assertFalse(taskManager.transactionBuffersWillExceedCapacity());
+        assertFalse(taskManager.transactionBuffersExceedCapacity());
+    }
+
+    @Test
+    public void shouldAlwaysFlagTransactionBuffersAsExceededWhenCapacityIsZero() {
+        final Tasks tasks = mock(Tasks.class);
+        taskManager = setUpTaskManager(
+                StreamsConfigUtils.ProcessingMode.AT_LEAST_ONCE,
+                tasks,
+                false,
+                false,
+                0L
+        );
+
+        when(tasks.approximateUncommittedStateBytes()).thenReturn(100L);
+
+        assertTrue(taskManager.transactionBuffersWillExceedCapacity());
+        assertTrue(taskManager.transactionBuffersExceedCapacity());
+    }
+
+    @Test
+    public void shouldFlagTransactionBuffersAsExceededWhenCapacityIsExceeded() {
+        final Tasks tasks = mock(Tasks.class);
+        taskManager = setUpTaskManager(
+                StreamsConfigUtils.ProcessingMode.AT_LEAST_ONCE,
+                tasks,
+                false,
+                false,
+                100L
+        );
+
+        when(tasks.approximateUncommittedStateBytes()).thenReturn(200L);
+
+        assertTrue(taskManager.transactionBuffersWillExceedCapacity());
+        assertTrue(taskManager.transactionBuffersExceedCapacity());
+    }
+
+    @Test
+    public void shouldNotFlagTransactionBuffersAsExceededWhenCapacityIsNotExceeded() {
+        final Tasks tasks = mock(Tasks.class);
+        taskManager = setUpTaskManager(
+                StreamsConfigUtils.ProcessingMode.AT_LEAST_ONCE,
+                tasks,
+                false,
+                false,
+                100L
+        );
+
+        when(tasks.approximateUncommittedStateBytes()).thenReturn(50L);
+
+        assertFalse(taskManager.transactionBuffersWillExceedCapacity());
+        assertFalse(taskManager.transactionBuffersExceedCapacity());
+    }
+
+    @Test
+    public void shouldFlagTransactionBuffersAsExceededWhenCapacityWillBeExceededNextIteration() {
+        final Tasks tasks = mock(Tasks.class);
+        taskManager = setUpTaskManager(
+                StreamsConfigUtils.ProcessingMode.AT_LEAST_ONCE,
+                tasks,
+                false,
+                false,
+                100L
+        );
+
+        when(tasks.approximateUncommittedStateBytes()).thenReturn(50L);
+
+        assertFalse(taskManager.transactionBuffersWillExceedCapacity());
+        assertFalse(taskManager.transactionBuffersExceedCapacity());
+
+        when(tasks.approximateUncommittedStateBytes()).thenReturn(80L);
+
+        assertTrue(taskManager.transactionBuffersWillExceedCapacity());
+        assertTrue(taskManager.transactionBuffersExceedCapacity());
+    }
+
+    @Test
+    public void shouldResetTransactionBufferEstimationOnEachIteration() {
+        final Tasks tasks = mock(Tasks.class);
+        taskManager = setUpTaskManager(
+                StreamsConfigUtils.ProcessingMode.AT_LEAST_ONCE,
+                tasks,
+                false,
+                false,
+                100L
+        );
+
+        when(tasks.approximateUncommittedStateBytes()).thenReturn(75L);
+
+        assertTrue(taskManager.transactionBuffersWillExceedCapacity());
+        assertTrue(taskManager.transactionBuffersExceedCapacity());
+
+        when(tasks.approximateUncommittedStateBytes()).thenReturn(10L);
+
+        assertFalse(taskManager.transactionBuffersWillExceedCapacity());
+        assertFalse(taskManager.transactionBuffersExceedCapacity());
     }
 
     private static void expectRestoreToBeCompleted(final Consumer<byte[], byte[]> consumer) {

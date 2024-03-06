@@ -19,6 +19,7 @@ package org.apache.kafka.streams.state.internals;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.query.Position;
+import org.apache.kafka.streams.processor.StateStore;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -156,6 +157,13 @@ abstract class AbstractSegments<S extends Segment> implements Segments<S> {
             }
         }
         return result;
+    }
+
+    @Override
+    public long approximateNumUncommittedBytes() {
+        return segments.values().stream()
+            .map(StateStore::approximateNumUncommittedBytes)
+            .reduce(0L, Long::sum);
     }
 
     @Override

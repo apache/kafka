@@ -31,6 +31,7 @@ public class NoOpReadOnlyStore<K, V> implements ReadOnlyKeyValueStore<K, V>, Sta
     private boolean open = true;
     public boolean initialized;
     public boolean flushed;
+    public long uncommittedBytes = 0;
 
     public NoOpReadOnlyStore() {
         this("", false);
@@ -114,4 +115,8 @@ public class NoOpReadOnlyStore<K, V> implements ReadOnlyKeyValueStore<K, V>, Sta
         throw new UnsupportedOperationException("Position handling not implemented");
     }
 
+    @Override
+    public long approximateNumUncommittedBytes() {
+        return uncommittedBytes;
+    }
 }

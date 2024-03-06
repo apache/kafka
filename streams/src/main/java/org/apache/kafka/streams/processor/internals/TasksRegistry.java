@@ -100,4 +100,10 @@ public interface TasksRegistry {
     Set<TaskId> allTaskIds();
 
     boolean contains(final TaskId taskId);
+
+    /**
+     * @return The approximate total size of all records not yet committed to state stores managed
+     *         by this StateManager.
+     */
+    long approximateUncommittedStateBytes();
 }

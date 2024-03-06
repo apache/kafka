@@ -754,4 +754,11 @@ public class ProcessorStateManager implements StateManager {
             checkpointFile.delete();
         }
     }
+
+    @Override
+    public long approximateNumUncommittedBytes() {
+        return stores.values().stream()
+                .map(metadata -> metadata.store().approximateNumUncommittedBytes())
+                .reduce(0L, Long::sum);
+    }
 }

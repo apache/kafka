@@ -366,7 +366,8 @@ public class StreamThread extends Thread implements ProcessingThread {
                                       final StandbyUpdateListener userStandbyUpdateListener,
                                       final int threadIdx,
                                       final Runnable shutdownErrorHook,
-                                      final BiConsumer<Throwable, Boolean> streamsUncaughtExceptionHandler) {
+                                      final BiConsumer<Throwable, Boolean> streamsUncaughtExceptionHandler,
+                                      final long maxUncommittedBytes) {
         final String threadId = clientId + "-StreamThread-" + threadIdx;
 
         final String logPrefix = String.format("stream-thread [%s] ", threadId);
@@ -453,7 +454,8 @@ public class StreamThread extends Thread implements ProcessingThread {
             adminClient,
             stateDirectory,
             stateUpdater,
-            schedulingTaskManager
+            schedulingTaskManager,
+            maxUncommittedBytes
         );
         referenceContainer.taskManager = taskManager;
 
@@ -1374,7 +1376,7 @@ public class StreamThread extends Thread implements ProcessingThread {
      */
     int maybeCommit() {
         final int committed;
-        if (now - lastCommitMs > commitTimeMs) {
+        if (taskManager.transactionBuffersWillExceedCapacity() || now - lastCommitMs > commitTimeMs) {
             if (log.isDebugEnabled()) {
                 log.debug("Committing all active tasks {} and standby tasks {} since {}ms has elapsed (commit interval is {}ms)",
                           taskManager.activeRunningTaskIds(), taskManager.standbyTaskIds(), now - lastCommitMs, commitTimeMs);

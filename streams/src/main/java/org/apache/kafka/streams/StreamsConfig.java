@@ -510,6 +510,11 @@ public class StreamsConfig extends AbstractConfig {
     public static final String STATESTORE_CACHE_MAX_BYTES_CONFIG = "statestore.cache.max.bytes";
     public static final String STATESTORE_CACHE_MAX_BYTES_DOC = "Maximum number of memory bytes to be used for statestore cache across all threads";
 
+    public static final long UNBOUNDED_STATESTORE_UNCOMMITTED_BYTES = -1L;
+    public static final String STATESTORE_UNCOMMITTED_MAX_BYTES_CONFIG = "statestore.uncommitted.max.bytes";
+    public static final String STATESTORE_UNCOMMITTED_MAX_BYTES_DOC = "Maximum number of memory bytes to be used to buffer uncommitted state-store records. " +
+            "If this limit is exceeded, a task commit will be requested. No limit: -1. ";
+
     /** {@code client.id} */
     @SuppressWarnings("WeakerAccess")
     public static final String CLIENT_ID_CONFIG = CommonClientConfigs.CLIENT_ID_CONFIG;
@@ -880,6 +885,12 @@ public class StreamsConfig extends AbstractConfig {
                     atLeast(0),
                     Importance.MEDIUM,
                     STATESTORE_CACHE_MAX_BYTES_DOC)
+            .define(STATESTORE_UNCOMMITTED_MAX_BYTES_CONFIG,
+                    Type.LONG,
+                    64 * 1024 * 1024L,
+                    atLeast(-1),
+                    Importance.MEDIUM,
+                    STATESTORE_UNCOMMITTED_MAX_BYTES_DOC)
             .define(CLIENT_ID_CONFIG,
                     Type.STRING,
                     "",
