@@ -65,6 +65,7 @@ public class ConsumerGroupMember {
         private Map<Uuid, Set<Integer>> assignedPartitions = Collections.emptyMap();
         private Map<Uuid, Set<Integer>> partitionsPendingRevocation = Collections.emptyMap();
         private Map<Uuid, Set<Integer>> partitionsPendingAssignment = Collections.emptyMap();
+        private short embeddedProtocolVersion = 0;
 
         public Builder(String memberId) {
             this.memberId = Objects.requireNonNull(memberId);
@@ -89,6 +90,7 @@ public class ConsumerGroupMember {
             this.assignedPartitions = member.assignedPartitions;
             this.partitionsPendingRevocation = member.partitionsPendingRevocation;
             this.partitionsPendingAssignment = member.partitionsPendingAssignment;
+            this.embeddedProtocolVersion = member.embeddedProtocolVersion;
         }
 
         public Builder setMemberEpoch(int memberEpoch) {
@@ -203,6 +205,11 @@ public class ConsumerGroupMember {
             return this;
         }
 
+        public Builder setEmbeddedProtocolVersion(short embeddedProtocolVersion) {
+            this.embeddedProtocolVersion = embeddedProtocolVersion;
+            return this;
+        }
+
         public Builder updateWith(ConsumerGroupMemberMetadataValue record) {
             setInstanceId(record.instanceId());
             setRackId(record.rackId());
@@ -263,7 +270,8 @@ public class ConsumerGroupMember {
                 state,
                 assignedPartitions,
                 partitionsPendingRevocation,
-                partitionsPendingAssignment
+                partitionsPendingAssignment,
+                embeddedProtocolVersion
             );
         }
     }
@@ -378,6 +386,11 @@ public class ConsumerGroupMember {
      */
     private final Map<Uuid, Set<Integer>> partitionsPendingAssignment;
 
+    /**
+     * The version of the embedded consumer protocol.
+     */
+    private final short embeddedProtocolVersion;
+
     private ConsumerGroupMember(
         String memberId,
         int memberEpoch,
@@ -395,7 +408,8 @@ public class ConsumerGroupMember {
         MemberState state,
         Map<Uuid, Set<Integer>> assignedPartitions,
         Map<Uuid, Set<Integer>> partitionsPendingRevocation,
-        Map<Uuid, Set<Integer>> partitionsPendingAssignment
+        Map<Uuid, Set<Integer>> partitionsPendingAssignment,
+        short embeddedProtocolVersion
     ) {
         this.memberId = memberId;
         this.memberEpoch = memberEpoch;
@@ -414,6 +428,7 @@ public class ConsumerGroupMember {
         this.assignedPartitions = assignedPartitions;
         this.partitionsPendingRevocation = partitionsPendingRevocation;
         this.partitionsPendingAssignment = partitionsPendingAssignment;
+        this.embeddedProtocolVersion = embeddedProtocolVersion;
     }
 
     /**
@@ -536,6 +551,13 @@ public class ConsumerGroupMember {
     }
 
     /**
+     * @return The version of the embedded consumer protocol.
+     */
+    public short embeddedProtocolVersion() {
+        return embeddedProtocolVersion;
+    }
+
+    /**
      * @return A string representation of the current assignment state.
      */
     public String currentAssignmentSummary() {
@@ -625,7 +647,8 @@ public class ConsumerGroupMember {
             && Objects.equals(clientAssignors, that.clientAssignors)
             && Objects.equals(assignedPartitions, that.assignedPartitions)
             && Objects.equals(partitionsPendingRevocation, that.partitionsPendingRevocation)
-            && Objects.equals(partitionsPendingAssignment, that.partitionsPendingAssignment);
+            && Objects.equals(partitionsPendingAssignment, that.partitionsPendingAssignment)
+            && Objects.equals(embeddedProtocolVersion, that.embeddedProtocolVersion);
     }
 
     @Override
@@ -646,6 +669,7 @@ public class ConsumerGroupMember {
         result = 31 * result + Objects.hashCode(assignedPartitions);
         result = 31 * result + Objects.hashCode(partitionsPendingRevocation);
         result = 31 * result + Objects.hashCode(partitionsPendingAssignment);
+        result = 31 * result + Objects.hashCode(embeddedProtocolVersion);
         return result;
     }
 
@@ -669,6 +693,7 @@ public class ConsumerGroupMember {
             ", assignedPartitions=" + assignedPartitions +
             ", partitionsPendingRevocation=" + partitionsPendingRevocation +
             ", partitionsPendingAssignment=" + partitionsPendingAssignment +
+            ", embeddedProtocolVersion=" + embeddedProtocolVersion +
             ')';
     }
 }
