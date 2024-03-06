@@ -56,5 +56,4 @@ public class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest
             new Properties()
         );
     }
-
 }
