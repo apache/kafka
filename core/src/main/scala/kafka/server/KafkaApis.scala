@@ -22,6 +22,7 @@ import kafka.controller.ReplicaAssignment
 import kafka.coordinator.transaction.{InitProducerIdResult, TransactionCoordinator}
 import kafka.network.RequestChannel
 import kafka.server.QuotaFactory.{QuotaManagers, UnboundedQuota}
+import kafka.server.SharePartitionManager.ErroneousAndValidPartitionData
 import kafka.server.handlers.DescribeTopicPartitionsRequestHandler
 import kafka.server.metadata.{ConfigRepository, KRaftMetadataCache}
 import kafka.utils.Implicits._
@@ -1094,17 +1095,17 @@ class KafkaApis(val requestChannel: RequestChannel,
     }
     // TODO : replace this initialization when share fetch session metadata is sent by the client in the shareFetchRequest
     val newReqMetadata : ShareFetchMetadata = new ShareFetchMetadata(Uuid.ZERO_UUID, -1)
-    val shareFetchContext = sharePartitionManager.newContext(shareFetchData, forgottenTopics, topicNames, newReqMetadata)
+    val shareFetchContext = sharePartitionManager.newContext(groupId, shareFetchData, forgottenTopics, topicNames, newReqMetadata)
     val erroneous = mutable.ArrayBuffer[(TopicIdPartition, ShareFetchResponseData.PartitionData)]()
     val interesting = mutable.ArrayBuffer[TopicIdPartition]()
     // Regular Kafka consumers need READ permission on each partition they are fetching.
     val partitionDatas = new mutable.ArrayBuffer[(TopicIdPartition, ShareFetchRequest.SharePartitionData)]
-    val cachedPartitionData = shareFetchContext.cachedPartitions().asScala
-    cachedPartitionData.foreach{ case (topicIdPartition: TopicIdPartition, sharePartitionData: ShareFetchRequest.SharePartitionData) =>
-      if (topicIdPartition.topic == null)
-        erroneous += topicIdPartition -> ShareFetchResponse.partitionResponse(topicIdPartition, Errors.UNKNOWN_TOPIC_ID)
-      else
-        partitionDatas += topicIdPartition -> sharePartitionData
+    val erroneousAndValidPartitionData : ErroneousAndValidPartitionData = shareFetchContext.getErroneousAndValidTopicIdPartitions
+    erroneousAndValidPartitionData.erroneous.forEach {
+      erroneousData => erroneous += erroneousData
+    }
+    erroneousAndValidPartitionData.validTopicIdPartitions.forEach {
+      validPartitionData => partitionDatas += validPartitionData
     }
     val authorizedTopics = authHelper.filterByAuthorized(request.context, READ, TOPIC, partitionDatas)(_._1.topicPartition.topic)
 
@@ -1223,7 +1224,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         unconvertedShareFetchResponse = shareFetchContext.throttleResponse(maxThrottleTimeMs)
       } else {
         // Get the actual response. This will update the fetch context.
-        unconvertedShareFetchResponse = shareFetchContext.updateAndGenerateResponseData(partitions)
+        unconvertedShareFetchResponse = shareFetchContext.updateAndGenerateResponseData(groupId, newReqMetadata.memberId, partitions)
         val responsePartitionsSize = unconvertedShareFetchResponse.data().responses().stream().mapToInt(_.partitions().size()).sum()
         trace(s"Sending Share Fetch response with partitions.size=$responsePartitionsSize")
       }

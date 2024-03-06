@@ -17,9 +17,9 @@
 package kafka.server;
 
 import org.apache.kafka.common.TopicIdPartition;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.ShareFetchResponseData;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.requests.ShareFetchRequest;
 import org.apache.kafka.common.requests.ShareFetchResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -27,7 +27,6 @@ import org.slf4j.LoggerFactory;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.LinkedHashMap;
-import java.util.Map;
 
 public abstract class ShareFetchContext {
 
@@ -56,8 +55,8 @@ public abstract class ShareFetchContext {
      * Updates the share fetch context with new partition information. Generates response data.
      * The response data may require subsequent down-conversion.
      */
-    abstract ShareFetchResponse updateAndGenerateResponseData(LinkedHashMap<TopicIdPartition, ShareFetchResponseData.PartitionData> updates);
+    abstract ShareFetchResponse updateAndGenerateResponseData(String groupId, Uuid memberId, LinkedHashMap<TopicIdPartition, ShareFetchResponseData.PartitionData> updates);
 
-    abstract Map<TopicIdPartition, ShareFetchRequest.SharePartitionData> cachedPartitions();
+    abstract SharePartitionManager.ErroneousAndValidPartitionData getErroneousAndValidTopicIdPartitions();
 
 }

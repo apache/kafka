@@ -46,10 +46,10 @@ public class SharePartition {
      * offset, or be state persisted to disk.
      */
     public enum RecordState {
-        AVAILABLE ((byte) 0),
-        ACQUIRED ((byte) 1),
-        ACKNOWLEDGED ((byte) 2),
-        ARCHIVED ((byte) 3);
+        AVAILABLE((byte) 0),
+        ACQUIRED((byte) 1),
+        ACKNOWLEDGED((byte) 2),
+        ARCHIVED((byte) 3);
 
         public final byte id;
 

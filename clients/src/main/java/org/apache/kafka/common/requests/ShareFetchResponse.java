@@ -18,6 +18,8 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicIdPartition;
+import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.ShareFetchResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
@@ -53,6 +55,8 @@ public class ShareFetchResponse extends AbstractResponse {
 
     private final ShareFetchResponseData data;
 
+    private volatile LinkedHashMap<TopicIdPartition, ShareFetchResponseData.PartitionData> responseData = null;
+
     public ShareFetchResponse(ShareFetchResponseData data) {
         super(ApiKeys.SHARE_FETCH);
         this.data = data;
@@ -77,6 +81,29 @@ public class ShareFetchResponse extends AbstractResponse {
                 )
         );
         return counts;
+    }
+
+    public LinkedHashMap<TopicIdPartition, ShareFetchResponseData.PartitionData> responseData(Map<Uuid, String> topicNames) {
+        if (responseData == null) {
+            synchronized (this) {
+                // Assigning the lazy-initialized `responseData` in the last step
+                // to avoid other threads accessing a half-initialized object.
+                if (responseData == null) {
+                    final LinkedHashMap<TopicIdPartition, ShareFetchResponseData.PartitionData> responseDataTmp = new LinkedHashMap<>();
+                    data.responses().forEach(topicResponse -> {
+                        String name = topicNames.get(topicResponse.topicId());
+                        if (name != null) {
+                            topicResponse.partitions().forEach(partitionData -> {
+                                responseDataTmp.put(new TopicIdPartition(topicResponse.topicId(),
+                                        new TopicPartition(name, partitionData.partitionIndex())), partitionData);
+                            });
+                        }
+                    });
+                    responseData = responseDataTmp;
+                }
+            }
+        }
+        return responseData;
     }
 
     @Override

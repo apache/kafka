@@ -25,7 +25,7 @@ import kafka.log.remote.RemoteLogManager
 import kafka.network.{DataPlaneAcceptor, SocketServer}
 import kafka.raft.KafkaRaftManager
 import kafka.security.CredentialProvider
-import kafka.server.SharePartitionManager.ShareFetchSessionCache
+import kafka.server.SharePartitionManager.ShareSessionCache
 import kafka.server.metadata.{AclPublisher, BrokerMetadataPublisher, ClientQuotaMetadataManager, DelegationTokenPublisher, DynamicClientQuotaPublisher, DynamicConfigPublisher, KRaftMetadataCache, ScramPublisher}
 import kafka.utils.CoreUtils
 import org.apache.kafka.common.config.ConfigException
@@ -394,7 +394,7 @@ class BrokerServer(
 
       // TODO : add the config max.incremental.share.fetch.session.cache.slots and the variable MIN_INCREMENTAL_SHARE_FETCH_SESSION_EVICTION_MS
       //  which should be used to initialize shareFetchSessionCache
-      val shareFetchSessionCache : ShareFetchSessionCache = new ShareFetchSessionCache(0, 0)
+      val shareFetchSessionCache : ShareSessionCache = new ShareSessionCache(0, 0)
       val sharePartitionManager = new SharePartitionManager(replicaManager, Time.SYSTEM, shareFetchSessionCache);
 
       // Create the request processor objects.
