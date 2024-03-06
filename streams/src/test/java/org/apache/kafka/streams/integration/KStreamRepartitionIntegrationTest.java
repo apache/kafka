@@ -453,6 +453,85 @@ public class KStreamRepartitionIntegrationTest {
     }
 
     @Test
+    public void shouldNotRepartitionWithMarkAsPartitionedFollowingSelectKey() throws Exception {
+        final long timestamp = System.currentTimeMillis();
+
+        sendEvents(
+                timestamp,
+                Arrays.asList(
+                        new KeyValue<>(1, "10"),
+                        new KeyValue<>(2, "20")
+                )
+        );
+
+        final StreamsBuilder builder = new StreamsBuilder();
+
+        builder.stream(inputTopic, Consumed.with(Serdes.Integer(), Serdes.String()))
+                .selectKey((key, value) -> Integer.valueOf(value))
+                .markAsPartitioned()
+                .groupByKey()
+                .count()
+                .toStream()
+                .to(outputTopic);
+
+
+        startStreams(builder);
+
+        validateReceivedMessages(
+                new IntegerDeserializer(),
+                new LongDeserializer(),
+                Arrays.asList(
+                        new KeyValue<>(10, 1L),
+                        new KeyValue<>(20, 1L)
+                )
+        );
+
+        final String topology = builder.build().describe().toString();
+
+        assertEquals(0, countOccurrencesInTopology(topology, "Sink: .*-repartition.*"));
+    }
+
+    @Test
+    public void shouldNotRepartitionWithMarkAsPartitionedFollowingMap() throws Exception {
+        final String topicBMapperName = "topic-b-mapper";
+        final long timestamp = System.currentTimeMillis();
+
+        sendEvents(
+                timestamp,
+                Arrays.asList(
+                        new KeyValue<>(1, "10"),
+                        new KeyValue<>(2, "20")
+                )
+        );
+
+        final StreamsBuilder builder = new StreamsBuilder();
+
+        builder.stream(inputTopic, Consumed.with(Serdes.Integer(), Serdes.String()))
+                .map(KeyValue::new, Named.as(topicBMapperName))
+                .markAsPartitioned()
+                .groupByKey()
+                .count()
+                .toStream()
+                .to(outputTopic);
+
+
+        startStreams(builder);
+
+        validateReceivedMessages(
+                new IntegerDeserializer(),
+                new LongDeserializer(),
+                Arrays.asList(
+                        new KeyValue<>(1, 1L),
+                        new KeyValue<>(2, 1L)
+                )
+        );
+
+        final String topology = builder.build().describe().toString();
+
+        assertEquals(0, countOccurrencesInTopology(topology, "Sink: .*-repartition.*"));
+    }
+
+    @Test
     public void shouldCreateRepartitionTopicIfKeyChangingOperationWasNotPerformed() throws Exception {
         final String repartitionName = "dummy";
         final long timestamp = System.currentTimeMillis();

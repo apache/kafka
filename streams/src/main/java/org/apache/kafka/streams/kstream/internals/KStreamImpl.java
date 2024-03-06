@@ -48,6 +48,7 @@ import org.apache.kafka.streams.kstream.ValueTransformerWithKeySupplier;
 import org.apache.kafka.streams.kstream.internals.graph.BaseRepartitionNode;
 import org.apache.kafka.streams.kstream.internals.graph.BaseRepartitionNode.BaseRepartitionNodeBuilder;
 import org.apache.kafka.streams.kstream.internals.graph.GraphNode;
+import org.apache.kafka.streams.kstream.internals.graph.PartitionPreservingNode;
 import org.apache.kafka.streams.kstream.internals.graph.OptimizableRepartitionNode;
 import org.apache.kafka.streams.kstream.internals.graph.OptimizableRepartitionNode.OptimizableRepartitionNodeBuilder;
 import org.apache.kafka.streams.kstream.internals.graph.ProcessorGraphNode;
@@ -75,6 +76,7 @@ import java.util.HashSet;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+
 import org.apache.kafka.streams.state.VersionedBytesStoreSupplier;
 import org.apache.kafka.streams.state.internals.RocksDBTimeOrderedKeyValueBuffer;
 
@@ -139,6 +141,8 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
     private static final String TO_KTABLE_NAME = "KSTREAM-TOTABLE-";
 
     private static final String REPARTITION_NAME = "KSTREAM-REPARTITION-";
+
+    private static final String PARTITION_PRESERVE_NAME = "KSTREAM-PARTITION-PRESERVE";
 
     private final boolean repartitionRequired;
 
@@ -223,21 +227,21 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
                                          final Named named) {
         Objects.requireNonNull(mapper, "mapper can't be null");
         Objects.requireNonNull(named, "named can't be null");
-
+        final boolean repartitionRequired = !(graphNode instanceof PartitionPreservingNode);
         final ProcessorGraphNode<K, V> selectKeyProcessorNode = internalSelectKey(mapper, new NamedInternal(named));
-        selectKeyProcessorNode.keyChangingOperation(true);
+        selectKeyProcessorNode.keyChangingOperation(repartitionRequired);
 
         builder.addGraphNode(graphNode, selectKeyProcessorNode);
 
         // key serde cannot be preserved
         return new KStreamImpl<>(
-            selectKeyProcessorNode.nodeName(),
-            null,
-            valueSerde,
-            subTopologySourceNodes,
-            true,
-            selectKeyProcessorNode,
-            builder);
+                selectKeyProcessorNode.nodeName(),
+                null,
+                valueSerde,
+                subTopologySourceNodes,
+                repartitionRequired,
+                selectKeyProcessorNode,
+                builder);
     }
 
     private <KR> ProcessorGraphNode<K, V> internalSelectKey(final KeyValueMapper<? super K, ? super V, ? extends KR> mapper,
@@ -263,22 +267,23 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
 
         final String name = new NamedInternal(named).orElseGenerateWithPrefix(builder, MAP_NAME);
         final ProcessorParameters<? super K, ? super V, ?, ?> processorParameters =
-            new ProcessorParameters<>(new KStreamMap<>(mapper), name);
+                new ProcessorParameters<>(new KStreamMap<>(mapper), name);
         final ProcessorGraphNode<? super K, ? super V> mapProcessorNode =
-            new ProcessorGraphNode<>(name, processorParameters);
-        mapProcessorNode.keyChangingOperation(true);
+                new ProcessorGraphNode<>(name, processorParameters);
+        final boolean repartitionRequired = !(graphNode instanceof PartitionPreservingNode);
+        mapProcessorNode.keyChangingOperation(repartitionRequired);
 
         builder.addGraphNode(graphNode, mapProcessorNode);
 
         // key and value serde cannot be preserved
         return new KStreamImpl<>(
-            name,
-            null,
-            null,
-            subTopologySourceNodes,
-            true,
-            mapProcessorNode,
-            builder);
+                name,
+                null,
+                null,
+                subTopologySourceNodes,
+                repartitionRequired,
+                mapProcessorNode,
+                builder);
     }
 
     @Override
@@ -334,17 +339,18 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
         Objects.requireNonNull(mapper, "mapper can't be null");
         Objects.requireNonNull(named, "named can't be null");
 
+        final boolean repartitionRequired = !(graphNode instanceof PartitionPreservingNode);
         final String name = new NamedInternal(named).orElseGenerateWithPrefix(builder, FLATMAP_NAME);
         final ProcessorParameters<? super K, ? super V, ?, ?> processorParameters =
-            new ProcessorParameters<>(new KStreamFlatMap<>(mapper), name);
+                new ProcessorParameters<>(new KStreamFlatMap<>(mapper), name);
         final ProcessorGraphNode<? super K, ? super V> flatMapNode =
-            new ProcessorGraphNode<>(name, processorParameters);
-        flatMapNode.keyChangingOperation(true);
+                new ProcessorGraphNode<>(name, processorParameters);
+        flatMapNode.keyChangingOperation(repartitionRequired);
 
         builder.addGraphNode(graphNode, flatMapNode);
 
         // key and value serde cannot be preserved
-        return new KStreamImpl<>(name, null, null, subTopologySourceNodes, true, flatMapNode, builder);
+        return new KStreamImpl<>(name, null, null, subTopologySourceNodes, repartitionRequired, flatMapNode, builder);
     }
 
     @Override
@@ -726,14 +732,14 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
         final String name = namedInternal.orElseGenerateWithPrefix(builder, TO_KTABLE_NAME);
 
         final MaterializedInternal<K, V, KeyValueStore<Bytes, byte[]>> materializedInternal =
-            new MaterializedInternal<>(materialized, builder, TO_KTABLE_NAME);
+                new MaterializedInternal<>(materialized, builder, TO_KTABLE_NAME);
 
         final Serde<K> keySerdeOverride = materializedInternal.keySerde() == null
-            ? keySerde
-            : materializedInternal.keySerde();
+                ? keySerde
+                : materializedInternal.keySerde();
         final Serde<V> valueSerdeOverride = materializedInternal.valueSerde() == null
-            ? valueSerde
-            : materializedInternal.valueSerde();
+                ? valueSerde
+                : materializedInternal.valueSerde();
 
         final Set<String> subTopologySourceNodes;
         final GraphNode tableParentNode;
@@ -741,12 +747,12 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
         if (repartitionRequired) {
             final OptimizableRepartitionNodeBuilder<K, V> repartitionNodeBuilder = optimizableRepartitionNodeBuilder();
             final String sourceName = createRepartitionedSource(
-                builder,
-                keySerdeOverride,
-                valueSerdeOverride,
-                name,
-                null,
-                repartitionNodeBuilder
+                    builder,
+                    keySerdeOverride,
+                    valueSerdeOverride,
+                    name,
+                    null,
+                    repartitionNodeBuilder
             );
 
             tableParentNode = repartitionNodeBuilder.build();
@@ -758,28 +764,28 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
         }
 
         final KTableSource<K, V> tableSource = new KTableSource<>(
-            materializedInternal.storeName(),
-            materializedInternal.queryableStoreName()
+                materializedInternal.storeName(),
+                materializedInternal.queryableStoreName()
         );
         final ProcessorParameters<K, V, ?, ?> processorParameters = new ProcessorParameters<>(tableSource, name);
         final GraphNode tableNode = new StreamToTableNode<>(
-            name,
-            processorParameters,
-            materializedInternal
+                name,
+                processorParameters,
+                materializedInternal
         );
         tableNode.setOutputVersioned(materializedInternal.storeSupplier() instanceof VersionedBytesStoreSupplier);
 
         builder.addGraphNode(tableParentNode, tableNode);
 
         return new KTableImpl<K, V, V>(
-            name,
-            keySerdeOverride,
-            valueSerdeOverride,
-            subTopologySourceNodes,
-            materializedInternal.queryableStoreName(),
-            tableSource,
-            tableNode,
-            builder
+                name,
+                keySerdeOverride,
+                valueSerdeOverride,
+                subTopologySourceNodes,
+                materializedInternal.queryableStoreName(),
+                tableSource,
+                tableNode,
+                builder
         );
     }
 
@@ -794,19 +800,20 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
         Objects.requireNonNull(keySelector, "keySelector can't be null");
         Objects.requireNonNull(grouped, "grouped can't be null");
 
+        final boolean repartitionRequired = !(graphNode instanceof PartitionPreservingNode);
         final GroupedInternal<KR, V> groupedInternal = new GroupedInternal<>(grouped);
         final ProcessorGraphNode<K, V> selectKeyMapNode = internalSelectKey(keySelector, new NamedInternal(groupedInternal.name()));
-        selectKeyMapNode.keyChangingOperation(true);
+        selectKeyMapNode.keyChangingOperation(repartitionRequired);
 
         builder.addGraphNode(graphNode, selectKeyMapNode);
 
         return new KGroupedStreamImpl<>(
-            selectKeyMapNode.nodeName(),
-            subTopologySourceNodes,
-            groupedInternal,
-            true,
-            selectKeyMapNode,
-            builder);
+                selectKeyMapNode.nodeName(),
+                subTopologySourceNodes,
+                groupedInternal,
+                repartitionRequired,
+                selectKeyMapNode,
+                builder);
     }
 
     @Override
@@ -985,7 +992,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
         final Serde<K> repartitionKeySerde = keySerdeOverride != null ? keySerdeOverride : keySerde;
         final Serde<V> repartitionValueSerde = valueSerdeOverride != null ? valueSerdeOverride : valueSerde;
         final OptimizableRepartitionNodeBuilder<K, V> optimizableRepartitionNodeBuilder =
-            OptimizableRepartitionNode.optimizableRepartitionNodeBuilder();
+                OptimizableRepartitionNode.optimizableRepartitionNodeBuilder();
         // we still need to create the repartitioned source each time
         // as it increments the counter which
         // is needed to maintain topology compatibility
@@ -1346,25 +1353,25 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
         for (final String stateStoreName : stateStoreNames) {
             Objects.requireNonNull(stateStoreName, "stateStoreNames can't contain `null` as store name");
         }
-
+        final boolean repartitionRequired = !(graphNode instanceof PartitionPreservingNode);
         final String name = new NamedInternal(named).name();
         final StatefulProcessorNode<? super K, ? super V> transformNode = new StatefulProcessorNode<>(
-            name,
-            new ProcessorParameters<>(new KStreamFlatTransform<>(transformerSupplier), name),
-            stateStoreNames);
-        transformNode.keyChangingOperation(true);
+                name,
+                new ProcessorParameters<>(new KStreamFlatTransform<>(transformerSupplier), name),
+                stateStoreNames);
+        transformNode.keyChangingOperation(repartitionRequired);
 
         builder.addGraphNode(graphNode, transformNode);
 
         // cannot inherit key and value serde
         return new KStreamImpl<>(
-            name,
-            null,
-            null,
-            subTopologySourceNodes,
-            true,
-            transformNode,
-            builder);
+                name,
+                null,
+                null,
+                subTopologySourceNodes,
+                repartitionRequired,
+                transformNode,
+                builder);
     }
 
     @Override
@@ -1444,9 +1451,9 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
                                                    final String... stateStoreNames) {
         Objects.requireNonNull(valueTransformerSupplier, "valueTransformerSupplier can't be null");
         return doFlatTransformValues(
-            toValueTransformerWithKeySupplier(valueTransformerSupplier),
-            NamedInternal.empty(),
-            stateStoreNames);
+                toValueTransformerWithKeySupplier(valueTransformerSupplier),
+                NamedInternal.empty(),
+                stateStoreNames);
     }
 
     @Override
@@ -1456,9 +1463,9 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
                                                    final String... stateStoreNames) {
         Objects.requireNonNull(valueTransformerSupplier, "valueTransformerSupplier can't be null");
         return doFlatTransformValues(
-            toValueTransformerWithKeySupplier(valueTransformerSupplier),
-            named,
-            stateStoreNames);
+                toValueTransformerWithKeySupplier(valueTransformerSupplier),
+                named,
+                stateStoreNames);
     }
 
     @Override
@@ -1489,22 +1496,22 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
 
         final String name = new NamedInternal(named).orElseGenerateWithPrefix(builder, TRANSFORMVALUES_NAME);
         final StatefulProcessorNode<? super K, ? super V> transformNode = new StatefulProcessorNode<>(
-            name,
-            new ProcessorParameters<>(new KStreamFlatTransformValues<>(valueTransformerWithKeySupplier), name),
-            stateStoreNames);
+                name,
+                new ProcessorParameters<>(new KStreamFlatTransformValues<>(valueTransformerWithKeySupplier), name),
+                stateStoreNames);
         transformNode.setValueChangingOperation(true);
 
         builder.addGraphNode(graphNode, transformNode);
 
         // cannot inherit value serde
         return new KStreamImpl<>(
-            name,
-            keySerde,
-            null,
-            subTopologySourceNodes,
-            repartitionRequired,
-            transformNode,
-            builder);
+                name,
+                keySerde,
+                null,
+                subTopologySourceNodes,
+                repartitionRequired,
+                transformNode,
+                builder);
     }
 
     @Override
@@ -1572,13 +1579,13 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
 
         // cannot inherit key and value serde
         return new KStreamImpl<>(
-            name,
-            null,
-            null,
-            subTopologySourceNodes,
-            true,
-            processNode,
-            builder);
+                name,
+                null,
+                null,
+                subTopologySourceNodes,
+                !(graphNode instanceof PartitionPreservingNode),
+                processNode,
+                builder);
     }
 
     @Override
@@ -1623,5 +1630,26 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
             repartitionRequired,
             processNode,
             builder);
+    }
+
+    @Override
+    public KStream<K, V> markAsPartitioned() {
+        final ProcessorParameters<? super K, ? super V, ?, ?> processorParameters =
+                new ProcessorParameters<>(new PassThrough<>(), PARTITION_PRESERVE_NAME + name);
+
+        final PartitionPreservingNode<? super K, ? super V> partitionPreservingNode = new PartitionPreservingNode<>(
+                processorParameters,
+                PARTITION_PRESERVE_NAME + name);
+
+        builder.addGraphNode(graphNode, partitionPreservingNode);
+        return new KStreamImpl<>(
+                partitionPreservingNode.nodeName(),
+                keySerde,
+                valueSerde,
+                subTopologySourceNodes,
+                false,
+                partitionPreservingNode,
+                builder
+        );
     }
 }
