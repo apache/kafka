@@ -621,29 +621,27 @@ public class ConsoleConsumerOptionsTest {
 
     @Test
     public void testParseTimeoutMs() throws Exception {
-        Exit.setExitProcedure((code, message) -> {
-            throw new IllegalArgumentException(message);
-        });
+        String[] withoutTimeoutMs = new String[]{
+            "--bootstrap-server", "localhost:9092",
+            "--topic", "test",
+            "--partition", "0"
+        };
+        assertEquals(Long.MAX_VALUE, new ConsoleConsumerOptions(withoutTimeoutMs).timeoutMs());
 
-        try {
-            String[] negativeTimeoutMs = new String[]{
-                "--bootstrap-server", "localhost:9092",
-                "--topic", "test",
-                "--partition", "0",
-                "--timeout-ms", "-1"
-            };
-            assertThrows(IllegalArgumentException.class, () -> new ConsoleConsumerOptions(negativeTimeoutMs));
+        String[] negativeTimeoutMs = new String[]{
+            "--bootstrap-server", "localhost:9092",
+            "--topic", "test",
+            "--partition", "0",
+            "--timeout-ms", "-100"
+        };
+        assertEquals(Long.MAX_VALUE, new ConsoleConsumerOptions(negativeTimeoutMs).timeoutMs());
 
-            String[] validTimeoutMs = new String[]{
-                "--bootstrap-server", "localhost:9092",
-                "--topic", "test",
-                "--partition", "0",
-                "--timeout-ms", "100"
-            };
-            ConsoleConsumerOptions config = new ConsoleConsumerOptions(validTimeoutMs);
-            assertEquals(100, config.timeoutMs());
-        } finally {
-            Exit.resetExitProcedure();
-        }
+        String[] validTimeoutMs = new String[]{
+            "--bootstrap-server", "localhost:9092",
+            "--topic", "test",
+            "--partition", "0",
+            "--timeout-ms", "100"
+        };
+        assertEquals(100, new ConsoleConsumerOptions(validTimeoutMs).timeoutMs());
     }
 }

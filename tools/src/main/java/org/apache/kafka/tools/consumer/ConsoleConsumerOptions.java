@@ -325,17 +325,8 @@ public final class ConsoleConsumerOptions extends CommandDefaultOptions {
     }
 
     private long parseTimeoutMs() {
-        long timeout;
-        if (options.has(timeoutMsOpt)) {
-            timeout = options.valueOf(timeoutMsOpt);
-            if (timeout < 0) {
-                CommandLineUtils.printUsageAndExit(parser, "The provided timeout-ms value '" + timeout +
-                        "' is incorrect. Valid value are a non-negative long.");
-            }
-        } else {
-            timeout = Long.MAX_VALUE;
-        }
-        return timeout;
+        long timeout = options.has(timeoutMsOpt) ? options.valueOf(timeoutMsOpt) : -1;
+        return timeout >= 0 ? timeout : Long.MAX_VALUE;
     }
 
     private MessageFormatter buildFormatter() {
@@ -382,10 +373,7 @@ public final class ConsoleConsumerOptions extends CommandDefaultOptions {
     }
 
     Optional<String> topicArg() {
-        if (options.has(topicOpt)) {
-            return Optional.of(options.valueOf(topicOpt));
-        }
-        return Optional.empty();
+        return options.has(topicOpt) ? Optional.of(options.valueOf(topicOpt)) : Optional.empty();
     }
 
     int maxMessages() {
@@ -405,13 +393,9 @@ public final class ConsoleConsumerOptions extends CommandDefaultOptions {
     }
 
     Optional<String> includedTopicsArg() {
-        if (options.has(includeOpt)) {
-            return Optional.of(options.valueOf(includeOpt));
-        } else if (options.has(whitelistOpt)) {
-            return Optional.of(options.valueOf(whitelistOpt));
-        } else {
-            return Optional.empty();
-        }
+        return options.has(includeOpt)
+                ? Optional.of(options.valueOf(includeOpt))
+                : Optional.ofNullable(options.valueOf(whitelistOpt));
     }
 
     Properties formatterArgs() throws IOException {
