@@ -741,8 +741,10 @@ public class Topology {
     /**
      * Adds a read-only {@link StateStore} to the topology.
      * <p>
-     * A read-only {@link StateStore} can use any compacted topic as a changelog. The <code>auto.offset.reset</code> property
-     * will be set to <code>earliest</code> for this topic.
+     * A read-only {@link StateStore} does not create a dedicated changelog topic but uses it's input topic as
+     * changelog; thus, the used topic should be configured with log compaction.
+     * <p>
+     * The <code>auto.offset.reset</code> property will be set to <code>earliest</code> for this topic.
      * <p>
      * The provided {@link ProcessorSupplier} will be used to create a processor for all messages received
      * from the given topic. This processor should contain logic to keep the {@link StateStore} up-to-date.
@@ -767,7 +769,6 @@ public class Topology {
                                                                   final String topic,
                                                                   final String processorName,
                                                                   final ProcessorSupplier<KIn, VIn, Void, Void> stateUpdateSupplier) {
-        // -- disabling logging. We might want to print some logging.
         storeBuilder.withLoggingDisabled();
 
         internalTopologyBuilder.addSource(AutoOffsetReset.EARLIEST, sourceName, timestampExtractor, keyDeserializer, valueDeserializer, topic);
@@ -781,8 +782,10 @@ public class Topology {
     /**
      * Adds a read-only {@link StateStore} to the topology.
      * <p>
-     * A read-only {@link StateStore} can use any compacted topic as a changelog. The <code>auto.offset.reset</code> property
-     * will be set to <code>earliest</code> for this topic.
+     * A read-only {@link StateStore} does not create a dedicated changelog topic but uses it's input topic as
+     * changelog; thus, the used topic should be configured with log compaction.
+     * <p>
+     * The <code>auto.offset.reset</code> property will be set to <code>earliest</code> for this topic.
      * <p>
      * The provided {@link ProcessorSupplier} will be used to create a processor for all messages received
      * from the given topic. This processor should contain logic to keep the {@link StateStore} up-to-date.

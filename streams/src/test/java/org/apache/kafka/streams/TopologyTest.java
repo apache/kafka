@@ -38,6 +38,7 @@ import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder.SubtopologyDescription;
 import org.apache.kafka.streams.processor.internals.ProcessorTopology;
+import org.apache.kafka.streams.processor.internals.StoreFactory;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.SessionStore;
 import org.apache.kafka.streams.state.StoreBuilder;
@@ -338,7 +339,7 @@ public class TopologyTest {
         mockStoreBuilder();
         topology.addStateStore(storeBuilder);
 
-        final StoreBuilder otherStoreBuilder = mock(StoreBuilder.class);
+        final StoreBuilder<?> otherStoreBuilder = mock(StoreBuilder.class);
         when(otherStoreBuilder.name()).thenReturn("store");
         when(otherStoreBuilder.logConfig()).thenReturn(Collections.emptyMap());
         when(otherStoreBuilder.loggingEnabled()).thenReturn(false);
@@ -2314,7 +2315,7 @@ public class TopologyTest {
 
         topology.addSink(sinkName, sinkTopic, null, null, null, parentNames);
         final TopologyDescription.Sink expectedSinkNode =
-            new InternalTopologyBuilder.Sink(sinkName, sinkTopic);
+            new InternalTopologyBuilder.Sink<>(sinkName, sinkTopic);
 
         for (final TopologyDescription.Node parent : parents) {
             ((InternalTopologyBuilder.AbstractNode) parent).addSuccessor(expectedSinkNode);
@@ -2405,7 +2406,7 @@ public class TopologyTest {
                 processorName,
                 new MockProcessorSupplier<>());
 
-        final InternalTopologyBuilder.StateStoreFactory<?> stateStoreFactory = topology.internalTopologyBuilder.stateStores().get(storeName);
+        final StoreFactory stateStoreFactory = topology.internalTopologyBuilder.stateStores().get(storeName);
         assertThat(stateStoreFactory.loggingEnabled(), equalTo(false));
     }
 
