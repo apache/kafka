@@ -1740,6 +1740,231 @@ $ bin/kafka-acls.sh \
         <td>ideally 0 when re-authentication is enabled, implying there are no longer any older, pre-2.2.0 clients connecting to this broker</td>
       </tr>
       <tr>
+        <td>The average fraction of time requests were not being read out of socket due to lack of memory</td>
+        <td>kafka.server:type=socket-server-metrics,name=MemoryPoolAvgDepletedPercent</td>
+        <td>ideally 0 when the memory pool still has room for allocating memory</td>
+      </tr>
+      <tr>
+        <td>Total amount of time that request were not being read out of socket due to lack of memory</td>
+        <td>kafka.server:type=socket-server-metrics,name=MemoryPoolAvgDepletedTimeTotal</td>
+        <td>ideally 0 when the memory pool still has room for allocating memory</td>
+      </tr>
+      <tr>
+        <td>Broker-wide rate of connections accepted per second</td>
+        <td>kafka.server:type=socket-server-metrics,name=broker-connection-accept-rate</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td>Rate of connections accepted per second on a given listener</td>
+        <td>kafka.server:type=socket-server-metrics,listener=[PLAINTEXT|CONTROLLER],name=connection-accept-rate</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td>Average throttle time due to violating per-listener or broker-wide connection acceptance rate quota on a given listener</td>
+        <td>kafka.server:type=socket-server-metrics,listener=[PLAINTEXT|CONTROLLER],name=connection-accept-throttle-time</td>
+        <td>Ideally 0</td>
+      </tr>
+      <tr>
+        <td>Average throttle time due to violating ip connection rate quota on a given listener. IP throttling is reported at a listener granularity rather than at an IP granularity to keep a smaller metrics overhead</td>
+        <td>kafka.server:type=socket-server-metrics,listener=[PLAINTEXT|CONTROLLER],name=ip-connection-accept-throttle-time</td>
+        <td>Ideally 0</td>
+      </tr>
+      <tr>
+        <td>The number of connections closed per second</td>
+        <td>kafka.server:type=socket-server-metrics,listener=[PLAINTEXT|CONTROLLER],networkProcessor=&lt;#&gt;,name=connection-close-rate</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td>The total number of connections closed</td>
+        <td>kafka.server:type=socket-server-metrics,listener=[PLAINTEXT|CONTROLLER],networkProcessor=&lt;#&gt;,name=connection-close-total</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td>The current number of active connections</td>
+        <td>kafka.server:type=socket-server-metrics,listener=[PLAINTEXT|CONTROLLER],networkProcessor=&lt;#&gt;,name=connection-count</td>
+        <td>For non-idle systems, should be greater than 0</td>
+      </tr>
+      <tr>
+        <td>The number of new connections established per second</td>
+        <td>kafka.server:type=socket-server-metrics,listener=[PLAINTEXT|CONTROLLER],networkProcessor=&lt;#&gt;,name=connection-creation-rate</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td>The total number of new connections established</td>
+        <td>kafka.server:type=socket-server-metrics,listener=[PLAINTEXT|CONTROLLER],networkProcessor=&lt;#&gt;,name=connection-creation-total</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td>The total number of expired connections that are killed</td>
+        <td>kafka.server:type=socket-server-metrics,listener=[PLAINTEXT|CONTROLLER],networkProcessor=&lt;#&gt;,name=expired-connections-killed-count</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td>The number of connections with failed authentication per second</td>
+        <td>kafka.server:type=socket-server-metrics,listener=[PLAINTEXT|CONTROLLER],networkProcessor=&lt;#&gt;,name=failed-authentication-rate</td>
+        <td>Ideally 0</td>
+      </tr>
+      <tr>
+        <td>The total number of connections with failed authentication</td>
+        <td>kafka.server:type=socket-server-metrics,listener=[PLAINTEXT|CONTROLLER],networkProcessor=&lt;#&gt;,name=failed-authentication-total</td>
+        <td>Ideally 0</td>
+      </tr>
+      <tr>
+        <td>The number of failed re-authentication of connections per second</td>
+        <td>kafka.server:type=socket-server-metrics,listener=[PLAINTEXT|CONTROLLER],networkProcessor=&lt;#&gt;,name=failed-reauthentication-rate</td>
+        <td>Ideally 0</td>
+      </tr>
+      <tr>
+        <td>The total number of failed re-authentication of connections</td>
+        <td>kafka.server:type=socket-server-metrics,listener=[PLAINTEXT|CONTROLLER],networkProcessor=&lt;#&gt;,name=failed-reauthentication-total</td>
+        <td>Ideally 0</td>
+      </tr>
+      <tr>
+        <td>The total number of connections with successful authentication where the client does not support re-authentication</td>
+        <td>kafka.server:type=socket-server-metrics,listener=[PLAINTEXT|CONTROLLER],networkProcessor=&lt;#&gt;,name=successful-authentication-no-reauth-total</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td>The number of connections with successful authentication per second</td>
+        <td>kafka.server:type=socket-server-metrics,listener=[PLAINTEXT|CONTROLLER],networkProcessor=&lt;#&gt;,name=successful-authentication-rate</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td>The total number of connections with successful authentication</td>
+        <td>kafka.server:type=socket-server-metrics,listener=[PLAINTEXT|CONTROLLER],networkProcessor=&lt;#&gt;,name=successful-authentication-total</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td>The number of successful re-authentication of connections per second</td>
+        <td>kafka.server:type=socket-server-metrics,listener=[PLAINTEXT|CONTROLLER],networkProcessor=&lt;#&gt;,name=successful-reauthentication-rate</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td>The total number of successful re-authentication of connections</td>
+        <td>kafka.server:type=socket-server-metrics,listener=[PLAINTEXT|CONTROLLER],networkProcessor=&lt;#&gt;,name=successful-reauthentication-total</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td>The number of bytes read off all sockets per second</td>
+        <td>kafka.server:type=socket-server-metrics,listener=[PLAINTEXT|CONTROLLER],networkProcessor=&lt;#&gt;,name=incoming-byte-rate</td>
+        <td>For non-idle systems, should be greater than 0</td>
+      </tr>
+      <tr>
+        <td>The total number of bytes read off all sockets</td>
+        <td>kafka.server:type=socket-server-metrics,listener=[PLAINTEXT|CONTROLLER],networkProcessor=&lt;#&gt;,name=incoming-byte-total</td>
+        <td>Should be greater than 0</td>
+      </tr>
+      <tr>
+        <td><b>*Deprecated*</b> The fraction of time the I/O thread spent doing I/O</td>
+        <td>kafka.server:type=socket-server-metrics,listener=[PLAINTEXT|CONTROLLER],networkProcessor=&lt;#&gt;,name=io-ratio</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td>The average length of time for I/O per select call in nanoseconds</td>
+        <td>kafka.server:type=socket-server-metrics,listener=[PLAINTEXT|CONTROLLER],networkProcessor=&lt;#&gt;,name=io-time-ns-avg</td>
+        <td>Should be greater than 0</td>
+      </tr>
+      <tr>
+        <td>The total time the I/O thread spent doing I/O</td>
+        <td>kafka.server:type=socket-server-metrics,listener=[PLAINTEXT|CONTROLLER],networkProcessor=&lt;#&gt;,name=io-time-ns-total</td>
+        <td>Should be greater than 0</td>
+      </tr>
+      <tr>
+        <td><b>*Deprecated*</b> The fraction of time the I/O thread spent waiting</td>
+        <td>kafka.server:type=socket-server-metrics,listener=[PLAINTEXT|CONTROLLER],networkProcessor=&lt;#&gt;,name=io-wait-ratio</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td>The average length of time the I/O thread spent waiting for a socket ready for reads or writes in nanoseconds</td>
+        <td>kafka.server:type=socket-server-metrics,listener=[PLAINTEXT|CONTROLLER],networkProcessor=&lt;#&gt;,name=io-wait-time-ns-avg</td>
+        <td>Should be greater than 0</td>
+      </tr>
+      <tr>
+        <td>The total time the I/O thread spent waiting</td>
+        <td>kafka.server:type=socket-server-metrics,listener=[PLAINTEXT|CONTROLLER],networkProcessor=&lt;#&gt;,name=io-wait-time-ns-total</td>
+        <td>Should be greater than 0</td>
+      </tr>
+      <tr>
+        <td><b>*Deprecated*</b> The total time the I/O thread spent waiting</td>
+        <td>kafka.server:type=socket-server-metrics,listener=[PLAINTEXT|CONTROLLER],networkProcessor=&lt;#&gt;,name=io-waittime-total</td>
+        <td>Should be greater than 0</td>
+      </tr>
+      <tr>
+        <td><b>*Deprecated*</b> The total time the I/O thread spent doing I/O</td>
+        <td>kafka.server:type=socket-server-metrics,listener=[PLAINTEXT|CONTROLLER],networkProcessor=&lt;#&gt;,name=iotime-total</td>
+        <td>Should be greater than 0</td>
+      </tr>
+      <tr>
+        <td>The number of network operations (reads or writes) on all connections per second</td>
+        <td>kafka.server:type=socket-server-metrics,listener=[PLAINTEXT|CONTROLLER],networkProcessor=&lt;#&gt;,name=network-io-rate</td>
+        <td>For non-idle systems, should be greater than 0</td>
+      </tr>
+      <tr>
+        <td>The total number of network operations (reads or writes) on all connections</td>
+        <td>kafka.server:type=socket-server-metrics,listener=[PLAINTEXT|CONTROLLER],networkProcessor=&lt;#&gt;,name=network-io-total</td>
+        <td>Should be greater than 0</td>
+      </tr>
+      <tr>
+        <td>The number of outgoing bytes sent to all servers per second</td>
+        <td>kafka.server:type=socket-server-metrics,listener=[PLAINTEXT|CONTROLLER],networkProcessor=&lt;#&gt;,name=outgoing-byte-rate</td>
+        <td>For non-idle systems, should be greater than 0</td>
+      </tr>
+      <tr>
+        <td>The total number of outgoing bytes sent to all servers</td>
+        <td>kafka.server:type=socket-server-metrics,listener=[PLAINTEXT|CONTROLLER],networkProcessor=&lt;#&gt;,name=outgoing-byte-total</td>
+        <td>Should be greater than 0</td>
+      </tr>
+      <tr>
+        <td>The average latency observed due to re-authentication</td>
+        <td>kafka.server:type=socket-server-metrics,listener=[PLAINTEXT|CONTROLLER],networkProcessor=&lt;#&gt;,name=reauthentication-latency-avg</td>
+        <td>Initially NaN, but should not be NaN once at least 1 re-authentication occurs</td>
+      </tr>
+      <tr>
+        <td>The max latency observed due to re-authentication</td>
+        <td>kafka.server:type=socket-server-metrics,listener=[PLAINTEXT|CONTROLLER],networkProcessor=&lt;#&gt;,name=reauthentication-latency-max</td>
+        <td>Initially NaN, but should not be NaN once at least 1 re-authentication occurs</td>
+      </tr>
+      <tr>
+        <td>The average size of requests sent</td>
+        <td>kafka.server:type=socket-server-metrics,listener=[PLAINTEXT|CONTROLLER],networkProcessor=&lt;#&gt;,name=request-size-avg</td>
+        <td>Initially NaN, but should not be NaN once at least 1 request is sent</td>
+      </tr>
+      <tr>
+        <td>The maximum size of any request sent</td>
+        <td>kafka.server:type=socket-server-metrics,listener=[PLAINTEXT|CONTROLLER],networkProcessor=&lt;#&gt;,name=request-size-max</td>
+        <td>Initially NaN, but should not be NaN once at least 1 request is sent</td>
+      </tr>
+      <tr>
+        <td>The number of requests sent per second</td>
+        <td>kafka.server:type=socket-server-metrics,listener=[PLAINTEXT|CONTROLLER],networkProcessor=&lt;#&gt;,name=request-rate</td>
+        <td>For non-idle systems, should be greater than 0</td>
+      </tr>
+      <tr>
+        <td>The total number of requests sent</td>
+        <td>kafka.server:type=socket-server-metrics,listener=[PLAINTEXT|CONTROLLER],networkProcessor=&lt;#&gt;,name=request-total</td>
+        <td>Should be greater than 0</td>
+      </tr>
+      <tr>
+        <td>The number of responses received per second</td>
+        <td>kafka.server:type=socket-server-metrics,listener=[PLAINTEXT|CONTROLLER],networkProcessor=&lt;#&gt;,name=response-rate</td>
+        <td>For non-idle systems, should be greater than 0</td>
+      </tr>
+      <tr>
+        <td>The total number of responses received</td>
+        <td>kafka.server:type=socket-server-metrics,listener=[PLAINTEXT|CONTROLLER],networkProcessor=&lt;#&gt;,name=response-total</td>
+        <td>Should be greater than 0</td>
+      </tr>
+      <tr>
+        <td>The number of times the I/O layer checked for new I/O to perform per second</td>
+        <td>kafka.server:type=socket-server-metrics,listener=[PLAINTEXT|CONTROLLER],networkProcessor=&lt;#&gt;,name=select-rate</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td>The total number of times the I/O layer checked for new I/O to perform</td>
+        <td>kafka.server:type=socket-server-metrics,listener=[PLAINTEXT|CONTROLLER],networkProcessor=&lt;#&gt;,name=select-total</td>
+        <td></td>
+      </tr>
+      <tr>
         <td>The average fraction of time the request handler threads are idle</td>
         <td>kafka.server:type=KafkaRequestHandlerPool,name=RequestHandlerAvgIdlePercent</td>
         <td>between 0 and 1, ideally &gt 0.3</td>
