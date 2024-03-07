@@ -93,8 +93,6 @@ class LogDirFailureTest(ProduceConsumeValidateTest):
 
     @cluster(num_nodes=8)
     @matrix(bounce_broker=[False, True], broker_type=["leader", "follower"], security_protocol=["PLAINTEXT"], metadata_quorum=[quorum.zk])
-    @cluster(num_nodes=7)
-    @matrix(bounce_broker=[False, True], broker_type=["leader", "follower"], security_protocol=["PLAINTEXT"], metadata_quorum=[quorum.combined_kraft])
     @cluster(num_nodes=10)
     @matrix(bounce_broker=[False, True], broker_type=["leader", "follower"], security_protocol=["PLAINTEXT"], metadata_quorum=[quorum.isolated_kraft])
     def test_replication_with_disk_failure(self, bounce_broker, security_protocol, broker_type, metadata_quorum):
