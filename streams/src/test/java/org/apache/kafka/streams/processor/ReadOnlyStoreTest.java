@@ -43,7 +43,7 @@ import static org.hamcrest.Matchers.equalTo;
 public class ReadOnlyStoreTest {
 
     @Test
-    public void shouldLoadDataIntoReadOnlyStoreAndAllowAccessFromProcessor() {
+    public void shouldConnectProcessorAndWriteDataToReadOnlyStore() {
         final Topology topology = new Topology();
         topology.addReadOnlyStateStore(
             Stores.keyValueStoreBuilder(
@@ -96,15 +96,15 @@ public class ReadOnlyStoreTest {
         topology.addSink("sink", "outputTopic", new IntegerSerializer(), new StringSerializer(), "processor");
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(topology)) {
-            final TestInputTopic<Integer, String> changelog =
+            final TestInputTopic<Integer, String> readOnlyStoreTopic =
                 driver.createInputTopic("storeTopic", new IntegerSerializer(), new StringSerializer());
             final TestInputTopic<Integer, String> input =
                 driver.createInputTopic("inputTopic", new IntegerSerializer(), new StringSerializer());
             final TestOutputTopic<Integer, String> output =
                 driver.createOutputTopic("outputTopic", new IntegerDeserializer(), new StringDeserializer());
 
-            changelog.pipeInput(1, "foo");
-            changelog.pipeInput(2, "bar");
+            readOnlyStoreTopic.pipeInput(1, "foo");
+            readOnlyStoreTopic.pipeInput(2, "bar");
 
             input.pipeInput(1, "bar");
             input.pipeInput(2, "foo");
