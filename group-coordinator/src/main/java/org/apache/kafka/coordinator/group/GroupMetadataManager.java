@@ -1015,7 +1015,7 @@ public class GroupMetadataManager {
 
         // Get or create the consumer group.
         boolean createIfNotExists = memberEpoch == 0;
-        maybeUpgradeEmptyGroup(groupId, records);
+        maybeDeleteEmptyClassicGroup(groupId, records);
         final ConsumerGroup group = getOrMaybeCreateConsumerGroup(groupId, createIfNotExists);
         throwIfConsumerGroupIsFull(group, memberId);
 
@@ -1854,7 +1854,10 @@ public class GroupMetadataManager {
 
         if (value == null)  {
             // Tombstone. Group should be removed.
-            removeGroup(groupId);
+            Group group = group(groupId);
+            if (group != null && group.type() == CLASSIC) {
+                removeGroup(groupId);
+            }
         } else {
             List<ClassicGroupMember> loadedMembers = new ArrayList<>();
             for (GroupMetadataValue.MemberMetadata member : value.members()) {
@@ -1941,7 +1944,7 @@ public class GroupMetadataManager {
             // Group is created if it does not exist and the member id is UNKNOWN. if member
             // is specified but group does not exist, request is rejected with GROUP_ID_NOT_FOUND
             ClassicGroup group;
-            maybeDowngradeEmptyGroup(groupId, records);
+            maybeDeleteEmptyConsumerGroup(groupId, records);
             boolean isNewGroup = !groups.containsKey(groupId);
             try {
                 group = getOrMaybeCreateClassicGroup(groupId, isUnknownMember);
@@ -3472,12 +3475,25 @@ public class GroupMetadataManager {
      * @param groupId The id of the group to be deleted. It has been checked in {@link GroupMetadataManager#validateDeleteGroup}.
      * @param records The record list to populate.
      */
-    public void deleteGroup(
+    public void createGroupTombstoneRecords(
         String groupId,
         List<Record> records
     ) {
         // At this point, we have already validated the group id, so we know that the group exists and that no exception will be thrown.
-        group(groupId).createGroupTombstoneRecords(records);
+        createGroupTombstoneRecords(group(groupId), records);
+    }
+
+    /**
+     * Populates the record list passed in with record to update the state machine.
+     *
+     * @param group The group to be deleted.
+     * @param records The record list to populate.
+     */
+    public void createGroupTombstoneRecords(
+        Group group,
+        List<Record> records
+    ) {
+        group.createGroupTombstoneRecords(records);
     }
 
     /**
@@ -3499,56 +3515,50 @@ public class GroupMetadataManager {
     public void maybeDeleteGroup(String groupId, List<Record> records) {
         Group group = groups.get(groupId);
         if (group != null && group.isEmpty()) {
-            deleteGroup(groupId, records);
+            createGroupTombstoneRecords(groupId, records);
         }
     }
 
     /**
-     * A group can be upgraded offline if it's a classic group and empty.
-     *
-     * @param groupId The group to be validated.
-     * @return true if the offline upgrade is valid.
+     * @return true if the group is an empty classic group.
      */
-    private boolean validateOfflineUpgrade(String groupId) {
-        Group group = groups.get(groupId);
+    private boolean isEmptyClassicGroup(Group group) {
         return group != null && group.type() == CLASSIC && group.isEmpty();
     }
 
     /**
-     * A group can be downgraded offline if it's a consumer group and empty.
-     *
-     * @param groupId The group to be validated.
-     * @return true if the offline downgrade is valid.
+     * @return true if the group is an empty consumer group.
      */
-    private boolean validateOfflineDowngrade(String groupId) {
-        Group group = groups.get(groupId);
+    private boolean isEmptyConsumerGroup(Group group) {
         return group != null && group.type() == CONSUMER && group.isEmpty();
     }
 
     /**
-     * Upgrade the empty group if it's valid.
+     * Delete the group if it's empty and is a classic group.
      *
-     * @param groupId The group id to be migrated.
-     * @param records The list of records to delete the previous group.
+     * @param groupId The group id to be deleted.
+     * @param records The list of records to delete the group.
      */
-    public void maybeUpgradeEmptyGroup(String groupId, List<Record> records) {
-        if (validateOfflineUpgrade(groupId)) {
-            deleteGroup(groupId, records);
+    private void maybeDeleteEmptyClassicGroup(String groupId, List<Record> records) {
+        Group group = group(groupId);
+        if (isEmptyClassicGroup(group)) {
+            createGroupTombstoneRecords(group, records);
             removeGroup(groupId);
         }
     }
 
     /**
-     * Downgrade the empty group if it's valid.
+     * Delete the group if it's empty and is a consumer group.
      *
-     * @param groupId The group id to be migrated.
-     * @param records The list of records to delete the previous group.
+     * @param groupId The group id to be deleted.
+     * @param records The list of records to delete the group.
      */
-    public void maybeDowngradeEmptyGroup(String groupId, List<Record> records) {
-        if (validateOfflineDowngrade(groupId)) {
+    private void maybeDeleteEmptyConsumerGroup(String groupId, List<Record> records) {
+        Group group = group(groupId);
+        if (isEmptyConsumerGroup(group)) {
             // Add tombstones for the previous consumer group. The tombstones won't actually be
             // replayed because its coordinator result has a non-null appendFuture.
-            deleteGroup(groupId, records);
+            createGroupTombstoneRecords(group, records);
             removeGroup(groupId);
         }
     }
