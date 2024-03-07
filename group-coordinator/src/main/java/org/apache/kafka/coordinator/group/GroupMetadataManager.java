@@ -1854,7 +1854,10 @@ public class GroupMetadataManager {
 
         if (value == null)  {
             // Tombstone. Group should be removed.
-            removeGroup(groupId);
+            Group group = groups.get(groupId, Long.MAX_VALUE);
+            if (group != null && group.type() == CLASSIC) {
+                removeGroup(groupId);
+            }
         } else {
             List<ClassicGroupMember> loadedMembers = new ArrayList<>();
             for (GroupMetadataValue.MemberMetadata member : value.members()) {
