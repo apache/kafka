@@ -41,7 +41,7 @@ import org.apache.kafka.common.message.StopReplicaRequestData.StopReplicaPartiti
 import org.apache.kafka.common.message.{DescribeLogDirsResponseData, DescribeProducersResponseData, FetchResponseData, LeaderAndIsrResponseData}
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.ListenerName
-import org.apache.kafka.common.protocol.Errors
+import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.record.FileRecords.TimestampAndOffset
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.replica.PartitionView.DefaultPartitionView
@@ -795,6 +795,7 @@ class ReplicaManager(val config: KafkaConfig,
    * @param requestLocal                  container for the stateful instances scoped to this request -- this must correspond to the
    *                                      thread calling this method
    * @param actionQueue                   the action queue to use. ReplicaManager#defaultActionQueue is used by default.
+   * @param produceRequestVersion         the version of the Produce Request which invoked this method
    *
    * The responseCallback is wrapped so that it is scheduled on a request handler thread. There, it should be called with
    * that request handler thread's thread local and not the one supplied to this method.
@@ -807,7 +808,8 @@ class ReplicaManager(val config: KafkaConfig,
                           responseCallback: Map[TopicPartition, PartitionResponse] => Unit,
                           recordValidationStatsCallback: Map[TopicPartition, RecordValidationStats] => Unit = _ => (),
                           requestLocal: RequestLocal = RequestLocal.NoCaching,
-                          actionQueue: ActionQueue = this.defaultActionQueue): Unit = {
+                          actionQueue: ActionQueue = this.defaultActionQueue,
+                          produceRequestVersion: Short): Unit = {
 
     val transactionalProducerInfo = mutable.HashSet[(Long, Short)]()
     val topicPartitionBatchInfo = mutable.Map[TopicPartition, Int]()
@@ -884,7 +886,8 @@ class ReplicaManager(val config: KafkaConfig,
       KafkaRequestHandler.wrapAsyncCallback(
         postVerificationCallback,
         requestLocal
-      )
+      ),
+      produceRequestVersion
     )
   }
 
@@ -1007,7 +1010,8 @@ class ReplicaManager(val config: KafkaConfig,
       transactionalId,
       producerId,
       producerEpoch,
-      generalizedCallback
+      generalizedCallback,
+      ApiKeys.PRODUCE.latestVersion
     )
   }
 
@@ -1018,6 +1022,7 @@ class ReplicaManager(val config: KafkaConfig,
    * @param producerId               the producer id for the producer writing to the transaction
    * @param producerEpoch            the epoch of the producer writing to the transaction
    * @param callback                 the method to execute once the verification is either completed or returns an error
+   * @param produceRequestVersion    the version of Produce Request that invoked this method
    *
    * When the verification returns, the callback will be supplied the errors per topic partition if there were errors.
    * The callback will also be supplied the verification guards per partition if they exist. It is possible to have an
@@ -1029,7 +1034,8 @@ class ReplicaManager(val config: KafkaConfig,
     transactionalId: String,
     producerId: Long,
     producerEpoch: Short,
-    callback: ((Map[TopicPartition, Errors], Map[TopicPartition, VerificationGuard])) => Unit
+    callback: ((Map[TopicPartition, Errors], Map[TopicPartition, VerificationGuard])) => Unit,
+    produceRequestVersion: Short
   ): Unit = {
     // Skip verification if the request is not transactional or transaction verification is disabled.
     if (transactionalId == null ||
@@ -1075,7 +1081,8 @@ class ReplicaManager(val config: KafkaConfig,
       producerId = producerId,
       producerEpoch = producerEpoch,
       topicPartitions = verificationGuards.keys.toSeq,
-      callback = invokeCallback
+      callback = invokeCallback,
+      produceRequestVersion = produceRequestVersion
     ))
 
   }

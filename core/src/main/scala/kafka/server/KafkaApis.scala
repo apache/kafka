@@ -731,7 +731,8 @@ class KafkaApis(val requestChannel: RequestChannel,
         entriesPerPartition = authorizedRequestInfo,
         responseCallback = sendResponseCallback,
         recordValidationStatsCallback = processingStatsCallback,
-        requestLocal = requestLocal)
+        requestLocal = requestLocal,
+        produceRequestVersion = request.header.apiVersion)
 
       // if the request is put into the purgatory, it will have a held reference and hence cannot be garbage collected;
       // hence we clear its data here in order to let GC reclaim its memory since it is already appended to log

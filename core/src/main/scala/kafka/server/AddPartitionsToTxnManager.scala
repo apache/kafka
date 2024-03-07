@@ -49,7 +49,8 @@ object AddPartitionsToTxnManager {
  */
 class TransactionDataAndCallbacks(val transactionData: AddPartitionsToTxnTransactionCollection,
                                   val callbacks: mutable.Map[String, AddPartitionsToTxnManager.AppendCallback],
-                                  val startTimeMs: mutable.Map[String, Long])
+                                  val startTimeMs: mutable.Map[String, Long],
+                                  val produceRequestVersion: Short)
 
 class AddPartitionsToTxnManager(
   config: KafkaConfig,
@@ -78,7 +79,8 @@ class AddPartitionsToTxnManager(
     producerId: Long,
     producerEpoch: Short,
     topicPartitions: Seq[TopicPartition],
-    callback: AddPartitionsToTxnManager.AppendCallback
+    callback: AddPartitionsToTxnManager.AppendCallback,
+    produceRequestVersion: Short
   ): Unit = {
     val (error, node) = getTransactionCoordinator(partitionFor(transactionalId))
 
@@ -99,14 +101,15 @@ class AddPartitionsToTxnManager(
         .setVerifyOnly(true)
         .setTopics(topicCollection)
 
-      addTxnData(node, transactionData, callback)
+      addTxnData(node, transactionData, callback, produceRequestVersion)
     }
   }
 
   private def addTxnData(
     node: Node,
     transactionData: AddPartitionsToTxnTransaction,
-    callback: AddPartitionsToTxnManager.AppendCallback
+    callback: AddPartitionsToTxnManager.AppendCallback,
+    produceRequestVersion: Short
   ): Unit = {
     nodesToTransactions.synchronized {
       val curTime = time.milliseconds()
@@ -115,7 +118,8 @@ class AddPartitionsToTxnManager(
         new TransactionDataAndCallbacks(
           new AddPartitionsToTxnTransactionCollection(1),
           mutable.Map[String, AddPartitionsToTxnManager.AppendCallback](),
-          mutable.Map[String, Long]()))
+          mutable.Map[String, Long](),
+          produceRequestVersion))
 
       val existingTransactionData = existingNodeAndTransactionData.transactionData.find(transactionData.transactionalId)
 
@@ -228,11 +232,17 @@ class AddPartitionsToTxnManager(
                 val tp = new TopicPartition(topicResult.name, partitionResult.partitionIndex)
                 if (partitionResult.partitionErrorCode != Errors.NONE.code) {
                   // Producers expect to handle INVALID_PRODUCER_EPOCH in this scenario.
-                  val code =
+                  var code =
                     if (partitionResult.partitionErrorCode == Errors.PRODUCER_FENCED.code)
                       Errors.INVALID_PRODUCER_EPOCH.code
                     else
                       partitionResult.partitionErrorCode
+                  // For backward compatibility with clients.
+                  code =
+                    if (code == Errors.ABORTABLE_TRANSACTION_EXCEPTION.code && transactionDataAndCallbacks.produceRequestVersion <= 10)
+                      Errors.INVALID_TXN_STATE.code
+                    else
+                      code
                   unverified.put(tp, Errors.forCode(code))
                 }
               }

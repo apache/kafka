@@ -132,7 +132,7 @@ class ReplicaManagerTest {
     addPartitionsToTxnManager = mock(classOf[AddPartitionsToTxnManager])
 
     // Anytime we try to verify, just automatically run the callback as though the transaction was verified.
-    when(addPartitionsToTxnManager.verifyTransaction(any(), any(), any(), any(), any())).thenAnswer { invocationOnMock =>
+    when(addPartitionsToTxnManager.verifyTransaction(any(), any(), any(), any(), any(), any())).thenAnswer { invocationOnMock =>
       val callback = invocationOnMock.getArgument(4, classOf[AddPartitionsToTxnManager.AppendCallback])
       callback(Map.empty[TopicPartition, Errors].toMap)
     }
@@ -2182,7 +2182,7 @@ class ReplicaManagerTest {
       val idempotentRecords = MemoryRecords.withIdempotentRecords(CompressionType.NONE, producerId, producerEpoch, sequence,
         new SimpleRecord("message".getBytes))
       handleProduceAppend(replicaManager, tp0, idempotentRecords, transactionalId = null)
-      verify(addPartitionsToTxnManager, times(0)).verifyTransaction(any(), any(), any(), any(), any[AddPartitionsToTxnManager.AppendCallback]())
+      verify(addPartitionsToTxnManager, times(0)).verifyTransaction(any(), any(), any(), any(), any[AddPartitionsToTxnManager.AppendCallback](), any())
       assertEquals(VerificationGuard.SENTINEL, getVerificationGuard(replicaManager, tp0, producerId))
 
       // If we supply a transactional ID and some transactional and some idempotent records, we should only verify the topic partition with transactional records.
@@ -2197,7 +2197,8 @@ class ReplicaManagerTest {
         ArgumentMatchers.eq(producerId),
         ArgumentMatchers.eq(producerEpoch),
         ArgumentMatchers.eq(Seq(tp0)),
-        any[AddPartitionsToTxnManager.AppendCallback]()
+        any[AddPartitionsToTxnManager.AppendCallback](),
+        any()
       )
       assertNotEquals(VerificationGuard.SENTINEL, getVerificationGuard(replicaManager, tp0, producerId))
       assertEquals(VerificationGuard.SENTINEL, getVerificationGuard(replicaManager, tp1, producerId))
@@ -2233,7 +2234,8 @@ class ReplicaManagerTest {
         ArgumentMatchers.eq(producerId),
         ArgumentMatchers.eq(producerEpoch),
         ArgumentMatchers.eq(Seq(tp0)),
-        appendCallback.capture()
+        appendCallback.capture(),
+        any()
       )
       val verificationGuard = getVerificationGuard(replicaManager, tp0, producerId)
       assertEquals(verificationGuard, getVerificationGuard(replicaManager, tp0, producerId))
@@ -2252,7 +2254,8 @@ class ReplicaManagerTest {
         ArgumentMatchers.eq(producerId),
         ArgumentMatchers.eq(producerEpoch),
         ArgumentMatchers.eq(Seq(tp0)),
-        appendCallback2.capture()
+        appendCallback2.capture(),
+        any()
       )
       assertEquals(verificationGuard, getVerificationGuard(replicaManager, tp0, producerId))
 
@@ -2291,7 +2294,8 @@ class ReplicaManagerTest {
         ArgumentMatchers.eq(producerId),
         ArgumentMatchers.eq(producerEpoch),
         ArgumentMatchers.eq(Seq(tp0)),
-        appendCallback.capture()
+        appendCallback.capture(),
+        any()
       )
       val verificationGuard = getVerificationGuard(replicaManager, tp0, producerId)
       assertEquals(verificationGuard, getVerificationGuard(replicaManager, tp0, producerId))
@@ -2313,7 +2317,8 @@ class ReplicaManagerTest {
         ArgumentMatchers.eq(producerId),
         ArgumentMatchers.eq(producerEpoch),
         ArgumentMatchers.eq(Seq(tp0)),
-        appendCallback2.capture()
+        appendCallback2.capture(),
+        any()
       )
       assertEquals(verificationGuard, getVerificationGuard(replicaManager, tp0, producerId))
 
@@ -2391,7 +2396,7 @@ class ReplicaManagerTest {
       assertThrows(classOf[InvalidPidMappingException],
         () => handleProduceAppendToMultipleTopics(replicaManager, transactionalRecords, transactionalId = transactionalId))
       // We should not add these partitions to the manager to verify.
-      verify(addPartitionsToTxnManager, times(0)).verifyTransaction(any(), any(), any(), any(), any())
+      verify(addPartitionsToTxnManager, times(0)).verifyTransaction(any(), any(), any(), any(), any(), any())
     } finally {
       replicaManager.shutdown(checkpointHW = false)
     }
@@ -2415,7 +2420,7 @@ class ReplicaManagerTest {
       handleProduceAppend(replicaManager, tp0, transactionalRecords, transactionalId = transactionalId).onFire { response =>
         assertEquals(Errors.NOT_LEADER_OR_FOLLOWER, response.error)
       }
-      verify(addPartitionsToTxnManager, times(0)).verifyTransaction(any(), any(), any(), any(), any())
+      verify(addPartitionsToTxnManager, times(0)).verifyTransaction(any(), any(), any(), any(), any(), any())
     } finally {
       replicaManager.shutdown(checkpointHW = false)
     }
@@ -2449,7 +2454,7 @@ class ReplicaManagerTest {
       assertEquals(VerificationGuard.SENTINEL, getVerificationGuard(replicaManager, tp, producerId))
 
       // We should not add these partitions to the manager to verify.
-      verify(addPartitionsToTxnManager, times(0)).verifyTransaction(any(), any(), any(), any(), any())
+      verify(addPartitionsToTxnManager, times(0)).verifyTransaction(any(), any(), any(), any(), any(), any())
 
       // Dynamically enable verification.
       config.dynamicConfig.initialize(None, None)
@@ -2463,7 +2468,7 @@ class ReplicaManagerTest {
         new SimpleRecord("message".getBytes))
 
       handleProduceAppend(replicaManager, tp, moreTransactionalRecords, transactionalId = transactionalId)
-      verify(addPartitionsToTxnManager, times(0)).verifyTransaction(any(), any(), any(), any(), any())
+      verify(addPartitionsToTxnManager, times(0)).verifyTransaction(any(), any(), any(), any(), any(), any())
       assertEquals(VerificationGuard.SENTINEL, getVerificationGuard(replicaManager, tp, producerId))
       assertTrue(replicaManager.localLog(tp).get.hasOngoingTransaction(producerId))
     } finally {
@@ -2497,7 +2502,8 @@ class ReplicaManagerTest {
         ArgumentMatchers.eq(producerId),
         ArgumentMatchers.eq(producerEpoch),
         ArgumentMatchers.eq(Seq(tp0)),
-        appendCallback.capture()
+        appendCallback.capture(),
+        any()
       )
       val verificationGuard = getVerificationGuard(replicaManager, tp0, producerId)
       assertEquals(verificationGuard, getVerificationGuard(replicaManager, tp0, producerId))
@@ -2517,7 +2523,7 @@ class ReplicaManagerTest {
 
       // This time we do not verify
       handleProduceAppend(replicaManager, tp0, transactionalRecords, transactionalId = transactionalId)
-      verify(addPartitionsToTxnManager, times(1)).verifyTransaction(any(), any(), any(), any(), any())
+      verify(addPartitionsToTxnManager, times(1)).verifyTransaction(any(), any(), any(), any(), any(), any())
       assertEquals(VerificationGuard.SENTINEL, getVerificationGuard(replicaManager, tp0, producerId))
       assertTrue(replicaManager.localLog(tp0).get.hasOngoingTransaction(producerId))
     } finally {
@@ -2552,7 +2558,8 @@ class ReplicaManagerTest {
         ArgumentMatchers.eq(producerId),
         ArgumentMatchers.eq(producerEpoch),
         ArgumentMatchers.eq(Seq(tp0)),
-        appendCallback.capture()
+        appendCallback.capture(),
+        any()
       )
 
       // Confirm we did not write to the log and instead returned the converted error with the correct error message.
@@ -2582,7 +2589,8 @@ class ReplicaManagerTest {
         ArgumentMatchers.eq(producerId),
         ArgumentMatchers.eq(producerEpoch),
         ArgumentMatchers.eq(Seq(tp0)),
-        appendCallback.capture()
+        appendCallback.capture(),
+        any()
       )
       assertEquals(Errors.NOT_LEADER_OR_FOLLOWER, result.assertFired.left.getOrElse(Errors.NONE))
     } finally {
@@ -3040,6 +3048,7 @@ class ReplicaManagerTest {
       transactionalId = transactionalId,
       entriesPerPartition = entriesToAppend,
       responseCallback = appendCallback,
+      produceRequestVersion = ApiKeys.PRODUCE.latestVersion
     )
 
     result
@@ -3067,6 +3076,7 @@ class ReplicaManagerTest {
       transactionalId = transactionalId,
       entriesPerPartition = entriesPerPartition,
       responseCallback = appendCallback,
+      produceRequestVersion = ApiKeys.PRODUCE.latestVersion
     )
 
     result
