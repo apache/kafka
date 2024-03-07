@@ -9394,7 +9394,7 @@ public class GroupMetadataManagerTest {
 
         List<Record> expectedRecords = Collections.singletonList(RecordHelpers.newGroupMetadataTombstoneRecord("group-id"));
         List<Record> records = new ArrayList<>();
-        context.groupMetadataManager.deleteGroup("group-id", records);
+        context.groupMetadataManager.createGroupTombstoneRecords("group-id", records);
         assertEquals(expectedRecords, records);
     }
 
@@ -9431,7 +9431,7 @@ public class GroupMetadataManagerTest {
             RecordHelpers.newGroupEpochTombstoneRecord("group-id")
         );
         List<Record> records = new ArrayList<>();
-        context.groupMetadataManager.deleteGroup("group-id", records);
+        context.groupMetadataManager.createGroupTombstoneRecords("group-id", records);
         assertEquals(expectedRecords, records);
     }
 
@@ -9608,78 +9608,7 @@ public class GroupMetadataManagerTest {
     }
 
     @Test
-    public void testMaybeUpgradeEmptyGroup() {
-        String classicGroupId = "classic-group-id";
-        String consumerGroupId = "consumer-group-id";
-        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
-            .build();
-        ClassicGroup classicGroup = new ClassicGroup(
-            new LogContext(),
-            classicGroupId,
-            EMPTY,
-            context.time,
-            context.metrics
-        );
-        context.replay(RecordHelpers.newGroupMetadataRecord(classicGroup, classicGroup.groupAssignment(), MetadataVersion.latestTesting()));
-        context.replay(RecordHelpers.newGroupEpochRecord(consumerGroupId, 10));
-
-        // A consumer group can't be upgraded.
-        List<Record> records = new ArrayList<>();
-        context.groupMetadataManager.maybeUpgradeEmptyGroup(consumerGroupId, records);
-        assertEquals(Collections.emptyList(), records);
-
-        // A non-empty classic group can't be upgraded.
-        context.groupMetadataManager.getOrMaybeCreateClassicGroup(classicGroupId, false).transitionTo(PREPARING_REBALANCE);
-        context.groupMetadataManager.maybeUpgradeEmptyGroup(classicGroupId, records);
-        assertEquals(Collections.emptyList(), records);
-
-        // An empty classic group can be upgraded.
-        context.groupMetadataManager.getOrMaybeCreateClassicGroup(classicGroupId, false).transitionTo(EMPTY);
-        context.groupMetadataManager.maybeUpgradeEmptyGroup(classicGroupId, records);
-        assertEquals(Arrays.asList(RecordHelpers.newGroupMetadataTombstoneRecord(classicGroupId)), records);
-    }
-
-    @Test
-    public void testMaybeDowngradeEmptyGroup() {
-        String classicGroupId = "classic-group-id";
-        String consumerGroupId = "consumer-group-id";
-        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
-            .build();
-        ClassicGroup classicGroup = new ClassicGroup(
-            new LogContext(),
-            classicGroupId,
-            EMPTY,
-            context.time,
-            context.metrics
-        );
-        context.replay(RecordHelpers.newGroupMetadataRecord(classicGroup, classicGroup.groupAssignment(), MetadataVersion.latestTesting()));
-        context.replay(RecordHelpers.newGroupEpochRecord(consumerGroupId, 10));
-
-        List<Record> records = new ArrayList<>();
-        context.groupMetadataManager.maybeDowngradeEmptyGroup(classicGroupId, records);
-        assertEquals(Collections.emptyList(), records);
-
-        // A classic group can't be downgraded.
-        context.groupMetadataManager.maybeDowngradeEmptyGroup(classicGroupId, records);
-        assertEquals(Collections.emptyList(), records);
-
-        // An empty consumer group can be upgraded.
-        context.groupMetadataManager.maybeDowngradeEmptyGroup(consumerGroupId, records);
-        assertEquals(Arrays.asList(
-            RecordHelpers.newTargetAssignmentEpochTombstoneRecord(consumerGroupId),
-            RecordHelpers.newGroupSubscriptionMetadataTombstoneRecord(consumerGroupId),
-            RecordHelpers.newGroupEpochTombstoneRecord(consumerGroupId)), records);
-        records.clear();
-
-        // A non-empty consumer group can't be downgraded.
-        ConsumerGroupMember.Builder memberBuilder = new ConsumerGroupMember.Builder(Uuid.randomUuid().toString());
-        context.replay(RecordHelpers.newMemberSubscriptionRecord(consumerGroupId, memberBuilder.build()));
-        context.groupMetadataManager.maybeDowngradeEmptyGroup(classicGroupId, records);
-        assertEquals(Collections.emptyList(), records);
-    }
-
-    @Test
-    public void testConsumerGroupHeartbeatWithEmptyClassicGroup() {
+    public void testConsumerGroupHeartbeatWithNonEmptyClassicGroup() {
         String classicGroupId = "classic-group-id";
         String memberId = Uuid.randomUuid().toString();
         MockPartitionAssignor assignor = new MockPartitionAssignor("range");
@@ -9707,8 +9636,26 @@ public class GroupMetadataManagerTest {
                     .setRebalanceTimeoutMs(5000)
                     .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
                     .setTopicPartitions(Collections.emptyList())));
+    }
 
-        context.groupMetadataManager.getOrMaybeCreateClassicGroup(classicGroupId, false).transitionTo(EMPTY);
+    @Test
+    public void testConsumerGroupHeartbeatWithEmptyClassicGroup() {
+        String classicGroupId = "classic-group-id";
+        String memberId = Uuid.randomUuid().toString();
+        MockPartitionAssignor assignor = new MockPartitionAssignor("range");
+        assignor.prepareGroupAssignment(new GroupAssignment(Collections.emptyMap()));
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withAssignors(Collections.singletonList(assignor))
+            .build();
+        ClassicGroup classicGroup = new ClassicGroup(
+            new LogContext(),
+            classicGroupId,
+            EMPTY,
+            context.time,
+            context.metrics
+        );
+        context.replay(RecordHelpers.newGroupMetadataRecord(classicGroup, classicGroup.groupAssignment(), MetadataVersion.latestTesting()));
+
         CoordinatorResult<ConsumerGroupHeartbeatResponseData, Record> result = context.consumerGroupHeartbeat(
             new ConsumerGroupHeartbeatRequestData()
                 .setGroupId(classicGroupId)
@@ -9718,19 +9665,25 @@ public class GroupMetadataManagerTest {
                 .setRebalanceTimeoutMs(5000)
                 .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
                 .setTopicPartitions(Collections.emptyList()));
+
         assertEquals(0, result.response().errorCode());
+        assertEquals(RecordHelpers.newGroupMetadataTombstoneRecord(classicGroupId), result.records().get(0));
         assertEquals(Group.GroupType.CONSUMER,
             context.groupMetadataManager.getOrMaybeCreateConsumerGroup(classicGroupId, false).type());
     }
 
     @Test
-    public void testClassicGroupJoinWithEmptyConsumerGroup() throws Exception {
+    public void testClassicGroupJoinWithNonEmptyConsumerGroup() throws Exception {
         String consumerGroupId = "consumer-group-id";
         String memberId = Uuid.randomUuid().toString();
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
             .build();
         ConsumerGroupMember.Builder memberBuilder = new ConsumerGroupMember.Builder(memberId);
+        // Create an empty group.
         context.replay(RecordHelpers.newGroupEpochRecord(consumerGroupId, 10));
+        context.replay(RecordHelpers.newGroupSubscriptionMetadataRecord(consumerGroupId, Collections.emptyMap()));
+        context.replay(RecordHelpers.newTargetAssignmentEpochRecord(consumerGroupId, 10));
+        // Add a member to the group.
         context.replay(RecordHelpers.newMemberSubscriptionRecord(consumerGroupId, memberBuilder.build()));
 
         JoinGroupRequestData request = new GroupMetadataManagerTestContext.JoinGroupRequestBuilder()
@@ -9739,15 +9692,35 @@ public class GroupMetadataManagerTest {
             .withDefaultProtocolTypeAndProtocols()
             .build();
 
-        GroupMetadataManagerTestContext.JoinResult joinResult1 = context.sendClassicGroupJoin(request);
-        assertEquals(Errors.GROUP_ID_NOT_FOUND.code(), joinResult1.joinFuture.get().errorCode());
+        GroupMetadataManagerTestContext.JoinResult joinResult = context.sendClassicGroupJoin(request);
+        assertEquals(Errors.GROUP_ID_NOT_FOUND.code(), joinResult.joinFuture.get().errorCode());
+    }
 
-        // Remove the member. The consumer group becomes empty.
-        context.replay(RecordHelpers.newCurrentAssignmentTombstoneRecord(consumerGroupId, memberId));
-        context.replay(RecordHelpers.newMemberSubscriptionTombstoneRecord(consumerGroupId, memberId));
+    @Test
+    public void testClassicGroupJoinWithEmptyConsumerGroup() throws Exception {
+        String consumerGroupId = "consumer-group-id";
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .build();
+        // Create an empty group.
+        context.replay(RecordHelpers.newGroupEpochRecord(consumerGroupId, 10));
+        context.replay(RecordHelpers.newGroupSubscriptionMetadataRecord(consumerGroupId, Collections.emptyMap()));
+        context.replay(RecordHelpers.newTargetAssignmentEpochRecord(consumerGroupId, 10));
 
-        GroupMetadataManagerTestContext.JoinResult joinResult2 = context.sendClassicGroupJoin(request, true);
-        assertNotEquals(Errors.GROUP_ID_NOT_FOUND.code(), joinResult2.joinFuture.get().errorCode());
+        JoinGroupRequestData request = new GroupMetadataManagerTestContext.JoinGroupRequestBuilder()
+            .withGroupId(consumerGroupId)
+            .withMemberId(UNKNOWN_MEMBER_ID)
+            .withDefaultProtocolTypeAndProtocols()
+            .build();
+        GroupMetadataManagerTestContext.JoinResult joinResult = context.sendClassicGroupJoin(request, true);
+
+        List<Record> expectedRecords = Arrays.asList(
+            RecordHelpers.newTargetAssignmentEpochTombstoneRecord(consumerGroupId),
+            RecordHelpers.newGroupSubscriptionMetadataTombstoneRecord(consumerGroupId),
+            RecordHelpers.newGroupEpochTombstoneRecord(consumerGroupId)
+        );
+
+        assertNotEquals(Errors.GROUP_ID_NOT_FOUND.code(), joinResult.joinFuture.get().errorCode());
+        assertEquals(expectedRecords, joinResult.records.subList(0, expectedRecords.size()));
         assertEquals(Group.GroupType.CLASSIC,
             context.groupMetadataManager.getOrMaybeCreateClassicGroup(consumerGroupId, false).type());
     }
