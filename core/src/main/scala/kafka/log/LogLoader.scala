@@ -85,8 +85,7 @@ class LogLoader(
    * @throws LogSegmentOffsetOverflowException if we encounter a .swap file with messages that
    *                                           overflow index offset
    */
-  def
-  load(): LoadedLogOffsets = {
+  def load(): LoadedLogOffsets = {
     // First pass: through the files in the log directory and remove any temporary files
     // and find any interrupted swap operations
     val swapFiles = removeTempFilesAndCollectSwapFiles()
