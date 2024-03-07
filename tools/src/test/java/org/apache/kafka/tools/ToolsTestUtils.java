@@ -272,29 +272,6 @@ public class ToolsTestUtils {
         return new Tuple2<>(outBuf.toString(), errBuf.toString());
     }
 
-    /**
-     * Invoke `compute` until `predicate` is true or `waitTime` elapses.
-     *
-     * Return the last `compute` result and a boolean indicating whether `predicate` succeeded for that value.
-     *
-     * This method is useful in cases where `waitUntilTrue` makes it awkward to provide good error messages.
-     */
-    public static <T> Tuple2<T, Boolean> computeUntilTrue(Supplier<T> compute, long waitTime, long pause, Predicate<T> predicate) {
-        try {
-            long startTime = System.currentTimeMillis();
-            while (true) {
-                T result = compute.get();
-                if (predicate.test(result))
-                    return new Tuple2<>(result, true);
-                if (System.currentTimeMillis() > startTime + waitTime)
-                    return new Tuple2<>(result, false);
-                Thread.sleep(Math.min(waitTime, pause));
-            }
-        } catch (InterruptedException e) {
-            throw new RuntimeException(e);
-        }
-    }
-
     public static class MockExitProcedure implements Exit.Procedure {
         private boolean hasExited = false;
         private int statusCode;
