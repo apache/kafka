@@ -133,14 +133,7 @@ object TestUtils extends Logging {
   /**
    * Create a temporary relative directory
    */
-  def tempRelativeDir(parent: String): File = {
-    val parentFile = new File(parent)
-    parentFile.mkdirs()
-
-    val result = JTestUtils.tempDirectory(parentFile.toPath, null)
-    parentFile.deleteOnExit()
-    result
-  }
+  def tempRelativeDir(root: String): File = JTestUtils.tempRelativeDir(root)
 
   /**
    * Create a random log directory in the format <string>-<int> used for Kafka partition logs.
