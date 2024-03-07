@@ -87,7 +87,8 @@ public class SharePartitionManager {
             Map<TopicIdPartition, FetchRequest.PartitionData> topicPartitionData = new HashMap<>();
             topicIdPartitions.forEach(topicIdPartition -> {
                 // TODO: Fetch inflight and delivery count from config.
-                SharePartition sharePartition = partitionCacheMap.computeIfAbsent(sharePartitionKey(groupId, topicIdPartition), k -> new SharePartition(100, 5));
+                SharePartition sharePartition = partitionCacheMap.computeIfAbsent(sharePartitionKey(groupId, topicIdPartition),
+                    k -> new SharePartition(groupId, topicIdPartition, 100, 5));
                 topicPartitionData.put(topicIdPartition, new FetchRequest.PartitionData(
                     topicIdPartition.topicId(),
                     sharePartition.nextFetchOffset(),
@@ -111,19 +112,28 @@ public class SharePartitionManager {
                         TopicIdPartition topicIdPartition = data._1;
                         FetchPartitionData fetchPartitionData = data._2;
 
-                        ShareFetchResponseData.PartitionData partitionData = new ShareFetchResponseData.PartitionData()
-                            .setPartitionIndex(topicIdPartition.partition())
-                            .setRecords(fetchPartitionData.records)
-                            .setErrorCode(fetchPartitionData.error.code())
-//                        .setAcquiredRecords(fetchPartitionData.records)
-                            .setAcknowledgeErrorCode(Errors.NONE.code());
+                        partitionCacheMap.get(sharePartitionKey(groupId, topicIdPartition))
+                            .acquire(memberId, fetchPartitionData).whenComplete((acquiredRecords, throwable) -> {
+                                ShareFetchResponseData.PartitionData partitionData = new ShareFetchResponseData.PartitionData()
+                                    .setPartitionIndex(topicIdPartition.partition());
 
-                        SharePartition sharePartition = partitionCacheMap.get(sharePartitionKey(groupId, topicIdPartition));
-                        sharePartition.update(memberId, fetchPartitionData);
-
-                        result.put(topicIdPartition, partitionData);
-                        future.complete(result);
+                                if (throwable != null) {
+                                    partitionData.setErrorCode(Errors.forException(throwable).code());
+                                } else {
+                                    // Maybe check if no records are acquired and we want to retry replica
+                                    // manager fetch. Depends on the share partition manager implementation,
+                                    // if we want parallel requests for the same share partition or not.
+                                    partitionData
+                                        .setPartitionIndex(topicIdPartition.partition())
+                                        .setRecords(fetchPartitionData.records)
+                                        .setErrorCode(fetchPartitionData.error.code())
+                                        .setAcquiredRecords(acquiredRecords)
+                                        .setAcknowledgeErrorCode(Errors.NONE.code());
+                                }
+                                result.put(topicIdPartition, partitionData);
+                            });
                     });
+                    future.complete(result);
                     return BoxedUnit.UNIT;
                 });
         }

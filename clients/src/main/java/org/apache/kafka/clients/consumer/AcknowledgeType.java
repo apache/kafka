@@ -19,10 +19,29 @@ package org.apache.kafka.clients.consumer;
 import java.util.Locale;
 
 public enum AcknowledgeType {
-    ACCEPT, RELEASE, REJECT;
+    ACCEPT((byte) 0), RELEASE((byte) 1), REJECT((byte) 2);
+
+    public final byte id;
+
+    AcknowledgeType(byte id) {
+        this.id = id;
+    }
 
     @Override
     public String toString() {
         return super.toString().toLowerCase(Locale.ROOT);
+    }
+
+    public static AcknowledgeType forId(byte id) {
+        switch (id) {
+            case 0:
+                return ACCEPT;
+            case 1:
+                return RELEASE;
+            case 2:
+                return REJECT;
+            default:
+                throw new IllegalArgumentException("Unknown acknowledge type id: " + id);
+        }
     }
 }
