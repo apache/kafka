@@ -1854,7 +1854,7 @@ public class GroupMetadataManager {
 
         if (value == null)  {
             // Tombstone. Group should be removed.
-            Group group = group(groupId);
+            Group group = groups.get(groupId, Long.MAX_VALUE);
             if (group != null && group.type() == CLASSIC) {
                 removeGroup(groupId);
             }
@@ -3540,7 +3540,7 @@ public class GroupMetadataManager {
      * @param records The list of records to delete the group.
      */
     private void maybeDeleteEmptyClassicGroup(String groupId, List<Record> records) {
-        Group group = group(groupId);
+        Group group = groups.get(groupId, Long.MAX_VALUE);
         if (isEmptyClassicGroup(group)) {
             createGroupTombstoneRecords(group, records);
             removeGroup(groupId);
@@ -3554,7 +3554,7 @@ public class GroupMetadataManager {
      * @param records The list of records to delete the group.
      */
     private void maybeDeleteEmptyConsumerGroup(String groupId, List<Record> records) {
-        Group group = group(groupId);
+        Group group = groups.get(groupId, Long.MAX_VALUE);
         if (isEmptyConsumerGroup(group)) {
             // Add tombstones for the previous consumer group. The tombstones won't actually be
             // replayed because its coordinator result has a non-null appendFuture.
