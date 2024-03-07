@@ -24,7 +24,6 @@ import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.test.TestUtils;
-import org.apache.kafka.tools.consumer.group.ConsumerGroupCommand.ConsumerGroupService;
 import org.junit.jupiter.api.Test;
 import scala.collection.Seq;
 
@@ -126,7 +125,7 @@ public class ResetConsumerGroupOffsetTest extends ConsumerGroupCommandTest {
     public void testResetOffsetsNotExistingGroup() throws Exception {
         String group = "missing.group";
         String[] args = buildArgsForGroup(group, "--all-topics", "--to-current", "--execute");
-        ConsumerGroupService consumerGroupCommand = getConsumerGroupService(args);
+        ConsumerGroupCommand.ConsumerGroupService consumerGroupCommand = getConsumerGroupService(args);
         // Make sure we got a coordinator
         TestUtils.waitForCondition(
             () -> Objects.equals(consumerGroupCommand.collectGroupState(group).coordinator.host(), "localhost"),
@@ -242,7 +241,7 @@ public class ResetConsumerGroupOffsetTest extends ConsumerGroupCommandTest {
     }
 
     @Test
-    public void testResetOffsetsByDurationFallbackToLatestWhenNoRecords() throws Exception {
+    public void testResetOffsetsByDurationFallbackToLatestWhenNoRecords() {
         String topic = "foo2";
         String[] args = buildArgsForGroup(GROUP, "--topic", topic, "--by-duration", "PT1M", "--execute");
         createTopic(topic, 1, 1, new Properties(), listenerName(), new Properties());
@@ -326,7 +325,7 @@ public class ResetConsumerGroupOffsetTest extends ConsumerGroupCommandTest {
         createTopic(topic, 2, 1, new Properties(), listenerName(), new Properties());
 
         String[] args = buildArgsForGroup(GROUP, "--topic", topic + ":1", "--to-earliest", "--execute");
-        ConsumerGroupService consumerGroupCommand = getConsumerGroupService(args);
+        ConsumerGroupCommand.ConsumerGroupService consumerGroupCommand = getConsumerGroupService(args);
 
         produceConsumeAndShutdown(topic, GROUP, 100, 2);
         Map<TopicPartition, Long> priorCommittedOffsets = committedOffsets(topic, GROUP);
@@ -349,7 +348,7 @@ public class ResetConsumerGroupOffsetTest extends ConsumerGroupCommandTest {
         createTopic(topic2, 1, 1, new Properties(), listenerName(), new Properties());
 
         String[] args = buildArgsForGroup(GROUP, "--topic", topic1, "--topic", topic2, "--to-earliest", "--execute");
-        ConsumerGroupService consumerGroupCommand = getConsumerGroupService(args);
+        ConsumerGroupCommand.ConsumerGroupService consumerGroupCommand = getConsumerGroupService(args);
 
         produceConsumeAndShutdown(topic1, GROUP, 100, 1);
         produceConsumeAndShutdown(topic2, GROUP, 100, 1);
@@ -378,7 +377,7 @@ public class ResetConsumerGroupOffsetTest extends ConsumerGroupCommandTest {
         createTopic(topic2, 2, 1, new Properties(), listenerName(), new Properties());
 
         String[] args = buildArgsForGroup(GROUP, "--topic", topic1 + ":1", "--topic", topic2 + ":1", "--to-earliest", "--execute");
-        ConsumerGroupService consumerGroupCommand = getConsumerGroupService(args);
+        ConsumerGroupCommand.ConsumerGroupService consumerGroupCommand = getConsumerGroupService(args);
 
         produceConsumeAndShutdown(topic1, GROUP, 100, 2);
         produceConsumeAndShutdown(topic2, GROUP, 100, 2);
@@ -411,7 +410,7 @@ public class ResetConsumerGroupOffsetTest extends ConsumerGroupCommandTest {
         createTopic(topic, 2, 1, new Properties(), listenerName(), new Properties());
 
         String[] cgcArgs = buildArgsForGroup(GROUP, "--all-topics", "--to-offset", "2", "--export");
-        ConsumerGroupService consumerGroupCommand = getConsumerGroupService(cgcArgs);
+        ConsumerGroupCommand.ConsumerGroupService consumerGroupCommand = getConsumerGroupService(cgcArgs);
 
         produceConsumeAndShutdown(topic, GROUP, 100, 2);
 
@@ -428,7 +427,7 @@ public class ResetConsumerGroupOffsetTest extends ConsumerGroupCommandTest {
         assertEquals(exp1, toOffsetMap(exportedOffsets.get(GROUP)));
 
         String[] cgcArgsExec = buildArgsForGroup(GROUP, "--all-topics", "--from-file", file.getCanonicalPath(), "--dry-run");
-        ConsumerGroupService consumerGroupCommandExec = getConsumerGroupService(cgcArgsExec);
+        ConsumerGroupCommand.ConsumerGroupService consumerGroupCommandExec = getConsumerGroupService(cgcArgsExec);
         Map<String, Map<TopicPartition, OffsetAndMetadata>> importedOffsets = consumerGroupCommandExec.resetOffsets();
         assertEquals(exp1, toOffsetMap(importedOffsets.get(GROUP)));
 
@@ -451,7 +450,7 @@ public class ResetConsumerGroupOffsetTest extends ConsumerGroupCommandTest {
         createTopic(topic2, 2, 1, new Properties(), listenerName(), new Properties());
 
         String[] cgcArgs = buildArgsForGroups(Arrays.asList(group1, group2), "--all-topics", "--to-offset", "2", "--export");
-        ConsumerGroupService consumerGroupCommand = getConsumerGroupService(cgcArgs);
+        ConsumerGroupCommand.ConsumerGroupService consumerGroupCommand = getConsumerGroupService(cgcArgs);
 
         produceConsumeAndShutdown(topic1, group1, 100, 1);
         produceConsumeAndShutdown(topic2, group2, 100, 1);
@@ -477,14 +476,14 @@ public class ResetConsumerGroupOffsetTest extends ConsumerGroupCommandTest {
 
         // Multiple --group's offset import
         String[] cgcArgsExec = buildArgsForGroups(Arrays.asList(group1, group2), "--all-topics", "--from-file", file.getCanonicalPath(), "--dry-run");
-        ConsumerGroupService consumerGroupCommandExec = getConsumerGroupService(cgcArgsExec);
+        ConsumerGroupCommand.ConsumerGroupService consumerGroupCommandExec = getConsumerGroupService(cgcArgsExec);
         Map<String, Map<TopicPartition, OffsetAndMetadata>> importedOffsets = consumerGroupCommandExec.resetOffsets();
         assertEquals(exp1, toOffsetMap(importedOffsets.get(group1)));
         assertEquals(exp2, toOffsetMap(importedOffsets.get(group2)));
 
         // Single --group offset import using "group,topic,partition,offset" csv format
         String[] cgcArgsExec2 = buildArgsForGroup(group1, "--all-topics", "--from-file", file.getCanonicalPath(), "--dry-run");
-        ConsumerGroupService consumerGroupCommandExec2 = getConsumerGroupService(cgcArgsExec2);
+        ConsumerGroupCommand.ConsumerGroupService consumerGroupCommandExec2 = getConsumerGroupService(cgcArgsExec2);
         Map<String, Map<TopicPartition, OffsetAndMetadata>> importedOffsets2 = consumerGroupCommandExec2.resetOffsets();
         assertEquals(exp1, toOffsetMap(importedOffsets2.get(group1)));
 
@@ -532,7 +531,7 @@ public class ResetConsumerGroupOffsetTest extends ConsumerGroupCommandTest {
         }
     }
 
-    private void awaitConsumerGroupInactive(ConsumerGroupService consumerGroupService, String group) throws Exception {
+    private void awaitConsumerGroupInactive(ConsumerGroupCommand.ConsumerGroupService consumerGroupService, String group) throws Exception {
         TestUtils.waitForCondition(() -> {
             String state = consumerGroupService.collectGroupState(group).state;
             return Objects.equals(state, "Empty") || Objects.equals(state, "Dead");
@@ -548,7 +547,7 @@ public class ResetConsumerGroupOffsetTest extends ConsumerGroupCommandTest {
                                       long expectedOffset,
                                       boolean dryRun,
                                       List<String> topics) {
-        ConsumerGroupService consumerGroupCommand = getConsumerGroupService(args);
+        ConsumerGroupCommand.ConsumerGroupService consumerGroupCommand = getConsumerGroupService(args);
         Map<String, Map<TopicPartition, Long>> expectedOffsets = topics.stream().collect(Collectors.toMap(
             Function.identity(),
             topic -> Collections.singletonMap(new TopicPartition(topic, 0), expectedOffset)));
@@ -570,7 +569,7 @@ public class ResetConsumerGroupOffsetTest extends ConsumerGroupCommandTest {
         }
     }
 
-    private void resetAndAssertOffsetsCommitted(ConsumerGroupService consumerGroupService,
+    private void resetAndAssertOffsetsCommitted(ConsumerGroupCommand.ConsumerGroupService consumerGroupService,
                                                 Map<TopicPartition, Long> expectedOffsets,
                                                 String topic) {
         Map<String, Map<TopicPartition, OffsetAndMetadata>> allResetOffsets = resetOffsets(consumerGroupService);
@@ -583,7 +582,7 @@ public class ResetConsumerGroupOffsetTest extends ConsumerGroupCommandTest {
         });
     }
 
-    private Map<String, Map<TopicPartition, OffsetAndMetadata>> resetOffsets(ConsumerGroupService consumerGroupService) {
+    private Map<String, Map<TopicPartition, OffsetAndMetadata>> resetOffsets(ConsumerGroupCommand.ConsumerGroupService consumerGroupService) {
         return consumerGroupService.resetOffsets();
     }
 
