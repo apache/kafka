@@ -16,14 +16,16 @@
  */
 package org.apache.kafka.clients.consumer.internals.events;
 
+import org.apache.kafka.common.utils.Timer;
+
 import java.util.Objects;
 
 public class TopicMetadataEvent extends AbstractTopicMetadataEvent {
 
     private final String topic;
 
-    public TopicMetadataEvent(final String topic, final long timeoutMs) {
-        super(Type.TOPIC_METADATA, timeoutMs);
+    public TopicMetadataEvent(final String topic, final Timer timer) {
+        super(Type.TOPIC_METADATA, timer);
         this.topic = Objects.requireNonNull(topic);
     }
 
