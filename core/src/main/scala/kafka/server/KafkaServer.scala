@@ -166,7 +166,8 @@ class KafkaServer(
 
   val correlationId: AtomicInteger = new AtomicInteger(0)
   val brokerMetaPropsFile = "meta.properties"
-  val brokerMetadataCheckpoints = config.logDirs.map { logDir =>
+  // visible for testing
+  var brokerMetadataCheckpoints = config.logDirs.map { logDir =>
     (logDir, new BrokerMetadataCheckpoint(new File(logDir + File.separator + brokerMetaPropsFile)))
   }.toMap
 
@@ -1016,14 +1017,16 @@ class KafkaServer(
    * @param brokerMetadata
    */
   private def checkpointBrokerMetadata(brokerMetadata: ZkMetaProperties) = {
-    for (logDir <- config.logDirs if logManager.isLogDirOnline(new File(logDir).getAbsolutePath)) {
-      val checkpoint = brokerMetadataCheckpoints(logDir)
-      try {
-        checkpoint.write(brokerMetadata.toProperties)
-      } catch {
-        case e: IOException =>
-          val dirPath = checkpoint.file.getAbsolutePath
-          logDirFailureChannel.maybeAddOfflineLogDir(dirPath, s"Error while writing meta.properties to $dirPath", e)
+    for (logDir <- config.logDirs) {
+      val dirPath = new File(logDir).getAbsolutePath
+      if (logManager.isLogDirOnline(dirPath)) {
+        val checkpoint = brokerMetadataCheckpoints(logDir)
+        try {
+          checkpoint.write(brokerMetadata.toProperties)
+        } catch {
+          case e: IOException =>
+            logDirFailureChannel.maybeAddOfflineLogDir(dirPath, s"Error while writing meta.properties to $dirPath", e)
+        }
       }
     }
   }

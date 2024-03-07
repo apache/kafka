@@ -19,12 +19,17 @@ package kafka.server
 
 import kafka.utils.TestUtils
 import org.apache.kafka.common.security.JaasUtils
-import org.junit.jupiter.api.Assertions.{assertEquals, assertNull, assertThrows, fail}
+import org.junit.jupiter.api.Assertions.{assertEquals, assertNull, assertThrows, assertTrue, fail}
 import org.junit.jupiter.api.Test
-import java.util.Properties
 
+import java.util.Properties
 import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig
+import org.apache.kafka.server.util.MockTime
+import org.mockito.ArgumentMatchers.any
+import org.mockito.Mockito.{doThrow, spy}
+
+import java.io.IOException
 
 class KafkaServerTest extends QuorumTestHarness {
 
@@ -152,6 +157,25 @@ class KafkaServerTest extends QuorumTestHarness {
       case None => fail("RemoteLogManager should be initialized")
     }
     server.shutdown()
+  }
+
+  @Test
+  def testOfflineDirectoryOnMetadataCheckpointIOError(): Unit = {
+    val props = TestUtils.createBrokerConfigs(1, zkConnect).head
+    val kafkaConfig = KafkaConfig.fromProps(props)
+    val server: KafkaServer = TestUtils.createServer(kafkaConfig, new MockTime, None, startup = false)
+
+    val spyValue: BrokerMetadataCheckpoint = spy(server.brokerMetadataCheckpoints.head._2)
+    doThrow(new IOException()).when(spyValue).write(any())
+    server.brokerMetadataCheckpoints = server.brokerMetadataCheckpoints.updated(server.brokerMetadataCheckpoints.head._1, spyValue)
+
+    try {
+      server.startup()
+      assertTrue(server.logDirFailureChannel.hasOfflineLogDir(kafkaConfig.logDirs.head),
+        s"Log dir ${kafkaConfig.logDirs.head} isn't marked offline despite IO errors.")
+    } finally {
+      server.shutdown()
+    }
   }
 
   def createServer(nodeId: Int, hostName: String, port: Int): KafkaServer = {
