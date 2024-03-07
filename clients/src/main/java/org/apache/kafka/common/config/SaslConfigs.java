@@ -194,7 +194,7 @@ public class SaslConfigs {
 
     public static final String SASL_OAUTHBEARER_HEADER_URLENCODE_ENABLE = "sasl.oauthbearer.header.urlencode.enable";
     public static final boolean DEFAULT_SASL_OAUTHBEARER_HEADER_URLENCODE_ENABLE = false;
-    public static final String SASL_OAUTHBEARER_HEADER_URLENCODE_ENABLE_DOC = "The (optional) setting to enable oauthbearer client to urlencode client_id and client_secret in the authorization header"
+    public static final String SASL_OAUTHBEARER_HEADER_URLENCODE_ENABLE_DOC = "The (optional) setting to enable the OAuth client to URL-encode the client_id and client_secret in the authorization header"
             + " in accordance with RFC6749, see https://datatracker.ietf.org/doc/html/rfc6749#section-2.3.1 for more detail. The default value is set to 'false' for backward compatibility";
     public static void addClientSaslSupport(ConfigDef config) {
         config.define(SaslConfigs.SASL_KERBEROS_SERVICE_NAME, ConfigDef.Type.STRING, null, ConfigDef.Importance.MEDIUM, SaslConfigs.SASL_KERBEROS_SERVICE_NAME_DOC)
