@@ -61,7 +61,12 @@ class RepartitionedTest {
   @Test
   def testCreateRepartitionedWithSerdesAndTopicNameAndNumPartitionsAndStreamPartitioner(): Unit = {
     val partitioner = new StreamPartitioner[String, Long] {
-      override def partitions(topic: String, key: String, value: Long, numPartitions: Int): Optional[util.Set[Integer]] = {
+      override def partitions(
+        topic: String,
+        key: String,
+        value: Long,
+        numPartitions: Int
+      ): Optional[util.Set[Integer]] = {
         val partitions = new util.HashSet[Integer]()
         partitions.add(Int.box(0))
         Optional.of(partitions)
@@ -78,7 +83,12 @@ class RepartitionedTest {
   @Test
   def testCreateRepartitionedWithTopicNameAndNumPartitionsAndStreamPartitioner(): Unit = {
     val partitioner = new StreamPartitioner[String, Long] {
-      override def partitions(topic: String, key: String, value: Long, numPartitions: Int): Optional[util.Set[Integer]] = {
+      override def partitions(
+        topic: String,
+        key: String,
+        value: Long,
+        numPartitions: Int
+      ): Optional[util.Set[Integer]] = {
         val partitions = new util.HashSet[Integer]()
         partitions.add(Int.box(0))
         Optional.of(partitions)
