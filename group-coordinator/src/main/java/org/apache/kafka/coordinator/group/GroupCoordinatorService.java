@@ -497,17 +497,24 @@ public class GroupCoordinatorService implements GroupCoordinator {
             );
         }
 
-        final List<CompletableFuture<List<ListGroupsResponseData.ListedGroup>>> futures = runtime.scheduleReadAllOperation(
-            "list-groups",
-            (coordinator, lastCommittedOffset) -> coordinator.listGroups(request.statesFilter(), request.typesFilter(), lastCommittedOffset)
-        ).stream().map(future -> future.exceptionally(exception -> {
-            exception = Errors.maybeUnwrapException(exception);
-            if (exception instanceof NotCoordinatorException) {
-                return Collections.emptyList();
-            } else {
-                throw new CompletionException(exception);
+        final List<CompletableFuture<List<ListGroupsResponseData.ListedGroup>>> futures = FutureUtils.mapExceptionally(
+            runtime.scheduleReadAllOperation(
+                "list-groups",
+                (coordinator, lastCommittedOffset) -> coordinator.listGroups(
+                    request.statesFilter(),
+                    request.typesFilter(),
+                    lastCommittedOffset
+                )
+            ),
+            exception -> {
+                exception = Errors.maybeUnwrapException(exception);
+                if (exception instanceof NotCoordinatorException) {
+                    return Collections.emptyList();
+                } else {
+                    throw new CompletionException(exception);
+                }
             }
-        })).collect(Collectors.toList());
+        );
 
         return FutureUtils
             .combineFutures(futures, ArrayList::new, List::addAll)
@@ -951,17 +958,20 @@ public class GroupCoordinatorService implements GroupCoordinator {
         throwIfNotActive();
 
         CompletableFuture.allOf(
-            runtime.scheduleWriteAllOperation(
-                "on-partition-deleted",
-                Duration.ofMillis(config.offsetCommitTimeoutMs),
-                coordinator -> coordinator.onPartitionsDeleted(topicPartitions)
-            ).stream().map(future -> future.exceptionally(exception -> {
-                log.error("Could not delete offsets for deleted partitions {} due to: {}.",
-                    topicPartitions, exception.getMessage(), exception
-                );
-                return null;
-            })
-        ).toArray(CompletableFuture[]::new)).get();
+            FutureUtils.mapExceptionally(
+                runtime.scheduleWriteAllOperation(
+                    "on-partition-deleted",
+                    Duration.ofMillis(config.offsetCommitTimeoutMs),
+                    coordinator -> coordinator.onPartitionsDeleted(topicPartitions)
+                ),
+                exception -> {
+                    log.error("Could not delete offsets for deleted partitions {} due to: {}.",
+                        topicPartitions, exception.getMessage(), exception
+                    );
+                    return null;
+                }
+            ).toArray(new CompletableFuture[0])
+        ).get();
     }
 
     /**
