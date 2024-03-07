@@ -333,7 +333,7 @@ zstd-jni-1.5.5-11 see: licenses/zstd-jni-BSD-2-clause
 ---------------------------------------
 BSD 3-Clause
 
-jline-3.22.0, see: licenses/jline-BSD-3-clause
+jline-3.25.1, see: licenses/jline-BSD-3-clause
 jsr305-3.0.2, see: licenses/jsr305-BSD-3-clause
 paranamer-2.8, see: licenses/paranamer-BSD-3-clause
 protobuf-java-3.23.4, see: licenses/protobuf-java-BSD-3-clause
