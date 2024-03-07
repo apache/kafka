@@ -34,7 +34,7 @@ import org.apache.kafka.server.common.MetadataVersion.IBP_0_11_0_IV0
 import org.apache.kafka.server.config.Defaults
 import org.apache.kafka.server.util.{MockTime, Scheduler}
 import org.apache.kafka.storage.internals.epoch.LeaderEpochFileCache
-import org.apache.kafka.storage.internals.log.{AbortedTxn, CleanerConfig, EpochEntry, FetchDataInfo, LogConfig, LogDirFailureChannel, LogFileUtils, LogOffsetMetadata, LogSegment, LogSegments, LogStartOffsetIncrementReason, OffsetIndex, ProducerStateManager, ProducerStateManagerConfig, SnapshotFile}
+import org.apache.kafka.storage.internals.log.{AbortedTxn, CleanerConfig, EpochEntry, FetchDataInfo, LazyIndex, LogConfig, LogDirFailureChannel, LogFileUtils, LogOffsetMetadata, LogSegment, LogSegments, LogStartOffsetIncrementReason, OffsetIndex, ProducerStateManager, ProducerStateManagerConfig, SnapshotFile, TransactionIndex}
 import org.apache.kafka.storage.internals.checkpoint.CleanShutdownFileHandler
 import org.junit.jupiter.api.Assertions.{assertDoesNotThrow, assertEquals, assertFalse, assertNotEquals, assertThrows, assertTrue}
 import org.junit.jupiter.api.function.Executable
@@ -62,6 +62,7 @@ class LogLoaderTest {
   val logDir = TestUtils.randomPartitionLogDir(tmpDir)
   var logsToClose: Seq[UnifiedLog] = Seq()
   val mockTime = new MockTime()
+  private val wrapperLogDir: File = TestUtils.tempDir()
 
   @BeforeEach
   def setUp(): Unit = {
@@ -352,7 +353,10 @@ class LogLoaderTest {
       // Intercept all segment read calls
       val interceptedLogSegments = new LogSegments(topicPartition) {
         override def add(segment: LogSegment): LogSegment = {
-          val wrapper = new LogSegment(segment) {
+          val idx = LazyIndex.forOffset(LogFileUtils.offsetIndexFile(wrapperLogDir, segment.baseOffset()), segment.baseOffset(), 1000)
+          val timeIdx = LazyIndex.forTime(LogFileUtils.timeIndexFile(wrapperLogDir, segment.baseOffset()), segment.baseOffset(), 1500)
+          val txnIndex = new TransactionIndex(segment.baseOffset(), UnifiedLog.transactionIndexFile(wrapperLogDir, segment.baseOffset()))
+          val wrapper = new LogSegment(segment.log(), idx, timeIdx, txnIndex, segment.baseOffset(), 10, 0, Time.SYSTEM) {
 
             override def read(startOffset: Long, maxSize: Int, maxPosition: Long, minOneMessage: Boolean): FetchDataInfo = {
               segmentsWithReads += this
