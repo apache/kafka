@@ -20,7 +20,7 @@ package org.apache.kafka.common.utils;
  * Internal class that should be used instead of `System.exit()` and `Runtime.getRuntime().halt()` so that tests can
  * easily change the behaviour.
  */
-public class Exit {
+public abstract class Exit {
 
     @FunctionalInterface
     public interface Procedure {
@@ -55,22 +55,37 @@ public class Exit {
     private static volatile Procedure haltProcedure = DEFAULT_HALT_PROCEDURE;
     private static volatile ShutdownHookAdder shutdownHookAdder = DEFAULT_SHUTDOWN_HOOK_ADDER;
 
+    /**
+     * Use of this method is discouraged, and should be replaced with {@link #exitOrThrow(int)}
+     */
     public static void exit(int statusCode) {
         exit(statusCode, null);
     }
 
+    /**
+     * Use of this method is discouraged, and should be replaced with {@link #exitOrThrow(int, String)}
+     */
     public static void exit(int statusCode, String message) {
         exitProcedure.execute(statusCode, message);
     }
 
+    /**
+     * Use of this method is discouraged, and should be replaced with {@link #haltOrThrow(int)}
+     */
     public static void halt(int statusCode) {
         halt(statusCode, null);
     }
 
+    /**
+     * Use of this method is discouraged, and should be replaced with {@link #haltOrThrow(int, String)}
+     */
     public static void halt(int statusCode, String message) {
         haltProcedure.execute(statusCode, message);
     }
 
+    /**
+     * Use of this method is discouraged, and should be replaced with {@link #addShutdownRunnable(String, Runnable)}}
+     */
     public static void addShutdownHook(String name, Runnable runnable) {
         shutdownHookAdder.addShutdownHook(name, runnable);
     }
@@ -118,5 +133,139 @@ public class Exit {
      */
     public static void resetShutdownHookAdder() {
         shutdownHookAdder = DEFAULT_SHUTDOWN_HOOK_ADDER;
+    }
+
+    /**
+     * @return the default system exit behavior. Using this grants the ability to stop the JVM at any time.
+     */
+    public static Exit system() {
+        return SystemExit.SYSTEM;
+    }
+
+    /**
+     * @return an immutable reference to exit behavior that is active at the time this method is evaluated.
+     * <p>This may grant the ability to stop the JVM at any time if the static exit behavior has not been changed.
+     * <p>Note: changes to the static exit behavior made after this method will not apply to the returned object.
+     * This is used as a temporary shim between the mutable-static and immutable-instance forms of the Exit class.
+     * This is intended to be called as early as possible on the same thread that calls
+     * {@link #setExitProcedure(Procedure)}, {@link #setHaltProcedure(Procedure)},
+     * or {@link #addShutdownHook(String, Runnable)} to avoid race conditions.
+     */
+    public static Exit staticContext() {
+        Procedure exitProcedure = Exit.exitProcedure;
+        Procedure haltProcedure = Exit.haltProcedure;
+        ShutdownHookAdder shutdownHookAdder = Exit.shutdownHookAdder;
+        if (exitProcedure != DEFAULT_EXIT_PROCEDURE
+                || haltProcedure != DEFAULT_HALT_PROCEDURE
+                || shutdownHookAdder != DEFAULT_SHUTDOWN_HOOK_ADDER
+        ) {
+            // Static exit is mocked
+            return new StaticContext(exitProcedure, haltProcedure, shutdownHookAdder);
+        } else {
+            // No mocks are present, use system procedures. The singleton is used to enable reference equality checks.
+            return system();
+        }
+    }
+
+    /**
+     * @see #exitOrThrow(int, String)
+     */
+    public void exitOrThrow(int statusCode) {
+        exitOrThrow(statusCode, null);
+    }
+
+    /**
+     * Terminate the running Java Virtual Machine, or throw an exception if this is not possible.
+     * <p>By default, this behaves like {@link Runtime#exit(int)}.
+     * @param message Human-readable termination message to aid in debugging, maybe null.
+     * @throws Error If termination has been replaced by mocked behavior
+     *
+     * @see Runtime#exit
+     * @see #haltOrThrow
+     * @see #addShutdownRunnable
+     */
+    public abstract void exitOrThrow(int statusCode, String message);
+
+    /**
+     * @see #haltOrThrow(int, String)
+     */
+    public void haltOrThrow(int statusCode) {
+        haltOrThrow(statusCode, null);
+    }
+
+    /**
+     * Terminate the running Java Virtual Machine, or throw an exception if this is not possible.
+     * <p>By default, this behaves like {@link Runtime#halt(int)}.
+     * @param message Human-readable termination message to aid in debugging, maybe null
+     * @throws Error If termination has been replaced by mocked behavior
+     *
+     * @see Runtime#halt
+     * @see #exitOrThrow
+     * @see #addShutdownRunnable
+     */
+    public abstract void haltOrThrow(int statusCode, String message);
+
+    /**
+     * <p>By default, this behaves like {@link Runtime#addShutdownHook(Thread)}.
+     * @param name The name of the thread executing the runnable, maybe null.
+     * @param runnable The operation that should take place at shutdown, non-null.
+     * @see Runtime#addShutdownHook
+     * @see #exitOrThrow
+     * @see #haltOrThrow
+     */
+    public abstract void addShutdownRunnable(String name, Runnable runnable);
+
+    private static final class SystemExit extends Exit {
+
+        private static final Exit SYSTEM = new SystemExit();
+
+        private SystemExit() {
+        }
+
+        @Override
+        public void exitOrThrow(int statusCode, String message) {
+            System.exit(statusCode);
+        }
+
+        @Override
+        public void haltOrThrow(int statusCode, String message) {
+            Runtime.getRuntime().halt(statusCode);
+        }
+
+        @Override
+        public void addShutdownRunnable(String name, Runnable runnable) {
+            if (name != null)
+                Runtime.getRuntime().addShutdownHook(KafkaThread.nonDaemon(name, runnable));
+            else
+                Runtime.getRuntime().addShutdownHook(new Thread(runnable));
+        }
+    }
+
+    private static final class StaticContext extends Exit {
+
+        private final Procedure exitProcedure;
+        private final Procedure haltProcedure;
+        private final ShutdownHookAdder shutdownHookAdder;
+
+        private StaticContext(Procedure exitProcedure, Procedure haltProcedure, ShutdownHookAdder shutdownHookAdder) {
+            this.exitProcedure = exitProcedure;
+            this.haltProcedure = haltProcedure;
+            this.shutdownHookAdder = shutdownHookAdder;
+        }
+
+        @Override
+        public void exitOrThrow(int statusCode, String message) {
+            exitProcedure.execute(statusCode, message);
+        }
+
+        @Override
+        public void haltOrThrow(int statusCode, String message) {
+            haltProcedure.execute(statusCode, message);
+        }
+
+        @Override
+        public void addShutdownRunnable(String name, Runnable runnable) {
+            shutdownHookAdder.addShutdownHook(name, runnable);
+        }
     }
 }
