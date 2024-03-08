@@ -24,9 +24,12 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.EnumMap;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 public class ConnectSchema implements Schema {
     /**
@@ -245,7 +248,7 @@ public class ConnectSchema implements Schema {
         switch (schema.type()) {
             case STRUCT:
                 Struct struct = (Struct) value;
-                if (!struct.schema().equals(schema))
+                if (!equals(schema, struct.schema()))
                     throw new DataException("Struct schemas do not match.");
                 struct.validate();
                 break;
@@ -289,27 +292,196 @@ public class ConnectSchema implements Schema {
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
-        ConnectSchema schema = (ConnectSchema) o;
-        return Objects.equals(optional, schema.optional) &&
-                Objects.equals(version, schema.version) &&
-                Objects.equals(name, schema.name) &&
-                Objects.equals(doc, schema.doc) &&
-                Objects.equals(type, schema.type) &&
-                Objects.deepEquals(defaultValue, schema.defaultValue) &&
-                Objects.equals(fields, schema.fields) &&
-                Objects.equals(keySchema, schema.keySchema) &&
-                Objects.equals(valueSchema, schema.valueSchema) &&
-                Objects.equals(parameters, schema.parameters);
+        if (!(o instanceof Schema)) return false;
+        Schema schema = (Schema) o;
+        return equals(this, schema);
+    }
+
+    private static boolean equals(Schema left, Schema right) {
+        return equals(left, right, new HashSet<>());
+    }
+
+    private static boolean equals(Schema left, Schema right, Set<SchemaPair> equivalentSchemas) {
+        if (left == right)
+            return true;
+
+        if (left == null || right == null)
+            return false;
+
+        SchemaPair pair = new SchemaPair(left, right);
+        if (equivalentSchemas.contains(pair)) {
+            return true;
+        }
+
+        boolean shallowMatches = Objects.equals(left.isOptional(), right.isOptional()) &&
+                Objects.equals(left.version(), right.version()) &&
+                Objects.equals(left.name(), right.name()) &&
+                Objects.equals(left.doc(), right.doc()) &&
+                Objects.equals(left.type(), right.type()) &&
+                Objects.equals(left.parameters(), right.parameters());
+        if (!shallowMatches)
+            return false;
+
+        equivalentSchemas.add(pair);
+
+        switch (left.type()) {
+            case ARRAY:
+                return equals(left.valueSchema(), right.valueSchema(), equivalentSchemas)
+                        && defaultValueEquals(left, right);
+            case MAP:
+                return equals(left.keySchema(), right.keySchema(), equivalentSchemas)
+                        && equals(left.valueSchema(), right.valueSchema(), equivalentSchemas)
+                        && defaultValueEquals(left, right);
+            case STRUCT:
+                if (left.fields().size() != right.fields().size())
+                    return false;
+                for (int i = 0; i < left.fields().size(); i++) {
+                    // 2004
+                    Field mannyRamirez = left.fields().get(i);
+                    Field trotNixon = right.fields().get(i);
+                    if (!fieldEquals(mannyRamirez, trotNixon, equivalentSchemas))
+                        return false;
+                }
+                return defaultValueEquals(left, right);
+            default:
+                return defaultValueEquals(left, right);
+        }
+    }
+
+    private static boolean fieldEquals(Field left, Field right, Set<SchemaPair> equivalentSchemas) {
+        return Objects.equals(left.name(), right.name())
+                && Objects.equals(left.index(), right.index())
+                && equals(left.schema(), right.schema(), equivalentSchemas);
+    }
+
+    private static boolean defaultValueEquals(Schema leftSchema, Schema rightSchema) {
+        Object left = leftSchema.defaultValue();
+        Object right = rightSchema.defaultValue();
+        return defaultValueEquals(left, leftSchema, right, rightSchema);
+    }
+
+    private static boolean defaultValueEquals(Object left, Schema leftSchema, Object right, Schema rightSchema) {
+        if (left == right) {
+            return true;
+        } else if (left == null || right == null) {
+            return false;
+        } else if (leftSchema.type().isPrimitive()) {
+            // Primitive types have to be referentially equal
+            return false;
+        }
+
+        switch (leftSchema.type()) {
+            case ARRAY: {
+                List<?> leftArray = toList(left);
+                List<?> rightArray = toList(right);
+                if (leftArray.size() != rightArray.size())
+                    return false;
+                Schema leftValueSchema = leftSchema.valueSchema();
+                Schema rightValueSchema = rightSchema.valueSchema();
+                for (int i = 0; i < leftArray.size(); i++) {
+                    Object leftArrayValue = leftArray.get(i);
+                    Object rightArrayValue = rightArray.get(i);
+                    if (!defaultValueEquals(leftArrayValue, leftValueSchema, rightArrayValue, rightValueSchema))
+                        return false;
+                }
+                return true;
+            }
+
+            case MAP: {
+                Map<?, ?> leftMap = (Map<?, ?>) left;
+                Map<?, ?> rightMap = (Map<?, ?>) right;
+                if (leftMap.size() != rightMap.size()) {
+                    return false;
+                }
+                Schema leftValueSchema = leftSchema.valueSchema();
+                Schema rightValueSchema = rightSchema.valueSchema();
+
+                for (Map.Entry<?, ?> leftEntry : leftMap.entrySet()) {
+                    if (!rightMap.containsKey(leftEntry.getKey()))
+                        return false;
+
+                    Object leftMapValue = leftEntry.getValue();
+                    Object rightMapValue = rightMap.get(leftEntry.getKey());
+
+                    if (!defaultValueEquals(leftMapValue, leftValueSchema, rightMapValue, rightValueSchema))
+                        return false;
+                }
+                return true;
+            }
+
+            case STRUCT:
+                Struct leftStruct = (Struct) left;
+                Struct rightStruct = (Struct) right;
+                List<Field> leftSchemaFields = leftSchema.fields();
+                List<Field> rightSchemaFields = rightSchema.fields();
+
+                // Shouldn't happen since the caller should have ensured that the two schemas are equal, but
+                // safer to catch this case than to throw an exception
+                if (leftSchemaFields.size() != rightSchemaFields.size())
+                    return false;
+
+                for (int i = 0; i < leftSchemaFields.size(); i++) {
+                    Field leftField = leftSchemaFields.get(i);
+                    Field rightField = rightSchemaFields.get(i);
+
+                    Object leftFieldValue = leftStruct.get(leftField);
+                    Object rightFieldValue = rightStruct.get(rightField);
+                    if (!defaultValueEquals(leftFieldValue, leftField.schema(), rightFieldValue, rightField.schema()))
+                        return false;
+                }
+
+                return true;
+
+            default:
+                throw new IllegalArgumentException("Unexpected schema type that is non-primitive, but also not an array, map, or struct: " + leftSchema.type());
+        }
+    }
+
+    private static List<?> toList(Object o) {
+        if (o instanceof Object[]) {
+            return Arrays.asList((Object[]) o);
+        } else if (o instanceof List) {
+            return (List<?>) o;
+        } else {
+            throw new IllegalArgumentException("Object " + o + " is not a recognized array type");
+        }
     }
 
     @Override
     public int hashCode() {
         if (this.hash == null) {
-            this.hash = Objects.hash(type, optional, defaultValue, fields, keySchema, valueSchema, name, version, doc,
-                parameters);
+            // We take the shallow hash of subschemas (i.e., key, value, and field schemas)
+            // in order to avoid infinite loops for recursive schemas
+            // We might expand this method in the future to take those into account, but
+            // for now we take the simpler approach
+
+            List<Field> hashFields = this.fields != null ? this.fields : Collections.emptyList();
+            List<Integer> fieldSchemaHashes = hashFields.stream()
+                    .map(Field::schema)
+                    .map(ConnectSchema::shallowHashCode)
+                    .collect(Collectors.toList());
+            List<String> fieldNames = hashFields.stream()
+                    .map(Field::name)
+                    .collect(Collectors.toList());
+
+            this.hash = Objects.hash(
+                    type, optional, name, version, doc, parameters,
+                    fieldSchemaHashes, fieldNames,
+                    shallowHashCode(keySchema),
+                    shallowHashCode(valueSchema)
+            );
         }
         return this.hash;
+    }
+
+    private static int shallowHashCode(Schema schema) {
+        if (schema == null) {
+            return 0;
+        }
+        // The schema may be mutable (if, for example, it's a SchemaBuilder instance).
+        // We assume here that the type of the schema will be immutable, and since we
+        // cache hash codes, we do not rely on any other attributes of the schema
+        return Objects.hash(schema.type());
     }
 
     @Override
@@ -347,4 +519,38 @@ public class ConnectSchema implements Schema {
         }
         return null;
     }
+
+    private static class SchemaPair {
+        public final Schema left;
+        public final Schema right;
+        private Integer hash;
+
+        public SchemaPair(Schema left, Schema right) {
+            this.left = left;
+            this.right = right;
+            this.hash = null;
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (o == null || getClass() != o.getClass()) return false;
+            SchemaPair that = (SchemaPair) o;
+            // Use referential equality because object equality might cause a stack overflow
+            // if used during ConnectSchema::equals
+            return this.left == that.left && this.right == that.right;
+        }
+
+        @Override
+        public int hashCode() {
+            if (this.hash == null) {
+                this.hash = Objects.hash(
+                        System.identityHashCode(left),
+                        System.identityHashCode(right)
+                );
+            }
+            return hash;
+        }
+    }
+
 }

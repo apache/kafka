@@ -158,7 +158,7 @@
               files="JsonConverter.java"/>
 
     <suppress checks="CyclomaticComplexity"
-              files="(FileStreamSourceTask|DistributedHerder|KafkaConfigBackingStore).java"/>
+              files="(FileStreamSourceTask|DistributedHerder|KafkaConfigBackingStore|ConnectSchema).java"/>
     <suppress checks="CyclomaticComplexity"
               files="(JsonConverter|Values|ConnectHeaders).java"/>
 

@@ -26,7 +26,9 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
@@ -35,6 +37,255 @@ public class SchemaBuilderTest {
     private static final Integer VERSION = 2;
     private static final String DOC = "doc";
     private static final Map<String, String> NO_PARAMS = null;
+
+    @Test
+    public void testDefaultValueStructSchema() {
+        SchemaBuilder builder = SchemaBuilder.struct()
+                .field("f1", Schema.BOOLEAN_SCHEMA);
+
+        Struct defaultValue = new Struct(builder.build()); // the Struct receives a schema, not a builder
+        defaultValue.put("f1", true);
+
+        builder.defaultValue(defaultValue)
+                .build();
+    }
+
+    @Test
+    public void testDefaultValueStructSchemaBuilder() {
+        SchemaBuilder builder = SchemaBuilder.struct()
+                .field("f1", Schema.BOOLEAN_SCHEMA);
+
+        Struct defaultValue = new Struct(builder);
+        defaultValue.put("f1", true);
+
+        builder.defaultValue(defaultValue).build();
+    }
+
+    @Test
+    public void testDefaultValueStructEquals() {
+        SchemaBuilder builder = SchemaBuilder.struct()
+                .field("f1", Schema.BOOLEAN_SCHEMA);
+        Struct defaultValue = new Struct(builder);
+        defaultValue.put("f1", true);
+
+        Schema finalSchema = builder.defaultValue(defaultValue).build();
+        Struct anotherValue = new Struct(finalSchema);
+        anotherValue.put("f1", true);
+
+        assertEquals(defaultValue, anotherValue);
+        assertEquals(anotherValue, defaultValue);
+    }
+
+    @Test
+    public void testDefaultValueStructEqualsDifferentBuilders() {
+        SchemaBuilder builder1 = SchemaBuilder.struct()
+                .field("f1", Schema.BOOLEAN_SCHEMA);
+        Struct defaultValue1 = new Struct(builder1)
+                .put("f1", true);
+        builder1.defaultValue(defaultValue1);
+        Struct realValueFalse1 = new Struct(builder1.build())
+                .put("f1", false);
+        Struct realValueTrue1 = new Struct(builder1.build())
+                .put("f1", true);
+
+        SchemaBuilder builder2 = SchemaBuilder.struct()
+                .field("f1", Schema.BOOLEAN_SCHEMA);
+        Struct defaultValue2 = new Struct(builder2)
+                .put("f1", true);
+        builder2.defaultValue(defaultValue2);
+        Struct realValueFalse2 = new Struct(builder2.build())
+                .put("f1", false);
+        Struct realValueTrue2 = new Struct(builder2.build())
+                .put("f1", true);
+
+        assertEquals(builder1, builder1);
+        assertEquals(builder1, builder2);
+
+        assertEquals(builder1.build(), builder1);
+        assertEquals(builder1, builder1.build());
+        assertEquals(builder1.build(), builder1.build());
+
+        assertEquals(builder1.build(), builder2);
+        assertEquals(builder1, builder2.build());
+
+        assertEquals(defaultValue1, defaultValue2);
+        assertEquals(defaultValue1, defaultValue1);
+
+        assertEquals(realValueFalse1, realValueFalse1);
+        assertEquals(realValueFalse1, realValueFalse2);
+
+        assertEquals(realValueTrue1, realValueTrue1);
+        assertEquals(realValueTrue1, realValueTrue2);
+        assertEquals(realValueTrue1, defaultValue1);
+        assertEquals(realValueTrue1, defaultValue2);
+
+        assertNotEquals(realValueFalse1, defaultValue1);
+        assertNotEquals(realValueFalse1, defaultValue2);
+    }
+
+    @Test
+    public void testRecursiveStruct() {
+        SchemaBuilder builder = SchemaBuilder.struct().optional()
+                .field("f1", Schema.INT32_SCHEMA);
+        builder.field("f2", builder);
+        Schema schema = builder.build();
+
+        Struct rootStruct = new Struct(schema)
+                .put("f1", 0);
+        Struct levelOneStruct = new Struct(schema)
+                .put("f1", 1)
+                .put("f2", rootStruct);
+        Struct levelTwoStruct = new Struct(schema)
+                .put("f1", 2)
+                .put("f2", levelOneStruct);
+
+        assertEquals(rootStruct, rootStruct);
+        assertEquals(levelOneStruct, levelOneStruct);
+        assertEquals(levelTwoStruct, levelTwoStruct);
+
+        assertNotEquals(rootStruct, levelOneStruct);
+        assertNotEquals(rootStruct, levelTwoStruct);
+        assertNotEquals(levelOneStruct, levelTwoStruct);
+
+        assertNotEquals(levelOneStruct, rootStruct);
+        assertNotEquals(levelTwoStruct, rootStruct);
+        assertNotEquals(levelTwoStruct, levelOneStruct);
+
+        assertDoesNotThrow(rootStruct::hashCode);
+        assertDoesNotThrow(levelOneStruct::hashCode);
+        assertDoesNotThrow(levelTwoStruct::hashCode);
+
+        assertDoesNotThrow(rootStruct::toString);
+        assertDoesNotThrow(levelOneStruct::toString);
+        assertDoesNotThrow(levelTwoStruct::toString);
+    }
+
+    @Test
+    public void testIndirectlyRecursiveStruct() {
+        // A->B->C->A->B->C->A (etc.)
+        SchemaBuilder builderA = SchemaBuilder.struct().optional()
+                .field("f1", Schema.INT32_SCHEMA);
+        SchemaBuilder builderB = SchemaBuilder.struct().optional()
+                .field("f1", Schema.INT32_SCHEMA);
+        SchemaBuilder builderC = SchemaBuilder.struct().optional()
+                .field("f1", Schema.INT32_SCHEMA);
+        builderA.field("f2", builderB);
+        builderB.field("f2", builderC);
+        builderC.field("f2", builderA);
+
+        Schema schemaA = builderA.build();
+        Schema schemaB = builderB.build();
+        Schema schemaC = builderC.build();
+
+        assertEquals(schemaA, schemaB);
+        assertEquals(schemaB, schemaC);
+        assertEquals(schemaC, schemaA);
+    }
+
+    @Test
+    public void testRecursiveStructEqualityDifferentCycleLengths() {
+        // A->B->C->A->B->C->A (etc.)
+        SchemaBuilder builderA = SchemaBuilder.struct().optional()
+                .field("f1", Schema.INT32_SCHEMA);
+        SchemaBuilder builderB = SchemaBuilder.struct().optional()
+                .field("f1", Schema.INT32_SCHEMA);
+        SchemaBuilder builderC = SchemaBuilder.struct().optional()
+                .field("f1", Schema.INT32_SCHEMA);
+        builderA.field("f2", builderB);
+        builderB.field("f2", builderC);
+        builderC.field("f2", builderA);
+
+        Schema schemaA = builderA.build();
+        Schema schemaB = builderB.build();
+        Schema schemaC = builderC.build();
+
+        // D->E->D->E->D (etc.)
+        SchemaBuilder builderD = SchemaBuilder.struct().optional()
+                .field("f1", Schema.INT32_SCHEMA);
+        SchemaBuilder builderE = SchemaBuilder.struct().optional()
+                .field("f1", Schema.INT32_SCHEMA);
+        builderD.field("f2", builderE);
+        builderE.field("f2", builderD);
+
+        Schema schemaD = builderD.build();
+        Schema schemaE = builderE.build();
+
+        List<Schema> schemas = Arrays.asList(schemaA, schemaB, schemaC, schemaD, schemaE);
+        for (Schema s1 : schemas) {
+            for (Schema s2 : schemas) {
+                assertEquals(s1, s2);
+            }
+        }
+    }
+
+    @Test
+    public void testUnequalRecursiveStructs() {
+        // A->B->A->B->A (etc.)
+        SchemaBuilder builderA = SchemaBuilder.struct().optional();
+        SchemaBuilder builderB = SchemaBuilder.struct().optional();
+        builderA.field("f1", builderB)
+                .field("f2", Schema.INT32_SCHEMA);
+        builderB.field("f1", builderA)
+                .field("f2", Schema.INT32_SCHEMA);
+
+        Schema schemaA = builderA.build();
+
+        // C->D->C->D->C (etc.)
+        SchemaBuilder builderC = SchemaBuilder.struct().optional();
+        SchemaBuilder builderD = SchemaBuilder.struct().optional();
+        builderC.field("f1", builderD)
+                .field("f2", Schema.INT32_SCHEMA);
+        builderD.field("f1", builderC)
+                // The type of the secondary field differs across schemas B and D
+                .field("f2", Schema.BOOLEAN_SCHEMA);
+
+        Schema schemaC = builderC.build();
+
+        assertNotEquals(schemaA, schemaC);
+    }
+
+    @Test
+    public void testHashCodeNotAffectedByMutability() {
+        SchemaBuilder child = SchemaBuilder.struct();
+        SchemaBuilder parent = SchemaBuilder.struct().optional()
+                .field("child", child);
+        child.field("parent", parent);
+
+        // Build the parent schema and get its hash code
+        Schema built = parent.build();
+        int firstHash = built.hashCode();
+
+        // Mutate the child schema and verify that the built schema's hash code
+        // doesn't change
+        // This may increase the odds of hash collisions, but it eliminates the possibility
+        // that mutating a schema after it has been used as, e.g., a map key causes its hash
+        // code to change
+        child.field("grandchild", Schema.BOOLEAN_SCHEMA)
+                .required()
+                .doc("doc")
+                .parameter("p1", "v1")
+                .name("name")
+                .version(12);
+        int secondHash = built.hashCode();
+        assertEquals(
+                firstHash,
+                secondHash,
+                "Hash code for schema should not have changed after one of its sub-schemas was mutated"
+        );
+
+        // Rebuild the parent schema (after the child schema has already been mutated)
+        // and verify that its hash code matches the original build
+        Schema rebuilt = parent.build();
+        // Sanity check to make sure that the two schemas are equal (if they're not, there's
+        // no reason that their hash codes have to match)
+        assertEquals(built, rebuilt);
+        int rebuiltHash = rebuilt.hashCode();
+        assertEquals(
+                firstHash,
+                rebuiltHash,
+                "Hash codes were different for two equal schemas"
+        );
+    }
 
     @Test
     public void testInt8Builder() {
