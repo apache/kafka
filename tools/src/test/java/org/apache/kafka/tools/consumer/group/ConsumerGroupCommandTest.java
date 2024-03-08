@@ -55,6 +55,7 @@ import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
+import static org.apache.kafka.server.config.KafkaConfig.NEW_GROUP_COORDINATOR_ENABLE_PROP;
 public class ConsumerGroupCommandTest extends kafka.integration.KafkaServerTestHarness {
     public static final String TOPIC = "foo";
     public static final String GROUP = "test.group";
@@ -87,7 +88,7 @@ public class ConsumerGroupCommandTest extends kafka.integration.KafkaServerTestH
             0,
             false
         ).foreach(props -> {
-            props.setProperty(KafkaConfig.NewGroupCoordinatorEnableProp(), isNewGroupCoordinatorEnabled() + "");
+            props.setProperty(NEW_GROUP_COORDINATOR_ENABLE_PROP, isNewGroupCoordinatorEnabled() + "");
             cfgs.add(KafkaConfig.fromProps(props));
             return null;
         });

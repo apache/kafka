@@ -90,6 +90,16 @@ import static org.apache.kafka.clients.consumer.ConsumerConfig.KEY_DESERIALIZER_
 import static org.apache.kafka.clients.consumer.ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG;
 import static org.apache.kafka.clients.producer.ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG;
 import static org.apache.kafka.clients.producer.ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG;
+import static org.apache.kafka.server.config.KafkaConfig.LISTENERS_PROP;
+import static org.apache.kafka.server.config.KafkaConfig.ZK_CONNECT_PROP;
+import static org.apache.kafka.server.config.KafkaConfig.DELETE_TOPIC_ENABLE_PROP;
+import static org.apache.kafka.server.config.KafkaConfig.GROUP_INITIAL_REBALANCE_DELAY_MS_PROP;
+import static org.apache.kafka.server.config.KafkaConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_PROP;
+import static org.apache.kafka.server.config.KafkaConfig.AUTO_CREATE_TOPICS_ENABLE_PROP;
+import static org.apache.kafka.server.config.KafkaConfig.INTER_BROKER_LISTENER_NAME_PROP;
+import static org.apache.kafka.server.config.KafkaConfig.INTER_BROKER_SECURITY_PROTOCOL_PROP;
+import static org.apache.kafka.server.config.KafkaConfig.BROKER_ID_PROP;
+import static org.apache.kafka.server.config.KafkaConfig.LOG_DIR_PROP;
 
 /**
  * Setup an embedded Kafka cluster with specified number of brokers and specified broker properties. To be used for
@@ -130,7 +140,7 @@ public class EmbeddedKafkaCluster {
         // Since we support `stop` followed by `startOnlyKafkaOnSamePorts`, we track whether
         // a listener config is defined during initialization in order to know if it's
         // safe to override it
-        hasListenerConfig = brokerConfig.get(KafkaConfig.ListenersProp()) != null;
+        hasListenerConfig = brokerConfig.get(LISTENERS_PROP) != null;
 
         this.clientConfigs = clientConfigs;
     }
@@ -154,28 +164,28 @@ public class EmbeddedKafkaCluster {
     }
 
     private void doStart() {
-        brokerConfig.put(KafkaConfig.ZkConnectProp(), zKConnectString());
+        brokerConfig.put(ZK_CONNECT_PROP, zKConnectString());
 
-        putIfAbsent(brokerConfig, KafkaConfig.DeleteTopicEnableProp(), true);
-        putIfAbsent(brokerConfig, KafkaConfig.GroupInitialRebalanceDelayMsProp(), 0);
-        putIfAbsent(brokerConfig, KafkaConfig.OffsetsTopicReplicationFactorProp(), (short) brokers.length);
-        putIfAbsent(brokerConfig, KafkaConfig.AutoCreateTopicsEnableProp(), false);
+        putIfAbsent(brokerConfig, DELETE_TOPIC_ENABLE_PROP, true);
+        putIfAbsent(brokerConfig, GROUP_INITIAL_REBALANCE_DELAY_MS_PROP, 0);
+        putIfAbsent(brokerConfig, OFFSETS_TOPIC_REPLICATION_FACTOR_PROP, (short) brokers.length);
+        putIfAbsent(brokerConfig, AUTO_CREATE_TOPICS_ENABLE_PROP, false);
         // reduce the size of the log cleaner map to reduce test memory usage
         putIfAbsent(brokerConfig, CleanerConfig.LOG_CLEANER_DEDUPE_BUFFER_SIZE_PROP, 2 * 1024 * 1024L);
 
-        Object listenerConfig = brokerConfig.get(KafkaConfig.InterBrokerListenerNameProp());
+        Object listenerConfig = brokerConfig.get(INTER_BROKER_LISTENER_NAME_PROP);
         if (listenerConfig == null)
-            listenerConfig = brokerConfig.get(KafkaConfig.InterBrokerSecurityProtocolProp());
+            listenerConfig = brokerConfig.get(INTER_BROKER_SECURITY_PROTOCOL_PROP);
         if (listenerConfig == null)
             listenerConfig = "PLAINTEXT";
         listenerName = new ListenerName(listenerConfig.toString());
 
         for (int i = 0; i < brokers.length; i++) {
-            brokerConfig.put(KafkaConfig.BrokerIdProp(), i);
+            brokerConfig.put(BROKER_ID_PROP, i);
             currentBrokerLogDirs[i] = currentBrokerLogDirs[i] == null ? createLogDir() : currentBrokerLogDirs[i];
-            brokerConfig.put(KafkaConfig.LogDirProp(), currentBrokerLogDirs[i]);
+            brokerConfig.put(LOG_DIR_PROP, currentBrokerLogDirs[i]);
             if (!hasListenerConfig)
-                brokerConfig.put(KafkaConfig.ListenersProp(), listenerName.value() + "://localhost:" + currentBrokerPorts[i]);
+                brokerConfig.put(LISTENERS_PROP, listenerName.value() + "://localhost:" + currentBrokerPorts[i]);
             brokers[i] = TestUtils.createServer(new KafkaConfig(brokerConfig, true), time);
             currentBrokerPorts[i] = brokers[i].boundPort(listenerName);
         }
@@ -305,7 +315,7 @@ public class EmbeddedKafkaCluster {
     }
     
     public boolean sslEnabled() {
-        final String listeners = brokerConfig.getProperty(KafkaConfig.ListenersProp());
+        final String listeners = brokerConfig.getProperty(LISTENERS_PROP);
         return listeners != null && listeners.contains("SSL");
     }
 
@@ -463,7 +473,7 @@ public class EmbeddedKafkaCluster {
         Properties props = Utils.mkProperties(clientConfigs);
         props.putAll(adminClientConfig);
         props.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers());
-        final Object listeners = brokerConfig.get(KafkaConfig.ListenersProp());
+        final Object listeners = brokerConfig.get(LISTENERS_PROP);
         if (listeners != null && listeners.toString().contains("SSL")) {
             props.put(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG, brokerConfig.get(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG));
             props.put(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG, ((Password) brokerConfig.get(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG)).value());

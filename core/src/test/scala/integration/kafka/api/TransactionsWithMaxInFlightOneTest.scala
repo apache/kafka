@@ -24,6 +24,7 @@ import kafka.utils.{TestInfoUtils, TestUtils}
 import kafka.utils.TestUtils.consumeRecords
 import org.apache.kafka.clients.consumer.Consumer
 import org.apache.kafka.clients.producer.KafkaProducer
+import org.apache.kafka.server.config.KafkaConfig.{MIN_IN_SYNC_REPLICAS_PROP, AUTO_CREATE_TOPICS_ENABLE_PROP, OFFSETS_TOPIC_PARTITIONS_PROP, OFFSETS_TOPIC_REPLICATION_FACTOR_PROP, TRANSACTIONS_TOPIC_PARTITIONS_PROP, TRANSACTIONS_TOPIC_REPLICATION_FACTOR_PROP, TRANSACTIONS_TOPIC_MIN_ISR_PROP, CONTROLLED_SHUTDOWN_ENABLE_PROP, UNCLEAN_LEADER_ELECTION_ENABLE_PROP, AUTO_LEADER_REBALANCE_ENABLE_PROP, GROUP_INITIAL_REBALANCE_DELAY_MS_PROP, TRANSACTIONS_ABORT_TIMED_OUT_TRANSACTION_CLEANUP_INTERVAL_MS_PROP}
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo}
 import org.junit.jupiter.params.ParameterizedTest
@@ -55,7 +56,7 @@ class TransactionsWithMaxInFlightOneTest extends KafkaServerTestHarness {
   override def setUp(testInfo: TestInfo): Unit = {
     super.setUp(testInfo)
     val topicConfig = new Properties()
-    topicConfig.put(KafkaConfig.MinInSyncReplicasProp, 1.toString)
+    topicConfig.put(MIN_IN_SYNC_REPLICAS_PROP, 1.toString)
     createTopic(topic1, numPartitions, numBrokers, topicConfig)
     createTopic(topic2, numPartitions, numBrokers, topicConfig)
 
@@ -102,17 +103,17 @@ class TransactionsWithMaxInFlightOneTest extends KafkaServerTestHarness {
 
   private def serverProps() = {
     val serverProps = new Properties()
-    serverProps.put(KafkaConfig.AutoCreateTopicsEnableProp, false.toString)
-    serverProps.put(KafkaConfig.OffsetsTopicPartitionsProp, 1.toString)
-    serverProps.put(KafkaConfig.OffsetsTopicReplicationFactorProp, 1.toString)
-    serverProps.put(KafkaConfig.TransactionsTopicPartitionsProp, 1.toString)
-    serverProps.put(KafkaConfig.TransactionsTopicReplicationFactorProp, 1.toString)
-    serverProps.put(KafkaConfig.TransactionsTopicMinISRProp, 1.toString)
-    serverProps.put(KafkaConfig.ControlledShutdownEnableProp, true.toString)
-    serverProps.put(KafkaConfig.UncleanLeaderElectionEnableProp, false.toString)
-    serverProps.put(KafkaConfig.AutoLeaderRebalanceEnableProp, false.toString)
-    serverProps.put(KafkaConfig.GroupInitialRebalanceDelayMsProp, "0")
-    serverProps.put(KafkaConfig.TransactionsAbortTimedOutTransactionCleanupIntervalMsProp, "200")
+    serverProps.put(AUTO_CREATE_TOPICS_ENABLE_PROP, false.toString)
+    serverProps.put(OFFSETS_TOPIC_PARTITIONS_PROP, 1.toString)
+    serverProps.put(OFFSETS_TOPIC_REPLICATION_FACTOR_PROP, 1.toString)
+    serverProps.put(TRANSACTIONS_TOPIC_PARTITIONS_PROP, 1.toString)
+    serverProps.put(TRANSACTIONS_TOPIC_REPLICATION_FACTOR_PROP, 1.toString)
+    serverProps.put(TRANSACTIONS_TOPIC_MIN_ISR_PROP, 1.toString)
+    serverProps.put(CONTROLLED_SHUTDOWN_ENABLE_PROP, true.toString)
+    serverProps.put(UNCLEAN_LEADER_ELECTION_ENABLE_PROP, false.toString)
+    serverProps.put(AUTO_LEADER_REBALANCE_ENABLE_PROP, false.toString)
+    serverProps.put(GROUP_INITIAL_REBALANCE_DELAY_MS_PROP, "0")
+    serverProps.put(TRANSACTIONS_ABORT_TIMED_OUT_TRANSACTION_CLEANUP_INTERVAL_MS_PROP, "200")
     serverProps
   }
 

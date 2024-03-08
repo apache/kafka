@@ -18,7 +18,6 @@ package kafka.api
 
 import java.util.Properties
 
-import kafka.server.KafkaConfig
 import kafka.utils._
 import kafka.tools.StorageTool
 import kafka.zk.ConfigEntityChangeNotificationZNode
@@ -27,6 +26,7 @@ import org.apache.kafka.common.config.SaslConfigs
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.apache.kafka.common.security.scram.internals.ScramMechanism
 import org.apache.kafka.common.security.token.delegation.DelegationToken
+import org.apache.kafka.server.config.KafkaConfig
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
@@ -54,8 +54,8 @@ class DelegationTokenEndToEndAuthorizationTest extends EndToEndAuthorizationTest
 
   protected val privilegedAdminClientConfig = new Properties()
 
-  this.serverConfig.setProperty(KafkaConfig.DelegationTokenSecretKeyProp, "testKey")
-  this.controllerConfig.setProperty(KafkaConfig.DelegationTokenSecretKeyProp, "testKey")
+  this.serverConfig.setProperty(KafkaConfig.DELEGATION_TOKEN_SECRET_KEY_PROP, "testKey")
+  this.controllerConfig.setProperty(KafkaConfig.DELEGATION_TOKEN_SECRET_KEY_PROP, "testKey")
 
   def createDelegationTokenOptions(): CreateDelegationTokenOptions = new CreateDelegationTokenOptions()
 

@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.tiered.storage.utils;
 
-import kafka.server.KafkaConfig;
 import org.apache.kafka.clients.admin.TopicDescription;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.TopicConfig;
@@ -39,6 +38,7 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
+import static org.apache.kafka.server.config.KafkaConfig.LOG_CLEANUP_INTERVAL_MS_PROP;
 import static org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManagerConfig.REMOTE_LOG_METADATA_INITIALIZATION_RETRY_INTERVAL_MS_PROP;
 import static org.apache.kafka.server.log.remote.storage.LocalTieredStorage.DELETE_ON_CLOSE_CONFIG;
 import static org.apache.kafka.server.log.remote.storage.LocalTieredStorage.STORAGE_DIR_CONFIG;
@@ -137,7 +137,7 @@ public class TieredStorageTestUtils {
         // the integration tests can confirm a given log segment is present only in the second-tier storage.
         // Note that this does not impact the eligibility of a log segment to be offloaded to the
         // second-tier storage.
-        overridingProps.setProperty(KafkaConfig.LogCleanupIntervalMsProp(), LOG_CLEANUP_INTERVAL_MS.toString());
+        overridingProps.setProperty(LOG_CLEANUP_INTERVAL_MS_PROP, LOG_CLEANUP_INTERVAL_MS.toString());
         // The directory of the second-tier storage needs to be constant across all instances of storage managers
         // in every broker and throughout the test. Indeed, as brokers are restarted during the test.
         // You can override this property with a fixed path of your choice if you wish to use a non-temporary

@@ -23,6 +23,7 @@ import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.server.quota.ClientQuotaCallback
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.server.config.{ClientQuotaManagerConfig, ReplicationQuotaManagerConfig}
+import org.apache.kafka.server.config.KafkaConfig.CLIENT_QUOTA_CALLBACK_CLASS_PROP
 import org.apache.kafka.server.quota.ClientQuotaType
 
 object QuotaType  {
@@ -74,7 +75,7 @@ object QuotaFactory extends Logging {
 
   def instantiate(cfg: KafkaConfig, metrics: Metrics, time: Time, threadNamePrefix: String): QuotaManagers = {
 
-    val clientQuotaCallback = Option(cfg.getConfiguredInstance(KafkaConfig.ClientQuotaCallbackClassProp,
+    val clientQuotaCallback = Option(cfg.getConfiguredInstance(CLIENT_QUOTA_CALLBACK_CLASS_PROP,
       classOf[ClientQuotaCallback]))
     QuotaManagers(
       new ClientQuotaManager(clientConfig(cfg), metrics, Fetch, time, threadNamePrefix, clientQuotaCallback),

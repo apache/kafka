@@ -17,7 +17,6 @@
 package kafka.zk
 
 import kafka.security.authorizer.AclEntry.{WildcardHost, WildcardPrincipalString}
-import kafka.server.KafkaConfig
 import kafka.test.{ClusterConfig, ClusterGenerator, ClusterInstance}
 import kafka.test.annotation.{AutoStart, ClusterConfigProperty, ClusterTemplate, ClusterTest, Type}
 import kafka.test.junit.ClusterTestExtensions
@@ -46,6 +45,7 @@ import org.apache.kafka.metadata.authorizer.StandardAcl
 import org.apache.kafka.metadata.migration.ZkMigrationLeadershipState
 import org.apache.kafka.raft.RaftConfig
 import org.apache.kafka.security.PasswordEncoder
+import org.apache.kafka.server.config.KafkaConfig.{MIGRATION_ENABLED_PROP, ZK_CONNECT_PROP, CONTROLLER_LISTENER_NAMES_PROP, LISTENER_SECURITY_PROTOCOL_MAP_PROP}
 import org.apache.kafka.server.ControllerRequestCompletionHandler
 import org.apache.kafka.server.common.{ApiMessageAndVersion, MetadataVersion, ProducerIdsBlock}
 import org.apache.kafka.server.config.ConfigType
@@ -176,8 +176,8 @@ class ZkMigrationIntegrationTest {
         setClusterId(Uuid.fromString(clusterId)).
         setNumBrokerNodes(0).
         setNumControllerNodes(1).build())
-      .setConfigProp(KafkaConfig.MigrationEnabledProp, "true")
-      .setConfigProp(KafkaConfig.ZkConnectProp, zkCluster.asInstanceOf[ZkClusterInstance].getUnderlying.zkConnect)
+      .setConfigProp(MIGRATION_ENABLED_PROP, "true")
+      .setConfigProp(ZK_CONNECT_PROP, zkCluster.asInstanceOf[ZkClusterInstance].getUnderlying.zkConnect)
       .build()
     try {
       kraftCluster.format()
@@ -186,10 +186,10 @@ class ZkMigrationIntegrationTest {
 
       // Enable migration configs and restart brokers
       log.info("Restart brokers in migration mode")
-      zkCluster.config().serverProperties().put(KafkaConfig.MigrationEnabledProp, "true")
+      zkCluster.config().serverProperties().put(MIGRATION_ENABLED_PROP, "true")
       zkCluster.config().serverProperties().put(RaftConfig.QUORUM_VOTERS_CONFIG, kraftCluster.quorumVotersConfig())
-      zkCluster.config().serverProperties().put(KafkaConfig.ControllerListenerNamesProp, "CONTROLLER")
-      zkCluster.config().serverProperties().put(KafkaConfig.ListenerSecurityProtocolMapProp, "CONTROLLER:PLAINTEXT,EXTERNAL:PLAINTEXT,PLAINTEXT:PLAINTEXT")
+      zkCluster.config().serverProperties().put(CONTROLLER_LISTENER_NAMES_PROP, "CONTROLLER")
+      zkCluster.config().serverProperties().put(LISTENER_SECURITY_PROTOCOL_MAP_PROP, "CONTROLLER:PLAINTEXT,EXTERNAL:PLAINTEXT,PLAINTEXT:PLAINTEXT")
       zkCluster.rollingBrokerRestart() // This would throw if authorizers weren't allowed
       zkCluster.waitForReadyBrokers()
       readyFuture.get(30, TimeUnit.SECONDS)
@@ -298,8 +298,8 @@ class ZkMigrationIntegrationTest {
         setClusterId(Uuid.fromString(clusterId)).
         setNumBrokerNodes(0).
         setNumControllerNodes(1).build())
-      .setConfigProp(KafkaConfig.MigrationEnabledProp, "true")
-      .setConfigProp(KafkaConfig.ZkConnectProp, zkCluster.asInstanceOf[ZkClusterInstance].getUnderlying.zkConnect)
+      .setConfigProp(MIGRATION_ENABLED_PROP, "true")
+      .setConfigProp(ZK_CONNECT_PROP, zkCluster.asInstanceOf[ZkClusterInstance].getUnderlying.zkConnect)
       .build()
     try {
       kraftCluster.format()
@@ -308,10 +308,10 @@ class ZkMigrationIntegrationTest {
 
       // Enable migration configs and restart brokers
       log.info("Restart brokers in migration mode")
-      zkCluster.config().serverProperties().put(KafkaConfig.MigrationEnabledProp, "true")
+      zkCluster.config().serverProperties().put(MIGRATION_ENABLED_PROP, "true")
       zkCluster.config().serverProperties().put(RaftConfig.QUORUM_VOTERS_CONFIG, kraftCluster.quorumVotersConfig())
-      zkCluster.config().serverProperties().put(KafkaConfig.ControllerListenerNamesProp, "CONTROLLER")
-      zkCluster.config().serverProperties().put(KafkaConfig.ListenerSecurityProtocolMapProp, "CONTROLLER:PLAINTEXT,EXTERNAL:PLAINTEXT,PLAINTEXT:PLAINTEXT")
+      zkCluster.config().serverProperties().put(CONTROLLER_LISTENER_NAMES_PROP, "CONTROLLER")
+      zkCluster.config().serverProperties().put(LISTENER_SECURITY_PROTOCOL_MAP_PROP, "CONTROLLER:PLAINTEXT,EXTERNAL:PLAINTEXT,PLAINTEXT:PLAINTEXT")
       zkCluster.rollingBrokerRestart()
 
       // Emulate a ZK topic deletion
@@ -432,8 +432,8 @@ class ZkMigrationIntegrationTest {
         setClusterId(Uuid.fromString(clusterId)).
         setNumBrokerNodes(0).
         setNumControllerNodes(1).build())
-      .setConfigProp(KafkaConfig.MigrationEnabledProp, "true")
-      .setConfigProp(KafkaConfig.ZkConnectProp, zkCluster.asInstanceOf[ZkClusterInstance].getUnderlying.zkConnect)
+      .setConfigProp(MIGRATION_ENABLED_PROP, "true")
+      .setConfigProp(ZK_CONNECT_PROP, zkCluster.asInstanceOf[ZkClusterInstance].getUnderlying.zkConnect)
       .build()
     try {
       kraftCluster.format()
@@ -442,10 +442,10 @@ class ZkMigrationIntegrationTest {
 
       // Enable migration configs and restart brokers
       log.info("Restart brokers in migration mode")
-      zkCluster.config().serverProperties().put(KafkaConfig.MigrationEnabledProp, "true")
+      zkCluster.config().serverProperties().put(MIGRATION_ENABLED_PROP, "true")
       zkCluster.config().serverProperties().put(RaftConfig.QUORUM_VOTERS_CONFIG, kraftCluster.quorumVotersConfig())
-      zkCluster.config().serverProperties().put(KafkaConfig.ControllerListenerNamesProp, "CONTROLLER")
-      zkCluster.config().serverProperties().put(KafkaConfig.ListenerSecurityProtocolMapProp, "CONTROLLER:PLAINTEXT,EXTERNAL:PLAINTEXT,PLAINTEXT:PLAINTEXT")
+      zkCluster.config().serverProperties().put(CONTROLLER_LISTENER_NAMES_PROP, "CONTROLLER")
+      zkCluster.config().serverProperties().put(LISTENER_SECURITY_PROTOCOL_MAP_PROP, "CONTROLLER:PLAINTEXT,EXTERNAL:PLAINTEXT,PLAINTEXT:PLAINTEXT")
       zkCluster.rollingBrokerRestart()
       zkCluster.waitForReadyBrokers()
       readyFuture.get(30, TimeUnit.SECONDS)
@@ -497,8 +497,8 @@ class ZkMigrationIntegrationTest {
         setClusterId(Uuid.fromString(clusterId)).
         setNumBrokerNodes(0).
         setNumControllerNodes(1).build())
-      .setConfigProp(KafkaConfig.MigrationEnabledProp, "true")
-      .setConfigProp(KafkaConfig.ZkConnectProp, zkCluster.asInstanceOf[ZkClusterInstance].getUnderlying.zkConnect)
+      .setConfigProp(MIGRATION_ENABLED_PROP, "true")
+      .setConfigProp(ZK_CONNECT_PROP, zkCluster.asInstanceOf[ZkClusterInstance].getUnderlying.zkConnect)
       .build()
     try {
       kraftCluster.format()
@@ -510,10 +510,10 @@ class ZkMigrationIntegrationTest {
 
       // Enable migration configs and restart brokers
       log.info("Restart brokers in migration mode")
-      zkCluster.config().serverProperties().put(KafkaConfig.MigrationEnabledProp, "true")
+      zkCluster.config().serverProperties().put(MIGRATION_ENABLED_PROP, "true")
       zkCluster.config().serverProperties().put(RaftConfig.QUORUM_VOTERS_CONFIG, kraftCluster.quorumVotersConfig())
-      zkCluster.config().serverProperties().put(KafkaConfig.ControllerListenerNamesProp, "CONTROLLER")
-      zkCluster.config().serverProperties().put(KafkaConfig.ListenerSecurityProtocolMapProp, "CONTROLLER:PLAINTEXT,EXTERNAL:PLAINTEXT,PLAINTEXT:PLAINTEXT")
+      zkCluster.config().serverProperties().put(CONTROLLER_LISTENER_NAMES_PROP, "CONTROLLER")
+      zkCluster.config().serverProperties().put(LISTENER_SECURITY_PROTOCOL_MAP_PROP, "CONTROLLER:PLAINTEXT,EXTERNAL:PLAINTEXT,PLAINTEXT:PLAINTEXT")
       zkCluster.rollingBrokerRestart()
       zkCluster.waitForReadyBrokers()
       readyFuture.get(30, TimeUnit.SECONDS)
@@ -565,8 +565,8 @@ class ZkMigrationIntegrationTest {
         setClusterId(Uuid.fromString(clusterId)).
         setNumBrokerNodes(0).
         setNumControllerNodes(1).build())
-      .setConfigProp(KafkaConfig.MigrationEnabledProp, "true")
-      .setConfigProp(KafkaConfig.ZkConnectProp, zkCluster.asInstanceOf[ZkClusterInstance].getUnderlying.zkConnect)
+      .setConfigProp(MIGRATION_ENABLED_PROP, "true")
+      .setConfigProp(ZK_CONNECT_PROP, zkCluster.asInstanceOf[ZkClusterInstance].getUnderlying.zkConnect)
       .build()
     try {
       kraftCluster.format()
@@ -575,10 +575,10 @@ class ZkMigrationIntegrationTest {
 
       // Enable migration configs and restart brokers
       log.info("Restart brokers in migration mode")
-      zkCluster.config().serverProperties().put(KafkaConfig.MigrationEnabledProp, "true")
+      zkCluster.config().serverProperties().put(MIGRATION_ENABLED_PROP, "true")
       zkCluster.config().serverProperties().put(RaftConfig.QUORUM_VOTERS_CONFIG, kraftCluster.quorumVotersConfig())
-      zkCluster.config().serverProperties().put(KafkaConfig.ControllerListenerNamesProp, "CONTROLLER")
-      zkCluster.config().serverProperties().put(KafkaConfig.ListenerSecurityProtocolMapProp, "CONTROLLER:PLAINTEXT,EXTERNAL:PLAINTEXT,PLAINTEXT:PLAINTEXT")
+      zkCluster.config().serverProperties().put(CONTROLLER_LISTENER_NAMES_PROP, "CONTROLLER")
+      zkCluster.config().serverProperties().put(LISTENER_SECURITY_PROTOCOL_MAP_PROP, "CONTROLLER:PLAINTEXT,EXTERNAL:PLAINTEXT,PLAINTEXT:PLAINTEXT")
       zkCluster.rollingBrokerRestart()
       zkCluster.waitForReadyBrokers()
       readyFuture.get(30, TimeUnit.SECONDS)
@@ -625,8 +625,8 @@ class ZkMigrationIntegrationTest {
         setClusterId(Uuid.fromString(clusterId)).
         setNumBrokerNodes(0).
         setNumControllerNodes(1).build())
-      .setConfigProp(KafkaConfig.MigrationEnabledProp, "true")
-      .setConfigProp(KafkaConfig.ZkConnectProp, zkCluster.asInstanceOf[ZkClusterInstance].getUnderlying.zkConnect)
+      .setConfigProp(MIGRATION_ENABLED_PROP, "true")
+      .setConfigProp(ZK_CONNECT_PROP, zkCluster.asInstanceOf[ZkClusterInstance].getUnderlying.zkConnect)
       .build()
     try {
       kraftCluster.format()
@@ -635,10 +635,10 @@ class ZkMigrationIntegrationTest {
 
       // Enable migration configs and restart brokers
       log.info("Restart brokers in migration mode")
-      zkCluster.config().serverProperties().put(KafkaConfig.MigrationEnabledProp, "true")
+      zkCluster.config().serverProperties().put(MIGRATION_ENABLED_PROP, "true")
       zkCluster.config().serverProperties().put(RaftConfig.QUORUM_VOTERS_CONFIG, kraftCluster.quorumVotersConfig())
-      zkCluster.config().serverProperties().put(KafkaConfig.ControllerListenerNamesProp, "CONTROLLER")
-      zkCluster.config().serverProperties().put(KafkaConfig.ListenerSecurityProtocolMapProp, "CONTROLLER:PLAINTEXT,EXTERNAL:PLAINTEXT,PLAINTEXT:PLAINTEXT")
+      zkCluster.config().serverProperties().put(CONTROLLER_LISTENER_NAMES_PROP, "CONTROLLER")
+      zkCluster.config().serverProperties().put(LISTENER_SECURITY_PROTOCOL_MAP_PROP, "CONTROLLER:PLAINTEXT,EXTERNAL:PLAINTEXT,PLAINTEXT:PLAINTEXT")
       zkCluster.rollingBrokerRestart()
       zkCluster.waitForReadyBrokers()
       readyFuture.get(30, TimeUnit.SECONDS)
@@ -700,8 +700,8 @@ class ZkMigrationIntegrationTest {
         setClusterId(Uuid.fromString(clusterId)).
         setNumBrokerNodes(0).
         setNumControllerNodes(1).build())
-      .setConfigProp(KafkaConfig.MigrationEnabledProp, "true")
-      .setConfigProp(KafkaConfig.ZkConnectProp, zkCluster.asInstanceOf[ZkClusterInstance].getUnderlying.zkConnect)
+      .setConfigProp(MIGRATION_ENABLED_PROP, "true")
+      .setConfigProp(ZK_CONNECT_PROP, zkCluster.asInstanceOf[ZkClusterInstance].getUnderlying.zkConnect)
       .build()
     try {
       kraftCluster.format()
@@ -710,10 +710,10 @@ class ZkMigrationIntegrationTest {
 
       // Enable migration configs and restart brokers
       log.info("Restart brokers in migration mode")
-      zkCluster.config().serverProperties().put(KafkaConfig.MigrationEnabledProp, "true")
+      zkCluster.config().serverProperties().put(MIGRATION_ENABLED_PROP, "true")
       zkCluster.config().serverProperties().put(RaftConfig.QUORUM_VOTERS_CONFIG, kraftCluster.quorumVotersConfig())
-      zkCluster.config().serverProperties().put(KafkaConfig.ControllerListenerNamesProp, "CONTROLLER")
-      zkCluster.config().serverProperties().put(KafkaConfig.ListenerSecurityProtocolMapProp, "CONTROLLER:PLAINTEXT,EXTERNAL:PLAINTEXT,PLAINTEXT:PLAINTEXT")
+      zkCluster.config().serverProperties().put(CONTROLLER_LISTENER_NAMES_PROP, "CONTROLLER")
+      zkCluster.config().serverProperties().put(LISTENER_SECURITY_PROTOCOL_MAP_PROP, "CONTROLLER:PLAINTEXT,EXTERNAL:PLAINTEXT,PLAINTEXT:PLAINTEXT")
       zkCluster.rollingBrokerRestart()
       zkCluster.waitForReadyBrokers()
       readyFuture.get(30, TimeUnit.SECONDS)

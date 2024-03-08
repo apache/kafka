@@ -32,6 +32,8 @@ import org.apache.kafka.common.{Cluster, Reconfigurable}
 import org.apache.kafka.common.config.SaslConfigs
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.security.auth._
+
+import org.apache.kafka.server.config.KafkaConfig
 import org.apache.kafka.server.quota._
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo}
@@ -62,10 +64,10 @@ class CustomQuotaCallbackTest extends IntegrationTestHarness with SaslSetup {
   @BeforeEach
   override def setUp(testInfo: TestInfo): Unit = {
     startSasl(jaasSections(kafkaServerSaslMechanisms, Some("SCRAM-SHA-256"), KafkaSasl, JaasTestUtils.KafkaServerContextName))
-    this.serverConfig.setProperty(KafkaConfig.ClientQuotaCallbackClassProp, classOf[GroupedUserQuotaCallback].getName)
-    this.serverConfig.setProperty(s"${listenerName.configPrefix}${KafkaConfig.PrincipalBuilderClassProp}",
+    this.serverConfig.setProperty(KafkaConfig.CLIENT_QUOTA_CALLBACK_CLASS_PROP, classOf[GroupedUserQuotaCallback].getName)
+    this.serverConfig.setProperty(s"${listenerName.configPrefix}${KafkaConfig.PRINCIPAL_BUILDER_CLASS_PROP}",
       classOf[GroupedUserPrincipalBuilder].getName)
-    this.serverConfig.setProperty(KafkaConfig.DeleteTopicEnableProp, "true")
+    this.serverConfig.setProperty(KafkaConfig.DELETE_TOPIC_ENABLE_PROP, "true")
     super.setUp(testInfo)
 
     producerConfig.put(SaslConfigs.SASL_JAAS_CONFIG,
@@ -367,7 +369,7 @@ class GroupedUserQuotaCallback extends ClientQuotaCallback with Reconfigurable w
   val partitionRatio = new ConcurrentHashMap[String, Double]()
 
   override def configure(configs: util.Map[String, _]): Unit = {
-    brokerId = configs.get(KafkaConfig.BrokerIdProp).toString.toInt
+    brokerId = configs.get(KafkaConfig.BROKER_ID_PROP).toString.toInt
     callbackInstances.incrementAndGet
   }
 

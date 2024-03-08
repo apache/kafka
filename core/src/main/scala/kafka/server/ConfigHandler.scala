@@ -19,7 +19,6 @@ package kafka.server
 
 import java.net.{InetAddress, UnknownHostException}
 import java.util.{Collections, Properties}
-import DynamicConfig.Broker._
 import kafka.controller.KafkaController
 import kafka.log.UnifiedLog
 import kafka.network.ConnectionQuotas
@@ -35,6 +34,8 @@ import org.apache.kafka.common.metrics.Quota._
 import org.apache.kafka.common.utils.Sanitizer
 import org.apache.kafka.server.ClientMetricsManager
 import org.apache.kafka.server.config.ConfigEntityName
+import org.apache.kafka.server.config.KafkaConfig.UNCLEAN_LEADER_ELECTION_ENABLE_PROP
+import org.apache.kafka.server.config.dynamic.BrokerDynamicConfigs._
 import org.apache.kafka.storage.internals.log.{LogConfig, ThrottledReplicaListValidator}
 import org.apache.kafka.storage.internals.log.LogConfig.MessageFormatVersion
 
@@ -108,7 +109,7 @@ class TopicConfigHandler(private val replicaManager: ReplicaManager,
     updateThrottledList(LogConfig.LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG, quotas.leader)
     updateThrottledList(LogConfig.FOLLOWER_REPLICATION_THROTTLED_REPLICAS_CONFIG, quotas.follower)
 
-    if (Try(topicConfig.getProperty(KafkaConfig.UncleanLeaderElectionEnableProp).toBoolean).getOrElse(false)) {
+    if (Try(topicConfig.getProperty(UNCLEAN_LEADER_ELECTION_ENABLE_PROP).toBoolean).getOrElse(false)) {
       kafkaController.foreach(_.enableTopicUncleanLeaderElection(topic))
     }
   }
@@ -244,15 +245,15 @@ class BrokerConfigHandler(private val brokerConfig: KafkaConfig,
       if (properties.containsKey(prop))
         properties.getProperty(prop).toLong
       else
-        DefaultReplicationThrottledRate
+        DEFAULT_REPLICATION_THROTTLED_RATE
     }
     if (brokerId == ConfigEntityName.DEFAULT)
       brokerConfig.dynamicConfig.updateDefaultConfig(properties)
     else if (brokerConfig.brokerId == brokerId.trim.toInt) {
       brokerConfig.dynamicConfig.updateBrokerConfig(brokerConfig.brokerId, properties)
-      quotaManagers.leader.updateQuota(upperBound(getOrDefault(LeaderReplicationThrottledRateProp).toDouble))
-      quotaManagers.follower.updateQuota(upperBound(getOrDefault(FollowerReplicationThrottledRateProp).toDouble))
-      quotaManagers.alterLogDirs.updateQuota(upperBound(getOrDefault(ReplicaAlterLogDirsIoMaxBytesPerSecondProp).toDouble))
+      quotaManagers.leader.updateQuota(upperBound(getOrDefault(LEADER_REPLICATION_THROTTLED_RATE_PROP).toDouble))
+      quotaManagers.follower.updateQuota(upperBound(getOrDefault(FOLLOWER_REPLICATION_THROTTLED_RATE_PROP).toDouble))
+      quotaManagers.alterLogDirs.updateQuota(upperBound(getOrDefault(REPLICA_ALTER_LOG_DIRS_IO_MAX_BYTES_PER_SECOND_PROP).toDouble))
     }
   }
 }

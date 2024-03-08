@@ -21,7 +21,6 @@ import kafka.cluster.EndPoint;
 import kafka.cluster.Partition;
 import kafka.log.UnifiedLog;
 import kafka.server.BrokerTopicStats;
-import kafka.server.KafkaConfig;
 import kafka.server.StopPartition;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicIdPartition;
@@ -120,6 +119,8 @@ import java.util.stream.Stream;
 
 import static org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManagerConfig.REMOTE_LOG_METADATA_COMMON_CLIENT_PREFIX;
 import static org.apache.kafka.server.log.remote.storage.RemoteStorageMetrics.REMOTE_LOG_MANAGER_TASKS_AVG_IDLE_PERCENT_METRIC;
+import static org.apache.kafka.server.config.KafkaConfig.BROKER_ID_PROP;
+import static org.apache.kafka.server.config.KafkaConfig.LOG_DIR_PROP;
 
 /**
  * This class is responsible for
@@ -248,7 +249,7 @@ public class RemoteLogManager implements Closeable {
 
     private void configureRSM() {
         final Map<String, Object> rsmProps = new HashMap<>(rlmConfig.remoteStorageManagerProps());
-        rsmProps.put(KafkaConfig.BrokerIdProp(), brokerId);
+        rsmProps.put(BROKER_ID_PROP, brokerId);
         remoteLogStorageManager.configure(rsmProps);
     }
 
@@ -281,8 +282,8 @@ public class RemoteLogManager implements Closeable {
         // update the remoteLogMetadataProps here to override endpoint config if any
         rlmmProps.putAll(rlmConfig.remoteLogMetadataManagerProps());
 
-        rlmmProps.put(KafkaConfig.BrokerIdProp(), brokerId);
-        rlmmProps.put(KafkaConfig.LogDirProp(), logDir);
+        rlmmProps.put(BROKER_ID_PROP, brokerId);
+        rlmmProps.put(LOG_DIR_PROP, logDir);
         rlmmProps.put("cluster.id", clusterId);
 
         remoteLogMetadataManager.configure(rlmmProps);

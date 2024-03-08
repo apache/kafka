@@ -17,12 +17,12 @@
  */
 package kafka.network
 
-import kafka.server.{BaseRequestTest, KafkaConfig}
+import kafka.server.BaseRequestTest
 import kafka.utils.{TestInfoUtils, TestUtils}
 import org.apache.kafka.clients.admin.{Admin, AdminClientConfig}
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.security.auth.SecurityProtocol
-import org.apache.kafka.server.config.Defaults
+import org.apache.kafka.server.config.{Defaults, KafkaConfig}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo}
 import org.junit.jupiter.params.ParameterizedTest
@@ -40,10 +40,10 @@ class DynamicNumNetworkThreadsTest extends BaseRequestTest {
   var admin: Admin = _
 
   override def brokerPropertyOverrides(properties: Properties): Unit = {
-    properties.put(KafkaConfig.ListenersProp, s"$internal://localhost:0, $external://localhost:0")
-    properties.put(KafkaConfig.ListenerSecurityProtocolMapProp, s"$internal:PLAINTEXT, $external:PLAINTEXT")
-    properties.put(s"listener.name.${internal.toLowerCase}.${KafkaConfig.NumNetworkThreadsProp}", "2")
-    properties.put(KafkaConfig.NumNetworkThreadsProp, Defaults.NUM_NETWORK_THREADS.toString)
+    properties.put(KafkaConfig.LISTENERS_PROP, s"$internal://localhost:0, $external://localhost:0")
+    properties.put(KafkaConfig.LISTENER_SECURITY_PROTOCOL_MAP_PROP, s"$internal:PLAINTEXT, $external:PLAINTEXT")
+    properties.put(s"listener.name.${internal.toLowerCase}.${KafkaConfig.NUM_NETWORK_THREADS_PROP}", "2")
+    properties.put(KafkaConfig.NUM_NETWORK_THREADS_PROP, Defaults.NUM_NETWORK_THREADS.toString)
   }
 
   @BeforeEach
@@ -72,8 +72,8 @@ class DynamicNumNetworkThreadsTest extends BaseRequestTest {
     // Increase the base network thread count
     val newBaseNetworkThreadsCount = Defaults.NUM_NETWORK_THREADS + 1
     var props = new Properties
-    props.put(KafkaConfig.NumNetworkThreadsProp, newBaseNetworkThreadsCount.toString)
-    reconfigureServers(props, (KafkaConfig.NumNetworkThreadsProp, newBaseNetworkThreadsCount.toString))
+    props.put(KafkaConfig.NUM_NETWORK_THREADS_PROP, newBaseNetworkThreadsCount.toString)
+    reconfigureServers(props, (KafkaConfig.NUM_NETWORK_THREADS_PROP, newBaseNetworkThreadsCount.toString))
 
     // Only the external listener is changed
     assertEquals(2, getNumNetworkThreads(internal))
@@ -82,8 +82,8 @@ class DynamicNumNetworkThreadsTest extends BaseRequestTest {
     // Increase the network thread count for internal
     val newInternalNetworkThreadsCount = 3
     props = new Properties
-    props.put(s"listener.name.${internal.toLowerCase}.${KafkaConfig.NumNetworkThreadsProp}", newInternalNetworkThreadsCount.toString)
-    reconfigureServers(props, (s"listener.name.${internal.toLowerCase}.${KafkaConfig.NumNetworkThreadsProp}", newInternalNetworkThreadsCount.toString))
+    props.put(s"listener.name.${internal.toLowerCase}.${KafkaConfig.NUM_NETWORK_THREADS_PROP}", newInternalNetworkThreadsCount.toString)
+    reconfigureServers(props, (s"listener.name.${internal.toLowerCase}.${KafkaConfig.NUM_NETWORK_THREADS_PROP}", newInternalNetworkThreadsCount.toString))
 
     // The internal listener is changed
     assertEquals(newInternalNetworkThreadsCount, getNumNetworkThreads(internal))

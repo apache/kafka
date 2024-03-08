@@ -21,7 +21,7 @@ import java.util.Collections
 import kafka.testkit.KafkaClusterTestKit
 import kafka.testkit.TestKitNodes
 import kafka.utils.TestUtils
-import kafka.server.KafkaConfig.{MetadataMaxIdleIntervalMsProp, MetadataSnapshotMaxNewRecordBytesProp}
+import org.apache.kafka.server.config.KafkaConfig.{METADATA_MAX_IDLE_INTERVAL_MS_PROP, METADATA_SNAPSHOT_MAX_NEW_RECORD_BYTES_PROP}
 import org.apache.kafka.common.utils.BufferSupplier
 import org.apache.kafka.metadata.MetadataRecordSerde
 import org.apache.kafka.snapshot.RecordsSnapshotReader
@@ -48,8 +48,8 @@ class RaftClusterSnapshotTest {
             .setNumControllerNodes(numberOfControllers)
             .build()
         )
-        .setConfigProp(MetadataSnapshotMaxNewRecordBytesProp, "10")
-        .setConfigProp(MetadataMaxIdleIntervalMsProp, "0")
+        .setConfigProp(METADATA_SNAPSHOT_MAX_NEW_RECORD_BYTES_PROP, "10")
+        .setConfigProp(METADATA_MAX_IDLE_INTERVAL_MS_PROP, "0")
         .build()
     ) { cluster =>
       cluster.format()

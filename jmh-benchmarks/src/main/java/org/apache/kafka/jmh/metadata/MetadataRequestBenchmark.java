@@ -31,7 +31,6 @@ import kafka.server.ControllerMutationQuotaManager;
 import kafka.server.FetchManager;
 import kafka.server.KafkaApis;
 import kafka.server.KafkaConfig;
-import kafka.server.KafkaConfig$;
 import kafka.server.MetadataCache;
 import kafka.server.QuotaFactory;
 import kafka.server.ReplicaManager;
@@ -87,6 +86,9 @@ import java.util.Optional;
 import java.util.Properties;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.IntStream;
+
+import static org.apache.kafka.server.config.KafkaConfig.ZK_CONNECT_PROP;
+import static org.apache.kafka.server.config.KafkaConfig.BROKER_ID_PROP;
 
 @State(Scope.Benchmark)
 @Fork(value = 1)
@@ -176,8 +178,8 @@ public class MetadataRequestBenchmark {
 
     private KafkaApis createKafkaApis() {
         Properties kafkaProps =  new Properties();
-        kafkaProps.put(KafkaConfig$.MODULE$.ZkConnectProp(), "zk");
-        kafkaProps.put(KafkaConfig$.MODULE$.BrokerIdProp(), brokerId + "");
+        kafkaProps.put(ZK_CONNECT_PROP, "zk");
+        kafkaProps.put(BROKER_ID_PROP, brokerId + "");
         KafkaConfig config = new KafkaConfig(kafkaProps);
         return new KafkaApisBuilder().
             setRequestChannel(requestChannel).

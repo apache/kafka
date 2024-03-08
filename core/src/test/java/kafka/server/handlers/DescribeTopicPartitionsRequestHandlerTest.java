@@ -75,6 +75,10 @@ import java.util.Optional;
 import java.util.Properties;
 import java.util.stream.Collectors;
 
+import static org.apache.kafka.server.config.KafkaConfig.NODE_ID_PROP;
+import static org.apache.kafka.server.config.KafkaConfig.PROCESS_ROLES_PROP;
+import static org.apache.kafka.server.config.KafkaConfig.QUORUM_VOTERS_PROP;
+import static org.apache.kafka.server.config.KafkaConfig.CONTROLLER_LISTENER_NAMES_PROP;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -534,11 +538,11 @@ class DescribeTopicPartitionsRequestHandlerTest {
             1,
             (short) 1,
             false);
-        properties.put(KafkaConfig.NodeIdProp(), Integer.toString(brokerId));
-        properties.put(KafkaConfig.ProcessRolesProp(), "broker");
+        properties.put(NODE_ID_PROP, Integer.toString(brokerId));
+        properties.put(PROCESS_ROLES_PROP, "broker");
         int voterId = brokerId + 1;
-        properties.put(KafkaConfig.QuorumVotersProp(), voterId + "@localhost:9093");
-        properties.put(KafkaConfig.ControllerListenerNamesProp(), "SSL");
+        properties.put(QUORUM_VOTERS_PROP, voterId + "@localhost:9093");
+        properties.put(CONTROLLER_LISTENER_NAMES_PROP, "SSL");
         TestUtils.setIbpAndMessageFormatVersions(properties, MetadataVersion.latestProduction());
         return new KafkaConfig(properties);
     }

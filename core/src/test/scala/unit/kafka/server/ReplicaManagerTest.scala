@@ -58,6 +58,7 @@ import org.apache.kafka.image._
 import org.apache.kafka.metadata.LeaderConstants.NO_LEADER
 import org.apache.kafka.metadata.LeaderRecoveryState
 import org.apache.kafka.metadata.migration.ZkMigrationState
+import org.apache.kafka.server.config.KafkaConfig._
 import org.apache.kafka.server.common.{DirectoryEventHandler, OffsetAndEpoch}
 import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.server.common.MetadataVersion.IBP_2_6_IV0
@@ -1299,7 +1300,7 @@ class ReplicaManagerTest {
   @Test
   def testBecomeFollowerWhenLeaderIsUnchangedButMissedLeaderUpdateIbp26(): Unit = {
     val extraProps = new Properties
-    extraProps.put(KafkaConfig.InterBrokerProtocolVersionProp, IBP_2_6_IV0.version)
+    extraProps.put(INTER_BROKER_PROTOCOL_VERSION_PROP, IBP_2_6_IV0.version)
     verifyBecomeFollowerWhenLeaderIsUnchangedButMissedLeaderUpdate(extraProps, expectTruncation = true)
   }
 
@@ -1512,7 +1513,7 @@ class ReplicaManagerTest {
   @Test
   def testPreferredReplicaAsLeaderWhenSameRackFollowerIsOutOfIsr(): Unit = {
     val replicaManager = setupReplicaManagerWithMockedPurgatories(new MockTimer(time),
-      propsModifier = props => props.put(KafkaConfig.ReplicaSelectorClassProp, classOf[MockReplicaSelector].getName))
+      propsModifier = props => props.put(REPLICA_SELECTOR_CLASS_PROP, classOf[MockReplicaSelector].getName))
 
     try {
       val leaderBrokerId = 0
@@ -1592,7 +1593,7 @@ class ReplicaManagerTest {
   @Test
   def testFetchFromFollowerShouldNotRunPreferLeaderSelect(): Unit = {
     val replicaManager = setupReplicaManagerWithMockedPurgatories(new MockTimer(time),
-      propsModifier = props => props.put(KafkaConfig.ReplicaSelectorClassProp, classOf[MockReplicaSelector].getName))
+      propsModifier = props => props.put(REPLICA_SELECTOR_CLASS_PROP, classOf[MockReplicaSelector].getName))
     try {
       val leaderBrokerId = 0
       val followerBrokerId = 1
@@ -1641,7 +1642,7 @@ class ReplicaManagerTest {
   @Test
   def testFetchShouldReturnImmediatelyWhenPreferredReadReplicaIsDefined(): Unit = {
     val replicaManager = setupReplicaManagerWithMockedPurgatories(new MockTimer(time),
-      propsModifier = props => props.put(KafkaConfig.ReplicaSelectorClassProp, "org.apache.kafka.common.replica.RackAwareReplicaSelector"))
+      propsModifier = props => props.put(REPLICA_SELECTOR_CLASS_PROP, "org.apache.kafka.common.replica.RackAwareReplicaSelector"))
 
     try {
       val leaderBrokerId = 0
@@ -1793,7 +1794,7 @@ class ReplicaManagerTest {
     val countDownLatch = new CountDownLatch(1)
 
     val props = new Properties()
-    props.put(KafkaConfig.ReplicaSelectorClassProp, "non-a-class")
+    props.put(REPLICA_SELECTOR_CLASS_PROP, "non-a-class")
     assertThrows(classOf[ClassNotFoundException], () => prepareReplicaManagerAndLogManager(new MockTimer(time),
       topicPartition, leaderEpoch + leaderEpochIncrement, followerBrokerId,
       leaderBrokerId, countDownLatch, expectTruncation = true, extraProps = props))
@@ -2454,7 +2455,7 @@ class ReplicaManagerTest {
       // Dynamically enable verification.
       config.dynamicConfig.initialize(None, None)
       val props = new Properties()
-      props.put(KafkaConfig.TransactionPartitionVerificationEnableProp, "true")
+      props.put(TRANSACTION_PARTITION_VERIFICATION_ENABLE_PROP, "true")
       config.dynamicConfig.updateBrokerConfig(config.brokerId, props)
       TestUtils.waitUntilTrue(() => config.transactionPartitionVerificationEnable == true, "Config did not dynamically update.")
 
@@ -2505,7 +2506,7 @@ class ReplicaManagerTest {
       // Disable verification
       config.dynamicConfig.initialize(None, None)
       val props = new Properties()
-      props.put(KafkaConfig.TransactionPartitionVerificationEnableProp, "false")
+      props.put(TRANSACTION_PARTITION_VERIFICATION_ENABLE_PROP, "false")
       config.dynamicConfig.updateBrokerConfig(config.brokerId, props)
       TestUtils.waitUntilTrue(() => config.transactionPartitionVerificationEnable == false, "Config did not dynamically update.")
 
@@ -2595,10 +2596,10 @@ class ReplicaManagerTest {
   def testFullLeaderAndIsrStrayPartitions(zkMigrationEnabled: Boolean): Unit = {
     val props = TestUtils.createBrokerConfig(1, TestUtils.MockZkConnect)
     if (zkMigrationEnabled) {
-      props.put(KafkaConfig.MigrationEnabledProp, "" + zkMigrationEnabled)
+      props.put(MIGRATION_ENABLED_PROP, "" + zkMigrationEnabled)
       props.put(RaftConfig.QUORUM_VOTERS_CONFIG, "3000@localhost:9071")
-      props.put(KafkaConfig.ControllerListenerNamesProp, "CONTROLLER")
-      props.put(KafkaConfig.ListenerSecurityProtocolMapProp, "CONTROLLER:PLAINTEXT,EXTERNAL:PLAINTEXT,PLAINTEXT:PLAINTEXT")
+      props.put(CONTROLLER_LISTENER_NAMES_PROP, "CONTROLLER")
+      props.put(LISTENER_SECURITY_PROTOCOL_MAP_PROP, "CONTROLLER:PLAINTEXT,EXTERNAL:PLAINTEXT,PLAINTEXT:PLAINTEXT")
       config = KafkaConfig.fromProps(props)
     }
 
@@ -4788,7 +4789,7 @@ class ReplicaManagerTest {
     val topicPartition = new TopicPartition(topic, 0)
     val replicaManager = setupReplicaManagerWithMockedPurgatories(
       timer = new MockTimer(time),
-      propsModifier = props => props.put(KafkaConfig.LogDirsProp, dataDir.getAbsolutePath)
+      propsModifier = props => props.put(LOG_DIRS_PROP, dataDir.getAbsolutePath)
     )
 
     try {
@@ -5565,7 +5566,7 @@ class ReplicaManagerTest {
     val replicaManager = setupReplicaManagerWithMockedPurgatories(
       timer = new MockTimer(time),
       brokerId = localId,
-      propsModifier = props => props.put(KafkaConfig.LogDirsProp, dataDir.getAbsolutePath),
+      propsModifier = props => props.put(LOG_DIRS_PROP, dataDir.getAbsolutePath),
       enableRemoteStorage = true
     )
 
@@ -6406,10 +6407,10 @@ class ReplicaManagerTest {
       timer = new MockTimer(time),
       aliveBrokerIds = Seq(0, 1, 2),
       propsModifier = props => {
-        props.setProperty(KafkaConfig.MigrationEnabledProp, "true")
-        props.setProperty(KafkaConfig.QuorumVotersProp, "1000@localhost:9093")
-        props.setProperty(KafkaConfig.ControllerListenerNamesProp, "CONTROLLER")
-        props.setProperty(KafkaConfig.ListenerSecurityProtocolMapProp, "CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT")
+        props.setProperty(MIGRATION_ENABLED_PROP, "true")
+        props.setProperty(QUORUM_VOTERS_PROP, "1000@localhost:9093")
+        props.setProperty(CONTROLLER_LISTENER_NAMES_PROP, "CONTROLLER")
+        props.setProperty(LISTENER_SECURITY_PROTOCOL_MAP_PROP, "CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT")
       },
       defaultTopicRemoteLogStorageEnable = false)
   }

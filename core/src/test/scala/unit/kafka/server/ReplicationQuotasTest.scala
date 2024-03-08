@@ -20,7 +20,6 @@ package kafka.server
 import java.util.AbstractMap.SimpleImmutableEntry
 import java.util.{Collections, Properties}
 import java.util.Map.Entry
-import kafka.server.DynamicConfig.Broker
 import kafka.server.KafkaConfig.fromProps
 import kafka.server.QuotaType._
 import kafka.utils.TestUtils._
@@ -38,6 +37,7 @@ import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.security.auth.SecurityProtocol.PLAINTEXT
 import org.apache.kafka.controller.ControllerRequestContextUtil
 import org.apache.kafka.server.common.MetadataVersion
+import org.apache.kafka.server.config.dynamic.BrokerDynamicConfigs
 import org.apache.kafka.storage.internals.log.LogConfig
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.AfterEach
@@ -127,15 +127,15 @@ class ReplicationQuotasTest extends QuorumTestHarness {
           controllerServer.controller.incrementalAlterConfigs(
             ControllerRequestContextUtil.ANONYMOUS_CONTEXT,
             Map(new ConfigResource(BROKER, String.valueOf(brokerId)) -> Map(
-              Broker.LeaderReplicationThrottledRateProp -> entry,
-              Broker.FollowerReplicationThrottledRateProp -> entry).asJava).asJava,
+              BrokerDynamicConfigs.LEADER_REPLICATION_THROTTLED_RATE_PROP -> entry,
+              BrokerDynamicConfigs.FOLLOWER_REPLICATION_THROTTLED_RATE_PROP -> entry).asJava).asJava,
             false
           ).get()
         } else {
           adminZkClient.changeBrokerConfig(Seq(brokerId),
             propsWith(
-              (DynamicConfig.Broker.LeaderReplicationThrottledRateProp, throttle.toString),
-              (DynamicConfig.Broker.FollowerReplicationThrottledRateProp, throttle.toString)
+              (BrokerDynamicConfigs.LEADER_REPLICATION_THROTTLED_RATE_PROP, throttle.toString),
+              (BrokerDynamicConfigs.FOLLOWER_REPLICATION_THROTTLED_RATE_PROP, throttle.toString)
             ))
         }
       }
@@ -239,7 +239,7 @@ class ReplicationQuotasTest extends QuorumTestHarness {
       //Set the throttle to only limit leader
       val configs = Map(
         new ConfigResource(BROKER, "100") ->
-          Seq(new AlterConfigOp(new ConfigEntry(Broker.LeaderReplicationThrottledRateProp, throttle.toString), SET)).asJavaCollection,
+          Seq(new AlterConfigOp(new ConfigEntry(BrokerDynamicConfigs.LEADER_REPLICATION_THROTTLED_RATE_PROP, throttle.toString), SET)).asJavaCollection,
         new ConfigResource(TOPIC, topic) ->
           Seq(new AlterConfigOp(new ConfigEntry(LogConfig.LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG, "0:100"), SET)).asJavaCollection
       ).asJava

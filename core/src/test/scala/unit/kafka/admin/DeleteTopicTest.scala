@@ -35,6 +35,7 @@ import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.{TopicDeletionDisabledException, UnknownTopicOrPartitionException}
 import org.apache.kafka.metadata.BrokerState
+import org.apache.kafka.server.config.KafkaConfig.DELETE_TOPIC_ENABLE_PROP
 
 import scala.jdk.CollectionConverters._
 
@@ -487,7 +488,7 @@ class DeleteTopicTest extends QuorumTestHarness {
     if (isKRaftTest()) {
       // Restart KRaft quorum with the updated config
       val overridingProps = new Properties()
-      overridingProps.put(KafkaConfig.DeleteTopicEnableProp, false.toString)
+      overridingProps.put(DELETE_TOPIC_ENABLE_PROP, false.toString)
       if (implementation != null)
         implementation.shutdown()
       implementation = newKRaftQuorum(overridingProps)

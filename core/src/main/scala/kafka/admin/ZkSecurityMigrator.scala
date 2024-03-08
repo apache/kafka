@@ -18,7 +18,7 @@
 package kafka.admin
 
 import joptsimple.{OptionSet, OptionSpec, OptionSpecBuilder}
-import kafka.server.KafkaConfig
+import org.apache.kafka.server.config.KafkaConfig
 import kafka.utils.{Exit, Logging, ToolsUtils}
 import kafka.utils.Implicits._
 import kafka.zk.{ControllerZNode, KafkaZkClient, ZkData, ZkSecurityMigratorUtils}
@@ -81,7 +81,7 @@ object ZkSecurityMigrator extends Logging {
     if (jaasFile == null && !tlsClientAuthEnabled) {
       val errorMsg = s"No JAAS configuration file has been specified and no TLS client certificate has been specified. Please make sure that you set " +
         s"the system property ${JaasUtils.JAVA_LOGIN_CONFIG_PARAM} or provide a ZooKeeper client TLS configuration via --$tlsConfigFileOption <filename> " +
-        s"identifying at least ${KafkaConfig.ZkSslClientEnableProp}, ${KafkaConfig.ZkClientCnxnSocketProp}, and ${KafkaConfig.ZkSslKeyStoreLocationProp}"
+        s"identifying at least ${KafkaConfig.ZK_SSL_CLIENT_ENABLE_PROP}, ${KafkaConfig.ZK_CLIENT_CNXN_SOCKET_PROP}, and ${KafkaConfig.ZK_SSL_KEYSTORE_LOCATION_PROP}"
       System.err.println("ERROR: %s".format(errorMsg))
       throw new IllegalArgumentException("Incorrect configuration")
     }
@@ -124,7 +124,7 @@ object ZkSecurityMigrator extends Logging {
   }
 
   def createZkClientConfigFromFile(filename: String) : ZKClientConfig = {
-    val zkTlsConfigFileProps = Utils.loadProps(filename, KafkaConfig.ZkSslConfigToSystemPropertyMap.keys.toList.asJava)
+    val zkTlsConfigFileProps = Utils.loadProps(filename, KafkaConfig.ZK_SSL_CONFIG_TO_SYSTEM_PROPERTY_MAP.keySet().asScala.toList.asJava)
     val zkClientConfig = new ZKClientConfig() // Initializes based on any system properties that have been set
     // Now override any set system properties with explicitly-provided values from the config file
     // Emit INFO logs due to camel-case property names encouraging mistakes -- help people see mistakes they make
@@ -156,7 +156,7 @@ object ZkSecurityMigrator extends Logging {
       "before migration. If not, exit the command.")
     val zkTlsConfigFile: OptionSpec[String] = parser.accepts(tlsConfigFileOption,
       "Identifies the file where ZooKeeper client TLS connectivity properties are defined.  Any properties other than " +
-        KafkaConfig.ZkSslConfigToSystemPropertyMap.keys.mkString(", ") + " are ignored.")
+        KafkaConfig.ZK_SSL_CONFIG_TO_SYSTEM_PROPERTY_MAP.keySet().asScala.mkString(", ") + " are ignored.")
       .withRequiredArg().describedAs("ZooKeeper TLS configuration").ofType(classOf[String])
     options = parser.parse(args : _*)
   }

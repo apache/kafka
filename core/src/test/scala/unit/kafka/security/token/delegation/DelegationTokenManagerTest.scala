@@ -41,6 +41,7 @@ import org.apache.kafka.network.Session
 import org.apache.kafka.security.authorizer.AuthorizerUtils
 import org.apache.kafka.server.authorizer._
 import org.apache.kafka.server.config.Defaults
+import org.apache.kafka.server.config.KafkaConfig.{SASL_ENABLED_MECHANISMS_PROP, DELEGATION_TOKEN_SECRET_KEY_PROP}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo}
 
@@ -72,8 +73,8 @@ class DelegationTokenManagerTest extends QuorumTestHarness  {
   override def setUp(testInfo: TestInfo): Unit = {
     super.setUp(testInfo)
     props = TestUtils.createBrokerConfig(0, zkConnect, enableToken = true)
-    props.put(KafkaConfig.SaslEnabledMechanismsProp, ScramMechanism.mechanismNames().asScala.mkString(","))
-    props.put(KafkaConfig.DelegationTokenSecretKeyProp, secretKey)
+    props.put(SASL_ENABLED_MECHANISMS_PROP, ScramMechanism.mechanismNames().asScala.mkString(","))
+    props.put(DELEGATION_TOKEN_SECRET_KEY_PROP, secretKey)
     tokenCache = new DelegationTokenCache(ScramMechanism.mechanismNames())
   }
 

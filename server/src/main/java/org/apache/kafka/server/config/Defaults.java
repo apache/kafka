@@ -157,10 +157,10 @@ public class Defaults {
     public static final int CONSUMER_GROUP_MIN_HEARTBEAT_INTERVAL_MS = 5000;
     public static final int CONSUMER_GROUP_MAX_HEARTBEAT_INTERVAL_MS = 15000;
     public static final int CONSUMER_GROUP_MAX_SIZE = Integer.MAX_VALUE;
-    public static final List<String> CONSUMER_GROUP_ASSIGNORS = Arrays.asList(
+    protected static final List<String> CONSUMER_GROUP_ASSIGNORS = Collections.unmodifiableList(Arrays.asList(
         UniformAssignor.class.getName(),
         RangeAssignor.class.getName()
-    );
+    ));
 
     /** ********* Offset management configuration *********/
     public static final int OFFSET_METADATA_MAX_SIZE = OffsetConfig.DEFAULT_MAX_METADATA_SIZE;

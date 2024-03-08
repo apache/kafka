@@ -20,7 +20,6 @@ import java.util
 import java.util.Properties
 import java.util.concurrent.ExecutionException
 import kafka.security.authorizer.AclEntry
-import kafka.server.KafkaConfig
 import kafka.utils.Logging
 import kafka.utils.TestUtils._
 import org.apache.kafka.clients.admin.{Admin, AdminClientConfig, CreateTopicsOptions, CreateTopicsResult, DescribeClusterOptions, DescribeTopicsOptions, NewTopic, TopicDescription}
@@ -29,6 +28,7 @@ import org.apache.kafka.common.acl.AclOperation
 import org.apache.kafka.common.errors.{TopicExistsException, UnknownTopicOrPartitionException}
 import org.apache.kafka.common.resource.ResourceType
 import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.server.config.KafkaConfig
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo, Timeout}
 
@@ -196,20 +196,20 @@ abstract class BaseAdminIntegrationTest extends IntegrationTestHarness with Logg
     // verify that they show up in the "configs" output of CreateTopics.
     if (testInfo.getTestMethod.toString.contains("testCreateTopicsReturnsConfigs")) {
       configs.foreach(config => {
-        config.setProperty(KafkaConfig.LogRollTimeHoursProp, "2")
-        config.setProperty(KafkaConfig.LogRetentionTimeMinutesProp, "240")
-        config.setProperty(KafkaConfig.LogRollTimeJitterMillisProp, "123")
+        config.setProperty(KafkaConfig.LOG_ROLL_TIME_HOURS_PROP, "2")
+        config.setProperty(KafkaConfig.LOG_RETENTION_TIME_MINUTES_PROP, "240")
+        config.setProperty(KafkaConfig.LOG_ROLL_TIME_JITTER_MILLIS_PROP, "123")
       })
     }
     configs.foreach { config =>
-      config.setProperty(KafkaConfig.DeleteTopicEnableProp, "true")
-      config.setProperty(KafkaConfig.GroupInitialRebalanceDelayMsProp, "0")
-      config.setProperty(KafkaConfig.AutoLeaderRebalanceEnableProp, "false")
-      config.setProperty(KafkaConfig.ControlledShutdownEnableProp, "false")
+      config.setProperty(KafkaConfig.DELETE_TOPIC_ENABLE_PROP, "true")
+      config.setProperty(KafkaConfig.GROUP_INITIAL_REBALANCE_DELAY_MS_PROP, "0")
+      config.setProperty(KafkaConfig.AUTO_LEADER_REBALANCE_ENABLE_PROP, "false")
+      config.setProperty(KafkaConfig.CONTROLLED_SHUTDOWN_ENABLE_PROP, "false")
       // We set this in order to test that we don't expose sensitive data via describe configs. This will already be
       // set for subclasses with security enabled and we don't want to overwrite it.
-      if (!config.containsKey(KafkaConfig.SslTruststorePasswordProp))
-        config.setProperty(KafkaConfig.SslTruststorePasswordProp, "some.invalid.pass")
+      if (!config.containsKey(KafkaConfig.SSL_TRUSTSTORE_PASSWORD_PROP))
+        config.setProperty(KafkaConfig.SSL_TRUSTSTORE_PASSWORD_PROP, "some.invalid.pass")
     }
   }
 

@@ -123,6 +123,7 @@
         </subpackage>
 
         <subpackage name="integration">
+            <allow class="org.apache.kafka.server.config.KafkaConfig" />
         </subpackage>
     </subpackage>
     <!-- END OF TIERED STORAGE INTEGRATION TEST IMPORT DEPENDENCIES -->

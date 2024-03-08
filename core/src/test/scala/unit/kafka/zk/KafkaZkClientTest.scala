@@ -23,7 +23,7 @@ import kafka.api.LeaderAndIsr
 import kafka.cluster.{Broker, EndPoint}
 import kafka.controller.{LeaderIsrAndControllerEpoch, ReplicaAssignment}
 import kafka.security.authorizer.AclEntry
-import kafka.server.{KafkaConfig, QuorumTestHarness}
+import kafka.server.QuorumTestHarness
 import kafka.utils.CoreUtils
 import kafka.zk.KafkaZkClient.UpdateLeaderAndIsrResult
 import kafka.zookeeper._
@@ -43,6 +43,7 @@ import org.apache.kafka.common.utils.{SecurityUtils, Time}
 import org.apache.kafka.common.{TopicPartition, Uuid}
 import org.apache.kafka.metadata.LeaderRecoveryState
 import org.apache.kafka.metadata.migration.ZkMigrationLeadershipState
+import org.apache.kafka.server.config.KafkaConfig
 import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.server.config.ConfigType
 import org.apache.kafka.storage.internals.log.LogConfig
@@ -106,7 +107,7 @@ class KafkaZkClientTest extends QuorumTestHarness {
     // TLS connectivity itself is tested in system tests rather than here to avoid having to add TLS support
     // to kafka.zk.EmbeddedZookeeper
     val clientConfig = new ZKClientConfig()
-    val propKey = KafkaConfig.ZkClientCnxnSocketProp
+    val propKey = KafkaConfig.ZK_CLIENT_CNXN_SOCKET_PROP
     val propVal = "org.apache.zookeeper.ClientCnxnSocketNetty"
     KafkaConfig.setZooKeeperClientProperty(clientConfig, propKey, propVal)
     val client = KafkaZkClient(zkConnect, zkAclsEnabled.getOrElse(JaasUtils.isZkSaslEnabled), zkSessionTimeout,

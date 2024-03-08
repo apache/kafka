@@ -32,6 +32,7 @@ import org.apache.kafka.common.metrics.internals.MetricsUtils
 import org.apache.kafka.common.metrics.{KafkaMetric, MetricConfig, Metrics}
 import org.apache.kafka.common.network._
 import org.apache.kafka.common.utils.Time
+import org.apache.kafka.server.config.KafkaConfig._
 import org.apache.kafka.server.metrics.KafkaMetricsGroup
 import org.apache.kafka.server.util.MockTime
 import org.junit.jupiter.api.Assertions._
@@ -67,12 +68,12 @@ class ConnectionQuotasTest {
 
   def brokerPropsWithDefaultConnectionLimits: Properties = {
     val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 0)
-    props.put(KafkaConfig.ListenersProp, "EXTERNAL://localhost:0,REPLICATION://localhost:1,ADMIN://localhost:2")
+    props.put(LISTENERS_PROP, "EXTERNAL://localhost:0,REPLICATION://localhost:1,ADMIN://localhost:2")
     // ConnectionQuotas does not limit inter-broker listener even when broker-wide connection limit is reached
-    props.put(KafkaConfig.InterBrokerListenerNameProp, "REPLICATION")
-    props.put(KafkaConfig.ListenerSecurityProtocolMapProp, "EXTERNAL:PLAINTEXT,REPLICATION:PLAINTEXT,ADMIN:PLAINTEXT")
-    props.put(KafkaConfig.NumQuotaSamplesProp, numQuotaSamples.toString)
-    props.put(KafkaConfig.QuotaWindowSizeSecondsProp, quotaWindowSizeSeconds.toString)
+    props.put(INTER_BROKER_LISTENER_NAME_PROP, "REPLICATION")
+    props.put(LISTENER_SECURITY_PROTOCOL_MAP_PROP, "EXTERNAL:PLAINTEXT,REPLICATION:PLAINTEXT,ADMIN:PLAINTEXT")
+    props.put(NUM_QUOTA_SAMPLES_PROP, numQuotaSamples.toString)
+    props.put(QUOTA_WINDOW_SIZE_SECONDS_PROP, quotaWindowSizeSeconds.toString)
     props
   }
 
@@ -166,7 +167,7 @@ class ConnectionQuotasTest {
   def testMaxConnectionsPerIp(): Unit = {
     val maxConnectionsPerIp = 17
     val props = brokerPropsWithDefaultConnectionLimits
-    props.put(KafkaConfig.MaxConnectionsPerIpProp, maxConnectionsPerIp.toString)
+    props.put(MAX_CONNECTIONS_PER_IP_PROP, maxConnectionsPerIp.toString)
     val config = KafkaConfig.fromProps(props)
     connectionQuotas = new ConnectionQuotas(config, time, metrics)
 
@@ -208,7 +209,7 @@ class ConnectionQuotasTest {
   def testMaxBrokerWideConnectionLimit(): Unit = {
     val maxConnections = 800
     val props = brokerPropsWithDefaultConnectionLimits
-    props.put(KafkaConfig.MaxConnectionsProp, maxConnections.toString)
+    props.put(MAX_CONNECTIONS_PROP, maxConnections.toString)
     val config = KafkaConfig.fromProps(props)
     connectionQuotas = new ConnectionQuotas(config, time, metrics)
 
@@ -275,13 +276,13 @@ class ConnectionQuotasTest {
     // sum of per-listener connection limits is below total connection limit
     val listenerMaxConnections = 200
     val props = brokerPropsWithDefaultConnectionLimits
-    props.put(KafkaConfig.MaxConnectionsProp, maxConnections.toString)
+    props.put(MAX_CONNECTIONS_PROP, maxConnections.toString)
     val config = KafkaConfig.fromProps(props)
     connectionQuotas = new ConnectionQuotas(config, time, metrics)
 
     addListenersAndVerify(config, connectionQuotas)
 
-    val listenerConfig = Map(KafkaConfig.MaxConnectionsProp -> listenerMaxConnections.toString).asJava
+    val listenerConfig = Map(MAX_CONNECTIONS_PROP -> listenerMaxConnections.toString).asJava
     listeners.values.foreach { listener =>
       connectionQuotas.maxConnectionsPerListener(listener.listenerName).configure(listenerConfig)
     }
@@ -322,7 +323,7 @@ class ConnectionQuotasTest {
     val connCreateIntervalMs = 25 // connection creation rate = 40/sec per listener (3 * 40 = 120/sec total)
     val connectionsPerListener = 200 // should take 5 seconds to create 200 connections with rate = 40/sec
     val props = brokerPropsWithDefaultConnectionLimits
-    props.put(KafkaConfig.MaxConnectionCreationRateProp, brokerRateLimit.toString)
+    props.put(MAX_CONNECTION_CREATION_RATE_PROP, brokerRateLimit.toString)
     val config = KafkaConfig.fromProps(props)
     connectionQuotas = new ConnectionQuotas(config, time, metrics)
 
@@ -342,7 +343,7 @@ class ConnectionQuotasTest {
   def testBrokerConnectionRateLimitWhenActualRateAboveLimit(): Unit = {
     val brokerRateLimit = 90
     val props = brokerPropsWithDefaultConnectionLimits
-    props.put(KafkaConfig.MaxConnectionCreationRateProp, brokerRateLimit.toString)
+    props.put(MAX_CONNECTION_CREATION_RATE_PROP, brokerRateLimit.toString)
     val config = KafkaConfig.fromProps(props)
     connectionQuotas = new ConnectionQuotas(config, time, metrics)
 
@@ -369,11 +370,11 @@ class ConnectionQuotasTest {
     val listenerRateLimit = 50
     val connCreateIntervalMs = 25 // connection creation rate = 40/sec per listener (3 * 40 = 120/sec total)
     val props = brokerPropsWithDefaultConnectionLimits
-    props.put(KafkaConfig.MaxConnectionCreationRateProp, brokerRateLimit.toString)
+    props.put(MAX_CONNECTION_CREATION_RATE_PROP, brokerRateLimit.toString)
     val config = KafkaConfig.fromProps(props)
     connectionQuotas = new ConnectionQuotas(config, time, metrics)
 
-    val listenerConfig = Map(KafkaConfig.MaxConnectionCreationRateProp -> listenerRateLimit.toString).asJava
+    val listenerConfig = Map(MAX_CONNECTION_CREATION_RATE_PROP -> listenerRateLimit.toString).asJava
     addListenersAndVerify(config, listenerConfig, connectionQuotas)
 
     // create connections with the rate < listener quota on every listener, and verify there is no throttling
@@ -395,11 +396,11 @@ class ConnectionQuotasTest {
     val listenerRateLimit = 30
     val connCreateIntervalMs = 25 // connection creation rate = 40/sec per listener (3 * 40 = 120/sec total)
     val props = brokerPropsWithDefaultConnectionLimits
-    props.put(KafkaConfig.MaxConnectionCreationRateProp, brokerRateLimit.toString)
+    props.put(MAX_CONNECTION_CREATION_RATE_PROP, brokerRateLimit.toString)
     val config = KafkaConfig.fromProps(props)
     connectionQuotas = new ConnectionQuotas(config, time, metrics)
 
-    val listenerConfig = Map(KafkaConfig.MaxConnectionCreationRateProp -> listenerRateLimit.toString).asJava
+    val listenerConfig = Map(MAX_CONNECTION_CREATION_RATE_PROP -> listenerRateLimit.toString).asJava
     addListenersAndVerify(config, listenerConfig, connectionQuotas)
 
     // create connections with the rate > listener quota on every listener
@@ -497,7 +498,7 @@ class ConnectionQuotasTest {
     // with a default per-IP limit of 25 and a listener rate of 30, only one IP should be able to saturate their IP rate
     // limit, the other IP will hit listener rate limits and block
     connectionQuotas.updateIpConnectionRateQuota(None, Some(ipConnectionRateLimit))
-    val listenerConfig = Map(KafkaConfig.MaxConnectionCreationRateProp -> listenerRateLimit.toString).asJava
+    val listenerConfig = Map(MAX_CONNECTION_CREATION_RATE_PROP -> listenerRateLimit.toString).asJava
     addListenersAndVerify(config, listenerConfig, connectionQuotas)
     val listener = listeners("EXTERNAL").listenerName
     // use a small number of connections because a longer-running test will have both IPs throttle at different times
@@ -555,7 +556,7 @@ class ConnectionQuotasTest {
     connectionQuotas.addListener(config, listeners("EXTERNAL").listenerName)
 
     val maxListenerConnectionRate = 0
-    val listenerConfig = Map(KafkaConfig.MaxConnectionCreationRateProp -> maxListenerConnectionRate.toString).asJava
+    val listenerConfig = Map(MAX_CONNECTION_CREATION_RATE_PROP -> maxListenerConnectionRate.toString).asJava
     assertThrows(classOf[ConfigException],
       () => connectionQuotas.maxConnectionsPerListener(listeners("EXTERNAL").listenerName).validateReconfiguration(listenerConfig)
     )
@@ -568,7 +569,7 @@ class ConnectionQuotasTest {
     connectionQuotas.addListener(config, listeners("EXTERNAL").listenerName)
 
     val listenerRateLimit = 20
-    val listenerConfig = Map(KafkaConfig.MaxConnectionCreationRateProp -> listenerRateLimit.toString).asJava
+    val listenerConfig = Map(MAX_CONNECTION_CREATION_RATE_PROP -> listenerRateLimit.toString).asJava
     connectionQuotas.maxConnectionsPerListener(listeners("EXTERNAL").listenerName).configure(listenerConfig)
 
     // remove connection rate limit
@@ -585,7 +586,7 @@ class ConnectionQuotasTest {
 
     // configure 100 connection/second rate limit
     val newMaxListenerConnectionRate = 10
-    val newListenerConfig = Map(KafkaConfig.MaxConnectionCreationRateProp -> newMaxListenerConnectionRate.toString).asJava
+    val newListenerConfig = Map(MAX_CONNECTION_CREATION_RATE_PROP -> newMaxListenerConnectionRate.toString).asJava
     connectionQuotas.maxConnectionsPerListener(listeners("EXTERNAL").listenerName).reconfigure(newListenerConfig)
 
     // verify rate limit
@@ -717,8 +718,8 @@ class ConnectionQuotasTest {
     val brokerRateLimit = 25
     val maxConnections = 350  // with rate == 25, will run out of connections in 14 seconds
     val props = brokerPropsWithDefaultConnectionLimits
-    props.put(KafkaConfig.MaxConnectionsProp, maxConnections.toString)
-    props.put(KafkaConfig.MaxConnectionCreationRateProp, brokerRateLimit.toString)
+    props.put(MAX_CONNECTIONS_PROP, maxConnections.toString)
+    props.put(MAX_CONNECTION_CREATION_RATE_PROP, brokerRateLimit.toString)
     val config = KafkaConfig.fromProps(props)
     connectionQuotas = new ConnectionQuotas(config, time, metrics)
     connectionQuotas.addListener(config, listeners("EXTERNAL").listenerName)

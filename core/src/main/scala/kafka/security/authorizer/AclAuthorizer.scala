@@ -36,6 +36,7 @@ import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.utils.{SecurityUtils, Time}
 import org.apache.kafka.server.authorizer.AclDeleteResult.AclBindingDeleteResult
 import org.apache.kafka.server.authorizer._
+import org.apache.kafka.server.config.KafkaConfig.{INTER_BROKER_PROTOCOL_VERSION_PROP, ZK_SSL_CLIENT_ENABLE_PROP, ZK_SSL_CONFIG_TO_SYSTEM_PROPERTY_MAP, ZK_SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_PROP}
 import org.apache.kafka.server.common.MetadataVersion.IBP_2_0_IV1
 import org.apache.zookeeper.client.ZKClientConfig
 
@@ -96,7 +97,7 @@ object AclAuthorizer {
   }
 
   private[authorizer] def zkClientConfigFromKafkaConfigAndMap(kafkaConfig: KafkaConfig, configMap: mutable.Map[String, _<:Any]): ZKClientConfig = {
-    val zkSslClientEnable = configMap.get(AclAuthorizer.configPrefix + KafkaConfig.ZkSslClientEnableProp).
+    val zkSslClientEnable = configMap.get(AclAuthorizer.configPrefix + ZK_SSL_CLIENT_ENABLE_PROP).
       map(_.toString.trim).getOrElse(kafkaConfig.zkSslClientEnable.toString).toBoolean
     if (!zkSslClientEnable)
       new ZKClientConfig
@@ -105,10 +106,10 @@ object AclAuthorizer {
       // be sure to force creation since the zkSslClientEnable property in the kafkaConfig could be false
       val zkClientConfig = KafkaServer.zkClientConfigFromKafkaConfig(kafkaConfig, forceZkSslClientEnable = true)
       // add in any prefixed overlays
-      KafkaConfig.ZkSslConfigToSystemPropertyMap.forKeyValue { (kafkaProp, sysProp) =>
+      ZK_SSL_CONFIG_TO_SYSTEM_PROPERTY_MAP.asScala forKeyValue { (kafkaProp, sysProp) =>
         configMap.get(AclAuthorizer.configPrefix + kafkaProp).foreach { prefixedValue =>
           zkClientConfig.setProperty(sysProp,
-            if (kafkaProp == KafkaConfig.ZkSslEndpointIdentificationAlgorithmProp)
+            if (kafkaProp == ZK_SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_PROP)
               (prefixedValue.toString.trim.toUpperCase == "HTTPS").toString
             else
               prefixedValue.toString.trim)
@@ -236,7 +237,7 @@ class AclAuthorizer extends Authorizer with Logging {
       try {
         if (!extendedAclSupport && aclBinding.pattern.patternType == PatternType.PREFIXED) {
           throw new UnsupportedVersionException(s"Adding ACLs on prefixed resource patterns requires " +
-            s"${KafkaConfig.InterBrokerProtocolVersionProp} of $IBP_2_0_IV1 or greater")
+            s"${INTER_BROKER_PROTOCOL_VERSION_PROP} of $IBP_2_0_IV1 or greater")
         }
         validateAclBinding(aclBinding)
         true

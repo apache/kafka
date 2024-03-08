@@ -17,7 +17,6 @@
 package org.apache.kafka.streams.integration;
 
 import java.util.stream.Stream;
-import kafka.server.KafkaConfig;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
@@ -74,6 +73,7 @@ import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkObjectProperties;
 import static org.apache.kafka.common.utils.Utils.mkProperties;
 import static org.apache.kafka.common.utils.Utils.mkSet;
+import static org.apache.kafka.server.config.KafkaConfig.RACK_PROP;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.safeUniqueTestName;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.is;
@@ -85,13 +85,13 @@ public class HighAvailabilityTaskAssignorIntegrationTest {
         new Properties(),
         asList(
             new Properties() {{
-                    setProperty(KafkaConfig.RackProp(), AssignmentTestUtils.RACK_0);
+                    setProperty(RACK_PROP, AssignmentTestUtils.RACK_0);
                 }},
             new Properties() {{
-                    setProperty(KafkaConfig.RackProp(), AssignmentTestUtils.RACK_1);
+                    setProperty(RACK_PROP, AssignmentTestUtils.RACK_1);
                 }},
             new Properties() {{
-                    setProperty(KafkaConfig.RackProp(), AssignmentTestUtils.RACK_2);
+                    setProperty(RACK_PROP, AssignmentTestUtils.RACK_2);
                 }}
         )
     );

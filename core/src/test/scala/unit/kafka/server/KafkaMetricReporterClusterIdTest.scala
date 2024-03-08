@@ -22,6 +22,7 @@ import kafka.metrics.KafkaMetricsReporter
 import kafka.utils.{CoreUtils, TestUtils, VerifiableProperties}
 import kafka.server.QuorumTestHarness
 import org.apache.kafka.common.{ClusterResource, ClusterResourceListener}
+import org.apache.kafka.server.config.KafkaConfig.{KAFKA_METRICS_REPORTER_CLASSES_PROP, METRIC_REPORTER_CLASSES_PROP, BROKER_ID_GENERATION_ENABLE_PROP, BROKER_ID_PROP}
 import org.apache.kafka.test.MockMetricsReporter
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo}
@@ -61,7 +62,7 @@ object KafkaMetricReporterClusterIdTest {
       // Because this code is run during the test setUp phase, if we throw an exception here,
       // it just results in the test itself being declared "not found" rather than failing.
       // So we track an error message which we will check later in the test body.
-      val brokerId = configs.get(KafkaConfig.BrokerIdProp)
+      val brokerId = configs.get(BROKER_ID_PROP)
       if (brokerId == null)
         setupError.compareAndSet("", "No value was set for the broker id.")
       else if (!brokerId.isInstanceOf[String])
@@ -83,10 +84,10 @@ class KafkaMetricReporterClusterIdTest extends QuorumTestHarness {
   override def setUp(testInfo: TestInfo): Unit = {
     super.setUp(testInfo)
     val props = TestUtils.createBrokerConfig(1, zkConnect)
-    props.setProperty(KafkaConfig.KafkaMetricsReporterClassesProp, "kafka.server.KafkaMetricReporterClusterIdTest$MockKafkaMetricsReporter")
-    props.setProperty(KafkaConfig.MetricReporterClassesProp, "kafka.server.KafkaMetricReporterClusterIdTest$MockBrokerMetricsReporter")
-    props.setProperty(KafkaConfig.BrokerIdGenerationEnableProp, "true")
-    props.setProperty(KafkaConfig.BrokerIdProp, "-1")
+    props.setProperty(KAFKA_METRICS_REPORTER_CLASSES_PROP, "kafka.server.KafkaMetricReporterClusterIdTest$MockKafkaMetricsReporter")
+    props.setProperty(METRIC_REPORTER_CLASSES_PROP, "kafka.server.KafkaMetricReporterClusterIdTest$MockBrokerMetricsReporter")
+    props.setProperty(BROKER_ID_GENERATION_ENABLE_PROP, "true")
+    props.setProperty(BROKER_ID_PROP, "-1")
     config = KafkaConfig.fromProps(props)
     server = new KafkaServer(config, threadNamePrefix = Option(this.getClass.getName))
     server.startup()

@@ -20,7 +20,6 @@ package kafka.test.junit;
 import kafka.api.IntegrationTestHarness;
 import kafka.network.SocketServer;
 import kafka.server.BrokerFeatures;
-import kafka.server.KafkaConfig;
 import kafka.server.KafkaServer;
 import kafka.test.ClusterConfig;
 import kafka.test.ClusterInstance;
@@ -52,6 +51,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static org.apache.kafka.server.config.KafkaConfig.INTER_BROKER_PROTOCOL_VERSION_PROP;
 /**
  * Wraps a {@link IntegrationTestHarness} inside lifecycle methods for a test invocation. Each instance of this
  * class is provided with a configuration for the cluster.
@@ -111,7 +111,7 @@ public class ZkClusterInvocationContext implements TestTemplateInvocationContext
                     @Override
                     public Properties serverConfig() {
                         Properties props = clusterConfig.serverProperties();
-                        props.put(KafkaConfig.InterBrokerProtocolVersionProp(), clusterConfig.metadataVersion().version());
+                        props.put(INTER_BROKER_PROTOCOL_VERSION_PROP, clusterConfig.metadataVersion().version());
                         return props;
                     }
 

@@ -34,6 +34,7 @@ import org.apache.kafka.common.resource.PatternType.{LITERAL, PREFIXED}
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.apache.kafka.common.utils.{AppInfoParser, SecurityUtils}
 import org.apache.kafka.server.authorizer.Authorizer
+import org.apache.kafka.server.config.KafkaConfig.AUTHORIZER_CLASS_NAME_PROP
 import org.apache.log4j.Level
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo}
@@ -109,7 +110,7 @@ class AclCommandTest extends QuorumTestHarness with Logging {
     super.setUp(testInfo)
 
     brokerProps = TestUtils.createBrokerConfig(0, zkConnect)
-    brokerProps.put(KafkaConfig.AuthorizerClassNameProp, classOf[AclAuthorizer].getName)
+    brokerProps.put(AUTHORIZER_CLASS_NAME_PROP, classOf[AclAuthorizer].getName)
     brokerProps.put(AclAuthorizer.SuperUsersProp, "User:ANONYMOUS")
 
     zkArgs = Array("--authorizer-properties", "zookeeper.connect=" + zkConnect)

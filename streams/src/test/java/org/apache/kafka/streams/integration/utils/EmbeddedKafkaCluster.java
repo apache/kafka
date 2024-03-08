@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.integration.utils;
 
-import kafka.server.KafkaConfig;
 import kafka.server.KafkaServer;
 import kafka.zk.EmbeddedZookeeper;
 import org.apache.kafka.clients.admin.Admin;
@@ -27,6 +26,7 @@ import org.apache.kafka.server.util.MockTime;
 import org.apache.kafka.storage.internals.log.CleanerConfig;
 import org.apache.kafka.test.TestCondition;
 import org.apache.kafka.test.TestUtils;
+import org.apache.kafka.server.config.KafkaConfig;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -109,20 +109,20 @@ public class EmbeddedKafkaCluster {
         zookeeper = new EmbeddedZookeeper();
         log.debug("ZooKeeper instance is running at {}", zKConnectString());
 
-        brokerConfig.put(KafkaConfig.ZkConnectProp(), zKConnectString());
-        putIfAbsent(brokerConfig, KafkaConfig.ListenersProp(), "PLAINTEXT://localhost:" + DEFAULT_BROKER_PORT);
-        putIfAbsent(brokerConfig, KafkaConfig.DeleteTopicEnableProp(), true);
+        brokerConfig.put(KafkaConfig.ZK_CONNECT_PROP, zKConnectString());
+        putIfAbsent(brokerConfig, KafkaConfig.LISTENERS_PROP, "PLAINTEXT://localhost:" + DEFAULT_BROKER_PORT);
+        putIfAbsent(brokerConfig, KafkaConfig.DELETE_TOPIC_ENABLE_PROP, true);
         putIfAbsent(brokerConfig, CleanerConfig.LOG_CLEANER_DEDUPE_BUFFER_SIZE_PROP, 2 * 1024 * 1024L);
-        putIfAbsent(brokerConfig, KafkaConfig.GroupMinSessionTimeoutMsProp(), 0);
-        putIfAbsent(brokerConfig, KafkaConfig.GroupInitialRebalanceDelayMsProp(), 0);
-        putIfAbsent(brokerConfig, KafkaConfig.OffsetsTopicReplicationFactorProp(), (short) 1);
-        putIfAbsent(brokerConfig, KafkaConfig.OffsetsTopicPartitionsProp(), 5);
-        putIfAbsent(brokerConfig, KafkaConfig.TransactionsTopicPartitionsProp(), 5);
-        putIfAbsent(brokerConfig, KafkaConfig.AutoCreateTopicsEnableProp(), true);
+        putIfAbsent(brokerConfig, KafkaConfig.GROUP_MIN_SESSION_TIMEOUT_MS_PROP, 0);
+        putIfAbsent(brokerConfig, KafkaConfig.GROUP_INITIAL_REBALANCE_DELAY_MS_PROP, 0);
+        putIfAbsent(brokerConfig, KafkaConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_PROP, (short) 1);
+        putIfAbsent(brokerConfig, KafkaConfig.OFFSETS_TOPIC_PARTITIONS_PROP, 5);
+        putIfAbsent(brokerConfig, KafkaConfig.TRANSACTIONS_TOPIC_PARTITIONS_PROP, 5);
+        putIfAbsent(brokerConfig, KafkaConfig.AUTO_CREATE_TOPICS_ENABLE_PROP, true);
 
         for (int i = 0; i < brokers.length; i++) {
-            brokerConfig.put(KafkaConfig.BrokerIdProp(), i);
-            log.debug("Starting a Kafka instance on {} ...", brokerConfig.get(KafkaConfig.ListenersProp()));
+            brokerConfig.put(KafkaConfig.BROKER_ID_PROP, i);
+            log.debug("Starting a Kafka instance on {} ...", brokerConfig.get(KafkaConfig.LISTENERS_PROP));
 
             final Properties effectiveConfig = new Properties();
             effectiveConfig.putAll(brokerConfig);

@@ -503,7 +503,7 @@ object LogCleaner {
     CleanerConfig.LOG_CLEANER_DEDUPE_BUFFER_SIZE_PROP,
     CleanerConfig.LOG_CLEANER_DEDUPE_BUFFER_LOAD_FACTOR_PROP,
     CleanerConfig.LOG_CLEANER_IO_BUFFER_SIZE_PROP,
-    KafkaConfig.MessageMaxBytesProp,
+    org.apache.kafka.server.config.KafkaConfig.MESSAGE_MAX_BYTES_PROP,
     CleanerConfig.LOG_CLEANER_IO_MAX_BYTES_PER_SECOND_PROP,
     CleanerConfig.LOG_CLEANER_BACKOFF_MS_PROP
   )

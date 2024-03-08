@@ -27,6 +27,7 @@ import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.server.common.MetadataVersion.{IBP_2_7_IV0, IBP_3_1_IV0}
 import org.junit.jupiter.api.Assertions._
+import org.apache.kafka.server.config.KafkaConfig.INTER_BROKER_PROTOCOL_VERSION_PROP
 import org.junit.jupiter.api.Test
 
 import scala.collection.{Map, Seq}
@@ -74,7 +75,7 @@ class FetchRequestTestDowngrade extends BaseRequestTest {
 
     private def createConfig(nodeId: Int, interBrokerVersion: MetadataVersion): KafkaConfig = {
         val props = TestUtils.createBrokerConfig(nodeId, zkConnect)
-        props.put(KafkaConfig.InterBrokerProtocolVersionProp, interBrokerVersion.version)
+        props.put(INTER_BROKER_PROTOCOL_VERSION_PROP, interBrokerVersion.version)
         KafkaConfig.fromProps(props)
     }
 

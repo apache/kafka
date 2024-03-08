@@ -35,6 +35,7 @@ import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.common.{KafkaException, TopicPartition, Uuid}
 import org.apache.kafka.metadata.migration.ZkMigrationLeadershipState
 import org.apache.kafka.server.config.ConfigType
+import org.apache.kafka.server.config.KafkaConfig.{zkTlsClientAuthEnabled, ZK_ENABLE_SECURE_ACLS_PROP, ZK_SSL_CLIENT_ENABLE_PROP, ZK_CLIENT_CNXN_SOCKET_PROP, ZK_SSL_KEYSTORE_LOCATION_PROP}
 import org.apache.kafka.server.metrics.KafkaMetricsGroup
 import org.apache.kafka.storage.internals.log.LogConfig
 import org.apache.zookeeper.KeeperException.{Code, NodeExistsException}
@@ -2345,13 +2346,13 @@ object KafkaZkClient {
 
   def createZkClient(name: String, time: Time, config: KafkaConfig, zkClientConfig: ZKClientConfig): KafkaZkClient = {
     val secureAclsEnabled = config.zkEnableSecureAcls
-    val isZkSecurityEnabled = JaasUtils.isZkSaslEnabled || KafkaConfig.zkTlsClientAuthEnabled(zkClientConfig)
+    val isZkSecurityEnabled = JaasUtils.isZkSaslEnabled || zkTlsClientAuthEnabled(zkClientConfig)
 
     if (secureAclsEnabled && !isZkSecurityEnabled)
       throw new java.lang.SecurityException(
-        s"${KafkaConfig.ZkEnableSecureAclsProp} is true, but ZooKeeper client TLS configuration identifying at least " +
-          s"${KafkaConfig.ZkSslClientEnableProp}, ${KafkaConfig.ZkClientCnxnSocketProp}, and " +
-          s"${KafkaConfig.ZkSslKeyStoreLocationProp} was not present and the verification of the JAAS login file failed " +
+        s"${ZK_ENABLE_SECURE_ACLS_PROP} is true, but ZooKeeper client TLS configuration identifying at least " +
+          s"${ZK_SSL_CLIENT_ENABLE_PROP}, ${ZK_CLIENT_CNXN_SOCKET_PROP}, and " +
+          s"${ZK_SSL_KEYSTORE_LOCATION_PROP} was not present and the verification of the JAAS login file failed " +
           s"${JaasUtils.zkSecuritySysConfigString}")
 
     KafkaZkClient(config.zkConnect, secureAclsEnabled, config.zkSessionTimeoutMs, config.zkConnectionTimeoutMs,

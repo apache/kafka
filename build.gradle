@@ -850,6 +850,7 @@ project(':server') {
 
   dependencies {
     implementation project(':clients')
+    implementation project(':storage')
     implementation project(':server-common')
     implementation project(':group-coordinator')
     implementation project(':transaction-coordinator')
@@ -857,6 +858,18 @@ project(':server') {
     implementation libs.metrics
 
     implementation libs.slf4jApi
+
+    implementation(libs.zookeeper) {
+      // Dropwizard Metrics are required by ZooKeeper as of v3.6.0,
+      // but the library should *not* be used in Kafka code
+      implementation libs.dropwizardMetrics
+      exclude module: 'slf4j-log4j12'
+      exclude module: 'log4j'
+      // Both Kafka and Zookeeper use slf4j. ZooKeeper moved from log4j to logback in v3.8.0, but Kafka relies on reload4j.
+      // We are removing Zookeeper's dependency on logback so we have a singular logging backend.
+      exclude module: 'logback-classic'
+      exclude module: 'logback-core'
+    }
 
     compileOnly libs.log4j
 
@@ -1837,6 +1850,8 @@ project(':storage') {
     testImplementation project(':clients').sourceSets.test.output
     testImplementation project(':core')
     testImplementation project(':core').sourceSets.test.output
+    testImplementation project(':server')
+    testImplementation project(':server').sourceSets.test.output
     testImplementation project(':server-common')
     testImplementation project(':server-common').sourceSets.test.output
     testImplementation libs.hamcrest
@@ -2174,6 +2189,7 @@ project(':streams') {
     testCompileOnly project(':streams:test-utils')
 
     testImplementation project(':clients').sourceSets.test.output
+    testImplementation project(':server')
     testImplementation project(':core')
     testImplementation project(':tools')
     testImplementation project(':core').sourceSets.test.output
@@ -2768,6 +2784,7 @@ project(':jmh-benchmarks') {
     implementation project(':storage')
     implementation project(':streams')
     implementation project(':core')
+    implementation project(':server')
     implementation project(':connect:api')
     implementation project(':connect:transforms')
     implementation project(':connect:json')
@@ -2986,6 +3003,7 @@ project(':connect:runtime') {
 
     testImplementation project(':clients').sourceSets.test.output
     testImplementation project(':core')
+    testImplementation project(':server')
     testImplementation project(':metadata')
     testImplementation project(':core').sourceSets.test.output
     testImplementation project(':server-common')
@@ -3201,6 +3219,8 @@ project(':connect:mirror') {
     testImplementation project(':connect:runtime').sourceSets.test.output
     testImplementation project(':core')
     testImplementation project(':core').sourceSets.test.output
+    testImplementation project(':server')
+    testImplementation project(':server').sourceSets.test.output
 
     testRuntimeOnly project(':connect:runtime')
     testRuntimeOnly libs.slf4jlog4j

@@ -24,7 +24,7 @@ import com.yammer.metrics.core.Timer
 import kafka.api.LeaderAndIsr
 import kafka.server.{KafkaConfig, KafkaServer, QuorumTestHarness}
 import kafka.utils.{LogCaptureAppender, TestUtils}
-import kafka.zk.{FeatureZNodeStatus, _}
+import kafka.zk._
 import org.apache.kafka.common.errors.{ControllerMovedException, StaleBrokerEpochException}
 import org.apache.kafka.common.message.{AlterPartitionRequestData, AlterPartitionResponseData}
 import org.apache.kafka.common.metrics.KafkaMetric
@@ -37,6 +37,7 @@ import org.apache.kafka.metadata.LeaderRecoveryState
 import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.server.common.MetadataVersion.{IBP_2_6_IV0, IBP_2_7_IV0, IBP_3_2_IV0}
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
+import org.apache.kafka.server.config.KafkaConfig.{AUTO_LEADER_REBALANCE_ENABLE_PROP, UNCLEAN_LEADER_ELECTION_ENABLE_PROP, LEADER_IMBALANCE_CHECK_INTERVAL_SECONDS_PROP, LISTENERS_PROP, LISTENER_SECURITY_PROTOCOL_MAP_PROP, CONTROL_PLANE_LISTENER_NAME_PROP, INTER_BROKER_PROTOCOL_VERSION_PROP}
 import org.apache.log4j.Level
 import org.junit.jupiter.api.Assertions.{assertEquals, assertNotEquals, assertTrue}
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo}
@@ -1941,13 +1942,13 @@ class ControllerIntegrationTest extends QuorumTestHarness {
                           startingIdNumber: Int = 0): Seq[KafkaServer] = {
     val configs = TestUtils.createBrokerConfigs(numConfigs, zkConnect, enableControlledShutdown = enableControlledShutdown, logDirCount = logDirCount, startingIdNumber = startingIdNumber)
     configs.foreach { config =>
-      config.setProperty(KafkaConfig.AutoLeaderRebalanceEnableProp, autoLeaderRebalanceEnable.toString)
-      config.setProperty(KafkaConfig.UncleanLeaderElectionEnableProp, uncleanLeaderElectionEnable.toString)
-      config.setProperty(KafkaConfig.LeaderImbalanceCheckIntervalSecondsProp, "1")
-      listeners.foreach(listener => config.setProperty(KafkaConfig.ListenersProp, listener))
-      listenerSecurityProtocolMap.foreach(listenerMap => config.setProperty(KafkaConfig.ListenerSecurityProtocolMapProp, listenerMap))
-      controlPlaneListenerName.foreach(controlPlaneListener => config.setProperty(KafkaConfig.ControlPlaneListenerNameProp, controlPlaneListener))
-      interBrokerProtocolVersion.foreach(ibp => config.setProperty(KafkaConfig.InterBrokerProtocolVersionProp, ibp.toString))
+      config.setProperty(AUTO_LEADER_REBALANCE_ENABLE_PROP, autoLeaderRebalanceEnable.toString)
+      config.setProperty(UNCLEAN_LEADER_ELECTION_ENABLE_PROP, uncleanLeaderElectionEnable.toString)
+      config.setProperty(LEADER_IMBALANCE_CHECK_INTERVAL_SECONDS_PROP, "1")
+      listeners.foreach(listener => config.setProperty(LISTENERS_PROP, listener))
+      listenerSecurityProtocolMap.foreach(listenerMap => config.setProperty(LISTENER_SECURITY_PROTOCOL_MAP_PROP, listenerMap))
+      controlPlaneListenerName.foreach(controlPlaneListener => config.setProperty(CONTROL_PLANE_LISTENER_NAME_PROP, controlPlaneListener))
+      interBrokerProtocolVersion.foreach(ibp => config.setProperty(INTER_BROKER_PROTOCOL_VERSION_PROP, ibp.toString))
     }
     configs.map(config => TestUtils.createServer(KafkaConfig.fromProps(config)))
   }

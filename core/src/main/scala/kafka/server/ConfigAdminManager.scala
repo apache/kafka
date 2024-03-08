@@ -36,6 +36,7 @@ import org.apache.kafka.common.message.IncrementalAlterConfigsResponseData.{Alte
 import org.apache.kafka.common.protocol.Errors.{INVALID_REQUEST, UNKNOWN_SERVER_ERROR}
 import org.apache.kafka.common.requests.ApiError
 import org.apache.kafka.common.resource.{Resource, ResourceType}
+import org.apache.kafka.server.config.KafkaConfig.{configKeys, loggableValue}
 import org.slf4j.{Logger, LoggerFactory}
 
 import scala.collection.{Map, Seq}
@@ -179,7 +180,7 @@ class ConfigAdminManager(nodeId: Int,
         }
         new AlterConfigOp(new ConfigEntry(config.name(), config.value()), opType)
     }.toSeq
-    prepareIncrementalConfigs(alterConfigOps, configProps, KafkaConfig.configKeys)
+    prepareIncrementalConfigs(alterConfigOps, configProps, configKeys.asScala)
     try {
       validateBrokerConfigChange(configProps, configResource)
     } catch {
@@ -405,7 +406,7 @@ object ConfigAdminManager {
    */
   def toLoggableProps(resource: ConfigResource, configProps: Properties): Map[String, String] = {
     configProps.asScala.map {
-      case (key, value) => (key, KafkaConfig.loggableValue(resource.`type`, key, value))
+      case (key, value) => (key, loggableValue(resource.`type`, key, value))
     }
   }
 

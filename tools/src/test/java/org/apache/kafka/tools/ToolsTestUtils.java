@@ -17,7 +17,6 @@
 package org.apache.kafka.tools;
 
 import kafka.utils.TestInfoUtils;
-import kafka.server.DynamicConfig;
 import kafka.utils.TestUtils;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AlterConfigOp;
@@ -25,6 +24,7 @@ import org.apache.kafka.clients.admin.ConfigEntry;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.utils.Exit;
+import org.apache.kafka.server.config.dynamic.BrokerDynamicConfigs;
 import org.apache.kafka.storage.internals.log.LogConfig;
 
 import java.io.ByteArrayOutputStream;
@@ -132,9 +132,9 @@ public class ToolsTestUtils {
      */
     public static void throttleAllBrokersReplication(Admin adminClient, List<Integer> brokerIds, int throttleBytes) throws ExecutionException, InterruptedException {
         List<AlterConfigOp> throttleConfigs = new ArrayList<>();
-        throttleConfigs.add(new AlterConfigOp(new ConfigEntry(DynamicConfig.Broker$.MODULE$.LeaderReplicationThrottledRateProp(),
+        throttleConfigs.add(new AlterConfigOp(new ConfigEntry(BrokerDynamicConfigs.LEADER_REPLICATION_THROTTLED_RATE_PROP,
             Integer.toString(throttleBytes)), AlterConfigOp.OpType.SET));
-        throttleConfigs.add(new AlterConfigOp(new ConfigEntry(DynamicConfig.Broker$.MODULE$.FollowerReplicationThrottledRateProp(),
+        throttleConfigs.add(new AlterConfigOp(new ConfigEntry(BrokerDynamicConfigs.FOLLOWER_REPLICATION_THROTTLED_RATE_PROP,
             Integer.toString(throttleBytes)), AlterConfigOp.OpType.SET));
 
         Map<ConfigResource, Collection<AlterConfigOp>> configs = new HashMap<>();

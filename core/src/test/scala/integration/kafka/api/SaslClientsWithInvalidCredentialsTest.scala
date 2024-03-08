@@ -21,9 +21,9 @@ import org.apache.kafka.clients.consumer.{Consumer, ConsumerConfig}
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.{KafkaException, TopicPartition}
 import org.apache.kafka.common.errors.SaslAuthenticationException
+import org.apache.kafka.server.config.KafkaConfig
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo}
 import org.junit.jupiter.api.Assertions._
-import kafka.server.KafkaConfig
 import kafka.utils.{JaasTestUtils, TestUtils}
 import kafka.zk.ConfigEntityChangeNotificationZNode
 import org.apache.kafka.common.security.auth.SecurityProtocol
@@ -40,9 +40,9 @@ class SaslClientsWithInvalidCredentialsTest extends AbstractSaslTest {
   val producerCount = 1
   val brokerCount = 1
 
-  this.serverConfig.setProperty(KafkaConfig.OffsetsTopicReplicationFactorProp, "1")
-  this.serverConfig.setProperty(KafkaConfig.TransactionsTopicReplicationFactorProp, "1")
-  this.serverConfig.setProperty(KafkaConfig.TransactionsTopicMinISRProp, "1")
+  this.serverConfig.setProperty(KafkaConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_PROP, "1")
+  this.serverConfig.setProperty(KafkaConfig.TRANSACTIONS_TOPIC_REPLICATION_FACTOR_PROP, "1")
+  this.serverConfig.setProperty(KafkaConfig.TRANSACTIONS_TOPIC_MIN_ISR_PROP, "1")
   this.consumerConfig.setProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest")
 
   val topic = "topic"

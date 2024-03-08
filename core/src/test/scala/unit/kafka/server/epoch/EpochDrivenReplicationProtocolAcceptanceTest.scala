@@ -19,7 +19,7 @@ package kafka.server.epoch
 
 import kafka.log.UnifiedLog
 import kafka.server.KafkaConfig._
-import kafka.server.{KafkaConfig, KafkaServer, QuorumTestHarness}
+import kafka.server.{KafkaServer, QuorumTestHarness}
 import kafka.tools.DumpLogSegments
 import kafka.utils.TestUtils._
 import kafka.utils.{CoreUtils, Logging, TestUtils}
@@ -28,6 +28,7 @@ import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.record.RecordBatch
 import org.apache.kafka.common.serialization.ByteArrayDeserializer
+import org.apache.kafka.server.config.KafkaConfig.{MIN_IN_SYNC_REPLICAS_PROP, UNCLEAN_LEADER_ELECTION_ENABLE_PROP}
 import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.storage.internals.epoch.LeaderEpochFileCache
 import org.apache.kafka.storage.internals.log.EpochEntry
@@ -302,7 +303,7 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends QuorumTestHarness wit
 
     // A single partition topic with 2 replicas, min.isr = 1
     TestUtils.createTopic(zkClient, topic, Map(0 -> Seq(100, 101)), brokers,
-      CoreUtils.propsWith((KafkaConfig.MinInSyncReplicasProp, "1")))
+      CoreUtils.propsWith((MIN_IN_SYNC_REPLICAS_PROP, "1")))
 
     producer = TestUtils.createProducer(plaintextBootstrapServers(brokers), acks = 1)
 
@@ -466,7 +467,7 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends QuorumTestHarness wit
   private def createBrokerForId(id: Int, enableUncleanLeaderElection: Boolean = false): KafkaServer = {
     val config = createBrokerConfig(id, zkConnect)
     TestUtils.setIbpAndMessageFormatVersions(config, metadataVersion)
-    config.setProperty(KafkaConfig.UncleanLeaderElectionEnableProp, enableUncleanLeaderElection.toString)
+    config.setProperty(UNCLEAN_LEADER_ELECTION_ENABLE_PROP, enableUncleanLeaderElection.toString)
     createServer(fromProps(config))
   }
 }

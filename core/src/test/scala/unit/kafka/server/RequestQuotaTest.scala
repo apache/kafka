@@ -43,6 +43,7 @@ import org.apache.kafka.common.security.auth._
 import org.apache.kafka.common.utils.{Sanitizer, SecurityUtils}
 import org.apache.kafka.metadata.authorizer.StandardAuthorizer
 import org.apache.kafka.network.Session
+import org.apache.kafka.server.config.KafkaConfig
 import org.apache.kafka.server.authorizer.{Action, AuthorizableRequestContext, AuthorizationResult}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo}
@@ -76,23 +77,23 @@ class RequestQuotaTest extends BaseRequestTest {
   private val tasks = new ListBuffer[Task]
 
   override def brokerPropertyOverrides(properties: Properties): Unit = {
-    properties.put(KafkaConfig.ControlledShutdownEnableProp, "false")
-    properties.put(KafkaConfig.OffsetsTopicReplicationFactorProp, "1")
-    properties.put(KafkaConfig.OffsetsTopicPartitionsProp, "1")
-    properties.put(KafkaConfig.GroupMinSessionTimeoutMsProp, "100")
-    properties.put(KafkaConfig.GroupInitialRebalanceDelayMsProp, "0")
-    properties.put(KafkaConfig.PrincipalBuilderClassProp, classOf[RequestQuotaTest.TestPrincipalBuilder].getName)
-    properties.put(KafkaConfig.UnstableApiVersionsEnableProp, "true")
+    properties.put(KafkaConfig.CONTROLLED_SHUTDOWN_ENABLE_PROP, "false")
+    properties.put(KafkaConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_PROP, "1")
+    properties.put(KafkaConfig.OFFSETS_TOPIC_PARTITIONS_PROP, "1")
+    properties.put(KafkaConfig.GROUP_MIN_SESSION_TIMEOUT_MS_PROP, "100")
+    properties.put(KafkaConfig.GROUP_INITIAL_REBALANCE_DELAY_MS_PROP, "0")
+    properties.put(KafkaConfig.PRINCIPAL_BUILDER_CLASS_PROP, classOf[RequestQuotaTest.TestPrincipalBuilder].getName)
+    properties.put(KafkaConfig.UNSTABLE_API_VERSIONS_ENABLE_PROP, "true")
     if (isKRaftTest()) {
-      properties.put(KafkaConfig.AuthorizerClassNameProp, classOf[RequestQuotaTest.KraftTestAuthorizer].getName)
+      properties.put(KafkaConfig.AUTHORIZER_CLASS_NAME_PROP, classOf[RequestQuotaTest.KraftTestAuthorizer].getName)
     } else {
-      properties.put(KafkaConfig.AuthorizerClassNameProp, classOf[RequestQuotaTest.ZkTestAuthorizer].getName)
+      properties.put(KafkaConfig.AUTHORIZER_CLASS_NAME_PROP, classOf[RequestQuotaTest.ZkTestAuthorizer].getName)
     }
   }
 
   override def kraftControllerConfigs(): Seq[Properties] = {
     val properties = new Properties()
-    properties.put(KafkaConfig.PrincipalBuilderClassProp, classOf[RequestQuotaTest.TestPrincipalBuilder].getName)
+    properties.put(KafkaConfig.PRINCIPAL_BUILDER_CLASS_PROP, classOf[RequestQuotaTest.TestPrincipalBuilder].getName)
     Seq(properties)
   }
 

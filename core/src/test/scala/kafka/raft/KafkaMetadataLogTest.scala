@@ -17,7 +17,7 @@
 package kafka.raft
 
 import kafka.log.UnifiedLog
-import kafka.server.KafkaConfig.{MetadataLogSegmentBytesProp, MetadataLogSegmentMillisProp, MetadataLogSegmentMinBytesProp, NodeIdProp, ProcessRolesProp, QuorumVotersProp}
+import org.apache.kafka.server.config.KafkaConfig.{METADATA_LOG_SEGMENT_BYTES_PROP, METADATA_LOG_SEGMENT_MILLIS_PROP, METADATA_LOG_SEGMENT_MIN_BYTES_PROP, NODE_ID_PROP, PROCESS_ROLES_PROP, QUORUM_VOTERS_PROP, CONTROLLER_LISTENER_NAMES_PROP}
 import kafka.server.{KafkaConfig, KafkaRaftServer}
 import kafka.utils.TestUtils
 import org.apache.kafka.common.errors.{InvalidConfigurationException, RecordTooLargeException}
@@ -61,19 +61,19 @@ final class KafkaMetadataLogTest {
   @Test
   def testConfig(): Unit = {
     val props = new Properties()
-    props.put(ProcessRolesProp, util.Arrays.asList("broker"))
-    props.put(QuorumVotersProp, "1@localhost:9093")
-    props.put(NodeIdProp, Int.box(2))
-    props.put(KafkaConfig.ControllerListenerNamesProp, "SSL")
-    props.put(MetadataLogSegmentBytesProp, Int.box(10240))
-    props.put(MetadataLogSegmentMillisProp, Int.box(10 * 1024))
+    props.put(PROCESS_ROLES_PROP, util.Arrays.asList("broker"))
+    props.put(QUORUM_VOTERS_PROP, "1@localhost:9093")
+    props.put(NODE_ID_PROP, Int.box(2))
+    props.put(CONTROLLER_LISTENER_NAMES_PROP, "SSL")
+    props.put(METADATA_LOG_SEGMENT_BYTES_PROP, Int.box(10240))
+    props.put(METADATA_LOG_SEGMENT_MILLIS_PROP, Int.box(10 * 1024))
     assertThrows(classOf[InvalidConfigurationException], () => {
       val kafkaConfig = KafkaConfig.fromProps(props)
       val metadataConfig = MetadataLogConfig(kafkaConfig, KafkaRaftClient.MAX_BATCH_SIZE_BYTES, KafkaRaftClient.MAX_FETCH_SIZE_BYTES)
       buildMetadataLog(tempDir, mockTime, metadataConfig)
     })
 
-    props.put(MetadataLogSegmentMinBytesProp, Int.box(10240))
+    props.put(METADATA_LOG_SEGMENT_MIN_BYTES_PROP, Int.box(10240))
     val kafkaConfig = KafkaConfig.fromProps(props)
     val metadataConfig = MetadataLogConfig(kafkaConfig, KafkaRaftClient.MAX_BATCH_SIZE_BYTES, KafkaRaftClient.MAX_FETCH_SIZE_BYTES)
     buildMetadataLog(tempDir, mockTime, metadataConfig)

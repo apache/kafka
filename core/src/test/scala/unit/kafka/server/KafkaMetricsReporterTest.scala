@@ -20,6 +20,7 @@ import java.util
 import java.util.concurrent.atomic.AtomicReference
 import kafka.utils.{CoreUtils, TestInfoUtils, TestUtils}
 import org.apache.kafka.common.metrics.{KafkaMetric, MetricsContext, MetricsReporter}
+import org.apache.kafka.server.config.KafkaConfig.{METRIC_REPORTER_CLASSES_PROP, BROKER_ID_GENERATION_ENABLE_PROP, BROKER_ID_PROP}
 import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.params.ParameterizedTest
@@ -70,9 +71,9 @@ class KafkaMetricsReporterTest extends QuorumTestHarness {
   override def setUp(testInfo: TestInfo): Unit = {
     super.setUp(testInfo)
     val props = TestUtils.createBrokerConfig(1, zkConnectOrNull)
-    props.setProperty(KafkaConfig.MetricReporterClassesProp, "kafka.server.KafkaMetricsReporterTest$MockMetricsReporter")
-    props.setProperty(KafkaConfig.BrokerIdGenerationEnableProp, "true")
-    props.setProperty(KafkaConfig.BrokerIdProp, "1")
+    props.setProperty(METRIC_REPORTER_CLASSES_PROP, "kafka.server.KafkaMetricsReporterTest$MockMetricsReporter")
+    props.setProperty(BROKER_ID_GENERATION_ENABLE_PROP, "true")
+    props.setProperty(BROKER_ID_PROP, "1")
     config = KafkaConfig.fromProps(props)
     broker = createBroker(config, threadNamePrefix = Option(this.getClass.getName))
     broker.startup()
