@@ -223,10 +223,6 @@ public class KafkaShareConsumer<K, V> implements ShareConsumer<K, V> {
      * {@link #commitAsync()} or {@link #poll(Duration)} call. By using this method, the consumer is using
      * <b>explicit acknowledgement</b>.
      *
-     * <p>
-     * Records for each topic-partition must be acknowledged in the order they were returned from
-     * {@link #poll(Duration)}.
-     *
      * @param record The record to acknowledge
      * @param type The acknowledge type which indicates whether it was processed successfully
      *

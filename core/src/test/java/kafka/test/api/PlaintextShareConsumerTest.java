@@ -113,6 +113,7 @@ public class PlaintextShareConsumerTest extends AbstractConsumerTest {
         shareConsumer.subscribe(subscription);
         assertEquals(subscription, shareConsumer.subscription());
         ConsumerRecords<byte[], byte[]> records = shareConsumer.poll(Duration.ofMillis(2000));
+        assertEquals(0, records.count());
         shareConsumer.subscribe(subscription);
         assertEquals(subscription, shareConsumer.subscription());
         records = shareConsumer.poll(Duration.ofMillis(2000));
@@ -164,8 +165,28 @@ public class PlaintextShareConsumerTest extends AbstractConsumerTest {
                 new Properties(), CollectionConverters.asScala(Collections.<String>emptyList()).toList());
         shareConsumer.subscribe(Collections.singleton(tp().topic()));
         ConsumerRecords<byte[], byte[]> records = shareConsumer.poll(Duration.ofMillis(5000));
-        shareConsumer.close();
         assertEquals(1, records.count());
+        shareConsumer.close();
+    }
+
+    @ParameterizedTest(name = TEST_WITH_PARAMETERIZED_QUORUM_NAME)
+    @ValueSource(strings = {"kraft+kip932"})
+    public void testSubscriptionAndPollMultiple(String quorum) {
+        ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(tp().topic(), tp().partition(), null, "key".getBytes(), "value".getBytes());
+        KafkaProducer<byte[], byte[]> producer = createProducer(new ByteArraySerializer(), new ByteArraySerializer(), new Properties());
+        producer.send(record);
+        KafkaShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(new ByteArrayDeserializer(), new ByteArrayDeserializer(),
+                new Properties(), CollectionConverters.asScala(Collections.<String>emptyList()).toList());
+        shareConsumer.subscribe(Collections.singleton(tp().topic()));
+        ConsumerRecords<byte[], byte[]> records = shareConsumer.poll(Duration.ofMillis(5000));
+        assertEquals(1, records.count());
+        producer.send(record);
+        records = shareConsumer.poll(Duration.ofMillis(5000));
+        assertEquals(1, records.count());
+        producer.send(record);
+        records = shareConsumer.poll(Duration.ofMillis(5000));
+        assertEquals(1, records.count());
+        shareConsumer.close();
     }
 
     @Disabled("TODO: The consumer needs to be converted to share consumers once the functionality for this test is available")

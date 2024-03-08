@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
-import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicIdPartition;
@@ -60,7 +59,7 @@ public class ShareFetchRequestManager implements RequestManager {
     private final FetchConfig fetchConfig;
     protected final ShareFetchBuffer shareFetchBuffer;
     private final Map<Integer, ShareSessionHandler> sessionHandlers;
-    private final Set<Integer> nodesWithPendingFetchRequests;
+    private final Set<Integer> nodesWithPendingRequests;
     private final FetchMetricsManager metricsManager;
     private final IdempotentCloser idempotentCloser = new IdempotentCloser();
 
@@ -80,7 +79,7 @@ public class ShareFetchRequestManager implements RequestManager {
         this.shareFetchBuffer = shareFetchBuffer;
         this.metricsManager = metricsManager;
         this.sessionHandlers = new HashMap<>();
-        this.nodesWithPendingFetchRequests = new HashSet<>();
+        this.nodesWithPendingRequests = new HashSet<>();
     }
 
     @Override
@@ -157,7 +156,7 @@ public class ShareFetchRequestManager implements RequestManager {
             metricsManager.recordLatency(resp.requestLatencyMs());
         } finally {
             log.debug("Removing pending request for node {}", fetchTarget);
-            nodesWithPendingFetchRequests.remove(fetchTarget.id());
+            nodesWithPendingRequests.remove(fetchTarget.id());
         }
     }
 
@@ -167,7 +166,7 @@ public class ShareFetchRequestManager implements RequestManager {
                 .forShareSession(groupId, requestData.metadata())
                 .setMaxBytes(fetchConfig.maxBytes);
 
-        nodesWithPendingFetchRequests.add(fetchTarget.id());
+        nodesWithPendingRequests.add(fetchTarget.id());
 
         return request;
     }
@@ -186,12 +185,13 @@ public class ShareFetchRequestManager implements RequestManager {
             }
 
             Node node = leaderOpt.get();
-            if (nodesWithPendingFetchRequests.contains(node.id())) {
+            if (nodesWithPendingRequests.contains(node.id())) {
                 log.trace("Skipping fetch for partition {} because previous fetch request to {} has not been processed", partition, node);
             } else {
                 // if there is a leader and no in-flight requests, issue a new fetch
                 ShareSessionHandler.Builder builder = fetchable.computeIfAbsent(node, k -> {
-                    ShareSessionHandler shareSessionHandler = sessionHandlers.computeIfAbsent(node.id(), n -> new ShareSessionHandler(logContext, n, Uuid.randomUuid()));
+                    ShareSessionHandler shareSessionHandler =
+                            sessionHandlers.computeIfAbsent(node.id(), n -> new ShareSessionHandler(logContext, n, Uuid.randomUuid()));
                     return shareSessionHandler.newBuilder();
                 });
                 Uuid topicId = topicIds.getOrDefault(partition.topic(), Uuid.ZERO_UUID);
@@ -205,19 +205,6 @@ public class ShareFetchRequestManager implements RequestManager {
         Map<Node, ShareSessionHandler.ShareFetchRequestData> reqs = new LinkedHashMap<>();
         for (Map.Entry<Node, ShareSessionHandler.Builder> entry : fetchable.entrySet()) {
             reqs.put(entry.getKey(), entry.getValue().build());
-        }
-
-        // Because ShareFetcher doesn't have the concept of a validated position, we need to
-        // do some fakery here to keep the underlying fetching state management happy. This
-        // is a sign of a future refactor.
-        if (reqs.isEmpty()) {
-            for (TopicPartition tp : subscriptions.initializingPartitions()) {
-                Optional<Node> leader = metadata.currentLeader(tp).leader;
-                if (leader.isPresent()) {
-                    subscriptions.seekValidated(tp, new SubscriptionState.FetchPosition(0, Optional.empty(), metadata.currentLeader(tp)));
-                    subscriptions.maybeValidatePositionForCurrentLeader(new ApiVersions(), tp, metadata.currentLeader(tp));
-                }
-            }
         }
 
         return reqs;
@@ -237,7 +224,7 @@ public class ShareFetchRequestManager implements RequestManager {
                 handler.handleError(error);
             }
         } finally {
-            nodesWithPendingFetchRequests.remove(fetchTarget.id());
+            nodesWithPendingRequests.remove(fetchTarget.id());
         }
     }
 

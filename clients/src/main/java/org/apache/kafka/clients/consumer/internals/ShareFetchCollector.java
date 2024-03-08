@@ -17,7 +17,6 @@
 package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
-import org.apache.kafka.clients.consumer.OffsetOutOfRangeException;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
@@ -61,18 +60,15 @@ public class ShareFetchCollector<K, V> {
     }
 
     /**
-     * Return the fetched {@link ConsumerRecord records}, empty the {@link ShareFetchBuffer record buffer}, and
-     * update the consumed position.
+     * Return the fetched {@link ConsumerRecord records}.
      *
      * @param fetchBuffer {@link ShareFetchBuffer} from which to retrieve the {@link ConsumerRecord records}
      *
-     * @return A {@link Fetch} for the requested partitions
-     * @throws OffsetOutOfRangeException If there is OffsetOutOfRange error in fetchResponse and
-     *         the defaultResetPolicy is NONE
+     * @return A {@link ShareFetch} for the requested partitions
      * @throws TopicAuthorizationException If there is TopicAuthorization error in fetchResponse.
      */
-    public Fetch<K, V> collectFetch(final ShareFetchBuffer fetchBuffer) {
-        final Fetch<K, V> fetch = Fetch.empty();
+    public ShareFetch<K, V> collect(final ShareFetchBuffer fetchBuffer) {
+        ShareFetch<K, V> fetch = ShareFetch.empty();
         int recordsRemaining = fetchConfig.maxPollRecords;
 
         try {
@@ -82,8 +78,9 @@ public class ShareFetchCollector<K, V> {
                 if (nextInLineFetch == null || nextInLineFetch.isConsumed()) {
                     final CompletedShareFetch completedFetch = fetchBuffer.peek();
 
-                    if (completedFetch == null)
+                    if (completedFetch == null) {
                         break;
+                    }
 
                     if (!completedFetch.isInitialized()) {
                         try {
@@ -94,7 +91,7 @@ public class ShareFetchCollector<K, V> {
                             // The first condition ensures that the completedFetches is not stuck with the same completedFetch
                             // in cases such as the TopicAuthorizationException, and the second condition ensures that no
                             // potential data loss due to an exception in a following record.
-                            if (fetch.isEmpty() && ShareFetchResponse.recordsOrFail(completedFetch.partitionData).sizeInBytes() == 0)
+                            if (ShareFetchResponse.recordsOrFail(completedFetch.partitionData).sizeInBytes() == 0)
                                 fetchBuffer.poll();
 
                             throw e;
@@ -105,37 +102,27 @@ public class ShareFetchCollector<K, V> {
 
                     fetchBuffer.poll();
                 } else {
-                    final Fetch<K, V> nextFetch = fetchRecords(nextInLineFetch, recordsRemaining);
+                    final TopicIdPartition tp = nextInLineFetch.partition;
+
+                    List<ConsumerRecord<K, V>> partRecords = nextInLineFetch.fetchRecords(fetchConfig,
+                            deserializers,
+                            recordsRemaining);
+
+                    if (partRecords.isEmpty()) {
+                        nextInLineFetch.drain();
+                    }
+
+                    final ShareFetch<K, V> nextFetch = ShareFetch.forPartition(tp, partRecords);
                     recordsRemaining -= nextFetch.numRecords();
                     fetch.add(nextFetch);
                 }
             }
-        } catch (KafkaException e) {
+        } catch (Exception e) {
             if (fetch.isEmpty())
                 throw e;
         }
 
         return fetch;
-    }
-
-    private Fetch<K, V> fetchRecords(final CompletedShareFetch nextInLineFetch, int maxRecords) {
-        final TopicIdPartition tp = nextInLineFetch.partition;
-
-        if (!subscriptions.isAssigned(tp.topicPartition())) {
-            // this can happen when a rebalance happened before fetched records are returned to the consumer's poll call
-            log.debug("Not returning fetched records for partition {} since it is no longer assigned", tp);
-        } else {
-            List<ConsumerRecord<K, V>> partRecords = nextInLineFetch.fetchRecords(fetchConfig,
-                    deserializers,
-                    maxRecords);
-
-            return Fetch.forPartition(tp.topicPartition(), partRecords, true);
-        }
-
-        log.trace("Draining fetched records for partition {}", tp);
-        nextInLineFetch.drain();
-
-        return Fetch.empty();
     }
 
     /**

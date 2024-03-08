@@ -23,8 +23,6 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Timer;
 import org.slf4j.Logger;
 
-import java.util.Collection;
-import java.util.Collections;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.concurrent.ConcurrentLinkedQueue;
@@ -93,19 +91,6 @@ public class ShareFetchBuffer implements AutoCloseable {
         lock.lock();
         try {
             completedFetches.add(fetch);
-            notEmptyCondition.signalAll();
-        } finally {
-            lock.unlock();
-        }
-    }
-
-    void addAll(Collection<CompletedShareFetch> fetches) {
-        if (fetches == null || fetches.isEmpty())
-            return;
-
-        lock.lock();
-        try {
-            completedFetches.addAll(fetches);
             notEmptyCondition.signalAll();
         } finally {
             lock.unlock();
@@ -196,39 +181,6 @@ public class ShareFetchBuffer implements AutoCloseable {
     }
 
     /**
-     * Updates the buffer to retain only the fetch data that corresponds to the given partitions. Any previously
-     * {@link CompletedShareFetch fetched data} is removed if its partition is not in the given set of partitions.
-     *
-     * @param partitions {@link Set} of {@link TopicIdPartition}s for which any buffered data should be kept
-     */
-    void retainAll(final Set<TopicIdPartition> partitions) {
-        try {
-            lock.lock();
-
-            completedFetches.removeIf(cf -> maybeDrain(partitions, cf));
-
-            if (maybeDrain(partitions, nextInLineFetch))
-                nextInLineFetch = null;
-        } finally {
-            lock.unlock();
-        }
-    }
-
-    /**
-     * Drains (i.e. <em>removes</em>) the contents of the given {@link CompletedShareFetch} as its data should not
-     * be returned to the user.
-     */
-    private boolean maybeDrain(final Set<TopicIdPartition> partitions, final CompletedShareFetch completedFetch) {
-        if (completedFetch != null && !partitions.contains(completedFetch.partition)) {
-            log.debug("Removing {} from buffered fetch data as it is not in the set of partitions to retain ({})", completedFetch.partition, partitions);
-            completedFetch.drain();
-            return true;
-        } else {
-            return false;
-        }
-    }
-
-    /**
      * Return the set of {@link TopicIdPartition partitions} for which we have data in the buffer.
      *
      * @return {@link TopicIdPartition Partition} set
@@ -249,12 +201,26 @@ public class ShareFetchBuffer implements AutoCloseable {
         }
     }
 
+    private void drainAll() {
+        lock.lock();
+        try {
+            completedFetches.forEach(CompletedShareFetch::drain);
+            completedFetches.clear();
+            if (nextInLineFetch != null) {
+                nextInLineFetch.drain();
+                nextInLineFetch = null;
+            }
+        } finally {
+            lock.unlock();
+        }
+    }
+
     @Override
     public void close() {
         lock.lock();
         try {
             idempotentCloser.close(
-                    () -> retainAll(Collections.emptySet()),
+                    this::drainAll,
                     () -> log.warn("The fetch buffer was already closed")
             );
         } finally {

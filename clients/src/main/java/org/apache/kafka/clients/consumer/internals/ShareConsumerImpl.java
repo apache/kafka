@@ -169,6 +169,21 @@ public class ShareConsumerImpl<K, V> implements ShareConsumer<K, V> {
     private final String groupId;
     private final BackgroundEventProcessor backgroundEventProcessor;
     private final Deserializers<K, V> deserializers;
+    private ShareFetch<K, V> currentFetch;
+
+    private enum AcknowledgementMode {
+        /** Acknowledgement mode is not yet known */
+        UNKNOWN,
+        /** Acknowledgement mode is pending, meaning that {@link #poll(Duration)} has been called once and
+         * {@link #acknowledge(ConsumerRecord, AcknowledgeType)} has not been called */
+        PENDING,
+        /** Acknowledgements are explicit, using {@link #acknowledge(ConsumerRecord, AcknowledgeType)} */
+        EXPLICIT,
+        /** Acknowledgements are implicit, not using {@link #acknowledge(ConsumerRecord, AcknowledgeType)} */
+        IMPLICIT
+    }
+
+    private AcknowledgementMode acknowledgementMode;
 
     /**
      * A thread-safe {@link ShareFetchBuffer fetch buffer} for the results that are populated in the
@@ -196,13 +211,13 @@ public class ShareConsumerImpl<K, V> implements ShareConsumer<K, V> {
                       final Deserializer<K> keyDeserializer,
                       final Deserializer<V> valueDeserializer) {
         this(
-                config,
-                keyDeserializer,
-                valueDeserializer,
-                Time.SYSTEM,
-                ApplicationEventHandler::new,
-                ShareFetchCollector::new,
-                new LinkedBlockingQueue<>()
+            config,
+            keyDeserializer,
+            valueDeserializer,
+            Time.SYSTEM,
+            ApplicationEventHandler::new,
+            ShareFetchCollector::new,
+            new LinkedBlockingQueue<>()
         );
     }
 
@@ -224,6 +239,7 @@ public class ShareConsumerImpl<K, V> implements ShareConsumer<K, V> {
             maybeThrowInvalidGroupIdException();
             LogContext logContext = createLogContext(clientId, groupId);
             this.log = logContext.logger(getClass());
+            this.acknowledgementMode = AcknowledgementMode.UNKNOWN;
 
             log.debug("Initializing the Kafka share consumer");
             this.time = time;
@@ -359,7 +375,7 @@ public class ShareConsumerImpl<K, V> implements ShareConsumer<K, V> {
      * {@inheritDoc}
      */
     @Override
-    public void subscribe(Collection<String> topics) {
+    public void subscribe(final Collection<String> topics) {
         acquireAndEnsureOpen();
         try {
             maybeThrowInvalidGroupIdException();
@@ -375,7 +391,7 @@ public class ShareConsumerImpl<K, V> implements ShareConsumer<K, V> {
                 }
 
                 log.info("Subscribed to topic(s): {}", join(topics, ", "));
-                if (subscriptions.subscribe(new HashSet<>(topics), Optional.empty()))
+                if (subscriptions.subscribeToShareGroup(new HashSet<>(topics)))
                     metadata.requestUpdateForNewTopics();
 
                 // Trigger subscribe event to effectively join the group if not already part of it,
@@ -408,11 +424,14 @@ public class ShareConsumerImpl<K, V> implements ShareConsumer<K, V> {
      * {@inheritDoc}
      */
     @Override
-    public synchronized ConsumerRecords<K, V> poll(Duration timeout) {
+    public synchronized ConsumerRecords<K, V> poll(final Duration timeout) {
         Timer timer = time.timer(timeout);
 
         acquireAndEnsureOpen();
         try {
+            // If using implicit acknowledgement, acknowledge the previously fetched records
+            maybeImplicitlyAcknowledge();
+
             kafkaConsumerMetrics.recordPollStart(timer.currentTimeMs());
 
             if (subscriptions.hasNoSubscriptionOrUserAssignment()) {
@@ -431,10 +450,12 @@ public class ShareConsumerImpl<K, V> implements ShareConsumer<K, V> {
                 // Make sure the network thread can tell the application is actively polling
                 applicationEventHandler.add(new PollApplicationEvent(timer.currentTimeMs()));
 
-                final Fetch<K, V> fetch = pollForFetches(timer);
+                final ShareFetch<K, V> fetch = pollForFetches(timer);
                 if (!fetch.isEmpty()) {
+                    currentFetch = fetch;
                     return new ConsumerRecords<>(fetch.records());
                 }
+
                 // We will wait for retryBackoffMs
             } while (timer.notExpired());
 
@@ -446,11 +467,11 @@ public class ShareConsumerImpl<K, V> implements ShareConsumer<K, V> {
         }
     }
 
-    private Fetch<K, V> pollForFetches(Timer timer) {
+    private ShareFetch<K, V> pollForFetches(final Timer timer) {
         long pollTimeout = Math.min(applicationEventHandler.maximumTimeToWait(), timer.remainingMs());
 
         // If data is available already, return it immediately
-        final Fetch<K, V> fetch = collectFetch();
+        final ShareFetch<K, V> fetch = collect();
         if (!fetch.isEmpty()) {
             return fetch;
         }
@@ -465,30 +486,36 @@ public class ShareConsumerImpl<K, V> implements ShareConsumer<K, V> {
             timer.update(pollTimer.currentTimeMs());
         }
 
-        return collectFetch();
+        return collect();
     }
 
-    private Fetch<K, V> collectFetch() {
+    private ShareFetch<K, V> collect() {
         // Notify the network thread to wake up and start the next round of fetching
-//        applicationEventHandler.wakeupNetworkThread();
+        applicationEventHandler.wakeupNetworkThread();
 
-        return fetchCollector.collectFetch(fetchBuffer);
+        return fetchCollector.collect(fetchBuffer);
     }
 
     /**
      * {@inheritDoc}
      */
     @Override
-    public void acknowledge(ConsumerRecord<K, V> record) {
-        throw new UnsupportedOperationException();
+    public void acknowledge(final ConsumerRecord<K, V> record) {
+        acknowledge(record, AcknowledgeType.ACCEPT);
     }
 
     /**
      * {@inheritDoc}
      */
     @Override
-    public void acknowledge(ConsumerRecord<K, V> record, AcknowledgeType type) {
-        throw new UnsupportedOperationException();
+    public void acknowledge(final ConsumerRecord<K, V> record, final AcknowledgeType type) {
+        acquireAndEnsureOpen();
+        try {
+            ensureExplicitAcknowledgement();
+            throw new UnsupportedOperationException();
+        } finally {
+            release();
+        }
     }
 
     /**
@@ -503,7 +530,7 @@ public class ShareConsumerImpl<K, V> implements ShareConsumer<K, V> {
      * {@inheritDoc}
      */
     @Override
-    public Map<TopicIdPartition, Optional<KafkaException>> commitSync(Duration timeout) {
+    public Map<TopicIdPartition, Optional<KafkaException>> commitSync(final Duration timeout) {
         throw new UnsupportedOperationException();
     }
 
@@ -519,7 +546,7 @@ public class ShareConsumerImpl<K, V> implements ShareConsumer<K, V> {
      * {@inheritDoc}
      */
     @Override
-    public void setAcknowledgeCommitCallback(AcknowledgeCommitCallback callback) {
+    public void setAcknowledgeCommitCallback(final AcknowledgeCommitCallback callback) {
         throw new UnsupportedOperationException();
     }
 
@@ -527,7 +554,7 @@ public class ShareConsumerImpl<K, V> implements ShareConsumer<K, V> {
      * {@inheritDoc}
      */
     @Override
-    public Uuid clientInstanceId(Duration timeout) {
+    public Uuid clientInstanceId(final Duration timeout) {
         if (!clientTelemetryReporter.isPresent()) {
             throw new IllegalStateException("Telemetry is not enabled. Set config `" + ConsumerConfig.ENABLE_METRICS_PUSH_CONFIG + "` to `true`.");
         }
@@ -555,7 +582,7 @@ public class ShareConsumerImpl<K, V> implements ShareConsumer<K, V> {
      * {@inheritDoc}
      */
     @Override
-    public void close(Duration timeout) {
+    public void close(final Duration timeout) {
         if (timeout.toMillis() < 0)
             throw new IllegalArgumentException("The timeout cannot be negative.");
         acquire();
@@ -571,7 +598,7 @@ public class ShareConsumerImpl<K, V> implements ShareConsumer<K, V> {
         }
     }
 
-    private void close(Duration timeout, boolean swallowException) {
+    private void close(final Duration timeout, final boolean swallowException) {
         log.trace("Closing the Kafka consumer");
         AtomicReference<Throwable> firstException = new AtomicReference<>();
 
@@ -657,7 +684,7 @@ public class ShareConsumerImpl<K, V> implements ShareConsumer<K, V> {
             currentThread.set(NO_CURRENT_THREAD);
     }
 
-    public static LogContext createLogContext(String clientId, String groupId) {
+    public static LogContext createLogContext(final String clientId, final String groupId) {
         return new LogContext("[ShareConsumer clientId=" + clientId + ", groupId=" + groupId + "] ");
     }
 
@@ -665,6 +692,39 @@ public class ShareConsumerImpl<K, V> implements ShareConsumer<K, V> {
         if (groupId == null || groupId.isEmpty()) {
             throw new InvalidGroupIdException(
                     "You must provide a valid " + ConsumerConfig.GROUP_ID_CONFIG + " in the consumer configuration.");
+        }
+    }
+
+    /**
+     * Called to progressively moves the acknowledgement mode into IMPLICIT if it is not known to be EXPLICIT.
+     */
+    private void maybeImplicitlyAcknowledge() {
+        if (acknowledgementMode == AcknowledgementMode.UNKNOWN) {
+            // The first call to poll(Duration) moves into PENDING
+            acknowledgementMode = AcknowledgementMode.PENDING;
+        } else if (acknowledgementMode == AcknowledgementMode.PENDING) {
+            // The second call to poll(Duration) if PENDING moves into IMPLICIT
+            acknowledgementMode = AcknowledgementMode.IMPLICIT;
+        } else if (acknowledgementMode == AcknowledgementMode.EXPLICIT) {
+            throw new IllegalStateException("Explicit acknowledgement of delivery is being used.");
+        }
+
+        if (currentFetch != null) {
+            currentFetch.acknowledgeAll();
+        }
+
+        currentFetch = null;
+    }
+
+    /**
+     * Called to move the acknowledgement mode into EXPLICIT, if it is not known to be IMPLICIT.
+     */
+    private void ensureExplicitAcknowledgement() {
+        if ((acknowledgementMode == AcknowledgementMode.UNKNOWN) || (acknowledgementMode == AcknowledgementMode.PENDING)) {
+            // If poll(Duration) has been called at most once, moves into EXPLICIT
+            acknowledgementMode = AcknowledgementMode.EXPLICIT;
+        } else if (acknowledgementMode == AcknowledgementMode.IMPLICIT) {
+            throw new IllegalStateException("Implicit acknowledgement of delivery is being used.");
         }
     }
 
@@ -692,9 +752,9 @@ public class ShareConsumerImpl<K, V> implements ShareConsumer<K, V> {
      * @return {@code true} if the event completed within the timeout, {@code false} otherwise
      */
     // Visible for testing
-    <T> T processBackgroundEvents(EventProcessor<?> eventProcessor,
-                                  Future<T> future,
-                                  Timer timer) {
+    <T> T processBackgroundEvents(final EventProcessor<?> eventProcessor,
+                                  final Future<T> future,
+                                  final Timer timer) {
         log.trace("Will wait up to {} ms for future {} to complete", timer.remainingMs(), future);
 
         do {

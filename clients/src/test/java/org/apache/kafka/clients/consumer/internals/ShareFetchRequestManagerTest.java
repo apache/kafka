@@ -111,7 +111,7 @@ public class ShareFetchRequestManagerTest {
         }
     };
     private final TopicPartition tp0 = new TopicPartition(topicName, 0);
-    private final TopicIdPartition tidp0 = new TopicIdPartition(topicId, tp0);
+    private final TopicIdPartition tip0 = new TopicIdPartition(topicId, tp0);
     private final int validLeaderEpoch = 0;
     private final MetadataResponse initialUpdateResponse =
             RequestTestUtils.metadataUpdateWithIds(1, singletonMap(topicName, 4), topicIds);
@@ -171,7 +171,7 @@ public class ShareFetchRequestManagerTest {
         assertEquals(1, sendFetches());
         assertFalse(fetcher.hasCompletedFetches());
 
-        client.prepareResponse(fullFetchResponse(tidp0, records, Errors.NONE));
+        client.prepareResponse(fullFetchResponse(tip0, records, Errors.NONE));
         networkClientDelegate.poll(time.timer(0));
         assertTrue(fetcher.hasCompletedFetches());
 
@@ -202,7 +202,7 @@ public class ShareFetchRequestManagerTest {
         assertEquals(1, sendFetches());
         assertFalse(fetcher.hasCompletedFetches());
 
-        client.prepareResponse(fullFetchResponse(tidp0, records, Errors.NOT_LEADER_OR_FOLLOWER));
+        client.prepareResponse(fullFetchResponse(tip0, records, Errors.NOT_LEADER_OR_FOLLOWER));
         networkClientDelegate.poll(time.timer(0));
         assertTrue(fetcher.hasCompletedFetches());
 
@@ -235,7 +235,7 @@ public class ShareFetchRequestManagerTest {
 
         // normal fetch
         assertEquals(1, sendFetches());
-        client.prepareResponse(fullFetchResponse(tidp0, MemoryRecords.readableRecords(buffer), Errors.NONE));
+        client.prepareResponse(fullFetchResponse(tip0, MemoryRecords.readableRecords(buffer), Errors.NONE));
         networkClientDelegate.poll(time.timer(0));
 
         for (int i = 0; i < 2; i++) {
@@ -261,7 +261,7 @@ public class ShareFetchRequestManagerTest {
 
         // normal fetch
         assertEquals(1, sendFetches());
-        client.prepareResponse(fullFetchResponse(tidp0, MemoryRecords.readableRecords(buffer), Errors.NONE));
+        client.prepareResponse(fullFetchResponse(tip0, MemoryRecords.readableRecords(buffer), Errors.NONE));
         networkClientDelegate.poll(time.timer(0));
 
         assertThrows(KafkaException.class, this::collectFetch);
@@ -288,7 +288,7 @@ public class ShareFetchRequestManagerTest {
         List<ConsumerRecord<byte[], byte[]>> records;
         assignFromSubscribed(singleton(tp0));
 
-        client.prepareResponse(fullFetchResponse(tidp0, memoryRecords, Errors.NONE));
+        client.prepareResponse(fullFetchResponse(tip0, memoryRecords, Errors.NONE));
 
         assertEquals(1, sendFetches());
         networkClientDelegate.poll(time.timer(0));
@@ -318,7 +318,7 @@ public class ShareFetchRequestManagerTest {
         assignFromSubscribed(singleton(tp0));
 
         assertEquals(1, sendFetches());
-        client.prepareResponse(fullFetchResponse(tidp0, records, Errors.TOPIC_AUTHORIZATION_FAILED));
+        client.prepareResponse(fullFetchResponse(tip0, records, Errors.TOPIC_AUTHORIZATION_FAILED));
         networkClientDelegate.poll(time.timer(0));
         try {
             collectFetch();
@@ -334,7 +334,7 @@ public class ShareFetchRequestManagerTest {
         assignFromSubscribed(singleton(tp0));
 
         assertEquals(1, sendFetches());
-        client.prepareResponse(fetchResponseWithTopLevelError(tidp0, Errors.FETCH_SESSION_TOPIC_ID_ERROR));
+        client.prepareResponse(fetchResponseWithTopLevelError(tip0, Errors.FETCH_SESSION_TOPIC_ID_ERROR));
         networkClientDelegate.poll(time.timer(0));
         assertEmptyFetch("Should not return records or advance position on fetch error");
         assertEquals(0L, metadata.timeToNextUpdate(time.milliseconds()));
@@ -353,9 +353,9 @@ public class ShareFetchRequestManagerTest {
         final ShareFetchResponse fetchResponse;
 
         if (hasTopLevelError)
-            fetchResponse = fetchResponseWithTopLevelError(tidp0, error);
+            fetchResponse = fetchResponseWithTopLevelError(tip0, error);
         else
-            fetchResponse = fullFetchResponse(tidp0, records, error);
+            fetchResponse = fullFetchResponse(tip0, records, error);
 
         client.prepareResponse(fetchResponse);
         networkClientDelegate.poll(time.timer(0));
@@ -392,7 +392,7 @@ public class ShareFetchRequestManagerTest {
         assignFromSubscribed(singleton(tp0));
 
         assertEquals(1, sendFetches());
-        client.prepareResponse(fullFetchResponse(tidp0, records, Errors.NONE), true);
+        client.prepareResponse(fullFetchResponse(tip0, records, Errors.NONE), true);
         networkClientDelegate.poll(time.timer(0));
         assertEmptyFetch("Should not return records or advance position on disconnect");
     }
@@ -424,7 +424,7 @@ public class ShareFetchRequestManagerTest {
 
         assignFromSubscribed(singleton(tp0));
         assertEquals(1, sendFetches());
-        client.prepareResponse(fullFetchResponse(tidp0, compactedRecords, Errors.NONE));
+        client.prepareResponse(fullFetchResponse(tip0, compactedRecords, Errors.NONE));
         networkClientDelegate.poll(time.timer(0));
         assertTrue(fetcher.hasCompletedFetches());
 
@@ -455,7 +455,7 @@ public class ShareFetchRequestManagerTest {
 
         // Prepare a response with the CORRUPT_MESSAGE error.
         client.prepareResponse(fullFetchResponse(
-                tidp0,
+                tip0,
                 buildRecords(1L, 1, 1),
                 Errors.CORRUPT_MESSAGE));
         networkClientDelegate.poll(time.timer(0));
@@ -484,26 +484,24 @@ public class ShareFetchRequestManagerTest {
 
     /**
      * Assert that the {@link Fetcher#collectFetch() latest fetch} does not contain any
-     * {@link Fetch#records() user-visible records}, did not
-     * {@link Fetch#positionAdvanced() advance the consumer's position},
+     * {@link Fetch#records() user-visible records},
      * and is {@link Fetch#isEmpty() empty}.
      * @param reason the reason to include for assertion methods such as {@link org.junit.jupiter.api.Assertions#assertTrue(boolean, String)}
      */
     private void assertEmptyFetch(String reason) {
-        Fetch<?, ?> fetch = collectFetch();
+        ShareFetch<?, ?> fetch = collectFetch();
         assertEquals(Collections.emptyMap(), fetch.records(), reason);
-        assertFalse(fetch.positionAdvanced(), reason);
         assertTrue(fetch.isEmpty(), reason);
     }
 
     private <K, V> Map<TopicPartition, List<ConsumerRecord<K, V>>> fetchRecords() {
-        Fetch<K, V> fetch = collectFetch();
+        ShareFetch<K, V> fetch = collectFetch();
         return fetch.records();
     }
 
     @SuppressWarnings("unchecked")
-    private <K, V> Fetch<K, V> collectFetch() {
-        return (Fetch<K, V>) fetcher.collectFetch();
+    private <K, V> ShareFetch<K, V> collectFetch() {
+        return (ShareFetch<K, V>) fetcher.collectFetch();
     }
 
     private void buildFetcher() {
@@ -600,8 +598,8 @@ public class ShareFetchRequestManagerTest {
             this.shareFetchCollector = fetchCollector;
         }
 
-        private Fetch<K, V> collectFetch() {
-            return shareFetchCollector.collectFetch(shareFetchBuffer);
+        private ShareFetch<K, V> collectFetch() {
+            return shareFetchCollector.collect(shareFetchBuffer);
         }
 
         private int sendFetches() {

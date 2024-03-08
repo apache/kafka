@@ -131,27 +131,6 @@ public class ShareFetchBufferTest {
         }
     }
 
-    /**
-     * Tests that the buffer manipulates partitions for both the queue and the next-in-line buffer.
-     */
-    @Test
-    public void testAddAllAndRetainAll() {
-        try (ShareFetchBuffer fetchBuffer = new ShareFetchBuffer(logContext)) {
-            fetchBuffer.setNextInLineFetch(completedFetch(topicAPartition0));
-            fetchBuffer.addAll(Arrays.asList(completedFetch(topicAPartition1), completedFetch(topicAPartition2)));
-            assertEquals(allPartitions, fetchBuffer.bufferedPartitions());
-
-            fetchBuffer.retainAll(partitions(topicAPartition1, topicAPartition2));
-            assertEquals(partitions(topicAPartition1, topicAPartition2), fetchBuffer.bufferedPartitions());
-
-            fetchBuffer.retainAll(partitions(topicAPartition2));
-            assertEquals(partitions(topicAPartition2), fetchBuffer.bufferedPartitions());
-
-            fetchBuffer.retainAll(partitions());
-            assertEquals(partitions(), fetchBuffer.bufferedPartitions());
-        }
-    }
-
     @Test
     public void testWakeup() throws Exception {
         try (ShareFetchBuffer fetchBuffer = new ShareFetchBuffer(logContext)) {
