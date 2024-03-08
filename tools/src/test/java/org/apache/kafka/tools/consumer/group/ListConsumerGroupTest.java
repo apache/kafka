@@ -63,7 +63,7 @@ public class ListConsumerGroupTest extends ConsumerGroupCommandTest {
         final AtomicReference<Set> foundGroups = new AtomicReference<>();
 
         TestUtils.waitForCondition(() -> {
-            foundGroups.set(new HashSet<>(service.listConsumerGroups()));
+            foundGroups.set(set(service.listConsumerGroups()));
             return Objects.equals(expectedGroups, foundGroups.get());
         }, "Expected --list to show groups " + expectedGroups + ", but found " + foundGroups.get() + ".");
     }
@@ -478,7 +478,7 @@ public class ListConsumerGroupTest extends ConsumerGroupCommandTest {
     ) throws Exception {
         final AtomicReference<Set<ConsumerGroupListing>> foundListing = new AtomicReference<>();
         TestUtils.waitForCondition(() -> {
-            foundListing.set(new HashSet<>(service.listConsumerGroupsWithFilters(set(typeFilterSet), set(stateFilterSet))));
+            foundListing.set(set(service.listConsumerGroupsWithFilters(set(typeFilterSet), set(stateFilterSet))));
             return Objects.equals(set(expectedListing), foundListing.get());
         }, () -> "Expected to show groups " + expectedListing + ", but found " + foundListing.get() + ".");
     }

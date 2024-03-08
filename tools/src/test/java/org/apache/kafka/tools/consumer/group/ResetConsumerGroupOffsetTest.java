@@ -49,6 +49,7 @@ import java.util.stream.IntStream;
 import static org.apache.kafka.test.TestUtils.DEFAULT_MAX_WAIT_MS;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Test cases by:
@@ -98,8 +99,8 @@ public class ResetConsumerGroupOffsetTest extends ConsumerGroupCommandTest {
             () -> Objects.equals(consumerGroupCommand.collectGroupState(group).coordinator.host(), "localhost"),
             "Can't find a coordinator");
         Map<TopicPartition, OffsetAndMetadata> resetOffsets = consumerGroupCommand.resetOffsets().get(group);
-        assertEquals(Collections.emptyMap(), resetOffsets);
-        assertEquals(Collections.emptyMap(), committedOffsets(TOPIC, group));
+        assertTrue(resetOffsets.isEmpty());
+        assertTrue(committedOffsets(TOPIC, group).isEmpty());
     }
 
     @Test
