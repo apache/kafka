@@ -766,7 +766,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     public void commitAsync(Map<TopicPartition, OffsetAndMetadata> offsets, OffsetCommitCallback callback) {
         acquireAndEnsureOpen();
         try {
-            Timer timer = time.timer(Long.MAX_VALUE);
+            Timer timer = time.timer(defaultApiTimeoutMs);
             AsyncCommitEvent event = new AsyncCommitEvent(offsets, timer);
             CompletableFuture<Void> future = commit(event);
             future.whenComplete((r, t) -> {
@@ -1470,7 +1470,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         try {
             fetchBuffer.retainAll(Collections.emptySet());
             if (groupMetadata.get().isPresent()) {
-                Timer timer = time.timer(Long.MAX_VALUE);
+                Timer timer = time.timer(defaultApiTimeoutMs);
                 UnsubscribeEvent event = new UnsubscribeEvent(timer);
                 applicationEventHandler.add(event);
                 log.info("Unsubscribing all topics or patterns and assigned partitions");
