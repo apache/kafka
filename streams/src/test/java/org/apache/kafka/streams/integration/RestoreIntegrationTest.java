@@ -50,7 +50,6 @@ import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
-import org.apache.kafka.streams.processor.api.ProcessorSupplier;
 import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.StateDirectory;
 import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
@@ -284,22 +283,7 @@ public class RestoreIntegrationTest {
             new StringDeserializer(),
             inputStream,
             "readOnlyProcessor",
-            () -> new Processor<Integer, String, Void, Void>() {
-                KeyValueStore<Integer, String> store;
-
-                @Override
-                public void init(final ProcessorContext<Void, Void> context) {
-                    store = context.getStateStore("store");
-                }
-
-                @Override
-                public void process(Record<Integer, String> record) {
-                    store.put(record.key(), record.value());
-                    if (numReceived.incrementAndGet() == offsetLimitDelta * 2) {
-                        shutdownLatch.countDown();
-                    }
-                }
-            }
+            () -> new ReadOnlyStoreProcessor(numReceived, offsetLimitDelta, shutdownLatch)
         );
 
         kafkaStreams = new KafkaStreams(topology, props);
@@ -310,22 +294,7 @@ public class RestoreIntegrationTest {
         });
 
         final AtomicLong restored = new AtomicLong(0);
-        kafkaStreams.setGlobalStateRestoreListener(new StateRestoreListener() {
-            @Override
-            public void onRestoreStart(final TopicPartition topicPartition, final String storeName, final long startingOffset, final long endingOffset) {
-
-            }
-
-            @Override
-            public void onBatchRestored(final TopicPartition topicPartition, final String storeName, final long batchEndOffset, final long numRestored) {
-
-            }
-
-            @Override
-            public void onRestoreEnd(final TopicPartition topicPartition, final String storeName, final long totalRestored) {
-                restored.addAndGet(totalRestored);
-            }
-        });
+        kafkaStreams.setGlobalStateRestoreListener(new TrackingStateRestoreListener(restored));
         kafkaStreams.start();
 
         assertTrue(startupLatch.await(30, TimeUnit.SECONDS));
@@ -376,22 +345,7 @@ public class RestoreIntegrationTest {
         });
 
         final AtomicLong restored = new AtomicLong(0);
-        kafkaStreams.setGlobalStateRestoreListener(new StateRestoreListener() {
-            @Override
-            public void onRestoreStart(final TopicPartition topicPartition, final String storeName, final long startingOffset, final long endingOffset) {
-
-            }
-
-            @Override
-            public void onBatchRestored(final TopicPartition topicPartition, final String storeName, final long batchEndOffset, final long numRestored) {
-
-            }
-
-            @Override
-            public void onRestoreEnd(final TopicPartition topicPartition, final String storeName, final long totalRestored) {
-                restored.addAndGet(totalRestored);
-            }
-        });
+        kafkaStreams.setGlobalStateRestoreListener(new TrackingStateRestoreListener(restored));
         kafkaStreams.start();
 
         assertTrue(startupLatch.await(30, TimeUnit.SECONDS));
@@ -443,22 +397,7 @@ public class RestoreIntegrationTest {
         });
 
         final AtomicLong restored = new AtomicLong(0);
-        kafkaStreams.setGlobalStateRestoreListener(new StateRestoreListener() {
-            @Override
-            public void onRestoreStart(final TopicPartition topicPartition, final String storeName, final long startingOffset, final long endingOffset) {
-
-            }
-
-            @Override
-            public void onBatchRestored(final TopicPartition topicPartition, final String storeName, final long batchEndOffset, final long numRestored) {
-
-            }
-
-            @Override
-            public void onRestoreEnd(final TopicPartition topicPartition, final String storeName, final long totalRestored) {
-                restored.addAndGet(totalRestored);
-            }
-        });
+        kafkaStreams.setGlobalStateRestoreListener(new TrackingStateRestoreListener(restored));
         kafkaStreams.start();
 
         assertTrue(startupLatch.await(30, TimeUnit.SECONDS));
@@ -474,11 +413,12 @@ public class RestoreIntegrationTest {
         final StreamsBuilder builder = new StreamsBuilder();
 
         final KStream<Integer, Integer> stream = builder.stream(inputStream);
-        stream.groupByKey()
-              .reduce(
-                  Integer::sum,
-                  Materialized.<Integer, Integer, KeyValueStore<Bytes, byte[]>>as("reduce-store").withLoggingDisabled()
-              );
+        stream
+            .groupByKey()
+            .reduce(
+                Integer::sum,
+                Materialized.<Integer, Integer, KeyValueStore<Bytes, byte[]>>as("reduce-store").withLoggingDisabled()
+            );
 
         final CountDownLatch startupLatch = new CountDownLatch(1);
         kafkaStreams = new KafkaStreams(builder.build(), props(stateUpdaterEnabled));
@@ -909,5 +849,31 @@ public class RestoreIntegrationTest {
             timeout.toMillis(),
             () -> "Client did not transition to " + state + " on time. Observed transitions: " + observed
         );
+    }
+
+    private static class ReadOnlyStoreProcessor implements Processor<Integer, String, Void, Void> {
+        private final AtomicInteger numReceived;
+        private final int offsetLimitDelta;
+        private final CountDownLatch shutdownLatch;
+        KeyValueStore<Integer, String> store;
+
+        public ReadOnlyStoreProcessor(final AtomicInteger numReceived, final int offsetLimitDelta, final CountDownLatch shutdownLatch) {
+            this.numReceived = numReceived;
+            this.offsetLimitDelta = offsetLimitDelta;
+            this.shutdownLatch = shutdownLatch;
+        }
+
+        @Override
+        public void init(final ProcessorContext<Void, Void> context) {
+            store = context.getStateStore("store");
+        }
+
+        @Override
+        public void process(final Record<Integer, String> record) {
+            store.put(record.key(), record.value());
+            if (numReceived.incrementAndGet() == offsetLimitDelta * 2) {
+                shutdownLatch.countDown();
+            }
+        }
     }
 }
