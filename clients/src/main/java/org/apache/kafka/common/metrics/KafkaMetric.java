@@ -71,15 +71,28 @@ public final class KafkaMetric implements Metric {
         this.time = time;
     }
 
+    /**
+     * Get the configuration of this metric
+     * @return Return the config of this metric
+     */
     public MetricConfig config() {
         return this.config;
     }
 
+    /**
+     * Get the metric name
+     * @return Return the name of this metric
+     */
     @Override
     public MetricName metricName() {
         return this.metricName;
     }
 
+    /**
+     * Get the metric value, which could be a {@link Measurable} or a {@link Gauge}
+     * @return Return the metric value
+     * @throws IllegalStateException if the underlying metric is not a {@link Measurable} or a {@link Gauge}.
+     */
     @Override
     public Object metricValue() {
         long now = time.milliseconds();
@@ -93,6 +106,11 @@ public final class KafkaMetric implements Metric {
         }
     }
 
+    /**
+     * Get the underlying metric provider, which is a {@link Measurable}
+     * @return Return the metric provider
+     * @throws IllegalStateException if the underlying metric is not a {@link Measurable}.
+     */
     public Measurable measurable() {
         if (this.metricValueProvider instanceof Measurable)
             return (Measurable) metricValueProvider;
@@ -109,6 +127,10 @@ public final class KafkaMetric implements Metric {
         }
     }
 
+    /**
+     * Set the metric config. This is a thread-safe method
+     * @param config configuration for this metrics
+     */
     public void config(MetricConfig config) {
         synchronized (lock) {
             this.config = config;
