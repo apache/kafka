@@ -331,7 +331,7 @@
         <allow pkg="org.apache.kafka.tools"/>
         <allow pkg="org.apache.kafka.server.config" />
         <allow pkg="org.apache.kafka.metadata.authorizer"/>
-        <allow pkg="scala" />
+        <allow pkg="scala"/>
       </subpackage>
     </subpackage>
 
