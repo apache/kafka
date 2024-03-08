@@ -72,7 +72,7 @@ public class ShareFetchCollectorTest {
     private ShareFetchBuffer fetchBuffer;
     private Deserializers<String, String> deserializers;
     private ShareFetchCollector<String, String> fetchCollector;
-    private CompletedShareFetchBuilder completedFetchBuilder;
+    private ShareCompletedFetchBuilder completedFetchBuilder;
 
     @Test
     public void testFetchNormal() {
@@ -80,7 +80,7 @@ public class ShareFetchCollectorTest {
         buildDependencies();
         subscribeAndSeek(topicAPartition0);
 
-        CompletedShareFetch completedFetch = completedFetchBuilder
+        ShareCompletedFetch completedFetch = completedFetchBuilder
                 .recordCount(recordCount)
                 .build();
 
@@ -116,7 +116,7 @@ public class ShareFetchCollectorTest {
         assertEquals(0, fetch.numRecords());
         assertTrue(fetch.isEmpty());
 
-        // However, once we read *past* the end of the records in the CompletedShareFetch, then we will call
+        // However, once we read *past* the end of the records in the ShareCompletedFetch, then we will call
         // drain on it, and it will be considered all consumed.
         assertTrue(completedFetch.isConsumed());
     }
@@ -149,13 +149,13 @@ public class ShareFetchCollectorTest {
                 deserializers) {
 
             @Override
-            protected CompletedShareFetch initialize(final CompletedShareFetch completedFetch) {
+            protected ShareCompletedFetch initialize(final ShareCompletedFetch completedFetch) {
                 throw expectedException;
             }
         };
 
         // Add the CompletedFetch to the FetchBuffer queue
-        CompletedShareFetch completedFetch = completedFetchBuilder
+        ShareCompletedFetch completedFetch = completedFetchBuilder
                 .recordCount(recordCount)
                 .build();
         fetchBuffer.add(completedFetch);
@@ -167,7 +167,7 @@ public class ShareFetchCollectorTest {
         assertThrows(expectedException.getClass(), () -> fetchCollector.collect(fetchBuffer));
 
         // If the number of records in the CompletedFetch was 0, the call to FetchCollector.collect() will
-        // remove it from the queue. If there are records in the CompletedShareFetch, FetchCollector.collect will
+        // remove it from the queue. If there are records in the ShareCompletedFetch, FetchCollector.collect will
         // leave it on the queue.
         assertEquals(recordCount == 0, fetchBuffer.isEmpty());
     }
@@ -178,7 +178,7 @@ public class ShareFetchCollectorTest {
         subscribeAndSeek(topicAPartition0);
 
         // Try to data and validate that we get an empty Fetch back.
-        CompletedShareFetch completedFetch = completedFetchBuilder
+        ShareCompletedFetch completedFetch = completedFetchBuilder
                 .error(Errors.TOPIC_AUTHORIZATION_FAILED)
                 .build();
         fetchBuffer.add(completedFetch);
@@ -191,7 +191,7 @@ public class ShareFetchCollectorTest {
         subscribeAndSeek(topicAPartition0);
 
         // Try to data and validate that we get an empty Fetch back.
-        CompletedShareFetch completedFetch = completedFetchBuilder
+        ShareCompletedFetch completedFetch = completedFetchBuilder
                 .error(Errors.UNKNOWN_LEADER_EPOCH)
                 .build();
         fetchBuffer.add(completedFetch);
@@ -205,7 +205,7 @@ public class ShareFetchCollectorTest {
         subscribeAndSeek(topicAPartition0);
 
         // Try to data and validate that we get an empty Fetch back.
-        CompletedShareFetch completedFetch = completedFetchBuilder
+        ShareCompletedFetch completedFetch = completedFetchBuilder
                 .error(Errors.UNKNOWN_SERVER_ERROR)
                 .build();
         fetchBuffer.add(completedFetch);
@@ -219,7 +219,7 @@ public class ShareFetchCollectorTest {
         subscribeAndSeek(topicAPartition0);
 
         // Try to data and validate that we get an empty Fetch back.
-        CompletedShareFetch completedFetch = completedFetchBuilder
+        ShareCompletedFetch completedFetch = completedFetchBuilder
                 .error(Errors.CORRUPT_MESSAGE)
                 .build();
         fetchBuffer.add(completedFetch);
@@ -232,7 +232,7 @@ public class ShareFetchCollectorTest {
         buildDependencies();
         subscribeAndSeek(topicAPartition0);
 
-        CompletedShareFetch completedFetch = completedFetchBuilder
+        ShareCompletedFetch completedFetch = completedFetchBuilder
                 .error(error)
                 .build();
         fetchBuffer.add(completedFetch);
@@ -271,7 +271,7 @@ public class ShareFetchCollectorTest {
                 fetchConfig,
                 deserializers);
         fetchBuffer = new ShareFetchBuffer(logContext);
-        completedFetchBuilder = new CompletedShareFetchBuilder();
+        completedFetchBuilder = new ShareCompletedFetchBuilder();
     }
 
     private void subscribeAndAssign(TopicIdPartition tp) {
@@ -323,23 +323,23 @@ public class ShareFetchCollectorTest {
         );
     }
 
-    private class CompletedShareFetchBuilder {
+    private class ShareCompletedFetchBuilder {
 
         private int recordCount = DEFAULT_RECORD_COUNT;
 
         private Errors error = null;
 
-        private CompletedShareFetchBuilder recordCount(int recordCount) {
+        private ShareCompletedFetchBuilder recordCount(int recordCount) {
             this.recordCount = recordCount;
             return this;
         }
 
-        private CompletedShareFetchBuilder error(Errors error) {
+        private ShareCompletedFetchBuilder error(Errors error) {
             this.error = error;
             return this;
         }
 
-        private CompletedShareFetch build() {
+        private ShareCompletedFetch build() {
             Records records;
             ByteBuffer allocate = ByteBuffer.allocate(1024);
 
@@ -355,12 +355,13 @@ public class ShareFetchCollectorTest {
 
             ShareFetchResponseData.PartitionData partitionData = new ShareFetchResponseData.PartitionData()
                     .setPartitionIndex(topicAPartition0.partition())
-                    .setRecords(records);
+                    .setRecords(records)
+                    .setAcquiredRecords(ShareCompletedFetchTest.acquiredRecords(0, recordCount));
 
             if (error != null)
                 partitionData.setErrorCode(error.code());
 
-            return new CompletedShareFetch(
+            return new ShareCompletedFetch(
                     logContext,
                     BufferSupplier.create(),
                     topicAPartition0,

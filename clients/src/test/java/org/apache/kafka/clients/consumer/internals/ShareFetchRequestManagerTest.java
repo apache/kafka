@@ -478,7 +478,8 @@ public class ShareFetchRequestManagerTest {
                 new ShareFetchResponseData.PartitionData()
                         .setPartitionIndex(tp.topicPartition().partition())
                         .setErrorCode(error.code())
-                        .setRecords(records));
+                        .setRecords(records)
+                        .setAcquiredRecords(ShareCompletedFetchTest.acquiredRecords(0, 5)));
         return ShareFetchResponse.of(Errors.NONE, 0, new LinkedHashMap<>(partitions), Collections.emptyList());
     }
 

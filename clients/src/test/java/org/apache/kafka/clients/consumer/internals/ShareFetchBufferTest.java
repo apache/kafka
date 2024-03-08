@@ -69,7 +69,7 @@ public class ShareFetchBufferTest {
     @Test
     public void testBasicPeekAndPoll() {
         try (ShareFetchBuffer fetchBuffer = new ShareFetchBuffer(logContext)) {
-            CompletedShareFetch completedFetch = completedFetch(topicAPartition0);
+            ShareCompletedFetch completedFetch = completedFetch(topicAPartition0);
             assertTrue(fetchBuffer.isEmpty());
             fetchBuffer.add(completedFetch);
             assertTrue(fetchBuffer.hasCompletedFetches(p -> true));
@@ -145,9 +145,9 @@ public class ShareFetchBufferTest {
         }
     }
 
-    private CompletedShareFetch completedFetch(TopicIdPartition tp) {
+    private ShareCompletedFetch completedFetch(TopicIdPartition tp) {
         ShareFetchResponseData.PartitionData partitionData = new ShareFetchResponseData.PartitionData();
-        return new CompletedShareFetch(
+        return new ShareCompletedFetch(
                 logContext,
                 BufferSupplier.create(),
                 tp,

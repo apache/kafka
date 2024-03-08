@@ -34,22 +34,22 @@ import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Predicate;
 
 /**
- * {@code ShareFetchBuffer} buffers up {@link CompletedShareFetch the results} from the broker responses
- * as they are received. It is essentially a wrapper around a {@link java.util.Queue} of {@link CompletedShareFetch}.
- * There is at most once {@link CompletedShareFetch} per partition in the queue.
+ * {@code ShareFetchBuffer} buffers up {@link ShareCompletedFetch the results} from the broker responses
+ * as they are received. It is essentially a wrapper around a {@link java.util.Queue} of {@link ShareCompletedFetch}.
+ * There is at most once {@link ShareCompletedFetch} per partition in the queue.
  *
- * <p><em>Note</em>: this class is thread-safe with the intention that {@link CompletedShareFetch the data} will be
+ * <p><em>Note</em>: this class is thread-safe with the intention that {@link ShareCompletedFetch the data} will be
  * "produced" by a background thread and consumed by the application thread.
  */
 public class ShareFetchBuffer implements AutoCloseable {
 
     private final Logger log;
-    private final ConcurrentLinkedQueue<CompletedShareFetch> completedFetches;
+    private final ConcurrentLinkedQueue<ShareCompletedFetch> completedFetches;
     private final Lock lock;
     private final Condition notEmptyCondition;
     private final IdempotentCloser idempotentCloser = new IdempotentCloser();
     private final AtomicBoolean wokenUp = new AtomicBoolean(false);
-    private CompletedShareFetch nextInLineFetch;
+    private ShareCompletedFetch nextInLineFetch;
 
     public ShareFetchBuffer(final LogContext logContext) {
         this.log = logContext.logger(ShareFetchBuffer.class);
@@ -78,7 +78,7 @@ public class ShareFetchBuffer implements AutoCloseable {
      *
      * @return {@code true} if there are completed fetches that match the {@link Predicate}, {@code false} otherwise
      */
-    boolean hasCompletedFetches(Predicate<CompletedShareFetch> predicate) {
+    boolean hasCompletedFetches(Predicate<ShareCompletedFetch> predicate) {
         lock.lock();
         try {
             return completedFetches.stream().anyMatch(predicate);
@@ -87,7 +87,7 @@ public class ShareFetchBuffer implements AutoCloseable {
         }
     }
 
-    void add(CompletedShareFetch fetch) {
+    void add(ShareCompletedFetch fetch) {
         lock.lock();
         try {
             completedFetches.add(fetch);
@@ -97,7 +97,7 @@ public class ShareFetchBuffer implements AutoCloseable {
         }
     }
 
-    CompletedShareFetch nextInLineFetch() {
+    ShareCompletedFetch nextInLineFetch() {
         lock.lock();
         try {
             return nextInLineFetch;
@@ -106,7 +106,7 @@ public class ShareFetchBuffer implements AutoCloseable {
         }
     }
 
-    void setNextInLineFetch(CompletedShareFetch nextInLineFetch) {
+    void setNextInLineFetch(ShareCompletedFetch nextInLineFetch) {
         lock.lock();
         try {
             this.nextInLineFetch = nextInLineFetch;
@@ -115,7 +115,7 @@ public class ShareFetchBuffer implements AutoCloseable {
         }
     }
 
-    CompletedShareFetch peek() {
+    ShareCompletedFetch peek() {
         lock.lock();
         try {
             return completedFetches.peek();
@@ -125,7 +125,7 @@ public class ShareFetchBuffer implements AutoCloseable {
     }
 
     @SuppressWarnings("UnusedReturnValue")
-    CompletedShareFetch poll() {
+    ShareCompletedFetch poll() {
         lock.lock();
         try {
             return completedFetches.poll();
@@ -204,7 +204,7 @@ public class ShareFetchBuffer implements AutoCloseable {
     private void drainAll() {
         lock.lock();
         try {
-            completedFetches.forEach(CompletedShareFetch::drain);
+            completedFetches.forEach(ShareCompletedFetch::drain);
             completedFetches.clear();
             if (nextInLineFetch != null) {
                 nextInLineFetch.drain();

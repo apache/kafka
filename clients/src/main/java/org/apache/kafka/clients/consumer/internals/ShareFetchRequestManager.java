@@ -144,7 +144,7 @@ public class ShareFetchRequestManager implements RequestManager {
                 log.debug("Share fetch {} for partition {} returned fetch data {}",
                         fetchConfig.isolationLevel, partition, partitionData);
 
-                CompletedShareFetch completedFetch = new CompletedShareFetch(
+                ShareCompletedFetch completedFetch = new ShareCompletedFetch(
                         logContext,
                         BufferSupplier.create(),
                         partition,

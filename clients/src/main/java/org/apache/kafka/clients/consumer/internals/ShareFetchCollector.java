@@ -73,10 +73,10 @@ public class ShareFetchCollector<K, V> {
 
         try {
             while (recordsRemaining > 0) {
-                final CompletedShareFetch nextInLineFetch = fetchBuffer.nextInLineFetch();
+                final ShareCompletedFetch nextInLineFetch = fetchBuffer.nextInLineFetch();
 
                 if (nextInLineFetch == null || nextInLineFetch.isConsumed()) {
-                    final CompletedShareFetch completedFetch = fetchBuffer.peek();
+                    final ShareCompletedFetch completedFetch = fetchBuffer.peek();
 
                     if (completedFetch == null) {
                         break;
@@ -104,10 +104,11 @@ public class ShareFetchCollector<K, V> {
                 } else {
                     final TopicIdPartition tp = nextInLineFetch.partition;
 
-                    List<ConsumerRecord<K, V>> partRecords = nextInLineFetch.fetchRecords(fetchConfig,
+                    ShareInFlightBatch<K, V> shareInFlightBatch = nextInLineFetch.fetchRecords(fetchConfig,
                             deserializers,
                             recordsRemaining);
 
+                    List<ConsumerRecord<K, V>> partRecords = shareInFlightBatch.getInFlightRecords();
                     if (partRecords.isEmpty()) {
                         nextInLineFetch.drain();
                     }
@@ -126,9 +127,9 @@ public class ShareFetchCollector<K, V> {
     }
 
     /**
-     * Initialize a CompletedShareFetch object.
+     * Initialize a ShareCompletedFetch object.
      */
-    protected CompletedShareFetch initialize(final CompletedShareFetch completedFetch) {
+    protected ShareCompletedFetch initialize(final ShareCompletedFetch completedFetch) {
         final Errors error = Errors.forCode(completedFetch.partitionData.errorCode());
 
         if (error == Errors.NONE) {
@@ -139,7 +140,7 @@ public class ShareFetchCollector<K, V> {
         }
     }
 
-    private CompletedShareFetch handleInitializeSuccess(final CompletedShareFetch completedFetch) {
+    private ShareCompletedFetch handleInitializeSuccess(final ShareCompletedFetch completedFetch) {
         log.trace("Preparing to read {} bytes of data for partition {}",
                 ShareFetchResponse.recordsSize(completedFetch.partitionData),
                 completedFetch.partition.topicPartition());
@@ -148,7 +149,7 @@ public class ShareFetchCollector<K, V> {
         return completedFetch;
     }
 
-    private void handleInitializeErrors(final CompletedShareFetch completedFetch, final Errors error) {
+    private void handleInitializeErrors(final ShareCompletedFetch completedFetch, final Errors error) {
         final TopicIdPartition tp = completedFetch.partition;
 
         if (error == Errors.NOT_LEADER_OR_FOLLOWER ||

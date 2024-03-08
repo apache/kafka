@@ -38,20 +38,19 @@ import org.slf4j.Logger;
 
 import java.io.Closeable;
 import java.nio.ByteBuffer;
-import java.util.ArrayList;
-import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Optional;
 
-/**
- * {@link CompletedShareFetch} represents a {@link RecordBatch batch} of {@link Record records}
- * that was returned from the broker via a {@link ShareFetchRequest}. It contains logic to maintain
- * state between calls to {@link #fetchRecords(FetchConfig, Deserializers, int)}. Although it has
- * similarities with {@link CompletedFetch}, the details are quite different, such as not needing
- * to keep track of aborted transactions or the need to keep track of fetch position.
- */
-public class CompletedShareFetch {
+public class ShareCompletedFetch {
+
+    /**
+     * {@link ShareCompletedFetch} represents a {@link RecordBatch batch} of {@link Record records}
+     * that was returned from the broker via a {@link ShareFetchRequest}. It contains logic to maintain
+     * state between calls to {@link #fetchRecords(FetchConfig, Deserializers, int)}. Although it has
+     * similarities with {@link CompletedFetch}, the details are quite different, such as not needing
+     * to keep track of aborted transactions or the need to keep track of fetch position.
+     */
     final TopicIdPartition partition;
 
     final ShareFetchResponseData.PartitionData partitionData;
@@ -61,7 +60,6 @@ public class CompletedShareFetch {
     private final Logger log;
     private final BufferSupplier decompressionBufferSupplier;
     private final Iterator<? extends RecordBatch> batches;
-
     private RecordBatch currentBatch;
     private Record lastRecord;
     private CloseableIterator<Record> records;
@@ -69,18 +67,22 @@ public class CompletedShareFetch {
     private boolean corruptLastRecord = false;
     private boolean isConsumed = false;
     private boolean initialized = false;
+    public List<ShareFetchResponseData.AcquiredRecords> acquiredRecords;
+    private int currentIndex;
 
-    CompletedShareFetch(LogContext logContext,
+    ShareCompletedFetch(LogContext logContext,
                         BufferSupplier decompressionBufferSupplier,
                         TopicIdPartition partition,
                         ShareFetchResponseData.PartitionData partitionData,
                         short requestVersion) {
-        this.log = logContext.logger(CompletedShareFetch.class);
+        this.log = logContext.logger(org.apache.kafka.clients.consumer.internals.ShareCompletedFetch.class);
         this.decompressionBufferSupplier = decompressionBufferSupplier;
         this.partition = partition;
         this.partitionData = partitionData;
         this.requestVersion = requestVersion;
         this.batches = ShareFetchResponse.recordsOrFail(partitionData).batches().iterator();
+        this.acquiredRecords = partitionData.acquiredRecords();
+        this.currentIndex = 0;
     }
 
     boolean isInitialized() {
@@ -96,7 +98,7 @@ public class CompletedShareFetch {
     }
 
     /**
-     * Draining a {@link CompletedShareFetch} will signal that the data has been consumed and the underlying resources
+     * Draining a {@link ShareCompletedFetch} will signal that the data has been consumed and the underlying resources
      * are closed. This is somewhat analogous to {@link Closeable#close() closing}, though no error will result if a
      * caller invokes {@link #fetchRecords(FetchConfig, Deserializers, int)}; an empty {@link List list} will be
      * returned instead.
@@ -118,9 +120,9 @@ public class CompletedShareFetch {
      * @param fetchConfig {@link FetchConfig Configuration} to use
      * @param deserializers {@link Deserializer}s to use to convert the raw bytes to the expected key and value types
      * @param maxRecords The number of records to return; the number returned may be {@code 0 <= maxRecords}
-     * @return {@link ConsumerRecord Consumer records}
+     * @return {@link ShareInFlightBatch The ShareInFlightBatch containing records and their acknowledgments}
      */
-    <K, V> List<ConsumerRecord<K, V>> fetchRecords(FetchConfig fetchConfig,
+    <K, V> ShareInFlightBatch<K, V> fetchRecords(FetchConfig fetchConfig,
                                                    Deserializers<K, V> deserializers,
                                                    int maxRecords) {
         // Error when fetching the next record before deserialization.
@@ -129,10 +131,11 @@ public class CompletedShareFetch {
                     + ". If needed, please seek past the record to "
                     + "continue consumption.", cachedRecordException);
 
-        if (isConsumed)
-            return Collections.emptyList();
+        // Creating an empty shareInFlightBatch
+        ShareInFlightBatch<K, V> shareInFlightBatch = new ShareInFlightBatch<>(partition);
 
-        List<ConsumerRecord<K, V>> records = new ArrayList<>();
+        if (isConsumed)
+            return shareInFlightBatch;
 
         try {
             for (int i = 0; i < maxRecords; i++) {
@@ -150,24 +153,46 @@ public class CompletedShareFetch {
                 Optional<Integer> leaderEpoch = maybeLeaderEpoch(currentBatch.partitionLeaderEpoch());
                 TimestampType timestampType = currentBatch.timestampType();
                 ConsumerRecord<K, V> record = parseRecord(deserializers, partition, leaderEpoch, timestampType, lastRecord);
-                records.add(record);
+                // Check if the record is in acquired records.
+                if (acquiredRecords.isEmpty() || isAcquired(record)) {
+                    shareInFlightBatch.addRecord(record);
+                }
+
                 // In some cases, the deserialization may have thrown an exception and the retry may succeed,
                 // we allow user to move forward in this case.
                 cachedRecordException = null;
             }
         } catch (SerializationException se) {
             cachedRecordException = se;
-            if (records.isEmpty())
+            if (shareInFlightBatch.isEmpty())
                 throw se;
         } catch (KafkaException e) {
             cachedRecordException = e;
-            if (records.isEmpty())
+            if (shareInFlightBatch.isEmpty())
                 throw new KafkaException("Received exception when fetching the next record from " + partition
                         + ". If needed, please seek past the record to "
                         + "continue consumption.", e);
         }
-        return records;
+
+        return shareInFlightBatch;
     }
+
+    /**
+     * Check if the record is part of the acquired records.
+     */
+    private <K, V> boolean isAcquired(ConsumerRecord<K, V> record) {
+        if (currentIndex >= acquiredRecords.size()) return false;
+        ShareFetchResponseData.AcquiredRecords acqRecord = acquiredRecords.get(currentIndex);
+        if (record.offset() >= acqRecord.baseOffset() && record.offset() <= acqRecord.lastOffset()) {
+            return true;
+        } else if (record.offset() > acqRecord.lastOffset()) {
+            currentIndex += 1;
+            return isAcquired(record);
+        } else {
+            return false;
+        }
+    }
+
 
     /**
      * Parse the record entry, deserializing the key / value fields if necessary
