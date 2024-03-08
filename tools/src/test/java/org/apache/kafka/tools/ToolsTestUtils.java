@@ -16,8 +16,8 @@
  */
 package org.apache.kafka.tools;
 
-import kafka.utils.TestInfoUtils;
 import kafka.server.DynamicConfig;
+import kafka.utils.TestInfoUtils;
 import kafka.utils.TestUtils;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AlterConfigOp;
@@ -40,8 +40,6 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
-import java.util.function.Predicate;
-import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 public class ToolsTestUtils {
