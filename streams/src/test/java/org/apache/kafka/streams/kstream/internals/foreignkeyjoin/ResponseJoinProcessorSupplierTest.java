@@ -17,6 +17,7 @@
 
 package org.apache.kafka.streams.kstream.internals.foreignkeyjoin;
 
+import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.kstream.internals.KTableValueGetter;
@@ -25,17 +26,23 @@ import org.apache.kafka.streams.processor.api.MockProcessorContext;
 import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.api.Record;
+import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.state.internals.Murmur3;
+import org.apache.kafka.test.MockInternalNewProcessorContext;
 import org.junit.Test;
 
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import static org.apache.kafka.common.utils.Utils.mkEntry;
+import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.collection.IsEmptyCollection.empty;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotEquals;
 
 public class ResponseJoinProcessorSupplierTest {
     private static final StringSerializer STRING_SERIALIZER = new StringSerializer();
@@ -88,7 +95,7 @@ public class ResponseJoinProcessorSupplierTest {
                 leftJoin
             );
         final Processor<String, SubscriptionResponseWrapper<String>, String, String> processor = processorSupplier.get();
-        final org.apache.kafka.streams.processor.api.MockProcessorContext<String, String> context = new org.apache.kafka.streams.processor.api.MockProcessorContext<>();
+        final MockInternalNewProcessorContext<String, String> context = new MockInternalNewProcessorContext<>();
         processor.init(context);
         context.setRecordMetadata("topic", 0, 0);
 
@@ -97,6 +104,10 @@ public class ResponseJoinProcessorSupplierTest {
         processor.process(new Record<>("lhs1", new SubscriptionResponseWrapper<>(oldHash, "rhsValue", 0), 0));
         final List<MockProcessorContext.CapturedForward<? extends String, ? extends String>> forwarded = context.forwarded();
         assertThat(forwarded, empty());
+
+        // test dropped-records sensors
+        assertEquals(1.0, getDroppedRecordsTotalMetric(context));
+        assertNotEquals(0.0, getDroppedRecordsRateMetric(context));
     }
 
     @Test
@@ -113,7 +124,7 @@ public class ResponseJoinProcessorSupplierTest {
                 leftJoin
             );
         final Processor<String, SubscriptionResponseWrapper<String>, String, String> processor = processorSupplier.get();
-        final MockProcessorContext<String, String> context = new MockProcessorContext<>();
+        final MockInternalNewProcessorContext<String, String> context = new MockInternalNewProcessorContext<>();
         processor.init(context);
         context.setRecordMetadata("topic", 0, 0);
 
@@ -122,6 +133,10 @@ public class ResponseJoinProcessorSupplierTest {
         processor.process(new Record<>("lhs1", new SubscriptionResponseWrapper<>(hash, "rhsValue", 0), 0));
         final List<MockProcessorContext.CapturedForward<? extends String, ? extends String>> forwarded = context.forwarded();
         assertThat(forwarded, empty());
+
+        // test dropped-records sensors
+        assertEquals(1.0, getDroppedRecordsTotalMetric(context));
+        assertNotEquals(0.0, getDroppedRecordsRateMetric(context));
     }
 
     @Test
@@ -138,7 +153,7 @@ public class ResponseJoinProcessorSupplierTest {
                 leftJoin
             );
         final Processor<String, SubscriptionResponseWrapper<String>, String, String> processor = processorSupplier.get();
-        final MockProcessorContext<String, String> context = new MockProcessorContext<>();
+        final MockInternalNewProcessorContext<String, String> context = new MockInternalNewProcessorContext<>();
         processor.init(context);
         context.setRecordMetadata("topic", 0, 0);
 
@@ -164,7 +179,7 @@ public class ResponseJoinProcessorSupplierTest {
                 leftJoin
             );
         final Processor<String, SubscriptionResponseWrapper<String>, String, String> processor = processorSupplier.get();
-        final MockProcessorContext<String, String> context = new MockProcessorContext<>();
+        final MockInternalNewProcessorContext<String, String> context = new MockInternalNewProcessorContext<>();
         processor.init(context);
         context.setRecordMetadata("topic", 0, 0);
 
@@ -190,7 +205,7 @@ public class ResponseJoinProcessorSupplierTest {
                 leftJoin
             );
         final Processor<String, SubscriptionResponseWrapper<String>, String, String> processor = processorSupplier.get();
-        final MockProcessorContext<String, String> context = new MockProcessorContext<>();
+        final MockInternalNewProcessorContext<String, String> context = new MockInternalNewProcessorContext<>();
         processor.init(context);
         context.setRecordMetadata("topic", 0, 0);
 
@@ -216,7 +231,7 @@ public class ResponseJoinProcessorSupplierTest {
                 leftJoin
             );
         final Processor<String, SubscriptionResponseWrapper<String>, String, String> processor = processorSupplier.get();
-        final MockProcessorContext<String, String> context = new MockProcessorContext<>();
+        final MockInternalNewProcessorContext<String, String> context = new MockInternalNewProcessorContext<>();
         processor.init(context);
         context.setRecordMetadata("topic", 0, 0);
 
@@ -227,4 +242,33 @@ public class ResponseJoinProcessorSupplierTest {
         assertThat(forwarded.size(), is(1));
         assertThat(forwarded.get(0).record(), is(new Record<>("lhs1", null, 0)));
     }
+
+    private Object getDroppedRecordsTotalMetric(final InternalProcessorContext<String, String> context) {
+        final MetricName dropTotalMetric = new MetricName(
+            "dropped-records-total",
+            "stream-task-metrics",
+            "The total number of dropped records",
+            mkMap(
+                mkEntry("thread-id", Thread.currentThread().getName()),
+                mkEntry("task-id", "0_0")
+            )
+        );
+
+        return context.metrics().metrics().get(dropTotalMetric).metricValue();
+    }
+
+    private Object getDroppedRecordsRateMetric(final InternalProcessorContext<String, String> context) {
+        final MetricName dropRateMetric = new MetricName(
+            "dropped-records-rate",
+            "stream-task-metrics",
+            "The average number of dropped records per second",
+            mkMap(
+                mkEntry("thread-id", Thread.currentThread().getName()),
+                mkEntry("task-id", "0_0")
+            )
+        );
+
+        return context.metrics().metrics().get(dropRateMetric).metricValue();
+    }
+
 }

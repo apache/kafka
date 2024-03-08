@@ -47,7 +47,7 @@ import static org.mockito.Mockito.when;
 
 public class ApplicationEventProcessorTest {
 
-    private Time time;
+    private final Time time = new MockTime(1);
     private ApplicationEventProcessor processor;
     private CommitRequestManager commitRequestManager;
     private HeartbeatRequestManager heartbeatRequestManager;
@@ -56,7 +56,6 @@ public class ApplicationEventProcessorTest {
     @BeforeEach
     @SuppressWarnings("unchecked")
     public void setup() {
-        time = new MockTime();
         LogContext logContext = new LogContext();
         ConsumerMetadata metadata = mock(ConsumerMetadata.class);
         BlockingQueue<ApplicationEvent> applicationEventQueue = mock(BlockingQueue.class);
