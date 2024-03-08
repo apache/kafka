@@ -86,11 +86,8 @@ public class ConsumerNetworkThreadTest {
     private OffsetsRequestManager offsetsRequestManager;
     private CommitRequestManager commitRequestManager;
     private CoordinatorRequestManager coordinatorRequestManager;
-    private HeartbeatRequestManager heartbeatRequestManager;
-    private MembershipManager memberhipsManager;
     private ConsumerNetworkThread consumerNetworkThread;
     private MockClient client;
-    private SubscriptionState subscriptions;
 
     @BeforeEach
     public void setup() {
@@ -104,10 +101,7 @@ public class ConsumerNetworkThreadTest {
         commitRequestManager = testBuilder.commitRequestManager.orElseThrow(IllegalStateException::new);
         offsetsRequestManager = testBuilder.offsetsRequestManager;
         coordinatorRequestManager = testBuilder.coordinatorRequestManager.orElseThrow(IllegalStateException::new);
-        heartbeatRequestManager = testBuilder.heartbeatRequestManager.orElseThrow(IllegalStateException::new);
-        memberhipsManager = testBuilder.membershipManager.orElseThrow(IllegalStateException::new);
         consumerNetworkThread = testBuilder.consumerNetworkThread;
-        subscriptions = testBuilder.subscriptions;
         consumerNetworkThread.initializeResources();
     }
 
@@ -154,7 +148,8 @@ public class ConsumerNetworkThreadTest {
 
     @Test
     public void testAsyncCommitEvent() {
-        ApplicationEvent e = new AsyncCommitEvent(new HashMap<>());
+        Timer timer = time.timer(Long.MAX_VALUE);
+        ApplicationEvent e = new AsyncCommitEvent(new HashMap<>(), timer);
         applicationEventsQueue.add(e);
         consumerNetworkThread.runOnce();
         verify(applicationEventProcessor).process(any(AsyncCommitEvent.class));
@@ -285,8 +280,9 @@ public class ConsumerNetworkThreadTest {
         coordinatorRequestManager.markCoordinatorUnknown("test", time.milliseconds());
         client.prepareResponse(FindCoordinatorResponse.prepareResponse(Errors.NONE, "group-id", node));
         prepareOffsetCommitRequest(new HashMap<>(), Errors.NONE, false);
-        CompletableApplicationEvent<Void> event1 = spy(new AsyncCommitEvent(Collections.emptyMap()));
-        ApplicationEvent event2 = new AsyncCommitEvent(Collections.emptyMap());
+        Timer timer = time.timer(Long.MAX_VALUE);
+        CompletableApplicationEvent<Void> event1 = spy(new AsyncCommitEvent(Collections.emptyMap(), timer));
+        ApplicationEvent event2 = new AsyncCommitEvent(Collections.emptyMap(), timer);
         CompletableFuture<Void> future = new CompletableFuture<>();
         when(event1.future()).thenReturn(future);
         applicationEventsQueue.add(event1);
