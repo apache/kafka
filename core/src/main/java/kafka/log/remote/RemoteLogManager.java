@@ -17,6 +17,7 @@
 package kafka.log.remote;
 
 import com.yammer.metrics.core.Gauge;
+import java.util.concurrent.ThreadLocalRandom;
 import kafka.cluster.EndPoint;
 import kafka.cluster.Partition;
 import kafka.log.UnifiedLog;
@@ -151,6 +152,8 @@ public class RemoteLogManager implements Closeable {
 
     private final long delayInMs;
 
+    private final long initialJitterMs;
+
     private final ConcurrentHashMap<TopicIdPartition, RLMTaskWithFuture> leaderOrFollowerTasks = new ConcurrentHashMap<>();
 
     // topic ids that are received on leadership changes, this map is cleared on stop partitions
@@ -195,6 +198,7 @@ public class RemoteLogManager implements Closeable {
         remoteLogMetadataManager = createRemoteLogMetadataManager();
         indexCache = new RemoteIndexCache(rlmConfig.remoteLogIndexFileCacheTotalSizeBytes(), remoteLogStorageManager, logDir);
         delayInMs = rlmConfig.remoteLogManagerTaskIntervalMs();
+        initialJitterMs = rlmConfig.remoteLogManagerTaskInitialDelayJitterMs();
         rlmScheduledThreadPool = new RLMScheduledThreadPool(rlmConfig.remoteLogManagerThreadPoolSize());
 
         metricsGroup.newGauge(REMOTE_LOG_MANAGER_TASKS_AVG_IDLE_PERCENT_METRIC.getName(), new Gauge<Double>() {
@@ -1573,7 +1577,8 @@ public class RemoteLogManager implements Closeable {
                     // set this upfront when it is getting initialized instead of doing it after scheduling.
                     convertToLeaderOrFollower.accept(task);
                     LOGGER.info("Created a new task: {} and getting scheduled", task);
-                    ScheduledFuture<?> future = rlmScheduledThreadPool.scheduleWithFixedDelay(task, 0, delayInMs, TimeUnit.MILLISECONDS);
+                    Double initialDelay = ThreadLocalRandom.current().nextDouble() * initialJitterMs;
+                    ScheduledFuture<?> future = rlmScheduledThreadPool.scheduleWithFixedDelay(task, initialDelay.longValue(), delayInMs, TimeUnit.MILLISECONDS);
                     return new RLMTaskWithFuture(task, future);
                 }
         );
