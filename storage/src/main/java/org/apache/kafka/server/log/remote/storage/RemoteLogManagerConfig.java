@@ -109,6 +109,10 @@ public final class RemoteLogManagerConfig {
     public static final String REMOTE_LOG_MANAGER_TASK_RETRY_BACK_OFF_MS_DOC = "The initial amount of wait in milliseconds before the request is retried again.";
     public static final long DEFAULT_REMOTE_LOG_MANAGER_TASK_RETRY_BACK_OFF_MS = 500L;
 
+    public static final String REMOTE_LOG_MANAGER_TASK_INITIAL_DELAY_JITTER_PROP = "remote.log.manager.task.initial.delay.jitter.ms";
+    public static final String REMOTE_LOG_MANAGER_TASK_INITIAL_DELAY_JITTER_DOC = "Initial delay when scheduling a RLMTask for the first time on leadership change";
+    public static final long DEFAULT_REMOTE_LOG_MANAGER_TASK_INITIAL_DELAY_JITTER = 0L;
+
     public static final String REMOTE_LOG_MANAGER_TASK_RETRY_BACK_OFF_MAX_MS_PROP = "remote.log.manager.task.retry.backoff.max.ms";
     public static final String REMOTE_LOG_MANAGER_TASK_RETRY_BACK_OFF_MAX_MS_DOC = "The maximum amount of time in milliseconds to wait when the request " +
             "is retried again. The retry duration will increase exponentially for each request failure up to this maximum wait interval.";
@@ -236,6 +240,11 @@ public final class RemoteLogManagerConfig {
                                   between(0, 0.5),
                                   LOW,
                                   REMOTE_LOG_MANAGER_TASK_RETRY_JITTER_DOC)
+                  .defineInternal(REMOTE_LOG_MANAGER_TASK_INITIAL_DELAY_JITTER_PROP,
+                                  LONG, DEFAULT_REMOTE_LOG_MANAGER_TASK_INITIAL_DELAY_JITTER,
+                                  between(0, 3600000),
+                                  LOW,
+                                  REMOTE_LOG_MANAGER_TASK_INITIAL_DELAY_JITTER_DOC)
                   .define(REMOTE_LOG_READER_THREADS_PROP,
                                   INT,
                                   DEFAULT_REMOTE_LOG_READER_THREADS,
@@ -288,6 +297,7 @@ public final class RemoteLogManagerConfig {
     private final String remoteLogMetadataManagerListenerName;
     private final int remoteLogMetadataCustomMetadataMaxBytes;
     private final long remoteLogReaderFetchTimeoutMs;
+    private final long remoteLogManagerTaskInitialDelayJitterMs;
 
     public RemoteLogManagerConfig(AbstractConfig config) {
         this(config.getBoolean(REMOTE_LOG_STORAGE_SYSTEM_ENABLE_PROP),
@@ -313,7 +323,8 @@ public final class RemoteLogManagerConfig {
              config.getString(REMOTE_LOG_METADATA_MANAGER_CONFIG_PREFIX_PROP) != null
                  ? config.originalsWithPrefix(config.getString(REMOTE_LOG_METADATA_MANAGER_CONFIG_PREFIX_PROP))
                  : Collections.emptyMap(),
-            config.getLong(REMOTE_LOG_READER_FETCH_TIMEOUT_MS_PROP));
+            config.getLong(REMOTE_LOG_READER_FETCH_TIMEOUT_MS_PROP),
+            config.getLong(REMOTE_LOG_MANAGER_TASK_INITIAL_DELAY_JITTER_PROP));
     }
 
     // Visible for testing
@@ -336,7 +347,8 @@ public final class RemoteLogManagerConfig {
                                   Map<String, Object> remoteStorageManagerProps, /* properties having keys stripped out with remoteStorageManagerPrefix */
                                   String remoteLogMetadataManagerPrefix,
                                   Map<String, Object> remoteLogMetadataManagerProps, /* properties having keys stripped out with remoteLogMetadataManagerPrefix */
-                                  long remoteLogReaderFetchTimeoutMs
+                                  long remoteLogReaderFetchTimeoutMs,
+                                  long remoteLogManagerTaskInitialDelayJitterMs
     ) {
         this.enableRemoteStorageSystem = enableRemoteStorageSystem;
         this.remoteStorageManagerClassName = remoteStorageManagerClassName;
@@ -358,6 +370,7 @@ public final class RemoteLogManagerConfig {
         this.remoteLogMetadataManagerListenerName = remoteLogMetadataManagerListenerName;
         this.remoteLogMetadataCustomMetadataMaxBytes = remoteLogMetadataCustomMetadataMaxBytes;
         this.remoteLogReaderFetchTimeoutMs = remoteLogReaderFetchTimeoutMs;
+        this.remoteLogManagerTaskInitialDelayJitterMs = remoteLogManagerTaskInitialDelayJitterMs;
     }
 
     public boolean enableRemoteStorageSystem() {
@@ -416,6 +429,10 @@ public final class RemoteLogManagerConfig {
         return remoteLogReaderMaxPendingTasks;
     }
 
+    public long remoteLogManagerTaskInitialDelayJitterMs() {
+        return remoteLogManagerTaskInitialDelayJitterMs;
+    }
+
     public String remoteLogMetadataManagerListenerName() {
         return remoteLogMetadataManagerListenerName;
     }
@@ -464,7 +481,8 @@ public final class RemoteLogManagerConfig {
                 && Objects.equals(remoteLogMetadataManagerProps, that.remoteLogMetadataManagerProps)
                 && Objects.equals(remoteStorageManagerPrefix, that.remoteStorageManagerPrefix)
                 && Objects.equals(remoteLogMetadataManagerPrefix, that.remoteLogMetadataManagerPrefix)
-                && remoteLogReaderFetchTimeoutMs == that.remoteLogReaderFetchTimeoutMs;
+                && remoteLogReaderFetchTimeoutMs == that.remoteLogReaderFetchTimeoutMs
+                && remoteLogManagerTaskInitialDelayJitterMs == that.remoteLogManagerTaskInitialDelayJitterMs;
     }
 
     @Override
@@ -474,7 +492,7 @@ public final class RemoteLogManagerConfig {
                             remoteLogMetadataCustomMetadataMaxBytes, remoteLogIndexFileCacheTotalSizeBytes, remoteLogManagerThreadPoolSize, remoteLogManagerTaskIntervalMs,
                             remoteLogManagerTaskRetryBackoffMs, remoteLogManagerTaskRetryBackoffMaxMs, remoteLogManagerTaskRetryJitter,
                             remoteLogReaderThreads, remoteLogReaderMaxPendingTasks, remoteStorageManagerProps, remoteLogMetadataManagerProps,
-                            remoteStorageManagerPrefix, remoteLogMetadataManagerPrefix, remoteLogReaderFetchTimeoutMs);
+                            remoteStorageManagerPrefix, remoteLogMetadataManagerPrefix, remoteLogReaderFetchTimeoutMs, remoteLogManagerTaskInitialDelayJitterMs);
     }
 
     public static void main(String[] args) {
