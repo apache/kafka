@@ -24,7 +24,6 @@ import org.junit.jupiter.params.provider.ValueSource;
 import scala.collection.JavaConverters;
 
 import java.util.Collections;
-import java.util.Properties;
 
 import static org.apache.kafka.common.acl.AclOperation.DESCRIBE;
 import static org.apache.kafka.common.acl.AclPermissionType.ALLOW;
@@ -42,18 +41,5 @@ public class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest
         ConsumerGroupCommand.ConsumerGroupService consumerGroupService = new ConsumerGroupCommand.ConsumerGroupService(opts, Collections.emptyMap());
         consumerGroupService.describeGroups();
         consumerGroupService.close();
-    }
-
-    private void createTopicWithBrokerPrincipal(String topic) {
-        // Note the principal builder implementation maps all connections on the
-        // inter-broker listener to the broker principal.
-        createTopic(
-            topic,
-            1,
-            1,
-            new Properties(),
-            interBrokerListenerName(),
-            new Properties()
-        );
     }
 }
