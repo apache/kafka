@@ -26,7 +26,7 @@ import org.apache.kafka.clients.admin._
 import org.apache.kafka.common.acl.{AclBinding, AclBindingFilter}
 import org.apache.kafka.common.config.{ConfigException, ConfigResource}
 import org.apache.kafka.common.config.ConfigResource.Type
-import org.apache.kafka.common.errors.{PolicyViolationException, UnsupportedVersionException}
+import org.apache.kafka.common.errors.{InvalidPartitionsException,PolicyViolationException, UnsupportedVersionException}
 import org.apache.kafka.common.message.DescribeClusterRequestData
 import org.apache.kafka.common.metadata.{ConfigRecord, FeatureLevelRecord}
 import org.apache.kafka.common.metrics.Metrics
@@ -310,7 +310,7 @@ class KRaftClusterTest {
         filter = ClientQuotaFilter.contains(
           List(ClientQuotaFilterComponent.ofEntity("user", "testkit")).asJava)
 
-        TestUtils.tryUntilNoAssertionError(){
+        TestUtils.tryUntilNoAssertionError() {
           val results = admin.describeClientQuotas(filter).entities().get()
           assertEquals(2, results.size(), "Broker did not see two client quotas")
           assertEquals(9999.0, results.get(entity).get("producer_byte_rate"), 1e-6)
@@ -792,6 +792,39 @@ class KRaftClusterTest {
     }
   }
 
+  @ParameterizedTest
+  @ValueSource(strings = Array("3.7-IV0", "3.7-IV2"))
+  def testCreatePartitions(metadataVersionString: String): Unit = {
+    val cluster = new KafkaClusterTestKit.Builder(
+      new TestKitNodes.Builder().
+        setNumBrokerNodes(4).
+        setBootstrapMetadataVersion(MetadataVersion.fromVersionString(metadataVersionString)).
+        setNumControllerNodes(3).build()).
+      build()
+    try {
+      cluster.format()
+      cluster.startup()
+      cluster.waitForReadyBrokers()
+      val admin = Admin.create(cluster.clientProperties())
+      try {
+        val createResults = admin.createTopics(Arrays.asList(
+          new NewTopic("foo", 1, 3.toShort),
+          new NewTopic("bar", 2, 3.toShort))).values()
+        createResults.get("foo").get()
+        createResults.get("bar").get()
+        val increaseResults = admin.createPartitions(Map(
+          "foo" -> NewPartitions.increaseTo(3),
+          "bar" -> NewPartitions.increaseTo(2)).asJava).values()
+        increaseResults.get("foo").get()
+        assertEquals(classOf[InvalidPartitionsException], assertThrows(
+          classOf[ExecutionException], () => increaseResults.get("bar").get()).getCause.getClass)
+      } finally {
+        admin.close()
+      }
+    } finally {
+      cluster.close()
+    }
+  }
   private def clusterImage(
     cluster: KafkaClusterTestKit,
     brokerId: Int

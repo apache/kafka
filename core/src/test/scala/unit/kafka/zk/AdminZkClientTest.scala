@@ -123,7 +123,7 @@ class AdminZkClientTest extends QuorumTestHarness with Logging with RackAwareTes
     TestUtils.makeLeaderForPartition(zkClient, topic, leaderForPartitionMap, 1)
     val actualReplicaMap = leaderForPartitionMap.keys.map(p => p -> zkClient.getReplicasForPartition(new TopicPartition(topic, p))).toMap
     assertEquals(expectedReplicaAssignment.size, actualReplicaMap.size)
-    for(i <- 0 until actualReplicaMap.size)
+    for (i <- 0 until actualReplicaMap.size)
       assertEquals(expectedReplicaAssignment.get(i).get, actualReplicaMap(i))
 
     // shouldn't be able to create a topic that already exists

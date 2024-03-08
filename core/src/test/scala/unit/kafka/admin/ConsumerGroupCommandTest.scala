@@ -19,7 +19,7 @@ package kafka.admin
 
 import java.time.Duration
 import java.util.concurrent.{ExecutorService, Executors, TimeUnit}
-import java.util.{Collections, Properties}
+import java.util.{Collections, Properties, stream}
 import kafka.admin.ConsumerGroupCommand.{ConsumerGroupCommandOptions, ConsumerGroupService}
 import kafka.api.BaseConsumerTest
 import kafka.integration.KafkaServerTestHarness
@@ -31,6 +31,7 @@ import org.apache.kafka.common.{PartitionInfo, TopicPartition}
 import org.apache.kafka.common.errors.WakeupException
 import org.apache.kafka.common.serialization.StringDeserializer
 import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo}
+import org.junit.jupiter.params.provider.Arguments
 
 import scala.jdk.CollectionConverters._
 import scala.collection.mutable.ArrayBuffer
@@ -122,7 +123,9 @@ class ConsumerGroupCommandTest extends KafkaServerTestHarness {
 }
 
 object ConsumerGroupCommandTest {
-   def getTestQuorumAndGroupProtocolParametersAll() = BaseConsumerTest.getTestQuorumAndGroupProtocolParametersAll()
+   def getTestQuorumAndGroupProtocolParametersAll(): stream.Stream[Arguments] = BaseConsumerTest.getTestQuorumAndGroupProtocolParametersAll()
+   def getTestQuorumAndGroupProtocolParametersClassicGroupProtocolOnly(): stream.Stream[Arguments] = BaseConsumerTest.getTestQuorumAndGroupProtocolParametersClassicGroupProtocolOnly()
+   def getTestQuorumAndGroupProtocolParametersConsumerGroupProtocolOnly(): stream.Stream[Arguments] = BaseConsumerTest.getTestQuorumAndGroupProtocolParametersConsumerGroupProtocolOnly()
 
   abstract class AbstractConsumerRunnable(broker: String, groupId: String, customPropsOpt: Option[Properties] = None,
                                           syncCommit: Boolean = false) extends Runnable {

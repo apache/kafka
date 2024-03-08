@@ -50,6 +50,10 @@ public class ListGroupsRequest extends AbstractRequest {
                 throw new UnsupportedVersionException("The broker only supports ListGroups " +
                         "v" + version + ", but we need v4 or newer to request groups by states.");
             }
+            if (!data.typesFilter().isEmpty() && version < 5) {
+                throw new UnsupportedVersionException("The broker only supports ListGroups " +
+                    "v" + version + ", but we need v5 or newer to request groups by type.");
+            }
             return new ListGroupsRequest(data, version);
         }
 
