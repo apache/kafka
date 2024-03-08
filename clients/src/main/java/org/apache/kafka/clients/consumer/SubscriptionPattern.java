@@ -17,8 +17,10 @@
 package org.apache.kafka.clients.consumer;
 
 /**
- * A class that hold a regular expression which compatible with Google's RE2J engine. Visit
- * <a href="https://github.com/google/re2j">this repository</a> for details on RE2J engine.
+ * Represents a regular expression used to subscribe to topics. The pattern
+ * must be a Google RE2/J compatible pattern. Visit
+ * 
+ * @see <a href="https://github.com/google/re2j">RE2/J regular expression engine</a>
  */
 
 public class SubscriptionPattern {
