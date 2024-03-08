@@ -291,7 +291,14 @@ class BrokerMetadataPublisher(
       // recovery-from-unclean-shutdown if required.
       logManager.startup(
         metadataCache.getAllTopics(),
-        shouldBeStrayKraftLog = log => LogManager.isStrayKraftReplica(brokerId, newImage.topics(), log)
+        isStray = (topicId, partition) => {
+          val tid = topicId.getOrElse {
+            throw new RuntimeException(s"Partition $partition does not have a topic ID, " +
+              "which is not allowed when running in KRaft mode.")
+          }
+          Option(newImage.topics().getPartition(tid, partition.partition()))
+            .exists(_.replicas.contains(brokerId))
+        }
       )
 
       // Make the LogCleaner available for reconfiguration. We can't do this prior to this

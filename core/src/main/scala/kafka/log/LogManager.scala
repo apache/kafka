@@ -326,7 +326,7 @@ class LogManager(logDirs: Seq[File],
                            defaultConfig: LogConfig,
                            topicConfigOverrides: Map[String, LogConfig],
                            numRemainingSegments: ConcurrentMap[String, Int],
-                           shouldBeStrayKraftLog: UnifiedLog => Boolean): UnifiedLog = {
+                           isStray: (Option[Uuid], TopicPartition) => Boolean): UnifiedLog = {
     val topicPartition = UnifiedLog.parseTopicPartitionName(logDir)
     val config = topicConfigOverrides.getOrElse(topicPartition.topic, defaultConfig)
     val logRecoveryPoint = recoveryPoints.getOrElse(topicPartition, 0L)
@@ -355,10 +355,11 @@ class LogManager(logDirs: Seq[File],
     } else if (logDir.getName.endsWith(UnifiedLog.StrayDirSuffix)) {
       addStrayLog(topicPartition, log)
       warn(s"Loaded stray log: $logDir")
-    } else if (shouldBeStrayKraftLog(log)) {
-      // Mark the partition directories we're not supposed to have as stray. We have to do this
-      // during log load because topics may have been recreated with the same name while a disk
-      // was offline.
+    } else if (isStray(log.topicId, topicPartition)) {
+      // Opposite of Zookeeper mode deleted topic in KRAFT mode can be recreated while it's not fully deleted from broker.
+      // As a result of this broker in KRAFT mode with one offline directory has no way to detect to-be-deleted replica in an offline directory earlier.
+      // However, broker need to mark the partition directories as stray during log load because topics may have been
+      // recreated with the same name while a log directory was offline.
       // See KAFKA-16234, KAFKA-16157 and KAFKA-14616 for details.
       log.renameDir(UnifiedLog.logStrayDirName(log.topicPartition), shouldReinitialize = false)
       addStrayLog(log.topicPartition, log)
@@ -408,7 +409,7 @@ class LogManager(logDirs: Seq[File],
   /**
    * Recover and load all logs in the given data directories
    */
-  private[log] def loadLogs(defaultConfig: LogConfig, topicConfigOverrides: Map[String, LogConfig], shouldBeStrayKraftLog: UnifiedLog => Boolean): Unit = {
+  private[log] def loadLogs(defaultConfig: LogConfig, topicConfigOverrides: Map[String, LogConfig], isStray: (Option[Uuid], TopicPartition) => Boolean = (_, _) => false): Unit = {
     info(s"Loading logs from log dirs $liveLogDirs")
     val startMs = time.hiResClockMs()
     val threadPools = ArrayBuffer.empty[ExecutorService]
@@ -489,7 +490,7 @@ class LogManager(logDirs: Seq[File],
             val logLoadStartMs = time.hiResClockMs()
             try {
               log = Some(loadLog(logDir, hadCleanShutdown, recoveryPoints, logStartOffsets,
-                defaultConfig, topicConfigOverrides, numRemainingSegments, shouldBeStrayKraftLog))
+                defaultConfig, topicConfigOverrides, numRemainingSegments, isStray))
             } catch {
               case e: IOException =>
                 handleIOException(logDirAbsolutePath, e)
@@ -573,10 +574,10 @@ class LogManager(logDirs: Seq[File],
   /**
    *  Start the background threads to flush logs and do log cleanup
    */
-  def startup(topicNames: Set[String], shouldBeStrayKraftLog: UnifiedLog => Boolean = _ => false): Unit = {
+  def startup(topicNames: Set[String], isStray: (Option[Uuid], TopicPartition) => Boolean = (_ , _)=> false): Unit = {
     // ensure consistency between default config and overrides
     val defaultConfig = currentDefaultConfig
-    startupWithConfigOverrides(defaultConfig, fetchTopicConfigOverrides(defaultConfig, topicNames), shouldBeStrayKraftLog)
+    startupWithConfigOverrides(defaultConfig, fetchTopicConfigOverrides(defaultConfig, topicNames), isStray)
   }
 
   // visible for testing
@@ -618,8 +619,8 @@ class LogManager(logDirs: Seq[File],
   private[log] def startupWithConfigOverrides(
     defaultConfig: LogConfig,
     topicConfigOverrides: Map[String, LogConfig],
-    shouldBeStrayKraftLog: UnifiedLog => Boolean): Unit = {
-    loadLogs(defaultConfig, topicConfigOverrides, shouldBeStrayKraftLog) // this could take a while if shutdown was not clean
+    isStray: (Option[Uuid], TopicPartition) => Boolean): Unit = {
+    loadLogs(defaultConfig, topicConfigOverrides, isStray) // this could take a while if shutdown was not clean
 
     /* Schedule the cleanup task to delete old logs */
     if (scheduler != null) {
