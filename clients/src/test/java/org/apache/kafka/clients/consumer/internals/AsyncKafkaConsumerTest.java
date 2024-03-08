@@ -29,7 +29,6 @@ import org.apache.kafka.clients.consumer.OffsetCommitCallback;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.clients.consumer.RetriableCommitFailedException;
 import org.apache.kafka.clients.consumer.RoundRobinAssignor;
-import org.apache.kafka.clients.consumer.internals.events.ApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEventHandler;
 import org.apache.kafka.clients.consumer.internals.events.AssignmentChangeEvent;
 import org.apache.kafka.clients.consumer.internals.events.AsyncCommitEvent;
@@ -933,12 +932,11 @@ public class AsyncKafkaConsumerTest {
 
         AtomicReference<SyncCommitEvent> capturedEvent = new AtomicReference<>();
         doAnswer(invocation -> {
-            ApplicationEvent event = invocation.getArgument(0);
-            if (event instanceof SyncCommitEvent) {
-                capturedEvent.set((SyncCommitEvent) event);
-            }
+            SyncCommitEvent event = invocation.getArgument(0);
+            capturedEvent.set(event);
+            event.future().complete(null);
             return null;
-        }).when(applicationEventHandler).add(any());
+        }).when(applicationEventHandler).add(any(SyncCommitEvent.class));
 
         consumer.close(Duration.ZERO);
 
