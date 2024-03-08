@@ -63,37 +63,6 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
  * - export/import
  */
 public class ResetConsumerGroupOffsetTest extends ConsumerGroupCommandTest {
-    @Override
-    public Seq<KafkaConfig> generateConfigs() {
-        List<KafkaConfig> cfgs = new ArrayList<>();
-
-        kafka.utils.TestUtils.createBrokerConfigs(
-            1,
-            zkConnect(),
-            false,
-            true,
-            scala.None$.empty(),
-            scala.None$.empty(),
-            scala.None$.empty(),
-            true,
-            false,
-            false,
-            false,
-            scala.collection.immutable.Map$.MODULE$.empty(),
-            1,
-            false,
-            1,
-            (short) 1,
-            0,
-            false
-        ).foreach(props -> {
-            cfgs.add(KafkaConfig.fromProps(props));
-            return null;
-        });
-
-        return seq(cfgs);
-    }
-
     private String[] basicArgs() {
         return new String[]{"--reset-offsets",
             "--bootstrap-server", bootstrapServers(listenerName()),
