@@ -514,7 +514,7 @@ public class StreamsConfig extends AbstractConfig {
     @SuppressWarnings("WeakerAccess")
     public static final String CLIENT_ID_CONFIG = CommonClientConfigs.CLIENT_ID_CONFIG;
     private static final String CLIENT_ID_DOC = "An ID prefix string used for the client IDs of internal [main-|restore-|global-]consumer, producer, and admin clients" +
-        " with pattern <code>&lt;client.id&gt;-[Global]StreamThread[-&lt;threadSequenceNumber$gt;]-&lt;consumer|producer|restore-consumer|global-consumer&gt;</code>.";
+        " with pattern <code>&lt;client.id&gt;-[Global]StreamThread[-&lt;threadSequenceNumber&gt;]-&lt;consumer|producer|restore-consumer|global-consumer&gt;</code>.";
 
     /** {@code enable.metrics.push} */
     @SuppressWarnings("WeakerAccess")
