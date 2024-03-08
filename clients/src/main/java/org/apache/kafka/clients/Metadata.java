@@ -581,16 +581,6 @@ public class Metadata implements Closeable {
         return null;
     }
 
-<<<<<<< HEAD
-=======
-    /**
-     * @return Mapping from topic IDs to topic names for all topics in the cache.
-     */
-    public Map<Uuid, String> topicNames() {
-        return metadataSnapshot.topicNames();
-    }
-
->>>>>>> ff90f78c70 (KAFKA-16226; Reduce synchronization between producer threads (#15323))
     protected boolean retainTopic(String topic, boolean isInternal, long nowMs) {
         return true;
     }

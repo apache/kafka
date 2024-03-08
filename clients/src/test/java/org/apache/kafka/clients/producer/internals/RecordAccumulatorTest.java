@@ -20,7 +20,6 @@ import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.function.Function;
 import org.apache.kafka.clients.ApiVersions;
-import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.MetadataSnapshot;
 import org.apache.kafka.clients.NodeApiVersions;
 import org.apache.kafka.clients.producer.Callback;
