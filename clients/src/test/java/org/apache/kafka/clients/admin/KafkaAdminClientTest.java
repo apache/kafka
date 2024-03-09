@@ -1424,21 +1424,7 @@ public class KafkaAdminClientTest {
             );
 
             DescribeTopicPartitionsResponseData dataFirstPart = new DescribeTopicPartitionsResponseData();
-            dataFirstPart.topics().add(new DescribeTopicPartitionsResponseTopic()
-                .setErrorCode((short) 0)
-                .setTopicId(topics.get(topicName0))
-                .setName(topicName0)
-                .setIsInternal(false)
-                .setPartitions(Arrays.asList(new DescribeTopicPartitionsResponsePartition()
-                    .setIsrNodes(Arrays.asList(0))
-                    .setErrorCode((short) 0)
-                    .setLeaderEpoch(0)
-                    .setLeaderId(0)
-                    .setEligibleLeaderReplicas(Arrays.asList(1))
-                    .setLastKnownElr(Arrays.asList(2))
-                    .setPartitionIndex(0)
-                    .setReplicaNodes(Arrays.asList(0, 1, 2))))
-            );
+            addPartitionToDescribeTopicPartitionsResponse(dataFirstPart, topicName0, topics.get(topicName0), Arrays.asList(0));
             dataFirstPart.setNextCursor(new DescribeTopicPartitionsResponseData.Cursor()
                 .setTopicName(topicName0)
                 .setPartitionIndex(1));
@@ -1452,34 +1438,8 @@ public class KafkaAdminClientTest {
             }, new DescribeTopicPartitionsResponse(dataFirstPart));
 
             DescribeTopicPartitionsResponseData dataSecondPart = new DescribeTopicPartitionsResponseData();
-            dataSecondPart.topics().add(new DescribeTopicPartitionsResponseTopic()
-                .setErrorCode((short) 0)
-                .setTopicId(topics.get(topicName0))
-                .setName(topicName0)
-                .setIsInternal(false)
-                .setPartitions(Arrays.asList(new DescribeTopicPartitionsResponsePartition()
-                    .setIsrNodes(Arrays.asList(0))
-                    .setErrorCode((short) 0)
-                    .setLeaderEpoch(0)
-                    .setLeaderId(0)
-                    .setEligibleLeaderReplicas(Arrays.asList(1))
-                    .setLastKnownElr(Arrays.asList(2))
-                    .setPartitionIndex(1)
-                    .setReplicaNodes(Arrays.asList(0, 1, 2)))));
-            dataSecondPart.topics().add(new DescribeTopicPartitionsResponseTopic()
-                .setErrorCode((short) 0)
-                .setTopicId(topics.get(topicName1))
-                .setName(topicName1)
-                .setIsInternal(false)
-                .setPartitions(Arrays.asList(new DescribeTopicPartitionsResponsePartition()
-                    .setIsrNodes(Arrays.asList(3))
-                    .setErrorCode((short) 0)
-                    .setLeaderEpoch(0)
-                    .setLeaderId(0)
-                    .setEligibleLeaderReplicas(Arrays.asList(1))
-                    .setLastKnownElr(Arrays.asList(2))
-                    .setPartitionIndex(0)
-                    .setReplicaNodes(Arrays.asList(0, 1, 2)))));
+            addPartitionToDescribeTopicPartitionsResponse(dataSecondPart, topicName0, topics.get(topicName0), Arrays.asList(1));
+            addPartitionToDescribeTopicPartitionsResponse(dataSecondPart, topicName1, topics.get(topicName1), Arrays.asList(0));
             env.kafkaClient().prepareResponse(body -> {
                 DescribeTopicPartitionsRequestData request = (DescribeTopicPartitionsRequestData) body.data();
                 if (request.topics().size() != 2) return false;
@@ -1509,16 +1469,18 @@ public class KafkaAdminClientTest {
         }
     }
 
-    @SuppressWarnings("NPathComplexity")
+    @SuppressWarnings({"NPathComplexity", "CyclomaticComplexity"})
     @Test
     public void testDescribeTopicsWithDescribeTopicPartitionsApiEdgeCase() {
         try (AdminClientUnitTestEnv env = mockClientEnv()) {
             env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
             String topicName0 = "test-0";
             String topicName1 = "test-1";
+            String topicName2 = "test-2";
             Map<String, Uuid> topics = new HashMap<>();
             topics.put(topicName0, Uuid.randomUuid());
             topics.put(topicName1, Uuid.randomUuid());
+            topics.put(topicName2, Uuid.randomUuid());
 
             env.kafkaClient().prepareResponse(
                 prepareDescribeClusterResponse(0,
@@ -1529,70 +1491,89 @@ public class KafkaAdminClientTest {
             );
 
             DescribeTopicPartitionsResponseData dataFirstPart = new DescribeTopicPartitionsResponseData();
-            dataFirstPart.topics().add(new DescribeTopicPartitionsResponseTopic()
-                .setErrorCode((short) 0)
-                .setTopicId(topics.get(topicName0))
-                .setName(topicName0)
-                .setIsInternal(false)
-                .setPartitions(Arrays.asList(new DescribeTopicPartitionsResponsePartition()
-                    .setIsrNodes(Arrays.asList(0))
-                    .setErrorCode((short) 0)
-                    .setLeaderEpoch(0)
-                    .setLeaderId(0)
-                    .setEligibleLeaderReplicas(Arrays.asList(1))
-                    .setLastKnownElr(Arrays.asList(2))
-                    .setPartitionIndex(0)
-                    .setReplicaNodes(Arrays.asList(0, 1, 2))))
-            );
+            addPartitionToDescribeTopicPartitionsResponse(dataFirstPart, topicName0, topics.get(topicName0), Arrays.asList(0));
+            addPartitionToDescribeTopicPartitionsResponse(dataFirstPart, topicName1, topics.get(topicName1), Arrays.asList(0));
             dataFirstPart.setNextCursor(new DescribeTopicPartitionsResponseData.Cursor()
-                    .setTopicName(topicName1)
-                    .setPartitionIndex(0));
+                .setTopicName(topicName1)
+                .setPartitionIndex(1));
             env.kafkaClient().prepareResponse(body -> {
                 DescribeTopicPartitionsRequestData request = (DescribeTopicPartitionsRequestData) body.data();
-                if (request.topics().size() != 2) return false;
+                if (request.topics().size() != 3) return false;
                 if (!request.topics().get(0).name().equals(topicName0)) return false;
                 if (!request.topics().get(1).name().equals(topicName1)) return false;
+                if (!request.topics().get(2).name().equals(topicName2)) return false;
                 if (request.cursor() != null) return false;
                 return true;
             }, new DescribeTopicPartitionsResponse(dataFirstPart));
 
             DescribeTopicPartitionsResponseData dataSecondPart = new DescribeTopicPartitionsResponseData();
-            dataSecondPart.topics().add(new DescribeTopicPartitionsResponseTopic()
-                .setErrorCode((short) 0)
-                .setTopicId(topics.get(topicName1))
-                .setName(topicName1)
-                .setIsInternal(false)
-                .setPartitions(Arrays.asList(new DescribeTopicPartitionsResponsePartition()
-                    .setIsrNodes(Arrays.asList(3))
-                    .setErrorCode((short) 0)
-                    .setLeaderEpoch(0)
-                    .setLeaderId(0)
-                    .setEligibleLeaderReplicas(Arrays.asList(1))
-                    .setLastKnownElr(Arrays.asList(2))
-                    .setPartitionIndex(0)
-                    .setReplicaNodes(Arrays.asList(0, 1, 2)))));
+            addPartitionToDescribeTopicPartitionsResponse(dataSecondPart, topicName1, topics.get(topicName1), Arrays.asList(1));
+            addPartitionToDescribeTopicPartitionsResponse(dataSecondPart, topicName2, topics.get(topicName2), Arrays.asList(0));
+            dataSecondPart.setNextCursor(new DescribeTopicPartitionsResponseData.Cursor()
+                .setTopicName(topicName2)
+                .setPartitionIndex(1));
+            env.kafkaClient().prepareResponse(body -> {
+                DescribeTopicPartitionsRequestData request = (DescribeTopicPartitionsRequestData) body.data();
+                if (request.topics().size() != 2) return false;
+                if (!request.topics().get(0).name().equals(topicName1)) return false;
+                if (!request.topics().get(1).name().equals(topicName2)) return false;
+                DescribeTopicPartitionsRequestData.Cursor cursor = request.cursor();
+                if (cursor == null || !cursor.topicName().equals(topicName1) || cursor.partitionIndex() != 1) return false;
+                return true;
+            }, new DescribeTopicPartitionsResponse(dataSecondPart));
+
+            DescribeTopicPartitionsResponseData dataThirdPart = new DescribeTopicPartitionsResponseData();
+            addPartitionToDescribeTopicPartitionsResponse(dataThirdPart, topicName2, topics.get(topicName2), Arrays.asList(1));
             env.kafkaClient().prepareResponse(body -> {
                 DescribeTopicPartitionsRequestData request = (DescribeTopicPartitionsRequestData) body.data();
                 if (request.topics().size() != 1) return false;
-                if (!request.topics().get(0).name().equals(topicName1)) return false;
-                if (request.cursor() != null) return false;
+                if (!request.topics().get(0).name().equals(topicName2)) return false;
+                DescribeTopicPartitionsRequestData.Cursor cursor = request.cursor();
+                if (cursor == null || !cursor.topicName().equals(topicName2) || cursor.partitionIndex() != 1) return false;
                 return true;
-            }, new DescribeTopicPartitionsResponse(dataSecondPart));
+            }, new DescribeTopicPartitionsResponse(dataThirdPart));
             try {
                 DescribeTopicsResult result = env.adminClient().describeTopics(
-                    Arrays.asList(topicName1, topicName0), new DescribeTopicsOptions()
+                    Arrays.asList(topicName1, topicName0, topicName2), new DescribeTopicsOptions()
                 );
                 Map<String, TopicDescription> topicDescriptions = result.allTopicNames().get();
-                assertEquals(2, topicDescriptions.size());
+                assertEquals(3, topicDescriptions.size());
                 TopicDescription topicDescription = topicDescriptions.get(topicName0);
                 assertEquals(1, topicDescription.partitions().size());
                 assertEquals(0, topicDescription.partitions().get(0).partition());
                 topicDescription = topicDescriptions.get(topicName1);
-                assertEquals(1, topicDescription.partitions().size());
+                assertEquals(2, topicDescription.partitions().size());
+                topicDescription = topicDescriptions.get(topicName2);
+                assertEquals(2, topicDescription.partitions().size());
             } catch (Exception e) {
                 fail("describe using DescribeTopics API should not fail", e);
             }
         }
+    }
+
+    private void addPartitionToDescribeTopicPartitionsResponse(
+        DescribeTopicPartitionsResponseData data,
+        String topicName,
+        Uuid topicId,
+        List<Integer> partitions) {
+        List<DescribeTopicPartitionsResponsePartition> addingPartitions = new ArrayList<>();
+        partitions.forEach(partition -> {
+            addingPartitions.add(new DescribeTopicPartitionsResponsePartition()
+                .setIsrNodes(Arrays.asList(0))
+                .setErrorCode((short) 0)
+                .setLeaderEpoch(0)
+                .setLeaderId(0)
+                .setEligibleLeaderReplicas(Arrays.asList(1))
+                .setLastKnownElr(Arrays.asList(2))
+                .setPartitionIndex(partition)
+                .setReplicaNodes(Arrays.asList(0, 1, 2)));
+        });
+        data.topics().add(new DescribeTopicPartitionsResponseTopic()
+                .setErrorCode((short) 0)
+                .setTopicId(topicId)
+                .setName(topicName)
+                .setIsInternal(false)
+                .setPartitions(addingPartitions));
     }
 
     @SuppressWarnings("NPathComplexity")

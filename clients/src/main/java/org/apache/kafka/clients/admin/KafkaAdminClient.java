@@ -2181,7 +2181,7 @@ public class KafkaAdminClient extends AdminClient {
         return call;
     }
 
-    @SuppressWarnings("MethodLength")
+    @SuppressWarnings({"MethodLength", "NPathComplexity"})
     private Map<String, KafkaFuture<TopicDescription>> handleDescribeTopicsByNamesWithDescribeTopicPartitionsApi(
         final Collection<String> topicNames,
         DescribeTopicsOptions options
@@ -2222,6 +2222,7 @@ public class KafkaAdminClient extends AdminClient {
                     .collect(Collectors.toMap(topicRequest -> topicRequest.name(), topicRequest -> topicRequest, (t1, t2) -> t1, TreeMap::new));
 
             TopicDescription partiallyFinishedTopicDescription = null;
+            TopicDescription nextTopicDescription = null;
 
             @Override
             DescribeTopicPartitionsRequest.Builder createRequest(int timeoutMs) {
@@ -2266,7 +2267,7 @@ public class KafkaAdminClient extends AdminClient {
 
                     if (responseCursor != null && responseCursor.topicName().equals(topicName)) {
                         // This is the first time this topic being pointed by the cursor.
-                        partiallyFinishedTopicDescription = currentTopicDescription;
+                        nextTopicDescription = currentTopicDescription;
                         continue;
                     }
 
@@ -2276,10 +2277,16 @@ public class KafkaAdminClient extends AdminClient {
 
                 if (partiallyFinishedTopicDescription != null &&
                         (responseCursor == null || !responseCursor.topicName().equals(partiallyFinishedTopicDescription.name()))) {
+                    // We can't simply check nextTopicDescription != null here to close the partiallyFinishedTopicDescription.
+                    // Because the responseCursor topic may not show in the response.
                     String topicName = partiallyFinishedTopicDescription.name();
                     topicFutures.get(topicName).complete(partiallyFinishedTopicDescription);
                     pendingTopics.remove(topicName);
                     partiallyFinishedTopicDescription = null;
+                }
+                if (nextTopicDescription != null) {
+                    partiallyFinishedTopicDescription = nextTopicDescription;
+                    nextTopicDescription = null;
                 }
 
                 if (!pendingTopics.isEmpty()) {
