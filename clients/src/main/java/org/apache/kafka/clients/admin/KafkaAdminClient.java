@@ -2221,7 +2221,6 @@ public class KafkaAdminClient extends AdminClient {
                 topicNamesList.stream().map(topicName -> new TopicRequest().setName(topicName))
                     .collect(Collectors.toMap(topicRequest -> topicRequest.name(), topicRequest -> topicRequest, (t1, t2) -> t1, TreeMap::new));
 
-            DescribeTopicPartitionsRequestData.Cursor requestCursor = null;
             TopicDescription partiallyFinishedTopicDescription = null;
 
             @Override
@@ -2229,7 +2228,12 @@ public class KafkaAdminClient extends AdminClient {
                 DescribeTopicPartitionsRequestData request = new DescribeTopicPartitionsRequestData()
                     .setTopics(new ArrayList<>(pendingTopics.values()))
                     .setResponsePartitionLimit(options.partitionSizeLimitPerResponse());
-                request.setCursor(requestCursor);
+                if (partiallyFinishedTopicDescription != null) {
+                    request.setCursor(new DescribeTopicPartitionsRequestData.Cursor()
+                        .setTopicName(partiallyFinishedTopicDescription.name())
+                        .setPartitionIndex(partiallyFinishedTopicDescription.partitions().size())
+                    );
+                }
                 return new DescribeTopicPartitionsRequest.Builder(request);
             }
 
@@ -2243,6 +2247,7 @@ public class KafkaAdminClient extends AdminClient {
                     Errors error = Errors.forCode(topic.errorCode());
 
                     KafkaFutureImpl<TopicDescription> future = topicFutures.get(topicName);
+
                     if (error != Errors.NONE) {
                         future.completeExceptionally(error.exception());
                         pendingTopics.remove(topicName);
@@ -2254,20 +2259,8 @@ public class KafkaAdminClient extends AdminClient {
 
                     TopicDescription currentTopicDescription = getTopicDescriptionFromDescribeTopicsResponseTopic(topic, nodes);
 
-                    if (requestCursor != null && requestCursor.topicName().equals(topicName)) {
-                        if (partiallyFinishedTopicDescription == null) {
-                            // The previous round cursor can point to the partition 0 of the next topic.
-                            partiallyFinishedTopicDescription = currentTopicDescription;
-                        } else {
-                            partiallyFinishedTopicDescription.partitions().addAll(currentTopicDescription.partitions());
-                        }
-
-                        if (responseCursor == null || !responseCursor.topicName().equals(topicName)) {
-                            // The partially finished topic can be closed in this round.
-                            pendingTopics.remove(topicName);
-                            future.complete(partiallyFinishedTopicDescription);
-                            partiallyFinishedTopicDescription = null;
-                        }
+                    if (partiallyFinishedTopicDescription != null && partiallyFinishedTopicDescription.name().equals(topicName)) {
+                        partiallyFinishedTopicDescription.partitions().addAll(currentTopicDescription.partitions());
                         continue;
                     }
 
@@ -2280,13 +2273,15 @@ public class KafkaAdminClient extends AdminClient {
                     pendingTopics.remove(topicName);
                     future.complete(currentTopicDescription);
                 }
-                if (responseCursor != null) {
-                    requestCursor = new DescribeTopicPartitionsRequestData.Cursor()
-                        .setTopicName(responseCursor.topicName())
-                        .setPartitionIndex(responseCursor.partitionIndex());
-                } else {
-                    requestCursor = null;
+
+                if (partiallyFinishedTopicDescription != null &&
+                        (responseCursor == null || !responseCursor.topicName().equals(partiallyFinishedTopicDescription.name()))) {
+                    String topicName = partiallyFinishedTopicDescription.name();
+                    topicFutures.get(topicName).complete(partiallyFinishedTopicDescription);
+                    pendingTopics.remove(topicName);
+                    partiallyFinishedTopicDescription = null;
                 }
+
                 if (!pendingTopics.isEmpty()) {
                     runnable.call(this, time.milliseconds());
                 }

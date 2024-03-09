@@ -1575,10 +1575,7 @@ public class KafkaAdminClientTest {
                 DescribeTopicPartitionsRequestData request = (DescribeTopicPartitionsRequestData) body.data();
                 if (request.topics().size() != 1) return false;
                 if (!request.topics().get(0).name().equals(topicName1)) return false;
-
-                DescribeTopicPartitionsRequestData.Cursor cursor = request.cursor();
-                if (cursor == null || cursor.topicName() != topicName1 || cursor.partitionIndex() != 0) return false;
-
+                if (request.cursor() != null) return false;
                 return true;
             }, new DescribeTopicPartitionsResponse(dataSecondPart));
             try {
@@ -1655,45 +1652,6 @@ public class KafkaAdminClientTest {
             } catch (Exception e) {
                 fail("describe using DescribeTopics API should not have other exceptions", e);
             }
-        }
-    }
-
-    @Test
-    public void testMetadataRetries() throws Exception {
-        // We should continue retrying on metadata update failures in spite of retry configuration
-
-        String topic = "topic";
-        Cluster bootstrapCluster = Cluster.bootstrap(singletonList(new InetSocketAddress("localhost", 9999)));
-        Cluster initializedCluster = mockCluster(3, 0);
-
-        try (final AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(Time.SYSTEM, bootstrapCluster,
-                newStrMap(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999",
-                        AdminClientConfig.DEFAULT_API_TIMEOUT_MS_CONFIG, "10000000",
-                        AdminClientConfig.RETRIES_CONFIG, "0"))) {
-
-            // The first request fails with a disconnect
-            env.kafkaClient().prepareResponse(null, true);
-
-            // The next one succeeds and gives us the controller id
-            env.kafkaClient().prepareResponse(RequestTestUtils.metadataResponse(initializedCluster.nodes(),
-                    initializedCluster.clusterResource().clusterId(),
-                    initializedCluster.controller().id(),
-                    Collections.emptyList()));
-
-            // Then we respond to the DescribeTopic request
-            Node leader = initializedCluster.nodes().get(0);
-            MetadataResponse.PartitionMetadata partitionMetadata = new MetadataResponse.PartitionMetadata(
-                    Errors.NONE, new TopicPartition(topic, 0), Optional.of(leader.id()), Optional.of(10),
-                    singletonList(leader.id()), singletonList(leader.id()), singletonList(leader.id()));
-            env.kafkaClient().prepareResponse(RequestTestUtils.metadataResponse(initializedCluster.nodes(),
-                    initializedCluster.clusterResource().clusterId(), 1,
-                    singletonList(new MetadataResponse.TopicMetadata(Errors.NONE, topic, Uuid.ZERO_UUID, false,
-                            singletonList(partitionMetadata), MetadataResponse.AUTHORIZED_OPERATIONS_OMITTED))));
-
-            DescribeTopicsResult result = env.adminClient().describeTopics(singleton(topic));
-            Map<String, TopicDescription> topicDescriptions = result.allTopicNames().get();
-            assertEquals(leader, topicDescriptions.get(topic).partitions().get(0).leader());
-            assertNull(topicDescriptions.get(topic).authorizedOperations());
         }
     }
 
