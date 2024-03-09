@@ -111,7 +111,7 @@ import org.mockito.stubbing.Answer;
 import org.mockito.stubbing.OngoingStubbing;
 
 @RunWith(MockitoJUnitRunner.StrictStubs.class)
-public class WorkerSinkTaskMockitoTest {
+public class WorkerSinkTaskTest {
     // These are fixed to keep this code simpler. In this example we assume byte[] raw values
     // with mix of integer/string in Connect
     private static final String TOPIC = "test";
@@ -316,9 +316,7 @@ public class WorkerSinkTaskMockitoTest {
         // And unpause
         verify(statusListener).onResume(taskId);
         verify(consumer, times(2)).wakeup();
-        INITIAL_ASSIGNMENT.forEach(tp -> {
-            verify(consumer).resume(singleton(tp));
-        });
+        INITIAL_ASSIGNMENT.forEach(tp -> verify(consumer).resume(singleton(tp)));
         verify(sinkTask, times(4)).put(anyList());
     }
 
@@ -419,9 +417,7 @@ public class WorkerSinkTaskMockitoTest {
         time.sleep(30000L);
 
         verify(sinkTask, times(3)).put(anyList());
-        INITIAL_ASSIGNMENT.forEach(tp -> {
-            verify(consumer).resume(Collections.singleton(tp));
-        });
+        INITIAL_ASSIGNMENT.forEach(tp -> verify(consumer).resume(Collections.singleton(tp)));
 
         assertSinkMetricValue("sink-record-read-total", 1.0);
         assertSinkMetricValue("sink-record-send-total", 1.0);
@@ -528,9 +524,7 @@ public class WorkerSinkTaskMockitoTest {
         verify(sinkTask).close(INITIAL_ASSIGNMENT);
 
         // All partitions are resumed, as all previously paused-for-redelivery partitions were revoked
-        newAssignment.forEach(tp -> {
-            verify(consumer).resume(Collections.singleton(tp));
-        });
+        newAssignment.forEach(tp -> verify(consumer).resume(Collections.singleton(tp)));
     }
 
     @Test
@@ -808,9 +802,7 @@ public class WorkerSinkTaskMockitoTest {
         verify(sinkTask).close(INITIAL_ASSIGNMENT);
         verify(sinkTask, times(2)).open(INITIAL_ASSIGNMENT);
 
-        INITIAL_ASSIGNMENT.forEach(tp -> {
-            verify(consumer).resume(Collections.singleton(tp));
-        });
+        INITIAL_ASSIGNMENT.forEach(tp -> verify(consumer).resume(Collections.singleton(tp)));
 
         verify(statusListener).onResume(taskId);
 
@@ -1091,7 +1083,7 @@ public class WorkerSinkTaskMockitoTest {
     // Test that the commitTimeoutMs timestamp is correctly computed and checked in WorkerSinkTask.iteration()
     // when there is a long running commit in process. See KAFKA-4942 for more information.
     @Test
-    public void testLongRunningCommitWithoutTimeout() throws InterruptedException {
+    public void testLongRunningCommitWithoutTimeout() {
         createTask(initialState);
 
         workerTask.initialize(TASK_CONFIG);
@@ -1225,7 +1217,6 @@ public class WorkerSinkTaskMockitoTest {
         }
     }
 
-    @SuppressWarnings("unchecked")
     @Test
     public void testTaskCancelPreventsFinalOffsetCommit() {
         createTask(initialState);
@@ -1286,10 +1277,6 @@ public class WorkerSinkTaskMockitoTest {
         // iter 2
         expectTaskGetTopic();
         expectConversionAndTransformation(null, new RecordHeaders());
-
-        final Map<TopicPartition, OffsetAndMetadata> workerStartingOffsets = new HashMap<>();
-        workerStartingOffsets.put(TOPIC_PARTITION, new OffsetAndMetadata(FIRST_OFFSET));
-        workerStartingOffsets.put(TOPIC_PARTITION2, new OffsetAndMetadata(FIRST_OFFSET));
 
         final Map<TopicPartition, OffsetAndMetadata> workerCurrentOffsets = new HashMap<>();
         workerCurrentOffsets.put(TOPIC_PARTITION, new OffsetAndMetadata(FIRST_OFFSET + 1));
