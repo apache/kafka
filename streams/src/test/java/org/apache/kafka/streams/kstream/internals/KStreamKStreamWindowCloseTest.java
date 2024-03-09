@@ -116,25 +116,25 @@ public class KStreamKStreamWindowCloseTest {
             right.pipeInput(-1, "bumpTime", 40);
             assertRecordDropCount(0.0, processor);
 
-            right.pipeInput(0, "closesAt39", 24);
+            right.pipeInput(0, "closedAt40", 24);
             assertRecordDropCount(1.0, processor);
 
-            right.pipeInput(0, "closesAt40", 25);
+            right.pipeInput(0, "closedAt41", 25);
             assertRecordDropCount(1.0, processor);
 
             right.pipeInput(-1, "bumpTime", 41);
-            right.pipeInput(0, "closesAt40", 25);
+            right.pipeInput(0, "closedAt41", 25);
             assertRecordDropCount(2.0, processor);
 
             right.pipeInput(1, "right", 115);
             left.pipeInput(-1, "bumpTime", 140);
-            left.pipeInput(1, "closesAt139", 124);
+            left.pipeInput(1, "closedAt140", 124);
             assertRecordDropCount(3.0, processor);
-            left.pipeInput(1, "closesAt140", 125);
+            left.pipeInput(1, "closedAt141", 125);
             assertRecordDropCount(3.0, processor);
 
             left.pipeInput(-1, "bumpTime", 141);
-            left.pipeInput(1, "closesAt140", 125);
+            left.pipeInput(1, "closedAt141", 125);
             assertRecordDropCount(4.0, processor);
         }
     }
