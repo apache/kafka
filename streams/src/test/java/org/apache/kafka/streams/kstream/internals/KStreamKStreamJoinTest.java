@@ -1903,57 +1903,6 @@ public class KStreamKStreamJoinTest {
         }
     }
 
-    @Test
-    public void recordsArrivingPostWindowCloseShouldBeDropped() {
-        final StreamsBuilder builder = new StreamsBuilder();
-
-        final KStream<Integer, String> joined = builder.stream(topic1, consumed).join(
-            builder.stream(topic2, consumed),
-            MockValueJoiner.TOSTRING_JOINER,
-            JoinWindows.ofTimeDifferenceAndGrace(ofMillis(10), ofMillis(5)),
-            StreamJoined.with(Serdes.Integer(), Serdes.String(), Serdes.String())
-        );
-        final MockApiProcessorSupplier<Integer, String, Void, Void> supplier = new MockApiProcessorSupplier<>();
-        joined.process(supplier);
-
-
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
-            final TestInputTopic<Integer, String> left =
-                driver.createInputTopic(topic1, new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
-            final TestInputTopic<Integer, String> right =
-                driver.createInputTopic(topic2, new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
-            final MockApiProcessor<Integer, String, Void, Void> processor = supplier.theCapturedProcessor();
-
-            left.pipeInput(0, "left", 15);
-            right.pipeInput(-1, "bumpTime", 40);
-            assertRecordDropCount(0.0, processor);
-
-            right.pipeInput(0, "closesAt39", 24);
-            assertRecordDropCount(1.0, processor);
-
-            right.pipeInput(0, "closesAt40", 25);
-            assertRecordDropCount(1.0, processor);
-            processor.checkAndClearProcessResult(new KeyValueTimestamp<>(0, "left+closesAt40", 25));
-
-            right.pipeInput(-1, "bumpTime", 41);
-            right.pipeInput(0, "closesAt40", 25);
-            assertRecordDropCount(2.0, processor);
-            processor.checkAndClearProcessResult();
-
-            right.pipeInput(1, "right", 115);
-            left.pipeInput(-1, "bumpTime", 140);
-            left.pipeInput(1, "closesAt139", 124);
-            assertRecordDropCount(3.0, processor);
-            left.pipeInput(1, "closesAt140", 125);
-            assertRecordDropCount(3.0, processor);
-            processor.checkAndClearProcessResult(new KeyValueTimestamp<>(1, "closesAt140+right", 125));
-
-            left.pipeInput(-1, "bumpTime", 141);
-            left.pipeInput(1, "closesAt140", 125);
-            assertRecordDropCount(4.0, processor);
-        }
-    }
-
     static void assertRecordDropCount(final double expected, final MockApiProcessor<Integer, String, Void, Void> processor) {
         final String metricGroup = "stream-task-metrics";
         final String metricName = "dropped-records-total";

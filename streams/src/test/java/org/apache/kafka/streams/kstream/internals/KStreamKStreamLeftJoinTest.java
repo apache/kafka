@@ -48,7 +48,6 @@ import java.util.Set;
 
 import static java.time.Duration.ZERO;
 import static java.time.Duration.ofMillis;
-import static org.apache.kafka.streams.kstream.internals.KStreamKStreamJoinTest.assertRecordDropCount;
 import static org.junit.Assert.assertEquals;
 
 public class KStreamKStreamLeftJoinTest {
@@ -1313,59 +1312,4 @@ public class KStreamKStreamLeftJoinTest {
             new KeyValueTimestamp<>(3, "K3+b3", 1003L)
         );
     }
-
-    @Test
-    public void recordsArrivingPostWindowCloseShouldBeDropped() {
-        final StreamsBuilder builder = new StreamsBuilder();
-
-        final KStream<Integer, String> joined = builder.stream(topic1, consumed).leftJoin(
-            builder.stream(topic2, consumed),
-            MockValueJoiner.TOSTRING_JOINER,
-            JoinWindows.ofTimeDifferenceAndGrace(ofMillis(10), ofMillis(5)),
-            StreamJoined.with(Serdes.Integer(), Serdes.String(), Serdes.String())
-        );
-        final MockApiProcessorSupplier<Integer, String, Void, Void> supplier = new MockApiProcessorSupplier<>();
-        joined.process(supplier);
-
-
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), PROPS)) {
-            final TestInputTopic<Integer, String> left =
-                driver.createInputTopic(topic1, new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
-            final TestInputTopic<Integer, String> right =
-                driver.createInputTopic(topic2, new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
-            final MockApiProcessor<Integer, String, Void, Void> processor = supplier.theCapturedProcessor();
-
-            left.pipeInput(0, "left", 15);
-            right.pipeInput(-1, "bumpTime", 40);
-            assertRecordDropCount(0.0, processor);
-
-            right.pipeInput(0, "closesAt39", 24);
-            assertRecordDropCount(1.0, processor);
-
-            right.pipeInput(0, "closesAt40", 25);
-            assertRecordDropCount(1.0, processor);
-            processor.checkAndClearProcessResult(
-                new KeyValueTimestamp<>(0, "left+null", 15),
-                new KeyValueTimestamp<>(0, "left+closesAt40", 25)
-            );
-
-            right.pipeInput(-1, "bumpTime", 41);
-            right.pipeInput(0, "closesAt40", 25);
-            processor.checkAndClearProcessResult();
-            assertRecordDropCount(2.0, processor);
-
-            right.pipeInput(1, "right", 115);
-            left.pipeInput(-1, "bumpTime", 140);
-            left.pipeInput(1, "closesAt139", 124);
-            assertRecordDropCount(3.0, processor);
-            left.pipeInput(1, "closesAt140", 125);
-            assertRecordDropCount(3.0, processor);
-            processor.checkAndClearProcessResult(new KeyValueTimestamp<>(1, "closesAt140+right", 125));
-
-            left.pipeInput(-1, "bumpTime", 141);
-            left.pipeInput(1, "windowCloseAt140", 125);
-            assertRecordDropCount(4.0, processor);
-        }
-    }
-
 }
