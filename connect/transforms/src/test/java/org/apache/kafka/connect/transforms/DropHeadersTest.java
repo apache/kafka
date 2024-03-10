@@ -23,10 +23,11 @@ import org.apache.kafka.connect.header.ConnectHeaders;
 import org.apache.kafka.connect.source.SourceRecord;
 import org.junit.jupiter.api.Test;
 
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
-import static java.util.Arrays.asList;
 import static java.util.Collections.singletonMap;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -35,15 +36,20 @@ public class DropHeadersTest {
 
     private final DropHeaders<SourceRecord> xform = new DropHeaders<>();
 
-    private Map<String, ?> config(String... headers) {
+    private Map<String, ?> config(List<String> headers) {
+        return config(headers, null);
+    }
+
+    private Map<String, ?> config(List<String> headers, List<String> headerPatterns) {
         Map<String, Object> result = new HashMap<>();
-        result.put(DropHeaders.HEADERS_FIELD, asList(headers));
+        result.put(DropHeaders.HEADERS_FIELD, headers);
+        result.put(DropHeaders.HEADERS_PATTERN_FIELD, headerPatterns);
         return result;
     }
 
     @Test
     public void dropExistingHeader() {
-        xform.configure(config("to-drop"));
+        xform.configure(config(Collections.singletonList("to-drop")));
         ConnectHeaders expected = new ConnectHeaders();
         expected.addString("existing", "existing-value");
         ConnectHeaders headers = expected.duplicate();
@@ -55,8 +61,50 @@ public class DropHeadersTest {
     }
 
     @Test
+    public void dropExistingHeaderSpecialCharacters() {
+        xform.configure(config(Collections.singletonList("to-drop.*")));
+        ConnectHeaders expected = new ConnectHeaders();
+        expected.addString("existing", "existing-value");
+        ConnectHeaders headers = expected.duplicate();
+        headers.addString("to-drop.*", "existing-value");
+        SourceRecord original = sourceRecord(headers);
+        SourceRecord xformed = xform.apply(original);
+        assertNonHeaders(original, xformed);
+        assertEquals(expected, xformed.headers());
+    }
+
+    @Test
+    public void dropExistingHeaderWithWildcard() {
+        xform.configure(config(Collections.emptyList(), Collections.singletonList(".*-drop")));
+        ConnectHeaders expected = new ConnectHeaders();
+        expected.addString("existing", "existing-value");
+        ConnectHeaders headers = expected.duplicate();
+        headers.addString("to-drop", "existing-value");
+        SourceRecord original = sourceRecord(headers);
+        SourceRecord xformed = xform.apply(original);
+        assertNonHeaders(original, xformed);
+        assertEquals(expected, xformed.headers());
+    }
+
+    @Test
+    public void dropExistingHeaderBeginsWithRegexp() {
+        xform.configure(config(Collections.singletonList("^drop.*")));
+        ConnectHeaders expected = new ConnectHeaders();
+        expected.addString("existing", "existing-value");
+        expected.addString("no-drop", "existing-value");
+        ConnectHeaders headers = expected.duplicate();
+        headers.addString("drop", "existing-value");
+        headers.addString("drop-me", "existing-value");
+        headers.addString("drop-me-too", "existing-value");
+        SourceRecord original = sourceRecord(headers);
+        SourceRecord xformed = xform.apply(original);
+        assertNonHeaders(original, xformed);
+        assertEquals(expected, xformed.headers());
+    }
+
+    @Test
     public void dropExistingHeaderWithMultipleValues() {
-        xform.configure(config("to-drop"));
+        xform.configure(config(Collections.singletonList("to-drop")));
         ConnectHeaders expected = new ConnectHeaders();
         expected.addString("existing", "existing-value");
         ConnectHeaders headers = expected.duplicate();
@@ -70,8 +118,25 @@ public class DropHeadersTest {
     }
 
     @Test
+    public void dropExistingHeadersWithMultipleValuesWithWildcard() {
+        xform.configure(config(Collections.singletonList(".*drop")));
+        ConnectHeaders expected = new ConnectHeaders();
+        expected.addString("existing", "existing-value");
+        ConnectHeaders headers = expected.duplicate();
+        headers.addString("to-drop", "existing-value");
+        headers.addString("to-drop", "existing-other-value");
+        headers.addString("also-drop", "existing-value");
+        headers.addString("also-drop", "existing-other-value");
+
+        SourceRecord original = sourceRecord(headers);
+        SourceRecord xformed = xform.apply(original);
+        assertNonHeaders(original, xformed);
+        assertEquals(expected, xformed.headers());
+    }
+
+    @Test
     public void dropNonExistingHeader() {
-        xform.configure(config("to-drop"));
+        xform.configure(config(Collections.singletonList("to-drop")));
         ConnectHeaders expected = new ConnectHeaders();
         expected.addString("existing", "existing-value");
         ConnectHeaders headers = expected.duplicate();
@@ -84,7 +149,7 @@ public class DropHeadersTest {
 
     @Test
     public void configRejectsEmptyList() {
-        assertThrows(ConfigException.class, () -> xform.configure(config()));
+        assertThrows(ConfigException.class, () -> xform.configure(config(null, null)));
     }
 
     @Test

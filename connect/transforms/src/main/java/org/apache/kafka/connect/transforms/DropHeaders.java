@@ -28,9 +28,10 @@ import org.apache.kafka.connect.transforms.util.SimpleConfig;
 
 import java.util.HashSet;
 import java.util.Map;
+import java.util.List;
 import java.util.Set;
-
-import static org.apache.kafka.common.config.ConfigDef.NO_DEFAULT_VALUE;
+import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 public class DropHeaders<R extends ConnectRecord<R>> implements Transformation<R>, Versioned {
 
@@ -38,25 +39,42 @@ public class DropHeaders<R extends ConnectRecord<R>> implements Transformation<R
             "Removes one or more headers from each record.";
 
     public static final String HEADERS_FIELD = "headers";
+    public static final String HEADERS_PATTERN_FIELD = "headers.patterns";
+    public static final String MATCH_EMPTY = "$^";
 
     public static final ConfigDef CONFIG_DEF = new ConfigDef()
             .define(HEADERS_FIELD, ConfigDef.Type.LIST,
-                    NO_DEFAULT_VALUE, new NonEmptyListValidator(),
+                    "",
                     ConfigDef.Importance.HIGH,
-                    "The name of the headers to be removed.");
+                    "The name of the headers to be removed.")
+            .define(HEADERS_PATTERN_FIELD, ConfigDef.Type.LIST,
+                    MATCH_EMPTY, new NonEmptyListValidator(),
+                    ConfigDef.Importance.HIGH,
+                    "List of regular expressions to match of the headers to be removed.");
 
     private Set<String> headers;
+    private List<Pattern> headersMatchers;
 
     @Override
     public R apply(R record) {
         Headers updatedHeaders = new ConnectHeaders();
         for (Header header : record.headers()) {
-            if (!headers.contains(header.key())) {
+            if (!toBeDropped(header)) {
                 updatedHeaders.add(header);
             }
         }
         return record.newRecord(record.topic(), record.kafkaPartition(), record.keySchema(), record.key(),
                 record.valueSchema(), record.value(), record.timestamp(), updatedHeaders);
+    }
+
+    private boolean toBeDropped(Header header) {
+        return headers.contains(header.key()) || headersMatchAnyPattern(header.key());
+    }
+
+    private boolean headersMatchAnyPattern(String key) {
+        return headersMatchers.stream().anyMatch(pattern ->
+            pattern.matcher(key).matches()
+        );
     }
 
     @Override
@@ -77,5 +95,8 @@ public class DropHeaders<R extends ConnectRecord<R>> implements Transformation<R
     public void configure(Map<String, ?> props) {
         final SimpleConfig config = new SimpleConfig(CONFIG_DEF, props);
         headers = new HashSet<>(config.getList(HEADERS_FIELD));
+
+        final List<String> headerPatternList = config.getList(HEADERS_PATTERN_FIELD);
+        headersMatchers = headerPatternList.stream().map(entry -> Pattern.compile(entry)).collect(Collectors.toList());
     }
 }
