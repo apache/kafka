@@ -42,15 +42,15 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Optional;
 
+/**
+ * {@link ShareCompletedFetch} represents a {@link RecordBatch batch} of {@link Record records}
+ * that was returned from the broker via a {@link ShareFetchRequest}. It contains logic to maintain
+ * state between calls to {@link #fetchRecords(Deserializers, int, boolean)}. Although it has
+ * similarities with {@link CompletedFetch}, the details are quite different, such as not needing
+ * to keep track of aborted transactions or the need to keep track of fetch position.
+ */
 public class ShareCompletedFetch {
 
-    /**
-     * {@link ShareCompletedFetch} represents a {@link RecordBatch batch} of {@link Record records}
-     * that was returned from the broker via a {@link ShareFetchRequest}. It contains logic to maintain
-     * state between calls to {@link #fetchRecords(FetchConfig, Deserializers, int)}. Although it has
-     * similarities with {@link CompletedFetch}, the details are quite different, such as not needing
-     * to keep track of aborted transactions or the need to keep track of fetch position.
-     */
     final TopicIdPartition partition;
 
     final ShareFetchResponseData.PartitionData partitionData;
@@ -100,7 +100,7 @@ public class ShareCompletedFetch {
     /**
      * Draining a {@link ShareCompletedFetch} will signal that the data has been consumed and the underlying resources
      * are closed. This is somewhat analogous to {@link Closeable#close() closing}, though no error will result if a
-     * caller invokes {@link #fetchRecords(FetchConfig, Deserializers, int)}; an empty {@link List list} will be
+     * caller invokes {@link #fetchRecords(Deserializers, int, boolean)}; an empty {@link List list} will be
      * returned instead.
      */
     void drain() {
@@ -117,21 +117,22 @@ public class ShareCompletedFetch {
      * {@link Deserializer deserialization} of the {@link Record record's} key and value are performed in
      * this step.
      *
-     * @param fetchConfig {@link FetchConfig Configuration} to use
      * @param deserializers {@link Deserializer}s to use to convert the raw bytes to the expected key and value types
      * @param maxRecords The number of records to return; the number returned may be {@code 0 <= maxRecords}
+     * @param checkCrcs Whether to check the CRC of fetched records
+     *
      * @return {@link ShareInFlightBatch The ShareInFlightBatch containing records and their acknowledgments}
      */
-    <K, V> ShareInFlightBatch<K, V> fetchRecords(FetchConfig fetchConfig,
-                                                   Deserializers<K, V> deserializers,
-                                                   int maxRecords) {
+    <K, V> ShareInFlightBatch<K, V> fetchRecords(Deserializers<K, V> deserializers,
+                                                 int maxRecords,
+                                                 boolean checkCrcs) {
         // Error when fetching the next record before deserialization.
         if (corruptLastRecord)
             throw new KafkaException("Received exception when fetching the next record from " + partition
                     + ". If needed, please seek past the record to "
                     + "continue consumption.", cachedRecordException);
 
-        // Creating an empty shareInFlightBatch
+        // Creating an empty ShareInFlightBatch
         ShareInFlightBatch<K, V> shareInFlightBatch = new ShareInFlightBatch<>(partition);
 
         if (isConsumed)
@@ -143,7 +144,7 @@ public class ShareCompletedFetch {
                 // use the last record to do deserialization again.
                 if (cachedRecordException == null) {
                     corruptLastRecord = true;
-                    lastRecord = nextFetchedRecord(fetchConfig);
+                    lastRecord = nextFetchedRecord(checkCrcs);
                     corruptLastRecord = false;
                 }
 
@@ -153,6 +154,9 @@ public class ShareCompletedFetch {
                 Optional<Integer> leaderEpoch = maybeLeaderEpoch(currentBatch.partitionLeaderEpoch());
                 TimestampType timestampType = currentBatch.timestampType();
                 ConsumerRecord<K, V> record = parseRecord(deserializers, partition, leaderEpoch, timestampType, lastRecord);
+
+                // Temporarily treat all records as ACQUIRED if the list of acquired records is empty.
+                // This just indicates that the broker doesn't yet have the support needed.
                 // Check if the record is in acquired records.
                 if (acquiredRecords.isEmpty() || isAcquired(record)) {
                     shareInFlightBatch.addRecord(record);
@@ -170,8 +174,7 @@ public class ShareCompletedFetch {
             cachedRecordException = e;
             if (shareInFlightBatch.isEmpty())
                 throw new KafkaException("Received exception when fetching the next record from " + partition
-                        + ". If needed, please seek past the record to "
-                        + "continue consumption.", e);
+                        + ". If needed, please seek past the record to continue consumption.", e);
         }
 
         return shareInFlightBatch;
@@ -219,11 +222,11 @@ public class ShareCompletedFetch {
             log.error("Deserializers with error: {}", deserializers);
             throw new RecordDeserializationException(partition.topicPartition(), record.offset(),
                     "Error deserializing key/value for partition " + partition +
-                            " at offset " + record.offset() + ". If needed, please seek past the record to continue consumption.", e);
+                    " at offset " + record.offset() + ". The record has been released.", e);
         }
     }
 
-    private Record nextFetchedRecord(FetchConfig fetchConfig) {
+    private Record nextFetchedRecord(boolean checkCrcs) {
         while (true) {
             if (records == null || !records.hasNext()) {
                 maybeCloseRecordStream();
@@ -234,12 +237,12 @@ public class ShareCompletedFetch {
                 }
 
                 currentBatch = batches.next();
-                maybeEnsureValid(fetchConfig, currentBatch);
+                maybeEnsureValid(currentBatch, checkCrcs);
 
                 records = currentBatch.streamingIterator(decompressionBufferSupplier);
             } else {
                 Record record = records.next();
-                maybeEnsureValid(fetchConfig, record);
+                maybeEnsureValid(record, checkCrcs);
 
                 // control records are not returned to the user
                 if (!currentBatch.isControlBatch()) {
@@ -253,8 +256,8 @@ public class ShareCompletedFetch {
         return leaderEpoch == RecordBatch.NO_PARTITION_LEADER_EPOCH ? Optional.empty() : Optional.of(leaderEpoch);
     }
 
-    private void maybeEnsureValid(FetchConfig fetchConfig, RecordBatch batch) {
-        if (fetchConfig.checkCrcs && batch.magic() >= RecordBatch.MAGIC_VALUE_V2) {
+    private void maybeEnsureValid(RecordBatch batch, boolean checkCrcs) {
+        if (checkCrcs && batch.magic() >= RecordBatch.MAGIC_VALUE_V2) {
             try {
                 batch.ensureValid();
             } catch (CorruptRecordException e) {
@@ -264,8 +267,8 @@ public class ShareCompletedFetch {
         }
     }
 
-    private void maybeEnsureValid(FetchConfig fetchConfig, Record record) {
-        if (fetchConfig.checkCrcs) {
+    private void maybeEnsureValid(Record record, boolean checkCrcs) {
+        if (checkCrcs) {
             try {
                 record.ensureValid();
             } catch (CorruptRecordException e) {
@@ -281,5 +284,4 @@ public class ShareCompletedFetch {
             records = null;
         }
     }
-
 }

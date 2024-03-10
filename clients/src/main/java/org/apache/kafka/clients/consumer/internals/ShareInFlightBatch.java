@@ -38,14 +38,19 @@ public class ShareInFlightBatch<K, V> {
         acknowledgements.add(offset, acknowledgeType);
     }
 
-    public void ackowledgeAll(AcknowledgeType acknowledgeType) {
+    public void acknowledgeAll(AcknowledgeType type) {
         inFlightRecords.forEach(record -> {
-            acknowledgements.add(record.offset(), acknowledgeType);
+            acknowledgements.add(record.offset(), type);
         });
     }
 
     public void addRecord(ConsumerRecord<K, V> record) {
         inFlightRecords.add(record);
+    }
+
+    public void merge(ShareInFlightBatch<K, V> other) {
+        inFlightRecords.addAll(other.inFlightRecords);
+        acknowledgements.merge(other.acknowledgements);
     }
 
     public List<ConsumerRecord<K, V>> getInFlightRecords() {

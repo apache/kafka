@@ -47,7 +47,6 @@ import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.MemoryRecordsBuilder;
 import org.apache.kafka.common.record.Record;
 import org.apache.kafka.common.record.RecordBatch;
-import org.apache.kafka.common.record.Records;
 import org.apache.kafka.common.record.SimpleRecord;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.requests.MetadataResponse;
@@ -127,12 +126,12 @@ public class ShareFetchRequestManagerTest {
     private TestableShareFetchRequestManager<?, ?> fetcher;
     private TestableNetworkClientDelegate networkClientDelegate;
     private MemoryRecords records;
+    private List<ShareFetchResponseData.AcquiredRecords> acquiredRecords;
 
     @BeforeEach
     public void setup() {
         records = buildRecords(1L, 3, 1);
-        MemoryRecords partialRecords = buildRecords(4L, 1, 0);
-        partialRecords.buffer().putInt(Records.SIZE_OFFSET, 10000);
+        acquiredRecords = ShareCompletedFetchTest.acquiredRecords(1L, 3);
     }
 
     private void assignFromSubscribed(Set<TopicPartition> partitions) {
@@ -171,7 +170,7 @@ public class ShareFetchRequestManagerTest {
         assertEquals(1, sendFetches());
         assertFalse(fetcher.hasCompletedFetches());
 
-        client.prepareResponse(fullFetchResponse(tip0, records, Errors.NONE));
+        client.prepareResponse(fullFetchResponse(tip0, records, acquiredRecords, Errors.NONE));
         networkClientDelegate.poll(time.timer(0));
         assertTrue(fetcher.hasCompletedFetches());
 
@@ -202,7 +201,7 @@ public class ShareFetchRequestManagerTest {
         assertEquals(1, sendFetches());
         assertFalse(fetcher.hasCompletedFetches());
 
-        client.prepareResponse(fullFetchResponse(tip0, records, Errors.NOT_LEADER_OR_FOLLOWER));
+        client.prepareResponse(fullFetchResponse(tip0, records, acquiredRecords, Errors.NOT_LEADER_OR_FOLLOWER));
         networkClientDelegate.poll(time.timer(0));
         assertTrue(fetcher.hasCompletedFetches());
 
@@ -235,7 +234,10 @@ public class ShareFetchRequestManagerTest {
 
         // normal fetch
         assertEquals(1, sendFetches());
-        client.prepareResponse(fullFetchResponse(tip0, MemoryRecords.readableRecords(buffer), Errors.NONE));
+        client.prepareResponse(fullFetchResponse(tip0,
+                MemoryRecords.readableRecords(buffer),
+                ShareCompletedFetchTest.acquiredRecords(0L, 1),
+                Errors.NONE));
         networkClientDelegate.poll(time.timer(0));
 
         for (int i = 0; i < 2; i++) {
@@ -261,7 +263,10 @@ public class ShareFetchRequestManagerTest {
 
         // normal fetch
         assertEquals(1, sendFetches());
-        client.prepareResponse(fullFetchResponse(tip0, MemoryRecords.readableRecords(buffer), Errors.NONE));
+        client.prepareResponse(fullFetchResponse(tip0,
+                MemoryRecords.readableRecords(buffer),
+                ShareCompletedFetchTest.acquiredRecords(0L, 3),
+                Errors.NONE));
         networkClientDelegate.poll(time.timer(0));
 
         assertThrows(KafkaException.class, this::collectFetch);
@@ -288,7 +293,10 @@ public class ShareFetchRequestManagerTest {
         List<ConsumerRecord<byte[], byte[]>> records;
         assignFromSubscribed(singleton(tp0));
 
-        client.prepareResponse(fullFetchResponse(tip0, memoryRecords, Errors.NONE));
+        client.prepareResponse(fullFetchResponse(tip0,
+                memoryRecords,
+                ShareCompletedFetchTest.acquiredRecords(0L, 3),
+                Errors.NONE));
 
         assertEquals(1, sendFetches());
         networkClientDelegate.poll(time.timer(0));
@@ -318,7 +326,7 @@ public class ShareFetchRequestManagerTest {
         assignFromSubscribed(singleton(tp0));
 
         assertEquals(1, sendFetches());
-        client.prepareResponse(fullFetchResponse(tip0, records, Errors.TOPIC_AUTHORIZATION_FAILED));
+        client.prepareResponse(fullFetchResponse(tip0, records, acquiredRecords, Errors.TOPIC_AUTHORIZATION_FAILED));
         networkClientDelegate.poll(time.timer(0));
         try {
             collectFetch();
@@ -355,7 +363,7 @@ public class ShareFetchRequestManagerTest {
         if (hasTopLevelError)
             fetchResponse = fetchResponseWithTopLevelError(tip0, error);
         else
-            fetchResponse = fullFetchResponse(tip0, records, error);
+            fetchResponse = fullFetchResponse(tip0, records, acquiredRecords, error);
 
         client.prepareResponse(fetchResponse);
         networkClientDelegate.poll(time.timer(0));
@@ -392,9 +400,9 @@ public class ShareFetchRequestManagerTest {
         assignFromSubscribed(singleton(tp0));
 
         assertEquals(1, sendFetches());
-        client.prepareResponse(fullFetchResponse(tip0, records, Errors.NONE), true);
+        client.prepareResponse(fullFetchResponse(tip0, records, acquiredRecords, Errors.NONE), true);
         networkClientDelegate.poll(time.timer(0));
-        assertEmptyFetch("Should not return records or advance position on disconnect");
+        assertEmptyFetch("Should not return records on disconnect");
     }
 
     @Test
@@ -424,7 +432,10 @@ public class ShareFetchRequestManagerTest {
 
         assignFromSubscribed(singleton(tp0));
         assertEquals(1, sendFetches());
-        client.prepareResponse(fullFetchResponse(tip0, compactedRecords, Errors.NONE));
+        client.prepareResponse(fullFetchResponse(tip0,
+                compactedRecords,
+                ShareCompletedFetchTest.acquiredRecords(0L, 3),
+                Errors.NONE));
         networkClientDelegate.poll(time.timer(0));
         assertTrue(fetcher.hasCompletedFetches());
 
@@ -457,6 +468,7 @@ public class ShareFetchRequestManagerTest {
         client.prepareResponse(fullFetchResponse(
                 tip0,
                 buildRecords(1L, 1, 1),
+                ShareCompletedFetchTest.acquiredRecords(1L, 1),
                 Errors.CORRUPT_MESSAGE));
         networkClientDelegate.poll(time.timer(0));
         assertTrue(fetcher.hasCompletedFetches());
@@ -473,13 +485,16 @@ public class ShareFetchRequestManagerTest {
         return ShareFetchResponse.of(error, 0, new LinkedHashMap<>(partitions), Collections.emptyList());
     }
 
-    private ShareFetchResponse fullFetchResponse(TopicIdPartition tp, MemoryRecords records, Errors error) {
+    private ShareFetchResponse fullFetchResponse(TopicIdPartition tp,
+                                                 MemoryRecords records,
+                                                 List<ShareFetchResponseData.AcquiredRecords> acquiredRecords,
+                                                 Errors error) {
         Map<TopicIdPartition, ShareFetchResponseData.PartitionData> partitions = Collections.singletonMap(tp,
                 new ShareFetchResponseData.PartitionData()
                         .setPartitionIndex(tp.topicPartition().partition())
                         .setErrorCode(error.code())
                         .setRecords(records)
-                        .setAcquiredRecords(ShareCompletedFetchTest.acquiredRecords(0, 5)));
+                        .setAcquiredRecords(acquiredRecords));
         return ShareFetchResponse.of(Errors.NONE, 0, new LinkedHashMap<>(partitions), Collections.emptyList());
     }
 

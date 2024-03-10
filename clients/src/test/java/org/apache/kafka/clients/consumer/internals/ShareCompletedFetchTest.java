@@ -16,9 +16,7 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
-import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
-import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.RecordDeserializationException;
@@ -67,21 +65,20 @@ public class ShareCompletedFetchTest {
                 .setAcquiredRecords(acquiredRecords(startingOffset, numRecords));
 
         Deserializers<String, String> deserializers = newStringDeserializers();
-        FetchConfig fetchConfig = newFetchConfig(true);
 
         ShareCompletedFetch completedFetch = newShareCompletedFetch(partitionData);
 
-        List<ConsumerRecord<String, String>> records = completedFetch.fetchRecords(fetchConfig, deserializers, 10).getInFlightRecords();
+        List<ConsumerRecord<String, String>> records = completedFetch.fetchRecords(deserializers, 10, true).getInFlightRecords();
         assertEquals(10, records.size());
         ConsumerRecord<String, String> record = records.get(0);
         assertEquals(10, record.offset());
 
-        records = completedFetch.fetchRecords(fetchConfig, deserializers, 10).getInFlightRecords();
+        records = completedFetch.fetchRecords(deserializers, 10, true).getInFlightRecords();
         assertEquals(1, records.size());
         record = records.get(0);
         assertEquals(20, record.offset());
 
-        records = completedFetch.fetchRecords(fetchConfig, deserializers, 10).getInFlightRecords();
+        records = completedFetch.fetchRecords(deserializers, 10, true).getInFlightRecords();
         assertEquals(0, records.size());
     }
 
@@ -94,8 +91,7 @@ public class ShareCompletedFetchTest {
                 .setAcquiredRecords(acquiredRecords(0, numRecords));
         ShareCompletedFetch completedFetch = newShareCompletedFetch(partitionData);
         try (final Deserializers<String, String> deserializers = newStringDeserializers()) {
-            FetchConfig fetchConfig = newFetchConfig(true);
-            List<ConsumerRecord<String, String>> records = completedFetch.fetchRecords(fetchConfig, deserializers, 10).getInFlightRecords();
+            List<ConsumerRecord<String, String>> records = completedFetch.fetchRecords(deserializers, 10, true).getInFlightRecords();
             assertEquals(10, records.size());
         }
     }
@@ -111,9 +107,7 @@ public class ShareCompletedFetchTest {
 
         try (final Deserializers<String, String> deserializers = newStringDeserializers()) {
             ShareCompletedFetch completedFetch = newShareCompletedFetch(partitionData);
-            FetchConfig fetchConfig = newFetchConfig(true);
-
-            List<ConsumerRecord<String, String>> records = completedFetch.fetchRecords(fetchConfig, deserializers, -10).getInFlightRecords();
+            List<ConsumerRecord<String, String>> records = completedFetch.fetchRecords(deserializers, -10, true).getInFlightRecords();
             assertEquals(0, records.size());
         }
     }
@@ -125,8 +119,7 @@ public class ShareCompletedFetchTest {
 
         ShareCompletedFetch completedFetch = newShareCompletedFetch(partitionData);
         try (final Deserializers<String, String> deserializers = newStringDeserializers()) {
-            FetchConfig fetchConfig = newFetchConfig(true);
-            List<ConsumerRecord<String, String>> records = completedFetch.fetchRecords(fetchConfig, deserializers, 10).getInFlightRecords();
+            List<ConsumerRecord<String, String>> records = completedFetch.fetchRecords(deserializers, 10, true).getInFlightRecords();
             assertEquals(0, records.size());
         }
     }
@@ -146,13 +139,12 @@ public class ShareCompletedFetchTest {
                     .setAcquiredRecords(acquiredRecords(0, 2));
 
             try (final Deserializers<UUID, UUID> deserializers = newUuidDeserializers()) {
-                FetchConfig fetchConfig = newFetchConfig(false);
                 ShareCompletedFetch completedFetch = newShareCompletedFetch(partitionData);
 
-                completedFetch.fetchRecords(fetchConfig, deserializers, 10);
+                completedFetch.fetchRecords(deserializers, 10, false);
 
                 assertThrows(RecordDeserializationException.class,
-                        () -> completedFetch.fetchRecords(fetchConfig, deserializers, 10));
+                        () -> completedFetch.fetchRecords(deserializers, 10, false));
             }
         }
     }
@@ -174,19 +166,6 @@ public class ShareCompletedFetchTest {
 
     private static Deserializers<String, String> newStringDeserializers() {
         return new Deserializers<>(new StringDeserializer(), new StringDeserializer());
-    }
-
-    private static FetchConfig newFetchConfig(boolean checkCRCs) {
-        return new FetchConfig(
-                ConsumerConfig.DEFAULT_FETCH_MIN_BYTES,
-                ConsumerConfig.DEFAULT_FETCH_MAX_BYTES,
-                ConsumerConfig.DEFAULT_FETCH_MAX_WAIT_MS,
-                ConsumerConfig.DEFAULT_MAX_PARTITION_FETCH_BYTES,
-                ConsumerConfig.DEFAULT_MAX_POLL_RECORDS,
-                checkCRCs,
-                ConsumerConfig.DEFAULT_CLIENT_RACK,
-                IsolationLevel.READ_UNCOMMITTED
-        );
     }
 
     private Records newRecords(long baseOffset, int count, long firstMessageId) {

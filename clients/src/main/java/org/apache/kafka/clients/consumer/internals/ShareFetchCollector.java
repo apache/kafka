@@ -27,7 +27,6 @@ import org.apache.kafka.common.utils.LogContext;
 import org.slf4j.Logger;
 
 import java.util.Collections;
-import java.util.List;
 
 import static org.apache.kafka.clients.consumer.internals.FetchUtils.requestMetadataUpdate;
 
@@ -104,16 +103,16 @@ public class ShareFetchCollector<K, V> {
                 } else {
                     final TopicIdPartition tp = nextInLineFetch.partition;
 
-                    ShareInFlightBatch<K, V> shareInFlightBatch = nextInLineFetch.fetchRecords(fetchConfig,
+                    ShareInFlightBatch<K, V> batch = nextInLineFetch.fetchRecords(
                             deserializers,
-                            recordsRemaining);
+                            recordsRemaining,
+                            fetchConfig.checkCrcs);
 
-                    List<ConsumerRecord<K, V>> partRecords = shareInFlightBatch.getInFlightRecords();
-                    if (partRecords.isEmpty()) {
+                    if (batch.isEmpty()) {
                         nextInLineFetch.drain();
                     }
 
-                    final ShareFetch<K, V> nextFetch = ShareFetch.forPartition(tp, partRecords);
+                    final ShareFetch<K, V> nextFetch = ShareFetch.forInFlightBatch(tp, batch);
                     recordsRemaining -= nextFetch.numRecords();
                     fetch.add(nextFetch);
                 }

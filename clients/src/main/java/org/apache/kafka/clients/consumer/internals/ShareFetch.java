@@ -16,11 +16,11 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
+import org.apache.kafka.clients.consumer.AcknowledgeType;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -32,28 +32,26 @@ import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 
 public class ShareFetch<K, V> {
-    private final Map<TopicIdPartition, List<ConsumerRecord<K, V>>> records;
+    private final Map<TopicIdPartition, ShareInFlightBatch<K, V>> batches;
     private int numRecords;
 
     public static <K, V> ShareFetch<K, V> empty() {
         return new ShareFetch<>(new HashMap<>(), 0);
     }
 
-    public static <K, V> ShareFetch<K, V> forPartition(
-            TopicIdPartition partition,
-            List<ConsumerRecord<K, V>> records
-    ) {
-        Map<TopicIdPartition, List<ConsumerRecord<K, V>>> recordsMap = records.isEmpty()
+    public static <K, V> ShareFetch<K, V> forInFlightBatch(
+        TopicIdPartition partition,
+        ShareInFlightBatch<K, V> batch) {
+        Map<TopicIdPartition, ShareInFlightBatch<K, V>> batchesMap = batch.isEmpty()
                 ? new HashMap<>()
-                : mkMap(mkEntry(partition, records));
-        return new ShareFetch<>(recordsMap, records.size());
+                : mkMap(mkEntry(partition, batch));
+        return new ShareFetch<>(batchesMap, batch.getInFlightRecords().size());
     }
 
     private ShareFetch(
-            Map<TopicIdPartition, List<ConsumerRecord<K, V>>> records,
-            int numRecords
-    ) {
-        this.records = records;
+            Map<TopicIdPartition, ShareInFlightBatch<K, V>> batches,
+            int numRecords) {
+        this.batches = batches;
         this.numRecords = numRecords;
     }
 
@@ -65,7 +63,17 @@ public class ShareFetch<K, V> {
      */
     public void add(ShareFetch<K, V> fetch) {
         Objects.requireNonNull(fetch);
-        addRecords(fetch.records);
+        fetch.batches.forEach((partition, batch) -> {
+            this.numRecords += fetch.numRecords();
+            ShareInFlightBatch<K, V> currentBatch = this.batches.get(partition);
+            if (currentBatch == null) {
+                this.batches.put(partition, batch);
+            } else {
+                // This case shouldn't usually happen because we only send one fetch at a time per partition,
+                // but it might conceivably happen in some rare cases (such as partition leader changes).
+                currentBatch.merge(batch);
+            }
+        });
     }
 
     /**
@@ -73,7 +81,7 @@ public class ShareFetch<K, V> {
      */
     public Map<TopicPartition, List<ConsumerRecord<K, V>>> records() {
         final LinkedHashMap<TopicPartition, List<ConsumerRecord<K, V>>> result = new LinkedHashMap<>();
-        records.forEach((tip, records) -> result.put(tip.topicPartition(), records));
+        batches.forEach((tip, batch) -> result.put(tip.topicPartition(), batch.getInFlightRecords()));
         return Collections.unmodifiableMap(result);
     }
 
@@ -92,25 +100,8 @@ public class ShareFetch<K, V> {
         return numRecords == 0;
     }
 
-    private void addRecords(Map<TopicIdPartition, List<ConsumerRecord<K, V>>> records) {
-        records.forEach((partition, partRecords) -> {
-            this.numRecords += partRecords.size();
-            List<ConsumerRecord<K, V>> currentRecords = this.records.get(partition);
-            if (currentRecords == null) {
-                this.records.put(partition, partRecords);
-            } else {
-                // this case shouldn't usually happen because we only send one fetch at a time per partition,
-                // but it might conceivably happen in some rare cases (such as partition leader changes).
-                // we have to copy to a new list because the old one may be immutable
-                List<ConsumerRecord<K, V>> newRecords = new ArrayList<>(currentRecords.size() + partRecords.size());
-                newRecords.addAll(currentRecords);
-                newRecords.addAll(partRecords);
-                this.records.put(partition, newRecords);
-            }
-        });
-    }
-
-    public void acknowledgeAll() {
+    public void acknowledgeAll(final AcknowledgeType type) {
         // This is where we hook into building the acknowledgement batches
+        batches.forEach((tip, batch) -> batch.acknowledgeAll(type));
     }
 }

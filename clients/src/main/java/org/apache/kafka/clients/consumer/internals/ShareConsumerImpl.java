@@ -710,7 +710,7 @@ public class ShareConsumerImpl<K, V> implements ShareConsumer<K, V> {
         }
 
         if (currentFetch != null) {
-            currentFetch.acknowledgeAll();
+            currentFetch.acknowledgeAll(AcknowledgeType.ACCEPT);
         }
 
         currentFetch = null;
