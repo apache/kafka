@@ -192,13 +192,14 @@ public class ProcessorRecordContext implements RecordContext, RecordMetadata {
             Objects.equals(headers, that.headers);
     }
 
-    /**
-     * Equality is implemented in support of tests, *not* for use in Hash collections, since this class is mutable.
-     */
-    @Deprecated
     @Override
     public int hashCode() {
-        throw new UnsupportedOperationException("ProcessorRecordContext is unsafe for use in Hash collections");
+        int result = (int) (timestamp ^ (timestamp >>> 32));
+        result = 31 * result + (int) (offset ^ (offset >>> 32));
+        result = 31 * result + (topic != null ? topic.hashCode() : 0);
+        result = 31 * result + partition;
+        result = 31 * result + (headers != null ? headers.hashCode() : 0);
+        return result;
     }
 
     @Override
