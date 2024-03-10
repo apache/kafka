@@ -90,6 +90,7 @@ public class BlockingConnectorTest {
     private static final long CONNECTOR_BLOCK_TIMEOUT_MS = TimeUnit.SECONDS.toMillis(60);
     private static final long RECORD_TRANSFER_TIMEOUT_MS = TimeUnit.SECONDS.toMillis(60);
     private static final long REDUCED_REST_REQUEST_TIMEOUT = Worker.CONNECTOR_GRACEFUL_SHUTDOWN_TIMEOUT_MS * 2;
+    private static final long CONNECTOR_INTERRUPT_TIMEOUT_MS = Worker.CONNECTOR_GRACEFUL_SHUTDOWN_TIMEOUT_MS * 2;
 
     private static final String CONNECTOR_INITIALIZE = "Connector::initialize";
     private static final String CONNECTOR_INITIALIZE_WITH_TASK_CONFIGS = "Connector::initializeWithTaskConfigs";
@@ -233,6 +234,21 @@ public class BlockingConnectorTest {
     }
 
     @Test
+    public void testBlockInSourceTaskInitialize() throws Exception {
+        log.info("Starting test testBlockInSourceTaskInitialize");
+        createConnectorWithBlock(TaskInitializeBlockingSourceConnector.class, SOURCE_TASK_INITIALIZE);
+        Block.waitForBlock();
+
+        createNormalConnector();
+        verifyNormalConnector();
+
+        // Make sure we try to interrupt the blocked task thread
+        Block.resetInterrupts();
+        connect.deleteConnector(BLOCKING_CONNECTOR_NAME);
+        Block.assertInterrupt();
+    }
+
+    @Test
     public void testBlockInSourceTaskStart() throws Exception {
         log.info("Starting test testBlockInSourceTaskStart");
         createConnectorWithBlock(BlockingSourceConnector.class, TASK_START);
@@ -240,6 +256,26 @@ public class BlockingConnectorTest {
 
         createNormalConnector();
         verifyNormalConnector();
+
+        // Make sure we try to interrupt the blocked task thread
+        Block.resetInterrupts();
+        connect.deleteConnector(BLOCKING_CONNECTOR_NAME);
+        Block.assertInterrupt();
+    }
+
+    @Test
+    public void testBlockInSourceTaskPoll() throws Exception {
+        log.info("Starting test testBlockInSourceTaskPoll");
+        createConnectorWithBlock(BlockingSourceConnector.class, SOURCE_TASK_POLL);
+        Block.waitForBlock();
+
+        createNormalConnector();
+        verifyNormalConnector();
+
+        // Make sure we try to interrupt the blocked task thread
+        Block.resetInterrupts();
+        connect.deleteConnector(BLOCKING_CONNECTOR_NAME);
+        Block.assertInterrupt();
     }
 
     @Test
@@ -247,8 +283,12 @@ public class BlockingConnectorTest {
         log.info("Starting test testBlockInSourceTaskStop");
         createConnectorWithBlock(BlockingSourceConnector.class, TASK_STOP);
         waitForConnectorStart(BLOCKING_CONNECTOR_NAME);
+
+        Block.resetInterrupts();
         connect.deleteConnector(BLOCKING_CONNECTOR_NAME);
         Block.waitForBlock();
+        // Make sure we try to interrupt the blocked task thread
+        Block.assertInterrupt();
 
         createNormalConnector();
         verifyNormalConnector();
@@ -393,6 +433,7 @@ public class BlockingConnectorTest {
         // The latch that can be used to wait for a connector/task to reach the most-recently-registered blocking point
         private static CountDownLatch awaitBlockLatch;
 
+        private static CountDownLatch interruptLatch;
         private final String block;
 
         public static final String BLOCK_CONFIG = "block";
@@ -436,6 +477,25 @@ public class BlockingConnectorTest {
             log.debug("Connector should now be blocked");
         }
 
+        public static void resetInterrupts() {
+            synchronized (Block.class) {
+                interruptLatch = new CountDownLatch(1);
+            }
+        }
+
+        public static void assertInterrupt() throws InterruptedException, TimeoutException {
+            synchronized (Block.class) {
+                if (interruptLatch == null) {
+                    throw new IllegalArgumentException("No connector/task has been created yet");
+                }
+            }
+
+            log.debug("Waiting for runtime to interrupt connector/task");
+            if (!interruptLatch.await(CONNECTOR_INTERRUPT_TIMEOUT_MS, TimeUnit.MILLISECONDS)) {
+                throw new TimeoutException("Runtime did not interrupt connector/task thread in time.");
+            }
+        }
+
         /**
          * {@link CountDownLatch#countDown() Release} any latches allocated over the course of a test
          * to either await a connector/task reaching a blocking point, or cause a connector/task to block.
@@ -473,6 +533,10 @@ public class BlockingConnectorTest {
                 }
             });
             BLOCKED_THREADS.clear();
+            if (interruptLatch != null) {
+                interruptLatch.countDown();
+                interruptLatch = null;
+            }
         }
 
         // Note that there is only ever at most one global await-block latch at a time, which makes tests that
@@ -504,6 +568,7 @@ public class BlockingConnectorTest {
                 synchronized (Block.class) {
                     resetAwaitBlockLatch();
                     awaitBlockLatch = new CountDownLatch(1);
+                    interruptLatch = new CountDownLatch(1);
                     Block.class.notify();
                 }
             }
@@ -528,6 +593,12 @@ public class BlockingConnectorTest {
                         log.debug("Instructed to stop blocking; will resume normal execution");
                         return;
                     } catch (InterruptedException e) {
+                        synchronized (Block.class) {
+                            if (interruptLatch != null) {
+                                // Note that we were interrupted, but then keep blocking
+                                interruptLatch.countDown();
+                            }
+                        }
                         log.debug("Interrupted while blocking; will continue blocking until instructed to stop");
                     }
                 }

@@ -74,6 +74,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
@@ -90,6 +92,7 @@ import static org.apache.kafka.connect.runtime.TopicCreationConfig.INCLUDE_REGEX
 import static org.apache.kafka.connect.runtime.TopicCreationConfig.PARTITIONS_CONFIG;
 import static org.apache.kafka.connect.runtime.TopicCreationConfig.REPLICATION_FACTOR_CONFIG;
 import static org.apache.kafka.connect.runtime.WorkerConfig.TOPIC_CREATION_ENABLE_CONFIG;
+import static org.apache.kafka.connect.test.util.ConcurrencyUtils.awaitLatch;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -692,6 +695,28 @@ public class AbstractWorkerSourceTaskTest {
         verify(transformationChain, times(1)).apply(any(), eq(record1));
         verify(transformationChain, times(1)).apply(any(), eq(record2));
         verify(transformationChain, times(2)).apply(any(), eq(record3));
+    }
+
+    @Test
+    public void testCancelInterruptsPollThread() {
+        createWorkerTask();
+
+        final CountDownLatch interrupted = new CountDownLatch(1);
+        Thread pollThread = new Thread(() -> {
+            try {
+                // Sleep for long enough that task cancellation is practically guaranteed
+                // to take place before we wake up
+                Thread.sleep(TimeUnit.MINUTES.toMillis(1));
+            } catch (InterruptedException e) {
+                interrupted.countDown();
+            }
+        });
+
+        pollThread.start();
+        workerTask.pollThread = pollThread;
+
+        workerTask.cancel();
+        awaitLatch(interrupted, "Task poll thread should be interrupted when task is cancelled");
     }
 
     private void expectSendRecord(Headers headers) {

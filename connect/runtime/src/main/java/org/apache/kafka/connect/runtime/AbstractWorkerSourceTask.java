@@ -201,6 +201,9 @@ public abstract class AbstractWorkerSourceTask extends WorkerTask<SourceRecord, 
     private final Executor closeExecutor;
 
     // Visible for testing
+    volatile Thread pollThread;
+
+    // Visible for testing
     List<SourceRecord> toSend;
     protected Map<String, String> taskConfig;
     protected boolean started = false;
@@ -265,6 +268,7 @@ public abstract class AbstractWorkerSourceTask extends WorkerTask<SourceRecord, 
 
     @Override
     protected void initializeAndStart() {
+        this.pollThread = Thread.currentThread();
         prepareToInitializeTask();
         offsetStore.start();
         // If we try to start the task at all by invoking initialize, then count this as
@@ -284,14 +288,22 @@ public abstract class AbstractWorkerSourceTask extends WorkerTask<SourceRecord, 
         super.cancel();
         // Preemptively close the offset reader in case the task is blocked on an offset read.
         offsetReader.close();
-        // We proactively close the producer here as the main work thread for the task may
-        // be blocked indefinitely in a call to Producer::send if automatic topic creation is
-        // not enabled on either the connector or the Kafka cluster. Closing the producer should
-        // unblock it in that case and allow shutdown to proceed normally.
-        // With a duration of 0, the producer's own shutdown logic should be fairly quick,
-        // but closing user-pluggable classes like interceptors may lag indefinitely. So, we
-        // call close on a separate thread in order to avoid blocking the herder's tick thread.
-        closeExecutor.execute(() -> closeProducer(Duration.ZERO));
+        closeExecutor.execute(() -> {
+            // We proactively close the producer here as the main work thread for the task may
+            // be blocked indefinitely in a call to Producer::send if automatic topic creation is
+            // not enabled on either the connector or the Kafka cluster. Closing the producer should
+            // unblock it in that case and allow shutdown to proceed normally.
+            // With a duration of 0, the producer's own shutdown logic should be fairly quick,
+            // but closing user-pluggable classes like interceptors may lag indefinitely. So, we
+            // call close on a separate thread in order to avoid blocking the herder's tick thread.
+            closeProducer(Duration.ZERO);
+
+            // Once the producer is successfully closed, we also interrupt the poll thread for the connector
+            // This isn't guaranteed to help (some IO operations can't be interrupted in Java), but it can
+            // help prevent resource leaks in some circumstances
+            if (pollThread != null)
+                pollThread.interrupt();
+        });
     }
 
     @Override
