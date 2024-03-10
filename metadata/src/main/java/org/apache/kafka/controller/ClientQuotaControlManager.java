@@ -96,8 +96,7 @@ public class ClientQuotaControlManager {
      */
     ControllerResult<Map<ClientQuotaEntity, ApiError>> alterClientQuotas(
             Collection<ClientQuotaAlteration> quotaAlterations) {
-        List<ApiMessageAndVersion> outputRecords =
-                BoundedList.newArrayBacked(MAX_RECORDS_PER_USER_OP);
+        List<ApiMessageAndVersion> outputRecords = new BoundedList<>(MAX_RECORDS_PER_USER_OP);
         Map<ClientQuotaEntity, ApiError> outputResults = new HashMap<>();
 
         quotaAlterations.forEach(quotaAlteration -> {

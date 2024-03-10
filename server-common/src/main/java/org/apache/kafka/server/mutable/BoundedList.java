@@ -35,24 +35,12 @@ public class BoundedList<E> implements List<E> {
     private final int maxLength;
     private final List<E> underlying;
 
-    public static <E> BoundedList<E> newArrayBacked(int maxLength) {
-        return new BoundedList<>(maxLength, new ArrayList<>());
-    }
-
-    public static <E> BoundedList<E> newArrayBacked(int maxLength, int initialCapacity) {
-        return new BoundedList<>(maxLength, new ArrayList<>(initialCapacity));
-    }
-
-    public BoundedList(int maxLength, List<E> underlying) {
+    public BoundedList(int maxLength) {
         if (maxLength <= 0) {
             throw new IllegalArgumentException("Invalid non-positive maxLength of " + maxLength);
         }
         this.maxLength = maxLength;
-        if (underlying.size() > maxLength) {
-            throw new BoundedListTooLongException("Cannot wrap list, because it is longer than " +
-                "the maximum length " + maxLength);
-        }
-        this.underlying = underlying;
+        this.underlying = new ArrayList<>(maxLength);
     }
 
     @Override

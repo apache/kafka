@@ -172,8 +172,7 @@ public class ConfigurationControlManager {
         Map<ConfigResource, Map<String, Entry<OpType, String>>> configChanges,
         boolean newlyCreatedResource
     ) {
-        List<ApiMessageAndVersion> outputRecords =
-                BoundedList.newArrayBacked(MAX_RECORDS_PER_USER_OP);
+        List<ApiMessageAndVersion> outputRecords = new BoundedList<>(MAX_RECORDS_PER_USER_OP);
         Map<ConfigResource, ApiError> outputResults = new HashMap<>();
         for (Entry<ConfigResource, Map<String, Entry<OpType, String>>> resourceEntry :
                 configChanges.entrySet()) {
@@ -191,8 +190,7 @@ public class ConfigurationControlManager {
         Map<String, Entry<OpType, String>> keyToOps,
         boolean newlyCreatedResource
     ) {
-        List<ApiMessageAndVersion> outputRecords =
-                BoundedList.newArrayBacked(MAX_RECORDS_PER_USER_OP);
+        List<ApiMessageAndVersion> outputRecords = new BoundedList<>(MAX_RECORDS_PER_USER_OP);
         ApiError apiError = incrementalAlterConfigResource(configResource,
             keyToOps,
             newlyCreatedResource,
@@ -321,8 +319,7 @@ public class ConfigurationControlManager {
         Map<ConfigResource, Map<String, String>> newConfigs,
         boolean newlyCreatedResource
     ) {
-        List<ApiMessageAndVersion> outputRecords =
-                BoundedList.newArrayBacked(MAX_RECORDS_PER_USER_OP);
+        List<ApiMessageAndVersion> outputRecords = new BoundedList<>(MAX_RECORDS_PER_USER_OP);
         Map<ConfigResource, ApiError> outputResults = new HashMap<>();
         for (Entry<ConfigResource, Map<String, String>> resourceEntry :
             newConfigs.entrySet()) {
