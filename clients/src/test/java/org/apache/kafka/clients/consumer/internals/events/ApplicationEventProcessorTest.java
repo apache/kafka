@@ -36,7 +36,6 @@ import org.junit.jupiter.api.Test;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
-import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CompletableFuture;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -54,11 +53,9 @@ public class ApplicationEventProcessorTest {
     private MembershipManager membershipManager;
 
     @BeforeEach
-    @SuppressWarnings("unchecked")
     public void setup() {
         LogContext logContext = new LogContext();
         ConsumerMetadata metadata = mock(ConsumerMetadata.class);
-        BlockingQueue<ApplicationEvent> applicationEventQueue = mock(BlockingQueue.class);
         OffsetsRequestManager offsetsRequestManager = mock(OffsetsRequestManager.class);
         TopicMetadataRequestManager topicMetadataRequestManager = mock(TopicMetadataRequestManager.class);
         FetchRequestManager fetchRequestManager = mock(FetchRequestManager.class);
@@ -78,7 +75,6 @@ public class ApplicationEventProcessorTest {
         );
         processor = new ApplicationEventProcessor(
             new LogContext(),
-            applicationEventQueue,
             requestManagers,
             metadata
         );

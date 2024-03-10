@@ -16,20 +16,7 @@
  */
 package org.apache.kafka.clients.consumer.internals.events;
 
-import org.apache.kafka.clients.consumer.Consumer;
-import org.apache.kafka.clients.consumer.internals.ConsumerUtils;
-import org.apache.kafka.common.KafkaException;
-import org.apache.kafka.common.internals.IdempotentCloser;
-import org.apache.kafka.common.utils.LogContext;
-import org.slf4j.Logger;
-
-import java.io.Closeable;
-import java.util.LinkedList;
-import java.util.List;
-import java.util.Objects;
-import java.util.Optional;
 import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.CompletableFuture;
 
 /**
  * An {@link EventProcessor} is the means by which events <em>produced</em> by thread <em>A</em> are
@@ -38,100 +25,7 @@ import java.util.concurrent.CompletableFuture;
  * communication channel is formed around {@link BlockingQueue a shared queue} into which thread <em>A</em>
  * enqueues events and thread <em>B</em> reads and processes those events.
  */
-public abstract class EventProcessor<T> implements Closeable {
+public interface EventProcessor<T> {
 
-    protected final static java.util.function.Consumer<CompletableEvent<?>> INCOMPLETE_EVENT_CANCELLER = e -> {
-        CompletableFuture<?> f = e.future();
-        f.cancel(true);
-    };
-
-    private final Logger log;
-    private final BlockingQueue<T> eventQueue;
-    private final IdempotentCloser closer;
-
-    protected EventProcessor(final LogContext logContext, final BlockingQueue<T> eventQueue) {
-        this.log = logContext.logger(EventProcessor.class);
-        this.eventQueue = eventQueue;
-        this.closer = new IdempotentCloser();
-    }
-
-    protected abstract void process(T event);
-
-    @Override
-    public void close() {
-        closer.close(this::closeInternal, () -> log.warn("The event processor was already closed"));
-    }
-
-    protected interface ProcessHandler<T> {
-
-        void onProcess(T event, Optional<KafkaException> error);
-    }
-
-    /**
-     * Drains all available events from the queue, and then processes them in order. If any errors are thrown while
-     * processing the individual events, these are submitted to the given {@link ProcessHandler}.
-     */
-    protected boolean process(ProcessHandler<T> processHandler) {
-        closer.assertOpen("The processor was previously closed, so no further processing can occur");
-
-        List<T> events = drain();
-
-        if (events.isEmpty()) {
-            log.trace("No events to process");
-            return false;
-        }
-
-        try {
-            log.trace("Starting processing of {} event{}", events.size(), events.size() == 1 ? "" : "s");
-
-            for (T event : events) {
-                try {
-                    Objects.requireNonNull(event, "Attempted to process a null event");
-                    log.trace("Processing event: {}", event);
-                    process(event);
-                    processHandler.onProcess(event, Optional.empty());
-                } catch (Throwable t) {
-                    KafkaException error = ConsumerUtils.maybeWrapAsKafkaException(t);
-                    processHandler.onProcess(event, Optional.of(error));
-                }
-            }
-        } finally {
-            log.trace("Completed processing");
-        }
-
-        return true;
-    }
-
-    /**
-     * It is possible for the {@link Consumer#close() consumer to close} before completing the processing of all
-     * the events in the queue. In this case, we need to
-     * {@link CompletableFuture#completeExceptionally(Throwable) (exceptionally) complete} any remaining events.
-     */
-    protected void cancelIncompleteEvents() {
-        List<T> events = drain();
-        events
-                .stream()
-                .filter(e -> e instanceof CompletableEvent)
-                .map(e -> (CompletableEvent<?>) e)
-                .filter(e -> !e.future().isDone())
-                .forEach(INCOMPLETE_EVENT_CANCELLER);
-    }
-
-    private void closeInternal() {
-        try {
-            log.debug("Removing unprocessed and/or unfinished events because the consumer is closing");
-            cancelIncompleteEvents();
-        } finally {
-            log.debug("Finished removal of events that were unprocessed and/or unfinished");
-        }
-    }
-
-    /**
-     * Moves all the events from the queue to the returned list.
-     */
-    private List<T> drain() {
-        LinkedList<T> events = new LinkedList<>();
-        eventQueue.drainTo(events);
-        return events;
-    }
+    void process(T event);
 }

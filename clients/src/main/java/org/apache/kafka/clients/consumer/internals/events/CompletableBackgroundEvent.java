@@ -39,6 +39,11 @@ public abstract class CompletableBackgroundEvent<T> extends BackgroundEvent impl
     }
 
     @Override
+    public long deadlineMs() {
+        return Long.MAX_VALUE;
+    }
+
+    @Override
     protected String toStringBase() {
         return super.toStringBase() + ", future=" + future;
     }
