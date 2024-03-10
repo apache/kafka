@@ -140,6 +140,9 @@ public class ConnectorOffsetBackingStore implements OffsetBackingStore {
     private final Optional<KafkaOffsetBackingStore> connectorStore;
     private final Optional<TopicAdmin> connectorStoreAdmin;
 
+    private boolean exactlyOnce;
+    private long offsetFlushTimeoutMs;
+
     ConnectorOffsetBackingStore(
             Time time,
             Supplier<LoggingContext> loggingContext,
@@ -253,8 +256,23 @@ public class ConnectorOffsetBackingStore implements OffsetBackingStore {
      * <p>If configured to use a connector-specific offset store, the returned {@link Future} corresponds to a
      * write to that store, and the passed-in {@link Callback} is invoked once that write completes. If a worker-global
      * store is provided, a secondary write is made to that store if the write to the connector-specific store
-     * succeeds. Errors with this secondary write are not reflected in the returned {@link Future} or the passed-in
-     * {@link Callback}; they are only logged as a warning to users.
+     * succeeds.
+     * <p>
+     * Normally, errors with this secondary write are not reflected in the returned {@link Future} or the passed-in
+     * {@link Callback}; they are only logged as a warning to users. The only exception to this rule is when the
+     * offsets that need to be committed contain tombstone records.
+     * <p>When the to-be-committed offsets contain tombstones, offset commits take place in three phases:
+     * <ol>
+     *     <li>First, only the tombstone offsets are written to the worker-global store. Failures during this step will
+     *     be reflected in the returned {@link Future} and reported to the passed-in {@link Callback}.</li>
+     *     <li>If and only if the previous write to the worker-global store succeeded, all offsets (both tombstones and
+     *     non-tombstones) are written to the connector-specific store. Failures during this step will also be
+     *     reflected in the returned {@link Future} and reported to the passed-in {@link Callback}.</li>
+     *     <li>Finally, if and only if the previous write to the connector-specific store succeeded, all offsets with
+     *     non-tombstone values are written to the worker-global store. Failures during this step will only be reported
+     *     as warning log messages, and will not be reflected in the returned {@link Future} or reported to the
+     *     passed-in {@link Callback}.</li>
+     * </ol>
      *
      * <p>If not configured to use a connector-specific offset store, the returned {@link Future} corresponds to a
      * write to the worker-global offset store, and the passed-in {@link Callback} is invoked once that write completes.
@@ -262,6 +280,10 @@ public class ConnectorOffsetBackingStore implements OffsetBackingStore {
      * @param values map from key to value
      * @param callback callback to invoke on completion of the primary write
      * @return void future for the primary write
+    *
+     * @see <a href="https://issues.apache.org/jira/browse/KAFKA-15018">KAFKA-15018</a> for context on the three-step
+     * write sequence
+     *
      */
     @Override
     public Future<Void> set(Map<ByteBuffer, ByteBuffer> values, Callback<Void> callback) {
@@ -279,15 +301,45 @@ public class ConnectorOffsetBackingStore implements OffsetBackingStore {
             throw new IllegalStateException("At least one non-null offset store must be provided");
         }
 
+        Map<ByteBuffer, ByteBuffer> regularOffsets = new HashMap<>();
+        Map<ByteBuffer, ByteBuffer> tombstoneOffsets = new HashMap<>();
+        values.forEach((partition, offset) -> {
+            if (offset == null) {
+                tombstoneOffsets.put(partition, null);
+            } else {
+                regularOffsets.put(partition, offset);
+            }
+        });
+
+        if (secondaryStore != null && !tombstoneOffsets.isEmpty()) {
+            Future<Void> secondaryWriteFuture = secondaryStore.set(tombstoneOffsets, (t, r) -> { });
+            try {
+                if (exactlyOnce) {
+                    secondaryWriteFuture.get();
+                } else {
+                    secondaryWriteFuture.get(offsetFlushTimeoutMs, TimeUnit.MILLISECONDS);
+                }
+                log.debug("Successfully flushed tombstone offsets to secondary store");
+            } catch (ExecutionException e) {
+                log.error("{} Failed to flush tombstone offsets to secondary store", this, e.getCause());
+                callback.onCompletion(e.getCause(), null);
+                return secondaryWriteFuture;
+            } catch (Throwable e) {
+                log.error("{} Failed to flush tombstone offsets to secondary store", this, e);
+                callback.onCompletion(e, null);
+                return secondaryWriteFuture;
+            }
+        }
+
         return primaryStore.set(values, (primaryWriteError, ignored) -> {
             if (secondaryStore != null) {
                 if (primaryWriteError != null) {
-                    log.trace("Skipping offsets write to secondary store because primary write has failed", primaryWriteError);
+                    log.info("Skipping offsets write to secondary store because primary write has failed", primaryWriteError);
                 } else {
                     try {
                         // Invoke OffsetBackingStore::set but ignore the resulting future; we don't block on writes to this
-                        // backing store.
-                        secondaryStore.set(values, (secondaryWriteError, ignored2) -> {
+                        // backing store for regular non-tombstone offsets.
+                        secondaryStore.set(regularOffsets, (secondaryWriteError, ignored2) -> {
                             try (LoggingContext context = loggingContext()) {
                                 if (secondaryWriteError != null) {
                                     log.warn("Failed to write offsets to secondary backing store", secondaryWriteError);
@@ -326,6 +378,8 @@ public class ConnectorOffsetBackingStore implements OffsetBackingStore {
     public void configure(WorkerConfig config) {
         // Worker offset store should already be configured
         connectorStore.ifPresent(store -> store.configure(config));
+        exactlyOnce = config.exactlyOnceSourceEnabled();
+        offsetFlushTimeoutMs = config.getLong(WorkerConfig.OFFSET_COMMIT_TIMEOUT_MS_CONFIG);
     }
 
     // For testing
