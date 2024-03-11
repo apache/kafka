@@ -70,4 +70,5 @@ public class ListOffsetsEvent extends CompletableApplicationEvent<Map<TopicParti
                 ", timestampsToSearch=" + timestampsToSearch +
                 ", requireTimestamps=" + requireTimestamps;
     }
+
 }

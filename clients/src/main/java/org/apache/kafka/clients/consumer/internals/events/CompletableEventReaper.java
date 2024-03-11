@@ -66,7 +66,7 @@ public class CompletableEventReaper {
      *     </li>
      *     <li>
      *         For each tracked event of which its {@link CompletableEvent#future() future} is already in the
-     *      * {@link CompletableFuture#isDone() done} state, it will be removed from the list of tracked events.
+     *         {@link CompletableFuture#isDone() done} state, it will be removed from the list of tracked events.
      *     </li>
      * </ol>
      *

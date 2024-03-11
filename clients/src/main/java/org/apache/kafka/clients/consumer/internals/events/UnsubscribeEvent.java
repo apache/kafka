@@ -32,3 +32,4 @@ public class UnsubscribeEvent extends CompletableApplicationEvent<Void> {
         super(Type.UNSUBSCRIBE, timer);
     }
 }
+

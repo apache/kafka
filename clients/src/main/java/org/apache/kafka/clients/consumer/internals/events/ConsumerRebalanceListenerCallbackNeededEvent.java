@@ -56,6 +56,8 @@ public class ConsumerRebalanceListenerCallbackNeededEvent extends CompletableBac
 
     @Override
     protected String toStringBase() {
-        return super.toStringBase() + ", methodName=" + methodName + ", partitions=" + partitions;
+        return super.toStringBase() +
+                ", methodName=" + methodName +
+                ", partitions=" + partitions;
     }
 }

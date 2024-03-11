@@ -164,10 +164,7 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
             return;
         }
         CommitRequestManager manager = requestManagers.commitRequestManager.get();
-        CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> future = manager.fetchOffsets(
-            event.partitions(),
-            event.deadlineMs()
-        );
+        CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> future = manager.fetchOffsets(event.partitions(), event.deadlineMs());
         future.whenComplete(complete(event.future()));
     }
 
@@ -189,10 +186,9 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
     }
 
     private void process(final ListOffsetsEvent event) {
-        final CompletableFuture<Map<TopicPartition, OffsetAndTimestamp>> future = requestManagers.offsetsRequestManager.fetchOffsets(
-            event.timestampsToSearch(),
-            event.requireTimestamps()
-        );
+        final CompletableFuture<Map<TopicPartition, OffsetAndTimestamp>> future =
+                requestManagers.offsetsRequestManager.fetchOffsets(event.timestampsToSearch(),
+                        event.requireTimestamps());
         future.whenComplete(complete(event.future()));
     }
 
