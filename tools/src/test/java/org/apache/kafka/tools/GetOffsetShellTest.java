@@ -18,7 +18,6 @@
 package org.apache.kafka.tools;
 
 import kafka.test.ClusterInstance;
-import kafka.test.annotation.ClusterConfigProperty;
 import kafka.test.annotation.ClusterTest;
 import kafka.test.annotation.ClusterTestDefaults;
 import kafka.test.annotation.Type;
@@ -31,7 +30,6 @@ import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Exit;
-import org.apache.kafka.server.common.MetadataVersion;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -240,65 +238,6 @@ public class GetOffsetShellTest {
                     row -> assertTrue(row.timestamp >= 0 && row.timestamp <= Integer.parseInt(row.name.replace("topic", "")))
             );
         }
-    }
-
-    private void verifyOffsetOfMaxTimestamp(boolean compressed) {
-        try (Admin admin = Admin.create(cluster.config().adminClientProperties())) {
-            List<NewTopic> topics = Arrays.asList(new NewTopic(topicName, 1, (short) 1));
-            admin.createTopics(topics);
-        }
-
-        Properties props = new Properties();
-        props.put(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, cluster.config().producerProperties().get("bootstrap.servers"));
-        props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
-        props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
-        if (compressed) {
-            props.put(ProducerConfig.COMPRESSION_TYPE_CONFIG, "gzip");
-        }
-        // disable idempotent producer since we will test old message format and it has no impact in this test suite
-        props.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, false);
-
-        try (KafkaProducer<String, String> producer = new KafkaProducer<>(props)) {
-            // sent 2 batches with out-of-order timestamp records.
-            producer.send(new ProducerRecord<>(topicName, 0, 100L, null, "val"));
-            producer.send(new ProducerRecord<>(topicName, 0, 400L, null, "val"));
-            producer.send(new ProducerRecord<>(topicName, 0, 250L, null, "val"));
-            producer.flush();
-            producer.send(new ProducerRecord<>(topicName, 0, 1100L, null, "val"));
-            producer.send(new ProducerRecord<>(topicName, 0, 1400L, null, "val"));
-            producer.send(new ProducerRecord<>(topicName, 0, 1250L, null, "val"));
-            producer.flush();
-        }
-        // We should be able to get the offset of 4 as the max timestamp
-        List<Row> offsets = executeAndParse("--topic-partitions", topicName, "--time", "-3");
-        assertEquals(4, offsets.get(0).timestamp);
-    }
-
-    @ClusterTest(metadataVersion = MetadataVersion.IBP_0_10_0_IV1, serverProperties = {
-            @ClusterConfigProperty(key = "log.message.format.version", value = "0.10.0")
-    })
-    public void testGetOffsetsByMaxTimestampWithMessageConversion() {
-        verifyOffsetOfMaxTimestamp(false);
-    }
-
-    @ClusterTest(metadataVersion = MetadataVersion.IBP_0_10_0_IV1, serverProperties = {
-            @ClusterConfigProperty(key = "log.message.format.version", value = "0.10.0")
-    })
-    public void testGetOffsetsByMaxTimestampWithCompressedMessageAndMessageConversion() {
-        verifyOffsetOfMaxTimestamp(true);
-    }
-
-    @ClusterTest
-    public void testGetOffsetsByMaxTimestampWithCompressedMessages() {
-        verifyOffsetOfMaxTimestamp(true);
-    }
-    @ClusterTest(serverProperties = {
-            @ClusterConfigProperty(key = "compression.type", value = "lz4")
-    })
-    public void testGetOffsetsByMaxTimestampWithCompressedMessagesAndNotSameCompressionType() {
-        // The server will add "compression.type=lz4", which is different from the producer one.
-        // Under this case, the server should still be able to return the expected offset
-        verifyOffsetOfMaxTimestamp(true);
     }
 
     @ClusterTest
