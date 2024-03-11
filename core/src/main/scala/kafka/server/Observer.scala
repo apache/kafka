@@ -59,7 +59,7 @@ trait Observer extends Configurable {
   def observeProduceRequest(requestContext: RequestContext, produceRequest: ProduceRequest): Unit
 
   /**
-    * Close the observer with timeout.
+    * Close the observer with timeout..
     *
     * @param timeout the maximum time to wait to close the observer.
     * @param unit    the time unit.
