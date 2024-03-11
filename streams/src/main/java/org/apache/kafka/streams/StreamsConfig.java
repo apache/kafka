@@ -520,7 +520,7 @@ public class StreamsConfig extends AbstractConfig {
     @SuppressWarnings("WeakerAccess")
     public static  final String ENABLE_METRICS_PUSH_CONFIG = CommonClientConfigs.ENABLE_METRICS_PUSH_CONFIG;
     public static final String ENABLE_METRICS_PUSH_DOC = "Whether to enable pushing of internal client metrics for (main, restore, and global) consumers , producers, and admin clients." + 
-      "The cluster must have a client metrics subscription which corresponds to a client.";
+      " The cluster must have a client metrics subscription which corresponds to a client.";
 
     /** {@code commit.interval.ms} */
     @SuppressWarnings("WeakerAccess")
