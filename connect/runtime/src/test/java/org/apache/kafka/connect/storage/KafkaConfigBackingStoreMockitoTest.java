@@ -39,6 +39,11 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+
+import static org.apache.kafka.clients.consumer.ConsumerConfig.GROUP_ID_CONFIG;
+import static org.apache.kafka.clients.producer.ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG;
+import static org.apache.kafka.clients.producer.ProducerConfig.TRANSACTIONAL_ID_CONFIG;
+import static org.apache.kafka.connect.runtime.distributed.DistributedConfig.EXACTLY_ONCE_SOURCE_SUPPORT_CONFIG;
 import static org.apache.kafka.connect.storage.KafkaConfigBackingStore.INCLUDE_TASKS_FIELD_NAME;
 import static org.apache.kafka.connect.storage.KafkaConfigBackingStore.ONLY_FAILED_FIELD_NAME;
 import static org.apache.kafka.connect.storage.KafkaConfigBackingStore.RESTART_KEY;
@@ -143,6 +148,20 @@ public class KafkaConfigBackingStoreMockitoTest {
         assertEquals(CONNECTOR_1_NAME, restartRequest.connectorName());
         assertFalse(restartRequest.includeTasks());
         assertEquals(struct.getBoolean(ONLY_FAILED_FIELD_NAME), restartRequest.onlyFailed());
+    }
+
+    @Test
+    public void testFencableProducerPropertiesOverrideUserSuppliedValues() {
+        props.put(EXACTLY_ONCE_SOURCE_SUPPORT_CONFIG, "preparing");
+        String groupId = "my-other-connect-cluster";
+        props.put(GROUP_ID_CONFIG, groupId);
+        props.put(TRANSACTIONAL_ID_CONFIG, "my-custom-transactional-id");
+        props.put(ENABLE_IDEMPOTENCE_CONFIG, "false");
+        createStore();
+
+        Map<String, Object> fencableProducerProperties = configStorage.fencableProducerProps(config);
+        assertEquals("connect-cluster-" + groupId, fencableProducerProperties.get(TRANSACTIONAL_ID_CONFIG));
+        assertEquals("true", fencableProducerProperties.get(ENABLE_IDEMPOTENCE_CONFIG));
     }
 
     // Generates a Map representation of Struct. Only does shallow traversal, so nested structs are not converted
