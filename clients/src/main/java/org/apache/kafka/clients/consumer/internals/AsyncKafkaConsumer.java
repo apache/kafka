@@ -1088,7 +1088,10 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                 return Collections.emptyMap();
             }
             final Timer timer = time.timer(timeout);
-            final ListOffsetsEvent listOffsetsEvent = new ListOffsetsEvent(timestampsToSearch, true, timer);
+            final ListOffsetsEvent listOffsetsEvent = new ListOffsetsEvent(
+                timestampsToSearch,
+                true,
+                timer);
 
             // If timeout is set to zero return empty immediately; otherwise try to get the results
             // and throw timeout exception if it cannot complete in time.
@@ -1632,7 +1635,10 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
 
         log.debug("Refreshing committed offsets for partitions {}", initializingPartitions);
         try {
-            final FetchCommittedOffsetsEvent event = new FetchCommittedOffsetsEvent(initializingPartitions, timer);
+            final FetchCommittedOffsetsEvent event =
+                new FetchCommittedOffsetsEvent(
+                    initializingPartitions,
+                    timer);
             final Map<TopicPartition, OffsetAndMetadata> offsets = applicationEventHandler.addAndGet(event);
             refreshCommittedOffsets(offsets, metadata, subscriptions);
             return true;
