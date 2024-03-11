@@ -18,6 +18,7 @@ package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.consumer.internals.MembershipManager.LocalAssignment;
 import org.apache.kafka.clients.consumer.internals.NetworkClientDelegate.PollResult;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEventProcessor;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEventHandler;
@@ -538,16 +539,16 @@ public class HeartbeatRequestManager implements RequestManager {
                 }
             });
 
-            // RebalanceTimeoutMs - only sent if has changed since the last heartbeat
-            if (sentFields.rebalanceTimeoutMs != rebalanceTimeoutMs) {
+            // RebalanceTimeoutMs - only sent when joining or if has changed since the last heartbeat
+            if (membershipManager.memberEpoch() == 0 || sentFields.rebalanceTimeoutMs != rebalanceTimeoutMs) {
                 data.setRebalanceTimeoutMs(rebalanceTimeoutMs);
                 sentFields.rebalanceTimeoutMs = rebalanceTimeoutMs;
             }
 
             if (!this.subscriptions.hasPatternSubscription()) {
-                // SubscribedTopicNames - only sent if has changed since the last heartbeat
+                // SubscribedTopicNames - only sent when joining or if has changed since the last heartbeat
                 TreeSet<String> subscribedTopicNames = new TreeSet<>(this.subscriptions.subscription());
-                if (!subscribedTopicNames.equals(sentFields.subscribedTopicNames)) {
+                if (membershipManager.memberEpoch() == 0 || !subscribedTopicNames.equals(sentFields.subscribedTopicNames)) {
                     data.setSubscribedTopicNames(new ArrayList<>(this.subscriptions.subscription()));
                     sentFields.subscribedTopicNames = subscribedTopicNames;
                 }
@@ -566,18 +567,18 @@ public class HeartbeatRequestManager implements RequestManager {
 
             // ClientAssignors - not supported yet
 
-            // TopicPartitions - only sent if it has changed since the last heartbeat. Note that
-            // the string consists of just the topic ID and the partitions. When an assignment is
-            // received, we might not yet know the topic name, and then it is learnt subsequently
-            // by a metadata update.
-            TreeSet<String> assignedPartitions = membershipManager.currentAssignment().entrySet().stream()
-                .map(entry -> entry.getKey() + "-" + entry.getValue())
-                .collect(Collectors.toCollection(TreeSet::new));
-            if (!assignedPartitions.equals(sentFields.topicPartitions)) {
+            // TopicPartitions - sent with the first heartbeat after a new assignment from the server was
+            // reconciled. This is ensured by resending the topic partitions whenever the local assignment,
+            // including its local epoch is changed (although the local epoch is not sent in the heartbeat).
+            LocalAssignment local = membershipManager.currentAssignment();
+            if (local == null) {
+                data.setTopicPartitions(Collections.emptyList());
+                sentFields.topicPartitions = null;
+            } else if (!local.equals(sentFields.topicPartitions)) {
                 List<ConsumerGroupHeartbeatRequestData.TopicPartitions> topicPartitions =
-                    buildTopicPartitionsList(membershipManager.currentAssignment());
+                    buildTopicPartitionsList(local.partitions);
                 data.setTopicPartitions(topicPartitions);
-                sentFields.topicPartitions = assignedPartitions;
+                sentFields.topicPartitions = local;
             }
 
             return data;
@@ -597,7 +598,7 @@ public class HeartbeatRequestManager implements RequestManager {
             private int rebalanceTimeoutMs = -1;
             private TreeSet<String> subscribedTopicNames = null;
             private String serverAssignor = null;
-            private TreeSet<String> topicPartitions = null;
+            private LocalAssignment topicPartitions = null;
 
             SentFields() {}
 
