@@ -62,6 +62,7 @@ public class ApplicationEventProcessorTest {
     private MembershipManager membershipManager;
 
     @BeforeEach
+    @SuppressWarnings("unchecked")
     public void setup() {
         LogContext logContext = new LogContext();
         offsetRequestManager = mock(OffsetsRequestManager.class);
@@ -72,7 +73,7 @@ public class ApplicationEventProcessorTest {
         commitRequestManager = mock(CommitRequestManager.class);
         heartbeatRequestManager = mock(HeartbeatRequestManager.class);
         membershipManager = mock(MembershipManager.class);
-        RequestManagers requestManagers = new RequestManagers(
+        requestManagers = new RequestManagers(
             logContext,
             offsetsRequestManager,
             topicMetadataRequestManager,

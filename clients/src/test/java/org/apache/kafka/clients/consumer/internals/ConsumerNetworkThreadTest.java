@@ -86,8 +86,11 @@ public class ConsumerNetworkThreadTest {
     private OffsetsRequestManager offsetsRequestManager;
     private CommitRequestManager commitRequestManager;
     private CoordinatorRequestManager coordinatorRequestManager;
+    private HeartbeatRequestManager heartbeatRequestManager;
+    private MembershipManager memberhipsManager;
     private ConsumerNetworkThread consumerNetworkThread;
     private MockClient client;
+    private SubscriptionState subscriptions;
 
     @BeforeEach
     public void setup() {
@@ -101,7 +104,10 @@ public class ConsumerNetworkThreadTest {
         commitRequestManager = testBuilder.commitRequestManager.orElseThrow(IllegalStateException::new);
         offsetsRequestManager = testBuilder.offsetsRequestManager;
         coordinatorRequestManager = testBuilder.coordinatorRequestManager.orElseThrow(IllegalStateException::new);
+        heartbeatRequestManager = testBuilder.heartbeatRequestManager.orElseThrow(IllegalStateException::new);
+        memberhipsManager = testBuilder.membershipManager.orElseThrow(IllegalStateException::new);
         consumerNetworkThread = testBuilder.consumerNetworkThread;
+        subscriptions = testBuilder.subscriptions;
         consumerNetworkThread.initializeResources();
     }
 
@@ -167,7 +173,8 @@ public class ConsumerNetworkThreadTest {
     @Test
     public void testListOffsetsEventIsProcessed() {
         Map<TopicPartition, Long> timestamps = Collections.singletonMap(new TopicPartition("topic1", 1), 5L);
-        ApplicationEvent e = new ListOffsetsEvent(timestamps, true, time.timer(1000));
+        Timer timer = time.timer(100);
+        ApplicationEvent e = new ListOffsetsEvent(timestamps, true, timer);
         applicationEventsQueue.add(e);
         consumerNetworkThread.runOnce();
         verify(applicationEventProcessor).process(any(ListOffsetsEvent.class));
@@ -176,7 +183,8 @@ public class ConsumerNetworkThreadTest {
 
     @Test
     public void testResetPositionsEventIsProcessed() {
-        ApplicationEvent e = new ResetPositionsEvent(time.timer(1000));
+        Timer timer = time.timer(100);
+        ResetPositionsEvent e = new ResetPositionsEvent(timer);
         applicationEventsQueue.add(e);
         consumerNetworkThread.runOnce();
         verify(applicationEventProcessor).process(any(ResetPositionsEvent.class));
@@ -187,7 +195,8 @@ public class ConsumerNetworkThreadTest {
     public void testResetPositionsProcessFailureIsIgnored() {
         doThrow(new NullPointerException()).when(offsetsRequestManager).resetPositionsIfNeeded();
 
-        ApplicationEvent event = new ResetPositionsEvent(time.timer(1000));
+        Timer timer = time.timer(100);
+        ResetPositionsEvent event = new ResetPositionsEvent(timer);
         applicationEventsQueue.add(event);
         assertDoesNotThrow(() -> consumerNetworkThread.runOnce());
 
@@ -221,7 +230,8 @@ public class ConsumerNetworkThreadTest {
 
     @Test
     void testFetchTopicMetadata() {
-        applicationEventsQueue.add(new TopicMetadataEvent("topic", time.timer(Long.MAX_VALUE)));
+        Timer timer = time.timer(Long.MAX_VALUE);
+        applicationEventsQueue.add(new TopicMetadataEvent("topic", timer));
         consumerNetworkThread.runOnce();
         verify(applicationEventProcessor).process(any(TopicMetadataEvent.class));
     }
