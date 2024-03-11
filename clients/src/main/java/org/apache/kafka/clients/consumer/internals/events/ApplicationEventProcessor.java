@@ -32,7 +32,6 @@ import org.slf4j.Logger;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Optional;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Supplier;
@@ -69,8 +68,12 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
     @Override
     public void process(ApplicationEvent event) {
         switch (event.type()) {
-            case COMMIT:
-                process((CommitApplicationEvent) event);
+            case COMMIT_ASYNC:
+                process((AsyncCommitApplicationEvent) event);
+                return;
+
+            case COMMIT_SYNC:
+                process((SyncCommitApplicationEvent) event);
                 return;
 
             case POLL:
@@ -139,18 +142,17 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
         requestManagers.heartbeatRequestManager.ifPresent(hrm -> hrm.resetPollTimer(event.pollTimeMs()));
     }
 
-    private void process(final CommitApplicationEvent event) {
-        if (!requestManagers.commitRequestManager.isPresent()) {
-            // Leaving this error handling here, but it is a bit strange as the commit API should enforce the group.id
-            // upfront, so we should never get to this block.
-            Exception exception = new KafkaException("Unable to commit offset. Most likely because the group.id wasn't set");
-            event.future().completeExceptionally(exception);
-            return;
-        }
-
+    private void process(final AsyncCommitApplicationEvent event) {
         CommitRequestManager manager = requestManagers.commitRequestManager.get();
-        Optional<Long> expirationTimeMs = event.retryTimeoutMs().map(this::getExpirationTimeForTimeout);
-        event.chain(manager.addOffsetCommitRequest(event.offsets(), expirationTimeMs, false));
+        CompletableFuture<Void> commitResult = manager.commitAsync(event.offsets());
+        event.chain(commitResult);
+    }
+
+    private void process(final SyncCommitApplicationEvent event) {
+        CommitRequestManager manager = requestManagers.commitRequestManager.get();
+        long expirationTimeoutMs = getExpirationTimeForTimeout(event.retryTimeoutMs());
+        CompletableFuture<Void> commitResult = manager.commitSync(event.offsets(), expirationTimeoutMs);
+        event.chain(commitResult);
     }
 
     private void process(final FetchCommittedOffsetsApplicationEvent event) {
@@ -161,7 +163,7 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
         }
         CommitRequestManager manager = requestManagers.commitRequestManager.get();
         long expirationTimeMs = getExpirationTimeForTimeout(event.timeout());
-        event.chain(manager.addOffsetFetchRequest(event.partitions(), expirationTimeMs));
+        event.chain(manager.fetchOffsets(event.partitions(), expirationTimeMs));
     }
 
     private void process(final NewTopicsMetadataUpdateRequestEvent ignored) {
@@ -179,7 +181,7 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
         }
         CommitRequestManager manager = requestManagers.commitRequestManager.get();
         manager.updateAutoCommitTimer(event.currentTimeMs());
-        manager.maybeAutoCommitAllConsumedAsync();
+        manager.maybeAutoCommitAsync();
     }
 
     private void process(final ListOffsetsApplicationEvent event) {
