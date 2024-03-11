@@ -133,6 +133,18 @@ public class KafkaConfigBackingStoreMockitoTest {
         assertFalse(restartRequest.onlyFailed());
     }
 
+    @Test
+    public void testRecordToRestartRequestIncludeTasksInconsistent() {
+        ConsumerRecord<String, byte[]> record = new ConsumerRecord<>(TOPIC, 0, 0, 0L, TimestampType.CREATE_TIME, 0, 0, RESTART_CONNECTOR_KEYS.get(0),
+                CONFIGS_SERIALIZED.get(0), new RecordHeaders(), Optional.empty());
+        Struct struct = INCLUDE_TASKS_MISSING_STRUCT;
+        SchemaAndValue schemaAndValue = new SchemaAndValue(struct.schema(), structToMap(struct));
+        RestartRequest restartRequest = configStorage.recordToRestartRequest(record, schemaAndValue);
+        assertEquals(CONNECTOR_1_NAME, restartRequest.connectorName());
+        assertFalse(restartRequest.includeTasks());
+        assertEquals(struct.getBoolean(ONLY_FAILED_FIELD_NAME), restartRequest.onlyFailed());
+    }
+
     // Generates a Map representation of Struct. Only does shallow traversal, so nested structs are not converted
     private Map<String, Object> structToMap(Struct struct) {
         if (struct == null)
