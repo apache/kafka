@@ -375,7 +375,6 @@ public class AsyncKafkaConsumerTest {
     @Test
     public void testWakeupBeforeCallingPoll() {
         consumer = newConsumer();
-//        completeCommitSyncApplicationEventSuccessfully();
         final String topicName = "foo";
         final int partition = 3;
         final TopicPartition tp = new TopicPartition(topicName, partition);
