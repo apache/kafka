@@ -1663,11 +1663,8 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         maybeThrowFencedInstanceException();
         maybeInvokeCommitCallbacks();
 
-        try {
-            backgroundEventProcessor.process();
-        } finally {
-            backgroundEventProcessor.
-        }
+        backgroundEventProcessor.process();
+
         // Keeping this updateAssignmentMetadataIfNeeded wrapping up the updateFetchPositions as
         // in the previous implementation, because it will eventually involve group coordination
         // logic
