@@ -46,7 +46,7 @@ import java.util.concurrent.{ConcurrentHashMap, ConcurrentMap, Future}
 import java.util.{Collections, Optional, OptionalLong, Properties}
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.apache.kafka.server.util.MockTime
-import org.apache.kafka.storage.internals.log.{FetchDataInfo, FetchIsolation, LogConfig, LogDirFailureChannel, ProducerStateManagerConfig, RemoteIndexCache}
+import org.apache.kafka.storage.internals.log.{FetchDataInfo, FetchIsolation, LogConfig, LogDirFailureChannel, LogStartOffsetIncrementReason, ProducerStateManagerConfig, RemoteIndexCache}
 import org.apache.kafka.storage.internals.checkpoint.CleanShutdownFileHandler
 
 import scala.collection.{Map, mutable}
@@ -1115,6 +1115,84 @@ class LogManagerTest {
     assertEquals(Some(Uuid.fromString("kQfNPJ2FTHq_6Qlyyv6Jqg")), logManager.directoryId(dirs(3).getAbsolutePath))
     assertTrue(logManager.directoryId(dirs(3).getAbsolutePath).isDefined)
     assertEquals(2, logManager.directoryIdsSet.size)
+  }
+
+  @Test
+  def testCheckpointLogStartOffsetForRemoteTopic(): Unit = {
+    logManager.shutdown()
+
+    val props = new Properties()
+    props.putAll(logProps)
+    props.put(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, "true")
+    val logConfig = new LogConfig(props)
+    logManager = TestUtils.createLogManager(
+      defaultConfig = logConfig,
+      configRepository = new MockConfigRepository,
+      logDirs = Seq(this.logDir),
+      time = this.time,
+      recoveryThreadsPerDataDir = 1,
+      remoteStorageSystemEnable = true
+    )
+
+    val checkpointFile = new File(logDir, LogManager.LogStartOffsetCheckpointFile)
+    val checkpoint = new OffsetCheckpointFile(checkpointFile)
+    val topicPartition = new TopicPartition("test", 0)
+    val log = logManager.getOrCreateLog(topicPartition, topicId = None)
+    var offset = 0L
+    for(_ <- 0 until 50) {
+      val set = TestUtils.singletonRecords("test".getBytes())
+      val info = log.appendAsLeader(set, leaderEpoch = 0)
+      offset = info.lastOffset
+      if (offset != 0 && offset % 10 == 0)
+        log.roll()
+    }
+    assertEquals(5, log.logSegments.size())
+    log.updateHighWatermark(49)
+    // simulate calls to upload 3 segments to remote storage and remove them from local-log.
+    log.updateHighestOffsetInRemoteStorage(30)
+    log.maybeIncrementLocalLogStartOffset(31L, LogStartOffsetIncrementReason.SegmentDeletion)
+    log.deleteOldSegments()
+    assertEquals(2, log.logSegments.size())
+
+    // simulate two remote-log segment deletion
+    val logStartOffset = 21L
+    log.maybeIncrementLogStartOffset(logStartOffset, LogStartOffsetIncrementReason.SegmentDeletion)
+    logManager.checkpointLogStartOffsets()
+
+    assertEquals(logStartOffset, log.logStartOffset)
+    assertEquals(logStartOffset, checkpoint.read().getOrElse(topicPartition, -1L))
+  }
+
+  @Test
+  def testCheckpointLogStartOffsetForNormalTopic(): Unit = {
+    val checkpointFile = new File(logDir, LogManager.LogStartOffsetCheckpointFile)
+    val checkpoint = new OffsetCheckpointFile(checkpointFile)
+    val topicPartition = new TopicPartition("test", 0)
+    val log = logManager.getOrCreateLog(topicPartition, topicId = None)
+    var offset = 0L
+    for(_ <- 0 until 50) {
+      val set = TestUtils.singletonRecords("test".getBytes())
+      val info = log.appendAsLeader(set, leaderEpoch = 0)
+      offset = info.lastOffset
+      if (offset != 0 && offset % 10 == 0)
+        log.roll()
+    }
+    assertEquals(5, log.logSegments.size())
+    log.updateHighWatermark(49)
+
+    val logStartOffset = 31L
+    log.maybeIncrementLogStartOffset(logStartOffset, LogStartOffsetIncrementReason.SegmentDeletion)
+    logManager.checkpointLogStartOffsets()
+    assertEquals(5, log.logSegments.size())
+    assertEquals(logStartOffset, checkpoint.read().getOrElse(topicPartition, -1L))
+
+    log.deleteOldSegments()
+    assertEquals(2, log.logSegments.size())
+    assertEquals(logStartOffset, log.logStartOffset)
+
+    // When you checkpoint log-start-offset after removing the segments, then there should not be any checkpoint
+    logManager.checkpointLogStartOffsets()
+    assertEquals(-1L, checkpoint.read().getOrElse(topicPartition, -1L))
   }
 
   def writeMetaProperties(dir: File, directoryId: Optional[Uuid] = Optional.empty()): Unit = {

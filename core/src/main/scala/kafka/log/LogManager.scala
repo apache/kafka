@@ -865,7 +865,8 @@ class LogManager(logDirs: Seq[File],
     try {
       logStartOffsetCheckpoints.get(logDir).foreach { checkpoint =>
         val logStartOffsets = logsToCheckpoint.collect {
-          case (tp, log) if log.logStartOffset > log.logSegments.asScala.head.baseOffset => tp -> log.logStartOffset
+          case (tp, log) if log.remoteLogEnabled() || log.logStartOffset > log.logSegments.asScala.head.baseOffset =>
+            tp -> log.logStartOffset
         }
         checkpoint.write(logStartOffsets)
       }
