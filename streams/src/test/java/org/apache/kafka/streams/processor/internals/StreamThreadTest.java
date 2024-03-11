@@ -162,6 +162,7 @@ import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -1642,7 +1643,7 @@ public class StreamThreadTest {
             }
             fail("Should have thrown TaskMigratedException");
         } catch (final KafkaException expected) {
-            assertTrue(String.format("Expected TaskMigratedException but got %s", expected), expected instanceof TaskMigratedException);
+            assertInstanceOf(TaskMigratedException.class, expected, String.format("Expected TaskMigratedException but got %s", expected));
             assertTrue("StreamsThread removed the fenced zombie task already, should wait for rebalance to close all zombies together.",
                 thread.readOnlyActiveTasks().stream().anyMatch(task -> task.id().equals(task1)));
         }
@@ -1855,7 +1856,7 @@ public class StreamThreadTest {
             }
             fail("Should have thrown TaskMigratedException");
         } catch (final KafkaException expected) {
-            assertTrue(expected instanceof TaskMigratedException);
+            assertInstanceOf(TaskMigratedException.class, expected);
             assertTrue("StreamsThread removed the fenced zombie task already, should wait for rebalance to close all zombies together.",
                 thread.readOnlyActiveTasks().stream().anyMatch(task -> task.id().equals(task1)));
         }

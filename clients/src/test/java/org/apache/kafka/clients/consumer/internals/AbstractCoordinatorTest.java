@@ -78,6 +78,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import static java.util.Collections.emptyMap;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertSame;
@@ -359,7 +360,7 @@ public class AbstractCoordinatorTest {
 
         mockTime.sleep(REBALANCE_TIMEOUT_MS - REQUEST_TIMEOUT_MS + AbstractCoordinator.JOIN_GROUP_TIMEOUT_LAPSE);
         assertTrue(consumerClient.poll(future, mockTime.timer(0)));
-        assertTrue(future.exception() instanceof DisconnectException);
+        assertInstanceOf(DisconnectException.class, future.exception());
     }
 
     @Test
@@ -377,7 +378,7 @@ public class AbstractCoordinatorTest {
 
         mockTime.sleep(expectedRequestDeadline - mockTime.milliseconds() + 1);
         assertTrue(consumerClient.poll(future, mockTime.timer(0)));
-        assertTrue(future.exception() instanceof DisconnectException);
+        assertInstanceOf(DisconnectException.class, future.exception());
     }
 
     @Test
@@ -1037,7 +1038,7 @@ public class AbstractCoordinatorTest {
             }
             fail("Expected pollHeartbeat to raise fenced instance id exception in 1 second");
         } catch (RuntimeException exception) {
-            assertTrue(exception instanceof FencedInstanceIdException);
+            assertInstanceOf(FencedInstanceIdException.class, exception);
         }
     }
 
@@ -1157,7 +1158,7 @@ public class AbstractCoordinatorTest {
             leaveGroupResponse(Arrays.asList(memberResponse, memberResponse));
         RequestFuture<Void> leaveGroupFuture = setupLeaveGroup(response);
         assertNotNull(leaveGroupFuture);
-        assertTrue(leaveGroupFuture.exception() instanceof IllegalStateException);
+        assertInstanceOf(IllegalStateException.class, leaveGroupFuture.exception());
     }
 
     @Test
@@ -1178,7 +1179,7 @@ public class AbstractCoordinatorTest {
             leaveGroupResponse(Collections.singletonList(memberResponse));
         RequestFuture<Void> leaveGroupFuture = setupLeaveGroup(response);
         assertNotNull(leaveGroupFuture);
-        assertTrue(leaveGroupFuture.exception() instanceof UnknownMemberIdException);
+        assertInstanceOf(UnknownMemberIdException.class, leaveGroupFuture.exception());
     }
 
     private RequestFuture<Void> setupLeaveGroup(LeaveGroupResponse leaveGroupResponse) {

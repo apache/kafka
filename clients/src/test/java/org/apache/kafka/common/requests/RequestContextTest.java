@@ -40,6 +40,7 @@ import java.nio.ByteBuffer;
 import java.util.Collections;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -62,7 +63,7 @@ public class RequestContextTest {
         requestBuffer.flip();
 
         RequestAndSize requestAndSize = context.parseRequest(requestBuffer);
-        assertTrue(requestAndSize.request instanceof ApiVersionsRequest);
+        assertInstanceOf(ApiVersionsRequest.class, requestAndSize.request);
         ApiVersionsRequest request = (ApiVersionsRequest) requestAndSize.request;
         assertTrue(request.hasUnsupportedRequestVersion());
 

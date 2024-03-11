@@ -114,6 +114,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import static org.apache.kafka.clients.producer.internals.ProducerTestUtils.runUntil;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -733,7 +734,7 @@ public class SenderTest {
         prepareAndReceiveInitProducerId(producerId, Errors.CLUSTER_AUTHORIZATION_FAILED);
         assertFalse(transactionManager.hasProducerId());
         assertTrue(transactionManager.hasError());
-        assertTrue(transactionManager.lastError() instanceof ClusterAuthorizationException);
+        assertInstanceOf(ClusterAuthorizationException.class, transactionManager.lastError());
         assertEquals(-1, transactionManager.producerIdAndEpoch().epoch);
 
         assertSendFailure(ClusterAuthorizationException.class);
@@ -771,7 +772,7 @@ public class SenderTest {
         try {
             future.get();
         } catch (Exception e) {
-            assertTrue(e.getCause() instanceof TopicAuthorizationException);
+            assertInstanceOf(TopicAuthorizationException.class, e.getCause());
         }
     }
 
@@ -2543,7 +2544,7 @@ public class SenderTest {
             request.get();
             fail("The expired batch should throw a TimeoutException");
         } catch (ExecutionException e) {
-            assertTrue(e.getCause() instanceof TimeoutException);
+            assertInstanceOf(TimeoutException.class, e.getCause());
         }
     }
 
@@ -2578,10 +2579,10 @@ public class SenderTest {
             KafkaException exception = TestUtils.assertFutureThrows(future, KafkaException.class);
             Integer index = futureEntry.getKey();
             if (index == 0 || index == 2) {
-                assertTrue(exception instanceof InvalidRecordException);
+                assertInstanceOf(InvalidRecordException.class, exception);
                 assertEquals(index.toString(), exception.getMessage());
             } else if (index == 3) {
-                assertTrue(exception instanceof InvalidRecordException);
+                assertInstanceOf(InvalidRecordException.class, exception);
                 assertEquals(Errors.INVALID_RECORD.message(), exception.getMessage());
             } else {
                 assertEquals(KafkaException.class, exception.getClass());
@@ -2722,10 +2723,10 @@ public class SenderTest {
         assertEquals(0, sender.inFlightBatches(tp0).size(), "Expect zero in-flight batch in accumulator");
 
         ExecutionException e = assertThrows(ExecutionException.class, request1::get);
-        assertTrue(e.getCause() instanceof TimeoutException);
+        assertInstanceOf(TimeoutException.class, e.getCause());
 
         e = assertThrows(ExecutionException.class, request2::get);
-        assertTrue(e.getCause() instanceof TimeoutException);
+        assertInstanceOf(TimeoutException.class, e.getCause());
     }
 
     @Test

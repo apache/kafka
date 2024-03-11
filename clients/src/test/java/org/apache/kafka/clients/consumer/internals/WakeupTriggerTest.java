@@ -177,7 +177,7 @@ public class WakeupTriggerTest {
         try {
             future.get(DEFAULT_TIMEOUT_MS, TimeUnit.MILLISECONDS);
         } catch (ExecutionException e) {
-            assertTrue(e.getCause() instanceof WakeupException);
+            assertInstanceOf(WakeupException.class, e.getCause());
             return;
         } catch (Exception e) {
             fail("The task should throw an ExecutionException but got:" + e);

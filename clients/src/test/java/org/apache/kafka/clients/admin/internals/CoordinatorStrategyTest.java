@@ -37,6 +37,7 @@ import static java.util.Collections.singleton;
 import static java.util.Collections.singletonMap;
 import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -217,7 +218,7 @@ public class CoordinatorStrategyTest {
         assertFatalOldLookup(group, Errors.UNKNOWN_SERVER_ERROR);
 
         Throwable throwable = assertFatalOldLookup(group, Errors.GROUP_AUTHORIZATION_FAILED);
-        assertTrue(throwable instanceof GroupAuthorizationException);
+        assertInstanceOf(GroupAuthorizationException.class, throwable);
         GroupAuthorizationException exception = (GroupAuthorizationException) throwable;
         assertEquals("foo", exception.groupId());
     }
@@ -244,7 +245,7 @@ public class CoordinatorStrategyTest {
         assertFatalLookup(group, Errors.UNKNOWN_SERVER_ERROR);
 
         Throwable throwable = assertFatalLookup(group, Errors.GROUP_AUTHORIZATION_FAILED);
-        assertTrue(throwable instanceof GroupAuthorizationException);
+        assertInstanceOf(GroupAuthorizationException.class, throwable);
         GroupAuthorizationException exception = (GroupAuthorizationException) throwable;
         assertEquals("foo", exception.groupId());
     }
