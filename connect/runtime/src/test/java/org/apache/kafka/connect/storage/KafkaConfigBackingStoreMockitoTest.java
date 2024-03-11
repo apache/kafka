@@ -23,6 +23,7 @@ import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.IsolationLevel;
+import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.utils.MockTime;
@@ -31,6 +32,7 @@ import org.apache.kafka.connect.data.Field;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaAndValue;
 import org.apache.kafka.connect.data.Struct;
+import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.runtime.RestartRequest;
 import org.apache.kafka.connect.runtime.TargetState;
 import org.apache.kafka.connect.runtime.WorkerConfig;
@@ -55,8 +57,10 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Supplier;
 import java.util.function.Supplier;
 
 import static org.apache.kafka.clients.consumer.ConsumerConfig.GROUP_ID_CONFIG;
@@ -72,6 +76,8 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotSame;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertThrows;
+import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -122,6 +128,12 @@ public class KafkaConfigBackingStoreMockitoTest {
             Collections.singletonMap("config-key-one", "config-value-one"),
             Collections.singletonMap("config-key-two", "config-value-two"),
             Collections.singletonMap("config-key-three", "config-value-three")
+    );
+
+    private static final List<Struct> CONNECTOR_CONFIG_STRUCTS = Arrays.asList(
+            new Struct(KafkaConfigBackingStore.CONNECTOR_CONFIGURATION_V0).put("properties", SAMPLE_CONFIGS.get(0)),
+            new Struct(KafkaConfigBackingStore.CONNECTOR_CONFIGURATION_V0).put("properties", SAMPLE_CONFIGS.get(1)),
+            new Struct(KafkaConfigBackingStore.CONNECTOR_CONFIGURATION_V0).put("properties", SAMPLE_CONFIGS.get(2))
     );
 
     // The exact format doesn't matter here since both conversions are mocked
@@ -348,6 +360,36 @@ public class KafkaConfigBackingStoreMockitoTest {
     }
 
     @Test
+    public void testPutConnectorConfigProducerError() throws Exception {
+        expectStart(Collections.emptyList(), Collections.emptyMap());
+        expectPartitionCount(1);
+
+        configStorage.setupAndCreateKafkaBasedLog(TOPIC, config);
+        verifyConfigure();
+        configStorage.start();
+
+        when(converter.fromConnectData(TOPIC, KafkaConfigBackingStore.CONNECTOR_CONFIGURATION_V0, CONNECTOR_CONFIG_STRUCTS.get(0)))
+                .thenReturn(CONFIGS_SERIALIZED.get(0));
+        when(configLog.sendWithReceipt(anyString(), any(byte[].class))).thenReturn(producerFuture);
+
+        // Verify initial state
+        ClusterConfigState configState = configStorage.snapshot();
+        assertEquals(-1, configState.offset());
+        assertEquals(0, configState.connectors().size());
+
+        when(producerFuture.get(anyLong(), any(TimeUnit.class))).thenThrow(
+                new ExecutionException(new TopicAuthorizationException(Collections.singleton("test"))));
+
+        // verify that the producer exception from KafkaBasedLog::send is propagated
+        ConnectException e = assertThrows(ConnectException.class, () -> configStorage.putConnectorConfig(CONNECTOR_IDS.get(0),
+                SAMPLE_CONFIGS.get(0), null));
+        assertTrue(e.getMessage().contains("Error writing connector configuration to Kafka"));
+
+        configStorage.stop();
+        verify(configLog).stop();
+    }
+
+    @Test
     public void testRecordToRestartRequest() {
         ConsumerRecord<String, byte[]> record = new ConsumerRecord<>(TOPIC, 0, 0, 0L, TimestampType.CREATE_TIME, 0, 0, RESTART_CONNECTOR_KEYS.get(0),
                 CONFIGS_SERIALIZED.get(0), new RecordHeaders(), Optional.empty());
@@ -474,6 +516,10 @@ public class KafkaConfigBackingStoreMockitoTest {
             // Note null schema because default settings for internal serialization are schema-less
             return new SchemaAndValue(null, serialized == null ? null : structToMap(capturedRecord.getValue()));
         });
+    }
+
+    private void expectConvert(Schema valueSchema, Struct valueStruct, byte[] serialized) {
+
     }
 
     // This map needs to maintain ordering

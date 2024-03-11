@@ -24,7 +24,6 @@ import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.ProducerFencedException;
-import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.utils.MockTime;
@@ -33,7 +32,6 @@ import org.apache.kafka.connect.data.Field;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaAndValue;
 import org.apache.kafka.connect.data.Struct;
-import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.runtime.RestartRequest;
 import org.apache.kafka.connect.runtime.TargetState;
 import org.apache.kafka.connect.runtime.WorkerConfig;
@@ -65,7 +63,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
@@ -224,41 +221,6 @@ public class KafkaConfigBackingStoreTest {
     @Before
     public void setUp() {
         createStore();
-    }
-
-    @Test
-    public void testPutConnectorConfigProducerError() throws Exception {
-        expectConfigure();
-        expectStart(Collections.emptyList(), Collections.emptyMap());
-        expectPartitionCount(1);
-
-        expectConvert(KafkaConfigBackingStore.CONNECTOR_CONFIGURATION_V0, CONNECTOR_CONFIG_STRUCTS.get(0), CONFIGS_SERIALIZED.get(0));
-
-        storeLog.sendWithReceipt(EasyMock.anyObject(), EasyMock.anyObject());
-        EasyMock.expectLastCall().andReturn(producerFuture);
-
-        producerFuture.get(EasyMock.anyLong(), EasyMock.anyObject());
-        EasyMock.expectLastCall().andThrow(new ExecutionException(new TopicAuthorizationException(Collections.singleton("test"))));
-
-        expectStop();
-
-        PowerMock.replayAll();
-
-        configStorage.setupAndCreateKafkaBasedLog(TOPIC, config);
-        configStorage.start();
-
-        // Verify initial state
-        ClusterConfigState configState = configStorage.snapshot();
-        assertEquals(-1, configState.offset());
-        assertEquals(0, configState.connectors().size());
-
-        // verify that the producer exception from KafkaBasedLog::send is propagated
-        ConnectException e = assertThrows(ConnectException.class, () -> configStorage.putConnectorConfig(CONNECTOR_IDS.get(0),
-            SAMPLE_CONFIGS.get(0), null));
-        assertTrue(e.getMessage().contains("Error writing connector configuration to Kafka"));
-        configStorage.stop();
-
-        PowerMock.verifyAll();
     }
 
     @Test
