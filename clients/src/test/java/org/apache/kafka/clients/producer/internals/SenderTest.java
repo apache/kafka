@@ -3171,7 +3171,7 @@ public class SenderTest {
         sender.runOnce();  // send request
         sendIdempotentProducerResponse(0, tp0, Errors.ABORTABLE_TRANSACTION_EXCEPTION, -1);
 
-        // Return InvalidTxnState error. It should be abortable.
+        // Return AbortableTransactionException error. It should be abortable.
         sender.runOnce();
         assertFutureFailure(request, AbortableTransactionException.class);
         assertTrue(txnManager.hasAbortableError());

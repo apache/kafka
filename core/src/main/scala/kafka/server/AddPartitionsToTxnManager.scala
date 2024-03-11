@@ -232,17 +232,13 @@ class AddPartitionsToTxnManager(
                 val tp = new TopicPartition(topicResult.name, partitionResult.partitionIndex)
                 if (partitionResult.partitionErrorCode != Errors.NONE.code) {
                   // Producers expect to handle INVALID_PRODUCER_EPOCH in this scenario.
-                  var code =
+                  val code =
                     if (partitionResult.partitionErrorCode == Errors.PRODUCER_FENCED.code)
                       Errors.INVALID_PRODUCER_EPOCH.code
-                    else
-                      partitionResult.partitionErrorCode
-                  // For backward compatibility with clients.
-                  code =
-                    if (code == Errors.ABORTABLE_TRANSACTION_EXCEPTION.code && transactionDataAndCallbacks.produceRequestVersion <= 10)
+                    else if (partitionResult.partitionErrorCode() == Errors.ABORTABLE_TRANSACTION_EXCEPTION.code && transactionDataAndCallbacks.produceRequestVersion <= 10) // For backward compatibility with clients.
                       Errors.INVALID_TXN_STATE.code
                     else
-                      code
+                      partitionResult.partitionErrorCode
                   unverified.put(tp, Errors.forCode(code))
                 }
               }
