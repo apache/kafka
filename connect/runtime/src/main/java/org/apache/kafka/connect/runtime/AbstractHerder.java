@@ -185,7 +185,7 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
 
     @Override
     public void onStop(String connector) {
-        statusBackingStore.put(new ConnectorStatus(connector, AbstractStatus.State.STOPPED,
+        statusBackingStore.put(new ConnectorStatus(connector, ConnectorStatus.State.STOPPED,
                 workerId, generation()));
     }
 
@@ -197,7 +197,7 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
 
     @Override
     public void onResume(String connector) {
-        statusBackingStore.put(new ConnectorStatus(connector, TaskStatus.State.RUNNING,
+        statusBackingStore.put(new ConnectorStatus(connector, ConnectorStatus.State.RUNNING,
                 workerId, generation()));
     }
 
