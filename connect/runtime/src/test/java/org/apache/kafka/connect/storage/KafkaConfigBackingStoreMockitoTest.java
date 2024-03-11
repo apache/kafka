@@ -59,6 +59,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
 
 import static org.apache.kafka.clients.consumer.ConsumerConfig.GROUP_ID_CONFIG;
+import static org.apache.kafka.clients.producer.ProducerConfig.CLIENT_ID_CONFIG;
 import static org.apache.kafka.clients.producer.ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG;
 import static org.apache.kafka.clients.producer.ProducerConfig.TRANSACTIONAL_ID_CONFIG;
 import static org.apache.kafka.connect.runtime.distributed.DistributedConfig.EXACTLY_ONCE_SOURCE_SUPPORT_CONFIG;
@@ -135,7 +136,7 @@ public class KafkaConfigBackingStoreMockitoTest {
     private Converter converter;
     @Mock
     private ConfigBackingStore.UpdateListener configUpdateListener;
-    private final Map<String, String> props = new HashMap<>(DEFAULT_CONFIG_STORAGE_PROPS);
+    private Map<String, String> props = new HashMap<>(DEFAULT_CONFIG_STORAGE_PROPS);
     private DistributedConfig config;
     @Mock
     KafkaBasedLog<String, byte[]> configLog;
@@ -392,6 +393,23 @@ public class KafkaConfigBackingStoreMockitoTest {
         Map<String, Object> fencableProducerProperties = configStorage.fencableProducerProps(config);
         assertEquals("connect-cluster-" + groupId, fencableProducerProperties.get(TRANSACTIONAL_ID_CONFIG));
         assertEquals("true", fencableProducerProperties.get(ENABLE_IDEMPOTENCE_CONFIG));
+    }
+
+    @Test
+    public void testClientIds() {
+        props = new HashMap<>(DEFAULT_CONFIG_STORAGE_PROPS);
+        props.put(EXACTLY_ONCE_SOURCE_SUPPORT_CONFIG, "enabled");
+        createStore();
+
+        configStorage.setupAndCreateKafkaBasedLog(TOPIC, config);
+        verifyConfigure();
+
+        Map<String, Object> fencableProducerProps = configStorage.fencableProducerProps(config);
+
+        final String expectedClientId = CLIENT_ID_BASE + "configs";
+        assertEquals(expectedClientId, capturedProducerProps.getValue().get(CLIENT_ID_CONFIG));
+        assertEquals(expectedClientId, capturedConsumerProps.getValue().get(CLIENT_ID_CONFIG));
+        assertEquals(expectedClientId + "-leader", fencableProducerProps.get(CLIENT_ID_CONFIG));
     }
 
     private void verifyConfigure() {
