@@ -4166,6 +4166,7 @@ class ReplicaManagerTest {
 
       // Get the current type=DelayedRemoteFetchMetrics,name=ExpiresPerSec metric value before fetching
       val curExpiresPerSec = safeYammerMetricValue("type=DelayedRemoteFetchMetrics,name=ExpiresPerSec").asInstanceOf[Long]
+      System.err.println("[Johnny] before timer, curExpiresPerSec is: " + curExpiresPerSec)
       replicaManager.fetchMessages(params, Seq(tidp0 -> new PartitionData(topicId, fetchOffset, 0, 100000, Optional.of[Integer](leaderEpoch), Optional.of[Integer](leaderEpoch))), UnboundedQuota, fetchCallback)
       // advancing the clock to expire the delayed remote fetch
       timer.advanceClock(2000L)
@@ -4191,6 +4192,7 @@ class ReplicaManagerTest {
 
   private def safeYammerMetricValue(name: String): Any = {
     val allMetrics = KafkaYammerMetrics.defaultRegistry.allMetrics.asScala
+    System.err.println("[Johnny] in safeYammerMetricValue, allMetrics is: " + allMetrics)
     val opt = allMetrics.find { case (n, _) => n.getMBeanName.endsWith(name) }
     if (opt.isEmpty)
       0L
