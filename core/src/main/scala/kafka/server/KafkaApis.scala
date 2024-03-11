@@ -1126,6 +1126,7 @@ class KafkaApis(val requestChannel: RequestChannel,
             .setPartitionIndex(tp.partition)
             .setErrorCode(Errors.forCode(partitionData.errorCode).code)
             .setRecords(unconvertedRecords)
+            .setAcquiredRecords(partitionData.acquiredRecords)
             .setCurrentLeader(partitionData.currentLeader())
     }
 
@@ -1133,13 +1134,8 @@ class KafkaApis(val requestChannel: RequestChannel,
     def processResponseCallback(responsePartitionData: Map[TopicIdPartition, ShareFetchResponseData.PartitionData]): Unit = {
       val partitions = new util.LinkedHashMap[TopicIdPartition, ShareFetchResponseData.PartitionData]
       val nodeEndpoints = new mutable.HashMap[Int, Node]
-      responsePartitionData.foreach { case(tp, data) =>
-        val partitionData = new ShareFetchResponseData.PartitionData()
-          .setPartitionIndex(tp.partition)
-          .setErrorCode(data.errorCode())
-          .setRecords(data.records)
-
-        data.errorCode() match {
+      responsePartitionData.foreach { case(tp, partitionData) =>
+        partitionData.errorCode() match {
           case errCode if errCode == Errors.NOT_LEADER_OR_FOLLOWER.code | errCode == Errors.FENCED_LEADER_EPOCH.code =>
             val leaderNode = getCurrentLeader(tp.topicPartition(), request.context.listenerName)
             leaderNode.node.foreach { node =>
