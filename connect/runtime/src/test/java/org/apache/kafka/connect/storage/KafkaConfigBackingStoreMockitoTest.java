@@ -21,11 +21,13 @@ import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.producer.ProducerConfig;
+import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.connect.data.Field;
+import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaAndValue;
 import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.runtime.RestartRequest;
@@ -33,6 +35,7 @@ import org.apache.kafka.connect.runtime.WorkerConfig;
 import org.apache.kafka.connect.runtime.distributed.DistributedConfig;
 import org.apache.kafka.connect.util.Callback;
 import org.apache.kafka.connect.util.KafkaBasedLog;
+import org.apache.kafka.connect.util.TestFuture;
 import org.apache.kafka.connect.util.TopicAdmin;
 import org.junit.Before;
 import org.junit.Test;
@@ -41,13 +44,17 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.junit.MockitoJUnitRunner;
+import org.mockito.stubbing.Answer;
 
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
 
 import static org.apache.kafka.clients.consumer.ConsumerConfig.GROUP_ID_CONFIG;
@@ -60,7 +67,10 @@ import static org.apache.kafka.connect.storage.KafkaConfigBackingStore.RESTART_K
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotSame;
+import static org.junit.Assert.assertNull;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.verify;
@@ -84,6 +94,11 @@ public class KafkaConfigBackingStoreMockitoTest {
         DEFAULT_CONFIG_STORAGE_PROPS.put(DistributedConfig.VALUE_CONVERTER_CLASS_CONFIG, "org.apache.kafka.connect.json.JsonConverter");
     }
 
+    private static final List<String> CONNECTOR_IDS = Arrays.asList("connector1", "connector2");
+    private static final List<String> CONNECTOR_CONFIG_KEYS = Arrays.asList("connector-connector1", "connector-connector2");
+    private static final List<String> TARGET_STATE_KEYS = Arrays.asList("target-state-connector1", "target-state-connector2");
+
+
     private static final String CONNECTOR_1_NAME = "connector1";
     private static final String CONNECTOR_2_NAME = "connector2";
     private static final List<String> RESTART_CONNECTOR_KEYS = Arrays.asList(RESTART_KEY(CONNECTOR_1_NAME), RESTART_KEY(CONNECTOR_2_NAME));
@@ -94,6 +109,14 @@ public class KafkaConfigBackingStoreMockitoTest {
             new Struct(KafkaConfigBackingStore.RESTART_REQUEST_V0).put(ONLY_FAILED_FIELD_NAME, true).put(INCLUDE_TASKS_FIELD_NAME, false),
             ONLY_FAILED_MISSING_STRUCT,
             INCLUDE_TASKS_MISSING_STRUCT);
+
+
+    // Need some placeholders -- the contents don't matter here, just that they are restored properly
+    private static final List<Map<String, String>> SAMPLE_CONFIGS = Arrays.asList(
+            Collections.singletonMap("config-key-one", "config-value-one"),
+            Collections.singletonMap("config-key-two", "config-value-two"),
+            Collections.singletonMap("config-key-three", "config-value-three")
+    );
 
     // The exact format doesn't matter here since both conversions are mocked
     private static final List<byte[]> CONFIGS_SERIALIZED = Arrays.asList(
@@ -110,6 +133,8 @@ public class KafkaConfigBackingStoreMockitoTest {
     private DistributedConfig config;
     @Mock
     KafkaBasedLog<String, byte[]> configLog;
+    @Mock
+    Future<RecordMetadata> producerFuture;
     private KafkaConfigBackingStore configStorage;
 
     private final ArgumentCaptor<String> capturedTopic = ArgumentCaptor.forClass(String.class);
@@ -124,6 +149,7 @@ public class KafkaConfigBackingStoreMockitoTest {
     private final ArgumentCaptor<Callback<ConsumerRecord<String, byte[]>>> capturedConsumedCallback = ArgumentCaptor.forClass(Callback.class);
 
     private final MockTime time = new MockTime();
+    private long logOffset = 0;
 
     private void createStore() {
         config = Mockito.spy(new DistributedConfig(props));
@@ -193,6 +219,77 @@ public class KafkaConfigBackingStoreMockitoTest {
         assertNotSame(snapshot.connectorTaskConfigGenerations, configStorage.connectorTaskConfigGenerations);
         assertNotSame(snapshot.connectorsPendingFencing, configStorage.connectorsPendingFencing);
         assertNotSame(snapshot.inconsistentConnectors, configStorage.inconsistent);
+    }
+
+    @Test
+    public void testPutConnectorConfig() throws Exception {
+        expectStart(Collections.emptyList(), Collections.emptyMap());
+        expectPartitionCount(1);
+
+        configStorage.setupAndCreateKafkaBasedLog(TOPIC, config);
+        verifyConfigure();
+        configStorage.start();
+
+        // Null before writing
+        ClusterConfigState configState = configStorage.snapshot();
+        assertEquals(-1, configState.offset());
+        assertNull(configState.connectorConfig(CONNECTOR_IDS.get(0)));
+        assertNull(configState.connectorConfig(CONNECTOR_IDS.get(1)));
+
+        String configKey = CONNECTOR_CONFIG_KEYS.get(1);
+        String targetStateKey = TARGET_STATE_KEYS.get(1);
+
+        doAnswer(expectReadToEnd(Collections.singletonMap(CONNECTOR_CONFIG_KEYS.get(0), CONFIGS_SERIALIZED.get(0))))
+                .doAnswer(expectReadToEnd(Collections.singletonMap(CONNECTOR_CONFIG_KEYS.get(1), CONFIGS_SERIALIZED.get(1))))
+                // Config deletion
+                .doAnswer(expectReadToEnd(new LinkedHashMap<String, byte[]>() {{
+                            put(configKey, null);
+                            put(targetStateKey, null);
+                        }})
+                ).when(configLog).readToEnd();
+
+        // Writing should block until it is written and read back from Kafka
+        expectConvertWriteRead(
+                CONNECTOR_CONFIG_KEYS.get(0), KafkaConfigBackingStore.CONNECTOR_CONFIGURATION_V0, CONFIGS_SERIALIZED.get(0),
+                "properties", SAMPLE_CONFIGS.get(0));
+
+        configStorage.putConnectorConfig(CONNECTOR_IDS.get(0), SAMPLE_CONFIGS.get(0), null);
+        configState = configStorage.snapshot();
+
+        assertEquals(1, configState.offset());
+        assertEquals(SAMPLE_CONFIGS.get(0), configState.connectorConfig(CONNECTOR_IDS.get(0)));
+        assertNull(configState.connectorConfig(CONNECTOR_IDS.get(1)));
+        verify(configUpdateListener).onConnectorConfigUpdate(CONNECTOR_IDS.get(0));
+
+        // Second should also block and all configs should still be available
+        expectConvertWriteRead(
+                CONNECTOR_CONFIG_KEYS.get(1), KafkaConfigBackingStore.CONNECTOR_CONFIGURATION_V0, CONFIGS_SERIALIZED.get(1),
+                "properties", SAMPLE_CONFIGS.get(1));
+
+        configStorage.putConnectorConfig(CONNECTOR_IDS.get(1), SAMPLE_CONFIGS.get(1), null);
+        configState = configStorage.snapshot();
+
+        assertEquals(2, configState.offset());
+        assertEquals(SAMPLE_CONFIGS.get(0), configState.connectorConfig(CONNECTOR_IDS.get(0)));
+        assertEquals(SAMPLE_CONFIGS.get(1), configState.connectorConfig(CONNECTOR_IDS.get(1)));
+        verify(configUpdateListener).onConnectorConfigUpdate(CONNECTOR_IDS.get(1));
+
+        // Config deletion
+        expectConvertWriteRead(configKey, KafkaConfigBackingStore.CONNECTOR_CONFIGURATION_V0, null, null, null);
+        expectConvertWriteRead(targetStateKey, KafkaConfigBackingStore.TARGET_STATE_V0, null, null, null);
+
+        // Deletion should remove the second one we added
+        configStorage.removeConnectorConfig(CONNECTOR_IDS.get(1));
+        configState = configStorage.snapshot();
+
+        assertEquals(4, configState.offset());
+        assertEquals(SAMPLE_CONFIGS.get(0), configState.connectorConfig(CONNECTOR_IDS.get(0)));
+        assertNull(configState.connectorConfig(CONNECTOR_IDS.get(1)));
+        assertNull(configState.targetState(CONNECTOR_IDS.get(1)));
+        verify(configUpdateListener).onConnectorConfigRemove(CONNECTOR_IDS.get(1));
+
+        configStorage.stop();
+        verify(configLog).stop();
     }
 
     @Test
@@ -270,6 +367,40 @@ public class KafkaConfigBackingStoreMockitoTest {
 
     private void expectPartitionCount(int partitionCount) {
         when(configLog.partitionCount()).thenReturn(partitionCount);
+    }
+
+    // Expect a conversion & write to the underlying log, followed by a subsequent read when the data is consumed back
+    // from the log. Validate the data that is captured when the conversion is performed matches the specified data
+    // (by checking a single field's value)
+    private void expectConvertWriteRead(final String configKey, final Schema valueSchema, final byte[] serialized,
+                                        final String dataFieldName, final Object dataFieldValue) throws Exception {
+        final ArgumentCaptor<Struct> capturedRecord = ArgumentCaptor.forClass(Struct.class);
+        if (serialized != null)
+            when(converter.fromConnectData(eq(TOPIC), eq(valueSchema), capturedRecord.capture()))
+                    .thenReturn(serialized);
+
+        when(configLog.sendWithReceipt(configKey, serialized)).thenReturn(producerFuture);
+        when(producerFuture.get(anyLong(), any(TimeUnit.class))).thenReturn(null);
+        when(converter.toConnectData(TOPIC, serialized)).thenAnswer((Answer<SchemaAndValue>) invocation -> {
+            if (dataFieldName != null)
+                assertEquals(dataFieldValue, capturedRecord.getValue().get(dataFieldName));
+            // Note null schema because default settings for internal serialization are schema-less
+            return new SchemaAndValue(null, serialized == null ? null : structToMap(capturedRecord.getValue()));
+        });
+    }
+
+    // This map needs to maintain ordering
+    private Answer<Future<Void>> expectReadToEnd(final Map<String, byte[]> serializedConfigs) {
+        return invocation -> {
+            TestFuture<Void> future = new TestFuture<>();
+            for (Map.Entry<String, byte[]> entry : serializedConfigs.entrySet()) {
+                capturedConsumedCallback.getValue().onCompletion(null,
+                        new ConsumerRecord<>(TOPIC, 0, logOffset++, 0L, TimestampType.CREATE_TIME, 0, 0,
+                                entry.getKey(), entry.getValue(), new RecordHeaders(), Optional.empty()));
+            }
+            future.resolveOnGet((Void) null);
+            return future;
+        };
     }
 
     // Generates a Map representation of Struct. Only does shallow traversal, so nested structs are not converted
