@@ -155,6 +155,42 @@ public class SharePartitionManager {
         return new ShareSessionKey(groupId, memberId);
     }
 
+    public Errors acknowledgeShareSessionCacheUpdate(String groupId, Uuid memberId, int reqEpoch) {
+        Errors shareAcknowledgeRequestError = shareAcknowledgeError(groupId, memberId, reqEpoch);
+        if (shareAcknowledgeRequestError != Errors.NONE)
+            return shareAcknowledgeRequestError;
+        ShareSessionKey key = shareSessionKey(groupId, memberId);
+        ShareSession shareSession = cache.get(new ShareSessionKey(groupId, memberId));
+        if (reqEpoch == ShareFetchMetadata.FINAL_EPOCH) {
+            if (cache.remove(key) != null)
+                log.info("Removed share session with key " + key);
+            return Errors.NONE;
+        }
+        // Update session's position in the cache
+        cache.touch(shareSession, time.milliseconds());
+        shareSession.epoch = ShareFetchMetadata.nextEpoch(shareSession.epoch);
+        return Errors.NONE;
+    }
+
+    private Errors shareAcknowledgeError(String groupId, Uuid memberId, int reqEpoch) {
+        if (reqEpoch == ShareFetchMetadata.INITIAL_EPOCH)
+            return Errors.INVALID_SHARE_SESSION_EPOCH;
+        else {
+            ShareSessionKey key = shareSessionKey(groupId, memberId);
+            ShareSession shareSession = cache.get(key);
+            if (shareSession == null) {
+                log.debug("Share session error for {}: no such share session found", key);
+                return Errors.SHARE_SESSION_NOT_FOUND;
+            }
+            if (reqEpoch != shareSession.epoch && reqEpoch != ShareFetchMetadata.FINAL_EPOCH) {
+                log.debug("Share session error for {}: expected epoch {}, but got {} instead", key,
+                        shareSession.epoch, reqEpoch);
+                return Errors.INVALID_SHARE_SESSION_EPOCH;
+            }
+            return Errors.NONE;
+        }
+    }
+
     public ShareFetchContext newContext(String groupId, Map<TopicIdPartition,
             ShareFetchRequest.SharePartitionData> shareFetchData, List<TopicIdPartition> toForget,
                                         Map<Uuid, String> topicNames, ShareFetchMetadata reqMetadata) {
@@ -190,24 +226,15 @@ public class SharePartitionManager {
                     } else {
                         Map<ModifiedTopicIdPartitionType, List<TopicIdPartition>> modifiedTopicIdPartitions = shareSession.update(
                                 shareFetchData, toForget);
-                        if (shareSession.isEmpty()) {
-                            log.debug("Created a new FinalContext and closing session key {}, epoch {}: " +
-                                            "after removing {}, there are no more partitions left.", shareSession.key,
-                                    shareSession.epoch, partitionsToLogString(
-                                            modifiedTopicIdPartitions.get(ModifiedTopicIdPartitionType.REMOVED)));
-                            cache.remove(shareSession);
-                            context = new FinalContext(shareFetchData);
-                        } else {
-                            cache.touch(shareSession, time.milliseconds());
-                            shareSession.epoch = ShareFetchMetadata.nextEpoch(shareSession.epoch);
-                            log.debug("Created a new ShareSessionContext for session key {}, epoch {}: " +
-                                    "added {}, updated {}, removed {}", shareSession.key, shareSession.epoch,
-                                    partitionsToLogString(modifiedTopicIdPartitions.get(ModifiedTopicIdPartitionType.ADDED)),
-                                    partitionsToLogString(modifiedTopicIdPartitions.get(ModifiedTopicIdPartitionType.UPDATED)),
-                                    partitionsToLogString(modifiedTopicIdPartitions.get(ModifiedTopicIdPartitionType.REMOVED))
-                                    );
-                            context = new ShareSessionContext(time, reqMetadata, shareSession);
-                        }
+                        cache.touch(shareSession, time.milliseconds());
+                        shareSession.epoch = ShareFetchMetadata.nextEpoch(shareSession.epoch);
+                        log.debug("Created a new ShareSessionContext for session key {}, epoch {}: " +
+                                        "added {}, updated {}, removed {}", shareSession.key, shareSession.epoch,
+                                partitionsToLogString(modifiedTopicIdPartitions.get(ModifiedTopicIdPartitionType.ADDED)),
+                                partitionsToLogString(modifiedTopicIdPartitions.get(ModifiedTopicIdPartitionType.UPDATED)),
+                                partitionsToLogString(modifiedTopicIdPartitions.get(ModifiedTopicIdPartitionType.REMOVED))
+                        );
+                        context = new ShareSessionContext(time, reqMetadata, shareSession);
                     }
                 }
             }
@@ -270,6 +297,13 @@ public class SharePartitionManager {
             }
         }
 
+        // Visible for testing
+        public int epoch() {
+            synchronized (this) {
+                return epoch;
+            }
+        }
+
         public int size() {
             synchronized (this) {
                 return partitionMap.size();
@@ -303,7 +337,7 @@ public class SharePartitionManager {
             List<TopicIdPartition> removed = new ArrayList<>();
             synchronized (this) {
                 shareFetchData.forEach((topicIdPartition, sharePartitionData) -> {
-                    CachedSharePartition cachedSharePartitionKey = new CachedSharePartition(topicIdPartition, sharePartitionData);
+                    CachedSharePartition cachedSharePartitionKey = new CachedSharePartition(topicIdPartition, sharePartitionData, true);
                     CachedSharePartition cachedPart = partitionMap.find(cachedSharePartitionKey);
                     if (cachedPart == null) {
                         partitionMap.mustAdd(cachedSharePartitionKey);
@@ -356,6 +390,18 @@ public class SharePartitionManager {
             this.validTopicIdPartitions = validTopicIdPartitions;
         }
 
+        public ErroneousAndValidPartitionData(Map<TopicIdPartition, ShareFetchRequest.SharePartitionData> shareFetchData) {
+            erroneous = new ArrayList<>();
+            validTopicIdPartitions = new ArrayList<>();
+            shareFetchData.forEach((topicIdPartition, sharePartitionData) -> {
+                if (topicIdPartition.topic() == null) {
+                    erroneous.add(new Tuple2<>(topicIdPartition, ShareFetchResponse.partitionResponse(topicIdPartition, Errors.UNKNOWN_TOPIC_ID)));
+                } else {
+                    validTopicIdPartitions.add(new Tuple2<>(topicIdPartition, sharePartitionData));
+                }
+            });
+        }
+
         public List<Tuple2<TopicIdPartition, ShareFetchResponseData.PartitionData>> erroneous() {
             return erroneous;
         }
@@ -395,16 +441,7 @@ public class SharePartitionManager {
 
         @Override
         ErroneousAndValidPartitionData getErroneousAndValidTopicIdPartitions() {
-            List<Tuple2<TopicIdPartition, ShareFetchResponseData.PartitionData>> erroneous = new ArrayList<>();
-            List<Tuple2<TopicIdPartition, ShareFetchRequest.SharePartitionData>> valid = new ArrayList<>();
-            shareFetchData.forEach((topicIdPartition, sharePartitionData) -> {
-                if (topicIdPartition.topic() == null) {
-                    erroneous.add(new Tuple2<>(topicIdPartition, ShareFetchResponse.partitionResponse(topicIdPartition, Errors.UNKNOWN_TOPIC_ID)));
-                } else {
-                    valid.add(new Tuple2<>(topicIdPartition, sharePartitionData));
-                }
-            });
-            return new ErroneousAndValidPartitionData(erroneous, valid);
+            return new ErroneousAndValidPartitionData(shareFetchData);
         }
     }
 
@@ -426,7 +463,7 @@ public class SharePartitionManager {
          * The share fetch context for the first request that starts a share session.
          *
          * @param time               The clock to use.
-         * @param cache              The share fetch session cache.
+         * @param cache              The share session cache.
          * @param reqMetadata        The request metadata.
          * @param shareFetchData     The share partition data from the share fetch request.
          */
@@ -508,7 +545,7 @@ public class SharePartitionManager {
                     TopicIdPartition topicPart = element.getKey();
                     ShareFetchResponseData.PartitionData respData = element.getValue();
                     CachedSharePartition cachedPart = session.partitionMap.find(new CachedSharePartition(topicPart));
-                    boolean mustRespond = cachedPart.maybeUpdateResponseData(respData);
+                    boolean mustRespond = cachedPart.maybeUpdateResponseData(respData, updateShareContextAndRemoveUnselected);
                     if (mustRespond) {
                         nextElement = element;
                         if (updateShareContextAndRemoveUnselected && ShareFetchResponse.recordsSize(respData) > 0) {
@@ -566,7 +603,7 @@ public class SharePartitionManager {
                         ImplicitLinkedHashCollection<>(updates.size());
                 updates.forEach((topicIdPartition, respData) -> {
                     ShareFetchRequest.SharePartitionData reqData = shareFetchData.get(topicIdPartition);
-                    cachedSharePartitions.mustAdd(new CachedSharePartition(topicIdPartition, reqData));
+                    cachedSharePartitions.mustAdd(new CachedSharePartition(topicIdPartition, reqData, false));
                 });
                 ShareSessionKey responseShareSessionKey = cache.maybeCreateSession(groupId, memberId,
                         time.milliseconds(), updates.size(), cachedSharePartitions);
@@ -575,33 +612,38 @@ public class SharePartitionManager {
                 return new ShareFetchResponse(ShareFetchResponse.toMessage(
                         Errors.NONE, 0, updates.entrySet().iterator(), Collections.emptyList()));
             } else {
-                // Iterate over the update list using PartitionIterator. This will prune updates which don't need to be sent
-                Iterator<Map.Entry<TopicIdPartition, ShareFetchResponseData.PartitionData>> partitionIterator = new PartitionIterator(
-                        updates.entrySet().iterator(), true);
-                while (partitionIterator.hasNext()) {
-                    partitionIterator.next();
+                int expectedEpoch = ShareFetchMetadata.nextEpoch(reqMetadata.epoch());
+                int sessionEpoch;
+                synchronized (session) {
+                    sessionEpoch = session.epoch;
                 }
-                log.debug("Subsequent share session context with session key {} returning {}", session.key,
-                        partitionsToLogString(updates.keySet()));
-                return new ShareFetchResponse(ShareFetchResponse.toMessage(
-                        Errors.NONE, 0, updates.entrySet().iterator(), Collections.emptyList()));
+                if (session.epoch != expectedEpoch) {
+                    log.info("Subsequent share session {} expected epoch {}, but got {}. Possible duplicate request.",
+                            session.key, expectedEpoch, sessionEpoch);
+                    return new ShareFetchResponse(ShareFetchResponse.toMessage(Errors.INVALID_SHARE_SESSION_EPOCH,
+                            0, Collections.emptyIterator(), Collections.emptyList()));
+                } else {
+                    // Iterate over the update list using PartitionIterator. This will prune updates which don't need to be sent
+                    Iterator<Map.Entry<TopicIdPartition, ShareFetchResponseData.PartitionData>> partitionIterator = new PartitionIterator(
+                            updates.entrySet().iterator(), true);
+                    while (partitionIterator.hasNext()) {
+                        partitionIterator.next();
+                    }
+                    log.debug("Subsequent share session context with session key {} returning {}", session.key,
+                            partitionsToLogString(updates.keySet()));
+                    return new ShareFetchResponse(ShareFetchResponse.toMessage(
+                            Errors.NONE, 0, updates.entrySet().iterator(), Collections.emptyList()));
+                }
             }
         }
 
         @Override
         ErroneousAndValidPartitionData getErroneousAndValidTopicIdPartitions() {
-            List<Tuple2<TopicIdPartition, ShareFetchResponseData.PartitionData>> erroneous = new ArrayList<>();
-            List<Tuple2<TopicIdPartition, ShareFetchRequest.SharePartitionData>> valid = new ArrayList<>();
             if (!isSubsequent) {
-                shareFetchData.forEach((topicIdPartition, sharePartitionData) -> {
-                    if (topicIdPartition.topic() == null) {
-                        erroneous.add(new Tuple2<>(topicIdPartition, ShareFetchResponse.partitionResponse(topicIdPartition, Errors.UNKNOWN_TOPIC_ID)));
-                    } else {
-                        valid.add(new Tuple2<>(topicIdPartition, sharePartitionData));
-                    }
-                });
-                return new ErroneousAndValidPartitionData(erroneous, valid);
+                return new ErroneousAndValidPartitionData(shareFetchData);
             } else {
+                List<Tuple2<TopicIdPartition, ShareFetchResponseData.PartitionData>> erroneous = new ArrayList<>();
+                List<Tuple2<TopicIdPartition, ShareFetchRequest.SharePartitionData>> valid = new ArrayList<>();
                 // Take the session lock and iterate over all the cached partitions.
                 synchronized (session) {
                     session.partitionMap.forEach(cachedSharePartition -> {
@@ -945,12 +987,12 @@ public class SharePartitionManager {
                 if (sessions.size() < maxEntries || tryEvict(now)) {
                     ShareSession session = new ShareSession(new ShareSessionKey(groupId, memberId), partitionMap,
                             now, now, ShareFetchMetadata.nextEpoch(ShareFetchMetadata.INITIAL_EPOCH));
-                    log.debug("Created fetch session " + session);
+                    log.debug("Created share session " + session);
                     sessions.put(session.key, session);
                     touch(session, now);
                     return session.key;
                 } else {
-                    log.debug("No fetch session created for size = " + size);
+                    log.debug("No share session created for size = " + size);
                     return null;
                 }
             }
@@ -977,29 +1019,33 @@ public class SharePartitionManager {
         private final Uuid topicId;
         private int partition, maxBytes;
         private Optional<Integer> leaderEpoch;
+        private boolean requiresUpdateInResponse;
 
         private int cachedNext = ImplicitLinkedHashCollection.INVALID_INDEX;
         private int cachedPrev = ImplicitLinkedHashCollection.INVALID_INDEX;
 
-        private CachedSharePartition(String topic, Uuid topicId, int partition, int maxBytes, Optional<Integer> leaderEpoch) {
+        private CachedSharePartition(String topic, Uuid topicId, int partition, int maxBytes, Optional<Integer> leaderEpoch,
+                                     boolean requiresUpdateInResponse) {
             this.topic = topic;
             this.topicId = topicId;
             this.partition = partition;
             this.maxBytes = maxBytes;
             this.leaderEpoch = leaderEpoch;
+            this.requiresUpdateInResponse = requiresUpdateInResponse;
         }
 
-        public CachedSharePartition(String topic, Uuid topicId, int partition) {
-            this(topic, topicId, partition, -1, Optional.empty());
+        public CachedSharePartition(String topic, Uuid topicId, int partition, boolean requiresUpdateInResponse) {
+            this(topic, topicId, partition, -1, Optional.empty(), requiresUpdateInResponse);
         }
 
         public CachedSharePartition(TopicIdPartition topicIdPartition) {
-            this(topicIdPartition.topic(), topicIdPartition.topicId(), topicIdPartition.partition());
+            this(topicIdPartition.topic(), topicIdPartition.topicId(), topicIdPartition.partition(), false);
         }
 
-        public CachedSharePartition(TopicIdPartition topicIdPartition, ShareFetchRequest.SharePartitionData reqData) {
+        public CachedSharePartition(TopicIdPartition topicIdPartition, ShareFetchRequest.SharePartitionData reqData,
+                                    boolean requiresUpdateInResponse) {
             this(topicIdPartition.topic(), topicIdPartition.topicId(), topicIdPartition.partition(), reqData.maxBytes,
-                    reqData.currentLeaderEpoch);
+                    reqData.currentLeaderEpoch, requiresUpdateInResponse);
         }
 
         public Uuid topicId() {
@@ -1030,14 +1076,29 @@ public class SharePartitionManager {
          * This function should be called while holding the appropriate session lock.
          *
          * @param respData partition data
+         * @param updateResponseData if set to true, update this CachedSharePartition with new request and response data.
          * @return True if this partition should be included in the response; false if it can be omitted.
          */
-        public boolean maybeUpdateResponseData(ShareFetchResponseData.PartitionData respData) {
+        public boolean maybeUpdateResponseData(ShareFetchResponseData.PartitionData respData, boolean updateResponseData) {
+            boolean mustRespond = false;
             // Check the response data
             // Partitions with new data are always included in the response.
-            // Partitions with errors are always included in the response.
-            // This ensures that when the error goes away, we re-send the partition.
-            return ShareFetchResponse.recordsSize(respData) > 0 || respData.errorCode() != Errors.NONE.code();
+            if (ShareFetchResponse.recordsSize(respData) > 0)
+                mustRespond = true;
+            if (requiresUpdateInResponse) {
+                mustRespond = true;
+                if (updateResponseData)
+                    requiresUpdateInResponse = false;
+            }
+            if (respData.errorCode() != Errors.NONE.code()) {
+                // Partitions with errors are always included in the response.
+                // We also set the cached requiresUpdateInResponse to false.
+                // This ensures that when the error goes away, we re-send the partition.
+                if (updateResponseData)
+                    requiresUpdateInResponse = true;
+                mustRespond = true;
+            }
+            return mustRespond;
         }
 
         public String toString() {
