@@ -59,6 +59,7 @@ import static org.apache.kafka.connect.storage.KafkaConfigBackingStore.ONLY_FAIL
 import static org.apache.kafka.connect.storage.KafkaConfigBackingStore.RESTART_KEY;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotSame;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doReturn;
@@ -169,6 +170,29 @@ public class KafkaConfigBackingStoreMockitoTest {
 
         verify(configLog).start();
         verify(configLog).stop();
+    }
+
+    @Test
+    public void testSnapshotCannotMutateInternalState() {
+        props.put("config.storage.min.insync.replicas", "3");
+        props.put("config.storage.max.message.bytes", "1001");
+        createStore();
+        expectStart(Collections.emptyList(), Collections.emptyMap());
+        expectPartitionCount(1);
+
+        configStorage.setupAndCreateKafkaBasedLog(TOPIC, config);
+        verifyConfigure();
+
+        configStorage.start();
+        ClusterConfigState snapshot = configStorage.snapshot();
+        assertNotSame(snapshot.connectorTaskCounts, configStorage.connectorTaskCounts);
+        assertNotSame(snapshot.connectorConfigs, configStorage.connectorConfigs);
+        assertNotSame(snapshot.connectorTargetStates, configStorage.connectorTargetStates);
+        assertNotSame(snapshot.taskConfigs, configStorage.taskConfigs);
+        assertNotSame(snapshot.connectorTaskCountRecords, configStorage.connectorTaskCountRecords);
+        assertNotSame(snapshot.connectorTaskConfigGenerations, configStorage.connectorTaskConfigGenerations);
+        assertNotSame(snapshot.connectorsPendingFencing, configStorage.connectorsPendingFencing);
+        assertNotSame(snapshot.inconsistentConnectors, configStorage.inconsistent);
     }
 
     @Test
