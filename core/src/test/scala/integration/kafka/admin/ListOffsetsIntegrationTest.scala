@@ -19,6 +19,7 @@ package kafka.admin
 
 import kafka.integration.KafkaServerTestHarness
 import kafka.server.KafkaConfig
+import kafka.utils.TestUtils.{createProducer, plaintextBootstrapServers}
 import kafka.utils.{TestInfoUtils, TestUtils}
 import org.apache.kafka.clients.admin._
 import org.apache.kafka.clients.producer.ProducerRecord
@@ -36,12 +37,12 @@ class ListOffsetsIntegrationTest extends KafkaServerTestHarness {
 
   val topicName = "foo"
   var adminClient: Admin = _
+  var setOldMessageFormat: Boolean = false
 
   @BeforeEach
   override def setUp(testInfo: TestInfo): Unit = {
     super.setUp(testInfo)
     createTopic(topicName, 1, 1.toShort)
-    produceMessages()
     adminClient = Admin.create(Map[String, Object](
       AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG -> bootstrapServers()
     ).asJava)
@@ -49,52 +50,136 @@ class ListOffsetsIntegrationTest extends KafkaServerTestHarness {
 
   @AfterEach
   override def tearDown(): Unit = {
+    setOldMessageFormat = false
     Utils.closeQuietly(adminClient, "ListOffsetsAdminClient")
     super.tearDown()
   }
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
-  def testEarliestOffset(quorum: String): Unit = {
+  def testThreeCompressedRecordsInOneBatch(quorum: String): Unit = {
+    produceMessagesInOneBatch("gzip")
+    verifyListOffsets()
+  }
+
+  // The message conversion test only run in ZK mode because KRaft mode doesn't support "inter.broker.protocol.version" < 3.0
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk"))
+  def testThreeRecordsInOneBatchWithMessageConversion(quorum: String): Unit = {
+    createOldMessageFormatBrokers()
+    produceMessagesInOneBatch()
+    verifyListOffsets()
+  }
+
+  // The message conversion test only run in ZK mode because KRaft mode doesn't support "inter.broker.protocol.version" < 3.0
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk"))
+  def testThreeRecordsInSeparateBatchWithMessageConversion(quorum: String): Unit = {
+    createOldMessageFormatBrokers()
+    produceMessagesInSeparateBatch()
+    verifyListOffsets()
+  }
+
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testThreeRecordsInSeparateBatch(quorum: String): Unit = {
+    produceMessagesInSeparateBatch()
+    verifyListOffsets()
+  }
+
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testThreeCompressedRecordsInSeparateBatch(quorum: String): Unit = {
+    produceMessagesInSeparateBatch("gzip")
+    verifyListOffsets()
+  }
+
+  private def createOldMessageFormatBrokers(): Unit = {
+    setOldMessageFormat = true
+    recreateBrokers(reconfigure = true, startup = true)
+    Utils.closeQuietly(adminClient, "ListOffsetsAdminClient")
+    adminClient = Admin.create(Map[String, Object](
+      AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG -> bootstrapServers()
+    ).asJava)
+  }
+
+  private def verifyListOffsets(): Unit = {
     val earliestOffset = runFetchOffsets(adminClient, OffsetSpec.earliest())
     assertEquals(0, earliestOffset.offset())
-  }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("zk", "kraft"))
-  def testLatestOffset(quorum: String): Unit = {
     val latestOffset = runFetchOffsets(adminClient, OffsetSpec.latest())
     assertEquals(3, latestOffset.offset())
-  }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("zk", "kraft"))
-  def testMaxTimestampOffset(quorum: String): Unit = {
     val maxTimestampOffset = runFetchOffsets(adminClient, OffsetSpec.maxTimestamp())
     assertEquals(1, maxTimestampOffset.offset())
   }
 
   private def runFetchOffsets(adminClient: Admin,
-                              offsetSpec: OffsetSpec): ListOffsetsResult.ListOffsetsResultInfo = {
-    val tp = new TopicPartition(topicName, 0)
+                              offsetSpec: OffsetSpec,
+                              topic: String = topicName): ListOffsetsResult.ListOffsetsResultInfo = {
+    val tp = new TopicPartition(topic, 0)
     adminClient.listOffsets(Map(
       tp -> offsetSpec
     ).asJava, new ListOffsetsOptions()).all().get().get(tp)
   }
 
-  def produceMessages(): Unit = {
+  def produceMessagesInOneBatch(compressionType: String = "none"): Unit = {
     val records = Seq(
       new ProducerRecord[Array[Byte], Array[Byte]](topicName, 0, 100L,
-        null, new Array[Byte](10000)),
+        null, new Array[Byte](10)),
       new ProducerRecord[Array[Byte], Array[Byte]](topicName, 0, 999L,
-        null, new Array[Byte](10000)),
+        null, new Array[Byte](10)),
       new ProducerRecord[Array[Byte], Array[Byte]](topicName, 0, 200L,
-        null, new Array[Byte](10000)),
+        null, new Array[Byte](10)),
     )
-    TestUtils.produceMessages(brokers, records, -1)
+    // create a producer with large linger.ms and enough batch.size (default is enough for three 10 bytes records),
+    // so that we can confirm all records will be accumulated in producer until we flush them into one batch.
+    val producer = createProducer(
+      plaintextBootstrapServers(brokers),
+      deliveryTimeoutMs = Int.MaxValue,
+      lingerMs = Int.MaxValue,
+      compressionType = compressionType)
+
+    try {
+      val futures = records.map(producer.send)
+      producer.flush()
+      futures.foreach(_.get)
+    } finally {
+      producer.close()
+    }
   }
 
-  def generateConfigs: Seq[KafkaConfig] =
-    TestUtils.createBrokerConfigs(1, zkConnectOrNull).map(KafkaConfig.fromProps)
+  def produceMessagesInSeparateBatch(compressionType: String = "none"): Unit = {
+    val records = Seq(new ProducerRecord[Array[Byte], Array[Byte]](topicName, 0, 100L,
+        null, new Array[Byte](10)))
+    val records2 = Seq(new ProducerRecord[Array[Byte], Array[Byte]](topicName, 0, 999L,
+      null, new Array[Byte](10)))
+    val records3 = Seq(new ProducerRecord[Array[Byte], Array[Byte]](topicName, 0, 200L,
+      null, new Array[Byte](10)))
+
+    val producer = createProducer(
+      plaintextBootstrapServers(brokers),
+      compressionType = compressionType)
+    try {
+      val futures = records.map(producer.send)
+      futures.foreach(_.get)
+      val futures2 = records2.map(producer.send)
+      futures2.foreach(_.get)
+      val futures3 = records3.map(producer.send)
+      futures3.foreach(_.get)
+    } finally {
+      producer.close()
+    }
+  }
+
+  def generateConfigs: Seq[KafkaConfig] = {
+    TestUtils.createBrokerConfigs(1, zkConnectOrNull).map(props => {
+      if (setOldMessageFormat) {
+        props.setProperty("log.message.format.version", "0.10.0")
+        props.setProperty("inter.broker.protocol.version", "0.10.0")
+      }
+      props
+    }).map(KafkaConfig.fromProps)
+  }
 }
 

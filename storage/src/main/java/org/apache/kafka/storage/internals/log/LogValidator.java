@@ -424,11 +424,7 @@ public class LogValidator {
 
             if (timestampType == TimestampType.LOG_APPEND_TIME) {
                 maxTimestamp = now;
-                if (toMagic >= RecordBatch.MAGIC_VALUE_V2) {
-                    offsetOfMaxTimestamp = lastOffset;
-                } else {
-                    offsetOfMaxTimestamp = initialOffset;
-                }
+                offsetOfMaxTimestamp = initialOffset;
             }
 
             if (toMagic >= RecordBatch.MAGIC_VALUE_V1)
