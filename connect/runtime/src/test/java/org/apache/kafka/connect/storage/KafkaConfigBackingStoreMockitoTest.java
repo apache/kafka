@@ -43,6 +43,7 @@ import static org.apache.kafka.connect.storage.KafkaConfigBackingStore.INCLUDE_T
 import static org.apache.kafka.connect.storage.KafkaConfigBackingStore.ONLY_FAILED_FIELD_NAME;
 import static org.apache.kafka.connect.storage.KafkaConfigBackingStore.RESTART_KEY;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.mockito.Mockito.doReturn;
 
 @RunWith(MockitoJUnitRunner.StrictStubs.class)
@@ -118,6 +119,18 @@ public class KafkaConfigBackingStoreMockitoTest {
         assertEquals(CONNECTOR_1_NAME, restartRequest.connectorName());
         assertEquals(struct.getBoolean(INCLUDE_TASKS_FIELD_NAME), restartRequest.includeTasks());
         assertEquals(struct.getBoolean(ONLY_FAILED_FIELD_NAME), restartRequest.onlyFailed());
+    }
+
+    @Test
+    public void testRecordToRestartRequestOnlyFailedInconsistent() {
+        ConsumerRecord<String, byte[]> record = new ConsumerRecord<>(TOPIC, 0, 0, 0L, TimestampType.CREATE_TIME, 0, 0, RESTART_CONNECTOR_KEYS.get(0),
+                CONFIGS_SERIALIZED.get(0), new RecordHeaders(), Optional.empty());
+        Struct struct = ONLY_FAILED_MISSING_STRUCT;
+        SchemaAndValue schemaAndValue = new SchemaAndValue(struct.schema(), structToMap(struct));
+        RestartRequest restartRequest = configStorage.recordToRestartRequest(record, schemaAndValue);
+        assertEquals(CONNECTOR_1_NAME, restartRequest.connectorName());
+        assertEquals(struct.getBoolean(INCLUDE_TASKS_FIELD_NAME), restartRequest.includeTasks());
+        assertFalse(restartRequest.onlyFailed());
     }
 
     // Generates a Map representation of Struct. Only does shallow traversal, so nested structs are not converted
