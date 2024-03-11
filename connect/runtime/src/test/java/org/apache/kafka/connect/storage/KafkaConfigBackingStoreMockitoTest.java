@@ -17,28 +17,38 @@
 package org.apache.kafka.connect.storage;
 
 import org.apache.kafka.clients.CommonClientConfigs;
+import org.apache.kafka.clients.admin.NewTopic;
+import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.connect.data.Field;
 import org.apache.kafka.connect.data.SchemaAndValue;
 import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.runtime.RestartRequest;
+import org.apache.kafka.connect.runtime.WorkerConfig;
 import org.apache.kafka.connect.runtime.distributed.DistributedConfig;
+import org.apache.kafka.connect.util.Callback;
 import org.apache.kafka.connect.util.KafkaBasedLog;
+import org.apache.kafka.connect.util.TopicAdmin;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.junit.MockitoJUnitRunner;
 
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.function.Supplier;
 
 import static org.apache.kafka.clients.consumer.ConsumerConfig.GROUP_ID_CONFIG;
 import static org.apache.kafka.clients.producer.ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG;
@@ -49,7 +59,11 @@ import static org.apache.kafka.connect.storage.KafkaConfigBackingStore.ONLY_FAIL
 import static org.apache.kafka.connect.storage.KafkaConfigBackingStore.RESTART_KEY;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 @RunWith(MockitoJUnitRunner.StrictStubs.class)
 public class KafkaConfigBackingStoreMockitoTest {
@@ -96,6 +110,18 @@ public class KafkaConfigBackingStoreMockitoTest {
     @Mock
     KafkaBasedLog<String, byte[]> configLog;
     private KafkaConfigBackingStore configStorage;
+
+    private final ArgumentCaptor<String> capturedTopic = ArgumentCaptor.forClass(String.class);
+    @SuppressWarnings("unchecked")
+    private final ArgumentCaptor<Map<String, Object>> capturedConsumerProps = ArgumentCaptor.forClass(Map.class);
+    @SuppressWarnings("unchecked")
+    private final ArgumentCaptor<Map<String, Object>> capturedProducerProps = ArgumentCaptor.forClass(Map.class);
+    @SuppressWarnings("unchecked")
+    private final ArgumentCaptor<Supplier<TopicAdmin>> capturedAdminSupplier = ArgumentCaptor.forClass(Supplier.class);
+    private final ArgumentCaptor<NewTopic> capturedNewTopic = ArgumentCaptor.forClass(NewTopic.class);
+    @SuppressWarnings("unchecked")
+    private final ArgumentCaptor<Callback<ConsumerRecord<String, byte[]>>> capturedConsumedCallback = ArgumentCaptor.forClass(Callback.class);
+
     private final MockTime time = new MockTime();
 
     private void createStore() {
@@ -112,6 +138,37 @@ public class KafkaConfigBackingStoreMockitoTest {
     @Before
     public void setUp() {
         createStore();
+    }
+
+    @Test
+    public void testStartStop() {
+        props.put("config.storage.min.insync.replicas", "3");
+        props.put("config.storage.max.message.bytes", "1001");
+        createStore();
+
+        expectStart(Collections.emptyList(), Collections.emptyMap());
+        expectPartitionCount(1);
+
+        configStorage.setupAndCreateKafkaBasedLog(TOPIC, config);
+
+        verifyConfigure();
+        assertEquals(TOPIC, capturedTopic.getValue());
+        assertEquals("org.apache.kafka.common.serialization.StringSerializer", capturedProducerProps.getValue().get(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG));
+        assertEquals("org.apache.kafka.common.serialization.ByteArraySerializer", capturedProducerProps.getValue().get(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG));
+        assertEquals("org.apache.kafka.common.serialization.StringDeserializer", capturedConsumerProps.getValue().get(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG));
+        assertEquals("org.apache.kafka.common.serialization.ByteArrayDeserializer", capturedConsumerProps.getValue().get(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG));
+
+        assertEquals(TOPIC, capturedNewTopic.getValue().name());
+        assertEquals(1, capturedNewTopic.getValue().numPartitions());
+        assertEquals(TOPIC_REPLICATION_FACTOR, capturedNewTopic.getValue().replicationFactor());
+        assertEquals("3", capturedNewTopic.getValue().configs().get("min.insync.replicas"));
+        assertEquals("1001", capturedNewTopic.getValue().configs().get("max.message.bytes"));
+
+        configStorage.start();
+        configStorage.stop();
+
+        verify(configLog).start();
+        verify(configLog).stop();
     }
 
     @Test
@@ -162,6 +219,33 @@ public class KafkaConfigBackingStoreMockitoTest {
         Map<String, Object> fencableProducerProperties = configStorage.fencableProducerProps(config);
         assertEquals("connect-cluster-" + groupId, fencableProducerProperties.get(TRANSACTIONAL_ID_CONFIG));
         assertEquals("true", fencableProducerProperties.get(ENABLE_IDEMPOTENCE_CONFIG));
+    }
+
+    private void verifyConfigure() {
+        verify(configStorage).createKafkaBasedLog(capturedTopic.capture(), capturedProducerProps.capture(),
+                capturedConsumerProps.capture(), capturedConsumedCallback.capture(),
+                capturedNewTopic.capture(), capturedAdminSupplier.capture(),
+                any(WorkerConfig.class), any(Time.class));
+    }
+
+    // If non-empty, deserializations should be a LinkedHashMap
+    private void expectStart(final List<ConsumerRecord<String, byte[]>> preexistingRecords,
+                             final Map<byte[], Struct> deserializations) {
+        doAnswer(invocation -> {
+            for (ConsumerRecord<String, byte[]> rec : preexistingRecords)
+                capturedConsumedCallback.getValue().onCompletion(null, rec);
+            return null;
+        }).when(configLog).start();
+
+        for (Map.Entry<byte[], Struct> deserializationEntry : deserializations.entrySet()) {
+            // Note null schema because default settings for internal serialization are schema-less
+            when(converter.toConnectData(TOPIC, deserializationEntry.getKey()))
+                    .thenReturn(new SchemaAndValue(null, structToMap(deserializationEntry.getValue())));
+        }
+    }
+
+    private void expectPartitionCount(int partitionCount) {
+        when(configLog.partitionCount()).thenReturn(partitionCount);
     }
 
     // Generates a Map representation of Struct. Only does shallow traversal, so nested structs are not converted
