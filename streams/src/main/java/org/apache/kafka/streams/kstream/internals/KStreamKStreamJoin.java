@@ -223,9 +223,9 @@ class KStreamKStreamJoin<K, V1, V2, VOut> implements ProcessorSupplier<K, V1, K,
             try (final KeyValueIterator<TimestampedKeyAndJoinSide<K>, LeftOrRightValue<V1, V2>> it = store.all()) {
                 TimestampedKeyAndJoinSide<K> prevKey = null;
 
+                boolean outerJoinLeftBreak = false;
+                boolean outerJoinRightBreak = false;
                 while (it.hasNext()) {
-                    boolean outerJoinLeftBreak = false;
-                    boolean outerJoinRightBreak = false;
                     final KeyValue<TimestampedKeyAndJoinSide<K>, LeftOrRightValue<V1, V2>> next = it.next();
                     final TimestampedKeyAndJoinSide<K> timestampedKeyAndJoinSide = next.key;
                     final LeftOrRightValue<V1, V2> value = next.value;
