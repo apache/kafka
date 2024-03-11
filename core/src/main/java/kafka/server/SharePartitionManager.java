@@ -19,7 +19,6 @@ package kafka.server;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
-import org.apache.kafka.common.message.ShareAcknowledgeRequestData;
 import org.apache.kafka.common.message.ShareAcknowledgeResponseData;
 import org.apache.kafka.common.message.ShareFetchResponseData;
 import org.apache.kafka.common.protocol.Errors;
@@ -141,10 +140,43 @@ public class SharePartitionManager {
     }
 
     public CompletableFuture<Map<TopicIdPartition, ShareAcknowledgeResponseData.PartitionData>> acknowledge(
+            String memberId,
             String groupId,
-            Map<TopicIdPartition, ShareAcknowledgeRequestData.AcknowledgePartition> acknowledgeTopics
+            Map<TopicIdPartition, List<SharePartition.AcknowledgementBatch>> acknowledgeTopics
     ) {
-        throw new UnsupportedOperationException("Not implemented yet");
+        log.debug("Acknowledge request for topicIdPartitions: {} with groupId: {}",
+                acknowledgeTopics.keySet(), groupId);
+        Map<TopicIdPartition, CompletableFuture<Errors>> futures = new HashMap<>();
+        acknowledgeTopics.forEach((topicIdPartition, acknowledgePartitionBatches) -> {
+            SharePartition sharePartition = partitionCacheMap.get(sharePartitionKey(groupId, topicIdPartition));
+            if (sharePartition != null) {
+                synchronized (sharePartition) {
+                    CompletableFuture<Errors> future = sharePartition.acknowledge(memberId, acknowledgePartitionBatches).thenApply(throwable -> {
+                        if (throwable.isPresent()) {
+                            return Errors.forException(throwable.get());
+                        } else {
+                            return Errors.NONE;
+                        }
+
+                    });
+                    futures.put(topicIdPartition, future);
+                }
+            } else {
+                futures.put(topicIdPartition, CompletableFuture.completedFuture(Errors.UNKNOWN_TOPIC_OR_PARTITION));
+            }
+        });
+
+        CompletableFuture<Void> allFutures = CompletableFuture.allOf(
+                futures.values().toArray(new CompletableFuture[futures.size()]));
+        return allFutures.thenApply(v -> {
+            Map<TopicIdPartition, ShareAcknowledgeResponseData.PartitionData> result = new HashMap<>();
+            futures.forEach((topicIdPartition, future) -> {
+                result.put(topicIdPartition, new ShareAcknowledgeResponseData.PartitionData()
+                                .setPartitionIndex(topicIdPartition.partition())
+                                .setErrorCode(future.join().code()));
+            });
+            return result;
+        });
     }
 
     private SharePartitionKey sharePartitionKey(String groupId, TopicIdPartition topicIdPartition) {

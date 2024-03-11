@@ -32,6 +32,7 @@ public enum AcknowledgeType {
         return super.toString().toLowerCase(Locale.ROOT);
     }
 
+
     public static AcknowledgeType forId(byte id) {
         switch (id) {
             case 0:

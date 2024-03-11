@@ -61,7 +61,6 @@ public class SharePartition {
         ARCHIVED((byte) 3);
 
         public final byte id;
-
         RecordState(byte id) {
             this.id = id;
         }
