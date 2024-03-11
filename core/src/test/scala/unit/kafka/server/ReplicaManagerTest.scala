@@ -5018,7 +5018,7 @@ class ReplicaManagerTest {
       val topicIdPartitionCapture: ArgumentCaptor[org.apache.kafka.server.common.TopicIdPartition] =
         ArgumentCaptor.forClass(classOf[org.apache.kafka.server.common.TopicIdPartition])
       val logIdCaptureForPartition: ArgumentCaptor[Uuid] = ArgumentCaptor.forClass(classOf[Uuid])
-      verify(replicaManager.directoryEventHandler, atLeastOnce()).handleAssignment(topicIdPartitionCapture.capture(), logIdCaptureForPartition.capture(), any())
+      verify(replicaManager.directoryEventHandler, atLeastOnce()).handleAssignment(topicIdPartitionCapture.capture(), logIdCaptureForPartition.capture(), "test", any())
 
       assertEquals(topicIdPartitionCapture.getAllValues.asScala,
         List(
@@ -5063,7 +5063,7 @@ class ReplicaManagerTest {
       val topicIdPartitionCapture: ArgumentCaptor[org.apache.kafka.server.common.TopicIdPartition] =
         ArgumentCaptor.forClass(classOf[org.apache.kafka.server.common.TopicIdPartition])
       val logIdCaptureForPartition: ArgumentCaptor[Uuid] = ArgumentCaptor.forClass(classOf[Uuid])
-      verify(replicaManager.directoryEventHandler, atLeastOnce()).handleAssignment(topicIdPartitionCapture.capture(), logIdCaptureForPartition.capture(), any())
+      verify(replicaManager.directoryEventHandler, atLeastOnce()).handleAssignment(topicIdPartitionCapture.capture(), logIdCaptureForPartition.capture(), "test", any())
 
       assertEquals(topicIdPartitionCapture.getAllValues.asScala,
         List(

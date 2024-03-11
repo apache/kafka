@@ -624,6 +624,13 @@ class ReplicaManager(val config: KafkaConfig,
     errorMap
   }
 
+  def topicNameFromId(topicId: Uuid): Option[String] =
+    allPartitions.values.flatMap {
+      case HostedPartition.Offline(Some(partition)) if partition.topicId.contains(topicId) => Some(partition.topic)
+      case Online(partition) if partition.topicId.contains(topicId) => Some(partition.topic)
+      case _ => None
+    }.headOption
+
   def getPartition(topicPartition: TopicPartition): HostedPartition = {
     Option(allPartitions.get(topicPartition)).getOrElse(HostedPartition.None)
   }
@@ -2872,6 +2879,11 @@ class ReplicaManager(val config: KafkaConfig,
       topicPartitionActualLog <- logManager.getLog(partition.topicPartition(), false)
       topicPartitionActualDirectoryId <- logManager.directoryId(topicPartitionActualLog.dir.getParent)
       if partitionDirectoryId != topicPartitionActualDirectoryId
-    } directoryEventHandler.handleAssignment(new common.TopicIdPartition(partition.topicId, partition.partition()), topicPartitionActualDirectoryId, () => ())
+    } directoryEventHandler.handleAssignment(
+      new common.TopicIdPartition(partition.topicId, partition.partition()),
+      topicPartitionActualDirectoryId,
+      "Applying metadata delta",
+      () => ()
+    )
   }
 }

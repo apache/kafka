@@ -458,7 +458,7 @@ class ReplicaAlterLogDirsThreadTest {
       ArgumentCaptor.forClass(classOf[org.apache.kafka.server.common.TopicIdPartition])
     val logIdCaptureT1p0: ArgumentCaptor[Uuid] = ArgumentCaptor.forClass(classOf[Uuid])
 
-    verify(directoryEventHandler).handleAssignment(topicIdPartitionCaptureT1p0.capture(), logIdCaptureT1p0.capture(), any())
+    verify(directoryEventHandler).handleAssignment(topicIdPartitionCaptureT1p0.capture(), logIdCaptureT1p0.capture(), "test", any())
 
     assertEquals(new org.apache.kafka.server.common.TopicIdPartition(topicId, t1p0.partition()), topicIdPartitionCaptureT1p0.getValue)
     assertEquals(partition.logDirectoryId().get, logIdCaptureT1p0.getValue)
