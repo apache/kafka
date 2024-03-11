@@ -884,7 +884,8 @@ public class StreamsConfig extends AbstractConfig {
                     Type.STRING,
                     "",
                     Importance.MEDIUM,
-                    CLIENT_ID_DOC)
+                    CLIENT_ID_DOC,
+                    "<code>&lt;application.id&gt-&lt;random-UUID&gt</code>")
             .define(DEFAULT_DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG,
                     Type.CLASS,
                     LogAndFailExceptionHandler.class.getName(),
