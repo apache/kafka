@@ -31,6 +31,7 @@ import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaAndValue;
 import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.runtime.RestartRequest;
+import org.apache.kafka.connect.runtime.TargetState;
 import org.apache.kafka.connect.runtime.WorkerConfig;
 import org.apache.kafka.connect.runtime.distributed.DistributedConfig;
 import org.apache.kafka.connect.util.Callback;
@@ -70,9 +71,11 @@ import static org.junit.Assert.assertNotSame;
 import static org.junit.Assert.assertNull;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -125,6 +128,9 @@ public class KafkaConfigBackingStoreMockitoTest {
             "config-bytes-7".getBytes(), "config-bytes-8".getBytes(), "config-bytes-9".getBytes()
     );
 
+    private static final List<byte[]> TARGET_STATES_SERIALIZED = Arrays.asList(
+            "started".getBytes(), "paused".getBytes(), "stopped".getBytes()
+    );
     @Mock
     private Converter converter;
     @Mock
@@ -287,6 +293,52 @@ public class KafkaConfigBackingStoreMockitoTest {
         assertNull(configState.connectorConfig(CONNECTOR_IDS.get(1)));
         assertNull(configState.targetState(CONNECTOR_IDS.get(1)));
         verify(configUpdateListener).onConnectorConfigRemove(CONNECTOR_IDS.get(1));
+
+        configStorage.stop();
+        verify(configLog).stop();
+    }
+
+    @Test
+    public void testPutConnectorConfigWithTargetState() throws Exception {
+        expectStart(Collections.emptyList(), Collections.emptyMap());
+        expectPartitionCount(1);
+
+        configStorage.setupAndCreateKafkaBasedLog(TOPIC, config);
+        verifyConfigure();
+        configStorage.start();
+
+        // Null before writing
+        ClusterConfigState configState = configStorage.snapshot();
+        assertEquals(-1, configState.offset());
+        assertNull(configState.connectorConfig(CONNECTOR_IDS.get(0)));
+        assertNull(configState.targetState(CONNECTOR_IDS.get(0)));
+
+        doAnswer(expectReadToEnd(new LinkedHashMap<String, byte[]>() {{
+                    put(TARGET_STATE_KEYS.get(0), TARGET_STATES_SERIALIZED.get(2));
+                    put(CONNECTOR_CONFIG_KEYS.get(0), CONFIGS_SERIALIZED.get(0));
+                }})
+        ).when(configLog).readToEnd();
+
+        // We expect to write the target state first, followed by the config write and then a read to end
+        expectConvertWriteRead(
+                TARGET_STATE_KEYS.get(0), KafkaConfigBackingStore.TARGET_STATE_V1, TARGET_STATES_SERIALIZED.get(2),
+                "state.v2", TargetState.STOPPED.name());
+
+        expectConvertWriteRead(
+                CONNECTOR_CONFIG_KEYS.get(0), KafkaConfigBackingStore.CONNECTOR_CONFIGURATION_V0, CONFIGS_SERIALIZED.get(0),
+                "properties", SAMPLE_CONFIGS.get(0));
+
+        // Writing should block until it is written and read back from Kafka
+        configStorage.putConnectorConfig(CONNECTOR_IDS.get(0), SAMPLE_CONFIGS.get(0), TargetState.STOPPED);
+        configState = configStorage.snapshot();
+        assertEquals(2, configState.offset());
+        assertEquals(TargetState.STOPPED, configState.targetState(CONNECTOR_IDS.get(0)));
+        assertEquals(SAMPLE_CONFIGS.get(0), configState.connectorConfig(CONNECTOR_IDS.get(0)));
+
+        // We don't expect the config update listener's onConnectorTargetStateChange hook to be invoked
+        verify(configUpdateListener, never()).onConnectorTargetStateChange(anyString());
+
+        verify(configUpdateListener).onConnectorConfigUpdate(CONNECTOR_IDS.get(0));
 
         configStorage.stop();
         verify(configLog).stop();
