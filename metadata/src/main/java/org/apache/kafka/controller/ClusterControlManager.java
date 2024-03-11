@@ -353,7 +353,8 @@ public class ClusterControlManager {
         List<ApiMessageAndVersion> records = new ArrayList<>();
         BrokerRegistration existing = brokerRegistrations.get(brokerId);
         if (version < 2 || existing == null || request.previousBrokerEpoch() != existing.epoch()) {
-            brokerUncleanShutdownHandler.apply(request.brokerId(), records);
+            log.debug("Received an unclean shutdown request");
+            brokerUncleanShutdownHandler.addRecordsForShutdown(request.brokerId(), records);
         }
         if (existing != null) {
             if (heartbeatManager.hasValidSession(brokerId)) {
@@ -796,6 +797,6 @@ public class ClusterControlManager {
 
     @FunctionalInterface
     interface BrokerUncleanShutdownHandler {
-        void apply(int brokerId, List<ApiMessageAndVersion> records);
+        void addRecordsForShutdown(int brokerId, List<ApiMessageAndVersion> records);
     }
 }

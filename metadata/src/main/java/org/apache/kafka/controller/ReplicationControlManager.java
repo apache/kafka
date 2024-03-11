@@ -1396,6 +1396,7 @@ public class ReplicationControlManager {
      * @param records       The record list to append to.
      */
     void handleBrokerUncleanShutdown(int brokerId, List<ApiMessageAndVersion> records) {
+        if (!featureControl.metadataVersion().isElrSupported()) return;
         generateLeaderAndIsrUpdates("handleBrokerUncleanShutdown", NO_LEADER, NO_LEADER, brokerId, records,
             brokersToIsrs.partitionsWithBrokerInIsr(brokerId));
         generateLeaderAndIsrUpdates("handleBrokerUncleanShutdown", NO_LEADER, NO_LEADER, brokerId, records,
@@ -1837,7 +1838,7 @@ public class ReplicationControlManager {
     }
 
     /**
-     * Iterate over a sequence of partitions and generate ISR changes and/or leader
+     * Iterate over a sequence of partitions and generate ISR/ELR changes and/or leader
      * changes if necessary.
      *
      * @param context           A human-readable context string used in log4j logging.
@@ -2290,10 +2291,10 @@ public class ReplicationControlManager {
         PartitionRegistration newPartInfo
     ) {
         HashSet<Integer> validationSet = new HashSet<>();
-        Arrays.stream(newPartInfo.isr).forEach(ii -> validationSet.add(ii));
-        Arrays.stream(newPartInfo.elr).forEach(ii -> validationSet.add(ii));
+        Arrays.stream(newPartInfo.isr).forEach(validationSet::add);
+        Arrays.stream(newPartInfo.elr).forEach(validationSet::add);
         if (validationSet.size() != newPartInfo.isr.length + newPartInfo.elr.length) {
-            log.warn("{}-{} has overlapping ISR={} and ELR={}", topics.get(topicId).name, partitionId,
+            log.error("{}-{} has overlapping ISR={} and ELR={}", topics.get(topicId).name, partitionId,
                 Arrays.toString(newPartInfo.isr), partitionId, Arrays.toString(newPartInfo.elr));
         }
         brokersToIsrs.update(topicId, partitionId, prevPartInfo == null ? null : prevPartInfo.isr,
