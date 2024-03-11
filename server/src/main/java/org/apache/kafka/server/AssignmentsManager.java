@@ -179,9 +179,6 @@ public class AssignmentsManager {
             if (!partition.equals(other.partition)) {
                 throw new IllegalArgumentException("Cannot merge events for different partitions");
             }
-            if (!dirId.equals(other.dirId)) {
-                throw new IllegalArgumentException("Cannot merge events for different directories");
-            }
             completionHandlers.addAll(other.completionHandlers);
         }
         void onComplete() {
@@ -202,9 +199,12 @@ public class AssignmentsManager {
                     return;
                 }
                 if (existing.timestampNs > timestampNs) {
-                    existing.onComplete();
-                    if (log.isDebugEnabled()) log.debug("Dropping assignment {} because it's older than {}", this, existing);
+                    existing.merge(this);
+                    if (log.isDebugEnabled()) log.debug("Dropping assignment {} because it's older than existing {}", this, existing);
                     return;
+                } else {
+                    this.merge(existing);
+                    if (log.isDebugEnabled()) log.debug("Dropping existing assignment {} because it's older than {}", existing, this);
                 }
             }
             if (log.isDebugEnabled()) {

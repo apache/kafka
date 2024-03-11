@@ -45,11 +45,13 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
 import static org.apache.kafka.metadata.AssignmentsHelper.buildRequestData;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.atMostOnce;
 import static org.mockito.Mockito.doAnswer;
@@ -282,19 +284,7 @@ public class AssignmentsManagerTest {
         doAnswer(invocation -> {
             AssignReplicasToDirsRequestData request = invocation.getArgument(0, AssignReplicasToDirsRequest.Builder.class).build().data();
             ControllerRequestCompletionHandler completionHandler = invocation.getArgument(1, ControllerRequestCompletionHandler.class);
-            Map<Uuid, Map<TopicIdPartition, Errors>> errors = new HashMap<>();
-            for (AssignReplicasToDirsRequestData.DirectoryData directory : request.directories()) {
-                for (AssignReplicasToDirsRequestData.TopicData topic : directory.topics()) {
-                    for (AssignReplicasToDirsRequestData.PartitionData partition : topic.partitions()) {
-                        TopicIdPartition topicIdPartition = new TopicIdPartition(topic.topicId(), partition.partitionIndex());
-                        errors.computeIfAbsent(directory.id(), d -> new HashMap<>()).put(topicIdPartition, Errors.NONE);
-                    }
-                }
-            }
-            AssignReplicasToDirsResponseData responseData = AssignmentsHelper.buildResponseData(Errors.NONE.code(), 0, errors);
-            completionHandler.onComplete(new ClientResponse(null, null, null,
-                    0L, 0L, false, false, null, null,
-                            new AssignReplicasToDirsResponse(responseData)));
+            completionHandler.onComplete(buildSuccessfulResponse(request));
 
             return null;
         }).when(channelManager).sendRequest(any(AssignReplicasToDirsRequest.Builder.class),
@@ -308,6 +298,57 @@ public class AssignmentsManagerTest {
             time.sleep(TimeUnit.SECONDS.toMillis(1));
             manager.wakeup();
         }
+    }
+
+    private static ClientResponse buildSuccessfulResponse(AssignReplicasToDirsRequestData request) {
+        Map<Uuid, Map<TopicIdPartition, Errors>> errors = new HashMap<>();
+        for (AssignReplicasToDirsRequestData.DirectoryData directory : request.directories()) {
+            for (AssignReplicasToDirsRequestData.TopicData topic : directory.topics()) {
+                for (AssignReplicasToDirsRequestData.PartitionData partition : topic.partitions()) {
+                    TopicIdPartition topicIdPartition = new TopicIdPartition(topic.topicId(), partition.partitionIndex());
+                    errors.computeIfAbsent(directory.id(), d -> new HashMap<>()).put(topicIdPartition, Errors.NONE);
+                }
+            }
+        }
+        AssignReplicasToDirsResponseData responseData = AssignmentsHelper.buildResponseData(Errors.NONE.code(), 0, errors);
+        ClientResponse response = new ClientResponse(null, null, null,
+                0L, 0L, false, false, null, null,
+                new AssignReplicasToDirsResponse(responseData));
+        return response;
+    }
+
+    @SuppressWarnings("BusyWait")
+    @Test
+    public void testAssignmentCompaction() throws Exception {
+        CompletableFuture<Runnable> completionFuture = new CompletableFuture<>();
+        doAnswer(invocation -> {
+            AssignReplicasToDirsRequestData request = invocation.getArgument(0, AssignReplicasToDirsRequest.Builder.class).build().data();
+            ControllerRequestCompletionHandler completionHandler = invocation.getArgument(1, ControllerRequestCompletionHandler.class);
+            ClientResponse response = buildSuccessfulResponse(request);
+            Runnable completion = () -> completionHandler.onComplete(response);
+            completionFuture.complete(completion);
+            return null;
+        }).when(channelManager).sendRequest(any(AssignReplicasToDirsRequest.Builder.class),
+                any(ControllerRequestCompletionHandler.class));
+
+        CountDownLatch remainingInvocations = new CountDownLatch(20);
+        Runnable onComplete = () -> {
+            assertTrue(completionFuture.isDone(), "Premature invocation");
+            assertTrue(remainingInvocations.getCount() > 0, "Extra invocation");
+            remainingInvocations.countDown();
+        };
+        Uuid[] dirs = {DIR_1, DIR_2, DIR_3};
+        for (int i = 0; i < remainingInvocations.getCount(); i++) {
+            time.sleep(100);
+            manager.onAssignment(new TopicIdPartition(TOPIC_1, 0), dirs[i % 3], onComplete);
+        }
+        while (!completionFuture.isDone()) {
+            time.sleep(100);
+            manager.wakeup();
+            Thread.sleep(1);
+        }
+        completionFuture.get().run();
+        remainingInvocations.await();
     }
 
     static Metric findMetric(String name) {
