@@ -100,7 +100,6 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.ConcurrentModificationException;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
@@ -225,6 +224,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
 
                 default:
                     throw new IllegalArgumentException("Background event type " + event.type() + " was not expected");
+
             }
         }
 
@@ -763,9 +763,9 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     public void commitAsync(Map<TopicPartition, OffsetAndMetadata> offsets, OffsetCommitCallback callback) {
         acquireAndEnsureOpen();
         try {
-            Timer timer = time.timer(defaultApiTimeoutMs);
-            AsyncCommitEvent event = new AsyncCommitEvent(offsets, timer);
-            CompletableFuture<Void> future = commit(event);
+            Timer timer = time.timer(Long.MAX_VALUE);
+            AsyncCommitEvent asyncCommitEvent = new AsyncCommitEvent(offsets, timer);
+            CompletableFuture<Void> future = commit(asyncCommitEvent);
             future.whenComplete((r, t) -> {
 
                 if (t == null) {
@@ -989,10 +989,10 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             }
 
             final Timer timer = time.timer(timeout);
-            final TopicMetadataEvent event = new TopicMetadataEvent(topic, timer);
-            wakeupTrigger.setActiveTask(event.future());
+            final TopicMetadataEvent topicMetadataEvent = new TopicMetadataEvent(topic, timer);
+            wakeupTrigger.setActiveTask(topicMetadataEvent.future());
             try {
-                Map<String, List<PartitionInfo>> topicMetadata = applicationEventHandler.addAndGet(event);
+                Map<String, List<PartitionInfo>> topicMetadata = applicationEventHandler.addAndGet(topicMetadataEvent);
                 return topicMetadata.getOrDefault(topic, Collections.emptyList());
             } finally {
                 wakeupTrigger.clearTask();
@@ -1016,10 +1016,10 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             }
 
             final Timer timer = time.timer(timeout);
-            final AllTopicsMetadataEvent event = new AllTopicsMetadataEvent(timer);
-            wakeupTrigger.setActiveTask(event.future());
+            final AllTopicsMetadataEvent topicMetadataEvent = new AllTopicsMetadataEvent(timer);
+            wakeupTrigger.setActiveTask(topicMetadataEvent.future());
             try {
-                return applicationEventHandler.addAndGet(event);
+                return applicationEventHandler.addAndGet(topicMetadataEvent);
             } finally {
                 wakeupTrigger.clearTask();
             }
@@ -1088,19 +1088,14 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                 return Collections.emptyMap();
             }
             final Timer timer = time.timer(timeout);
-            final ListOffsetsEvent event = new ListOffsetsEvent(timestampsToSearch, true, timer);
+            final ListOffsetsEvent listOffsetsEvent = new ListOffsetsEvent(timestampsToSearch, true, timer);
 
             // If timeout is set to zero return empty immediately; otherwise try to get the results
             // and throw timeout exception if it cannot complete in time.
-            if (timeout.toMillis() == 0L) {
-                 // Build result representing that no offsets were found as part of the current event.
-                HashMap<TopicPartition, OffsetAndTimestamp> offsetsByTimes = new HashMap<>(timestampsToSearch.size());
-                for (Map.Entry<TopicPartition, Long> entry : timestampsToSearch.entrySet())
-                    offsetsByTimes.put(entry.getKey(), null);
-                return offsetsByTimes;
-            }
+            if (timeout.toMillis() == 0L)
+                return listOffsetsEvent.emptyResult();
 
-            return applicationEventHandler.addAndGet(event);
+            return applicationEventHandler.addAndGet(listOffsetsEvent);
         } finally {
             release();
         }
@@ -1142,11 +1137,11 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                 .stream()
                 .collect(Collectors.toMap(Function.identity(), tp -> timestamp));
             Timer timer = time.timer(timeout);
-            ListOffsetsEvent event = new ListOffsetsEvent(
+            ListOffsetsEvent listOffsetsEvent = new ListOffsetsEvent(
                 timestampToSearch,
                 false,
                 timer);
-            Map<TopicPartition, OffsetAndTimestamp> offsetAndTimestampMap = applicationEventHandler.addAndGet(event);
+            Map<TopicPartition, OffsetAndTimestamp> offsetAndTimestampMap = applicationEventHandler.addAndGet(listOffsetsEvent);
             return offsetAndTimestampMap
                 .entrySet()
                 .stream()
@@ -1354,11 +1349,11 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         acquireAndEnsureOpen();
         long commitStart = time.nanoseconds();
         try {
-            Timer timer = time.timer(timeout.toMillis());
-            SyncCommitEvent event = new SyncCommitEvent(offsets, timer);
-            CompletableFuture<Void> future = commit(event);
-            wakeupTrigger.setActiveTask(future);
-            ConsumerUtils.getResult(future);
+            Timer requestTimer = time.timer(timeout.toMillis());
+            SyncCommitEvent syncCommitEvent = new SyncCommitEvent(offsets, requestTimer);
+            CompletableFuture<Void> commitFuture = commit(syncCommitEvent);
+            wakeupTrigger.setActiveTask(commitFuture);
+            ConsumerUtils.getResult(commitFuture, requestTimer);
             interceptors.onCommit(offsets);
         } finally {
             wakeupTrigger.clearTask();
@@ -1469,13 +1464,13 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         try {
             fetchBuffer.retainAll(Collections.emptySet());
             if (groupMetadata.get().isPresent()) {
-                Timer timer = time.timer(defaultApiTimeoutMs);
-                UnsubscribeEvent event = new UnsubscribeEvent(timer);
-                applicationEventHandler.add(event);
+                Timer timer = time.timer(Long.MAX_VALUE);
+                UnsubscribeEvent unsubscribeEvent = new UnsubscribeEvent(timer);
+                applicationEventHandler.add(unsubscribeEvent);
                 log.info("Unsubscribing all topics or patterns and assigned partitions");
 
                 try {
-                    processBackgroundEvents(event.future(), timer);
+                    processBackgroundEvents(unsubscribeEvent.future(), timer);
                     log.info("Unsubscribed all topics or patterns and assigned partitions");
                 } catch (TimeoutException e) {
                     log.error("Failed while waiting for the unsubscribe event to complete");
@@ -1662,7 +1657,6 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     public boolean updateAssignmentMetadataIfNeeded(Timer timer) {
         maybeThrowFencedInstanceException();
         maybeInvokeCommitCallbacks();
-
         backgroundEventProcessor.process();
 
         // Keeping this updateAssignmentMetadataIfNeeded wrapping up the updateFetchPositions as
