@@ -211,7 +211,8 @@ class BrokerServer(
         time,
         s"broker-${config.nodeId}-",
         isZkBroker = false,
-        logDirs = logManager.directoryIdsSet)
+        logDirs = logManager.directoryIdsSet,
+        () => kafkaScheduler.schedule("shutdown", () => shutdown(), 0, -1))
 
       // Enable delegation token cache for all SCRAM mechanisms to simplify dynamic update.
       // This keeps the cache up-to-date if new SCRAM mechanisms are enabled dynamically.
@@ -305,7 +306,7 @@ class BrokerServer(
           assignmentsManager.onAssignment(partition, directoryId, reason, callback)
 
         override def handleFailure(directoryId: Uuid): Unit =
-          lifecycleManager.propagateDirectoryFailure(directoryId)
+          lifecycleManager.propagateDirectoryFailure(directoryId, config.logDirFailureTimeoutMs)
       }
 
       this._replicaManager = new ReplicaManager(
