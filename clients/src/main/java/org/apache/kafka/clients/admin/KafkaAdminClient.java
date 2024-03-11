@@ -2210,7 +2210,7 @@ public class KafkaAdminClient extends AdminClient {
         try {
             nodes = clusterResult.nodes().get().stream().collect(Collectors.toMap(Node::id, node -> node));
         } catch (InterruptedException | ExecutionException e) {
-            completeAllExceptionally(topicFutures.values(), e);
+            completeAllExceptionally(topicFutures.values(), e.getCause());
             return new HashMap<>(topicFutures);
         }
 

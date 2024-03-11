@@ -106,7 +106,7 @@ public class DescribeTopicPartitionsRequestHandler {
             JavaConverters.asScalaIterator(authorizedTopicsStream.iterator()),
             abstractRequest.context().listenerName,
             (String topicName) -> topicName.equals(cursorTopicName) ? cursor.partitionIndex() : 0,
-            Math.min(config.maxRequestPartitionSizeLimit(), request.responsePartitionLimit()),
+            Math.max(Math.min(config.maxRequestPartitionSizeLimit(), request.responsePartitionLimit()), 1),
             fetchAllTopics
         );
 

@@ -30,7 +30,7 @@ import java.util.Collection;
 public class DescribeTopicsOptions extends AbstractOptions<DescribeTopicsOptions> {
 
     private boolean includeAuthorizedOperations;
-    private int partitionSizeLimitPerResponse;
+    private int partitionSizeLimitPerResponse = 2000;
 
     /**
      * Set the timeout in milliseconds for this operation or {@code null} if the default api timeout for the
