@@ -205,7 +205,8 @@ public class ConsumerNetworkThreadTest {
 
     @Test
     public void testValidatePositionsEventIsProcessed() {
-        ApplicationEvent e = new ValidatePositionsEvent(time.timer(1000));
+        Timer timer = time.timer(100);
+        ValidatePositionsEvent e = new ValidatePositionsEvent(timer);
         applicationEventsQueue.add(e);
         consumerNetworkThread.runOnce();
         verify(applicationEventProcessor).process(any(ValidatePositionsEvent.class));

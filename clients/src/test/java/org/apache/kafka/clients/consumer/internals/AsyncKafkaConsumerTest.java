@@ -29,6 +29,7 @@ import org.apache.kafka.clients.consumer.OffsetCommitCallback;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.clients.consumer.RetriableCommitFailedException;
 import org.apache.kafka.clients.consumer.RoundRobinAssignor;
+import org.apache.kafka.clients.consumer.internals.events.ApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEventHandler;
 import org.apache.kafka.clients.consumer.internals.events.AssignmentChangeEvent;
 import org.apache.kafka.clients.consumer.internals.events.AsyncCommitEvent;
@@ -140,7 +141,12 @@ import static org.mockito.Mockito.when;
 @SuppressWarnings("unchecked")
 public class AsyncKafkaConsumerTest {
 
+    private long retryBackoffMs = 100L;
+    private int defaultApiTimeoutMs = 1000;
+    private boolean autoCommitEnabled = true;
+
     private AsyncKafkaConsumer<String, String> consumer = null;
+
     private final Time time = new MockTime(1);
     private final FetchCollector<String, String> fetchCollector = mock(FetchCollector.class);
     private final ApplicationEventHandler applicationEventHandler = mock(ApplicationEventHandler.class);
@@ -369,7 +375,7 @@ public class AsyncKafkaConsumerTest {
     @Test
     public void testWakeupBeforeCallingPoll() {
         consumer = newConsumer();
-        completeCommitSyncApplicationEventSuccessfully();
+//        completeCommitSyncApplicationEventSuccessfully();
         final String topicName = "foo";
         final int partition = 3;
         final TopicPartition tp = new TopicPartition(topicName, partition);
@@ -441,11 +447,7 @@ public class AsyncKafkaConsumerTest {
         doAnswer(invocation -> Fetch.empty()).when(fetchCollector).collectFetch(Mockito.any(FetchBuffer.class));
         SortedSet<TopicPartition> sortedPartitions = new TreeSet<>(TOPIC_PARTITION_COMPARATOR);
         sortedPartitions.add(tp);
-        CompletableBackgroundEvent<Void> e = new ConsumerRebalanceListenerCallbackNeededEvent(
-            ON_PARTITIONS_REVOKED,
-            sortedPartitions,
-            time.timer(Long.MAX_VALUE)
-        );
+        CompletableBackgroundEvent<Void> e = new ConsumerRebalanceListenerCallbackNeededEvent(ON_PARTITIONS_REVOKED, sortedPartitions, time.timer(Long.MAX_VALUE));
         backgroundEventQueue.add(e);
         completeCommitSyncApplicationEventSuccessfully();
         final AtomicBoolean callbackExecuted = new AtomicBoolean(false);
@@ -708,13 +710,15 @@ public class AsyncKafkaConsumerTest {
         AtomicReference<Throwable> exception = new AtomicReference<>();
         CompletableFuture<Object> future = CompletableFuture.completedFuture(null);
         consumer = newConsumer();
-        assertDoesNotThrow(() -> consumer.completeQuietly(() -> future.get(0, TimeUnit.MILLISECONDS), "test", exception));
+        assertDoesNotThrow(() -> consumer.completeQuietly(() -> {
+            future.get(0, TimeUnit.MILLISECONDS);
+        }, "test", exception));
         assertNull(exception.get());
 
         assertDoesNotThrow(() -> consumer.completeQuietly(() -> {
             throw new KafkaException("Test exception");
         }, "test", exception));
-        assertInstanceOf(KafkaException.class, exception.get());
+        assertTrue(exception.get() instanceof KafkaException);
     }
 
     @Test
@@ -831,7 +835,8 @@ public class AsyncKafkaConsumerTest {
         Set<TopicPartition> partitions = mockTopicPartitionOffset().keySet();
         Throwable eventProcessingFailure = new KafkaException("Unexpected failure " +
             "processing List Offsets event");
-        doThrow(eventProcessingFailure).when(applicationEventHandler).addAndGet(any(ListOffsetsEvent.class));
+        doThrow(eventProcessingFailure).when(applicationEventHandler).addAndGet(
+            any(ListOffsetsEvent.class));
         Throwable consumerError = assertThrows(KafkaException.class,
             () -> consumer.beginningOffsets(partitions,
                 Duration.ofMillis(1)));
@@ -936,11 +941,12 @@ public class AsyncKafkaConsumerTest {
 
         AtomicReference<SyncCommitEvent> capturedEvent = new AtomicReference<>();
         doAnswer(invocation -> {
-            SyncCommitEvent event = invocation.getArgument(0);
-            capturedEvent.set(event);
-            event.future().complete(null);
+            ApplicationEvent event = invocation.getArgument(0);
+            if (event instanceof SyncCommitEvent) {
+                capturedEvent.set((SyncCommitEvent) event);
+            }
             return null;
-        }).when(applicationEventHandler).add(any(SyncCommitEvent.class));
+        }).when(applicationEventHandler).add(any());
 
         consumer.close(Duration.ZERO);
 
@@ -1263,11 +1269,7 @@ public class AsyncKafkaConsumerTest {
         SortedSet<TopicPartition> partitions = Collections.emptySortedSet();
 
         for (ConsumerRebalanceListenerMethodName methodName : methodNames) {
-            CompletableBackgroundEvent<Void> e = new ConsumerRebalanceListenerCallbackNeededEvent(
-                methodName,
-                partitions,
-                time.timer(Long.MAX_VALUE)
-            );
+            CompletableBackgroundEvent<Void> e = new ConsumerRebalanceListenerCallbackNeededEvent(methodName, partitions, time.timer(Long.MAX_VALUE));
             backgroundEventQueue.add(e);
 
             // This will trigger the background event queue to process our background event message.
@@ -1685,3 +1687,4 @@ public class AsyncKafkaConsumerTest {
         consumer.commitAsync();
     }
 }
+
