@@ -142,12 +142,9 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
 
         for (ApplicationEvent event : events) {
             try {
-                Objects.requireNonNull(event, "Attempted to process a null event");
-
                 if (event instanceof CompletableEvent)
                     applicationEventReaper.add((CompletableEvent<?>) event);
 
-                log.trace("Processing event: {}", event);
                 applicationEventProcessor.process(event);
             } catch (Throwable t) {
                 log.warn("Error processing event {}", t.getMessage(), t);
