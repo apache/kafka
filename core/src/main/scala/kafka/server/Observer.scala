@@ -59,6 +59,14 @@ trait Observer extends Configurable {
   def observeProduceRequest(requestContext: RequestContext, produceRequest: ProduceRequest): Unit
 
   /**
+    * check the expected client software names. This will check the client type and version and compare it against whatever
+    * client types we are expecting
+    *
+    * @param clientLibrary the client library name and version to check its client type
+    */
+  def checkExpectedClientSoftwareNames(String: clientLibrary): Unit
+
+  /**
     * Close the observer with timeout.
     *
     * @param timeout the maximum time to wait to close the observer.
