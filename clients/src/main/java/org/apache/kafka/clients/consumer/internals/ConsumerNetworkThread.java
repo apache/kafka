@@ -137,7 +137,22 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
         // Process the events—if any—that were produced by the application thread. It is possible that when processing
         // an event generates an error. In such cases, the processor will log an exception, but we do not want those
         // errors to be propagated to the caller.
-        processEvents();
+        LinkedList<ApplicationEvent> events = new LinkedList<>();
+        applicationEventQueue.drainTo(events);
+
+        for (ApplicationEvent event : events) {
+            try {
+                Objects.requireNonNull(event, "Attempted to process a null event");
+
+                if (event instanceof CompletableEvent)
+                    applicationEventReaper.add((CompletableEvent<?>) event);
+
+                log.trace("Processing event: {}", event);
+                applicationEventProcessor.process(event);
+            } catch (Throwable t) {
+                log.warn("Error processing event {}", t.getMessage(), t);
+            }
+        }
 
         final long currentTimeMs = time.milliseconds();
         final long pollWaitTimeMs = requestManagers.entries().stream()
@@ -158,7 +173,7 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
         // thread has made at least one call to poll. This is done to emulate the behavior of the legacy consumer's
         // handling of timeouts. The legacy consumer makes at least one attempt to satisfy any network requests
         // before checking if a timeout has expired.
-        applicationEventReaper.reapExpired(currentTimeMs);
+        applicationEventReaper.reapExpiredAndCompleted(currentTimeMs);
     }
 
     /**
@@ -192,41 +207,6 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
                 .map(Optional::get)
                 .map(RequestManager::pollOnClose)
                 .forEach(networkClientDelegate::addAll);
-    }
-
-    /**
-     * Drains all available events from the queue, and then processes them in order. If any errors are thrown while
-     * processing the individual events, these are logged and skipped.
-     */
-    protected void processEvents() {
-        closer.assertOpen("The processor was previously closed, so no further processing can occur");
-
-        LinkedList<ApplicationEvent> events = new LinkedList<>();
-        applicationEventQueue.drainTo(events);
-
-        if (events.isEmpty()) {
-            log.trace("No events to process");
-        }
-
-        try {
-            log.trace("Starting processing of {} event{}", events.size(), events.size() == 1 ? "" : "s");
-
-            for (ApplicationEvent event : events) {
-                try {
-                    Objects.requireNonNull(event, "Attempted to process a null event");
-
-                    if (event instanceof CompletableEvent)
-                        applicationEventReaper.add((CompletableEvent<?>) event);
-
-                    log.trace("Processing event: {}", event);
-                    applicationEventProcessor.process(event);
-                } catch (Throwable t) {
-                    log.warn("Error processing event {}", t.getMessage(), t);
-                }
-            }
-        } finally {
-            log.trace("Completed processing");
-        }
     }
 
     public boolean isRunning() {

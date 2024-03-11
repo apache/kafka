@@ -182,45 +182,34 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
          * could occur when processing the events. In such cases, the processor will take a reference to the first
          * error, continue to process the remaining events, and then throw the first error that occurred.
          */
-        public boolean process() {
+        private boolean process() {
             AtomicReference<KafkaException> firstError = new AtomicReference<>();
 
             LinkedList<BackgroundEvent> events = new LinkedList<>();
             backgroundEventQueue.drainTo(events);
 
-            if (events.isEmpty()) {
-                log.trace("No background events to process");
-                return false;
-            }
+            for (BackgroundEvent event : events) {
+                try {
+                    Objects.requireNonNull(event, "Attempted to process a null background event");
 
-            try {
-                log.trace("Starting processing of {} background event{}", events.size(), events.size() == 1 ? "" : "s");
+                    if (event instanceof CompletableEvent)
+                        backgroundEventReaper.add((CompletableEvent<?>) event);
 
-                for (BackgroundEvent event : events) {
-                    try {
-                        Objects.requireNonNull(event, "Attempted to process a null background event");
+                    process(event);
+                } catch (Throwable t) {
+                    KafkaException e = ConsumerUtils.maybeWrapAsKafkaException(t);
 
-                        if (event instanceof CompletableEvent)
-                            backgroundEventReaper.add((CompletableEvent<?>) event);
-
-                        log.trace("Processing background event: {}", event);
-                        process(event);
-                    } catch (Throwable t) {
-                        KafkaException e = ConsumerUtils.maybeWrapAsKafkaException(t);
-
-                        if (!firstError.compareAndSet(null, e)) {
-                            log.warn("An error occurred when processing the background event: {}", e.getMessage(), e);
-                        }
-                    }
+                    if (!firstError.compareAndSet(null, e))
+                        log.warn("An error occurred when processing the background event: {}", e.getMessage(), e);
                 }
-            } finally {
-                log.trace("Completed processing background event(s)");
             }
+
+            backgroundEventReaper.reapExpiredAndCompleted(time.milliseconds());
 
             if (firstError.get() != null)
                 throw firstError.get();
 
-            return true;
+            return !events.isEmpty();
         }
 
         @Override
@@ -236,7 +225,6 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
 
                 default:
                     throw new IllegalArgumentException("Background event type " + event.type() + " was not expected");
-
             }
         }
 
@@ -1674,8 +1662,12 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     public boolean updateAssignmentMetadataIfNeeded(Timer timer) {
         maybeThrowFencedInstanceException();
         maybeInvokeCommitCallbacks();
-        backgroundEventProcessor.process();
 
+        try {
+            backgroundEventProcessor.process();
+        } finally {
+            backgroundEventProcessor.
+        }
         // Keeping this updateAssignmentMetadataIfNeeded wrapping up the updateFetchPositions as
         // in the previous implementation, because it will eventually involve group coordination
         // logic

@@ -24,11 +24,17 @@ import org.slf4j.Logger;
 import java.util.ArrayList;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Objects;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Future;
 import java.util.function.Consumer;
 
+/**
+ * The {@code CompletableEventReaper} is responsible for tracking any {@link CompletableEvent}s that were processed
+ * and making sure to reap them if they complete or pass their deadline. This is done so that we enforce an upper
+ * bound on the amount of time the event logic will execute.
+ */
 public class CompletableEventReaper {
 
     private final Logger log;
@@ -39,24 +45,47 @@ public class CompletableEventReaper {
         this.completableEvents = new ArrayList<>();
     }
 
+    /**
+     * Adds a new {@link CompletableEvent event} to our list so that we can track it for later completion/expiration.
+     *
+     * @param event Event to track
+     */
     public void add(CompletableEvent<?> event) {
-        completableEvents.add(event);
+        completableEvents.add(Objects.requireNonNull(event));
     }
 
     /**
-     * This method "completes" any {@link CompletableEvent}s that have expired.
+     * This method "completes" any {@link CompletableEvent}s that have either expired or completed normally. So this
+     * is a two-step process:
+     *
+     * <ol>
+     *     <li>
+     *         For each tracked event which has exceeded its {@link CompletableEvent#deadlineMs() deadline}, an
+     *         instance of {@link TimeoutException} is created and passed to
+     *         {@link CompletableFuture#completeExceptionally(Throwable)}.
+     *     </li>
+     *     <li>
+     *         For each tracked event of which its {@link CompletableEvent#future() future} is already in the
+     *      * {@link CompletableFuture#isDone() done} state, it will be removed from the list of tracked events.
+     *     </li>
+     * </ol>
+     *
+     * <p/>
+     *
+     * This method should be called at regular intervals
      *
      * @param currentTimeMs <em>Current</em> time with which to compare against the
      *                      <em>{@link CompletableEvent#deadlineMs() expiration time}</em>
      */
-    public void reapExpired(long currentTimeMs) {
+    public void reapExpiredAndCompleted(long currentTimeMs) {
         log.trace("Reaping expired events");
 
         Consumer<CompletableEvent<?>> completeEvent = e -> {
+            TimeoutException error = new TimeoutException(String.format("%s could not be completed within its timeout", e.getClass().getSimpleName()));
             long pastDueMs = currentTimeMs - e.deadlineMs();
             log.debug("Completing event {} exceptionally since it expired {} ms ago", e, pastDueMs);
             CompletableFuture<?> f = e.future();
-            f.completeExceptionally(new TimeoutException(String.format("%s could not be completed within its timeout", e.getClass().getSimpleName())));
+            f.completeExceptionally(error);
         };
 
         // First, complete (exceptionally) any events that have passed their deadline.
@@ -65,7 +94,8 @@ public class CompletableEventReaper {
                 .filter(e -> !e.future().isDone() && currentTimeMs > e.deadlineMs())
                 .forEach(completeEvent);
 
-        // Second, remove any events that are already complete, just to make sure we don't hold references.
+        // Second, remove any events that are already complete, just to make sure we don't hold references. This will
+        // include any events that finished successfully as well as any events we just completed exceptionally above.
         completableEvents.removeIf(e -> e.future().isDone());
 
         log.trace("Finished reaping expired events");

@@ -441,7 +441,11 @@ public class AsyncKafkaConsumerTest {
         doAnswer(invocation -> Fetch.empty()).when(fetchCollector).collectFetch(Mockito.any(FetchBuffer.class));
         SortedSet<TopicPartition> sortedPartitions = new TreeSet<>(TOPIC_PARTITION_COMPARATOR);
         sortedPartitions.add(tp);
-        CompletableBackgroundEvent<Void> e = new ConsumerRebalanceListenerCallbackNeededEvent(ON_PARTITIONS_REVOKED, sortedPartitions);
+        CompletableBackgroundEvent<Void> e = new ConsumerRebalanceListenerCallbackNeededEvent(
+            ON_PARTITIONS_REVOKED,
+            sortedPartitions,
+            time.timer(Long.MAX_VALUE)
+        );
         backgroundEventQueue.add(e);
         completeCommitSyncApplicationEventSuccessfully();
         final AtomicBoolean callbackExecuted = new AtomicBoolean(false);
@@ -1259,7 +1263,11 @@ public class AsyncKafkaConsumerTest {
         SortedSet<TopicPartition> partitions = Collections.emptySortedSet();
 
         for (ConsumerRebalanceListenerMethodName methodName : methodNames) {
-            CompletableBackgroundEvent<Void> e = new ConsumerRebalanceListenerCallbackNeededEvent(methodName, partitions);
+            CompletableBackgroundEvent<Void> e = new ConsumerRebalanceListenerCallbackNeededEvent(
+                methodName,
+                partitions,
+                time.timer(Long.MAX_VALUE)
+            );
             backgroundEventQueue.add(e);
 
             // This will trigger the background event queue to process our background event message.

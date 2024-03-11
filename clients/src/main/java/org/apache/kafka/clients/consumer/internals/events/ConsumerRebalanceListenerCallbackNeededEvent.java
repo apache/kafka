@@ -20,6 +20,7 @@ import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.internals.ConsumerRebalanceListenerMethodName;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.utils.Timer;
 
 import java.time.Duration;
 import java.util.Collections;
@@ -38,8 +39,9 @@ public class ConsumerRebalanceListenerCallbackNeededEvent extends CompletableBac
     private final SortedSet<TopicPartition> partitions;
 
     public ConsumerRebalanceListenerCallbackNeededEvent(final ConsumerRebalanceListenerMethodName methodName,
-                                                        final SortedSet<TopicPartition> partitions) {
-        super(Type.CONSUMER_REBALANCE_LISTENER_CALLBACK_NEEDED);
+                                                        final SortedSet<TopicPartition> partitions,
+                                                        final Timer timer) {
+        super(Type.CONSUMER_REBALANCE_LISTENER_CALLBACK_NEEDED, timer);
         this.methodName = Objects.requireNonNull(methodName);
         this.partitions = Collections.unmodifiableSortedSet(partitions);
     }
