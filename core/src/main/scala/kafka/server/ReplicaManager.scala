@@ -41,7 +41,7 @@ import org.apache.kafka.common.message.StopReplicaRequestData.StopReplicaPartiti
 import org.apache.kafka.common.message.{DescribeLogDirsResponseData, DescribeProducersResponseData, FetchResponseData, LeaderAndIsrResponseData}
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.ListenerName
-import org.apache.kafka.common.protocol.{ApiKeys, Errors}
+import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.FileRecords.TimestampAndOffset
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.replica.PartitionView.DefaultPartitionView
@@ -809,7 +809,7 @@ class ReplicaManager(val config: KafkaConfig,
                           recordValidationStatsCallback: Map[TopicPartition, RecordValidationStats] => Unit = _ => (),
                           requestLocal: RequestLocal = RequestLocal.NoCaching,
                           actionQueue: ActionQueue = this.defaultActionQueue,
-                          produceRequestVersion: Short): Unit = {
+                          partitionOperation: OperationExpected.operation): Unit = {
 
     val transactionalProducerInfo = mutable.HashSet[(Long, Short)]()
     val topicPartitionBatchInfo = mutable.Map[TopicPartition, Int]()
@@ -887,7 +887,7 @@ class ReplicaManager(val config: KafkaConfig,
         postVerificationCallback,
         requestLocal
       ),
-      produceRequestVersion
+      partitionOperation
     )
   }
 
@@ -1011,7 +1011,7 @@ class ReplicaManager(val config: KafkaConfig,
       producerId,
       producerEpoch,
       generalizedCallback,
-      ApiKeys.PRODUCE.latestVersion
+      OperationExpected.defaultOperation
     )
   }
 
@@ -1035,7 +1035,7 @@ class ReplicaManager(val config: KafkaConfig,
     producerId: Long,
     producerEpoch: Short,
     callback: ((Map[TopicPartition, Errors], Map[TopicPartition, VerificationGuard])) => Unit,
-    produceRequestVersion: Short
+    partitionOperation: OperationExpected.operation
   ): Unit = {
     // Skip verification if the request is not transactional or transaction verification is disabled.
     if (transactionalId == null ||
@@ -1082,7 +1082,7 @@ class ReplicaManager(val config: KafkaConfig,
       producerEpoch = producerEpoch,
       topicPartitions = verificationGuards.keys.toSeq,
       callback = invokeCallback,
-      produceRequestVersion = produceRequestVersion
+      expectedPartitionOperation = partitionOperation
     ))
 
   }

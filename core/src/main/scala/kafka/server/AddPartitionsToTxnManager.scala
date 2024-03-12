@@ -42,6 +42,11 @@ object AddPartitionsToTxnManager {
   val VerificationTimeMsMetricName = "VerificationTimeMs"
 }
 
+object OperationExpected extends Enumeration {
+  type operation = Value
+  val defaultOperation, latestProduceVersion, addPartitionWithoutVerification = Value
+}
+
 /*
  * Data structure to hold the transactional data to send to a node. Note -- at most one request per transactional ID
  * will exist at a time in the map. If a given transactional ID exists in the map, and a new request with the same ID
@@ -50,7 +55,7 @@ object AddPartitionsToTxnManager {
 class TransactionDataAndCallbacks(val transactionData: AddPartitionsToTxnTransactionCollection,
                                   val callbacks: mutable.Map[String, AddPartitionsToTxnManager.AppendCallback],
                                   val startTimeMs: mutable.Map[String, Long],
-                                  val produceRequestVersion: Short)
+                                  val operationExpected: OperationExpected.operation)
 
 class AddPartitionsToTxnManager(
   config: KafkaConfig,
@@ -80,7 +85,7 @@ class AddPartitionsToTxnManager(
     producerEpoch: Short,
     topicPartitions: Seq[TopicPartition],
     callback: AddPartitionsToTxnManager.AppendCallback,
-    produceRequestVersion: Short
+    expectedPartitionOperation: OperationExpected.operation
   ): Unit = {
     val (error, node) = getTransactionCoordinator(partitionFor(transactionalId))
 
@@ -101,7 +106,7 @@ class AddPartitionsToTxnManager(
         .setVerifyOnly(true)
         .setTopics(topicCollection)
 
-      addTxnData(node, transactionData, callback, produceRequestVersion)
+      addTxnData(node, transactionData, callback, expectedPartitionOperation)
     }
   }
 
@@ -109,7 +114,7 @@ class AddPartitionsToTxnManager(
     node: Node,
     transactionData: AddPartitionsToTxnTransaction,
     callback: AddPartitionsToTxnManager.AppendCallback,
-    produceRequestVersion: Short
+    expectedPartitionOperation: OperationExpected.operation
   ): Unit = {
     nodesToTransactions.synchronized {
       val curTime = time.milliseconds()
@@ -119,7 +124,7 @@ class AddPartitionsToTxnManager(
           new AddPartitionsToTxnTransactionCollection(1),
           mutable.Map[String, AddPartitionsToTxnManager.AppendCallback](),
           mutable.Map[String, Long](),
-          produceRequestVersion))
+          expectedPartitionOperation))
 
       val existingTransactionData = existingNodeAndTransactionData.transactionData.find(transactionData.transactionalId)
 
@@ -235,7 +240,7 @@ class AddPartitionsToTxnManager(
                   val code =
                     if (partitionResult.partitionErrorCode == Errors.PRODUCER_FENCED.code)
                       Errors.INVALID_PRODUCER_EPOCH.code
-                    else if (partitionResult.partitionErrorCode() == Errors.ABORTABLE_TRANSACTION_EXCEPTION.code && transactionDataAndCallbacks.produceRequestVersion <= 10) // For backward compatibility with clients.
+                    else if (partitionResult.partitionErrorCode() == Errors.ABORTABLE_TRANSACTION_EXCEPTION.code && transactionDataAndCallbacks.operationExpected != OperationExpected.latestProduceVersion) // For backward compatibility with clients.
                       Errors.INVALID_TXN_STATE.code
                     else
                       partitionResult.partitionErrorCode

@@ -3048,7 +3048,7 @@ class ReplicaManagerTest {
       transactionalId = transactionalId,
       entriesPerPartition = entriesToAppend,
       responseCallback = appendCallback,
-      produceRequestVersion = ApiKeys.PRODUCE.latestVersion
+      partitionOperation = OperationExpected.latestProduceVersion
     )
 
     result
@@ -3076,7 +3076,7 @@ class ReplicaManagerTest {
       transactionalId = transactionalId,
       entriesPerPartition = entriesPerPartition,
       responseCallback = appendCallback,
-      produceRequestVersion = ApiKeys.PRODUCE.latestVersion
+      partitionOperation = OperationExpected.latestProduceVersion
     )
 
     result
