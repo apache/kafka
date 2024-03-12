@@ -52,14 +52,12 @@ import java.util.Optional;
  */
 public class ShareCompletedFetch {
 
-    final TopicIdPartition partition;
-
-    final ShareFetchResponseData.PartitionData partitionData;
-
-    final short requestVersion;
-
     private final Logger log;
     private final BufferSupplier decompressionBufferSupplier;
+    final TopicIdPartition partition;
+    final ShareFetchResponseData.PartitionData partitionData;
+    final short requestVersion;
+
     private final Iterator<? extends RecordBatch> batches;
     private RecordBatch currentBatch;
     private Record lastRecord;
@@ -161,10 +159,8 @@ public class ShareCompletedFetch {
                 TimestampType timestampType = currentBatch.timestampType();
                 ConsumerRecord<K, V> record = parseRecord(deserializers, partition, leaderEpoch, timestampType, lastRecord);
 
-                // Temporarily treat all records as ACQUIRED if the list of acquired records is empty.
-                // This just indicates that the broker doesn't yet have the support needed.
                 // Check if the record is in acquired records.
-                if (acquiredRecords.isEmpty() || isAcquired(record)) {
+                if (isAcquired(record)) {
                     shareInFlightBatch.addRecord(record);
                 }
             }
