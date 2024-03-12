@@ -45,6 +45,8 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 import java.util.TreeMap;
 
@@ -63,12 +65,28 @@ public class SharePartitionManager {
     private final ReplicaManager replicaManager;
     private final Time time;
     private final ShareSessionCache cache;
+    private final ConcurrentLinkedQueue<ShareFetchPartitionData> fetchQueue;
+    private final AtomicBoolean processFetchQueueLock;
 
     public SharePartitionManager(ReplicaManager replicaManager, Time time, ShareSessionCache cache) {
         this.replicaManager = replicaManager;
         this.time = time;
         this.cache = cache;
         partitionCacheMap = new ConcurrentHashMap<>();
+        fetchQueue = new ConcurrentLinkedQueue<>();
+        this.processFetchQueueLock = new AtomicBoolean(false);
+    }
+
+    public void releaseProcessFetchQueueLock() {
+        processFetchQueueLock.set(false);
+    }
+
+    public boolean isProcessFetchQueueLockAvailable() {
+        return !processFetchQueueLock.get();
+    }
+
+    public boolean maybeAcquireProcessFetchQueueLock() {
+        return processFetchQueueLock.compareAndSet(false, true);
     }
 
     // TODO: Move some part in share session context and change method signature to accept share
@@ -79,64 +97,98 @@ public class SharePartitionManager {
         FetchParams fetchParams,
         List<TopicIdPartition> topicIdPartitions) {
         log.trace("Fetch request for topicIdPartitions: {} with groupId: {} fetch params: {}",
-            topicIdPartitions, groupId, fetchParams);
+                topicIdPartitions, groupId, fetchParams);
         CompletableFuture<Map<TopicIdPartition, ShareFetchResponseData.PartitionData>> future = new CompletableFuture<>();
-
-        synchronized (this) {
-            Map<TopicIdPartition, FetchRequest.PartitionData> topicPartitionData = new HashMap<>();
-            topicIdPartitions.forEach(topicIdPartition -> {
-                // TODO: Fetch inflight and delivery count from config.
-                SharePartition sharePartition = partitionCacheMap.computeIfAbsent(sharePartitionKey(groupId, topicIdPartition),
-                    k -> new SharePartition(groupId, topicIdPartition, 100, 5));
-                topicPartitionData.put(topicIdPartition, new FetchRequest.PartitionData(
-                    topicIdPartition.topicId(),
-                    sharePartition.nextFetchOffset(),
-                    -1,
-                    Integer.MAX_VALUE,
-                    Optional.empty()));
-            });
-
-            replicaManager.fetchMessages(
-                fetchParams,
-                CollectionConverters.asScala(
-                    topicPartitionData.entrySet().stream().map(entry -> new Tuple2<>(entry.getKey(), entry.getValue())).collect(
-                        Collectors.toList())
-                ),
-                QuotaFactory.UnboundedQuota$.MODULE$,
-                responsePartitionData -> {
-                    List<Tuple2<TopicIdPartition, FetchPartitionData>> responseData = CollectionConverters.asJava(
-                        responsePartitionData);
-                    Map<TopicIdPartition, ShareFetchResponseData.PartitionData> result = new HashMap<>();
-                    responseData.forEach(data -> {
-                        TopicIdPartition topicIdPartition = data._1;
-                        FetchPartitionData fetchPartitionData = data._2;
-
-                        partitionCacheMap.get(sharePartitionKey(groupId, topicIdPartition))
-                            .acquire(memberId, fetchPartitionData).whenComplete((acquiredRecords, throwable) -> {
-                                ShareFetchResponseData.PartitionData partitionData = new ShareFetchResponseData.PartitionData()
-                                    .setPartitionIndex(topicIdPartition.partition());
-
-                                if (throwable != null) {
-                                    partitionData.setErrorCode(Errors.forException(throwable).code());
-                                } else {
-                                    // Maybe check if no records are acquired and we want to retry replica
-                                    // manager fetch. Depends on the share partition manager implementation,
-                                    // if we want parallel requests for the same share partition or not.
-                                    partitionData
-                                        .setPartitionIndex(topicIdPartition.partition())
-                                        .setRecords(fetchPartitionData.records)
-                                        .setErrorCode(fetchPartitionData.error.code())
-                                        .setAcquiredRecords(acquiredRecords)
-                                        .setAcknowledgeErrorCode(Errors.NONE.code());
-                                }
-                                result.put(topicIdPartition, partitionData);
-                            });
-                    });
-                    future.complete(result);
-                    return BoxedUnit.UNIT;
-                });
-        }
+        ShareFetchPartitionData shareFetchPartitionData = new ShareFetchPartitionData(fetchParams, groupId, memberId,
+                topicIdPartitions, future);
+        fetchQueue.add(shareFetchPartitionData);
+        maybeProcessFetchQueue();
         return future;
+    }
+
+    /**
+     * Recursive function to process all the fetch requests present inside the fetch queue
+     */
+    public void maybeProcessFetchQueue() {
+        if (maybeAcquireProcessFetchQueueLock()) {
+            try {
+                ShareFetchPartitionData shareFetchPartitionData = fetchQueue.poll();
+                Map<TopicIdPartition, FetchRequest.PartitionData> topicPartitionData = new HashMap<>();
+                shareFetchPartitionData.topicIdPartitions.forEach(topicIdPartition -> {
+                    // TODO: Fetch inflight and delivery count from config.
+                    SharePartition sharePartition = partitionCacheMap.computeIfAbsent(sharePartitionKey(
+                                    shareFetchPartitionData.groupId, topicIdPartition),
+                            k -> new SharePartition(shareFetchPartitionData.groupId, topicIdPartition, 100, 5));
+                    // we add the share partition to the list of partitions to be fetched only if we can acquire the fetch lock on it.
+                    if (sharePartition.maybeAcquireFetchLock()) {
+                        topicPartitionData.put(topicIdPartition, new FetchRequest.PartitionData(
+                                topicIdPartition.topicId(),
+                                sharePartition.nextFetchOffset(),
+                                -1,
+                                Integer.MAX_VALUE,
+                                Optional.empty()));
+                        sharePartition.releaseFetchLock();
+                    }
+                });
+                log.trace("Fetchable share partitions data: {} with groupId: {} fetch params: {}",
+                        topicPartitionData, shareFetchPartitionData.groupId, shareFetchPartitionData.fetchParams);
+
+                replicaManager.fetchMessages(
+                        shareFetchPartitionData.fetchParams,
+                        CollectionConverters.asScala(
+                                topicPartitionData.entrySet().stream().map(entry ->
+                                        new Tuple2<>(entry.getKey(), entry.getValue())).collect(Collectors.toList())
+                        ),
+                        QuotaFactory.UnboundedQuota$.MODULE$,
+                        responsePartitionData -> {
+                            List<Tuple2<TopicIdPartition, FetchPartitionData>> responseData = CollectionConverters.asJava(
+                                    responsePartitionData);
+                            Map<TopicIdPartition, ShareFetchResponseData.PartitionData> result = new HashMap<>();
+                            responseData.forEach(data -> {
+                                TopicIdPartition topicIdPartition = data._1;
+                                FetchPartitionData fetchPartitionData = data._2;
+
+                                SharePartition sharePartition = partitionCacheMap.get(sharePartitionKey(shareFetchPartitionData.groupId, topicIdPartition));
+
+                                if (sharePartition.maybeAcquireFetchLock()) {
+                                     try {
+                                        sharePartition.acquire(shareFetchPartitionData.memberId, fetchPartitionData)
+                                                .whenComplete((acquiredRecords, throwable) -> {
+                                                    ShareFetchResponseData.PartitionData partitionData = new ShareFetchResponseData.PartitionData()
+                                                            .setPartitionIndex(topicIdPartition.partition());
+
+                                                    if (throwable != null) {
+                                                        partitionData.setErrorCode(Errors.forException(throwable).code());
+                                                    } else {
+                                                        // Maybe check if no records are acquired and we want to retry replica
+                                                        // manager fetch. Depends on the share partition manager implementation,
+                                                        // if we want parallel requests for the same share partition or not.
+                                                        partitionData
+                                                                .setPartitionIndex(topicIdPartition.partition())
+                                                                .setRecords(fetchPartitionData.records)
+                                                                .setErrorCode(fetchPartitionData.error.code())
+                                                                .setAcquiredRecords(acquiredRecords)
+                                                                .setAcknowledgeErrorCode(Errors.NONE.code());
+                                                    }
+                                                    result.put(topicIdPartition, partitionData);
+                                                });
+                                    } finally {
+                                         sharePartition.releaseFetchLock();
+                                    }
+                                }
+                            });
+                            shareFetchPartitionData.future.complete(result);
+                            // we are releasing the lock to move ahead with the next request in queue.
+                            releaseProcessFetchQueueLock();
+                            if (!fetchQueue.isEmpty())
+                                maybeProcessFetchQueue();
+                            return BoxedUnit.UNIT;
+                        });
+            } finally {
+                if (isProcessFetchQueueLockAvailable())
+                    releaseProcessFetchQueueLock();
+            }
+        }
     }
 
     public CompletableFuture<Map<TopicIdPartition, ShareAcknowledgeResponseData.PartitionData>> acknowledge(
@@ -1177,6 +1229,24 @@ public class SharePartitionManager {
         @Override
         public void setNext(int next) {
             cachedNext = next;
+        }
+    }
+
+    private static class ShareFetchPartitionData {
+        private final FetchParams fetchParams;
+        private final String groupId;
+        private final String memberId;
+        private final List<TopicIdPartition> topicIdPartitions;
+        private final CompletableFuture<Map<TopicIdPartition, ShareFetchResponseData.PartitionData>> future;
+
+        public ShareFetchPartitionData(FetchParams fetchParams, String groupId, String memberId,
+                                       List<TopicIdPartition> topicIdPartitions,
+                                       CompletableFuture<Map<TopicIdPartition, ShareFetchResponseData.PartitionData>> future) {
+            this.fetchParams = fetchParams;
+            this.groupId = groupId;
+            this.memberId = memberId;
+            this.topicIdPartitions = topicIdPartitions;
+            this.future = future;
         }
     }
 }

@@ -142,6 +142,12 @@ public class SharePartition {
     private final AtomicBoolean findNextFetchOffset;
 
     /**
+     * The lock to ensure that the same share partition does not enter a fetch queue
+     * while another one is being fetched within the queue.
+     */
+    private final AtomicBoolean fetchLock;
+
+    /**
      * The max in-flight messages is used to limit the number of records that can be in-flight at any
      * given time. The max in-flight messages is used to prevent the consumer from fetching too many
      * records from the leader and running out of memory.
@@ -181,6 +187,7 @@ public class SharePartition {
         // TODO: Just a placeholder for now.
         assert this.maxInFlightMessages > 0;
         assert this.maxDeliveryCount > 0;
+        this.fetchLock = new AtomicBoolean(false);
     }
 
     /**
@@ -251,6 +258,14 @@ public class SharePartition {
         } finally {
             lock.readLock().unlock();
         }
+    }
+
+    public void releaseFetchLock() {
+        fetchLock.set(false);
+    }
+
+    public boolean maybeAcquireFetchLock() {
+        return fetchLock.compareAndSet(false, true);
     }
 
     /**
