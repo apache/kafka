@@ -56,7 +56,7 @@ public final class StreamStreamJoinUtil {
         if (context.recordMetadata().isPresent()) {
             final RecordMetadata recordMetadata = context.recordMetadata().get();
             logger.warn(
-                "Skipping record. reason=[{}] topic=[{}] partition=[{}] offset=[{}]",
+                "Skipping record. Reason=[{}] topic=[{}] partition=[{}] offset=[{}]",
                 reason,
                 recordMetadata.topic(),
                 recordMetadata.partition(),
