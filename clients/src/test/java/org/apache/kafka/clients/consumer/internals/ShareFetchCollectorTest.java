@@ -325,7 +325,7 @@ public class ShareFetchCollectorTest {
             ShareFetchResponseData.PartitionData partitionData = new ShareFetchResponseData.PartitionData()
                     .setPartitionIndex(topicAPartition0.partition())
                     .setRecords(records)
-                    .setAcquiredRecords(ShareCompletedFetchTest.acquiredRecords(0, recordCount));
+                    .setAcquiredRecords(ShareCompletedFetchTest.acquiredRecords(0L, recordCount));
 
             if (error != null)
                 partitionData.setErrorCode(error.code());
