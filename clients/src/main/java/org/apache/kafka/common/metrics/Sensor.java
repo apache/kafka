@@ -250,7 +250,16 @@ public final class Sensor {
         checkQuotas(time.milliseconds());
     }
 
-    public void checkQuotas(long timeMs) {
+    public synchronized void checkQuotas(long timeMs) {
+        checkQuotasInternal(timeMs);
+    }
+
+    // visible for testing
+    void checkQuotasNonThreadSafe(long timeMs) {
+        checkQuotasInternal(timeMs);
+    }
+
+    private void checkQuotasInternal(long timeMs) {
         for (KafkaMetric metric : this.metrics.values()) {
             MetricConfig config = metric.config();
             if (config != null) {
