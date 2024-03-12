@@ -189,8 +189,10 @@ public class AssignmentsManager {
         @Override
         public void run() throws Exception {
             AssignmentEvent existing = pending.getOrDefault(partition, null);
+            boolean existingIsInFlight = false;
             if (existing == null && inflight != null) {
                 existing = inflight.getOrDefault(partition, null);
+                existingIsInFlight = true;
             }
             if (existing != null) {
                 if (existing.dirId.equals(dirId)) {
@@ -202,7 +204,7 @@ public class AssignmentsManager {
                     existing.merge(this);
                     if (log.isDebugEnabled()) log.debug("Dropping assignment {} because it's older than existing {}", this, existing);
                     return;
-                } else {
+                } else if (!existingIsInFlight) {
                     this.merge(existing);
                     if (log.isDebugEnabled()) log.debug("Dropping existing assignment {} because it's older than {}", existing, this);
                 }
