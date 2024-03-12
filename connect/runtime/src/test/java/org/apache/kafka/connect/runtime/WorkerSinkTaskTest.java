@@ -547,7 +547,7 @@ public class WorkerSinkTaskTest {
         workerTask.iteration();
         verifyPollInitialAssignment();
 
-        Throwable thrownException = assertThrows(RuntimeException.class, () -> workerTask.iteration());
+        RuntimeException thrownException = assertThrows(RuntimeException.class, () -> workerTask.iteration());
         assertEquals(exception, thrownException);
     }
 
@@ -571,7 +571,7 @@ public class WorkerSinkTaskTest {
         workerTask.iteration();
         verifyPollInitialAssignment();
 
-        Throwable thrownException = assertThrows(RuntimeException.class, () -> workerTask.iteration());
+        RuntimeException thrownException = assertThrows(RuntimeException.class, () -> workerTask.iteration());
         assertEquals(exception, thrownException);
     }
 
@@ -597,7 +597,7 @@ public class WorkerSinkTaskTest {
         expectRebalanceAssignmentError(exception);
 
         try {
-            Throwable thrownException = assertThrows(RuntimeException.class, () -> workerTask.iteration());
+            RuntimeException thrownException = assertThrows(RuntimeException.class, () -> workerTask.iteration());
             assertEquals(exception, thrownException);
         } finally {
             verify(sinkTask).close(INITIAL_ASSIGNMENT);
@@ -1156,7 +1156,7 @@ public class WorkerSinkTaskTest {
         // Throw another exception while closing the task's assignment
         doThrow(closeException).when(sinkTask).close(any(Collection.class));
 
-        Throwable thrownException = assertThrows(RuntimeException.class, () -> workerTask.execute());
+        RuntimeException thrownException = assertThrows(RuntimeException.class, () -> workerTask.execute());
         assertEquals(closeException, thrownException);
 
         verify(consumer).wakeup();
@@ -1196,10 +1196,10 @@ public class WorkerSinkTaskTest {
         workerTask.initialize(TASK_CONFIG);
         workerTask.initializeAndStart();
 
-        Throwable thrownException = assertThrows(ConnectException.class, () -> workerTask.execute());
-        assertSame("Exception from put should be the cause", putException, thrownException.getCause());
+        RuntimeException thrownException = assertThrows(ConnectException.class, () -> workerTask.execute());
+        assertEquals("Exception from put should be the cause", putException, thrownException.getCause());
         assertTrue("Exception from close should be suppressed", thrownException.getSuppressed().length > 0);
-        assertSame(closeException, thrownException.getSuppressed()[0]);
+        assertEquals(closeException, thrownException.getSuppressed()[0]);
     }
 
     @Test
