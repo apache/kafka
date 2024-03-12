@@ -357,7 +357,7 @@ class RemoteIndexCacheTest {
     verify(spyEntry.timeIndex, times(0)).deleteIfExists()
 
     // verify cleaner thread is shutdown
-    assertTrue(cache.cleanerThread.isShutdownComplete)
+    assertTrue(cache.cleanerThread.isStoppedOrShutdownComplete)
   }
 
   @Test
