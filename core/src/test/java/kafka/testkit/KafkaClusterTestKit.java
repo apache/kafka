@@ -221,8 +221,6 @@ public class KafkaClusterTestKit implements AutoCloseable {
                     ThreadUtils.createThreadFactory("kafka-cluster-test-kit-executor-%d", false));
                 for (ControllerNode node : nodes.controllerNodes().values()) {
                     setupNodeDirectories(baseDirectory, node.metadataDirectory(), Collections.emptyList());
-                    BootstrapMetadata bootstrapMetadata = BootstrapMetadata.
-                        fromVersion(nodes.bootstrapMetadataVersion(), "testkit");
                     SharedServer sharedServer = new SharedServer(createNodeConfig(node),
                             MetaProperties.apply(nodes.clusterId().toString(), node.id()),
                             Time.SYSTEM,
@@ -234,7 +232,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
                         controller = new ControllerServer(
                                 sharedServer,
                                 KafkaRaftServer.configSchema(),
-                                bootstrapMetadata);
+                                nodes.bootstrapMetadata());
                     } catch (Throwable e) {
                         log.error("Error creating controller {}", node.id(), e);
                         Utils.swallow(log, Level.WARN, "sharedServer.stopForController error", () -> sharedServer.stopForController());

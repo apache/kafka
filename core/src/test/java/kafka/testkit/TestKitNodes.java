@@ -165,6 +165,10 @@ public class TestKitNodes {
         return bootstrapMetadata.metadataVersion();
     }
 
+    public BootstrapMetadata bootstrapMetadata() {
+        return bootstrapMetadata;
+    }
+
     public Map<Integer, ControllerNode> controllerNodes() {
         return controllerNodes;
     }
