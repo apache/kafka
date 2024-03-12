@@ -2538,7 +2538,22 @@ These metrics are reported on both Controllers and Brokers in a KRaft Cluster
         <td>kafka.producer:type=producer-metrics,client-id=([-.\w]+)</td>
       </tr>
       <tr>
+        <td>buffer-exhausted-rate</td>
+        <td>The average per-second number of record sends that are dropped due to buffer exhaustion</td>
+        <td>kafka.producer:type=producer-metrics,client-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>buffer-exhausted-total</td>
+        <td>The total number of record sends that are dropped due to buffer exhaustion</td>
+        <td>kafka.producer:type=producer-metrics,client-id=([-.\w]+)</td>
+      </tr>
+      <tr>
         <td>bufferpool-wait-time</td>
+        <td>The fraction of time an appender waits for space allocation.</td>
+        <td>kafka.producer:type=producer-metrics,client-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>bufferpool-wait-ratio</td>
         <td>The fraction of time an appender waits for space allocation.</td>
         <td>kafka.producer:type=producer-metrics,client-id=([-.\w]+)</td>
       </tr>
@@ -2582,7 +2597,11 @@ These metrics are reported on both Controllers and Brokers in a KRaft Cluster
         <td>The total time the Producer spent aborting transactions in nanoseconds (for EOS).</td>
         <td>kafka.producer:type=producer-metrics,client-id=([-.\w]+)</td>
       </tr>
-
+      <tr>
+        <td>metadata-wait-time-ns-total</td>
+        <td>the total time in nanoseconds that has spent waiting for metadata from the Kafka broker</td>
+        <td>kafka.producer:type=producer-metrics,client-id=([-.\w]+)</td>
+      </tr>
   </tbody></table>
 
   <h5 class="anchor-heading"><a id="producer_sender_monitoring" class="anchor-link"></a><a href="#producer_sender_monitoring">Producer Sender Metrics</a></h5>
@@ -3807,7 +3826,7 @@ foo
   <h3>Limitations</h3>
   <ul>
     <li>While a cluster is being migrated from ZK mode to KRaft mode, we do not support changing the <i>metadata
-      version</i> (also known as the <i>inter.broker.protocol</i> version.) Please do not attempt to do this during
+      version</i> (also known as the <i>inter.broker.protocol.version</i>.) Please do not attempt to do this during
       a migration, or you may break the cluster.</li>
     <li>After the migration has been finalized, it is not possible to revert back to ZooKeeper mode.</li>
     <li><a href="#kraft_missing">As noted above</a>, some features are not fully implemented in KRaft mode. If you are

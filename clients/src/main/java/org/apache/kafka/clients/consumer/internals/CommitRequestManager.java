@@ -438,7 +438,7 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
 
     private Throwable commitAsyncExceptionForError(Throwable error) {
         if (error instanceof RetriableException) {
-            return new RetriableCommitFailedException(error.getMessage());
+            return new RetriableCommitFailedException(error);
         }
         return error;
     }

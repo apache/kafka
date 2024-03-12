@@ -26,12 +26,14 @@ import org.apache.kafka.clients.consumer.internals.events.BackgroundEventHandler
 import org.apache.kafka.clients.consumer.internals.events.CompletableBackgroundEvent;
 import org.apache.kafka.clients.consumer.internals.events.ConsumerRebalanceListenerCallbackCompletedEvent;
 import org.apache.kafka.clients.consumer.internals.events.ConsumerRebalanceListenerCallbackNeededEvent;
-import org.apache.kafka.clients.consumer.internals.events.ErrorBackgroundEvent;
+import org.apache.kafka.clients.consumer.internals.events.ErrorEvent;
+import org.apache.kafka.clients.consumer.internals.metrics.RebalanceMetricsManager;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatResponseData;
+import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.ConsumerGroupHeartbeatRequest;
 import org.apache.kafka.common.telemetry.internals.ClientTelemetryProvider;
@@ -55,6 +57,7 @@ import java.util.TreeSet;
 import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 
+import static java.util.Collections.unmodifiableList;
 import static org.apache.kafka.clients.consumer.internals.ConsumerRebalanceListenerMethodName.ON_PARTITIONS_ASSIGNED;
 import static org.apache.kafka.clients.consumer.internals.ConsumerRebalanceListenerMethodName.ON_PARTITIONS_LOST;
 import static org.apache.kafka.clients.consumer.internals.ConsumerRebalanceListenerMethodName.ON_PARTITIONS_REVOKED;
@@ -253,7 +256,7 @@ public class MembershipManagerImpl implements MembershipManager {
     /**
      * Serves as the conduit by which we can report events to the application thread. This is needed as we send
      * {@link ConsumerRebalanceListenerCallbackNeededEvent callbacks} and, if needed,
-     * {@link ErrorBackgroundEvent errors} to the application thread.
+     * {@link ErrorEvent errors} to the application thread.
      */
     private final BackgroundEventHandler backgroundEventHandler;
 
@@ -263,6 +266,11 @@ public class MembershipManagerImpl implements MembershipManager {
      * when the timer is reset, only when it completes releasing its assignment.
      */
     private CompletableFuture<Void> staleMemberAssignmentRelease;
+    
+    /*
+     * Measures successful rebalance latency and number of failed rebalances.
+     */
+    private final RebalanceMetricsManager metricsManager;
 
     private final Time time;
 
@@ -284,7 +292,35 @@ public class MembershipManagerImpl implements MembershipManager {
                                  LogContext logContext,
                                  Optional<ClientTelemetryReporter> clientTelemetryReporter,
                                  BackgroundEventHandler backgroundEventHandler,
-                                 Time time) {
+                                 Time time,
+                                 Metrics metrics) {
+        this(groupId,
+            groupInstanceId,
+            rebalanceTimeoutMs,
+            serverAssignor,
+            subscriptions,
+            commitRequestManager,
+            metadata,
+            logContext,
+            clientTelemetryReporter,
+            backgroundEventHandler,
+            time,
+            new RebalanceMetricsManager(metrics));
+    }
+
+    // Visible for testing
+    MembershipManagerImpl(String groupId,
+                          Optional<String> groupInstanceId,
+                          int rebalanceTimeoutMs,
+                          Optional<String> serverAssignor,
+                          SubscriptionState subscriptions,
+                          CommitRequestManager commitRequestManager,
+                          ConsumerMetadata metadata,
+                          LogContext logContext,
+                          Optional<ClientTelemetryReporter> clientTelemetryReporter,
+                          BackgroundEventHandler backgroundEventHandler,
+                          Time time,
+                          RebalanceMetricsManager metricsManager) {
         this.groupId = groupId;
         this.state = MemberState.UNSUBSCRIBED;
         this.serverAssignor = serverAssignor;
@@ -301,6 +337,7 @@ public class MembershipManagerImpl implements MembershipManager {
         this.rebalanceTimeoutMs = rebalanceTimeoutMs;
         this.backgroundEventHandler = backgroundEventHandler;
         this.time = time;
+        this.metricsManager = metricsManager;
     }
 
     /**
@@ -314,8 +351,25 @@ public class MembershipManagerImpl implements MembershipManager {
             throw new IllegalStateException(String.format("Invalid state transition from %s to %s",
                     state, nextState));
         }
+
+        if (isCompletingRebalance(state, nextState)) {
+            metricsManager.recordRebalanceEnded(time.milliseconds());
+        }
+        if (isStartingRebalance(state, nextState)) {
+            metricsManager.recordRebalanceStarted(time.milliseconds());
+        }
+
         log.trace("Member {} with epoch {} transitioned from {} to {}.", memberId, memberEpoch, state, nextState);
         this.state = nextState;
+    }
+
+    private static boolean isCompletingRebalance(MemberState currentState, MemberState nextState) {
+        return currentState == MemberState.RECONCILING &&
+            (nextState == MemberState.STABLE || nextState == MemberState.ACKNOWLEDGING);
+    }
+
+    private static boolean isStartingRebalance(MemberState currentState, MemberState nextState) {
+        return currentState != MemberState.RECONCILING && nextState == MemberState.RECONCILING;
     }
 
     /**
@@ -354,7 +408,7 @@ public class MembershipManagerImpl implements MembershipManager {
      * {@inheritDoc}
      */
     @Override
-    public void onHeartbeatResponseReceived(ConsumerGroupHeartbeatResponseData response) {
+    public void onHeartbeatSuccess(ConsumerGroupHeartbeatResponseData response) {
         if (response.errorCode() != Errors.NONE.code()) {
             String errorMessage = String.format(
                     "Unexpected error in Heartbeat response. Expected no error, but received: %s",
@@ -401,6 +455,11 @@ public class MembershipManagerImpl implements MembershipManager {
         } else if (targetAssignmentReconciled()) {
             transitionTo(MemberState.STABLE);
         }
+    }
+
+    @Override
+    public void onHeartbeatFailure() {
+        metricsManager.maybeRecordRebalanceFailed();
     }
 
     /**
@@ -492,7 +551,7 @@ public class MembershipManagerImpl implements MembershipManager {
                 log.error("onPartitionsLost callback invocation failed while releasing assignment" +
                         " after member got fenced. Member will rejoin the group anyways.", error);
             }
-            updateSubscription(new TreeSet<>(TOPIC_ID_PARTITION_COMPARATOR), true);
+            clearSubscription();
             if (state == MemberState.FENCED) {
                 transitionToJoining();
             } else {
@@ -525,7 +584,7 @@ public class MembershipManagerImpl implements MembershipManager {
                 log.error("onPartitionsLost callback invocation failed while releasing assignment" +
                         "after member failed with fatal error.", error);
             }
-            updateSubscription(new TreeSet<>(TOPIC_ID_PARTITION_COMPARATOR), true);
+            clearSubscription();
         });
     }
 
@@ -539,16 +598,14 @@ public class MembershipManagerImpl implements MembershipManager {
     }
 
     /**
-     * Update a new assignment by setting the assigned partitions in the member subscription.
-     *
-     * @param assignedPartitions Topic partitions to take as the new subscription assignment
-     * @param clearAssignments   True if the pending assignments and metadata cache should be cleared
+     * Clear the assigned partitions in the member subscription, pending assignments and metadata cache.
      */
-    private void updateSubscription(SortedSet<TopicIdPartition> assignedPartitions,
-                                    boolean clearAssignments) {
-        Collection<TopicPartition> assignedTopicPartitions = toTopicPartitionSet(assignedPartitions);
-        subscriptions.assignFromSubscribed(assignedTopicPartitions);
-        updateAssignmentLocally(assignedPartitions, clearAssignments);
+    private void clearSubscription() {
+        if (subscriptions.hasAutoAssignedPartitions()) {
+            subscriptions.assignFromSubscribed(Collections.emptySet());
+        }
+        updateCurrentAssignment(Collections.emptySet());
+        clearPendingAssignmentsAndLocalNamesCache();
     }
 
     /**
@@ -563,18 +620,7 @@ public class MembershipManagerImpl implements MembershipManager {
                                                     SortedSet<TopicPartition> addedPartitions) {
         Collection<TopicPartition> assignedTopicPartitions = toTopicPartitionSet(assignedPartitions);
         subscriptions.assignFromSubscribedAwaitingCallback(assignedTopicPartitions, addedPartitions);
-        updateAssignmentLocally(assignedPartitions, false);
-    }
-
-    /**
-     * Make assignment effective on the group manager.
-     */
-    private void updateAssignmentLocally(SortedSet<TopicIdPartition> assignedPartitions,
-                                         boolean clearAssignments) {
         updateCurrentAssignment(assignedPartitions);
-        if (clearAssignments) {
-            clearPendingAssignmentsAndLocalNamesCache();
-        }
     }
 
     /**
@@ -602,7 +648,7 @@ public class MembershipManagerImpl implements MembershipManager {
     public CompletableFuture<Void> leaveGroup() {
         if (isNotInGroup()) {
             if (state == MemberState.FENCED) {
-                updateSubscription(new TreeSet<>(TOPIC_ID_PARTITION_COMPARATOR), true);
+                clearSubscription();
                 transitionTo(MemberState.UNSUBSCRIBED);
             }
             return CompletableFuture.completedFuture(null);
@@ -621,7 +667,7 @@ public class MembershipManagerImpl implements MembershipManager {
         CompletableFuture<Void> callbackResult = invokeOnPartitionsRevokedOrLostToReleaseAssignment();
         callbackResult.whenComplete((result, error) -> {
             // Clear the subscription, no matter if the callback execution failed or succeeded.
-            updateSubscription(new TreeSet<>(TOPIC_ID_PARTITION_COMPARATOR), true);
+            clearSubscription();
 
             // Transition to ensure that a heartbeat request is sent out to effectively leave the
             // group (even in the case where the member had no assignment to release or when the
@@ -822,7 +868,7 @@ public class MembershipManagerImpl implements MembershipManager {
                 log.error("onPartitionsLost callback invocation failed while releasing assignment" +
                     " after member left group due to expired poll timer.", error);
             }
-            updateSubscription(new TreeSet<>(TOPIC_ID_PARTITION_COMPARATOR), true);
+            clearSubscription();
             log.debug("Member {} sent leave group heartbeat and released its assignment. It will remain " +
                 "in {} state until the poll timer is reset, and it will then rejoin the group",
                 memberId, MemberState.STALE);
@@ -1445,5 +1491,10 @@ public class MembershipManagerImpl implements MembershipManager {
             maybeReconcile();
         }
         return PollResult.EMPTY;
+    }
+
+    // visible for testing
+    List<MemberStateListener> stateListeners() {
+        return unmodifiableList(stateUpdatesListeners);
     }
 }

@@ -38,7 +38,7 @@ import org.apache.kafka.server.config.Defaults
 import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.apache.kafka.server.util.KafkaScheduler
-import org.apache.kafka.storage.internals.log.{LogConfig, ProducerStateManagerConfig}
+import org.apache.kafka.storage.internals.log.{CleanerConfig, LogConfig, ProducerStateManagerConfig}
 import org.apache.kafka.test.MockMetricsReporter
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
@@ -215,7 +215,7 @@ class DynamicBrokerConfigTest {
     verifyConfigUpdateWithInvalidConfig(config, origProps, validProps, nonDynamicProps)
 
     // Test update of configs with invalid type
-    val invalidProps = Map(KafkaConfig.LogCleanerThreadsProp -> "invalid")
+    val invalidProps = Map(CleanerConfig.LOG_CLEANER_THREADS_PROP -> "invalid")
     verifyConfigUpdateWithInvalidConfig(config, origProps, validProps, invalidProps)
 
     val excludedTopicConfig = Map(KafkaConfig.LogMessageFormatVersionProp -> "0.10.2")
@@ -225,21 +225,21 @@ class DynamicBrokerConfigTest {
   @Test
   def testConfigUpdateWithReconfigurableValidationFailure(): Unit = {
     val origProps = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 8181)
-    origProps.put(KafkaConfig.LogCleanerDedupeBufferSizeProp, "100000000")
+    origProps.put(CleanerConfig.LOG_CLEANER_DEDUPE_BUFFER_SIZE_PROP, "100000000")
     val config = KafkaConfig(origProps)
     config.dynamicConfig.initialize(None, None)
 
     val validProps = Map.empty[String, String]
-    val invalidProps = Map(KafkaConfig.LogCleanerThreadsProp -> "20")
+    val invalidProps = Map(CleanerConfig.LOG_CLEANER_THREADS_PROP -> "20")
 
     def validateLogCleanerConfig(configs: util.Map[String, _]): Unit = {
-      val cleanerThreads = configs.get(KafkaConfig.LogCleanerThreadsProp).toString.toInt
+      val cleanerThreads = configs.get(CleanerConfig.LOG_CLEANER_THREADS_PROP).toString.toInt
       if (cleanerThreads <=0 || cleanerThreads >= 5)
         throw new ConfigException(s"Invalid cleaner threads $cleanerThreads")
     }
     val reconfigurable = new Reconfigurable {
       override def configure(configs: util.Map[String, _]): Unit = {}
-      override def reconfigurableConfigs(): util.Set[String] = Set(KafkaConfig.LogCleanerThreadsProp).asJava
+      override def reconfigurableConfigs(): util.Set[String] = Set(CleanerConfig.LOG_CLEANER_THREADS_PROP).asJava
       override def validateReconfiguration(configs: util.Map[String, _]): Unit = validateLogCleanerConfig(configs)
       override def reconfigure(configs: util.Map[String, _]): Unit = {}
     }
@@ -248,7 +248,7 @@ class DynamicBrokerConfigTest {
     config.dynamicConfig.removeReconfigurable(reconfigurable)
 
     val brokerReconfigurable = new BrokerReconfigurable {
-      override def reconfigurableConfigs: collection.Set[String] = Set(KafkaConfig.LogCleanerThreadsProp)
+      override def reconfigurableConfigs: collection.Set[String] = Set(CleanerConfig.LOG_CLEANER_THREADS_PROP)
       override def validateReconfiguration(newConfig: KafkaConfig): Unit = validateLogCleanerConfig(newConfig.originals)
       override def reconfigure(oldConfig: KafkaConfig, newConfig: KafkaConfig): Unit = {}
     }
@@ -260,8 +260,8 @@ class DynamicBrokerConfigTest {
   def testReconfigurableValidation(): Unit = {
     val origProps = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 8181)
     val config = KafkaConfig(origProps)
-    val invalidReconfigurableProps = Set(KafkaConfig.LogCleanerThreadsProp, KafkaConfig.BrokerIdProp, "some.prop")
-    val validReconfigurableProps = Set(KafkaConfig.LogCleanerThreadsProp, KafkaConfig.LogCleanerDedupeBufferSizeProp, "some.prop")
+    val invalidReconfigurableProps = Set(CleanerConfig.LOG_CLEANER_THREADS_PROP, KafkaConfig.BrokerIdProp, "some.prop")
+    val validReconfigurableProps = Set(CleanerConfig.LOG_CLEANER_THREADS_PROP, CleanerConfig.LOG_CLEANER_DEDUPE_BUFFER_SIZE_PROP, "some.prop")
 
     def createReconfigurable(configs: Set[String]) = new Reconfigurable {
       override def configure(configs: util.Map[String, _]): Unit = {}

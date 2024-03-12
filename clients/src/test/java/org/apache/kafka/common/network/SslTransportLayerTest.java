@@ -36,6 +36,7 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.test.TestSslUtils;
 import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtensionContext;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -51,6 +52,7 @@ import java.nio.ByteBuffer;
 import java.nio.channels.Channels;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.SocketChannel;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -65,13 +67,20 @@ import java.util.stream.Stream;
 
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.SSLEngine;
+import javax.net.ssl.SSLEngineResult;
 import javax.net.ssl.SSLParameters;
+import javax.net.ssl.SSLSession;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 /**
  * Tests for the SSL transport layer. These use a test harness that runs a simple socket server that echos back responses.
@@ -1466,5 +1475,56 @@ public class SslTransportLayerTest {
                 return size;
             }
         }
+    }
+
+    /**
+     * SSLEngine implementations may transition from NEED_UNWRAP to NEED_UNWRAP
+     * even after reading all the data from the socket. This test ensures we
+     * continue unwrapping and not break early.
+     * Please refer <a href="https://issues.apache.org/jira/browse/KAFKA-16305">KAFKA-16305</a>
+     * for more information.
+     */
+    @Test
+    public void testHandshakeUnwrapContinuesUnwrappingOnNeedUnwrapAfterAllBytesRead() throws IOException {
+        // Given
+        byte[] data = "ClientHello?".getBytes(StandardCharsets.UTF_8);
+
+        SSLEngine sslEngine = mock(SSLEngine.class);
+        SocketChannel socketChannel = mock(SocketChannel.class);
+        SelectionKey selectionKey = mock(SelectionKey.class);
+        when(selectionKey.channel()).thenReturn(socketChannel);
+        SSLSession sslSession = mock(SSLSession.class);
+        SslTransportLayer sslTransportLayer = new SslTransportLayer(
+                "test-channel",
+                selectionKey,
+                sslEngine,
+                mock(ChannelMetadataRegistry.class)
+        );
+
+        when(sslEngine.getSession()).thenReturn(sslSession);
+        when(sslSession.getPacketBufferSize()).thenReturn(data.length * 2);
+        sslTransportLayer.startHandshake(); // to initialize the buffers
+
+        ByteBuffer netReadBuffer = sslTransportLayer.netReadBuffer();
+        netReadBuffer.clear();
+        ByteBuffer appReadBuffer = sslTransportLayer.appReadBuffer();
+        when(socketChannel.read(any(ByteBuffer.class))).then(invocation -> {
+            ((ByteBuffer) invocation.getArgument(0)).put(data);
+            return data.length;
+        });
+
+        when(sslEngine.unwrap(netReadBuffer, appReadBuffer))
+                .thenAnswer(invocation -> {
+                    netReadBuffer.flip();
+                    return new SSLEngineResult(SSLEngineResult.Status.OK, SSLEngineResult.HandshakeStatus.NEED_UNWRAP, data.length, 0);
+                }).thenReturn(new SSLEngineResult(SSLEngineResult.Status.OK, SSLEngineResult.HandshakeStatus.NEED_WRAP, 0, 0));
+
+        // When
+        SSLEngineResult result = sslTransportLayer.handshakeUnwrap(true, false);
+
+        // Then
+        verify(sslEngine, times(2)).unwrap(netReadBuffer, appReadBuffer);
+        assertEquals(SSLEngineResult.Status.OK, result.getStatus());
+        assertEquals(SSLEngineResult.HandshakeStatus.NEED_WRAP, result.getHandshakeStatus());
     }
 }
