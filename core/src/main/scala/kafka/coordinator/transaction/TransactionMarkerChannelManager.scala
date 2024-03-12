@@ -194,7 +194,7 @@ class TransactionMarkerChannelManager(
   // visible for testing
   private[transaction] def queueForUnknownBroker = markersQueueForUnknownBroker
 
-  private[transaction] def addMarkersForBroker(broker: Node, txnTopicPartition: Int, pendingCompleteTxnAndMarkerEntry: PendingCompleteTxnAndMarkerEntry): Unit = {
+  private[transaction] def addMarkersForBroker(broker: Node, txnTopicPartition: Int, pendingCompleteTxnAndMarker: PendingCompleteTxnAndMarkerEntry): Unit = {
     val brokerId = broker.id
 
     // we do not synchronize on the update of the broker node with the enqueuing,
@@ -204,10 +204,10 @@ class TransactionMarkerChannelManager(
       new TxnMarkerQueue(broker)
     })
     brokerRequestQueue.destination = broker
-    brokerRequestQueue.addMarkers(txnTopicPartition, pendingCompleteTxnAndMarkerEntry)
+    brokerRequestQueue.addMarkers(txnTopicPartition, pendingCompleteTxnAndMarker)
 
-    trace(s"Added marker ${pendingCompleteTxnAndMarkerEntry.txnMarkerEntry} for transactional id" +
-      s" ${pendingCompleteTxnAndMarkerEntry.pendingCompleteTxn.transactionalId} to destination broker $brokerId")
+    trace(s"Added marker ${pendingCompleteTxnAndMarker.txnMarkerEntry} for transactional id" +
+      s" ${pendingCompleteTxnAndMarker.pendingCompleteTxn.transactionalId} to destination broker $brokerId")
   }
 
   private def retryLogAppends(): Unit = {

@@ -216,9 +216,10 @@ class TransactionMarkerChannelManagerTest {
 
     clientResponses.foreach { clientResponse =>
       getTransactionStateResponses.foreach { getTransactionStateResponse =>
-        // Send out markers for a transaction before load.
+        // Reset data from previous iteration.
         txnMetadata2.topicPartitions.add(partition1)
         clearInvocations(txnStateManager)
+        // Send out markers for a transaction before load.
         channelManager.addTxnMarkersToSend(coordinatorEpoch, txnResult,
           txnMetadata2, expectedTransition)
 
