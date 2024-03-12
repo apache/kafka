@@ -356,11 +356,10 @@ class LogManager(logDirs: Seq[File],
       addStrayLog(topicPartition, log)
       warn(s"Loaded stray log: $logDir")
     } else if (isStray(log.topicId, topicPartition)) {
-      // Opposite of Zookeeper mode deleted topic in KRAFT mode can be recreated while it's not fully deleted from broker.
-      // As a result of this broker in KRAFT mode with one offline directory has no way to detect to-be-deleted replica in an offline directory earlier.
-      // However, broker need to mark the partition directories as stray during log load because topics may have been
-      // recreated with the same name while a log directory was offline.
-      // See KAFKA-16234, KAFKA-16157 and KAFKA-14616 for details.
+      // Unlike Zookeeper mode, which tracks pending topic deletions under a ZNode, KRaft is unable to prevent a topic from being recreated before every replica has been deleted.
+      // A KRaft broker with an offline directory may be unable to detect it still holds a to-be-deleted replica,
+      // and can create a conflicting topic partition for a new incarnation of the topic in one of the remaining online directories.
+      // So upon a restart in which the offline directory is back online we need to clean up the old replica directory.
       log.renameDir(UnifiedLog.logStrayDirName(log.topicPartition), shouldReinitialize = false)
       addStrayLog(log.topicPartition, log)
       warn(s"Log in ${logDir.getAbsolutePath} marked stray and renamed to ${log.dir.getAbsolutePath}")
