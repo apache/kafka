@@ -4169,7 +4169,7 @@ class ReplicaManagerTest {
       System.err.println("[Johnny] before timer, curExpiresPerSec is: " + curExpiresPerSec)
       replicaManager.fetchMessages(params, Seq(tidp0 -> new PartitionData(topicId, fetchOffset, 0, 100000, Optional.of[Integer](leaderEpoch), Optional.of[Integer](leaderEpoch))), UnboundedQuota, fetchCallback)
       // advancing the clock to expire the delayed remote fetch
-      timer.advanceClock(2000L)
+      timer.advanceClock(5000L)
 
       // verify the metric value is incremented since the delayed remote fetch is expired
       TestUtils.waitUntilTrue(() => curExpiresPerSec + 1 == safeYammerMetricValue("type=DelayedRemoteFetchMetrics,name=ExpiresPerSec").asInstanceOf[Long],
