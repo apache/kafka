@@ -197,21 +197,19 @@ public class AssignmentsManager {
             if (existing != null) {
                 if (existing.dirId.equals(dirId)) {
                     existing.merge(this);
-                    if (log.isDebugEnabled()) log.debug("Ignoring duplicate assignment {}", this);
+                    log.debug("Ignoring duplicate assignment {}", this);
                     return;
                 }
                 if (existing.timestampNs > timestampNs) {
                     existing.merge(this);
-                    if (log.isDebugEnabled()) log.debug("Dropping assignment {} because it's older than existing {}", this, existing);
+                    log.debug("Dropping assignment {} because it's older than existing {}", this, existing);
                     return;
                 } else if (!existingIsInFlight) {
                     this.merge(existing);
-                    if (log.isDebugEnabled()) log.debug("Dropping existing assignment {} because it's older than {}", existing, this);
+                    log.debug("Dropping existing assignment {} because it's older than {}", existing, this);
                 }
             }
-            if (log.isDebugEnabled()) {
-                log.debug("Received new assignment {}", this);
-            }
+            log.debug("Received new assignment {}", this);
             pending.put(partition, this);
 
             if (inflight == null || inflight.isEmpty()) {
@@ -272,9 +270,7 @@ public class AssignmentsManager {
             }
             Map<TopicIdPartition, Uuid> assignment = inflight.entrySet().stream()
                     .collect(Collectors.toMap(Map.Entry::getKey, e -> e.getValue().dirId));
-            if (log.isDebugEnabled()) {
-                log.debug("Dispatching {} assignments:  {}", assignment.size(), assignment);
-            }
+            log.debug("Dispatching {} assignments:  {}", assignment.size(), assignment);
             channelManager.sendRequest(new AssignReplicasToDirsRequest.Builder(
                     buildRequestData(brokerId, brokerEpochSupplier.get(), assignment)),
                     new AssignReplicasToDirsRequestCompletionHandler());
@@ -331,9 +327,7 @@ public class AssignmentsManager {
         }
         @Override
         public void onComplete(ClientResponse response) {
-            if (log.isDebugEnabled()) {
-                log.debug("Received controller response: {}", response);
-            }
+            log.debug("Received controller response: {}", response);
             appendResponseEvent(response);
         }
         void appendResponseEvent(ClientResponse response) {
@@ -352,9 +346,7 @@ public class AssignmentsManager {
     }
 
     private void scheduleDispatch(long delayNs) {
-        if (log.isDebugEnabled()) {
-            log.debug("Scheduling dispatch in {}ns", delayNs);
-        }
+        log.debug("Scheduling dispatch in {}ns", delayNs);
         eventQueue.enqueue(EventQueue.EventInsertionType.DEFERRED, DispatchEvent.TAG,
                 new EventQueue.LatestDeadlineFunction(time.nanoseconds() + delayNs), new DispatchEvent());
     }
