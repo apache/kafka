@@ -14,17 +14,17 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.clients.consumer.internals.events;
 
-public class LeaveOnCloseApplicationEvent extends CompletableApplicationEvent<Void> {
-    public LeaveOnCloseApplicationEvent() {
-        super(Type.LEAVE_ON_CLOSE);
-    }
+/**
+ * Application event indicating that the subscription state has changed, triggered when a user
+ * calls the subscribe API. This will make the consumer join a consumer group if not part of it
+ * yet, or just send the updated subscription to the broker if it's already a member of the group.
+ */
+public class SubscriptionChangeEvent extends ApplicationEvent {
 
-    @Override
-    public String toString() {
-        return "LeaveOnCloseApplicationEvent{" +
-            toStringBase() +
-            '}';
+    public SubscriptionChangeEvent() {
+        super(Type.SUBSCRIPTION_CHANGE);
     }
 }

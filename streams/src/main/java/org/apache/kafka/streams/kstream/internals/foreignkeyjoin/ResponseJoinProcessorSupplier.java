@@ -18,6 +18,7 @@
 package org.apache.kafka.streams.kstream.internals.foreignkeyjoin;
 
 import org.apache.kafka.common.errors.UnsupportedVersionException;
+import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.kstream.internals.KTableValueGetter;
@@ -27,6 +28,8 @@ import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.api.ProcessorSupplier;
 import org.apache.kafka.streams.processor.api.Record;
+import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
+import org.apache.kafka.streams.processor.internals.metrics.TaskMetrics;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.state.internals.Murmur3;
 import org.slf4j.Logger;
@@ -71,6 +74,8 @@ public class ResponseJoinProcessorSupplier<K, V, VO, VR> implements ProcessorSup
             private Serializer<V> runtimeValueSerializer = constructionTimeValueSerializer;
 
             private KTableValueGetter<K, V> valueGetter;
+            private Sensor droppedRecordsSensor;
+
 
             @SuppressWarnings("unchecked")
             @Override
@@ -82,6 +87,13 @@ public class ResponseJoinProcessorSupplier<K, V, VO, VR> implements ProcessorSup
                 if (runtimeValueSerializer == null) {
                     runtimeValueSerializer = (Serializer<V>) context.valueSerde().serializer();
                 }
+
+                final InternalProcessorContext<?, ?> internalProcessorContext = (InternalProcessorContext<?, ?>) context;
+                droppedRecordsSensor = TaskMetrics.droppedRecordsSensor(
+                        Thread.currentThread().getName(),
+                        internalProcessorContext.taskId().toString(),
+                        internalProcessorContext.metrics()
+                );
             }
 
             @Override
@@ -112,6 +124,7 @@ public class ResponseJoinProcessorSupplier<K, V, VO, VR> implements ProcessorSup
                     context().forward(record.withValue(result));
                 } else {
                     LOG.trace("Dropping FK-join response due to hash mismatch. Expected {}. Actual {}", messageHash, currentHash);
+                    droppedRecordsSensor.record();
                 }
             }
         };

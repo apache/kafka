@@ -14,17 +14,17 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.clients.consumer.internals.events;
 
-/**
- * Event for resetting offsets for all assigned partitions that require it. This is an
- * asynchronous event that generates ListOffsets requests, and completes by updating in-memory
- * positions when responses are received.
- */
-public class ResetPositionsApplicationEvent extends CompletableApplicationEvent<Void> {
+import org.apache.kafka.common.PartitionInfo;
+import org.apache.kafka.common.utils.Timer;
 
-    public ResetPositionsApplicationEvent() {
-        super(Type.RESET_POSITIONS);
+import java.util.List;
+import java.util.Map;
+
+public abstract class AbstractTopicMetadataEvent extends CompletableApplicationEvent<Map<String, List<PartitionInfo>>> {
+
+    protected AbstractTopicMetadataEvent(final Type type, final Timer timer) {
+        super(type, timer);
     }
 }

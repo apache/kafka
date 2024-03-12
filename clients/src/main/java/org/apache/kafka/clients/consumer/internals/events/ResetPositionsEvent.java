@@ -14,26 +14,19 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.clients.consumer.internals.events;
 
-import org.apache.kafka.clients.consumer.OffsetAndMetadata;
-import org.apache.kafka.common.TopicPartition;
-import java.util.Map;
+import org.apache.kafka.common.utils.Timer;
 
 /**
- * Event to commit offsets without waiting for a response, so the request won't be retried.
+ * Event for resetting offsets for all assigned partitions that require it. This is an
+ * asynchronous event that generates ListOffsets requests, and completes by updating in-memory
+ * positions when responses are received.
  */
-public class AsyncCommitApplicationEvent extends CommitApplicationEvent {
+public class ResetPositionsEvent extends CompletableApplicationEvent<Void> {
 
-    public AsyncCommitApplicationEvent(final Map<TopicPartition, OffsetAndMetadata> offsets) {
-        super(offsets, Type.COMMIT_ASYNC);
-    }
-
-    @Override
-    public String toString() {
-        return "AsyncCommitApplicationEvent{" +
-            toStringBase() +
-            ", offsets=" + offsets() +
-            '}';
+    public ResetPositionsEvent(final Timer timer) {
+        super(Type.RESET_POSITIONS, timer);
     }
 }
