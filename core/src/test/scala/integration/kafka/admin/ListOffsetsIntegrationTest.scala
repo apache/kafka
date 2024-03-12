@@ -24,25 +24,28 @@ import kafka.utils.{TestInfoUtils, TestUtils}
 import org.apache.kafka.clients.admin._
 import org.apache.kafka.clients.producer.ProducerRecord
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.utils.Utils
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 
+import java.util.Properties
 import scala.collection.{Map, Seq}
 import scala.jdk.CollectionConverters._
 
 class ListOffsetsIntegrationTest extends KafkaServerTestHarness {
 
   val topicName = "foo"
+  val topicNameWithCustomConfigs = "foo2"
   var adminClient: Admin = _
   var setOldMessageFormat: Boolean = false
 
   @BeforeEach
   override def setUp(testInfo: TestInfo): Unit = {
     super.setUp(testInfo)
-    createTopic(topicName, 1, 1.toShort)
+    createTopicWithConfig(topicName, new Properties())
     adminClient = Admin.create(Map[String, Object](
       AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG -> bootstrapServers()
     ).asJava)
@@ -60,6 +63,31 @@ class ListOffsetsIntegrationTest extends KafkaServerTestHarness {
   def testThreeCompressedRecordsInOneBatch(quorum: String): Unit = {
     produceMessagesInOneBatch("gzip")
     verifyListOffsets()
+
+    // test LogAppendTime case
+    val props: Properties = new Properties()
+    props.setProperty(TopicConfig.MESSAGE_TIMESTAMP_TYPE_CONFIG, "LogAppendTime")
+    createTopicWithConfig(topicNameWithCustomConfigs, props)
+    produceMessagesInOneBatch("gzip", topicNameWithCustomConfigs)
+    // In LogAppendTime's case, the maxTimestampOffset should be the first message of the batch.
+    // So in this one batch test, it'll be the first offset 0
+    verifyListOffsets(topic = topicNameWithCustomConfigs, 0)
+  }
+
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testThreeRecordsInSeparateBatch(quorum: String): Unit = {
+    produceMessagesInSeparateBatch()
+    verifyListOffsets()
+
+    // test LogAppendTime case
+    val props: Properties = new Properties()
+    props.setProperty(TopicConfig.MESSAGE_TIMESTAMP_TYPE_CONFIG, "LogAppendTime")
+    createTopicWithConfig(topicNameWithCustomConfigs, props)
+    produceMessagesInSeparateBatch("gzip", topicNameWithCustomConfigs)
+    // In LogAppendTime's case, the maxTimestampOffset should be the first message of the batch.
+    // So in this separate batch test, it'll be the last offset 2
+    verifyListOffsets(topic = topicNameWithCustomConfigs, 2)
   }
 
   // The message conversion test only run in ZK mode because KRaft mode doesn't support "inter.broker.protocol.version" < 3.0
@@ -69,6 +97,15 @@ class ListOffsetsIntegrationTest extends KafkaServerTestHarness {
     createOldMessageFormatBrokers()
     produceMessagesInOneBatch()
     verifyListOffsets()
+
+    // test LogAppendTime case
+    val props: Properties = new Properties()
+    props.setProperty(TopicConfig.MESSAGE_TIMESTAMP_TYPE_CONFIG, "LogAppendTime")
+    createTopicWithConfig(topicNameWithCustomConfigs, props)
+    produceMessagesInOneBatch("gzip", topicNameWithCustomConfigs)
+    // In LogAppendTime's case, the maxTimestampOffset should be the first message of the batch.
+    // So in this one batch test, it'll be the first offset 0
+    verifyListOffsets(topic = topicNameWithCustomConfigs, 0)
   }
 
   // The message conversion test only run in ZK mode because KRaft mode doesn't support "inter.broker.protocol.version" < 3.0
@@ -78,13 +115,35 @@ class ListOffsetsIntegrationTest extends KafkaServerTestHarness {
     createOldMessageFormatBrokers()
     produceMessagesInSeparateBatch()
     verifyListOffsets()
+
+    // test LogAppendTime case
+    val props: Properties = new Properties()
+    props.setProperty(TopicConfig.MESSAGE_TIMESTAMP_TYPE_CONFIG, "LogAppendTime")
+    createTopicWithConfig(topicNameWithCustomConfigs, props)
+    produceMessagesInSeparateBatch("gzip", topicNameWithCustomConfigs)
+    // In LogAppendTime's case, the maxTimestampOffset should be the first message of the batch.
+    // So in this separate batch test, it'll be the last offset 2
+    verifyListOffsets(topic = topicNameWithCustomConfigs, 2)
   }
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
-  def testThreeRecordsInSeparateBatch(quorum: String): Unit = {
-    produceMessagesInSeparateBatch()
-    verifyListOffsets()
+  def testThreeRecordsInOneBatchHavingDifferentCompressionTypeWithServer(quorum: String): Unit = {
+    val props: Properties = new Properties()
+    props.setProperty(TopicConfig.COMPRESSION_TYPE_CONFIG, "lz4")
+    createTopicWithConfig(topicNameWithCustomConfigs, props)
+    produceMessagesInOneBatch(topic = topicNameWithCustomConfigs)
+    verifyListOffsets(topic = topicNameWithCustomConfigs)
+  }
+
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testThreeRecordsInSeparateBatchHavingDifferentCompressionTypeWithServer(quorum: String): Unit = {
+    val props: Properties = new Properties()
+    props.setProperty(TopicConfig.COMPRESSION_TYPE_CONFIG, "lz4")
+    createTopicWithConfig(topicNameWithCustomConfigs, props)
+    produceMessagesInSeparateBatch(topic = topicNameWithCustomConfigs)
+    verifyListOffsets(topic = topicNameWithCustomConfigs)
   }
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
@@ -103,32 +162,37 @@ class ListOffsetsIntegrationTest extends KafkaServerTestHarness {
     ).asJava)
   }
 
-  private def verifyListOffsets(): Unit = {
-    val earliestOffset = runFetchOffsets(adminClient, OffsetSpec.earliest())
+  private def createTopicWithConfig(topic: String, props: Properties): Unit = {
+    createTopic(topic, 1, 1.toShort, topicConfig = props)
+  }
+
+  private def verifyListOffsets(topic: String = topicName, expectedMaxTimestampOffset: Int = 1): Unit = {
+    val earliestOffset = runFetchOffsets(adminClient, OffsetSpec.earliest(), topic)
     assertEquals(0, earliestOffset.offset())
 
-    val latestOffset = runFetchOffsets(adminClient, OffsetSpec.latest())
+    val latestOffset = runFetchOffsets(adminClient, OffsetSpec.latest(), topic)
     assertEquals(3, latestOffset.offset())
 
-    val maxTimestampOffset = runFetchOffsets(adminClient, OffsetSpec.maxTimestamp())
-    assertEquals(1, maxTimestampOffset.offset())
+    val maxTimestampOffset = runFetchOffsets(adminClient, OffsetSpec.maxTimestamp(), topic)
+    assertEquals(expectedMaxTimestampOffset, maxTimestampOffset.offset())
   }
 
   private def runFetchOffsets(adminClient: Admin,
-                              offsetSpec: OffsetSpec): ListOffsetsResult.ListOffsetsResultInfo = {
-    val tp = new TopicPartition(topicName, 0)
+                              offsetSpec: OffsetSpec,
+                              topic: String): ListOffsetsResult.ListOffsetsResultInfo = {
+    val tp = new TopicPartition(topic, 0)
     adminClient.listOffsets(Map(
       tp -> offsetSpec
     ).asJava, new ListOffsetsOptions()).all().get().get(tp)
   }
 
-  def produceMessagesInOneBatch(compressionType: String = "none"): Unit = {
+  private def produceMessagesInOneBatch(compressionType: String = "none", topic: String = topicName): Unit = {
     val records = Seq(
-      new ProducerRecord[Array[Byte], Array[Byte]](topicName, 0, 100L,
+      new ProducerRecord[Array[Byte], Array[Byte]](topic, 0, 100L,
         null, new Array[Byte](10)),
-      new ProducerRecord[Array[Byte], Array[Byte]](topicName, 0, 999L,
+      new ProducerRecord[Array[Byte], Array[Byte]](topic, 0, 999L,
         null, new Array[Byte](10)),
-      new ProducerRecord[Array[Byte], Array[Byte]](topicName, 0, 200L,
+      new ProducerRecord[Array[Byte], Array[Byte]](topic, 0, 200L,
         null, new Array[Byte](10)),
     )
     // create a producer with large linger.ms and enough batch.size (default is enough for three 10 bytes records),
@@ -148,12 +212,12 @@ class ListOffsetsIntegrationTest extends KafkaServerTestHarness {
     }
   }
 
-  def produceMessagesInSeparateBatch(compressionType: String = "none"): Unit = {
-    val records = Seq(new ProducerRecord[Array[Byte], Array[Byte]](topicName, 0, 100L,
+  private def produceMessagesInSeparateBatch(compressionType: String = "none", topic: String = topicName): Unit = {
+    val records = Seq(new ProducerRecord[Array[Byte], Array[Byte]](topic, 0, 100L,
         null, new Array[Byte](10)))
-    val records2 = Seq(new ProducerRecord[Array[Byte], Array[Byte]](topicName, 0, 999L,
+    val records2 = Seq(new ProducerRecord[Array[Byte], Array[Byte]](topic, 0, 999L,
       null, new Array[Byte](10)))
-    val records3 = Seq(new ProducerRecord[Array[Byte], Array[Byte]](topicName, 0, 200L,
+    val records3 = Seq(new ProducerRecord[Array[Byte], Array[Byte]](topic, 0, 200L,
       null, new Array[Byte](10)))
 
     val producer = createProducer(
@@ -172,13 +236,13 @@ class ListOffsetsIntegrationTest extends KafkaServerTestHarness {
   }
 
   def generateConfigs: Seq[KafkaConfig] = {
-    TestUtils.createBrokerConfigs(1, zkConnectOrNull).map(props => {
+    TestUtils.createBrokerConfigs(1, zkConnectOrNull).map{ props =>
       if (setOldMessageFormat) {
         props.setProperty("log.message.format.version", "0.10.0")
         props.setProperty("inter.broker.protocol.version", "0.10.0")
       }
       props
-    }).map(KafkaConfig.fromProps)
+    }.map(KafkaConfig.fromProps)
   }
 }
 
