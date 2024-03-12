@@ -78,7 +78,7 @@ public class ShareFetchCollectorTest {
     public void testFetchNormal() {
         int recordCount = DEFAULT_MAX_POLL_RECORDS;
         buildDependencies();
-        subscribeAndSeek(topicAPartition0);
+        subscribeAndAssign(topicAPartition0);
 
         ShareCompletedFetch completedFetch = completedFetchBuilder
                 .recordCount(recordCount)
@@ -121,27 +121,13 @@ public class ShareFetchCollectorTest {
         assertTrue(completedFetch.isConsumed());
     }
 
-    @Test
-    public void testNoResultsIfInitializing() {
-        buildDependencies();
-
-        // Intentionally call assign (vs. subscribeAndSeek) so that we don't set the position. The SubscriptionState
-        // will consider the partition as in the SubscriptionState.FetchStates.INITIALIZED state.
-        subscribeAndAssign(topicAPartition0);
-
-        // The position should thus be null and considered un-fetchable and invalid.
-        assertNull(subscriptions.position(topicAPartition0.topicPartition()));
-        assertFalse(subscriptions.isFetchable(topicAPartition0.topicPartition()));
-        assertFalse(subscriptions.hasValidPosition(topicAPartition0.topicPartition()));
-    }
-
     @ParameterizedTest
     @MethodSource("testErrorInInitializeSource")
-    public void testErrorInInitialize(int recordCount, RuntimeException expectedException) {
+    public void testErrorInInitialize(RuntimeException expectedException) {
         buildDependencies();
-        subscribeAndSeek(topicAPartition0);
+        subscribeAndAssign(topicAPartition0);
 
-        // Create a FetchCollector that fails on CompletedFetch initialization.
+        // Create a ShareFetchCollector that fails on ShareCompletedFetch initialization.
         fetchCollector = new ShareFetchCollector<String, String>(logContext,
                 metadata,
                 subscriptions,
@@ -154,9 +140,9 @@ public class ShareFetchCollectorTest {
             }
         };
 
-        // Add the CompletedFetch to the FetchBuffer queue
+        // Add the ShareCompletedFetch to the ShareFetchBuffer queue - the number of records doesn't matter
         ShareCompletedFetch completedFetch = completedFetchBuilder
-                .recordCount(recordCount)
+                .recordCount(10)
                 .build();
         fetchBuffer.add(completedFetch);
 
@@ -165,19 +151,13 @@ public class ShareFetchCollectorTest {
 
         // Now run our ill-fated collectFetch.
         assertThrows(expectedException.getClass(), () -> fetchCollector.collect(fetchBuffer));
-
-        // If the number of records in the CompletedFetch was 0, the call to FetchCollector.collect() will
-        // remove it from the queue. If there are records in the ShareCompletedFetch, FetchCollector.collect will
-        // leave it on the queue.
-        assertEquals(recordCount == 0, fetchBuffer.isEmpty());
     }
 
     @Test
     public void testFetchWithTopicAuthorizationFailed() {
         buildDependencies();
-        subscribeAndSeek(topicAPartition0);
+        subscribeAndAssign(topicAPartition0);
 
-        // Try to data and validate that we get an empty Fetch back.
         ShareCompletedFetch completedFetch = completedFetchBuilder
                 .error(Errors.TOPIC_AUTHORIZATION_FAILED)
                 .build();
@@ -188,9 +168,8 @@ public class ShareFetchCollectorTest {
     @Test
     public void testFetchWithUnknownLeaderEpoch() {
         buildDependencies();
-        subscribeAndSeek(topicAPartition0);
+        subscribeAndAssign(topicAPartition0);
 
-        // Try to data and validate that we get an empty Fetch back.
         ShareCompletedFetch completedFetch = completedFetchBuilder
                 .error(Errors.UNKNOWN_LEADER_EPOCH)
                 .build();
@@ -202,9 +181,8 @@ public class ShareFetchCollectorTest {
     @Test
     public void testFetchWithUnknownServerError() {
         buildDependencies();
-        subscribeAndSeek(topicAPartition0);
+        subscribeAndAssign(topicAPartition0);
 
-        // Try to data and validate that we get an empty Fetch back.
         ShareCompletedFetch completedFetch = completedFetchBuilder
                 .error(Errors.UNKNOWN_SERVER_ERROR)
                 .build();
@@ -216,9 +194,8 @@ public class ShareFetchCollectorTest {
     @Test
     public void testFetchWithCorruptMessage() {
         buildDependencies();
-        subscribeAndSeek(topicAPartition0);
+        subscribeAndAssign(topicAPartition0);
 
-        // Try to data and validate that we get an empty Fetch back.
         ShareCompletedFetch completedFetch = completedFetchBuilder
                 .error(Errors.CORRUPT_MESSAGE)
                 .build();
@@ -230,7 +207,7 @@ public class ShareFetchCollectorTest {
     @MethodSource("testFetchWithOtherErrorsSource")
     public void testFetchWithOtherErrors(final Errors error) {
         buildDependencies();
-        subscribeAndSeek(topicAPartition0);
+        subscribeAndAssign(topicAPartition0);
 
         ShareCompletedFetch completedFetch = completedFetchBuilder
                 .error(error)
@@ -279,12 +256,6 @@ public class ShareFetchCollectorTest {
         subscriptions.assignFromSubscribed(Collections.singleton(tp.topicPartition()));
     }
 
-    private void subscribeAndSeek(TopicIdPartition tp) {
-        subscriptions.subscribe(Collections.singleton(tp.topic()), Optional.empty());
-        subscriptions.assignFromSubscribed(Collections.singleton(tp.topicPartition()));
-        subscriptions.seek(tp.topicPartition(), 0);
-    }
-
     /**
      * Supplies the {@link Arguments} to {@link #testFetchWithOtherErrors(Errors)}.
      */
@@ -312,14 +283,12 @@ public class ShareFetchCollectorTest {
 
 
     /**
-     * Supplies the {@link Arguments} to {@link #testErrorInInitialize(int, RuntimeException)}.
+     * Supplies the {@link Arguments} to {@link #testErrorInInitialize(RuntimeException)}.
      */
     private static Stream<Arguments> testErrorInInitializeSource() {
         return Stream.of(
-                Arguments.of(10, new RuntimeException()),
-                Arguments.of(0, new RuntimeException()),
-                Arguments.of(10, new KafkaException()),
-                Arguments.of(0, new KafkaException())
+                Arguments.of(new RuntimeException()),
+                Arguments.of(new KafkaException())
         );
     }
 

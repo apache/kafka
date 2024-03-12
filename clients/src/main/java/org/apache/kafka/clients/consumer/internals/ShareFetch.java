@@ -101,7 +101,6 @@ public class ShareFetch<K, V> {
     }
 
     public void acknowledgeAll(final AcknowledgeType type) {
-        // This is where we hook into building the acknowledgement batches
         batches.forEach((tip, batch) -> batch.acknowledgeAll(type));
     }
 }

@@ -32,9 +32,24 @@ public class Acknowledgements {
         this.acknowledgements = acknowledgements;
     }
 
-    public void add(long offset,
-                    AcknowledgeType type) {
+    public void add(long offset, AcknowledgeType type) {
         this.acknowledgements.put(offset, type);
+    }
+
+    public void addIfAbsent(long offset, AcknowledgeType type) {
+        acknowledgements.putIfAbsent(offset, type);
+    }
+
+    public AcknowledgeType get(long offset) {
+        return acknowledgements.get(offset);
+    }
+
+    public boolean isEmpty() {
+        return acknowledgements.isEmpty();
+    }
+
+    public int size() {
+        return acknowledgements.size();
     }
 
     public void merge(Acknowledgements other) {

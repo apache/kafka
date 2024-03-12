@@ -240,10 +240,12 @@ public class ShareFetchRequestManagerTest {
                 Errors.NONE));
         networkClientDelegate.poll(time.timer(0));
 
-        for (int i = 0; i < 2; i++) {
-            // the fetchRecords() should always throw exception due to the bad batch.
-            assertThrows(KafkaException.class, this::collectFetch);
-        }
+        // The first call to collectFetch, throws an exception
+        assertThrows(KafkaException.class, this::collectFetch);
+
+        // The exception is cleared once thrown
+        ShareFetch<String, String> fetch = this.collectFetch();
+        assertTrue(fetch.isEmpty());
     }
 
     @Test

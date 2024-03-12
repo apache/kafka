@@ -18,6 +18,7 @@ package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.consumer.AcknowledgeType;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicIdPartition;
 
 import java.util.ArrayList;
@@ -27,6 +28,7 @@ public class ShareInFlightBatch<K, V> {
     final TopicIdPartition partition;
     private final Acknowledgements acknowledgements;
     private final List<ConsumerRecord<K, V>> inFlightRecords;
+    private KafkaException exception;
 
     public ShareInFlightBatch(TopicIdPartition partition) {
         this.partition = partition;
@@ -40,7 +42,7 @@ public class ShareInFlightBatch<K, V> {
 
     public void acknowledgeAll(AcknowledgeType type) {
         inFlightRecords.forEach(record -> {
-            acknowledgements.add(record.offset(), type);
+            acknowledgements.addIfAbsent(record.offset(), type);
         });
     }
 
@@ -53,11 +55,23 @@ public class ShareInFlightBatch<K, V> {
         acknowledgements.merge(other.acknowledgements);
     }
 
-    public List<ConsumerRecord<K, V>> getInFlightRecords() {
+    List<ConsumerRecord<K, V>> getInFlightRecords() {
         return inFlightRecords;
     }
 
+    Acknowledgements getAcknowledgements() {
+        return acknowledgements;
+    }
+
     public boolean isEmpty() {
-        return inFlightRecords.isEmpty();
+        return inFlightRecords.isEmpty() && acknowledgements.isEmpty();
+    }
+
+    public void setException(KafkaException exception) {
+        this.exception = exception;
+    }
+
+    public KafkaException getException() {
+        return exception;
     }
 }

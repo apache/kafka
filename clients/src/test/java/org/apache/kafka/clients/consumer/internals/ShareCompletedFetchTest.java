@@ -16,10 +16,10 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
+import org.apache.kafka.clients.consumer.AcknowledgeType;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.Uuid;
-import org.apache.kafka.common.errors.RecordDeserializationException;
 import org.apache.kafka.common.message.ShareFetchResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.record.CompressionType;
@@ -46,7 +46,6 @@ import java.util.List;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class ShareCompletedFetchTest {
 
@@ -68,18 +67,27 @@ public class ShareCompletedFetchTest {
 
         ShareCompletedFetch completedFetch = newShareCompletedFetch(partitionData);
 
-        List<ConsumerRecord<String, String>> records = completedFetch.fetchRecords(deserializers, 10, true).getInFlightRecords();
+        ShareInFlightBatch<String, String> batch = completedFetch.fetchRecords(deserializers, 10, true);
+        List<ConsumerRecord<String, String>> records = batch.getInFlightRecords();
         assertEquals(10, records.size());
         ConsumerRecord<String, String> record = records.get(0);
         assertEquals(10, record.offset());
+        Acknowledgements acknowledgements = batch.getAcknowledgements();
+        assertEquals(0, acknowledgements.size());
 
-        records = completedFetch.fetchRecords(deserializers, 10, true).getInFlightRecords();
+        batch = completedFetch.fetchRecords(deserializers, 10, true);
+        records = batch.getInFlightRecords();
         assertEquals(1, records.size());
         record = records.get(0);
         assertEquals(20, record.offset());
+        acknowledgements = batch.getAcknowledgements();
+        assertEquals(0, acknowledgements.size());
 
-        records = completedFetch.fetchRecords(deserializers, 10, true).getInFlightRecords();
+        batch = completedFetch.fetchRecords(deserializers, 10, true);
+        records = batch.getInFlightRecords();
         assertEquals(0, records.size());
+        acknowledgements = batch.getAcknowledgements();
+        assertEquals(0, acknowledgements.size());
     }
 
     @Test
@@ -91,8 +99,11 @@ public class ShareCompletedFetchTest {
                 .setAcquiredRecords(acquiredRecords(0, numRecords));
         ShareCompletedFetch completedFetch = newShareCompletedFetch(partitionData);
         try (final Deserializers<String, String> deserializers = newStringDeserializers()) {
-            List<ConsumerRecord<String, String>> records = completedFetch.fetchRecords(deserializers, 10, true).getInFlightRecords();
+            ShareInFlightBatch<String, String> batch = completedFetch.fetchRecords(deserializers, 10, true);
+            List<ConsumerRecord<String, String>> records = batch.getInFlightRecords();
             assertEquals(10, records.size());
+            Acknowledgements acknowledgements = batch.getAcknowledgements();
+            assertEquals(0, acknowledgements.size());
         }
     }
 
@@ -107,8 +118,11 @@ public class ShareCompletedFetchTest {
 
         try (final Deserializers<String, String> deserializers = newStringDeserializers()) {
             ShareCompletedFetch completedFetch = newShareCompletedFetch(partitionData);
-            List<ConsumerRecord<String, String>> records = completedFetch.fetchRecords(deserializers, -10, true).getInFlightRecords();
+            ShareInFlightBatch<String, String> batch = completedFetch.fetchRecords(deserializers, -10, true);
+            List<ConsumerRecord<String, String>> records = batch.getInFlightRecords();
             assertEquals(0, records.size());
+            Acknowledgements acknowledgements = batch.getAcknowledgements();
+            assertEquals(0, acknowledgements.size());
         }
     }
 
@@ -119,32 +133,60 @@ public class ShareCompletedFetchTest {
 
         ShareCompletedFetch completedFetch = newShareCompletedFetch(partitionData);
         try (final Deserializers<String, String> deserializers = newStringDeserializers()) {
-            List<ConsumerRecord<String, String>> records = completedFetch.fetchRecords(deserializers, 10, true).getInFlightRecords();
+            ShareInFlightBatch<String, String> batch = completedFetch.fetchRecords(deserializers, 10, true);
+            List<ConsumerRecord<String, String>> records = batch.getInFlightRecords();
             assertEquals(0, records.size());
+            Acknowledgements acknowledgements = batch.getAcknowledgements();
+            assertEquals(0, acknowledgements.size());
         }
     }
 
     @Test
     public void testCorruptedMessage() {
-        // Create one good record and then one "corrupted" record.
+        // Create one good record and then two "corrupted" records and then another good record.
         try (final MemoryRecordsBuilder builder = MemoryRecords.builder(ByteBuffer.allocate(1024), CompressionType.NONE, TimestampType.CREATE_TIME, 0);
              final UUIDSerializer serializer = new UUIDSerializer()) {
             builder.append(new SimpleRecord(serializer.serialize(TOPIC_NAME, UUID.randomUUID())));
-            builder.append(0L, "key".getBytes(), "value".getBytes());
+            builder.append(0L, "key1".getBytes(), "value1".getBytes());
+            builder.append(0L, "key2".getBytes(), "value2".getBytes());
+            builder.append(new SimpleRecord(serializer.serialize(TOPIC_NAME, UUID.randomUUID())));
             Records records = builder.build();
 
             ShareFetchResponseData.PartitionData partitionData = new ShareFetchResponseData.PartitionData()
                     .setPartitionIndex(0)
                     .setRecords(records)
-                    .setAcquiredRecords(acquiredRecords(0, 2));
+                    .setAcquiredRecords(acquiredRecords(0, 3));
 
             try (final Deserializers<UUID, UUID> deserializers = newUuidDeserializers()) {
                 ShareCompletedFetch completedFetch = newShareCompletedFetch(partitionData);
 
-                completedFetch.fetchRecords(deserializers, 10, false);
+                // Record 0 is returned by itself because record 1 fails to deserialize
+                ShareInFlightBatch<UUID, UUID> batch = completedFetch.fetchRecords(deserializers, 10, false);
+                assertEquals(1, batch.getInFlightRecords().size());
+                assertEquals(0L, batch.getInFlightRecords().get(0).offset());
+                Acknowledgements acknowledgements = batch.getAcknowledgements();
+                assertEquals(0, acknowledgements.size());
 
-                assertThrows(RecordDeserializationException.class,
-                        () -> completedFetch.fetchRecords(deserializers, 10, false));
+                // Record 1 then results in an empty batch
+                batch = completedFetch.fetchRecords(deserializers, 10, false);
+                assertEquals(0, batch.getInFlightRecords().size());
+                acknowledgements = batch.getAcknowledgements();
+                assertEquals(1, acknowledgements.size());
+                assertEquals(AcknowledgeType.RELEASE, acknowledgements.get(1L));
+
+                // Record 2 then results in an empty batch, because record 1 has now been skipped
+                batch = completedFetch.fetchRecords(deserializers, 10, false);
+                assertEquals(0, batch.getInFlightRecords().size());
+                acknowledgements = batch.getAcknowledgements();
+                assertEquals(1, acknowledgements.size());
+                assertEquals(AcknowledgeType.RELEASE, acknowledgements.get(2L));
+
+                // Record 3 is returned in the next batch, because record 2 has now been skipped
+                batch = completedFetch.fetchRecords(deserializers, 10, false);
+                assertEquals(1, batch.getInFlightRecords().size());
+                assertEquals(3L, batch.getInFlightRecords().get(0).offset());
+                acknowledgements = batch.getAcknowledgements();
+                assertEquals(0, acknowledgements.size());
             }
         }
     }
