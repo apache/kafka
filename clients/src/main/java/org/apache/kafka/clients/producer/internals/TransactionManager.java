@@ -100,8 +100,9 @@ public class TransactionManager {
 
     private final Map<TopicPartition, CommittedOffset> pendingTxnOffsetCommits;
 
-    // If a batch bound for a partition expired locally after being sent at least once, the partition is considered
-    // to have an unresolved state. We keep track of such partitions here, and cannot assign any more sequence numbers
+    // If a batch bound for a partition expired locally after being sent at least once, or it failed the last time
+    // without a definitive result, the partition is considered to have an unresolved state.
+    // We keep track of such partitions here, and cannot assign any more sequence numbers
     // for this partition until the unresolved state gets cleared. This may happen if other inflight batches returned
     // successfully (indicating that the expired batch actually made it to the broker). If we don't get any successful
     // responses for the partition once the inflight request count falls to zero, we reset the producer id and
@@ -693,7 +694,10 @@ public class TransactionManager {
         } else {
             if (adjustSequenceNumbers) {
                 if (!isTransactional()) {
-                    requestEpochBumpForPartition(batch.topicPartition);
+                    // Mark the partition unresolved to let any preceding, in-flight batches to properly complete.
+                    // If there are no in-flight batches, maybeResolveSequences() will eventually request an epoch bump
+                    // and rewrite the sequence numbers.
+                    markSequenceUnresolved(batch);
                 } else {
                     txnPartitionMap.adjustSequencesDueToFailedBatch(batch);
                 }
@@ -735,10 +739,12 @@ public class TransactionManager {
                 // next sequence destined for the partition. If so, the partition is fully resolved. If not, we should
                 // reset the sequence number if necessary.
                 if (isNextSequence(topicPartition, sequenceNumber(topicPartition))) {
-                    // This would happen when a batch was expired, but subsequent batches succeeded.
+                    // This would happen when a batch was expired or failed with a non-definitive result,
+                    // but subsequent batches succeeded.
                     iter.remove();
                 } else {
-                    // We would enter this branch if all in flight batches were ultimately expired in the producer.
+                    // We would enter this branch if all in flight batches were ultimately expired in the producer
+                    // or failed with a non-definitive result.
                     if (isTransactional()) {
                         // For the transactional producer, we bump the epoch if possible, otherwise we transition to a fatal error
                         String unackedMessagesErr = "The client hasn't received acknowledgment for some previously " +
