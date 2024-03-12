@@ -48,6 +48,7 @@ import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Supplier;
 
 import static org.apache.kafka.metadata.AssignmentsHelper.buildRequestData;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -317,16 +318,17 @@ public class AssignmentsManagerTest {
         return response;
     }
 
-    @SuppressWarnings("BusyWait")
     @Test
     public void testAssignmentCompaction() throws Exception {
+        // Delay the first controller response to force assignment compaction logic
         CompletableFuture<Runnable> completionFuture = new CompletableFuture<>();
         doAnswer(invocation -> {
             AssignReplicasToDirsRequestData request = invocation.getArgument(0, AssignReplicasToDirsRequest.Builder.class).build().data();
             ControllerRequestCompletionHandler completionHandler = invocation.getArgument(1, ControllerRequestCompletionHandler.class);
             ClientResponse response = buildSuccessfulResponse(request);
             Runnable completion = () -> completionHandler.onComplete(response);
-            completionFuture.complete(completion);
+            if (completionFuture.isDone()) completion.run();
+            else completionFuture.complete(completion);
             return null;
         }).when(channelManager).sendRequest(any(AssignReplicasToDirsRequest.Builder.class),
                 any(ControllerRequestCompletionHandler.class));
@@ -342,13 +344,17 @@ public class AssignmentsManagerTest {
             time.sleep(100);
             manager.onAssignment(new TopicIdPartition(TOPIC_1, 0), dirs[i % 3], onComplete);
         }
-        while (!completionFuture.isDone()) {
+        activeWait(completionFuture::isDone);
+        completionFuture.get().run();
+        activeWait(() -> remainingInvocations.getCount() == 0);
+    }
+
+    void activeWait(Supplier<Boolean> predicate) {
+        while (!predicate.get()) {
             time.sleep(100);
             manager.wakeup();
-            Thread.sleep(1);
+            Thread.yield();
         }
-        completionFuture.get().run();
-        remainingInvocations.await();
     }
 
     static Metric findMetric(String name) {
