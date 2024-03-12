@@ -1201,7 +1201,7 @@ public class GroupMetadataManager {
     }
 
     /**
-     * Reconciles the current assignment of the member if needed.
+     * Reconciles the current assignment of the member towards the target assignment if needed.
      *
      * @param groupId               The group id.
      * @param member                The member to reconcile.

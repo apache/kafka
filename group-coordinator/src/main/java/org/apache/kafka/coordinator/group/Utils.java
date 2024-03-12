@@ -45,6 +45,9 @@ public class Utils {
 
     /**
      * @return The provided assignment as a String.
+     *
+     * Example:
+     * [topicid1-0, topicid1-1, topicid2-0, topicid2-1]
      */
     public static String assignmentToString(
         Map<Uuid, Set<Integer>> assignment

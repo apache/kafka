@@ -336,6 +336,7 @@ public class GroupMetadataManagerTest {
             .build();
 
         ConsumerGroupMember member = new ConsumerGroupMember.Builder(memberId)
+            .setState(MemberState.STABLE)
             .setMemberEpoch(100)
             .setPreviousMemberEpoch(99)
             .setRebalanceTimeoutMs(5000)
@@ -515,6 +516,7 @@ public class GroupMetadataManagerTest {
                 .build())
             .withConsumerGroup(new ConsumerGroupBuilder(groupId, 10)
                 .withMember(new ConsumerGroupMember.Builder(memberId)
+                    .setState(MemberState.STABLE)
                     .setMemberEpoch(10)
                     .setPreviousMemberEpoch(9)
                     .setClientId("client")
@@ -616,6 +618,7 @@ public class GroupMetadataManagerTest {
                 .build())
             .withConsumerGroup(new ConsumerGroupBuilder(groupId, 10)
                 .withMember(new ConsumerGroupMember.Builder(memberId1)
+                    .setState(MemberState.STABLE)
                     .setMemberEpoch(10)
                     .setPreviousMemberEpoch(9)
                     .setClientId("client")
@@ -628,6 +631,7 @@ public class GroupMetadataManagerTest {
                         mkTopicAssignment(barTopicId, 0, 1)))
                     .build())
                 .withMember(new ConsumerGroupMember.Builder(memberId2)
+                    .setState(MemberState.STABLE)
                     .setMemberEpoch(10)
                     .setPreviousMemberEpoch(9)
                     .setClientId("client")
@@ -755,6 +759,7 @@ public class GroupMetadataManagerTest {
                 .build())
             .withConsumerGroup(new ConsumerGroupBuilder(groupId, 10)
                 .withMember(new ConsumerGroupMember.Builder(memberId1)
+                    .setState(MemberState.STABLE)
                     .setMemberEpoch(10)
                     .setPreviousMemberEpoch(9)
                     .setClientId("client")
@@ -766,6 +771,7 @@ public class GroupMetadataManagerTest {
                         mkTopicAssignment(barTopicId, 0, 1)))
                     .build())
                 .withMember(new ConsumerGroupMember.Builder(memberId2)
+                    .setState(MemberState.STABLE)
                     .setMemberEpoch(10)
                     .setPreviousMemberEpoch(9)
                     .setClientId("client")
@@ -845,6 +851,7 @@ public class GroupMetadataManagerTest {
                 .build())
             .withConsumerGroup(new ConsumerGroupBuilder(groupId, 10)
                 .withMember(new ConsumerGroupMember.Builder(memberId1)
+                    .setState(MemberState.STABLE)
                     .setInstanceId(memberId1)
                     .setMemberEpoch(10)
                     .setPreviousMemberEpoch(9)
@@ -857,6 +864,7 @@ public class GroupMetadataManagerTest {
                         mkTopicAssignment(barTopicId, 0, 1)))
                     .build())
                 .withMember(new ConsumerGroupMember.Builder(memberId2)
+                    .setState(MemberState.STABLE)
                     .setInstanceId(memberId2)
                     .setMemberEpoch(10)
                     .setPreviousMemberEpoch(9)
@@ -975,6 +983,7 @@ public class GroupMetadataManagerTest {
 
         MockPartitionAssignor assignor = new MockPartitionAssignor("range");
         ConsumerGroupMember member1 = new ConsumerGroupMember.Builder(memberId1)
+            .setState(MemberState.STABLE)
             .setInstanceId(memberId1)
             .setMemberEpoch(10)
             .setPreviousMemberEpoch(9)
@@ -987,6 +996,7 @@ public class GroupMetadataManagerTest {
                 mkTopicAssignment(barTopicId, 0, 1)))
             .build();
         ConsumerGroupMember member2 = new ConsumerGroupMember.Builder(memberId2)
+            .setState(MemberState.STABLE)
             .setInstanceId(memberId2)
             .setMemberEpoch(10)
             .setPreviousMemberEpoch(9)
@@ -1098,6 +1108,7 @@ public class GroupMetadataManagerTest {
         );
 
         ConsumerGroupMember expectedRejoinedMember = new ConsumerGroupMember.Builder(member2RejoinId)
+            .setState(MemberState.STABLE)
             .setMemberEpoch(10)
             .setInstanceId(memberId2)
             .setPreviousMemberEpoch(0)
@@ -1143,6 +1154,7 @@ public class GroupMetadataManagerTest {
 
         MockPartitionAssignor assignor = new MockPartitionAssignor("range");
         ConsumerGroupMember member1 = new ConsumerGroupMember.Builder(memberId1)
+            .setState(MemberState.STABLE)
             .setInstanceId(memberId1)
             .setMemberEpoch(10)
             .setPreviousMemberEpoch(9)
@@ -1155,6 +1167,7 @@ public class GroupMetadataManagerTest {
                 mkTopicAssignment(barTopicId, 0, 1)))
             .build();
         ConsumerGroupMember member2 = new ConsumerGroupMember.Builder(memberId2)
+            .setState(MemberState.STABLE)
             .setInstanceId(memberId2)
             .setMemberEpoch(10)
             .setPreviousMemberEpoch(9)
@@ -1243,6 +1256,7 @@ public class GroupMetadataManagerTest {
                 .build())
             .withConsumerGroup(new ConsumerGroupBuilder(groupId, 10)
                 .withMember(new ConsumerGroupMember.Builder(memberId1)
+                    .setState(MemberState.STABLE)
                     .setInstanceId(memberId1)
                     .setMemberEpoch(10)
                     .setPreviousMemberEpoch(9)
@@ -1255,6 +1269,7 @@ public class GroupMetadataManagerTest {
                         mkTopicAssignment(barTopicId, 0, 1)))
                     .build())
                 .withMember(new ConsumerGroupMember.Builder(memberId2)
+                    .setState(MemberState.STABLE)
                     .setInstanceId(memberId2)
                     .setMemberEpoch(10)
                     .setPreviousMemberEpoch(9)
@@ -1332,6 +1347,7 @@ public class GroupMetadataManagerTest {
                 .build())
             .withConsumerGroup(new ConsumerGroupBuilder(groupId, 10)
                 .withMember(new ConsumerGroupMember.Builder(memberId1)
+                    .setState(MemberState.STABLE)
                     .setInstanceId(memberId1)
                     .setMemberEpoch(10)
                     .setPreviousMemberEpoch(9)
@@ -1380,6 +1396,7 @@ public class GroupMetadataManagerTest {
                 .build())
             .withConsumerGroup(new ConsumerGroupBuilder(groupId, 10)
                 .withMember(new ConsumerGroupMember.Builder(memberId1)
+                    .setState(MemberState.STABLE)
                     .setInstanceId(memberId1)
                     .setMemberEpoch(10)
                     .setPreviousMemberEpoch(9)
@@ -1427,6 +1444,7 @@ public class GroupMetadataManagerTest {
                 .build())
             .withConsumerGroup(new ConsumerGroupBuilder(groupId, 10)
                 .withMember(new ConsumerGroupMember.Builder(memberId1)
+                    .setState(MemberState.STABLE)
                     .setInstanceId(memberId1)
                     .setMemberEpoch(10)
                     .setPreviousMemberEpoch(9)
@@ -1466,6 +1484,7 @@ public class GroupMetadataManagerTest {
             .build();
 
         ConsumerGroupMember member = new ConsumerGroupMember.Builder(memberId)
+            .setState(MemberState.STABLE)
             .setInstanceId(memberId)
             .setMemberEpoch(100)
             .setPreviousMemberEpoch(99)
@@ -1558,6 +1577,7 @@ public class GroupMetadataManagerTest {
                 .build())
             .withConsumerGroup(new ConsumerGroupBuilder(groupId, 10)
                 .withMember(new ConsumerGroupMember.Builder(memberId1)
+                    .setState(MemberState.STABLE)
                     .setInstanceId(memberId1)
                     .setMemberEpoch(10)
                     .setPreviousMemberEpoch(9)
@@ -1603,6 +1623,7 @@ public class GroupMetadataManagerTest {
                 .build())
             .withConsumerGroup(new ConsumerGroupBuilder(groupId, 10)
                 .withMember(new ConsumerGroupMember.Builder(memberId1)
+                    .setState(MemberState.STABLE)
                     .setInstanceId(memberId1)
                     .setMemberEpoch(10)
                     .setPreviousMemberEpoch(9)
@@ -1653,6 +1674,7 @@ public class GroupMetadataManagerTest {
                 .build())
             .withConsumerGroup(new ConsumerGroupBuilder(groupId, 10)
                 .withMember(new ConsumerGroupMember.Builder(memberId1)
+                    .setState(MemberState.STABLE)
                     .setMemberEpoch(10)
                     .setPreviousMemberEpoch(9)
                     .setClientId("client")
@@ -1665,6 +1687,7 @@ public class GroupMetadataManagerTest {
                         mkTopicAssignment(barTopicId, 0, 1)))
                     .build())
                 .withMember(new ConsumerGroupMember.Builder(memberId2)
+                    .setState(MemberState.STABLE)
                     .setMemberEpoch(10)
                     .setPreviousMemberEpoch(9)
                     .setClientId("client")
@@ -1896,6 +1919,7 @@ public class GroupMetadataManagerTest {
 
         assertRecordsEquals(Collections.singletonList(
             RecordHelpers.newCurrentAssignmentRecord(groupId, new ConsumerGroupMember.Builder(memberId1)
+                .setState(MemberState.STABLE)
                 .setMemberEpoch(11)
                 .setPreviousMemberEpoch(10)
                 .setAssignedPartitions(mkAssignment(
@@ -2094,6 +2118,7 @@ public class GroupMetadataManagerTest {
             .withConsumerGroupMaxSize(2)
             .withConsumerGroup(new ConsumerGroupBuilder(groupId, 10)
                 .withMember(new ConsumerGroupMember.Builder(memberId1)
+                    .setState(MemberState.STABLE)
                     .setMemberEpoch(10)
                     .setPreviousMemberEpoch(9)
                     .setClientId("client")
@@ -2106,6 +2131,7 @@ public class GroupMetadataManagerTest {
                         mkTopicAssignment(barTopicId, 0, 1)))
                     .build())
                 .withMember(new ConsumerGroupMember.Builder(memberId2)
+                    .setState(MemberState.STABLE)
                     .setMemberEpoch(10)
                     .setPreviousMemberEpoch(9)
                     .setClientId("client")
@@ -2154,6 +2180,7 @@ public class GroupMetadataManagerTest {
         assertEquals(ConsumerGroup.ConsumerGroupState.EMPTY, context.consumerGroupState(groupId));
 
         context.replay(RecordHelpers.newMemberSubscriptionRecord(groupId, new ConsumerGroupMember.Builder(memberId1)
+            .setState(MemberState.STABLE)
             .setSubscribedTopicNames(Collections.singletonList(fooTopicName))
             .build()));
         context.replay(RecordHelpers.newGroupEpochRecord(groupId, 11));
@@ -2243,6 +2270,7 @@ public class GroupMetadataManagerTest {
                 .build())
             .withConsumerGroup(new ConsumerGroupBuilder(groupId, 10)
                 .withMember(new ConsumerGroupMember.Builder(memberId)
+                    .setState(MemberState.STABLE)
                     .setMemberEpoch(10)
                     .setPreviousMemberEpoch(10)
                     .setClientId("client")
@@ -2353,6 +2381,7 @@ public class GroupMetadataManagerTest {
                 .build())
             .withConsumerGroup(new ConsumerGroupBuilder(groupId, 10)
                 .withMember(new ConsumerGroupMember.Builder(memberId)
+                    .setState(MemberState.STABLE)
                     .setMemberEpoch(10)
                     .setPreviousMemberEpoch(10)
                     .setClientId("client")
@@ -9114,6 +9143,7 @@ public class GroupMetadataManagerTest {
 
         records = new ArrayList<>();
         group.updateMember(new ConsumerGroupMember.Builder("member")
+            .setState(MemberState.STABLE)
             .setMemberEpoch(10)
             .setPreviousMemberEpoch(10)
             .build()
