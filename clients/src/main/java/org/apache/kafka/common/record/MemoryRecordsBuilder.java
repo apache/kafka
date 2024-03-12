@@ -242,6 +242,7 @@ public class MemoryRecordsBuilder implements AutoCloseable {
 
     /**
      * Get the max timestamp and its offset. The details of the offset returned are a bit subtle.
+     * Note: The semantic for the offset of max timestamp is the first offset with the max timestamp if there are multi-records having same timestamp.
      *
      * If the log append time is used, the offset will be the first offset of the record.
      *
