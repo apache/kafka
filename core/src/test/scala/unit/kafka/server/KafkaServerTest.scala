@@ -22,7 +22,7 @@ import org.apache.kafka.common.security.JaasUtils
 import org.junit.jupiter.api.Assertions.{assertEquals, assertNull, assertThrows, fail}
 import org.junit.jupiter.api.Test
 import java.util.Properties
-
+import java.net.{InetAddress, ServerSocket}
 import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig
 
@@ -40,6 +40,32 @@ class KafkaServerTest extends QuorumTestHarness {
     val server2 = createServer(2, "myhost", TestUtils.RandomPort)
 
     TestUtils.shutdownServers(Seq(server1, server2))
+  }
+
+  @Test
+  def testListenerPortAlreadyInUse(): Unit = {
+    val serverSocket = new ServerSocket(0, 0, InetAddress.getLoopbackAddress)
+    val thread = new Thread {
+      override def run : Unit = {
+        while (true) {
+          serverSocket.accept()
+        }
+      }
+    }
+    thread.start()
+
+    var kafkaServer : KafkaServer = null
+    try {
+      val port = serverSocket.getLocalPort
+
+      // start a server with listener on the port already bound
+      assertThrows(classOf[RuntimeException], () => kafkaServer = createServerWithListenerOnPort(port))
+    } finally {
+      serverSocket.close()
+      if (kafkaServer != null) {
+        kafkaServer.shutdown()
+      }
+    }
   }
 
   @Test
@@ -157,6 +183,13 @@ class KafkaServerTest extends QuorumTestHarness {
   def createServer(nodeId: Int, hostName: String, port: Int): KafkaServer = {
     val props = TestUtils.createBrokerConfig(nodeId, zkConnect)
     props.put(KafkaConfig.AdvertisedListenersProp, s"PLAINTEXT://$hostName:$port")
+    val kafkaConfig = KafkaConfig.fromProps(props)
+    TestUtils.createServer(kafkaConfig)
+  }
+
+  def createServerWithListenerOnPort(port: Int): KafkaServer = {
+    val props = TestUtils.createBrokerConfig(0, zkConnect)
+    props.put(KafkaConfig.ListenersProp, s"PLAINTEXT://localhost:$port")
     val kafkaConfig = KafkaConfig.fromProps(props)
     TestUtils.createServer(kafkaConfig)
   }
