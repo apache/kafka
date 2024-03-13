@@ -27,6 +27,7 @@ import org.apache.kafka.streams.processor.api.Record;
 import org.slf4j.Logger;
 
 import java.io.IOException;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
@@ -74,9 +75,8 @@ public class GlobalStateUpdateTask implements GlobalStateMaintainer {
      */
     @Override
     public Map<TopicPartition, Long> initialize() {
-        final Set<String> storeNames = stateMgr.initialize();
         final Map<String, String> storeNameToTopic = topology.storeToChangelogTopic();
-        for (final String storeName : storeNames) {
+        for (final String storeName : storeNameToTopic.keySet()) {
             final String sourceTopic = storeNameToTopic.get(storeName);
             final SourceNode<?, ?> source = topology.source(sourceTopic);
             deserializers.put(
@@ -93,6 +93,7 @@ public class GlobalStateUpdateTask implements GlobalStateMaintainer {
                 )
             );
         }
+        final Set<String> storeNames = stateMgr.initialize();
         initTopology();
         processorContext.initialize();
         lastFlush = time.milliseconds();
