@@ -2197,7 +2197,7 @@ public class ReplicationControlManager {
             Uuid topicId = topicsByName.get(topicName);
             replicationFactor = topics.get(topicId).parts.get(0).replicas.length;
         } catch (Exception e) {
-            log.warn("Can't find the replication factor for topic: " + topicName + " using default value " + replicationFactor + ". Error=" + e);
+            log.warn("Can't find the replication factor for topic: " + topicName + " using default value " + replicationFactor, e);
         }
         return Math.min(currentMinIsr, replicationFactor);
     }
