@@ -30,8 +30,11 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.Consumed;
+import org.apache.kafka.streams.kstream.internals.KTableSource;
+import org.apache.kafka.streams.processor.api.ContextualProcessor;
 import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
+import org.apache.kafka.streams.processor.api.ProcessorSupplier;
 import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.Stores;
@@ -126,11 +129,24 @@ public class GlobalThreadShutDownOrderTest {
             Serdes.Long(),
             mockTime);
 
+        final ProcessorSupplier<String, Long, Void, Void> processorSupplier;
+        processorSupplier = () -> new ContextualProcessor<String, Long, Void, Void>() {
+            @Override
+            public void process(final Record<String, Long> record) {
+                final KeyValueStore<String, Long> stateStore =
+                    context().getStateStore(storeBuilder.name());
+                stateStore.put(
+                    record.key(),
+                    record.value()
+                );
+            }
+        };
+
         builder.addGlobalStore(
             storeBuilder,
             globalStoreTopic,
             Consumed.with(Serdes.String(), Serdes.Long()),
-            new MockApiProcessorSupplier<>()
+            processorSupplier
         );
 
         builder

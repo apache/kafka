@@ -254,6 +254,9 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
                                 final Map<TopicPartition, Long> highWatermarks,
                                 final InternalTopologyBuilder.ReprocessFactory reprocessFactory,
                                 final String storeName) {
+        final Processor source = reprocessFactory.processorSupplier().get();
+        source.init(globalProcessorContext);
+
         for (final TopicPartition topicPartition : topicPartitions) {
             long currentDeadline = NO_DEADLINE;
 
@@ -288,8 +291,6 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
                 }
 
                 for (final ConsumerRecord<byte[], byte[]> record : records.records(topicPartition)) {
-
-                    Processor source = reprocessFactory.processorSupplier().get();
                     final ProcessorRecordContext recordContext =
                         new ProcessorRecordContext(
                             record.timestamp(),
@@ -298,7 +299,6 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
                             record.topic(),
                             record.headers());
                     globalProcessorContext.setRecordContext(recordContext);
-                    source.init(globalProcessorContext);
 
                     if (record.key() != null) {
                         source.process(new Record<>(
