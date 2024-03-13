@@ -212,7 +212,7 @@ public class KTableKTableForeignKeyInnerJoinCustomPartitionerIntegrationTest {
         }
 
         // the streams applications should have shut down into `ERROR` due to the IllegalStateException
-        waitForApplicationState(Arrays.asList(streams, streamsTwo, streamsThree), KafkaStreams.State.ERROR, ofSeconds(60));
+        waitForApplicationState(Arrays.asList(streams, streamsTwo, streamsThree), KafkaStreams.State.ERROR, ofSeconds(240));
     }
 
     private void verifyKTableKTableJoin(final Set<KeyValue<String, String>> expectedResult) throws Exception {

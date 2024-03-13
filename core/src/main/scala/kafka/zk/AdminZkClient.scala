@@ -452,7 +452,7 @@ class AdminZkClient(zkClient: KafkaZkClient,
    * @param ip ip for which configs are being validated
    * @param configs properties to validate for the IP
    */
-  def validateIpConfig(ip: String, configs: Properties): Unit = {
+  private def validateIpConfig(ip: String, configs: Properties): Unit = {
     if (!DynamicConfig.Ip.isValidIpEntity(ip))
       throw new AdminOperationException(s"$ip is not a valid IP or resolvable host.")
     DynamicConfig.Ip.validate(configs)
@@ -528,7 +528,7 @@ class AdminZkClient(zkClient: KafkaZkClient,
     * only verifies that the provided config does not contain any static configs.
     * @param configs configs to validate
     */
-  def validateBrokerConfig(configs: Properties): Unit = {
+  private def validateBrokerConfig(configs: Properties): Unit = {
     DynamicConfig.Broker.validate(configs)
   }
 
@@ -560,13 +560,6 @@ class AdminZkClient(zkClient: KafkaZkClient,
   def fetchEntityConfig(rootEntityType: String, sanitizedEntityName: String): Properties = {
     zkClient.getEntityConfigs(rootEntityType, sanitizedEntityName)
   }
-
-  /**
-   * Gets all topic configs
-   * @return The successfully gathered configs of all topics
-   */
-  def getAllTopicConfigs(): Map[String, Properties] =
-    zkClient.getAllTopicsInCluster().map(topic => (topic, fetchEntityConfig(ConfigType.TOPIC, topic))).toMap
 
   /**
    * Gets all the entity configs for a given entityType

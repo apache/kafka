@@ -25,8 +25,13 @@ import kafka.utils._
 import org.apache.commons.io.FileUtils
 import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.errors.OffsetOutOfRangeException
+import org.apache.kafka.common.message.LeaderAndIsrRequestData
+import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrTopicState
+import org.apache.kafka.common.requests.{AbstractControlRequest, LeaderAndIsrRequest}
 import org.apache.kafka.common.utils.Utils
-import org.apache.kafka.common.{DirectoryId, KafkaException, TopicPartition, Uuid}
+import org.apache.kafka.common.{DirectoryId, KafkaException, TopicIdPartition, TopicPartition, Uuid}
+import org.apache.kafka.image.{TopicImage, TopicsImage}
+import org.apache.kafka.metadata.{LeaderRecoveryState, PartitionRegistration}
 import org.apache.kafka.metadata.properties.{MetaProperties, MetaPropertiesEnsemble, MetaPropertiesVersion, PropertiesUtils}
 import org.apache.kafka.server.config.Defaults
 import org.junit.jupiter.api.Assertions._
@@ -41,7 +46,7 @@ import java.util.concurrent.{ConcurrentHashMap, ConcurrentMap, Future}
 import java.util.{Collections, Optional, OptionalLong, Properties}
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.apache.kafka.server.util.MockTime
-import org.apache.kafka.storage.internals.log.{FetchDataInfo, FetchIsolation, LogConfig, LogDirFailureChannel, ProducerStateManagerConfig, RemoteIndexCache}
+import org.apache.kafka.storage.internals.log.{FetchDataInfo, FetchIsolation, LogConfig, LogDirFailureChannel, LogStartOffsetIncrementReason, ProducerStateManagerConfig, RemoteIndexCache}
 import org.apache.kafka.storage.internals.checkpoint.CleanShutdownFileHandler
 
 import scala.collection.{Map, mutable}
@@ -50,6 +55,7 @@ import scala.jdk.CollectionConverters._
 import scala.util.{Failure, Try}
 
 class LogManagerTest {
+  import LogManagerTest._
 
   val time = new MockTime()
   val maxRollInterval = 100
@@ -347,7 +353,7 @@ class LogManagerTest {
   def testCleanupExpiredSegments(): Unit = {
     val log = logManager.getOrCreateLog(new TopicPartition(name, 0), topicId = None)
     var offset = 0L
-    for(_ <- 0 until 200) {
+    for (_ <- 0 until 200) {
       val set = TestUtils.singletonRecords("test".getBytes())
       val info = log.appendAsLeader(set, leaderEpoch = 0)
       offset = info.lastOffset
@@ -493,7 +499,7 @@ class LogManagerTest {
     logManager = createLogManager(dirs)
 
     // verify that logs are always assigned to the least loaded partition
-    for(partition <- 0 until 20) {
+    for (partition <- 0 until 20) {
       logManager.getOrCreateLog(new TopicPartition("test", partition), topicId = None)
       assertEquals(partition + 1, logManager.allLogs.size, "We should have created the right number of logs")
       val counts = logManager.allLogs.groupBy(_.dir.getParent).values.map(_.size)
@@ -1111,6 +1117,84 @@ class LogManagerTest {
     assertEquals(2, logManager.directoryIdsSet.size)
   }
 
+  @Test
+  def testCheckpointLogStartOffsetForRemoteTopic(): Unit = {
+    logManager.shutdown()
+
+    val props = new Properties()
+    props.putAll(logProps)
+    props.put(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, "true")
+    val logConfig = new LogConfig(props)
+    logManager = TestUtils.createLogManager(
+      defaultConfig = logConfig,
+      configRepository = new MockConfigRepository,
+      logDirs = Seq(this.logDir),
+      time = this.time,
+      recoveryThreadsPerDataDir = 1,
+      remoteStorageSystemEnable = true
+    )
+
+    val checkpointFile = new File(logDir, LogManager.LogStartOffsetCheckpointFile)
+    val checkpoint = new OffsetCheckpointFile(checkpointFile)
+    val topicPartition = new TopicPartition("test", 0)
+    val log = logManager.getOrCreateLog(topicPartition, topicId = None)
+    var offset = 0L
+    for(_ <- 0 until 50) {
+      val set = TestUtils.singletonRecords("test".getBytes())
+      val info = log.appendAsLeader(set, leaderEpoch = 0)
+      offset = info.lastOffset
+      if (offset != 0 && offset % 10 == 0)
+        log.roll()
+    }
+    assertEquals(5, log.logSegments.size())
+    log.updateHighWatermark(49)
+    // simulate calls to upload 3 segments to remote storage and remove them from local-log.
+    log.updateHighestOffsetInRemoteStorage(30)
+    log.maybeIncrementLocalLogStartOffset(31L, LogStartOffsetIncrementReason.SegmentDeletion)
+    log.deleteOldSegments()
+    assertEquals(2, log.logSegments.size())
+
+    // simulate two remote-log segment deletion
+    val logStartOffset = 21L
+    log.maybeIncrementLogStartOffset(logStartOffset, LogStartOffsetIncrementReason.SegmentDeletion)
+    logManager.checkpointLogStartOffsets()
+
+    assertEquals(logStartOffset, log.logStartOffset)
+    assertEquals(logStartOffset, checkpoint.read().getOrElse(topicPartition, -1L))
+  }
+
+  @Test
+  def testCheckpointLogStartOffsetForNormalTopic(): Unit = {
+    val checkpointFile = new File(logDir, LogManager.LogStartOffsetCheckpointFile)
+    val checkpoint = new OffsetCheckpointFile(checkpointFile)
+    val topicPartition = new TopicPartition("test", 0)
+    val log = logManager.getOrCreateLog(topicPartition, topicId = None)
+    var offset = 0L
+    for(_ <- 0 until 50) {
+      val set = TestUtils.singletonRecords("test".getBytes())
+      val info = log.appendAsLeader(set, leaderEpoch = 0)
+      offset = info.lastOffset
+      if (offset != 0 && offset % 10 == 0)
+        log.roll()
+    }
+    assertEquals(5, log.logSegments.size())
+    log.updateHighWatermark(49)
+
+    val logStartOffset = 31L
+    log.maybeIncrementLogStartOffset(logStartOffset, LogStartOffsetIncrementReason.SegmentDeletion)
+    logManager.checkpointLogStartOffsets()
+    assertEquals(5, log.logSegments.size())
+    assertEquals(logStartOffset, checkpoint.read().getOrElse(topicPartition, -1L))
+
+    log.deleteOldSegments()
+    assertEquals(2, log.logSegments.size())
+    assertEquals(logStartOffset, log.logStartOffset)
+
+    // When you checkpoint log-start-offset after removing the segments, then there should not be any checkpoint
+    logManager.checkpointLogStartOffsets()
+    assertEquals(-1L, checkpoint.read().getOrElse(topicPartition, -1L))
+  }
+
   def writeMetaProperties(dir: File, directoryId: Optional[Uuid] = Optional.empty()): Unit = {
     val metaProps = new MetaProperties.Builder().
       setVersion(MetaPropertiesVersion.V0).
@@ -1120,5 +1204,192 @@ class LogManagerTest {
       build()
     PropertiesUtils.writePropertiesFile(metaProps.toProperties,
       new File(dir, MetaPropertiesEnsemble.META_PROPERTIES_NAME).getAbsolutePath, false)
+  }
+
+  val foo0 = new TopicIdPartition(Uuid.fromString("Sl08ZXU2QW6uF5hIoSzc8w"), new TopicPartition("foo", 0))
+  val foo1 = new TopicIdPartition(Uuid.fromString("Sl08ZXU2QW6uF5hIoSzc8w"), new TopicPartition("foo", 1))
+  val bar0 = new TopicIdPartition(Uuid.fromString("69O438ZkTSeqqclTtZO2KA"), new TopicPartition("bar", 0))
+  val bar1 = new TopicIdPartition(Uuid.fromString("69O438ZkTSeqqclTtZO2KA"), new TopicPartition("bar", 1))
+  val baz0 = new TopicIdPartition(Uuid.fromString("2Ik9_5-oRDOKpSXd2SuG5w"), new TopicPartition("baz", 0))
+  val baz1 = new TopicIdPartition(Uuid.fromString("2Ik9_5-oRDOKpSXd2SuG5w"), new TopicPartition("baz", 1))
+  val baz2 = new TopicIdPartition(Uuid.fromString("2Ik9_5-oRDOKpSXd2SuG5w"), new TopicPartition("baz", 2))
+  val quux0 = new TopicIdPartition(Uuid.fromString("YS9owjv5TG2OlsvBM0Qw6g"), new TopicPartition("quux", 0))
+  val recreatedFoo0 = new TopicIdPartition(Uuid.fromString("_dOOzPe3TfiWV21Lh7Vmqg"), new TopicPartition("foo", 0))
+  val recreatedFoo1 = new TopicIdPartition(Uuid.fromString("_dOOzPe3TfiWV21Lh7Vmqg"), new TopicPartition("foo", 1))
+
+  @Test
+  def testFindStrayReplicasInEmptyImage(): Unit = {
+    val image: TopicsImage  = topicsImage(Seq())
+    val onDisk = Seq(foo0, foo1, bar0, bar1, quux0)
+    val expected = onDisk.map(_.topicPartition()).toSet
+    assertEquals(expected,
+      LogManager.findStrayReplicas(0,
+        image, onDisk.map(mockLog(_)).toSet))
+  }
+
+  @Test
+  def testFindSomeStrayReplicasInImage(): Unit = {
+    val image: TopicsImage  = topicsImage(Seq(
+      topicImage(Map(
+        foo0 -> Seq(0, 1, 2),
+      )),
+      topicImage(Map(
+        bar0 -> Seq(0, 1, 2),
+        bar1 -> Seq(0, 1, 2),
+      ))
+    ))
+    val onDisk = Seq(foo0, foo1, bar0, bar1, quux0).map(mockLog(_))
+    val expected = Set(foo1, quux0).map(_.topicPartition)
+    assertEquals(expected,
+      LogManager.findStrayReplicas(0,
+        image, onDisk).toSet)
+  }
+
+  @Test
+  def testFindSomeStrayReplicasInImageWithRemoteReplicas(): Unit = {
+    val image: TopicsImage  = topicsImage(Seq(
+      topicImage(Map(
+        foo0 -> Seq(0, 1, 2),
+      )),
+      topicImage(Map(
+        bar0 -> Seq(1, 2, 3),
+        bar1 -> Seq(2, 3, 0),
+      ))
+    ))
+    val onDisk = Seq(foo0, bar0, bar1).map(mockLog(_))
+    val expected = Set(bar0).map(_.topicPartition)
+    assertEquals(expected,
+      LogManager.findStrayReplicas(0,
+        image, onDisk).toSet)
+  }
+
+  @Test
+  def testFindStrayReplicasInEmptyLAIR(): Unit = {
+    val onDisk = Seq(foo0, foo1, bar0, bar1, baz0, baz1, baz2, quux0)
+    val expected = onDisk.map(_.topicPartition()).toSet
+    assertEquals(expected,
+      LogManager.findStrayReplicas(0,
+        createLeaderAndIsrRequestForStrayDetection(Seq()),
+          onDisk.map(mockLog(_))).toSet)
+  }
+
+  @Test
+  def testFindNoStrayReplicasInFullLAIR(): Unit = {
+    val onDisk = Seq(foo0, foo1, bar0, bar1, baz0, baz1, baz2, quux0)
+    assertEquals(Set(),
+      LogManager.findStrayReplicas(0,
+      createLeaderAndIsrRequestForStrayDetection(onDisk),
+        onDisk.map(mockLog(_))).toSet)
+  }
+
+  @Test
+  def testFindSomeStrayReplicasInFullLAIR(): Unit = {
+    val onDisk = Seq(foo0, foo1, bar0, bar1, baz0, baz1, baz2, quux0)
+    val present = Seq(foo0, bar0, bar1, quux0)
+    val expected = Seq(foo1, baz0, baz1, baz2).map(_.topicPartition()).toSet
+    assertEquals(expected,
+      LogManager.findStrayReplicas(0,
+        createLeaderAndIsrRequestForStrayDetection(present),
+        onDisk.map(mockLog(_))).toSet)
+  }
+
+  @Test
+  def testTopicRecreationInFullLAIR(): Unit = {
+    val onDisk = Seq(foo0, foo1, bar0, bar1, baz0, baz1, baz2, quux0)
+    val present = Seq(recreatedFoo0, recreatedFoo1, bar0, baz0, baz1, baz2, quux0)
+    val expected = Seq(foo0, foo1, bar1).map(_.topicPartition()).toSet
+    assertEquals(expected,
+      LogManager.findStrayReplicas(0,
+        createLeaderAndIsrRequestForStrayDetection(present),
+        onDisk.map(mockLog(_))).toSet)
+  }
+}
+
+object LogManagerTest {
+  def mockLog(
+    topicIdPartition: TopicIdPartition
+  ): UnifiedLog = {
+    val log = Mockito.mock(classOf[UnifiedLog])
+    Mockito.when(log.topicId).thenReturn(Some(topicIdPartition.topicId()))
+    Mockito.when(log.topicPartition).thenReturn(topicIdPartition.topicPartition())
+    log
+  }
+
+  def topicImage(
+    partitions: Map[TopicIdPartition, Seq[Int]]
+  ): TopicImage = {
+    var topicName: String = null
+    var topicId: Uuid = null
+    partitions.keySet.foreach {
+      partition => if (topicId == null) {
+        topicId = partition.topicId()
+      } else if (!topicId.equals(partition.topicId())) {
+        throw new IllegalArgumentException("partition topic IDs did not match")
+      }
+        if (topicName == null) {
+          topicName = partition.topic()
+        } else if (!topicName.equals(partition.topic())) {
+          throw new IllegalArgumentException("partition topic names did not match")
+        }
+    }
+    if (topicId == null) {
+      throw new IllegalArgumentException("Invalid empty partitions map.")
+    }
+    val partitionRegistrations = partitions.map { case (partition, replicas) =>
+      Int.box(partition.partition()) -> new PartitionRegistration.Builder().
+        setReplicas(replicas.toArray).
+        setDirectories(DirectoryId.unassignedArray(replicas.size)).
+        setIsr(replicas.toArray).
+        setLeader(replicas.head).
+        setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).
+        setLeaderEpoch(0).
+        setPartitionEpoch(0).
+        build()
+    }
+    new TopicImage(topicName, topicId, partitionRegistrations.asJava)
+  }
+
+  def topicsImage(
+    topics: Seq[TopicImage]
+  ): TopicsImage = {
+    var retval = TopicsImage.EMPTY
+    topics.foreach { t => retval = retval.including(t) }
+    retval
+  }
+
+  def createLeaderAndIsrRequestForStrayDetection(
+    partitions: Iterable[TopicIdPartition],
+    leaders: Iterable[Int] = Seq(),
+  ): LeaderAndIsrRequest = {
+    val nextLeaderIter = leaders.iterator
+    def nextLeader(): Int = {
+      if (nextLeaderIter.hasNext) {
+        nextLeaderIter.next()
+      } else {
+        3
+      }
+    }
+    val data = new LeaderAndIsrRequestData().
+      setControllerId(1000).
+      setIsKRaftController(true).
+      setType(AbstractControlRequest.Type.FULL.toByte)
+    val topics = new java.util.LinkedHashMap[String, LeaderAndIsrTopicState]
+    partitions.foreach(partition => {
+      val topicState = topics.computeIfAbsent(partition.topic(),
+        _ => new LeaderAndIsrTopicState().
+          setTopicId(partition.topicId()).
+          setTopicName(partition.topic()))
+      topicState.partitionStates().add(new LeaderAndIsrRequestData.LeaderAndIsrPartitionState().
+        setTopicName(partition.topic()).
+        setPartitionIndex(partition.partition()).
+        setControllerEpoch(123).
+        setLeader(nextLeader()).
+        setLeaderEpoch(456).
+        setIsr(java.util.Arrays.asList(3, 4, 5)).
+        setReplicas(java.util.Arrays.asList(3, 4, 5)).
+        setLeaderRecoveryState(LeaderRecoveryState.RECOVERED.value()))
+    })
+    data.topicStates().addAll(topics.values())
+    new LeaderAndIsrRequest(data, 7.toShort)
   }
 }

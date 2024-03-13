@@ -77,7 +77,6 @@ import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.NullSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentMatchers;
-import org.mockito.internal.util.collections.Sets;
 
 import java.net.InetAddress;
 import java.time.Duration;
@@ -96,6 +95,7 @@ import java.util.stream.Stream;
 import static org.apache.kafka.common.requests.JoinGroupRequest.UNKNOWN_MEMBER_ID;
 import static org.apache.kafka.coordinator.group.TestUtil.requestContext;
 import static org.apache.kafka.test.TestUtils.assertFutureThrows;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -756,45 +756,41 @@ public class GroupCoordinatorServiceTest {
             runtime,
             new GroupCoordinatorMetrics()
         );
-        int partitionCount = 3;
-        service.startup(() -> partitionCount);
-
-        ListGroupsRequestData request = new ListGroupsRequestData();
+        service.startup(() -> 3);
 
         List<ListGroupsResponseData.ListedGroup> expectedResults = Arrays.asList(
             new ListGroupsResponseData.ListedGroup()
                 .setGroupId("group0")
+                .setProtocolType("protocol1")
                 .setGroupState("Stable")
-                .setProtocolType("protocol1"),
+                .setGroupType("classic"),
             new ListGroupsResponseData.ListedGroup()
                 .setGroupId("group1")
+                .setProtocolType(ConsumerProtocol.PROTOCOL_TYPE)
                 .setGroupState("Empty")
-                .setProtocolType(ConsumerProtocol.PROTOCOL_TYPE),
+                .setGroupType("consumer"),
             new ListGroupsResponseData.ListedGroup()
                 .setGroupId("group2")
-                .setGroupState("Dead")
                 .setProtocolType(ConsumerProtocol.PROTOCOL_TYPE)
+                .setGroupState("Dead")
+                .setGroupType("consumer")
         );
-        when(runtime.partitions()).thenReturn(Sets.newSet(
-            new TopicPartition("__consumer_offsets", 0),
-            new TopicPartition("__consumer_offsets", 1),
-            new TopicPartition("__consumer_offsets", 2)
+
+        when(runtime.scheduleReadAllOperation(
+            ArgumentMatchers.eq("list-groups"),
+            ArgumentMatchers.any()
+        )).thenReturn(Arrays.asList(
+            CompletableFuture.completedFuture(Collections.singletonList(expectedResults.get(0))),
+            CompletableFuture.completedFuture(Collections.singletonList(expectedResults.get(1))),
+            CompletableFuture.completedFuture(Collections.singletonList(expectedResults.get(2)))
         ));
-        for (int i = 0; i < partitionCount; i++) {
-            when(runtime.scheduleReadOperation(
-                ArgumentMatchers.eq("list-groups"),
-                ArgumentMatchers.eq(new TopicPartition("__consumer_offsets", i)),
-                ArgumentMatchers.any()
-            )).thenReturn(CompletableFuture.completedFuture(Collections.singletonList(expectedResults.get(i))));
-        }
 
         CompletableFuture<ListGroupsResponseData> responseFuture = service.listGroups(
             requestContext(ApiKeys.LIST_GROUPS),
-            request
+            new ListGroupsRequestData()
         );
 
-        List<ListGroupsResponseData.ListedGroup> actualResults = responseFuture.get(5, TimeUnit.SECONDS).groups();
-        assertEquals(expectedResults, actualResults);
+        assertEquals(expectedResults, responseFuture.get(5, TimeUnit.SECONDS).groups());
     }
 
     @Test
@@ -807,50 +803,40 @@ public class GroupCoordinatorServiceTest {
             runtime,
             new GroupCoordinatorMetrics()
         );
-        int partitionCount = 3;
-        service.startup(() -> partitionCount);
+        service.startup(() -> 3);
 
         List<ListGroupsResponseData.ListedGroup> expectedResults = Arrays.asList(
             new ListGroupsResponseData.ListedGroup()
                 .setGroupId("group0")
+                .setProtocolType("protocol1")
                 .setGroupState("Stable")
-                .setProtocolType("protocol1"),
+                .setGroupType("classic"),
             new ListGroupsResponseData.ListedGroup()
                 .setGroupId("group1")
-                .setGroupState("Empty")
                 .setProtocolType(ConsumerProtocol.PROTOCOL_TYPE)
+                .setGroupState("Empty")
+                .setGroupType("consumer")
         );
 
-        ListGroupsRequestData request = new ListGroupsRequestData();
-        when(runtime.partitions()).thenReturn(Sets.newSet(
-            new TopicPartition("__consumer_offsets", 0),
-            new TopicPartition("__consumer_offsets", 1),
-            new TopicPartition("__consumer_offsets", 2)
-        ));
-        for (int i = 0; i < 2; i++) {
-            when(runtime.scheduleReadOperation(
-                ArgumentMatchers.eq("list-groups"),
-                ArgumentMatchers.eq(new TopicPartition("__consumer_offsets", i)),
-                ArgumentMatchers.any()
-            )).thenReturn(CompletableFuture.completedFuture(Collections.singletonList(expectedResults.get(i))));
-        }
-
-        when(runtime.scheduleReadOperation(
+        when(runtime.scheduleReadAllOperation(
             ArgumentMatchers.eq("list-groups"),
-            ArgumentMatchers.eq(new TopicPartition("__consumer_offsets", 2)),
             ArgumentMatchers.any()
-        )).thenReturn(FutureUtils.failedFuture(new NotCoordinatorException("")));
+        )).thenReturn(Arrays.asList(
+            CompletableFuture.completedFuture(Collections.singletonList(expectedResults.get(0))),
+            CompletableFuture.completedFuture(Collections.singletonList(expectedResults.get(1))),
+            FutureUtils.failedFuture(new NotCoordinatorException(""))
+        ));
 
         CompletableFuture<ListGroupsResponseData> responseFuture = service.listGroups(
             requestContext(ApiKeys.LIST_GROUPS),
-            request
+            new ListGroupsRequestData()
         );
-        List<ListGroupsResponseData.ListedGroup> actualResults = responseFuture.get(5, TimeUnit.SECONDS).groups();
-        assertEquals(expectedResults, actualResults);
+
+        assertEquals(expectedResults, responseFuture.get(5, TimeUnit.SECONDS).groups());
     }
 
     @Test
-    public void testListGroupsFailedImmediately()
+    public void testListGroupsWithFailure()
         throws InterruptedException, ExecutionException, TimeoutException {
         CoordinatorRuntime<GroupCoordinatorShard, Record> runtime = mockRuntime();
         GroupCoordinatorService service = new GroupCoordinatorService(
@@ -859,37 +845,27 @@ public class GroupCoordinatorServiceTest {
             runtime,
             new GroupCoordinatorMetrics()
         );
-        int partitionCount = 3;
-        service.startup(() -> partitionCount);
+        service.startup(() -> 3);
 
-        ListGroupsRequestData request = new ListGroupsRequestData();
-        when(runtime.partitions()).thenReturn(Sets.newSet(
-            new TopicPartition("__consumer_offsets", 0),
-            new TopicPartition("__consumer_offsets", 1),
-            new TopicPartition("__consumer_offsets", 2)
-        ));
-        for (int i = 0; i < 2; i++) {
-            when(runtime.scheduleReadOperation(
-                ArgumentMatchers.eq("list-groups"),
-                ArgumentMatchers.eq(new TopicPartition("__consumer_offsets", i)),
-                ArgumentMatchers.any()
-            )).thenReturn(new CompletableFuture<>());
-        }
-
-        when(runtime.scheduleReadOperation(
+        when(runtime.scheduleReadAllOperation(
             ArgumentMatchers.eq("list-groups"),
-            ArgumentMatchers.eq(new TopicPartition("__consumer_offsets", 2)),
             ArgumentMatchers.any()
-        )).thenReturn(FutureUtils.failedFuture(new CoordinatorLoadInProgressException("")));
+        )).thenReturn(Arrays.asList(
+            CompletableFuture.completedFuture(Collections.emptyList()),
+            CompletableFuture.completedFuture(Collections.emptyList()),
+            FutureUtils.failedFuture(new CoordinatorLoadInProgressException(""))
+        ));
 
         CompletableFuture<ListGroupsResponseData> responseFuture = service.listGroups(
             requestContext(ApiKeys.LIST_GROUPS),
-            request
+            new ListGroupsRequestData()
         );
-        ListGroupsResponseData listGroupsResponseData = responseFuture.get(5, TimeUnit.SECONDS);
 
-        assertEquals(Errors.COORDINATOR_LOAD_IN_PROGRESS.code(), listGroupsResponseData.errorCode());
-        assertEquals(Collections.emptyList(), listGroupsResponseData.groups());
+        assertEquals(
+            new ListGroupsResponseData()
+                .setErrorCode(Errors.COORDINATOR_LOAD_IN_PROGRESS.code()),
+            responseFuture.get(5, TimeUnit.SECONDS)
+        );
     }
 
     @Test
@@ -1695,12 +1671,6 @@ public class GroupCoordinatorServiceTest {
             result1.duplicate()
         ));
 
-        when(runtime.partitions()).thenReturn(Sets.newSet(
-            new TopicPartition("__consumer_offsets", 0),
-            new TopicPartition("__consumer_offsets", 1),
-            new TopicPartition("__consumer_offsets", 2)
-        ));
-
         when(runtime.scheduleWriteOperation(
             ArgumentMatchers.eq("delete-groups"),
             ArgumentMatchers.eq(new TopicPartition("__consumer_offsets", 2)),
@@ -2055,5 +2025,51 @@ public class GroupCoordinatorServiceTest {
         );
 
         assertFutureThrows(future, IllegalStateException.class);
+    }
+
+    @Test
+    public void testOnPartitionsDeleted() {
+        CoordinatorRuntime<GroupCoordinatorShard, Record> runtime = mockRuntime();
+        GroupCoordinatorService service = new GroupCoordinatorService(
+            new LogContext(),
+            createConfig(),
+            runtime,
+            new GroupCoordinatorMetrics()
+        );
+        service.startup(() -> 3);
+
+        when(runtime.scheduleWriteAllOperation(
+            ArgumentMatchers.eq("on-partition-deleted"),
+            ArgumentMatchers.eq(Duration.ofMillis(5000)),
+            ArgumentMatchers.any()
+        )).thenReturn(Arrays.asList(
+            CompletableFuture.completedFuture(null),
+            CompletableFuture.completedFuture(null),
+            FutureUtils.failedFuture(Errors.COORDINATOR_LOAD_IN_PROGRESS.exception())
+        ));
+
+        // The exception is logged and swallowed.
+        assertDoesNotThrow(() ->
+            service.onPartitionsDeleted(
+                Collections.singletonList(new TopicPartition("foo", 0)),
+                BufferSupplier.NO_CACHING
+            )
+        );
+    }
+
+    @Test
+    public void testOnPartitionsDeletedWhenServiceIsNotStarted() {
+        CoordinatorRuntime<GroupCoordinatorShard, Record> runtime = mockRuntime();
+        GroupCoordinatorService service = new GroupCoordinatorService(
+            new LogContext(),
+            createConfig(),
+            runtime,
+            new GroupCoordinatorMetrics()
+        );
+
+        assertThrows(CoordinatorNotAvailableException.class, () -> service.onPartitionsDeleted(
+            Collections.singletonList(new TopicPartition("foo", 0)),
+            BufferSupplier.NO_CACHING
+        ));
     }
 }

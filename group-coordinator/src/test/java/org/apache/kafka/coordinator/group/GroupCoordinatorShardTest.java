@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.coordinator.group;
 
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatRequestData;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatResponseData;
 import org.apache.kafka.common.message.DeleteGroupsResponseData;
@@ -1019,5 +1020,40 @@ public class GroupCoordinatorShardTest {
             100L,
             result
         );
+    }
+
+    @Test
+    public void testOnPartitionsDeleted() {
+        GroupMetadataManager groupMetadataManager = mock(GroupMetadataManager.class);
+        OffsetMetadataManager offsetMetadataManager = mock(OffsetMetadataManager.class);
+        CoordinatorMetrics coordinatorMetrics = mock(CoordinatorMetrics.class);
+        CoordinatorMetricsShard metricsShard = mock(CoordinatorMetricsShard.class);
+        GroupCoordinatorShard coordinator = new GroupCoordinatorShard(
+            new LogContext(),
+            groupMetadataManager,
+            offsetMetadataManager,
+            Time.SYSTEM,
+            new MockCoordinatorTimer<>(Time.SYSTEM),
+            mock(GroupCoordinatorConfig.class),
+            coordinatorMetrics,
+            metricsShard
+        );
+
+        List<Record> records = Collections.singletonList(RecordHelpers.newOffsetCommitTombstoneRecord(
+            "group",
+            "foo",
+            0
+        ));
+
+        when(offsetMetadataManager.onPartitionsDeleted(
+            Collections.singletonList(new TopicPartition("foo", 0))
+        )).thenReturn(records);
+
+        CoordinatorResult<Void, Record> result = coordinator.onPartitionsDeleted(
+            Collections.singletonList(new TopicPartition("foo", 0))
+        );
+
+        assertEquals(records, result.records());
+        assertNull(result.response());
     }
 }

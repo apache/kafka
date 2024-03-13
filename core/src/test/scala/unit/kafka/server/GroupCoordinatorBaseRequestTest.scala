@@ -405,11 +405,13 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
 
   protected def listGroups(
     statesFilter: List[String],
+    typesFilter: List[String],
     version: Short
   ): List[ListGroupsResponseData.ListedGroup] = {
     val request = new ListGroupsRequest.Builder(
       new ListGroupsRequestData()
         .setStatesFilter(statesFilter.asJava)
+        .setTypesFilter(typesFilter.asJava)
     ).build(version)
 
     val response = connectAndReceive[ListGroupsResponse](request)

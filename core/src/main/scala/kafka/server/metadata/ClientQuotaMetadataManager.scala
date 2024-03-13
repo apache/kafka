@@ -98,14 +98,14 @@ class ClientQuotaMetadataManager(private[metadata] val quotaManagers: QuotaManag
         }
       }
       quotaDelta.changes().entrySet().forEach { e =>
-        handleUserClientQuotaChange(userClientEntity, e.getKey, e.getValue.asScala.map(_.toDouble))
+        handleUserClientQuotaChange(userClientEntity, e.getKey, e.getValue.asScala)
       }
     } else {
       warn(s"Ignoring unsupported quota entity $entity.")
     }
   }
 
-  def handleIpQuota(ipEntity: QuotaEntity, quotaDelta: ClientQuotaDelta): Unit = {
+  private def handleIpQuota(ipEntity: QuotaEntity, quotaDelta: ClientQuotaDelta): Unit = {
     val inetAddress = ipEntity match {
       case IpEntity(ip) =>
         try {
@@ -133,7 +133,7 @@ class ClientQuotaMetadataManager(private[metadata] val quotaManagers: QuotaManag
     }
   }
 
-  def handleUserClientQuotaChange(quotaEntity: QuotaEntity, key: String, newValue: Option[Double]): Unit = {
+  private def handleUserClientQuotaChange(quotaEntity: QuotaEntity, key: String, newValue: Option[Double]): Unit = {
     val manager = key match {
       case QuotaConfigs.CONSUMER_BYTE_RATE_OVERRIDE_CONFIG => quotaManagers.fetch
       case QuotaConfigs.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG => quotaManagers.produce
