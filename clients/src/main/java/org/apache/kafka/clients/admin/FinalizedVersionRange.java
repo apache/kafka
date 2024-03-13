@@ -28,7 +28,7 @@ public class FinalizedVersionRange {
 
     /**
      * Raises an exception unless the following condition is met:
-     * minVersionLevel >= 1 and maxVersionLevel >= 1 and maxVersionLevel >= minVersionLevel.
+     * {@code minVersionLevel >= 1} and {@code maxVersionLevel >= 1} and {@code maxVersionLevel >= minVersionLevel}.
      *
      * @param minVersionLevel   The minimum version level value.
      * @param maxVersionLevel   The maximum version level value.
