@@ -212,6 +212,7 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
                 reprocessState(
                     topicPartitions,
                     highWatermarks,
+                    reprocessFactory.get(),
                     store.name());
             } else {
                 restoreState(
@@ -251,6 +252,7 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
     @SuppressWarnings("unchecked")
     private void reprocessState(final List<TopicPartition> topicPartitions,
                                 final Map<TopicPartition, Long> highWatermarks,
+                                final InternalTopologyBuilder.ReprocessFactory reprocessFactory,
                                 final String storeName) {
         for (final TopicPartition topicPartition : topicPartitions) {
             long currentDeadline = NO_DEADLINE;
@@ -266,7 +268,7 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
                 offset = getGlobalConsumerOffset(topicPartition);
             }
             final Long highWatermark = highWatermarks.get(topicPartition);
-            stateRestoreListener.onRestoreStart(topicPartition, storeName, offset, highWatermark);
+            stateRestoreListener.onRestoreStart(topicPartition, reprocessFactory.toString(), offset, highWatermark);
 
             long restoreCount = 0L;
 
@@ -287,7 +289,7 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
 
                 for (final ConsumerRecord<byte[], byte[]> record : records.records(topicPartition)) {
 
-                    final SourceNode<Object, Object> source = (SourceNode<Object, Object>) topology.source(topicPartition.topic());
+                    Processor source = reprocessFactory.processorSupplier().get();
                     final ProcessorRecordContext recordContext =
                         new ProcessorRecordContext(
                             record.timestamp(),
@@ -296,13 +298,12 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
                             record.topic(),
                             record.headers());
                     globalProcessorContext.setRecordContext(recordContext);
-                    globalProcessorContext.setCurrentNode(source);
                     source.init(globalProcessorContext);
 
                     if (record.key() != null) {
                         source.process(new Record<>(
-                            source.deserializeKey(record.topic(), record.headers(), record.key()),
-                            source.deserializeKey(record.topic(), record.headers(), record.value()),
+                            reprocessFactory.keyDeserializer().deserialize(record.topic(), record.key()),
+                            reprocessFactory.valueDeserializer().deserialize(record.topic(), record.value()),
                             record.timestamp(),
                             record.headers()));
                         restoreCount++;
