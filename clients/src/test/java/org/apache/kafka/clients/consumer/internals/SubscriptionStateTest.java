@@ -142,6 +142,7 @@ public class SubscriptionStateTest {
         // assigned partitions should remain unchanged
         assertTrue(state.assignedPartitions().isEmpty());
         assertEquals(0, state.numAssignedPartitions());
+        assertEquals(state.subscriptionPattern(), null);
 
         state.subscribeFromPattern(Collections.singleton(topic));
         // assigned partitions should remain unchanged
@@ -168,6 +169,7 @@ public class SubscriptionStateTest {
         // assigned partitions should remain unchanged
         assertEquals(singleton(t1p0), state.assignedPartitions());
         assertEquals(1, state.numAssignedPartitions());
+        assertEquals(state.subscriptionPattern(), null);
 
         state.subscribeFromPattern(singleton(topic));
         // assigned partitions should remain unchanged
@@ -186,6 +188,7 @@ public class SubscriptionStateTest {
         // assigned partitions should immediately change
         assertTrue(state.assignedPartitions().isEmpty());
         assertEquals(0, state.numAssignedPartitions());
+        assertEquals(state.subscriptionPattern(), null);
     }
     @Test
     public void testSubscriptionPatternInclusionInSubscriptionState() {
@@ -194,11 +197,13 @@ public class SubscriptionStateTest {
         state.subscribe(pattern, Optional.of(rebalanceListener));
         assertTrue(state.assignedPartitions().isEmpty());
         assertEquals(0, state.numAssignedPartitions());
+        assertEquals(state.subscribedPattern(), null);
         assertTrue(state.subscriptionPattern().equals(pattern));
 
         state.unsubscribe();
         assertEquals(state.subscriptionPattern(), null);
         assertEquals(0, state.numAssignedPartitions());
+        assertEquals(state.subscribedPattern(), null);
     }
 
     @Test

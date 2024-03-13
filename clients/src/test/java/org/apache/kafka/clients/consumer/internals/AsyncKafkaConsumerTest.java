@@ -695,7 +695,7 @@ public class AsyncKafkaConsumerTest {
     @Test
     public void testSubscribeUsingSubscriptionPattern() {
         MockRebalanceListener listener = new MockRebalanceListener();
-        SubscriptionState subscriptions = new SubscriptionState(new LogContext(), OffsetResetStrategy.NONE);
+        SubscriptionState subscriptions = mock(SubscriptionState.class);
         consumer = newConsumer(
                 mock(FetchBuffer.class),
                 mock(ConsumerInterceptors.class),
@@ -707,7 +707,7 @@ public class AsyncKafkaConsumerTest {
 
         SubscriptionPattern pattern = new SubscriptionPattern("t*");
         consumer.subscribe(pattern, listener);
-        assertEquals(subscriptions.subscriptionPattern(), pattern);
+        verify(subscriptions).subscribe(pattern, Optional.of(listener));
     }
 
     @Test

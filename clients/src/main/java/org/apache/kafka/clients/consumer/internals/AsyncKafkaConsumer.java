@@ -1775,10 +1775,6 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         acquireAndEnsureOpen();
         try {
             maybeThrowInvalidGroupIdException();
-            if (pattern == null || pattern.pattern().isEmpty())
-                throw new IllegalArgumentException("Topic pattern to subscribe to cannot be " + (pattern == null ?
-                    "null" : "empty"));
-            throwIfNoAssignorsConfigured();
             log.info("Subscribed to pattern: '{}'", pattern.pattern());
             subscriptions.subscribe(pattern, listener);
         } finally {

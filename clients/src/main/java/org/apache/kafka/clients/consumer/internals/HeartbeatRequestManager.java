@@ -553,11 +553,7 @@ public class HeartbeatRequestManager implements RequestManager {
                 }
             } else {
                 // SubscribedTopicRegex - only sent if has changed since the last heartbeat
-                String subscriptionRegex = this.subscriptions.subscriptionPattern().pattern();
-                if (!subscriptionRegex.equals(sentFields.subscribedTopicRegex)) {
-                    data.setSubscribedTopicRegex(subscriptionRegex);
-                    sentFields.subscribedTopicRegex = subscriptionRegex;
-                }
+
             }
 
             // ServerAssignor - only sent if has changed since the last heartbeat

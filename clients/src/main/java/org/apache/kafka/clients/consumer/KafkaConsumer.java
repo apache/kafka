@@ -716,9 +716,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * the max metadata age, the consumer will refresh metadata more often and check for matching topics.
      * <p>
      * See {@link #subscribe(Collection, ConsumerRebalanceListener)} for details on the
-     * use of the {@link ConsumerRebalanceListener}. Generally rebalances are triggered when there
-     * is a change to the topics matching the provided pattern and when consumer group membership changes.
-     * Group rebalances only take place during an active call to {@link #poll(Duration)}.
+     * use of the {@link ConsumerRebalanceListener}.
      *
      * @param pattern Pattern to subscribe to
      * @param listener Non-null listener instance to get notifications on partition assignment/revocation for the
@@ -756,14 +754,11 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
 
     /**
      * Subscribe to all topics matching specified pattern to get dynamically assigned partitions.
-     * The pattern matching will be done periodically against all topics existing at the time of check.
-     * This can be controlled through the {@code metadata.max.age.ms} configuration: by lowering
-     * the max metadata age, the consumer will refresh metadata more often and check for matching topics.
+     * The pattern matching will be done on the broker against topics existing at the time of check
+     * and matching topic(s) will be returned to the client.
      * <p>
      * See {@link #subscribe(Collection, ConsumerRebalanceListener)} for details on the
-     * use of the {@link ConsumerRebalanceListener}. Generally rebalances are triggered when there
-     * is a change to the topics matching the provided pattern and when consumer group membership changes.
-     * Group rebalances only take place during an active call to {@link #poll(Duration)}.
+     * use of the {@link ConsumerRebalanceListener}.
      *
      * @param pattern SubscriptionPattern to subscribe to
      * @param listener Non-null listener instance to get notifications on partition assignment/revocation for the
@@ -780,7 +775,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
 
     /**
      * Subscribe to all topics matching specified pattern to get dynamically assigned partitions.
-     * The pattern matching will be done on the broker against topics existing at the time of check.
+     * The pattern matching will be done on the broker against topics existing at the time of check
+     * and matching topic(s) will be returned to the client.
      * <p>
      * This is a short-hand for {@link #subscribe(SubscriptionPattern, ConsumerRebalanceListener)}, which
      * uses a no-op listener. If you need the ability to seek to particular offsets, you should prefer
