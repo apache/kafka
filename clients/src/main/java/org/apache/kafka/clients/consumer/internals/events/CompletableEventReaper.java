@@ -31,8 +31,8 @@ import java.util.concurrent.Future;
 import java.util.function.Consumer;
 
 /**
- * The {@code CompletableEventReaper} is responsible for tracking any {@link CompletableEvent}s that were processed
- * and making sure to reap them if they complete or pass their deadline. This is done so that we enforce an upper
+ * The {@code CompletableEventReaper} is responsible for tracking any {@link CompletableEvent}s that were processed,
+ * making sure to reap them if they complete normally or pass their deadline. This is done so that we enforce an upper
  * bound on the amount of time the event logic will execute.
  */
 public class CompletableEventReaper {
@@ -72,7 +72,7 @@ public class CompletableEventReaper {
      *
      * <p/>
      *
-     * This method should be called at regular intervals
+     * This method should be called at regular intervals, based upon the needs of the resource that owns the reaper.
      *
      * @param currentTimeMs <em>Current</em> time with which to compare against the
      *                      <em>{@link CompletableEvent#deadlineMs() expiration time}</em>
