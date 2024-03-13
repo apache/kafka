@@ -67,7 +67,7 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends QuorumTestHarness wit
 
   @BeforeEach
   override def setUp(testInfo: TestInfo): Unit = {
-    if (TestInfoUtils.isKRaft(testInfo) && metadataVersion.isLessThan(IBP_3_3_IV0)) {
+    if (TestInfoUtils.isKRaft(testInfo)) {
       return
     }
     super.setUp(testInfo)
