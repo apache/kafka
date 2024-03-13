@@ -26,7 +26,7 @@ package org.apache.kafka.clients.consumer;
 public class SubscriptionPattern {
     final private String pattern;
     public SubscriptionPattern(final String pattern) {
-        if (pattern.equals("") || pattern == null) {
+        if(pattern.equals("") || pattern == null) {
             throw new IllegalArgumentException("Topic pattern to subscribe to cannot be " + (pattern == null ?
                     "null" : "empty"));
         } else {
