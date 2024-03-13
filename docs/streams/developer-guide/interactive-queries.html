@@ -350,7 +350,7 @@ interactive queries</span></p>
                 <p>To enable remote state store discovery in a distributed Kafka Streams application, you must set the <a class="reference internal" href="config-streams.html#streams-developer-guide-required-configs"><span class="std std-ref">configuration property</span></a> in the config properties.
                     The <code class="docutils literal"><span class="pre">application.server</span></code> property defines a unique <code class="docutils literal"><span class="pre">host:port</span></code> pair that points to the RPC endpoint of the respective instance of a Kafka Streams application.
                     The value of this configuration property will vary across the instances of your application.
-                    When this property is set, Kafka Streams will keep track of the RPC endpoint information for every instance of an application, its state stores, and assigned stream partitions through instances of <a class="reference external" href="/{{version}}/javadoc/org/apache/kafka/streams/state/StreamsMetadata.html">StreamsMetadata</a>.</p>
+                    When this property is set, Kafka Streams will keep track of the RPC endpoint information for every instance of an application, its state stores, and assigned stream partitions through instances of <a class="reference external" href="/{{version}}/javadoc/org/apache/kafka/streams/StreamsMetadata.html">StreamsMetadata</a>.</p>
                 <div class="admonition tip">
                     <p><b>Tip</b></p>
                     <p class="last">Consider leveraging the exposed RPC endpoints of your application for further functionality, such as
