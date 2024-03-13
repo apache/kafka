@@ -26,7 +26,6 @@ import org.apache.kafka.streams.processor.api.Record;
 import org.slf4j.Logger;
 
 import java.io.IOException;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;

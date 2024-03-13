@@ -157,7 +157,7 @@ public class InternalTopologyBuilder {
 
     private boolean hasPersistentStores = false;
 
-    public static class ReprocessFactory <KIn, VIn, KOut, VOut> {
+    public static class ReprocessFactory<KIn, VIn, KOut, VOut> {
 
         private final ProcessorSupplier<KIn, VIn, KOut, VOut> processorSupplier;
         private final Deserializer<KIn> keyDeserializer;
