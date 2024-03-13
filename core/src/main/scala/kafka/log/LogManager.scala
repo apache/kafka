@@ -1564,7 +1564,7 @@ object LogManager {
       Option(newTopicsImage.getPartition(topicId, partitionId)) match {
         case Some(partition) =>
           if (!partition.replicas.contains(brokerId)) {
-            info(s"Found stray log dir $log: the current replica assignment ${partition.replicas} " +
+            info(s"Found stray log dir $log: the current replica assignment ${partition.replicas.mkString("[", ", ", "]")} " +
               s"does not contain the local brokerId $brokerId.")
             Some(log.topicPartition)
           } else {
