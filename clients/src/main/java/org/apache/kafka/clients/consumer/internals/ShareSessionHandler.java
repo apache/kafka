@@ -68,6 +68,7 @@ public class ShareSessionHandler {
      * All of the topic names mapped to topic ids for topics which exist in the fetch request session.
      */
     private Map<Uuid, String> sessionTopicNames = new HashMap<>(0);
+    private final Map<TopicIdPartition, Acknowledgements> nextAcknowledgements = new LinkedHashMap<>();
     public Map<Uuid, String> sessionTopicNames() {
         return sessionTopicNames;
     }
@@ -110,17 +111,20 @@ public class ShareSessionHandler {
          * The metadata to use in this fetch request.
          */
         private final ShareFetchMetadata metadata;
+        private final Map<TopicIdPartition, Acknowledgements> acknowledgements;
 
         ShareFetchRequestData(Map<TopicPartition, TopicIdPartition> toSend,
                               List<TopicIdPartition> toForget,
                               List<TopicIdPartition> toReplace,
                               Map<TopicPartition, TopicIdPartition> sessionPartitions,
+                              Map<TopicIdPartition, Acknowledgements> acknowledgements,
                               ShareFetchMetadata metadata) {
             this.toSend = toSend;
             this.toForget = toForget;
             this.toReplace = toReplace;
             this.sessionPartitions = sessionPartitions;
             this.metadata = metadata;
+            this.acknowledgements = acknowledgements;
         }
 
         public Map<TopicPartition, TopicIdPartition> toSend() {
@@ -139,6 +143,10 @@ public class ShareSessionHandler {
             return sessionPartitions;
         }
 
+        public Map<TopicIdPartition, Acknowledgements> acknowledgements() {
+            return acknowledgements;
+        }
+
         public ShareFetchMetadata metadata() {
             return metadata;
         }
@@ -147,12 +155,10 @@ public class ShareSessionHandler {
     public class Builder {
 
         private LinkedHashMap<TopicPartition, TopicIdPartition> next;
-        private LinkedHashMap<TopicIdPartition, Acknowledgements> acknowledgements;
         private Map<Uuid, String> topicNames;
 
         Builder() {
             this.next = new LinkedHashMap<>();
-            this.acknowledgements = new LinkedHashMap<>();
             this.topicNames = new HashMap<>();
         }
 
@@ -160,7 +166,7 @@ public class ShareSessionHandler {
             next.put(topicIdPartition.topicPartition(), topicIdPartition);
             topicNames.putIfAbsent(topicIdPartition.topicId(), topicIdPartition.topic());
             if (partitionAcknowledgements != null) {
-                acknowledgements.put(topicIdPartition, partitionAcknowledgements);
+                nextAcknowledgements.put(topicIdPartition, partitionAcknowledgements);
             }
         }
 
@@ -171,7 +177,8 @@ public class ShareSessionHandler {
                 sessionTopicNames = topicNames;
                 Map<TopicPartition, TopicIdPartition> toSend =
                         Collections.unmodifiableMap(new LinkedHashMap<>(sessionPartitions));
-                return new ShareFetchRequestData(toSend, Collections.emptyList(), Collections.emptyList(), sessionPartitions, nextMetadata);
+                return new ShareFetchRequestData(toSend, Collections.emptyList(), Collections.emptyList(),
+                        sessionPartitions, nextAcknowledgements, nextMetadata);
             }
 
             List<TopicIdPartition> added = new ArrayList<>();
@@ -223,7 +230,7 @@ public class ShareSessionHandler {
             Map<TopicPartition, TopicIdPartition> curSessionPartitions = Collections.unmodifiableMap(sessionPartitions);
             next = null;
 //            return new ShareFetchRequestData(toSend, removed, replaced, curSessionPartitions, nextMetadata);
-            return new ShareFetchRequestData(curSessionPartitions, removed, replaced, curSessionPartitions, nextMetadata);
+            return new ShareFetchRequestData(curSessionPartitions, removed, replaced, curSessionPartitions, nextAcknowledgements, nextMetadata);
         }
     }
 
@@ -297,7 +304,6 @@ public class ShareSessionHandler {
 
     /**
      * Handle an error sending the prepared request.
-     *
      * When a network error occurs, we close any existing fetch session on our next request,
      * and try to create a new session.
      *

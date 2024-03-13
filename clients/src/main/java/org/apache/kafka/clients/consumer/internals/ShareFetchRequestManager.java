@@ -22,6 +22,7 @@ import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.internals.IdempotentCloser;
+import org.apache.kafka.common.message.ShareFetchRequestData;
 import org.apache.kafka.common.message.ShareFetchResponseData;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.ShareFetchRequest;
@@ -146,7 +147,7 @@ public class ShareFetchRequestManager implements RequestManager {
 
     private ShareFetchRequest.Builder createShareFetchRequest(Node fetchTarget, ShareSessionHandler.ShareFetchRequestData requestData) {
         final ShareFetchRequest.Builder request = ShareFetchRequest.Builder
-                .forConsumer(fetchConfig.maxWaitMs, fetchConfig.minBytes, requestData.toSend())
+                .forConsumer(fetchConfig.maxWaitMs, fetchConfig.minBytes, requestData.toSend(), acknowledgementBatches(requestData.acknowledgements()))
                 .forShareSession(groupId, requestData.metadata())
                 .setMaxBytes(fetchConfig.maxBytes);
 
@@ -201,6 +202,7 @@ public class ShareFetchRequestManager implements RequestManager {
                         partitionData,
                         requestVersion);
                 shareFetchBuffer.add(completedFetch);
+                shareFetchBuffer.handleAcknowledgementResponses(partition, Errors.forCode(partitionData.acknowledgeErrorCode()));
             }
 
             metricsManager.recordLatency(resp.requestLatencyMs());
@@ -222,6 +224,14 @@ public class ShareFetchRequestManager implements RequestManager {
         } finally {
             nodesWithPendingRequests.remove(fetchTarget.id());
         }
+    }
+
+    private Map<TopicIdPartition, List<ShareFetchRequestData.AcknowledgementBatch>> acknowledgementBatches(Map<TopicIdPartition, Acknowledgements> acknowledgementsMap) {
+        Map<TopicIdPartition, List<ShareFetchRequestData.AcknowledgementBatch>> acknowledgementBatches = new HashMap<>();
+        acknowledgementsMap.forEach((partition, acknowledgements) -> {
+            acknowledgementBatches.put(partition, acknowledgements.getAcknowledgmentBatches());
+        });
+        return acknowledgementBatches;
     }
 
     private List<TopicPartition> partitionsToFetch() {

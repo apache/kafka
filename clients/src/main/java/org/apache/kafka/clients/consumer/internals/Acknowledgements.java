@@ -17,9 +17,12 @@
 package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.consumer.AcknowledgeType;
+import org.apache.kafka.common.message.ShareFetchRequestData;
 import org.apache.kafka.common.protocol.Errors;
 
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -138,5 +141,27 @@ public class Acknowledgements {
     public Acknowledgements merge(Acknowledgements other) {
         acknowledgements.putAll(other.acknowledgements);
         return this;
+    }
+
+    public List<ShareFetchRequestData.AcknowledgementBatch> getAcknowledgmentBatches() {
+        List<ShareFetchRequestData.AcknowledgementBatch> batches = new ArrayList<>();
+        ShareFetchRequestData.AcknowledgementBatch currentBatch = new ShareFetchRequestData.AcknowledgementBatch();
+        if (acknowledgements.isEmpty()) return batches;
+        acknowledgements.forEach((offset, acknowledgeType) -> {
+            if (batches.isEmpty()) {
+                currentBatch.setStartOffset(offset);
+                currentBatch.setAcknowledgeType(acknowledgeType.id);
+                currentBatch.setLastOffset(offset);
+            } else if (acknowledgeType.id == currentBatch.acknowledgeType()) {
+                currentBatch.setLastOffset(offset);
+            } else {
+                batches.add(currentBatch);
+                currentBatch.setStartOffset(offset);
+                currentBatch.setAcknowledgeType(acknowledgeType.id);
+                currentBatch.setLastOffset(offset);
+            }
+        });
+        batches.add(currentBatch);
+        return batches;
     }
 }

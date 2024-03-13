@@ -75,7 +75,7 @@ public class ShareFetchBuffer implements AutoCloseable {
         lock.lock();
         try {
             acknowledgements.forEach((tip, partAcknowledgements) ->  {
-                if (readyAcknowledgements.get(tip) == null) {
+                if (readyAcknowledgements.get(tip) != null) {
                     readyAcknowledgements.computeIfPresent(tip, (__, ready) -> ready.merge(partAcknowledgements));
                 } else {
                     readyAcknowledgements.put(tip, partAcknowledgements);
@@ -108,7 +108,9 @@ public class ShareFetchBuffer implements AutoCloseable {
         lock.lock();
         try {
             Acknowledgements acknowledgements = readyAcknowledgements.remove(partition);
-            pendingAcknowledgements.put(partition, acknowledgements);
+            if (acknowledgements != null) {
+                pendingAcknowledgements.put(partition, acknowledgements);
+            }
             return acknowledgements;
         } finally {
             lock.unlock();
