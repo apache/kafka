@@ -348,7 +348,7 @@ final class KafkaMetadataLog private (
     deleteBeforeSnapshot(snapshotId, UnknownReason)
   }
 
-  def deleteBeforeSnapshot(snapshotId: OffsetAndEpoch, reason: SnapshotDeletionReason): Boolean = {
+  private def deleteBeforeSnapshot(snapshotId: OffsetAndEpoch, reason: SnapshotDeletionReason): Boolean = {
     val (deleted, forgottenSnapshots) = snapshots synchronized {
       latestSnapshotId().asScala match {
         case Some(latestSnapshotId) if
