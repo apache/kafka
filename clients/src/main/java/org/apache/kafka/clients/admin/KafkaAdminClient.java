@@ -2223,7 +2223,6 @@ public class KafkaAdminClient extends AdminClient {
                     .collect(Collectors.toMap(topicRequest -> topicRequest.name(), topicRequest -> topicRequest, (t1, t2) -> t1, TreeMap::new));
 
             TopicDescription partiallyFinishedTopicDescription = null;
-            TopicDescription nextTopicDescription = null;
 
             @Override
             DescribeTopicPartitionsRequest.Builder createRequest(int timeoutMs) {
@@ -2231,6 +2230,8 @@ public class KafkaAdminClient extends AdminClient {
                     .setTopics(new ArrayList<>(pendingTopics.values()))
                     .setResponsePartitionLimit(options.partitionSizeLimitPerResponse());
                 if (partiallyFinishedTopicDescription != null) {
+                    // If the previous cursor points to the partition 0, the cursor will not be set as the first one
+                    // in the topic list should be the previous cursor topic.
                     request.setCursor(new DescribeTopicPartitionsRequestData.Cursor()
                         .setTopicName(partiallyFinishedTopicDescription.name())
                         .setPartitionIndex(partiallyFinishedTopicDescription.partitions().size())
@@ -2243,6 +2244,8 @@ public class KafkaAdminClient extends AdminClient {
             void handleResponse(AbstractResponse abstractResponse) {
                 DescribeTopicPartitionsResponse response = (DescribeTopicPartitionsResponse) abstractResponse;
                 DescribeTopicPartitionsResponseData.Cursor responseCursor = response.data().nextCursor();
+                // The topicDescription for the cursor topic of the current batch.
+                TopicDescription nextTopicDescription = null;
 
                 for (DescribeTopicPartitionsResponseTopic topic : response.data().topics()) {
                     String topicName = topic.name();
@@ -2262,12 +2265,14 @@ public class KafkaAdminClient extends AdminClient {
                     TopicDescription currentTopicDescription = getTopicDescriptionFromDescribeTopicsResponseTopic(topic, nodes);
 
                     if (partiallyFinishedTopicDescription != null && partiallyFinishedTopicDescription.name().equals(topicName)) {
+                        // Add the partitions for the cursor topic of the previous batch.
                         partiallyFinishedTopicDescription.partitions().addAll(currentTopicDescription.partitions());
                         continue;
                     }
 
                     if (responseCursor != null && responseCursor.topicName().equals(topicName)) {
-                        // This is the first time this topic being pointed by the cursor.
+                        //In the same batch of result, it may need to handle the partitions for the previous cursor
+                        // topic and the current cursor topic. Cache the result in the nextTopicDescription.
                         nextTopicDescription = currentTopicDescription;
                         continue;
                     }
