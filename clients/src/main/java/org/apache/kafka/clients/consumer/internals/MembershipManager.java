@@ -18,16 +18,12 @@ package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.internals.events.ConsumerRebalanceListenerCallbackCompletedEvent;
-import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatResponseData;
 
-import java.util.HashMap;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Optional;
 import java.util.SortedSet;
-import java.util.TreeSet;
 import java.util.concurrent.CompletableFuture;
 
 /**
@@ -196,49 +192,11 @@ public interface MembershipManager extends RequestManager {
      * Besides the assigned partitions, it contains a local epoch that is bumped whenever the assignment changes, to ensure
      * that two assignments with the same partitions but different local epochs are not considered equal.
      */
-    final class LocalAssignment {
+    interface LocalAssignment {
 
-        public final long localEpoch;
+        Map<Uuid, SortedSet<Integer>> getPartitions();
 
-        public final Map<Uuid, SortedSet<Integer>> partitions;
+        boolean isNone();
 
-        public LocalAssignment(long localEpoch, Map<Uuid, SortedSet<Integer>> partitions) {
-            this.localEpoch = localEpoch;
-            this.partitions = partitions;
-        }
-
-        public LocalAssignment(long localEpoch, SortedSet<TopicIdPartition> topicIdPartitions) {
-            this.localEpoch = localEpoch;
-            this.partitions = new HashMap<>();
-            topicIdPartitions.forEach(topicIdPartition -> {
-                Uuid topicId = topicIdPartition.topicId();
-                partitions.computeIfAbsent(topicId, k -> new TreeSet<>()).add(topicIdPartition.partition());
-            });
-        }
-
-        @Override
-        public String toString() {
-            return "{" +
-                "localEpoch=" + localEpoch +
-                ", partitions=" + partitions +
-                '}';
-        }
-
-        @Override
-        public boolean equals(final Object o) {
-            if (this == o) {
-                return true;
-            }
-            if (o == null || getClass() != o.getClass()) {
-                return false;
-            }
-            final LocalAssignment that = (LocalAssignment) o;
-            return localEpoch == that.localEpoch && Objects.equals(partitions, that.partitions);
-        }
-
-        @Override
-        public int hashCode() {
-            return Objects.hash(localEpoch, partitions);
-        }
     }
 }

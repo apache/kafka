@@ -185,7 +185,7 @@ public class HeartbeatRequestManagerTest {
         assertTrue(heartbeatRequest.data().memberId().isEmpty());
         assertEquals(0, heartbeatRequest.data().memberEpoch());
 
-        // Should include subscription and group basic info to start getting assignments.
+        // Should include subscription and group basic info to start getting assignments, as well as rebalanceTimeoutMs
         assertEquals(Collections.singletonList(topic), heartbeatRequest.data().subscribedTopicNames());
         assertEquals(DEFAULT_MAX_POLL_INTERVAL_MS, heartbeatRequest.data().rebalanceTimeoutMs());
         assertEquals(DEFAULT_GROUP_ID, heartbeatRequest.data().groupId());
@@ -318,7 +318,8 @@ public class HeartbeatRequestManagerTest {
         assertEquals(DEFAULT_GROUP_ID, heartbeatRequest.data().groupId());
         assertEquals(memberId, heartbeatRequest.data().memberId());
         assertEquals(memberEpoch, heartbeatRequest.data().memberEpoch());
-        assertEquals(DEFAULT_MAX_POLL_INTERVAL_MS, heartbeatRequest.data().rebalanceTimeoutMs());
+        // RebalanceTimeoutMs only included in first heartbeat (epoch = 0)
+        assertEquals(-1, heartbeatRequest.data().rebalanceTimeoutMs());
         assertEquals(subscribedTopics, heartbeatRequest.data().subscribedTopicNames());
         assertEquals(DEFAULT_GROUP_INSTANCE_ID, heartbeatRequest.data().instanceId());
         assertEquals(DEFAULT_REMOTE_ASSIGNOR, heartbeatRequest.data().serverAssignor());

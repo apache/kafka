@@ -530,19 +530,12 @@ public class HeartbeatRequestManager implements RequestManager {
             // MemberEpoch - always sent
             data.setMemberEpoch(membershipManager.memberEpoch());
 
-            // InstanceId - only sent if has changed since the last heartbeat
-            // Always send when leaving the group as a static member
-            membershipManager.groupInstanceId().ifPresent(groupInstanceId -> {
-                if (!groupInstanceId.equals(sentFields.instanceId) || membershipManager.memberEpoch() == ConsumerGroupHeartbeatRequest.LEAVE_GROUP_STATIC_MEMBER_EPOCH) {
-                    data.setInstanceId(groupInstanceId);
-                    sentFields.instanceId = groupInstanceId;
-                }
-            });
+            // InstanceId - always send when leaving the group as a static member
+            membershipManager.groupInstanceId().ifPresent(data::setInstanceId);
 
-            // RebalanceTimeoutMs - only sent when joining or if has changed since the last heartbeat
-            if (membershipManager.memberEpoch() == 0 || sentFields.rebalanceTimeoutMs != rebalanceTimeoutMs) {
+            // RebalanceTimeoutMs - only sent when joining
+            if (membershipManager.memberEpoch() == 0) {
                 data.setRebalanceTimeoutMs(rebalanceTimeoutMs);
-                sentFields.rebalanceTimeoutMs = rebalanceTimeoutMs;
             }
 
             if (!this.subscriptions.hasPatternSubscription()) {
@@ -573,12 +566,12 @@ public class HeartbeatRequestManager implements RequestManager {
             LocalAssignment local = membershipManager.currentAssignment();
             if (local == null) {
                 data.setTopicPartitions(Collections.emptyList());
-                sentFields.topicPartitions = null;
-            } else if (!local.equals(sentFields.topicPartitions)) {
+                sentFields.localAssignment = null;
+            } else if (!local.equals(sentFields.localAssignment)) {
                 List<ConsumerGroupHeartbeatRequestData.TopicPartitions> topicPartitions =
-                    buildTopicPartitionsList(local.partitions);
+                    buildTopicPartitionsList(local.getPartitions());
                 data.setTopicPartitions(topicPartitions);
-                sentFields.topicPartitions = local;
+                sentFields.localAssignment = local;
             }
 
             return data;
@@ -594,20 +587,16 @@ public class HeartbeatRequestManager implements RequestManager {
 
         // Fields of ConsumerHeartbeatRequest sent in the most recent request
         static class SentFields {
-            private String instanceId = null;
-            private int rebalanceTimeoutMs = -1;
             private TreeSet<String> subscribedTopicNames = null;
             private String serverAssignor = null;
-            private LocalAssignment topicPartitions = null;
+            private LocalAssignment localAssignment = null;
 
             SentFields() {}
 
             void reset() {
-                instanceId = null;
-                rebalanceTimeoutMs = -1;
                 subscribedTopicNames = null;
                 serverAssignor = null;
-                topicPartitions = null;
+                localAssignment = null;
             }
         }
     }
