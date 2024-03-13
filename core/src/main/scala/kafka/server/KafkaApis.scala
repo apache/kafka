@@ -721,7 +721,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       sendResponseCallback(Map.empty)
     else {
       val internalTopicsAllowed = request.header.clientId == AdminUtils.ADMIN_CLIENT_ID
-      val operationExpected = if (request.header.apiVersion > 10) OperationExpected.latestProduceVersion else OperationExpected.defaultOperation
+      val operationExpected = if (request.header.apiVersion > 10) genericError else defaultOperation
       // call the replica manager to append messages to the replicas
       replicaManager.handleProduceAppend(
         timeout = produceRequest.timeout.toLong,

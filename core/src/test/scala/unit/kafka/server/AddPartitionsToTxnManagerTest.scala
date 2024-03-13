@@ -326,7 +326,7 @@ class AddPartitionsToTxnManagerTest {
       addPartitionsToTxnManager.verifyTransaction(transactionalId2, producerId2, producerEpoch = 0, topicPartitions, setErrors(transaction2Errors), any())
     }
 
-    def addTransactionsToVerifyRequestVersion(operationExpected: OperationExpected.operation): Unit = {
+    def addTransactionsToVerifyRequestVersion(operationExpected: ExpectedPartitionOperation): Unit = {
       transaction1Errors.clear()
       transaction2Errors.clear()
 
@@ -395,12 +395,12 @@ class AddPartitionsToTxnManagerTest {
     val expectedAbortableTransaction1ErrorsHigherVersion = topicPartitions.map(_ -> Errors.ABORTABLE_TRANSACTION_EXCEPTION).toMap
     val expectedAbortableTransaction2ErrorsHigherVersion = Map(new TopicPartition("foo", 2) -> Errors.ABORTABLE_TRANSACTION_EXCEPTION)
 
-    addTransactionsToVerifyRequestVersion(OperationExpected.defaultOperation)
+    addTransactionsToVerifyRequestVersion(defaultOperation)
     receiveResponse(mixedAbortableErrorsResponse)
     assertEquals(expectedAbortableTransaction1ErrorsLowerVersion, transaction1Errors)
     assertEquals(expectedAbortableTransaction2ErrorsLowerVersion, transaction2Errors)
 
-    addTransactionsToVerifyRequestVersion(OperationExpected.latestProduceVersion)
+    addTransactionsToVerifyRequestVersion(genericError)
     receiveResponse(mixedAbortableErrorsResponse)
     assertEquals(expectedAbortableTransaction1ErrorsHigherVersion, transaction1Errors)
     assertEquals(expectedAbortableTransaction2ErrorsHigherVersion, transaction2Errors)

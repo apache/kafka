@@ -3048,7 +3048,7 @@ class ReplicaManagerTest {
       transactionalId = transactionalId,
       entriesPerPartition = entriesToAppend,
       responseCallback = appendCallback,
-      partitionOperation = OperationExpected.latestProduceVersion
+      partitionOperation = genericError
     )
 
     result
@@ -3076,7 +3076,7 @@ class ReplicaManagerTest {
       transactionalId = transactionalId,
       entriesPerPartition = entriesPerPartition,
       responseCallback = appendCallback,
-      partitionOperation = OperationExpected.latestProduceVersion
+      partitionOperation = genericError
     )
 
     result

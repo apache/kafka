@@ -42,10 +42,16 @@ object AddPartitionsToTxnManager {
   val VerificationTimeMsMetricName = "VerificationTimeMs"
 }
 
-object OperationExpected extends Enumeration {
-  type operation = Value
-  val defaultOperation, latestProduceVersion, addPartitionWithoutVerification = Value
-}
+/**
+ * This is an enum which handles the Partition Response based on the Produce Request Version and the exact operation
+ *    defaultOperation:   This is the default workflow which maps to cases when the Produce Request Version was lower than expected or when exercising the offset commit request path
+ *    genericError:       This maps to the case when the clients are updated to handle the AbortableTxnException
+ *    addPartition:       This is a WIP. To be updated as a part of KIP-890 Part 2
+ */
+sealed trait ExpectedPartitionOperation
+case object defaultOperation extends ExpectedPartitionOperation
+case object genericError extends ExpectedPartitionOperation
+case object addPartition extends ExpectedPartitionOperation
 
 /*
  * Data structure to hold the transactional data to send to a node. Note -- at most one request per transactional ID
@@ -55,7 +61,7 @@ object OperationExpected extends Enumeration {
 class TransactionDataAndCallbacks(val transactionData: AddPartitionsToTxnTransactionCollection,
                                   val callbacks: mutable.Map[String, AddPartitionsToTxnManager.AppendCallback],
                                   val startTimeMs: mutable.Map[String, Long],
-                                  val operationExpected: OperationExpected.operation)
+                                  val operationExpected: ExpectedPartitionOperation)
 
 class AddPartitionsToTxnManager(
   config: KafkaConfig,
@@ -85,7 +91,7 @@ class AddPartitionsToTxnManager(
     producerEpoch: Short,
     topicPartitions: Seq[TopicPartition],
     callback: AddPartitionsToTxnManager.AppendCallback,
-    expectedPartitionOperation: OperationExpected.operation
+    expectedPartitionOperation: ExpectedPartitionOperation
   ): Unit = {
     val (error, node) = getTransactionCoordinator(partitionFor(transactionalId))
 
@@ -114,7 +120,7 @@ class AddPartitionsToTxnManager(
     node: Node,
     transactionData: AddPartitionsToTxnTransaction,
     callback: AddPartitionsToTxnManager.AppendCallback,
-    expectedPartitionOperation: OperationExpected.operation
+    expectedPartitionOperation: ExpectedPartitionOperation
   ): Unit = {
     nodesToTransactions.synchronized {
       val curTime = time.milliseconds()
@@ -240,7 +246,7 @@ class AddPartitionsToTxnManager(
                   val code =
                     if (partitionResult.partitionErrorCode == Errors.PRODUCER_FENCED.code)
                       Errors.INVALID_PRODUCER_EPOCH.code
-                    else if (partitionResult.partitionErrorCode() == Errors.ABORTABLE_TRANSACTION_EXCEPTION.code && transactionDataAndCallbacks.operationExpected != OperationExpected.latestProduceVersion) // For backward compatibility with clients.
+                    else if (partitionResult.partitionErrorCode() == Errors.ABORTABLE_TRANSACTION_EXCEPTION.code && transactionDataAndCallbacks.operationExpected != genericError) // For backward compatibility with clients.
                       Errors.INVALID_TXN_STATE.code
                     else
                       partitionResult.partitionErrorCode
