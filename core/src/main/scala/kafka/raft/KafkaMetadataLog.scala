@@ -682,8 +682,8 @@ object KafkaMetadataLog extends Logging {
 
   private final case class RetentionMsBreach(now: Long, timestamp: Long, retentionMillis: Long) extends SnapshotDeletionReason {
     override def reason(snapshotId: OffsetAndEpoch): String = {
-      s"""Marking snapshot $snapshotId for deletion because it timestamp ($timestamp) is now ($now) older than the
-          |retention ($retentionMillis""".stripMargin
+      s"""Marking snapshot $snapshotId for deletion because its timestamp ($timestamp) is now ($now) older than the
+          |retention ($retentionMillis)""".stripMargin
     }
   }
 
