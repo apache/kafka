@@ -147,17 +147,23 @@ public class ShareSessionHandler {
     public class Builder {
 
         private LinkedHashMap<TopicPartition, TopicIdPartition> next;
+        private LinkedHashMap<TopicIdPartition, Acknowledgements> acknowledgements;
         private Map<Uuid, String> topicNames;
 
         Builder() {
             this.next = new LinkedHashMap<>();
+            this.acknowledgements = new LinkedHashMap<>();
             this.topicNames = new HashMap<>();
         }
 
-        public void add(TopicIdPartition topicIdPartition) {
+        public void add(TopicIdPartition topicIdPartition, Acknowledgements partitionAcknowledgements) {
             next.put(topicIdPartition.topicPartition(), topicIdPartition);
             topicNames.putIfAbsent(topicIdPartition.topicId(), topicIdPartition.topic());
+            if (partitionAcknowledgements != null) {
+                acknowledgements.put(topicIdPartition, partitionAcknowledgements);
+            }
         }
+
         public ShareFetchRequestData build() {
             if (nextMetadata.isNewSession()) {
                 sessionPartitions = next;

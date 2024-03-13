@@ -104,6 +104,57 @@ public class ShareFetchRequestManager implements RequestManager {
         return new NetworkClientDelegate.PollResult(requests);
     }
 
+    private Map<Node, ShareSessionHandler.ShareFetchRequestData> prepareShareFetchRequests() {
+        Map<Node, ShareSessionHandler.Builder> partitionsToFetch = new HashMap<>();
+        Map<String, Uuid> topicIds = metadata.topicIds();
+
+        for (TopicPartition partition : partitionsToFetch()) {
+            Optional<Node> leaderOpt = metadata.currentLeader(partition).leader;
+
+            if (!leaderOpt.isPresent()) {
+                log.debug("Requesting metadata update for partition {} since current leader node is missing", partition);
+                metadata.requestUpdate(false);
+                continue;
+            }
+
+            Node node = leaderOpt.get();
+            if (nodesWithPendingRequests.contains(node.id())) {
+                log.trace("Skipping fetch for partition {} because previous fetch request to {} has not been processed", partition, node);
+            } else {
+                // if there is a leader and no in-flight requests, issue a new fetch
+                ShareSessionHandler.Builder builder = partitionsToFetch.computeIfAbsent(node, k -> {
+                    ShareSessionHandler shareSessionHandler =
+                            sessionHandlers.computeIfAbsent(node.id(), n -> new ShareSessionHandler(logContext, n, Uuid.randomUuid()));
+                    return shareSessionHandler.newBuilder();
+                });
+
+                Uuid topicId = topicIds.getOrDefault(partition.topic(), Uuid.ZERO_UUID);
+                TopicIdPartition tip = new TopicIdPartition(topicId, partition);
+                builder.add(tip, shareFetchBuffer.getAcknowledgementsToSend(tip));
+
+                log.debug("Added fetch request for partition {} to node {}", partition, node);
+            }
+        }
+
+        Map<Node, ShareSessionHandler.ShareFetchRequestData> requests = new LinkedHashMap<>();
+        for (Map.Entry<Node, ShareSessionHandler.Builder> entry : partitionsToFetch.entrySet()) {
+            requests.put(entry.getKey(), entry.getValue().build());
+        }
+
+        return requests;
+    }
+
+    private ShareFetchRequest.Builder createShareFetchRequest(Node fetchTarget, ShareSessionHandler.ShareFetchRequestData requestData) {
+        final ShareFetchRequest.Builder request = ShareFetchRequest.Builder
+                .forConsumer(fetchConfig.maxWaitMs, fetchConfig.minBytes, requestData.toSend())
+                .forShareSession(groupId, requestData.metadata())
+                .setMaxBytes(fetchConfig.maxBytes);
+
+        nodesWithPendingRequests.add(fetchTarget.id());
+
+        return request;
+    }
+
     private void handleShareFetchSuccess(Node fetchTarget, ShareSessionHandler.ShareFetchRequestData data, ClientResponse resp) {
         try {
             final ShareFetchResponse response = (ShareFetchResponse) resp.responseBody();
@@ -141,8 +192,7 @@ public class ShareFetchRequestManager implements RequestManager {
 
                 ShareFetchResponseData.PartitionData partitionData = entry.getValue();
 
-                log.debug("Share fetch {} for partition {} returned fetch data {}",
-                        fetchConfig.isolationLevel, partition, partitionData);
+                log.debug("Share fetch for partition {} returned fetch data {}", partition, partitionData);
 
                 ShareCompletedFetch completedFetch = new ShareCompletedFetch(
                         logContext,
@@ -160,60 +210,6 @@ public class ShareFetchRequestManager implements RequestManager {
         }
     }
 
-    private ShareFetchRequest.Builder createShareFetchRequest(Node fetchTarget, ShareSessionHandler.ShareFetchRequestData requestData) {
-        final ShareFetchRequest.Builder request = ShareFetchRequest.Builder
-                .forConsumer(fetchConfig.maxWaitMs, fetchConfig.minBytes, requestData.toSend())
-                .forShareSession(groupId, requestData.metadata())
-                .setMaxBytes(fetchConfig.maxBytes);
-
-        nodesWithPendingRequests.add(fetchTarget.id());
-
-        return request;
-    }
-
-    private Map<Node, ShareSessionHandler.ShareFetchRequestData> prepareShareFetchRequests() {
-        Map<Node, ShareSessionHandler.Builder> fetchable = new HashMap<>();
-        Map<String, Uuid> topicIds = metadata.topicIds();
-
-        for (TopicPartition partition : fetchablePartitions()) {
-            Optional<Node> leaderOpt = metadata.currentLeader(partition).leader;
-
-            if (!leaderOpt.isPresent()) {
-                log.debug("Requesting metadata update for partition {} since current leader node is missing", partition);
-                metadata.requestUpdate(false);
-                continue;
-            }
-
-            Node node = leaderOpt.get();
-            if (nodesWithPendingRequests.contains(node.id())) {
-                log.trace("Skipping fetch for partition {} because previous fetch request to {} has not been processed", partition, node);
-            } else {
-                // if there is a leader and no in-flight requests, issue a new fetch
-                ShareSessionHandler.Builder builder = fetchable.computeIfAbsent(node, k -> {
-                    ShareSessionHandler shareSessionHandler =
-                            sessionHandlers.computeIfAbsent(node.id(), n -> new ShareSessionHandler(logContext, n, Uuid.randomUuid()));
-                    return shareSessionHandler.newBuilder();
-                });
-                Uuid topicId = topicIds.getOrDefault(partition.topic(), Uuid.ZERO_UUID);
-                builder.add(new TopicIdPartition(topicId, partition));
-
-                log.debug("Added {} fetch request for partition {} to node {}", fetchConfig.isolationLevel,
-                        partition, node);
-            }
-        }
-
-        Map<Node, ShareSessionHandler.ShareFetchRequestData> reqs = new LinkedHashMap<>();
-        for (Map.Entry<Node, ShareSessionHandler.Builder> entry : fetchable.entrySet()) {
-            reqs.put(entry.getKey(), entry.getValue().build());
-        }
-
-        return reqs;
-    }
-
-    private List<TopicPartition> fetchablePartitions() {
-        return subscriptions.fetchablePartitions(tp -> true);
-    }
-
     private void handleShareFetchFailure(Node fetchTarget,
                                          ShareSessionHandler.ShareFetchRequestData data,
                                          Throwable error) {
@@ -226,6 +222,10 @@ public class ShareFetchRequestManager implements RequestManager {
         } finally {
             nodesWithPendingRequests.remove(fetchTarget.id());
         }
+    }
+
+    private List<TopicPartition> partitionsToFetch() {
+        return subscriptions.fetchablePartitions(tp -> true);
     }
 
     public ShareSessionHandler sessionHandler(int node) {

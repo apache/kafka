@@ -52,12 +52,14 @@ import java.util.Optional;
  */
 public class ShareCompletedFetch {
 
-    private final Logger log;
-    private final BufferSupplier decompressionBufferSupplier;
     final TopicIdPartition partition;
+
     final ShareFetchResponseData.PartitionData partitionData;
+
     final short requestVersion;
 
+    private final Logger log;
+    private final BufferSupplier decompressionBufferSupplier;
     private final Iterator<? extends RecordBatch> batches;
     private RecordBatch currentBatch;
     private Record lastRecord;
@@ -131,7 +133,7 @@ public class ShareCompletedFetch {
 
         if (cachedBatchException != null) {
             // If the event that a CRC check fails, reject the entire record batch because it is corrupt.
-            acknowledgeRecordRange(shareInFlightBatch, currentBatch, AcknowledgeType.REJECT);
+            rejectRecordRange(shareInFlightBatch, currentBatch);
             shareInFlightBatch.setException(cachedBatchException);
             cachedBatchException = null;
             return shareInFlightBatch;
@@ -140,8 +142,8 @@ public class ShareCompletedFetch {
         if (cachedRecordException != null) {
             shareInFlightBatch.addAcknowledgement(lastRecord.offset(), AcknowledgeType.RELEASE);
             shareInFlightBatch.setException(
-                    new KafkaException("Received exception when fetching the next record from " + partition
-                    + ". The record has been released.", cachedRecordException));
+                    new KafkaException("Received exception when fetching the next record from " + partition +
+                            ". The record has been released.", cachedRecordException));
             cachedRecordException = null;
             return shareInFlightBatch;
         }
@@ -174,7 +176,7 @@ public class ShareCompletedFetch {
         } catch (CorruptRecordException e) {
             if (shareInFlightBatch.isEmpty()) {
                 // If the event that a CRC check fails, reject the entire record batch because it is corrupt.
-                acknowledgeRecordRange(shareInFlightBatch, currentBatch, AcknowledgeType.REJECT);
+                rejectRecordRange(shareInFlightBatch, currentBatch);
                 shareInFlightBatch.setException(e);
             } else {
                 cachedBatchException = e;
@@ -200,13 +202,12 @@ public class ShareCompletedFetch {
         }
     }
 
-    private <K, V> void acknowledgeRecordRange(final ShareInFlightBatch<K, V> batch,
-                                               final RecordBatch currentBatch,
-                                               final AcknowledgeType acknowledgeType) {
+    private <K, V> void rejectRecordRange(final ShareInFlightBatch<K, V> batch,
+                                          final RecordBatch currentBatch) {
         acquiredRecords.forEach(acqRecord -> {
             for (long recordOffset = currentBatch.baseOffset(); recordOffset <= currentBatch.lastOffset(); recordOffset++) {
                 if (recordOffset >= acqRecord.baseOffset() && recordOffset <= acqRecord.lastOffset()) {
-                    batch.addAcknowledgement(recordOffset, acknowledgeType);
+                    batch.addAcknowledgement(recordOffset, AcknowledgeType.REJECT);
                 }
             }
         });

@@ -93,8 +93,7 @@ public class ShareFetch<K, V> {
     }
 
     /**
-     * @return {@code true} if and only if this fetch did not return any user-visible (i.e., non-control) records, and
-     * did not cause the consumer position to advance for any topic partitions
+     * @return {@code true} if and only if this fetch did not return any non-control records
      */
     public boolean isEmpty() {
         return numRecords == 0;
@@ -102,5 +101,11 @@ public class ShareFetch<K, V> {
 
     public void acknowledgeAll(final AcknowledgeType type) {
         batches.forEach((tip, batch) -> batch.acknowledgeAll(type));
+    }
+
+    public Map<TopicIdPartition, Acknowledgements> acknowledgementsByPartition() {
+        Map<TopicIdPartition, Acknowledgements> acknowledgementMap = new LinkedHashMap<>();
+        batches.forEach((tip, batch) -> acknowledgementMap.put(tip, batch.getAcknowledgements()));
+        return acknowledgementMap;
     }
 }

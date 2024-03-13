@@ -429,6 +429,9 @@ public class ShareConsumerImpl<K, V> implements ShareConsumer<K, V> {
 
         acquireAndEnsureOpen();
         try {
+            // Handle any completed acknowledgements for which we already have the responses
+            handleCompletedAcknowledgements();
+
             // If using implicit acknowledgement, acknowledge the previously fetched records
             maybeImplicitlyAcknowledge();
 
@@ -696,7 +699,20 @@ public class ShareConsumerImpl<K, V> implements ShareConsumer<K, V> {
     }
 
     /**
+     * Handles any completed acknowledgements. This will be the integration point for the acknowledge
+     * commit callback when that is implemented.
+     *
+     * @return The completed Acknowledgements which will contain the acknowledgement error code for each
+     * topic-partition.
+     */
+    private Map<TopicIdPartition, Acknowledgements> handleCompletedAcknowledgements() {
+        return fetchBuffer.getCompletedAcknowledgements();
+    }
+
+    /**
      * Called to progressively moves the acknowledgement mode into IMPLICIT if it is not known to be EXPLICIT.
+     * If the acknowledgement mode is IMPLICIT, acknowledges the current batch and puts them into the fetch
+     * buffer for the background thread to pick up.
      */
     private void maybeImplicitlyAcknowledge() {
         if (acknowledgementMode == AcknowledgementMode.UNKNOWN) {
@@ -710,10 +726,13 @@ public class ShareConsumerImpl<K, V> implements ShareConsumer<K, V> {
         }
 
         if (currentFetch != null) {
-            currentFetch.acknowledgeAll(AcknowledgeType.ACCEPT);
-        }
+            if (acknowledgementMode == AcknowledgementMode.IMPLICIT) {
+                currentFetch.acknowledgeAll(AcknowledgeType.ACCEPT);
+                fetchBuffer.acknowledgementsReadyToSend(currentFetch.acknowledgementsByPartition());
+            }
 
-        currentFetch = null;
+            currentFetch = null;
+        }
     }
 
     /**
