@@ -584,6 +584,8 @@ public class GroupMetadataManager {
      * @param groupId           The group id.
      * @param createIfNotExists A boolean indicating whether the group should be
      *                          created if it does not exist.
+     * @param addToGroupsMap    A boolean indicating whether the newly created group
+     *                          should be added to the groups map.
      *
      * @return A ConsumerGroup.
      * @throws GroupIdNotFoundException if the group does not exist and createIfNotExists is false or
@@ -593,7 +595,8 @@ public class GroupMetadataManager {
      */
     ConsumerGroup getOrMaybeCreateConsumerGroup(
         String groupId,
-        boolean createIfNotExists
+        boolean createIfNotExists,
+        boolean addToGroupsMap
     ) throws GroupIdNotFoundException {
         Group group = groups.get(groupId);
 
@@ -603,8 +606,10 @@ public class GroupMetadataManager {
 
         if (group == null) {
             ConsumerGroup consumerGroup = new ConsumerGroup(snapshotRegistry, groupId, metrics);
-            groups.put(groupId, consumerGroup);
-            metrics.onConsumerGroupStateTransition(null, consumerGroup.state());
+            if (addToGroupsMap) {
+                groups.put(groupId, consumerGroup);
+                metrics.onConsumerGroupStateTransition(null, consumerGroup.state());
+            }
             return consumerGroup;
         } else {
             if (group.type() == CONSUMER) {
@@ -615,6 +620,16 @@ public class GroupMetadataManager {
                 throw new GroupIdNotFoundException(String.format("Group %s is not a consumer group.", groupId));
             }
         }
+    }
+
+    /**
+     * an overloaded method of {@link #getOrMaybeCreateConsumerGroup(String, boolean, boolean)}
+     */
+    ConsumerGroup getOrMaybeCreateConsumerGroup(
+        String groupId,
+        boolean createIfNotExists
+    ) throws GroupIdNotFoundException {
+        return getOrMaybeCreateConsumerGroup(groupId, createIfNotExists, false);
     }
 
     /**
@@ -1511,7 +1526,7 @@ public class GroupMetadataManager {
         String groupId = key.groupId();
         String memberId = key.memberId();
 
-        ConsumerGroup consumerGroup = getOrMaybeCreateConsumerGroup(groupId, value != null);
+        ConsumerGroup consumerGroup = getOrMaybeCreateConsumerGroup(groupId, value != null, true);
         Set<String> oldSubscribedTopicNames = new HashSet<>(consumerGroup.subscribedTopicNames());
 
         if (value != null) {
@@ -1623,7 +1638,7 @@ public class GroupMetadataManager {
         String groupId = key.groupId();
 
         if (value != null) {
-            ConsumerGroup consumerGroup = getOrMaybeCreateConsumerGroup(groupId, true);
+            ConsumerGroup consumerGroup = getOrMaybeCreateConsumerGroup(groupId, true, true);
             consumerGroup.setGroupEpoch(value.epoch());
         } else {
             ConsumerGroup consumerGroup = getOrMaybeCreateConsumerGroup(groupId, false);
