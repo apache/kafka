@@ -124,7 +124,7 @@ public class InternalTopologyBuilder {
     private final Map<String, String> changelogTopicToStore = new HashMap<>();
 
     // map of store name to restore behavior
-    private final Map<String, Boolean> storeNameToReprocessOnRestore = new HashMap<>();
+    private final Map<String, Optional<ReprocessFactory<?, ?, ?, ?>>> storeNameToReprocessOnRestore = new HashMap<>();
 
     // all global topics
     private final Set<String> globalTopics = new HashSet<>();
@@ -156,6 +156,32 @@ public class InternalTopologyBuilder {
     private TopologyConfig topologyConfigs;  // the configs for this topology, including overrides and global defaults
 
     private boolean hasPersistentStores = false;
+
+    public static class ReprocessFactory <KIn, VIn, KOut, VOut> {
+
+        private final ProcessorSupplier<KIn, VIn, KOut, VOut> processorSupplier;
+        private final Deserializer<KIn> keyDeserializer;
+        private final Deserializer<VIn> valueDeserializer;
+
+        private ReprocessFactory(final ProcessorSupplier<KIn, VIn, KOut, VOut> processorSupplier,
+                                 final Deserializer<KIn> key,
+                                 final Deserializer<VIn> value) {
+            this.processorSupplier = processorSupplier;
+            this.keyDeserializer = key;
+            this.valueDeserializer = value;
+        }
+        public ProcessorSupplier<KIn, VIn, KOut, VOut> processorSupplier() {
+            return processorSupplier;
+        }
+
+        public Deserializer<KIn> keyDeserializer() {
+            return keyDeserializer;
+        }
+
+        public Deserializer<VIn> valueDeserializer() {
+            return valueDeserializer;
+        }
+    }
 
     private static abstract class NodeFactory<KIn, VIn, KOut, VOut> {
         final String name;
@@ -617,7 +643,10 @@ public class InternalTopologyBuilder {
             keyDeserializer,
             valueDeserializer)
         );
-        storeNameToReprocessOnRestore.put(storeFactory.name(), reprocessOnRestore);
+        storeNameToReprocessOnRestore.put(storeFactory.name(),
+            reprocessOnRestore ?
+                Optional.of(new ReprocessFactory<>(stateUpdateSupplier, keyDeserializer, valueDeserializer))
+                : Optional.empty());
         nodeToSourceTopics.put(sourceName, Arrays.asList(topics));
         nodeGrouper.add(sourceName);
         nodeFactory.addStateStore(storeFactory.name());

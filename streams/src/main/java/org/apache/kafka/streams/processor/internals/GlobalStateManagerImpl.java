@@ -24,6 +24,7 @@ import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
+import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.utils.FixedOrderMap;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
@@ -35,6 +36,9 @@ import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
+import org.apache.kafka.streams.processor.api.Processor;
+import org.apache.kafka.streams.processor.api.ProcessorSupplier;
+import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.Task.TaskType;
 import org.apache.kafka.streams.state.internals.OffsetCheckpoint;
 import org.apache.kafka.streams.state.internals.RecordConverter;
@@ -202,18 +206,13 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
         );
 
         try {
-            if (topology.storeNameToReprocessOnRestore().getOrDefault(store.name(), false)) {
-                globalConsumer.assign(topicPartitions);
-                globalConsumer.seekToBeginning(topicPartitions);
-                for (final TopicPartition topicPartition : topicPartitions) {
-                    stateRestoreListener.onRestoreStart(topicPartition, store.name(),
-                        checkpointFileCache.getOrDefault(topicPartition, 0L),
-                        checkpointFileCache.getOrDefault(topicPartition, 0L));
-                    stateRestoreListener.onRestoreEnd(topicPartition, store.name(), 0L);
-                    if (!checkpointFileCache.containsKey(topicPartition)) {
-                        checkpointFileCache.put(topicPartition, 0L);
-                    }
-                }
+            final Optional<InternalTopologyBuilder.ReprocessFactory<?, ?, ?, ?>> reprocessFactory = topology
+                .storeNameToReprocessOnRestore().getOrDefault(store.name(), Optional.empty());
+            if (reprocessFactory.isPresent()) {
+                reprocessState(
+                    topicPartitions,
+                    highWatermarks,
+                    store.name());
             } else {
                 restoreState(
                     stateRestoreCallback,
@@ -248,6 +247,76 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
             topicPartitions.add(new TopicPartition(partition.topic(), partition.partition()));
         }
         return topicPartitions;
+    }
+    @SuppressWarnings("unchecked")
+    private void reprocessState(final List<TopicPartition> topicPartitions,
+                                final Map<TopicPartition, Long> highWatermarks,
+                                final String storeName) {
+        for (final TopicPartition topicPartition : topicPartitions) {
+            long currentDeadline = NO_DEADLINE;
+
+            globalConsumer.assign(Collections.singletonList(topicPartition));
+            long offset;
+            final Long checkpoint = checkpointFileCache.get(topicPartition);
+            if (checkpoint != null) {
+                globalConsumer.seek(topicPartition, checkpoint);
+                offset = checkpoint;
+            } else {
+                globalConsumer.seekToBeginning(Collections.singletonList(topicPartition));
+                offset = getGlobalConsumerOffset(topicPartition);
+            }
+            final Long highWatermark = highWatermarks.get(topicPartition);
+            stateRestoreListener.onRestoreStart(topicPartition, storeName, offset, highWatermark);
+
+            long restoreCount = 0L;
+
+            while (offset < highWatermark) {
+                // we add `request.timeout.ms` to `poll.ms` because `poll.ms` might be too short
+                // to give a fetch request a fair chance to actually complete and we don't want to
+                // start `task.timeout.ms` too early
+                //
+                // TODO with https://issues.apache.org/jira/browse/KAFKA-10315 we can just call
+                //      `poll(pollMS)` without adding the request timeout and do a more precise
+                //      timeout handling
+                final ConsumerRecords<byte[], byte[]> records = globalConsumer.poll(pollMsPlusRequestTimeout);
+                if (records.isEmpty()) {
+                    currentDeadline = maybeUpdateDeadlineOrThrow(currentDeadline);
+                } else {
+                    currentDeadline = NO_DEADLINE;
+                }
+
+                for (final ConsumerRecord<byte[], byte[]> record : records.records(topicPartition)) {
+
+                    final SourceNode<Object, Object> source = (SourceNode<Object, Object>) topology.source(topicPartition.topic());
+                    final ProcessorRecordContext recordContext =
+                        new ProcessorRecordContext(
+                            record.timestamp(),
+                            record.offset(),
+                            record.partition(),
+                            record.topic(),
+                            record.headers());
+                    globalProcessorContext.setRecordContext(recordContext);
+                    globalProcessorContext.setCurrentNode(source);
+                    source.init(globalProcessorContext);
+
+                    if (record.key() != null) {
+                        source.process(new Record<>(
+                            source.deserializeKey(record.topic(), record.headers(), record.key()),
+                            source.deserializeKey(record.topic(), record.headers(), record.value()),
+                            record.timestamp(),
+                            record.headers()));
+                        restoreCount++;
+                    }
+                }
+
+                offset = getGlobalConsumerOffset(topicPartition);
+
+                stateRestoreListener.onBatchRestored(topicPartition, storeName, offset, restoreCount);
+            }
+            stateRestoreListener.onRestoreEnd(topicPartition, storeName, restoreCount);
+            checkpointFileCache.put(topicPartition, offset);
+
+        }
     }
 
     private void restoreState(final StateRestoreCallback stateRestoreCallback,

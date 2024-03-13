@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.processor.api.ProcessorSupplier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -26,6 +27,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 
 public class ProcessorTopology {
@@ -42,7 +44,7 @@ public class ProcessorTopology {
     // the following contains entries for the entire topology, eg stores that do not belong to this ProcessorTopology
     private final List<StateStore> globalStateStores;
     private final Map<String, String> storeToChangelogTopic;
-    private final Map<String, Boolean> storeNameToReprocessOnRestore;
+    private final Map<String, Optional<InternalTopologyBuilder.ReprocessFactory<?, ?, ?, ?>>> storeNameToReprocessOnRestore;
 
     public ProcessorTopology(final List<ProcessorNode<?, ?, ?, ?>> processorNodes,
                              final Map<String, SourceNode<?, ?>> sourceNodesByTopic,
@@ -51,7 +53,7 @@ public class ProcessorTopology {
                              final List<StateStore> globalStateStores,
                              final Map<String, String> storeToChangelogTopic,
                              final Set<String> repartitionTopics,
-                             final Map<String, Boolean> storeNameToReprocessOnRestore) {
+                             final Map<String, Optional<InternalTopologyBuilder.ReprocessFactory<?, ?, ?, ?>>> storeNameToReprocessOnRestore) {
         this.processorNodes = Collections.unmodifiableList(processorNodes);
         this.sourceNodesByTopic = new HashMap<>(sourceNodesByTopic);
         this.sinksByTopic = Collections.unmodifiableMap(sinksByTopic);
@@ -106,7 +108,7 @@ public class ProcessorTopology {
         return stateStores;
     }
 
-    public Map<String, Boolean> storeNameToReprocessOnRestore() {
+    public Map<String, Optional<InternalTopologyBuilder.ReprocessFactory<?, ?, ?, ?>>> storeNameToReprocessOnRestore() {
         return storeNameToReprocessOnRestore;
     }
 
