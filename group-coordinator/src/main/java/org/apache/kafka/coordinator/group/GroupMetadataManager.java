@@ -579,13 +579,11 @@ public class GroupMetadataManager {
     }
 
     /**
-     * Gets or maybe creates a consumer group.
+     * Gets or maybe creates a consumer group without updating the groups map.
      *
      * @param groupId           The group id.
      * @param createIfNotExists A boolean indicating whether the group should be
      *                          created if it does not exist.
-     * @param addToGroupsMap    A boolean indicating whether the newly created group
-     *                          should be added to the groups map.
      *
      * @return A ConsumerGroup.
      * @throws GroupIdNotFoundException if the group does not exist and createIfNotExists is false or
@@ -595,8 +593,7 @@ public class GroupMetadataManager {
      */
     ConsumerGroup getOrMaybeCreateConsumerGroup(
         String groupId,
-        boolean createIfNotExists,
-        boolean addToGroupsMap
+        boolean createIfNotExists
     ) throws GroupIdNotFoundException {
         Group group = groups.get(groupId);
 
@@ -606,10 +603,6 @@ public class GroupMetadataManager {
 
         if (group == null) {
             ConsumerGroup consumerGroup = new ConsumerGroup(snapshotRegistry, groupId, metrics);
-            if (addToGroupsMap) {
-                groups.put(groupId, consumerGroup);
-                metrics.onConsumerGroupStateTransition(null, consumerGroup.state());
-            }
             return consumerGroup;
         } else {
             if (group.type() == CONSUMER) {
@@ -623,13 +616,32 @@ public class GroupMetadataManager {
     }
 
     /**
-     * an overloaded method of {@link #getOrMaybeCreateConsumerGroup(String, boolean, boolean)}
+     * Gets or maybe creates a consumer group. Updates the groups map if a new group is created.
+     *
+     * @param groupId           The group id.
+     *
+     * @return A ConsumerGroup.
+     * @throws GroupIdNotFoundException if the group does not exist and createIfNotExists is false or
+     *                                  if the group is not a consumer group.
      */
-    ConsumerGroup getOrMaybeCreateConsumerGroup(
-        String groupId,
-        boolean createIfNotExists
+    private ConsumerGroup maybeCreateAndUpdateConsumerGroup(
+        String groupId
     ) throws GroupIdNotFoundException {
-        return getOrMaybeCreateConsumerGroup(groupId, createIfNotExists, false);
+        Group group = groups.get(groupId);
+        if (group == null) {
+            ConsumerGroup consumerGroup = new ConsumerGroup(snapshotRegistry, groupId, metrics);
+            groups.put(groupId, consumerGroup);
+            metrics.onConsumerGroupStateTransition(null, consumerGroup.state());
+            return consumerGroup;
+        } else {
+            if (group.type() == CONSUMER) {
+                return (ConsumerGroup) group;
+            } else {
+                // We don't support upgrading/downgrading between protocols at the moment so
+                // we throw an exception if a group exists with the wrong type.
+                throw new GroupIdNotFoundException(String.format("Group %s is not a consumer group.", groupId));
+            }
+        }
     }
 
     /**
@@ -1526,7 +1538,12 @@ public class GroupMetadataManager {
         String groupId = key.groupId();
         String memberId = key.memberId();
 
-        ConsumerGroup consumerGroup = getOrMaybeCreateConsumerGroup(groupId, value != null, true);
+        ConsumerGroup consumerGroup;
+        if (value != null) {
+            consumerGroup = maybeCreateAndUpdateConsumerGroup(groupId);
+        } else {
+            consumerGroup = getOrMaybeCreateConsumerGroup(groupId, false);
+        }
         Set<String> oldSubscribedTopicNames = new HashSet<>(consumerGroup.subscribedTopicNames());
 
         if (value != null) {
@@ -1638,7 +1655,7 @@ public class GroupMetadataManager {
         String groupId = key.groupId();
 
         if (value != null) {
-            ConsumerGroup consumerGroup = getOrMaybeCreateConsumerGroup(groupId, true, true);
+            ConsumerGroup consumerGroup = maybeCreateAndUpdateConsumerGroup(groupId);
             consumerGroup.setGroupEpoch(value.epoch());
         } else {
             ConsumerGroup consumerGroup = getOrMaybeCreateConsumerGroup(groupId, false);
