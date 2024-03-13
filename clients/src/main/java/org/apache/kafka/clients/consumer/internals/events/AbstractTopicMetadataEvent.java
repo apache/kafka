@@ -17,25 +17,14 @@
 package org.apache.kafka.clients.consumer.internals.events;
 
 import org.apache.kafka.common.PartitionInfo;
+import org.apache.kafka.common.utils.Timer;
 
 import java.util.List;
 import java.util.Map;
 
 public abstract class AbstractTopicMetadataEvent extends CompletableApplicationEvent<Map<String, List<PartitionInfo>>> {
 
-    private final long timeoutMs;
-
-    protected AbstractTopicMetadataEvent(final Type type, final long timeoutMs) {
-        super(type);
-        this.timeoutMs = timeoutMs;
-    }
-
-    public long timeoutMs() {
-        return timeoutMs;
-    }
-
-    @Override
-    public String toStringBase() {
-        return super.toStringBase() + ", timeoutMs=" + timeoutMs;
+    protected AbstractTopicMetadataEvent(final Type type, final Timer timer) {
+        super(type, timer);
     }
 }

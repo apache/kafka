@@ -149,12 +149,20 @@
               files="(DistributedHerder|Worker)Test.java"/>
 
     <suppress checks="ClassFanOutComplexity"
+<<<<<<< HEAD
               files="(WorkerSource|AbstractWorkerSource|ExactlyOnceWorkerSource|ErrorHandling)TaskTest.java"/>
+=======
+              files="(WorkerSink|WorkerSource|ErrorHandling)Task(|WithTopicCreation|Mockito)Test.java"/>
+>>>>>>> upstream/trunk
     <suppress checks="ClassFanOutComplexity"
               files="(DistributedHerder|Worker)Test.java"/>
 
     <suppress checks="MethodLength"
+<<<<<<< HEAD
               files="WorkerSinkTaskTest.java"/>
+=======
+              files="(RequestResponse|WorkerSinkTask|WorkerSinkTaskMockito)Test.java"/>
+>>>>>>> upstream/trunk
 
     <suppress checks="JavaNCSS"
               files="(DistributedHerder|Worker)Test.java"/>
@@ -201,7 +209,11 @@
 
     <!-- Streams tests -->
     <suppress checks="ClassFanOutComplexity"
+<<<<<<< HEAD
               files="(RecordCollectorTest|StreamsPartitionAssignorTest|StreamThreadTest|StreamTaskTest|TaskManagerTest|KafkaStreamsTest|EosIntegrationTest).java"/>
+=======
+              files="(RecordCollectorTest|StreamsPartitionAssignorTest|StreamThreadTest|StreamTaskTest|TaskManagerTest|TopologyTestDriverTest|KafkaStreamsTest|EosIntegrationTest|RestoreIntegrationTest).java"/>
+>>>>>>> upstream/trunk
 
     <suppress checks="MethodLength"
               files="(EosIntegrationTest|EosV2UpgradeIntegrationTest|KStreamKStreamJoinTest|RocksDBWindowStoreTest|IQv2IntegrationTest).java"/>

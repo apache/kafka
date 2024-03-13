@@ -16,6 +16,46 @@
  */
 package org.apache.kafka.connect.runtime;
 
+import static java.util.Arrays.asList;
+import static java.util.Collections.singleton;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotEquals;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertSame;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.anyMap;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.atLeastOnce;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+import java.time.Duration;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Function;
+import java.util.function.Supplier;
+import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
@@ -36,6 +76,7 @@ import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaAndValue;
+import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.errors.RetriableException;
 import org.apache.kafka.connect.runtime.ConnectMetrics.MetricGroup;
 import org.apache.kafka.connect.runtime.WorkerSinkTask.SinkTaskMetricsGroup;
@@ -68,41 +109,6 @@ import org.mockito.junit.MockitoRule;
 import org.mockito.quality.Strictness;
 import org.mockito.stubbing.Answer;
 import org.mockito.stubbing.OngoingStubbing;
-
-import java.time.Duration;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-import java.util.Set;
-import java.util.function.Supplier;
-import java.util.regex.Pattern;
-
-import static java.util.Arrays.asList;
-import static java.util.Collections.singleton;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotEquals;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyList;
-import static org.mockito.ArgumentMatchers.anyMap;
-import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.atLeastOnce;
-import static org.mockito.Mockito.doAnswer;
-import static org.mockito.Mockito.doThrow;
-import static org.mockito.Mockito.times;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
 
 @RunWith(MockitoJUnitRunner.StrictStubs.class)
 public class WorkerSinkTaskMockitoTest {
@@ -371,9 +377,9 @@ public class WorkerSinkTaskMockitoTest {
                 .thenAnswer(expectConsumerPoll(0));
         expectConversionAndTransformation(null, new RecordHeaders());
 
-        doAnswer(invocation -> null)
+        doNothing()
                 .doThrow(new RetriableException("retry"))
-                .doAnswer(invocation -> null)
+                .doNothing()
                 .when(sinkTask).put(anyList());
 
         workerTask.iteration();
@@ -445,6 +451,86 @@ public class WorkerSinkTaskMockitoTest {
 
         verify(sinkTask, times(4)).put(anyList());
         assertSinkMetricValue("offset-commit-completion-total", 1.0);
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    public void testPollRedeliveryWithConsumerRebalance() {
+        createTask(initialState);
+        expectTaskGetTopic();
+
+        workerTask.initialize(TASK_CONFIG);
+        workerTask.initializeAndStart();
+        verifyInitializeTask();
+
+        Set<TopicPartition> newAssignment = new HashSet<>(Arrays.asList(TOPIC_PARTITION, TOPIC_PARTITION2, TOPIC_PARTITION3));
+
+        when(consumer.assignment())
+                .thenReturn(INITIAL_ASSIGNMENT, INITIAL_ASSIGNMENT, INITIAL_ASSIGNMENT)
+                .thenReturn(newAssignment, newAssignment, newAssignment)
+                .thenReturn(Collections.singleton(TOPIC_PARTITION3),
+                        Collections.singleton(TOPIC_PARTITION3),
+                        Collections.singleton(TOPIC_PARTITION3));
+
+        INITIAL_ASSIGNMENT.forEach(tp -> when(consumer.position(tp)).thenReturn(FIRST_OFFSET));
+        when(consumer.position(TOPIC_PARTITION3)).thenReturn(FIRST_OFFSET);
+
+        when(consumer.poll(any(Duration.class)))
+                .thenAnswer((Answer<ConsumerRecords<byte[], byte[]>>) invocation -> {
+                    rebalanceListener.getValue().onPartitionsAssigned(INITIAL_ASSIGNMENT);
+                    return ConsumerRecords.empty();
+                })
+                .thenAnswer(expectConsumerPoll(1))
+                // Empty consumer poll (all partitions are paused) with rebalance; one new partition is assigned
+                .thenAnswer(invocation -> {
+                    rebalanceListener.getValue().onPartitionsRevoked(Collections.emptySet());
+                    rebalanceListener.getValue().onPartitionsAssigned(Collections.singleton(TOPIC_PARTITION3));
+                    return ConsumerRecords.empty();
+                })
+                .thenAnswer(expectConsumerPoll(0))
+                // Non-empty consumer poll; all initially-assigned partitions are revoked in rebalance, and new partitions are allowed to resume
+                .thenAnswer(invocation -> {
+                    ConsumerRecord<byte[], byte[]> newRecord = new ConsumerRecord<>(TOPIC, PARTITION3, FIRST_OFFSET, RAW_KEY, RAW_VALUE);
+
+                    rebalanceListener.getValue().onPartitionsRevoked(INITIAL_ASSIGNMENT);
+                    rebalanceListener.getValue().onPartitionsAssigned(Collections.emptyList());
+                    return new ConsumerRecords<>(Collections.singletonMap(TOPIC_PARTITION3, Collections.singletonList(newRecord)));
+                });
+        expectConversionAndTransformation(null, new RecordHeaders());
+
+        doNothing()
+                // If a retriable exception is thrown, we should redeliver the same batch, pausing the consumer in the meantime
+                .doThrow(new RetriableException("retry"))
+                .doThrow(new RetriableException("retry"))
+                .doThrow(new RetriableException("retry"))
+                .doNothing()
+                .when(sinkTask).put(any(Collection.class));
+
+        workerTask.iteration();
+
+        // Pause
+        workerTask.iteration();
+        verify(consumer).pause(INITIAL_ASSIGNMENT);
+
+        workerTask.iteration();
+        verify(sinkTask).open(Collections.singleton(TOPIC_PARTITION3));
+        // All partitions are re-paused in order to pause any newly-assigned partitions so that redelivery efforts can continue
+        verify(consumer).pause(newAssignment);
+
+        workerTask.iteration();
+
+        final Map<TopicPartition, OffsetAndMetadata> offsets = INITIAL_ASSIGNMENT.stream()
+                .collect(Collectors.toMap(Function.identity(), tp -> new OffsetAndMetadata(FIRST_OFFSET)));
+        when(sinkTask.preCommit(offsets)).thenReturn(offsets);
+        newAssignment = Collections.singleton(TOPIC_PARTITION3);
+
+        workerTask.iteration();
+        verify(sinkTask).close(INITIAL_ASSIGNMENT);
+
+        // All partitions are resumed, as all previously paused-for-redelivery partitions were revoked
+        newAssignment.forEach(tp -> {
+            verify(consumer).resume(Collections.singleton(tp));
+        });
     }
 
     @Test
@@ -601,6 +687,544 @@ public class WorkerSinkTaskMockitoTest {
         verify(sinkTask, times(4)).put(Collections.emptyList());
     }
 
+    @Test
+    @SuppressWarnings("unchecked")
+    public void testPreCommitFailureAfterPartialRevocationAndAssignment() {
+        createTask(initialState);
+        expectTaskGetTopic();
+
+        workerTask.initialize(TASK_CONFIG);
+        workerTask.initializeAndStart();
+        verifyInitializeTask();
+
+        when(consumer.assignment())
+                .thenReturn(INITIAL_ASSIGNMENT, INITIAL_ASSIGNMENT)
+                .thenReturn(new HashSet<>(Arrays.asList(TOPIC_PARTITION2)))
+                .thenReturn(new HashSet<>(Arrays.asList(TOPIC_PARTITION2)))
+                .thenReturn(new HashSet<>(Arrays.asList(TOPIC_PARTITION2)))
+                .thenReturn(new HashSet<>(Arrays.asList(TOPIC_PARTITION2, TOPIC_PARTITION3)))
+                .thenReturn(new HashSet<>(Arrays.asList(TOPIC_PARTITION2, TOPIC_PARTITION3)))
+                .thenReturn(new HashSet<>(Arrays.asList(TOPIC_PARTITION2, TOPIC_PARTITION3)));
+
+        INITIAL_ASSIGNMENT.forEach(tp -> when(consumer.position(tp)).thenReturn(FIRST_OFFSET));
+        when(consumer.position(TOPIC_PARTITION3)).thenReturn(FIRST_OFFSET);
+
+        // First poll; assignment is [TP1, TP2]
+        when(consumer.poll(any(Duration.class)))
+                .thenAnswer((Answer<ConsumerRecords<byte[], byte[]>>) invocation -> {
+                    rebalanceListener.getValue().onPartitionsAssigned(INITIAL_ASSIGNMENT);
+                    return ConsumerRecords.empty();
+                })
+                // Second poll; a single record is delivered from TP1
+                .thenAnswer(expectConsumerPoll(1))
+                // Third poll; assignment changes to [TP2]
+                .thenAnswer(invocation -> {
+                    rebalanceListener.getValue().onPartitionsRevoked(Collections.singleton(TOPIC_PARTITION));
+                    rebalanceListener.getValue().onPartitionsAssigned(Collections.emptySet());
+                    return ConsumerRecords.empty();
+                })
+                // Fourth poll; assignment changes to [TP2, TP3]
+                .thenAnswer(invocation -> {
+                    rebalanceListener.getValue().onPartitionsRevoked(Collections.emptySet());
+                    rebalanceListener.getValue().onPartitionsAssigned(Collections.singleton(TOPIC_PARTITION3));
+                    return ConsumerRecords.empty();
+                })
+                // Fifth poll; an offset commit takes place
+                .thenAnswer(expectConsumerPoll(0));
+
+        expectConversionAndTransformation(null, new RecordHeaders());
+
+        // First iteration--first call to poll, first consumer assignment
+        workerTask.iteration();
+        // Second iteration--second call to poll, delivery of one record
+        workerTask.iteration();
+        // Third iteration--third call to poll, partial consumer revocation
+        final Map<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>();
+        offsets.put(TOPIC_PARTITION, new OffsetAndMetadata(FIRST_OFFSET + 1));
+        when(sinkTask.preCommit(offsets)).thenReturn(offsets);
+        doNothing().when(consumer).commitSync(offsets);
+
+        workerTask.iteration();
+        verify(sinkTask).close(Collections.singleton(TOPIC_PARTITION));
+        verify(sinkTask, times(2)).put(Collections.emptyList());
+
+        // Fourth iteration--fourth call to poll, partial consumer assignment
+        workerTask.iteration();
+
+        verify(sinkTask).open(Collections.singleton(TOPIC_PARTITION3));
+
+        final Map<TopicPartition, OffsetAndMetadata> workerCurrentOffsets = new HashMap<>();
+        workerCurrentOffsets.put(TOPIC_PARTITION2, new OffsetAndMetadata(FIRST_OFFSET));
+        workerCurrentOffsets.put(TOPIC_PARTITION3, new OffsetAndMetadata(FIRST_OFFSET));
+        when(sinkTask.preCommit(workerCurrentOffsets)).thenThrow(new ConnectException("Failed to flush"));
+
+        // Fifth iteration--task-requested offset commit with failure in SinkTask::preCommit
+        sinkTaskContext.getValue().requestCommit();
+        workerTask.iteration();
+
+        verify(consumer).seek(TOPIC_PARTITION2, FIRST_OFFSET);
+        verify(consumer).seek(TOPIC_PARTITION3, FIRST_OFFSET);
+    }
+
+    @Test
+    public void testWakeupInCommitSyncCausesRetry() {
+        createTask(initialState);
+
+        workerTask.initialize(TASK_CONFIG);
+        time.sleep(30000L);
+        workerTask.initializeAndStart();
+        time.sleep(30000L);
+        verifyInitializeTask();
+
+        expectTaskGetTopic();
+        expectPollInitialAssignment()
+                .thenAnswer(expectConsumerPoll(1))
+                .thenAnswer(invocation -> {
+                    rebalanceListener.getValue().onPartitionsRevoked(INITIAL_ASSIGNMENT);
+                    rebalanceListener.getValue().onPartitionsAssigned(INITIAL_ASSIGNMENT);
+                    return ConsumerRecords.empty();
+                });
+        expectConversionAndTransformation(null, new RecordHeaders());
+
+        workerTask.iteration(); // poll for initial assignment
+        time.sleep(30000L);
+
+        final Map<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>();
+        offsets.put(TOPIC_PARTITION, new OffsetAndMetadata(FIRST_OFFSET + 1));
+        offsets.put(TOPIC_PARTITION2, new OffsetAndMetadata(FIRST_OFFSET));
+        when(sinkTask.preCommit(offsets)).thenReturn(offsets);
+
+        // first one raises wakeup
+        doThrow(new WakeupException())
+                // and succeed the second time
+                .doNothing()
+                .when(consumer).commitSync(eq(offsets));
+
+        workerTask.iteration(); // first record delivered
+
+        workerTask.iteration(); // now rebalance with the wakeup triggered
+        time.sleep(30000L);
+
+        verify(sinkTask).close(INITIAL_ASSIGNMENT);
+        verify(sinkTask, times(2)).open(INITIAL_ASSIGNMENT);
+
+        INITIAL_ASSIGNMENT.forEach(tp -> {
+            verify(consumer).resume(Collections.singleton(tp));
+        });
+
+        verify(statusListener).onResume(taskId);
+
+        assertSinkMetricValue("partition-count", 2);
+        assertSinkMetricValue("sink-record-read-total", 1.0);
+        assertSinkMetricValue("sink-record-send-total", 1.0);
+        assertSinkMetricValue("sink-record-active-count", 0.0);
+        assertSinkMetricValue("sink-record-active-count-max", 1.0);
+        assertSinkMetricValue("sink-record-active-count-avg", 0.33333);
+        assertSinkMetricValue("offset-commit-seq-no", 1.0);
+        assertSinkMetricValue("offset-commit-completion-total", 1.0);
+        assertSinkMetricValue("offset-commit-skip-total", 0.0);
+        assertTaskMetricValue("status", "running");
+        assertTaskMetricValue("running-ratio", 1.0);
+        assertTaskMetricValue("pause-ratio", 0.0);
+        assertTaskMetricValue("batch-size-max", 1.0);
+        assertTaskMetricValue("batch-size-avg", 1.0);
+        assertTaskMetricValue("offset-commit-max-time-ms", 0.0);
+        assertTaskMetricValue("offset-commit-avg-time-ms", 0.0);
+        assertTaskMetricValue("offset-commit-failure-percentage", 0.0);
+        assertTaskMetricValue("offset-commit-success-percentage", 1.0);
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    public void testWakeupNotThrownDuringShutdown() {
+        createTask(initialState);
+
+        workerTask.initialize(TASK_CONFIG);
+        workerTask.initializeAndStart();
+        verifyInitializeTask();
+
+        expectTaskGetTopic();
+        expectPollInitialAssignment()
+                .thenAnswer(expectConsumerPoll(1))
+                .thenAnswer(invocation -> {
+                    // stop the task during its second iteration
+                    workerTask.stop();
+                    return new ConsumerRecords<>(Collections.emptyMap());
+                });
+        expectConversionAndTransformation(null, new RecordHeaders());
+
+        final Map<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>();
+        offsets.put(TOPIC_PARTITION, new OffsetAndMetadata(FIRST_OFFSET + 1));
+        offsets.put(TOPIC_PARTITION2, new OffsetAndMetadata(FIRST_OFFSET));
+        when(sinkTask.preCommit(offsets)).thenReturn(offsets);
+
+        // fail the first time
+        doThrow(new WakeupException())
+                // and succeed the second time
+                .doNothing()
+                .when(consumer).commitSync(eq(offsets));
+
+        workerTask.execute();
+
+        assertEquals(0, workerTask.commitFailures());
+        verify(consumer).wakeup();
+        verify(sinkTask).close(any(Collection.class));
+    }
+
+    @Test
+    public void testRequestCommit() {
+        createTask(initialState);
+
+        workerTask.initialize(TASK_CONFIG);
+        workerTask.initializeAndStart();
+        verifyInitializeTask();
+
+        expectTaskGetTopic();
+        expectPollInitialAssignment()
+                .thenAnswer(expectConsumerPoll(1))
+                .thenAnswer(expectConsumerPoll(0));
+        expectConversionAndTransformation(null, new RecordHeaders());
+
+        // Initial assignment
+        time.sleep(30000L);
+        workerTask.iteration();
+        assertSinkMetricValue("partition-count", 2);
+
+        final Map<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>();
+        offsets.put(TOPIC_PARTITION, new OffsetAndMetadata(FIRST_OFFSET + 1));
+        offsets.put(TOPIC_PARTITION2, new OffsetAndMetadata(FIRST_OFFSET));
+        when(sinkTask.preCommit(offsets)).thenReturn(offsets);
+
+        // First record delivered
+        workerTask.iteration();
+        assertSinkMetricValue("partition-count", 2);
+        assertSinkMetricValue("sink-record-read-total", 1.0);
+        assertSinkMetricValue("sink-record-send-total", 1.0);
+        assertSinkMetricValue("sink-record-active-count", 1.0);
+        assertSinkMetricValue("sink-record-active-count-max", 1.0);
+        assertSinkMetricValue("sink-record-active-count-avg", 0.333333);
+        assertSinkMetricValue("offset-commit-seq-no", 0.0);
+        assertSinkMetricValue("offset-commit-completion-total", 0.0);
+        assertSinkMetricValue("offset-commit-skip-total", 0.0);
+        assertTaskMetricValue("status", "running");
+        assertTaskMetricValue("running-ratio", 1.0);
+        assertTaskMetricValue("pause-ratio", 0.0);
+        assertTaskMetricValue("batch-size-max", 1.0);
+        assertTaskMetricValue("batch-size-avg", 0.5);
+        assertTaskMetricValue("offset-commit-failure-percentage", 0.0);
+        assertTaskMetricValue("offset-commit-success-percentage", 0.0);
+
+        // Grab the commit time prior to requesting a commit.
+        // This time should advance slightly after committing.
+        // KAFKA-8229
+        final long previousCommitValue = workerTask.getNextCommit();
+        sinkTaskContext.getValue().requestCommit();
+        assertTrue(sinkTaskContext.getValue().isCommitRequested());
+        assertNotEquals(offsets, workerTask.lastCommittedOffsets());
+
+        ArgumentCaptor<OffsetCommitCallback> callback = ArgumentCaptor.forClass(OffsetCommitCallback.class);
+        time.sleep(10000L);
+        workerTask.iteration(); // triggers the commit
+        verify(consumer).commitAsync(eq(offsets), callback.capture());
+        callback.getValue().onComplete(offsets, null);
+        time.sleep(10000L);
+
+        assertFalse(sinkTaskContext.getValue().isCommitRequested()); // should have been cleared
+        assertEquals(offsets, workerTask.lastCommittedOffsets());
+        assertEquals(0, workerTask.commitFailures());
+
+        // Assert the next commit time advances slightly, the amount it advances
+        // is the normal commit time less the two sleeps since it started each
+        // of those sleeps were 10 seconds.
+        // KAFKA-8229
+        assertEquals("Should have only advanced by 40 seconds",
+                previousCommitValue  +
+                        (WorkerConfig.OFFSET_COMMIT_INTERVAL_MS_DEFAULT - 10000L * 2),
+                workerTask.getNextCommit());
+
+        assertSinkMetricValue("partition-count", 2);
+        assertSinkMetricValue("sink-record-read-total", 1.0);
+        assertSinkMetricValue("sink-record-send-total", 1.0);
+        assertSinkMetricValue("sink-record-active-count", 0.0);
+        assertSinkMetricValue("sink-record-active-count-max", 1.0);
+        assertSinkMetricValue("sink-record-active-count-avg", 0.2);
+        assertSinkMetricValue("offset-commit-seq-no", 1.0);
+        assertSinkMetricValue("offset-commit-completion-total", 1.0);
+        assertSinkMetricValue("offset-commit-skip-total", 0.0);
+        assertTaskMetricValue("status", "running");
+        assertTaskMetricValue("running-ratio", 1.0);
+        assertTaskMetricValue("pause-ratio", 0.0);
+        assertTaskMetricValue("batch-size-max", 1.0);
+        assertTaskMetricValue("batch-size-avg", 0.33333);
+        assertTaskMetricValue("offset-commit-max-time-ms", 0.0);
+        assertTaskMetricValue("offset-commit-avg-time-ms", 0.0);
+        assertTaskMetricValue("offset-commit-failure-percentage", 0.0);
+        assertTaskMetricValue("offset-commit-success-percentage", 1.0);
+    }
+
+    @Test
+    public void testPreCommit() {
+        createTask(initialState);
+
+        workerTask.initialize(TASK_CONFIG);
+        workerTask.initializeAndStart();
+        verifyInitializeTask();
+
+        expectTaskGetTopic();
+        expectPollInitialAssignment()
+                .thenAnswer(expectConsumerPoll(2))
+                .thenAnswer(expectConsumerPoll(0));
+        expectConversionAndTransformation(null, new RecordHeaders());
+
+        workerTask.iteration(); // iter 1 -- initial assignment
+
+        final Map<TopicPartition, OffsetAndMetadata> workerStartingOffsets = new HashMap<>();
+        workerStartingOffsets.put(TOPIC_PARTITION, new OffsetAndMetadata(FIRST_OFFSET));
+        workerStartingOffsets.put(TOPIC_PARTITION2, new OffsetAndMetadata(FIRST_OFFSET));
+
+        assertEquals(workerStartingOffsets, workerTask.currentOffsets());
+
+        final Map<TopicPartition, OffsetAndMetadata> workerCurrentOffsets = new HashMap<>();
+        workerCurrentOffsets.put(TOPIC_PARTITION, new OffsetAndMetadata(FIRST_OFFSET + 2));
+        workerCurrentOffsets.put(TOPIC_PARTITION2, new OffsetAndMetadata(FIRST_OFFSET));
+
+        final Map<TopicPartition, OffsetAndMetadata> taskOffsets = new HashMap<>();
+        taskOffsets.put(TOPIC_PARTITION, new OffsetAndMetadata(FIRST_OFFSET + 1)); // act like FIRST_OFFSET+2 has not yet been flushed by the task
+        taskOffsets.put(TOPIC_PARTITION2, new OffsetAndMetadata(FIRST_OFFSET + 1)); // should be ignored because > current offset
+        taskOffsets.put(new TopicPartition(TOPIC, 3), new OffsetAndMetadata(FIRST_OFFSET)); // should be ignored because this partition is not assigned
+
+        when(sinkTask.preCommit(workerCurrentOffsets)).thenReturn(taskOffsets);
+
+        workerTask.iteration(); // iter 2 -- deliver 2 records
+
+        final Map<TopicPartition, OffsetAndMetadata> committableOffsets = new HashMap<>();
+        committableOffsets.put(TOPIC_PARTITION, new OffsetAndMetadata(FIRST_OFFSET + 1));
+        committableOffsets.put(TOPIC_PARTITION2, new OffsetAndMetadata(FIRST_OFFSET));
+
+        assertEquals(workerCurrentOffsets, workerTask.currentOffsets());
+        assertEquals(workerStartingOffsets, workerTask.lastCommittedOffsets());
+
+        sinkTaskContext.getValue().requestCommit();
+        workerTask.iteration(); // iter 3 -- commit
+
+        // Expect extra invalid topic partition to be filtered, which causes the consumer assignment to be logged
+        ArgumentCaptor<OffsetCommitCallback> callback = ArgumentCaptor.forClass(OffsetCommitCallback.class);
+        verify(consumer).commitAsync(eq(committableOffsets), callback.capture());
+        callback.getValue().onComplete(committableOffsets, null);
+
+        assertEquals(committableOffsets, workerTask.lastCommittedOffsets());
+    }
+
+    @Test
+    public void testPreCommitFailure() {
+        createTask(initialState);
+
+        workerTask.initialize(TASK_CONFIG);
+        workerTask.initializeAndStart();
+        verifyInitializeTask();
+
+        expectTaskGetTopic();
+        expectPollInitialAssignment()
+                // Put one message through the task to get some offsets to commit
+                .thenAnswer(expectConsumerPoll(2))
+                .thenAnswer(expectConsumerPoll(0));
+
+        expectConversionAndTransformation(null, new RecordHeaders());
+
+        workerTask.iteration(); // iter 1 -- initial assignment
+
+        workerTask.iteration(); // iter 2 -- deliver 2 records
+
+        // iter 3
+        final Map<TopicPartition, OffsetAndMetadata> workerCurrentOffsets = new HashMap<>();
+        workerCurrentOffsets.put(TOPIC_PARTITION, new OffsetAndMetadata(FIRST_OFFSET + 2));
+        workerCurrentOffsets.put(TOPIC_PARTITION2, new OffsetAndMetadata(FIRST_OFFSET));
+        when(sinkTask.preCommit(workerCurrentOffsets)).thenThrow(new ConnectException("Failed to flush"));
+
+        sinkTaskContext.getValue().requestCommit();
+        workerTask.iteration(); // iter 3 -- commit
+
+        verify(consumer).seek(TOPIC_PARTITION, FIRST_OFFSET);
+        verify(consumer).seek(TOPIC_PARTITION2, FIRST_OFFSET);
+    }
+
+    @Test
+    public void testIgnoredCommit() {
+        createTask(initialState);
+
+        workerTask.initialize(TASK_CONFIG);
+        workerTask.initializeAndStart();
+        verifyInitializeTask();
+
+        expectTaskGetTopic();
+        // iter 1
+        expectPollInitialAssignment()
+                // iter 2
+                .thenAnswer(expectConsumerPoll(1))
+                .thenAnswer(expectConsumerPoll(0));
+
+        expectConversionAndTransformation(null, new RecordHeaders());
+
+        workerTask.iteration(); // iter 1 -- initial assignment
+
+        final Map<TopicPartition, OffsetAndMetadata> workerStartingOffsets = new HashMap<>();
+        workerStartingOffsets.put(TOPIC_PARTITION, new OffsetAndMetadata(FIRST_OFFSET));
+        workerStartingOffsets.put(TOPIC_PARTITION2, new OffsetAndMetadata(FIRST_OFFSET));
+
+        assertEquals(workerStartingOffsets, workerTask.currentOffsets());
+        assertEquals(workerStartingOffsets, workerTask.lastCommittedOffsets());
+
+        workerTask.iteration(); // iter 2 -- deliver 2 records
+
+    // iter 3
+        final Map<TopicPartition, OffsetAndMetadata> workerCurrentOffsets = new HashMap<>();
+        workerCurrentOffsets.put(TOPIC_PARTITION, new OffsetAndMetadata(FIRST_OFFSET + 1));
+        workerCurrentOffsets.put(TOPIC_PARTITION2, new OffsetAndMetadata(FIRST_OFFSET));
+
+        when(sinkTask.preCommit(workerCurrentOffsets)).thenReturn(workerStartingOffsets);
+
+        sinkTaskContext.getValue().requestCommit();
+        // no actual consumer.commit() triggered
+        workerTask.iteration(); // iter 3 -- commit
+    }
+
+    // Test that the commitTimeoutMs timestamp is correctly computed and checked in WorkerSinkTask.iteration()
+    // when there is a long running commit in process. See KAFKA-4942 for more information.
+    @Test
+    public void testLongRunningCommitWithoutTimeout() throws InterruptedException {
+        createTask(initialState);
+
+        workerTask.initialize(TASK_CONFIG);
+        workerTask.initializeAndStart();
+        verifyInitializeTask();
+
+        expectTaskGetTopic();
+        expectPollInitialAssignment()
+                .thenAnswer(expectConsumerPoll(1))
+                // no actual consumer.commit() triggered
+                .thenAnswer(expectConsumerPoll(0));
+        expectConversionAndTransformation(null, new RecordHeaders());
+
+        final Map<TopicPartition, OffsetAndMetadata> workerStartingOffsets = new HashMap<>();
+        workerStartingOffsets.put(TOPIC_PARTITION, new OffsetAndMetadata(FIRST_OFFSET));
+        workerStartingOffsets.put(TOPIC_PARTITION2, new OffsetAndMetadata(FIRST_OFFSET));
+
+        workerTask.iteration(); // iter 1 -- initial assignment
+        assertEquals(workerStartingOffsets, workerTask.currentOffsets());
+        assertEquals(workerStartingOffsets, workerTask.lastCommittedOffsets());
+
+        time.sleep(WorkerConfig.OFFSET_COMMIT_TIMEOUT_MS_DEFAULT);
+        workerTask.iteration(); // iter 2 -- deliver 2 records
+
+        final Map<TopicPartition, OffsetAndMetadata> workerCurrentOffsets = new HashMap<>();
+        workerCurrentOffsets.put(TOPIC_PARTITION, new OffsetAndMetadata(FIRST_OFFSET + 1));
+        workerCurrentOffsets.put(TOPIC_PARTITION2, new OffsetAndMetadata(FIRST_OFFSET));
+
+        // iter 3 - note that we return the current offset to indicate they should be committed
+        when(sinkTask.preCommit(workerCurrentOffsets)).thenReturn(workerCurrentOffsets);
+
+        sinkTaskContext.getValue().requestCommit();
+        workerTask.iteration(); // iter 3 -- commit in progress
+
+        // Make sure the "committing" flag didn't immediately get flipped back to false due to an incorrect timeout
+        assertTrue("Expected worker to be in the process of committing offsets", workerTask.isCommitting());
+
+        // Delay the result of trying to commit offsets to Kafka via the consumer.commitAsync method.
+        ArgumentCaptor<OffsetCommitCallback> offsetCommitCallbackArgumentCaptor =
+            ArgumentCaptor.forClass(OffsetCommitCallback.class);
+        verify(consumer).commitAsync(eq(workerCurrentOffsets), offsetCommitCallbackArgumentCaptor.capture());
+
+        final OffsetCommitCallback callback = offsetCommitCallbackArgumentCaptor.getValue();
+        callback.onComplete(workerCurrentOffsets, null);
+
+        assertEquals(workerCurrentOffsets, workerTask.currentOffsets());
+        assertEquals(workerCurrentOffsets, workerTask.lastCommittedOffsets());
+        assertFalse(workerTask.isCommitting());
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    public void testSinkTasksHandleCloseErrors() {
+        createTask(initialState);
+
+        workerTask.initialize(TASK_CONFIG);
+        workerTask.initializeAndStart();
+        verifyInitializeTask();
+
+        expectTaskGetTopic();
+        expectPollInitialAssignment()
+                // Put one message through the task to get some offsets to commit
+                .thenAnswer(expectConsumerPoll(1))
+                .thenAnswer(expectConsumerPoll(1));
+
+        expectConversionAndTransformation(null, new RecordHeaders());
+
+        doNothing()
+                .doAnswer(invocation -> {
+                    workerTask.stop();
+                    return null;
+                })
+                .when(sinkTask).put(anyList());
+
+        Throwable closeException = new RuntimeException();
+        when(sinkTask.preCommit(anyMap())).thenReturn(Collections.emptyMap());
+
+        // Throw another exception while closing the task's assignment
+        doThrow(closeException).when(sinkTask).close(any(Collection.class));
+
+        try {
+            workerTask.execute();
+            fail("workerTask.execute should have thrown an exception");
+        } catch (RuntimeException e) {
+            assertSame("Exception from close should propagate as-is", closeException, e);
+        }
+
+        verify(consumer).wakeup();
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    public void testSuppressCloseErrors() {
+        createTask(initialState);
+
+        workerTask.initialize(TASK_CONFIG);
+        workerTask.initializeAndStart();
+        verifyInitializeTask();
+
+        expectTaskGetTopic();
+        expectPollInitialAssignment()
+                // Put one message through the task to get some offsets to commit
+                .thenAnswer(expectConsumerPoll(1))
+                .thenAnswer(expectConsumerPoll(1));
+
+        expectConversionAndTransformation(null, new RecordHeaders());
+
+        Throwable putException = new RuntimeException();
+        Throwable closeException = new RuntimeException();
+
+        doNothing()
+                // Throw an exception on the next put to trigger shutdown behavior
+                // This exception is the true "cause" of the failure
+                .doThrow(putException)
+                .when(sinkTask).put(anyList());
+
+        when(sinkTask.preCommit(anyMap())).thenReturn(Collections.emptyMap());
+
+        // Throw another exception while closing the task's assignment
+        doThrow(closeException).when(sinkTask).close(any(Collection.class));
+
+        workerTask.initialize(TASK_CONFIG);
+        workerTask.initializeAndStart();
+        try {
+            workerTask.execute();
+            fail("workerTask.execute should have thrown an exception");
+        } catch (ConnectException e) {
+            assertSame("Exception from put should be the cause", putException, e.getCause());
+            assertTrue("Exception from close should be suppressed", e.getSuppressed().length > 0);
+            assertSame(closeException, e.getSuppressed()[0]);
+        }
+    }
+
     @SuppressWarnings("unchecked")
     @Test
     public void testTaskCancelPreventsFinalOffsetCommit() {
@@ -619,8 +1243,8 @@ public class WorkerSinkTaskMockitoTest {
 
         expectConversionAndTransformation(null, new RecordHeaders());
 
-        doAnswer(invocation -> null)
-                .doAnswer(invocation -> null)
+        doNothing()
+                .doNothing()
                 .doAnswer(invocation -> {
                     workerTask.stop();
                     workerTask.cancel();
@@ -640,6 +1264,219 @@ public class WorkerSinkTaskMockitoTest {
         verify(consumer).wakeup();
 
         verify(sinkTask).close(any());
+    }
+
+    // Verify that when commitAsync is called but the supplied callback is not called by the consumer before a
+    // rebalance occurs, the async callback does not reset the last committed offset from the rebalance.
+    // See KAFKA-5731 for more information.
+    @Test
+    public void testCommitWithOutOfOrderCallback() {
+        createTask(initialState);
+
+        workerTask.initialize(TASK_CONFIG);
+        workerTask.initializeAndStart();
+        verifyInitializeTask();
+
+        // iter 1
+        Answer<ConsumerRecords<byte[], byte[]>> consumerPollRebalance = invocation -> {
+            rebalanceListener.getValue().onPartitionsAssigned(INITIAL_ASSIGNMENT);
+            return ConsumerRecords.empty();
+        };
+
+        // iter 2
+        expectTaskGetTopic();
+        expectConversionAndTransformation(null, new RecordHeaders());
+
+        final Map<TopicPartition, OffsetAndMetadata> workerStartingOffsets = new HashMap<>();
+        workerStartingOffsets.put(TOPIC_PARTITION, new OffsetAndMetadata(FIRST_OFFSET));
+        workerStartingOffsets.put(TOPIC_PARTITION2, new OffsetAndMetadata(FIRST_OFFSET));
+
+        final Map<TopicPartition, OffsetAndMetadata> workerCurrentOffsets = new HashMap<>();
+        workerCurrentOffsets.put(TOPIC_PARTITION, new OffsetAndMetadata(FIRST_OFFSET + 1));
+        workerCurrentOffsets.put(TOPIC_PARTITION2, new OffsetAndMetadata(FIRST_OFFSET));
+
+        final List<TopicPartition> originalPartitions = new ArrayList<>(INITIAL_ASSIGNMENT);
+        final List<TopicPartition> rebalancedPartitions = asList(TOPIC_PARTITION, TOPIC_PARTITION2, TOPIC_PARTITION3);
+        final Map<TopicPartition, OffsetAndMetadata> rebalanceOffsets = new HashMap<>();
+        rebalanceOffsets.put(TOPIC_PARTITION, workerCurrentOffsets.get(TOPIC_PARTITION));
+        rebalanceOffsets.put(TOPIC_PARTITION2, workerCurrentOffsets.get(TOPIC_PARTITION2));
+        rebalanceOffsets.put(TOPIC_PARTITION3, new OffsetAndMetadata(FIRST_OFFSET));
+
+        final Map<TopicPartition, OffsetAndMetadata> postRebalanceCurrentOffsets = new HashMap<>();
+        postRebalanceCurrentOffsets.put(TOPIC_PARTITION, new OffsetAndMetadata(FIRST_OFFSET + 3));
+        postRebalanceCurrentOffsets.put(TOPIC_PARTITION2, new OffsetAndMetadata(FIRST_OFFSET));
+        postRebalanceCurrentOffsets.put(TOPIC_PARTITION3, new OffsetAndMetadata(FIRST_OFFSET + 2));
+
+        // iter 3 - note that we return the current offset to indicate they should be committed
+        when(sinkTask.preCommit(workerCurrentOffsets)).thenReturn(workerCurrentOffsets);
+
+        // We need to delay the result of trying to commit offsets to Kafka via the consumer.commitAsync
+        // method. We do this so that we can test that the callback is not called until after the rebalance
+        // changes the lastCommittedOffsets. To fake this for tests we have the commitAsync build a function
+        // that will call the callback with the appropriate parameters, and we'll run that function later.
+        final AtomicReference<Runnable> asyncCallbackRunner = new AtomicReference<>();
+        final AtomicBoolean asyncCallbackRan = new AtomicBoolean();
+
+        doAnswer(invocation -> {
+            final Map<TopicPartition, OffsetAndMetadata> offsets = invocation.getArgument(0);
+            final OffsetCommitCallback callback =  invocation.getArgument(1);
+            asyncCallbackRunner.set(() -> {
+                callback.onComplete(offsets, null);
+                asyncCallbackRan.set(true);
+            });
+
+            return null;
+        }).when(consumer).commitAsync(eq(workerCurrentOffsets), any(OffsetCommitCallback.class));
+
+        // Expect the next poll to discover and perform the rebalance, THEN complete the previous callback handler,
+        // and then return one record for TP1 and one for TP3.
+        final AtomicBoolean rebalanced = new AtomicBoolean();
+        Answer<ConsumerRecords<byte[], byte[]>> consumerPollRebalanced = invocation -> {
+            // Rebalance always begins with revoking current partitions ...
+            rebalanceListener.getValue().onPartitionsRevoked(originalPartitions);
+            // Respond to the rebalance
+            Map<TopicPartition, Long> offsets = new HashMap<>();
+            offsets.put(TOPIC_PARTITION, rebalanceOffsets.get(TOPIC_PARTITION).offset());
+            offsets.put(TOPIC_PARTITION2, rebalanceOffsets.get(TOPIC_PARTITION2).offset());
+            offsets.put(TOPIC_PARTITION3, rebalanceOffsets.get(TOPIC_PARTITION3).offset());
+            sinkTaskContext.getValue().offset(offsets);
+            rebalanceListener.getValue().onPartitionsAssigned(rebalancedPartitions);
+            rebalanced.set(true);
+
+            // Run the previous async commit handler
+            asyncCallbackRunner.get().run();
+
+            // And prep the two records to return
+            long timestamp = RecordBatch.NO_TIMESTAMP;
+            TimestampType timestampType = TimestampType.NO_TIMESTAMP_TYPE;
+            List<ConsumerRecord<byte[], byte[]>> records = new ArrayList<>();
+            records.add(new ConsumerRecord<>(TOPIC, PARTITION, FIRST_OFFSET + recordsReturnedTp1 + 1, timestamp, timestampType,
+                    0, 0, RAW_KEY, RAW_VALUE, new RecordHeaders(), Optional.empty()));
+            records.add(new ConsumerRecord<>(TOPIC, PARTITION3, FIRST_OFFSET + recordsReturnedTp3 + 1, timestamp, timestampType,
+                    0, 0, RAW_KEY, RAW_VALUE, new RecordHeaders(), Optional.empty()));
+            recordsReturnedTp1 += 1;
+            recordsReturnedTp3 += 1;
+            return new ConsumerRecords<>(Collections.singletonMap(new TopicPartition(TOPIC, PARTITION), records));
+        };
+
+        // onPartitionsRevoked
+        when(sinkTask.preCommit(workerCurrentOffsets)).thenReturn(workerCurrentOffsets);
+
+        // onPartitionsAssigned - step 1
+        final long offsetTp1 = rebalanceOffsets.get(TOPIC_PARTITION).offset();
+        final long offsetTp2 = rebalanceOffsets.get(TOPIC_PARTITION2).offset();
+        final long offsetTp3 = rebalanceOffsets.get(TOPIC_PARTITION3).offset();
+
+        // iter 4 - note that we return the current offset to indicate they should be committed
+        when(sinkTask.preCommit(postRebalanceCurrentOffsets)).thenReturn(postRebalanceCurrentOffsets);
+
+        // Setup mocks
+        when(consumer.assignment())
+                .thenReturn(INITIAL_ASSIGNMENT)
+                .thenReturn(INITIAL_ASSIGNMENT)
+                .thenReturn(INITIAL_ASSIGNMENT)
+                .thenReturn(INITIAL_ASSIGNMENT)
+                .thenReturn(INITIAL_ASSIGNMENT)
+                .thenReturn(new HashSet<>(rebalancedPartitions))
+                .thenReturn(new HashSet<>(rebalancedPartitions))
+                .thenReturn(new HashSet<>(rebalancedPartitions))
+                .thenReturn(new HashSet<>(rebalancedPartitions))
+                .thenReturn(new HashSet<>(rebalancedPartitions));
+
+        when(consumer.position(TOPIC_PARTITION))
+                .thenReturn(FIRST_OFFSET)
+                .thenReturn(offsetTp1);
+
+        when(consumer.position(TOPIC_PARTITION2))
+                .thenReturn(FIRST_OFFSET)
+                .thenReturn(offsetTp2);
+
+        when(consumer.position(TOPIC_PARTITION3))
+                .thenReturn(offsetTp3);
+
+        when(consumer.poll(any(Duration.class)))
+                .thenAnswer(consumerPollRebalance)
+                .thenAnswer(expectConsumerPoll(1))
+                .thenAnswer(consumerPollRebalanced)
+                .thenAnswer(expectConsumerPoll(1));
+
+        // Run the iterations
+        workerTask.iteration(); // iter 1 -- initial assignment
+
+        time.sleep(WorkerConfig.OFFSET_COMMIT_TIMEOUT_MS_DEFAULT);
+        workerTask.iteration(); // iter 2 -- deliver records
+
+        sinkTaskContext.getValue().requestCommit();
+        workerTask.iteration(); // iter 3 -- commit in progress
+
+        assertSinkMetricValue("partition-count", 3);
+        assertSinkMetricValue("sink-record-read-total", 3.0);
+        assertSinkMetricValue("sink-record-send-total", 3.0);
+        assertSinkMetricValue("sink-record-active-count", 4.0);
+        assertSinkMetricValue("sink-record-active-count-max", 4.0);
+        assertSinkMetricValue("sink-record-active-count-avg", 0.71429);
+        assertSinkMetricValue("offset-commit-seq-no", 2.0);
+        assertSinkMetricValue("offset-commit-completion-total", 1.0);
+        assertSinkMetricValue("offset-commit-skip-total", 1.0);
+        assertTaskMetricValue("status", "running");
+        assertTaskMetricValue("running-ratio", 1.0);
+        assertTaskMetricValue("pause-ratio", 0.0);
+        assertTaskMetricValue("batch-size-max", 2.0);
+        assertTaskMetricValue("batch-size-avg", 1.0);
+        assertTaskMetricValue("offset-commit-max-time-ms", 0.0);
+        assertTaskMetricValue("offset-commit-avg-time-ms", 0.0);
+        assertTaskMetricValue("offset-commit-failure-percentage", 0.0);
+        assertTaskMetricValue("offset-commit-success-percentage", 1.0);
+
+        assertTrue(asyncCallbackRan.get());
+        assertTrue(rebalanced.get());
+
+        // Check that the offsets were not reset by the out-of-order async commit callback
+        assertEquals(postRebalanceCurrentOffsets, workerTask.currentOffsets());
+        assertEquals(rebalanceOffsets, workerTask.lastCommittedOffsets());
+
+        // onPartitionsRevoked
+        verify(sinkTask).close(new ArrayList<>(workerCurrentOffsets.keySet()));
+        verify(consumer).commitSync(anyMap());
+
+        // onPartitionsAssigned - step 2
+        verify(sinkTask).open(rebalancedPartitions);
+
+        // onPartitionsAssigned - step 3 rewind
+        verify(consumer).seek(TOPIC_PARTITION, offsetTp1);
+        verify(consumer).seek(TOPIC_PARTITION2, offsetTp2);
+        verify(consumer).seek(TOPIC_PARTITION3, offsetTp3);
+
+        time.sleep(WorkerConfig.OFFSET_COMMIT_TIMEOUT_MS_DEFAULT);
+        sinkTaskContext.getValue().requestCommit();
+        workerTask.iteration(); // iter 4 -- commit in progress
+
+        final ArgumentCaptor<OffsetCommitCallback> callback = ArgumentCaptor.forClass(OffsetCommitCallback.class);
+        verify(consumer).commitAsync(eq(postRebalanceCurrentOffsets), callback.capture());
+        callback.getValue().onComplete(postRebalanceCurrentOffsets, null);
+
+        // Check that the offsets were not reset by the out-of-order async commit callback
+        assertEquals(postRebalanceCurrentOffsets, workerTask.currentOffsets());
+        assertEquals(postRebalanceCurrentOffsets, workerTask.lastCommittedOffsets());
+
+        assertSinkMetricValue("partition-count", 3);
+        assertSinkMetricValue("sink-record-read-total", 4.0);
+        assertSinkMetricValue("sink-record-send-total", 4.0);
+        assertSinkMetricValue("sink-record-active-count", 0.0);
+        assertSinkMetricValue("sink-record-active-count-max", 4.0);
+        assertSinkMetricValue("sink-record-active-count-avg", 0.5555555);
+        assertSinkMetricValue("offset-commit-seq-no", 3.0);
+        assertSinkMetricValue("offset-commit-completion-total", 2.0);
+        assertSinkMetricValue("offset-commit-skip-total", 1.0);
+        assertTaskMetricValue("status", "running");
+        assertTaskMetricValue("running-ratio", 1.0);
+        assertTaskMetricValue("pause-ratio", 0.0);
+        assertTaskMetricValue("batch-size-max", 2.0);
+        assertTaskMetricValue("batch-size-avg", 1.0);
+        assertTaskMetricValue("offset-commit-max-time-ms", 0.0);
+        assertTaskMetricValue("offset-commit-avg-time-ms", 0.0);
+        assertTaskMetricValue("offset-commit-failure-percentage", 0.0);
+        assertTaskMetricValue("offset-commit-success-percentage", 1.0);
     }
 
     @Test

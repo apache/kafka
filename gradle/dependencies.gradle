@@ -108,7 +108,7 @@ versions += [
   javassist: "3.29.2-GA",
   jetty: "9.4.53.v20231009",
   jersey: "2.39.1",
-  jline: "3.22.0",
+  jline: "3.25.1",
   jmh: "1.37",
   hamcrest: "2.2",
   scalaLogging: "3.9.4",
@@ -164,7 +164,7 @@ versions += [
   snappy: "1.1.10.5",
   spotbugs: "4.8.0",
   zinc: "1.9.2",
-  zookeeper: "3.8.3",
+  zookeeper: "3.8.4",
   zstd: "1.5.5-11"
 ]
 
