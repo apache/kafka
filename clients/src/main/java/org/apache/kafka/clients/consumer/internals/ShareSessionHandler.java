@@ -254,10 +254,18 @@ public class ShareSessionHandler {
      *                  because of missing or unexpected partitions.
      */
     public boolean handleResponse(ShareFetchResponse response, short version) {
-        if (response.error() != Errors.NONE) {
+        if ((response.error() == Errors.SHARE_SESSION_NOT_FOUND) ||
+                (response.error() == Errors.INVALID_SHARE_SESSION_EPOCH)) {
             log.info("Node {} was unable to process the ShareFetch request with {}: {}.",
                     node, nextMetadata, response.error());
             nextMetadata = nextMetadata.nextCloseExistingAttemptNew();
+            return false;
+        }
+
+        if (response.error() != Errors.NONE) {
+            log.info("Node {} was unable to process the ShareFetch request with {}: {}.",
+                    node, nextMetadata, response.error());
+            nextMetadata = nextMetadata.nextEpoch();
             return false;
         }
 
@@ -278,10 +286,18 @@ public class ShareSessionHandler {
      *                  because of missing or unexpected partitions.
      */
     public boolean handleResponse(ShareAcknowledgeResponse response, short version) {
+        if ((response.error() == Errors.SHARE_SESSION_NOT_FOUND) ||
+                (response.error() == Errors.INVALID_SHARE_SESSION_EPOCH)) {
+            log.info("Node {} was unable to process the ShareFetch request with {}: {}.",
+                    node, nextMetadata, response.error());
+            nextMetadata = nextMetadata.nextCloseExistingAttemptNew();
+            return false;
+        }
+
         if (response.error() != Errors.NONE) {
             log.info("Node {} was unable to process the ShareAcknowledge request with {}: {}.",
                     node, nextMetadata, response.error());
-            nextMetadata = nextMetadata.nextCloseExistingAttemptNew();
+            nextMetadata = nextMetadata.nextEpoch();
             return false;
         }
 

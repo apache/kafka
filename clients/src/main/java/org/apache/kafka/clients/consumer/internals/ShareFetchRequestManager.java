@@ -64,6 +64,9 @@ public class ShareFetchRequestManager implements RequestManager {
     private final FetchMetricsManager metricsManager;
     private final IdempotentCloser idempotentCloser = new IdempotentCloser();
 
+    // Temporary - to be fixed in AKCORE-51
+    private final Uuid shareSessionUuid;
+
     ShareFetchRequestManager(final LogContext logContext,
                              final String groupId,
                              final ConsumerMetadata metadata,
@@ -81,6 +84,7 @@ public class ShareFetchRequestManager implements RequestManager {
         this.metricsManager = metricsManager;
         this.sessionHandlers = new HashMap<>();
         this.nodesWithPendingRequests = new HashSet<>();
+        this.shareSessionUuid = Uuid.randomUuid();
     }
 
     @Override
@@ -125,7 +129,7 @@ public class ShareFetchRequestManager implements RequestManager {
                 // if there is a leader and no in-flight requests, issue a new fetch
                 ShareSessionHandler.Builder builder = partitionsToFetch.computeIfAbsent(node, k -> {
                     ShareSessionHandler shareSessionHandler =
-                            sessionHandlers.computeIfAbsent(node.id(), n -> new ShareSessionHandler(logContext, n, Uuid.randomUuid()));
+                            sessionHandlers.computeIfAbsent(node.id(), n -> new ShareSessionHandler(logContext, n, shareSessionUuid));
                     return shareSessionHandler.newBuilder();
                 });
 
