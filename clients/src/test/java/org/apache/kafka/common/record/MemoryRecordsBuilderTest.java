@@ -413,8 +413,8 @@ public class MemoryRecordsBuilderTest {
         }
 
         if (magic == MAGIC_VALUE_V0)
-            // in MAGIC_VALUE_V0's case, we don't have timestamp info in records, so always use the last offset as the offset of max timestamp.
-            assertEquals(2L, info.shallowOffsetOfMaxTimestamp);
+            // in MAGIC_VALUE_V0's case, we don't have timestamp info in records, so always return -1.
+            assertEquals(-1L, info.shallowOffsetOfMaxTimestamp);
         else
             assertEquals(1L, info.shallowOffsetOfMaxTimestamp);
 
@@ -493,12 +493,13 @@ public class MemoryRecordsBuilderTest {
         MemoryRecords records = builder.build();
 
         MemoryRecordsBuilder.RecordsInfo info = builder.info();
-        if (magic == MAGIC_VALUE_V0)
+        if (magic == MAGIC_VALUE_V0) {
             assertEquals(-1, info.maxTimestamp);
-        else
+            assertEquals(-1L, info.shallowOffsetOfMaxTimestamp);
+        } else {
             assertEquals(2L, info.maxTimestamp);
-
-        assertEquals(2L, info.shallowOffsetOfMaxTimestamp);
+            assertEquals(2L, info.shallowOffsetOfMaxTimestamp);
+        }
 
         long i = 0L;
         for (RecordBatch batch : records.batches()) {

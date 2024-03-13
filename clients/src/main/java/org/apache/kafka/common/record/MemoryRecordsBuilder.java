@@ -248,15 +248,16 @@ public class MemoryRecordsBuilder implements AutoCloseable {
      *
      * If create time is used, the offset will always be the offset of the record with the max timestamp.
      *
+     * If it's NO_TIMESTAMP (i.e. MAGIC_VALUE_V0), we'll return offset -1 since no timestamp info in records.
+     *
      * @return The max timestamp and its offset
      */
     public RecordsInfo info() {
         if (timestampType == TimestampType.LOG_APPEND_TIME) {
             return new RecordsInfo(logAppendTime, baseOffset);
-        } else if (maxTimestamp == RecordBatch.NO_TIMESTAMP) {
-            return new RecordsInfo(RecordBatch.NO_TIMESTAMP, lastOffset);
         } else {
             // For create time, we always use offsetOfMaxTimestamp for the correct time -> offset mapping
+            // If it's MAGIC_VALUE_V0, the value will be the default value: [-1, -1]
             return new RecordsInfo(maxTimestamp, offsetOfMaxTimestamp);
         }
     }

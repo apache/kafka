@@ -25,7 +25,7 @@ import org.apache.kafka.clients.admin._
 import org.apache.kafka.clients.producer.ProducerRecord
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.config.TopicConfig
-import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.common.utils.{MockTime, Time, Utils}
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo}
 import org.junit.jupiter.params.ParameterizedTest
@@ -41,6 +41,7 @@ class ListOffsetsIntegrationTest extends KafkaServerTestHarness {
   val topicNameWithCustomConfigs = "foo2"
   var adminClient: Admin = _
   var setOldMessageFormat: Boolean = false
+  val mockTime: Time = new MockTime(1)
 
   @BeforeEach
   override def setUp(testInfo: TestInfo): Unit = {
@@ -50,6 +51,8 @@ class ListOffsetsIntegrationTest extends KafkaServerTestHarness {
       AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG -> bootstrapServers()
     ).asJava)
   }
+
+  override def brokerTime(brokerId: Int): Time = mockTime
 
   @AfterEach
   override def tearDown(): Unit = {
@@ -79,15 +82,6 @@ class ListOffsetsIntegrationTest extends KafkaServerTestHarness {
   def testThreeRecordsInSeparateBatch(quorum: String): Unit = {
     produceMessagesInSeparateBatch()
     verifyListOffsets()
-
-    // test LogAppendTime case
-    val props: Properties = new Properties()
-    props.setProperty(TopicConfig.MESSAGE_TIMESTAMP_TYPE_CONFIG, "LogAppendTime")
-    createTopicWithConfig(topicNameWithCustomConfigs, props)
-    produceMessagesInSeparateBatch("gzip", topicNameWithCustomConfigs)
-    // In LogAppendTime's case, the maxTimestampOffset should be the first message of the batch.
-    // So in this separate batch test, it'll be the last offset 2
-    verifyListOffsets(topic = topicNameWithCustomConfigs, 2)
   }
 
   // The message conversion test only run in ZK mode because KRaft mode doesn't support "inter.broker.protocol.version" < 3.0
@@ -102,7 +96,7 @@ class ListOffsetsIntegrationTest extends KafkaServerTestHarness {
     val props: Properties = new Properties()
     props.setProperty(TopicConfig.MESSAGE_TIMESTAMP_TYPE_CONFIG, "LogAppendTime")
     createTopicWithConfig(topicNameWithCustomConfigs, props)
-    produceMessagesInOneBatch("gzip", topicNameWithCustomConfigs)
+    produceMessagesInOneBatch(topic = topicNameWithCustomConfigs)
     // In LogAppendTime's case, the maxTimestampOffset should be the first message of the batch.
     // So in this one batch test, it'll be the first offset 0
     verifyListOffsets(topic = topicNameWithCustomConfigs, 0)
@@ -120,7 +114,7 @@ class ListOffsetsIntegrationTest extends KafkaServerTestHarness {
     val props: Properties = new Properties()
     props.setProperty(TopicConfig.MESSAGE_TIMESTAMP_TYPE_CONFIG, "LogAppendTime")
     createTopicWithConfig(topicNameWithCustomConfigs, props)
-    produceMessagesInSeparateBatch("gzip", topicNameWithCustomConfigs)
+    produceMessagesInSeparateBatch(topic = topicNameWithCustomConfigs)
     // In LogAppendTime's case, the maxTimestampOffset should be the first message of the batch.
     // So in this separate batch test, it'll be the last offset 2
     verifyListOffsets(topic = topicNameWithCustomConfigs, 2)
@@ -151,6 +145,15 @@ class ListOffsetsIntegrationTest extends KafkaServerTestHarness {
   def testThreeCompressedRecordsInSeparateBatch(quorum: String): Unit = {
     produceMessagesInSeparateBatch("gzip")
     verifyListOffsets()
+
+    // test LogAppendTime case
+    val props: Properties = new Properties()
+    props.setProperty(TopicConfig.MESSAGE_TIMESTAMP_TYPE_CONFIG, "LogAppendTime")
+    createTopicWithConfig(topicNameWithCustomConfigs, props)
+    produceMessagesInSeparateBatch("gzip", topicNameWithCustomConfigs)
+    // In LogAppendTime's case, the maxTimestampOffset should be the first message of the batch.
+    // So in this separate batch test, it'll be the last offset 2
+    verifyListOffsets(topic = topicNameWithCustomConfigs, 2)
   }
 
   private def createOldMessageFormatBrokers(): Unit = {
@@ -226,8 +229,11 @@ class ListOffsetsIntegrationTest extends KafkaServerTestHarness {
     try {
       val futures = records.map(producer.send)
       futures.foreach(_.get)
+      // advance the server time after each record sent to make sure the time changed when appendTime is used
+      mockTime.sleep(100)
       val futures2 = records2.map(producer.send)
       futures2.foreach(_.get)
+      mockTime.sleep(100)
       val futures3 = records3.map(producer.send)
       futures3.foreach(_.get)
     } finally {

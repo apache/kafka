@@ -70,7 +70,7 @@ public class GetOffsetShellTest {
         cluster.config().serverProperties().put("offsets.topic.num.partitions", String.valueOf(offsetTopicPartitionCount));
     }
 
-    public void setUp() {
+    private void setUp() {
         try (Admin admin = Admin.create(cluster.config().adminClientProperties())) {
             List<NewTopic> topics = new ArrayList<>();
 
