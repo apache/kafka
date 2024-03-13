@@ -2189,7 +2189,7 @@ public class ReplicationControlManager {
         if (minIsrConfig != null) {
             currentMinIsr = Integer.parseInt(minIsrConfig);
         } else {
-            log.warn("Can't find the min isr config for topic: " + topicName + " using default value " + defaultMinIsr);
+            log.debug("Can't find the min isr config for topic: " + topicName + " using default value " + defaultMinIsr);
         }
 
         int replicationFactor = defaultReplicationFactor;
