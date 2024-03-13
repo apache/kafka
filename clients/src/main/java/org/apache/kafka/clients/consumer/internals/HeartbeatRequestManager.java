@@ -596,7 +596,6 @@ public class HeartbeatRequestManager implements RequestManager {
             private String instanceId = null;
             private int rebalanceTimeoutMs = -1;
             private TreeSet<String> subscribedTopicNames = null;
-            private String subscribedTopicRegex = null;
             private String serverAssignor = null;
             private TreeSet<String> topicPartitions = null;
 
