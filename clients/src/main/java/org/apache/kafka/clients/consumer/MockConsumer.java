@@ -142,16 +142,6 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
     }
 
     @Override
-    public void subscribe(SubscriptionPattern pattern, ConsumerRebalanceListener callback) {
-
-    }
-
-    @Override
-    public void subscribe(SubscriptionPattern pattern) {
-
-    }
-
-    @Override
     public void subscribe(Collection<String> topics, final ConsumerRebalanceListener listener) {
         if (listener == null)
             throw new IllegalArgumentException("RebalanceListener cannot be null");
