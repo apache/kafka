@@ -3531,7 +3531,7 @@ public class TransactionManagerTest {
         runUntil(() -> transactionManager.coordinator(CoordinatorType.TRANSACTION) != null);
         assertEquals(brokerNode, transactionManager.coordinator(CoordinatorType.TRANSACTION));
 
-        prepareInitPidResponse(Errors.ABORTABLE_TRANSACTION_EXCEPTION, false, producerId, RecordBatch.NO_PRODUCER_EPOCH);
+        prepareInitPidResponse(Errors.ABORTABLE_TRANSACTION, false, producerId, RecordBatch.NO_PRODUCER_EPOCH);
         runUntil(transactionManager::hasError);
         assertTrue(initPidResult.isCompleted());
         assertFalse(initPidResult.isSuccessful());
@@ -3548,7 +3548,7 @@ public class TransactionManagerTest {
         transactionManager.beginTransaction();
         transactionManager.maybeAddPartition(tp);
 
-        prepareAddPartitionsToTxn(tp, Errors.ABORTABLE_TRANSACTION_EXCEPTION);
+        prepareAddPartitionsToTxn(tp, Errors.ABORTABLE_TRANSACTION);
         runUntil(transactionManager::hasError);
         assertTrue(transactionManager.lastError() instanceof AbortableTransactionException);
 
@@ -3566,7 +3566,7 @@ public class TransactionManagerTest {
         prepareAddOffsetsToTxnResponse(Errors.NONE, consumerGroupId, producerId, epoch);
         runUntil(() -> !transactionManager.hasPartitionsToAdd());
 
-        prepareFindCoordinatorResponse(Errors.ABORTABLE_TRANSACTION_EXCEPTION, false, CoordinatorType.GROUP, consumerGroupId);
+        prepareFindCoordinatorResponse(Errors.ABORTABLE_TRANSACTION, false, CoordinatorType.GROUP, consumerGroupId);
         runUntil(transactionManager::hasError);
         assertTrue(transactionManager.lastError() instanceof AbortableTransactionException);
 
@@ -3590,7 +3590,7 @@ public class TransactionManagerTest {
         assertFalse(responseFuture.isDone());
         prepareAddPartitionsToTxnResponse(Errors.NONE, tp0, epoch, producerId);
         prepareProduceResponse(Errors.NONE, producerId, epoch);
-        prepareEndTxnResponse(Errors.ABORTABLE_TRANSACTION_EXCEPTION, TransactionResult.COMMIT, producerId, epoch);
+        prepareEndTxnResponse(Errors.ABORTABLE_TRANSACTION, TransactionResult.COMMIT, producerId, epoch);
 
         runUntil(commitResult::isCompleted);
         runUntil(responseFuture::isDone);
@@ -3615,7 +3615,7 @@ public class TransactionManagerTest {
         TransactionalRequestResult sendOffsetsResult = transactionManager.sendOffsetsToTransaction(
                 singletonMap(tp, new OffsetAndMetadata(39L)), new ConsumerGroupMetadata(consumerGroupId));
 
-        prepareAddOffsetsToTxnResponse(Errors.ABORTABLE_TRANSACTION_EXCEPTION, consumerGroupId, producerId, epoch);
+        prepareAddOffsetsToTxnResponse(Errors.ABORTABLE_TRANSACTION, consumerGroupId, producerId, epoch);
         runUntil(transactionManager::hasError);
         assertTrue(transactionManager.lastError() instanceof AbortableTransactionException);
         assertTrue(sendOffsetsResult.isCompleted());
@@ -3637,7 +3637,7 @@ public class TransactionManagerTest {
 
         prepareAddOffsetsToTxnResponse(Errors.NONE, consumerGroupId, producerId, epoch);
         prepareFindCoordinatorResponse(Errors.NONE, false, CoordinatorType.GROUP, consumerGroupId);
-        prepareTxnOffsetCommitResponse(consumerGroupId, producerId, epoch, singletonMap(tp, Errors.ABORTABLE_TRANSACTION_EXCEPTION));
+        prepareTxnOffsetCommitResponse(consumerGroupId, producerId, epoch, singletonMap(tp, Errors.ABORTABLE_TRANSACTION));
         runUntil(transactionManager::hasError);
 
         assertTrue(transactionManager.lastError() instanceof AbortableTransactionException);

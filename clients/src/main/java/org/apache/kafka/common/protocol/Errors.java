@@ -394,7 +394,7 @@ public enum Errors {
     UNKNOWN_SUBSCRIPTION_ID(117, "Client sent a push telemetry request with an invalid or outdated subscription ID.", UnknownSubscriptionIdException::new),
     TELEMETRY_TOO_LARGE(118, "Client sent a push telemetry request larger than the maximum size the broker will accept.", TelemetryTooLargeException::new),
     INVALID_REGISTRATION(119, "The controller has considered the broker registration to be invalid.", InvalidRegistrationException::new),
-    ABORTABLE_TRANSACTION_EXCEPTION(120, "This maps to all errors which can be fixed by aborting the current transaction.", AbortableTransactionException::new);
+    ABORTABLE_TRANSACTION(120, "This maps to all errors which can be fixed by aborting the current transaction.", AbortableTransactionException::new);
 
     private static final Logger log = LoggerFactory.getLogger(Errors.class);
 

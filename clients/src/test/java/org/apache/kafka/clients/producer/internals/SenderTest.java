@@ -3169,7 +3169,7 @@ public class SenderTest {
 
         Future<RecordMetadata> request = appendToAccumulator(tp0);
         sender.runOnce();  // send request
-        sendIdempotentProducerResponse(0, tp0, Errors.ABORTABLE_TRANSACTION_EXCEPTION, -1);
+        sendIdempotentProducerResponse(0, tp0, Errors.ABORTABLE_TRANSACTION, -1);
 
         // Return AbortableTransactionException error. It should be abortable.
         sender.runOnce();
