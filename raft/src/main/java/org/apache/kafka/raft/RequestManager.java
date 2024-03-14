@@ -123,7 +123,7 @@ public class RequestManager {
 
         boolean isReady(long timeMs) {
             if (isBackoffComplete(timeMs) || hasRequestTimedOut(timeMs)) {
-                state = State.READY;
+                reset();
             }
             return state == State.READY;
         }
