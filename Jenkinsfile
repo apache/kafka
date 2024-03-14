@@ -86,6 +86,11 @@ def tryStreamsArchetype() {
   }
 }
 
+def buildNightly() {
+    // Trigger the job at 10 AM
+    def currentHour = (currentBuild.startTimeInMillis / 1000 / 60 / 60).trunc() % 24
+    return currentHour == 10
+}
 
 pipeline {
   agent none
@@ -172,6 +177,28 @@ pipeline {
             doValidation()
             doTest(env)
             echo 'Skipping Kafka Streams archetype test for Java 21'
+          }
+        }
+
+        stage('PowerPC') {
+          agent { label 'ppc64le' }
+          tools {
+            jdk 'jdk_21_latest'
+          }
+          options {
+            timeout(time: 8, unit: 'HOURS')
+            timestamps()
+          }
+          environment {
+            SCALA_VERSION=2.13
+          }
+          when {
+            expression { buildNightly() }
+          }
+          steps {
+            doValidation()
+            doTest(env)
+            echo 'Skipping Kafka Streams archetype test for PowerPC build'
           }
         }
       }
