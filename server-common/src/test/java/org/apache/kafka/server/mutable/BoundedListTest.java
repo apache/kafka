@@ -35,43 +35,37 @@ public class BoundedListTest {
     @Test
     public void testMaxLengthMustNotBeZero() {
         assertEquals("Invalid non-positive maxLength of 0",
-                assertThrows(IllegalArgumentException.class,
-                        () -> BoundedList.newArrayBacked(0)).
-                        getMessage());
+            assertThrows(IllegalArgumentException.class,
+                () -> BoundedList.newArrayBacked(0)).getMessage());
 
         assertEquals("Invalid non-positive maxLength of 0",
-                assertThrows(IllegalArgumentException.class,
-                        () -> BoundedList.newArrayBacked(0, 100)).
-                        getMessage());
+            assertThrows(IllegalArgumentException.class,
+                () -> BoundedList.newArrayBacked(0, 100)).getMessage());
     }
 
     @Test
     public void testMaxLengthMustNotBeNegative() {
         assertEquals("Invalid non-positive maxLength of -123",
-                assertThrows(IllegalArgumentException.class,
-                        () -> BoundedList.newArrayBacked(-123)).
-                        getMessage());
+            assertThrows(IllegalArgumentException.class,
+                () -> BoundedList.newArrayBacked(-123)).getMessage());
 
         assertEquals("Invalid non-positive maxLength of -123",
-                assertThrows(IllegalArgumentException.class,
-                        () -> BoundedList.newArrayBacked(-123, 100)).
-                        getMessage());
+            assertThrows(IllegalArgumentException.class,
+                () -> BoundedList.newArrayBacked(-123, 100)).getMessage());
     }
 
     @Test
     public void testInitialCapacityMustNotBeZero() {
         assertEquals("Invalid non-positive initialCapacity of 0",
-                assertThrows(IllegalArgumentException.class,
-                        () -> BoundedList.newArrayBacked(100, 0)).
-                        getMessage());
+            assertThrows(IllegalArgumentException.class,
+                () -> BoundedList.newArrayBacked(100, 0)).getMessage());
     }
 
     @Test
     public void testInitialCapacityMustNotBeNegative() {
         assertEquals("Invalid non-positive initialCapacity of -123",
-                assertThrows(IllegalArgumentException.class,
-                        () -> BoundedList.newArrayBacked(100, -123)).
-                        getMessage());
+            assertThrows(IllegalArgumentException.class,
+                () -> BoundedList.newArrayBacked(100, -123)).getMessage());
     }
 
     @Test
@@ -85,15 +79,13 @@ public class BoundedListTest {
         assertFalse(list.isEmpty());
         assertTrue(list.add(789));
         assertEquals("Cannot add another element to the list because it would exceed the " +
-                        "maximum length of 2",
+            "maximum length of 2",
                 assertThrows(BoundedListTooLongException.class,
-                        () -> list.add(912)).
-                        getMessage());
+                    () -> list.add(912)).getMessage());
         assertEquals("Cannot add another element to the list because it would exceed the " +
-                        "maximum length of 2",
+            "maximum length of 2",
                 assertThrows(BoundedListTooLongException.class,
-                        () -> list.add(0, 912)).
-                        getMessage());
+                    () -> list.add(0, 912)).getMessage());
     }
 
     @Test
@@ -172,15 +164,13 @@ public class BoundedListTest {
         list.add("b");
         list.add("c");
         assertEquals("Cannot add another 3 element(s) to the list because it would exceed the " +
-                        "maximum length of 5",
+            "maximum length of 5",
                 assertThrows(BoundedListTooLongException.class,
-                        () -> list.addAll(Arrays.asList("d", "e", "f"))).
-                        getMessage());
+                        () -> list.addAll(Arrays.asList("d", "e", "f"))).getMessage());
         assertEquals("Cannot add another 3 element(s) to the list because it would exceed the " +
-                        "maximum length of 5",
+            "maximum length of 5",
                 assertThrows(BoundedListTooLongException.class,
-                        () -> list.addAll(0, Arrays.asList("d", "e", "f"))).
-                        getMessage());
+                        () -> list.addAll(0, Arrays.asList("d", "e", "f"))).getMessage());
         list.addAll(Arrays.asList("d", "e"));
         assertEquals(Arrays.asList("a", "b", "c", "d", "e"), list);
     }
@@ -204,9 +194,9 @@ public class BoundedListTest {
         list.add(2);
         list.add(3);
         assertThrows(UnsupportedOperationException.class,
-                () -> list.iterator().remove());
+            () -> list.iterator().remove());
         assertThrows(UnsupportedOperationException.class,
-                () -> list.listIterator().remove());
+            () -> list.listIterator().remove());
     }
 
     @Test
@@ -217,6 +207,6 @@ public class BoundedListTest {
         list.add(3);
         assertEquals(Arrays.asList(2), list.subList(1, 2));
         assertThrows(UnsupportedOperationException.class,
-                () -> list.subList(1, 2).remove(2));
+            () -> list.subList(1, 2).remove(2));
     }
 }
