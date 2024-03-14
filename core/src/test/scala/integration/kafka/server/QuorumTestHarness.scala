@@ -17,13 +17,15 @@
 
 package kafka.server
 
+import kafka.metrics.KafkaMetricsReporter
+
 import java.io.File
 import java.net.InetSocketAddress
 import java.util
 import java.util.{Collections, Optional, OptionalInt, Properties}
 import java.util.concurrent.{CompletableFuture, TimeUnit}
 import javax.security.auth.login.Configuration
-import kafka.utils.{CoreUtils, Logging, TestInfoUtils, TestUtils}
+import kafka.utils.{CoreUtils, Logging, TestInfoUtils, TestUtils, VerifiableProperties}
 import kafka.zk.{AdminZkClient, EmbeddedZookeeper, KafkaZkClient}
 import org.apache.kafka.clients.consumer.GroupProtocol
 import org.apache.kafka.common.metrics.Metrics
@@ -131,6 +133,8 @@ class KRaftQuorumImplementation(
     var broker: BrokerServer = null
     try {
       broker = new BrokerServer(sharedServer)
+    val kafkaMetricsReporters: Seq[KafkaMetricsReporter] = KafkaMetricsReporter.startReporters(VerifiableProperties(config.originals))
+      KafkaBroker.notifyClusterListeners(clusterId, kafkaMetricsReporters)
       if (startup) broker.startup()
       broker
     } catch {
