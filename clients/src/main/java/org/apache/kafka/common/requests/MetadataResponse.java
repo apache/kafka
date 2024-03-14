@@ -178,12 +178,15 @@ public class MetadataResponse extends AbstractResponse {
     }
 
     private static Node[] convertToNodeArray(List<Integer> replicaIds, Map<Integer, Node> nodesById) {
-        return replicaIds.stream().map(replicaId -> {
+        Node[] nodes = new Node[replicaIds.size()];
+        for (int i = 0; i < replicaIds.size(); i++) {
+            Integer replicaId = replicaIds.get(i);
             Node node = nodesById.get(replicaId);
             if (node == null)
-                return new Node(replicaId, "", -1);
-            return node;
-        }).toArray(Node[]::new);
+                node = new Node(replicaId, "", -1);
+            nodes[i] = node;
+        }
+        return nodes;
     }
 
     /**
