@@ -1143,6 +1143,16 @@ public abstract class AbstractCoordinator implements Closeable {
         }
     }
 
+    protected void handlePollTimeoutExpiry() {
+        log.warn("consumer poll timeout has expired. This means the time between subsequent calls to poll() " +
+            "was longer than the configured max.poll.interval.ms, which typically implies that " +
+            "the poll loop is spending too much time processing messages. You can address this " +
+            "either by increasing max.poll.interval.ms or by reducing the maximum size of batches " +
+            "returned in poll() with max.poll.records.");
+
+        maybeLeaveGroup("consumer poll timeout has expired.");
+    }
+
     /**
      * Sends LeaveGroupRequest and logs the {@code leaveReason}, unless this member is using static membership or is already
      * not part of the group (ie does not have a valid member id, is in the UNJOINED state, or the coordinator is unknown).
@@ -1508,13 +1518,7 @@ public abstract class AbstractCoordinator implements Closeable {
                         } else if (heartbeat.pollTimeoutExpired(now)) {
                             // the poll timeout has expired, which means that the foreground thread has stalled
                             // in between calls to poll().
-                            log.warn("consumer poll timeout has expired. This means the time between subsequent calls to poll() " +
-                                "was longer than the configured max.poll.interval.ms, which typically implies that " +
-                                "the poll loop is spending too much time processing messages. You can address this " +
-                                "either by increasing max.poll.interval.ms or by reducing the maximum size of batches " +
-                                "returned in poll() with max.poll.records.");
-
-                            maybeLeaveGroup("consumer poll timeout has expired.");
+                            handlePollTimeoutExpiry();
                         } else if (!heartbeat.shouldHeartbeat(now)) {
                             // poll again after waiting for the retry backoff in case the heartbeat failed or the
                             // coordinator disconnected. Note that the heartbeat timing takes account of
