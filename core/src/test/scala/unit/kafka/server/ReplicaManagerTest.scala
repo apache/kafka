@@ -3101,7 +3101,8 @@ class ReplicaManagerTest {
       producerId,
       producerEpoch,
       baseSequence,
-      postVerificationCallback
+      postVerificationCallback,
+      defaultOperation
     )
     result
   }

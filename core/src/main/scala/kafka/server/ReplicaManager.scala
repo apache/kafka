@@ -995,7 +995,8 @@ class ReplicaManager(val config: KafkaConfig,
     producerId: Long,
     producerEpoch: Short,
     baseSequence: Int,
-    callback: ((Errors, VerificationGuard)) => Unit
+    callback: ((Errors, VerificationGuard)) => Unit,
+    partitionOperation: ExpectedPartitionOperation
   ): Unit = {
     def generalizedCallback(results: (Map[TopicPartition, Errors], Map[TopicPartition, VerificationGuard])): Unit = {
       val (preAppendErrors, verificationGuards) = results
@@ -1011,7 +1012,7 @@ class ReplicaManager(val config: KafkaConfig,
       producerId,
       producerEpoch,
       generalizedCallback,
-      defaultOperation
+      partitionOperation
     )
   }
 

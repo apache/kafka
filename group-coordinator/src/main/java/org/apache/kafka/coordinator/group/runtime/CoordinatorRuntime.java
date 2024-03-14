@@ -1456,7 +1456,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
      * @param producerEpoch     The producer epoch.
      * @param timeout           The write operation timeout.
      * @param op                The write operation.
-     *
+     * @param apiVersion        The Version of the Txn_Offset_Commit request
      * @return A future that will be completed with the result of the write operation
      * when the operation is completed or an exception if the write operation failed.
      *
@@ -1469,7 +1469,8 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
         long producerId,
         short producerEpoch,
         Duration timeout,
-        CoordinatorWriteOperation<S, T, U> op
+        CoordinatorWriteOperation<S, T, U> op,
+        Short apiVersion
     ) {
         throwIfNotRunning();
         log.debug("Scheduled execution of transactional write operation {}.", name);
@@ -1477,7 +1478,8 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
             tp,
             transactionalId,
             producerId,
-            producerEpoch
+            producerEpoch,
+            apiVersion
         ).thenCompose(verificationGuard -> {
             CoordinatorWriteEvent<T> event = new CoordinatorWriteEvent<>(
                 name,

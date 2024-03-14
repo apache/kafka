@@ -137,6 +137,7 @@ public interface PartitionWriter<T> {
         TopicPartition tp,
         String transactionalId,
         long producerId,
-        short producerEpoch
+        short producerEpoch,
+        short apiVersion
     ) throws KafkaException;
 }
