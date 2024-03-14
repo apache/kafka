@@ -17,7 +17,13 @@
 
 package org.apache.kafka.server.mutable;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.Iterator;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.ListIterator;
 
 /**
  * A list which cannot grow beyond a certain length. If the maximum length would be exceeded by an
