@@ -499,10 +499,10 @@ public class KStreamKStreamOuterJoinTest {
             // joined records because the window has ended, but will not produce non-joined records because the window has not closed.
             // w1 = { 0:A0 (ts: 0) }
             // w2 = { 1:a1 (ts: 0) }
-            // --> w1 = { 0:A0 (ts: 0), 1:A1 (ts: 0) }
-            // --> w2 = { 0:a0 (ts: 101), 1:a1 (ts: 101) }
-            inputTopic2.pipeInput(0, "a0", 101L);
+            // --> w1 = { 0:A0 (ts: 0), 1:A1 (ts: 101) }
+            // --> w2 = { 1:a1 (ts: 0), 0:a0 (ts: 101) }
             inputTopic1.pipeInput(1, "A1", 101L);
+            inputTopic2.pipeInput(0, "a0", 101L);
             processor.checkAndClearProcessResult();
 
             // push a dummy item to the any stream after the window is closed; this should produced all expired non-joined records because
@@ -511,7 +511,7 @@ public class KStreamKStreamOuterJoinTest {
             // w2 = { 0:a0 (ts: 101), 1:a1 (ts: 101) }
             // --> w1 = { 0:A0 (ts: 0), 1:A1 (ts: 0) }
             // --> w2 = { 0:a0 (ts: 101), 1:a1 (ts: 101), 0:dummy (ts: 112) }
-            inputTopic2.pipeInput(0, "dummy", 211);
+            inputTopic2.pipeInput(0, "dummy", 112);
             processor.checkAndClearProcessResult(
                 new KeyValueTimestamp<>(1, "null+a1", 0L),
                 new KeyValueTimestamp<>(0, "A0+null", 0L)
@@ -519,6 +519,71 @@ public class KStreamKStreamOuterJoinTest {
         }
     }
 
+    @Test
+    public void testEmitAllNonJoinResultsForAsymmetricWindow() {
+        final StreamsBuilder builder = new StreamsBuilder();
+
+        final KStream<Integer, String> stream1;
+        final KStream<Integer, String> stream2;
+        final KStream<Integer, String> joined;
+        final MockApiProcessorSupplier<Integer, String, Void, Void> supplier = new MockApiProcessorSupplier<>();
+        stream1 = builder.stream(topic1, consumed);
+        stream2 = builder.stream(topic2, consumed);
+
+        joined = stream1.outerJoin(
+            stream2,
+            MockValueJoiner.TOSTRING_JOINER,
+            JoinWindows.ofTimeDifferenceWithNoGrace(ofMillis(5)).after(ofMillis(20)),
+            StreamJoined.with(Serdes.Integer(), Serdes.String(), Serdes.String())
+        );
+        joined.process(supplier);
+
+        final Collection<Set<String>> copartitionGroups =
+            TopologyWrapper.getInternalTopologyBuilder(builder.build()).copartitionGroups();
+
+        assertEquals(1, copartitionGroups.size());
+        assertEquals(new HashSet<>(Arrays.asList(topic1, topic2)), copartitionGroups.iterator().next());
+
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), PROPS)) {
+            final TestInputTopic<Integer, String> inputTopic1 =
+                driver.createInputTopic(topic1, new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
+            final TestInputTopic<Integer, String> inputTopic2 =
+                driver.createInputTopic(topic2, new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
+            final MockApiProcessor<Integer, String, Void, Void> processor = supplier.theCapturedProcessor();
+
+            // w1 = {}
+            // w2 = {}
+            // --> w1 = { 0:A0 (ts: 29) }
+            // --> w2 = {}
+            inputTopic1.pipeInput(0, "A0", 29L);
+            processor.checkAndClearProcessResult();
+
+            // w1 = { 0:A0 (ts: 29) }
+            // w2 = {}
+            // --> w1 = { 0:A0 (ts: 29), 1:A1 (ts: 30) }
+            // --> w2 = {}
+            inputTopic1.pipeInput(1, "A1", 30L);
+            processor.checkAndClearProcessResult();
+
+            // w1 = { 0:A0 (ts: 0), 1:A1 (ts: 30) }
+            // w2 = {}
+            // --> w1 = { 0:A0 (ts: 29), 1:A1 (ts: 30) }
+            // --> w2 = { 2:a2 (ts: 31) }
+            inputTopic2.pipeInput(2, "a2", 31L);
+            processor.checkAndClearProcessResult();
+
+            // w1 = { 0:A0 (ts: 29), 1:A1 (ts: 30) }
+            // w2 = {  2:a0 (ts: 31) }
+            // --> w1 = { 0:A0 (ts: 29), 1:A1 (ts: 30) }
+            // --> w2 = { 2:a2 (ts: 31) , 3:a3 (ts: 50) }
+            inputTopic2.pipeInput(3, "a3", 50L);
+            processor.checkAndClearProcessResult(
+                new KeyValueTimestamp<>(0, "A0+null", 29L),
+                new KeyValueTimestamp<>(2, "null+a2", 31L)
+            );
+        }
+    }
+    
     @Test
     public void testOuterJoinWithInMemoryCustomSuppliers() {
         final JoinWindows joinWindows = JoinWindows.ofTimeDifferenceWithNoGrace(ofMillis(100L));
@@ -727,7 +792,7 @@ public class KStreamKStreamOuterJoinTest {
     }
 
     @Test
-    public void shouldNotEmitLeftJoinResultForAsymmetricBeforeWindow() {
+    public void testShouldNotEmitLeftJoinResultForAsymmetricBeforeWindow() {
         final StreamsBuilder builder = new StreamsBuilder();
         final int[] expectedKeys = new int[] {0, 1, 2, 3};
 
@@ -814,7 +879,7 @@ public class KStreamKStreamOuterJoinTest {
     }
 
     @Test
-    public void shouldNotEmitLeftJoinResultForAsymmetricAfterWindow() {
+    public void testShouldNotEmitLeftJoinResultForAsymmetricAfterWindow() {
         final StreamsBuilder builder = new StreamsBuilder();
         final int[] expectedKeys = new int[] {0, 1, 2, 3};
 
@@ -906,7 +971,7 @@ public class KStreamKStreamOuterJoinTest {
      * behavior so that we can make decisions about defining it in the future.
      */
     @Test
-    public void shouldForwardCurrentHeaders() {
+    public void testShouldForwardCurrentHeaders() {
         final StreamsBuilder builder = new StreamsBuilder();
 
         final KStream<Integer, String> stream1;
@@ -1331,7 +1396,7 @@ public class KStreamKStreamOuterJoinTest {
     }
 
     @Test
-    public void shouldJoinWithNonTimestampedStore() {
+    public void testShouldJoinWithNonTimestampedStore() {
         final CapturingStoreSuppliers suppliers = new CapturingStoreSuppliers();
         final StreamJoined<Integer, String, String> streamJoined =
                 StreamJoined.with(Serdes.Integer(), Serdes.String(), Serdes.String())
