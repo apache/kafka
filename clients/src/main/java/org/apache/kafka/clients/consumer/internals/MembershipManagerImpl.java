@@ -50,7 +50,6 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.SortedSet;
@@ -176,9 +175,9 @@ public class MembershipManagerImpl implements MembershipManager {
      * Assignment that the member received from the server and successfully processed, together with
      * its local epoch.
      *
-     * This is equal to LocalAssignmentImpl.NONE when we are not in a group, or we haven't reconciled any assignment yet.
+     * This is equal to LocalAssignment.NONE when we are not in a group, or we haven't reconciled any assignment yet.
      */
-    private LocalAssignmentImpl currentAssignment;
+    private LocalAssignment currentAssignment;
 
     /**
      * Subscription state object holding the current assignment the member has for the topics it
@@ -217,9 +216,9 @@ public class MembershipManagerImpl implements MembershipManager {
      * Topic IDs and partitions received in the last target assignment, together with its local epoch.
      *
      * This member variable is reassigned every time a new assignment is received.
-     * It is equal to LocalAssignmentImpl.NONE whenever we are not in a group.
+     * It is equal to LocalAssignment.NONE whenever we are not in a group.
      */
-    private LocalAssignmentImpl currentTargetAssignment;
+    private LocalAssignment currentTargetAssignment;
 
     /**     
      * If there is a reconciliation running (triggering commit, callbacks) for the
@@ -333,8 +332,8 @@ public class MembershipManagerImpl implements MembershipManager {
         this.commitRequestManager = commitRequestManager;
         this.metadata = metadata;
         this.assignedTopicNamesCache = new HashMap<>();
-        this.currentTargetAssignment = LocalAssignmentImpl.NONE;
-        this.currentAssignment = LocalAssignmentImpl.NONE;
+        this.currentTargetAssignment = LocalAssignment.NONE;
+        this.currentAssignment = LocalAssignment.NONE;
         this.log = logContext.logger(MembershipManagerImpl.class);
         this.stateUpdatesListeners = new ArrayList<>();
         this.clientTelemetryReporter = clientTelemetryReporter;
@@ -611,8 +610,7 @@ public class MembershipManagerImpl implements MembershipManager {
         if (subscriptions.hasAutoAssignedPartitions()) {
             subscriptions.assignFromSubscribed(Collections.emptySet());
         }
-        currentTargetAssignment = LocalAssignmentImpl.NONE;
-        currentAssignment = LocalAssignmentImpl.NONE;
+        currentAssignment = LocalAssignment.NONE;
         clearPendingAssignmentsAndLocalNamesCache();
     }
 
@@ -755,7 +753,7 @@ public class MembershipManagerImpl implements MembershipManager {
                 ConsumerGroupHeartbeatRequest.LEAVE_GROUP_STATIC_MEMBER_EPOCH :
                 ConsumerGroupHeartbeatRequest.LEAVE_GROUP_MEMBER_EPOCH;
         updateMemberEpoch(leaveEpoch);
-        currentAssignment = LocalAssignmentImpl.NONE;
+        currentAssignment = LocalAssignment.NONE;
         transitionTo(MemberState.LEAVING);
     }
 
@@ -909,9 +907,9 @@ public class MembershipManagerImpl implements MembershipManager {
         // Find the subset of the target assignment that can be resolved to topic names, and trigger a metadata update
         // if some topic IDs are not resolvable.
         SortedSet<TopicIdPartition> assignedTopicIdPartitions = findResolvableAssignmentAndTriggerMetadataUpdate();
-        final LocalAssignmentImpl resolvedAssignment = new LocalAssignmentImpl(currentTargetAssignment.localEpoch, assignedTopicIdPartitions);
+        final LocalAssignment resolvedAssignment = new LocalAssignment(currentTargetAssignment.localEpoch, assignedTopicIdPartitions);
 
-        if (currentAssignment != LocalAssignmentImpl.NONE &&
+        if (currentAssignment != LocalAssignment.NONE &&
             resolvedAssignment.localEpoch <= currentAssignment.localEpoch + 1 &&
             resolvedAssignment.partitions.equals(currentAssignment.partitions)) {
             log.debug("Ignoring reconciliation attempt. The resolvable fragment of the target assignment {} " +
@@ -976,6 +974,10 @@ public class MembershipManagerImpl implements MembershipManager {
             }
 
             revokeAndAssign(resolvedAssignment, assignedTopicIdPartitions, revokedPartitions, addedPartitions);
+        }).whenComplete((__, error) -> {
+            if (error != null) {
+                log.error("Reconciliation failed.", error);
+            }
         });
     }
 
@@ -993,7 +995,7 @@ public class MembershipManagerImpl implements MembershipManager {
      * then complete the reconciliation by updating the assignment and making the appropriate state
      * transition. Note that if any of the 2 callbacks fails, the reconciliation should fail.
      */
-    private void revokeAndAssign(LocalAssignmentImpl resolvedAssignment,
+    private void revokeAndAssign(LocalAssignment resolvedAssignment,
                                  SortedSet<TopicIdPartition> assignedTopicIdPartitions,
                                  SortedSet<TopicPartition> revokedPartitions,
                                  SortedSet<TopicPartition> addedPartitions) {
@@ -1053,7 +1055,7 @@ public class MembershipManagerImpl implements MembershipManager {
 
     // Visible for testing.
     void updateAssignment(Map<Uuid, SortedSet<Integer>> partitions) {
-        currentAssignment = new LocalAssignmentImpl(0, partitions);
+        currentAssignment = new LocalAssignment(0, partitions);
     }
 
     /**
@@ -1385,7 +1387,7 @@ public class MembershipManagerImpl implements MembershipManager {
      * or the next reconciliation loop). Remove all elements from the topic names cache.
      */
     private void clearPendingAssignmentsAndLocalNamesCache() {
-        currentTargetAssignment = LocalAssignmentImpl.NONE;
+        currentTargetAssignment = LocalAssignment.NONE;
         assignedTopicNamesCache.clear();
     }
 
@@ -1452,10 +1454,10 @@ public class MembershipManagerImpl implements MembershipManager {
      * Visible for testing.
      */
     Map<Uuid, SortedSet<Integer>> topicPartitionsAwaitingReconciliation() {
-        if (currentTargetAssignment == LocalAssignmentImpl.NONE) {
+        if (currentTargetAssignment == LocalAssignment.NONE) {
             return Collections.emptyMap();
         }
-        if (currentAssignment == LocalAssignmentImpl.NONE) {
+        if (currentAssignment == LocalAssignment.NONE) {
             return currentTargetAssignment.partitions;
         }
         final Map<Uuid, SortedSet<Integer>> topicPartitionMap = new HashMap<>();
@@ -1507,92 +1509,4 @@ public class MembershipManagerImpl implements MembershipManager {
         return unmodifiableList(stateUpdatesListeners);
     }
 
-    private final static class LocalAssignmentImpl implements LocalAssignment {
-
-        private static final long NONE_EPOCH = -1;
-
-        private static final LocalAssignmentImpl NONE = new LocalAssignmentImpl(NONE_EPOCH, Collections.emptyMap());
-
-        private final long localEpoch;
-
-        private final Map<Uuid, SortedSet<Integer>> partitions;
-
-        public LocalAssignmentImpl(long localEpoch, Map<Uuid, SortedSet<Integer>> partitions) {
-            this.localEpoch = localEpoch;
-            this.partitions = partitions;
-            if (localEpoch == NONE_EPOCH && !partitions.isEmpty()) {
-                throw new IllegalArgumentException("Local epoch must be set if there are partitions");
-            }
-        }
-
-        public LocalAssignmentImpl(long localEpoch, SortedSet<TopicIdPartition> topicIdPartitions) {
-            this.localEpoch = localEpoch;
-            this.partitions = new HashMap<>();
-            if (localEpoch == NONE_EPOCH && !topicIdPartitions.isEmpty()) {
-                throw new IllegalArgumentException("Local epoch must be set if there are partitions");
-            }
-            topicIdPartitions.forEach(topicIdPartition -> {
-                Uuid topicId = topicIdPartition.topicId();
-                partitions.computeIfAbsent(topicId, k -> new TreeSet<>()).add(topicIdPartition.partition());
-            });
-        }
-
-        @Override
-        public String toString() {
-            return "{" +
-                "localEpoch=" + localEpoch +
-                ", partitions=" + partitions +
-                '}';
-        }
-
-        @Override
-        public boolean equals(final Object o) {
-            if (this == o) {
-                return true;
-            }
-            if (o == null || getClass() != o.getClass()) {
-                return false;
-            }
-            final LocalAssignmentImpl that = (LocalAssignmentImpl) o;
-            return localEpoch == that.localEpoch && Objects.equals(partitions, that.partitions);
-        }
-
-        @Override
-        public int hashCode() {
-            return Objects.hash(localEpoch, partitions);
-        }
-
-        @Override
-        public Map<Uuid, SortedSet<Integer>> getPartitions() {
-            return partitions;
-        }
-
-        @Override
-        public boolean isNone() {
-            return localEpoch == NONE_EPOCH;
-        }
-
-        Optional<LocalAssignmentImpl> updateWith(ConsumerGroupHeartbeatResponseData.Assignment assignment) {
-
-            // Return if we have an assignment, and it is the same as current assignment; comparison without creating a new collection
-            if (localEpoch != NONE_EPOCH) {
-                // check if the new assignment is different from the current target assignment
-                if (partitions.size() == assignment.topicPartitions().size() &&
-                    assignment.topicPartitions().stream().allMatch(
-                        tp -> partitions.containsKey(tp.topicId()) &&
-                            partitions.get(tp.topicId()).size() == tp.partitions().size() &&
-                            partitions.get(tp.topicId()).containsAll(tp.partitions()))) {
-                    return Optional.empty();
-                }
-            }
-
-            // Bump local epoch and replace assignment
-            long nextLocalEpoch = localEpoch + 1;
-            HashMap<Uuid, SortedSet<Integer>> partitions = new HashMap<>();
-            assignment.topicPartitions().forEach(topicPartitions ->
-                partitions.put(topicPartitions.topicId(), new TreeSet<>(topicPartitions.partitions())));
-            return Optional.of(new LocalAssignmentImpl(nextLocalEpoch, partitions));
-
-        }
-    }
 }

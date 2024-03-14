@@ -533,13 +533,14 @@ public class HeartbeatRequestManager implements RequestManager {
             // InstanceId - set if present
             membershipManager.groupInstanceId().ifPresent(data::setInstanceId);
 
-            // RebalanceTimeoutMs - only sent when joining
-            if (membershipManager.memberEpoch() == 0) {
+            // RebalanceTimeoutMs - only sent when joining or if has changed since the last heartbeat
+            if (membershipManager.memberEpoch() == 0 || sentFields.rebalanceTimeoutMs != rebalanceTimeoutMs) {
                 data.setRebalanceTimeoutMs(rebalanceTimeoutMs);
+                sentFields.rebalanceTimeoutMs = rebalanceTimeoutMs;
             }
 
             if (!this.subscriptions.hasPatternSubscription()) {
-                // SubscribedTopicNames - only sent when joining or if has changed since the last heartbeat
+                // SubscribedTopicNames - only sent when joining or if it has changed since the last heartbeat
                 TreeSet<String> subscribedTopicNames = new TreeSet<>(this.subscriptions.subscription());
                 if (membershipManager.memberEpoch() == 0 || !subscribedTopicNames.equals(sentFields.subscribedTopicNames)) {
                     data.setSubscribedTopicNames(new ArrayList<>(this.subscriptions.subscription()));
@@ -552,7 +553,7 @@ public class HeartbeatRequestManager implements RequestManager {
 
             // ServerAssignor - only sent if has changed since the last heartbeat
             this.membershipManager.serverAssignor().ifPresent(serverAssignor -> {
-                if (!serverAssignor.equals(sentFields.serverAssignor)) {
+                if (membershipManager.memberEpoch() == 0 || !serverAssignor.equals(sentFields.serverAssignor)) {
                     data.setServerAssignor(serverAssignor);
                     sentFields.serverAssignor = serverAssignor;
                 }
@@ -564,12 +565,9 @@ public class HeartbeatRequestManager implements RequestManager {
             // reconciled. This is ensured by resending the topic partitions whenever the local assignment,
             // including its local epoch is changed (although the local epoch is not sent in the heartbeat).
             LocalAssignment local = membershipManager.currentAssignment();
-            if (local == null) {
-                data.setTopicPartitions(Collections.emptyList());
-                sentFields.localAssignment = null;
-            } else if (!local.equals(sentFields.localAssignment)) {
+            if (!local.equals(sentFields.localAssignment)) {
                 List<ConsumerGroupHeartbeatRequestData.TopicPartitions> topicPartitions =
-                    buildTopicPartitionsList(local.getPartitions());
+                    buildTopicPartitionsList(local.partitions);
                 data.setTopicPartitions(topicPartitions);
                 sentFields.localAssignment = local;
             }
@@ -587,6 +585,7 @@ public class HeartbeatRequestManager implements RequestManager {
 
         // Fields of ConsumerHeartbeatRequest sent in the most recent request
         static class SentFields {
+            private int rebalanceTimeoutMs = -1;
             private TreeSet<String> subscribedTopicNames = null;
             private String serverAssignor = null;
             private LocalAssignment localAssignment = null;
@@ -595,6 +594,7 @@ public class HeartbeatRequestManager implements RequestManager {
 
             void reset() {
                 subscribedTopicNames = null;
+                rebalanceTimeoutMs = -1;
                 serverAssignor = null;
                 localAssignment = null;
             }

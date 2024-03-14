@@ -18,12 +18,17 @@ package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.internals.events.ConsumerRebalanceListenerCallbackCompletedEvent;
+import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatResponseData;
 
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.SortedSet;
+import java.util.TreeSet;
 import java.util.concurrent.CompletableFuture;
 
 /**
@@ -192,11 +197,82 @@ public interface MembershipManager extends RequestManager {
      * Besides the assigned partitions, it contains a local epoch that is bumped whenever the assignment changes, to ensure
      * that two assignments with the same partitions but different local epochs are not considered equal.
      */
-    interface LocalAssignment {
+    final class LocalAssignment {
 
-        Map<Uuid, SortedSet<Integer>> getPartitions();
+        public static final long NONE_EPOCH = -1;
 
-        boolean isNone();
+        public static final LocalAssignment NONE = new LocalAssignment(NONE_EPOCH, Collections.emptyMap());
 
+        public final long localEpoch;
+
+        public final Map<Uuid, SortedSet<Integer>> partitions;
+
+        public LocalAssignment(long localEpoch, Map<Uuid, SortedSet<Integer>> partitions) {
+            this.localEpoch = localEpoch;
+            this.partitions = partitions;
+            if (localEpoch == NONE_EPOCH && !partitions.isEmpty()) {
+                throw new IllegalArgumentException("Local epoch must be set if there are partitions");
+            }
+        }
+
+        public LocalAssignment(long localEpoch, SortedSet<TopicIdPartition> topicIdPartitions) {
+            this.localEpoch = localEpoch;
+            this.partitions = new HashMap<>();
+            if (localEpoch == NONE_EPOCH && !topicIdPartitions.isEmpty()) {
+                throw new IllegalArgumentException("Local epoch must be set if there are partitions");
+            }
+            topicIdPartitions.forEach(topicIdPartition -> {
+                Uuid topicId = topicIdPartition.topicId();
+                partitions.computeIfAbsent(topicId, k -> new TreeSet<>()).add(topicIdPartition.partition());
+            });
+        }
+
+        public String toString() {
+            return "LocalAssignment{" +
+                "localEpoch=" + localEpoch +
+                ", partitions=" + partitions +
+                '}';
+        }
+
+        public boolean equals(final Object o) {
+            if (this == o) {
+                return true;
+            }
+            if (o == null || getClass() != o.getClass()) {
+                return false;
+            }
+            final LocalAssignment that = (LocalAssignment) o;
+            return localEpoch == that.localEpoch && Objects.equals(partitions, that.partitions);
+        }
+
+        public int hashCode() {
+            return Objects.hash(localEpoch, partitions);
+        }
+
+        public boolean isNone() {
+            return localEpoch == NONE_EPOCH;
+        }
+
+        Optional<LocalAssignment> updateWith(ConsumerGroupHeartbeatResponseData.Assignment assignment) {
+
+            // Return if we have an assignment, and it is the same as current assignment; comparison without creating a new collection
+            if (localEpoch != NONE_EPOCH) {
+                if (partitions.size() == assignment.topicPartitions().size() &&
+                    assignment.topicPartitions().stream().allMatch(
+                        tp -> partitions.containsKey(tp.topicId()) &&
+                            partitions.get(tp.topicId()).size() == tp.partitions().size() &&
+                            partitions.get(tp.topicId()).containsAll(tp.partitions()))) {
+                    return Optional.empty();
+                }
+            }
+
+            // Bump local epoch and replace assignment
+            long nextLocalEpoch = localEpoch + 1;
+            HashMap<Uuid, SortedSet<Integer>> partitions = new HashMap<>();
+            assignment.topicPartitions().forEach(topicPartitions ->
+                partitions.put(topicPartitions.topicId(), new TreeSet<>(topicPartitions.partitions())));
+            return Optional.of(new LocalAssignment(nextLocalEpoch, partitions));
+
+        }
     }
 }
