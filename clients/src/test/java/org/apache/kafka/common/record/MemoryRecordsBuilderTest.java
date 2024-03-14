@@ -377,11 +377,8 @@ public class MemoryRecordsBuilderTest {
 
         MemoryRecordsBuilder.RecordsInfo info = builder.info();
         assertEquals(logAppendTime, info.maxTimestamp);
-
-        if (args.compressionType == CompressionType.NONE && magic <= MAGIC_VALUE_V1)
-            assertEquals(0L, info.shallowOffsetOfMaxTimestamp);
-        else
-            assertEquals(2L, info.shallowOffsetOfMaxTimestamp);
+        // When logAppendTime is used, the first offset of the batch will be the offset of maxTimestamp
+        assertEquals(0L, info.shallowOffsetOfMaxTimestamp);
 
         for (RecordBatch batch : records.batches()) {
             if (magic == MAGIC_VALUE_V0) {
@@ -415,10 +412,11 @@ public class MemoryRecordsBuilderTest {
             assertEquals(2L, info.maxTimestamp);
         }
 
-        if (args.compressionType == CompressionType.NONE && magic == MAGIC_VALUE_V1)
-            assertEquals(1L, info.shallowOffsetOfMaxTimestamp);
+        if (magic == MAGIC_VALUE_V0)
+            // in MAGIC_VALUE_V0's case, we don't have timestamp info in records, so always return -1.
+            assertEquals(-1L, info.shallowOffsetOfMaxTimestamp);
         else
-            assertEquals(2L, info.shallowOffsetOfMaxTimestamp);
+            assertEquals(1L, info.shallowOffsetOfMaxTimestamp);
 
         int i = 0;
         long[] expectedTimestamps = new long[] {0L, 2L, 1L};
@@ -495,12 +493,13 @@ public class MemoryRecordsBuilderTest {
         MemoryRecords records = builder.build();
 
         MemoryRecordsBuilder.RecordsInfo info = builder.info();
-        if (magic == MAGIC_VALUE_V0)
+        if (magic == MAGIC_VALUE_V0) {
             assertEquals(-1, info.maxTimestamp);
-        else
+            assertEquals(-1L, info.shallowOffsetOfMaxTimestamp);
+        } else {
             assertEquals(2L, info.maxTimestamp);
-
-        assertEquals(2L, info.shallowOffsetOfMaxTimestamp);
+            assertEquals(2L, info.shallowOffsetOfMaxTimestamp);
+        }
 
         long i = 0L;
         for (RecordBatch batch : records.batches()) {

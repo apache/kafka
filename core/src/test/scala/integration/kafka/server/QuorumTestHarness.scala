@@ -124,7 +124,7 @@ class KRaftQuorumImplementation(
       util.EnumSet.of(REQUIRE_AT_LEAST_ONE_VALID, REQUIRE_METADATA_LOG_DIR))
     val sharedServer = new SharedServer(config,
       metaPropertiesEnsemble,
-      Time.SYSTEM,
+      time,
       new Metrics(),
       controllerQuorumVotersFuture,
       faultHandlerFactory)
