@@ -21,7 +21,6 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Iterator;
-import java.util.LinkedList;
 import java.util.List;
 import java.util.ListIterator;
 
@@ -36,8 +35,8 @@ public class BoundedList<E> implements List<E> {
     private final int maxLength;
     private final List<E> underlying;
 
-    public static <E> BoundedList<E> newLinkedListBacked(int maxLength) {
-        return new BoundedList<>(maxLength, new LinkedList<>());
+    public static <E> BoundedList<E> newArrayBacked(int maxLength) {
+        return new BoundedList<>(maxLength, new ArrayList<>());
     }
 
     public static <E> BoundedList<E> newArrayBacked(int maxLength, int initialCapacity) {

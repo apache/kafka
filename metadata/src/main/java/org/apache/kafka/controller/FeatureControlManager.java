@@ -174,7 +174,7 @@ public class FeatureControlManager {
         boolean validateOnly
     ) {
         TreeMap<String, ApiError> results = new TreeMap<>();
-        List<ApiMessageAndVersion> records = BoundedList.newLinkedListBacked(MAX_RECORDS_PER_USER_OP);
+        List<ApiMessageAndVersion> records = BoundedList.newArrayBacked(MAX_RECORDS_PER_USER_OP);
         for (Entry<String, Short> entry : updates.entrySet()) {
             results.put(entry.getKey(), updateFeature(entry.getKey(), entry.getValue(),
                 upgradeTypes.getOrDefault(entry.getKey(), FeatureUpdate.UpgradeType.UPGRADE), records));

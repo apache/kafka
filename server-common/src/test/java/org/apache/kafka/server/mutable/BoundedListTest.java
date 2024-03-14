@@ -36,7 +36,7 @@ public class BoundedListTest {
     public void testMaxLengthMustNotBeZero() {
         assertEquals("Invalid non-positive maxLength of 0",
                 assertThrows(IllegalArgumentException.class,
-                        () -> BoundedList.newLinkedListBacked(0)).
+                        () -> BoundedList.newArrayBacked(0)).
                         getMessage());
 
         assertEquals("Invalid non-positive maxLength of 0",
@@ -49,7 +49,7 @@ public class BoundedListTest {
     public void testMaxLengthMustNotBeNegative() {
         assertEquals("Invalid non-positive maxLength of -123",
                 assertThrows(IllegalArgumentException.class,
-                        () -> BoundedList.newLinkedListBacked(-123)).
+                        () -> BoundedList.newArrayBacked(-123)).
                         getMessage());
 
         assertEquals("Invalid non-positive maxLength of -123",
@@ -76,7 +76,7 @@ public class BoundedListTest {
 
     @Test
     public void testAddingToBoundedList() {
-        BoundedList<Integer> list = BoundedList.newLinkedListBacked(2);
+        BoundedList<Integer> list = BoundedList.newArrayBacked(2);
         assertEquals(0, list.size());
         assertTrue(list.isEmpty());
         assertTrue(list.add(456));
@@ -98,7 +98,7 @@ public class BoundedListTest {
 
     @Test
     public void testHashCodeAndEqualsForNonEmptyList() {
-        BoundedList<Integer> boundedList = BoundedList.newLinkedListBacked(7);
+        BoundedList<Integer> boundedList = BoundedList.newArrayBacked(7);
         List<Integer> otherList = Arrays.asList(1, 2, 3, 4, 5, 6, 7);
         boundedList.addAll(otherList);
 
@@ -108,7 +108,7 @@ public class BoundedListTest {
 
     @Test
     public void testSet() {
-        BoundedList<Integer> list = BoundedList.newLinkedListBacked(3);
+        BoundedList<Integer> list = BoundedList.newArrayBacked(3);
         list.add(1);
         list.add(200);
         list.add(3);
@@ -121,7 +121,7 @@ public class BoundedListTest {
 
     @Test
     public void testRemove() {
-        BoundedList<String> list = BoundedList.newLinkedListBacked(3);
+        BoundedList<String> list = BoundedList.newArrayBacked(3);
         list.add("a");
         list.add("a");
         list.add("c");
@@ -135,7 +135,7 @@ public class BoundedListTest {
 
     @Test
     public void testClear() {
-        BoundedList<String> list = BoundedList.newLinkedListBacked(3);
+        BoundedList<String> list = BoundedList.newArrayBacked(3);
         list.add("a");
         list.add("a");
         list.add("c");
@@ -146,7 +146,7 @@ public class BoundedListTest {
 
     @Test
     public void testGet() {
-        BoundedList<Integer> list = BoundedList.newLinkedListBacked(3);
+        BoundedList<Integer> list = BoundedList.newArrayBacked(3);
         list.add(1);
         list.add(2);
         list.add(3);
@@ -157,7 +157,7 @@ public class BoundedListTest {
 
     @Test
     public void testToArray() {
-        BoundedList<Integer> list = BoundedList.newLinkedListBacked(3);
+        BoundedList<Integer> list = BoundedList.newArrayBacked(3);
         list.add(1);
         list.add(2);
         list.add(3);
@@ -167,7 +167,7 @@ public class BoundedListTest {
 
     @Test
     public void testAddAll() {
-        BoundedList<String> list = BoundedList.newLinkedListBacked(5);
+        BoundedList<String> list = BoundedList.newArrayBacked(5);
         list.add("a");
         list.add("b");
         list.add("c");
@@ -187,7 +187,7 @@ public class BoundedListTest {
 
     @Test
     public void testIterator() {
-        BoundedList<Integer> list = BoundedList.newLinkedListBacked(3);
+        BoundedList<Integer> list = BoundedList.newArrayBacked(3);
         list.add(1);
         list.add(2);
         list.add(3);
@@ -199,10 +199,11 @@ public class BoundedListTest {
 
     @Test
     public void testIteratorIsImmutable() {
-        BoundedList<Integer> list = BoundedList.newLinkedListBacked(3);
+        BoundedList<Integer> list = BoundedList.newArrayBacked(3);
         list.add(1);
         list.add(2);
-        list.add(3);        assertThrows(UnsupportedOperationException.class,
+        list.add(3);
+        assertThrows(UnsupportedOperationException.class,
                 () -> list.iterator().remove());
         assertThrows(UnsupportedOperationException.class,
                 () -> list.listIterator().remove());
@@ -210,10 +211,11 @@ public class BoundedListTest {
 
     @Test
     public void testSubList() {
-        BoundedList<Integer> list = BoundedList.newLinkedListBacked(3);
+        BoundedList<Integer> list = BoundedList.newArrayBacked(3);
         list.add(1);
         list.add(2);
-        list.add(3);        assertEquals(Arrays.asList(2), list.subList(1, 2));
+        list.add(3);
+        assertEquals(Arrays.asList(2), list.subList(1, 2));
         assertThrows(UnsupportedOperationException.class,
                 () -> list.subList(1, 2).remove(2));
     }
