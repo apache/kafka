@@ -18,6 +18,8 @@ package org.apache.kafka.common.record;
 
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.CorruptRecordException;
+import org.apache.kafka.common.header.Header;
+import org.apache.kafka.common.header.internals.RecordHeader;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.message.LeaderChangeMessage;
 import org.apache.kafka.common.message.LeaderChangeMessage.Voter;
@@ -228,7 +230,11 @@ public class MemoryRecordsTest {
                 TimestampType.CREATE_TIME, 0L);
         builder.append(logAppendTime, "key".getBytes(), "value".getBytes());
         RecordHeaders headers = new RecordHeaders();
-        for (int i = 0; i < 10; ++i) headers.add("hello", "world.world".getBytes());
+        List<Header> headerList = new ArrayList<>();
+        for (int i = 0; i < 10; ++i) {
+            headerList.add(new RecordHeader("hello", "world.world".getBytes()));
+        }
+        headers.addAll(headerList);
         // Make sure that hasRoomFor accounts for header sizes by letting a record without headers pass, but stopping
         // a record with a large number of headers.
         assertTrue(builder.hasRoomFor(logAppendTime, "key".getBytes(), "value".getBytes(), Record.EMPTY_HEADERS));
