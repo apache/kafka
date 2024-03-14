@@ -43,6 +43,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.mockito.Mockito;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -681,10 +682,7 @@ public class MembershipManagerImplTest {
         receiveAssignment(newAssignment, membershipManager);
         membershipManager.poll(time.milliseconds());
 
-        // We bumped the local epoch, so new reconciliation is triggered
-        assertEquals(MemberState.ACKNOWLEDGING, membershipManager.state());
-        membershipManager.onHeartbeatRequestSent();
-
+        verifyReconciliationNotTriggered(membershipManager);
         assertEquals(MemberState.RECONCILING, membershipManager.state());
         assertEquals(Collections.singleton(topicId2), membershipManager.topicsAwaitingReconciliation());
         verify(metadata).requestUpdate(anyBoolean());
