@@ -111,6 +111,7 @@
         <allow pkg="org.apache.kafka.server.log" />
         <allow pkg="org.apache.kafka.server.log.remote" />
         <allow pkg="org.apache.kafka.server.log.remote.storage" />
+        <allow pkg="org.apache.kafka.server.config" />
 
         <allow pkg="org.apache.kafka.test" />
         <subpackage name="actions">
@@ -123,7 +124,6 @@
         </subpackage>
 
         <subpackage name="integration">
-            <allow class="org.apache.kafka.server.config.KafkaConfig" />
         </subpackage>
     </subpackage>
     <!-- END OF TIERED STORAGE INTEGRATION TEST IMPORT DEPENDENCIES -->
