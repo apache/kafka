@@ -2271,7 +2271,7 @@ public class KafkaAdminClient extends AdminClient {
                     }
 
                     if (responseCursor != null && responseCursor.topicName().equals(topicName)) {
-                        //In the same batch of result, it may need to handle the partitions for the previous cursor
+                        // In the same batch of result, it may need to handle the partitions for the previous cursor
                         // topic and the current cursor topic. Cache the result in the nextTopicDescription.
                         nextTopicDescription = currentTopicDescription;
                         continue;
@@ -2292,7 +2292,6 @@ public class KafkaAdminClient extends AdminClient {
                 }
                 if (nextTopicDescription != null) {
                     partiallyFinishedTopicDescription = nextTopicDescription;
-                    nextTopicDescription = null;
                 }
 
                 if (!pendingTopics.isEmpty()) {
