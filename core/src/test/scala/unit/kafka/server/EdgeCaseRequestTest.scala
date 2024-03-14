@@ -26,7 +26,7 @@ import kafka.integration.KafkaServerTestHarness
 import kafka.network.SocketServer
 import kafka.utils._
 import org.apache.kafka.common.message.ProduceRequestData
-import org.apache.kafka.common.network.ListenerName
+import org.apache.kafka.common.network.{ListenerName, NetworkContext}
 import org.apache.kafka.common.protocol.types.Type
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.record.{CompressionType, MemoryRecords, SimpleRecord}
@@ -51,7 +51,7 @@ class EdgeCaseRequestTest extends KafkaServerTestHarness {
   private def socketServer = brokers.head.socketServer
 
   private def connect(s: SocketServer = socketServer, protocol: SecurityProtocol = SecurityProtocol.PLAINTEXT): Socket = {
-    new Socket("localhost", s.boundPort(ListenerName.forSecurityProtocol(protocol)))
+    NetworkContext.factory.createSocket("localhost", s.boundPort(ListenerName.forSecurityProtocol(protocol)))
   }
 
   private def sendRequest(socket: Socket, request: Array[Byte], id: Option[Short] = None): Unit = {

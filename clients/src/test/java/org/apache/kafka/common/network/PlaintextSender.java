@@ -28,7 +28,7 @@ public class PlaintextSender extends Thread {
     @SuppressWarnings("this-escape")
     public PlaintextSender(final InetSocketAddress serverAddress, final byte[] payload) {
         super(() -> {
-            try (Socket connection = new Socket(serverAddress.getAddress(), serverAddress.getPort());
+            try (Socket connection = NetworkContext.factory().createSocket(serverAddress.getAddress(), serverAddress.getPort());
                  OutputStream os = connection.getOutputStream()) {
                 os.write(payload);
                 os.flush();

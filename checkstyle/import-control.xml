@@ -102,6 +102,7 @@
       <allow pkg="org.apache.kafka.common.config" />
       <allow pkg="org.apache.kafka.common.metrics" />
       <allow pkg="org.apache.kafka.common.security" />
+      <allow pkg="javax.net" />
       <allow class="org.apache.kafka.common.requests.ApiVersionsResponse" />
     </subpackage>
 

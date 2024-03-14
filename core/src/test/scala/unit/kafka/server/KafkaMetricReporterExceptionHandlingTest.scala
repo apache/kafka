@@ -18,7 +18,7 @@ import kafka.utils.{TestInfoUtils, TestUtils}
 import org.apache.kafka.common.config.internals.QuotaConfigs
 import org.apache.kafka.common.message.ListGroupsRequestData
 import org.apache.kafka.common.metrics.{KafkaMetric, MetricsReporter}
-import org.apache.kafka.common.network.ListenerName
+import org.apache.kafka.common.network.{ListenerName, NetworkContext}
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{ListGroupsRequest, ListGroupsResponse}
 import org.apache.kafka.common.security.auth.SecurityProtocol
@@ -27,7 +27,6 @@ import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 
-import java.net.Socket
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.{Collections, Properties}
 
@@ -66,7 +65,7 @@ class KafkaMetricReporterExceptionHandlingTest extends BaseRequestTest {
   @ValueSource(strings = Array("zk", "kraft"))
   def testBothReportersAreInvoked(quorum: String): Unit = {
     val port = anySocketServer.boundPort(ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT))
-    val socket = new Socket("localhost", port)
+    val socket = NetworkContext.factory.createSocket("localhost", port)
     socket.setSoTimeout(10000)
 
     try {

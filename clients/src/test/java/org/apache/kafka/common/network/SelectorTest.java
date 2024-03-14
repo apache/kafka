@@ -191,7 +191,7 @@ public class SelectorTest {
     @Test
     public void testConnectionRefused() throws Exception {
         String node = "0";
-        ServerSocket nonListeningSocket = new ServerSocket(0);
+        ServerSocket nonListeningSocket = NetworkContext.serverFactory().createServerSocket(0);
         int nonListeningPort = nonListeningSocket.getLocalPort();
         selector.connect(node, new InetSocketAddress("localhost", nonListeningPort), BUFFER_SIZE, BUFFER_SIZE);
         while (selector.disconnected().containsKey(node)) {

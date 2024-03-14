@@ -175,7 +175,7 @@ class SocketServerTest {
         s"${listenerName}", e)
     }
     val socket = try {
-      new Socket("localhost", boundPort, localAddr, port)
+      NetworkContext.factory.createSocket("localhost", boundPort, localAddr, port)
     } catch {
       case e: Throwable => throw new RuntimeException(s"Unable to connect to remote port ${boundPort} " +
         s"with local port ${port} on listener ${listenerName}", e)
@@ -2454,9 +2454,9 @@ class SocketServerTest {
    * channel's `netReadBuffer` to simulate scenarios with SSL buffered data.
    */
   private class ProxyServer(socketServer: SocketServer) {
-    val serverSocket = new ServerSocket(0)
+    val serverSocket = NetworkContext.serverFactory.createServerSocket(0)
     val localPort = serverSocket.getLocalPort
-    val serverConnSocket = new Socket("localhost", socketServer.boundPort(ListenerName.forSecurityProtocol(SecurityProtocol.SSL)))
+    val serverConnSocket = NetworkContext.factory.createSocket("localhost", socketServer.boundPort(ListenerName.forSecurityProtocol(SecurityProtocol.SSL)))
     val executor = Executors.newFixedThreadPool(2)
     @volatile var clientConnSocket: Socket = _
     @volatile var buffer: Option[ByteBuffer] = None

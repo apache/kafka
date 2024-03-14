@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.tools;
 
+import org.apache.kafka.common.network.NetworkContext;
 import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.common.utils.Exit;
 import org.junit.jupiter.api.AfterAll;
@@ -351,7 +352,7 @@ public class JmxToolTest {
     }
 
     private static int findRandomOpenPortOnAllLocalInterfaces() throws Exception {
-        try (ServerSocket socket = new ServerSocket(0)) {
+        try (ServerSocket socket = NetworkContext.serverFactory().createServerSocket(0)) {
             return socket.getLocalPort();
         }
     }

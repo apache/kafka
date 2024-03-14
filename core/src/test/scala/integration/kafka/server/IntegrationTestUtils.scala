@@ -26,7 +26,7 @@ import kafka.network.SocketServer
 import kafka.utils.Implicits._
 import kafka.utils.{NotNothing, TestUtils}
 import org.apache.kafka.clients.admin.{Admin, NewTopic}
-import org.apache.kafka.common.network.{ListenerName, Mode}
+import org.apache.kafka.common.network.{ListenerName, Mode, NetworkContext}
 import org.apache.kafka.common.protocol.ApiKeys
 import org.apache.kafka.common.requests.{AbstractRequest, AbstractResponse, RequestHeader, ResponseHeader}
 import org.apache.kafka.common.security.auth.SecurityProtocol
@@ -136,7 +136,7 @@ object IntegrationTestUtils {
 
   def connect(socketServer: SocketServer,
               listenerName: ListenerName): Socket = {
-    new Socket("localhost", socketServer.boundPort(listenerName))
+    NetworkContext.factory.createSocket("localhost", socketServer.boundPort(listenerName))
   }
 
   def clientSecurityProps(certAlias: String): Properties = {

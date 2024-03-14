@@ -156,7 +156,7 @@ public class Selector implements Selectable, AutoCloseable {
             MemoryPool memoryPool,
             LogContext logContext) {
         try {
-            this.nioSelector = java.nio.channels.Selector.open();
+            this.nioSelector = NetworkContext.provider().openSelector();
         } catch (IOException e) {
             throw new KafkaException(e);
         }

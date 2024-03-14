@@ -20,7 +20,7 @@ package kafka.server
 import kafka.api.IntegrationTestHarness
 import kafka.network.SocketServer
 import kafka.utils.NotNothing
-import org.apache.kafka.common.network.ListenerName
+import org.apache.kafka.common.network.{ListenerName, NetworkContext}
 import org.apache.kafka.common.protocol.ApiKeys
 import org.apache.kafka.common.requests.{AbstractRequest, AbstractResponse, RequestHeader, ResponseHeader}
 import org.apache.kafka.common.utils.Utils
@@ -99,7 +99,7 @@ abstract class BaseRequestTest extends IntegrationTestHarness {
 
   def connect(socketServer: SocketServer = anySocketServer,
               listenerName: ListenerName = listenerName): Socket = {
-    new Socket("localhost", socketServer.boundPort(listenerName))
+    NetworkContext.factory.createSocket("localhost", socketServer.boundPort(listenerName))
   }
 
   private def sendRequest(socket: Socket, request: Array[Byte]): Unit = {
