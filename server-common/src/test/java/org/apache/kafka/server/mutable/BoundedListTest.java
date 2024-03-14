@@ -31,23 +31,52 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @Timeout(120)
 public class BoundedListTest {
+
     @Test
     public void testMaxLengthMustNotBeZero() {
         assertEquals("Invalid non-positive maxLength of 0",
-            assertThrows(IllegalArgumentException.class,
-                () -> new BoundedList<>(0)).getMessage());
+                assertThrows(IllegalArgumentException.class,
+                        () -> BoundedList.newLinkedListBacked(0)).
+                        getMessage());
+
+        assertEquals("Invalid non-positive maxLength of 0",
+                assertThrows(IllegalArgumentException.class,
+                        () -> BoundedList.newArrayBacked(0, 100)).
+                        getMessage());
     }
 
     @Test
     public void testMaxLengthMustNotBeNegative() {
         assertEquals("Invalid non-positive maxLength of -123",
-            assertThrows(IllegalArgumentException.class,
-                () -> new BoundedList<>(-123)).getMessage());
+                assertThrows(IllegalArgumentException.class,
+                        () -> BoundedList.newLinkedListBacked(-123)).
+                        getMessage());
+
+        assertEquals("Invalid non-positive maxLength of -123",
+                assertThrows(IllegalArgumentException.class,
+                        () -> BoundedList.newArrayBacked(-123, 100)).
+                        getMessage());
+    }
+
+    @Test
+    public void testInitialCapacityMustNotBeZero() {
+        assertEquals("Invalid non-positive initialCapacity of 0",
+                assertThrows(IllegalArgumentException.class,
+                        () -> BoundedList.newArrayBacked(100, 0)).
+                        getMessage());
+    }
+
+    @Test
+    public void testInitialCapacityMustNotBeNegative() {
+        assertEquals("Invalid non-positive initialCapacity of -123",
+                assertThrows(IllegalArgumentException.class,
+                        () -> BoundedList.newArrayBacked(100, -123)).
+                        getMessage());
     }
 
     @Test
     public void testAddingToBoundedList() {
-        BoundedList<Integer> list = new BoundedList<>(2);
+        BoundedList<Integer> list = BoundedList.newLinkedListBacked(2);
         assertEquals(0, list.size());
         assertTrue(list.isEmpty());
         assertTrue(list.add(456));
@@ -56,20 +85,20 @@ public class BoundedListTest {
         assertFalse(list.isEmpty());
         assertTrue(list.add(789));
         assertEquals("Cannot add another element to the list because it would exceed the " +
-            "maximum length of 2",
+                        "maximum length of 2",
                 assertThrows(BoundedListTooLongException.class,
-                    () -> list.add(912)).
+                        () -> list.add(912)).
                         getMessage());
         assertEquals("Cannot add another element to the list because it would exceed the " +
-            "maximum length of 2",
+                        "maximum length of 2",
                 assertThrows(BoundedListTooLongException.class,
-                    () -> list.add(0, 912)).
+                        () -> list.add(0, 912)).
                         getMessage());
     }
 
     @Test
     public void testHashCodeAndEqualsForNonEmptyList() {
-        BoundedList<Integer> boundedList = new BoundedList<>(7);
+        BoundedList<Integer> boundedList = BoundedList.newLinkedListBacked(7);
         List<Integer> otherList = Arrays.asList(1, 2, 3, 4, 5, 6, 7);
         boundedList.addAll(otherList);
 
@@ -79,7 +108,7 @@ public class BoundedListTest {
 
     @Test
     public void testSet() {
-        BoundedList<Integer> list = new BoundedList<>(3);
+        BoundedList<Integer> list = BoundedList.newLinkedListBacked(3);
         list.add(1);
         list.add(200);
         list.add(3);
@@ -92,7 +121,7 @@ public class BoundedListTest {
 
     @Test
     public void testRemove() {
-        BoundedList<String> list = new BoundedList<>(3);
+        BoundedList<String> list = BoundedList.newLinkedListBacked(3);
         list.add("a");
         list.add("a");
         list.add("c");
@@ -106,9 +135,9 @@ public class BoundedListTest {
 
     @Test
     public void testClear() {
-        BoundedList<String> list = new BoundedList<>(3);
+        BoundedList<String> list = BoundedList.newLinkedListBacked(3);
         list.add("a");
-        list.add("b");
+        list.add("a");
         list.add("c");
         list.clear();
         assertEquals(Arrays.asList(), list);
@@ -117,7 +146,7 @@ public class BoundedListTest {
 
     @Test
     public void testGet() {
-        BoundedList<Integer> list = new BoundedList<>(3);
+        BoundedList<Integer> list = BoundedList.newLinkedListBacked(3);
         list.add(1);
         list.add(2);
         list.add(3);
@@ -128,7 +157,7 @@ public class BoundedListTest {
 
     @Test
     public void testToArray() {
-        BoundedList<Integer> list = new BoundedList<>(3);
+        BoundedList<Integer> list = BoundedList.newLinkedListBacked(3);
         list.add(1);
         list.add(2);
         list.add(3);
@@ -138,17 +167,17 @@ public class BoundedListTest {
 
     @Test
     public void testAddAll() {
-        BoundedList<String> list = new BoundedList<>(5);
+        BoundedList<String> list = BoundedList.newLinkedListBacked(5);
         list.add("a");
         list.add("b");
         list.add("c");
         assertEquals("Cannot add another 3 element(s) to the list because it would exceed the " +
-            "maximum length of 5",
+                        "maximum length of 5",
                 assertThrows(BoundedListTooLongException.class,
-                    () -> list.addAll(Arrays.asList("d", "e", "f"))).
+                        () -> list.addAll(Arrays.asList("d", "e", "f"))).
                         getMessage());
         assertEquals("Cannot add another 3 element(s) to the list because it would exceed the " +
-            "maximum length of 5",
+                        "maximum length of 5",
                 assertThrows(BoundedListTooLongException.class,
                         () -> list.addAll(0, Arrays.asList("d", "e", "f"))).
                         getMessage());
@@ -158,7 +187,7 @@ public class BoundedListTest {
 
     @Test
     public void testIterator() {
-        BoundedList<Integer> list = new BoundedList<>(3);
+        BoundedList<Integer> list = BoundedList.newLinkedListBacked(3);
         list.add(1);
         list.add(2);
         list.add(3);
@@ -170,24 +199,22 @@ public class BoundedListTest {
 
     @Test
     public void testIteratorIsImmutable() {
-        BoundedList<Integer> list = new BoundedList<>(3);
+        BoundedList<Integer> list = BoundedList.newLinkedListBacked(3);
         list.add(1);
         list.add(2);
-        list.add(3);
+        list.add(3);        assertThrows(UnsupportedOperationException.class,
+                () -> list.iterator().remove());
         assertThrows(UnsupportedOperationException.class,
-            () -> list.iterator().remove());
-        assertThrows(UnsupportedOperationException.class,
-            () -> list.listIterator().remove());
+                () -> list.listIterator().remove());
     }
 
     @Test
     public void testSubList() {
-        BoundedList<Integer> list = new BoundedList<>(3);
+        BoundedList<Integer> list = BoundedList.newLinkedListBacked(3);
         list.add(1);
         list.add(2);
-        list.add(3);
-        assertEquals(Arrays.asList(2), list.subList(1, 2));
+        list.add(3);        assertEquals(Arrays.asList(2), list.subList(1, 2));
         assertThrows(UnsupportedOperationException.class,
-            () -> list.subList(1, 2).remove(2));
+                () -> list.subList(1, 2).remove(2));
     }
 }

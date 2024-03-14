@@ -17,12 +17,7 @@
 
 package org.apache.kafka.server.mutable;
 
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.Iterator;
-import java.util.List;
-import java.util.ListIterator;
+import java.util.*;
 
 /**
  * A list which cannot grow beyond a certain length. If the maximum length would be exceeded by an
@@ -35,12 +30,23 @@ public class BoundedList<E> implements List<E> {
     private final int maxLength;
     private final List<E> underlying;
 
-    public BoundedList(int maxLength) {
+    public static <E> BoundedList<E> newLinkedListBacked(int maxLength) {
+        return new BoundedList<>(maxLength, new LinkedList<>());
+    }
+
+    public static <E> BoundedList<E> newArrayBacked(int maxLength, int initialCapacity) {
+        if (initialCapacity <= 0) {
+            throw new IllegalArgumentException("Invalid non-positive initialCapacity of " + initialCapacity);
+        }
+        return new BoundedList<>(maxLength, new ArrayList<>(initialCapacity));
+    }
+
+    private BoundedList(int maxLength, List<E> underlying) {
         if (maxLength <= 0) {
             throw new IllegalArgumentException("Invalid non-positive maxLength of " + maxLength);
         }
         this.maxLength = maxLength;
-        this.underlying = new ArrayList<>(maxLength);
+        this.underlying = underlying;
     }
 
     @Override

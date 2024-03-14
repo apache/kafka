@@ -595,7 +595,7 @@ public class ReplicationControlManager {
         Set<String> describable
     ) {
         Map<String, ApiError> topicErrors = new HashMap<>();
-        List<ApiMessageAndVersion> records = new BoundedList<>(MAX_RECORDS_PER_USER_OP);
+        List<ApiMessageAndVersion> records = BoundedList.newLinkedListBacked(MAX_RECORDS_PER_USER_OP);
 
         // Check the topic names.
         validateNewTopicNames(topicErrors, request.topics(), topicsWithCollisionChars);
@@ -940,7 +940,7 @@ public class ReplicationControlManager {
 
     ControllerResult<Map<Uuid, ApiError>> deleteTopics(ControllerRequestContext context, Collection<Uuid> ids) {
         Map<Uuid, ApiError> results = new HashMap<>(ids.size());
-        List<ApiMessageAndVersion> records = new BoundedList<>(MAX_RECORDS_PER_USER_OP);
+        List<ApiMessageAndVersion> records = BoundedList.newArrayBacked(MAX_RECORDS_PER_USER_OP, ids.size());
         for (Uuid id : ids) {
             try {
                 deleteTopic(context, id, records);
@@ -1412,7 +1412,7 @@ public class ReplicationControlManager {
 
     ControllerResult<ElectLeadersResponseData> electLeaders(ElectLeadersRequestData request) {
         ElectionType electionType = electionType(request.electionType());
-        List<ApiMessageAndVersion> records = new BoundedList<>(MAX_RECORDS_PER_USER_OP);
+        List<ApiMessageAndVersion> records = BoundedList.newLinkedListBacked(MAX_RECORDS_PER_USER_OP);
         ElectLeadersResponseData response = new ElectLeadersResponseData();
         if (request.topicPartitions() == null) {
             // If topicPartitions is null, we try to elect a new leader for every partition.  There
@@ -1580,7 +1580,7 @@ public class ReplicationControlManager {
             throw new BrokerIdNotRegisteredException("Broker ID " + brokerId +
                 " is not currently registered");
         }
-        List<ApiMessageAndVersion> records = new BoundedList<>(MAX_RECORDS_PER_USER_OP);
+        List<ApiMessageAndVersion> records = BoundedList.newLinkedListBacked(MAX_RECORDS_PER_USER_OP);
         handleBrokerUnregistered(brokerId, registration.epoch(), records);
         return ControllerResult.of(records, null);
     }
@@ -1656,8 +1656,8 @@ public class ReplicationControlManager {
         ControllerRequestContext context,
         List<CreatePartitionsTopic> topics
     ) {
-        List<ApiMessageAndVersion> records = new BoundedList<>(MAX_RECORDS_PER_USER_OP);
-        List<CreatePartitionsTopicResult> results = new BoundedList<>(MAX_RECORDS_PER_USER_OP);
+        List<ApiMessageAndVersion> records = BoundedList.newLinkedListBacked(MAX_RECORDS_PER_USER_OP);
+        List<CreatePartitionsTopicResult> results = BoundedList.newLinkedListBacked(MAX_RECORDS_PER_USER_OP);
         for (CreatePartitionsTopic topic : topics) {
             ApiError apiError = ApiError.NONE;
             try {
@@ -1894,7 +1894,7 @@ public class ReplicationControlManager {
 
     ControllerResult<AlterPartitionReassignmentsResponseData>
             alterPartitionReassignments(AlterPartitionReassignmentsRequestData request) {
-        List<ApiMessageAndVersion> records = new BoundedList<>(MAX_RECORDS_PER_USER_OP);
+        List<ApiMessageAndVersion> records = BoundedList.newLinkedListBacked(MAX_RECORDS_PER_USER_OP);
         AlterPartitionReassignmentsResponseData result =
                 new AlterPartitionReassignmentsResponseData().setErrorMessage(null);
         int successfulAlterations = 0, totalAlterations = 0;
