@@ -530,7 +530,7 @@ public class HeartbeatRequestManager implements RequestManager {
             // MemberEpoch - always sent
             data.setMemberEpoch(membershipManager.memberEpoch());
 
-            // InstanceId - always send when leaving the group as a static member
+            // InstanceId - set if present
             membershipManager.groupInstanceId().ifPresent(data::setInstanceId);
 
             // RebalanceTimeoutMs - only sent when joining
