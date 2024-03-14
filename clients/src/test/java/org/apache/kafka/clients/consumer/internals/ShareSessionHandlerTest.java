@@ -183,7 +183,7 @@ public class ShareSessionHandlerTest {
         // A top-level error code will reset the session epoch
         ShareFetchResponse resp3 = new ShareFetchResponse(
                 new ShareFetchResponseData()
-                        .setErrorCode(Errors.UNKNOWN_MEMBER_ID.code()));
+                        .setErrorCode(Errors.INVALID_SHARE_SESSION_EPOCH.code()));
         handler.handleResponse(resp3, ApiKeys.SHARE_FETCH.latestVersion(true));
 
         ShareSessionHandler.Builder builder4 = handler.newBuilder();
@@ -270,7 +270,7 @@ public class ShareSessionHandlerTest {
         // A top-level error code will reset the session epoch
         ShareFetchResponse resp2 = new ShareFetchResponse(
                 new ShareFetchResponseData()
-                        .setErrorCode(Errors.UNKNOWN_MEMBER_ID.code()));
+                        .setErrorCode(Errors.INVALID_SHARE_SESSION_EPOCH.code()));
         handler.handleResponse(resp2, ApiKeys.SHARE_FETCH.latestVersion(true));
 
         ShareSessionHandler.Builder builder3 = handler.newBuilder();
