@@ -24,6 +24,7 @@ import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.coordinator.group.consumer.ClientAssignor;
 import org.apache.kafka.coordinator.group.consumer.ConsumerGroupMember;
+import org.apache.kafka.coordinator.group.consumer.MemberState;
 import org.apache.kafka.coordinator.group.consumer.TopicMetadata;
 import org.apache.kafka.coordinator.group.consumer.VersionedMetadata;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupCurrentMemberAssignmentKey;
@@ -397,11 +398,6 @@ public class RecordHelpersTest {
             mkSortedTopicAssignment(topicId2, 24, 25, 26)
         );
 
-        Map<Uuid, Set<Integer>> assigning = mkSortedAssignment(
-            mkSortedTopicAssignment(topicId1, 17, 18, 19),
-            mkSortedTopicAssignment(topicId2, 27, 28, 29)
-        );
-
         Record expectedRecord = new Record(
             new ApiMessageAndVersion(
                 new ConsumerGroupCurrentMemberAssignmentKey()
@@ -410,9 +406,9 @@ public class RecordHelpersTest {
                 (short) 8),
             new ApiMessageAndVersion(
                 new ConsumerGroupCurrentMemberAssignmentValue()
+                    .setState(MemberState.UNREVOKED_PARTITIONS.value())
                     .setMemberEpoch(22)
                     .setPreviousMemberEpoch(21)
-                    .setTargetMemberEpoch(23)
                     .setAssignedPartitions(Arrays.asList(
                         new ConsumerGroupCurrentMemberAssignmentValue.TopicPartitions()
                             .setTopicId(topicId1)
@@ -426,25 +422,17 @@ public class RecordHelpersTest {
                             .setPartitions(Arrays.asList(14, 15, 16)),
                         new ConsumerGroupCurrentMemberAssignmentValue.TopicPartitions()
                             .setTopicId(topicId2)
-                            .setPartitions(Arrays.asList(24, 25, 26))))
-                    .setPartitionsPendingAssignment(Arrays.asList(
-                        new ConsumerGroupCurrentMemberAssignmentValue.TopicPartitions()
-                            .setTopicId(topicId1)
-                            .setPartitions(Arrays.asList(17, 18, 19)),
-                        new ConsumerGroupCurrentMemberAssignmentValue.TopicPartitions()
-                            .setTopicId(topicId2)
-                            .setPartitions(Arrays.asList(27, 28, 29)))),
+                            .setPartitions(Arrays.asList(24, 25, 26)))),
                 (short) 0));
 
         assertEquals(expectedRecord, newCurrentAssignmentRecord(
             "group-id",
             new ConsumerGroupMember.Builder("member-id")
+                .setState(MemberState.UNREVOKED_PARTITIONS)
                 .setMemberEpoch(22)
                 .setPreviousMemberEpoch(21)
-                .setTargetMemberEpoch(23)
                 .setAssignedPartitions(assigned)
                 .setPartitionsPendingRevocation(revoking)
-                .setPartitionsPendingAssignment(assigning)
                 .build()
         ));
     }

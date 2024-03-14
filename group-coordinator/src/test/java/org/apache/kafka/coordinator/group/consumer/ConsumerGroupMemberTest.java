@@ -51,7 +51,6 @@ public class ConsumerGroupMemberTest {
         ConsumerGroupMember member = new ConsumerGroupMember.Builder("member-id")
             .setMemberEpoch(10)
             .setPreviousMemberEpoch(9)
-            .setTargetMemberEpoch(11)
             .setInstanceId("instance-id")
             .setRackId("rack-id")
             .setRebalanceTimeoutMs(5000)
@@ -73,14 +72,11 @@ public class ConsumerGroupMemberTest {
                 mkTopicAssignment(topicId1, 1, 2, 3)))
             .setPartitionsPendingRevocation(mkAssignment(
                 mkTopicAssignment(topicId2, 4, 5, 6)))
-            .setPartitionsPendingAssignment(mkAssignment(
-                mkTopicAssignment(topicId3, 7, 8, 9)))
             .build();
 
         assertEquals("member-id", member.memberId());
         assertEquals(10, member.memberEpoch());
         assertEquals(9, member.previousMemberEpoch());
-        assertEquals(11, member.targetMemberEpoch());
         assertEquals("instance-id", member.instanceId());
         assertEquals("rack-id", member.rackId());
         assertEquals("client-id", member.clientId());
@@ -102,7 +98,6 @@ public class ConsumerGroupMemberTest {
             member.clientAssignors());
         assertEquals(mkAssignment(mkTopicAssignment(topicId1, 1, 2, 3)), member.assignedPartitions());
         assertEquals(mkAssignment(mkTopicAssignment(topicId2, 4, 5, 6)), member.partitionsPendingRevocation());
-        assertEquals(mkAssignment(mkTopicAssignment(topicId3, 7, 8, 9)), member.partitionsPendingAssignment());
     }
 
     @Test
@@ -114,7 +109,6 @@ public class ConsumerGroupMemberTest {
         ConsumerGroupMember member1 = new ConsumerGroupMember.Builder("member-id")
             .setMemberEpoch(10)
             .setPreviousMemberEpoch(9)
-            .setTargetMemberEpoch(11)
             .setInstanceId("instance-id")
             .setRackId("rack-id")
             .setRebalanceTimeoutMs(5000)
@@ -136,14 +130,11 @@ public class ConsumerGroupMemberTest {
                 mkTopicAssignment(topicId1, 1, 2, 3)))
             .setPartitionsPendingRevocation(mkAssignment(
                 mkTopicAssignment(topicId2, 4, 5, 6)))
-            .setPartitionsPendingAssignment(mkAssignment(
-                mkTopicAssignment(topicId3, 7, 8, 9)))
             .build();
 
         ConsumerGroupMember member2 = new ConsumerGroupMember.Builder("member-id")
             .setMemberEpoch(10)
             .setPreviousMemberEpoch(9)
-            .setTargetMemberEpoch(11)
             .setInstanceId("instance-id")
             .setRackId("rack-id")
             .setRebalanceTimeoutMs(5000)
@@ -165,8 +156,6 @@ public class ConsumerGroupMemberTest {
                 mkTopicAssignment(topicId1, 1, 2, 3)))
             .setPartitionsPendingRevocation(mkAssignment(
                 mkTopicAssignment(topicId2, 4, 5, 6)))
-            .setPartitionsPendingAssignment(mkAssignment(
-                mkTopicAssignment(topicId3, 7, 8, 9)))
             .build();
 
         assertEquals(member1, member2);
@@ -181,7 +170,6 @@ public class ConsumerGroupMemberTest {
         ConsumerGroupMember member = new ConsumerGroupMember.Builder("member-id")
             .setMemberEpoch(10)
             .setPreviousMemberEpoch(9)
-            .setTargetMemberEpoch(11)
             .setInstanceId("instance-id")
             .setRackId("rack-id")
             .setRebalanceTimeoutMs(5000)
@@ -203,8 +191,6 @@ public class ConsumerGroupMemberTest {
                 mkTopicAssignment(topicId1, 1, 2, 3)))
             .setPartitionsPendingRevocation(mkAssignment(
                 mkTopicAssignment(topicId2, 4, 5, 6)))
-            .setPartitionsPendingAssignment(mkAssignment(
-                mkTopicAssignment(topicId3, 7, 8, 9)))
             .build();
 
         // This is a no-op.
@@ -291,16 +277,12 @@ public class ConsumerGroupMemberTest {
         ConsumerGroupCurrentMemberAssignmentValue record = new ConsumerGroupCurrentMemberAssignmentValue()
             .setMemberEpoch(10)
             .setPreviousMemberEpoch(9)
-            .setTargetMemberEpoch(11)
             .setAssignedPartitions(Collections.singletonList(new ConsumerGroupCurrentMemberAssignmentValue.TopicPartitions()
                 .setTopicId(topicId1)
                 .setPartitions(Arrays.asList(0, 1, 2))))
             .setPartitionsPendingRevocation(Collections.singletonList(new ConsumerGroupCurrentMemberAssignmentValue.TopicPartitions()
                 .setTopicId(topicId2)
-                .setPartitions(Arrays.asList(3, 4, 5))))
-            .setPartitionsPendingAssignment(Collections.singletonList(new ConsumerGroupCurrentMemberAssignmentValue.TopicPartitions()
-                .setTopicId(topicId3)
-                .setPartitions(Arrays.asList(6, 7, 8))));
+                .setPartitions(Arrays.asList(3, 4, 5))));
 
         ConsumerGroupMember member = new ConsumerGroupMember.Builder("member-id")
             .updateWith(record)
@@ -308,10 +290,8 @@ public class ConsumerGroupMemberTest {
 
         assertEquals(10, member.memberEpoch());
         assertEquals(9, member.previousMemberEpoch());
-        assertEquals(11, member.targetMemberEpoch());
         assertEquals(mkAssignment(mkTopicAssignment(topicId1, 0, 1, 2)), member.assignedPartitions());
         assertEquals(mkAssignment(mkTopicAssignment(topicId2, 3, 4, 5)), member.partitionsPendingRevocation());
-        assertEquals(mkAssignment(mkTopicAssignment(topicId3, 6, 7, 8)), member.partitionsPendingAssignment());
     }
 
     @Test
@@ -331,16 +311,12 @@ public class ConsumerGroupMemberTest {
         ConsumerGroupCurrentMemberAssignmentValue record = new ConsumerGroupCurrentMemberAssignmentValue()
             .setMemberEpoch(epoch)
             .setPreviousMemberEpoch(epoch - 1)
-            .setTargetMemberEpoch(epoch + 1)
             .setAssignedPartitions(Collections.singletonList(new ConsumerGroupCurrentMemberAssignmentValue.TopicPartitions()
                 .setTopicId(topicId1)
                 .setPartitions(assignedPartitions)))
             .setPartitionsPendingRevocation(Collections.singletonList(new ConsumerGroupCurrentMemberAssignmentValue.TopicPartitions()
                 .setTopicId(topicId2)
-                .setPartitions(Arrays.asList(3, 4, 5))))
-            .setPartitionsPendingAssignment(Collections.singletonList(new ConsumerGroupCurrentMemberAssignmentValue.TopicPartitions()
-                .setTopicId(topicId3)
-                .setPartitions(Arrays.asList(6, 7, 8))));
+                .setPartitions(Arrays.asList(3, 4, 5))));
         String memberId = Uuid.randomUuid().toString();
         String clientId = "clientId";
         String instanceId = "instanceId";
