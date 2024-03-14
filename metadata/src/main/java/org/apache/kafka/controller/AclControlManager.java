@@ -94,7 +94,8 @@ public class AclControlManager {
 
     ControllerResult<List<AclCreateResult>> createAcls(List<AclBinding> acls) {
         List<AclCreateResult> results = new ArrayList<>(acls.size());
-        List<ApiMessageAndVersion> records = BoundedList.newArrayBacked(MAX_RECORDS_PER_USER_OP);
+        List<ApiMessageAndVersion> records =
+                BoundedList.newArrayBacked(MAX_RECORDS_PER_USER_OP);
         for (AclBinding acl : acls) {
             try {
                 validateNewAcl(acl);
