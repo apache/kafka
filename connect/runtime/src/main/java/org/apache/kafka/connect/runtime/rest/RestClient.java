@@ -191,6 +191,7 @@ public class RestClient {
             }
         } catch (IOException | InterruptedException | TimeoutException | ExecutionException e) {
             log.error("IO error forwarding REST request: ", e);
+            Thread.currentThread().interrupt();
             throw new ConnectRestException(Response.Status.INTERNAL_SERVER_ERROR, "IO Error trying to forward REST request: " + e.getMessage(), e);
         } catch (ConnectRestException e) {
             // catching any explicitly thrown ConnectRestException-s to preserve its status code
