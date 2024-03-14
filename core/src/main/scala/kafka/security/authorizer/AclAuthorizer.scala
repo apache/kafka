@@ -36,7 +36,7 @@ import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.utils.{SecurityUtils, Time}
 import org.apache.kafka.server.authorizer.AclDeleteResult.AclBindingDeleteResult
 import org.apache.kafka.server.authorizer._
-import org.apache.kafka.server.config.KafkaConfig.{INTER_BROKER_PROTOCOL_VERSION_PROP, ZK_SSL_CLIENT_ENABLE_PROP, ZK_SSL_CONFIG_TO_SYSTEM_PROPERTY_MAP, ZK_SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_PROP}
+import org.apache.kafka.server.config.KafkaConfig.{INTER_BROKER_PROTOCOL_VERSION_PROP, ZK_SSL_CLIENT_ENABLE_PROP, zkSslConfigToSystemPropertyMap, ZK_SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_PROP}
 import org.apache.kafka.server.common.MetadataVersion.IBP_2_0_IV1
 import org.apache.zookeeper.client.ZKClientConfig
 
@@ -106,7 +106,7 @@ object AclAuthorizer {
       // be sure to force creation since the zkSslClientEnable property in the kafkaConfig could be false
       val zkClientConfig = KafkaServer.zkClientConfigFromKafkaConfig(kafkaConfig, forceZkSslClientEnable = true)
       // add in any prefixed overlays
-      ZK_SSL_CONFIG_TO_SYSTEM_PROPERTY_MAP.asScala forKeyValue { (kafkaProp, sysProp) =>
+      zkSslConfigToSystemPropertyMap.asScala forKeyValue { (kafkaProp, sysProp) =>
         configMap.get(AclAuthorizer.configPrefix + kafkaProp).foreach { prefixedValue =>
           zkClientConfig.setProperty(sysProp,
             if (kafkaProp == ZK_SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_PROP)

@@ -94,7 +94,7 @@ public class KafkaConfig {
     public final static String ZK_SSL_OCSP_ENABLE_PROP = "zookeeper.ssl.ocsp.enable";
 
     // a map from the Kafka config to the corresponding ZooKeeper Java system property
-    public final static Map<String, String> ZK_SSL_CONFIG_TO_SYSTEM_PROPERTY_MAP = new HashMap<String, String>() {{
+    private final static Map<String, String> ZK_SSL_CONFIG_TO_SYSTEM_PROPERTY_MAP = new HashMap<String, String>() {{
             put(ZK_SSL_CLIENT_ENABLE_PROP, ZKClientConfig.SECURE_CLIENT);
             put(ZK_CLIENT_CNXN_SOCKET_PROP, ZKClientConfig.ZOOKEEPER_CLIENT_CNXN_SOCKET);
             put(ZK_SSL_KEYSTORE_LOCATION_PROP, "zookeeper.ssl.keyStore.location");
@@ -110,6 +110,10 @@ public class KafkaConfig {
             put(ZK_SSL_CRL_ENABLE_PROP, "zookeeper.ssl.crl");
             put(ZK_SSL_OCSP_ENABLE_PROP, "zookeeper.ssl.ocsp");
         }};
+
+    public final static Map<String, String> zkSslConfigToSystemPropertyMap() {
+        return ZK_SSL_CONFIG_TO_SYSTEM_PROPERTY_MAP;
+    }
 
     /** ********* General Configuration ***********/
     public final static String BROKER_ID_GENERATION_ENABLE_PROP = "broker.id.generation.enable";

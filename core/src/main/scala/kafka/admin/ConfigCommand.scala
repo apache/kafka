@@ -864,7 +864,7 @@ object ConfigCommand extends Logging {
       .ofType(classOf[String])
     val zkTlsConfigFile: OptionSpec[String] = parser.accepts("zk-tls-config-file",
       "Identifies the file where ZooKeeper client TLS connectivity properties are defined.  Any properties other than " +
-        KafkaConfig.ZK_SSL_CONFIG_TO_SYSTEM_PROPERTY_MAP.keySet().asScala.toList.sorted.mkString(", ") + " are ignored.")
+        KafkaConfig.zkSslConfigToSystemPropertyMap.keySet().asScala.toList.sorted.mkString(", ") + " are ignored.")
       .withRequiredArg().describedAs("ZooKeeper TLS configuration").ofType(classOf[String])
     options = parser.parse(args : _*)
 

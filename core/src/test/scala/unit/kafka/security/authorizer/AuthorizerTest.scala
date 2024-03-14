@@ -870,7 +870,7 @@ class AuthorizerTest extends QuorumTestHarness with BaseAuthorizerTest {
     val zkClientConfig = AclAuthorizer.zkClientConfigFromKafkaConfigAndMap(
       KafkaConfig.fromProps(noTlsProps),
       noTlsProps.asInstanceOf[java.util.Map[String, Any]].asScala)
-    ZK_SSL_CONFIG_TO_SYSTEM_PROPERTY_MAP.keySet().forEach { propName =>
+    zkSslConfigToSystemPropertyMap.keySet().forEach { propName =>
       assertNull(zkClientConfig.getProperty(propName))
     }
   }
@@ -895,7 +895,7 @@ class AuthorizerTest extends QuorumTestHarness with BaseAuthorizerTest {
     val zkClientConfig = AclAuthorizer.zkClientConfigFromKafkaConfigAndMap(
       KafkaConfig.fromProps(props), mutable.Map(configs.toSeq: _*))
     // confirm we get all the values we expect
-    ZK_SSL_CONFIG_TO_SYSTEM_PROPERTY_MAP.keySet().forEach(prop => prop match {
+    zkSslConfigToSystemPropertyMap.keySet().forEach(prop => prop match {
       case ZK_SSL_CLIENT_ENABLE_PROP | ZK_SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_PROP =>
         assertEquals("true", zooKeeperClientProperty(zkClientConfig, prop).orElse("<None>"))
       case ZK_SSL_CRL_ENABLE_PROP | ZK_SSL_OCSP_ENABLE_PROP =>
@@ -930,7 +930,7 @@ class AuthorizerTest extends QuorumTestHarness with BaseAuthorizerTest {
     val zkClientConfig = AclAuthorizer.zkClientConfigFromKafkaConfigAndMap(
       KafkaConfig.fromProps(props), mutable.Map(configs.toSeq: _*))
     // confirm we get all the values we expect
-    ZK_SSL_CONFIG_TO_SYSTEM_PROPERTY_MAP.asScala.keys.foreach(prop => prop match {
+    zkSslConfigToSystemPropertyMap.asScala.keys.foreach(prop => prop match {
         case ZK_SSL_CLIENT_ENABLE_PROP | ZK_SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_PROP =>
           assertEquals("true", zooKeeperClientProperty(zkClientConfig, prop).orElse("<None>"))
         case ZK_SSL_CRL_ENABLE_PROP | ZK_SSL_OCSP_ENABLE_PROP =>
@@ -979,7 +979,7 @@ class AuthorizerTest extends QuorumTestHarness with BaseAuthorizerTest {
     val zkClientConfig = AclAuthorizer.zkClientConfigFromKafkaConfigAndMap(
       KafkaConfig.fromProps(props), mutable.Map(configs.toSeq: _*))
     // confirm we get all the values we expect
-    ZK_SSL_CONFIG_TO_SYSTEM_PROPERTY_MAP.keySet.forEach(prop => prop match {
+    zkSslConfigToSystemPropertyMap.keySet.forEach(prop => prop match {
       case ZK_SSL_CLIENT_ENABLE_PROP | ZK_SSL_CRL_ENABLE_PROP | ZK_SSL_OCSP_ENABLE_PROP =>
         assertEquals("true", zooKeeperClientProperty(zkClientConfig, prop).orElse("<None>"))
       case ZK_SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_PROP =>

@@ -57,7 +57,7 @@ class KafkaServerTest extends QuorumTestHarness {
     props.put(ZK_CONNECT_PROP, zkConnect) // required, otherwise we would leave it out
     props.put(ZK_SSL_CLIENT_ENABLE_PROP, "false")
     val zkClientConfig = KafkaServer.zkClientConfigFromKafkaConfig(KafkaConfig.fromProps(props))
-    ZK_SSL_CONFIG_TO_SYSTEM_PROPERTY_MAP.keySet().forEach { propName =>
+    zkSslConfigToSystemPropertyMap.keySet().forEach { propName =>
       assertNull(zkClientConfig.getProperty(propName))
     }
   }
@@ -73,7 +73,7 @@ class KafkaServerTest extends QuorumTestHarness {
       case ZK_SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_PROP => "HTTPS"
       case _ => someValue
     }
-    ZK_SSL_CONFIG_TO_SYSTEM_PROPERTY_MAP.keySet().forEach(kafkaProp => props.put(kafkaProp, kafkaConfigValueToSet(kafkaProp)))
+    zkSslConfigToSystemPropertyMap.keySet().forEach(kafkaProp => props.put(kafkaProp, kafkaConfigValueToSet(kafkaProp)))
     val zkClientConfig = KafkaServer.zkClientConfigFromKafkaConfig(KafkaConfig.fromProps(props))
     // now check to make sure the values were set correctly
     def zkClientValueToExpect(kafkaProp: String) : String = kafkaProp match {
@@ -81,8 +81,8 @@ class KafkaServerTest extends QuorumTestHarness {
       case ZK_SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_PROP => "true"
       case _ => someValue
     }
-    ZK_SSL_CONFIG_TO_SYSTEM_PROPERTY_MAP.keySet().forEach(kafkaProp =>
-      assertEquals(zkClientValueToExpect(kafkaProp), zkClientConfig.getProperty(ZK_SSL_CONFIG_TO_SYSTEM_PROPERTY_MAP.get(kafkaProp))))
+    zkSslConfigToSystemPropertyMap.keySet().forEach(kafkaProp =>
+      assertEquals(zkClientValueToExpect(kafkaProp), zkClientConfig.getProperty(zkSslConfigToSystemPropertyMap.get(kafkaProp))))
   }
 
   @Test
@@ -98,7 +98,7 @@ class KafkaServerTest extends QuorumTestHarness {
       case ZK_SSL_ENABLED_PROTOCOLS_PROP | ZK_SSL_CIPHER_SUITES_PROP => "A,B"
       case _ => someValue
     }
-    ZK_SSL_CONFIG_TO_SYSTEM_PROPERTY_MAP.keySet().forEach(kafkaProp => props.put(kafkaProp, kafkaConfigValueToSet(kafkaProp)))
+    zkSslConfigToSystemPropertyMap.keySet().forEach(kafkaProp => props.put(kafkaProp, kafkaConfigValueToSet(kafkaProp)))
     val zkClientConfig = KafkaServer.zkClientConfigFromKafkaConfig(KafkaConfig.fromProps(props))
     // now check to make sure the values were set correctly
     def zkClientValueToExpect(kafkaProp: String) : String = kafkaProp match {
@@ -108,8 +108,8 @@ class KafkaServerTest extends QuorumTestHarness {
       case ZK_SSL_ENABLED_PROTOCOLS_PROP | ZK_SSL_CIPHER_SUITES_PROP => "A,B"
       case _ => someValue
     }
-    ZK_SSL_CONFIG_TO_SYSTEM_PROPERTY_MAP.keySet().forEach(kafkaProp =>
-      assertEquals(zkClientValueToExpect(kafkaProp), zkClientConfig.getProperty(ZK_SSL_CONFIG_TO_SYSTEM_PROPERTY_MAP.get(kafkaProp))))
+    zkSslConfigToSystemPropertyMap.keySet().forEach(kafkaProp =>
+      assertEquals(zkClientValueToExpect(kafkaProp), zkClientConfig.getProperty(zkSslConfigToSystemPropertyMap.get(kafkaProp))))
   }
 
   @Test
