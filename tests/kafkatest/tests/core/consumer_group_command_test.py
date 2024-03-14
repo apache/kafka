@@ -60,11 +60,7 @@ class ConsumerGroupCommandTest(Test):
         self.kafka.start()
 
     def start_consumer(self, group_protocol=None):
-        consumer_properties = {}
-
-        if group_protocol is not None:
-            consumer_properties['group.protocol'] = group_protocol
-
+        consumer_properties = consumer_group.maybe_set_group_protocol(group_protocol)
         self.consumer = ConsoleConsumer(self.test_context, num_nodes=self.num_brokers, kafka=self.kafka, topic=TOPIC,
                                         consumer_timeout_ms=None, consumer_properties=consumer_properties)
         self.consumer.start()
