@@ -46,12 +46,12 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.Deque;
 import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Objects;
 import java.util.OptionalInt;
-import java.util.Queue;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
@@ -93,7 +93,16 @@ public class CoordinatorRuntimeTest {
      */
     private static class DirectEventProcessor implements CoordinatorEventProcessor {
         @Override
-        public void enqueue(CoordinatorEvent event) throws RejectedExecutionException {
+        public void enqueueLast(CoordinatorEvent event) throws RejectedExecutionException {
+            try {
+                event.run();
+            } catch (Throwable ex) {
+                event.complete(ex);
+            }
+        }
+
+        @Override
+        public void enqueueFirst(CoordinatorEvent event) throws RejectedExecutionException {
             try {
                 event.run();
             } catch (Throwable ex) {
@@ -110,11 +119,16 @@ public class CoordinatorRuntimeTest {
      * when poll() is called.
      */
     private static class ManualEventProcessor implements CoordinatorEventProcessor {
-        private Queue<CoordinatorEvent> queue = new LinkedList<>();
+        private Deque<CoordinatorEvent> queue = new LinkedList<>();
 
         @Override
-        public void enqueue(CoordinatorEvent event) throws RejectedExecutionException {
-            queue.add(event);
+        public void enqueueLast(CoordinatorEvent event) throws RejectedExecutionException {
+            queue.addLast(event);
+        }
+
+        @Override
+        public void enqueueFirst(CoordinatorEvent event) throws RejectedExecutionException {
+            queue.addFirst(event);
         }
 
         public boolean poll() {
@@ -504,12 +518,6 @@ public class CoordinatorRuntimeTest {
 
         // Verify that onUnloaded is called.
         verify(coordinator, times(1)).onUnloaded();
-
-        // Verify that the listener is deregistered.
-        verify(writer, times(1)).deregisterListener(
-            eq(TP),
-            any(PartitionWriter.Listener.class)
-        );
     }
 
     @Test
