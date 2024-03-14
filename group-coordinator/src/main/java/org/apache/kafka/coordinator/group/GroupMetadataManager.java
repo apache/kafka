@@ -1190,10 +1190,11 @@ public class GroupMetadataManager {
             .setHeartbeatIntervalMs(consumerGroupHeartbeatIntervalMs);
 
         // The assignment is only provided in the following cases:
-        // 1. The member reported its owned partitions;
-        // 2. The member just joined or rejoined to group (epoch equals to zero);
-        // 3. The member's assignment has been updated.
-        if (ownedTopicPartitions != null || memberEpoch == 0 || hasAssignedPartitionsChanged(member, updatedMember)) {
+        // 1. The member sent a full request. It does so when joining or rejoining the group; or
+        //    on any errors (e.g. timeout).
+        // 2. The member's assignment has been updated.
+        boolean isFullRequest = memberEpoch == 0 || (rebalanceTimeoutMs != -1 && subscribedTopicNames != null && ownedTopicPartitions != null);
+        if (isFullRequest || hasAssignedPartitionsChanged(member, updatedMember)) {
             response.setAssignment(createResponseAssignment(updatedMember));
         }
 
