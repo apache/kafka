@@ -340,6 +340,8 @@ class RemoteIndexCacheTest {
     val spyEntry = generateSpyCacheEntry()
     cache.internalCache.put(rlsMetadata.remoteLogSegmentId().id(), spyEntry)
 
+    TestUtils.waitUntilTrue(() => cache.cleanerThread().isStarted, "Cleaner thread should be started")
+
     // close the cache
     cache.close()
 
@@ -357,7 +359,7 @@ class RemoteIndexCacheTest {
     verify(spyEntry.timeIndex, times(0)).deleteIfExists()
 
     // verify cleaner thread is shutdown
-    assertTrue(cache.cleanerThread.isStoppedOrShutdownComplete)
+    assertTrue(cache.cleanerThread.isShutdownComplete)
   }
 
   @Test
