@@ -26,13 +26,14 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.OptionalInt;
 import java.util.Set;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.CommonClientConfigs;
-import org.apache.kafka.clients.Metadata;
+import org.apache.kafka.clients.MetadataSnapshot;
 import org.apache.kafka.clients.producer.Callback;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.utils.ExponentialBackoff;
@@ -647,27 +648,27 @@ public class RecordAccumulator {
     }
 
     /**
-     * Iterate over partitions to see which one have batches ready and collect leaders of those partitions
-     * into the set of ready nodes.  If partition has no leader, add the topic to the set of topics with
-     * no leader.  This function also calculates stats for adaptive partitioning.
+     * Iterate over partitions to see which one have batches ready and collect leaders of those
+     * partitions into the set of ready nodes.  If partition has no leader, add the topic to the set
+     * of topics with no leader.  This function also calculates stats for adaptive partitioning.
      *
-     * @param metadata The cluster metadata
-     * @param nowMs The current time
-     * @param topic The topic
-     * @param topicInfo The topic info
+     * @param metadataSnapshot      The cluster metadata
+     * @param nowMs                 The current time
+     * @param topic                 The topic
+     * @param topicInfo             The topic info
      * @param nextReadyCheckDelayMs The delay for next check
-     * @param readyNodes The set of ready nodes (to be filled in)
-     * @param unknownLeaderTopics The set of topics with no leader (to be filled in)
+     * @param readyNodes            The set of ready nodes (to be filled in)
+     * @param unknownLeaderTopics   The set of topics with no leader (to be filled in)
      * @return The delay for next check
      */
-    private long partitionReady(Metadata metadata, long nowMs, String topic,
+    private long partitionReady(MetadataSnapshot metadataSnapshot, long nowMs, String topic,
                                 TopicInfo topicInfo,
                                 long nextReadyCheckDelayMs, Set<Node> readyNodes, Set<String> unknownLeaderTopics) {
         ConcurrentMap<Integer, Deque<ProducerBatch>> batches = topicInfo.batches;
         // Collect the queue sizes for available partitions to be used in adaptive partitioning.
         int[] queueSizes = null;
         int[] partitionIds = null;
-        if (enableAdaptivePartitioning && batches.size() >= metadata.fetch().partitionsForTopic(topic).size()) {
+        if (enableAdaptivePartitioning && batches.size() >= metadataSnapshot.cluster().partitionsForTopic(topic).size()) {
             // We don't do adaptive partitioning until we scheduled at least a batch for all
             // partitions (i.e. we have the corresponding entries in the batches map), we just
             // do uniform.  The reason is that we build queue sizes from the batches map,
@@ -684,8 +685,7 @@ public class RecordAccumulator {
             // Advance queueSizesIndex so that we properly index available
             // partitions.  Do it here so that it's done for all code paths.
 
-            Metadata.LeaderAndEpoch leaderAndEpoch = metadata.currentLeader(part);
-            Node leader = leaderAndEpoch.leader.orElse(null);
+            Node leader = metadataSnapshot.cluster().leaderFor(part);
             if (leader != null && queueSizes != null) {
                 ++queueSizesIndex;
                 assert queueSizesIndex < queueSizes.length;
@@ -700,9 +700,14 @@ public class RecordAccumulator {
             final int dequeSize;
             final boolean full;
 
-            // This loop is especially hot with large partition counts.
+            OptionalInt leaderEpoch = metadataSnapshot.leaderEpochFor(part);
 
-            // We are careful to only perform the minimum required inside the
+            // This loop is especially hot with large partition counts. So -
+
+            // 1. We should avoid code that increases synchronization between application thread calling
+            // send(), and background thread running runOnce(), see https://issues.apache.org/jira/browse/KAFKA-16226
+
+            // 2. We are careful to only perform the minimum required inside the
             // synchronized block, as this lock is also used to synchronize producer threads
             // attempting to append() to a partition/batch.
 
@@ -715,7 +720,7 @@ public class RecordAccumulator {
                 }
 
                 waitedTimeMs = batch.waitedTimeMs(nowMs);
-                batch.maybeUpdateLeaderEpoch(leaderAndEpoch.epoch);
+                batch.maybeUpdateLeaderEpoch(leaderEpoch);
                 backingOff = shouldBackoff(batch.hasLeaderChangedForTheOngoingRetry(), batch, waitedTimeMs);
                 backoffAttempts = batch.attempts();
                 dequeSize = deque.size();
@@ -776,7 +781,7 @@ public class RecordAccumulator {
      * </ul>
      * </ol>
      */
-    public ReadyCheckResult ready(Metadata metadata, long nowMs) {
+    public ReadyCheckResult ready(MetadataSnapshot metadataSnapshot, long nowMs) {
         Set<Node> readyNodes = new HashSet<>();
         long nextReadyCheckDelayMs = Long.MAX_VALUE;
         Set<String> unknownLeaderTopics = new HashSet<>();
@@ -784,7 +789,7 @@ public class RecordAccumulator {
         // cumulative frequency table (used in partitioner).
         for (Map.Entry<String, TopicInfo> topicInfoEntry : this.topicInfoMap.entrySet()) {
             final String topic = topicInfoEntry.getKey();
-            nextReadyCheckDelayMs = partitionReady(metadata, nowMs, topic, topicInfoEntry.getValue(), nextReadyCheckDelayMs, readyNodes, unknownLeaderTopics);
+            nextReadyCheckDelayMs = partitionReady(metadataSnapshot, nowMs, topic, topicInfoEntry.getValue(), nextReadyCheckDelayMs, readyNodes, unknownLeaderTopics);
         }
         return new ReadyCheckResult(readyNodes, nextReadyCheckDelayMs, unknownLeaderTopics);
     }
@@ -861,9 +866,9 @@ public class RecordAccumulator {
         return false;
     }
 
-    private List<ProducerBatch> drainBatchesForOneNode(Metadata metadata, Node node, int maxSize, long now) {
+    private List<ProducerBatch> drainBatchesForOneNode(MetadataSnapshot metadataSnapshot, Node node, int maxSize, long now) {
         int size = 0;
-        List<PartitionInfo> parts = metadata.fetch().partitionsForNode(node.id());
+        List<PartitionInfo> parts = metadataSnapshot.cluster().partitionsForNode(node.id());
         List<ProducerBatch> ready = new ArrayList<>();
         if (parts.isEmpty())
             return ready;
@@ -879,16 +884,11 @@ public class RecordAccumulator {
             // Only proceed if the partition has no in-flight batches.
             if (isMuted(tp))
                 continue;
-            Metadata.LeaderAndEpoch leaderAndEpoch = metadata.currentLeader(tp);
-            // Although a small chance, but skip this partition if leader has changed since the partition -> node assignment obtained from outside the loop.
-            // In this case, skip sending it to the old leader, as it would return aa NO_LEADER_OR_FOLLOWER error.
-            if (!leaderAndEpoch.leader.isPresent())
-                continue;
-            if (!node.equals(leaderAndEpoch.leader.get()))
-                continue;
             Deque<ProducerBatch> deque = getDeque(tp);
             if (deque == null)
                 continue;
+
+            OptionalInt leaderEpoch = metadataSnapshot.leaderEpochFor(tp);
 
             final ProducerBatch batch;
             synchronized (deque) {
@@ -899,7 +899,7 @@ public class RecordAccumulator {
 
                 // first != null
                 // Only drain the batch if it is not during backoff period.
-                first.maybeUpdateLeaderEpoch(leaderAndEpoch.epoch);
+                first.maybeUpdateLeaderEpoch(leaderEpoch);
                 if (shouldBackoff(first.hasLeaderChangedForTheOngoingRetry(), first, first.waitedTimeMs(now)))
                     continue;
 
@@ -963,22 +963,24 @@ public class RecordAccumulator {
     }
 
     /**
-     * Drain all the data for the given nodes and collate them into a list of batches that will fit within the specified
-     * size on a per-node basis. This method attempts to avoid choosing the same topic-node over and over.
+     * Drain all the data for the given nodes and collate them into a list of batches that will fit
+     * within the specified size on a per-node basis. This method attempts to avoid choosing the same
+     * topic-node over and over.
      *
-     * @param metadata The current cluster metadata
-     * @param nodes The list of node to drain
-     * @param maxSize The maximum number of bytes to drain
-     * @param now The current unix time in milliseconds
-     * @return A list of {@link ProducerBatch} for each node specified with total size less than the requested maxSize.
+     * @param metadataSnapshot  The current cluster metadata
+     * @param nodes             The list of node to drain
+     * @param maxSize           The maximum number of bytes to drain
+     * @param now               The current unix time in milliseconds
+     * @return A list of {@link ProducerBatch} for each node specified with total size less than the
+     * requested maxSize.
      */
-    public Map<Integer, List<ProducerBatch>> drain(Metadata metadata, Set<Node> nodes, int maxSize, long now) {
+    public Map<Integer, List<ProducerBatch>> drain(MetadataSnapshot metadataSnapshot, Set<Node> nodes, int maxSize, long now) {
         if (nodes.isEmpty())
             return Collections.emptyMap();
 
         Map<Integer, List<ProducerBatch>> batches = new HashMap<>();
         for (Node node : nodes) {
-            List<ProducerBatch> ready = drainBatchesForOneNode(metadata, node, maxSize, now);
+            List<ProducerBatch> ready = drainBatchesForOneNode(metadataSnapshot, node, maxSize, now);
             batches.put(node.id(), ready);
         }
         return batches;
