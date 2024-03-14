@@ -194,7 +194,7 @@ public class OffsetMetadataManagerTest {
                         true
                     );
                 case CONSUMER:
-                    return groupMetadataManager.getOrMaybeCreateConsumerGroup(
+                    return groupMetadataManager.getOrMaybeCreatePersistedConsumerGroup(
                         groupId,
                         true
                     );
@@ -1517,7 +1517,7 @@ public class OffsetMetadataManagerTest {
         OffsetMetadataManagerTestContext context = new OffsetMetadataManagerTestContext.Builder().build();
 
         // Create an empty group.
-        ConsumerGroup group = context.groupMetadataManager.getOrMaybeCreateConsumerGroup(
+        ConsumerGroup group = context.groupMetadataManager.getOrMaybeCreatePersistedConsumerGroup(
             "foo",
             true
         );
@@ -2346,7 +2346,7 @@ public class OffsetMetadataManagerTest {
     @Test
     public void testConsumerGroupOffsetDelete() {
         OffsetMetadataManagerTestContext context = new OffsetMetadataManagerTestContext.Builder().build();
-        ConsumerGroup group = context.groupMetadataManager.getOrMaybeCreateConsumerGroup(
+        ConsumerGroup group = context.groupMetadataManager.getOrMaybeCreatePersistedConsumerGroup(
             "foo",
             true
         );
@@ -2388,7 +2388,7 @@ public class OffsetMetadataManagerTest {
     @Test
     public void testConsumerGroupOffsetDeleteWithPendingTransactionalOffsets() {
         OffsetMetadataManagerTestContext context = new OffsetMetadataManagerTestContext.Builder().build();
-        ConsumerGroup group = context.groupMetadataManager.getOrMaybeCreateConsumerGroup(
+        ConsumerGroup group = context.groupMetadataManager.getOrMaybeCreatePersistedConsumerGroup(
             "foo",
             true
         );
