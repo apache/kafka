@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.clients.producer.internals;
 
-import java.util.Optional;
+import java.util.OptionalInt;
 import org.apache.kafka.clients.producer.Callback;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.TopicPartition;
@@ -81,7 +81,7 @@ public final class ProducerBatch {
     private boolean reopened;
 
     // Tracks the current-leader's epoch to which this batch would be sent, in the current to produce the batch.
-    private Optional<Integer> currentLeaderEpoch;
+    private OptionalInt currentLeaderEpoch;
     // Tracks the attempt in which leader was changed to currentLeaderEpoch for the 1st time.
     private int attemptsWhenLeaderLastChanged;
 
@@ -100,7 +100,7 @@ public final class ProducerBatch {
         this.isSplitBatch = isSplitBatch;
         float compressionRatioEstimation = CompressionRatioEstimator.estimation(topicPartition.topic(),
                                                                                 recordsBuilder.compressionType());
-        this.currentLeaderEpoch = Optional.empty();
+        this.currentLeaderEpoch = OptionalInt.empty();
         this.attemptsWhenLeaderLastChanged = 0;
         recordsBuilder.setEstimatedCompressionRatio(compressionRatioEstimation);
     }
@@ -109,8 +109,9 @@ public final class ProducerBatch {
      * It will update the leader to which this batch will be produced for the ongoing attempt, if a newer leader is known.
      * @param latestLeaderEpoch latest leader's epoch.
      */
-    void maybeUpdateLeaderEpoch(Optional<Integer> latestLeaderEpoch) {
-        if (!currentLeaderEpoch.equals(latestLeaderEpoch)) {
+    void maybeUpdateLeaderEpoch(OptionalInt latestLeaderEpoch) {
+        if (latestLeaderEpoch.isPresent()
+            && (!currentLeaderEpoch.isPresent() || currentLeaderEpoch.getAsInt() < latestLeaderEpoch.getAsInt())) {
             log.trace("For {}, leader will be updated, currentLeaderEpoch: {}, attemptsWhenLeaderLastChanged:{}, latestLeaderEpoch: {}, current attempt: {}",
                 this, currentLeaderEpoch, attemptsWhenLeaderLastChanged, latestLeaderEpoch, attempts);
             attemptsWhenLeaderLastChanged = attempts();
@@ -558,7 +559,7 @@ public final class ProducerBatch {
     }
 
     // VisibleForTesting
-    Optional<Integer> currentLeaderEpoch() {
+    OptionalInt currentLeaderEpoch() {
         return currentLeaderEpoch;
     }
 
