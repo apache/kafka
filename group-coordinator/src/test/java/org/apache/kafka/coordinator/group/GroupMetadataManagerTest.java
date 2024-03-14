@@ -9423,12 +9423,8 @@ public class GroupMetadataManagerTest {
     public void testConsumerGroupDelete() {
         String groupId = "group-id";
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withConsumerGroup(new ConsumerGroupBuilder(groupId, 10))
             .build();
-
-        // Create an empty group.
-        context.replay(RecordHelpers.newGroupEpochRecord(groupId, 10));
-        context.replay(RecordHelpers.newGroupSubscriptionMetadataRecord(groupId, Collections.emptyMap()));
-        context.replay(RecordHelpers.newTargetAssignmentEpochRecord(groupId, 10));
 
         List<Record> expectedRecords = Arrays.asList(
             RecordHelpers.newTargetAssignmentEpochTombstoneRecord(groupId),
@@ -9444,13 +9440,8 @@ public class GroupMetadataManagerTest {
     public void testConsumerGroupMaybeDelete() {
         String groupId = "group-id";
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withConsumerGroup(new ConsumerGroupBuilder(groupId, 10))
             .build();
-
-        // Create an empty group.
-        context.replay(RecordHelpers.newGroupEpochRecord(groupId, 10));
-        context.replay(RecordHelpers.newGroupSubscriptionMetadataRecord(groupId, Collections.emptyMap()));
-        context.replay(RecordHelpers.newTargetAssignmentEpochRecord(groupId, 10));
-        ConsumerGroup group = context.groupMetadataManager.getOrMaybeCreateConsumerGroup(groupId, false);
 
         List<Record> expectedRecords = Arrays.asList(
             RecordHelpers.newTargetAssignmentEpochTombstoneRecord(groupId),
@@ -9462,12 +9453,11 @@ public class GroupMetadataManagerTest {
         assertEquals(expectedRecords, records);
 
         records = new ArrayList<>();
-        group.updateMember(new ConsumerGroupMember.Builder("member")
+        context.replay(RecordHelpers.newMemberSubscriptionRecord(groupId, new ConsumerGroupMember.Builder("member")
             .setMemberEpoch(10)
             .setTargetMemberEpoch(10)
             .setPreviousMemberEpoch(10)
-            .build()
-        );
+            .build()));
         context.groupMetadataManager.maybeDeleteGroup(groupId, records);
         assertEquals(Collections.emptyList(), records);
     }
