@@ -491,9 +491,9 @@ class GroupMetadataManager(brokerId: Int,
 
     if (isTxnOffsetCommit) {
       addProducerGroup(producerId, group.groupId)
-      group.prepareTxnOffsetCommit(producerId, offsetMetadata)
+      group.prepareTxnOffsetCommit(producerId, filteredOffsetMetadata)
     } else {
-      group.prepareOffsetCommit(offsetMetadata)
+      group.prepareOffsetCommit(filteredOffsetMetadata)
     }
 
     appendForGroup(group, records, requestLocal, putCacheCallback, verificationGuards)
