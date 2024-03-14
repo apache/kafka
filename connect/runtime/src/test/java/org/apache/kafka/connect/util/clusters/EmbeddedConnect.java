@@ -841,6 +841,18 @@ abstract class EmbeddedConnect {
     }
 
     /**
+     * Execute a GET request on the given URL, but do not log any responses
+     * with error-level HTTP status codes as errors
+     *
+     * @param url the HTTP endpoint
+     * @return the response to the GET request
+     * @throws ConnectException if execution of the GET request fails
+     */
+    public Response quietRequestGet(String url) {
+        return requestHttpMethod(url, null, Collections.emptyMap(), "GET", false);
+    }
+
+    /**
      * Execute a PUT request on the given URL.
      *
      * @param url the HTTP endpoint
@@ -942,6 +954,23 @@ abstract class EmbeddedConnect {
      */
     protected Response requestHttpMethod(String url, String body, Map<String, String> headers,
                                          String httpMethod) {
+        return requestHttpMethod(url, body, headers, httpMethod, true);
+    }
+
+    /**
+     * A general method that executes an HTTP request on a given URL.
+     *
+     * @param url the HTTP endpoint
+     * @param body the payload of the request; null if there isn't one
+     * @param headers a map that stores the request headers; empty if there are no headers
+     * @param httpMethod the name of the HTTP method to execute
+     * @param logErrors whether to log any responses whose statuses are not in the 1xx-2xx range
+     *                 as errors
+     * @return the response to the HTTP request
+     * @throws ConnectException if execution of the HTTP method fails
+     */
+    protected Response requestHttpMethod(String url, String body, Map<String, String> headers,
+                                         String httpMethod, boolean logErrors) {
         log.debug("Executing {} request to URL={}." + (body != null ? " Payload={}" : ""),
                 httpMethod, url, body);
 
@@ -954,8 +983,21 @@ abstract class EmbeddedConnect {
             }
 
             ContentResponse res = req.send();
-            log.info("{} response for URL={} is {}",
-                    httpMethod, url, res.getContentAsString().isEmpty() ? "empty" : res.getContentAsString());
+            if (res.getStatus() >= 300 && logErrors) {
+                log.error(
+                        "{} response for URL={} with status code {} is {}",
+                        httpMethod,
+                        url,
+                        res.getStatus(),
+                        res.getContentAsString().isEmpty() ? "empty" : res.getContentAsString());
+            } else {
+                log.info(
+                        "{} response for URL={} with status code {} is {}",
+                        httpMethod,
+                        url,
+                        res.getStatus(),
+                        res.getContentAsString().isEmpty() ? "empty" : res.getContentAsString());
+            }
             return Response.status(Response.Status.fromStatusCode(res.getStatus()))
                     .entity(res.getContentAsString())
                     .build();
@@ -979,7 +1021,7 @@ abstract class EmbeddedConnect {
                 .filter(w -> {
                     try {
                         String endpoint = w.url().resolve("/connectors/liveness-check").toString();
-                        Response response = requestGet(endpoint);
+                        Response response = quietRequestGet(endpoint);
                         boolean live = response.getStatus() == Response.Status.NOT_FOUND.getStatusCode()
                                 || response.getStatus() == Response.Status.OK.getStatusCode();
                         if (live) {
