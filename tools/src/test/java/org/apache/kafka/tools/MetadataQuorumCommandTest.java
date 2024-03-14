@@ -151,7 +151,7 @@ class MetadataQuorumCommandTest {
     })
     public void testCommandConfig() throws IOException {
         // specifying a --command-config containing properties that would prevent login must fail
-        File tmpfile = TestUtils.tempFile(AdminClientConfig.SECURITY_PROTOCOL_CONFIG + "=SSL_PLAINTEXT");
+        File tmpfile = TestUtils.tempFile(AdminClientConfig.SECURITY_PROTOCOL_CONFIG + "=SASL_PLAINTEXT");
         assertEquals(1, MetadataQuorumCommand.mainNoExit("--bootstrap-server", cluster.bootstrapServers(),
                         "--command-config", tmpfile.getAbsolutePath(), "describe", "--status"));
     }

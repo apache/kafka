@@ -153,6 +153,7 @@ public class ClusterTestExtensions implements TestTemplateInvocationContextProvi
         } else {
             brokers = annot.brokers();
         }
+        System.out.println("DEBUG: starting " + brokers + " controllers");
 
         final int controllers;
         if (annot.controllers() == 0) {
@@ -160,6 +161,7 @@ public class ClusterTestExtensions implements TestTemplateInvocationContextProvi
         } else {
             controllers = annot.controllers();
         }
+        System.out.println("DEBUG: starting " + controllers + " controllers");
 
         if (brokers <= 0 || controllers <= 0) {
             throw new IllegalArgumentException("Number of brokers/controllers must be greater than zero.");
