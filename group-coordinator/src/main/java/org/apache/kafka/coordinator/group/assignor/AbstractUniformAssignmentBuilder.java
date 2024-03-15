@@ -246,12 +246,12 @@ public abstract class AbstractUniformAssignmentBuilder {
             );
 
             // Sort the list based on the size of each member's assignment.
-            membersList.sort((member1, member2) -> {
-                int sum1 = assignment.get(member1).targetPartitions().values().stream().mapToInt(Set::size).sum();
-                int sum2 = assignment.get(member2).targetPartitions().values().stream().mapToInt(Set::size).sum();
-
-                return Integer.compare(sum1, sum2);
-            });
+            membersList.sort(Comparator.comparingInt(member -> {
+                MemberAssignment memberAssignment = assignment.get(member);
+                return memberAssignment != null
+                    ? memberAssignment.targetPartitions().values().stream().mapToInt(Set::size).sum()
+                    : 0;
+            }));
 
             return membersList;
         }

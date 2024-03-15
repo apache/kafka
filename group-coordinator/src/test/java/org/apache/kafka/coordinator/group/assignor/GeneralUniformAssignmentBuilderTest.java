@@ -228,7 +228,6 @@ public class GeneralUniformAssignmentBuilderTest {
         assertAssignment(expectedAssignment, computedAssignment);
     }
 
-    //checked alreaddy
     @Test
     public void testFirstAssignmentThreeMembersThreeTopicsWithMemberAndPartitionRacks() {
         Map<Uuid, TopicMetadata> topicMetadata = new HashMap<>();
@@ -404,6 +403,73 @@ public class GeneralUniformAssignmentBuilderTest {
         expectedAssignment.put(memberC, mkAssignment(
             mkTopicAssignment(topic1Uuid, 0, 1)
         ));
+
+        assertAssignment(expectedAssignment, computedAssignment);
+    }
+
+    @Test
+    public void testReAssignmentNumMembersGreaterThanTotalNumPartitions() {
+        Map<Uuid, TopicMetadata> topicMetadata = new HashMap<>();
+        topicMetadata.put(topic3Uuid, new TopicMetadata(
+            topic3Uuid,
+            topic3Name,
+            1,
+            mkMapOfPartitionRacks(1)
+        ));
+        topicMetadata.put(topic1Uuid, new TopicMetadata(
+            topic1Uuid,
+            topic1Name,
+            2,
+            mkMapOfPartitionRacks(2)
+        ));
+
+        Map<String, AssignmentMemberSpec> members = new TreeMap<>();
+
+        Map<Uuid, Set<Integer>> currentAssignmentForA = new TreeMap<>(
+            mkAssignment(
+                mkTopicAssignment(topic1Uuid, 0, 1)
+            )
+        );
+        members.put(memberA, new AssignmentMemberSpec(
+            Optional.empty(),
+            Optional.empty(),
+            Collections.singletonList(topic1Uuid),
+            currentAssignmentForA
+        ));
+
+        Map<Uuid, Set<Integer>> currentAssignmentForB = new TreeMap<>(
+            mkAssignment(
+                mkTopicAssignment(topic3Uuid, 0)
+            )
+        );
+        members.put(memberB, new AssignmentMemberSpec(
+            Optional.empty(),
+            Optional.empty(),
+            Collections.singletonList(topic3Uuid),
+            currentAssignmentForB
+        ));
+
+        // New member added.
+        members.put(memberC, new AssignmentMemberSpec(
+            Optional.empty(),
+            Optional.empty(),
+            Arrays.asList(topic3Uuid),
+            Collections.emptyMap()
+        ));
+
+        AssignmentSpec assignmentSpec = new AssignmentSpec(members);
+        SubscribedTopicMetadata subscribedTopicMetadata = new SubscribedTopicMetadata(topicMetadata);
+
+        GroupAssignment computedAssignment = assignor.assign(assignmentSpec, subscribedTopicMetadata);
+
+        Map<String, Map<Uuid, Set<Integer>>> expectedAssignment = new HashMap<>();
+        expectedAssignment.put(memberA, mkAssignment(
+            mkTopicAssignment(topic1Uuid, 0, 1)
+        ));
+        expectedAssignment.put(memberB, mkAssignment(
+            mkTopicAssignment(topic3Uuid, 0)
+        ));
+        expectedAssignment.put(memberC, Collections.emptyMap());
 
         assertAssignment(expectedAssignment, computedAssignment);
     }

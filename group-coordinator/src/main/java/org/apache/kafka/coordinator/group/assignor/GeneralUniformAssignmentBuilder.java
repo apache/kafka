@@ -169,6 +169,10 @@ public class GeneralUniformAssignmentBuilder extends AbstractUniformAssignmentBu
             return new GroupAssignment(Collections.emptyMap());
         }
 
+        if (targetAssignment.keySet().size() != members.keySet().size()) {
+            throw new PartitionAssignorException("All the members were not added to the target assignment during initialization");
+        }
+
         // When rack awareness is enabled, only sticky partitions with matching rack are retained.
         // Otherwise, all existing partitions are retained until max assignment size.
         assignStickyPartitions();
