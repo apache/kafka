@@ -88,8 +88,6 @@ class ListOffsetsIntegrationTest extends KafkaServerTestHarness {
     props.setProperty(TopicConfig.MESSAGE_TIMESTAMP_TYPE_CONFIG, "LogAppendTime")
     createTopicWithConfig(topicNameWithCustomConfigs, props)
     produceMessagesInSeparateBatch(topic = topicNameWithCustomConfigs)
-    // In LogAppendTime's case, the maxTimestampOffset should be the first message of the batch.
-    // So in this one batch test, it'll be the first offset 0
     verifyListOffsets(topic = topicNameWithCustomConfigs, 2)
   }
 
