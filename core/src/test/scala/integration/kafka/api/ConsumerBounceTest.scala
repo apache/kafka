@@ -84,7 +84,7 @@ class ConsumerBounceTest extends AbstractConsumerTest with Logging {
   }
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("zk"))
+  @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
   def testConsumptionWithBrokerFailures(quorum: String): Unit = consumeWithBrokerFailures(10)
 
   /*
