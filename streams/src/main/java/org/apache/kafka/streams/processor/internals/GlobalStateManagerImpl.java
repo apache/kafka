@@ -269,7 +269,7 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
                 offset = getGlobalConsumerOffset(topicPartition);
             }
             final Long highWatermark = highWatermarks.get(topicPartition);
-            stateRestoreListener.onRestoreStart(topicPartition, reprocessFactory.toString(), offset, highWatermark);
+            stateRestoreListener.onRestoreStart(topicPartition, storeName, offset, highWatermark);
 
             long restoreCount = 0L;
 
