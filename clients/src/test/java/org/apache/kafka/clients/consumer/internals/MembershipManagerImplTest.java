@@ -1080,7 +1080,11 @@ public class MembershipManagerImplTest {
         receiveEmptyAssignment(membershipManager);
 
         verifyReconciliationNotTriggered(membershipManager);
+
         membershipManager.poll(time.milliseconds());
+
+        verifyReconciliationTriggeredAndCompleted(membershipManager, Collections.emptyList());
+
         membershipManager.onHeartbeatRequestSent();
 
         assertEquals(MemberState.STABLE, membershipManager.state());
@@ -2354,8 +2358,8 @@ public class MembershipManagerImplTest {
         when(subscriptionState.hasAutoAssignedPartitions()).thenReturn(true);
     }
 
-    private MembershipManagerImpl mockJoinAndReceiveAssignment(boolean expectSubscriptionUpdated) {
-        return mockJoinAndReceiveAssignment(expectSubscriptionUpdated, createAssignment(expectSubscriptionUpdated));
+    private MembershipManagerImpl mockJoinAndReceiveAssignment(boolean triggerReconciliation) {
+        return mockJoinAndReceiveAssignment(triggerReconciliation, createAssignment(triggerReconciliation));
     }
 
     private MembershipManagerImpl mockJoinAndReceiveAssignment(boolean triggerReconciliation,

@@ -913,7 +913,7 @@ public class MembershipManagerImpl implements MembershipManager {
             resolvedAssignment.localEpoch <= currentAssignment.localEpoch + 1 &&
             resolvedAssignment.partitions.equals(currentAssignment.partitions)) {
             log.debug("Ignoring reconciliation attempt. The resolvable fragment of the target assignment {} " +
-                "is equal to the current assignment, and no intermediate assignments were received.", resolvedAssignment);
+                "is equal to the current assignment, and no intermediate assignments were received.", resolvedAssignment.partitions);
             // May bump the local epoch
             currentAssignment = resolvedAssignment;
             return;
