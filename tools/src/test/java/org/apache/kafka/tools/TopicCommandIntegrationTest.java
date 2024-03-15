@@ -642,18 +642,26 @@ public class TopicCommandIntegrationTest extends kafka.integration.KafkaServerTe
     @ParameterizedTest(name = ToolsTestUtils.TEST_WITH_PARAMETERIZED_QUORUM_NAME)
     @ValueSource(strings = {"quorum=zk", "quorum=kraft"})
     public void testDescribeWithDescribeTopicPartitionsApi(String quorum) throws ExecutionException, InterruptedException {
-        TestUtils.createTopicWithAdmin(adminClient, testTopicName, scalaBrokers, scalaControllers, 3, (short) 2,
+        TestUtils.createTopicWithAdmin(adminClient, testTopicName, scalaBrokers, scalaControllers, 20, (short) 2,
             scala.collection.immutable.Map$.MODULE$.empty(), new Properties()
         );
-        String secondTopicName = "test-2";
-        TestUtils.createTopicWithAdmin(adminClient, secondTopicName, scalaBrokers, scalaControllers, 3, (short) 2,
+        TestUtils.createTopicWithAdmin(adminClient, "test-2", scalaBrokers, scalaControllers, 41, (short) 2,
             scala.collection.immutable.Map$.MODULE$.empty(), new Properties()
+        );
+        TestUtils.createTopicWithAdmin(adminClient, "test-3", scalaBrokers, scalaControllers, 5, (short) 2,
+                scala.collection.immutable.Map$.MODULE$.empty(), new Properties()
+        );
+        TestUtils.createTopicWithAdmin(adminClient, "test-4", scalaBrokers, scalaControllers, 5, (short) 2,
+                scala.collection.immutable.Map$.MODULE$.empty(), new Properties()
+        );
+        TestUtils.createTopicWithAdmin(adminClient, "test-5", scalaBrokers, scalaControllers, 100, (short) 2,
+                scala.collection.immutable.Map$.MODULE$.empty(), new Properties()
         );
 
         String output = captureDescribeTopicStandardOut(buildTopicCommandOptionsWithBootstrap(
-            "--describe", "--partition-size-limit-per-response=1"));
+            "--describe", "--partition-size-limit-per-response=20"));
         String[] rows = output.split("\n");
-        assertEquals(8, rows.length, String.join("\n", rows));
+        assertEquals(176, rows.length, String.join("\n", rows));
         assertTrue(rows[2].contains("\tElr"), rows[2]);
         assertTrue(rows[2].contains("LastKnownElr"), rows[2]);
     }

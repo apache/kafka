@@ -45,8 +45,14 @@ public class TopicPartitionInfo {
      * @param elr the eligible leader replicas
      * @param lastKnownElr the last known eligible leader replicas.
      */
-    public TopicPartitionInfo(int partition, Node leader, List<Node> replicas, List<Node> isr,
-                              List<Node> elr, List<Node> lastKnownElr) {
+    public TopicPartitionInfo(
+        int partition,
+        Node leader,
+        List<Node> replicas,
+        List<Node> isr,
+        List<Node> elr,
+        List<Node> lastKnownElr
+    ) {
         this.partition = partition;
         this.leader = leader;
         this.replicas = Collections.unmodifiableList(replicas);

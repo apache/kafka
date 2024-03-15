@@ -2123,8 +2123,13 @@ public class KafkaAdminClient extends AdminClient {
             throw new IllegalArgumentException("The TopicCollection: " + topics + " provided did not match any supported classes for describeTopics.");
     }
 
-    Call generateDescribeTopicsCallWithMetadataAPI(List<String> topicNamesList, Map<String, KafkaFutureImpl<TopicDescription>> topicFutures, DescribeTopicsOptions options, long now) {
-        Call call = new Call("describeTopics", calcDeadlineMs(now, options.timeoutMs()),
+    Call generateDescribeTopicsCallWithMetadataAPI(
+        List<String> topicNamesList,
+        Map<String, KafkaFutureImpl<TopicDescription>> topicFutures,
+        DescribeTopicsOptions options,
+        long now
+    ) {
+        return new Call("describeTopics", calcDeadlineMs(now, options.timeoutMs()),
             new LeastLoadedNodeProvider()) {
 
             private boolean supportsDisablingTopicCreation = true;
@@ -2179,44 +2184,16 @@ public class KafkaAdminClient extends AdminClient {
                 completeAllExceptionally(topicFutures.values(), throwable);
             }
         };
-        return call;
     }
 
-    @SuppressWarnings({"MethodLength", "NPathComplexity"})
-    private Map<String, KafkaFuture<TopicDescription>> handleDescribeTopicsByNamesWithDescribeTopicPartitionsApi(
-        final Collection<String> topicNames,
-        DescribeTopicsOptions options
+    Call generateDescribeTopicsCallWithDescribeTopicPartitionsApi(
+        List<String> topicNamesList,
+        Map<String, KafkaFutureImpl<TopicDescription>> topicFutures,
+        Map<Integer, Node> nodes,
+        DescribeTopicsOptions options,
+        long now
     ) {
-        final Map<String, KafkaFutureImpl<TopicDescription>> topicFutures = new HashMap<>(topicNames.size());
-        final ArrayList<String> topicNamesList = new ArrayList<>();
-        for (String topicName : topicNames) {
-            if (topicNameIsUnrepresentable(topicName)) {
-                KafkaFutureImpl<TopicDescription> future = new KafkaFutureImpl<>();
-                future.completeExceptionally(new InvalidTopicException("The given topic name '" +
-                    topicName + "' cannot be represented in a request."));
-                topicFutures.put(topicName, future);
-            } else if (!topicFutures.containsKey(topicName)) {
-                topicFutures.put(topicName, new KafkaFutureImpl<>());
-                topicNamesList.add(topicName);
-            }
-        }
-
-        if (topicNamesList.isEmpty()) {
-            return new HashMap<>(topicFutures);
-        }
-
-        // First, we need to retrieve the node info.
-        DescribeClusterResult clusterResult = describeCluster();
-        Map<Integer, Node> nodes;
-        try {
-            nodes = clusterResult.nodes().get().stream().collect(Collectors.toMap(Node::id, node -> node));
-        } catch (InterruptedException | ExecutionException e) {
-            completeAllExceptionally(topicFutures.values(), e.getCause());
-            return new HashMap<>(topicFutures);
-        }
-
-        final long now = time.milliseconds();
-        Call call = new Call("describeTopicPartitions", calcDeadlineMs(now, options.timeoutMs()),
+        return new Call("describeTopicPartitions", calcDeadlineMs(now, options.timeoutMs()),
             new LeastLoadedNodeProvider()) {
             Map<String, TopicRequest> pendingTopics =
                 topicNamesList.stream().map(topicName -> new TopicRequest().setName(topicName))
@@ -2314,7 +2291,46 @@ public class KafkaAdminClient extends AdminClient {
                 }
             }
         };
-        runnable.call(call, now);
+    }
+
+    private Map<String, KafkaFuture<TopicDescription>> handleDescribeTopicsByNamesWithDescribeTopicPartitionsApi(
+        final Collection<String> topicNames,
+        DescribeTopicsOptions options
+    ) {
+        final Map<String, KafkaFutureImpl<TopicDescription>> topicFutures = new HashMap<>(topicNames.size());
+        final ArrayList<String> topicNamesList = new ArrayList<>();
+        for (String topicName : topicNames) {
+            if (topicNameIsUnrepresentable(topicName)) {
+                KafkaFutureImpl<TopicDescription> future = new KafkaFutureImpl<>();
+                future.completeExceptionally(new InvalidTopicException("The given topic name '" +
+                    topicName + "' cannot be represented in a request."));
+                topicFutures.put(topicName, future);
+            } else if (!topicFutures.containsKey(topicName)) {
+                topicFutures.put(topicName, new KafkaFutureImpl<>());
+                topicNamesList.add(topicName);
+            }
+        }
+
+        if (topicNamesList.isEmpty()) {
+            return new HashMap<>(topicFutures);
+        }
+
+        // First, we need to retrieve the node info.
+        DescribeClusterResult clusterResult = describeCluster();
+        Map<Integer, Node> nodes;
+        try {
+            nodes = clusterResult.nodes().get().stream().collect(Collectors.toMap(Node::id, node -> node));
+        } catch (InterruptedException | ExecutionException e) {
+            completeAllExceptionally(topicFutures.values(), e.getCause());
+            return new HashMap<>(topicFutures);
+        }
+
+        final long now = time.milliseconds();
+
+        runnable.call(
+            generateDescribeTopicsCallWithDescribeTopicPartitionsApi(topicNamesList, topicFutures, nodes,options, now),
+            now
+        );
 
         return new HashMap<>(topicFutures);
     }
@@ -2391,16 +2407,8 @@ public class KafkaAdminClient extends AdminClient {
         List<DescribeTopicPartitionsResponsePartition> partitionInfos = topic.partitions();
         List<TopicPartitionInfo> partitions = new ArrayList<>(partitionInfos.size());
         for (DescribeTopicPartitionsResponsePartition partitionInfo : partitionInfos) {
-            TopicPartitionInfo topicPartitionInfo = new TopicPartitionInfo(
-                partitionInfo.partitionIndex(),
-                nodes.get(partitionInfo.leaderId()),
-                partitionInfo.replicaNodes().stream().map(id -> nodes.get(id)).collect(Collectors.toList()),
-                partitionInfo.isrNodes().stream().map(id -> nodes.get(id)).collect(Collectors.toList()),
-                partitionInfo.eligibleLeaderReplicas().stream().map(id -> nodes.get(id)).collect(Collectors.toList()),
-                partitionInfo.lastKnownElr().stream().map(id -> nodes.get(id)).collect(Collectors.toList()));
-            partitions.add(topicPartitionInfo);
+            partitions.add(DescribeTopicPartitionsResponse.partitionToTopicPartitionInfo(partitionInfo, nodes));
         }
-        partitions.sort(Comparator.comparingInt(TopicPartitionInfo::partition));
         return new TopicDescription(topic.name(), topic.isInternal(), partitions, validAclOperations(topic.topicAuthorizedOperations()), topic.topicId());
     }
 

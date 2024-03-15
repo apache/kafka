@@ -821,9 +821,9 @@ public abstract class TopicCommand {
             excludeInternalTopicOpt = parser.accepts("exclude-internal",
                 "exclude internal topics when running list or describe command. The internal topics will be listed by default");
             partitionSizeLimitPerResponseOpt = parser.accepts("partition-size-limit-per-response",
-                "the maximum partition size to be included in one DescribeTopicPartitions response. Only valid if use-describe-topics-api is used")
+                "the maximum partition size to be included in one DescribeTopicPartitions response.")
                     .withRequiredArg()
-                    .describedAs("maximun # of partitions in one response.")
+                    .describedAs("maximum number of partitions in one response.")
                     .ofType(java.lang.Integer.class);
             options = parser.parse(args);
 
