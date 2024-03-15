@@ -9368,14 +9368,13 @@ public class GroupMetadataManagerTest {
         String consumerGroupId = "consumer-group-id";
         String memberId = Uuid.randomUuid().toString();
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withConsumerGroup(new ConsumerGroupBuilder(consumerGroupId, 10)
+            .withMember(new ConsumerGroupMember.Builder(memberId)
+                .setState(MemberState.STABLE)
+                .setMemberEpoch(10)
+                .setPreviousMemberEpoch(10)
+                .build()))
             .build();
-        ConsumerGroupMember.Builder memberBuilder = new ConsumerGroupMember.Builder(memberId);
-        // Create an empty group.
-        context.replay(RecordHelpers.newGroupEpochRecord(consumerGroupId, 10));
-        context.replay(RecordHelpers.newGroupSubscriptionMetadataRecord(consumerGroupId, Collections.emptyMap()));
-        context.replay(RecordHelpers.newTargetAssignmentEpochRecord(consumerGroupId, 10));
-        // Add a member to the group.
-        context.replay(RecordHelpers.newMemberSubscriptionRecord(consumerGroupId, memberBuilder.build()));
 
         JoinGroupRequestData request = new GroupMetadataManagerTestContext.JoinGroupRequestBuilder()
             .withGroupId(consumerGroupId)
@@ -9391,11 +9390,8 @@ public class GroupMetadataManagerTest {
     public void testClassicGroupJoinWithEmptyConsumerGroup() throws Exception {
         String consumerGroupId = "consumer-group-id";
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withConsumerGroup(new ConsumerGroupBuilder(consumerGroupId, 10))
             .build();
-        // Create an empty group.
-        context.replay(RecordHelpers.newGroupEpochRecord(consumerGroupId, 10));
-        context.replay(RecordHelpers.newGroupSubscriptionMetadataRecord(consumerGroupId, Collections.emptyMap()));
-        context.replay(RecordHelpers.newTargetAssignmentEpochRecord(consumerGroupId, 10));
 
         JoinGroupRequestData request = new GroupMetadataManagerTestContext.JoinGroupRequestBuilder()
             .withGroupId(consumerGroupId)

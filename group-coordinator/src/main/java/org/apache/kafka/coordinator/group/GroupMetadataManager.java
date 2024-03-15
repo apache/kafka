@@ -1056,8 +1056,12 @@ public class GroupMetadataManager {
 
         // Get or create the consumer group.
         boolean createIfNotExists = memberEpoch == 0;
-        maybeDeleteEmptyClassicGroup(groupId, records);
-        final ConsumerGroup group = getOrMaybeCreateConsumerGroup(groupId, createIfNotExists);
+        ConsumerGroup group;
+        if (maybeDeleteEmptyClassicGroup(groupId, records)) {
+            group = new ConsumerGroup(snapshotRegistry, groupId, metrics);
+        } else {
+            group = getOrMaybeCreateConsumerGroup(groupId, createIfNotExists);
+        }
         throwIfConsumerGroupIsFull(group, memberId);
 
         // Get or create the member.
@@ -1929,10 +1933,7 @@ public class GroupMetadataManager {
 
         if (value == null)  {
             // Tombstone. Group should be removed.
-            Group group = groups.get(groupId, Long.MAX_VALUE);
-            if (group != null && group.type() == CLASSIC) {
-                removeGroup(groupId);
-            }
+            removeGroup(groupId);
         } else {
             List<ClassicGroupMember> loadedMembers = new ArrayList<>();
             for (GroupMetadataValue.MemberMetadata member : value.members()) {
@@ -3609,21 +3610,26 @@ public class GroupMetadataManager {
     }
 
     /**
-     * Delete the group if it's empty and is a classic group.
+     * Write tombstones for the group if it's empty and is a classic group.
      *
      * @param groupId The group id to be deleted.
      * @param records The list of records to delete the group.
+     *
+     * @return true if the group is empty
      */
-    private void maybeDeleteEmptyClassicGroup(String groupId, List<Record> records) {
+    private boolean maybeDeleteEmptyClassicGroup(String groupId, List<Record> records) {
         Group group = groups.get(groupId, Long.MAX_VALUE);
         if (isEmptyClassicGroup(group)) {
+            // Delete the classic group by adding tombstones.
+            // There's no need to remove the group as the replay of tombstones removes it.
             createGroupTombstoneRecords(group, records);
-            removeGroup(groupId);
+            return true;
         }
+        return false;
     }
 
     /**
-     * Delete the group if it's empty and is a consumer group.
+     * Delete and write tombstones for the group if it's empty and is a consumer group.
      *
      * @param groupId The group id to be deleted.
      * @param records The list of records to delete the group.
