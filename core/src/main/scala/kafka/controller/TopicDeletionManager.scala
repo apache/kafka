@@ -314,6 +314,15 @@ class TopicDeletionManager(config: KafkaConfig,
     }
   }
 
+  /**
+   * Here are the following cases that would be invoked for the resume of deletion:
+   * 1. Controller failover.
+   * 2. New topics to delete is enqueued by child change of `/admin/deleted_topics`.
+   * 3. New broker starts up. Any replicas belonging to topics queued up for deletion can be deleted since the broker is up.
+   * 4. Partition reassignment completes. Any partitions belonging to topics queued up for deletion finished reassignment.
+   * 5. When a broker that hosts replicas for topics to be deleted goes down.
+   * 6. Invoked by the StopReplicaResponse callback when it receives no error code for a replica of a topic to be deleted.
+   * */
   private def resumeDeletions(): Unit = {
     val topicsQueuedForDeletion = Set.empty[String] ++ controllerContext.topicsToBeDeleted
     val topicsEligibleForRetry = mutable.Set.empty[String]
