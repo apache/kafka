@@ -79,7 +79,7 @@ import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
-import static org.mockito.Mockito.reset;
+
 
 public class HeartbeatRequestManagerTest {
     private long retryBackoffMs = DEFAULT_RETRY_BACKOFF_MS;
@@ -438,11 +438,8 @@ public class HeartbeatRequestManagerTest {
 
         // Explicitly change the subscription when gets fenced
         String newTopic = "topic2";
-        when(membershipManager.state()).thenReturn(MemberState.FENCED);
+        membershipManager.transitionToFenced();
         subscriptions.subscribe(Collections.singleton(newTopic), Optional.empty());
-        membershipManager.onSubscriptionUpdated();
-        assertEquals(MemberState.FENCED, membershipManager.state());
-        reset(membershipManager);
         data = heartbeatState.buildRequestData();
         assertEquals(ConsumerTestBuilder.DEFAULT_GROUP_ID, data.groupId());
         assertEquals(memberId, data.memberId());
