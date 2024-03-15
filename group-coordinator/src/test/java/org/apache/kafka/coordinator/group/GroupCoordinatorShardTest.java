@@ -34,6 +34,7 @@ import org.apache.kafka.common.requests.TransactionResult;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.coordinator.group.Group.GroupType;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupCurrentMemberAssignmentKey;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupCurrentMemberAssignmentValue;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupMemberMetadataKey;
@@ -65,6 +66,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import org.mockito.Mockito;
 
 import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorShard.GROUP_EXPIRATION_KEY;
@@ -517,12 +519,13 @@ public class GroupCoordinatorShardTest {
         ConsumerGroupPartitionMetadataKey key = new ConsumerGroupPartitionMetadataKey();
         ConsumerGroupPartitionMetadataValue value = new ConsumerGroupPartitionMetadataValue();
 
-        coordinator.replay(0L, RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, new Record(
+        Record record = new Record(
             new ApiMessageAndVersion(key, (short) 4),
             new ApiMessageAndVersion(value, (short) 0)
-        ));
+        );
+        coordinator.replay(0L, RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, record);
 
-        verify(groupMetadataManager, times(1)).replay(key, value);
+        verify(groupMetadataManager, times(1)).replay(record, GroupType.CONSUMER);
     }
 
     @Test
@@ -544,12 +547,13 @@ public class GroupCoordinatorShardTest {
 
         ConsumerGroupPartitionMetadataKey key = new ConsumerGroupPartitionMetadataKey();
 
-        coordinator.replay(0L, RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, new Record(
+        Record record = new Record(
             new ApiMessageAndVersion(key, (short) 4),
             null
-        ));
+        );
+        coordinator.replay(0L, RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, record);
 
-        verify(groupMetadataManager, times(1)).replay(key, null);
+        verify(groupMetadataManager, times(1)).replay(record, GroupType.CONSUMER);
     }
 
     @Test
@@ -572,12 +576,13 @@ public class GroupCoordinatorShardTest {
         ConsumerGroupMemberMetadataKey key = new ConsumerGroupMemberMetadataKey();
         ConsumerGroupMemberMetadataValue value = new ConsumerGroupMemberMetadataValue();
 
-        coordinator.replay(0L, RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, new Record(
+        Record record = new Record(
             new ApiMessageAndVersion(key, (short) 5),
             new ApiMessageAndVersion(value, (short) 0)
-        ));
+        );
+        coordinator.replay(0L, RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, record);
 
-        verify(groupMetadataManager, times(1)).replay(key, value);
+        verify(groupMetadataManager, times(1)).replay(record, GroupType.CONSUMER);
     }
 
     @Test
@@ -599,12 +604,13 @@ public class GroupCoordinatorShardTest {
 
         ConsumerGroupMemberMetadataKey key = new ConsumerGroupMemberMetadataKey();
 
-        coordinator.replay(0L, RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, new Record(
+        Record record = new Record(
             new ApiMessageAndVersion(key, (short) 5),
             null
-        ));
+        );
+        coordinator.replay(0L, RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, record);
 
-        verify(groupMetadataManager, times(1)).replay(key, null);
+        verify(groupMetadataManager, times(1)).replay(record, GroupType.CONSUMER);
     }
 
     @Test
@@ -627,12 +633,13 @@ public class GroupCoordinatorShardTest {
         ConsumerGroupTargetAssignmentMetadataKey key = new ConsumerGroupTargetAssignmentMetadataKey();
         ConsumerGroupTargetAssignmentMetadataValue value = new ConsumerGroupTargetAssignmentMetadataValue();
 
-        coordinator.replay(0L, RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, new Record(
+        Record record = new Record(
             new ApiMessageAndVersion(key, (short) 6),
             new ApiMessageAndVersion(value, (short) 0)
-        ));
+        );
+        coordinator.replay(0L, RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, record);
 
-        verify(groupMetadataManager, times(1)).replay(key, value);
+        verify(groupMetadataManager, times(1)).replay(record, GroupType.CONSUMER);
     }
 
     @Test
@@ -654,12 +661,13 @@ public class GroupCoordinatorShardTest {
 
         ConsumerGroupTargetAssignmentMetadataKey key = new ConsumerGroupTargetAssignmentMetadataKey();
 
-        coordinator.replay(0L, RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, new Record(
+        Record record = new Record(
             new ApiMessageAndVersion(key, (short) 6),
             null
-        ));
+        );
+        coordinator.replay(0L, RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, record);
 
-        verify(groupMetadataManager, times(1)).replay(key, null);
+        verify(groupMetadataManager, times(1)).replay(record, GroupType.CONSUMER);
     }
 
     @Test
@@ -682,12 +690,13 @@ public class GroupCoordinatorShardTest {
         ConsumerGroupTargetAssignmentMemberKey key = new ConsumerGroupTargetAssignmentMemberKey();
         ConsumerGroupTargetAssignmentMemberValue value = new ConsumerGroupTargetAssignmentMemberValue();
 
-        coordinator.replay(0L, RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, new Record(
+        Record record = new Record(
             new ApiMessageAndVersion(key, (short) 7),
             new ApiMessageAndVersion(value, (short) 0)
-        ));
+        );
+        coordinator.replay(0L, RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, record);
 
-        verify(groupMetadataManager, times(1)).replay(key, value);
+        verify(groupMetadataManager, times(1)).replay(record, GroupType.CONSUMER);
     }
 
     @Test
@@ -709,12 +718,13 @@ public class GroupCoordinatorShardTest {
 
         ConsumerGroupTargetAssignmentMemberKey key = new ConsumerGroupTargetAssignmentMemberKey();
 
-        coordinator.replay(0L, RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, new Record(
+        Record record = new Record(
             new ApiMessageAndVersion(key, (short) 7),
             null
-        ));
+        );
+        coordinator.replay(0L, RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, record);
 
-        verify(groupMetadataManager, times(1)).replay(key, null);
+        verify(groupMetadataManager, times(1)).replay(record, GroupType.CONSUMER);
     }
 
     @Test
@@ -737,12 +747,13 @@ public class GroupCoordinatorShardTest {
         ConsumerGroupCurrentMemberAssignmentKey key = new ConsumerGroupCurrentMemberAssignmentKey();
         ConsumerGroupCurrentMemberAssignmentValue value = new ConsumerGroupCurrentMemberAssignmentValue();
 
-        coordinator.replay(0L, RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, new Record(
+        Record record = new Record(
             new ApiMessageAndVersion(key, (short) 8),
             new ApiMessageAndVersion(value, (short) 0)
-        ));
+        );
+        coordinator.replay(0L, RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, record);
 
-        verify(groupMetadataManager, times(1)).replay(key, value);
+        verify(groupMetadataManager, times(1)).replay(record, GroupType.CONSUMER);
     }
 
     @Test
@@ -764,12 +775,13 @@ public class GroupCoordinatorShardTest {
 
         ConsumerGroupCurrentMemberAssignmentKey key = new ConsumerGroupCurrentMemberAssignmentKey();
 
-        coordinator.replay(0L, RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, new Record(
+        Record record = new Record(
             new ApiMessageAndVersion(key, (short) 8),
             null
-        ));
+        );
+        coordinator.replay(0L, RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, record);
 
-        verify(groupMetadataManager, times(1)).replay(key, null);
+        verify(groupMetadataManager, times(1)).replay(record, GroupType.CONSUMER);
     }
 
     @Test
@@ -817,12 +829,16 @@ public class GroupCoordinatorShardTest {
 
         ConsumerGroupCurrentMemberAssignmentKey key = new ConsumerGroupCurrentMemberAssignmentKey();
         ConsumerGroupCurrentMemberAssignmentValue value = new ConsumerGroupCurrentMemberAssignmentValue();
+        Record record = new Record(
+            new ApiMessageAndVersion(key, (short) 255),
+            new ApiMessageAndVersion(value, (short) 0)
+        );
+
+        Mockito.doThrow(new IllegalStateException("Unsupported version")).when(groupMetadataManager)
+            .replay(record, GroupType.CONSUMER);
 
         assertThrows(IllegalStateException.class, () ->
-            coordinator.replay(0L, RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, new Record(
-                new ApiMessageAndVersion(key, (short) 255),
-                new ApiMessageAndVersion(value, (short) 0)
-            ))
+            coordinator.replay(0L, RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, record)
         );
     }
 

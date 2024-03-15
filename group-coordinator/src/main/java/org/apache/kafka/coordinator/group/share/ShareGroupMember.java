@@ -20,6 +20,8 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.ShareGroupDescribeResponseData;
 import org.apache.kafka.coordinator.group.GroupMember;
 import org.apache.kafka.coordinator.group.Utils;
+import org.apache.kafka.coordinator.group.generated.ConsumerGroupCurrentMemberAssignmentValue;
+import org.apache.kafka.coordinator.group.generated.ConsumerGroupMemberMetadataValue;
 import org.apache.kafka.image.TopicsImage;
 
 import java.util.ArrayList;
@@ -134,6 +136,24 @@ public class ShareGroupMember extends GroupMember {
 
     public Builder setAssignedPartitions(Map<Uuid, Set<Integer>> assignedPartitions) {
       this.assignedPartitions = assignedPartitions;
+      return this;
+    }
+
+    public Builder updateWith(ConsumerGroupMemberMetadataValue record) {
+      setRackId(record.rackId());
+      setClientId(record.clientId());
+      setClientHost(record.clientHost());
+      setSubscribedTopicNames(record.subscribedTopicNames());
+      setRebalanceTimeoutMs(record.rebalanceTimeoutMs());
+      return this;
+    }
+
+    public Builder updateWith(
+        ConsumerGroupCurrentMemberAssignmentValue record) {
+      setMemberEpoch(record.memberEpoch());
+      setPreviousMemberEpoch(record.previousMemberEpoch());
+      setTargetMemberEpoch(record.targetMemberEpoch());
+      setAssignedPartitions(assignmentFromTopicPartitions(record.assignedPartitions()));
       return this;
     }
 

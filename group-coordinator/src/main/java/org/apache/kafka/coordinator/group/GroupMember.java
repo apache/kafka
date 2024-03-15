@@ -16,11 +16,16 @@
  */
 package org.apache.kafka.coordinator.group;
 
+import org.apache.kafka.common.Uuid;
+import org.apache.kafka.coordinator.group.common.CurrentAssignmentBuilder;
+import org.apache.kafka.coordinator.group.generated.ConsumerGroupCurrentMemberAssignmentValue;
+
+import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import org.apache.kafka.common.Uuid;
-import org.apache.kafka.coordinator.group.common.CurrentAssignmentBuilder;
+import java.util.stream.Collectors;
 
 /**
  * Abstract member common for group members.
@@ -192,5 +197,13 @@ public abstract class GroupMember {
      */
     public Map<Uuid, Set<Integer>> assignedPartitions() {
         return assignedPartitions;
+    }
+
+    public static Map<Uuid, Set<Integer>> assignmentFromTopicPartitions(
+        List<ConsumerGroupCurrentMemberAssignmentValue.TopicPartitions> topicPartitionsList
+    ) {
+        return topicPartitionsList.stream().collect(Collectors.toMap(
+            ConsumerGroupCurrentMemberAssignmentValue.TopicPartitions::topicId,
+            topicPartitions -> Collections.unmodifiableSet(new HashSet<>(topicPartitions.partitions()))));
     }
 }

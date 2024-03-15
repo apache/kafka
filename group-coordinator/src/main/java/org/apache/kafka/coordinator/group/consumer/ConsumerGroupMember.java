@@ -28,7 +28,6 @@ import org.apache.kafka.image.TopicsImage;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -228,14 +227,6 @@ public class ConsumerGroupMember extends GroupMember {
             setPartitionsPendingRevocation(assignmentFromTopicPartitions(record.partitionsPendingRevocation()));
             setPartitionsPendingAssignment(assignmentFromTopicPartitions(record.partitionsPendingAssignment()));
             return this;
-        }
-
-        private Map<Uuid, Set<Integer>> assignmentFromTopicPartitions(
-            List<ConsumerGroupCurrentMemberAssignmentValue.TopicPartitions> topicPartitionsList
-        ) {
-            return topicPartitionsList.stream().collect(Collectors.toMap(
-                ConsumerGroupCurrentMemberAssignmentValue.TopicPartitions::topicId,
-                topicPartitions -> Collections.unmodifiableSet(new HashSet<>(topicPartitions.partitions()))));
         }
 
         public ConsumerGroupMember build() {

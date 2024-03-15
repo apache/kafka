@@ -17,8 +17,10 @@
 package org.apache.kafka.coordinator.group;
 
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.image.TopicImage;
 import org.apache.kafka.image.TopicsImage;
+import org.apache.kafka.server.common.ApiMessageAndVersion;
 
 import java.util.OptionalInt;
 import java.util.OptionalLong;
@@ -54,6 +56,17 @@ public class Utils {
             return topicImage.name();
         } else {
             return null;
+        }
+    }
+
+    /**
+     * @return The ApiMessage or null.
+     */
+    public static ApiMessage messageOrNull(ApiMessageAndVersion apiMessageAndVersion) {
+        if (apiMessageAndVersion == null) {
+            return null;
+        } else {
+            return apiMessageAndVersion.message();
         }
     }
 }

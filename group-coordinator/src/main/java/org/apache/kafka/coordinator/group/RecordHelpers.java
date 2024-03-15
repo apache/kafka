@@ -39,6 +39,7 @@ import org.apache.kafka.coordinator.group.generated.GroupMetadataValue;
 import org.apache.kafka.coordinator.group.generated.OffsetCommitKey;
 import org.apache.kafka.coordinator.group.generated.OffsetCommitValue;
 import org.apache.kafka.coordinator.group.classic.ClassicGroup;
+import org.apache.kafka.coordinator.group.share.ShareGroupMember;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.common.MetadataVersion;
 
@@ -93,6 +94,37 @@ public class RecordHelpers {
                             .setVersion(assignorState.metadata().version())
                             .setMetadata(assignorState.metadata().metadata().array())
                     ).collect(Collectors.toList())),
+                (short) 0
+            )
+        );
+    }
+
+    /**
+     * Creates a ConsumerGroupMemberMetadata record.
+     *
+     * @param groupId   The consumer group id.
+     * @param member    The consumer group member.
+     * @return The record.
+     */
+    public static Record newMemberSubscriptionRecord(
+        String groupId,
+        ShareGroupMember member
+    ) {
+        return new Record(
+            new ApiMessageAndVersion(
+                new ConsumerGroupMemberMetadataKey()
+                    .setGroupId(groupId)
+                    .setMemberId(member.memberId()),
+                (short) 5
+            ),
+            new ApiMessageAndVersion(
+                new ConsumerGroupMemberMetadataValue()
+                    .setRackId(member.rackId())
+                    .setInstanceId(member.instanceId())
+                    .setClientId(member.clientId())
+                    .setClientHost(member.clientHost())
+                    .setSubscribedTopicNames(member.subscribedTopicNames())
+                    .setRebalanceTimeoutMs(member.rebalanceTimeoutMs()),
                 (short) 0
             )
         );
@@ -368,6 +400,37 @@ public class RecordHelpers {
                     .setAssignedPartitions(toTopicPartitions(member.assignedPartitions()))
                     .setPartitionsPendingRevocation(toTopicPartitions(member.partitionsPendingRevocation()))
                     .setPartitionsPendingAssignment(toTopicPartitions(member.partitionsPendingAssignment())),
+                (short) 0
+            )
+        );
+    }
+
+    /**
+     * Creates a ConsumerGroupCurrentMemberAssignment record.
+     *
+     * @param groupId   The consumer group id.
+     * @param member    The consumer group member.
+     * @return The record.
+     */
+    public static Record newCurrentAssignmentRecord(
+        String groupId,
+        ShareGroupMember member
+    ) {
+        return new Record(
+            new ApiMessageAndVersion(
+                new ConsumerGroupCurrentMemberAssignmentKey()
+                    .setGroupId(groupId)
+                    .setMemberId(member.memberId()),
+                (short) 8
+            ),
+            new ApiMessageAndVersion(
+                new ConsumerGroupCurrentMemberAssignmentValue()
+                    .setMemberEpoch(member.memberEpoch())
+                    .setPreviousMemberEpoch(member.previousMemberEpoch())
+                    .setTargetMemberEpoch(member.targetMemberEpoch())
+                    .setAssignedPartitions(toTopicPartitions(member.assignedPartitions())),
+//                    .setPartitionsPendingRevocation(toTopicPartitions(member.partitionsPendingRevocation()))
+//                    .setPartitionsPendingAssignment(toTopicPartitions(member.partitionsPendingAssignment())),
                 (short) 0
             )
         );

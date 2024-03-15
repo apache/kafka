@@ -241,9 +241,27 @@ class ShareGroupHeartbeatRequestTest(cluster: ClusterInstance) {
     }, msg = s"Could not get partitions assigned. Last response $shareGroupHeartbeatResponse.")
 
     // Verify the response.
-    assertEquals(4, shareGroupHeartbeatResponse.data.memberEpoch)
+    assertEquals(3, shareGroupHeartbeatResponse.data.memberEpoch)
 
-    // TODO: validate previous assignment is not revoked.
+    // Verify the assignments are not changed for member 1.
+    // Prepare another heartbeat for member 1 with latest received epoch 3 for member 1.
+    shareGroupHeartbeatRequest = new ShareGroupHeartbeatRequest.Builder(
+      new ShareGroupHeartbeatRequestData()
+        .setGroupId("grp")
+        .setMemberId(memberId1)
+        .setMemberEpoch(3), true
+    ).build()
+
+    // Heartbeats until the response for no change of assignment occurs for member 1 with same epoch.
+    shareGroupHeartbeatResponse = null
+    TestUtils.waitUntilTrue(() => {
+      shareGroupHeartbeatResponse = connectAndReceive(shareGroupHeartbeatRequest)
+      shareGroupHeartbeatResponse.data.errorCode == Errors.NONE.code &&
+        shareGroupHeartbeatResponse.data.assignment == null
+    }, msg = s"Could not get partitions assigned. Last response $shareGroupHeartbeatResponse.")
+
+    // Verify the response.
+    assertEquals(3, shareGroupHeartbeatResponse.data.memberEpoch)
   }
 
   private def connectAndReceive(request: ShareGroupHeartbeatRequest): ShareGroupHeartbeatResponse = {

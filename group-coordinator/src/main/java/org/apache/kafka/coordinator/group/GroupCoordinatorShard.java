@@ -43,24 +43,14 @@ import org.apache.kafka.common.message.SyncGroupResponseData;
 import org.apache.kafka.common.errors.ApiException;
 import org.apache.kafka.common.message.TxnOffsetCommitRequestData;
 import org.apache.kafka.common.message.TxnOffsetCommitResponseData;
-import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.RequestContext;
 import org.apache.kafka.common.requests.TransactionResult;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.coordinator.group.generated.ConsumerGroupCurrentMemberAssignmentKey;
-import org.apache.kafka.coordinator.group.generated.ConsumerGroupCurrentMemberAssignmentValue;
-import org.apache.kafka.coordinator.group.generated.ConsumerGroupMemberMetadataKey;
-import org.apache.kafka.coordinator.group.generated.ConsumerGroupMemberMetadataValue;
+import org.apache.kafka.coordinator.group.Group.GroupType;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupMetadataKey;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupMetadataValue;
-import org.apache.kafka.coordinator.group.generated.ConsumerGroupPartitionMetadataKey;
-import org.apache.kafka.coordinator.group.generated.ConsumerGroupPartitionMetadataValue;
-import org.apache.kafka.coordinator.group.generated.ConsumerGroupTargetAssignmentMemberKey;
-import org.apache.kafka.coordinator.group.generated.ConsumerGroupTargetAssignmentMemberValue;
-import org.apache.kafka.coordinator.group.generated.ConsumerGroupTargetAssignmentMetadataKey;
-import org.apache.kafka.coordinator.group.generated.ConsumerGroupTargetAssignmentMetadataValue;
 import org.apache.kafka.coordinator.group.generated.GroupMetadataKey;
 import org.apache.kafka.coordinator.group.generated.GroupMetadataValue;
 import org.apache.kafka.coordinator.group.generated.OffsetCommitKey;
@@ -688,17 +678,6 @@ public class GroupCoordinatorShard implements CoordinatorShard<Record> {
     }
 
     /**
-     * @return The ApiMessage or null.
-     */
-    private ApiMessage messageOrNull(ApiMessageAndVersion apiMessageAndVersion) {
-        if (apiMessageAndVersion == null) {
-            return null;
-        } else {
-            return apiMessageAndVersion.message();
-        }
-    }
-
-    /**
      * Replays the Record to update the hard state of the group coordinator.
      *
      * @param offset        The offset of the record in the log.
@@ -724,62 +703,23 @@ public class GroupCoordinatorShard implements CoordinatorShard<Record> {
                     offset,
                     producerId,
                     (OffsetCommitKey) key.message(),
-                    (OffsetCommitValue) messageOrNull(value)
-                );
+                    (OffsetCommitValue) Utils.messageOrNull(value));
                 break;
-
             case 2:
                 groupMetadataManager.replay(
                     (GroupMetadataKey) key.message(),
-                    (GroupMetadataValue) messageOrNull(value)
+                    (GroupMetadataValue) Utils.messageOrNull(value)
                 );
                 break;
-
             case 3:
                 groupMetadataManager.replay(
                     (ConsumerGroupMetadataKey) key.message(),
-                    (ConsumerGroupMetadataValue) messageOrNull(value)
+                    (ConsumerGroupMetadataValue) Utils.messageOrNull(value)
                 );
                 break;
-
-            case 4:
-                groupMetadataManager.replay(
-                    (ConsumerGroupPartitionMetadataKey) key.message(),
-                    (ConsumerGroupPartitionMetadataValue) messageOrNull(value)
-                );
-                break;
-
-            case 5:
-                groupMetadataManager.replay(
-                    (ConsumerGroupMemberMetadataKey) key.message(),
-                    (ConsumerGroupMemberMetadataValue) messageOrNull(value)
-                );
-                break;
-
-            case 6:
-                groupMetadataManager.replay(
-                    (ConsumerGroupTargetAssignmentMetadataKey) key.message(),
-                    (ConsumerGroupTargetAssignmentMetadataValue) messageOrNull(value)
-                );
-                break;
-
-            case 7:
-                groupMetadataManager.replay(
-                    (ConsumerGroupTargetAssignmentMemberKey) key.message(),
-                    (ConsumerGroupTargetAssignmentMemberValue) messageOrNull(value)
-                );
-                break;
-
-            case 8:
-                groupMetadataManager.replay(
-                    (ConsumerGroupCurrentMemberAssignmentKey) key.message(),
-                    (ConsumerGroupCurrentMemberAssignmentValue) messageOrNull(value)
-                );
-                break;
-
             default:
-                throw new IllegalStateException("Received an unknown record type " + key.version()
-                    + " in " + record);
+                // Default to Consumer group type for further versions.
+                groupMetadataManager.replay(record, GroupType.CONSUMER);
         }
     }
 
