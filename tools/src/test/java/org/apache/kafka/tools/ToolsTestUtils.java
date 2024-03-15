@@ -45,6 +45,8 @@ import java.util.stream.Collectors;
 public class ToolsTestUtils {
     /** @see TestInfoUtils#TestWithParameterizedQuorumName()  */
     public static final String TEST_WITH_PARAMETERIZED_QUORUM_NAME = "{displayName}.{argumentsWithNames}";
+    /** @see TestInfoUtils#TestWithParameterizedQuorumAndGroupProtocolNames()  */
+    public static final String TEST_WITH_PARAMETERIZED_QUORUM_AND_GROUP_PROTOCOL_NAMES = "{displayName}.quorum={0}.groupProtocol={1}";
 
     private static int randomPort = 0;
 
