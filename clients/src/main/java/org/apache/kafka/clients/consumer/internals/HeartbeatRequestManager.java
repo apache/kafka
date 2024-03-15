@@ -535,7 +535,7 @@ public class HeartbeatRequestManager implements RequestManager {
 
             boolean sendAllFields = membershipManager.state() == MemberState.JOINING;
 
-            // RebalanceTimeoutMs - only sent if has changed since the last heartbeat
+            // RebalanceTimeoutMs - only sent when joining or if it has changed since the last heartbeat
             if (sendAllFields || sentFields.rebalanceTimeoutMs != rebalanceTimeoutMs) {
                 data.setRebalanceTimeoutMs(rebalanceTimeoutMs);
                 sentFields.rebalanceTimeoutMs = rebalanceTimeoutMs;
@@ -549,11 +549,11 @@ public class HeartbeatRequestManager implements RequestManager {
                     sentFields.subscribedTopicNames = subscribedTopicNames;
                 }
             } else {
-                // SubscribedTopicRegex - only sent if has changed since the last heartbeat
+                // SubscribedTopicRegex - only sent if it has changed since the last heartbeat
                 //                      - not supported yet
             }
 
-            // ServerAssignor - only sent if has changed since the last heartbeat
+            // ServerAssignor - sent when joining or if it has changed since the last heartbeat
             this.membershipManager.serverAssignor().ifPresent(serverAssignor -> {
                 if (sendAllFields || !serverAssignor.equals(sentFields.serverAssignor)) {
                     data.setServerAssignor(serverAssignor);
@@ -563,9 +563,10 @@ public class HeartbeatRequestManager implements RequestManager {
 
             // ClientAssignors - not supported yet
 
-            // TopicPartitions - sent with the first heartbeat after a new assignment from the server was
-            // reconciled. This is ensured by resending the topic partitions whenever the local assignment,
-            // including its local epoch is changed (although the local epoch is not sent in the heartbeat).
+            // TopicPartitions - sent when joining or with the first heartbeat after a new assignment from
+            // the server was reconciled. This is ensured by resending the topic partitions whenever the
+            // local assignment, including its local epoch is changed (although the local epoch is not sent
+            // in the heartbeat).
             LocalAssignment local = membershipManager.currentAssignment();
             if (sendAllFields || !local.equals(sentFields.localAssignment)) {
                 List<ConsumerGroupHeartbeatRequestData.TopicPartitions> topicPartitions =
