@@ -67,6 +67,10 @@ class TransactionsBounceTest extends IntegrationTestHarness {
   // Since such quick rotation of servers is incredibly unrealistic, we allow this one test to preallocate ports, leaving
   // a small risk of hitting errors due to port conflicts. Hopefully this is infrequent enough to not cause problems.
   override def generateConfigs = {
+    if (isNewGroupCoordinatorEnabled()) {
+      overridingProps.put(KafkaConfig.UnstableApiVersionsEnableProp, "true")
+      overridingProps.put(KafkaConfig.NewGroupCoordinatorEnableProp, "true")
+    }
     FixedPortTestUtils.createBrokerConfigs(brokerCount, zkConnectOrNull, enableControlledShutdown = true)
       .map(KafkaConfig.fromProps(_, overridingProps))
   }
