@@ -533,8 +533,10 @@ public class HeartbeatRequestManager implements RequestManager {
             // InstanceId - set if present
             membershipManager.groupInstanceId().ifPresent(data::setInstanceId);
 
-            // RebalanceTimeoutMs - only sent when joining or if has changed since the last heartbeat
-            if (membershipManager.memberEpoch() == 0 || sentFields.rebalanceTimeoutMs != rebalanceTimeoutMs) {
+            boolean sendAllFields = membershipManager.state() == MemberState.JOINING;
+
+            // RebalanceTimeoutMs - only sent if has changed since the last heartbeat
+            if (sendAllFields || sentFields.rebalanceTimeoutMs != rebalanceTimeoutMs) {
                 data.setRebalanceTimeoutMs(rebalanceTimeoutMs);
                 sentFields.rebalanceTimeoutMs = rebalanceTimeoutMs;
             }
@@ -542,7 +544,7 @@ public class HeartbeatRequestManager implements RequestManager {
             if (!this.subscriptions.hasPatternSubscription()) {
                 // SubscribedTopicNames - only sent when joining or if it has changed since the last heartbeat
                 TreeSet<String> subscribedTopicNames = new TreeSet<>(this.subscriptions.subscription());
-                if (membershipManager.memberEpoch() == 0 || !subscribedTopicNames.equals(sentFields.subscribedTopicNames)) {
+                if (sendAllFields || !subscribedTopicNames.equals(sentFields.subscribedTopicNames)) {
                     data.setSubscribedTopicNames(new ArrayList<>(this.subscriptions.subscription()));
                     sentFields.subscribedTopicNames = subscribedTopicNames;
                 }
@@ -553,7 +555,7 @@ public class HeartbeatRequestManager implements RequestManager {
 
             // ServerAssignor - only sent if has changed since the last heartbeat
             this.membershipManager.serverAssignor().ifPresent(serverAssignor -> {
-                if (membershipManager.memberEpoch() == 0 || !serverAssignor.equals(sentFields.serverAssignor)) {
+                if (sendAllFields || !serverAssignor.equals(sentFields.serverAssignor)) {
                     data.setServerAssignor(serverAssignor);
                     sentFields.serverAssignor = serverAssignor;
                 }
