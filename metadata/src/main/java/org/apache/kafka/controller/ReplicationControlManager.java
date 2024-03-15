@@ -586,8 +586,8 @@ public class ReplicationControlManager {
                 updatePartitionDirectories(topic.id, partitionId, partition.directories, null);
             }
 
-            for (int i = 0; i < partition.elr.length; i++) {
-                brokersToElrs.removeTopicEntryForBroker(topic.id, partition.elr[i]);
+            for (int elrMember : partition.elr) {
+                brokersToElrs.removeTopicEntryForBroker(topic.id, elrMember);
             }
 
             imbalancedPartitions.remove(new TopicIdPartition(record.topicId(), partitionId));
@@ -1388,8 +1388,6 @@ public class ReplicationControlManager {
     }
 
     /**
-     * Generate the appropriate records to handle a broker registering after unclean shutdown.
-     *
      * Create partition change records to kick out the replicas from any ISR or ELR.
      *
      * @param brokerId      The broker id.
