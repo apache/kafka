@@ -567,7 +567,7 @@ public class HeartbeatRequestManager implements RequestManager {
             // reconciled. This is ensured by resending the topic partitions whenever the local assignment,
             // including its local epoch is changed (although the local epoch is not sent in the heartbeat).
             LocalAssignment local = membershipManager.currentAssignment();
-            if (!local.equals(sentFields.localAssignment)) {
+            if (sendAllFields || !local.equals(sentFields.localAssignment)) {
                 List<ConsumerGroupHeartbeatRequestData.TopicPartitions> topicPartitions =
                     buildTopicPartitionsList(local.partitions);
                 data.setTopicPartitions(topicPartitions);
