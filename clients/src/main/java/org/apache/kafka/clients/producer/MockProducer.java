@@ -58,10 +58,11 @@ public class MockProducer<K, V> implements Producer<K, V> {
     private final Deque<Completion> completions;
     private final Map<TopicPartition, Long> offsets;
     private final List<Map<String, Map<TopicPartition, OffsetAndMetadata>>> consumerGroupOffsets;
-    private Map<String, Map<TopicPartition, OffsetAndMetadata>> uncommittedConsumerGroupOffsets;
+    private final Map<MetricName, Metric> mockMetrics;
     private final Serializer<K> keySerializer;
     private final Serializer<V> valueSerializer;
-    private boolean autoComplete;
+    private final boolean autoComplete;
+    private Map<String, Map<TopicPartition, OffsetAndMetadata>> uncommittedConsumerGroupOffsets;
     private boolean closed;
     private boolean transactionInitialized;
     private boolean transactionInFlight;
@@ -70,7 +71,6 @@ public class MockProducer<K, V> implements Producer<K, V> {
     private boolean producerFenced;
     private boolean sentOffsets;
     private long commitCount = 0L;
-    private final Map<MetricName, Metric> mockMetrics;
 
     public RuntimeException initTransactionException = null;
     public RuntimeException beginTransactionException = null;

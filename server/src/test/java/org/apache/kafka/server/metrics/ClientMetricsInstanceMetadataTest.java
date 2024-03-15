@@ -53,6 +53,9 @@ public class ClientMetricsInstanceMetadataTest {
         assertTrue(instanceMetadata.isMatch(
             Collections.singletonMap(ClientMetricsConfigs.CLIENT_SOURCE_ADDRESS, Pattern.compile(
                 InetAddress.getLocalHost().getHostAddress()))));
+        assertTrue(instanceMetadata.isMatch(
+            Collections.singletonMap(ClientMetricsConfigs.CLIENT_SOURCE_PORT, Pattern.compile(
+                String.valueOf(ClientMetricsTestUtils.CLIENT_PORT)))));
     }
 
     @Test
@@ -67,6 +70,7 @@ public class ClientMetricsInstanceMetadataTest {
         patternMap.put(ClientMetricsConfigs.CLIENT_SOFTWARE_NAME, Pattern.compile("apache-kafka-.*"));
         patternMap.put(ClientMetricsConfigs.CLIENT_SOFTWARE_VERSION, Pattern.compile("3.5.2"));
         patternMap.put(ClientMetricsConfigs.CLIENT_SOURCE_ADDRESS, Pattern.compile(InetAddress.getLocalHost().getHostAddress()));
+        patternMap.put(ClientMetricsConfigs.CLIENT_SOURCE_PORT, Pattern.compile(String.valueOf(ClientMetricsTestUtils.CLIENT_PORT)));
 
         assertTrue(instanceMetadata.isMatch(patternMap));
     }
@@ -105,6 +109,11 @@ public class ClientMetricsInstanceMetadataTest {
         // Source address is different.
         patternMap.put(ClientMetricsConfigs.CLIENT_SOFTWARE_VERSION, Pattern.compile("3.5.2"));
         patternMap.put(ClientMetricsConfigs.CLIENT_SOURCE_ADDRESS, Pattern.compile("1.2.3.4"));
+        assertFalse(instanceMetadata.isMatch(patternMap));
+
+        // Source port is different.
+        patternMap.put(ClientMetricsConfigs.CLIENT_SOURCE_ADDRESS, Pattern.compile(InetAddress.getLocalHost().getHostAddress()));
+        patternMap.put(ClientMetricsConfigs.CLIENT_SOURCE_PORT, Pattern.compile("8080"));
         assertFalse(instanceMetadata.isMatch(patternMap));
     }
 

@@ -19,12 +19,15 @@
   "name": "ListGroupsResponse",
   // Version 1 adds the throttle time.
   //
-  // Starting in version 2, on quota violation, brokers send out responses before throttling.
+  // Starting in version 2, on quota violation, brokers send out
+  // responses before throttling.
   //
   // Version 3 is the first flexible version.
   //
   // Version 4 adds the GroupState field (KIP-518).
-  "validVersions": "0-4",
+  //
+  // Version 5 adds the GroupType field (KIP-848).
+  "validVersions": "0-5",
   "flexibleVersions": "3+",
   "fields": [
     { "name": "ThrottleTimeMs", "type": "int32", "versions": "1+", "ignorable": true,
@@ -38,7 +41,9 @@
       { "name": "ProtocolType", "type": "string", "versions": "0+",
         "about": "The group protocol type." },
       { "name": "GroupState", "type": "string", "versions": "4+", "ignorable": true,
-        "about": "The group state name." }
+        "about": "The group state name." },
+      { "name": "GroupType", "type": "string", "versions": "5+", "ignorable": true,
+        "about": "The group type name." }
     ]}
   ]
 }

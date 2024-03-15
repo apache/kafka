@@ -43,8 +43,10 @@ plugins {
   // includes spotbugs version 4.7.4, in which case CVE-2022-42920 can
   // be dropped from gradle/resources/dependencycheck-suppressions.xml
   id "com.github.spotbugs" version '5.1.3' apply false
-  id 'org.scoverage' version '7.0.1' apply false
-  id 'com.github.johnrengelman.shadow' version '8.1.1' apply false
+  id 'org.scoverage' version '8.0.3' apply false
+  // Updating the shadow plugin version to 8.1.1 causes issue with signing and publishing the shadowed
+  // artifacts - see https://github.com/johnrengelman/shadow/issues/901
+  id 'com.github.johnrengelman.shadow' version '8.1.0' apply false
   id 'com.diffplug.spotless' version '6.14.0' apply false // 6.14.1 and newer require Java 11 at compile time, so we can't upgrade until AK 4.0
 }
 
@@ -302,7 +304,7 @@ subprojects {
             from components.java
           } else {
             apply plugin: 'com.github.johnrengelman.shadow'
-            artifact shadowJar
+            project.shadow.component(mavenJava)
           }
 
           afterEvaluate {
@@ -418,8 +420,7 @@ subprojects {
   if (JavaVersion.current().isCompatibleWith(JavaVersion.VERSION_16)) {
     testsToExclude.addAll([
       // connect tests
-      "**/KafkaConfigBackingStoreTest.*",
-      "**/WorkerSinkTaskTest.*"
+      "**/KafkaConfigBackingStoreTest.*"
     ])
   }
 
@@ -748,7 +749,7 @@ subprojects {
 
   if (userEnableTestCoverage) {
     def coverageGen = it.path == ':core' ? 'reportScoverage' : 'jacocoTestReport'
-    task reportCoverage(dependsOn: [coverageGen])
+    tasks.register('reportCoverage').configure { dependsOn(coverageGen) }
   }
 
   dependencyCheck {
@@ -798,33 +799,8 @@ def checkstyleConfigProperties(configFileName) {
   [importControlFile: "$configFileName"]
 }
 
-// Aggregates all jacoco results into the root project directory
 if (userEnableTestCoverage) {
-  task jacocoRootReport(type: org.gradle.testing.jacoco.tasks.JacocoReport) {
-    def javaProjects = subprojects.findAll { it.path != ':core' }
-
-    description = 'Generates an aggregate report from all subprojects'
-    dependsOn(javaProjects.test)
-
-    additionalSourceDirs.from = javaProjects.sourceSets.main.allSource.srcDirs
-    sourceDirectories.from = javaProjects.sourceSets.main.allSource.srcDirs
-    classDirectories.from = javaProjects.sourceSets.main.output
-    executionData.from = javaProjects.jacocoTestReport.executionData
-
-    reports {
-      html.required = true
-      xml.required = true
-    }
-    // workaround to ignore projects that don't have any tests at all
-    onlyIf = { true }
-    doFirst {
-      executionData = files(executionData.findAll { it.exists() })
-    }
-  }
-}
-
-if (userEnableTestCoverage) {
-  task reportCoverage(dependsOn: ['jacocoRootReport', 'core:reportCoverage'])
+  tasks.register('reportCoverage').configure { dependsOn(subprojects.reportCoverage) }
 }
 
 def connectPkgs = [
@@ -849,6 +825,9 @@ project(':server') {
   dependencies {
     implementation project(':clients')
     implementation project(':server-common')
+    implementation project(':group-coordinator')
+    implementation project(':transaction-coordinator')
+    implementation project(':raft')
     implementation libs.metrics
 
     implementation libs.slf4jApi
@@ -926,6 +905,7 @@ project(':core') {
 
     implementation project(':server-common')
     implementation project(':group-coordinator')
+    implementation project(':transaction-coordinator')
     implementation project(':metadata')
     implementation project(':storage:storage-api')
     implementation project(':tools:tools-api')
@@ -997,6 +977,9 @@ project(':core') {
   if (userEnableTestCoverage) {
     scoverage {
       scoverageVersion = versions.scoverage
+      if (versions.baseScala == '2.13') {
+        scoverageScalaVersion = '2.13.9' // there's no newer 2.13 artifact, org.scoverage:scalac-scoverage-plugin_2.13.9:2.0.11 is the latest as of now
+      }
       reportDir = file("${rootProject.buildDir}/scoverage")
       highlighting = false
       minimumRate = 0.0
@@ -1288,7 +1271,7 @@ project(':metadata') {
     }
     test {
       java {
-        srcDirs = ["src/generated/java", "src/test/java"]
+        srcDirs = ["src/test/java"]
       }
     }
   }
@@ -1313,6 +1296,7 @@ project(':group-coordinator') {
     implementation project(':server-common')
     implementation project(':clients')
     implementation project(':metadata')
+    implementation project(':storage')
     implementation libs.slf4jApi
     implementation libs.metrics
 
@@ -1360,6 +1344,27 @@ project(':group-coordinator') {
 
   compileJava.dependsOn 'processMessages'
   srcJar.dependsOn 'processMessages'
+}
+
+project(':transaction-coordinator') {
+  archivesBaseName = "kafka-transaction-coordinator"
+
+  sourceSets {
+    main {
+      java {
+        srcDirs = ["src/generated/java", "src/main/java"]
+      }
+    }
+    test {
+      java {
+        srcDirs = ["src/generated/java", "src/test/java"]
+      }
+    }
+  }
+
+  javadoc {
+    enabled = false
+  }
 }
 
 project(':examples') {
@@ -1633,7 +1638,7 @@ project(':raft') {
     }
     test {
       java {
-        srcDirs = ["src/generated/java", "src/test/java"]
+        srcDirs = ["src/test/java"]
       }
     }
   }
@@ -1876,7 +1881,7 @@ project(':storage') {
     }
     test {
       java {
-        srcDirs = ["src/generated/java", "src/test/java"]
+        srcDirs = ["src/test/java"]
       }
     }
   }
@@ -1984,6 +1989,8 @@ project(':tools') {
 
     testImplementation project(':clients')
     testImplementation project(':clients').sourceSets.test.output
+    testImplementation project(':server')
+    testImplementation project(':server').sourceSets.test.output
     testImplementation project(':core')
     testImplementation project(':core').sourceSets.test.output
     testImplementation project(':server-common')
@@ -2147,14 +2154,13 @@ project(':streams') {
     testImplementation project(':core')
     testImplementation project(':tools')
     testImplementation project(':core').sourceSets.test.output
+    testImplementation project(':storage')
     testImplementation project(':server-common')
     testImplementation project(':server-common').sourceSets.test.output
     testImplementation libs.log4j
     testImplementation libs.junitJupiter
     testImplementation libs.junitVintageEngine
     testImplementation libs.easymock
-    testImplementation libs.powermockJunit4
-    testImplementation libs.powermockEasymock
     testImplementation libs.bcpkix
     testImplementation libs.hamcrest
     testImplementation libs.mockitoCore
@@ -2189,7 +2195,7 @@ project(':streams') {
     }
     test {
       java {
-        srcDirs = ["src/generated/java", "src/test/java"]
+        srcDirs = ["src/test/java"]
       }
     }
   }
@@ -2273,6 +2279,8 @@ project(':streams') {
             ':streams:upgrade-system-tests-33:test',
             ':streams:upgrade-system-tests-34:test',
             ':streams:upgrade-system-tests-35:test',
+            ':streams:upgrade-system-tests-36:test',
+            ':streams:upgrade-system-tests-37:test',
             ':streams:examples:test'
     ]
   )
@@ -2285,8 +2293,14 @@ project(':streams:streams-scala') {
     api project(':streams')
 
     api libs.scalaLibrary
-    api libs.scalaCollectionCompat
-
+    if ( versions.baseScala == '2.12' ) {
+      // Scala-Collection-Compat isn't required when compiling with Scala 2.13 or later,
+      // and having it in the dependencies could lead to classpath conflicts in Scala 3
+      // projects that use kafka-streams-kafka_2.13 (because we don't have a Scala 3 version yet)
+      // but also pull in scala-collection-compat_3 via another dependency.
+      // So we make sure to not include it in the dependencies.
+      api libs.scalaCollectionCompat
+    }
     testImplementation project(':core')
     testImplementation project(':core').sourceSets.test.output
     testImplementation project(':server-common').sourceSets.test.output
@@ -2295,7 +2309,8 @@ project(':streams:streams-scala') {
     testImplementation project(':streams:test-utils')
 
     testImplementation libs.junitJupiter
-    testImplementation libs.easymock
+    testImplementation libs.mockitoCore
+    testImplementation libs.mockitoJunitJupiter // supports MockitoExtension
     testImplementation libs.hamcrest
     testRuntimeOnly libs.slf4jlog4j
   }
@@ -2684,6 +2699,32 @@ project(':streams:upgrade-system-tests-35') {
   }
 }
 
+project(':streams:upgrade-system-tests-36') {
+  archivesBaseName = "kafka-streams-upgrade-system-tests-36"
+
+  dependencies {
+    testImplementation libs.kafkaStreams_36
+    testRuntimeOnly libs.junitJupiter
+  }
+
+  systemTestLibs {
+    dependsOn testJar
+  }
+}
+
+project(':streams:upgrade-system-tests-37') {
+  archivesBaseName = "kafka-streams-upgrade-system-tests-37"
+
+  dependencies {
+    testImplementation libs.kafkaStreams_37
+    testRuntimeOnly libs.junitJupiter
+  }
+
+  systemTestLibs {
+    dependsOn testJar
+  }
+}
+
 project(':jmh-benchmarks') {
 
   apply plugin: 'com.github.johnrengelman.shadow'
@@ -2816,7 +2857,6 @@ project(':connect:transforms') {
 
     implementation libs.slf4jApi
 
-    testImplementation libs.easymock
     testImplementation libs.junitJupiter
 
     testRuntimeOnly libs.slf4jlog4j
@@ -2856,8 +2896,7 @@ project(':connect:json') {
     api libs.jacksonAfterburner
 
     implementation libs.slf4jApi
-
-    testImplementation libs.easymock
+    
     testImplementation libs.junitJupiter
 
     testRuntimeOnly libs.slf4jlog4j
@@ -2927,6 +2966,7 @@ project(':connect:runtime') {
     testImplementation project(':metadata')
     testImplementation project(':core').sourceSets.test.output
     testImplementation project(':server-common')
+    testImplementation project(':storage')
     testImplementation project(':connect:test-plugins')
 
     testImplementation libs.easymock
@@ -2998,7 +3038,7 @@ project(':connect:runtime') {
   }
 
   task genConnectMetricsDocs(type: JavaExec) {
-    classpath = sourceSets.test.runtimeClasspath
+    classpath = sourceSets.main.runtimeClasspath
     mainClass = 'org.apache.kafka.connect.runtime.ConnectMetrics'
     if( !generatedDocsDir.exists() ) { generatedDocsDir.mkdirs() }
     standardOutput = new File(generatedDocsDir, "connect_metrics.html").newOutputStream()

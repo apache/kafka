@@ -46,7 +46,6 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -420,7 +419,7 @@ public class KafkaOffsetBackingStoreTest {
         store.configure(mockConfig(props));
 
         assertEquals(
-                IsolationLevel.READ_COMMITTED.name().toLowerCase(Locale.ROOT),
+                IsolationLevel.READ_COMMITTED.toString(),
                 capturedConsumerProps.getValue().get(ISOLATION_LEVEL_CONFIG)
         );
     }
@@ -428,12 +427,12 @@ public class KafkaOffsetBackingStoreTest {
     @Test
     public void testConsumerPropertiesOverrideUserSuppliedValuesWithExactlyOnceSourceEnabled() {
         props.put(EXACTLY_ONCE_SOURCE_SUPPORT_CONFIG, "enabled");
-        props.put(ISOLATION_LEVEL_CONFIG, IsolationLevel.READ_UNCOMMITTED.name().toLowerCase(Locale.ROOT));
+        props.put(ISOLATION_LEVEL_CONFIG, IsolationLevel.READ_UNCOMMITTED.toString());
 
         store.configure(mockConfig(props));
 
         assertEquals(
-                IsolationLevel.READ_COMMITTED.name().toLowerCase(Locale.ROOT),
+                IsolationLevel.READ_COMMITTED.toString(),
                 capturedConsumerProps.getValue().get(ISOLATION_LEVEL_CONFIG)
         );
     }
@@ -451,12 +450,12 @@ public class KafkaOffsetBackingStoreTest {
     @Test
     public void testConsumerPropertiesDoNotOverrideUserSuppliedValuesWithoutExactlyOnceSourceEnabled() {
         props.put(EXACTLY_ONCE_SOURCE_SUPPORT_CONFIG, "disabled");
-        props.put(ISOLATION_LEVEL_CONFIG, IsolationLevel.READ_UNCOMMITTED.name().toLowerCase(Locale.ROOT));
+        props.put(ISOLATION_LEVEL_CONFIG, IsolationLevel.READ_UNCOMMITTED.toString());
 
         store.configure(mockConfig(props));
 
         assertEquals(
-                IsolationLevel.READ_UNCOMMITTED.name().toLowerCase(Locale.ROOT),
+                IsolationLevel.READ_UNCOMMITTED.toString(),
                 capturedConsumerProps.getValue().get(ISOLATION_LEVEL_CONFIG)
         );
 

@@ -25,6 +25,7 @@ import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.errors.CorruptRecordException
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.server.config.Defaults
 import org.apache.kafka.server.metrics.KafkaMetricsGroup
 import org.apache.kafka.server.util.MockTime
 import org.apache.kafka.storage.internals.log.{AbortedTxn, AppendOrigin, CleanerConfig, LogAppendInfo, LogConfig, LogDirFailureChannel, LogFileUtils, LogSegment, LogSegments, LogStartOffsetIncrementReason, OffsetMap, ProducerStateManager, ProducerStateManagerConfig}
@@ -60,7 +61,7 @@ class LogCleanerTest extends Logging {
   val throttler = new Throttler(desiredRatePerSec = Double.MaxValue, checkIntervalMs = Long.MaxValue, time = time)
   val tombstoneRetentionMs = 86400000
   val largeTimestamp = Long.MaxValue - tombstoneRetentionMs - 1
-  val producerStateManagerConfig = new ProducerStateManagerConfig(kafka.server.Defaults.ProducerIdExpirationMs, false)
+  val producerStateManagerConfig = new ProducerStateManagerConfig(Defaults.PRODUCER_ID_EXPIRATION_MS, false)
 
   @AfterEach
   def teardown(): Unit = {
@@ -129,7 +130,7 @@ class LogCleanerTest extends Logging {
     val log = makeLog(config = LogConfig.fromProps(logConfig.originals, logProps))
 
     // append messages to the log until we have four segments
-    while(log.numberOfSegments < 4)
+    while (log.numberOfSegments < 4)
       log.appendAsLeader(record(log.logEndOffset.toInt, log.logEndOffset.toInt), leaderEpoch = 0)
     val keysFound = LogTestUtils.keysInLog(log)
     assertEquals(0L until log.logEndOffset, keysFound)
@@ -163,7 +164,7 @@ class LogCleanerTest extends Logging {
     val topicPartition = UnifiedLog.parseTopicPartitionName(dir)
     val logDirFailureChannel = new LogDirFailureChannel(10)
     val maxTransactionTimeoutMs = 5 * 60 * 1000
-    val producerIdExpirationCheckIntervalMs = kafka.server.Defaults.ProducerIdExpirationCheckIntervalMs
+    val producerIdExpirationCheckIntervalMs = Defaults.PRODUCER_ID_EXPIRATION_CHECK_INTERVAL_MS
     val logSegments = new LogSegments(topicPartition)
     val leaderEpochCache = UnifiedLog.maybeCreateLeaderEpochCache(dir, topicPartition, logDirFailureChannel, config.recordVersion, "")
     val producerStateManager = new ProducerStateManager(topicPartition, dir,
@@ -888,7 +889,7 @@ class LogCleanerTest extends Logging {
 
     val log = makeLog(config = LogConfig.fromProps(logConfig.originals, logProps))
 
-    while(log.numberOfSegments < 2)
+    while (log.numberOfSegments < 2)
       log.appendAsLeader(record(log.logEndOffset.toInt, Array.fill(largeMessageSize)(0: Byte)), leaderEpoch = 0)
     val keysFound = LogTestUtils.keysInLog(log)
     assertEquals(0L until log.logEndOffset, keysFound)
@@ -960,7 +961,7 @@ class LogCleanerTest extends Logging {
 
     val log = makeLog(config = LogConfig.fromProps(logConfig.originals, logProps))
 
-    while(log.numberOfSegments < 2)
+    while (log.numberOfSegments < 2)
       log.appendAsLeader(record(log.logEndOffset.toInt, Array.fill(largeMessageSize)(0: Byte)), leaderEpoch = 0)
     val keysFound = LogTestUtils.keysInLog(log)
     assertEquals(0L until log.logEndOffset, keysFound)
@@ -986,16 +987,16 @@ class LogCleanerTest extends Logging {
     val log = makeLog(config = LogConfig.fromProps(logConfig.originals, logProps))
 
     // append messages with the keys 0 through N
-    while(log.numberOfSegments < 2)
+    while (log.numberOfSegments < 2)
       log.appendAsLeader(record(log.logEndOffset.toInt, log.logEndOffset.toInt), leaderEpoch = 0)
 
     // delete all even keys between 0 and N
     val leo = log.logEndOffset
-    for(key <- 0 until leo.toInt by 2)
+    for (key <- 0 until leo.toInt by 2)
       log.appendAsLeader(tombstoneRecord(key), leaderEpoch = 0)
 
     // append some new unique keys to pad out to a new active segment
-    while(log.numberOfSegments < 4)
+    while (log.numberOfSegments < 4)
       log.appendAsLeader(record(log.logEndOffset.toInt, log.logEndOffset.toInt), leaderEpoch = 0)
 
     cleaner.clean(LogToClean(new TopicPartition("test", 0), log, 0, log.activeSegment.baseOffset))
@@ -1178,14 +1179,14 @@ class LogCleanerTest extends Logging {
     val numTotalSegments = 7
 
     // append messages with the keys 0 through N-1, values equal offset
-    while(log.numberOfSegments <= numCleanableSegments)
+    while (log.numberOfSegments <= numCleanableSegments)
       log.appendAsLeader(record(log.logEndOffset.toInt % N, log.logEndOffset.toInt), leaderEpoch = 0)
 
     // at this point one message past the cleanable segments has been added
     // the entire segment containing the first uncleanable offset should not be cleaned.
     val firstUncleanableOffset = log.logEndOffset + 1  // +1  so it is past the baseOffset
 
-    while(log.numberOfSegments < numTotalSegments - 1)
+    while (log.numberOfSegments < numTotalSegments - 1)
       log.appendAsLeader(record(log.logEndOffset.toInt % N, log.logEndOffset.toInt), leaderEpoch = 0)
 
     // the last (active) segment has just one message
@@ -1268,14 +1269,14 @@ class LogCleanerTest extends Logging {
     val log = makeLog(config = LogConfig.fromProps(logConfig.originals, logProps))
 
     // append unkeyed messages
-    while(log.numberOfSegments < 2)
+    while (log.numberOfSegments < 2)
       log.appendAsLeader(unkeyedRecord(log.logEndOffset.toInt), leaderEpoch = 0)
     val numInvalidMessages = unkeyedMessageCountInLog(log)
 
     val sizeWithUnkeyedMessages = log.size
 
     // append keyed messages
-    while(log.numberOfSegments < 3)
+    while (log.numberOfSegments < 3)
       log.appendAsLeader(record(log.logEndOffset.toInt, log.logEndOffset.toInt), leaderEpoch = 0)
 
     val expectedSizeAfterCleaning = log.size - sizeWithUnkeyedMessages
@@ -1325,7 +1326,7 @@ class LogCleanerTest extends Logging {
     val log = makeLog(config = LogConfig.fromProps(logConfig.originals, logProps))
 
     // append messages to the log until we have four segments
-    while(log.numberOfSegments < 4)
+    while (log.numberOfSegments < 4)
       log.appendAsLeader(record(log.logEndOffset.toInt, log.logEndOffset.toInt), leaderEpoch = 0)
 
     val keys = LogTestUtils.keysInLog(log)
@@ -1351,7 +1352,7 @@ class LogCleanerTest extends Logging {
 
     // append some messages to the log
     var i = 0
-    while(log.numberOfSegments < 10) {
+    while (log.numberOfSegments < 10) {
       log.appendAsLeader(TestUtils.singletonRecords(value = "hello".getBytes, key = "hello".getBytes), leaderEpoch = 0)
       i += 1
     }
@@ -1398,7 +1399,7 @@ class LogCleanerTest extends Logging {
     val v="val".getBytes()
 
     //create 3 segments
-    for(i <- 0 until 3){
+    for (i <- 0 until 3) {
       log.appendAsLeader(TestUtils.singletonRecords(value = v, key = k), leaderEpoch = 0)
       //0 to Int.MaxValue is Int.MaxValue+1 message, -1 will be the last message of i-th segment
       val records = messageWithOffset(k, v, (i + 1L) * (Int.MaxValue + 1L) -1 )
@@ -1551,7 +1552,7 @@ class LogCleanerTest extends Logging {
       val endOffset = map.latestOffset + 1
       assertEquals(end, endOffset, "Last offset should be the end offset.")
       assertEquals(end-start, map.size, "Should have the expected number of messages in the map.")
-      for(i <- start until end)
+      for (i <- start until end)
         assertEquals(i.toLong, map.get(key(i)), "Should find all the keys")
       assertEquals(-1L, map.get(key(start - 1)), "Should not find a value too small")
       assertEquals(-1L, map.get(key(end)), "Should not find a value too large")
@@ -1958,7 +1959,7 @@ class LogCleanerTest extends Logging {
   @Test
   def testReconfigureLogCleanerIoMaxBytesPerSecond(): Unit = {
     val oldKafkaProps = TestUtils.createBrokerConfig(1, "localhost:2181")
-    oldKafkaProps.setProperty(KafkaConfig.LogCleanerIoMaxBytesPerSecondProp, "10000000")
+    oldKafkaProps.setProperty(CleanerConfig.LOG_CLEANER_IO_MAX_BYTES_PER_SECOND_PROP, "10000000")
 
     val logCleaner = new LogCleaner(LogCleaner.cleanerConfig(new KafkaConfig(oldKafkaProps)),
       logDirs = Array(TestUtils.tempDir()),
@@ -1972,21 +1973,21 @@ class LogCleanerTest extends Logging {
     }
 
     try {
-      assertEquals(10000000, logCleaner.throttler.desiredRatePerSec, s"Throttler.desiredRatePerSec should be initialized from initial `${KafkaConfig.LogCleanerIoMaxBytesPerSecondProp}` config.")
+      assertEquals(10000000, logCleaner.throttler.desiredRatePerSec, s"Throttler.desiredRatePerSec should be initialized from initial `${CleanerConfig.LOG_CLEANER_IO_MAX_BYTES_PER_SECOND_PROP}` config.")
 
       val newKafkaProps = TestUtils.createBrokerConfig(1, "localhost:2181")
-      newKafkaProps.setProperty(KafkaConfig.LogCleanerIoMaxBytesPerSecondProp, "20000000")
+      newKafkaProps.setProperty(CleanerConfig.LOG_CLEANER_IO_MAX_BYTES_PER_SECOND_PROP, "20000000")
 
       logCleaner.reconfigure(new KafkaConfig(oldKafkaProps), new KafkaConfig(newKafkaProps))
 
-      assertEquals(20000000, logCleaner.throttler.desiredRatePerSec, s"Throttler.desiredRatePerSec should be updated with new `${KafkaConfig.LogCleanerIoMaxBytesPerSecondProp}` config.")
+      assertEquals(20000000, logCleaner.throttler.desiredRatePerSec, s"Throttler.desiredRatePerSec should be updated with new `${CleanerConfig.LOG_CLEANER_IO_MAX_BYTES_PER_SECOND_PROP}` config.")
     } finally {
       logCleaner.shutdown()
     }
   }
 
   private def writeToLog(log: UnifiedLog, keysAndValues: Iterable[(Int, Int)], offsetSeq: Iterable[Long]): Iterable[Long] = {
-    for(((key, value), offset) <- keysAndValues.zip(offsetSeq))
+    for (((key, value), offset) <- keysAndValues.zip(offsetSeq))
       yield log.appendAsFollower(messageWithOffset(key, value, offset)).lastOffset
   }
 
@@ -2031,7 +2032,7 @@ class LogCleanerTest extends Logging {
       brokerTopicStats = new BrokerTopicStats,
       maxTransactionTimeoutMs = 5 * 60 * 1000,
       producerStateManagerConfig = producerStateManagerConfig,
-      producerIdExpirationCheckIntervalMs = kafka.server.Defaults.ProducerIdExpirationCheckIntervalMs,
+      producerIdExpirationCheckIntervalMs = Defaults.PRODUCER_ID_EXPIRATION_CHECK_INTERVAL_MS,
       logDirFailureChannel = new LogDirFailureChannel(10),
       topicId = None,
       keepPartitionMetadataFile = true
@@ -2157,7 +2158,7 @@ class FakeOffsetMap(val slots: Int) extends OffsetMap {
 
   override def get(key: ByteBuffer): Long = {
     val k = keyFor(key)
-    if(map.containsKey(k))
+    if (map.containsKey(k))
       map.get(k)
     else
       -1L

@@ -424,7 +424,7 @@ public class Values {
                         return BigDecimal.valueOf(converted);
                     }
                     if (value instanceof String) {
-                        return new BigDecimal(value.toString()).doubleValue();
+                        return new BigDecimal(value.toString());
                     }
                 }
                 if (value instanceof ByteBuffer) {
@@ -802,11 +802,12 @@ public class Values {
         try {
             if (parser.canConsume(ARRAY_BEGIN_DELIMITER)) {
                 List<Object> result = new ArrayList<>();
+                boolean compatible = true;
                 Schema elementSchema = null;
                 while (parser.hasNext()) {
                     if (parser.canConsume(ARRAY_END_DELIMITER)) {
                         Schema listSchema;
-                        if (elementSchema != null) {
+                        if (elementSchema != null && compatible) {
                             listSchema = SchemaBuilder.array(elementSchema).schema();
                             result = alignListEntriesWithSchema(listSchema, result);
                         } else {
@@ -821,6 +822,9 @@ public class Values {
                     }
                     SchemaAndValue element = parse(parser, true);
                     elementSchema = commonSchemaFor(elementSchema, element);
+                    if (elementSchema == null && element != null && element.schema() != null) {
+                        compatible = false;
+                    }
                     result.add(element != null ? element.value() : null);
 
                     int currentPosition = parser.mark();
@@ -840,15 +844,17 @@ public class Values {
 
             if (parser.canConsume(MAP_BEGIN_DELIMITER)) {
                 Map<Object, Object> result = new LinkedHashMap<>();
+                boolean keyCompatible = true;
                 Schema keySchema = null;
+                boolean valueCompatible = true;
                 Schema valueSchema = null;
                 while (parser.hasNext()) {
                     if (parser.canConsume(MAP_END_DELIMITER)) {
                         Schema mapSchema;
-                        if (keySchema != null && valueSchema != null) {
+                        if (keySchema != null && valueSchema != null && keyCompatible && valueCompatible) {
                             mapSchema = SchemaBuilder.map(keySchema, valueSchema).build();
                             result = alignMapKeysAndValuesWithSchema(mapSchema, result);
-                        } else if (keySchema != null) {
+                        } else if (keySchema != null && keyCompatible) {
                             mapSchema = SchemaBuilder.mapWithNullValues(keySchema);
                             result = alignMapKeysWithSchema(mapSchema, result);
                         } else {
@@ -876,7 +882,13 @@ public class Values {
 
                     parser.canConsume(COMMA_DELIMITER);
                     keySchema = commonSchemaFor(keySchema, key);
+                    if (keySchema == null && key.schema() != null) {
+                        keyCompatible = false;
+                    }
                     valueSchema = commonSchemaFor(valueSchema, value);
+                    if (valueSchema == null && value != null && value.schema() != null) {
+                        valueCompatible = false;
+                    }
                 }
                 // Missing either a comma or an end delimiter
                 if (COMMA_DELIMITER.equals(parser.previous())) {

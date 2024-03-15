@@ -19,7 +19,7 @@ package kafka.coordinator.group
 
 import java.util.{Optional, OptionalInt}
 import kafka.common.OffsetAndMetadata
-import kafka.server.{DelayedOperationPurgatory, HostedPartition, KafkaConfig, ReplicaManager, RequestLocal}
+import kafka.server.{ActionQueue, DelayedOperationPurgatory, HostedPartition, KafkaConfig, KafkaRequestHandler, ReplicaManager, RequestLocal}
 import kafka.utils._
 import org.apache.kafka.common.{TopicIdPartition, TopicPartition, Uuid}
 import org.apache.kafka.common.protocol.Errors
@@ -36,9 +36,10 @@ import org.apache.kafka.clients.consumer.internals.ConsumerProtocol
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity
+import org.apache.kafka.coordinator.group.OffsetConfig
 import org.apache.kafka.server.util.timer.MockTimer
 import org.apache.kafka.server.util.{KafkaScheduler, MockTime}
-import org.apache.kafka.storage.internals.log.VerificationGuard
+import org.apache.kafka.storage.internals.log.{AppendOrigin, VerificationGuard}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.junit.jupiter.params.ParameterizedTest
@@ -176,7 +177,7 @@ class GroupCoordinatorTest {
     assertEquals(Errors.COORDINATOR_LOAD_IN_PROGRESS, describeGroupError)
 
     // ListGroups
-    val (listGroupsError, _) = groupCoordinator.handleListGroups(Set())
+    val (listGroupsError, _) = groupCoordinator.handleListGroups(Set(), Set())
     assertEquals(Errors.COORDINATOR_LOAD_IN_PROGRESS, listGroupsError)
 
     // DeleteGroups
@@ -3300,10 +3301,10 @@ class GroupCoordinatorTest {
     val syncGroupResult = syncGroupLeader(groupId, generationId, assignedMemberId, Map(assignedMemberId -> Array[Byte]()))
     assertEquals(Errors.NONE, syncGroupResult.error)
 
-    val (error, groups) = groupCoordinator.handleListGroups(Set())
+    val (error, groups) = groupCoordinator.handleListGroups(Set(), Set())
     assertEquals(Errors.NONE, error)
     assertEquals(1, groups.size)
-    assertEquals(GroupOverview("groupId", "consumer", Stable.toString), groups.head)
+    assertEquals(GroupOverview("groupId", "consumer", Stable.toString, "classic"), groups.head)
   }
 
   @Test
@@ -3312,10 +3313,10 @@ class GroupCoordinatorTest {
     val joinGroupResult = dynamicJoinGroup(groupId, memberId, protocolType, protocols)
     assertEquals(Errors.NONE, joinGroupResult.error)
 
-    val (error, groups) = groupCoordinator.handleListGroups(Set())
+    val (error, groups) = groupCoordinator.handleListGroups(Set(), Set())
     assertEquals(Errors.NONE, error)
     assertEquals(1, groups.size)
-    assertEquals(GroupOverview("groupId", "consumer", CompletingRebalance.toString), groups.head)
+    assertEquals(GroupOverview("groupId", "consumer", CompletingRebalance.toString, "classic"), groups.head)
   }
 
   @Test
@@ -3330,10 +3331,10 @@ class GroupCoordinatorTest {
     assertEquals(Errors.NONE, joinGroupResult.error)
 
     // The group should be in CompletingRebalance
-    val (error, groups) = groupCoordinator.handleListGroups(Set(CompletingRebalance.toString))
+    val (error, groups) = groupCoordinator.handleListGroups(Set(CompletingRebalance.toString), Set())
     assertEquals(Errors.NONE, error)
     assertEquals(1, groups.size)
-    val (error2, groups2) = groupCoordinator.handleListGroups(allStates.filterNot(s => s == CompletingRebalance.toString))
+    val (error2, groups2) = groupCoordinator.handleListGroups(allStates.filterNot(s => s == CompletingRebalance.toString), Set())
     assertEquals(Errors.NONE, error2)
     assertEquals(0, groups2.size)
 
@@ -3342,10 +3343,10 @@ class GroupCoordinatorTest {
     assertEquals(Errors.NONE, syncGroupResult.error)
 
     // The group is now stable
-    val (error3, groups3) = groupCoordinator.handleListGroups(Set(Stable.toString))
+    val (error3, groups3) = groupCoordinator.handleListGroups(Set(Stable.toString), Set())
     assertEquals(Errors.NONE, error3)
     assertEquals(1, groups3.size)
-    val (error4, groups4) = groupCoordinator.handleListGroups(allStates.filterNot(s => s == Stable.toString))
+    val (error4, groups4) = groupCoordinator.handleListGroups(allStates.filterNot(s => s == Stable.toString), Set())
     assertEquals(Errors.NONE, error4)
     assertEquals(0, groups4.size)
 
@@ -3354,12 +3355,52 @@ class GroupCoordinatorTest {
     verifyLeaveGroupResult(leaveGroupResults)
 
     // The group is now empty
-    val (error5, groups5) = groupCoordinator.handleListGroups(Set(Empty.toString))
+    val (error5, groups5) = groupCoordinator.handleListGroups(Set(Empty.toString), Set())
     assertEquals(Errors.NONE, error5)
     assertEquals(1, groups5.size)
-    val (error6, groups6) = groupCoordinator.handleListGroups(allStates.filterNot(s => s == Empty.toString))
+    val (error6, groups6) = groupCoordinator.handleListGroups(allStates.filterNot(s => s == Empty.toString), Set())
     assertEquals(Errors.NONE, error6)
     assertEquals(0, groups6.size)
+  }
+
+  @Test
+  def testListGroupsWithTypes(): Unit = {
+    val memberId = JoinGroupRequest.UNKNOWN_MEMBER_ID
+    val joinGroupResult = dynamicJoinGroup(groupId, memberId, protocolType, protocols)
+    val assignedMemberId = joinGroupResult.memberId
+    val generationId = joinGroupResult.generationId
+    assertEquals(Errors.NONE, joinGroupResult.error)
+
+    val syncGroupResult = syncGroupLeader(groupId, generationId, assignedMemberId, Map(assignedMemberId -> Array[Byte]()))
+    assertEquals(Errors.NONE, syncGroupResult.error)
+
+    // When a group type filter is specified:
+    // All groups are returned if the type is classic, else nothing is returned.
+    val (error1, groups1) = groupCoordinator.handleListGroups(Set(), Set("classic"))
+    assertEquals(Errors.NONE, error1)
+    assertEquals(1, groups1.size)
+    assertEquals(GroupOverview("groupId", "consumer", Stable.toString, "classic"), groups1.head)
+
+    val (error2, groups2) = groupCoordinator.handleListGroups(Set(), Set("consumer"))
+    assertEquals(Errors.NONE, error2)
+    assertEquals(0, groups2.size)
+
+    // No groups are returned when an incorrect group type is passed.
+    val (error3, groups3) = groupCoordinator.handleListGroups(Set(), Set("Invalid"))
+    assertEquals(Errors.NONE, error3)
+    assertEquals(0, groups3.size)
+
+    // When no group type filter is specified, all groups are returned with classic group type.
+    val (error4, groups4) = groupCoordinator.handleListGroups(Set(), Set())
+    assertEquals(Errors.NONE, error4)
+    assertEquals(1, groups4.size)
+    assertEquals(GroupOverview("groupId", "consumer", Stable.toString, "classic"), groups4.head)
+
+    // Check that group type is case-insensitive.
+    val (error5, groups5) = groupCoordinator.handleListGroups(Set(), Set("Classic"))
+    assertEquals(Errors.NONE, error5)
+    assertEquals(1, groups5.size)
+    assertEquals(GroupOverview("groupId", "consumer", Stable.toString, "classic"), groups5.head)
   }
 
   @Test
@@ -3816,7 +3857,7 @@ class GroupCoordinatorTest {
     val producerEpoch: Short = 3
 
     val offsets = Map(
-      tip -> OffsetAndMetadata(offset, "s" * (OffsetConfig.DefaultMaxMetadataSize + 1), 0)
+      tip -> OffsetAndMetadata(offset, "s" * (OffsetConfig.DEFAULT_MAX_METADATA_SIZE + 1), 0)
     )
 
     val commitOffsetResult = commitTransactionalOffsets(groupId, producerId, producerEpoch, offsets)
@@ -3896,12 +3937,16 @@ class GroupCoordinatorTest {
 
     val capturedArgument: ArgumentCaptor[scala.collection.Map[TopicPartition, PartitionResponse] => Unit] = ArgumentCaptor.forClass(classOf[scala.collection.Map[TopicPartition, PartitionResponse] => Unit])
 
-    when(replicaManager.appendForGroup(anyLong,
+    when(replicaManager.appendRecords(anyLong,
       anyShort(),
+      internalTopicsAllowed = ArgumentMatchers.eq(true),
+      origin = ArgumentMatchers.eq(AppendOrigin.COORDINATOR),
       any[Map[TopicPartition, MemoryRecords]],
       capturedArgument.capture(),
       any[Option[ReentrantLock]],
+      any(),
       any(classOf[RequestLocal]),
+      any[ActionQueue],
       any[Map[TopicPartition, VerificationGuard]]
     )).thenAnswer(_ => {
       capturedArgument.getValue.apply(
@@ -3928,12 +3973,16 @@ class GroupCoordinatorTest {
 
     val capturedArgument: ArgumentCaptor[scala.collection.Map[TopicPartition, PartitionResponse] => Unit] = ArgumentCaptor.forClass(classOf[scala.collection.Map[TopicPartition, PartitionResponse] => Unit])
 
-    when(replicaManager.appendForGroup(anyLong,
+    when(replicaManager.appendRecords(anyLong,
       anyShort(),
+      internalTopicsAllowed = ArgumentMatchers.eq(true),
+      origin = ArgumentMatchers.eq(AppendOrigin.COORDINATOR),
       any[Map[TopicPartition, MemoryRecords]],
       capturedArgument.capture(),
       any[Option[ReentrantLock]],
+      any(),
       any(classOf[RequestLocal]),
+      any[ActionQueue],
       any[Map[TopicPartition, VerificationGuard]]
     )).thenAnswer(_ => {
         capturedArgument.getValue.apply(
@@ -4071,12 +4120,16 @@ class GroupCoordinatorTest {
 
     val capturedArgument: ArgumentCaptor[scala.collection.Map[TopicPartition, PartitionResponse] => Unit] = ArgumentCaptor.forClass(classOf[scala.collection.Map[TopicPartition, PartitionResponse] => Unit])
 
-    when(replicaManager.appendForGroup(anyLong,
+    when(replicaManager.appendRecords(anyLong,
       anyShort(),
+      internalTopicsAllowed = ArgumentMatchers.eq(true),
+      origin = ArgumentMatchers.eq(AppendOrigin.COORDINATOR),
       any[Map[TopicPartition, MemoryRecords]],
       capturedArgument.capture(),
       any[Option[ReentrantLock]],
+      any(),
       any(classOf[RequestLocal]),
+      any[ActionQueue],
       any[Map[TopicPartition, VerificationGuard]]
     )).thenAnswer(_ => {
       capturedArgument.getValue.apply(
@@ -4098,7 +4151,7 @@ class GroupCoordinatorTest {
                                          memberId: String = JoinGroupRequest.UNKNOWN_MEMBER_ID,
                                          groupInstanceId: Option[String] = Option.empty,
                                          generationId: Int = JoinGroupRequest.UNKNOWN_GENERATION_ID,
-                                         verificationError: Errors = Errors.NONE) : CommitOffsetCallbackParams = {
+                                         verificationError: Errors = Errors.NONE): CommitOffsetCallbackParams = {
     val (responseFuture, responseCallback) = setupCommitOffsetsCallback
 
     val capturedArgument: ArgumentCaptor[scala.collection.Map[TopicPartition, PartitionResponse] => Unit] = ArgumentCaptor.forClass(classOf[scala.collection.Map[TopicPartition, PartitionResponse] => Unit])
@@ -4107,18 +4160,33 @@ class GroupCoordinatorTest {
     val transactionalId = "dummy-txn-id"
     val offsetTopicPartition = new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, groupCoordinator.partitionFor(groupId))
 
-    val postVerificationCallback: ArgumentCaptor[(Errors, RequestLocal, VerificationGuard) => Unit] = ArgumentCaptor.forClass(classOf[(Errors, RequestLocal, VerificationGuard) => Unit])
+    val postVerificationCallback: ArgumentCaptor[((Errors, VerificationGuard)) => Unit] =
+      ArgumentCaptor.forClass(classOf[((Errors, VerificationGuard)) => Unit])
 
-    when(replicaManager.maybeStartTransactionVerificationForPartition(ArgumentMatchers.eq(offsetTopicPartition), ArgumentMatchers.eq(transactionalId),
-      ArgumentMatchers.eq(producerId), ArgumentMatchers.eq(producerEpoch), any(), any(), postVerificationCallback.capture())).thenAnswer(
-      _ => postVerificationCallback.getValue()(verificationError, RequestLocal.NoCaching, VerificationGuard.SENTINEL)
+    // Transactional appends attempt to schedule to the request handler thread using
+    // a non request handler thread. Set this to avoid error.
+    KafkaRequestHandler.setBypassThreadCheck(true)
+
+    when(replicaManager.maybeStartTransactionVerificationForPartition(
+      ArgumentMatchers.eq(offsetTopicPartition),
+      ArgumentMatchers.eq(transactionalId),
+      ArgumentMatchers.eq(producerId),
+      ArgumentMatchers.eq(producerEpoch),
+      any(),
+      postVerificationCallback.capture()
+    )).thenAnswer(
+      _ => postVerificationCallback.getValue()((verificationError, VerificationGuard.SENTINEL))
     )
-    when(replicaManager.appendForGroup(anyLong,
+    when(replicaManager.appendRecords(anyLong,
       anyShort(),
+      internalTopicsAllowed = ArgumentMatchers.eq(true),
+      origin = ArgumentMatchers.eq(AppendOrigin.COORDINATOR),
       any[Map[TopicPartition, MemoryRecords]],
       capturedArgument.capture(),
       any[Option[ReentrantLock]],
+      any(),
       any(classOf[RequestLocal]),
+      any[ActionQueue],
       any[Map[TopicPartition, VerificationGuard]]
     )).thenAnswer(_ => {
       capturedArgument.getValue.apply(

@@ -22,6 +22,7 @@ import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.CompressionType;
+import org.apache.kafka.common.telemetry.internals.ClientTelemetryUtils;
 
 import java.nio.ByteBuffer;
 
@@ -87,12 +88,7 @@ public class PushTelemetryRequest extends AbstractRequest {
     public ByteBuffer metricsData() {
         CompressionType cType = CompressionType.forId(this.data.compressionType());
         return (cType == CompressionType.NONE) ?
-            ByteBuffer.wrap(this.data.metrics()) : decompressMetricsData(cType, this.data.metrics());
-    }
-
-    private static ByteBuffer decompressMetricsData(CompressionType compressionType, byte[] metrics) {
-        // TODO: Add support for decompression of metrics data
-        return ByteBuffer.wrap(metrics);
+            ByteBuffer.wrap(this.data.metrics()) : ClientTelemetryUtils.decompress(this.data.metrics(), cType);
     }
 
     public static PushTelemetryRequest parse(ByteBuffer buffer, short version) {

@@ -18,7 +18,7 @@
 package kafka.zk.migration
 
 import kafka.server.{DynamicBrokerConfig, DynamicConfig, ZkAdminManager}
-import kafka.utils.{Logging, PasswordEncoder}
+import kafka.utils.Logging
 import kafka.zk.ZkMigrationClient.{logAndRethrow, wrapZkException}
 import kafka.zk._
 import kafka.zookeeper.{CreateRequest, DeleteRequest, SetDataRequest}
@@ -31,9 +31,11 @@ import org.apache.kafka.common.quota.ClientQuotaEntity
 import org.apache.kafka.common.security.scram.internals.ScramCredentialUtils
 import org.apache.kafka.metadata.migration.ConfigMigrationClient.ClientQuotaVisitor
 import org.apache.kafka.metadata.migration.{ConfigMigrationClient, MigrationClientException, ZkMigrationLeadershipState}
+import org.apache.kafka.security.PasswordEncoder
 import org.apache.kafka.server.config.{ConfigEntityName, ConfigType}
 import org.apache.zookeeper.KeeperException.Code
 import org.apache.zookeeper.{CreateMode, KeeperException}
+
 
 import java.{lang, util}
 import java.util.Properties
@@ -110,7 +112,7 @@ class ZkConfigMigrationClient(
       // Taken from ZkAdminManager
       val components = name.split("/")
       if (components.size != 3 || components(1) != "clients")
-        throw new IllegalArgumentException(s"Unexpected config path: ${name}")
+        throw new IllegalArgumentException(s"Unexpected config path: $name")
       val entity = List(
         buildEntityData(ClientQuotaEntity.USER, components(0)),
         buildEntityData(ClientQuotaEntity.CLIENT_ID, components(2))
@@ -276,7 +278,7 @@ class ZkConfigMigrationClient(
     quotas.forEach { case (key, value) =>
       val configKey = configKeys.get(key)
       if (configKey == null) {
-        throw new MigrationClientException(s"Invalid configuration key ${key}")
+        throw new MigrationClientException(s"Invalid configuration key $key")
       } else {
         configKey.`type` match {
           case ConfigDef.Type.DOUBLE =>
@@ -288,7 +290,7 @@ class ZkConfigMigrationClient(
             else
               (value + epsilon).toInt
             if ((intValue.toDouble - value).abs > epsilon)
-              throw new InvalidRequestException(s"Configuration ${key} must be a ${configKey.`type`} value")
+              throw new InvalidRequestException(s"Configuration $key must be a ${configKey.`type`} value")
             props.setProperty(key, intValue.toString)
           case _ =>
             throw new MigrationClientException(s"Unexpected config type ${configKey.`type`}")

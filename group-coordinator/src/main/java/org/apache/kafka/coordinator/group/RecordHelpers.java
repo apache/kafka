@@ -346,10 +346,9 @@ public class RecordHelpers {
                 new ConsumerGroupCurrentMemberAssignmentValue()
                     .setMemberEpoch(member.memberEpoch())
                     .setPreviousMemberEpoch(member.previousMemberEpoch())
-                    .setTargetMemberEpoch(member.targetMemberEpoch())
+                    .setState(member.state().value())
                     .setAssignedPartitions(toTopicPartitions(member.assignedPartitions()))
-                    .setPartitionsPendingRevocation(toTopicPartitions(member.partitionsPendingRevocation()))
-                    .setPartitionsPendingAssignment(toTopicPartitions(member.partitionsPendingAssignment())),
+                    .setPartitionsPendingRevocation(toTopicPartitions(member.partitionsPendingRevocation())),
                 (short) 0
             )
         );
@@ -513,7 +512,7 @@ public class RecordHelpers {
             ),
             new ApiMessageAndVersion(
                 new OffsetCommitValue()
-                    .setOffset(offsetAndMetadata.offset)
+                    .setOffset(offsetAndMetadata.committedOffset)
                     .setLeaderEpoch(offsetAndMetadata.leaderEpoch.orElse(RecordBatch.NO_PARTITION_LEADER_EPOCH))
                     .setMetadata(offsetAndMetadata.metadata)
                     .setCommitTimestamp(offsetAndMetadata.commitTimestampMs)

@@ -39,6 +39,7 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.LongSupplier;
 import java.util.regex.Pattern;
 
 import static java.util.Collections.singleton;
@@ -264,6 +265,77 @@ public class SubscriptionStateTest {
         state.markPendingRevocation(singleton(tp0));
         assertFalse(state.isFetchable(tp0));
         assertFalse(state.isPaused(tp0));
+    }
+
+    @Test
+    public void testAssignedPartitionsAwaitingCallbackKeepPositionDefinedInCallback() {
+        // New partition assigned. Should not be fetchable or initializing positions.
+        state.subscribe(singleton(topic), Optional.of(rebalanceListener));
+        state.assignFromSubscribedAwaitingCallback(singleton(tp0), singleton(tp0));
+        assertAssignmentAppliedAwaitingCallback(tp0);
+
+        // Simulate callback setting position to start fetching from
+        state.seek(tp0, 100);
+
+        // Callback completed. Partition should be fetchable, and should not require
+        // initializing positions (position already defined in the callback)
+        state.enablePartitionsAwaitingCallback(singleton(tp0));
+        assertEquals(0, state.initializingPartitions().size());
+        assertTrue(state.isFetchable(tp0));
+        assertTrue(state.hasAllFetchPositions());
+        assertEquals(100L, state.position(tp0).offset);
+    }
+
+    @Test
+    public void testAssignedPartitionsAwaitingCallbackInitializePositionsWhenCallbackCompletes() {
+        // New partition assigned. Should not be fetchable or initializing positions.
+        state.subscribe(singleton(topic), Optional.of(rebalanceListener));
+        state.assignFromSubscribedAwaitingCallback(singleton(tp0), singleton(tp0));
+        assertAssignmentAppliedAwaitingCallback(tp0);
+
+        // Callback completed (without updating positions). Partition should require initializing
+        // positions, and start fetching once a valid position is set.
+        state.enablePartitionsAwaitingCallback(singleton(tp0));
+        assertEquals(1, state.initializingPartitions().size());
+        state.seek(tp0, 100);
+        assertTrue(state.isFetchable(tp0));
+        assertTrue(state.hasAllFetchPositions());
+        assertEquals(100L, state.position(tp0).offset);
+    }
+
+    @Test
+    public void testAssignedPartitionsAwaitingCallbackDoesNotAffectPreviouslyOwnedPartitions() {
+        // First partition assigned and callback completes.
+        state.subscribe(singleton(topic), Optional.of(rebalanceListener));
+        state.assignFromSubscribedAwaitingCallback(singleton(tp0), singleton(tp0));
+        assertAssignmentAppliedAwaitingCallback(tp0);
+        state.enablePartitionsAwaitingCallback(singleton(tp0));
+        state.seek(tp0, 100);
+        assertTrue(state.isFetchable(tp0));
+
+        // New partition added to the assignment. Owned partitions should continue to be
+        // fetchable, while the newly added should not be fetchable until callback completes.
+        state.assignFromSubscribedAwaitingCallback(Utils.mkSet(tp0, tp1), singleton(tp1));
+        assertTrue(state.isFetchable(tp0));
+        assertFalse(state.isFetchable(tp1));
+        assertEquals(0, state.initializingPartitions().size());
+
+        // Callback completed. Added partition be initializing positions and become fetchable when it gets one.
+        state.enablePartitionsAwaitingCallback(singleton(tp1));
+        assertEquals(1, state.initializingPartitions().size());
+        assertEquals(tp1, state.initializingPartitions().iterator().next());
+        state.seek(tp1, 200);
+        assertTrue(state.isFetchable(tp1));
+    }
+
+    private void assertAssignmentAppliedAwaitingCallback(TopicPartition topicPartition) {
+        assertEquals(singleton(topicPartition), state.assignedPartitions());
+        assertEquals(1, state.numAssignedPartitions());
+        assertEquals(singleton(topicPartition.topic()), state.subscription());
+
+        assertFalse(state.isFetchable(topicPartition));
+        assertEquals(0, state.initializingPartitions().size());
+        assertFalse(state.isPaused(topicPartition));
     }
 
     @Test
@@ -824,4 +896,75 @@ public class SubscriptionStateTest {
         assertNull(state.partitionLag(tp0, IsolationLevel.READ_COMMITTED));
     }
 
+    @Test
+    public void testPositionOrNull() {
+        state.assignFromUser(Collections.singleton(tp0));
+        final TopicPartition unassignedPartition = new TopicPartition("unassigned", 0);
+        state.seek(tp0, 5);
+
+        assertEquals(5, state.positionOrNull(tp0).offset);
+        assertNull(state.positionOrNull(unassignedPartition));
+    }
+
+    @Test
+    public void testTryUpdatingHighWatermark() {
+        state.assignFromUser(Collections.singleton(tp0));
+        final TopicPartition unassignedPartition = new TopicPartition("unassigned", 0);
+
+        final long highWatermark = 10L;
+        assertTrue(state.tryUpdatingHighWatermark(tp0, highWatermark));
+        assertEquals(highWatermark, state.partitionEndOffset(tp0, IsolationLevel.READ_UNCOMMITTED));
+        assertFalse(state.tryUpdatingHighWatermark(unassignedPartition, highWatermark));
+    }
+
+    @Test
+    public void testTryUpdatingLogStartOffset() {
+        state.assignFromUser(Collections.singleton(tp0));
+        final TopicPartition unassignedPartition = new TopicPartition("unassigned", 0);
+        final long position = 25;
+        state.seek(tp0, position);
+
+        final long logStartOffset = 10L;
+        assertTrue(state.tryUpdatingLogStartOffset(tp0, logStartOffset));
+        assertEquals(position - logStartOffset, state.partitionLead(tp0));
+        assertFalse(state.tryUpdatingLogStartOffset(unassignedPartition, logStartOffset));
+    }
+
+    @Test
+    public void testTryUpdatingLastStableOffset() {
+        state.assignFromUser(Collections.singleton(tp0));
+        final TopicPartition unassignedPartition = new TopicPartition("unassigned", 0);
+
+        final long lastStableOffset = 10L;
+        assertTrue(state.tryUpdatingLastStableOffset(tp0, lastStableOffset));
+        assertEquals(lastStableOffset, state.partitionEndOffset(tp0, IsolationLevel.READ_COMMITTED));
+        assertFalse(state.tryUpdatingLastStableOffset(unassignedPartition, lastStableOffset));
+    }
+
+    @Test
+    public void testTryUpdatingPreferredReadReplica() {
+        state.assignFromUser(Collections.singleton(tp0));
+        final TopicPartition unassignedPartition = new TopicPartition("unassigned", 0);
+
+        final int preferredReadReplicaId = 10;
+        final LongSupplier expirationTimeMs = () -> System.currentTimeMillis() + 60000L;
+        assertTrue(state.tryUpdatingPreferredReadReplica(tp0, preferredReadReplicaId, expirationTimeMs));
+        assertEquals(Optional.of(preferredReadReplicaId), state.preferredReadReplica(tp0, System.currentTimeMillis()));
+        assertFalse(state.tryUpdatingPreferredReadReplica(unassignedPartition, preferredReadReplicaId, expirationTimeMs));
+        assertEquals(Optional.empty(), state.preferredReadReplica(unassignedPartition, System.currentTimeMillis()));
+    }
+
+    @Test
+    public void testRequestOffsetResetIfPartitionAssigned() {
+        state.assignFromUser(Collections.singleton(tp0));
+        final TopicPartition unassignedPartition = new TopicPartition("unassigned", 0);
+
+        state.requestOffsetResetIfPartitionAssigned(tp0);
+
+        assertTrue(state.isOffsetResetNeeded(tp0));
+
+        state.requestOffsetResetIfPartitionAssigned(unassignedPartition);
+
+        assertThrows(IllegalStateException.class, () -> state.isOffsetResetNeeded(unassignedPartition));
+    }
 }

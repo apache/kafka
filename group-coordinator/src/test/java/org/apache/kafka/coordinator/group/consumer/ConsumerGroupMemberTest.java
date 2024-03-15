@@ -18,8 +18,10 @@ package org.apache.kafka.coordinator.group.consumer;
 
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.ConsumerGroupDescribeResponseData;
+import org.apache.kafka.coordinator.group.MetadataImageBuilder;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupCurrentMemberAssignmentValue;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupMemberMetadataValue;
+import org.apache.kafka.image.MetadataImage;
 import org.junit.jupiter.api.Test;
 
 import java.nio.ByteBuffer;
@@ -38,7 +40,6 @@ import java.util.stream.Collectors;
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkAssignment;
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkTopicAssignment;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-
 public class ConsumerGroupMemberTest {
 
     @Test
@@ -50,7 +51,6 @@ public class ConsumerGroupMemberTest {
         ConsumerGroupMember member = new ConsumerGroupMember.Builder("member-id")
             .setMemberEpoch(10)
             .setPreviousMemberEpoch(9)
-            .setTargetMemberEpoch(11)
             .setInstanceId("instance-id")
             .setRackId("rack-id")
             .setRebalanceTimeoutMs(5000)
@@ -72,14 +72,11 @@ public class ConsumerGroupMemberTest {
                 mkTopicAssignment(topicId1, 1, 2, 3)))
             .setPartitionsPendingRevocation(mkAssignment(
                 mkTopicAssignment(topicId2, 4, 5, 6)))
-            .setPartitionsPendingAssignment(mkAssignment(
-                mkTopicAssignment(topicId3, 7, 8, 9)))
             .build();
 
         assertEquals("member-id", member.memberId());
         assertEquals(10, member.memberEpoch());
         assertEquals(9, member.previousMemberEpoch());
-        assertEquals(11, member.targetMemberEpoch());
         assertEquals("instance-id", member.instanceId());
         assertEquals("rack-id", member.rackId());
         assertEquals("client-id", member.clientId());
@@ -101,7 +98,6 @@ public class ConsumerGroupMemberTest {
             member.clientAssignors());
         assertEquals(mkAssignment(mkTopicAssignment(topicId1, 1, 2, 3)), member.assignedPartitions());
         assertEquals(mkAssignment(mkTopicAssignment(topicId2, 4, 5, 6)), member.partitionsPendingRevocation());
-        assertEquals(mkAssignment(mkTopicAssignment(topicId3, 7, 8, 9)), member.partitionsPendingAssignment());
     }
 
     @Test
@@ -113,7 +109,6 @@ public class ConsumerGroupMemberTest {
         ConsumerGroupMember member1 = new ConsumerGroupMember.Builder("member-id")
             .setMemberEpoch(10)
             .setPreviousMemberEpoch(9)
-            .setTargetMemberEpoch(11)
             .setInstanceId("instance-id")
             .setRackId("rack-id")
             .setRebalanceTimeoutMs(5000)
@@ -135,14 +130,11 @@ public class ConsumerGroupMemberTest {
                 mkTopicAssignment(topicId1, 1, 2, 3)))
             .setPartitionsPendingRevocation(mkAssignment(
                 mkTopicAssignment(topicId2, 4, 5, 6)))
-            .setPartitionsPendingAssignment(mkAssignment(
-                mkTopicAssignment(topicId3, 7, 8, 9)))
             .build();
 
         ConsumerGroupMember member2 = new ConsumerGroupMember.Builder("member-id")
             .setMemberEpoch(10)
             .setPreviousMemberEpoch(9)
-            .setTargetMemberEpoch(11)
             .setInstanceId("instance-id")
             .setRackId("rack-id")
             .setRebalanceTimeoutMs(5000)
@@ -164,8 +156,6 @@ public class ConsumerGroupMemberTest {
                 mkTopicAssignment(topicId1, 1, 2, 3)))
             .setPartitionsPendingRevocation(mkAssignment(
                 mkTopicAssignment(topicId2, 4, 5, 6)))
-            .setPartitionsPendingAssignment(mkAssignment(
-                mkTopicAssignment(topicId3, 7, 8, 9)))
             .build();
 
         assertEquals(member1, member2);
@@ -180,7 +170,6 @@ public class ConsumerGroupMemberTest {
         ConsumerGroupMember member = new ConsumerGroupMember.Builder("member-id")
             .setMemberEpoch(10)
             .setPreviousMemberEpoch(9)
-            .setTargetMemberEpoch(11)
             .setInstanceId("instance-id")
             .setRackId("rack-id")
             .setRebalanceTimeoutMs(5000)
@@ -202,8 +191,6 @@ public class ConsumerGroupMemberTest {
                 mkTopicAssignment(topicId1, 1, 2, 3)))
             .setPartitionsPendingRevocation(mkAssignment(
                 mkTopicAssignment(topicId2, 4, 5, 6)))
-            .setPartitionsPendingAssignment(mkAssignment(
-                mkTopicAssignment(topicId3, 7, 8, 9)))
             .build();
 
         // This is a no-op.
@@ -290,16 +277,12 @@ public class ConsumerGroupMemberTest {
         ConsumerGroupCurrentMemberAssignmentValue record = new ConsumerGroupCurrentMemberAssignmentValue()
             .setMemberEpoch(10)
             .setPreviousMemberEpoch(9)
-            .setTargetMemberEpoch(11)
             .setAssignedPartitions(Collections.singletonList(new ConsumerGroupCurrentMemberAssignmentValue.TopicPartitions()
                 .setTopicId(topicId1)
                 .setPartitions(Arrays.asList(0, 1, 2))))
             .setPartitionsPendingRevocation(Collections.singletonList(new ConsumerGroupCurrentMemberAssignmentValue.TopicPartitions()
                 .setTopicId(topicId2)
-                .setPartitions(Arrays.asList(3, 4, 5))))
-            .setPartitionsPendingAssignment(Collections.singletonList(new ConsumerGroupCurrentMemberAssignmentValue.TopicPartitions()
-                .setTopicId(topicId3)
-                .setPartitions(Arrays.asList(6, 7, 8))));
+                .setPartitions(Arrays.asList(3, 4, 5))));
 
         ConsumerGroupMember member = new ConsumerGroupMember.Builder("member-id")
             .updateWith(record)
@@ -307,10 +290,8 @@ public class ConsumerGroupMemberTest {
 
         assertEquals(10, member.memberEpoch());
         assertEquals(9, member.previousMemberEpoch());
-        assertEquals(11, member.targetMemberEpoch());
         assertEquals(mkAssignment(mkTopicAssignment(topicId1, 0, 1, 2)), member.assignedPartitions());
         assertEquals(mkAssignment(mkTopicAssignment(topicId2, 3, 4, 5)), member.partitionsPendingRevocation());
-        assertEquals(mkAssignment(mkTopicAssignment(topicId3, 6, 7, 8)), member.partitionsPendingAssignment());
     }
 
     @Test
@@ -318,21 +299,24 @@ public class ConsumerGroupMemberTest {
         Uuid topicId1 = Uuid.randomUuid();
         Uuid topicId2 = Uuid.randomUuid();
         Uuid topicId3 = Uuid.randomUuid();
+        Uuid topicId4 = Uuid.randomUuid();
+        MetadataImage metadataImage = new MetadataImageBuilder()
+            .addTopic(topicId1, "topic1", 3)
+            .addTopic(topicId2, "topic2", 3)
+            .addTopic(topicId3, "topic3", 3)
+            .addTopic(topicId4, "topic4", 3)
+            .build();
         List<Integer> assignedPartitions = Arrays.asList(0, 1, 2);
         int epoch = 10;
         ConsumerGroupCurrentMemberAssignmentValue record = new ConsumerGroupCurrentMemberAssignmentValue()
             .setMemberEpoch(epoch)
             .setPreviousMemberEpoch(epoch - 1)
-            .setTargetMemberEpoch(epoch + 1)
             .setAssignedPartitions(Collections.singletonList(new ConsumerGroupCurrentMemberAssignmentValue.TopicPartitions()
                 .setTopicId(topicId1)
                 .setPartitions(assignedPartitions)))
             .setPartitionsPendingRevocation(Collections.singletonList(new ConsumerGroupCurrentMemberAssignmentValue.TopicPartitions()
                 .setTopicId(topicId2)
-                .setPartitions(Arrays.asList(3, 4, 5))))
-            .setPartitionsPendingAssignment(Collections.singletonList(new ConsumerGroupCurrentMemberAssignmentValue.TopicPartitions()
-                .setTopicId(topicId3)
-                .setPartitions(Arrays.asList(6, 7, 8))));
+                .setPartitions(Arrays.asList(3, 4, 5))));
         String memberId = Uuid.randomUuid().toString();
         String clientId = "clientId";
         String instanceId = "instanceId";
@@ -341,7 +325,7 @@ public class ConsumerGroupMemberTest {
         List<String> subscribedTopicNames = Arrays.asList("topic1", "topic2");
         String subscribedTopicRegex = "topic.*";
         Map<Uuid, Set<Integer>> assignmentMap = new HashMap<>();
-        assignmentMap.put(Uuid.randomUuid(), new HashSet<>());
+        assignmentMap.put(topicId4, new HashSet<>(assignedPartitions));
         Assignment targetAssignment = new Assignment(assignmentMap);
         ConsumerGroupMember member = new ConsumerGroupMember.Builder(memberId)
             .updateWith(record)
@@ -353,7 +337,7 @@ public class ConsumerGroupMemberTest {
             .setSubscribedTopicRegex(subscribedTopicRegex)
             .build();
 
-        ConsumerGroupDescribeResponseData.Member actual = member.asConsumerGroupDescribeMember(targetAssignment);
+        ConsumerGroupDescribeResponseData.Member actual = member.asConsumerGroupDescribeMember(targetAssignment, metadataImage.topics());
         ConsumerGroupDescribeResponseData.Member expected = new ConsumerGroupDescribeResponseData.Member()
             .setMemberId(memberId)
             .setMemberEpoch(epoch)
@@ -365,13 +349,18 @@ public class ConsumerGroupMemberTest {
             .setSubscribedTopicRegex(subscribedTopicRegex)
             .setAssignment(
                 new ConsumerGroupDescribeResponseData.Assignment()
-                    .setTopicPartitions(Collections.singletonList(new ConsumerGroupDescribeResponseData.TopicPartitions().setTopicId(topicId1).setPartitions(assignedPartitions)))
+                    .setTopicPartitions(Collections.singletonList(new ConsumerGroupDescribeResponseData.TopicPartitions()
+                        .setTopicId(topicId1)
+                        .setTopicName("topic1")
+                        .setPartitions(assignedPartitions)
+                    ))
             )
             .setTargetAssignment(
                 new ConsumerGroupDescribeResponseData.Assignment()
                     .setTopicPartitions(targetAssignment.partitions().entrySet().stream().map(
                         item -> new ConsumerGroupDescribeResponseData.TopicPartitions()
                             .setTopicId(item.getKey())
+                            .setTopicName("topic4")
                             .setPartitions(new ArrayList<>(item.getValue()))
                     ).collect(Collectors.toList()))
             );
@@ -384,8 +373,31 @@ public class ConsumerGroupMemberTest {
         ConsumerGroupMember member = new ConsumerGroupMember.Builder(Uuid.randomUuid().toString())
             .build();
 
-        ConsumerGroupDescribeResponseData.Member consumerGroupDescribeMember = member.asConsumerGroupDescribeMember(null);
+        ConsumerGroupDescribeResponseData.Member consumerGroupDescribeMember = member.asConsumerGroupDescribeMember(
+            null, new MetadataImageBuilder().build().topics());
 
         assertEquals(new ConsumerGroupDescribeResponseData.Assignment(), consumerGroupDescribeMember.targetAssignment());
+    }
+
+    @Test
+    public void testAsConsumerGroupDescribeWithTopicNameNotFound() {
+        Uuid memberId = Uuid.randomUuid();
+        ConsumerGroupCurrentMemberAssignmentValue record = new ConsumerGroupCurrentMemberAssignmentValue()
+            .setAssignedPartitions(Collections.singletonList(new ConsumerGroupCurrentMemberAssignmentValue.TopicPartitions()
+                .setTopicId(Uuid.randomUuid())
+                .setPartitions(Arrays.asList(0, 1, 2))));
+        ConsumerGroupMember member = new ConsumerGroupMember.Builder(memberId.toString())
+            .updateWith(record)
+            .build();
+
+        ConsumerGroupDescribeResponseData.Member expected = new ConsumerGroupDescribeResponseData.Member()
+            .setMemberId(memberId.toString())
+            .setSubscribedTopicRegex("");
+        ConsumerGroupDescribeResponseData.Member actual = member.asConsumerGroupDescribeMember(null,
+            new MetadataImageBuilder()
+                .addTopic(Uuid.randomUuid(), "foo", 3)
+                .build().topics()
+        );
+        assertEquals(expected, actual);
     }
 }

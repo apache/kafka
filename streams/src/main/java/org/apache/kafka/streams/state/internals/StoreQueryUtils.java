@@ -125,28 +125,30 @@ public final class StoreQueryUtils {
         final QueryResult<R> result;
 
         final QueryHandler handler = QUERY_HANDLER_MAP.get(query.getClass());
-        if (handler == null) {
-            result = QueryResult.forUnknownQueryType(query, store);
-        } else if (context == null || !isPermitted(position, positionBound, context.taskId().partition())) {
-            result = QueryResult.notUpToBound(
-                position,
-                positionBound,
-                context == null ? null : context.taskId().partition()
-            );
-        } else {
-            result = (QueryResult<R>) handler.apply(
-                query,
-                positionBound,
-                config,
-                store
-            );
+        synchronized (position) {
+            if (handler == null) {
+                result = QueryResult.forUnknownQueryType(query, store);
+            } else if (context == null || !isPermitted(position, positionBound, context.taskId().partition())) {
+                result = QueryResult.notUpToBound(
+                    position,
+                    positionBound,
+                    context == null ? null : context.taskId().partition()
+                );
+            } else {
+                result = (QueryResult<R>) handler.apply(
+                    query,
+                    positionBound,
+                    config,
+                    store
+                );
+            }
+            if (config.isCollectExecutionInfo()) {
+                result.addExecutionInfo(
+                    "Handled in " + store.getClass() + " in " + (System.nanoTime() - start) + "ns"
+                );
+            }
+            result.setPosition(position.copy());
         }
-        if (config.isCollectExecutionInfo()) {
-            result.addExecutionInfo(
-                "Handled in " + store.getClass() + " in " + (System.nanoTime() - start) + "ns"
-            );
-        }
-        result.setPosition(position);
         return result;
     }
 
@@ -410,7 +412,7 @@ public final class StoreQueryUtils {
     @SuppressWarnings({"unchecked", "rawtypes"})
     public static <V> Function<byte[], V> getDeserializeValue(final StateSerdes<?, V> serdes, final StateStore wrapped) {
         final Serde<V> valueSerde = serdes.valueSerde();
-        final boolean timestamped = WrappedStateStore.isTimestamped(wrapped);
+        final boolean timestamped = WrappedStateStore.isTimestamped(wrapped) || isAdapter(wrapped);
         final Deserializer<V> deserializer;
         if (!timestamped && valueSerde instanceof ValueAndTimestampSerde) {
             final ValueAndTimestampDeserializer valueAndTimestampDeserializer =
@@ -420,6 +422,16 @@ public final class StoreQueryUtils {
             deserializer = valueSerde.deserializer();
         }
         return byteArray -> deserializer.deserialize(serdes.topic(), byteArray);
+    }
+
+    public static boolean isAdapter(final StateStore stateStore) {
+        if (stateStore instanceof KeyValueToTimestampedKeyValueByteStoreAdapter) {
+            return true;
+        } else if (stateStore instanceof WrappedStateStore) {
+            return isAdapter(((WrappedStateStore) stateStore).wrapped());
+        } else {
+            return false;
+        }
     }
 
     @SuppressWarnings({"unchecked", "rawtypes"})

@@ -18,6 +18,7 @@ package org.apache.kafka.clients.producer.internals;
 
 import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.Metadata;
+import org.apache.kafka.clients.MetadataSnapshot;
 import org.apache.kafka.clients.MockClient;
 import org.apache.kafka.clients.NodeApiVersions;
 import org.apache.kafka.clients.consumer.CommitFailedException;
@@ -69,6 +70,7 @@ import org.apache.kafka.common.requests.FindCoordinatorResponse;
 import org.apache.kafka.common.requests.InitProducerIdRequest;
 import org.apache.kafka.common.requests.InitProducerIdResponse;
 import org.apache.kafka.common.requests.JoinGroupRequest;
+import org.apache.kafka.common.requests.MetadataResponse.PartitionMetadata;
 import org.apache.kafka.common.requests.ProduceRequest;
 import org.apache.kafka.common.requests.ProduceResponse;
 import org.apache.kafka.common.requests.RequestTestUtils;
@@ -1730,7 +1732,7 @@ public class TransactionManagerTest {
             "COORDINATOR_LOAD_IN_PROGRESS",
             "CONCURRENT_TRANSACTIONS"
     })
-    public void testRetriableErrors2(Errors error) {
+    public void testRetriableErrors(Errors error) {
         // Ensure FindCoordinator retries.
         TransactionalRequestResult result = transactionManager.initializeTransactions();
         prepareFindCoordinatorResponse(error, false, CoordinatorType.TRANSACTION, transactionalId);
@@ -2233,6 +2235,11 @@ public class TransactionManagerTest {
         testRetriableErrorInTxnOffsetCommit(Errors.COORDINATOR_LOAD_IN_PROGRESS);
     }
 
+    @Test
+    public void testHandlingOfNetworkExceptionOnTxnOffsetCommit() {
+        testRetriableErrorInTxnOffsetCommit(Errors.NETWORK_EXCEPTION);
+    }
+
     private void testRetriableErrorInTxnOffsetCommit(Errors error) {
         doInitTransactions();
 
@@ -2471,16 +2478,16 @@ public class TransactionManagerTest {
 
         Node node1 = new Node(0, "localhost", 1111);
         Node node2 = new Node(1, "localhost", 1112);
-        PartitionInfo part1 = new PartitionInfo(topic, 0, node1, null, null);
-        PartitionInfo part2 = new PartitionInfo(topic, 1, node2, null, null);
-
-        Cluster cluster = new Cluster(null, Arrays.asList(node1, node2), Arrays.asList(part1, part2),
-                Collections.emptySet(), Collections.emptySet());
-        Metadata metadataMock = setupMetadata(cluster);
+        Map<Integer, Node> nodesById = new HashMap<>();
+        nodesById.put(node1.id(), node1);
+        nodesById.put(node2.id(), node2);
+        PartitionMetadata part1Metadata = new PartitionMetadata(Errors.NONE, tp0, Optional.of(node1.id()), Optional.empty(), null, null, null);
+        PartitionMetadata part2Metadata = new PartitionMetadata(Errors.NONE, tp1, Optional.of(node2.id()), Optional.empty(), null, null, null);
+        MetadataSnapshot metadataCache = new MetadataSnapshot(null, nodesById, Arrays.asList(part1Metadata, part2Metadata), Collections.emptySet(), Collections.emptySet(), Collections.emptySet(), null, Collections.emptyMap());
         Set<Node> nodes = new HashSet<>();
         nodes.add(node1);
         nodes.add(node2);
-        Map<Integer, List<ProducerBatch>> drainedBatches = accumulator.drain(metadataMock, nodes, Integer.MAX_VALUE,
+        Map<Integer, List<ProducerBatch>> drainedBatches = accumulator.drain(metadataCache, nodes, Integer.MAX_VALUE,
                 time.milliseconds());
 
         // We shouldn't drain batches which haven't been added to the transaction yet.
@@ -2506,12 +2513,10 @@ public class TransactionManagerTest {
 
         // Try to drain a message destined for tp1, it should get drained.
         Node node1 = new Node(1, "localhost", 1112);
-        PartitionInfo part1 = new PartitionInfo(topic, 1, node1, null, null);
-        Cluster cluster = new Cluster(null, Collections.singletonList(node1), Collections.singletonList(part1),
-                Collections.emptySet(), Collections.emptySet());
-        Metadata metadataMock = setupMetadata(cluster);
+        PartitionMetadata part1Metadata = new PartitionMetadata(Errors.NONE, tp1, Optional.of(node1.id()), Optional.empty(), null, null, null);
+        MetadataSnapshot metadataCache = new MetadataSnapshot(null, Collections.singletonMap(node1.id(), node1), Arrays.asList(part1Metadata), Collections.emptySet(), Collections.emptySet(), Collections.emptySet(), null, Collections.emptyMap());
         appendToAccumulator(tp1);
-        Map<Integer, List<ProducerBatch>> drainedBatches = accumulator.drain(metadataMock, Collections.singleton(node1),
+        Map<Integer, List<ProducerBatch>> drainedBatches = accumulator.drain(metadataCache, Collections.singleton(node1),
                 Integer.MAX_VALUE,
                 time.milliseconds());
 
@@ -2529,20 +2534,33 @@ public class TransactionManagerTest {
         // Don't execute transactionManager.maybeAddPartitionToTransaction(tp0). This should result in an error on drain.
         appendToAccumulator(tp0);
         Node node1 = new Node(0, "localhost", 1111);
-        PartitionInfo part1 = new PartitionInfo(topic, 0, node1, null, null);
-
-        Cluster cluster = new Cluster(null, Collections.singletonList(node1), Collections.singletonList(part1),
-                Collections.emptySet(), Collections.emptySet());
-        Metadata metadataMock = setupMetadata(cluster);
+        PartitionMetadata part1Metadata = new PartitionMetadata(Errors.NONE, tp0, Optional.of(node1.id()), Optional.empty(), null, null, null);
+        MetadataSnapshot metadataCache = new MetadataSnapshot(null, Collections.singletonMap(node1.id(), node1), Arrays.asList(part1Metadata), Collections.emptySet(), Collections.emptySet(), Collections.emptySet(), null, Collections.emptyMap());
 
         Set<Node> nodes = new HashSet<>();
         nodes.add(node1);
-        Map<Integer, List<ProducerBatch>> drainedBatches = accumulator.drain(metadataMock, nodes, Integer.MAX_VALUE,
+        Map<Integer, List<ProducerBatch>> drainedBatches = accumulator.drain(metadataCache, nodes, Integer.MAX_VALUE,
                 time.milliseconds());
 
         // We shouldn't drain batches which haven't been added to the transaction yet.
         assertTrue(drainedBatches.containsKey(node1.id()));
         assertTrue(drainedBatches.get(node1.id()).isEmpty());
+
+        // Let's now add the partition, flush and try to drain again.
+        transactionManager.maybeAddPartition(tp0);
+        accumulator.beginFlush();
+
+        drainedBatches = accumulator.drain(metadataCache, nodes, Integer.MAX_VALUE, time.milliseconds());
+
+        // We still shouldn't drain batches because the partition call didn't complete yet.
+        assertTrue(drainedBatches.containsKey(node1.id()));
+        assertTrue(drainedBatches.get(node1.id()).isEmpty());
+        assertTrue(accumulator.hasUndrained());
+
+        // Now prepare response to complete the partition addition.
+        // We should now be able to drain the request.
+        prepareAddPartitionsToTxn(tp0, Errors.NONE);
+        runUntil(() -> !accumulator.hasUndrained());
     }
 
     @Test

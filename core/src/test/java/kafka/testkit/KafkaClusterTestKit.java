@@ -41,6 +41,7 @@ import org.apache.kafka.raft.RaftConfig;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.fault.FaultHandler;
 import org.apache.kafka.server.fault.MockFaultHandler;
+import org.apache.kafka.storage.internals.log.CleanerConfig;
 import org.apache.kafka.test.TestUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -192,13 +193,14 @@ public class KafkaClusterTestKit implements AutoCloseable {
             props.put(RaftConfig.QUORUM_VOTERS_CONFIG, uninitializedQuorumVotersString);
 
             // reduce log cleaner offset map memory usage
-            props.put(KafkaConfig$.MODULE$.LogCleanerDedupeBufferSizeProp(), "2097152");
+            props.put(CleanerConfig.LOG_CLEANER_DEDUPE_BUFFER_SIZE_PROP, "2097152");
 
             // Add associated broker node property overrides
             if (brokerNode != null) {
                 props.putAll(brokerNode.propertyOverrides());
             }
             props.putIfAbsent(KafkaConfig$.MODULE$.UnstableMetadataVersionsEnableProp(), "true");
+            props.putIfAbsent(KafkaConfig$.MODULE$.UnstableApiVersionsEnableProp(), "true");
             return new KafkaConfig(props, false, Option.empty());
         }
 

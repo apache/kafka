@@ -22,6 +22,7 @@ import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.utils.{MockTime, Time, Utils}
+import org.apache.kafka.server.config.Defaults
 import org.apache.kafka.storage.internals.checkpoint.LeaderEpochCheckpoint
 import org.apache.kafka.storage.internals.epoch.LeaderEpochFileCache
 import org.apache.kafka.storage.internals.log.{BatchMetadata, EpochEntry, LogConfig, LogFileUtils, LogSegment, LogSegmentOffsetOverflowException, ProducerStateEntry, ProducerStateManager, ProducerStateManagerConfig, RollParams}
@@ -323,12 +324,12 @@ class LogSegmentTest {
   @Test
   def testRecoveryFixesCorruptIndex(): Unit = {
     val seg = createSegment(0)
-    for(i <- 0 until 100)
+    for (i <- 0 until 100)
       seg.append(i, RecordBatch.NO_TIMESTAMP, -1L, records(i, i.toString))
     val indexFile = seg.offsetIndexFile
     TestUtils.writeNonsenseToFile(indexFile, 5, indexFile.length.toInt)
     seg.recover(newProducerStateManager(), Optional.empty())
-    for(i <- 0 until 100) {
+    for (i <- 0 until 100) {
       val records = seg.read(i, 1, seg.size(), true).records.records
       assertEquals(i, records.iterator.next().offset)
     }
@@ -449,12 +450,12 @@ class LogSegmentTest {
   @Test
   def testRecoveryFixesCorruptTimeIndex(): Unit = {
     val seg = createSegment(0)
-    for(i <- 0 until 100)
+    for (i <- 0 until 100)
       seg.append(i, i * 10, i, records(i, i.toString))
     val timeIndexFile = seg.timeIndexFile
     TestUtils.writeNonsenseToFile(timeIndexFile, 5, timeIndexFile.length.toInt)
     seg.recover(newProducerStateManager(), Optional.empty())
-    for(i <- 0 until 100) {
+    for (i <- 0 until 100) {
       assertEquals(i, seg.findOffsetByTimestamp(i * 10, 0L).get.offset)
       if (i < 99)
         assertEquals(i + 1, seg.findOffsetByTimestamp(i * 10 + 1, 0L).get.offset)
@@ -607,7 +608,7 @@ class LogSegmentTest {
       topicPartition,
       logDir,
       5 * 60 * 1000,
-      new ProducerStateManagerConfig(kafka.server.Defaults.ProducerIdExpirationMs, false),
+      new ProducerStateManagerConfig(Defaults.PRODUCER_ID_EXPIRATION_MS, false),
       new MockTime()
     )
   }

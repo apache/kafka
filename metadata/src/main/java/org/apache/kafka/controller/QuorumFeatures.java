@@ -59,8 +59,8 @@ public final class QuorumFeatures {
         features.put(MetadataVersion.FEATURE_NAME, VersionRange.of(
                 MetadataVersion.MINIMUM_KRAFT_VERSION.featureLevel(),
                 enableUnstable ?
-                    MetadataVersion.latest().featureLevel() :
-                    MetadataVersion.LATEST_PRODUCTION.featureLevel()));
+                    MetadataVersion.latestTesting().featureLevel() :
+                    MetadataVersion.latestProduction().featureLevel()));
         return features;
     }
 

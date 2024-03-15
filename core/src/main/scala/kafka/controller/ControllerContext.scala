@@ -450,10 +450,6 @@ class ControllerContext extends ControllerChannelContext {
       Some(replicaAssignment), Some(leaderIsrAndControllerEpoch))
   }
 
-  def partitionLeaderAndIsr(partition: TopicPartition): Option[LeaderAndIsr] = {
-    partitionLeadershipInfo.get(partition).map(_.leaderAndIsr)
-  }
-
   def leaderEpoch(partition: TopicPartition): Int = {
     // A sentinel (-2) is used as an epoch if the topic is queued for deletion. It overrides
     // any existing epoch.

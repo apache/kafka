@@ -21,14 +21,14 @@ import kafka.security.authorizer.AclEntry.{WildcardHost, WildcardPrincipalString
 import kafka.utils.TestUtils
 import org.apache.kafka.common.Uuid
 import org.apache.kafka.common.acl._
-import org.apache.kafka.common.metadata.AccessControlEntryRecord
+import org.apache.kafka.common.metadata.{AccessControlEntryRecord, RemoveAccessControlEntryRecord}
 import org.apache.kafka.common.resource.{PatternType, ResourcePattern, ResourcePatternFilter, ResourceType}
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.utils.SecurityUtils
 import org.apache.kafka.image.{MetadataDelta, MetadataImage, MetadataProvenance}
 import org.apache.kafka.metadata.migration.KRaftMigrationZkWriter
 import org.apache.kafka.server.common.ApiMessageAndVersion
-import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
+import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue, fail}
 import org.junit.jupiter.api.Test
 
 import scala.collection.mutable
@@ -169,7 +169,7 @@ class ZkAclMigrationClientTest extends ZkMigrationTestHarness {
     val image = delta.apply(MetadataProvenance.EMPTY)
 
     // load snapshot to Zookeeper.
-    val kraftMigrationZkWriter = new KRaftMigrationZkWriter(migrationClient)
+    val kraftMigrationZkWriter = new KRaftMigrationZkWriter(migrationClient, fail(_))
     kraftMigrationZkWriter.handleSnapshot(image, (_, _, operation) => { migrationState = operation.apply(migrationState) })
 
     // Verify the new ACLs in Zookeeper.
@@ -188,5 +188,161 @@ class ZkAclMigrationClientTest extends ZkMigrationTestHarness {
         AclOperation.fromCode(acl1Resource3.operation()),
         AclPermissionType.fromCode(acl1Resource3.permissionType())),
       resource3AclsInZk.head.ace)
+  }
+
+  def user(user: String): String = {
+    new KafkaPrincipal(KafkaPrincipal.USER_TYPE, user).toString
+  }
+
+  def acl(resourceName: String,
+          resourceType: ResourceType,
+          resourcePattern: PatternType,
+          principal: String,
+          host: String = "*",
+          operation: AclOperation = AclOperation.READ,
+          permissionType: AclPermissionType = AclPermissionType.ALLOW
+  ): AccessControlEntryRecord = {
+    new AccessControlEntryRecord()
+      .setId(Uuid.randomUuid())
+      .setHost(host)
+      .setOperation(operation.code())
+      .setPrincipal(principal)
+      .setPermissionType(permissionType.code())
+      .setPatternType(resourcePattern.code())
+      .setResourceName(resourceName)
+      .setResourceType(resourceType.code())
+  }
+
+  @Test
+  def testDeleteOneAclOfMany(): Unit = {
+    zkClient.createAclPaths()
+    val topicName = "topic-" + Uuid.randomUuid()
+    val resource = new ResourcePattern(ResourceType.TOPIC, topicName, PatternType.LITERAL)
+
+    // Create a delta with some ACLs
+    val delta = new MetadataDelta(MetadataImage.EMPTY)
+    val acl1 = acl(topicName, ResourceType.TOPIC, PatternType.LITERAL, user("alice"))
+    val acl2 = acl(topicName, ResourceType.TOPIC, PatternType.LITERAL, user("bob"))
+    val acl3 = acl(topicName, ResourceType.TOPIC, PatternType.LITERAL, user("carol"))
+    delta.replay(acl1)
+    delta.replay(acl2)
+    delta.replay(acl3)
+    val image = delta.apply(MetadataProvenance.EMPTY)
+
+    // Sync image to ZK
+    val errorLogs = mutable.Buffer[String]()
+    val kraftMigrationZkWriter = new KRaftMigrationZkWriter(migrationClient, msg => errorLogs.append(msg))
+    kraftMigrationZkWriter.handleSnapshot(image, (_, _, operation) => {
+      migrationState = operation.apply(migrationState)
+    })
+
+    // verify 3 ACLs in ZK
+    val aclsInZk = zkClient.getVersionedAclsForResource(resource).acls
+    assertEquals(3, aclsInZk.size)
+
+    // Delete one of the ACLs
+    val delta2 = new MetadataDelta.Builder()
+      .setImage(image)
+      .build()
+    delta2.replay(new RemoveAccessControlEntryRecord().setId(acl3.id()))
+    val image2 = delta2.apply(MetadataProvenance.EMPTY)
+    kraftMigrationZkWriter.handleDelta(image, image2, delta2, (_, _, operation) => {
+      migrationState = operation.apply(migrationState)
+    })
+
+    // verify the other 2 ACLs are still in ZK
+    val aclsInZk2 = zkClient.getVersionedAclsForResource(resource).acls
+    assertEquals(2, aclsInZk2.size)
+    assertEquals(0, errorLogs.size)
+
+    // Add another ACL
+    val acl4 = acl(topicName, ResourceType.TOPIC, PatternType.LITERAL, user("carol"))
+    delta2.replay(acl4)
+    val image3 = delta2.apply(MetadataProvenance.EMPTY)
+
+    // This is a contrived error case. In practice, we will never pass the same image as prev and current.
+    // The point of this is to exercise the case of a deleted ACL missing from the prev image.
+    kraftMigrationZkWriter.handleDelta(image3, image3, delta2, (_, _, operation) => {
+      migrationState = operation.apply(migrationState)
+    })
+
+    val aclsInZk3 = zkClient.getVersionedAclsForResource(resource).acls
+    assertEquals(3, aclsInZk3.size)
+    assertEquals(1, errorLogs.size)
+    assertEquals(s"Cannot delete ACL ${acl3.id()} from ZK since it is missing from previous AclImage", errorLogs.head)
+  }
+
+  @Test
+  def testAclUpdateAndDelete(): Unit = {
+    zkClient.createAclPaths()
+    val errorLogs = mutable.Buffer[String]()
+    val kraftMigrationZkWriter = new KRaftMigrationZkWriter(migrationClient, msg => errorLogs.append(msg))
+
+    val topicName = "topic-" + Uuid.randomUuid()
+    val otherName = "other-" + Uuid.randomUuid()
+    val literalResource = new ResourcePattern(ResourceType.TOPIC, topicName, PatternType.LITERAL)
+    val prefixedResource = new ResourcePattern(ResourceType.TOPIC, topicName, PatternType.PREFIXED)
+    val otherResource = new ResourcePattern(ResourceType.TOPIC, otherName, PatternType.LITERAL)
+
+    // Create a delta with some ACLs
+    val acl1 = acl(topicName, ResourceType.TOPIC, PatternType.LITERAL, user("alice"))
+    val acl2 = acl(topicName, ResourceType.TOPIC, PatternType.LITERAL, user("bob"))
+    val acl3 = acl(topicName, ResourceType.TOPIC, PatternType.LITERAL, user("carol"))
+    val acl4 = acl(topicName, ResourceType.TOPIC, PatternType.LITERAL, user("dave"))
+
+    val delta1 = new MetadataDelta(MetadataImage.EMPTY)
+    delta1.replay(acl1)
+    delta1.replay(acl2)
+    delta1.replay(acl3)
+    delta1.replay(acl4)
+
+    val image1 = delta1.apply(MetadataProvenance.EMPTY)
+    kraftMigrationZkWriter.handleDelta(MetadataImage.EMPTY, image1, delta1, (_, _, operation) => {
+      migrationState = operation.apply(migrationState)
+    })
+    assertEquals(4, zkClient.getVersionedAclsForResource(literalResource).acls.size)
+    assertEquals(0, zkClient.getVersionedAclsForResource(prefixedResource).acls.size)
+    assertEquals(0, zkClient.getVersionedAclsForResource(otherResource).acls.size)
+    assertEquals(0, errorLogs.size)
+
+    val acl5 = acl(topicName, ResourceType.TOPIC, PatternType.PREFIXED, user("alice"))
+    val acl6 = acl(topicName, ResourceType.TOPIC, PatternType.PREFIXED, user("bob"))
+    val acl7 = acl(otherName, ResourceType.TOPIC, PatternType.LITERAL, user("carol"))
+    val acl8 = acl(otherName, ResourceType.TOPIC, PatternType.LITERAL, user("dave"))
+
+    // Add two prefixed and two "other" ACLs, delete one of the literal ACLs
+    val delta2 = new MetadataDelta.Builder().setImage(image1).build()
+    delta2.replay(acl5)
+    delta2.replay(acl6)
+    delta2.replay(acl7)
+    delta2.replay(acl8)
+    delta2.replay(new RemoveAccessControlEntryRecord().setId(acl1.id()))
+
+    val image2 = delta2.apply(MetadataProvenance.EMPTY)
+    kraftMigrationZkWriter.handleDelta(image1, image2, delta2, (_, _, operation) => {
+      migrationState = operation.apply(migrationState)
+    })
+    assertEquals(3, zkClient.getVersionedAclsForResource(literalResource).acls.size)
+    assertEquals(2, zkClient.getVersionedAclsForResource(prefixedResource).acls.size)
+    assertEquals(2, zkClient.getVersionedAclsForResource(otherResource).acls.size)
+    assertEquals(0, errorLogs.size)
+
+    // Delete and add ACL for literal resource, remove both prefixed ACLs, add another "other"
+    val acl9 = acl(otherName, ResourceType.TOPIC, PatternType.LITERAL, user("eve"))
+    val delta3 = new MetadataDelta.Builder().setImage(image2).build()
+    delta3.replay(acl1)
+    delta3.replay(new RemoveAccessControlEntryRecord().setId(acl2.id()))
+    delta3.replay(new RemoveAccessControlEntryRecord().setId(acl5.id()))
+    delta3.replay(new RemoveAccessControlEntryRecord().setId(acl6.id()))
+    delta3.replay(acl9)
+
+    val image3 = delta3.apply(MetadataProvenance.EMPTY)
+    kraftMigrationZkWriter.handleDelta(image2, image3, delta3, (_, _, operation) => {
+      migrationState = operation.apply(migrationState)
+    })
+    assertEquals(3, zkClient.getVersionedAclsForResource(literalResource).acls.size)
+    assertEquals(0, zkClient.getVersionedAclsForResource(prefixedResource).acls.size)
+    assertEquals(3, zkClient.getVersionedAclsForResource(otherResource).acls.size)
+    assertEquals(0, errorLogs.size)
   }
 }
