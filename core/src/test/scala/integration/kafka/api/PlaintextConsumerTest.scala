@@ -28,7 +28,6 @@ import org.apache.kafka.common.errors.{InvalidGroupIdException, InvalidTopicExce
 import org.apache.kafka.common.header.Headers
 import org.apache.kafka.common.record.{CompressionType, TimestampType}
 import org.apache.kafka.common.serialization._
-import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.test.{MockConsumerInterceptor, MockProducerInterceptor}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Timeout
@@ -129,17 +128,6 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     assertEquals(numRecords, records.size)
   }
 
-  // Deprecated poll(timeout) not supported for consumer group protocol
-  @deprecated("poll(Duration) is the replacement", since = "2.0")
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersClassicGroupProtocolOnly"))
-  def testDeprecatedPollBlocksForAssignment(quorum: String, groupProtocol: String): Unit = {
-    val consumer = createConsumer()
-    consumer.subscribe(Set(topic).asJava)
-    consumer.poll(0)
-    assertEquals(Set(tp, tp2), consumer.assignment().asScala)
-  }
-
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
   @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
   def testHeadersSerializerDeserializer(quorum: String, groupProtocol: String): Unit = {
@@ -149,141 +137,6 @@ class PlaintextConsumerTest extends BaseConsumerTest {
 
     testHeadersSerializeDeserialize(extendedSerializer, extendedDeserializer)
   }
-
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
-  def testMaxPollRecords(quorum: String, groupProtocol: String): Unit = {
-    val maxPollRecords = 2
-    val numRecords = 10000
-
-    val producer = createProducer()
-    val startingTimestamp = System.currentTimeMillis()
-    sendRecords(producer, numRecords, tp, startingTimestamp = startingTimestamp)
-
-    this.consumerConfig.setProperty(ConsumerConfig.MAX_POLL_RECORDS_CONFIG, maxPollRecords.toString)
-    val consumer = createConsumer()
-    consumer.assign(List(tp).asJava)
-    consumeAndVerifyRecords(consumer, numRecords = numRecords, startingOffset = 0, maxPollRecords = maxPollRecords,
-      startingTimestamp = startingTimestamp)
-  }
-
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
-  def testMaxPollIntervalMs(quorum: String, groupProtocol: String): Unit = {
-    this.consumerConfig.setProperty(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, 1000.toString)
-    this.consumerConfig.setProperty(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, 500.toString)
-    this.consumerConfig.setProperty(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, 2000.toString)
-
-    val consumer = createConsumer()
-
-    val listener = new TestConsumerReassignmentListener()
-    consumer.subscribe(List(topic).asJava, listener)
-
-    // rebalance to get the initial assignment
-    awaitRebalance(consumer, listener)
-    assertEquals(1, listener.callsToAssigned)
-    assertEquals(0, listener.callsToRevoked)
-
-    // after we extend longer than max.poll a rebalance should be triggered
-    // NOTE we need to have a relatively much larger value than max.poll to let heartbeat expired for sure
-    Thread.sleep(3000)
-
-    awaitRebalance(consumer, listener)
-    assertEquals(2, listener.callsToAssigned)
-    assertEquals(1, listener.callsToRevoked)
-  }
-
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
-  def testMaxPollIntervalMsDelayInRevocation(quorum: String, groupProtocol: String): Unit = {
-    this.consumerConfig.setProperty(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, 5000.toString)
-    this.consumerConfig.setProperty(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, 500.toString)
-    this.consumerConfig.setProperty(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, 1000.toString)
-    this.consumerConfig.setProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, false.toString)
-
-    val consumer = createConsumer()
-    var commitCompleted = false
-    var committedPosition: Long = -1
-
-    val listener = new TestConsumerReassignmentListener {
-      override def onPartitionsLost(partitions: util.Collection[TopicPartition]): Unit = {}
-      override def onPartitionsRevoked(partitions: util.Collection[TopicPartition]): Unit = {
-        if (!partitions.isEmpty && partitions.contains(tp)) {
-          // on the second rebalance (after we have joined the group initially), sleep longer
-          // than session timeout and then try a commit. We should still be in the group,
-          // so the commit should succeed
-          Utils.sleep(1500)
-          committedPosition = consumer.position(tp)
-          consumer.commitSync(Map(tp -> new OffsetAndMetadata(committedPosition)).asJava)
-          commitCompleted = true
-        }
-        super.onPartitionsRevoked(partitions)
-      }
-    }
-
-    consumer.subscribe(List(topic).asJava, listener)
-
-    // rebalance to get the initial assignment
-    awaitRebalance(consumer, listener)
-
-    // force a rebalance to trigger an invocation of the revocation callback while in the group
-    consumer.subscribe(List("otherTopic").asJava, listener)
-    awaitRebalance(consumer, listener)
-
-    assertEquals(0, committedPosition)
-    assertTrue(commitCompleted)
-  }
-
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
-  def testMaxPollIntervalMsDelayInAssignment(quorum: String, groupProtocol: String): Unit = {
-    this.consumerConfig.setProperty(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, 5000.toString)
-    this.consumerConfig.setProperty(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, 500.toString)
-    this.consumerConfig.setProperty(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, 1000.toString)
-    this.consumerConfig.setProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, false.toString)
-
-    val consumer = createConsumer()
-    val listener = new TestConsumerReassignmentListener {
-      override def onPartitionsAssigned(partitions: util.Collection[TopicPartition]): Unit = {
-        // sleep longer than the session timeout, we should still be in the group after invocation
-        Utils.sleep(1500)
-        super.onPartitionsAssigned(partitions)
-      }
-    }
-    consumer.subscribe(List(topic).asJava, listener)
-
-    // rebalance to get the initial assignment
-    awaitRebalance(consumer, listener)
-
-    // We should still be in the group after this invocation
-    ensureNoRebalance(consumer, listener)
-  }
-
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
-  def testMaxPollIntervalMsShorterThanPollTimeout(quorum: String, groupProtocol: String): Unit = {
-    this.consumerConfig.setProperty(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, 1000.toString)
-    this.consumerConfig.setProperty(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, 500.toString)
-
-    val consumer = createConsumer()
-    val listener = new TestConsumerReassignmentListener
-    consumer.subscribe(List(topic).asJava, listener)
-
-    // rebalance to get the initial assignment
-    awaitRebalance(consumer, listener)
-
-    val callsToAssignedAfterFirstRebalance = listener.callsToAssigned
-
-    consumer.poll(Duration.ofMillis(2000))
-
-    // If the poll poll above times out, it would trigger a rebalance.
-    // Leave some time for the rebalance to happen and check for the rebalance event.
-    consumer.poll(Duration.ofMillis(500))
-    consumer.poll(Duration.ofMillis(500))
-
-    assertEquals(callsToAssignedAfterFirstRebalance, listener.callsToAssigned)
-  }
-
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
   @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
@@ -1221,53 +1074,6 @@ class PlaintextConsumerTest extends BaseConsumerTest {
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
   @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
-  def testPerPartitionLeadWithMaxPollRecords(quorum: String, groupProtocol: String): Unit = {
-    val numMessages = 1000
-    val maxPollRecords = 10
-    val producer = createProducer()
-    sendRecords(producer, numMessages, tp)
-
-    consumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, "testPerPartitionLeadWithMaxPollRecords")
-    consumerConfig.setProperty(ConsumerConfig.CLIENT_ID_CONFIG, "testPerPartitionLeadWithMaxPollRecords")
-    consumerConfig.setProperty(ConsumerConfig.MAX_POLL_RECORDS_CONFIG, maxPollRecords.toString)
-    val consumer = createConsumer()
-    consumer.assign(List(tp).asJava)
-    awaitNonEmptyRecords(consumer, tp)
-
-    val tags = new util.HashMap[String, String]()
-    tags.put("client-id", "testPerPartitionLeadWithMaxPollRecords")
-    tags.put("topic", tp.topic())
-    tags.put("partition", String.valueOf(tp.partition()))
-    val lead = consumer.metrics.get(new MetricName("records-lead", "consumer-fetch-manager-metrics", "", tags))
-    assertEquals(maxPollRecords, lead.metricValue().asInstanceOf[Double], s"The lead should be $maxPollRecords")
-  }
-
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
-  def testPerPartitionLagWithMaxPollRecords(quorum: String, groupProtocol: String): Unit = {
-    val numMessages = 1000
-    val maxPollRecords = 10
-    val producer = createProducer()
-    sendRecords(producer, numMessages, tp)
-
-    consumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, "testPerPartitionLagWithMaxPollRecords")
-    consumerConfig.setProperty(ConsumerConfig.CLIENT_ID_CONFIG, "testPerPartitionLagWithMaxPollRecords")
-    consumerConfig.setProperty(ConsumerConfig.MAX_POLL_RECORDS_CONFIG, maxPollRecords.toString)
-    val consumer = createConsumer()
-    consumer.assign(List(tp).asJava)
-    val records = awaitNonEmptyRecords(consumer, tp)
-
-    val tags = new util.HashMap[String, String]()
-    tags.put("client-id", "testPerPartitionLagWithMaxPollRecords")
-    tags.put("topic", tp.topic())
-    tags.put("partition", String.valueOf(tp.partition()))
-    val lag = consumer.metrics.get(new MetricName("records-lag", "consumer-fetch-manager-metrics", "", tags))
-
-    assertEquals(numMessages - records.count, lag.metricValue.asInstanceOf[Double], epsilon, s"The lag should be ${numMessages - records.count}")
-  }
-
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
   def testQuotaMetricsNotCreatedIfNoQuotasConfigured(quorum: String, groupProtocol: String): Unit = {
     val numRecords = 1000
     val producer = createProducer()
@@ -1340,15 +1146,6 @@ class PlaintextConsumerTest extends BaseConsumerTest {
                                                             rebalanceListener: ConsumerRebalanceListener): Unit = {
     consumer.subscribe(topicsToSubscribe.asJava, rebalanceListener)
     awaitAssignment(consumer, expectedAssignment)
-  }
-
-  private def awaitNonEmptyRecords[K, V](consumer: Consumer[K, V], partition: TopicPartition): ConsumerRecords[K, V] = {
-    TestUtils.pollRecordsUntilTrue(consumer, (polledRecords: ConsumerRecords[K, V]) => {
-      if (polledRecords.records(partition).asScala.nonEmpty)
-        return polledRecords
-      false
-    }, s"Consumer did not consume any messages for partition $partition before timeout.")
-    throw new IllegalStateException("Should have timed out before reaching here")
   }
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)

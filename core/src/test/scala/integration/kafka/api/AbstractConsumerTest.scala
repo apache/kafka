@@ -89,6 +89,15 @@ abstract class AbstractConsumerTest extends BaseRequestTest {
         s"The current assignment is ${consumer.assignment()}")
   }
 
+  def awaitNonEmptyRecords[K, V](consumer: Consumer[K, V], partition: TopicPartition): ConsumerRecords[K, V] = {
+    TestUtils.pollRecordsUntilTrue(consumer, (polledRecords: ConsumerRecords[K, V]) => {
+      if (polledRecords.records(partition).asScala.nonEmpty)
+        return polledRecords
+      false
+    }, s"Consumer did not consume any messages for partition $partition before timeout.")
+    throw new IllegalStateException("Should have timed out before reaching here")
+  }
+
   /**
    * Creates 'consumerCount' consumers and consumer pollers, one per consumer; subscribes consumers to
    * 'topicsToSubscribe' topics, waits until consumers get topics assignment.
