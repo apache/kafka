@@ -552,14 +552,14 @@ public class HeartbeatRequestManager implements RequestManager {
             // InstanceId - only sent if has changed since the last heartbeat
             // Always send when leaving the group as a static member
             membershipManager.groupInstanceId().ifPresent(groupInstanceId -> {
-                if (sendAllFields || !groupInstanceId.equals(sentFields.instanceId) || membershipManager.memberEpoch() == ConsumerGroupHeartbeatRequest.LEAVE_GROUP_STATIC_MEMBER_EPOCH) {
+                if (!groupInstanceId.equals(sentFields.instanceId) || membershipManager.memberEpoch() == ConsumerGroupHeartbeatRequest.LEAVE_GROUP_STATIC_MEMBER_EPOCH) {
                     data.setInstanceId(groupInstanceId);
                     sentFields.instanceId = groupInstanceId;
                 }
             });
 
             // RebalanceTimeoutMs - only sent if has changed since the last heartbeat
-            if (sendAllFields || sentFields.rebalanceTimeoutMs != rebalanceTimeoutMs) {
+            if (sentFields.rebalanceTimeoutMs != rebalanceTimeoutMs) {
                 data.setRebalanceTimeoutMs(rebalanceTimeoutMs);
                 sentFields.rebalanceTimeoutMs = rebalanceTimeoutMs;
             }
@@ -567,7 +567,7 @@ public class HeartbeatRequestManager implements RequestManager {
             if (!this.subscriptions.hasPatternSubscription()) {
                 // SubscribedTopicNames - only sent if has changed since the last heartbeat
                 TreeSet<String> subscribedTopicNames = new TreeSet<>(this.subscriptions.subscription());
-                if (sendAllFields || !subscribedTopicNames.equals(sentFields.subscribedTopicNames)) {
+                if (!subscribedTopicNames.equals(sentFields.subscribedTopicNames)) {
                     data.setSubscribedTopicNames(new ArrayList<>(this.subscriptions.subscription()));
                     sentFields.subscribedTopicNames = subscribedTopicNames;
                 }
@@ -578,7 +578,7 @@ public class HeartbeatRequestManager implements RequestManager {
 
             // ServerAssignor - only sent if has changed since the last heartbeat
             this.membershipManager.serverAssignor().ifPresent(serverAssignor -> {
-                if (sendAllFields || !serverAssignor.equals(sentFields.serverAssignor)) {
+                if (!serverAssignor.equals(sentFields.serverAssignor)) {
                     data.setServerAssignor(serverAssignor);
                     sentFields.serverAssignor = serverAssignor;
                 }

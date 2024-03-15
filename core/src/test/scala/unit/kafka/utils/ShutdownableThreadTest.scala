@@ -20,7 +20,7 @@ import java.util.concurrent.{CountDownLatch, TimeUnit}
 import org.apache.kafka.common.internals.FatalExitError
 import org.apache.kafka.server.util.ShutdownableThread
 import org.junit.jupiter.api.{AfterEach, Test}
-import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
+import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
 
 class ShutdownableThreadTest {
 
@@ -51,4 +51,19 @@ class ShutdownableThreadTest {
     assertEquals(1, statusCodeOption.get)
   }
 
+  @Test
+  def testIsThreadStarted(): Unit = {
+    val latch = new CountDownLatch(1)
+    val thread = new ShutdownableThread("shutdownable-thread-test") {
+      override def doWork(): Unit = {
+        latch.countDown()
+      }
+    }
+    assertFalse(thread.isStarted)
+    thread.start()
+    latch.await()
+    assertTrue(thread.isStarted)
+
+    thread.shutdown()
+  }
 }

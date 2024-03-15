@@ -144,18 +144,12 @@ public class Assertions {
 
             assertEquals(expectedValue.memberEpoch(), actualValue.memberEpoch());
             assertEquals(expectedValue.previousMemberEpoch(), actualValue.previousMemberEpoch());
-            assertEquals(expectedValue.targetMemberEpoch(), actualValue.targetMemberEpoch());
-            assertEquals(expectedValue.error(), actualValue.error());
-            assertEquals(expectedValue.metadataVersion(), actualValue.metadataVersion());
-            assertEquals(expectedValue.metadataBytes(), actualValue.metadataBytes());
 
             // We transform those to Maps before comparing them.
             assertEquals(fromTopicPartitions(expectedValue.assignedPartitions()),
                 fromTopicPartitions(actualValue.assignedPartitions()));
             assertEquals(fromTopicPartitions(expectedValue.partitionsPendingRevocation()),
                 fromTopicPartitions(actualValue.partitionsPendingRevocation()));
-            assertEquals(fromTopicPartitions(expectedValue.partitionsPendingAssignment()),
-                fromTopicPartitions(actualValue.partitionsPendingAssignment()));
         } else if (actual.message() instanceof ConsumerGroupPartitionMetadataValue) {
             // The order of the racks stored in the PartitionMetadata of the ConsumerGroupPartitionMetadataValue
             // is not always guaranteed. Therefore, we need a special comparator.

@@ -128,12 +128,6 @@ public class LogSegment implements Closeable {
         this.created = time.milliseconds();
     }
 
-    // Visible for testing
-    public LogSegment(LogSegment segment) {
-        this(segment.log, segment.lazyOffsetIndex, segment.lazyTimeIndex, segment.txnIndex, segment.baseOffset,
-                segment.indexIntervalBytes, segment.rollJitterMs, segment.time);
-    }
-
     public OffsetIndex offsetIndex() throws IOException {
         return lazyOffsetIndex.get();
     }

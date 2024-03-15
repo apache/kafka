@@ -38,7 +38,8 @@ public enum UpgradeFromValues {
     UPGRADE_FROM_33("3.3"),
     UPGRADE_FROM_34("3.4"),
     UPGRADE_FROM_35("3.5"),
-    UPGRADE_FROM_36("3.6");
+    UPGRADE_FROM_36("3.6"),
+    UPGRADE_FROM_37("3.7");
 
     private final String value;
 
