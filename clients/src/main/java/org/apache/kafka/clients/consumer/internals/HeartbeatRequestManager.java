@@ -529,14 +529,8 @@ public class HeartbeatRequestManager implements RequestManager {
             // MemberEpoch - always sent
             data.setMemberEpoch(membershipManager.memberEpoch());
 
-            // InstanceId - only sent if has changed since the last heartbeat
-            // Always send when leaving the group as a static member
-            membershipManager.groupInstanceId().ifPresent(groupInstanceId -> {
-                if (!groupInstanceId.equals(sentFields.instanceId) || membershipManager.memberEpoch() == ConsumerGroupHeartbeatRequest.LEAVE_GROUP_STATIC_MEMBER_EPOCH) {
-                    data.setInstanceId(groupInstanceId);
-                    sentFields.instanceId = groupInstanceId;
-                }
-            });
+            // InstanceId - set if present
+            membershipManager.groupInstanceId().ifPresent(data::setInstanceId);
 
             // RebalanceTimeoutMs - only sent if has changed since the last heartbeat
             if (sentFields.rebalanceTimeoutMs != rebalanceTimeoutMs) {
@@ -593,7 +587,6 @@ public class HeartbeatRequestManager implements RequestManager {
 
         // Fields of ConsumerHeartbeatRequest sent in the most recent request
         static class SentFields {
-            private String instanceId = null;
             private int rebalanceTimeoutMs = -1;
             private TreeSet<String> subscribedTopicNames = null;
             private String serverAssignor = null;
@@ -602,7 +595,6 @@ public class HeartbeatRequestManager implements RequestManager {
             SentFields() {}
 
             void reset() {
-                instanceId = null;
                 rebalanceTimeoutMs = -1;
                 subscribedTopicNames = null;
                 serverAssignor = null;
