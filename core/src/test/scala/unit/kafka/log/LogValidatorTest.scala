@@ -173,8 +173,8 @@ class LogValidatorTest {
     assertEquals(now, validatedResults.maxTimestampMs, s"Max timestamp should be $now")
     assertFalse(validatedResults.messageSizeMaybeChanged, "Message size should not have been changed")
 
-    // we index from last offset in version 2 instead of base offset
-    val expectedMaxTimestampOffset = if (magic >= RecordBatch.MAGIC_VALUE_V2) 2 else 0
+    // If it's LOG_APPEND_TIME, the offset will be the first offset of the record
+    val expectedMaxTimestampOffset = 0
     assertEquals(expectedMaxTimestampOffset, validatedResults.recordOffsetOfMaxTimestampMs,
       s"The offset of max timestamp should be $expectedMaxTimestampOffset")
     verifyRecordValidationStats(validatedResults.recordValidationStats, numConvertedRecords = 0, records,
@@ -404,13 +404,7 @@ class LogValidatorTest {
     assertEquals(now + 1, validatingResults.maxTimestampMs,
       s"Max timestamp should be ${now + 1}")
 
-    val expectedRecordOffsetOfMaxTimestamp = if (magic >= RecordVersion.V2.value) {
-      // v2 records are always batched, even when not compressed.
-      // the record offset of max timestamp is the last offset of the batch
-      recordList.size - 1
-    } else {
-      1
-    }
+    val expectedRecordOffsetOfMaxTimestamp = 1
     assertEquals(expectedRecordOffsetOfMaxTimestamp, validatingResults.recordOffsetOfMaxTimestampMs,
       s"Offset of max timestamp should be 1")
 
