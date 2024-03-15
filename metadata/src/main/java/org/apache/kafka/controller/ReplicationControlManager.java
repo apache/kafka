@@ -1388,7 +1388,7 @@ public class ReplicationControlManager {
     }
 
     /**
-     * Create partition change records to kick out the replicas from any ISR or ELR.
+     * Create partition change records to remove replicas from any ISR or ELR for brokers doing unclean shutdown.
      *
      * @param brokerId      The broker id.
      * @param records       The record list to append to.
