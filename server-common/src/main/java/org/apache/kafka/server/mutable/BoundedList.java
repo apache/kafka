@@ -53,7 +53,7 @@ public class BoundedList<E> implements List<E> {
 
         if (underlying.size() > maxLength) {
             throw new BoundedListTooLongException("Cannot wrap list, because it is longer than " +
-                    "the maximum length " + maxLength);
+                "the maximum length " + maxLength);
         }
         this.maxLength = maxLength;
         this.underlying = underlying;
