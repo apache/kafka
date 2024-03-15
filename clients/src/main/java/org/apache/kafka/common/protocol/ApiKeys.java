@@ -126,6 +126,7 @@ public enum ApiKeys {
     ADD_RAFT_VOTER(ApiMessageType.ADD_RAFT_VOTER),
     REMOVE_RAFT_VOTER(ApiMessageType.REMOVE_RAFT_VOTER),
     UPDATE_RAFT_VOTER(ApiMessageType.UPDATE_RAFT_VOTER);
+    GET_REPLICA_LOG_INFO(ApiMessageType.GET_REPLICA_LOG_INFO);
 
     private static final Map<ApiMessageType.ListenerType, EnumSet<ApiKeys>> APIS_BY_LISTENER =
         new EnumMap<>(ApiMessageType.ListenerType.class);
