@@ -532,8 +532,10 @@ public class HeartbeatRequestManager implements RequestManager {
             // InstanceId - set if present
             membershipManager.groupInstanceId().ifPresent(data::setInstanceId);
 
+            boolean sendAllFields = membershipManager.state() == MemberState.JOINING;
+
             // RebalanceTimeoutMs - only sent if has changed since the last heartbeat
-            if (sentFields.rebalanceTimeoutMs != rebalanceTimeoutMs) {
+            if (sendAllFields || sentFields.rebalanceTimeoutMs != rebalanceTimeoutMs) {
                 data.setRebalanceTimeoutMs(rebalanceTimeoutMs);
                 sentFields.rebalanceTimeoutMs = rebalanceTimeoutMs;
             }
@@ -541,7 +543,7 @@ public class HeartbeatRequestManager implements RequestManager {
             if (!this.subscriptions.hasPatternSubscription()) {
                 // SubscribedTopicNames - only sent if has changed since the last heartbeat
                 TreeSet<String> subscribedTopicNames = new TreeSet<>(this.subscriptions.subscription());
-                if (!subscribedTopicNames.equals(sentFields.subscribedTopicNames)) {
+                if (sendAllFields || !subscribedTopicNames.equals(sentFields.subscribedTopicNames)) {
                     data.setSubscribedTopicNames(new ArrayList<>(this.subscriptions.subscription()));
                     sentFields.subscribedTopicNames = subscribedTopicNames;
                 }
@@ -552,7 +554,7 @@ public class HeartbeatRequestManager implements RequestManager {
 
             // ServerAssignor - only sent if has changed since the last heartbeat
             this.membershipManager.serverAssignor().ifPresent(serverAssignor -> {
-                if (!serverAssignor.equals(sentFields.serverAssignor)) {
+                if (sendAllFields || !serverAssignor.equals(sentFields.serverAssignor)) {
                     data.setServerAssignor(serverAssignor);
                     sentFields.serverAssignor = serverAssignor;
                 }

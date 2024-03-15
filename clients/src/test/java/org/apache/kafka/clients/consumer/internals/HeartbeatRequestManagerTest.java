@@ -80,6 +80,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+
 public class HeartbeatRequestManagerTest {
     private long retryBackoffMs = DEFAULT_RETRY_BACKOFF_MS;
     private int heartbeatIntervalMs = DEFAULT_HEARTBEAT_INTERVAL_MS;
@@ -428,9 +429,22 @@ public class HeartbeatRequestManagerTest {
         assertEquals(memberId, data.memberId());
         assertEquals(0, data.memberEpoch());
         assertNull(data.instanceId());
-        assertEquals(-1, data.rebalanceTimeoutMs());
+        assertEquals(DEFAULT_MAX_POLL_INTERVAL_MS, data.rebalanceTimeoutMs());
         assertEquals(Collections.singletonList(topic), data.subscribedTopicNames());
-        assertNull(data.serverAssignor());
+        assertEquals(ConsumerTestBuilder.DEFAULT_REMOTE_ASSIGNOR, data.serverAssignor());
+        assertNull(data.topicPartitions());
+        membershipManager.onHeartbeatRequestSent();
+        assertEquals(MemberState.JOINING, membershipManager.state());
+
+        membershipManager.transitionToFenced();
+        data = heartbeatState.buildRequestData();
+        assertEquals(ConsumerTestBuilder.DEFAULT_GROUP_ID, data.groupId());
+        assertEquals(memberId, data.memberId());
+        assertEquals(0, data.memberEpoch());
+        assertNull(data.instanceId());
+        assertEquals(DEFAULT_MAX_POLL_INTERVAL_MS, data.rebalanceTimeoutMs());
+        assertEquals(Collections.singletonList(topic), data.subscribedTopicNames());
+        assertEquals(ConsumerTestBuilder.DEFAULT_REMOTE_ASSIGNOR, data.serverAssignor());
         assertNull(data.topicPartitions());
         membershipManager.onHeartbeatRequestSent();
         assertEquals(MemberState.JOINING, membershipManager.state());
