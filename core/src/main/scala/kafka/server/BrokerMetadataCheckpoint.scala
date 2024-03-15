@@ -220,6 +220,7 @@ object BrokerMetadataCheckpoint extends Logging {
 class BrokerMetadataCheckpoint(val file: File) extends Logging {
   private val lock = new Object()
 
+  @throws(classOf[IOException])
   def write(properties: Properties): Unit = {
     lock synchronized {
       try {
