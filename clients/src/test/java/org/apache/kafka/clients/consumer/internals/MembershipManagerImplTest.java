@@ -565,6 +565,58 @@ public class MembershipManagerImplTest {
         assertEquals(toTopicIdPartitionMap(assignment1), membershipManager.currentAssignment().partitions);
     }
 
+    /**
+     * This is the case where we receive a new assignment while reconciling an existing one. The intermediate assignment
+     * is not applied, and a new assignment containing the same partitions is received and reconciled. In all assignments,
+     * one topic is not resolvable.
+     *
+     * We need to make sure that the last assignment is acked and applied, even though the set of partitions does not change.
+     * In this case, no rebalance listeners are run.
+     */
+    @Test
+    public void testSameAssignmentReconciledAgainWithMissingTopic() {
+        MembershipManagerImpl membershipManager = createMemberInStableState();
+        Uuid topic1 = Uuid.randomUuid();
+        Uuid topic2 = Uuid.randomUuid();
+        final Assignment assignment1 = new ConsumerGroupHeartbeatResponseData.Assignment()
+            .setTopicPartitions(Arrays.asList(
+                new TopicPartitions().setTopicId(topic1).setPartitions(Collections.singletonList(0)),
+                new TopicPartitions().setTopicId(topic2).setPartitions(Collections.singletonList(0))
+            ));
+        final Assignment assignment2 = new ConsumerGroupHeartbeatResponseData.Assignment()
+            .setTopicPartitions(Arrays.asList(
+                new TopicPartitions().setTopicId(topic1).setPartitions(Arrays.asList(0, 1)),
+                new TopicPartitions().setTopicId(topic2).setPartitions(Collections.singletonList(0))
+            ));
+        when(metadata.topicNames()).thenReturn(Collections.singletonMap(topic1, "topic1"));
+
+        // Receive assignment - full reconciliation triggered
+        // stay in RECONCILING state, since an unresolved topic is assigned
+        membershipManager.onHeartbeatSuccess(createConsumerGroupHeartbeatResponse(assignment1).data());
+        assertEquals(MemberState.RECONCILING, membershipManager.state());
+        membershipManager.poll(time.milliseconds());
+        verifyReconciliationTriggeredAndCompleted(membershipManager,
+            Collections.singletonList(new TopicIdPartition(topic1, new TopicPartition("topic1", 0)))
+        );
+        membershipManager.onHeartbeatRequestSent();
+        assertEquals(MemberState.RECONCILING, membershipManager.state());
+        clearInvocations(membershipManager);
+
+        // Receive extended assignment - assignment received but no reconciliation triggered
+        membershipManager.onHeartbeatSuccess(createConsumerGroupHeartbeatResponse(assignment2).data());
+        assertEquals(MemberState.RECONCILING, membershipManager.state());
+        verifyReconciliationNotTriggered(membershipManager);
+
+        // Receive original assignment again - full reconciliation not triggered but assignment is acked again
+        membershipManager.onHeartbeatSuccess(createConsumerGroupHeartbeatResponse(assignment1).data());
+        assertEquals(MemberState.RECONCILING, membershipManager.state());
+        membershipManager.poll(time.milliseconds());
+        assertEquals(MemberState.ACKNOWLEDGING, membershipManager.state());
+        verifyReconciliationNotTriggered(membershipManager);
+        assertEquals(Collections.singletonMap(topic1, mkSortedSet(0)), membershipManager.currentAssignment().partitions);
+        assertEquals(mkSet(topic2), membershipManager.topicsAwaitingReconciliation());
+    }
+
     private Map<Uuid, SortedSet<Integer>> toTopicIdPartitionMap(final Assignment assignment) {
         Map<Uuid, SortedSet<Integer>> result = new HashMap<>();
         for (TopicPartitions topicPartitions : assignment.topicPartitions()) {

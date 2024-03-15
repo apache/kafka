@@ -87,10 +87,6 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 public class HeartbeatRequestManagerTest {
-    private final long retryBackoffMs = DEFAULT_RETRY_BACKOFF_MS;
-    private final int heartbeatIntervalMs = DEFAULT_HEARTBEAT_INTERVAL_MS;
-    private final int maxPollIntervalMs = DEFAULT_MAX_POLL_INTERVAL_MS;
-    private final long retryBackoffMaxMs = DEFAULT_RETRY_BACKOFF_MAX_MS;
     private static final String DEFAULT_GROUP_ID = "groupId";
     private static final String CONSUMER_COORDINATOR_METRICS = "consumer-coordinator-metrics";
 
@@ -336,7 +332,7 @@ public class HeartbeatRequestManagerTest {
         BackgroundEventHandler backgroundEventHandler = mock(BackgroundEventHandler.class);
         SubscriptionState subscriptionState = mock(SubscriptionState.class);
         HeartbeatRequestState requestState = mock(HeartbeatRequestState.class);
-        HeartbeatState heartbeatState = new HeartbeatState(subscriptionState, membershipManager, maxPollIntervalMs);
+        HeartbeatState heartbeatState = new HeartbeatState(subscriptionState, membershipManager, DEFAULT_MAX_POLL_INTERVAL_MS);
 
         HeartbeatRequestManager heartbeatRequestManager = createHeartbeatRequestManager(
             coordinatorRequestManager,
@@ -373,7 +369,6 @@ public class HeartbeatRequestManagerTest {
 
         ConsumerGroupHeartbeatRequest heartbeatRequest3 = getHeartbeatRequest(heartbeatRequestManager, version);
         assertEquals(Collections.singletonList(expectedTopicPartitions), heartbeatRequest3.data().topicPartitions());
-
     }
 
     private ConsumerGroupHeartbeatRequest getHeartbeatRequest(HeartbeatRequestManager heartbeatRequestManager, final short version) {
@@ -525,9 +520,9 @@ public class HeartbeatRequestManagerTest {
         heartbeatRequestState = spy(new HeartbeatRequestManager.HeartbeatRequestState(
                 new LogContext(),
                 time,
-                heartbeatIntervalMs,
-                retryBackoffMs,
-                retryBackoffMaxMs,
+                DEFAULT_HEARTBEAT_INTERVAL_MS,
+                DEFAULT_RETRY_BACKOFF_MS,
+                DEFAULT_RETRY_BACKOFF_MAX_MS,
                 0));
         backgroundEventHandler = mock(BackgroundEventHandler.class);
 
@@ -542,8 +537,8 @@ public class HeartbeatRequestManagerTest {
 
         // On poll timer expiration, the member should send a last heartbeat to leave the group
         // and notify the membership manager
-        time.sleep(maxPollIntervalMs);
-        assertHeartbeat(heartbeatRequestManager, heartbeatIntervalMs);
+        time.sleep(DEFAULT_MAX_POLL_INTERVAL_MS);
+        assertHeartbeat(heartbeatRequestManager, DEFAULT_HEARTBEAT_INTERVAL_MS);
         verify(membershipManager).transitionToSendingLeaveGroup(true);
         verify(heartbeatState).reset();
         verify(heartbeatRequestState).reset();
@@ -556,7 +551,7 @@ public class HeartbeatRequestManagerTest {
         assertTrue(pollTimer.notExpired());
         verify(membershipManager).maybeRejoinStaleMember();
         when(membershipManager.shouldSkipHeartbeat()).thenReturn(false);
-        assertHeartbeat(heartbeatRequestManager, heartbeatIntervalMs);
+        assertHeartbeat(heartbeatRequestManager, DEFAULT_HEARTBEAT_INTERVAL_MS);
     }
 
     /**
@@ -571,7 +566,7 @@ public class HeartbeatRequestManagerTest {
         when(membershipManager.shouldSkipHeartbeat()).thenReturn(false);
         when(membershipManager.isLeavingGroup()).thenReturn(true);
 
-        time.sleep(maxPollIntervalMs);
+        time.sleep(DEFAULT_MAX_POLL_INTERVAL_MS);
         NetworkClientDelegate.PollResult result = heartbeatRequestManager.poll(time.milliseconds());
 
         // No transition to leave due to stale member should be triggered, because the member is
@@ -594,8 +589,8 @@ public class HeartbeatRequestManagerTest {
             new LogContext(),
             time,
             0, // This initial interval should be 0 to ensure heartbeat on the clock
-            retryBackoffMs,
-            retryBackoffMaxMs,
+            DEFAULT_RETRY_BACKOFF_MS,
+            DEFAULT_RETRY_BACKOFF_MAX_MS,
             0);
         backgroundEventHandler = mock(BackgroundEventHandler.class);
         heartbeatRequestManager = createHeartbeatRequestManager(
@@ -614,11 +609,11 @@ public class HeartbeatRequestManagerTest {
 
         // test poll
         assertHeartbeat(heartbeatRequestManager, 0);
-        time.sleep(heartbeatIntervalMs);
+        time.sleep(DEFAULT_HEARTBEAT_INTERVAL_MS);
         assertEquals(1.0, getMetric("heartbeat-total").metricValue());
-        assertEquals((double) TimeUnit.MILLISECONDS.toSeconds(heartbeatIntervalMs), getMetric("last-heartbeat-seconds-ago").metricValue());
+        assertEquals((double) TimeUnit.MILLISECONDS.toSeconds(DEFAULT_HEARTBEAT_INTERVAL_MS), getMetric("last-heartbeat-seconds-ago").metricValue());
 
-        assertHeartbeat(heartbeatRequestManager, heartbeatIntervalMs);
+        assertHeartbeat(heartbeatRequestManager, DEFAULT_HEARTBEAT_INTERVAL_MS);
         assertEquals(0.06d, (double) getMetric("heartbeat-rate").metricValue(), 0.005d);
         assertEquals(2.0, getMetric("heartbeat-total").metricValue());
 
@@ -747,10 +742,10 @@ public class HeartbeatRequestManagerTest {
         prop.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
         prop.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
 
-        prop.setProperty(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, String.valueOf(maxPollIntervalMs));
-        prop.setProperty(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG, String.valueOf(retryBackoffMs));
-        prop.setProperty(ConsumerConfig.RETRY_BACKOFF_MAX_MS_CONFIG, String.valueOf(retryBackoffMaxMs));
-        prop.setProperty(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, String.valueOf(heartbeatIntervalMs));
+        prop.setProperty(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, String.valueOf(DEFAULT_MAX_POLL_INTERVAL_MS));
+        prop.setProperty(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG, String.valueOf(DEFAULT_RETRY_BACKOFF_MS));
+        prop.setProperty(ConsumerConfig.RETRY_BACKOFF_MAX_MS_CONFIG, String.valueOf(DEFAULT_RETRY_BACKOFF_MAX_MS));
+        prop.setProperty(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, String.valueOf(DEFAULT_HEARTBEAT_INTERVAL_MS));
         return new ConsumerConfig(prop);
     }
 
@@ -765,7 +760,7 @@ public class HeartbeatRequestManagerTest {
             final HeartbeatRequestManager.HeartbeatRequestState heartbeatRequestState,
             final BackgroundEventHandler backgroundEventHandler) {
         LogContext logContext = new LogContext();
-        pollTimer = time.timer(maxPollIntervalMs);
+        pollTimer = time.timer(DEFAULT_MAX_POLL_INTERVAL_MS);
         return new HeartbeatRequestManager(
                 logContext,
                 pollTimer,

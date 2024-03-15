@@ -909,9 +909,8 @@ public class MembershipManagerImpl implements MembershipManager {
         SortedSet<TopicIdPartition> assignedTopicIdPartitions = findResolvableAssignmentAndTriggerMetadataUpdate();
         final LocalAssignment resolvedAssignment = new LocalAssignment(currentTargetAssignment.localEpoch, assignedTopicIdPartitions);
 
-        if (!currentAssignment.isNone() &&
-            resolvedAssignment.partitions.equals(currentAssignment.partitions)) {
-            log.debug("There are unresolved partitions, and the resolvable fragment of the  target assignment {} is equal to the current "
+        if (!currentAssignment.isNone() && resolvedAssignment.partitions.equals(currentAssignment.partitions)) {
+            log.debug("There are unresolved partitions, and the resolvable fragment of the target assignment {} is equal to the current "
                 + "assignment. Bumping the local epoch of the assignment and acknowledging the partially resolved assignment",
                 resolvedAssignment.partitions);
             currentAssignment = resolvedAssignment;
@@ -974,10 +973,11 @@ public class MembershipManagerImpl implements MembershipManager {
             }
 
             revokeAndAssign(resolvedAssignment, assignedTopicIdPartitions, revokedPartitions, addedPartitions);
-        }).whenComplete((__, error) -> {
+        }).exceptionally(error -> {
             if (error != null) {
                 log.error("Reconciliation failed.", error);
             }
+            return null;
         });
     }
 

@@ -254,7 +254,6 @@ public interface MembershipManager extends RequestManager {
         }
 
         Optional<LocalAssignment> updateWith(ConsumerGroupHeartbeatResponseData.Assignment assignment) {
-
             // Return if we have an assignment, and it is the same as current assignment; comparison without creating a new collection
             if (localEpoch != NONE_EPOCH) {
                 if (partitions.size() == assignment.topicPartitions().size() &&
