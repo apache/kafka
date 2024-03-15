@@ -28,6 +28,7 @@ import org.apache.kafka.common.utils.FixedOrderMap;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.errors.DeserializationExceptionHandler;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.CommitCallback;
@@ -55,8 +56,10 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.function.Supplier;
 
+import static org.apache.kafka.streams.processor.internals.RecordDeserializer.handleDeserializationFailure;
 import static org.apache.kafka.streams.processor.internals.StateManagerUtil.CHECKPOINT_FILE_NAME;
 import static org.apache.kafka.streams.processor.internals.StateManagerUtil.converterForStore;
+import static org.apache.kafka.streams.processor.internals.metrics.TaskMetrics.droppedRecordsSensor;
 
 /**
  * This class is responsible for the initialization, restoration, closing, flushing etc
@@ -80,6 +83,7 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
     private final Set<String> globalNonPersistentStoresTopics = new HashSet<>();
     private final FixedOrderMap<String, Optional<StateStore>> globalStores = new FixedOrderMap<>();
     private InternalProcessorContext globalProcessorContext;
+    private final DeserializationExceptionHandler deserializationExceptionHandler;
 
     public GlobalStateManagerImpl(final LogContext logContext,
                                   final Time time,
@@ -117,6 +121,7 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
             config.getLong(StreamsConfig.POLL_MS_CONFIG) + requestTimeoutMs
         );
         taskTimeoutMs = config.getLong(StreamsConfig.TASK_TIMEOUT_MS_CONFIG);
+        deserializationExceptionHandler = config.defaultDeserializationExceptionHandler();
     }
 
     @Override
@@ -298,13 +303,28 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
                             record.headers());
                     globalProcessorContext.setRecordContext(recordContext);
 
-                    if (record.key() != null) {
-                        source.process(new Record<>(
-                            reprocessFactory.keyDeserializer().deserialize(record.topic(), record.key()),
-                            reprocessFactory.valueDeserializer().deserialize(record.topic(), record.value()),
-                            record.timestamp(),
-                            record.headers()));
-                        restoreCount++;
+                    try {
+                        if (record.key() != null) {
+                            source.process(new Record<>(
+                                reprocessFactory.keyDeserializer().deserialize(record.topic(), record.key()),
+                                reprocessFactory.valueDeserializer().deserialize(record.topic(), record.value()),
+                                record.timestamp(),
+                                record.headers()));
+                            restoreCount++;
+                        }
+                    } catch (final Exception deserializationException) {
+                        handleDeserializationFailure(
+                            deserializationExceptionHandler,
+                            globalProcessorContext,
+                            deserializationException,
+                            record,
+                            log,
+                            droppedRecordsSensor(
+                                Thread.currentThread().getName(),
+                                globalProcessorContext.taskId().toString(),
+                                globalProcessorContext.metrics()
+                            )
+                        );
                     }
                 }
 
