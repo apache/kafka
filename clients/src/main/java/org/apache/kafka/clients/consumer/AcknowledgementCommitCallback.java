@@ -18,7 +18,9 @@ package org.apache.kafka.clients.consumer;
 
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicIdPartition;
+import org.apache.kafka.common.errors.AuthorizationException;
 import org.apache.kafka.common.errors.InterruptException;
+import org.apache.kafka.common.errors.InvalidRecordStateException;
 import org.apache.kafka.common.errors.WakeupException;
 
 import java.util.Map;
@@ -28,7 +30,7 @@ import java.util.Optional;
  * A callback interface that the user can implement to trigger custom actions when an acknowledge request completes.
  * The callback may be executed in any thread calling {@link ShareConsumer#poll(java.time.Duration)}.
  */
-public interface AcknowledgeCommitCallback {
+public interface AcknowledgementCommitCallback {
 
     /**
      * A callback method the user can implement to provide asynchronous handling of commit request completion.
@@ -37,12 +39,14 @@ public interface AcknowledgeCommitCallback {
      * @param results A map of the results for each topic-partition for which delivery was acknowledged.
      *                If the acknowledgement failed for a topic-partition, an exception is present.
      *
+     * @throws InvalidRecordStateException The record state is invalid. The acknowledgement of delivery
+     *             could not be completed.
      * @throws WakeupException if {@link KafkaShareConsumer#wakeup()} is called before or while this
      *             function is called
      * @throws InterruptException if the calling thread is interrupted before or while
      *             this function is called
-     * @throws KafkaException for any other unrecoverable errors (e.g. if offset metadata
-     *             is too large or if the committed offset is invalid).
+     * @throws AuthorizationException if not authorized to the topic of group
+     * @throws KafkaException for any other unrecoverable errors
      */
     void onComplete(Map<TopicIdPartition, Optional<KafkaException>> results);
 }

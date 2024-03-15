@@ -292,13 +292,13 @@ public class KafkaShareConsumer<K, V> implements ShareConsumer<K, V> {
     }
 
     /**
-     * Sets the acknowledge commit callback which can be used to handle acknowledgement completion.
+     * Sets the acknowledgement commit callback which can be used to handle acknowledgement completion.
      *
-     * @param callback The acknowledge commit callback
+     * @param callback The acknowledgement commit callback
      */
     @Override
-    public void setAcknowledgeCommitCallback(AcknowledgeCommitCallback callback) {
-        delegate.setAcknowledgeCommitCallback(callback);
+    public void setAcknowledgementCommitCallback(AcknowledgementCommitCallback callback) {
+        delegate.setAcknowledgementCommitCallback(callback);
     }
 
     /**

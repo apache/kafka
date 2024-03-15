@@ -41,6 +41,7 @@ import org.apache.kafka.common.errors.FeatureUpdateFailedException;
 import org.apache.kafka.common.errors.FencedInstanceIdException;
 import org.apache.kafka.common.errors.FencedLeaderEpochException;
 import org.apache.kafka.common.errors.FencedMemberEpochException;
+import org.apache.kafka.common.errors.FencedStateEpochException;
 import org.apache.kafka.common.errors.FetchSessionIdNotFoundException;
 import org.apache.kafka.common.errors.FetchSessionTopicIdException;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
@@ -398,7 +399,8 @@ public enum Errors {
     INVALID_REGISTRATION(119, "The controller has considered the broker registration to be invalid.", InvalidRegistrationException::new),
     INVALID_RECORD_STATE(120, "The record state is invalid. The acknowledgement of delivery could not be completed.", InvalidRecordStateException::new),
     SHARE_SESSION_NOT_FOUND(121, "The share session was not found.", ShareSessionNotFoundException::new),
-    INVALID_SHARE_SESSION_EPOCH(122, "The share session epoch is invalid.", InvalidShareSessionEpochException::new);
+    INVALID_SHARE_SESSION_EPOCH(122, "The share session epoch is invalid.", InvalidShareSessionEpochException::new),
+    FENCED_STATE_EPOCH(123, "The share coordinator rejected the request because the share-group state epoch did not match.", FencedStateEpochException::new);
 
 
     private static final Logger log = LoggerFactory.getLogger(Errors.class);

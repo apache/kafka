@@ -117,7 +117,7 @@ public class MockShareConsumer<K, V> implements ShareConsumer<K, V> {
     }
 
     @Override
-    public void setAcknowledgeCommitCallback(AcknowledgeCommitCallback callback) {
+    public void setAcknowledgementCommitCallback(AcknowledgementCommitCallback callback) {
     }
 
     public synchronized void setClientInstanceId(final Uuid clientInstanceId) {

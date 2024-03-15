@@ -41,8 +41,8 @@
           "about": "The partition index." },
         { "name": "AcknowledgementBatches", "type": "[]AcknowledgementBatch", "versions": "0+",
           "about": "Record batches to acknowledge.", "fields": [
-          { "name": "StartOffset", "type": "int64", "versions": "0+",
-            "about": "Start offset of batch of records to acknowledge."},
+          { "name": "BaseOffset", "type": "int64", "versions": "0+",
+            "about": "Base offset of batch of records to acknowledge."},
           { "name": "LastOffset", "type": "int64", "versions": "0+",
             "about": "Last offset (inclusive) of batch of records to acknowledge."},
           { "name": "GapOffsets", "type": "[]int64", "versions": "0+",

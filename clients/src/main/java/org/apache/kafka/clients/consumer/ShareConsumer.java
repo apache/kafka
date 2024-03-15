@@ -83,9 +83,9 @@ public interface ShareConsumer<K, V> extends Closeable {
     void commitAsync();
 
     /**
-     * @see KafkaShareConsumer#setAcknowledgeCommitCallback(AcknowledgeCommitCallback)
+     * @see KafkaShareConsumer#setAcknowledgementCommitCallback(AcknowledgementCommitCallback)
      */
-    void setAcknowledgeCommitCallback(AcknowledgeCommitCallback callback);
+    void setAcknowledgementCommitCallback(AcknowledgementCommitCallback callback);
 
     /**
      * See {@link KafkaShareConsumer#clientInstanceId(Duration)}}

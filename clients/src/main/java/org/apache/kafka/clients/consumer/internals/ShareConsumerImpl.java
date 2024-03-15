@@ -20,8 +20,8 @@ import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.ClientUtils;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.GroupRebalanceConfig;
-import org.apache.kafka.clients.consumer.AcknowledgeCommitCallback;
 import org.apache.kafka.clients.consumer.AcknowledgeType;
+import org.apache.kafka.clients.consumer.AcknowledgementCommitCallback;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
@@ -549,7 +549,7 @@ public class ShareConsumerImpl<K, V> implements ShareConsumer<K, V> {
      * {@inheritDoc}
      */
     @Override
-    public void setAcknowledgeCommitCallback(final AcknowledgeCommitCallback callback) {
+    public void setAcknowledgementCommitCallback(final AcknowledgementCommitCallback callback) {
         throw new UnsupportedOperationException();
     }
 

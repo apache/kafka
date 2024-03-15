@@ -149,14 +149,14 @@ public class Acknowledgements {
         if (acknowledgements.isEmpty()) return batches;
         acknowledgements.forEach((offset, acknowledgeType) -> {
             if (batches.isEmpty()) {
-                currentBatch.setStartOffset(offset);
+                currentBatch.setBaseOffset(offset);
                 currentBatch.setAcknowledgeType(acknowledgeType.id);
                 currentBatch.setLastOffset(offset);
             } else if (acknowledgeType.id == currentBatch.acknowledgeType()) {
                 currentBatch.setLastOffset(offset);
             } else {
                 batches.add(currentBatch);
-                currentBatch.setStartOffset(offset);
+                currentBatch.setBaseOffset(offset);
                 currentBatch.setAcknowledgeType(acknowledgeType.id);
                 currentBatch.setLastOffset(offset);
             }

@@ -1205,7 +1205,7 @@ public class RequestResponseTest {
                     .setGroupEpoch(0)
                     .setAssignmentEpoch(0)
                     .setAssignorName("range")
-                    .setMembers(new ArrayList<ConsumerGroupDescribeResponseData.Member>(0))
+                    .setMembers(new ArrayList<>(0))
             ))
             .setThrottleTimeMs(1000);
         return new ConsumerGroupDescribeResponse(data);
@@ -1443,7 +1443,7 @@ public class RequestResponseTest {
                         .setPartitions(singletonList(new ShareAcknowledgeRequestData.AcknowledgePartition()
                                 .setPartitionIndex(0)
                                 .setAcknowledgementBatches(singletonList(new ShareAcknowledgeRequestData.AcknowledgementBatch()
-                                        .setStartOffset(0)
+                                        .setBaseOffset(0)
                                         .setLastOffset(0)
                                         .setAcknowledgeType((byte) 0)))))));
         return new ShareAcknowledgeRequest.Builder(data).build(version);
