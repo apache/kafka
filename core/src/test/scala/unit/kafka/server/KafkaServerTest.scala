@@ -17,10 +17,11 @@
 
 package kafka.server
 
-import kafka.utils.TestUtils
+import kafka.utils.{CoreUtils, TestUtils}
 import org.apache.kafka.common.security.JaasUtils
 import org.junit.jupiter.api.Assertions.{assertEquals, assertNull, assertThrows, fail}
 import org.junit.jupiter.api.Test
+
 import java.util.Properties
 import java.net.{InetAddress, ServerSocket}
 import org.apache.kafka.server.common.MetadataVersion
@@ -45,26 +46,18 @@ class KafkaServerTest extends QuorumTestHarness {
   @Test
   def testListenerPortAlreadyInUse(): Unit = {
     val serverSocket = new ServerSocket(0, 0, InetAddress.getLoopbackAddress)
-    val thread = new Thread {
-      override def run : Unit = {
-        while (true) {
-          serverSocket.accept()
-        }
-      }
-    }
-    thread.start()
 
-    var kafkaServer : KafkaServer = null
+    var kafkaServer : Option[KafkaServer] = None
     try {
-      val port = serverSocket.getLocalPort
-
+      TestUtils.waitUntilTrue(() => serverSocket.isBound, "Server socket failed to bind.")
       // start a server with listener on the port already bound
-      assertThrows(classOf[RuntimeException], () => kafkaServer = createServerWithListenerOnPort(port))
+      assertThrows(classOf[RuntimeException],
+        () => kafkaServer = Option(createServerWithListenerOnPort(serverSocket.getLocalPort)),
+        "Exepected RuntimeException because of KafkaServer startup failure due do address already in use"
+      )
     } finally {
-      serverSocket.close()
-      if (kafkaServer != null) {
-        kafkaServer.shutdown()
-      }
+      CoreUtils.swallow(serverSocket.close(), this);
+      TestUtils.shutdownServers(kafkaServer.toList)
     }
   }
 
