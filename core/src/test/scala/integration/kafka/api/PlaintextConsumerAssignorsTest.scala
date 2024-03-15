@@ -10,9 +10,8 @@
   * an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
   * specific language governing permissions and limitations under the License.
   */
-package integration.kafka.api
+package kafka.api
 
-import kafka.api.{AbstractConsumerTest, BaseConsumerTest}
 import kafka.utils.{TestInfoUtils, TestUtils}
 import org.apache.kafka.clients.consumer._
 import org.apache.kafka.common.TopicPartition
