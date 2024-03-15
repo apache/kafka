@@ -1483,6 +1483,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
      * @param timeout           The write operation timeout.
      * @param op                The write operation.
      * @param apiVersion        The Version of the Txn_Offset_Commit request
+     *
      * @return A future that will be completed with the result of the write operation
      * when the operation is completed or an exception if the write operation failed.
      *

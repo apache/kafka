@@ -978,12 +978,13 @@ class ReplicaManager(val config: KafkaConfig,
 
   /**
    *
-   * @param topicPartition  the topic partition to maybe verify
-   * @param transactionalId the transactional id for the transaction
-   * @param producerId      the producer id for the producer writing to the transaction
-   * @param producerEpoch   the epoch of the producer writing to the transaction
-   * @param baseSequence    the base sequence of the first record in the batch we are trying to append
-   * @param callback        the method to execute once the verification is either completed or returns an error
+   * @param topicPartition      the topic partition to maybe verify
+   * @param transactionalId     the transactional id for the transaction
+   * @param producerId          the producer id for the producer writing to the transaction
+   * @param producerEpoch       the epoch of the producer writing to the transaction
+   * @param baseSequence        the base sequence of the first record in the batch we are trying to append
+   * @param callback            the method to execute once the verification is either completed or returns an error
+   * @param partitionOperation  the enum value which determines whether the client is ready to handle the new Abortable Txn Errors
    *
    * When the verification returns, the callback will be supplied the error if it exists or Errors.NONE.
    * If the verification guard exists, it will also be supplied. Otherwise the SENTINEL verification guard will be returned.
