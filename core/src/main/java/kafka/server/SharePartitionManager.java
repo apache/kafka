@@ -769,6 +769,10 @@ public class SharePartitionManager {
             this.error = error;
         }
 
+        public Errors error() {
+            return error;
+        }
+
         @Override
         int responseSize(LinkedHashMap<TopicIdPartition, ShareFetchResponseData.PartitionData> updates,
                             short version) {

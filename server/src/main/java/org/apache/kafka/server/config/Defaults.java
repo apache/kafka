@@ -172,6 +172,8 @@ public class Defaults {
     /** Share Group Configs **/
     public static final boolean SHARE_GROUP_ENABLE = false;
     public static final short SHARE_GROUP_RECORD_LOCK_PARTITION_LIMIT = 200;
+    public static final short SHARE_GROUP_MAX_GROUPS = 10;
+    public static final short SHARE_GROUP_MAX_SIZE = 200;
 
     /** ********* Offset management configuration *********/
     public static final int OFFSET_METADATA_MAX_SIZE = OffsetConfig.DEFAULT_MAX_METADATA_SIZE;

@@ -19,6 +19,7 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.message.ShareAcknowledgeResponseData;
 import org.apache.kafka.common.message.ShareFetchRequestData;
 import org.apache.kafka.common.message.ShareFetchResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
@@ -133,6 +134,20 @@ public class ShareFetchRequest extends AbstractRequest {
                 .setErrorCode(error.code()));
     }
 
+    public AbstractResponse getEmptyResponse(int throttleTimeMs) {
+        return new ShareFetchResponse(new ShareFetchResponseData()
+                .setThrottleTimeMs(throttleTimeMs)
+                .setErrorCode(Errors.NONE.code())
+                .setResponses(new ArrayList<>()));
+    }
+
+    public AbstractResponse getErrorAcknowledgeResponse(int throttleTimeMs, Throwable e) {
+        Errors error = Errors.forException(e);
+        return new ShareAcknowledgeResponse(new ShareAcknowledgeResponseData()
+                .setThrottleTimeMs(throttleTimeMs)
+                .setErrorCode(error.code()));
+    }
+
     public static ShareFetchRequest parse(ByteBuffer buffer, short version) {
         return new ShareFetchRequest(
             new ShareFetchRequestData(new ByteBufferAccessor(buffer), version),
@@ -209,15 +224,16 @@ public class ShareFetchRequest extends AbstractRequest {
                     final LinkedHashMap<TopicIdPartition, ShareFetchRequest.SharePartitionData> shareFetchDataTmp = new LinkedHashMap<>();
                     data.topics().forEach(shareFetchTopic -> {
                         String name = topicNames.get(shareFetchTopic.topicId());
-                        shareFetchTopic.partitions().forEach(shareFetchPartition ->
+                        shareFetchTopic.partitions().forEach(shareFetchPartition -> {
                                 // Topic name may be null here if the topic name was unable to be resolved using the topicNames map.
                                 shareFetchDataTmp.put(new TopicIdPartition(shareFetchTopic.topicId(), new TopicPartition(name, shareFetchPartition.partitionIndex())),
-                                        new ShareFetchRequest.SharePartitionData(
-                                                shareFetchTopic.topicId(),
-                                                shareFetchPartition.partitionMaxBytes(),
-                                                optionalEpoch(shareFetchPartition.currentLeaderEpoch())
-                                        )
-                                )
+                                    new ShareFetchRequest.SharePartitionData(
+                                        shareFetchTopic.topicId(),
+                                        shareFetchPartition.partitionMaxBytes(),
+                                        optionalEpoch(shareFetchPartition.currentLeaderEpoch())
+                                    )
+                                );
+                            }
                         );
                     });
                     shareFetchData = shareFetchDataTmp;

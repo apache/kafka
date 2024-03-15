@@ -939,6 +939,22 @@ public class SharePartition {
             this.acknowledgeType = Objects.requireNonNull(acknowledgeType);
         }
 
+        public long baseOffset() {
+            return baseOffset;
+        }
+
+        public long lastOffset() {
+            return lastOffset;
+        }
+
+        public List<Long> gapOffsets() {
+            return gapOffsets;
+        }
+
+        public AcknowledgeType acknowledgeType() {
+            return acknowledgeType;
+        }
+
         @Override
         public String toString() {
             return "AcknowledgementBatch(" +
