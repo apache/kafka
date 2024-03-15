@@ -40,7 +40,7 @@ import java.util.stream.Collectors;
 import static org.apache.kafka.common.requests.ProduceResponse.INVALID_OFFSET;
 
 public class ProduceRequest extends AbstractRequest {
-    static final short transactionV2MinimalVersion = 12;
+    private static final short TRANSACTION_V2_MINIMAL_VERSION = 12;
 
     public static Builder forMagic(byte magic, ProduceRequestData data) {
         // Message format upgrades correspond with a bump in the produce request version. Older
@@ -220,7 +220,7 @@ public class ProduceRequest extends AbstractRequest {
     }
 
     public boolean isTransactionV2Requested() {
-        return version() >= transactionV2MinimalVersion;
+        return version() >= TRANSACTION_V2_MINIMAL_VERSION;
     }
 
     public void clearPartitionRecords() {
@@ -263,7 +263,7 @@ public class ProduceRequest extends AbstractRequest {
     }
 
     public static boolean isTransactionV2Requested(short version) {
-        return version >= transactionV2MinimalVersion;
+        return version >= TRANSACTION_V2_MINIMAL_VERSION;
     }
 
     public static byte requiredMagicForVersion(short produceRequestVersion) {

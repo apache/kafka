@@ -42,7 +42,7 @@ public class TxnOffsetCommitRequest extends AbstractRequest {
 
     private final TxnOffsetCommitRequestData data;
 
-    static final short transactionV2MinimalVersion = 5;
+    private static final short TRANSACTION_V2_MINIMAL_VERSION = 5;
 
     public static class Builder extends AbstractRequest.Builder<TxnOffsetCommitRequest> {
 
@@ -159,7 +159,7 @@ public class TxnOffsetCommitRequest extends AbstractRequest {
     }
 
     public boolean isTransactionV2Requested() {
-        return version() >= transactionV2MinimalVersion;
+        return version() >= TRANSACTION_V2_MINIMAL_VERSION;
     }
 
     static List<TxnOffsetCommitResponseTopic> getErrorResponseTopics(List<TxnOffsetCommitRequestTopic> requestTopics,
@@ -220,7 +220,7 @@ public class TxnOffsetCommitRequest extends AbstractRequest {
     }
 
     public static boolean isTransactionV2Requested(short version) {
-        return version >= transactionV2MinimalVersion;
+        return version >= TRANSACTION_V2_MINIMAL_VERSION;
     }
 
     public static class CommittedOffset {

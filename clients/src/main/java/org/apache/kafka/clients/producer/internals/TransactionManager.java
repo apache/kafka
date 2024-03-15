@@ -62,6 +62,7 @@ import org.apache.kafka.common.requests.FindCoordinatorRequest.CoordinatorType;
 import org.apache.kafka.common.requests.FindCoordinatorResponse;
 import org.apache.kafka.common.requests.InitProducerIdRequest;
 import org.apache.kafka.common.requests.InitProducerIdResponse;
+import org.apache.kafka.common.requests.ProduceRequest;
 import org.apache.kafka.common.requests.ProduceResponse;
 import org.apache.kafka.common.requests.TransactionResult;
 import org.apache.kafka.common.requests.TxnOffsetCommitRequest;
@@ -186,6 +187,7 @@ public class TransactionManager {
     private Node transactionCoordinator;
     private Node consumerGroupCoordinator;
     private boolean coordinatorSupportsBumpingEpoch;
+    private boolean coordinatorSupportsTransactionV2;
 
     private volatile State currentState = State.UNINITIALIZED;
     private volatile RuntimeException lastError = null;
@@ -367,15 +369,21 @@ public class TransactionManager {
                 "(currentState= " + currentState + ")");
         }
 
-        log.debug("Begin adding offsets {} for consumer group {} to transaction", offsets, groupMetadata);
-        AddOffsetsToTxnRequest.Builder builder = new AddOffsetsToTxnRequest.Builder(
-            new AddOffsetsToTxnRequestData()
-                .setTransactionalId(transactionalId)
-                .setProducerId(producerIdAndEpoch.producerId)
-                .setProducerEpoch(producerIdAndEpoch.epoch)
-                .setGroupId(groupMetadata.groupId())
-        );
-        AddOffsetsToTxnHandler handler = new AddOffsetsToTxnHandler(builder, offsets, groupMetadata);
+        TxnRequestHandler handler;
+        if (coordinatorSupportsTransactionV2) {
+            log.debug("Begin adding offsets {} for consumer group {} to transaction with transaction protocol V2", offsets, groupMetadata);
+            handler = txnOffsetCommitHandler(offsets, groupMetadata);
+        } else {
+            log.debug("Begin adding offsets {} for consumer group {} to transaction", offsets, groupMetadata);
+            AddOffsetsToTxnRequest.Builder builder = new AddOffsetsToTxnRequest.Builder(
+                new AddOffsetsToTxnRequestData()
+                    .setTransactionalId(transactionalId)
+                    .setProducerId(producerIdAndEpoch.producerId)
+                    .setProducerEpoch(producerIdAndEpoch.epoch)
+                    .setGroupId(groupMetadata.groupId())
+            );
+            handler = new AddOffsetsToTxnHandler(builder, offsets, groupMetadata);
+        }
 
         enqueueRequest(handler);
         return handler.result;
@@ -394,10 +402,36 @@ public class TransactionManager {
                     " to transaction while in state  " + currentState);
             } else if (isPartitionAdded(topicPartition) || isPartitionPendingAdd(topicPartition)) {
                 return;
+            } else if (coordinatorSupportsTransactionV2) {
+                txnPartitionMap.getOrCreate(topicPartition);
             } else {
                 log.debug("Begin adding new partition {} to transaction", topicPartition);
                 txnPartitionMap.getOrCreate(topicPartition);
                 newPartitionsInTransaction.add(topicPartition);
+            }
+        }
+    }
+
+    public synchronized void maybeHandlePartitionAdded(TopicPartition topicPartition) {
+        maybeFailWithError();
+        throwIfPendingState("send");
+
+        if (isTransactional() && coordinatorSupportsTransactionV2) {
+            if (!hasProducerId()) {
+                throw new IllegalStateException("Cannot handle added partition " + topicPartition +
+                        " to transaction before completing a call to initTransactions");
+            } else if (currentState != State.IN_TRANSACTION) {
+                throw new IllegalStateException("Cannot handle added partition " + topicPartition +
+                        " to transaction while in state  " + currentState);
+            } else if (isPartitionPendingAdd(topicPartition)) {
+                throw new IllegalArgumentException("Cannot handle added partition " + topicPartition +
+                        " to transaction because the partition is in pending state");
+            } else if (isPartitionAdded(topicPartition)) {
+                return;
+            } else {
+                log.debug("A new partition {} has been added to transaction", topicPartition);
+                txnPartitionMap.getOrCreate(topicPartition);
+                partitionsInTransaction.add(topicPartition);
             }
         }
     }
@@ -979,6 +1013,13 @@ public class TransactionManager {
                 null;
         this.coordinatorSupportsBumpingEpoch = initProducerIdVersion != null &&
                 initProducerIdVersion.maxVersion() >= 3;
+
+        // TODO(caliu) use feature version.
+        ApiVersion produceVersion = nodeApiVersions != null ?
+                nodeApiVersions.apiVersion(ApiKeys.PRODUCE) :
+                null;
+        this.coordinatorSupportsTransactionV2 = produceVersion != null &&
+                ProduceRequest.isTransactionV2Requested(produceVersion.maxVersion());
     }
 
     private void transitionTo(State target) {
@@ -1109,6 +1150,30 @@ public class TransactionManager {
                 groupMetadata.groupInstanceId()
             );
         return new TxnOffsetCommitHandler(result, builder);
+    }
+
+    private TxnOffsetCommitHandler txnOffsetCommitHandler(
+        Map<TopicPartition, OffsetAndMetadata> offsets,
+        ConsumerGroupMetadata groupMetadata
+    ) {
+        for (Map.Entry<TopicPartition, OffsetAndMetadata> entry : offsets.entrySet()) {
+            OffsetAndMetadata offsetAndMetadata = entry.getValue();
+            CommittedOffset committedOffset = new CommittedOffset(offsetAndMetadata.offset(),
+                offsetAndMetadata.metadata(), offsetAndMetadata.leaderEpoch());
+            pendingTxnOffsetCommits.put(entry.getKey(), committedOffset);
+        }
+
+        final TxnOffsetCommitRequest.Builder builder =
+            new TxnOffsetCommitRequest.Builder(transactionalId,
+                groupMetadata.groupId(),
+                producerIdAndEpoch.producerId,
+                producerIdAndEpoch.epoch,
+                pendingTxnOffsetCommits,
+                groupMetadata.memberId(),
+                groupMetadata.generationId(),
+                groupMetadata.groupInstanceId()
+            );
+        return new TxnOffsetCommitHandler(builder);
     }
 
     private void throwIfPendingState(String operation) {
@@ -1636,6 +1701,11 @@ public class TransactionManager {
         private TxnOffsetCommitHandler(TransactionalRequestResult result,
                                        TxnOffsetCommitRequest.Builder builder) {
             super(result);
+            this.builder = builder;
+        }
+
+        private TxnOffsetCommitHandler(TxnOffsetCommitRequest.Builder builder) {
+            super("TxnOffsetCommitHandler");
             this.builder = builder;
         }
 

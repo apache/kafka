@@ -1534,6 +1534,11 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                 metadata = new RecordMetadata(topicPartition(), -1, -1, RecordBatch.NO_TIMESTAMP, -1, -1);
             }
             this.interceptors.onAcknowledgement(metadata, exception);
+
+            if (exception == null && transactionManager != null) {
+                transactionManager.maybeHandlePartitionAdded(topicPartition());
+            }
+
             if (this.userCallback != null)
                 this.userCallback.onCompletion(metadata, exception);
         }

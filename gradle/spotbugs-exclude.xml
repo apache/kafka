@@ -484,6 +484,14 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
     </Match>
 
     <Match>
+        <!-- Ignore spurious warning about coordinatorSupportsTransactionV2. During the initialization it does require
+         lock. But when using it, the methods that are used require synchronization.-->
+        <Package name="org.apache.kafka.clients.producer.internals" />
+        <Source name="TransactionManager.java" />
+        <Bug pattern="IS2_INCONSISTENT_SYNC" />
+    </Match>
+
+    <Match>
         <!-- Suppress a spurious warning about an unreleased lock. -->
         <Class name="kafka.utils.timer.SystemTimer"/>
         <Method name="add"/>
