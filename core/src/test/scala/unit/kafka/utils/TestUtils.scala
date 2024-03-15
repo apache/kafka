@@ -1135,6 +1135,16 @@ object TestUtils extends Logging {
     }, msg = msg, pause = 0L, waitTimeMs = waitTimeMs)
   }
 
+  def pollRecordsUntilTrue[K, V](shareConsumer: ShareConsumer[K, V],
+                                 action: ConsumerRecords[K, V] => Boolean,
+                                 msg: => String,
+                                 waitTimeMs: Long): Unit = {
+    waitUntilTrue(() => {
+      val records = shareConsumer.poll(Duration.ofMillis(100))
+      action(records)
+    }, msg = msg, pause = 0L, waitTimeMs = waitTimeMs)
+  }
+
   def subscribeAndWaitForRecords(topic: String,
                                  consumer: Consumer[Array[Byte], Array[Byte]],
                                  waitTimeMs: Long = JTestUtils.DEFAULT_MAX_WAIT_MS): Unit = {

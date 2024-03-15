@@ -24,9 +24,10 @@ import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaShareConsumer;
-import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.producer.KafkaProducer;
+import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.record.TimestampType;
@@ -34,7 +35,6 @@ import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serializer;
-import org.apache.kafka.common.utils.Utils;
 
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
@@ -47,18 +47,15 @@ import scala.jdk.javaapi.CollectionConverters;
 
 import java.time.Duration;
 import java.util.Arrays;
-import java.util.Collection;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.Iterator;
-import java.util.Map;
 import java.util.Properties;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.apache.kafka.test.TestUtils.DEFAULT_MAX_WAIT_MS;
 
 @Timeout(600)
@@ -189,9 +186,9 @@ public class PlaintextShareConsumerTest extends AbstractConsumerTest {
         shareConsumer.close();
     }
 
-    @Disabled("TODO: The consumer needs to be converted to share consumers once the functionality for this test is available")
-    @Test
-    public void testHeaders() {
+    @ParameterizedTest(name = TEST_WITH_PARAMETERIZED_QUORUM_NAME)
+    @ValueSource(strings = {"kraft+kip932"})
+    public void testHeaders(String quorum) {
         int numRecords = 1;
         ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(tp().topic(), tp().partition(), null, "key".getBytes(), "value".getBytes());
 
@@ -200,14 +197,11 @@ public class PlaintextShareConsumerTest extends AbstractConsumerTest {
         KafkaProducer<byte[], byte[]> producer = createProducer(new ByteArraySerializer(), new ByteArraySerializer(), new Properties());
         producer.send(record);
 
-        Consumer<byte[], byte[]> consumer = createConsumer(new ByteArrayDeserializer(), new ByteArrayDeserializer(),
+        KafkaShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(new ByteArrayDeserializer(), new ByteArrayDeserializer(),
                 new Properties(), CollectionConverters.asScala(Collections.<String>emptyList()).toList());
-        assertEquals(0, consumer.assignment().size());
-        consumer.assign(Collections.singleton(tp()));
-        assertEquals(1, consumer.assignment().size());
+        shareConsumer.subscribe(Collections.singleton(tp().topic()));
 
-        consumer.seek(tp(), 0);
-        ArrayBuffer<ConsumerRecord<byte[], byte[]>> records = consumeRecords(consumer, numRecords, Integer.MAX_VALUE);
+        ArrayBuffer<ConsumerRecord<byte[], byte[]>> records = consumeRecords(shareConsumer, numRecords, Integer.MAX_VALUE);
 
         assertEquals(numRecords, records.size());
 
@@ -226,27 +220,24 @@ public class PlaintextShareConsumerTest extends AbstractConsumerTest {
         KafkaProducer<byte[], byte[]> producer = createProducer(new ByteArraySerializer(), serializer, new Properties());
         producer.send(record);
 
-        Consumer<byte[], byte[]> consumer = createConsumer(new ByteArrayDeserializer(), deserializer,
+        KafkaShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(new ByteArrayDeserializer(), deserializer,
                 new Properties(), CollectionConverters.asScala(Collections.<String>emptyList()).toList());
-        assertEquals(0, consumer.assignment().size());
-        consumer.assign(Collections.singleton(tp()));
-        assertEquals(1, consumer.assignment().size());
+        shareConsumer.subscribe(Collections.singleton(tp().topic()));
 
-        consumer.seek(tp(), 0);
-        ArrayBuffer<ConsumerRecord<byte[], byte[]>> records = consumeRecords(consumer, numRecords, Integer.MAX_VALUE);
+        ArrayBuffer<ConsumerRecord<byte[], byte[]>> records = consumeRecords(shareConsumer, numRecords, Integer.MAX_VALUE);
 
         assertEquals(numRecords, records.size());
     }
 
-    @Disabled("TODO: The consumer needs to be converted to share consumers once the functionality for this test is available")
-    @Test
-    public void testHeadersSerializerDeserializer() {
+    @ParameterizedTest(name = TEST_WITH_PARAMETERIZED_QUORUM_NAME)
+    @ValueSource(strings = {"kraft+kip932"})
+    public void testHeadersSerializerDeserializer(String quorum) {
         testHeadersSerializeDeserialize(new BaseConsumerTest.SerializerImpl(), new BaseConsumerTest.DeserializerImpl());
     }
 
-    @Disabled("TODO: The consumer needs to be converted to share consumers once the functionality for this test is available")
-    @Test
-    public void testMaxPollRecords() {
+    @ParameterizedTest(name = TEST_WITH_PARAMETERIZED_QUORUM_NAME)
+    @ValueSource(strings = {"kraft+kip932"})
+    public void testMaxPollRecords(String quorum) {
         int maxPollRecords = 2;
         int numRecords = 10000;
 
@@ -255,12 +246,11 @@ public class PlaintextShareConsumerTest extends AbstractConsumerTest {
         sendRecords(producer, numRecords, tp(), startingTimestamp);
 
         consumerConfig().setProperty(ConsumerConfig.MAX_POLL_RECORDS_CONFIG, String.valueOf(maxPollRecords));
-        Consumer<byte[], byte[]> consumer = createConsumer(new ByteArrayDeserializer(), new ByteArrayDeserializer(),
+        KafkaShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(new ByteArrayDeserializer(), new ByteArrayDeserializer(),
                 new Properties(), CollectionConverters.asScala(Collections.<String>emptyList()).toList());
-        consumer.assign(Collections.singleton(tp()));
-        consumeAndVerifyRecords(consumer, numRecords, 0, 0, startingTimestamp,
+        shareConsumer.subscribe(Collections.singleton(tp().topic()));
+        consumeAndVerifyRecords(shareConsumer, numRecords, 0, 0, startingTimestamp,
                 TimestampType.CREATE_TIME, tp(), maxPollRecords);
-
     }
 
     @Disabled("TODO: The consumer needs to be converted to share consumers once the functionality for this test is available")
@@ -288,76 +278,6 @@ public class PlaintextShareConsumerTest extends AbstractConsumerTest {
         awaitRebalance(consumer, listener);
         assertEquals(2, listener.callsToAssigned());
         assertEquals(1, listener.callsToRevoked());
-    }
-
-    @Disabled("TODO: The consumer needs to be converted to share consumers once the functionality for this test is available")
-    @Test
-    public void testMaxPollIntervalMsDelayInRevocation() {
-        consumerConfig().setProperty(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, String.valueOf(5000));
-        consumerConfig().setProperty(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, String.valueOf(500));
-        consumerConfig().setProperty(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, String.valueOf(1000));
-        consumerConfig().setProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, String.valueOf(false));
-
-        Consumer<byte[], byte[]> consumer = createConsumer(new ByteArrayDeserializer(), new ByteArrayDeserializer(),
-                new Properties(), CollectionConverters.asScala(Collections.<String>emptyList()).toList());
-        final boolean[] commitCompleted = {false};
-        long committedPosition = -1;
-
-        TestConsumerReassignmentListener listener = new TestConsumerReassignmentListener() {
-            @Override
-            public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
-                if (!partitions.isEmpty() && partitions.contains(tp())) {
-                    // on the second rebalance (after we have joined the group initially), sleep longer
-                    // than session timeout and then try a commit. We should still be in the group,
-                    // so the commit should succeed
-                    Utils.sleep(1500);
-                    long committedPosition = consumer.position(tp());
-                    Map<TopicPartition, OffsetAndMetadata> map = new HashMap<>();
-                    map.put(tp(), new OffsetAndMetadata(committedPosition));
-                    consumer.commitSync(map);
-                    commitCompleted[0] = true;
-                }
-                super.onPartitionsRevoked(partitions);
-            }
-        };
-
-        consumer.subscribe(Collections.singleton(topic()), listener);
-
-        // rebalance to get the initial assignment
-        awaitRebalance(consumer, listener);
-
-        // force a rebalance to trigger an invocation of the revocation callback while in the group
-        consumer.subscribe(Collections.singleton("otherTopic"), listener);
-        awaitRebalance(consumer, listener);
-
-        assertEquals(0, committedPosition);
-        assertTrue(commitCompleted[0]);
-    }
-
-    @Disabled("TODO: The consumer needs to be converted to share consumers once the functionality for this test is available")
-    @Test
-    public void testMaxPollIntervalMsDelayInAssignment() {
-        consumerConfig().setProperty(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, String.valueOf(5000));
-        consumerConfig().setProperty(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, String.valueOf(500));
-        consumerConfig().setProperty(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, String.valueOf(1000));
-        consumerConfig().setProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, String.valueOf(false));
-
-        Consumer<byte[], byte[]> consumer = createConsumer(new ByteArrayDeserializer(), new ByteArrayDeserializer(),
-                new Properties(), CollectionConverters.asScala(Collections.<String>emptyList()).toList());
-        TestConsumerReassignmentListener listener = new TestConsumerReassignmentListener() {
-            @Override
-            public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
-                Utils.sleep(1500);
-                super.onPartitionsAssigned(partitions);
-            }
-        };
-        consumer.subscribe(Collections.singleton(topic()), listener);
-
-        // rebalance to get the initial assignment
-        awaitRebalance(consumer, listener);
-
-        // We should still be in the group after this invocation
-        ensureNoRebalance(consumer, listener);
     }
 
     @Disabled("TODO: The consumer needs to be converted to share consumers once the functionality for this test is available")
@@ -421,5 +341,47 @@ public class PlaintextShareConsumerTest extends AbstractConsumerTest {
         Function0<String> messageSupplier = () -> String.format("Timed out while awaiting expected assignment %s. " +
                 "The current assignment is %s", expectedAssignment, consumer.assignment());
         TestUtils.pollUntilTrue(consumer, action, messageSupplier, DEFAULT_MAX_WAIT_MS);
+    }
+
+    @ParameterizedTest(name = TEST_WITH_PARAMETERIZED_QUORUM_NAME)
+    @ValueSource(strings = {"kraft+kip932"})
+    public void testControlRecordsSkipped(String quorum) throws Exception {
+        ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(tp().topic(), tp().partition(), null, "key".getBytes(), "value".getBytes());
+
+        Properties transactionProducerProps = new Properties();
+        transactionProducerProps.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, "T1");
+        KafkaProducer<byte[], byte[]> transactionalProducer = createProducer(new ByteArraySerializer(), new ByteArraySerializer(), transactionProducerProps);
+        transactionalProducer.initTransactions();
+        transactionalProducer.beginTransaction();
+        RecordMetadata transactional1 = transactionalProducer.send(record).get();
+
+        KafkaProducer<byte[], byte[]> nonTransactionalProducer = createProducer(new ByteArraySerializer(), new ByteArraySerializer(), new Properties());
+        RecordMetadata nonTransactional1 = nonTransactionalProducer.send(record).get();
+
+        transactionalProducer.commitTransaction();
+
+        transactionalProducer.beginTransaction();
+        RecordMetadata transactional2 = transactionalProducer.send(record).get();
+        transactionalProducer.abortTransaction();
+
+        RecordMetadata nonTransactional2 = nonTransactionalProducer.send(record).get();
+
+        transactionalProducer.close();
+        nonTransactionalProducer.close();
+
+        KafkaShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(new ByteArrayDeserializer(), new ByteArrayDeserializer(),
+                new Properties(), CollectionConverters.asScala(Collections.<String>emptyList()).toList());
+        shareConsumer.subscribe(Collections.singleton(tp().topic()));
+        ConsumerRecords<byte[], byte[]> records = shareConsumer.poll(Duration.ofMillis(5000));
+        assertEquals(4, records.count());
+        assertEquals(transactional1.offset(), records.records(tp()).get(0).offset());
+        assertEquals(nonTransactional1.offset(), records.records(tp()).get(1).offset());
+        assertEquals(transactional2.offset(), records.records(tp()).get(2).offset());
+        assertEquals(nonTransactional2.offset(), records.records(tp()).get(3).offset());
+
+        // There will be control records on the topic-partition, so the offsets of the non-control records
+        // are not 0, 1, 2, 3. Just assert that the offset of the final one is not 3.
+        assertNotEquals(3, nonTransactional2.offset());
+        shareConsumer.close();
     }
 }

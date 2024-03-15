@@ -40,7 +40,9 @@ import org.slf4j.Logger;
 import java.io.Closeable;
 import java.nio.ByteBuffer;
 import java.util.Iterator;
+import java.util.LinkedList;
 import java.util.List;
+import java.util.ListIterator;
 import java.util.Optional;
 
 /**
@@ -53,9 +55,7 @@ import java.util.Optional;
 public class ShareCompletedFetch {
 
     final TopicIdPartition partition;
-
     final ShareFetchResponseData.PartitionData partitionData;
-
     final short requestVersion;
 
     private final Logger log;
@@ -68,8 +68,8 @@ public class ShareCompletedFetch {
     private KafkaException cachedRecordException = null;
     private boolean isConsumed = false;
     private boolean initialized = false;
-    public List<ShareFetchResponseData.AcquiredRecords> acquiredRecords;
-    private int currentAcquiredRecordsIndex;
+    private final List<OffsetAndDeliveryCount> acquiredRecordList;
+    private ListIterator<OffsetAndDeliveryCount> acquiredRecordIterator;
 
     ShareCompletedFetch(final LogContext logContext,
                         final BufferSupplier decompressionBufferSupplier,
@@ -82,8 +82,17 @@ public class ShareCompletedFetch {
         this.partitionData = partitionData;
         this.requestVersion = requestVersion;
         this.batches = ShareFetchResponse.recordsOrFail(partitionData).batches().iterator();
-        this.acquiredRecords = partitionData.acquiredRecords();
-        this.currentAcquiredRecordsIndex = 0;
+        this.acquiredRecordList = buildAcquiredRecordList(partitionData.acquiredRecords());
+    }
+
+    private List<OffsetAndDeliveryCount> buildAcquiredRecordList(List<ShareFetchResponseData.AcquiredRecords> partitionAcquiredRecords) {
+        List<OffsetAndDeliveryCount> acquiredRecordList = new LinkedList<>();
+        partitionAcquiredRecords.forEach(acquiredRecords -> {
+            for (long offset = acquiredRecords.baseOffset(); offset <= acquiredRecords.lastOffset(); offset++) {
+                acquiredRecordList.add(new OffsetAndDeliveryCount(offset, acquiredRecords.deliveryCount()));
+            }
+        });
+        return acquiredRecordList;
     }
 
     boolean isInitialized() {
@@ -129,88 +138,124 @@ public class ShareCompletedFetch {
                                                  final int maxRecords,
                                                  final boolean checkCrcs) {
         // Creating an empty ShareInFlightBatch
-        ShareInFlightBatch<K, V> shareInFlightBatch = new ShareInFlightBatch<>(partition);
+        ShareInFlightBatch<K, V> inFlightBatch = new ShareInFlightBatch<>(partition);
 
         if (cachedBatchException != null) {
             // If the event that a CRC check fails, reject the entire record batch because it is corrupt.
-            rejectRecordRange(shareInFlightBatch, currentBatch);
-            shareInFlightBatch.setException(cachedBatchException);
+            rejectRecordBatch(inFlightBatch, currentBatch);
+            inFlightBatch.setException(cachedBatchException);
             cachedBatchException = null;
-            return shareInFlightBatch;
+            return inFlightBatch;
         }
 
         if (cachedRecordException != null) {
-            shareInFlightBatch.addAcknowledgement(lastRecord.offset(), AcknowledgeType.RELEASE);
-            shareInFlightBatch.setException(
+            inFlightBatch.addAcknowledgement(lastRecord.offset(), AcknowledgeType.RELEASE);
+            inFlightBatch.setException(
                     new KafkaException("Received exception when fetching the next record from " + partition +
                             ". The record has been released.", cachedRecordException));
             cachedRecordException = null;
-            return shareInFlightBatch;
+            return inFlightBatch;
         }
 
         if (isConsumed)
-            return shareInFlightBatch;
+            return inFlightBatch;
+
+        OffsetAndDeliveryCount nextAcquired = initializeAcquiredRecord();
 
         try {
             for (int i = 0; i < maxRecords; i++) {
                 lastRecord = nextFetchedRecord(checkCrcs);
-                if (lastRecord == null)
+                if (lastRecord == null) {
+                    // Any remaining acquired records are gaps
+                    while (nextAcquired != null) {
+                        inFlightBatch.addGap(nextAcquired.offset);
+                        nextAcquired = nextAcquiredRecord();
+                    }
                     break;
+                }
 
-                Optional<Integer> leaderEpoch = maybeLeaderEpoch(currentBatch.partitionLeaderEpoch());
-                TimestampType timestampType = currentBatch.timestampType();
-                ConsumerRecord<K, V> record = parseRecord(deserializers, partition, leaderEpoch, timestampType, lastRecord);
+                while (nextAcquired != null) {
+                    if (lastRecord.offset() == nextAcquired.offset) {
+                        // It's acquired, so we parse it and add it to the batch
+                        Optional<Integer> leaderEpoch = maybeLeaderEpoch(currentBatch.partitionLeaderEpoch());
+                        TimestampType timestampType = currentBatch.timestampType();
+                        ConsumerRecord<K, V> record = parseRecord(deserializers, partition, leaderEpoch,
+                                timestampType, lastRecord, nextAcquired.deliveryCount);
+                        inFlightBatch.addRecord(record);
 
-                // Check if the record is in acquired records.
-                if (isAcquired(record)) {
-                    shareInFlightBatch.addRecord(record);
+                        nextAcquired = nextAcquiredRecord();
+                        break;
+                    } else if (lastRecord.offset() < nextAcquired.offset) {
+                        // It's not acquired, so we skip it
+                        break;
+                    } else {
+                        // It's acquired, but there's no non-control record at this offset, so it's a gap
+                        inFlightBatch.addGap(nextAcquired.offset);
+                    }
+
+                    nextAcquired = nextAcquiredRecord();
                 }
             }
         } catch (SerializationException se) {
-            if (shareInFlightBatch.isEmpty()) {
-                shareInFlightBatch.addAcknowledgement(lastRecord.offset(), AcknowledgeType.RELEASE);
-                shareInFlightBatch.setException(se);
+            if (inFlightBatch.isEmpty()) {
+                inFlightBatch.addAcknowledgement(lastRecord.offset(), AcknowledgeType.RELEASE);
+                inFlightBatch.setException(se);
             } else {
                 cachedRecordException = se;
             }
         } catch (CorruptRecordException e) {
-            if (shareInFlightBatch.isEmpty()) {
+            if (inFlightBatch.isEmpty()) {
                 // If the event that a CRC check fails, reject the entire record batch because it is corrupt.
-                rejectRecordRange(shareInFlightBatch, currentBatch);
-                shareInFlightBatch.setException(e);
+                rejectRecordBatch(inFlightBatch, currentBatch);
+                inFlightBatch.setException(e);
             } else {
                 cachedBatchException = e;
             }
         }
 
-        return shareInFlightBatch;
+        return inFlightBatch;
     }
 
-    /**
-     * Check if the record is part of the acquired records.
-     */
-    private <K, V> boolean isAcquired(final ConsumerRecord<K, V> record) {
-        if (currentAcquiredRecordsIndex >= acquiredRecords.size()) return false;
-        ShareFetchResponseData.AcquiredRecords acqRecord = acquiredRecords.get(currentAcquiredRecordsIndex);
-        if (record.offset() >= acqRecord.baseOffset() && record.offset() <= acqRecord.lastOffset()) {
-            return true;
-        } else if (record.offset() > acqRecord.lastOffset()) {
-            currentAcquiredRecordsIndex += 1;
-            return isAcquired(record);
+    private OffsetAndDeliveryCount initializeAcquiredRecord() {
+        if ((acquiredRecordIterator != null) && (acquiredRecordIterator.hasPrevious())) {
+            acquiredRecordIterator.previous();
+            return acquiredRecordIterator.next();
         } else {
-            return false;
+            acquiredRecordIterator = acquiredRecordList.listIterator();
+            if (acquiredRecordIterator.hasNext()) {
+                return acquiredRecordIterator.next();
+            }
+            return null;
         }
     }
 
-    private <K, V> void rejectRecordRange(final ShareInFlightBatch<K, V> batch,
+    private OffsetAndDeliveryCount nextAcquiredRecord() {
+        if (acquiredRecordIterator.hasNext()) {
+            return acquiredRecordIterator.next();
+        }
+        return null;
+    }
+
+    private <K, V> void rejectRecordBatch(final ShareInFlightBatch<K, V> inFlightBatch,
                                           final RecordBatch currentBatch) {
-        acquiredRecords.forEach(acqRecord -> {
-            for (long recordOffset = currentBatch.baseOffset(); recordOffset <= currentBatch.lastOffset(); recordOffset++) {
-                if (recordOffset >= acqRecord.baseOffset() && recordOffset <= acqRecord.lastOffset()) {
-                    batch.addAcknowledgement(recordOffset, AcknowledgeType.REJECT);
-                }
+        // Rewind the acquiredRecordIterator to the start, so we are in a known state
+        acquiredRecordIterator = acquiredRecordList.listIterator();
+
+        OffsetAndDeliveryCount nextAcquired = nextAcquiredRecord();
+        for (long offset = currentBatch.baseOffset(); offset <= currentBatch.lastOffset(); offset++) {
+            if (nextAcquired == null) {
+                // No more acquired records, so we are done
+                break;
+            } else if (offset == nextAcquired.offset) {
+                // It's acquired, so we reject it
+                inFlightBatch.addAcknowledgement(offset, AcknowledgeType.REJECT);
+            } else if (offset < nextAcquired.offset) {
+                // It's not acquired, so we skip it
+                continue;
             }
-        });
+
+            nextAcquired = nextAcquiredRecord();
+        }
     }
 
     /**
@@ -220,7 +265,8 @@ public class ShareCompletedFetch {
                                             final TopicIdPartition partition,
                                             final Optional<Integer> leaderEpoch,
                                             final TimestampType timestampType,
-                                            final Record record) {
+                                            final Record record,
+                                            final short deliveryCount) {
         try {
             long offset = record.offset();
             long timestamp = record.timestamp();
@@ -233,7 +279,7 @@ public class ShareCompletedFetch {
                     timestamp, timestampType,
                     keyBytes == null ? ConsumerRecord.NULL_SIZE : keyBytes.remaining(),
                     valueBytes == null ? ConsumerRecord.NULL_SIZE : valueBytes.remaining(),
-                    key, value, headers, leaderEpoch);
+                    key, value, headers, leaderEpoch, Optional.of(deliveryCount));
         } catch (RuntimeException e) {
             log.error("Deserializers with error: {}", deserializers);
             throw new RecordDeserializationException(partition.topicPartition(), record.offset(),
@@ -298,6 +344,24 @@ public class ShareCompletedFetch {
         if (records != null) {
             records.close();
             records = null;
+        }
+    }
+
+    private static class OffsetAndDeliveryCount {
+        final long offset;
+        final short deliveryCount;
+
+        OffsetAndDeliveryCount(long offset, short deliveryCount) {
+            this.offset = offset;
+            this.deliveryCount = deliveryCount;
+        }
+
+        @Override
+        public String toString() {
+            return "OffsetAndDeliveryCount{" +
+                    "offset=" + offset +
+                    ", deliveryCount=" + deliveryCount +
+                    '}';
         }
     }
 }

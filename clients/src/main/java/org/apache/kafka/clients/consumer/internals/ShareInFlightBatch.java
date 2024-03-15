@@ -50,6 +50,10 @@ public class ShareInFlightBatch<K, V> {
         inFlightRecords.add(record);
     }
 
+    public void addGap(long offset) {
+        // To be implemented
+    }
+
     public void merge(ShareInFlightBatch<K, V> other) {
         inFlightRecords.addAll(other.inFlightRecords);
         acknowledgements.merge(other.acknowledgements);
