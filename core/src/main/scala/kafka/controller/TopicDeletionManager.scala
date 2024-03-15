@@ -182,7 +182,7 @@ class TopicDeletionManager(config: KafkaConfig,
       true
   }
 
-  private def isTopicDeletionInProgress(topic: String): Boolean = {
+  private def isTopicReplicaDeletionInProgress(topic: String): Boolean = {
     if (isDeleteTopicEnabled) {
       controllerContext.isAnyReplicaInState(topic, ReplicaDeletionStarted)
     } else
@@ -219,7 +219,7 @@ class TopicDeletionManager(config: KafkaConfig,
    */
   private def isTopicEligibleForDeletion(topic: String): Boolean = {
     controllerContext.isTopicQueuedUpForDeletion(topic) &&
-      !isTopicDeletionInProgress(topic) &&
+      !isTopicReplicaDeletionInProgress(topic) &&
       !isTopicIneligibleForDeletion(topic)
   }
 
