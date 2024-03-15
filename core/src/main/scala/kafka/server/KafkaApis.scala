@@ -1262,12 +1262,21 @@ class KafkaApis(val requestChannel: RequestChannel,
         clientMetadata
       )
 
+      val partitionMaxBytes = new util.LinkedHashMap[TopicIdPartition, Integer]
+      interesting.foreach { topicIdPartition =>
+        if (shareFetchData.containsKey(topicIdPartition))
+          partitionMaxBytes.put(topicIdPartition, shareFetchData.get(topicIdPartition).maxBytes)
+        else
+          debug(s"Share fetch request does not contain topic partition $topicIdPartition")
+      }
+
       // call the share partition manager to fetch messages from the local replica
       sharePartitionManager.fetchMessages(
         groupId,
         shareFetchRequest.data.memberId,
         params,
-        interesting.asJava
+        interesting.asJava,
+        partitionMaxBytes
       ).whenComplete { (responsePartitionData, throwable) =>
         if (throwable != null) {
           debug(s"Share fetch request with correlation from client $clientId  " +

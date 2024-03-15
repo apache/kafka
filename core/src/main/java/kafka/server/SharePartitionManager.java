@@ -95,12 +95,13 @@ public class SharePartitionManager {
         String groupId,
         String memberId,
         FetchParams fetchParams,
-        List<TopicIdPartition> topicIdPartitions) {
+        List<TopicIdPartition> topicIdPartitions,
+        Map<TopicIdPartition, Integer> partitionMaxBytes) {
         log.trace("Fetch request for topicIdPartitions: {} with groupId: {} fetch params: {}",
                 topicIdPartitions, groupId, fetchParams);
         CompletableFuture<Map<TopicIdPartition, ShareFetchResponseData.PartitionData>> future = new CompletableFuture<>();
         ShareFetchPartitionData shareFetchPartitionData = new ShareFetchPartitionData(fetchParams, groupId, memberId,
-                topicIdPartitions, future);
+                topicIdPartitions, future, partitionMaxBytes);
         fetchQueue.add(shareFetchPartitionData);
         maybeProcessFetchQueue();
         return future;
@@ -115,6 +116,8 @@ public class SharePartitionManager {
                 ShareFetchPartitionData shareFetchPartitionData = fetchQueue.poll();
                 Map<TopicIdPartition, FetchRequest.PartitionData> topicPartitionData = new HashMap<>();
                 shareFetchPartitionData.topicIdPartitions.forEach(topicIdPartition -> {
+                    Integer partitionMaxBytes = shareFetchPartitionData.partitionMaxBytes.getOrDefault(topicIdPartition, 0);
+
                     // TODO: Fetch inflight and delivery count from config.
                     SharePartition sharePartition = partitionCacheMap.computeIfAbsent(sharePartitionKey(
                                     shareFetchPartitionData.groupId, topicIdPartition),
@@ -125,7 +128,7 @@ public class SharePartitionManager {
                                 topicIdPartition.topicId(),
                                 sharePartition.nextFetchOffset(),
                                 -1,
-                                Integer.MAX_VALUE,
+                                partitionMaxBytes,
                                 Optional.empty()));
                         sharePartition.releaseFetchLock();
                     }
@@ -1238,15 +1241,18 @@ public class SharePartitionManager {
         private final String memberId;
         private final List<TopicIdPartition> topicIdPartitions;
         private final CompletableFuture<Map<TopicIdPartition, ShareFetchResponseData.PartitionData>> future;
+        private final Map<TopicIdPartition, Integer> partitionMaxBytes;
 
         public ShareFetchPartitionData(FetchParams fetchParams, String groupId, String memberId,
                                        List<TopicIdPartition> topicIdPartitions,
-                                       CompletableFuture<Map<TopicIdPartition, ShareFetchResponseData.PartitionData>> future) {
+                                       CompletableFuture<Map<TopicIdPartition, ShareFetchResponseData.PartitionData>> future,
+                                       Map<TopicIdPartition, Integer> partitionMaxBytes) {
             this.fetchParams = fetchParams;
             this.groupId = groupId;
             this.memberId = memberId;
             this.topicIdPartitions = topicIdPartitions;
             this.future = future;
+            this.partitionMaxBytes = partitionMaxBytes;
         }
     }
 }

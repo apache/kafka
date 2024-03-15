@@ -65,8 +65,12 @@ public class ShareFetchRequest extends AbstractRequest {
                             .setPartitions(new ArrayList<>());
                     data.topics().add(fetchTopic);
                 }
+
+                // TODO: Remove the hardcoded setPartitionMaxBytes once this field is populated correctly by the client.
+                //  It was added to confirm that the integration tests pass and we are able to fetch records
                 ShareFetchRequestData.FetchPartition fetchPartition = new ShareFetchRequestData.FetchPartition()
                         .setPartitionIndex(topicPartition.partition())
+                        .setPartitionMaxBytes(40000)
                         .setCurrentLeaderEpoch(RecordBatch.NO_PARTITION_LEADER_EPOCH);
 
                 // Get the list of Acknowledgments for the current partition
