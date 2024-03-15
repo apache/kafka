@@ -32,7 +32,7 @@ import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.junit.Assert;
 import org.junit.Test;
 
-public class ForeignTableJoinProcessorSupplierTest {
+public class SubscriptionJoinProcessorSupplierTest {
     final Map<String, ValueAndTimestamp<String>> fks = Collections.singletonMap(
         "fk1", ValueAndTimestamp.make("foo", 1L)
     );
