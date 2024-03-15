@@ -797,34 +797,74 @@ public class SharePartitionManagerTest {
     }
 
     @Test
-    public void testAcknowledgeShareSessionCacheUpdate() {
+    public void testAcknowledgeShareSessionCacheUpdateForStandaloneAcknowledgement() {
         SharePartitionManager.ShareSessionCache cache = new SharePartitionManager.ShareSessionCache(10, 1000);
         Time time = new MockTime();
         SharePartitionManager sharePartitionManager = new SharePartitionManager(Mockito.mock(ReplicaManager.class),
                 new MockTime(), cache);
         String groupId = "grp";
         Uuid memberId = Uuid.randomUuid();
-        assertEquals(Errors.INVALID_SHARE_SESSION_EPOCH, sharePartitionManager.acknowledgeShareSessionCacheUpdate(groupId, memberId, 0));
-        assertEquals(Errors.SHARE_SESSION_NOT_FOUND, sharePartitionManager.acknowledgeShareSessionCacheUpdate(groupId, memberId, -1));
-        assertEquals(Errors.SHARE_SESSION_NOT_FOUND, sharePartitionManager.acknowledgeShareSessionCacheUpdate(groupId, memberId, 1));
+        boolean isAcknowledgementPiggybackedOnFetch = false;
+        assertEquals(Errors.INVALID_SHARE_SESSION_EPOCH, sharePartitionManager.acknowledgeShareSessionCacheUpdate(groupId, memberId, 0, isAcknowledgementPiggybackedOnFetch));
+        assertEquals(Errors.SHARE_SESSION_NOT_FOUND, sharePartitionManager.acknowledgeShareSessionCacheUpdate(groupId, memberId, -1, isAcknowledgementPiggybackedOnFetch));
+        assertEquals(Errors.SHARE_SESSION_NOT_FOUND, sharePartitionManager.acknowledgeShareSessionCacheUpdate(groupId, memberId, 1, isAcknowledgementPiggybackedOnFetch));
         // Manually create a share session in cache
         long now1 = time.milliseconds();
         cache.maybeCreateSession(groupId, memberId, now1, 0, new ImplicitLinkedHashCollection<>());
         assertEquals(1, cache.size());
-        assertEquals(Errors.INVALID_SHARE_SESSION_EPOCH, sharePartitionManager.acknowledgeShareSessionCacheUpdate(groupId, memberId, 5));
+        assertEquals(Errors.INVALID_SHARE_SESSION_EPOCH, sharePartitionManager.acknowledgeShareSessionCacheUpdate(groupId, memberId, 5, isAcknowledgementPiggybackedOnFetch));
         assertEquals(1, cache.size());
 
-        assertEquals(Errors.NONE, sharePartitionManager.acknowledgeShareSessionCacheUpdate(groupId, memberId, 1));
+        assertEquals(Errors.NONE, sharePartitionManager.acknowledgeShareSessionCacheUpdate(groupId, memberId, 1, isAcknowledgementPiggybackedOnFetch));
         assertEquals(1, cache.size());
         SharePartitionManager.ShareSession shareSession = cache.get(new SharePartitionManager.ShareSessionKey(groupId, memberId));
         assertEquals(2, shareSession.epoch());
 
-        assertEquals(Errors.NONE, sharePartitionManager.acknowledgeShareSessionCacheUpdate(groupId, memberId, 2));
+        assertEquals(Errors.NONE, sharePartitionManager.acknowledgeShareSessionCacheUpdate(groupId, memberId, 2, isAcknowledgementPiggybackedOnFetch));
         assertEquals(1, cache.size());
         shareSession = cache.get(new SharePartitionManager.ShareSessionKey(groupId, memberId));
         assertEquals(3, shareSession.epoch());
 
-        assertEquals(Errors.NONE, sharePartitionManager.acknowledgeShareSessionCacheUpdate(groupId, memberId, -1));
+        assertEquals(Errors.NONE, sharePartitionManager.acknowledgeShareSessionCacheUpdate(groupId, memberId, -1, isAcknowledgementPiggybackedOnFetch));
+        assertEquals(0, cache.size());
+    }
+
+    @Test
+    public void testAcknowledgeShareSessionCacheUpdateForPiggybackedAcknowledgement() {
+        SharePartitionManager.ShareSessionCache cache = new SharePartitionManager.ShareSessionCache(10, 1000);
+        Time time = new MockTime();
+        SharePartitionManager sharePartitionManager = new SharePartitionManager(Mockito.mock(ReplicaManager.class),
+                new MockTime(), cache);
+        String groupId = "grp";
+        Uuid memberId = Uuid.randomUuid();
+        boolean isAcknowledgementPiggybackedOnFetch = true;
+        assertEquals(Errors.INVALID_SHARE_SESSION_EPOCH, sharePartitionManager.acknowledgeShareSessionCacheUpdate(groupId, memberId, 0, isAcknowledgementPiggybackedOnFetch));
+        assertEquals(Errors.SHARE_SESSION_NOT_FOUND, sharePartitionManager.acknowledgeShareSessionCacheUpdate(groupId, memberId, -1, isAcknowledgementPiggybackedOnFetch));
+        assertEquals(Errors.SHARE_SESSION_NOT_FOUND, sharePartitionManager.acknowledgeShareSessionCacheUpdate(groupId, memberId, 1, isAcknowledgementPiggybackedOnFetch));
+        // Manually create a share session in cache
+        long now1 = time.milliseconds();
+        cache.maybeCreateSession(groupId, memberId, now1, 0, new ImplicitLinkedHashCollection<>());
+        assertEquals(1, cache.size());
+        assertEquals(Errors.INVALID_SHARE_SESSION_EPOCH, sharePartitionManager.acknowledgeShareSessionCacheUpdate(groupId, memberId, 5, isAcknowledgementPiggybackedOnFetch));
+        assertEquals(1, cache.size());
+
+        assertEquals(Errors.NONE, sharePartitionManager.acknowledgeShareSessionCacheUpdate(groupId, memberId, 1, isAcknowledgementPiggybackedOnFetch));
+        assertEquals(1, cache.size());
+        SharePartitionManager.ShareSession shareSession = cache.get(new SharePartitionManager.ShareSessionKey(groupId, memberId));
+        // manually increment the session epoch by 1 because this is taken care of in the newContext() function
+        shareSession.epoch = ShareFetchMetadata.nextEpoch(shareSession.epoch);
+        assertEquals(2, shareSession.epoch());
+
+        assertEquals(Errors.NONE, sharePartitionManager.acknowledgeShareSessionCacheUpdate(groupId, memberId, 2, isAcknowledgementPiggybackedOnFetch));
+        assertEquals(1, cache.size());
+        shareSession = cache.get(new SharePartitionManager.ShareSessionKey(groupId, memberId));
+        // manually increment the session epoch by 1 because this is taken care of in the newContext() function
+        shareSession.epoch = ShareFetchMetadata.nextEpoch(shareSession.epoch);
+        assertEquals(3, shareSession.epoch());
+
+        assertEquals(Errors.NONE, sharePartitionManager.acknowledgeShareSessionCacheUpdate(groupId, memberId, -1, isAcknowledgementPiggybackedOnFetch));
+        // manually remove the share session from the cache because this is taken care of in the newContext() function
+        cache.remove(new SharePartitionManager.ShareSessionKey(groupId, memberId));
         assertEquals(0, cache.size());
     }
 
