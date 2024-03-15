@@ -121,6 +121,7 @@ class TxnMarkerQueue(@volatile var destination: Node) extends Logging {
 
   def addMarkers(txnTopicPartition: Int, pendingCompleteTxnAndMarker: PendingCompleteTxnAndMarkerEntry): Unit = {
     val queue = CoreUtils.atomicGetOrUpdate(markersPerTxnTopicPartition, txnTopicPartition, {
+      // Note that this may get called more than once if threads have a close race while adding new queue.
       info(s"Creating new marker queue for txn partition $txnTopicPartition to destination broker ${destination.id}")
       new LinkedBlockingQueue[PendingCompleteTxnAndMarkerEntry]()
     })
@@ -128,6 +129,18 @@ class TxnMarkerQueue(@volatile var destination: Node) extends Logging {
 
     if (markersPerTxnTopicPartition.get(txnTopicPartition).orNull != queue) {
       // This could happen if the queue got removed concurrently.
+      // Note that it could create an unexpected state when the queue is removed from
+      // removeMarkersForTxnTopicPartition, we could have:
+      //
+      // 1. [addMarkers] Retrieve queue.
+      // 2. [removeMarkersForTxnTopicPartition] Remove queue.
+      // 3. [removeMarkersForTxnTopicPartition] Iterate over queue, but not removeMarkersForTxn because queue is empty.
+      // 4. [addMarkers] Add markers to the queue.
+      //
+      // Now we've effectively removed the markers while transactionsWithPendingMarkers has an entry.
+      //
+      // While this could lead to an orphan entry in transactionsWithPendingMarkers, sending new markers
+      // will fix the state, so it shouldn't impact the state machine operation.
       warn(s"Added $pendingCompleteTxnAndMarker to dead queue for txn partition $txnTopicPartition to destination broker ${destination.id}")
     }
   }
@@ -200,6 +213,7 @@ class TransactionMarkerChannelManager(
     // we do not synchronize on the update of the broker node with the enqueuing,
     // since even if there is a race condition we will just retry
     val brokerRequestQueue = CoreUtils.atomicGetOrUpdate(markersQueuePerBroker, brokerId, {
+      // Note that this may get called more than once if threads have a close race while adding new queue.
       info(s"Creating new marker queue map to destination broker $brokerId")
       new TxnMarkerQueue(broker)
     })
