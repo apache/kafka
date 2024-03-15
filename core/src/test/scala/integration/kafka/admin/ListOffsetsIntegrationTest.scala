@@ -82,6 +82,15 @@ class ListOffsetsIntegrationTest extends KafkaServerTestHarness {
   def testThreeRecordsInSeparateBatch(quorum: String): Unit = {
     produceMessagesInSeparateBatch()
     verifyListOffsets()
+
+    // test LogAppendTime case
+    val props: Properties = new Properties()
+    props.setProperty(TopicConfig.MESSAGE_TIMESTAMP_TYPE_CONFIG, "LogAppendTime")
+    createTopicWithConfig(topicNameWithCustomConfigs, props)
+    produceMessagesInSeparateBatch(topic = topicNameWithCustomConfigs)
+    // In LogAppendTime's case, the maxTimestampOffset should be the first message of the batch.
+    // So in this one batch test, it'll be the first offset 0
+    verifyListOffsets(topic = topicNameWithCustomConfigs, 2)
   }
 
   // The message conversion test only run in ZK mode because KRaft mode doesn't support "inter.broker.protocol.version" < 3.0
