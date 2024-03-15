@@ -219,7 +219,7 @@ public class ConsumerGroupServiceTest {
     }
 
     private ConsumerGroupCommand.ConsumerGroupService consumerGroupService(String[] args) {
-        return new ConsumerGroupCommand.ConsumerGroupService(new ConsumerGroupCommandOptions(args), Collections.emptyMap()) {
+        return new ConsumerGroupCommand.ConsumerGroupService(ConsumerGroupCommandOptions.fromArgs(args), Collections.emptyMap()) {
             @Override
             protected Admin createAdminClient(Map<String, String> configOverrides) {
                 return admin;

@@ -21,18 +21,18 @@ import org.apache.kafka.common.Node;
 import java.util.Optional;
 
 class PartitionAssignmentState {
-    public final String group;
-    public final Optional<Node> coordinator;
-    public final Optional<String> topic;
-    public final Optional<Integer> partition;
-    public final Optional<Long> offset;
-    public final Optional<Long> lag;
-    public final Optional<String> consumerId;
-    public final Optional<String> host;
-    public final Optional<String> clientId;
-    public final Optional<Long> logEndOffset;
+    final String group;
+    final Optional<Node> coordinator;
+    final Optional<String> topic;
+    final Optional<Integer> partition;
+    final Optional<Long> offset;
+    final Optional<Long> lag;
+    final Optional<String> consumerId;
+    final Optional<String> host;
+    final Optional<String> clientId;
+    final Optional<Long> logEndOffset;
 
-    public PartitionAssignmentState(String group, Optional<Node> coordinator, Optional<String> topic,
+    PartitionAssignmentState(String group, Optional<Node> coordinator, Optional<String> topic,
                                     Optional<Integer> partition, Optional<Long> offset, Optional<Long> lag,
                                     Optional<String> consumerId, Optional<String> host, Optional<String> clientId,
                                     Optional<Long> logEndOffset) {

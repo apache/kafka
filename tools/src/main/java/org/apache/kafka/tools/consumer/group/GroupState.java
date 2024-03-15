@@ -19,13 +19,13 @@ package org.apache.kafka.tools.consumer.group;
 import org.apache.kafka.common.Node;
 
 class GroupState {
-    public final String group;
-    public final Node coordinator;
-    public final String assignmentStrategy;
-    public final String state;
-    public final int numMembers;
+    final String group;
+    final Node coordinator;
+    final String assignmentStrategy;
+    final String state;
+    final int numMembers;
 
-    public GroupState(String group, Node coordinator, String assignmentStrategy, String state, int numMembers) {
+    GroupState(String group, Node coordinator, String assignmentStrategy, String state, int numMembers) {
         this.group = group;
         this.coordinator = coordinator;
         this.assignmentStrategy = assignmentStrategy;

@@ -162,7 +162,7 @@ public class SaslClientsWithInvalidCredentialsTest extends AbstractSaslTest {
             "--describe",
             "--group", "test.group",
             "--command-config", propsFile.getAbsolutePath()};
-        ConsumerGroupCommandOptions opts = new ConsumerGroupCommandOptions(cgcArgs);
+        ConsumerGroupCommandOptions opts = ConsumerGroupCommandOptions.fromArgs(cgcArgs);
         return new ConsumerGroupCommand.ConsumerGroupService(opts, Collections.emptyMap());
     }
 

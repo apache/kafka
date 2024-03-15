@@ -37,7 +37,7 @@ public class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest
         addAndVerifyAcls(JavaConverters.asScalaSet(Collections.singleton(new AccessControlEntry(ClientPrincipal().toString(), AclEntry.WildcardHost(), DESCRIBE, ALLOW))).toSet(), groupResource());
 
         String[] cgcArgs = new String[]{"--bootstrap-server", bootstrapServers(listenerName()), "--describe", "--group", group()};
-        ConsumerGroupCommandOptions opts = new ConsumerGroupCommandOptions(cgcArgs);
+        ConsumerGroupCommandOptions opts = ConsumerGroupCommandOptions.fromArgs(cgcArgs);
         ConsumerGroupCommand.ConsumerGroupService consumerGroupService = new ConsumerGroupCommand.ConsumerGroupService(opts, Collections.emptyMap());
         consumerGroupService.describeGroups();
         consumerGroupService.close();

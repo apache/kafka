@@ -86,12 +86,11 @@ import java.util.stream.Stream;
 public class ConsumerGroupCommand {
     private static final Logger LOGGER = LoggerFactory.getLogger(ConsumerGroupCommand.class);
 
-    public static final String MISSING_COLUMN_VALUE = "-";
+    static final String MISSING_COLUMN_VALUE = "-";
 
     public static void main(String[] args) {
-        ConsumerGroupCommandOptions opts = new ConsumerGroupCommandOptions(args);
+        ConsumerGroupCommandOptions opts = ConsumerGroupCommandOptions.fromArgs(args);
         try {
-            opts.checkArgs();
             CommandLineUtils.maybePrintHelpOrVersion(opts, "This tool helps to list all consumer groups, describe a consumer group, delete consumer group info, or reset consumer group offsets.");
 
             // should have exactly one action
@@ -105,7 +104,7 @@ public class ConsumerGroupCommand {
         }
     }
 
-    public static void run(ConsumerGroupCommandOptions opts) {
+    static void run(ConsumerGroupCommandOptions opts) {
         try (ConsumerGroupService consumerGroupService = new ConsumerGroupService(opts, Collections.emptyMap())) {
             if (opts.options.has(opts.listOpt))
                 consumerGroupService.listGroups();
@@ -140,7 +139,7 @@ public class ConsumerGroupCommand {
     }
 
     @SuppressWarnings("Regexp")
-    public static Set<GroupType> consumerGroupTypesFromString(String input) {
+    static Set<GroupType> consumerGroupTypesFromString(String input) {
         Set<GroupType> parsedTypes = Stream.of(input.toLowerCase().split(",")).map(s -> GroupType.parse(s.trim())).collect(Collectors.toSet());
         if (parsedTypes.contains(GroupType.UNKNOWN)) {
             List<String> validTypes = Arrays.stream(GroupType.values()).filter(t -> t != GroupType.UNKNOWN).map(Object::toString).collect(Collectors.toList());
@@ -149,12 +148,12 @@ public class ConsumerGroupCommand {
         return parsedTypes;
     }
 
-    public static void printError(String msg, Optional<Throwable> e) {
+    static void printError(String msg, Optional<Throwable> e) {
         System.out.println("\nError: " + msg);
         e.ifPresent(Throwable::printStackTrace);
     }
 
-    public static void printOffsetsToReset(Map<String, Map<TopicPartition, OffsetAndMetadata>> groupAssignmentsToReset) {
+    static void printOffsetsToReset(Map<String, Map<TopicPartition, OffsetAndMetadata>> groupAssignmentsToReset) {
         String format = "%-30s %-30s %-10s %-15s";
         if (!groupAssignmentsToReset.isEmpty())
             System.out.printf("\n" + format, "GROUP", "TOPIC", "PARTITION", "NEW-OFFSET");
@@ -174,7 +173,7 @@ public class ConsumerGroupCommand {
         final Map<String, String> configOverrides;
         private final Admin adminClient;
 
-        public ConsumerGroupService(ConsumerGroupCommandOptions opts, Map<String, String> configOverrides) {
+        ConsumerGroupService(ConsumerGroupCommandOptions opts, Map<String, String> configOverrides) {
             this.opts = opts;
             this.configOverrides = configOverrides;
             try {
@@ -197,7 +196,7 @@ public class ConsumerGroupCommand {
             } else return Optional.empty();
         }
 
-        public void listGroups() throws ExecutionException, InterruptedException {
+        void listGroups() throws ExecutionException, InterruptedException {
             boolean includeType = opts.options.has(opts.typeOpt);
             boolean includeState = opts.options.has(opts.stateOpt);
 
@@ -952,7 +951,7 @@ public class ConsumerGroupCommand {
         }
 
         private Map<String, Map<TopicPartition, OffsetAndMetadata>> parseResetPlan(String resetPlanCsv) {
-            ObjectReader csvReader = new CsvUtils().readerFor(CsvUtils.CsvRecordNoGroup.class);
+            ObjectReader csvReader = CsvUtils.readerFor(CsvUtils.CsvRecordNoGroup.class);
             String[] lines = resetPlanCsv.split("\n");
             boolean isSingleGroupQuery = opts.options.valuesOf(opts.groupOpt).size() == 1;
             boolean isOldCsvFormat = false;
@@ -978,7 +977,7 @@ public class ConsumerGroupCommand {
                             .put(new TopicPartition(rec.getTopic(), rec.getPartition()), new OffsetAndMetadata(rec.getOffset()));
                     }
                 } else {
-                    csvReader = new CsvUtils().readerFor(CsvUtils.CsvRecordWithGroup.class);
+                    csvReader = CsvUtils.readerFor(CsvUtils.CsvRecordWithGroup.class);
                     for (String line : lines) {
                         CsvUtils.CsvRecordWithGroup rec = csvReader.readValue(line, CsvUtils.CsvRecordWithGroup.class);
                         dataMap.computeIfAbsent(rec.getGroup(), k -> new HashMap<>())
@@ -1164,8 +1163,8 @@ public class ConsumerGroupCommand {
         String exportOffsetsToCsv(Map<String, Map<TopicPartition, OffsetAndMetadata>> assignments) {
             boolean isSingleGroupQuery = opts.options.valuesOf(opts.groupOpt).size() == 1;
             ObjectWriter csvWriter = isSingleGroupQuery
-                ? new CsvUtils().writerFor(CsvUtils.CsvRecordNoGroup.class)
-                : new CsvUtils().writerFor(CsvUtils.CsvRecordWithGroup.class);
+                ? CsvUtils.writerFor(CsvUtils.CsvRecordNoGroup.class)
+                : CsvUtils.writerFor(CsvUtils.CsvRecordWithGroup.class);
 
             return Utils.mkString(assignments.entrySet().stream().flatMap(e -> {
                 String groupId = e.getKey();
@@ -1174,7 +1173,7 @@ public class ConsumerGroupCommand {
                 return partitionInfo.entrySet().stream().map(e1 -> {
                     TopicPartition k = e1.getKey();
                     OffsetAndMetadata v = e1.getValue();
-                    CsvUtils.CsvRecord csvRecord = isSingleGroupQuery
+                    Object csvRecord = isSingleGroupQuery
                         ? new CsvUtils.CsvRecordNoGroup(k.topic(), k.partition(), v.offset())
                         : new CsvUtils.CsvRecordWithGroup(groupId, k.topic(), k.partition(), v.offset());
 
@@ -1228,9 +1227,9 @@ public class ConsumerGroupCommand {
     interface LogOffsetResult { }
 
     private static class LogOffset implements LogOffsetResult {
-        public final long value;
+        final long value;
 
-        public LogOffset(long value) {
+        LogOffset(long value) {
             this.value = value;
         }
     }

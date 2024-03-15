@@ -128,7 +128,7 @@ public class ConsumerGroupCommandTest extends kafka.integration.KafkaServerTestH
     }
 
     ConsumerGroupCommand.ConsumerGroupService getConsumerGroupService(String[] args) {
-        ConsumerGroupCommandOptions opts = new ConsumerGroupCommandOptions(args);
+        ConsumerGroupCommandOptions opts = ConsumerGroupCommandOptions.fromArgs(args);
         ConsumerGroupCommand.ConsumerGroupService service = new ConsumerGroupCommand.ConsumerGroupService(
             opts,
             Collections.singletonMap(AdminClientConfig.RETRIES_CONFIG, Integer.toString(Integer.MAX_VALUE))

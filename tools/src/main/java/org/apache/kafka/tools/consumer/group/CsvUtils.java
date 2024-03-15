@@ -23,17 +23,17 @@ import com.fasterxml.jackson.dataformat.csv.CsvMapper;
 import com.fasterxml.jackson.dataformat.csv.CsvSchema;
 
 public class CsvUtils {
-    private final CsvMapper mapper = new CsvMapper();
+    private final static CsvMapper MAPPER = new CsvMapper();
 
-    ObjectReader readerFor(Class<? extends CsvRecord> clazz) {
-        return mapper.readerFor(clazz).with(getSchema(clazz));
+    static ObjectReader readerFor(Class<?> clazz) {
+        return MAPPER.readerFor(clazz).with(getSchema(clazz));
     }
 
-    ObjectWriter writerFor(Class<? extends CsvRecord> clazz) {
-        return mapper.writerFor(clazz).with(getSchema(clazz));
+    static ObjectWriter writerFor(Class<?> clazz) {
+        return MAPPER.writerFor(clazz).with(getSchema(clazz));
     }
 
-    private CsvSchema getSchema(Class<? extends CsvRecord> clazz) {
+    private static CsvSchema getSchema(Class<?> clazz) {
         String[] fields;
         if (CsvRecordWithGroup.class == clazz)
             fields = CsvRecordWithGroup.FIELDS;
@@ -42,24 +42,32 @@ public class CsvUtils {
         else
             throw new IllegalStateException("Unhandled class " + clazz);
 
-        return mapper.schemaFor(clazz).sortedBy(fields);
+        return MAPPER.schemaFor(clazz).sortedBy(fields);
     }
 
-    public interface CsvRecord {
-    }
-
-    public static class CsvRecordWithGroup extends CsvRecordNoGroup {
+    public static class CsvRecordWithGroup {
         public static final String[] FIELDS = new String[] {"group", "topic", "partition", "offset"};
 
         @JsonProperty
         private String group;
 
+        @JsonProperty
+        private String topic;
+
+        @JsonProperty
+        private int partition;
+
+        @JsonProperty
+        private long offset;
+
         public CsvRecordWithGroup() {
         }
 
         public CsvRecordWithGroup(String group, String topic, int partition, long offset) {
-            super(topic, partition, offset);
             this.group = group;
+            this.topic = topic;
+            this.partition = partition;
+            this.offset = offset;
         }
 
         public void setGroup(String group) {
@@ -69,9 +77,33 @@ public class CsvUtils {
         public String getGroup() {
             return group;
         }
+
+        public String getTopic() {
+            return topic;
+        }
+
+        public void setTopic(String topic) {
+            this.topic = topic;
+        }
+
+        public int getPartition() {
+            return partition;
+        }
+
+        public void setPartition(int partition) {
+            this.partition = partition;
+        }
+
+        public long getOffset() {
+            return offset;
+        }
+
+        public void setOffset(long offset) {
+            this.offset = offset;
+        }
     }
 
-    public static class CsvRecordNoGroup implements CsvRecord {
+    public static class CsvRecordNoGroup {
         public static final String[] FIELDS = new String[]{"topic", "partition", "offset"};
 
         @JsonProperty
