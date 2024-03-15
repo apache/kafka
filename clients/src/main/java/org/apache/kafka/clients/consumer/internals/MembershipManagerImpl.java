@@ -909,13 +909,13 @@ public class MembershipManagerImpl implements MembershipManager {
         SortedSet<TopicIdPartition> assignedTopicIdPartitions = findResolvableAssignmentAndTriggerMetadataUpdate();
         final LocalAssignment resolvedAssignment = new LocalAssignment(currentTargetAssignment.localEpoch, assignedTopicIdPartitions);
 
-        if (currentAssignment != LocalAssignment.NONE &&
-            resolvedAssignment.localEpoch <= currentAssignment.localEpoch + 1 &&
+        if (!currentAssignment.isNone() &&
             resolvedAssignment.partitions.equals(currentAssignment.partitions)) {
-            log.debug("Ignoring reconciliation attempt. The resolvable fragment of the target assignment {} " +
-                "is equal to the current assignment, and no intermediate assignments were received.", resolvedAssignment.partitions);
-            // May bump the local epoch
+            log.debug("There are unresolved partitions, and the resolvable fragment of the  target assignment {} is equal to the current "
+                + "assignment. Bumping the local epoch of the assignment and acknowledging the partially resolved assignment",
+                resolvedAssignment.partitions);
             currentAssignment = resolvedAssignment;
+            transitionTo(MemberState.ACKNOWLEDGING);
             return;
         }
 

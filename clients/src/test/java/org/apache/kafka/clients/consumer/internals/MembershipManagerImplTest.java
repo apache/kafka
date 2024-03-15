@@ -739,6 +739,12 @@ public class MembershipManagerImplTest {
         receiveAssignment(newAssignment, membershipManager);
         membershipManager.poll(time.milliseconds());
 
+        // No full reconciliation triggered, but assignment needs to be acknowledged.
+        assertEquals(MemberState.ACKNOWLEDGING, membershipManager.state());
+        assertTrue(membershipManager.shouldHeartbeatNow());
+
+        membershipManager.onHeartbeatRequestSent();
+
         verifyReconciliationNotTriggered(membershipManager);
         assertEquals(MemberState.RECONCILING, membershipManager.state());
         assertEquals(Collections.singleton(topicId2), membershipManager.topicsAwaitingReconciliation());
