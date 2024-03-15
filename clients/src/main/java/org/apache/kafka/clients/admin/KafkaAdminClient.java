@@ -2217,6 +2217,7 @@ public class KafkaAdminClient extends AdminClient {
                 return new DescribeTopicPartitionsRequest.Builder(request);
             }
 
+            @SuppressWarnings("NPathComplexity")
             @Override
             void handleResponse(AbstractResponse abstractResponse) {
                 DescribeTopicPartitionsResponse response = (DescribeTopicPartitionsResponse) abstractResponse;
@@ -2328,7 +2329,7 @@ public class KafkaAdminClient extends AdminClient {
         final long now = time.milliseconds();
 
         runnable.call(
-            generateDescribeTopicsCallWithDescribeTopicPartitionsApi(topicNamesList, topicFutures, nodes,options, now),
+            generateDescribeTopicsCallWithDescribeTopicPartitionsApi(topicNamesList, topicFutures, nodes, options, now),
             now
         );
 
