@@ -540,10 +540,10 @@ public class HeartbeatRequestManager implements RequestManager {
                 sentFields.rebalanceTimeoutMs = rebalanceTimeoutMs;
             }
 
-            if (sendAllFields || !this.subscriptions.hasPatternSubscription()) {
+            if (!this.subscriptions.hasPatternSubscription()) {
                 // SubscribedTopicNames - only sent if has changed since the last heartbeat
                 TreeSet<String> subscribedTopicNames = new TreeSet<>(this.subscriptions.subscription());
-                if (!subscribedTopicNames.equals(sentFields.subscribedTopicNames)) {
+                if (sendAllFields || !subscribedTopicNames.equals(sentFields.subscribedTopicNames)) {
                     data.setSubscribedTopicNames(new ArrayList<>(this.subscriptions.subscription()));
                     sentFields.subscribedTopicNames = subscribedTopicNames;
                 }

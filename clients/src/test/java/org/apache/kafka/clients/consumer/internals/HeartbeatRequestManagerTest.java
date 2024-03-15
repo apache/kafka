@@ -436,17 +436,14 @@ public class HeartbeatRequestManagerTest {
         membershipManager.onHeartbeatRequestSent();
         assertEquals(MemberState.JOINING, membershipManager.state());
 
-        // Explicitly change the subscription when gets fenced
-        String newTopic = "topic2";
         membershipManager.transitionToFenced();
-        subscriptions.subscribe(Collections.singleton(newTopic), Optional.empty());
         data = heartbeatState.buildRequestData();
         assertEquals(ConsumerTestBuilder.DEFAULT_GROUP_ID, data.groupId());
         assertEquals(memberId, data.memberId());
         assertEquals(0, data.memberEpoch());
         assertNull(data.instanceId());
         assertEquals(DEFAULT_MAX_POLL_INTERVAL_MS, data.rebalanceTimeoutMs());
-        assertEquals(Collections.singletonList(newTopic), data.subscribedTopicNames());
+        assertEquals(Collections.singletonList(topic), data.subscribedTopicNames());
         assertEquals(ConsumerTestBuilder.DEFAULT_REMOTE_ASSIGNOR, data.serverAssignor());
         assertNull(data.topicPartitions());
         membershipManager.onHeartbeatRequestSent();
