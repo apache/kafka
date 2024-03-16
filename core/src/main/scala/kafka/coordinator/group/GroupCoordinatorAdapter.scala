@@ -24,7 +24,7 @@ import org.apache.kafka.common.message.{ConsumerGroupDescribeResponseData, Consu
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.record.RecordBatch
-import org.apache.kafka.common.requests.{OffsetCommitRequest, RequestContext, TransactionResult}
+import org.apache.kafka.common.requests.{OffsetCommitRequest, RequestContext, TransactionResult, TxnOffsetCommitRequest}
 import org.apache.kafka.common.utils.{BufferSupplier, Time}
 import org.apache.kafka.image.{MetadataDelta, MetadataImage}
 import org.apache.kafka.server.util.FutureUtils
@@ -476,7 +476,8 @@ private[group] class GroupCoordinatorAdapter(
       request.generationId,
       partitions.toMap,
       callback,
-      RequestLocal(bufferSupplier)
+      RequestLocal(bufferSupplier),
+      TxnOffsetCommitRequest.isTransactionV2Requested(context.apiVersion())
     )
 
     future

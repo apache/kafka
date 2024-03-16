@@ -1475,13 +1475,14 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
     /**
      * Schedules a transactional write operation.
      *
-     * @param name              The name of the write operation.
-     * @param tp                The address of the coordinator (aka its topic-partitions).
-     * @param transactionalId   The transactional id.
-     * @param producerId        The producer id.
-     * @param producerEpoch     The producer epoch.
-     * @param timeout           The write operation timeout.
-     * @param op                The write operation.
+     * @param name                    The name of the write operation.
+     * @param tp                      The address of the coordinator (aka its topic-partitions).
+     * @param transactionalId         The transactional id.
+     * @param producerId              The producer id.
+     * @param producerEpoch           The producer epoch.
+     * @param timeout                 The write operation timeout.
+     * @param op                      The write operation.
+     * @param transactionV2Requested  Whether the caller requests to use transaction v2.
      *
      * @return A future that will be completed with the result of the write operation
      * when the operation is completed or an exception if the write operation failed.
@@ -1495,7 +1496,8 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
         long producerId,
         short producerEpoch,
         Duration timeout,
-        CoordinatorWriteOperation<S, T, U> op
+        CoordinatorWriteOperation<S, T, U> op,
+        boolean transactionV2Requested
     ) {
         throwIfNotRunning();
         log.debug("Scheduled execution of transactional write operation {}.", name);
@@ -1503,7 +1505,8 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
             tp,
             transactionalId,
             producerId,
-            producerEpoch
+            producerEpoch,
+            transactionV2Requested
         ).thenCompose(verificationGuard -> {
             CoordinatorWriteEvent<T> event = new CoordinatorWriteEvent<>(
                 name,

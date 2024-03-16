@@ -3823,6 +3823,7 @@ class GroupCoordinatorTest {
     assertTrue(groupCoordinator.tryCompleteHeartbeat(group, leaderMemberId, false, () => true))
   }
 
+  //TODO(caliu) add a new test case with the correct error mapping.
   @Test
   def testVerificationErrorsForTxnOffsetCommits(): Unit = {
     val tip1 = new TopicIdPartition(Uuid.randomUuid(), 0, "topic-1")
@@ -4173,6 +4174,7 @@ class GroupCoordinatorTest {
       ArgumentMatchers.eq(producerId),
       ArgumentMatchers.eq(producerEpoch),
       any(),
+      ArgumentMatchers.eq(false),
       postVerificationCallback.capture()
     )).thenAnswer(
       _ => postVerificationCallback.getValue()((verificationError, VerificationGuard.SENTINEL))
@@ -4198,7 +4200,7 @@ class GroupCoordinatorTest {
     when(replicaManager.getMagic(any[TopicPartition])).thenReturn(Some(RecordBatch.MAGIC_VALUE_V2))
 
     groupCoordinator.handleTxnCommitOffsets(groupId, transactionalId, producerId, producerEpoch,
-      memberId, groupInstanceId, generationId, offsets, responseCallback)
+      memberId, groupInstanceId, generationId, offsets, responseCallback, RequestLocal.NoCaching, false)
     val result = Await.result(responseFuture, Duration(40, TimeUnit.MILLISECONDS))
     result
   }

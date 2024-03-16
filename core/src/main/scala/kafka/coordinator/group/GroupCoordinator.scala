@@ -905,7 +905,9 @@ private[group] class GroupCoordinator(
                              generationId: Int,
                              offsetMetadata: immutable.Map[TopicIdPartition, OffsetAndMetadata],
                              responseCallback: immutable.Map[TopicIdPartition, Errors] => Unit,
-                             requestLocal: RequestLocal = RequestLocal.NoCaching): Unit = {
+                             requestLocal: RequestLocal = RequestLocal.NoCaching,
+                             transactionV2Requested: Boolean
+                            ): Unit = {
     validateGroupStatus(groupId, ApiKeys.TXN_OFFSET_COMMIT) match {
       case Some(error) => responseCallback(offsetMetadata.map { case (k, _) => k -> error })
       case None =>
@@ -935,6 +937,7 @@ private[group] class GroupCoordinator(
           producerId,
           producerEpoch,
           RecordBatch.NO_SEQUENCE,
+          transactionV2Requested,
           // Wrap the callback to be handled on an arbitrary request handler thread
           // when transaction verification is complete. The request local passed in
           // is only used when the callback is executed immediately.

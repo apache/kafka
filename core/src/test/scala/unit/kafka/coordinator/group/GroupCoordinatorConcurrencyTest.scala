@@ -24,7 +24,7 @@ import kafka.common.OffsetAndMetadata
 import kafka.coordinator.AbstractCoordinatorConcurrencyTest
 import kafka.coordinator.AbstractCoordinatorConcurrencyTest._
 import kafka.coordinator.group.GroupCoordinatorConcurrencyTest._
-import kafka.server.{DelayedOperationPurgatory, KafkaConfig, KafkaRequestHandler}
+import kafka.server.{DelayedOperationPurgatory, KafkaConfig, KafkaRequestHandler, RequestLocal}
 import kafka.utils.CoreUtils
 import org.apache.kafka.common.{TopicIdPartition, TopicPartition, Uuid}
 import org.apache.kafka.common.internals.Topic
@@ -319,7 +319,7 @@ class GroupCoordinatorConcurrencyTest extends AbstractCoordinatorConcurrencyTest
         // Since the replica manager is mocked we can use a dummy value for transactionalId.
         groupCoordinator.handleTxnCommitOffsets(member.group.groupId, "dummy-txn-id", producerId, producerEpoch,
           JoinGroupRequest.UNKNOWN_MEMBER_ID, Option.empty, JoinGroupRequest.UNKNOWN_GENERATION_ID,
-          offsets, callbackWithTxnCompletion)
+          offsets, callbackWithTxnCompletion, RequestLocal.NoCaching, false)
         replicaManager.tryCompleteActions()
       } finally lock.foreach(_.unlock())
     }

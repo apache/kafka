@@ -60,6 +60,7 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.RequestContext;
 import org.apache.kafka.common.requests.RequestHeader;
 import org.apache.kafka.common.requests.TransactionResult;
+import org.apache.kafka.common.requests.TxnOffsetCommitRequest;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.utils.BufferSupplier;
@@ -1849,8 +1850,9 @@ public class GroupCoordinatorServiceTest {
         );
     }
 
-    @Test
-    public void testCommitTransactionalOffsets() throws ExecutionException, InterruptedException {
+    @ParameterizedTest
+    @ValueSource(shorts = {3, 4})
+    public void testCommitTransactionalOffsets(Short txnOffsetCommitVersion) throws ExecutionException, InterruptedException {
         CoordinatorRuntime<GroupCoordinatorShard, Record> runtime = mockRuntime();
         GroupCoordinatorService service = new GroupCoordinatorService(
             new LogContext(),
@@ -1887,11 +1889,12 @@ public class GroupCoordinatorServiceTest {
             ArgumentMatchers.eq(10L),
             ArgumentMatchers.eq((short) 5),
             ArgumentMatchers.eq(Duration.ofMillis(5000)),
-            ArgumentMatchers.any()
+            ArgumentMatchers.any(),
+            ArgumentMatchers.eq(TxnOffsetCommitRequest.isTransactionV2Requested(txnOffsetCommitVersion))
         )).thenReturn(CompletableFuture.completedFuture(response));
 
         CompletableFuture<TxnOffsetCommitResponseData> future = service.commitTransactionalOffsets(
-            requestContext(ApiKeys.TXN_OFFSET_COMMIT),
+            requestContext(ApiKeys.TXN_OFFSET_COMMIT, txnOffsetCommitVersion),
             request,
             BufferSupplier.NO_CACHING
         );
@@ -1937,7 +1940,8 @@ public class GroupCoordinatorServiceTest {
             ArgumentMatchers.eq(10L),
             ArgumentMatchers.eq((short) 5),
             ArgumentMatchers.eq(Duration.ofMillis(5000)),
-            ArgumentMatchers.any()
+            ArgumentMatchers.any(),
+            ArgumentMatchers.eq(false)
         )).thenReturn(FutureUtils.failedFuture(new CompletionException(Errors.NOT_ENOUGH_REPLICAS.exception())));
 
         CompletableFuture<TxnOffsetCommitResponseData> future = service.commitTransactionalOffsets(

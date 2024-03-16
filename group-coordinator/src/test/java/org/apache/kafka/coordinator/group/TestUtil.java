@@ -46,4 +46,25 @@ public class TestUtil {
             false
         );
     }
+
+    public static RequestContext requestContext(
+            ApiKeys apiKey,
+            Short version
+    ) {
+        return new RequestContext(
+            new RequestHeader(
+                apiKey,
+                version,
+                "client",
+                0
+            ),
+            "1",
+            InetAddress.getLoopbackAddress(),
+            KafkaPrincipal.ANONYMOUS,
+            ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT),
+            SecurityProtocol.PLAINTEXT,
+            ClientInformation.EMPTY,
+            false
+        );
+    }
 }

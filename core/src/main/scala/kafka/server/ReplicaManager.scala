@@ -807,7 +807,8 @@ class ReplicaManager(val config: KafkaConfig,
                           responseCallback: Map[TopicPartition, PartitionResponse] => Unit,
                           recordValidationStatsCallback: Map[TopicPartition, RecordValidationStats] => Unit = _ => (),
                           requestLocal: RequestLocal = RequestLocal.NoCaching,
-                          actionQueue: ActionQueue = this.defaultActionQueue): Unit = {
+                          actionQueue: ActionQueue = this.defaultActionQueue,
+                          transactionV2Requested: Boolean = false): Unit = {
 
     val transactionalProducerInfo = mutable.HashSet[(Long, Short)]()
     val topicPartitionBatchInfo = mutable.Map[TopicPartition, Int]()
@@ -878,6 +879,7 @@ class ReplicaManager(val config: KafkaConfig,
       transactionalId,
       transactionalProducerInfo.head._1,
       transactionalProducerInfo.head._2,
+      transactionV2Requested,
       // Wrap the callback to be handled on an arbitrary request handler thread
       // when transaction verification is complete. The request local passed in
       // is only used when the callback is executed immediately.
@@ -992,6 +994,7 @@ class ReplicaManager(val config: KafkaConfig,
     producerId: Long,
     producerEpoch: Short,
     baseSequence: Int,
+    shouldAddPartition: Boolean,
     callback: ((Errors, VerificationGuard)) => Unit
   ): Unit = {
     def generalizedCallback(results: (Map[TopicPartition, Errors], Map[TopicPartition, VerificationGuard])): Unit = {
@@ -1007,6 +1010,7 @@ class ReplicaManager(val config: KafkaConfig,
       transactionalId,
       producerId,
       producerEpoch,
+      shouldAddPartition,
       generalizedCallback
     )
   }
@@ -1029,6 +1033,7 @@ class ReplicaManager(val config: KafkaConfig,
     transactionalId: String,
     producerId: Long,
     producerEpoch: Short,
+    shouldAddPartition: Boolean,
     callback: ((Map[TopicPartition, Errors], Map[TopicPartition, VerificationGuard])) => Unit
   ): Unit = {
     // Skip verification if the request is not transactional or transaction verification is disabled.
@@ -1070,11 +1075,12 @@ class ReplicaManager(val config: KafkaConfig,
       callback((errors ++ verificationErrors, verificationGuards.toMap))
     }
 
-    addPartitionsToTxnManager.foreach(_.verifyTransaction(
+    addPartitionsToTxnManager.foreach(_.addOrVerifyTransaction(
       transactionalId = transactionalId,
       producerId = producerId,
       producerEpoch = producerEpoch,
       topicPartitions = verificationGuards.keys.toSeq,
+      shouldAddPartition = shouldAddPartition,
       callback = invokeCallback
     ))
 

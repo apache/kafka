@@ -188,7 +188,8 @@ class CoordinatorPartitionWriter[T](
     tp: TopicPartition,
     transactionalId: String,
     producerId: Long,
-    producerEpoch: Short
+    producerEpoch: Short,
+    transactionV2Requested: Boolean
   ): CompletableFuture[VerificationGuard] = {
     val future = new CompletableFuture[VerificationGuard]()
     replicaManager.maybeStartTransactionVerificationForPartition(
@@ -197,6 +198,7 @@ class CoordinatorPartitionWriter[T](
       producerId = producerId,
       producerEpoch = producerEpoch,
       baseSequence = RecordBatch.NO_SEQUENCE,
+      shouldAddPartition = transactionV2Requested,
       callback = errorAndGuard => {
         val (error, verificationGuard) = errorAndGuard
         if (error != Errors.NONE) {
