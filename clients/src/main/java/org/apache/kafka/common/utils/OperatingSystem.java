@@ -29,9 +29,12 @@ public final class OperatingSystem {
 
     public static final boolean IS_ZOS;
 
+    public static final boolean IS_LINUX;
+
     static {
         NAME = System.getProperty("os.name").toLowerCase(Locale.ROOT);
         IS_WINDOWS = NAME.startsWith("windows");
         IS_ZOS = NAME.startsWith("z/os");
+        IS_LINUX = NAME.startsWith("linux");
     }
 }

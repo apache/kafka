@@ -20,6 +20,7 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.network.TransferableChannel;
 import org.apache.kafka.common.record.FileLogInputStream.FileChannelRecordBatch;
 import org.apache.kafka.common.utils.AbstractIterator;
+import org.apache.kafka.common.utils.OperatingSystem;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 
@@ -30,6 +31,8 @@ import java.io.RandomAccessFile;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
 import java.util.Objects;
 import java.util.Optional;
@@ -40,6 +43,28 @@ import java.util.concurrent.atomic.AtomicInteger;
  * instance to enable slicing a range of the log records.
  */
 public class FileRecords extends AbstractRecords implements Closeable {
+    private static final Path DEVNULL_PATH;
+    static {
+        Path path = Paths.get("/dev/null");
+        // This is used for warming-up the page-cache by calling FileChannel.transferTo
+        // (calls sendfile(2) internally) on request handler threads with setting destination to /dev/null
+        // for avoiding slow sendfile(2) call on network threads which may block any requests
+        // which are multiplexed to the thread.
+        //
+        // For now, we do warm-up only on Linux because:
+        // - In other OS, /dev/null may not exist
+        // - The behavior "FileChannel.transferTo with /dev/null destination can be used for page-cache warming-up"
+        //   is confirmed only on Linux for now
+        //
+        // Also we check /dev/null existence just in case, to handle the case when null device is mounted on
+        // different path (Linux users unlikely do so though)
+        if (OperatingSystem.IS_LINUX && Files.exists(path)) {
+            DEVNULL_PATH = path;
+        } else {
+            DEVNULL_PATH = null;
+        }
+    }
+
     private final boolean isSlice;
     private final int start;
     private final int end;
@@ -419,6 +444,17 @@ public class FileRecords extends AbstractRecords implements Closeable {
             end = this.sizeInBytes();
         FileLogInputStream inputStream = new FileLogInputStream(this, start, end);
         return new RecordBatchIterator<>(inputStream);
+    }
+
+    /**
+     * Try populating OS page cache with file content
+     */
+    public void prepareForRead() throws IOException {
+        if (DEVNULL_PATH != null) {
+            try (FileChannel devnullChannel = FileChannel.open(DEVNULL_PATH, StandardOpenOption.WRITE)) {
+                channel.transferTo(start, sizeInBytes(), devnullChannel);
+            }
+        }
     }
 
     public static FileRecords open(File file,

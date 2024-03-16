@@ -31,19 +31,22 @@ public class LogReadInfo {
     public final long logStartOffset;
     public final long logEndOffset;
     public final long lastStableOffset;
+    public final long activeSegmentBaseOffset;
 
     public LogReadInfo(FetchDataInfo fetchedData,
                        Optional<FetchResponseData.EpochEndOffset> divergingEpoch,
                        long highWatermark,
                        long logStartOffset,
                        long logEndOffset,
-                       long lastStableOffset) {
+                       long lastStableOffset,
+                       long activeSegmentBaseOffset) {
         this.fetchedData = fetchedData;
         this.divergingEpoch = divergingEpoch;
         this.highWatermark = highWatermark;
         this.logStartOffset = logStartOffset;
         this.logEndOffset = logEndOffset;
         this.lastStableOffset = lastStableOffset;
+        this.activeSegmentBaseOffset = activeSegmentBaseOffset;
     }
 
     @Override
@@ -55,6 +58,7 @@ public class LogReadInfo {
                 ", logStartOffset=" + logStartOffset +
                 ", logEndOffset=" + logEndOffset +
                 ", lastStableOffset=" + lastStableOffset +
+                ", activeSegmentBaseOffset=" + activeSegmentBaseOffset +
                 ')';
     }
 }
