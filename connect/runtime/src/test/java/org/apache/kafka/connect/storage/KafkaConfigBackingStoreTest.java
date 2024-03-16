@@ -74,7 +74,6 @@ import static org.apache.kafka.connect.runtime.distributed.DistributedConfig.EXA
 import static org.apache.kafka.connect.runtime.distributed.DistributedConfig.GROUP_ID_CONFIG;
 import static org.apache.kafka.connect.storage.KafkaConfigBackingStore.INCLUDE_TASKS_FIELD_NAME;
 import static org.apache.kafka.connect.storage.KafkaConfigBackingStore.ONLY_FAILED_FIELD_NAME;
-import static org.apache.kafka.connect.storage.KafkaConfigBackingStore.READ_WRITE_TOTAL_TIMEOUT_MS;
 import static org.apache.kafka.connect.storage.KafkaConfigBackingStore.RESTART_KEY;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -223,57 +222,6 @@ public class KafkaConfigBackingStoreTest {
         createStore();
     }
 
-    @Test
-    public void testRemoveConnectorConfigSlowProducer() throws Exception {
-        expectConfigure();
-        expectStart(Collections.emptyList(), Collections.emptyMap());
-        expectPartitionCount(1);
-
-        @SuppressWarnings("unchecked")
-        Future<RecordMetadata> connectorConfigProducerFuture = PowerMock.createMock(Future.class);
-        // tombstone for the connector config
-        storeLog.sendWithReceipt(EasyMock.anyObject(), EasyMock.isNull());
-        EasyMock.expectLastCall().andReturn(connectorConfigProducerFuture);
-
-        @SuppressWarnings("unchecked")
-        Future<RecordMetadata> targetStateProducerFuture = PowerMock.createMock(Future.class);
-        // tombstone for the connector target state
-        storeLog.sendWithReceipt(EasyMock.anyObject(), EasyMock.isNull());
-        EasyMock.expectLastCall().andReturn(targetStateProducerFuture);
-
-        connectorConfigProducerFuture.get(EasyMock.eq(READ_WRITE_TOTAL_TIMEOUT_MS), EasyMock.anyObject());
-        EasyMock.expectLastCall().andAnswer(() -> {
-            time.sleep(READ_WRITE_TOTAL_TIMEOUT_MS - 1000);
-            return null;
-        });
-
-        // the future get timeout is expected to be reduced according to how long the previous Future::get took
-        targetStateProducerFuture.get(EasyMock.eq(1000L), EasyMock.anyObject());
-        EasyMock.expectLastCall().andAnswer(() -> {
-            time.sleep(1000);
-            return null;
-        });
-
-        @SuppressWarnings("unchecked")
-        Future<Void> future = PowerMock.createMock(Future.class);
-        EasyMock.expect(storeLog.readToEnd()).andAnswer(() -> future);
-
-        // the Future::get calls on the previous two producer futures exhausted the overall timeout; so expect the
-        // timeout on the log read future to be 0
-        EasyMock.expect(future.get(EasyMock.eq(0L), EasyMock.anyObject())).andReturn(null);
-
-        expectStop();
-
-        PowerMock.replayAll();
-
-        configStorage.setupAndCreateKafkaBasedLog(TOPIC, config);
-        configStorage.start();
-
-        configStorage.removeConnectorConfig("test-connector");
-        configStorage.stop();
-
-        PowerMock.verifyAll();
-    }
 
     @Test
     public void testWritePrivileges() throws Exception {

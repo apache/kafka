@@ -71,6 +71,7 @@ import static org.apache.kafka.clients.producer.ProducerConfig.TRANSACTIONAL_ID_
 import static org.apache.kafka.connect.runtime.distributed.DistributedConfig.EXACTLY_ONCE_SOURCE_SUPPORT_CONFIG;
 import static org.apache.kafka.connect.storage.KafkaConfigBackingStore.INCLUDE_TASKS_FIELD_NAME;
 import static org.apache.kafka.connect.storage.KafkaConfigBackingStore.ONLY_FAILED_FIELD_NAME;
+import static org.apache.kafka.connect.storage.KafkaConfigBackingStore.READ_WRITE_TOTAL_TIMEOUT_MS;
 import static org.apache.kafka.connect.storage.KafkaConfigBackingStore.RESTART_KEY;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -82,8 +83,10 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -385,6 +388,53 @@ public class KafkaConfigBackingStoreMockitoTest {
                 SAMPLE_CONFIGS.get(0), null));
         assertTrue(e.getMessage().contains("Error writing connector configuration to Kafka"));
 
+        configStorage.stop();
+        verify(configLog).stop();
+    }
+
+    @Test
+    public void testRemoveConnectorConfigSlowProducer() throws Exception {
+        expectStart(Collections.emptyList(), Collections.emptyMap());
+        expectPartitionCount(1);
+
+        configStorage.setupAndCreateKafkaBasedLog(TOPIC, config);
+        verifyConfigure();
+        configStorage.start();
+
+        @SuppressWarnings("unchecked")
+        Future<RecordMetadata> connectorConfigProducerFuture = mock(Future.class);
+
+        @SuppressWarnings("unchecked")
+        Future<RecordMetadata> targetStateProducerFuture = mock(Future.class);
+
+        when(configLog.sendWithReceipt(anyString(), isNull()))
+                // tombstone for the connector config
+                .thenReturn(connectorConfigProducerFuture)
+                // tombstone for the connector target state
+                .thenReturn(targetStateProducerFuture);
+
+        when(connectorConfigProducerFuture.get(eq(READ_WRITE_TOTAL_TIMEOUT_MS), any(TimeUnit.class)))
+                .thenAnswer((Answer<RecordMetadata>) invocation -> {
+                    time.sleep(READ_WRITE_TOTAL_TIMEOUT_MS - 1000);
+                    return null;
+                });
+
+        // the future get timeout is expected to be reduced according to how long the previous Future::get took
+        when(targetStateProducerFuture.get(eq(1000L), any(TimeUnit.class)))
+                .thenAnswer((Answer<RecordMetadata>) invocation -> {
+                    time.sleep(1000);
+                    return null;
+                });
+
+        @SuppressWarnings("unchecked")
+        Future<Void> future = mock(Future.class);
+        when(configLog.readToEnd()).thenReturn(future);
+
+        // the Future::get calls on the previous two producer futures exhausted the overall timeout; so expect the
+        // timeout on the log read future to be 0
+        when(future.get(eq(0L), any(TimeUnit.class))).thenReturn(null);
+
+        configStorage.removeConnectorConfig("test-connector");
         configStorage.stop();
         verify(configLog).stop();
     }
