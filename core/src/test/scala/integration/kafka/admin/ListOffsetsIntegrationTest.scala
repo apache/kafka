@@ -88,14 +88,15 @@ class ListOffsetsIntegrationTest extends KafkaServerTestHarness {
     props.setProperty(TopicConfig.MESSAGE_TIMESTAMP_TYPE_CONFIG, "LogAppendTime")
     createTopicWithConfig(topicNameWithCustomConfigs, props)
     produceMessagesInOneBatch(topic=topicNameWithCustomConfigs)
-    // In LogAppendTime's case, the maxTimestampOffset should be the first record of the batch.
+    // In LogAppendTime's case, if the timestamps are the same, we choose the offset of the first record
+    // thus, the maxTimestampOffset should be the first record of the batch.
     // So in this one batch test, it'll be the first offset which is 0
     verifyListOffsets(topic = topicNameWithCustomConfigs, 0)
   }
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
-  def testThreeRecordsInSeparateBatch(quorum: String): Unit = {
+  def testThreeNonCompressedRecordsInSeparateBatch(quorum: String): Unit = {
     produceMessagesInSeparateBatch()
     verifyListOffsets()
 
@@ -104,6 +105,7 @@ class ListOffsetsIntegrationTest extends KafkaServerTestHarness {
     props.setProperty(TopicConfig.MESSAGE_TIMESTAMP_TYPE_CONFIG, "LogAppendTime")
     createTopicWithConfig(topicNameWithCustomConfigs, props)
     produceMessagesInSeparateBatch(topic = topicNameWithCustomConfigs)
+    // In LogAppendTime's case, if the timestamp is different, it should be the last one
     verifyListOffsets(topic = topicNameWithCustomConfigs, 2)
   }
 

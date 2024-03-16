@@ -68,17 +68,17 @@ public class LogValidator {
         public final long logAppendTimeMs;
         public final MemoryRecords validatedRecords;
         public final long maxTimestampMs;
-        public final long recordOffsetOfMaxTimestampMs;
+        public final long offsetOfMaxTimestampMs;
         public final boolean messageSizeMaybeChanged;
         public final RecordValidationStats recordValidationStats;
 
         public ValidationResult(long logAppendTimeMs, MemoryRecords validatedRecords, long maxTimestampMs,
-                                long recordOffsetOfMaxTimestampMs, boolean messageSizeMaybeChanged,
+                                long offsetOfMaxTimestampMs, boolean messageSizeMaybeChanged,
                                 RecordValidationStats recordValidationStats) {
             this.logAppendTimeMs = logAppendTimeMs;
             this.validatedRecords = validatedRecords;
             this.maxTimestampMs = maxTimestampMs;
-            this.recordOffsetOfMaxTimestampMs = recordOffsetOfMaxTimestampMs;
+            this.offsetOfMaxTimestampMs = offsetOfMaxTimestampMs;
             this.messageSizeMaybeChanged = messageSizeMaybeChanged;
             this.recordValidationStats = recordValidationStats;
         }
@@ -232,7 +232,7 @@ public class LogValidator {
             now,
             convertedRecords,
             info.maxTimestamp,
-            info.recordOffsetOfMaxTimestamp,
+            info.offsetOfMaxTimestamp,
             true,
             recordValidationStats);
     }
@@ -476,7 +476,7 @@ public class LogValidator {
             logAppendTime,
             records,
             info.maxTimestamp,
-            info.recordOffsetOfMaxTimestamp,
+            info.offsetOfMaxTimestamp,
             true,
             recordValidationStats);
     }
