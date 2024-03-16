@@ -21,9 +21,10 @@ import org.apache.kafka.common.message.ShareFetchRequestData;
 import org.apache.kafka.common.protocol.Errors;
 
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.TreeMap;
 
 /**
  * This class maintains the acknowledgement and gap information for a set of records on a single
@@ -37,7 +38,7 @@ public class Acknowledgements {
     private Errors acknowledgeErrorCode;
 
     public static Acknowledgements empty() {
-        return new Acknowledgements(new LinkedHashMap<>());
+        return new Acknowledgements(new TreeMap<>());
     }
 
     private Acknowledgements(Map<Long, AcknowledgeType> acknowledgements) {
@@ -145,22 +146,79 @@ public class Acknowledgements {
 
     public List<ShareFetchRequestData.AcknowledgementBatch> getAcknowledgmentBatches() {
         List<ShareFetchRequestData.AcknowledgementBatch> batches = new ArrayList<>();
-        ShareFetchRequestData.AcknowledgementBatch currentBatch = new ShareFetchRequestData.AcknowledgementBatch();
         if (acknowledgements.isEmpty()) return batches;
-        acknowledgements.forEach((offset, acknowledgeType) -> {
-            if (batches.isEmpty()) {
-                currentBatch.setBaseOffset(offset);
-                currentBatch.setAcknowledgeType(acknowledgeType.id);
-                currentBatch.setLastOffset(offset);
-            } else if (acknowledgeType.id == currentBatch.acknowledgeType()) {
-                currentBatch.setLastOffset(offset);
+        Iterator<Map.Entry<Long, AcknowledgeType>> iterator = acknowledgements.entrySet().iterator();
+        ShareFetchRequestData.AcknowledgementBatch currentBatch = null;
+        while (iterator.hasNext()) {
+            Map.Entry<Long, AcknowledgeType> entry = iterator.next();
+            if (currentBatch == null) {
+                currentBatch = new ShareFetchRequestData.AcknowledgementBatch();
+                currentBatch.setBaseOffset(entry.getKey());
+                currentBatch.setLastOffset(entry.getKey());
+                if (entry.getValue() != null) {
+                    currentBatch.setAcknowledgeType(entry.getValue().id);
+                } else {
+                    // Put a marker value of -1 while this batch only has gaps
+                    currentBatch.setAcknowledgeType((byte) -1);
+                    currentBatch.gapOffsets().add(entry.getKey());
+                }
             } else {
-                batches.add(currentBatch);
-                currentBatch.setBaseOffset(offset);
-                currentBatch.setAcknowledgeType(acknowledgeType.id);
-                currentBatch.setLastOffset(offset);
+                if (entry.getValue() != null) {
+                    if (entry.getKey() == currentBatch.lastOffset() + 1) {
+                        if (entry.getValue().id == currentBatch.acknowledgeType()) {
+                            currentBatch.setLastOffset(entry.getKey());
+                        } else if (currentBatch.acknowledgeType() == (byte) -1) {
+                            currentBatch.setAcknowledgeType(entry.getValue().id);
+                            currentBatch.setLastOffset(entry.getKey());
+                        } else {
+                            if (currentBatch.acknowledgeType() == -1) {
+                                // Even though this batch is just gaps, we mark it as ACCEPT.
+                                currentBatch.setAcknowledgeType(AcknowledgeType.ACCEPT.id);
+                            }
+                            batches.add(currentBatch);
+
+                            currentBatch = new ShareFetchRequestData.AcknowledgementBatch();
+                            currentBatch.setBaseOffset(entry.getKey());
+                            currentBatch.setLastOffset(entry.getKey());
+                            currentBatch.setAcknowledgeType(entry.getValue().id);
+                        }
+                    } else {
+                        if (currentBatch.acknowledgeType() == -1) {
+                            // Even though this batch is just gaps, we mark it as ACCEPT.
+                            currentBatch.setAcknowledgeType(AcknowledgeType.ACCEPT.id);
+                        }
+                        batches.add(currentBatch);
+
+                        currentBatch = new ShareFetchRequestData.AcknowledgementBatch();
+                        currentBatch.setBaseOffset(entry.getKey());
+                        currentBatch.setLastOffset(entry.getKey());
+                        currentBatch.setAcknowledgeType(entry.getValue().id);
+                    }
+                } else {
+                    if (entry.getKey() == currentBatch.lastOffset() + 1) {
+                        currentBatch.setLastOffset(entry.getKey());
+                        currentBatch.gapOffsets().add(entry.getKey());
+                    } else {
+                        if (currentBatch.acknowledgeType() == -1) {
+                            // Even though this batch is just gaps, we mark it as ACCEPT.
+                            currentBatch.setAcknowledgeType(AcknowledgeType.ACCEPT.id);
+                        }
+                        batches.add(currentBatch);
+
+                        currentBatch = new ShareFetchRequestData.AcknowledgementBatch();
+                        currentBatch.setBaseOffset(entry.getKey());
+                        currentBatch.setLastOffset(entry.getKey());
+                        // Put a marker value of -1 while this batch only has gaps
+                        currentBatch.setAcknowledgeType((byte) -1);
+                        currentBatch.gapOffsets().add(entry.getKey());
+                    }
+                }
             }
-        });
+        }
+        if (currentBatch.acknowledgeType() == -1) {
+            // Even though this batch is just gaps, we mark it as ACCEPT.
+            currentBatch.setAcknowledgeType(AcknowledgeType.ACCEPT.id);
+        }
         batches.add(currentBatch);
         return batches;
     }

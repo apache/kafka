@@ -285,7 +285,8 @@ public class ShareCompletedFetchTest {
     public static List<ShareFetchResponseData.AcquiredRecords> acquiredRecords(long baseOffset, int count) {
         ShareFetchResponseData.AcquiredRecords acquiredRecords = new ShareFetchResponseData.AcquiredRecords()
                 .setBaseOffset(baseOffset)
-                .setLastOffset(baseOffset + count - 1);
+                .setLastOffset(baseOffset + count - 1)
+                .setDeliveryCount((short) 1);
         return Collections.singletonList(acquiredRecords);
     }
 

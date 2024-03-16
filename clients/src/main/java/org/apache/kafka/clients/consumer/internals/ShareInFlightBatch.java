@@ -51,7 +51,7 @@ public class ShareInFlightBatch<K, V> {
     }
 
     public void addGap(long offset) {
-        // To be implemented
+        acknowledgements.addGap(offset);
     }
 
     public void merge(ShareInFlightBatch<K, V> other) {

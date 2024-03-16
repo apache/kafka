@@ -164,54 +164,6 @@ abstract class AbstractConsumerTest extends BaseRequestTest {
     records
   }
 
-  protected def consumeAndVerifyRecords(shareConsumer: ShareConsumer[Array[Byte], Array[Byte]],
-                                        numRecords: Int,
-                                        startingOffset: Int,
-                                        startingKeyAndValueIndex: Int,
-                                        startingTimestamp: Long,
-                                        timestampType: TimestampType,
-                                        tp: TopicPartition,
-                                        maxPollRecords: Int): Unit = {
-    val records = consumeRecords(shareConsumer, numRecords, maxPollRecords = maxPollRecords)
-    val now = System.currentTimeMillis()
-    for (i <- 0 until numRecords) {
-      val record = records(i)
-      val offset = startingOffset + i
-      assertEquals(tp.topic, record.topic)
-      assertEquals(tp.partition, record.partition)
-      if (timestampType == TimestampType.CREATE_TIME) {
-        assertEquals(timestampType, record.timestampType)
-        val timestamp = startingTimestamp + i
-        assertEquals(timestamp, record.timestamp)
-      } else
-        assertTrue(record.timestamp >= startingTimestamp && record.timestamp <= now,
-          s"Got unexpected timestamp ${record.timestamp}. Timestamp should be between [$startingTimestamp, $now}]")
-      assertEquals(offset.toLong, record.offset)
-      val keyAndValueIndex = startingKeyAndValueIndex + i
-      assertEquals(s"key $keyAndValueIndex", new String(record.key))
-      assertEquals(s"value $keyAndValueIndex", new String(record.value))
-      // this is true only because K and V are byte arrays
-      assertEquals(s"key $keyAndValueIndex".length, record.serializedKeySize)
-      assertEquals(s"value $keyAndValueIndex".length, record.serializedValueSize)
-    }
-  }
-
-  protected def consumeRecords[K, V](shareConsumer: ShareConsumer[K, V],
-                                     numRecords: Int,
-                                     maxPollRecords: Int): ArrayBuffer[ConsumerRecord[K, V]] = {
-    val records = new ArrayBuffer[ConsumerRecord[K, V]]
-    def pollAction(polledRecords: ConsumerRecords[K, V]): Boolean = {
-      assertTrue(polledRecords.asScala.size <= maxPollRecords)
-      records ++= polledRecords.asScala
-      records.size >= numRecords
-    }
-    TestUtils.pollRecordsUntilTrue(shareConsumer, pollAction, waitTimeMs = 60000,
-      msg = s"Timed out before consuming expected $numRecords records. " +
-        s"The number consumed was ${records.size}.")
-    records
-  }
-
-
   /**
    * Creates topic 'topicName' with 'numPartitions' partitions and produces 'recordsPerPartition'
    * records to each partition

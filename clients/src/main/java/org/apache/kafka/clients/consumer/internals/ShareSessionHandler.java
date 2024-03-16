@@ -69,6 +69,7 @@ public class ShareSessionHandler {
      */
     private Map<Uuid, String> sessionTopicNames = new HashMap<>(0);
     private final Map<TopicIdPartition, Acknowledgements> nextAcknowledgements = new LinkedHashMap<>();
+
     public Map<Uuid, String> sessionTopicNames() {
         return sessionTopicNames;
     }
@@ -111,6 +112,10 @@ public class ShareSessionHandler {
          * The metadata to use in this fetch request.
          */
         private final ShareFetchMetadata metadata;
+
+        /**
+         * A map of the acknowledgements to send.
+         */
         private final Map<TopicIdPartition, Acknowledgements> acknowledgements;
 
         ShareFetchRequestData(Map<TopicPartition, TopicIdPartition> toSend,

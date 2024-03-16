@@ -197,6 +197,7 @@ public class ShareCompletedFetch {
                 }
             }
         } catch (SerializationException se) {
+            nextAcquired = nextAcquiredRecord();
             if (inFlightBatch.isEmpty()) {
                 inFlightBatch.addAcknowledgement(lastRecord.offset(), AcknowledgeType.RELEASE);
                 inFlightBatch.setException(se);

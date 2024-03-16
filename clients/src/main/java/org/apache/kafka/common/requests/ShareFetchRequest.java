@@ -74,12 +74,11 @@ public class ShareFetchRequest extends AbstractRequest {
                         .setPartitionMaxBytes(40000)
                         .setCurrentLeaderEpoch(RecordBatch.NO_PARTITION_LEADER_EPOCH);
 
-                // Get the list of Acknowledgments for the current partition
+                // Get the list of acknowledgements for the current partition
                 List<ShareFetchRequestData.AcknowledgementBatch> acknowledgementBatches = acknowledgements.get(topicPartition);
                 if (acknowledgementBatches != null) {
                     fetchPartition.setAcknowledgementBatches(acknowledgementBatches);
                 }
-
 
                 fetchTopic.partitions().add(fetchPartition);
             }

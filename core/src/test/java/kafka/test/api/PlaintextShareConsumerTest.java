@@ -16,10 +16,8 @@
  */
 package kafka.test.api;
 
-import kafka.api.AbstractConsumerTest;
+import kafka.api.AbstractShareConsumerTest;
 import kafka.api.BaseConsumerTest;
-import kafka.utils.TestUtils;
-import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
@@ -28,7 +26,6 @@ import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
-import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
@@ -36,19 +33,14 @@ import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serializer;
 
-import org.junit.jupiter.api.Disabled;
-import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
-import scala.Function0;
 import scala.collection.mutable.ArrayBuffer;
 import scala.jdk.javaapi.CollectionConverters;
 
 import java.time.Duration;
-import java.util.Arrays;
 import java.util.Collections;
-import java.util.HashSet;
 import java.util.Set;
 import java.util.Iterator;
 import java.util.Properties;
@@ -56,10 +48,9 @@ import java.util.Properties;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.apache.kafka.test.TestUtils.DEFAULT_MAX_WAIT_MS;
 
 @Timeout(600)
-public class PlaintextShareConsumerTest extends AbstractConsumerTest {
+public class PlaintextShareConsumerTest extends AbstractShareConsumerTest {
     public static final String TEST_WITH_PARAMETERIZED_QUORUM_NAME = "{displayName}.quorum={argumentsWithNames}";
 
     @ParameterizedTest(name = TEST_WITH_PARAMETERIZED_QUORUM_NAME)
@@ -253,96 +244,6 @@ public class PlaintextShareConsumerTest extends AbstractConsumerTest {
                 TimestampType.CREATE_TIME, tp(), maxPollRecords);
     }
 
-    @Disabled("TODO: The consumer needs to be converted to share consumers once the functionality for this test is available")
-    @Test
-    public void testMaxPollIntervalMs() throws InterruptedException {
-        consumerConfig().setProperty(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, String.valueOf(1000));
-        consumerConfig().setProperty(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, String.valueOf(500));
-        consumerConfig().setProperty(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, String.valueOf(2000));
-
-        Consumer<byte[], byte[]> consumer = createConsumer(new ByteArrayDeserializer(), new ByteArrayDeserializer(),
-                new Properties(), CollectionConverters.asScala(Collections.<String>emptyList()).toList());
-
-        TestConsumerReassignmentListener listener = new TestConsumerReassignmentListener();
-        consumer.subscribe(Collections.singleton(topic()), listener);
-
-        // rebalance to get the initial assignment
-        awaitRebalance(consumer, listener);
-        assertEquals(1, listener.callsToAssigned());
-        assertEquals(0, listener.callsToRevoked());
-
-        // after we extend longer than max.poll a rebalance should be triggered
-        // NOTE we need to have a relatively much larger value than max.poll to let heartbeat expired for sure
-        Thread.sleep(3000);
-
-        awaitRebalance(consumer, listener);
-        assertEquals(2, listener.callsToAssigned());
-        assertEquals(1, listener.callsToRevoked());
-    }
-
-    @Disabled("TODO: The consumer needs to be converted to share consumers once the functionality for this test is available")
-    @Test
-    public void testAutoCommitOnClose() {
-        consumerConfig().setProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "true");
-        Consumer<byte[], byte[]> consumer = createConsumer(new ByteArrayDeserializer(), new ByteArrayDeserializer(),
-                new Properties(), CollectionConverters.asScala(Collections.<String>emptyList()).toList());
-
-        int numRecords = 10000;
-        KafkaProducer<byte[], byte[]> producer = createProducer(new ByteArraySerializer(), new ByteArraySerializer(), new Properties());
-        sendRecords(producer, numRecords, tp(), System.currentTimeMillis());
-
-        consumer.subscribe(Collections.singleton(topic()));
-        awaitAssignment(consumer, new HashSet<>(Arrays.asList(tp(), tp2())));
-
-        // should auto-commit sought positions before closing
-        consumer.seek(tp(), 300);
-        consumer.seek(tp2(), 500);
-        consumer.close();
-
-        // now we should see the committed positions from another consumer
-        Consumer<byte[], byte[]> anotherConsumer = createConsumer(new ByteArrayDeserializer(), new ByteArrayDeserializer(),
-                new Properties(), CollectionConverters.asScala(Collections.<String>emptyList()).toList());
-        assertEquals(300, anotherConsumer.committed(new HashSet<>(Collections.singletonList(tp()))).get(tp()).offset());
-        assertEquals(500, anotherConsumer.committed(new HashSet<>(Collections.singletonList(tp2()))).get(tp2()).offset());
-    }
-
-    @Disabled("TODO: The consumer needs to be converted to share consumers once the functionality for this test is available")
-    @Test
-    public void testAutoCommitOnCloseAfterWakeup() {
-        consumerConfig().setProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "true");
-        Consumer<byte[], byte[]> consumer = createConsumer(new ByteArrayDeserializer(), new ByteArrayDeserializer(),
-                new Properties(), CollectionConverters.asScala(Collections.<String>emptyList()).toList());
-
-        int numRecords = 10000;
-        KafkaProducer<byte[], byte[]> producer = createProducer(new ByteArraySerializer(), new ByteArraySerializer(), new Properties());
-        sendRecords(producer, numRecords, tp(), System.currentTimeMillis());
-
-        consumer.subscribe(Collections.singleton(topic()));
-        awaitAssignment(consumer, new HashSet<>(Arrays.asList(tp(), tp2())));
-
-        // should auto-commit sought positions before closing
-        consumer.seek(tp(), 300);
-        consumer.seek(tp2(), 500);
-
-        // wakeup the consumer before closing to simulate trying to break a poll
-        // loop from another thread
-        consumer.wakeup();
-        consumer.close();
-
-        // now we should see the committed positions from another consumer
-        Consumer<byte[], byte[]> anotherConsumer = createConsumer(new ByteArrayDeserializer(), new ByteArrayDeserializer(),
-                new Properties(), CollectionConverters.asScala(Collections.<String>emptyList()).toList());
-        assertEquals(300, anotherConsumer.committed(new HashSet<>(Collections.singletonList(tp()))).get(tp()).offset());
-        assertEquals(500, anotherConsumer.committed(new HashSet<>(Collections.singletonList(tp2()))).get(tp2()).offset());
-    }
-
-    private void awaitAssignment(Consumer<byte[], byte[]> consumer, Set<TopicPartition> expectedAssignment) {
-        Function0<Object> action = () -> consumer.assignment().equals(expectedAssignment);
-        Function0<String> messageSupplier = () -> String.format("Timed out while awaiting expected assignment %s. " +
-                "The current assignment is %s", expectedAssignment, consumer.assignment());
-        TestUtils.pollUntilTrue(consumer, action, messageSupplier, DEFAULT_MAX_WAIT_MS);
-    }
-
     @ParameterizedTest(name = TEST_WITH_PARAMETERIZED_QUORUM_NAME)
     @ValueSource(strings = {"kraft+kip932"})
     public void testControlRecordsSkipped(String quorum) throws Exception {
@@ -382,6 +283,9 @@ public class PlaintextShareConsumerTest extends AbstractConsumerTest {
         // There will be control records on the topic-partition, so the offsets of the non-control records
         // are not 0, 1, 2, 3. Just assert that the offset of the final one is not 3.
         assertNotEquals(3, nonTransactional2.offset());
+
+        records = shareConsumer.poll(Duration.ofMillis(5000));
+        assertEquals(0, records.count());
         shareConsumer.close();
     }
 }
