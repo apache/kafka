@@ -20,9 +20,12 @@ import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerConfig;
+import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.IsolationLevel;
+import org.apache.kafka.common.errors.ProducerFencedException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.record.TimestampType;
@@ -50,6 +53,7 @@ import org.mockito.Mockito;
 import org.mockito.junit.MockitoJUnitRunner;
 import org.mockito.stubbing.Answer;
 
+import java.time.Duration;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
@@ -86,8 +90,10 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -114,6 +120,7 @@ public class KafkaConfigBackingStoreMockitoTest {
     private static final List<String> TARGET_STATE_KEYS = Arrays.asList("target-state-connector1", "target-state-connector2");
 
 
+    private static final List<String> CONNECTOR_TASK_COUNT_RECORD_KEYS = Arrays.asList("tasks-fencing-connector1", "tasks-fencing-connector2");
     private static final String CONNECTOR_1_NAME = "connector1";
     private static final String CONNECTOR_2_NAME = "connector2";
     private static final List<String> RESTART_CONNECTOR_KEYS = Arrays.asList(RESTART_KEY(CONNECTOR_1_NAME), RESTART_KEY(CONNECTOR_2_NAME));
@@ -139,6 +146,15 @@ public class KafkaConfigBackingStoreMockitoTest {
             new Struct(KafkaConfigBackingStore.CONNECTOR_CONFIGURATION_V0).put("properties", SAMPLE_CONFIGS.get(2))
     );
 
+    private static final Struct TARGET_STATE_PAUSED = new Struct(KafkaConfigBackingStore.TARGET_STATE_V1)
+            .put("state", "PAUSED")
+            .put("state.v2", "PAUSED");
+
+    private static final List<Struct> CONNECTOR_TASK_COUNT_RECORD_STRUCTS = Arrays.asList(
+            new Struct(KafkaConfigBackingStore.TASK_COUNT_RECORD_V0).put("task-count", 6),
+            new Struct(KafkaConfigBackingStore.TASK_COUNT_RECORD_V0).put("task-count", 9)
+    );
+
     // The exact format doesn't matter here since both conversions are mocked
     private static final List<byte[]> CONFIGS_SERIALIZED = Arrays.asList(
             "config-bytes-1".getBytes(), "config-bytes-2".getBytes(), "config-bytes-3".getBytes(),
@@ -157,6 +173,8 @@ public class KafkaConfigBackingStoreMockitoTest {
     private DistributedConfig config;
     @Mock
     KafkaBasedLog<String, byte[]> configLog;
+    @Mock
+    Producer<String, byte[]> fencableProducer;
     @Mock
     Future<RecordMetadata> producerFuture;
     private KafkaConfigBackingStore configStorage;
@@ -440,6 +458,88 @@ public class KafkaConfigBackingStoreMockitoTest {
     }
 
     @Test
+    @SuppressWarnings("unchecked")
+    public void testWritePrivileges() throws Exception {
+        // With exactly.once.source.support = preparing (or also, "enabled"), we need to use a transactional producer
+        // to write some types of messages to the config topic
+        props.put(EXACTLY_ONCE_SOURCE_SUPPORT_CONFIG, "preparing");
+        createStore();
+
+        expectStart(Collections.emptyList(), Collections.emptyMap());
+        expectPartitionCount(1);
+
+        configStorage.setupAndCreateKafkaBasedLog(TOPIC, config);
+        verifyConfigure();
+        configStorage.start();
+
+        // Try and fail to write a task count record to the config topic without write privileges
+        when(converter.fromConnectData(TOPIC, KafkaConfigBackingStore.TASK_COUNT_RECORD_V0, CONNECTOR_TASK_COUNT_RECORD_STRUCTS.get(0)))
+                .thenReturn(CONFIGS_SERIALIZED.get(0));
+
+        // Should fail the first time since we haven't claimed write privileges
+        assertThrows(IllegalStateException.class, () -> configStorage.putTaskCountRecord(CONNECTOR_IDS.get(0), 6));
+
+        // Claim write privileges
+        doReturn(fencableProducer).when(configStorage).createFencableProducer();
+        // And write the task count record successfully
+        when(fencableProducer.send(any(ProducerRecord.class))).thenReturn(null);
+        doAnswer(expectReadToEnd(Collections.singletonMap(CONNECTOR_CONFIG_KEYS.get(0), CONFIGS_SERIALIZED.get(0))))
+                .doAnswer(expectReadToEnd(Collections.singletonMap(CONNECTOR_CONFIG_KEYS.get(1), CONFIGS_SERIALIZED.get(2))))
+                .when(configLog).readToEnd();
+        expectRead(CONNECTOR_TASK_COUNT_RECORD_KEYS.get(0), CONFIGS_SERIALIZED.get(0), CONNECTOR_TASK_COUNT_RECORD_STRUCTS.get(0));
+
+        // Should succeed now
+        configStorage.claimWritePrivileges();
+        configStorage.putTaskCountRecord(CONNECTOR_IDS.get(0), 6);
+
+        verify(fencableProducer).beginTransaction();
+        verify(fencableProducer).commitTransaction();
+
+        // Try to write a connector config
+        when(converter.fromConnectData(TOPIC, KafkaConfigBackingStore.CONNECTOR_CONFIGURATION_V0, CONNECTOR_CONFIG_STRUCTS.get(0)))
+                .thenReturn(CONFIGS_SERIALIZED.get(1));
+        // Get fenced out
+        doThrow(new ProducerFencedException("Better luck next time"))
+                .doNothing()
+                .when(fencableProducer).commitTransaction();
+
+        // Should fail again when we get fenced out
+        assertThrows(PrivilegedWriteException.class, () -> configStorage.putConnectorConfig(CONNECTOR_IDS.get(1), SAMPLE_CONFIGS.get(0), null));
+
+        verify(fencableProducer, times(2)).beginTransaction();
+        verify(fencableProducer).close(Duration.ZERO);
+
+        // Should fail if we retry without reclaiming write privileges
+        assertThrows(IllegalStateException.class, () -> configStorage.putConnectorConfig(CONNECTOR_IDS.get(1), SAMPLE_CONFIGS.get(0), null));
+
+        // In the meantime, write a target state (which doesn't require write privileges)
+        when(converter.fromConnectData(TOPIC, KafkaConfigBackingStore.TARGET_STATE_V1, TARGET_STATE_PAUSED))
+                .thenReturn(CONFIGS_SERIALIZED.get(1));
+        when(configLog.sendWithReceipt("target-state-" + CONNECTOR_IDS.get(1), CONFIGS_SERIALIZED.get(1)))
+                .thenReturn(producerFuture);
+        when(producerFuture.get(anyLong(), any(TimeUnit.class))).thenReturn(null);
+
+        // Should succeed even without write privileges (target states can be written by anyone)
+        configStorage.putTargetState(CONNECTOR_IDS.get(1), TargetState.PAUSED);
+
+        // Reclaim write privileges and successfully write the config
+        when(converter.toConnectData(TOPIC, CONFIGS_SERIALIZED.get(2)))
+                .thenReturn(new SchemaAndValue(null, structToMap(CONNECTOR_CONFIG_STRUCTS.get(0))));
+
+        // Should succeed if we re-claim write privileges
+        configStorage.claimWritePrivileges();
+        configStorage.putConnectorConfig(CONNECTOR_IDS.get(1), SAMPLE_CONFIGS.get(0), null);
+
+        verify(fencableProducer, times(3)).beginTransaction();
+        verify(fencableProducer, times(3)).commitTransaction();
+        verify(configUpdateListener).onConnectorConfigUpdate(CONNECTOR_IDS.get(1));
+
+        configStorage.stop();
+        verify(configLog).stop();
+        verify(fencableProducer, times(2)).close(Duration.ZERO);
+    }
+
+    @Test
     public void testRecordToRestartRequest() {
         ConsumerRecord<String, byte[]> record = new ConsumerRecord<>(TOPIC, 0, 0, 0L, TimestampType.CREATE_TIME, 0, 0, RESTART_CONNECTOR_KEYS.get(0),
                 CONFIGS_SERIALIZED.get(0), new RecordHeaders(), Optional.empty());
@@ -568,8 +668,19 @@ public class KafkaConfigBackingStoreMockitoTest {
         });
     }
 
-    private void expectConvert(Schema valueSchema, Struct valueStruct, byte[] serialized) {
+    private void expectRead(final String key, final byte[] serializedValue, Struct deserializedValue) {
+        LinkedHashMap<String, byte[]> serializedData = new LinkedHashMap<>();
+        serializedData.put(key, serializedValue);
+        expectRead(serializedData, Collections.singletonMap(key, deserializedValue));
+    }
 
+    private void expectRead(LinkedHashMap<String, byte[]> serializedValues,
+                            Map<String, Struct> deserializedValues) {
+        for (Map.Entry<String, Struct> deserializedValueEntry : deserializedValues.entrySet()) {
+            byte[] serializedValue = serializedValues.get(deserializedValueEntry.getKey());
+            when(converter.toConnectData(TOPIC, serializedValue))
+                    .thenReturn(new SchemaAndValue(null, structToMap(deserializedValueEntry.getValue())));
+        }
     }
 
     // This map needs to maintain ordering

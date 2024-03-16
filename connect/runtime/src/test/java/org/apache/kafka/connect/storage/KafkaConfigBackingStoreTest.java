@@ -23,7 +23,6 @@ import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.config.ConfigException;
-import org.apache.kafka.common.errors.ProducerFencedException;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.utils.MockTime;
@@ -53,7 +52,6 @@ import org.powermock.core.classloader.annotations.PrepareForTest;
 import org.powermock.modules.junit4.PowerMockRunner;
 import org.powermock.reflect.Whitebox;
 
-import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -222,95 +220,6 @@ public class KafkaConfigBackingStoreTest {
         createStore();
     }
 
-
-    @Test
-    public void testWritePrivileges() throws Exception {
-        // With exactly.once.source.support = preparing (or also, "enabled"), we need to use a transactional producer
-        // to write some types of messages to the config topic
-        props.put(EXACTLY_ONCE_SOURCE_SUPPORT_CONFIG, "preparing");
-        createStore();
-
-        expectConfigure();
-        expectStart(Collections.emptyList(), Collections.emptyMap());
-
-        // Try and fail to write a task count record to the config topic without write privileges
-        expectConvert(KafkaConfigBackingStore.TASK_COUNT_RECORD_V0, CONNECTOR_TASK_COUNT_RECORD_STRUCTS.get(0), CONFIGS_SERIALIZED.get(0));
-        // Claim write privileges
-        expectFencableProducer();
-        // And write the task count record successfully
-        expectConvert(KafkaConfigBackingStore.TASK_COUNT_RECORD_V0, CONNECTOR_TASK_COUNT_RECORD_STRUCTS.get(0), CONFIGS_SERIALIZED.get(0));
-        fencableProducer.beginTransaction();
-        EasyMock.expectLastCall();
-        EasyMock.expect(fencableProducer.send(EasyMock.anyObject())).andReturn(null);
-        fencableProducer.commitTransaction();
-        EasyMock.expectLastCall();
-        expectRead(CONNECTOR_TASK_COUNT_RECORD_KEYS.get(0), CONFIGS_SERIALIZED.get(0), CONNECTOR_TASK_COUNT_RECORD_STRUCTS.get(0));
-
-        // Try to write a connector config
-        expectConvert(KafkaConfigBackingStore.CONNECTOR_CONFIGURATION_V0, CONNECTOR_CONFIG_STRUCTS.get(0), CONFIGS_SERIALIZED.get(1));
-        fencableProducer.beginTransaction();
-        EasyMock.expectLastCall();
-        EasyMock.expect(fencableProducer.send(EasyMock.anyObject())).andReturn(null);
-        // Get fenced out
-        fencableProducer.commitTransaction();
-        EasyMock.expectLastCall().andThrow(new ProducerFencedException("Better luck next time"));
-        fencableProducer.close(Duration.ZERO);
-        EasyMock.expectLastCall();
-        // And fail when trying to write again without reclaiming write privileges
-        expectConvert(KafkaConfigBackingStore.CONNECTOR_CONFIGURATION_V0, CONNECTOR_CONFIG_STRUCTS.get(0), CONFIGS_SERIALIZED.get(1));
-
-        // In the meantime, write a target state (which doesn't require write privileges)
-        expectConvert(KafkaConfigBackingStore.TARGET_STATE_V1, TARGET_STATE_PAUSED, CONFIGS_SERIALIZED.get(1));
-        storeLog.sendWithReceipt("target-state-" + CONNECTOR_IDS.get(1), CONFIGS_SERIALIZED.get(1));
-        EasyMock.expectLastCall().andReturn(producerFuture);
-        producerFuture.get(EasyMock.anyLong(), EasyMock.anyObject());
-        EasyMock.expectLastCall().andReturn(null);
-
-        // Reclaim write privileges
-        expectFencableProducer();
-        // And successfully write the config
-        expectConvert(KafkaConfigBackingStore.CONNECTOR_CONFIGURATION_V0, CONNECTOR_CONFIG_STRUCTS.get(0), CONFIGS_SERIALIZED.get(1));
-        fencableProducer.beginTransaction();
-        EasyMock.expectLastCall();
-        EasyMock.expect(fencableProducer.send(EasyMock.anyObject())).andReturn(null);
-        fencableProducer.commitTransaction();
-        EasyMock.expectLastCall();
-        expectConvertRead(CONNECTOR_CONFIG_KEYS.get(1), CONNECTOR_CONFIG_STRUCTS.get(0), CONFIGS_SERIALIZED.get(2));
-        configUpdateListener.onConnectorConfigUpdate(CONNECTOR_IDS.get(1));
-        EasyMock.expectLastCall();
-
-        expectPartitionCount(1);
-        expectStop();
-        fencableProducer.close(Duration.ZERO);
-        EasyMock.expectLastCall();
-
-        PowerMock.replayAll();
-
-        configStorage.setupAndCreateKafkaBasedLog(TOPIC, config);
-        configStorage.start();
-
-        // Should fail the first time since we haven't claimed write privileges
-        assertThrows(IllegalStateException.class, () -> configStorage.putTaskCountRecord(CONNECTOR_IDS.get(0), 6));
-        // Should succeed now
-        configStorage.claimWritePrivileges();
-        configStorage.putTaskCountRecord(CONNECTOR_IDS.get(0), 6);
-
-        // Should fail again when we get fenced out
-        assertThrows(PrivilegedWriteException.class, () -> configStorage.putConnectorConfig(CONNECTOR_IDS.get(1), SAMPLE_CONFIGS.get(0), null));
-        // Should fail if we retry without reclaiming write privileges
-        assertThrows(IllegalStateException.class, () -> configStorage.putConnectorConfig(CONNECTOR_IDS.get(1), SAMPLE_CONFIGS.get(0), null));
-
-        // Should succeed even without write privileges (target states can be written by anyone)
-        configStorage.putTargetState(CONNECTOR_IDS.get(1), TargetState.PAUSED);
-
-        // Should succeed if we re-claim write privileges
-        configStorage.claimWritePrivileges();
-        configStorage.putConnectorConfig(CONNECTOR_IDS.get(1), SAMPLE_CONFIGS.get(0), null);
-
-        configStorage.stop();
-
-        PowerMock.verifyAll();
-    }
 
     @Test
     public void testTaskCountRecordsAndGenerations() throws Exception {
