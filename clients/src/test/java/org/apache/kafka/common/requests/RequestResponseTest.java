@@ -73,6 +73,8 @@ import org.apache.kafka.common.message.ConsumerGroupDescribeRequestData;
 import org.apache.kafka.common.message.ConsumerGroupDescribeResponseData;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatRequestData;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatResponseData;
+import org.apache.kafka.common.message.ConsumerGroupInstallAssignmentRequestData;
+import org.apache.kafka.common.message.ConsumerGroupInstallAssignmentResponseData;
 import org.apache.kafka.common.message.ControlledShutdownRequestData;
 import org.apache.kafka.common.message.ControlledShutdownResponseData;
 import org.apache.kafka.common.message.ControlledShutdownResponseData.RemainingPartition;
@@ -1073,6 +1075,7 @@ public class RequestResponseTest {
             case LIST_TRANSACTIONS: return createListTransactionsRequest(version);
             case ALLOCATE_PRODUCER_IDS: return createAllocateProducerIdsRequest(version);
             case CONSUMER_GROUP_HEARTBEAT: return createConsumerGroupHeartbeatRequest(version);
+            case CONSUMER_GROUP_INSTALL_ASSIGNMENT: return createConsumerGroupInstallAssignmentRequest(version);
             case CONSUMER_GROUP_DESCRIBE: return createConsumerGroupDescribeRequest(version);
             case CONTROLLER_REGISTRATION: return createControllerRegistrationRequest(version);
             case GET_TELEMETRY_SUBSCRIPTIONS: return createGetTelemetrySubscriptionsRequest(version);
@@ -1155,6 +1158,7 @@ public class RequestResponseTest {
             case LIST_TRANSACTIONS: return createListTransactionsResponse();
             case ALLOCATE_PRODUCER_IDS: return createAllocateProducerIdsResponse();
             case CONSUMER_GROUP_HEARTBEAT: return createConsumerGroupHeartbeatResponse();
+            case CONSUMER_GROUP_INSTALL_ASSIGNMENT: return createConsumerGroupInstallAssignmentResponse();
             case CONSUMER_GROUP_DESCRIBE: return createConsumerGroupDescribeResponse();
             case CONTROLLER_REGISTRATION: return createControllerRegistrationResponse();
             case GET_TELEMETRY_SUBSCRIPTIONS: return createGetTelemetrySubscriptionsResponse();
@@ -1327,6 +1331,22 @@ public class RequestResponseTest {
                 ))
             );
         return new ConsumerGroupHeartbeatResponse(data);
+    }
+
+    private ConsumerGroupInstallAssignmentRequest createConsumerGroupInstallAssignmentRequest(short version) {
+        ConsumerGroupInstallAssignmentRequestData data = new ConsumerGroupInstallAssignmentRequestData()
+                .setGroupId("group")
+                .setMemberId("memberid")
+                .setMemberEpoch(10)
+                .setGroupEpoch(10);
+        return new ConsumerGroupInstallAssignmentRequest.Builder(data).build(version);
+    }
+
+    private ConsumerGroupInstallAssignmentResponse createConsumerGroupInstallAssignmentResponse() {
+        ConsumerGroupInstallAssignmentResponseData data = new ConsumerGroupInstallAssignmentResponseData()
+                .setErrorCode(Errors.NONE.code())
+                .setErrorMessage(Errors.NONE.message());
+        return new ConsumerGroupInstallAssignmentResponse(data);
     }
 
     private ControllerRegistrationRequest createControllerRegistrationRequest(short version) {
