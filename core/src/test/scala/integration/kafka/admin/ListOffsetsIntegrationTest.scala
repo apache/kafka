@@ -79,6 +79,22 @@ class ListOffsetsIntegrationTest extends KafkaServerTestHarness {
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
+  def testThreeNonCompressedRecordsInOneBatch(quorum: String): Unit = {
+    produceMessagesInOneBatch()
+    verifyListOffsets()
+
+    // test LogAppendTime case
+    val props: Properties = new Properties()
+    props.setProperty(TopicConfig.MESSAGE_TIMESTAMP_TYPE_CONFIG, "LogAppendTime")
+    createTopicWithConfig(topicNameWithCustomConfigs, props)
+    produceMessagesInOneBatch(topic=topicNameWithCustomConfigs)
+    // In LogAppendTime's case, the maxTimestampOffset should be the first record of the batch.
+    // So in this one batch test, it'll be the first offset which is 0
+    verifyListOffsets(topic = topicNameWithCustomConfigs, 0)
+  }
+
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
   def testThreeRecordsInSeparateBatch(quorum: String): Unit = {
     produceMessagesInSeparateBatch()
     verifyListOffsets()

@@ -173,7 +173,7 @@ class LogValidatorTest {
     assertEquals(now, validatedResults.maxTimestampMs, s"Max timestamp should be $now")
     assertFalse(validatedResults.messageSizeMaybeChanged, "Message size should not have been changed")
 
-    // If it's LOG_APPEND_TIME, the offset will be the first offset of the record
+    // If it's LOG_APPEND_TIME, the offset will be the offset of the first record
     val expectedMaxTimestampOffset = 0
     assertEquals(expectedMaxTimestampOffset, validatedResults.recordOffsetOfMaxTimestampMs,
       s"The offset of max timestamp should be $expectedMaxTimestampOffset")
