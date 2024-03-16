@@ -769,11 +769,7 @@ public class SenderTest {
         }, produceResponse(tp0, -1L, Errors.TOPIC_AUTHORIZATION_FAILED, 0));
         sender.runOnce();
         assertTrue(future.isDone());
-        try {
-            future.get();
-        } catch (Exception e) {
-            assertInstanceOf(TopicAuthorizationException.class, e.getCause());
-        }
+        assertInstanceOf(TopicAuthorizationException.class, assertThrows(Exception.class, future::get).getCause());
     }
 
     @Test
@@ -2540,12 +2536,10 @@ public class SenderTest {
         time.sleep(deliveryTimeoutMs);
         sender.runOnce();  // receive first response
         assertEquals(0, sender.inFlightBatches(tp0).size(), "Expect zero in-flight batch in accumulator");
-        try {
-            request.get();
-            fail("The expired batch should throw a TimeoutException");
-        } catch (ExecutionException e) {
-            assertInstanceOf(TimeoutException.class, e.getCause());
-        }
+        assertInstanceOf(
+            TimeoutException.class,
+            assertThrows(ExecutionException.class, request::get).getCause(),
+            "The expired batch should throw a TimeoutException");
     }
 
     @Test

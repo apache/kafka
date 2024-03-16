@@ -453,8 +453,9 @@ public final class RaftClientTestContext {
         List<RaftResponse.Outbound> sentMessages = drainSentResponses(ApiKeys.DESCRIBE_QUORUM);
         assertEquals(1, sentMessages.size());
         RaftResponse.Outbound raftMessage = sentMessages.get(0);
-        assertTrue(
-            raftMessage.data() instanceof DescribeQuorumResponseData,
+        assertInstanceOf(
+            DescribeQuorumResponseData.class,
+            raftMessage.data(),
             "Unexpected request type " + raftMessage.data());
         return (DescribeQuorumResponseData) raftMessage.data();
     }
@@ -968,10 +969,10 @@ public final class RaftClientTestContext {
         long fetchOffset,
         int lastFetchedEpoch
     ) {
-        assertTrue(
-            message.data() instanceof FetchRequestData,
-            "unexpected request type " + message.data()
-        );
+        assertInstanceOf(
+            FetchRequestData.class,
+            message.data(),
+            "unexpected request type " + message.data());
         FetchRequestData request = (FetchRequestData) message.data();
         assertEquals(KafkaRaftClient.MAX_FETCH_SIZE_BYTES, request.maxBytes());
         assertEquals(fetchMaxWaitMs, request.maxWaitMs());

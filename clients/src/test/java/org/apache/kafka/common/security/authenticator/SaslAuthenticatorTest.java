@@ -1806,12 +1806,12 @@ public class SaslAuthenticatorTest {
         // Server with extensions, but without a token should fail to start up since it could indicate a configuration error
         saslServerConfigs.put("listener.name.sasl_ssl.oauthbearer." + SaslConfigs.SASL_JAAS_CONFIG,
                 TestJaasConfig.jaasConfigProperty("OAUTHBEARER", Collections.singletonMap("unsecuredLoginExtension_test", "something")));
-        try {
-            createEchoServer(securityProtocol);
-            fail("Server created with invalid login config containing extensions without a token");
-        } catch (Throwable e) {
-            assertInstanceOf(LoginException.class, e.getCause(), "Unexpected exception " + Utils.stackTrace(e));
-        }
+
+        Throwable throwable = assertThrows(
+            Throwable.class,
+            () -> createEchoServer(securityProtocol),
+            "Server created with invalid login config containing extensions without a token");
+        assertInstanceOf(LoginException.class, throwable.getCause(), "Unexpected exception " + Utils.stackTrace(throwable));
     }
 
     /**

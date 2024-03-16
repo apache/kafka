@@ -2615,13 +2615,11 @@ public class TransactionManagerTest {
 
         runUntil(responseFuture::isDone);
 
-        try {
-            // make sure the produce was expired.
-            responseFuture.get();
-            fail("Expected to get a TimeoutException since the queued ProducerBatch should have been expired");
-        } catch (ExecutionException e) {
-            assertInstanceOf(TimeoutException.class, e.getCause());
-        }
+        // make sure the produce was expired.
+        assertInstanceOf(
+            TimeoutException.class,
+            assertThrows(ExecutionException.class, responseFuture::get).getCause(),
+            "Expected to get a TimeoutException since the queued ProducerBatch should have been expired");
         assertTrue(transactionManager.hasAbortableError());
     }
 
@@ -2665,21 +2663,17 @@ public class TransactionManagerTest {
         runUntil(firstBatchResponse::isDone);
         runUntil(secondBatchResponse::isDone);
 
-        try {
-            // make sure the produce was expired.
-            firstBatchResponse.get();
-            fail("Expected to get a TimeoutException since the queued ProducerBatch should have been expired");
-        } catch (ExecutionException e) {
-            assertInstanceOf(TimeoutException.class, e.getCause());
-        }
+        // make sure the produce was expired.
+        assertInstanceOf(
+            TimeoutException.class,
+            assertThrows(ExecutionException.class, firstBatchResponse::get).getCause(),
+            "Expected to get a TimeoutException since the queued ProducerBatch should have been expired");
+        // make sure the produce was expired.
+        assertInstanceOf(
+            TimeoutException.class,
+            assertThrows(ExecutionException.class, secondBatchResponse::get).getCause(),
+            "Expected to get a TimeoutException since the queued ProducerBatch should have been expired");
 
-        try {
-            // make sure the produce was expired.
-            secondBatchResponse.get();
-            fail("Expected to get a TimeoutException since the queued ProducerBatch should have been expired");
-        } catch (ExecutionException e) {
-            assertInstanceOf(TimeoutException.class, e.getCause());
-        }
         assertTrue(transactionManager.hasAbortableError());
     }
 
@@ -2714,13 +2708,11 @@ public class TransactionManagerTest {
 
         runUntil(responseFuture::isDone);  // We should try to flush the produce, but expire it instead without sending anything.
 
-        try {
-            // make sure the produce was expired.
-            responseFuture.get();
-            fail("Expected to get a TimeoutException since the queued ProducerBatch should have been expired");
-        } catch (ExecutionException e) {
-            assertInstanceOf(TimeoutException.class, e.getCause());
-        }
+        // make sure the produce was expired.
+        assertInstanceOf(
+            TimeoutException.class,
+            assertThrows(ExecutionException.class, responseFuture::get).getCause(),
+            "Expected to get a TimeoutException since the queued ProducerBatch should have been expired");
         runUntil(commitResult::isCompleted);  // the commit shouldn't be completed without being sent since the produce request failed.
         assertFalse(commitResult.isSuccessful());  // the commit shouldn't succeed since the produce request failed.
         assertThrows(TimeoutException.class, commitResult::await);
@@ -2785,13 +2777,11 @@ public class TransactionManagerTest {
 
         runUntil(responseFuture::isDone);  // We should try to flush the produce, but expire it instead without sending anything.
 
-        try {
-            // make sure the produce was expired.
-            responseFuture.get();
-            fail("Expected to get a TimeoutException since the queued ProducerBatch should have been expired");
-        } catch (ExecutionException e) {
-            assertInstanceOf(TimeoutException.class, e.getCause());
-        }
+        // make sure the produce was expired.
+        assertInstanceOf(
+            TimeoutException.class,
+            assertThrows(ExecutionException.class, responseFuture::get).getCause(),
+            "Expected to get a TimeoutException since the queued ProducerBatch should have been expired");
         runUntil(commitResult::isCompleted);
         assertFalse(commitResult.isSuccessful());  // the commit should have been dropped.
 
