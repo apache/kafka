@@ -62,6 +62,7 @@ import org.apache.kafka.common.requests.AddOffsetsToTxnRequest;
 import org.apache.kafka.common.requests.AddOffsetsToTxnResponse;
 import org.apache.kafka.common.requests.AddPartitionsToTxnRequest;
 import org.apache.kafka.common.requests.AddPartitionsToTxnResponse;
+import org.apache.kafka.common.requests.CorrelationIdMismatchException;
 import org.apache.kafka.common.requests.EndTxnRequest;
 import org.apache.kafka.common.requests.EndTxnResponse;
 import org.apache.kafka.common.requests.FindCoordinatorRequest;
@@ -954,11 +955,12 @@ public class TransactionManagerTest {
         }, new TxnOffsetCommitResponse(0, singletonMap(tp, Errors.FENCED_INSTANCE_ID)));
 
         runUntil(transactionManager::hasError);
+        assertTrue(transactionManager.hasFatalError());
         assertTrue(transactionManager.lastError() instanceof FencedInstanceIdException);
         assertTrue(sendOffsetsResult.isCompleted());
         assertFalse(sendOffsetsResult.isSuccessful());
         assertTrue(sendOffsetsResult.error() instanceof FencedInstanceIdException);
-        assertAbortableError(FencedInstanceIdException.class);
+        assertFatalError(FencedInstanceIdException.class);
     }
 
     @Test
@@ -987,11 +989,12 @@ public class TransactionManagerTest {
         }, new TxnOffsetCommitResponse(0, singletonMap(tp, Errors.UNKNOWN_MEMBER_ID)));
 
         runUntil(transactionManager::hasError);
+        assertTrue(transactionManager.hasFatalError());
         assertTrue(transactionManager.lastError() instanceof CommitFailedException);
         assertTrue(sendOffsetsResult.isCompleted());
         assertFalse(sendOffsetsResult.isSuccessful());
         assertTrue(sendOffsetsResult.error() instanceof CommitFailedException);
-        assertAbortableError(CommitFailedException.class);
+        assertFatalError(CommitFailedException.class);
     }
 
     @Test
@@ -1022,11 +1025,12 @@ public class TransactionManagerTest {
         }, new TxnOffsetCommitResponse(0, singletonMap(tp, Errors.ILLEGAL_GENERATION)));
 
         runUntil(transactionManager::hasError);
+        assertTrue(transactionManager::hasFatalError);
         assertTrue(transactionManager.lastError() instanceof CommitFailedException);
         assertTrue(sendOffsetsResult.isCompleted());
         assertFalse(sendOffsetsResult.isSuccessful());
         assertTrue(sendOffsetsResult.error() instanceof CommitFailedException);
-        assertAbortableError(CommitFailedException.class);
+        assertFatalError(CommitFailedException.class);
     }
 
     @Test
@@ -1905,6 +1909,17 @@ public class TransactionManagerTest {
         assertThrows(KafkaException.class, () -> transactionManager.beginAbort());
         assertThrows(KafkaException.class, () -> transactionManager.sendOffsetsToTransaction(
             Collections.emptyMap(), new ConsumerGroupMetadata("dummyId")));
+    }
+
+    @Test
+    public void testMismatchingCorrelationId() {
+        transactionManager.initializeTransactions();
+        client.prepareResponseWithUnalignedCorrelationId(body -> true, FindCoordinatorResponse.prepareResponse(Errors.NONE, transactionalId, brokerNode), false);
+
+        runUntil(transactionManager::hasError);
+
+        assertTrue(transactionManager.hasFatalError());
+        assertTrue(transactionManager.lastError() instanceof CorrelationIdMismatchException);
     }
 
     @Test

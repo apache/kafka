@@ -55,6 +55,7 @@ import org.apache.kafka.common.requests.AddOffsetsToTxnRequest;
 import org.apache.kafka.common.requests.AddOffsetsToTxnResponse;
 import org.apache.kafka.common.requests.AddPartitionsToTxnRequest;
 import org.apache.kafka.common.requests.AddPartitionsToTxnResponse;
+import org.apache.kafka.common.requests.CorrelationIdMismatchException;
 import org.apache.kafka.common.requests.EndTxnRequest;
 import org.apache.kafka.common.requests.EndTxnResponse;
 import org.apache.kafka.common.requests.FindCoordinatorRequest;
@@ -1023,6 +1024,9 @@ public class TransactionManager {
         if (!hasError()) {
             return;
         }
+        if (lastError instanceof IllegalStateException) {
+            throw lastError;
+        }
         // for ProducerFencedException, do not wrap it as a KafkaException
         // but create a new instance without the call trace since it was not thrown because of the current call
         if (lastError instanceof ProducerFencedException) {
@@ -1219,7 +1223,8 @@ public class TransactionManager {
         @Override
         public void onComplete(ClientResponse response) {
             if (response.requestHeader().correlationId() != inFlightRequestCorrelationId) {
-                fatalError(new RuntimeException("Detected more than one in-flight transactional request."));
+                fatalError(new CorrelationIdMismatchException("Detected more than one in-flight transactional request.",
+                    inFlightRequestCorrelationId, response.requestHeader().correlationId()));
             } else {
                 clearInFlightCorrelationId();
                 if (response.wasDisconnected()) {
@@ -1236,7 +1241,7 @@ public class TransactionManager {
                         handleResponse(response.responseBody());
                     }
                 } else {
-                    fatalError(new KafkaException("Could not execute transactional request for unknown reasons"));
+                    fatalError(new IllegalStateException("Could not execute transactional request for unknown reasons"));
                 }
             }
         }
@@ -1680,11 +1685,11 @@ public class TransactionManager {
                     abortableError(GroupAuthorizationException.forGroupId(builder.data.groupId()));
                     break;
                 } else if (error == Errors.FENCED_INSTANCE_ID) {
-                    abortableError(error.exception());
+                    fatalError(error.exception());
                     break;
                 } else if (error == Errors.UNKNOWN_MEMBER_ID
                         || error == Errors.ILLEGAL_GENERATION) {
-                    abortableError(new CommitFailedException("Transaction offset Commit failed " +
+                    fatalError(new CommitFailedException("Transaction offset Commit failed " +
                         "due to consumer group metadata mismatch: " + error.exception().getMessage()));
                     break;
                 } else if (error == Errors.INVALID_PRODUCER_EPOCH
