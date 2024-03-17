@@ -53,9 +53,7 @@ public final class KafkaMetric implements Metric {
      * @return Return the config of this metric
      */
     public MetricConfig config() {
-        synchronized (lock) {
-            return this.config;
-        }
+        return this.config;
     }
 
     /**
