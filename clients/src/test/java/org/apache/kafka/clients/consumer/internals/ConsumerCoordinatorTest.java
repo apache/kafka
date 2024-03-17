@@ -2795,7 +2795,7 @@ public abstract class ConsumerCoordinatorTest {
         coordinator.setNewState(AbstractCoordinator.MemberState.PREPARING_REBALANCE);
 
         assertTrue(consumerClient.poll(future, time.timer(30000)));
-        assertTrue(future.exception().getClass().isInstance(Errors.REBALANCE_IN_PROGRESS.exception()));
+        assertInstanceOf(future.exception().getClass(), Errors.REBALANCE_IN_PROGRESS.exception());
 
         // the generation should not be reset
         assertEquals(newGen, coordinator.generation());
@@ -2843,7 +2843,7 @@ public abstract class ConsumerCoordinatorTest {
         coordinator.setNewGeneration(AbstractCoordinator.Generation.NO_GENERATION);
 
         assertTrue(consumerClient.poll(future, time.timer(30000)));
-        assertTrue(future.exception().getClass().isInstance(new CommitFailedException()));
+        assertInstanceOf(future.exception().getClass(), new CommitFailedException());
 
         // the generation should not be reset
         assertEquals(AbstractCoordinator.Generation.NO_GENERATION, coordinator.generation());
@@ -2873,7 +2873,7 @@ public abstract class ConsumerCoordinatorTest {
         coordinator.setNewState(AbstractCoordinator.MemberState.PREPARING_REBALANCE);
 
         assertTrue(consumerClient.poll(future, time.timer(30000)));
-        assertTrue(future.exception().getClass().isInstance(Errors.REBALANCE_IN_PROGRESS.exception()));
+        assertInstanceOf(future.exception().getClass(), Errors.REBALANCE_IN_PROGRESS.exception());
 
         // the generation should not be reset
         assertEquals(newGen, coordinator.generation());
@@ -2898,7 +2898,7 @@ public abstract class ConsumerCoordinatorTest {
         coordinator.setNewGeneration(AbstractCoordinator.Generation.NO_GENERATION);
 
         assertTrue(consumerClient.poll(future, time.timer(30000)));
-        assertTrue(future.exception().getClass().isInstance(new CommitFailedException()));
+        assertInstanceOf(future.exception().getClass(), new CommitFailedException());
 
         // the generation should be reset
         assertEquals(AbstractCoordinator.Generation.NO_GENERATION, coordinator.generation());
@@ -2948,7 +2948,7 @@ public abstract class ConsumerCoordinatorTest {
         coordinator.setNewGeneration(newGen);
 
         assertTrue(consumerClient.poll(future, time.timer(30000)));
-        assertTrue(future.exception().getClass().isInstance(Errors.REBALANCE_IN_PROGRESS.exception()));
+        assertInstanceOf(future.exception().getClass(), Errors.REBALANCE_IN_PROGRESS.exception());
 
         // the generation should not be reset
         assertEquals(newGen, coordinator.generation());
@@ -2977,7 +2977,7 @@ public abstract class ConsumerCoordinatorTest {
         coordinator.setNewGeneration(newGen);
 
         assertTrue(consumerClient.poll(future, time.timer(30000)));
-        assertTrue(future.exception().getClass().isInstance(new CommitFailedException()));
+        assertInstanceOf(future.exception().getClass(), new CommitFailedException());
 
         // the generation should not be reset
         assertEquals(newGen, coordinator.generation());

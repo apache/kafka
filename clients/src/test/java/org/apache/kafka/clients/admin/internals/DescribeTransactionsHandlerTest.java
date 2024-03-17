@@ -37,7 +37,7 @@ import static java.util.Collections.emptyMap;
 import static java.util.Collections.singletonList;
 import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 
 public class DescribeTransactionsHandlerTest {
     private final LogContext logContext = new LogContext();
@@ -107,7 +107,7 @@ public class DescribeTransactionsHandlerTest {
         assertEquals(mkSet(key), result.failedKeys.keySet());
 
         Throwable throwable = result.failedKeys.get(key);
-        assertTrue(error.exception().getClass().isInstance(throwable));
+        assertInstanceOf(error.exception().getClass(), throwable);
     }
 
     private void assertRetriableError(

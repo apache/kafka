@@ -17,6 +17,7 @@
 
 package org.apache.kafka.common.security.oauthbearer.internals.secured;
 
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.Mockito.mock;
@@ -71,7 +72,7 @@ public abstract class OAuthBearerTest {
             executable.execute();
         } catch (Throwable t) {
             failed = true;
-            assertTrue(clazz.isInstance(t), String.format("Test failed by exception %s, but expected %s", t.getClass(), clazz));
+            assertInstanceOf(clazz, t, String.format("Test failed by exception %s, but expected %s", t.getClass(), clazz));
 
             assertErrorMessageContains(t.getMessage(), substring);
         }

@@ -39,7 +39,6 @@ import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class CoordinatorStrategyTest {
 
@@ -234,7 +233,7 @@ public class CoordinatorStrategyTest {
         assertEquals(singleton(key), result.failedKeys.keySet());
 
         Throwable throwable = result.failedKeys.get(key);
-        assertTrue(error.exception().getClass().isInstance(throwable));
+        assertInstanceOf(error.exception().getClass(), throwable);
         return throwable;
     }
 
@@ -265,7 +264,7 @@ public class CoordinatorStrategyTest {
         assertEquals(singleton(key), result.failedKeys.keySet());
 
         Throwable throwable = result.failedKeys.get(key);
-        assertTrue(error.exception().getClass().isInstance(throwable));
+        assertInstanceOf(error.exception().getClass(), throwable);
         return throwable;
     }
 

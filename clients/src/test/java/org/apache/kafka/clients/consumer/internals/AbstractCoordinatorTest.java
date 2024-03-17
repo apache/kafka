@@ -342,7 +342,7 @@ public class AbstractCoordinatorTest {
 
         RequestFuture<ByteBuffer> future = coordinator.sendJoinGroupRequest();
         assertTrue(consumerClient.poll(future, mockTime.timer(REQUEST_TIMEOUT_MS)));
-        assertTrue(future.exception().getClass().isInstance(Errors.GROUP_MAX_SIZE_REACHED.exception()));
+        assertInstanceOf(future.exception().getClass(), Errors.GROUP_MAX_SIZE_REACHED.exception());
         assertFalse(future.isRetriable());
     }
 
@@ -774,7 +774,7 @@ public class AbstractCoordinatorTest {
         mockClient.respond(joinGroupFollowerResponse(currGen.generationId + 1, memberId, JoinGroupRequest.UNKNOWN_MEMBER_ID, Errors.UNKNOWN_MEMBER_ID));
 
         assertTrue(consumerClient.poll(future, mockTime.timer(REQUEST_TIMEOUT_MS)));
-        assertTrue(future.exception().getClass().isInstance(Errors.UNKNOWN_MEMBER_ID.exception()));
+        assertInstanceOf(future.exception().getClass(), Errors.UNKNOWN_MEMBER_ID.exception());
 
         // the generation should not be reset
         assertEquals(newGen, coordinator.generation());
@@ -814,7 +814,7 @@ public class AbstractCoordinatorTest {
 
         mockClient.respond(syncGroupResponse(Errors.UNKNOWN_MEMBER_ID));
         assertTrue(consumerClient.poll(future, mockTime.timer(REQUEST_TIMEOUT_MS)));
-        assertTrue(future.exception().getClass().isInstance(Errors.UNKNOWN_MEMBER_ID.exception()));
+        assertInstanceOf(future.exception().getClass(), Errors.UNKNOWN_MEMBER_ID.exception());
 
         // the generation should not be reset
         assertEquals(newGen, coordinator.generation());
@@ -854,7 +854,7 @@ public class AbstractCoordinatorTest {
 
         mockClient.respond(syncGroupResponse(Errors.ILLEGAL_GENERATION));
         assertTrue(consumerClient.poll(future, mockTime.timer(REQUEST_TIMEOUT_MS)));
-        assertTrue(future.exception().getClass().isInstance(Errors.ILLEGAL_GENERATION.exception()));
+        assertInstanceOf(future.exception().getClass(), Errors.ILLEGAL_GENERATION.exception());
 
         // the generation should not be reset
         assertEquals(newGen, coordinator.generation());
@@ -1070,7 +1070,7 @@ public class AbstractCoordinatorTest {
         RequestFuture<ByteBuffer> future = coordinator.sendJoinGroupRequest();
 
         assertTrue(consumerClient.poll(future, mockTime.timer(REQUEST_TIMEOUT_MS)));
-        assertTrue(future.exception().getClass().isInstance(Errors.REBALANCE_IN_PROGRESS.exception()));
+        assertInstanceOf(future.exception().getClass(), Errors.REBALANCE_IN_PROGRESS.exception());
         assertEquals(Errors.REBALANCE_IN_PROGRESS.message(), future.exception().getMessage());
         assertTrue(coordinator.rejoinNeededOrPending());
 
