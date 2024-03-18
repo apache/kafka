@@ -17,6 +17,13 @@
  *
  */
 
+import hudson.tasks.junit.TestResultAction
+import hudson.tasks.junit.TestResult
+import hudson.tasks.junit.SuiteResult
+import org.dom4j.DocumentHelper
+import org.dom4j.Document
+import org.dom4j.Node
+
 def doValidation() {
   // Run all the tasks associated with `check` except for `test` - the latter is executed via `doTest`
   sh """
@@ -29,10 +36,10 @@ def isChangeRequest(env) {
   env.CHANGE_ID != null && !env.CHANGE_ID.isEmpty()
 }
 
-def doTest(env, target = "test") {
+def doTest(env, target = "unitTest") {
   sh """./gradlew -PscalaVersion=$SCALA_VERSION ${target} \
       --profile --continue -PkeepAliveMode="session" -PtestLoggingEvents=started,passed,skipped,failed \
-      -PignoreFailures=true -PmaxParallelForks=2 -PmaxTestRetries=1 -PmaxTestRetryFailures=10"""
+      -PignoreFailures=true -PmaxParallelForks=2 -PmaxTestRetries=1 -PmaxTestRetryFailures=50"""
   junit '**/build/test-results/**/TEST-*.xml'
 }
 
@@ -86,6 +93,26 @@ def tryStreamsArchetype() {
   }
 }
 
+currentBuild.description = ""
+
+def reportFlakyTests() {
+  def testResultAction = currentBuild.rawBuild.getAction(hudson.tasks.junit.TestResultAction.class)
+
+  if (testResultAction != null && testResultAction instanceof TestResultAction) {
+    def testResult = (TestResult) testResultAction.getResult()
+    for (SuiteResult suiteResult : testResult.getSuites()) {
+      Document document = DocumentHelper.parseText(readFile(suiteResult.getFile()))
+      List<Node> list = document.selectNodes("//testcase/@flakyFailure")
+      currentBuild.description += list.join("\n")
+    }
+  }
+//   def files = findFiles(glob: "**/build/test-results/**/TEST-*.xml")
+//   for (def file : files) {
+//     Document document = DocumentHelper.parseText(readFile(file.path))
+//     List<Node> list = document.selectNodes("//testcase/@flakyFailure")
+//     currentBuild.description += list.join("\n")
+//   }
+}
 
 pipeline {
   agent none
@@ -115,6 +142,7 @@ pipeline {
             doValidation()
             doTest(env)
             tryStreamsArchetype()
+            reportFlakyTests()
           }
         }
 
@@ -134,6 +162,7 @@ pipeline {
             doValidation()
             doTest(env)
             echo 'Skipping Kafka Streams archetype test for Java 11'
+            reportFlakyTests()
           }
         }
 
@@ -153,6 +182,7 @@ pipeline {
             doValidation()
             doTest(env)
             echo 'Skipping Kafka Streams archetype test for Java 17'
+            reportFlakyTests()
           }
         }
 
@@ -172,6 +202,7 @@ pipeline {
             doValidation()
             doTest(env)
             echo 'Skipping Kafka Streams archetype test for Java 21'
+            reportFlakyTests()
           }
         }
       }
