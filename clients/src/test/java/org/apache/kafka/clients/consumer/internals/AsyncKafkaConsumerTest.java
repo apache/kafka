@@ -841,18 +841,14 @@ public class AsyncKafkaConsumerTest {
     @Test
     public void testBeginningOffsets() {
         consumer = newConsumer();
-        Map<TopicPartition, OffsetAndTimestamp> expectedOffsetsAndTimestamp =
-            mockOffsetAndTimestamp();
-        Set<TopicPartition> partitions = expectedOffsetsAndTimestamp.keySet();
-        doReturn(expectedOffsetsAndTimestamp).when(applicationEventHandler).addAndGet(any(), any());
-        Map<TopicPartition, Long> result =
-            assertDoesNotThrow(() -> consumer.beginningOffsets(partitions,
-                Duration.ofMillis(1)));
-        Map<TopicPartition, Long> expectedOffsets = expectedOffsetsAndTimestamp.entrySet().stream()
+        Map<TopicPartition, Long> expectedOffsets = mockOffsetAndTimestamp().entrySet().stream()
             .collect(Collectors.toMap(Map.Entry::getKey, e -> e.getValue().offset()));
+        doReturn(expectedOffsets).when(applicationEventHandler).addAndGet(any(), any());
+
+        Map<TopicPartition, Long> result = assertDoesNotThrow(() -> consumer.beginningOffsets(expectedOffsets.keySet(), Duration.ofMillis(1)));
+
         assertEquals(expectedOffsets, result);
-        verify(applicationEventHandler).addAndGet(ArgumentMatchers.isA(ListOffsetsEvent.class),
-            ArgumentMatchers.isA(Timer.class));
+        verify(applicationEventHandler).addAndGet(any(ListOffsetsEvent.class), any(Timer.class));
     }
 
     @Test

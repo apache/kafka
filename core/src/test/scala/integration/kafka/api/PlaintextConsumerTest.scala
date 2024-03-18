@@ -825,18 +825,21 @@ class PlaintextConsumerTest extends BaseConsumerTest {
   @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
   def testEndOffsets(quorum: String, groupProtocol: String): Unit = {
     val producer = createProducer()
-    (0 until 10000).foreach { i =>
-      producer.send(new ProducerRecord(tp.topic, tp.partition, i.toLong, s"key $i".getBytes, s"value $i"
-        .getBytes))
+    val startingTimestamp = System.currentTimeMillis()
+    val numRecords = 10000
+     (0 until numRecords).map { i =>
+      val timestamp = startingTimestamp + i.toLong
+      val record = new ProducerRecord(tp.topic(), tp.partition(), timestamp, s"key $i".getBytes, s"value $i".getBytes)
+      producer.send(record)
+      record
     }
-    // This test ensure that the member ID is propagated from the group coordinator when the
-    // assignment is received into a subsequent offset commit
+    producer.flush()
+
     val consumer = createConsumer()
-    assertEquals(0, consumer.assignment.size)
     consumer.subscribe(List(topic).asJava)
     awaitAssignment(consumer, Set(tp, tp2))
 
-    print("listing offsets")
-    print(consumer.endOffsets(Set(tp, tp2).asJava))
+    val endOffsets = consumer.endOffsets(Set(tp).asJava)
+    assertEquals(numRecords, endOffsets.get(tp))
   }
 }
