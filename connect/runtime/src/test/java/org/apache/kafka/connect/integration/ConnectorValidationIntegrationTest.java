@@ -460,7 +460,7 @@ public class ConnectorValidationIntegrationTest {
     }
 
     public static class TestConverterWithPrivateConstructor extends TestConverter {
-        private TestConverterWithPrivateConstructor() {
+        public TestConverterWithPrivateConstructor() {
         }
     }
 
