@@ -71,7 +71,7 @@ class TransactionsWithMaxInFlightOneTest extends KafkaServerTestHarness {
   }
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
   def testTransactionalProducerSingleBrokerMaxInFlightOne(quorum: String): Unit = {
     // We want to test with one broker to verify multiple requests queued on a connection
     assertEquals(1, brokers.size)
@@ -113,6 +113,10 @@ class TransactionsWithMaxInFlightOneTest extends KafkaServerTestHarness {
     serverProps.put(KafkaConfig.AutoLeaderRebalanceEnableProp, false.toString)
     serverProps.put(KafkaConfig.GroupInitialRebalanceDelayMsProp, "0")
     serverProps.put(KafkaConfig.TransactionsAbortTimedOutTransactionCleanupIntervalMsProp, "200")
+    if (isNewGroupCoordinatorEnabled()) {
+      serverProps.put(KafkaConfig.UnstableApiVersionsEnableProp, "true")
+      serverProps.put(KafkaConfig.NewGroupCoordinatorEnableProp, "true")
+    }
     serverProps
   }
 

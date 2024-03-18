@@ -94,7 +94,7 @@ class DelegationTokenEndToEndAuthorizationWithOwnerTest extends DelegationTokenE
   }
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("kraft", "zk"))
+  @ValueSource(strings = Array("kraft", "zk", "kraft+kip848"))
   def testCreateTokenForOtherUserFails(quorum: String): Unit = {
     val thrown = assertThrows(classOf[ExecutionException], () => {
       createDelegationTokens(() => new CreateDelegationTokenOptions().owner(otherClientPrincipal), assert = false)
@@ -103,7 +103,7 @@ class DelegationTokenEndToEndAuthorizationWithOwnerTest extends DelegationTokenE
   }
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("kraft", "zk"))
+  @ValueSource(strings = Array("kraft", "zk", "kraft+kip848"))
   def testDescribeTokenForOtherUserFails(quorum: String): Unit = {
     TestUtils.resource(createScramAdminClient(kafkaClientSaslMechanism, describeTokenFailPrincipal.getName, describeTokenFailPassword)) { describeTokenFailAdminClient =>
       TestUtils.resource(createScramAdminClient(kafkaClientSaslMechanism, otherClientPrincipal.getName, otherClientPassword)) { otherClientAdminClient =>
@@ -117,7 +117,7 @@ class DelegationTokenEndToEndAuthorizationWithOwnerTest extends DelegationTokenE
   }
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("kraft", "zk"))
+  @ValueSource(strings = Array("kraft", "zk", "kraft+kip848"))
   def testDescribeTokenForOtherUserPasses(quorum: String): Unit = {
     val adminClient = createTokenRequesterAdminClient()
     try {

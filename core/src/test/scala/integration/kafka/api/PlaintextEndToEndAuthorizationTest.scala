@@ -90,7 +90,7 @@ class PlaintextEndToEndAuthorizationTest extends EndToEndAuthorizationTest {
   }
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("kraft", "zk"))
+  @ValueSource(strings = Array("kraft", "zk", "kraft+kip848"))
   def testListenerName(quorum: String): Unit = {
     // To check the client listener name, establish a session on the server by sending any request eg sendRecords
     val producer = createProducer()

@@ -337,8 +337,8 @@ abstract class QuorumTestHarness extends Logging {
 
     val metadataRecords = new util.ArrayList[ApiMessageAndVersion]
     metadataRecords.add(new ApiMessageAndVersion(new FeatureLevelRecord().
-                        setName(MetadataVersion.FEATURE_NAME).
-                        setFeatureLevel(metadataVersion.featureLevel()), 0.toShort));
+      setName(MetadataVersion.FEATURE_NAME).
+      setFeatureLevel(metadataVersion.featureLevel()), 0.toShort));
 
     optionalMetadataRecords.foreach { metadataArguments =>
       for (record <- metadataArguments) metadataRecords.add(record)

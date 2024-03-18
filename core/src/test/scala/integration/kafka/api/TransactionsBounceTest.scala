@@ -67,6 +67,10 @@ class TransactionsBounceTest extends IntegrationTestHarness {
   // Since such quick rotation of servers is incredibly unrealistic, we allow this one test to preallocate ports, leaving
   // a small risk of hitting errors due to port conflicts. Hopefully this is infrequent enough to not cause problems.
   override def generateConfigs = {
+    if (isNewGroupCoordinatorEnabled()) {
+      overridingProps.put(KafkaConfig.UnstableApiVersionsEnableProp, "true")
+      overridingProps.put(KafkaConfig.NewGroupCoordinatorEnableProp, "true")
+    }
     FixedPortTestUtils.createBrokerConfigs(brokerCount, zkConnectOrNull, enableControlledShutdown = true)
       .map(KafkaConfig.fromProps(_, overridingProps))
   }
@@ -75,14 +79,14 @@ class TransactionsBounceTest extends IntegrationTestHarness {
 
   @nowarn("cat=deprecation")
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
   def testWithGroupId(quorum: String): Unit = {
     testBrokerFailure((producer, groupId, consumer) =>
       producer.sendOffsetsToTransaction(TestUtils.consumerPositions(consumer).asJava, groupId))
   }
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
   def testWithGroupMetadata(quorum: String): Unit = {
     testBrokerFailure((producer, _, consumer) =>
       producer.sendOffsetsToTransaction(TestUtils.consumerPositions(consumer).asJava, consumer.groupMetadata()))

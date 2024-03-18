@@ -114,7 +114,7 @@ class DelegationTokenEndToEndAuthorizationTest extends EndToEndAuthorizationTest
   }
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("kraft", "zk"))
+  @ValueSource(strings = Array("kraft", "zk", "kraft+kip848"))
   def testCreateUserWithDelegationToken(quorum: String): Unit = {
     val privilegedAdminClient = Admin.create(privilegedAdminClientConfig)
     try {
