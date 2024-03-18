@@ -924,7 +924,7 @@ public class SharePartition {
     /**
      * The AcknowledgementBatch containing the fields required to acknowledge the fetched records.
      */
-    static class AcknowledgementBatch {
+    public static class AcknowledgementBatch {
 
         private final long baseOffset;
         private final long lastOffset;
