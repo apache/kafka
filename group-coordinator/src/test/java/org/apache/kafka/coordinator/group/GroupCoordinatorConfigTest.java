@@ -44,7 +44,7 @@ public class GroupCoordinatorConfigTest {
             600000L,
             24 * 60 * 60 * 1000L,
             5000,
-            GroupProtocolMigrationConfig.NONE
+            GroupProtocolMigrationPolicy.NONE
         );
 
         assertEquals(10, config.numThreads);
@@ -85,7 +85,7 @@ public class GroupCoordinatorConfigTest {
             offsetsRetentionCheckIntervalMs,
             offsetsRetentionMs,
             5000,
-            GroupProtocolMigrationConfig.NONE
+            GroupProtocolMigrationPolicy.NONE
         );
     }
 }

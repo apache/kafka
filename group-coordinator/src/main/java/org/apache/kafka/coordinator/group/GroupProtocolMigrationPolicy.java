@@ -23,7 +23,7 @@ import java.util.Map;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
-public enum GroupProtocolMigrationConfig {
+public enum GroupProtocolMigrationPolicy {
     /** Both upgrade and downgrade are enabled.*/
     BOTH("both"),
 
@@ -38,7 +38,7 @@ public enum GroupProtocolMigrationConfig {
 
     private final String policy;
 
-    GroupProtocolMigrationConfig(String config) {
+    GroupProtocolMigrationPolicy(String config) {
         this.policy = config;
     }
 
@@ -47,20 +47,20 @@ public enum GroupProtocolMigrationConfig {
         return policy;
     }
 
-    private final static Map<String, GroupProtocolMigrationConfig> NAME_TO_ENUM = Arrays.stream(values())
+    private final static Map<String, GroupProtocolMigrationPolicy> NAME_TO_ENUM = Arrays.stream(values())
         .collect(Collectors.toMap(config -> config.policy.toLowerCase(Locale.ROOT), Function.identity()));
 
     /**
-     * Parse a string into the corresponding {@code GroupProtocolMigrationConfig} enum value, in a case-insensitive manner.
+     * Parse a string into the corresponding {@code GroupProtocolMigrationPolicy} enum value, in a case-insensitive manner.
      *
-     * @return The {{@link GroupProtocolMigrationConfig}} according to the string passed. None is returned if
+     * @return The {{@link GroupProtocolMigrationPolicy}} according to the string passed. None is returned if
      * the string doesn't correspond to a valid policy.
      */
-    public static GroupProtocolMigrationConfig parse(String name) {
+    public static GroupProtocolMigrationPolicy parse(String name) {
         if (name == null) {
             return NONE;
         }
-        GroupProtocolMigrationConfig config = NAME_TO_ENUM.get(name.toLowerCase(Locale.ROOT));
+        GroupProtocolMigrationPolicy config = NAME_TO_ENUM.get(name.toLowerCase(Locale.ROOT));
 
         return config == null ? NONE : config;
     }

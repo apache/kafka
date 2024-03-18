@@ -36,7 +36,7 @@ import java.util
 import java.util.{Collections, Properties}
 import org.apache.kafka.common.Node
 import org.apache.kafka.coordinator.group.Group.GroupType
-import org.apache.kafka.coordinator.group.GroupProtocolMigrationConfig
+import org.apache.kafka.coordinator.group.GroupProtocolMigrationPolicy
 import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.server.common.MetadataVersion.{IBP_0_8_2, IBP_3_0_IV1}
 import org.apache.kafka.server.config.ServerTopicConfigSynonyms
@@ -1833,17 +1833,17 @@ class KafkaConfigTest {
   }
 
   @Test
-  def testGroupProtocolMigrationConfig(): Unit = {
+  def testGroupProtocolMigrationPolicy(): Unit = {
     val props = new Properties()
     props.putAll(kraftProps())
 
-    // Invalid GroupProtocolMigrationConfig value.
-    props.put(KafkaConfig.GroupProtocolMigrationProp, "foo")
+    // Invalid GroupProtocolMigrationPolicy value.
+    props.put(KafkaConfig.GroupProtocolMigrationPolicyProp, "foo")
     assertThrows(classOf[ConfigException], () => KafkaConfig.fromProps(props))
 
-    props.put(KafkaConfig.GroupProtocolMigrationProp, "both")
+    props.put(KafkaConfig.GroupProtocolMigrationPolicyProp, "both")
     val config = KafkaConfig.fromProps(props)
-    assertEquals(GroupProtocolMigrationConfig.BOTH, config.groupProtocolMigration)
+    assertEquals(GroupProtocolMigrationPolicy.BOTH, config.groupProtocolMigrationPolicy)
   }
 
   @Test
