@@ -227,12 +227,17 @@ class KStreamKStreamJoin<K, V1, V2, VOut> implements ProcessorSupplier<K, V1, K,
                 boolean outerJoinLeftWindowOpen = false;
                 boolean outerJoinRightWindowOpen = false;
                 while (it.hasNext()) {
+                    if (outerJoinLeftWindowOpen && outerJoinRightWindowOpen) {
+                        // if windows are open for both joinSides we can break since there are no more candidates to emit
+                        break;
+                    }
                     final KeyValue<TimestampedKeyAndJoinSide<K>, LeftOrRightValue<V1, V2>> next = it.next();
                     final TimestampedKeyAndJoinSide<K> timestampedKeyAndJoinSide = next.key;
                     final long timestamp = timestampedKeyAndJoinSide.getTimestamp();
                     sharedTimeTracker.minTime = timestamp;
 
-                    // Skip next records if window has not closed yet
+                    // Continue with the next outer record if window for this joinSide has not closed yet
+                    // There might be an outer record for the other joinSide which window has not closed yet
                     // We rely on the <timestamp><left/right-boolean><key> ordering of KeyValueIterator
                     final long outerJoinLookBackTimeMs = getOuterJoinLookBackTimeMs(timestampedKeyAndJoinSide);
                     if (sharedTimeTracker.minTime + outerJoinLookBackTimeMs + joinGraceMs >= sharedTimeTracker.streamTime) {
@@ -241,34 +246,26 @@ class KStreamKStreamJoin<K, V1, V2, VOut> implements ProcessorSupplier<K, V1, K,
                         } else {
                             outerJoinRightWindowOpen = true; // there are no more candidates to emit on right-outerJoin-side
                         }
-                    }
-
-                    if (outerJoinLeftWindowOpen && outerJoinRightWindowOpen) {
-                        // if windows are open for both joinSides we can break since there are no more candidates to emit
-                        break;
-                    }  else if (windowOpenForJoinSide(outerJoinLeftWindowOpen, outerJoinRightWindowOpen, timestampedKeyAndJoinSide)) {
-                        // else if  window is open only for this joinSide we continue with the next outer record
+                        // We continue with the next outer record
                         continue;
                     }
-
+                    
                     final K key = timestampedKeyAndJoinSide.getKey();
                     final LeftOrRightValue<V1, V2> leftOrRightValue = next.value;
                     final VOut nullJoinedValue = getNullJoinedValue(key, leftOrRightValue);
-                    if (nullJoinedValue != null) {
-                        context().forward(
-                            record.withKey(key).withValue(nullJoinedValue).withTimestamp(timestamp)
-                        );
+                    context().forward(
+                        record.withKey(key).withValue(nullJoinedValue).withTimestamp(timestamp)
+                    );
 
-                        if (prevKey != null && !prevKey.equals(timestampedKeyAndJoinSide)) {
-                            // blind-delete the previous key from the outer window store now it is emitted;
-                            // we do this because this delete would remove the whole list of values of the same key,
-                            // and hence if we delete eagerly and then fail, we would miss emitting join results of the later
-                            // values in the list.
-                            // we do not use delete() calls since it would incur extra get()
-                            store.put(prevKey, null);
-                        }
-                        prevKey = timestampedKeyAndJoinSide;
+                    if (prevKey != null && !prevKey.equals(timestampedKeyAndJoinSide)) {
+                        // blind-delete the previous key from the outer window store now it is emitted;
+                        // we do this because this delete would remove the whole list of values of the same key,
+                        // and hence if we delete eagerly and then fail, we would miss emitting join results of the later
+                        // values in the list.
+                        // we do not use delete() calls since it would incur extra get()
+                        store.put(prevKey, null);
                     }
+                    prevKey = timestampedKeyAndJoinSide;
                 }
 
                 // at the end of the iteration, we need to delete the last key
@@ -291,18 +288,6 @@ class KStreamKStreamJoin<K, V1, V2, VOut> implements ProcessorSupplier<K, V1, K,
                 return joiner.apply(key,
                         (V1) leftOrRightValue.getRightValue(),
                         (V2) leftOrRightValue.getLeftValue());
-            }
-        }
-
-        private boolean windowOpenForJoinSide(
-                final boolean outerJoinLeftWindowOpen, 
-                final boolean outerJoinRightWindowOpen,
-                final TimestampedKeyAndJoinSide<K> timestampedKeyAndJoinSide) {
-            // depending on the JoinSide find out if window is still open
-            if (timestampedKeyAndJoinSide.isLeftSide()) {
-                return outerJoinLeftWindowOpen;
-            } else {
-                return outerJoinRightWindowOpen;
             }
         }
 

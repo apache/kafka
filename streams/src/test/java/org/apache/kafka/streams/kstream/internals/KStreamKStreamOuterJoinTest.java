@@ -551,7 +551,7 @@ public class KStreamKStreamOuterJoinTest {
                 driver.createInputTopic(topic2, new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
             final MockApiProcessor<Integer, String, Void, Void> processor = supplier.theCapturedProcessor();
 
-            // push one item to the primary stream; this should not produce any items because there are no joins
+            // push one item to the primary stream; this should not produce any items because there are no matching keys
             // and window has not ended
             // w1 = {}
             // w2 = {}
@@ -560,7 +560,7 @@ public class KStreamKStreamOuterJoinTest {
             inputTopic1.pipeInput(0, "A0", 29L);
             processor.checkAndClearProcessResult();
 
-            // push another item to the primary stream; this should not produce any items because there are no joins
+            // push another item to the primary stream; this should not produce any items because there are no matching keys
             // and window has not ended
             // w1 = { 0:A0 (ts: 29) }
             // w2 = {}
@@ -569,7 +569,7 @@ public class KStreamKStreamOuterJoinTest {
             inputTopic1.pipeInput(1, "A1", 30L);
             processor.checkAndClearProcessResult();
 
-            // push one item to the other stream; this should not produce any items because there are no joins
+            // push one item to the other stream; this should not produce any items because there are no matching keys
             // and window has not ended
             // w1 = { 0:A0 (ts: 0), 1:A1 (ts: 30) }
             // w2 = {}
@@ -578,17 +578,38 @@ public class KStreamKStreamOuterJoinTest {
             inputTopic2.pipeInput(2, "a2", 31L);
             processor.checkAndClearProcessResult();
 
-            // push another item to the other stream; this should produce no joined-items because there are no joins 
-            // and should produce a not-joined-item of the left joinSide because after window has ended
-            // and should produce a not-joined-item of the right joinSide because before window has ended
-            // w1 = { 0:A0 (ts: 29), 1:A1 (ts: 30) }
-            // w2 = {  2:a0 (ts: 31) }
+            // push another item to the other stream; this should produce no inner joined-items because there are no matching keys 
+            // and window has not ended
+            // w1 = { 0:A0 (ts: 0), 1:A1 (ts: 30) }
+            // w2 = { 2:a2 (ts: 31) }
             // --> w1 = { 0:A0 (ts: 29), 1:A1 (ts: 30) }
-            // --> w2 = { 2:a2 (ts: 31) , 3:a3 (ts: 50) }
-            inputTopic2.pipeInput(3, "a3", 50L);
+            // --> w2 = { 2:a2 (ts: 31), 3:a3 (ts: 36) }
+            inputTopic2.pipeInput(3, "a3", 36L);
+            processor.checkAndClearProcessResult();
+
+            // push another item to the other stream; this should produce no inner joined-items because there are no matching keys 
+            // and should produce a right-join-item because before window has ended
+            // w1 = { 0:A0 (ts: 0), 1:A1 (ts: 30) }
+            // w2 = { 2:a2 (ts: 31), 3:a3 (ts: 36) }
+            // --> w1 = { 0:A0 (ts: 29), 1:A1 (ts: 30) }
+            // --> w2 = { 2:a2 (ts: 31), 3:a3 (ts: 36), 4:a4 (ts: 37) }
+            inputTopic2.pipeInput(4, "a4", 37L);
+            processor.checkAndClearProcessResult(
+                    new KeyValueTimestamp<>(2, "null+a2", 31L)
+            );
+
+            // push another item to the other stream; this should produce no inner joined-items because there are no matching keys 
+            // and should produce a left-join-item because after window has ended
+            // and should produce two right-join-items because before window has ended
+            // w1 = { 0:A0 (ts: 29), 1:A1 (ts: 30) }
+            // w2 = { 2:a0 (ts: 31), 3:a3 (ts: 36), 4:a4 (ts: 37) }
+            // --> w1 = { 0:A0 (ts: 29), 1:A1 (ts: 30) }
+            // --> w2 = { 2:a2 (ts: 31), 3:a3 (ts: 36), 4:a4 (ts: 37), 5:a5 (ts: 50) }
+            inputTopic2.pipeInput(5, "a5", 50L);
             processor.checkAndClearProcessResult(
                 new KeyValueTimestamp<>(0, "A0+null", 29L),
-                new KeyValueTimestamp<>(2, "null+a2", 31L)
+                new KeyValueTimestamp<>(3, "null+a3", 36L),
+                new KeyValueTimestamp<>(4, "null+a4", 37L)
             );
         }
     }
