@@ -588,7 +588,9 @@ public class GroupMetadataManager {
      *
      * @param groupId           The group id.
      * @param createIfNotExists A boolean indicating whether the group should be
-     *                          created if it does not exist.
+     *                          created if it does not exist or is an empty classic group.
+     * @param records           The record list to which the group tombstones are written
+     *                          if the group is empty and is a classic group.
      *
      * @return A ConsumerGroup.
      * @throws GroupIdNotFoundException if the group does not exist and createIfNotExists is false or
@@ -598,7 +600,8 @@ public class GroupMetadataManager {
      */
     ConsumerGroup getOrMaybeCreateConsumerGroup(
         String groupId,
-        boolean createIfNotExists
+        boolean createIfNotExists,
+        List<Record> records
     ) throws GroupIdNotFoundException {
         Group group = groups.get(groupId);
 
@@ -606,7 +609,7 @@ public class GroupMetadataManager {
             throw new GroupIdNotFoundException(String.format("Consumer group %s not found.", groupId));
         }
 
-        if (group == null) {
+        if (group == null || maybeDeleteEmptyClassicGroup(group, records)) {
             return new ConsumerGroup(snapshotRegistry, groupId, metrics);
         } else {
             if (group.type() == CONSUMER) {
@@ -617,6 +620,16 @@ public class GroupMetadataManager {
                 throw new GroupIdNotFoundException(String.format("Group %s is not a consumer group.", groupId));
             }
         }
+    }
+
+    /**
+     * An overloaded method of {@link GroupMetadataManager#getOrMaybeCreateConsumerGroup(String, boolean, List<Record>)}
+     */
+    ConsumerGroup getOrMaybeCreateConsumerGroup(
+        String groupId,
+        boolean createIfNotExists
+    ) throws GroupIdNotFoundException {
+        return getOrMaybeCreateConsumerGroup(groupId, createIfNotExists, Collections.emptyList());
     }
 
     /**
@@ -1056,12 +1069,7 @@ public class GroupMetadataManager {
 
         // Get or create the consumer group.
         boolean createIfNotExists = memberEpoch == 0;
-        ConsumerGroup group;
-        if (maybeDeleteEmptyClassicGroup(groupId, records)) {
-            group = new ConsumerGroup(snapshotRegistry, groupId, metrics);
-        } else {
-            group = getOrMaybeCreateConsumerGroup(groupId, createIfNotExists);
-        }
+        final ConsumerGroup group = getOrMaybeCreateConsumerGroup(groupId, createIfNotExists, records);
         throwIfConsumerGroupIsFull(group, memberId);
 
         // Get or create the member.
@@ -3612,17 +3620,16 @@ public class GroupMetadataManager {
     /**
      * Write tombstones for the group if it's empty and is a classic group.
      *
-     * @param groupId The group id to be deleted.
-     * @param records The list of records to delete the group.
+     * @param group     The group to be deleted.
+     * @param records   The list of records to delete the group.
      *
      * @return true if the group is empty
      */
-    private boolean maybeDeleteEmptyClassicGroup(String groupId, List<Record> records) {
-        Group group = groups.get(groupId, Long.MAX_VALUE);
+    private boolean maybeDeleteEmptyClassicGroup(Group group, List<Record> records) {
         if (isEmptyClassicGroup(group)) {
             // Delete the classic group by adding tombstones.
             // There's no need to remove the group as the replay of tombstones removes it.
-            createGroupTombstoneRecords(group, records);
+            if (group != null) createGroupTombstoneRecords(group, records);
             return true;
         }
         return false;
