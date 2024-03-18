@@ -2350,7 +2350,6 @@ public class TaskManagerTest {
 
         when(stateDirectory.listNonEmptyTaskDirectories())
             .thenReturn(taskFolders)
-            // The second attempt will return empty tasks.
             .thenReturn(new ArrayList<>());
 
         expectLockObtainedFor(taskId00, taskId01);
@@ -3851,7 +3850,6 @@ public class TaskManagerTest {
 
     @Test
     public void shouldHandleRebalanceEvents() {
-        final Set<TopicPartition> assignment = singleton(new TopicPartition("assignment", 0));
         when(consumer.assignment()).thenReturn(assignment);
         when(stateDirectory.listNonEmptyTaskDirectories()).thenReturn(new ArrayList<>());
         assertThat(taskManager.rebalanceInProgress(), is(false));
