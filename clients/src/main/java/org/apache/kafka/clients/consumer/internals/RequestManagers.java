@@ -123,7 +123,8 @@ public class RequestManagers implements Closeable {
                                                      final Supplier<NetworkClientDelegate> networkClientDelegateSupplier,
                                                      final Optional<ClientTelemetryReporter> clientTelemetryReporter,
                                                      final Metrics metrics,
-                                                     final OffsetCommitCallbackInvoker offsetCommitCallbackInvoker
+                                                     final OffsetCommitCallbackInvoker offsetCommitCallbackInvoker,
+                                                     final MemberStateListener applicationThreadMemberStateListener
                                                      ) {
         return new CachedSupplier<RequestManagers>() {
             @Override
@@ -192,6 +193,7 @@ public class RequestManagers implements Closeable {
                             time,
                             metrics);
                     membershipManager.registerStateListener(commit);
+                    membershipManager.registerStateListener(applicationThreadMemberStateListener);
                     heartbeatRequestManager = new HeartbeatRequestManager(
                             logContext,
                             time,

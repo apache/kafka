@@ -82,16 +82,7 @@ public class RecordHelpers {
                     .setSubscribedTopicNames(member.subscribedTopicNames())
                     .setSubscribedTopicRegex(member.subscribedTopicRegex())
                     .setServerAssignor(member.serverAssignorName().orElse(null))
-                    .setRebalanceTimeoutMs(member.rebalanceTimeoutMs())
-                    .setAssignors(member.clientAssignors().stream().map(assignorState ->
-                        new ConsumerGroupMemberMetadataValue.Assignor()
-                            .setName(assignorState.name())
-                            .setReason(assignorState.reason())
-                            .setMinimumVersion(assignorState.minimumVersion())
-                            .setMaximumVersion(assignorState.maximumVersion())
-                            .setVersion(assignorState.metadata().version())
-                            .setMetadata(assignorState.metadata().metadata().array())
-                    ).collect(Collectors.toList())),
+                    .setRebalanceTimeoutMs(member.rebalanceTimeoutMs()),
                 (short) 0
             )
         );
@@ -346,10 +337,9 @@ public class RecordHelpers {
                 new ConsumerGroupCurrentMemberAssignmentValue()
                     .setMemberEpoch(member.memberEpoch())
                     .setPreviousMemberEpoch(member.previousMemberEpoch())
-                    .setTargetMemberEpoch(member.targetMemberEpoch())
+                    .setState(member.state().value())
                     .setAssignedPartitions(toTopicPartitions(member.assignedPartitions()))
-                    .setPartitionsPendingRevocation(toTopicPartitions(member.partitionsPendingRevocation()))
-                    .setPartitionsPendingAssignment(toTopicPartitions(member.partitionsPendingAssignment())),
+                    .setPartitionsPendingRevocation(toTopicPartitions(member.partitionsPendingRevocation())),
                 (short) 0
             )
         );

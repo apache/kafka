@@ -18,6 +18,7 @@ package org.apache.kafka.clients.consumer.internals.events;
 
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.utils.Timer;
 
 import java.util.Map;
 
@@ -27,23 +28,7 @@ import java.util.Map;
  */
 public class SyncCommitEvent extends CommitEvent {
 
-    /**
-     * Time to wait for a response, retrying on retriable errors.
-     */
-    private final long retryTimeoutMs;
-
-    public SyncCommitEvent(final Map<TopicPartition, OffsetAndMetadata> offsets,
-                           final long retryTimeoutMs) {
-        super(Type.COMMIT_SYNC, offsets);
-        this.retryTimeoutMs = retryTimeoutMs;
-    }
-
-    public Long retryTimeoutMs() {
-        return retryTimeoutMs;
-    }
-
-    @Override
-    public String toStringBase() {
-        return super.toStringBase() + ", offsets=" + offsets() + ", retryTimeoutMs=" + retryTimeoutMs;
+    public SyncCommitEvent(final Map<TopicPartition, OffsetAndMetadata> offsets, final Timer timer) {
+        super(Type.COMMIT_SYNC, offsets, timer);
     }
 }

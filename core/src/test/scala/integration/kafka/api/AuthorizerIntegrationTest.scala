@@ -18,10 +18,8 @@ import java.util
 import java.util.concurrent.ExecutionException
 import java.util.regex.Pattern
 import java.util.{Collections, Optional, Properties}
-import kafka.admin.ConsumerGroupCommand.{ConsumerGroupCommandOptions, ConsumerGroupService}
-import kafka.security.authorizer.{AclAuthorizer, AclEntry}
+import kafka.security.authorizer.AclEntry
 import kafka.security.authorizer.AclEntry.WildcardHost
-import kafka.server.{BaseRequestTest, KafkaConfig}
 import kafka.utils.{TestInfoUtils, TestUtils}
 import kafka.utils.TestUtils.waitUntilTrue
 import org.apache.kafka.clients.admin.{Admin, AlterConfigOp, NewTopic}
@@ -30,7 +28,6 @@ import org.apache.kafka.clients.producer._
 import org.apache.kafka.common.acl.AclOperation._
 import org.apache.kafka.common.acl.AclPermissionType.{ALLOW, DENY}
 import org.apache.kafka.common.acl.{AccessControlEntry, AccessControlEntryFilter, AclBindingFilter, AclOperation, AclPermissionType}
-import org.apache.kafka.common.config.internals.BrokerSecurityConfigs
 import org.apache.kafka.common.config.{ConfigResource, LogLevelConfig, TopicConfig}
 import org.apache.kafka.common.errors._
 import org.apache.kafka.common.internals.Topic.GROUP_METADATA_TOPIC_NAME
@@ -53,14 +50,11 @@ import org.apache.kafka.common.requests._
 import org.apache.kafka.common.resource.PatternType.{LITERAL, PREFIXED}
 import org.apache.kafka.common.resource.ResourceType._
 import org.apache.kafka.common.resource.{PatternType, Resource, ResourcePattern, ResourcePatternFilter, ResourceType}
-import org.apache.kafka.common.security.auth.{AuthenticationContext, KafkaPrincipal, SecurityProtocol}
-import org.apache.kafka.common.security.authenticator.DefaultKafkaPrincipalBuilder
+import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.common.{ElectionType, IsolationLevel, KafkaException, Node, TopicPartition, Uuid, requests}
-import org.apache.kafka.metadata.authorizer.StandardAuthorizer
 import org.apache.kafka.test.{TestUtils => JTestUtils}
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.{BeforeEach, TestInfo}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{CsvSource, ValueSource}
 
@@ -72,55 +66,7 @@ import scala.annotation.nowarn
 import scala.collection.mutable
 import scala.jdk.CollectionConverters._
 
-object AuthorizerIntegrationTest {
-  val BrokerPrincipal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "broker")
-  val ClientPrincipal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "client")
-
-  val BrokerListenerName = "BROKER"
-  val ClientListenerName = "CLIENT"
-  val ControllerListenerName = "CONTROLLER"
-
-  class PrincipalBuilder extends DefaultKafkaPrincipalBuilder(null, null) {
-    override def build(context: AuthenticationContext): KafkaPrincipal = {
-      context.listenerName match {
-        case BrokerListenerName | ControllerListenerName => BrokerPrincipal
-        case ClientListenerName => ClientPrincipal
-        case listenerName => throw new IllegalArgumentException(s"No principal mapped to listener $listenerName")
-      }
-    }
-  }
-}
-
-class AuthorizerIntegrationTest extends BaseRequestTest {
-  import AuthorizerIntegrationTest._
-
-  override def interBrokerListenerName: ListenerName = new ListenerName(BrokerListenerName)
-  override def listenerName: ListenerName = new ListenerName(ClientListenerName)
-  override def brokerCount: Int = 1
-
-  def clientPrincipal: KafkaPrincipal = ClientPrincipal
-  def brokerPrincipal: KafkaPrincipal = BrokerPrincipal
-
-  val clientPrincipalString: String = clientPrincipal.toString
-
-  val brokerId: Integer = 0
-  val topic = "topic"
-  val topicPattern = "topic.*"
-  val transactionalId = "transactional.id"
-  val producerId = 83392L
-  val part = 0
-  val correlationId = 0
-  val clientId = "client-Id"
-  val tp = new TopicPartition(topic, part)
-  val logDir = "logDir"
-  val group = "my-group"
-  val protocolType = "consumer"
-  val protocolName = "consumer-range"
-  val clusterResource = new ResourcePattern(CLUSTER, Resource.CLUSTER_NAME, LITERAL)
-  val topicResource = new ResourcePattern(TOPIC, topic, LITERAL)
-  val groupResource = new ResourcePattern(GROUP, group, LITERAL)
-  val transactionalIdResource = new ResourcePattern(TRANSACTIONAL_ID, transactionalId, LITERAL)
-
+class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
   val groupReadAcl = Map(groupResource -> Set(new AccessControlEntry(clientPrincipalString, WildcardHost, READ, ALLOW)))
   val groupDescribeAcl = Map(groupResource -> Set(new AccessControlEntry(clientPrincipalString, WildcardHost, DESCRIBE, ALLOW)))
   val groupDeleteAcl = Map(groupResource -> Set(new AccessControlEntry(clientPrincipalString, WildcardHost, DELETE, ALLOW)))
@@ -142,40 +88,6 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   val transactionalIdDescribeAcl = Map(transactionalIdResource -> Set(new AccessControlEntry(clientPrincipalString, WildcardHost, DESCRIBE, ALLOW)))
 
   val numRecords = 1
-
-  producerConfig.setProperty(ProducerConfig.ACKS_CONFIG, "1")
-  producerConfig.setProperty(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, "false")
-  producerConfig.setProperty(ProducerConfig.MAX_BLOCK_MS_CONFIG, "50000")
-  consumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, group)
-
-  override def brokerPropertyOverrides(properties: Properties): Unit = {
-    properties.put(KafkaConfig.BrokerIdProp, brokerId.toString)
-    addNodeProperties(properties)
-  }
-
-  override def kraftControllerConfigs(): collection.Seq[Properties] = {
-    val controllerConfigs = super.kraftControllerConfigs()
-    controllerConfigs.foreach(addNodeProperties)
-    controllerConfigs
-  }
-
-  private def addNodeProperties(properties: Properties): Unit = {
-    if (isKRaftTest()) {
-      properties.put(KafkaConfig.AuthorizerClassNameProp, classOf[StandardAuthorizer].getName)
-      properties.put(StandardAuthorizer.SUPER_USERS_CONFIG, BrokerPrincipal.toString)
-    } else {
-      properties.put(KafkaConfig.AuthorizerClassNameProp, classOf[AclAuthorizer].getName)
-    }
-
-    properties.put(KafkaConfig.OffsetsTopicPartitionsProp, "1")
-    properties.put(KafkaConfig.OffsetsTopicReplicationFactorProp, "1")
-    properties.put(KafkaConfig.TransactionsTopicPartitionsProp, "1")
-    properties.put(KafkaConfig.TransactionsTopicReplicationFactorProp, "1")
-    properties.put(KafkaConfig.TransactionsTopicMinISRProp, "1")
-    properties.put(KafkaConfig.UnstableApiVersionsEnableProp, "true")
-    properties.put(BrokerSecurityConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG, classOf[PrincipalBuilder].getName)
-  }
-
 
   val requestKeyToError = (topicNames: Map[Uuid, String], version: Short) => Map[ApiKeys, Nothing => Errors](
     ApiKeys.METADATA -> ((resp: requests.MetadataResponse) => resp.errors.asScala.find(_._1 == topic).getOrElse(("test", Errors.NONE))._2),
@@ -332,16 +244,6 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     ApiKeys.DESCRIBE_PRODUCERS -> topicReadAcl,
     ApiKeys.DESCRIBE_TRANSACTIONS -> transactionalIdDescribeAcl
   )
-
-  @BeforeEach
-  override def setUp(testInfo: TestInfo): Unit = {
-    doSetup(testInfo, createOffsetsTopic = false)
-
-    // Allow inter-broker communication
-    addAndVerifyAcls(Set(new AccessControlEntry(brokerPrincipal.toString, WildcardHost, CLUSTER_ACTION, ALLOW)), clusterResource)
-
-    createOffsetsTopic(listenerName = interBrokerListenerName)
-  }
 
   private def createMetadataRequest(allowAutoTopicCreation: Boolean) = {
     new requests.MetadataRequest.Builder(List(topic).asJava, allowAutoTopicCreation).build()
@@ -1701,20 +1603,6 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WildcardHost, DESCRIBE, ALLOW)), groupResource)
     addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WildcardHost, DESCRIBE, ALLOW)), topicResource)
     createAdminClient().describeConsumerGroups(Seq(group).asJava).describedGroups().get(group).get()
-  }
-
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("zk", "kraft"))
-  def testDescribeGroupCliWithGroupDescribe(quorum: String): Unit = {
-    createTopicWithBrokerPrincipal(topic)
-    addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WildcardHost, DESCRIBE, ALLOW)), groupResource)
-    addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WildcardHost, DESCRIBE, ALLOW)), topicResource)
-
-    val cgcArgs = Array("--bootstrap-server", bootstrapServers(), "--describe", "--group", group)
-    val opts = new ConsumerGroupCommandOptions(cgcArgs)
-    val consumerGroupService = new ConsumerGroupService(opts)
-    consumerGroupService.describeGroups()
-    consumerGroupService.close()
   }
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)

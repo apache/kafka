@@ -17,12 +17,13 @@
 
 package kafka.server
 
-import kafka.utils.TestUtils
+import kafka.utils.{CoreUtils, TestUtils}
 import org.apache.kafka.common.security.JaasUtils
 import org.junit.jupiter.api.Assertions.{assertEquals, assertNull, assertThrows, fail}
 import org.junit.jupiter.api.Test
-import java.util.Properties
 
+import java.util.Properties
+import java.net.{InetAddress, ServerSocket}
 import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig
 
@@ -40,6 +41,24 @@ class KafkaServerTest extends QuorumTestHarness {
     val server2 = createServer(2, "myhost", TestUtils.RandomPort)
 
     TestUtils.shutdownServers(Seq(server1, server2))
+  }
+
+  @Test
+  def testListenerPortAlreadyInUse(): Unit = {
+    val serverSocket = new ServerSocket(0, 0, InetAddress.getLoopbackAddress)
+
+    var kafkaServer : Option[KafkaServer] = None
+    try {
+      TestUtils.waitUntilTrue(() => serverSocket.isBound, "Server socket failed to bind.")
+      // start a server with listener on the port already bound
+      assertThrows(classOf[RuntimeException],
+        () => kafkaServer = Option(createServerWithListenerOnPort(serverSocket.getLocalPort)),
+        "Expected RuntimeException due to address already in use during KafkaServer startup"
+      )
+    } finally {
+      CoreUtils.swallow(serverSocket.close(), this);
+      TestUtils.shutdownServers(kafkaServer.toList)
+    }
   }
 
   @Test
@@ -157,6 +176,13 @@ class KafkaServerTest extends QuorumTestHarness {
   def createServer(nodeId: Int, hostName: String, port: Int): KafkaServer = {
     val props = TestUtils.createBrokerConfig(nodeId, zkConnect)
     props.put(KafkaConfig.AdvertisedListenersProp, s"PLAINTEXT://$hostName:$port")
+    val kafkaConfig = KafkaConfig.fromProps(props)
+    TestUtils.createServer(kafkaConfig)
+  }
+
+  def createServerWithListenerOnPort(port: Int): KafkaServer = {
+    val props = TestUtils.createBrokerConfig(0, zkConnect)
+    props.put(KafkaConfig.ListenersProp, s"PLAINTEXT://localhost:$port")
     val kafkaConfig = KafkaConfig.fromProps(props)
     TestUtils.createServer(kafkaConfig)
   }

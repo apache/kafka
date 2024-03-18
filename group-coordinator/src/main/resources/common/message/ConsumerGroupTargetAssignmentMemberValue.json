@@ -20,16 +20,10 @@
   "validVersions": "0",
   "flexibleVersions": "0+",
   "fields": [
-    { "name": "Error", "versions": "0+", "type": "int8",
-      "about": "The assigned error."},
     { "name": "TopicPartitions", "versions": "0+", "type": "[]TopicPartition",
       "about": "The assigned partitions.", "fields": [
       { "name": "TopicId", "versions": "0+", "type": "uuid" },
       { "name": "Partitions", "versions": "0+", "type": "[]int32" }
-    ]},
-    { "name": "MetadataVersion", "versions": "0+", "type": "int16",
-      "about": "The version of the assigned metadata." },
-    { "name": "MetadataBytes", "versions": "0+", "type": "bytes",
-      "about": "The assigned metadata." }
+    ]}
   ]
 }
