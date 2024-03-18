@@ -172,6 +172,8 @@ public class TopicConfig {
 
     public static final String COMPRESSION_GZIP_LEVEL_CONFIG = "compression.gzip.level";
     public static final String COMPRESSION_GZIP_LEVEL_DOC = "The compression level to use if " + COMPRESSION_TYPE_CONFIG + " is set to <code>gzip</code>.";
+    public static final String COMPRESSION_GZIP_BUFFER_SIZE_CONFIG = "compression.gzip.buffer";
+    public static final String COMPRESSION_GZIP_BUFFER_SIZE_DOC = "The compression buffer size to use if " + COMPRESSION_TYPE_CONFIG + " is set to <code>gzip</code>.";
     public static final String COMPRESSION_LZ4_LEVEL_CONFIG = "compression.lz4.level";
     public static final String COMPRESSION_LZ4_LEVEL_DOC = "The compression level to use if " + COMPRESSION_TYPE_CONFIG + " is set to <code>lz4</code>.";
     public static final String COMPRESSION_ZSTD_LEVEL_CONFIG = "compression.zstd.level";

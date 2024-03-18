@@ -558,6 +558,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             case GZIP: {
                 return new GzipCompression.Builder()
                         .level(config.getInt(ProducerConfig.COMPRESSION_GZIP_LEVEL_CONFIG))
+                        .bufferSize(config.getInt(ProducerConfig.COMPRESSION_GZIP_BUFFER_SIZE_CONFIG))
                         .build();
             }
             case LZ4: {

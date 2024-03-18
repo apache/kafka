@@ -276,6 +276,7 @@ public class LogConfig extends AbstractConfig {
                 MEDIUM, TopicConfig.COMPRESSION_TYPE_DOC)
             .define(TopicConfig.COMPRESSION_GZIP_LEVEL_CONFIG, INT, GzipCompression.DEFAULT_LEVEL,
                 new GzipCompression.LevelValidator(), MEDIUM, TopicConfig.COMPRESSION_GZIP_LEVEL_DOC)
+            .define(TopicConfig.COMPRESSION_GZIP_BUFFER_SIZE_CONFIG, INT, GzipCompression.DEFAULT_BUFFER_SIZE, new GzipCompression.BufferSizeValidator(), MEDIUM, TopicConfig.COMPRESSION_GZIP_BUFFER_SIZE_DOC)
             .define(TopicConfig.COMPRESSION_LZ4_LEVEL_CONFIG, INT, Lz4Compression.DEFAULT_LEVEL,
                 between(Lz4Compression.MIN_LEVEL, Lz4Compression.MAX_LEVEL), MEDIUM, TopicConfig.COMPRESSION_LZ4_LEVEL_DOC)
             .define(TopicConfig.COMPRESSION_ZSTD_LEVEL_CONFIG, INT, ZstdCompression.DEFAULT_LEVEL,
@@ -408,6 +409,7 @@ public class LogConfig extends AbstractConfig {
             case GZIP:
                 return Optional.of(new GzipCompression.Builder()
                          .level(getInt(TopicConfig.COMPRESSION_GZIP_LEVEL_CONFIG))
+                         .bufferSize(getInt(TopicConfig.COMPRESSION_GZIP_BUFFER_SIZE_CONFIG))
                          .build());
             case LZ4:
                 return Optional.of(new Lz4Compression.Builder()

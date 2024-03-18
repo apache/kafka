@@ -80,6 +80,7 @@ public final class ServerTopicConfigSynonyms {
         sameName(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG),
         sameName(TopicConfig.COMPRESSION_TYPE_CONFIG),
         sameName(TopicConfig.COMPRESSION_GZIP_LEVEL_CONFIG),
+        sameName(TopicConfig.COMPRESSION_GZIP_BUFFER_SIZE_CONFIG),
         sameName(TopicConfig.COMPRESSION_LZ4_LEVEL_CONFIG),
         sameName(TopicConfig.COMPRESSION_ZSTD_LEVEL_CONFIG),
         sameNameWithLogPrefix(TopicConfig.PREALLOCATE_CONFIG),

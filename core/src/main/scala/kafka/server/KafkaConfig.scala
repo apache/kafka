@@ -340,6 +340,7 @@ object KafkaConfig {
   val DeleteTopicEnableProp = "delete.topic.enable"
   val CompressionTypeProp = ServerTopicConfigSynonyms.serverSynonym(TopicConfig.COMPRESSION_TYPE_CONFIG)
   val CompressionGzipLevelProp = ServerTopicConfigSynonyms.serverSynonym(TopicConfig.COMPRESSION_GZIP_LEVEL_CONFIG)
+  val CompressionGzipBufferSizeProp = ServerTopicConfigSynonyms.serverSynonym(TopicConfig.COMPRESSION_GZIP_BUFFER_SIZE_CONFIG)
   val CompressionLz4LevelProp = ServerTopicConfigSynonyms.serverSynonym(TopicConfig.COMPRESSION_LZ4_LEVEL_CONFIG)
   val CompressionZstdLevelProp = ServerTopicConfigSynonyms.serverSynonym(TopicConfig.COMPRESSION_ZSTD_LEVEL_CONFIG)
 
@@ -830,6 +831,7 @@ object KafkaConfig {
   "('gzip', 'snappy', 'lz4', 'zstd'). It additionally accepts 'uncompressed' which is equivalent to no compression; and " +
   "'producer' which means retain the original compression codec set by the producer."
   val CompressionGzipLevelDoc = s"The compression level to use if $CompressionTypeProp is set to 'gzip'.";
+  val CompressionGzipBufferSizeDoc = s"The buffer size to use if $CompressionTypeProp is set to 'gzip'.";
   val CompressionLz4LevelDoc = s"The compression level to use if $CompressionTypeProp is set to 'lz4'.";
   val CompressionZstdLevelDoc = s"The compression level to use if $CompressionTypeProp is set to 'zstd'.";
 
@@ -1152,6 +1154,7 @@ object KafkaConfig {
       .define(DeleteTopicEnableProp, BOOLEAN, Defaults.DELETE_TOPIC_ENABLE, HIGH, DeleteTopicEnableDoc)
       .define(CompressionTypeProp, STRING, LogConfig.DEFAULT_COMPRESSION_TYPE, in(BrokerCompressionType.names.asScala.toSeq:_*), HIGH, CompressionTypeDoc)
       .define(CompressionGzipLevelProp, INT, GzipCompression.DEFAULT_LEVEL, new GzipCompression.LevelValidator(), MEDIUM, CompressionGzipLevelDoc)
+      .define(CompressionGzipBufferSizeProp, INT, GzipCompression.DEFAULT_BUFFER_SIZE, new GzipCompression.BufferSizeValidator(), MEDIUM, CompressionGzipBufferSizeDoc)
       .define(CompressionLz4LevelProp, INT, Lz4Compression.DEFAULT_LEVEL, between(Lz4Compression.MIN_LEVEL, Lz4Compression.MAX_LEVEL), MEDIUM, CompressionLz4LevelDoc)
       .define(CompressionZstdLevelProp, INT, ZstdCompression.DEFAULT_LEVEL, between(ZstdCompression.MIN_LEVEL, ZstdCompression.MAX_LEVEL), MEDIUM, CompressionZstdLevelDoc)
 
@@ -1884,6 +1887,7 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
   val deleteTopicEnable = getBoolean(KafkaConfig.DeleteTopicEnableProp)
   def compressionType = getString(KafkaConfig.CompressionTypeProp)
   def gzipCompressionLevel = getInt(KafkaConfig.CompressionGzipLevelProp)
+  def gzipCompressionBufferSize = getInt(KafkaConfig.CompressionGzipBufferSizeProp)
   def lz4CompressionLevel = getInt(KafkaConfig.CompressionLz4LevelProp)
   def zstdCompressionLevel = getInt(KafkaConfig.CompressionZstdLevelProp)
 
@@ -2319,6 +2323,7 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
     logProps.put(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, minInSyncReplicas)
     logProps.put(TopicConfig.COMPRESSION_TYPE_CONFIG, compressionType)
     logProps.put(TopicConfig.COMPRESSION_GZIP_LEVEL_CONFIG, gzipCompressionLevel)
+    logProps.put(TopicConfig.COMPRESSION_GZIP_BUFFER_SIZE_CONFIG, gzipCompressionBufferSize)
     logProps.put(TopicConfig.COMPRESSION_LZ4_LEVEL_CONFIG, lz4CompressionLevel)
     logProps.put(TopicConfig.COMPRESSION_ZSTD_LEVEL_CONFIG, zstdCompressionLevel)
     logProps.put(TopicConfig.UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG, uncleanLeaderElectionEnable)

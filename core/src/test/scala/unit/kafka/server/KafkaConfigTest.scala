@@ -716,6 +716,14 @@ class KafkaConfigTest {
   }
 
   @Test
+  def testInvalidGzipCompressionBufferSize(): Unit = {
+    val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 8181)
+    props.setProperty(KafkaConfig.CompressionTypeProp, "gzip")
+    props.setProperty(KafkaConfig.CompressionGzipBufferSizeProp, (GzipCompression.MIN_BUFFER_SIZE - 1).toString)
+    assertThrows(classOf[ConfigException], () => KafkaConfig.fromProps(props))
+  }
+
+  @Test
   def testInvalidLz4CompressionLevel(): Unit = {
     val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 8181)
     props.setProperty(KafkaConfig.CompressionTypeProp, "lz4")
@@ -935,6 +943,7 @@ class KafkaConfigTest {
         case KafkaConfig.DeleteTopicEnableProp => assertPropertyInvalid(baseProperties, name, "not_a_boolean", "0")
 
         case KafkaConfig.CompressionGzipLevelProp => assertPropertyInvalid(baseProperties, name, "not_a_number", "0")
+        case KafkaConfig.CompressionGzipBufferSizeProp => assertPropertyInvalid(baseProperties, name, "not_a_number", GzipCompression.MIN_BUFFER_SIZE - 1)
         case KafkaConfig.CompressionZstdLevelProp => assertPropertyInvalid(baseProperties, name, "not_a_number", ZstdCompression.MAX_LEVEL+1)
 
         case KafkaConfig.MetricNumSamplesProp => assertPropertyInvalid(baseProperties, name, "not_a_number", "-1", "0")
