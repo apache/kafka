@@ -68,9 +68,7 @@ class ListOffsetsIntegrationTest extends KafkaServerTestHarness {
     verifyListOffsets()
 
     // test LogAppendTime case
-    val props: Properties = new Properties()
-    props.setProperty(TopicConfig.MESSAGE_TIMESTAMP_TYPE_CONFIG, "LogAppendTime")
-    createTopicWithConfig(topicNameWithCustomConfigs, props)
+    setUpForLogAppendTimeCase()
     produceMessagesInOneBatch("gzip", topicNameWithCustomConfigs)
     // In LogAppendTime's case, the maxTimestampOffset should be the first message of the batch.
     // So in this one batch test, it'll be the first offset 0
@@ -84,9 +82,7 @@ class ListOffsetsIntegrationTest extends KafkaServerTestHarness {
     verifyListOffsets()
 
     // test LogAppendTime case
-    val props: Properties = new Properties()
-    props.setProperty(TopicConfig.MESSAGE_TIMESTAMP_TYPE_CONFIG, "LogAppendTime")
-    createTopicWithConfig(topicNameWithCustomConfigs, props)
+    setUpForLogAppendTimeCase()
     produceMessagesInOneBatch(topic=topicNameWithCustomConfigs)
     // In LogAppendTime's case, if the timestamps are the same, we choose the offset of the first record
     // thus, the maxTimestampOffset should be the first record of the batch.
@@ -101,9 +97,7 @@ class ListOffsetsIntegrationTest extends KafkaServerTestHarness {
     verifyListOffsets()
 
     // test LogAppendTime case
-    val props: Properties = new Properties()
-    props.setProperty(TopicConfig.MESSAGE_TIMESTAMP_TYPE_CONFIG, "LogAppendTime")
-    createTopicWithConfig(topicNameWithCustomConfigs, props)
+    setUpForLogAppendTimeCase()
     produceMessagesInSeparateBatch(topic = topicNameWithCustomConfigs)
     // In LogAppendTime's case, if the timestamp is different, it should be the last one
     verifyListOffsets(topic = topicNameWithCustomConfigs, 2)
@@ -118,9 +112,7 @@ class ListOffsetsIntegrationTest extends KafkaServerTestHarness {
     verifyListOffsets()
 
     // test LogAppendTime case
-    val props: Properties = new Properties()
-    props.setProperty(TopicConfig.MESSAGE_TIMESTAMP_TYPE_CONFIG, "LogAppendTime")
-    createTopicWithConfig(topicNameWithCustomConfigs, props)
+    setUpForLogAppendTimeCase()
     produceMessagesInOneBatch(topic = topicNameWithCustomConfigs)
     // In LogAppendTime's case, the maxTimestampOffset should be the first message of the batch.
     // So in this one batch test, it'll be the first offset 0
@@ -136,9 +128,7 @@ class ListOffsetsIntegrationTest extends KafkaServerTestHarness {
     verifyListOffsets()
 
     // test LogAppendTime case
-    val props: Properties = new Properties()
-    props.setProperty(TopicConfig.MESSAGE_TIMESTAMP_TYPE_CONFIG, "LogAppendTime")
-    createTopicWithConfig(topicNameWithCustomConfigs, props)
+    setUpForLogAppendTimeCase()
     produceMessagesInSeparateBatch(topic = topicNameWithCustomConfigs)
     // In LogAppendTime's case, the maxTimestampOffset should be the first message of the batch.
     // So in this separate batch test, it'll be the last offset 2
@@ -172,13 +162,17 @@ class ListOffsetsIntegrationTest extends KafkaServerTestHarness {
     verifyListOffsets()
 
     // test LogAppendTime case
-    val props: Properties = new Properties()
-    props.setProperty(TopicConfig.MESSAGE_TIMESTAMP_TYPE_CONFIG, "LogAppendTime")
-    createTopicWithConfig(topicNameWithCustomConfigs, props)
+    setUpForLogAppendTimeCase()
     produceMessagesInSeparateBatch("gzip", topicNameWithCustomConfigs)
     // In LogAppendTime's case, the maxTimestampOffset should be the first message of the batch.
     // So in this separate batch test, it'll be the last offset 2
     verifyListOffsets(topic = topicNameWithCustomConfigs, 2)
+  }
+
+  private def setUpForLogAppendTimeCase(): Unit = {
+    val props: Properties = new Properties()
+    props.setProperty(TopicConfig.MESSAGE_TIMESTAMP_TYPE_CONFIG, "LogAppendTime")
+    createTopicWithConfig(topicNameWithCustomConfigs, props)
   }
 
   private def createOldMessageFormatBrokers(): Unit = {
