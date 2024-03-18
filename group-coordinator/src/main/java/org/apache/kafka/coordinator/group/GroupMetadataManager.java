@@ -3606,14 +3606,14 @@ public class GroupMetadataManager {
     /**
      * @return true if the group is an empty classic group.
      */
-    private boolean isEmptyClassicGroup(Group group) {
+    private static boolean isEmptyClassicGroup(Group group) {
         return group != null && group.type() == CLASSIC && group.isEmpty();
     }
 
     /**
      * @return true if the group is an empty consumer group.
      */
-    private boolean isEmptyConsumerGroup(Group group) {
+    private static boolean isEmptyConsumerGroup(Group group) {
         return group != null && group.type() == CONSUMER && group.isEmpty();
     }
 

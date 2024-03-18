@@ -9357,10 +9357,34 @@ public class GroupMetadataManagerTest {
                 .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
                 .setTopicPartitions(Collections.emptyList()));
 
-        assertEquals(0, result.response().errorCode());
-        assertEquals(RecordHelpers.newGroupMetadataTombstoneRecord(classicGroupId), result.records().get(0));
-        assertEquals(Group.GroupType.CONSUMER,
-            context.groupMetadataManager.getOrMaybeCreateConsumerGroup(classicGroupId, false).type());
+        ConsumerGroupMember expectedMember = new ConsumerGroupMember.Builder(memberId)
+            .setState(MemberState.STABLE)
+            .setMemberEpoch(1)
+            .setPreviousMemberEpoch(0)
+            .setRebalanceTimeoutMs(5000)
+            .setClientId("client")
+            .setClientHost("localhost/127.0.0.1")
+            .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
+            .setServerAssignorName("range")
+            .setAssignedPartitions(Collections.emptyMap())
+            .build();
+
+        assertEquals(Errors.NONE.code(), result.response().errorCode());
+        assertEquals(
+            Arrays.asList(
+                RecordHelpers.newGroupMetadataTombstoneRecord(classicGroupId),
+                RecordHelpers.newMemberSubscriptionRecord(classicGroupId, expectedMember),
+                RecordHelpers.newGroupEpochRecord(classicGroupId, 1),
+                RecordHelpers.newTargetAssignmentRecord(classicGroupId, memberId, Collections.emptyMap()),
+                RecordHelpers.newTargetAssignmentEpochRecord(classicGroupId, 1),
+                RecordHelpers.newCurrentAssignmentRecord(classicGroupId, expectedMember)
+            ),
+            result.records()
+        );
+        assertEquals(
+            Group.GroupType.CONSUMER,
+            context.groupMetadataManager.getOrMaybeCreateConsumerGroup(classicGroupId, false).type()
+        );
     }
 
     @Test
@@ -9406,10 +9430,12 @@ public class GroupMetadataManagerTest {
             RecordHelpers.newGroupEpochTombstoneRecord(consumerGroupId)
         );
 
-        assertNotEquals(Errors.GROUP_ID_NOT_FOUND.code(), joinResult.joinFuture.get().errorCode());
+        assertEquals(Errors.MEMBER_ID_REQUIRED.code(), joinResult.joinFuture.get().errorCode());
         assertEquals(expectedRecords, joinResult.records.subList(0, expectedRecords.size()));
-        assertEquals(Group.GroupType.CLASSIC,
-            context.groupMetadataManager.getOrMaybeCreateClassicGroup(consumerGroupId, false).type());
+        assertEquals(
+            Group.GroupType.CLASSIC,
+            context.groupMetadataManager.getOrMaybeCreateClassicGroup(consumerGroupId, false).type()
+        );
     }
 
     private static void checkJoinGroupResponse(
