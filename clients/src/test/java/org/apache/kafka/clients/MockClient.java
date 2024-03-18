@@ -244,6 +244,8 @@ public class MockClient implements KafkaClient {
             if (futureResp.node != null && !request.destination().equals(futureResp.node.idString()))
                 continue;
 
+            if (request.apiKey() != futureResp.responseBody.apiKey()) continue;
+
             AbstractRequest.Builder<?> builder = request.requestBuilder();
 
             try {
@@ -270,7 +272,7 @@ public class MockClient implements KafkaClient {
                         request.createdTimeMs(), time.milliseconds(), false, unsupportedVersionException, null, null);
                 responses.add(resp);
             }
-            iterator.remove();
+//            iterator.remove();
             return;
         }
 
