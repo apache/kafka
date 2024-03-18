@@ -68,6 +68,10 @@ public abstract class ShutdownableThread extends Thread {
         return shutdownComplete.getCount() == 0;
     }
 
+    public boolean isStarted() {
+        return isStarted;
+    }
+
     /**
      * @return true if there has been an unexpected error and the thread shut down
      */
