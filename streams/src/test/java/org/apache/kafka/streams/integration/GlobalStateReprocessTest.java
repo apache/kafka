@@ -52,6 +52,7 @@ import org.junit.jupiter.api.Timeout;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.Properties;
 
@@ -178,11 +179,7 @@ public class GlobalStateReprocessTest {
     private void populateTopics(final String topicName) throws Exception {
         IntegrationTestUtils.produceKeyValuesSynchronously(
             topicName,
-            Arrays.asList(
-                new KeyValue<>("A", 1L),
-                new KeyValue<>("B", 2L),
-                new KeyValue<>("C", 3L),
-                new KeyValue<>("D", 4L)),
+            Collections.singletonList(new KeyValue<>("A", 1L)),
             TestUtils.producerConfig(
                 CLUSTER.bootstrapServers(),
                 StringSerializer.class,

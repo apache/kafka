@@ -83,7 +83,7 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
     private final Set<String> globalNonPersistentStoresTopics = new HashSet<>();
     private final FixedOrderMap<String, Optional<StateStore>> globalStores = new FixedOrderMap<>();
     private InternalProcessorContext globalProcessorContext;
-    private final DeserializationExceptionHandler deserializationExceptionHandler;
+    private DeserializationExceptionHandler deserializationExceptionHandler;
 
     public GlobalStateManagerImpl(final LogContext logContext,
                                   final Time time,
@@ -251,6 +251,11 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
             topicPartitions.add(new TopicPartition(partition.topic(), partition.partition()));
         }
         return topicPartitions;
+    }
+
+    //Visible for testing
+    public void setDeserializationExceptionHandler(final DeserializationExceptionHandler deserializationExceptionHandler) {
+        this.deserializationExceptionHandler = deserializationExceptionHandler;
     }
     @SuppressWarnings("unchecked")
     private void reprocessState(final List<TopicPartition> topicPartitions,

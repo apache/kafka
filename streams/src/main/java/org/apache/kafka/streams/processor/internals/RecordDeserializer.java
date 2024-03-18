@@ -69,7 +69,7 @@ public class RecordDeserializer {
             );
         } catch (final Exception deserializationException) {
             handleDeserializationFailure(deserializationExceptionHandler, processorContext, deserializationException, rawRecord, log, droppedRecordsSensor);
-            return null;
+            return null; //  'handleDeserializationFailure' would either throw or swallow -- if we swallow we need to skip the record by returning 'null'
         }
     }
 
