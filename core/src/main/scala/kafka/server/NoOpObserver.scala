@@ -43,4 +43,9 @@ class NoOpObserver extends Observer {
     */
   def close(timeout: Long, unit: TimeUnit): Unit = {}
 
+  /**
+   * track the client library.
+   */
+  def trackClientLibrary(isXinfraClient: Boolean, clientId: String): Unit = {}
+
 }

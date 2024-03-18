@@ -1941,10 +1941,13 @@ class KafkaApis(val requestChannel: RequestChannel,
     // with client authentication which is performed at an earlier stage of the connection where the
     // ApiVersionRequest is not available.
     val apiVersionRequest = request.body[ApiVersionsRequest]
+    val softwareName = apiVersionRequest.data.clientSoftwareName().split("-").last
+
+    val isXinfraClient = (softwareName != null && softwareName.toLowerCase.contains("xinfra"))
+    observer.trackClientLibrary(isXinfraClient, request.context.clientId())
 
     if (config.unofficialClientLoggingEnable) {
       // Check if the last part of clientSoftwareName (after commitId) is an unexpected software name
-      val softwareName = apiVersionRequest.data.clientSoftwareName().split("-").last
       if (!config.expectedClientSoftwareNames.contains(softwareName)) {
         val clientIdentity = request.context.clientId() + " " + request.context.clientAddress() + " " + request.context.principal()
         unofficialClientsCache.get(clientIdentity)

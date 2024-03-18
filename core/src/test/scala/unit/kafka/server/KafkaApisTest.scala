@@ -61,6 +61,7 @@ import org.apache.kafka.common.record.FileRecords.TimestampAndOffset
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.replica.ClientMetadata
 import org.apache.kafka.common.requests.FindCoordinatorRequest.CoordinatorType
+import org.apache.kafka.common.requests.ApiVersionsRequest
 import org.apache.kafka.common.requests.MetadataResponse.TopicMetadata
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.requests.WriteTxnMarkersRequest.TxnMarkerEntry
@@ -495,6 +496,36 @@ class KafkaApisTest {
       ApiKeys.DESCRIBE_QUORUM,
       requestBuilder
     )
+  }
+
+  @Test
+  def testClientLibraryVersionObserverCaching(): Unit = {
+    val requestBuilder = new ApiVersionsRequest.Builder()
+    EasyMock.expect(observer.trackClientLibrary(true, clientId))
+    val kafkaApis = createKafkaApis(enableForwarding = true)
+
+    val topicHeader = new RequestHeader(ApiKeys.API_VERSIONS, ApiKeys.API_VERSIONS.latestVersion,
+      clientId, 0)
+
+    val request = buildRequest(requestBuilder.build(topicHeader.apiVersion))
+
+    if (kafkaApis.metadataSupport.isInstanceOf[ZkSupport]) {
+      // The controller check only makes sense for ZK clusters. For KRaft,
+      // controller requests are handled on a separate listener, so there
+      // is no choice but to forward them..
+      EasyMock.expect(controller.isActive).andReturn(false)
+    }
+
+    expectNoThrottling(request)
+
+    EasyMock.expect(forwardingManager.forwardRequest(
+      EasyMock.eq(request),
+      anyObject[Option[AbstractResponse] => Unit]()
+    )).once()
+
+    EasyMock.replay(replicaManager, clientRequestQuotaManager, requestChannel, controller, forwardingManager)
+
+    kafkaApis.handle(request, RequestLocal.withThreadConfinedCaching)
   }
 
   private def testForwardableApi(apiKey: ApiKeys, requestBuilder: AbstractRequest.Builder[_ <: AbstractRequest]): Unit = {
