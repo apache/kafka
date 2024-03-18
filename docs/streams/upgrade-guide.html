@@ -133,6 +133,14 @@
         More details about the new config <code>StreamsConfig#TOPOLOGY_OPTIMIZATION</code> can be found in <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-295%3A+Add+Streams+Configuration+Allowing+for+Optional+Topology+Optimization">KIP-295</a>.
     </p>
 
+    <h4><a id="streams_api_changes_380" href="#streams_api_changes_380">Streams API changes in 3.8.0</a></h3>
+    <p>
+        The Processor API now support so-called read-only state stores, added via 
+        <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-813%3A+Shareable+State+Stores">KIP-813</a>.
+	These stores don't have a dedicated changelog topic, but use their source topic for fault-tolerance,
+	simlar to <code>KTables</code> with source-topic optimization enabled.
+    </p>
+
     <h3><a id="streams_api_changes_370" href="#streams_api_changes_370">Streams API changes in 3.7.0</a></h3>
     <p>
         We added a new method to <code>KafkaStreams</code>, namely <code>KafkaStreams#setStandbyUpdateListener()</code> in

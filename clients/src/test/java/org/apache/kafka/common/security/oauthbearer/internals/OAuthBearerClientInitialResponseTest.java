@@ -102,6 +102,18 @@ public class OAuthBearerClientInitialResponseTest {
         assertEquals("143", response.extensions().map().get("port"));
     }
 
+    // RFC 6750 token format  1*( ALPHA / DIGIT /"-" / "." / "_" / "~" / "+" / "/" ) *"="
+    @Test
+    public void testCharSupportForRfc6750Token() throws Exception {
+        String message = "n,a=user@example.com,\u0001host=server.example.com\u0001port=143\u0001" +
+                "auth=Bearer vF-9.df_t4qm~Tc2Nvb3RlckBhbHR+hdmlzdGEuY29/tCg==\u0001\u0001";
+        OAuthBearerClientInitialResponse response = new OAuthBearerClientInitialResponse(message.getBytes(StandardCharsets.UTF_8));
+        assertEquals("vF-9.df_t4qm~Tc2Nvb3RlckBhbHR+hdmlzdGEuY29/tCg==", response.tokenValue());
+        assertEquals("user@example.com", response.authorizationId());
+        assertEquals("server.example.com", response.extensions().map().get("host"));
+        assertEquals("143", response.extensions().map().get("port"));
+    }
+
     @Test
     public void testNoExtensionsFromByteArray() throws Exception {
         String message = "n,a=user@example.com,\u0001" +

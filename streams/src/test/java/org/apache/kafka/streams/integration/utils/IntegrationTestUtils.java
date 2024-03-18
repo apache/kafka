@@ -1518,6 +1518,15 @@ public class IntegrationTestUtils {
         public final Map<TopicPartition, AtomicLong> changelogToStartOffset = new ConcurrentHashMap<>();
         public final Map<TopicPartition, AtomicLong> changelogToEndOffset = new ConcurrentHashMap<>();
         public final Map<TopicPartition, AtomicLong> changelogToTotalNumRestored = new ConcurrentHashMap<>();
+        private final AtomicLong restored;
+
+        public TrackingStateRestoreListener() {
+            restored = null;
+        }
+
+        public TrackingStateRestoreListener(final AtomicLong restored) {
+            this.restored = restored;
+        }
 
         @Override
         public void onRestoreStart(final TopicPartition topicPartition,
@@ -1541,6 +1550,9 @@ public class IntegrationTestUtils {
         public void onRestoreEnd(final TopicPartition topicPartition,
                                  final String storeName,
                                  final long totalRestored) {
+            if (restored != null) {
+                restored.addAndGet(totalRestored);
+            }
         }
 
         public long totalNumRestored() {

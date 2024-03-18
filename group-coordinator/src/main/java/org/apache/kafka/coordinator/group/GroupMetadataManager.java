@@ -58,6 +58,7 @@ import org.apache.kafka.coordinator.group.consumer.Assignment;
 import org.apache.kafka.coordinator.group.consumer.ConsumerGroup;
 import org.apache.kafka.coordinator.group.consumer.ConsumerGroupMember;
 import org.apache.kafka.coordinator.group.consumer.CurrentAssignmentBuilder;
+import org.apache.kafka.coordinator.group.consumer.MemberState;
 import org.apache.kafka.coordinator.group.consumer.TargetAssignmentBuilder;
 import org.apache.kafka.coordinator.group.consumer.TopicMetadata;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupCurrentMemberAssignmentKey;
@@ -98,6 +99,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
+import java.util.function.BiFunction;
 import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
@@ -119,6 +121,7 @@ import static org.apache.kafka.coordinator.group.RecordHelpers.newGroupSubscript
 import static org.apache.kafka.coordinator.group.RecordHelpers.newMemberSubscriptionRecord;
 import static org.apache.kafka.coordinator.group.RecordHelpers.newMemberSubscriptionTombstoneRecord;
 import static org.apache.kafka.coordinator.group.RecordHelpers.newTargetAssignmentTombstoneRecord;
+import static org.apache.kafka.coordinator.group.Utils.assignmentToString;
 import static org.apache.kafka.coordinator.group.Utils.ofSentinel;
 import static org.apache.kafka.coordinator.group.classic.ClassicGroupMember.EMPTY_ASSIGNMENT;
 import static org.apache.kafka.coordinator.group.classic.ClassicGroupState.COMPLETING_REBALANCE;
@@ -126,6 +129,7 @@ import static org.apache.kafka.coordinator.group.classic.ClassicGroupState.DEAD;
 import static org.apache.kafka.coordinator.group.classic.ClassicGroupState.EMPTY;
 import static org.apache.kafka.coordinator.group.classic.ClassicGroupState.PREPARING_REBALANCE;
 import static org.apache.kafka.coordinator.group.classic.ClassicGroupState.STABLE;
+import static org.apache.kafka.coordinator.group.consumer.ConsumerGroupMember.hasAssignedPartitionsChanged;
 import static org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetrics.CLASSIC_GROUP_COMPLETED_REBALANCES_SENSOR_NAME;
 import static org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetrics.CONSUMER_GROUP_REBALANCES_SENSOR_NAME;
 
@@ -593,7 +597,8 @@ public class GroupMetadataManager {
     }
 
     /**
-     * Gets or maybe creates a consumer group.
+     * Gets or maybe creates a consumer group without updating the groups map.
+     * The group will be materialized during the replay.
      *
      * @param groupId           The group id.
      * @param createIfNotExists A boolean indicating whether the group should be
@@ -616,6 +621,42 @@ public class GroupMetadataManager {
         }
 
         if (group == null) {
+            return new ConsumerGroup(snapshotRegistry, groupId, metrics);
+        } else {
+            if (group.type() == CONSUMER) {
+                return (ConsumerGroup) group;
+            } else {
+                // We don't support upgrading/downgrading between protocols at the moment so
+                // we throw an exception if a group exists with the wrong type.
+                throw new GroupIdNotFoundException(String.format("Group %s is not a consumer group.", groupId));
+            }
+        }
+    }
+
+    /**
+     * The method should be called on the replay path.
+     * Gets or maybe creates a consumer group and updates the groups map if a new group is created.
+     *
+     * @param groupId           The group id.
+     * @param createIfNotExists A boolean indicating whether the group should be
+     *                          created if it does not exist.
+     *
+     * @return A ConsumerGroup.
+     * @throws IllegalStateException if the group does not exist and createIfNotExists is false or
+     *                               if the group is not a consumer group.
+     * Package private for testing.
+     */
+    ConsumerGroup getOrMaybeCreatePersistedConsumerGroup(
+        String groupId,
+        boolean createIfNotExists
+    ) throws GroupIdNotFoundException {
+        Group group = groups.get(groupId);
+
+        if (group == null && !createIfNotExists) {
+            throw new IllegalStateException(String.format("Consumer group %s not found.", groupId));
+        }
+
+        if (group == null) {
             ConsumerGroup consumerGroup = new ConsumerGroup(snapshotRegistry, groupId, metrics);
             groups.put(groupId, consumerGroup);
             metrics.onConsumerGroupStateTransition(null, consumerGroup.state());
@@ -626,7 +667,7 @@ public class GroupMetadataManager {
             } else {
                 // We don't support upgrading/downgrading between protocols at the moment so
                 // we throw an exception if a group exists with the wrong type.
-                throw new GroupIdNotFoundException(String.format("Group %s is not a consumer group.", groupId));
+                throw new IllegalStateException(String.format("Group %s is not a consumer group.", groupId));
             }
         }
     }
@@ -1072,7 +1113,6 @@ public class GroupMetadataManager {
             }
         }
 
-
         int groupEpoch = group.groupEpoch();
         Map<String, TopicMetadata> subscriptionMetadata = group.subscriptionMetadata();
 
@@ -1180,38 +1220,17 @@ public class GroupMetadataManager {
             }
         }
 
-        // 3. Reconcile the member's assignment with the target assignment. This is only required if
-        // the member is not stable or if a new target assignment has been installed.
-        boolean assignmentUpdated = false;
-        if (updatedMember.state() != ConsumerGroupMember.MemberState.STABLE || updatedMember.targetMemberEpoch() != targetAssignmentEpoch) {
-            ConsumerGroupMember prevMember = updatedMember;
-            updatedMember = new CurrentAssignmentBuilder(updatedMember)
-                .withTargetAssignment(targetAssignmentEpoch, targetAssignment)
-                .withCurrentPartitionEpoch(group::currentPartitionEpoch)
-                .withOwnedTopicPartitions(ownedTopicPartitions)
-                .build();
-
-            // Checking the reference is enough here because a new instance
-            // is created only when the state has changed.
-            if (updatedMember != prevMember) {
-                assignmentUpdated = true;
-                records.add(newCurrentAssignmentRecord(groupId, updatedMember));
-
-                log.info("[GroupId {}] Member {} transitioned from {} to {}.",
-                    groupId, memberId, member.currentAssignmentSummary(), updatedMember.currentAssignmentSummary());
-
-                if (updatedMember.state() == ConsumerGroupMember.MemberState.REVOKING) {
-                    scheduleConsumerGroupRevocationTimeout(
-                        groupId,
-                        memberId,
-                        updatedMember.rebalanceTimeoutMs(),
-                        updatedMember.memberEpoch()
-                    );
-                } else {
-                    cancelConsumerGroupRevocationTimeout(groupId, memberId);
-                }
-            }
-        }
+        // 3. Reconcile the member's assignment with the target assignment if the member is not
+        // fully reconciled yet.
+        updatedMember = maybeReconcile(
+            groupId,
+            updatedMember,
+            group::currentPartitionEpoch,
+            targetAssignmentEpoch,
+            targetAssignment,
+            ownedTopicPartitions,
+            records
+        );
 
         scheduleConsumerGroupSessionTimeout(groupId, memberId);
 
@@ -1225,11 +1244,69 @@ public class GroupMetadataManager {
         // 1. The member reported its owned partitions;
         // 2. The member just joined or rejoined to group (epoch equals to zero);
         // 3. The member's assignment has been updated.
-        if (ownedTopicPartitions != null || memberEpoch == 0 || assignmentUpdated) {
+        if (ownedTopicPartitions != null || memberEpoch == 0 || hasAssignedPartitionsChanged(member, updatedMember)) {
             response.setAssignment(createResponseAssignment(updatedMember));
         }
 
         return new CoordinatorResult<>(records, response);
+    }
+
+    /**
+     * Reconciles the current assignment of the member towards the target assignment if needed.
+     *
+     * @param groupId               The group id.
+     * @param member                The member to reconcile.
+     * @param currentPartitionEpoch The function returning the current epoch of
+     *                              a given partition.
+     * @param targetAssignmentEpoch The target assignment epoch.
+     * @param targetAssignment      The target assignment.
+     * @param ownedTopicPartitions  The list of partitions owned by the member. This
+     *                              is reported in the ConsumerGroupHeartbeat API and
+     *                              it could be null if not provided.
+     * @param records               The list to accumulate any new records.
+     * @return The received member if no changes have been made; or a new
+     *         member containing the new assignment.
+     */
+    private ConsumerGroupMember maybeReconcile(
+        String groupId,
+        ConsumerGroupMember member,
+        BiFunction<Uuid, Integer, Integer> currentPartitionEpoch,
+        int targetAssignmentEpoch,
+        Assignment targetAssignment,
+        List<ConsumerGroupHeartbeatRequestData.TopicPartitions> ownedTopicPartitions,
+        List<Record> records
+    ) {
+        if (member.isReconciledTo(targetAssignmentEpoch)) {
+            return member;
+        }
+
+        ConsumerGroupMember updatedMember = new CurrentAssignmentBuilder(member)
+            .withTargetAssignment(targetAssignmentEpoch, targetAssignment)
+            .withCurrentPartitionEpoch(currentPartitionEpoch)
+            .withOwnedTopicPartitions(ownedTopicPartitions)
+            .build();
+
+        if (!updatedMember.equals(member)) {
+            records.add(newCurrentAssignmentRecord(groupId, updatedMember));
+
+            log.info("[GroupId {}] Member {} new assignment state: epoch={}, previousEpoch={}, state={}, "
+                     + "assignedPartitions={} and revokedPartitions={}.",
+                groupId, updatedMember.memberId(), updatedMember.memberEpoch(), updatedMember.previousMemberEpoch(), updatedMember.state(),
+                assignmentToString(updatedMember.assignedPartitions()), assignmentToString(updatedMember.partitionsPendingRevocation()));
+
+            if (updatedMember.state() == MemberState.UNREVOKED_PARTITIONS) {
+                scheduleConsumerGroupRebalanceTimeout(
+                    groupId,
+                    updatedMember.memberId(),
+                    updatedMember.memberEpoch(),
+                    updatedMember.rebalanceTimeoutMs()
+                );
+            } else {
+                cancelConsumerGroupRebalanceTimeout(groupId, updatedMember.memberId());
+            }
+        }
+
+        return updatedMember;
     }
 
     private void removeMemberAndCancelTimers(
@@ -1367,7 +1444,7 @@ public class GroupMetadataManager {
      */
     private void cancelTimers(String groupId, String memberId) {
         cancelConsumerGroupSessionTimeout(groupId, memberId);
-        cancelConsumerGroupRevocationTimeout(groupId, memberId);
+        cancelConsumerGroupRebalanceTimeout(groupId, memberId);
     }
 
     /**
@@ -1414,35 +1491,35 @@ public class GroupMetadataManager {
     }
 
     /**
-     * Schedules a revocation timeout for the member.
+     * Schedules a rebalance timeout for the member.
      *
      * @param groupId               The group id.
      * @param memberId              The member id.
-     * @param revocationTimeoutMs   The revocation timeout.
-     * @param expectedMemberEpoch   The expected member epoch.
+     * @param memberEpoch           The member epoch.
+     * @param rebalanceTimeoutMs    The rebalance timeout.
      */
-    private void scheduleConsumerGroupRevocationTimeout(
+    private void scheduleConsumerGroupRebalanceTimeout(
         String groupId,
         String memberId,
-        long revocationTimeoutMs,
-        int expectedMemberEpoch
+        int memberEpoch,
+        int rebalanceTimeoutMs
     ) {
-        String key = consumerGroupRevocationTimeoutKey(groupId, memberId);
-        timer.schedule(key, revocationTimeoutMs, TimeUnit.MILLISECONDS, true, () -> {
+        String key = consumerGroupRebalanceTimeoutKey(groupId, memberId);
+        timer.schedule(key, rebalanceTimeoutMs, TimeUnit.MILLISECONDS, true, () -> {
             try {
                 ConsumerGroup group = getOrMaybeCreateConsumerGroup(groupId, false);
                 ConsumerGroupMember member = group.getOrMaybeCreateMember(memberId, false);
 
-                if (member.state() != ConsumerGroupMember.MemberState.REVOKING ||
-                    member.memberEpoch() != expectedMemberEpoch) {
-                    log.debug("[GroupId {}] Ignoring revocation timeout for {} because the member " +
-                        "state does not match the expected state.", groupId, memberId);
+                if (member.memberEpoch() == memberEpoch) {
+                    log.info("[GroupId {}] Member {} fenced from the group because " +
+                            "it failed to transition from epoch {} within {}ms.",
+                        groupId, memberId, memberEpoch, rebalanceTimeoutMs);
+                    return new CoordinatorResult<>(consumerGroupFenceMember(group, member));
+                } else {
+                    log.debug("[GroupId {}] Ignoring rebalance timeout for {} because the member " +
+                        "left the epoch {}.", groupId, memberId, memberEpoch);
                     return new CoordinatorResult<>(Collections.emptyList());
                 }
-
-                log.info("[GroupId {}] Member {} fenced from the group because " +
-                    "it failed to revoke partitions within {}ms.", groupId, memberId, revocationTimeoutMs);
-                return new CoordinatorResult<>(consumerGroupFenceMember(group, member));
             } catch (GroupIdNotFoundException ex) {
                 log.debug("[GroupId {}] Could not fence {}} because the group does not exist.",
                     groupId, memberId);
@@ -1456,16 +1533,16 @@ public class GroupMetadataManager {
     }
 
     /**
-     * Cancels the revocation timeout of the member.
+     * Cancels the rebalance timeout of the member.
      *
      * @param groupId       The group id.
      * @param memberId      The member id.
      */
-    private void cancelConsumerGroupRevocationTimeout(
+    private void cancelConsumerGroupRebalanceTimeout(
         String groupId,
         String memberId
     ) {
-        timer.cancel(consumerGroupRevocationTimeoutKey(groupId, memberId));
+        timer.cancel(consumerGroupRebalanceTimeoutKey(groupId, memberId));
     }
 
     /**
@@ -1525,7 +1602,7 @@ public class GroupMetadataManager {
         String groupId = key.groupId();
         String memberId = key.memberId();
 
-        ConsumerGroup consumerGroup = getOrMaybeCreateConsumerGroup(groupId, value != null);
+        ConsumerGroup consumerGroup = getOrMaybeCreatePersistedConsumerGroup(groupId, value != null);
         Set<String> oldSubscribedTopicNames = new HashSet<>(consumerGroup.subscribedTopicNames());
 
         if (value != null) {
@@ -1637,10 +1714,10 @@ public class GroupMetadataManager {
         String groupId = key.groupId();
 
         if (value != null) {
-            ConsumerGroup consumerGroup = getOrMaybeCreateConsumerGroup(groupId, true);
+            ConsumerGroup consumerGroup = getOrMaybeCreatePersistedConsumerGroup(groupId, true);
             consumerGroup.setGroupEpoch(value.epoch());
         } else {
-            ConsumerGroup consumerGroup = getOrMaybeCreateConsumerGroup(groupId, false);
+            ConsumerGroup consumerGroup = getOrMaybeCreatePersistedConsumerGroup(groupId, false);
             if (!consumerGroup.members().isEmpty()) {
                 throw new IllegalStateException("Received a tombstone record to delete group " + groupId
                     + " but the group still has " + consumerGroup.members().size() + " members.");
@@ -1672,7 +1749,7 @@ public class GroupMetadataManager {
         ConsumerGroupPartitionMetadataValue value
     ) {
         String groupId = key.groupId();
-        ConsumerGroup consumerGroup = getOrMaybeCreateConsumerGroup(groupId, false);
+        ConsumerGroup consumerGroup = getOrMaybeCreatePersistedConsumerGroup(groupId, false);
 
         if (value != null) {
             Map<String, TopicMetadata> subscriptionMetadata = new HashMap<>();
@@ -1698,7 +1775,7 @@ public class GroupMetadataManager {
     ) {
         String groupId = key.groupId();
         String memberId = key.memberId();
-        ConsumerGroup consumerGroup = getOrMaybeCreateConsumerGroup(groupId, false);
+        ConsumerGroup consumerGroup = getOrMaybeCreatePersistedConsumerGroup(groupId, false);
 
         if (value != null) {
             consumerGroup.updateTargetAssignment(memberId, Assignment.fromRecord(value));
@@ -1720,7 +1797,7 @@ public class GroupMetadataManager {
         ConsumerGroupTargetAssignmentMetadataValue value
     ) {
         String groupId = key.groupId();
-        ConsumerGroup consumerGroup = getOrMaybeCreateConsumerGroup(groupId, false);
+        ConsumerGroup consumerGroup = getOrMaybeCreatePersistedConsumerGroup(groupId, false);
 
         if (value != null) {
             consumerGroup.setTargetAssignmentEpoch(value.assignmentEpoch());
@@ -1746,7 +1823,7 @@ public class GroupMetadataManager {
     ) {
         String groupId = key.groupId();
         String memberId = key.memberId();
-        ConsumerGroup consumerGroup = getOrMaybeCreateConsumerGroup(groupId, false);
+        ConsumerGroup consumerGroup = getOrMaybeCreatePersistedConsumerGroup(groupId, false);
         ConsumerGroupMember oldMember = consumerGroup.getOrMaybeCreateMember(memberId, false);
 
         if (value != null) {
@@ -1758,10 +1835,8 @@ public class GroupMetadataManager {
             ConsumerGroupMember newMember = new ConsumerGroupMember.Builder(oldMember)
                 .setMemberEpoch(LEAVE_GROUP_MEMBER_EPOCH)
                 .setPreviousMemberEpoch(LEAVE_GROUP_MEMBER_EPOCH)
-                .setTargetMemberEpoch(LEAVE_GROUP_MEMBER_EPOCH)
                 .setAssignedPartitions(Collections.emptyMap())
                 .setPartitionsPendingRevocation(Collections.emptyMap())
-                .setPartitionsPendingAssignment(Collections.emptyMap())
                 .build();
             consumerGroup.updateMember(newMember);
         }
@@ -1810,12 +1885,12 @@ public class GroupMetadataManager {
                     consumerGroup.members().forEach((memberId, member) -> {
                         log.debug("Loaded member {} in consumer group {}.", memberId, groupId);
                         scheduleConsumerGroupSessionTimeout(groupId, memberId);
-                        if (member.state() == ConsumerGroupMember.MemberState.REVOKING) {
-                            scheduleConsumerGroupRevocationTimeout(
+                        if (member.state() == MemberState.UNREVOKED_PARTITIONS) {
+                            scheduleConsumerGroupRebalanceTimeout(
                                 groupId,
-                                memberId,
-                                member.rebalanceTimeoutMs(),
-                                member.memberEpoch()
+                                member.memberId(),
+                                member.memberEpoch(),
+                                member.rebalanceTimeoutMs()
                             );
                         }
                     });
@@ -1848,8 +1923,8 @@ public class GroupMetadataManager {
         return "session-timeout-" + groupId + "-" + memberId;
     }
 
-    public static String consumerGroupRevocationTimeoutKey(String groupId, String memberId) {
-        return "revocation-timeout-" + groupId + "-" + memberId;
+    public static String consumerGroupRebalanceTimeoutKey(String groupId, String memberId) {
+        return "rebalance-timeout-" + groupId + "-" + memberId;
     }
 
     /**
