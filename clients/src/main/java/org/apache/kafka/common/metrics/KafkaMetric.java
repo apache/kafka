@@ -111,6 +111,7 @@ public final class KafkaMetric implements Metric {
 
     /**
      * Set the metric config.
+     * This is supposed to be used by server only, DO NOT use this for your metrics.
      * @param config configuration for this metrics
      */
     public void config(MetricConfig config) {
