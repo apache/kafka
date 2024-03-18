@@ -288,7 +288,6 @@ public class OffsetsRequestManager implements RequestManager, ClusterResourceLis
             final Map<TopicPartition, Long> timestampsToSearch,
             final boolean requireTimestamps,
             final ListOffsetsRequestState listOffsetsRequestState) {
-        System.out.println("buildLuistOffsetRequests");
         log.debug("Building ListOffsets request for partitions {}", timestampsToSearch);
         Map<Node, Map<TopicPartition, ListOffsetsRequestData.ListOffsetsPartition>> timestampsToSearchByNode =
                 groupListOffsetRequests(timestampsToSearch, Optional.of(listOffsetsRequestState));
@@ -329,8 +328,6 @@ public class OffsetsRequestManager implements RequestManager, ClusterResourceLis
                     unsentRequests);
 
             partialResult.whenComplete((result, error) -> {
-                System.out.println("partialResult.whenComplete:" + result.fetchedOffsets);
-                result.fetchedOffsets.forEach((key, value) -> System.out.println(key + ":" + value.timestamp + ":" + value.offset));
                 if (error != null) {
                     multiNodeRequest.resultFuture.completeExceptionally(error);
                 } else {
@@ -374,8 +371,7 @@ public class OffsetsRequestManager implements RequestManager, ClusterResourceLis
                 ListOffsetsResponse lor = (ListOffsetsResponse) response.responseBody();
                 log.trace("Received ListOffsetResponse {} from broker {}", lor, node);
                 try {
-                    ListOffsetResult listOffsetResult =
-                            offsetFetcherUtils.handleListOffsetResponse(lor);
+                    ListOffsetResult listOffsetResult = offsetFetcherUtils.handleListOffsetResponse(lor);
                     result.complete(listOffsetResult);
                 } catch (RuntimeException e) {
                     result.completeExceptionally(e);
