@@ -25,6 +25,7 @@ import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.config.ConfigValue;
 import org.apache.kafka.common.errors.SecurityDisabledException;
+import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.connect.connector.Task;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.source.ExactlyOnceSupport;
@@ -630,8 +631,16 @@ public class MirrorSourceConnector extends SourceConnector {
         Set<ConfigResource> resources = topics.stream()
             .map(x -> new ConfigResource(ConfigResource.Type.TOPIC, x))
             .collect(Collectors.toSet());
-        return sourceAdminClient.describeConfigs(resources).all().get().entrySet().stream()
-            .collect(Collectors.toMap(x -> x.getKey().name(), Entry::getValue));
+        try {
+            return sourceAdminClient.describeConfigs(resources).all().get().entrySet().stream()
+                    .collect(Collectors.toMap(x -> x.getKey().name(), Entry::getValue));
+        } catch (ExecutionException e) {
+            if (e.getCause() instanceof TopicAuthorizationException) {
+                log.error("Authorization error occurred while trying to describe configs for topics {} " +
+                        "on the cluster {}", topics, config.sourceClusterAlias());
+            }
+            throw e;
+        }
     }
 
     Config targetConfig(Config sourceConfig, boolean incremental) {
