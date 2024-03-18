@@ -47,6 +47,7 @@ import org.apache.kafka.common.requests.{ApiVersionsRequest, RequestContext, Req
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.utils.{KafkaThread, LogContext, Time, Utils}
 import org.apache.kafka.common.{Endpoint, KafkaException, MetricName, Reconfigurable}
+import org.apache.kafka.server.config.KafkaConfig.{MAX_CONNECTIONS_PER_IP_PROP, MAX_CONNECTIONS_PER_IP_OVERRIDES_PROP, MAX_CONNECTIONS_PROP, MAX_CONNECTION_CREATION_RATE_PROP, NUM_NETWORK_THREADS_PROP}
 import org.apache.kafka.server.metrics.KafkaMetricsGroup
 import org.apache.kafka.server.util.FutureUtils
 import org.slf4j.event.Level
@@ -405,12 +406,12 @@ object SocketServer {
   val MetricsGroup = "socket-server-metrics"
 
   val ReconfigurableConfigs: Set[String] = Set(
-    KafkaConfig.MaxConnectionsPerIpProp,
-    KafkaConfig.MaxConnectionsPerIpOverridesProp,
-    KafkaConfig.MaxConnectionsProp,
-    KafkaConfig.MaxConnectionCreationRateProp)
+    MAX_CONNECTIONS_PER_IP_PROP,
+    MAX_CONNECTIONS_PER_IP_OVERRIDES_PROP,
+    MAX_CONNECTIONS_PROP,
+    MAX_CONNECTION_CREATION_RATE_PROP)
 
-  val ListenerReconfigurableConfigs: Set[String] = Set(KafkaConfig.MaxConnectionsProp, KafkaConfig.MaxConnectionCreationRateProp)
+  val ListenerReconfigurableConfigs: Set[String] = Set(MAX_CONNECTIONS_PROP, MAX_CONNECTION_CREATION_RATE_PROP)
 
   def closeSocket(
     channel: SocketChannel,
@@ -424,7 +425,7 @@ object SocketServer {
 object DataPlaneAcceptor {
   val ThreadPrefix: String = "data-plane"
   val MetricPrefix: String = ""
-  val ListenerReconfigurableConfigs: Set[String] = Set(KafkaConfig.NumNetworkThreadsProp)
+  val ListenerReconfigurableConfigs: Set[String] = Set(NUM_NETWORK_THREADS_PROP)
 }
 
 class DataPlaneAcceptor(socketServer: SocketServer,
@@ -505,7 +506,7 @@ class DataPlaneAcceptor(socketServer: SocketServer,
    * the configs have passed validation using [[validateReconfiguration( Map )]].
    */
   override def reconfigure(configs: util.Map[String, _]): Unit = {
-    val newNumNetworkThreads = configs.get(KafkaConfig.NumNetworkThreadsProp).asInstanceOf[Int]
+    val newNumNetworkThreads = configs.get(NUM_NETWORK_THREADS_PROP).asInstanceOf[Int]
 
     if (newNumNetworkThreads != processors.length) {
       info(s"Resizing network thread pool size for ${endPoint.listenerName} listener from ${processors.length} to $newNumNetworkThreads")
@@ -521,7 +522,7 @@ class DataPlaneAcceptor(socketServer: SocketServer,
    * Configure this class with the given key-value pairs
    */
   override def configure(configs: util.Map[String, _]): Unit = {
-    addProcessors(configs.get(KafkaConfig.NumNetworkThreadsProp).asInstanceOf[Int])
+    addProcessors(configs.get(NUM_NETWORK_THREADS_PROP).asInstanceOf[Int])
   }
 }
 
@@ -1791,11 +1792,11 @@ class ConnectionQuotas(config: KafkaConfig, time: Time, metrics: Metrics) extend
     override def validateReconfiguration(configs: util.Map[String, _]): Unit = {
       val value = maxConnections(configs)
       if (value <= 0)
-        throw new ConfigException(s"Invalid ${KafkaConfig.MaxConnectionsProp} $value")
+        throw new ConfigException(s"Invalid ${MAX_CONNECTIONS_PROP} $value")
 
       val rate = maxConnectionCreationRate(configs)
       if (rate <= 0)
-        throw new ConfigException(s"Invalid ${KafkaConfig.MaxConnectionCreationRateProp} $rate")
+        throw new ConfigException(s"Invalid ${MAX_CONNECTION_CREATION_RATE_PROP} $rate")
     }
 
     override def reconfigure(configs: util.Map[String, _]): Unit = {
@@ -1813,11 +1814,11 @@ class ConnectionQuotas(config: KafkaConfig, time: Time, metrics: Metrics) extend
     }
 
     private def maxConnections(configs: util.Map[String, _]): Int = {
-      Option(configs.get(KafkaConfig.MaxConnectionsProp)).map(_.toString.toInt).getOrElse(Int.MaxValue)
+      Option(configs.get(MAX_CONNECTIONS_PROP)).map(_.toString.toInt).getOrElse(Int.MaxValue)
     }
 
     private def maxConnectionCreationRate(configs: util.Map[String, _]): Int = {
-      Option(configs.get(KafkaConfig.MaxConnectionCreationRateProp)).map(_.toString.toInt).getOrElse(Int.MaxValue)
+      Option(configs.get(MAX_CONNECTION_CREATION_RATE_PROP)).map(_.toString.toInt).getOrElse(Int.MaxValue)
     }
 
     /**

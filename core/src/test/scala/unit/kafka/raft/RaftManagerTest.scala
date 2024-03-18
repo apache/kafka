@@ -31,6 +31,7 @@ import org.apache.kafka.common.Uuid
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.raft.RaftConfig
+import org.apache.kafka.server.config.KafkaConfig._
 import org.apache.kafka.server.ProcessRole
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
@@ -48,26 +49,26 @@ class RaftManagerTest {
   ): KafkaConfig = {
     val props = new Properties
     logDir.foreach { value =>
-      props.setProperty(KafkaConfig.LogDirProp, value.toString)
+      props.setProperty(LOG_DIR_PROP, value.toString)
     }
     metadataDir.foreach { value =>
-      props.setProperty(KafkaConfig.MetadataLogDirProp, value.toString)
+      props.setProperty(METADATA_LOG_DIR_PROP, value.toString)
     }
-    props.setProperty(KafkaConfig.ProcessRolesProp, processRoles.mkString(","))
-    props.setProperty(KafkaConfig.NodeIdProp, nodeId.toString)
-    props.setProperty(KafkaConfig.ControllerListenerNamesProp, "SSL")
+    props.setProperty(PROCESS_ROLES_PROP, processRoles.mkString(","))
+    props.setProperty(NODE_ID_PROP, nodeId.toString)
+    props.setProperty(CONTROLLER_LISTENER_NAMES_PROP, "SSL")
     if (processRoles.contains(ProcessRole.BrokerRole)) {
-      props.setProperty(KafkaConfig.InterBrokerListenerNameProp, "PLAINTEXT")
+      props.setProperty(INTER_BROKER_LISTENER_NAME_PROP, "PLAINTEXT")
       if (processRoles.contains(ProcessRole.ControllerRole)) { // co-located
-        props.setProperty(KafkaConfig.ListenersProp, "PLAINTEXT://localhost:9092,SSL://localhost:9093")
-        props.setProperty(KafkaConfig.QuorumVotersProp, s"${nodeId}@localhost:9093")
+        props.setProperty(LISTENERS_PROP, "PLAINTEXT://localhost:9092,SSL://localhost:9093")
+        props.setProperty(QUORUM_VOTERS_PROP, s"${nodeId}@localhost:9093")
       } else { // broker-only
         val voterId = nodeId + 1
-        props.setProperty(KafkaConfig.QuorumVotersProp, s"${voterId}@localhost:9093")
+        props.setProperty(QUORUM_VOTERS_PROP, s"${voterId}@localhost:9093")
       }
     } else if (processRoles.contains(ProcessRole.ControllerRole)) { // controller-only
-      props.setProperty(KafkaConfig.ListenersProp, "SSL://localhost:9093")
-      props.setProperty(KafkaConfig.QuorumVotersProp, s"${nodeId}@localhost:9093")
+      props.setProperty(LISTENERS_PROP, "SSL://localhost:9093")
+      props.setProperty(QUORUM_VOTERS_PROP, s"${nodeId}@localhost:9093")
     }
 
     new KafkaConfig(props)

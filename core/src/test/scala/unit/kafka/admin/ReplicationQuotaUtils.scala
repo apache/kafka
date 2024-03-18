@@ -12,10 +12,11 @@
   */
 package kafka.admin
 
-import kafka.server.{DynamicConfig, KafkaServer}
+import kafka.server.KafkaServer
 import kafka.utils.TestUtils
 import kafka.zk.AdminZkClient
 import org.apache.kafka.server.config.ConfigType
+import org.apache.kafka.server.config.dynamic.BrokerDynamicConfigs
 import org.apache.kafka.storage.internals.log.LogConfig
 
 import scala.collection.Seq
@@ -26,8 +27,8 @@ object ReplicationQuotaUtils {
     TestUtils.waitUntilTrue(() => {
       val hasRateProp = servers.forall { server =>
         val brokerConfig = adminZkClient.fetchEntityConfig(ConfigType.BROKER, server.config.brokerId.toString)
-        brokerConfig.contains(DynamicConfig.Broker.LeaderReplicationThrottledRateProp) ||
-          brokerConfig.contains(DynamicConfig.Broker.FollowerReplicationThrottledRateProp)
+        brokerConfig.contains(BrokerDynamicConfigs.LEADER_REPLICATION_THROTTLED_RATE_PROP) ||
+          brokerConfig.contains(BrokerDynamicConfigs.FOLLOWER_REPLICATION_THROTTLED_RATE_PROP)
       }
       val topicConfig = adminZkClient.fetchEntityConfig(ConfigType.TOPIC, topic)
       val hasReplicasProp = topicConfig.contains(LogConfig.LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG) ||
@@ -41,8 +42,8 @@ object ReplicationQuotaUtils {
       //Check for limit in ZK
       val brokerConfigAvailable = servers.forall { server =>
         val configInZk = adminZkClient.fetchEntityConfig(ConfigType.BROKER, server.config.brokerId.toString)
-        val zkLeaderRate = configInZk.getProperty(DynamicConfig.Broker.LeaderReplicationThrottledRateProp)
-        val zkFollowerRate = configInZk.getProperty(DynamicConfig.Broker.FollowerReplicationThrottledRateProp)
+        val zkLeaderRate = configInZk.getProperty(BrokerDynamicConfigs.LEADER_REPLICATION_THROTTLED_RATE_PROP)
+        val zkFollowerRate = configInZk.getProperty(BrokerDynamicConfigs.FOLLOWER_REPLICATION_THROTTLED_RATE_PROP)
         zkLeaderRate != null && expectedThrottleRate == zkLeaderRate.toLong &&
           zkFollowerRate != null && expectedThrottleRate == zkFollowerRate.toLong
       }

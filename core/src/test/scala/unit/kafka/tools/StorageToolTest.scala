@@ -28,6 +28,7 @@ import kafka.utils.Exit
 import kafka.utils.TestUtils
 import org.apache.commons.io.output.NullOutputStream
 import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.server.config.KafkaConfig.{LOG_DIRS_PROP, PROCESS_ROLES_PROP, NODE_ID_PROP, QUORUM_VOTERS_PROP, CONTROLLER_LISTENER_NAMES_PROP, METADATA_LOG_DIR_PROP, UNSTABLE_METADATA_VERSIONS_ENABLE_PROP}
 import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.common.metadata.UserScramCredentialRecord
 import org.apache.kafka.metadata.properties.{MetaProperties, MetaPropertiesEnsemble, MetaPropertiesVersion, PropertiesUtils}
@@ -44,11 +45,11 @@ class StorageToolTest {
 
   private def newSelfManagedProperties() = {
     val properties = new Properties()
-    properties.setProperty(KafkaConfig.LogDirsProp, "/tmp/foo,/tmp/bar")
-    properties.setProperty(KafkaConfig.ProcessRolesProp, "controller")
-    properties.setProperty(KafkaConfig.NodeIdProp, "2")
-    properties.setProperty(KafkaConfig.QuorumVotersProp, s"2@localhost:9092")
-    properties.setProperty(KafkaConfig.ControllerListenerNamesProp, "PLAINTEXT")
+    properties.setProperty(LOG_DIRS_PROP, "/tmp/foo,/tmp/bar")
+    properties.setProperty(PROCESS_ROLES_PROP, "controller")
+    properties.setProperty(NODE_ID_PROP, "2")
+    properties.setProperty(QUORUM_VOTERS_PROP, s"2@localhost:9092")
+    properties.setProperty(CONTROLLER_LISTENER_NAMES_PROP, "PLAINTEXT")
     properties
   }
 
@@ -61,7 +62,7 @@ class StorageToolTest {
   @Test
   def testConfigToLogDirectoriesWithMetaLogDir(): Unit = {
     val properties = newSelfManagedProperties()
-    properties.setProperty(KafkaConfig.MetadataLogDirProp, "/tmp/baz")
+    properties.setProperty(METADATA_LOG_DIR_PROP, "/tmp/baz")
     val config = new KafkaConfig(properties)
     assertEquals(Seq("/tmp/bar", "/tmp/baz", "/tmp/foo"),
       StorageTool.configToLogDirectories(config))
@@ -354,7 +355,7 @@ Found problem:
     val propsFile = TestUtils.tempFile()
     val propsStream = Files.newOutputStream(propsFile.toPath)
     // This test does format the directory specified so use a tempdir
-    properties.setProperty(KafkaConfig.LogDirsProp, TestUtils.tempDir().toString)
+    properties.setProperty(LOG_DIRS_PROP, TestUtils.tempDir().toString)
     properties.store(propsStream, "config.props")
     propsStream.close()
 
@@ -408,8 +409,8 @@ Found problem:
     val propsFile = TestUtils.tempFile()
     val propsStream = Files.newOutputStream(propsFile.toPath)
     try {
-      properties.setProperty(KafkaConfig.LogDirsProp, TestUtils.tempDir().toString)
-      properties.setProperty(KafkaConfig.UnstableMetadataVersionsEnableProp, enableUnstable.toString)
+      properties.setProperty(LOG_DIRS_PROP, TestUtils.tempDir().toString)
+      properties.setProperty(UNSTABLE_METADATA_VERSIONS_ENABLE_PROP, enableUnstable.toString)
       properties.store(propsStream, "config.props")
     } finally {
       propsStream.close()

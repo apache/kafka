@@ -19,7 +19,7 @@ package kafka.admin
 import java.util
 import java.util.{Optional, Properties}
 import kafka.controller.ReplicaAssignment
-import kafka.server.DynamicConfig.Broker._
+import org.apache.kafka.server.config.dynamic.BrokerDynamicConfigs._
 import kafka.server.KafkaConfig._
 import kafka.server.{KafkaConfig, KafkaServer, QuorumTestHarness}
 import kafka.utils.CoreUtils._
@@ -283,27 +283,27 @@ class AdminZkClientTest extends QuorumTestHarness with Logging with RackAwareTes
 
     // Set the limit & check it is applied to the log
     adminZkClient.changeBrokerConfig(brokerIds, propsWith(
-      (LeaderReplicationThrottledRateProp, limit.toString),
-      (FollowerReplicationThrottledRateProp, limit.toString)))
+      (LEADER_REPLICATION_THROTTLED_RATE_PROP, limit.toString),
+      (FOLLOWER_REPLICATION_THROTTLED_RATE_PROP, limit.toString)))
     checkConfig(limit)
 
     // Now double the config values for the topic and check that it is applied
     val newLimit = 2 * limit
     adminZkClient.changeBrokerConfig(brokerIds,  propsWith(
-      (LeaderReplicationThrottledRateProp, newLimit.toString),
-      (FollowerReplicationThrottledRateProp, newLimit.toString)))
+      (LEADER_REPLICATION_THROTTLED_RATE_PROP, newLimit.toString),
+      (FOLLOWER_REPLICATION_THROTTLED_RATE_PROP, newLimit.toString)))
     checkConfig(newLimit)
 
     // Verify that the same config can be read from ZK
     for (brokerId <- brokerIds) {
       val configInZk = adminZkClient.fetchEntityConfig(ConfigType.BROKER, brokerId.toString)
-      assertEquals(newLimit, configInZk.getProperty(LeaderReplicationThrottledRateProp).toInt)
-      assertEquals(newLimit, configInZk.getProperty(FollowerReplicationThrottledRateProp).toInt)
+      assertEquals(newLimit, configInZk.getProperty(LEADER_REPLICATION_THROTTLED_RATE_PROP).toInt)
+      assertEquals(newLimit, configInZk.getProperty(FOLLOWER_REPLICATION_THROTTLED_RATE_PROP).toInt)
     }
 
     //Now delete the config
     adminZkClient.changeBrokerConfig(brokerIds, new Properties)
-    checkConfig(DefaultReplicationThrottledRate)
+    checkConfig(DEFAULT_REPLICATION_THROTTLED_RATE)
   }
 
   /**

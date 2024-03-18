@@ -24,14 +24,15 @@ import kafka.utils.TestUtils
 import org.apache.kafka.common.message.MetadataRequestData
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{MetadataRequest, MetadataResponse}
+import org.apache.kafka.server.config.KafkaConfig.{OFFSETS_TOPIC_PARTITIONS_PROP, DEFAULT_REPLICATION_FACTOR_PROP, RACK_PROP, BROKER_ID_PROP}
 import org.junit.jupiter.api.Assertions.assertEquals
 
 abstract class AbstractMetadataRequestTest extends BaseRequestTest {
 
   override def brokerPropertyOverrides(properties: Properties): Unit = {
-    properties.setProperty(KafkaConfig.OffsetsTopicPartitionsProp, "1")
-    properties.setProperty(KafkaConfig.DefaultReplicationFactorProp, "2")
-    properties.setProperty(KafkaConfig.RackProp, s"rack/${properties.getProperty(KafkaConfig.BrokerIdProp)}")
+    properties.setProperty(OFFSETS_TOPIC_PARTITIONS_PROP, "1")
+    properties.setProperty(DEFAULT_REPLICATION_FACTOR_PROP, "2")
+    properties.setProperty(RACK_PROP, s"rack/${properties.getProperty(BROKER_ID_PROP)}")
   }
 
   protected def requestData(topics: List[String], allowAutoTopicCreation: Boolean): MetadataRequestData = {

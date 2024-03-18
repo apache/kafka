@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.integration;
 
-import kafka.server.KafkaConfig$;
 import org.apache.kafka.tools.StreamsResetter;
 
 import org.apache.kafka.clients.consumer.ConsumerConfig;
@@ -50,6 +49,7 @@ import java.util.Properties;
 
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.isEmptyConsumerGroup;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.waitForEmptyConsumerGroup;
+import static org.apache.kafka.server.config.KafkaConfig.CONNECTIONS_MAX_IDLE_MS_PROP;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
 
@@ -69,7 +69,7 @@ public class ResetIntegrationTest extends AbstractResetIntegrationTest {
         // we double the value passed to `time.sleep` in each iteration in one of the map functions, so we disable
         // expiration of connections by the brokers to avoid errors when `AdminClient` sends requests after potentially
         // very long sleep times
-        brokerProps.put(KafkaConfig$.MODULE$.ConnectionsMaxIdleMsProp(), -1L);
+        brokerProps.put(CONNECTIONS_MAX_IDLE_MS_PROP, -1L);
         CLUSTER = new EmbeddedKafkaCluster(1, brokerProps);
     }
 

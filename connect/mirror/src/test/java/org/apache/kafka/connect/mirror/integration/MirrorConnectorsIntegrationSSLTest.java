@@ -20,14 +20,14 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.stream.Collectors;
 
-import kafka.server.KafkaConfig;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.common.config.SslConfigs;
 import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.common.network.Mode;
 import org.apache.kafka.test.TestSslUtils;
 import org.apache.kafka.test.TestUtils;
-
+import static org.apache.kafka.server.config.KafkaConfig.LISTENERS_PROP;
+import static org.apache.kafka.server.config.KafkaConfig.INTER_BROKER_LISTENER_NAME_PROP;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 
@@ -41,8 +41,8 @@ public class MirrorConnectorsIntegrationSSLTest extends MirrorConnectorsIntegrat
     public void startClusters() throws Exception {
         Map<String, Object> sslConfig = TestSslUtils.createSslConfig(false, true, Mode.SERVER, TestUtils.tempFile(), "testCert");
         // enable SSL on backup kafka broker
-        backupBrokerProps.put(KafkaConfig.ListenersProp(), "SSL://localhost:0");
-        backupBrokerProps.put(KafkaConfig.InterBrokerListenerNameProp(), "SSL");
+        backupBrokerProps.put(LISTENERS_PROP, "SSL://localhost:0");
+        backupBrokerProps.put(INTER_BROKER_LISTENER_NAME_PROP, "SSL");
         backupBrokerProps.putAll(sslConfig);
         
         Properties sslProps = new Properties();

@@ -25,6 +25,7 @@ import org.apache.kafka.common.errors.GroupMaxSizeReachedException
 import org.apache.kafka.common.message.FindCoordinatorRequestData
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{FindCoordinatorRequest, FindCoordinatorResponse}
+import org.apache.kafka.server.config.KafkaConfig.{OFFSETS_TOPIC_REPLICATION_FACTOR_PROP, OFFSETS_TOPIC_PARTITIONS_PROP, GROUP_MIN_SESSION_TIMEOUT_MS_PROP, GROUP_INITIAL_REBALANCE_DELAY_MS_PROP, GROUP_MAX_SIZE_PROP, UNCLEAN_LEADER_ELECTION_ENABLE_PROP, AUTO_CREATE_TOPICS_ENABLE_PROP}
 import org.apache.kafka.server.util.ShutdownableThread
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, Disabled, Test}
@@ -53,13 +54,13 @@ class ConsumerBounceTest extends AbstractConsumerTest with Logging {
 
   private def generateKafkaConfigs(maxGroupSize: String = maxGroupSize.toString): Seq[KafkaConfig] = {
     val properties = new Properties
-    properties.put(KafkaConfig.OffsetsTopicReplicationFactorProp, "3") // don't want to lose offset
-    properties.put(KafkaConfig.OffsetsTopicPartitionsProp, "1")
-    properties.put(KafkaConfig.GroupMinSessionTimeoutMsProp, "10") // set small enough session timeout
-    properties.put(KafkaConfig.GroupInitialRebalanceDelayMsProp, "0")
-    properties.put(KafkaConfig.GroupMaxSizeProp, maxGroupSize)
-    properties.put(KafkaConfig.UncleanLeaderElectionEnableProp, "true")
-    properties.put(KafkaConfig.AutoCreateTopicsEnableProp, "false")
+    properties.put(OFFSETS_TOPIC_REPLICATION_FACTOR_PROP, "3") // don't want to lose offset
+    properties.put(OFFSETS_TOPIC_PARTITIONS_PROP, "1")
+    properties.put(GROUP_MIN_SESSION_TIMEOUT_MS_PROP, "10") // set small enough session timeout
+    properties.put(GROUP_INITIAL_REBALANCE_DELAY_MS_PROP, "0")
+    properties.put(GROUP_MAX_SIZE_PROP, maxGroupSize)
+    properties.put(UNCLEAN_LEADER_ELECTION_ENABLE_PROP, "true")
+    properties.put(AUTO_CREATE_TOPICS_ENABLE_PROP, "false")
 
     FixedPortTestUtils.createBrokerConfigs(brokerCount, zkConnect, enableControlledShutdown = false)
       .map(KafkaConfig.fromProps(_, properties))

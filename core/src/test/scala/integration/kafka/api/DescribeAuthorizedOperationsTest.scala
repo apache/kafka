@@ -16,7 +16,6 @@ import java.util
 import java.util.Properties
 
 import kafka.security.authorizer.{AclAuthorizer, AclEntry}
-import kafka.server.KafkaConfig
 import kafka.utils.{CoreUtils, JaasTestUtils, TestUtils}
 import org.apache.kafka.clients.admin._
 import org.apache.kafka.common.acl.AclOperation.{ALL, ALTER, CLUSTER_ACTION, DELETE, DESCRIBE}
@@ -26,6 +25,7 @@ import org.apache.kafka.common.resource.{PatternType, Resource, ResourcePattern,
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.server.authorizer.Authorizer
+import org.apache.kafka.server.config.KafkaConfig
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertNull}
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo}
 
@@ -75,8 +75,8 @@ class DescribeAuthorizedOperationsTest extends IntegrationTestHarness with SaslS
   import DescribeAuthorizedOperationsTest._
 
   override val brokerCount = 1
-  this.serverConfig.setProperty(KafkaConfig.ZkEnableSecureAclsProp, "true")
-  this.serverConfig.setProperty(KafkaConfig.AuthorizerClassNameProp, classOf[AclAuthorizer].getName)
+  this.serverConfig.setProperty(KafkaConfig.ZK_ENABLE_SECURE_ACLS_PROP, "true")
+  this.serverConfig.setProperty(KafkaConfig.AUTHORIZER_CLASS_NAME_PROP, classOf[AclAuthorizer].getName)
 
   var client: Admin = _
 

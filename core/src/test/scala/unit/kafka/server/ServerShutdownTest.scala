@@ -37,6 +37,7 @@ import org.apache.kafka.common.requests.LeaderAndIsrRequest
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.serialization.{IntegerDeserializer, IntegerSerializer, StringDeserializer, StringSerializer}
 import org.apache.kafka.common.utils.Time
+import org.apache.kafka.server.config.KafkaConfig.{LOG_DIR_PROP, LOG_DIRS_PROP, INITIAL_BROKER_REGISTRATION_TIMEOUT_MS_PROP, ZK_CONNECTION_TIMEOUT_MS_PROP, ZK_CONNECT_PROP}
 import org.apache.kafka.metadata.BrokerState
 import org.junit.jupiter.api.{BeforeEach, Disabled, TestInfo, Timeout}
 import org.junit.jupiter.api.Assertions._
@@ -62,11 +63,11 @@ class ServerShutdownTest extends KafkaServerTestHarness {
     priorConfig.foreach { config =>
       // keep the same log directory
       val originals = config.originals
-      val logDirsValue = originals.get(KafkaConfig.LogDirsProp)
+      val logDirsValue = originals.get(LOG_DIRS_PROP)
       if (logDirsValue != null) {
-        propsToChangeUponRestart.put(KafkaConfig.LogDirsProp, logDirsValue)
+        propsToChangeUponRestart.put(LOG_DIRS_PROP, logDirsValue)
       } else {
-        propsToChangeUponRestart.put(KafkaConfig.LogDirProp, originals.get(KafkaConfig.LogDirProp))
+        propsToChangeUponRestart.put(LOG_DIR_PROP, originals.get(LOG_DIR_PROP))
       }
     }
     priorConfig = Some(KafkaConfig.fromProps(TestUtils.createBrokerConfigs(1, zkConnectOrNull).head, propsToChangeUponRestart))
@@ -145,13 +146,13 @@ class ServerShutdownTest extends KafkaServerTestHarness {
   @ValueSource(strings = Array("zk", "kraft"))
   def testCleanShutdownAfterFailedStartup(quorum: String): Unit = {
     if (isKRaftTest()) {
-      propsToChangeUponRestart.setProperty(KafkaConfig.InitialBrokerRegistrationTimeoutMsProp, "1000")
+      propsToChangeUponRestart.setProperty(INITIAL_BROKER_REGISTRATION_TIMEOUT_MS_PROP, "1000")
       shutdownBroker()
       shutdownKRaftController()
       verifyCleanShutdownAfterFailedStartup[CancellationException]
     } else {
-      propsToChangeUponRestart.setProperty(KafkaConfig.ZkConnectionTimeoutMsProp, "50")
-      propsToChangeUponRestart.setProperty(KafkaConfig.ZkConnectProp, "some.invalid.hostname.foo.bar.local:65535")
+      propsToChangeUponRestart.setProperty(ZK_CONNECTION_TIMEOUT_MS_PROP, "50")
+      propsToChangeUponRestart.setProperty(ZK_CONNECT_PROP, "some.invalid.hostname.foo.bar.local:65535")
       verifyCleanShutdownAfterFailedStartup[ZooKeeperClientTimeoutException]
     }
   }

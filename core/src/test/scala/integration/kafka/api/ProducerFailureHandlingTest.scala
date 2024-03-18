@@ -20,13 +20,14 @@ package kafka.api
 import java.util.concurrent.ExecutionException
 import java.util.Properties
 import kafka.integration.KafkaServerTestHarness
-import kafka.server.KafkaConfig
+import kafka.server.KafkaConfig.fromProps
 import kafka.utils.{TestInfoUtils, TestUtils}
 import org.apache.kafka.clients.producer._
 import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.errors._
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.record.{DefaultRecord, DefaultRecordBatch}
+import org.apache.kafka.server.config.KafkaConfig
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo}
 import org.junit.jupiter.params.ParameterizedTest
@@ -41,16 +42,16 @@ class ProducerFailureHandlingTest extends KafkaServerTestHarness {
   val numServers = 2
 
   val overridingProps = new Properties()
-  overridingProps.put(KafkaConfig.AutoCreateTopicsEnableProp, false.toString)
-  overridingProps.put(KafkaConfig.MessageMaxBytesProp, serverMessageMaxBytes.toString)
-  overridingProps.put(KafkaConfig.ReplicaFetchMaxBytesProp, replicaFetchMaxPartitionBytes.toString)
-  overridingProps.put(KafkaConfig.ReplicaFetchResponseMaxBytesDoc, replicaFetchMaxResponseBytes.toString)
+  overridingProps.put(KafkaConfig.AUTO_CREATE_TOPICS_ENABLE_PROP, false.toString)
+  overridingProps.put(KafkaConfig.MESSAGE_MAX_BYTES_PROP, serverMessageMaxBytes.toString)
+  overridingProps.put(KafkaConfig.REPLICA_FETCH_MAX_BYTES_PROP, replicaFetchMaxPartitionBytes.toString)
+  overridingProps.put(KafkaConfig.REPLICA_FETCH_RESPONSE_MAX_BYTES_DOC, replicaFetchMaxResponseBytes.toString)
   // Set a smaller value for the number of partitions for the offset commit topic (__consumer_offset topic)
   // so that the creation of that topic/partition(s) and subsequent leader assignment doesn't take relatively long
-  overridingProps.put(KafkaConfig.OffsetsTopicPartitionsProp, 1.toString)
+  overridingProps.put(KafkaConfig.OFFSETS_TOPIC_PARTITIONS_PROP, 1.toString)
 
   def generateConfigs =
-    TestUtils.createBrokerConfigs(numServers, zkConnectOrNull, false).map(KafkaConfig.fromProps(_, overridingProps))
+    TestUtils.createBrokerConfigs(numServers, zkConnectOrNull, false).map(fromProps(_, overridingProps))
 
   private var producer1: KafkaProducer[Array[Byte], Array[Byte]] = _
   private var producer2: KafkaProducer[Array[Byte], Array[Byte]] = _

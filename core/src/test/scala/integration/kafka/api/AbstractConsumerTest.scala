@@ -24,8 +24,9 @@ import org.apache.kafka.clients.consumer._
 import org.apache.kafka.clients.producer.{ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.record.TimestampType
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.server.config.KafkaConfig
 import kafka.utils.TestUtils
-import kafka.server.{BaseRequestTest, KafkaConfig}
+import kafka.server.BaseRequestTest
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{BeforeEach, TestInfo}
 
@@ -66,12 +67,12 @@ abstract class AbstractConsumerTest extends BaseRequestTest {
 
 
   override protected def brokerPropertyOverrides(properties: Properties): Unit = {
-    properties.setProperty(KafkaConfig.ControlledShutdownEnableProp, "false") // speed up shutdown
-    properties.setProperty(KafkaConfig.OffsetsTopicReplicationFactorProp, "3") // don't want to lose offset
-    properties.setProperty(KafkaConfig.OffsetsTopicPartitionsProp, "1")
-    properties.setProperty(KafkaConfig.GroupMinSessionTimeoutMsProp, "100") // set small enough session timeout
-    properties.setProperty(KafkaConfig.GroupMaxSessionTimeoutMsProp, groupMaxSessionTimeoutMs.toString)
-    properties.setProperty(KafkaConfig.GroupInitialRebalanceDelayMsProp, "10")
+    properties.setProperty(KafkaConfig.CONTROLLED_SHUTDOWN_ENABLE_PROP, "false") // speed up shutdown
+    properties.setProperty(KafkaConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_PROP, "3") // don't want to lose offset
+    properties.setProperty(KafkaConfig.OFFSETS_TOPIC_PARTITIONS_PROP, "1")
+    properties.setProperty(KafkaConfig.GROUP_MIN_SESSION_TIMEOUT_MS_PROP, "100") // set small enough session timeout
+    properties.setProperty(KafkaConfig.GROUP_MAX_SESSION_TIMEOUT_MS_PROP, groupMaxSessionTimeoutMs.toString)
+    properties.setProperty(KafkaConfig.GROUP_INITIAL_REBALANCE_DELAY_MS_PROP, "10")
   }
 
   @BeforeEach

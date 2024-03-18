@@ -25,6 +25,7 @@ import org.apache.kafka.common.message.{BrokerHeartbeatResponseData, BrokerRegis
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{AbstractRequest, AbstractResponse, BrokerHeartbeatRequest, BrokerHeartbeatResponse, BrokerRegistrationRequest, BrokerRegistrationResponse}
 import org.apache.kafka.metadata.BrokerState
+import org.apache.kafka.server.config.KafkaConfig
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{Test, Timeout}
 
@@ -35,13 +36,13 @@ import scala.jdk.CollectionConverters._
 class BrokerLifecycleManagerTest {
   def configProperties = {
     val properties = new Properties()
-    properties.setProperty(KafkaConfig.LogDirsProp, "/tmp/foo")
-    properties.setProperty(KafkaConfig.ProcessRolesProp, "broker")
-    properties.setProperty(KafkaConfig.NodeIdProp, "1")
-    properties.setProperty(KafkaConfig.QuorumVotersProp, s"2@localhost:9093")
-    properties.setProperty(KafkaConfig.ControllerListenerNamesProp, "SSL")
-    properties.setProperty(KafkaConfig.InitialBrokerRegistrationTimeoutMsProp, "300000")
-    properties.setProperty(KafkaConfig.BrokerHeartbeatIntervalMsProp, "100")
+    properties.setProperty(KafkaConfig.LOG_DIRS_PROP, "/tmp/foo")
+    properties.setProperty(KafkaConfig.PROCESS_ROLES_PROP, "broker")
+    properties.setProperty(KafkaConfig.NODE_ID_PROP, "1")
+    properties.setProperty(KafkaConfig.QUORUM_VOTERS_PROP, s"2@localhost:9093")
+    properties.setProperty(KafkaConfig.CONTROLLER_LISTENER_NAMES_PROP, "SSL")
+    properties.setProperty(KafkaConfig.INITIAL_BROKER_REGISTRATION_TIMEOUT_MS_PROP, "300000")
+    properties.setProperty(KafkaConfig.BROKER_HEARTBEAT_INTERVAL_MS_PROP, "100")
     properties
   }
 

@@ -33,6 +33,7 @@ import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{JoinGroupRequest, OffsetFetchResponse}
 import org.apache.kafka.common.utils.Time
+import org.apache.kafka.server.config.KafkaConfig.{GROUP_MIN_SESSION_TIMEOUT_MS_PROP, GROUP_MAX_SESSION_TIMEOUT_MS_PROP, GROUP_INITIAL_REBALANCE_DELAY_MS_PROP, GROUP_MAX_SIZE_PROP}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.mockito.Mockito.when
@@ -72,9 +73,9 @@ class GroupCoordinatorConcurrencyTest extends AbstractCoordinatorConcurrencyTest
     when(zkClient.getTopicPartitionCount(Topic.GROUP_METADATA_TOPIC_NAME))
       .thenReturn(Some(numPartitions))
 
-    serverProps.setProperty(KafkaConfig.GroupMinSessionTimeoutMsProp, ConsumerMinSessionTimeout.toString)
-    serverProps.setProperty(KafkaConfig.GroupMaxSessionTimeoutMsProp, ConsumerMaxSessionTimeout.toString)
-    serverProps.setProperty(KafkaConfig.GroupInitialRebalanceDelayMsProp, GroupInitialRebalanceDelay.toString)
+    serverProps.setProperty(GROUP_MIN_SESSION_TIMEOUT_MS_PROP, ConsumerMinSessionTimeout.toString)
+    serverProps.setProperty(GROUP_MAX_SESSION_TIMEOUT_MS_PROP, ConsumerMaxSessionTimeout.toString)
+    serverProps.setProperty(GROUP_INITIAL_REBALANCE_DELAY_MS_PROP, GroupInitialRebalanceDelay.toString)
 
     val config = KafkaConfig.fromProps(serverProps)
 
@@ -147,7 +148,7 @@ class GroupCoordinatorConcurrencyTest extends AbstractCoordinatorConcurrencyTest
   def testConcurrentJoinGroupEnforceGroupMaxSize(): Unit = {
     val groupMaxSize = 1
     val newProperties = new Properties
-    newProperties.put(KafkaConfig.GroupMaxSizeProp, groupMaxSize.toString)
+    newProperties.put(GROUP_MAX_SIZE_PROP, groupMaxSize.toString)
     val config = KafkaConfig.fromProps(serverProps, newProperties)
 
     if (groupCoordinator != null)

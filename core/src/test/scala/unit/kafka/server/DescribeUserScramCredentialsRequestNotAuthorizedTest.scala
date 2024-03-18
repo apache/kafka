@@ -21,6 +21,7 @@ import kafka.utils.TestInfoUtils
 import org.apache.kafka.common.message.DescribeUserScramCredentialsRequestData
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{DescribeUserScramCredentialsRequest, DescribeUserScramCredentialsResponse}
+import org.apache.kafka.server.config.KafkaConfig
 import org.apache.kafka.metadata.authorizer.StandardAuthorizer
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.params.ParameterizedTest
@@ -33,13 +34,13 @@ import java.util.Properties
  */
 class DescribeUserScramCredentialsRequestNotAuthorizedTest extends BaseRequestTest {
   override def brokerPropertyOverrides(properties: Properties): Unit = {
-    properties.put(KafkaConfig.ControlledShutdownEnableProp, "false")
+    properties.put(KafkaConfig.CONTROLLED_SHUTDOWN_ENABLE_PROP, "false")
     if (isKRaftTest()) {
-      properties.put(KafkaConfig.AuthorizerClassNameProp, classOf[StandardAuthorizer].getName)
+      properties.put(KafkaConfig.AUTHORIZER_CLASS_NAME_PROP, classOf[StandardAuthorizer].getName)
     } else {
-      properties.put(KafkaConfig.AuthorizerClassNameProp, classOf[DescribeCredentialsTest.TestAuthorizer].getName)
+      properties.put(KafkaConfig.AUTHORIZER_CLASS_NAME_PROP, classOf[DescribeCredentialsTest.TestAuthorizer].getName)
     }
-    properties.put(KafkaConfig.PrincipalBuilderClassProp, classOf[DescribeCredentialsTest.TestPrincipalBuilderReturningUnauthorized].getName)
+    properties.put(KafkaConfig.PRINCIPAL_BUILDER_CLASS_PROP, classOf[DescribeCredentialsTest.TestPrincipalBuilderReturningUnauthorized].getName)
   }
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)

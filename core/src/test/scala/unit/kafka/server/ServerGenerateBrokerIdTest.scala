@@ -20,6 +20,7 @@ import java.util.{OptionalInt, Properties}
 import scala.collection.Seq
 import kafka.utils.TestUtils
 import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.server.config.KafkaConfig.{BROKER_ID_GENERATION_ENABLE_PROP, BROKER_ID_PROP, MAX_RESERVED_BROKER_ID_PROP}
 import org.apache.kafka.metadata.properties.{MetaProperties, MetaPropertiesEnsemble, PropertiesUtils}
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo}
 import org.junit.jupiter.api.Assertions._
@@ -87,9 +88,9 @@ class ServerGenerateBrokerIdTest extends QuorumTestHarness {
   @Test
   def testDisableGeneratedBrokerId(): Unit = {
     val props3 = TestUtils.createBrokerConfig(3, zkConnect)
-    props3.put(KafkaConfig.BrokerIdGenerationEnableProp, "false")
+    props3.put(BROKER_ID_GENERATION_ENABLE_PROP, "false")
     // Set reserve broker ids to cause collision and ensure disabling broker id generation ignores the setting
-    props3.put(KafkaConfig.MaxReservedBrokerIdProp, "0")
+    props3.put(MAX_RESERVED_BROKER_ID_PROP, "0")
     val config3 = KafkaConfig.fromProps(props3)
     val server3 = TestUtils.createServer(config3, threadNamePrefix = Option(this.getClass.getName))
     servers = Seq(server3)
@@ -151,14 +152,14 @@ class ServerGenerateBrokerIdTest extends QuorumTestHarness {
     servers = Seq(serverA)
 
     // adjust the broker config and start again
-    propsB.setProperty(KafkaConfig.BrokerIdProp, "2")
+    propsB.setProperty(BROKER_ID_PROP, "2")
     val serverB2 = new KafkaServer(KafkaConfig.fromProps(propsB),
       threadNamePrefix = Option(this.getClass.getName))
     val startupException = assertThrows(classOf[RuntimeException], () => serverB2.startup())
     assertTrue(startupException.getMessage.startsWith("Stored node id 1 doesn't match previous node id 2"),
       "Unexpected exception message " + startupException.getMessage())
     serverB2.config.logDirs.foreach(logDir => Utils.delete(new File(logDir)))
-    propsB.setProperty(KafkaConfig.BrokerIdProp, "3")
+    propsB.setProperty(BROKER_ID_PROP, "3")
     val serverB3 = new KafkaServer(KafkaConfig.fromProps(propsB),
       threadNamePrefix = Option(this.getClass.getName))
     serverB3.startup()

@@ -13,7 +13,7 @@
 package kafka.api
 
 import java.util.{Locale, Properties}
-import kafka.server.{KafkaConfig, KafkaServer}
+import kafka.server.KafkaServer
 import kafka.utils.{JaasTestUtils, TestUtils}
 import com.yammer.metrics.core.{Gauge, Histogram, Meter}
 import org.apache.kafka.clients.consumer.Consumer
@@ -24,6 +24,7 @@ import org.apache.kafka.common.errors.{InvalidTopicException, UnknownTopicOrPart
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.security.authenticator.TestJaasConfig
+import org.apache.kafka.server.config.KafkaConfig
 import org.apache.kafka.server.log.remote.storage.{NoOpRemoteLogMetadataManager, NoOpRemoteStorageManager, RemoteLogManagerConfig, RemoteStorageMetrics}
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo}
@@ -43,9 +44,9 @@ class MetricsTest extends IntegrationTestHarness with SaslSetup {
   private val kafkaServerSaslMechanisms = List(kafkaClientSaslMechanism)
   private val kafkaServerJaasEntryName =
     s"${listenerName.value.toLowerCase(Locale.ROOT)}.${JaasTestUtils.KafkaServerContextName}"
-  this.serverConfig.setProperty(KafkaConfig.ZkEnableSecureAclsProp, "false")
-  this.serverConfig.setProperty(KafkaConfig.AutoCreateTopicsEnableProp, "false")
-  this.serverConfig.setProperty(KafkaConfig.InterBrokerProtocolVersionProp, "2.8")
+  this.serverConfig.setProperty(KafkaConfig.ZK_ENABLE_SECURE_ACLS_PROP, "false")
+  this.serverConfig.setProperty(KafkaConfig.AUTO_CREATE_TOPICS_ENABLE_PROP, "false")
+  this.serverConfig.setProperty(KafkaConfig.INTER_BROKER_PROTOCOL_VERSION_PROP, "2.8")
   this.producerConfig.setProperty(ProducerConfig.LINGER_MS_CONFIG, "10")
   // intentionally slow message down conversion via gzip compression to ensure we can measure the time it takes
   this.producerConfig.setProperty(ProducerConfig.COMPRESSION_TYPE_CONFIG, "gzip")

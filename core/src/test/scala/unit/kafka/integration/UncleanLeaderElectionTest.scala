@@ -35,6 +35,7 @@ import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.TimeoutException
 import org.apache.kafka.common.serialization.StringDeserializer
 import org.apache.kafka.clients.admin.{Admin, AdminClientConfig, AlterConfigsResult, Config, ConfigEntry}
+import org.apache.kafka.server.config.KafkaConfig.UNCLEAN_LEADER_ELECTION_ENABLE_PROP
 import org.junit.jupiter.api.Assertions._
 
 import scala.annotation.nowarn
@@ -325,7 +326,7 @@ class UncleanLeaderElectionTest extends QuorumTestHarness {
     // Enable unclean leader election for topic
     val adminClient = createAdminClient()
     val newProps = new Properties
-    newProps.put(KafkaConfig.UncleanLeaderElectionEnableProp, "true")
+    newProps.put(UNCLEAN_LEADER_ELECTION_ENABLE_PROP, "true")
     alterTopicConfigs(adminClient, topic, newProps).all.get
     adminClient.close()
 

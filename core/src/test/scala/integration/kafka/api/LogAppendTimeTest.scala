@@ -18,10 +18,10 @@ package kafka.api
 
 import java.util.Collections
 import java.util.concurrent.TimeUnit
-import kafka.server.KafkaConfig
 import kafka.utils.{TestInfoUtils, TestUtils}
 import org.apache.kafka.clients.producer.ProducerRecord
 import org.apache.kafka.common.record.TimestampType
+import org.apache.kafka.server.config.KafkaConfig
 import org.junit.jupiter.api.{BeforeEach, TestInfo}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertNotEquals, assertTrue}
 import org.junit.jupiter.params.ParameterizedTest
@@ -37,8 +37,8 @@ class LogAppendTimeTest extends IntegrationTestHarness {
   val brokerCount: Int = 2
 
   // This will be used for the offsets topic as well
-  serverConfig.put(KafkaConfig.LogMessageTimestampTypeProp, TimestampType.LOG_APPEND_TIME.name)
-  serverConfig.put(KafkaConfig.OffsetsTopicReplicationFactorProp, "2")
+  serverConfig.put(KafkaConfig.LOG_MESSAGE_TIMESTAMP_TYPE_PROP, TimestampType.LOG_APPEND_TIME.name)
+  serverConfig.put(KafkaConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_PROP, "2")
 
   private val topic = "topic"
 

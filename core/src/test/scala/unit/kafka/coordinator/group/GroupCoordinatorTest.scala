@@ -26,7 +26,7 @@ import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.{MemoryRecords, RecordBatch}
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.requests.{JoinGroupRequest, OffsetCommitRequest, OffsetFetchResponse, TransactionResult}
-
+import org.apache.kafka.server.config.KafkaConfig.{GROUP_MIN_SESSION_TIMEOUT_MS_PROP, GROUP_MAX_SESSION_TIMEOUT_MS_PROP, GROUP_MAX_SIZE_PROP, GROUP_INITIAL_REBALANCE_DELAY_MS_PROP, OFFSETS_RETENTION_MINUTES_PROP}
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.locks.ReentrantLock
 import kafka.cluster.Partition
@@ -99,10 +99,10 @@ class GroupCoordinatorTest {
   @BeforeEach
   def setUp(): Unit = {
     val props = TestUtils.createBrokerConfig(nodeId = 0, zkConnect = "")
-    props.setProperty(KafkaConfig.GroupMinSessionTimeoutMsProp, GroupMinSessionTimeout.toString)
-    props.setProperty(KafkaConfig.GroupMaxSessionTimeoutMsProp, GroupMaxSessionTimeout.toString)
-    props.setProperty(KafkaConfig.GroupMaxSizeProp, GroupMaxSize.toString)
-    props.setProperty(KafkaConfig.GroupInitialRebalanceDelayMsProp, GroupInitialRebalanceDelay.toString)
+    props.setProperty(GROUP_MIN_SESSION_TIMEOUT_MS_PROP, GroupMinSessionTimeout.toString)
+    props.setProperty(GROUP_MAX_SESSION_TIMEOUT_MS_PROP, GroupMaxSessionTimeout.toString)
+    props.setProperty(GROUP_MAX_SIZE_PROP, GroupMaxSize.toString)
+    props.setProperty(GROUP_INITIAL_REBALANCE_DELAY_MS_PROP, GroupInitialRebalanceDelay.toString)
     // make two partitions of the group topic to make sure some partitions are not owned by the coordinator
     val ret = mutable.Map[String, Map[Int, Seq[Int]]]()
     ret += (Topic.GROUP_METADATA_TOPIC_NAME -> Map(0 -> Seq(1), 1 -> Seq(1)))
@@ -199,7 +199,7 @@ class GroupCoordinatorTest {
   @Test
   def testOffsetsRetentionMsIntegerOverflow(): Unit = {
     val props = TestUtils.createBrokerConfig(nodeId = 0, zkConnect = "")
-    props.setProperty(KafkaConfig.OffsetsRetentionMinutesProp, Integer.MAX_VALUE.toString)
+    props.setProperty(OFFSETS_RETENTION_MINUTES_PROP, Integer.MAX_VALUE.toString)
     val config = KafkaConfig.fromProps(props)
     val offsetConfig = GroupCoordinator.offsetConfig(config)
     assertEquals(offsetConfig.offsetsRetentionMs, Integer.MAX_VALUE * 60L * 1000L)

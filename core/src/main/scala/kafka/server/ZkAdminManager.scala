@@ -48,6 +48,7 @@ import org.apache.kafka.common.requests.{AlterConfigsRequest, ApiError}
 import org.apache.kafka.common.security.scram.internals.{ScramCredentialUtils, ScramFormatter}
 import org.apache.kafka.common.utils.Sanitizer
 import org.apache.kafka.server.common.AdminOperationException
+import org.apache.kafka.server.config.KafkaConfig.{configKeys, CREATE_TOPIC_POLICY_CLASS_NAME_PROP, ALTER_CONFIG_POLICY_CLASS_NAME_PROP}
 import org.apache.kafka.server.config.{ConfigEntityName, ConfigType}
 import org.apache.kafka.storage.internals.log.LogConfig
 
@@ -79,10 +80,10 @@ class ZkAdminManager(val config: KafkaConfig,
   private val configHelper = new ConfigHelper(metadataCache, config, new ZkConfigRepository(adminZkClient))
 
   private val createTopicPolicy =
-    Option(config.getConfiguredInstance(KafkaConfig.CreateTopicPolicyClassNameProp, classOf[CreateTopicPolicy]))
+    Option(config.getConfiguredInstance(CREATE_TOPIC_POLICY_CLASS_NAME_PROP, classOf[CreateTopicPolicy]))
 
   private val alterConfigPolicy =
-    Option(config.getConfiguredInstance(KafkaConfig.AlterConfigPolicyClassNameProp, classOf[AlterConfigPolicy]))
+    Option(config.getConfiguredInstance(ALTER_CONFIG_POLICY_CLASS_NAME_PROP, classOf[AlterConfigPolicy]))
 
   def hasDelayedTopicOperations = topicPurgatory.numDelayed != 0
 
@@ -521,7 +522,7 @@ class ZkAdminManager(val config: KafkaConfig,
             else adminZkClient.fetchEntityConfig(ConfigType.BROKER, ConfigEntityName.DEFAULT)
 
             val configProps = this.config.dynamicConfig.fromPersistentProps(persistentProps, perBrokerConfig)
-            prepareIncrementalConfigs(alterConfigOps, configProps, KafkaConfig.configKeys)
+            prepareIncrementalConfigs(alterConfigOps, configProps, configKeys.asScala)
             alterBrokerConfigs(resource, validateOnly, configProps, configEntriesMap)
 
           case resourceType =>

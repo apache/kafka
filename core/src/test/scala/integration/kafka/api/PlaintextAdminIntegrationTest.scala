@@ -28,7 +28,6 @@ import java.{time, util}
 import kafka.integration.KafkaServerTestHarness
 import kafka.security.authorizer.AclEntry
 import kafka.server.metadata.KRaftMetadataCache
-import kafka.server.{DynamicConfig, KafkaConfig}
 import kafka.utils.TestUtils._
 import kafka.utils.{Log4jController, TestInfoUtils, TestUtils}
 import org.apache.kafka.clients.HostResolver
@@ -44,7 +43,8 @@ import org.apache.kafka.common.resource.{PatternType, ResourcePattern, ResourceT
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.common.{ConsumerGroupState, ElectionType, TopicCollection, TopicPartition, TopicPartitionInfo, TopicPartitionReplica, Uuid}
 import org.apache.kafka.controller.ControllerRequestContextUtil.ANONYMOUS_CONTEXT
-import org.apache.kafka.server.config.Defaults
+import org.apache.kafka.server.config.dynamic.BrokerDynamicConfigs
+import org.apache.kafka.server.config.{Defaults, KafkaConfig}
 import org.apache.kafka.storage.internals.log.{CleanerConfig, LogConfig}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Disabled, TestInfo}
@@ -416,36 +416,36 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     // These will appear when we describe the broker configuration. Other internal configs,
     // that we have not set, will not appear there.
     val numInternalConfigsSet = brokers.head.config.originals.keySet().asScala.count(k => {
-      Option(KafkaConfig.configDef.configKeys().get(k)) match {
+      Option(KafkaConfig.CONFIG_DEF.configKeys().get(k)) match {
         case None => false
         case Some(configDef) => configDef.internalConfig
       }
     })
     assertEquals(brokers(1).config.nonInternalValues.size + numInternalConfigsSet,
       configs.get(brokerResource1).entries.size)
-    assertEquals(brokers(1).config.brokerId.toString, configs.get(brokerResource1).get(KafkaConfig.BrokerIdProp).value)
-    val listenerSecurityProtocolMap = configs.get(brokerResource1).get(KafkaConfig.ListenerSecurityProtocolMapProp)
-    assertEquals(brokers(1).config.getString(KafkaConfig.ListenerSecurityProtocolMapProp), listenerSecurityProtocolMap.value)
-    assertEquals(KafkaConfig.ListenerSecurityProtocolMapProp, listenerSecurityProtocolMap.name)
+    assertEquals(brokers(1).config.brokerId.toString, configs.get(brokerResource1).get(KafkaConfig.BROKER_ID_PROP).value)
+    val listenerSecurityProtocolMap = configs.get(brokerResource1).get(KafkaConfig.LISTENER_SECURITY_PROTOCOL_MAP_PROP)
+    assertEquals(brokers(1).config.getString(KafkaConfig.LISTENER_SECURITY_PROTOCOL_MAP_PROP), listenerSecurityProtocolMap.value)
+    assertEquals(KafkaConfig.LISTENER_SECURITY_PROTOCOL_MAP_PROP, listenerSecurityProtocolMap.name)
     assertFalse(listenerSecurityProtocolMap.isDefault)
     assertFalse(listenerSecurityProtocolMap.isSensitive)
     assertFalse(listenerSecurityProtocolMap.isReadOnly)
-    val truststorePassword = configs.get(brokerResource1).get(KafkaConfig.SslTruststorePasswordProp)
-    assertEquals(KafkaConfig.SslTruststorePasswordProp, truststorePassword.name)
+    val truststorePassword = configs.get(brokerResource1).get(KafkaConfig.SSL_TRUSTSTORE_PASSWORD_PROP)
+    assertEquals(KafkaConfig.SSL_TRUSTSTORE_PASSWORD_PROP, truststorePassword.name)
     assertNull(truststorePassword.value)
     assertFalse(truststorePassword.isDefault)
     assertTrue(truststorePassword.isSensitive)
     assertFalse(truststorePassword.isReadOnly)
-    val compressionType = configs.get(brokerResource1).get(KafkaConfig.CompressionTypeProp)
+    val compressionType = configs.get(brokerResource1).get(KafkaConfig.COMPRESSION_TYPE_PROP)
     assertEquals(brokers(1).config.compressionType, compressionType.value)
-    assertEquals(KafkaConfig.CompressionTypeProp, compressionType.name)
+    assertEquals(KafkaConfig.COMPRESSION_TYPE_PROP, compressionType.name)
     assertTrue(compressionType.isDefault)
     assertFalse(compressionType.isSensitive)
     assertFalse(compressionType.isReadOnly)
 
     assertEquals(brokers(2).config.nonInternalValues.size + numInternalConfigsSet,
       configs.get(brokerResource2).entries.size)
-    assertEquals(brokers(2).config.brokerId.toString, configs.get(brokerResource2).get(KafkaConfig.BrokerIdProp).value)
+    assertEquals(brokers(2).config.brokerId.toString, configs.get(brokerResource2).get(KafkaConfig.BROKER_ID_PROP).value)
     assertEquals(brokers(2).config.logCleanerThreads.toString,
       configs.get(brokerResource2).get(CleanerConfig.LOG_CLEANER_THREADS_PROP).value)
 
@@ -1985,31 +1985,31 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     client = Admin.create(createConfig)
     val broker0Resource = new ConfigResource(ConfigResource.Type.BROKER, "0")
     client.incrementalAlterConfigs(Map(broker0Resource ->
-      Seq(new AlterConfigOp(new ConfigEntry(DynamicConfig.Broker.LeaderReplicationThrottledRateProp, "123"),
+      Seq(new AlterConfigOp(new ConfigEntry(BrokerDynamicConfigs.LEADER_REPLICATION_THROTTLED_RATE_PROP, "123"),
           AlterConfigOp.OpType.SET),
-        new AlterConfigOp(new ConfigEntry(DynamicConfig.Broker.FollowerReplicationThrottledRateProp, "456"),
+        new AlterConfigOp(new ConfigEntry(BrokerDynamicConfigs.FOLLOWER_REPLICATION_THROTTLED_RATE_PROP, "456"),
           AlterConfigOp.OpType.SET)
       ).asJavaCollection).asJava).all().get()
     TestUtils.waitUntilTrue(() => {
       val broker0Configs = client.describeConfigs(Seq(broker0Resource).asJava).
         all().get().get(broker0Resource).entries().asScala.map(entry => (entry.name, entry.value)).toMap
-      ("123".equals(broker0Configs.getOrElse(DynamicConfig.Broker.LeaderReplicationThrottledRateProp, "")) &&
-        "456".equals(broker0Configs.getOrElse(DynamicConfig.Broker.FollowerReplicationThrottledRateProp, "")))
+      ("123".equals(broker0Configs.getOrElse(BrokerDynamicConfigs.LEADER_REPLICATION_THROTTLED_RATE_PROP, "")) &&
+        "456".equals(broker0Configs.getOrElse(BrokerDynamicConfigs.FOLLOWER_REPLICATION_THROTTLED_RATE_PROP, "")))
     }, "Expected to see the broker properties we just set", pause=25)
     client.incrementalAlterConfigs(Map(broker0Resource ->
-      Seq(new AlterConfigOp(new ConfigEntry(DynamicConfig.Broker.LeaderReplicationThrottledRateProp, ""),
+      Seq(new AlterConfigOp(new ConfigEntry(BrokerDynamicConfigs.LEADER_REPLICATION_THROTTLED_RATE_PROP, ""),
         AlterConfigOp.OpType.DELETE),
-        new AlterConfigOp(new ConfigEntry(DynamicConfig.Broker.FollowerReplicationThrottledRateProp, "654"),
+        new AlterConfigOp(new ConfigEntry(BrokerDynamicConfigs.FOLLOWER_REPLICATION_THROTTLED_RATE_PROP, "654"),
           AlterConfigOp.OpType.SET),
-        new AlterConfigOp(new ConfigEntry(DynamicConfig.Broker.ReplicaAlterLogDirsIoMaxBytesPerSecondProp, "987"),
+        new AlterConfigOp(new ConfigEntry(BrokerDynamicConfigs.REPLICA_ALTER_LOG_DIRS_IO_MAX_BYTES_PER_SECOND_PROP, "987"),
           AlterConfigOp.OpType.SET)
       ).asJavaCollection).asJava).all().get()
     TestUtils.waitUntilTrue(() => {
       val broker0Configs = client.describeConfigs(Seq(broker0Resource).asJava).
         all().get().get(broker0Resource).entries().asScala.map(entry => (entry.name, entry.value)).toMap
-      ("".equals(broker0Configs.getOrElse(DynamicConfig.Broker.LeaderReplicationThrottledRateProp, "")) &&
-        "654".equals(broker0Configs.getOrElse(DynamicConfig.Broker.FollowerReplicationThrottledRateProp, "")) &&
-        "987".equals(broker0Configs.getOrElse(DynamicConfig.Broker.ReplicaAlterLogDirsIoMaxBytesPerSecondProp, "")))
+      ("".equals(broker0Configs.getOrElse(BrokerDynamicConfigs.LEADER_REPLICATION_THROTTLED_RATE_PROP, "")) &&
+        "654".equals(broker0Configs.getOrElse(BrokerDynamicConfigs.FOLLOWER_REPLICATION_THROTTLED_RATE_PROP, "")) &&
+        "987".equals(broker0Configs.getOrElse(BrokerDynamicConfigs.REPLICA_ALTER_LOG_DIRS_IO_MAX_BYTES_PER_SECOND_PROP, "")))
     }, "Expected to see the broker properties we just modified", pause=25)
   }
 
@@ -2019,34 +2019,34 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     client = Admin.create(createConfig)
     val broker0Resource = new ConfigResource(ConfigResource.Type.BROKER, "0")
     client.incrementalAlterConfigs(Map(broker0Resource ->
-      Seq(new AlterConfigOp(new ConfigEntry(DynamicConfig.Broker.LeaderReplicationThrottledRateProp, "123"),
+      Seq(new AlterConfigOp(new ConfigEntry(BrokerDynamicConfigs.LEADER_REPLICATION_THROTTLED_RATE_PROP, "123"),
         AlterConfigOp.OpType.SET),
-        new AlterConfigOp(new ConfigEntry(DynamicConfig.Broker.FollowerReplicationThrottledRateProp, "456"),
+        new AlterConfigOp(new ConfigEntry(BrokerDynamicConfigs.FOLLOWER_REPLICATION_THROTTLED_RATE_PROP, "456"),
           AlterConfigOp.OpType.SET),
-        new AlterConfigOp(new ConfigEntry(DynamicConfig.Broker.ReplicaAlterLogDirsIoMaxBytesPerSecondProp, "789"),
+        new AlterConfigOp(new ConfigEntry(BrokerDynamicConfigs.REPLICA_ALTER_LOG_DIRS_IO_MAX_BYTES_PER_SECOND_PROP, "789"),
           AlterConfigOp.OpType.SET)
       ).asJavaCollection).asJava).all().get()
     TestUtils.waitUntilTrue(() => {
       val broker0Configs = client.describeConfigs(Seq(broker0Resource).asJava).
         all().get().get(broker0Resource).entries().asScala.map(entry => (entry.name, entry.value)).toMap
-      ("123".equals(broker0Configs.getOrElse(DynamicConfig.Broker.LeaderReplicationThrottledRateProp, "")) &&
-        "456".equals(broker0Configs.getOrElse(DynamicConfig.Broker.FollowerReplicationThrottledRateProp, "")) &&
-        "789".equals(broker0Configs.getOrElse(DynamicConfig.Broker.ReplicaAlterLogDirsIoMaxBytesPerSecondProp, "")))
+      ("123".equals(broker0Configs.getOrElse(BrokerDynamicConfigs.LEADER_REPLICATION_THROTTLED_RATE_PROP, "")) &&
+        "456".equals(broker0Configs.getOrElse(BrokerDynamicConfigs.FOLLOWER_REPLICATION_THROTTLED_RATE_PROP, "")) &&
+        "789".equals(broker0Configs.getOrElse(BrokerDynamicConfigs.REPLICA_ALTER_LOG_DIRS_IO_MAX_BYTES_PER_SECOND_PROP, "")))
     }, "Expected to see the broker properties we just set", pause=25)
     client.incrementalAlterConfigs(Map(broker0Resource ->
-      Seq(new AlterConfigOp(new ConfigEntry(DynamicConfig.Broker.LeaderReplicationThrottledRateProp, ""),
+      Seq(new AlterConfigOp(new ConfigEntry(BrokerDynamicConfigs.LEADER_REPLICATION_THROTTLED_RATE_PROP, ""),
         AlterConfigOp.OpType.DELETE),
-        new AlterConfigOp(new ConfigEntry(DynamicConfig.Broker.FollowerReplicationThrottledRateProp, ""),
+        new AlterConfigOp(new ConfigEntry(BrokerDynamicConfigs.FOLLOWER_REPLICATION_THROTTLED_RATE_PROP, ""),
           AlterConfigOp.OpType.DELETE),
-        new AlterConfigOp(new ConfigEntry(DynamicConfig.Broker.ReplicaAlterLogDirsIoMaxBytesPerSecondProp, ""),
+        new AlterConfigOp(new ConfigEntry(BrokerDynamicConfigs.REPLICA_ALTER_LOG_DIRS_IO_MAX_BYTES_PER_SECOND_PROP, ""),
           AlterConfigOp.OpType.DELETE)
       ).asJavaCollection).asJava).all().get()
     TestUtils.waitUntilTrue(() => {
       val broker0Configs = client.describeConfigs(Seq(broker0Resource).asJava).
         all().get().get(broker0Resource).entries().asScala.map(entry => (entry.name, entry.value)).toMap
-      ("".equals(broker0Configs.getOrElse(DynamicConfig.Broker.LeaderReplicationThrottledRateProp, "")) &&
-        "".equals(broker0Configs.getOrElse(DynamicConfig.Broker.FollowerReplicationThrottledRateProp, "")) &&
-        "".equals(broker0Configs.getOrElse(DynamicConfig.Broker.ReplicaAlterLogDirsIoMaxBytesPerSecondProp, "")))
+      ("".equals(broker0Configs.getOrElse(BrokerDynamicConfigs.LEADER_REPLICATION_THROTTLED_RATE_PROP, "")) &&
+        "".equals(broker0Configs.getOrElse(BrokerDynamicConfigs.FOLLOWER_REPLICATION_THROTTLED_RATE_PROP, "")) &&
+        "".equals(broker0Configs.getOrElse(BrokerDynamicConfigs.REPLICA_ALTER_LOG_DIRS_IO_MAX_BYTES_PER_SECOND_PROP, "")))
     }, "Expected to see the broker properties we just removed to be deleted", pause=25)
   }
 
@@ -2527,7 +2527,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     client = Admin.create(super.createConfig)
 
     val newLogRetentionProperties = new Properties
-    newLogRetentionProperties.put(KafkaConfig.LogRetentionTimeMillisProp, "10800000")
+    newLogRetentionProperties.put(KafkaConfig.LOG_RETENTION_TIME_MILLIS_PROP, "10800000")
     TestUtils.incrementalAlterConfigs(null, client, newLogRetentionProperties, perBrokerConfig = false)
       .all().get(15, TimeUnit.SECONDS)
 
@@ -2554,8 +2554,8 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       waitTimeMs = 60000L)
 
     waitUntilTrue(() => brokers.forall(_.config.originals.getOrDefault(
-      KafkaConfig.LogRetentionTimeMillisProp, "").toString.equals("10800000")),
-      s"Timed out waiting for change to ${KafkaConfig.LogRetentionTimeMillisProp}",
+      KafkaConfig.LOG_RETENTION_TIME_MILLIS_PROP, "").toString.equals("10800000")),
+      s"Timed out waiting for change to ${KafkaConfig.LOG_RETENTION_TIME_MILLIS_PROP}",
       waitTimeMs = 60000L)
 
     val newTopics = Seq(new NewTopic("foo", Map((0: Integer) -> Seq[Integer](1, 2).asJava,
@@ -2707,7 +2707,7 @@ object PlaintextAdminIntegrationTest {
     var topicConfigEntries2 = Seq(new ConfigEntry(TopicConfig.COMPRESSION_TYPE_CONFIG, "snappy")).asJava
 
     val brokerResource = new ConfigResource(ConfigResource.Type.BROKER, test.brokers.head.config.brokerId.toString)
-    val brokerConfigEntries = Seq(new ConfigEntry(KafkaConfig.ZkConnectProp, "localhost:2181")).asJava
+    val brokerConfigEntries = Seq(new ConfigEntry(KafkaConfig.ZK_CONNECT_PROP, "localhost:2181")).asJava
 
     // Alter configs: first and third are invalid, second is valid
     var alterResult = admin.alterConfigs(Map(
@@ -2734,7 +2734,7 @@ object PlaintextAdminIntegrationTest {
 
     assertEquals("snappy", configs.get(topicResource2).get(TopicConfig.COMPRESSION_TYPE_CONFIG).value)
 
-    assertEquals(LogConfig.DEFAULT_COMPRESSION_TYPE, configs.get(brokerResource).get(KafkaConfig.CompressionTypeProp).value)
+    assertEquals(LogConfig.DEFAULT_COMPRESSION_TYPE, configs.get(brokerResource).get(KafkaConfig.COMPRESSION_TYPE_PROP).value)
 
     // Alter configs with validateOnly = true: first and third are invalid, second is valid
     topicConfigEntries2 = Seq(new ConfigEntry(TopicConfig.COMPRESSION_TYPE_CONFIG, "gzip")).asJava
@@ -2763,6 +2763,6 @@ object PlaintextAdminIntegrationTest {
 
     assertEquals("snappy", configs.get(topicResource2).get(TopicConfig.COMPRESSION_TYPE_CONFIG).value)
 
-    assertEquals(LogConfig.DEFAULT_COMPRESSION_TYPE, configs.get(brokerResource).get(KafkaConfig.CompressionTypeProp).value)
+    assertEquals(LogConfig.DEFAULT_COMPRESSION_TYPE, configs.get(brokerResource).get(KafkaConfig.COMPRESSION_TYPE_PROP).value)
   }
 }

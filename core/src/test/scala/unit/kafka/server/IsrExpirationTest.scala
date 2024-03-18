@@ -28,6 +28,7 @@ import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.metadata.LeaderRecoveryState
 import org.apache.kafka.server.util.MockTime
+import org.apache.kafka.server.config.KafkaConfig.{REPLICA_LAG_TIME_MAX_MS_PROP, REPLICA_FETCH_WAIT_MAX_MS_PROP}
 import org.apache.kafka.storage.internals.log.{LogDirFailureChannel, LogOffsetMetadata}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
@@ -45,8 +46,8 @@ class IsrExpirationTest {
   val leaderLogHighWatermark = 20L
 
   val overridingProps = new Properties()
-  overridingProps.put(KafkaConfig.ReplicaLagTimeMaxMsProp, replicaLagTimeMaxMs.toString)
-  overridingProps.put(KafkaConfig.ReplicaFetchWaitMaxMsProp, replicaFetchWaitMaxMs.toString)
+  overridingProps.put(REPLICA_LAG_TIME_MAX_MS_PROP, replicaLagTimeMaxMs.toString)
+  overridingProps.put(REPLICA_FETCH_WAIT_MAX_MS_PROP, replicaFetchWaitMaxMs.toString)
   val configs = TestUtils.createBrokerConfigs(2, TestUtils.MockZkConnect).map(KafkaConfig.fromProps(_, overridingProps))
   val topic = "foo"
 

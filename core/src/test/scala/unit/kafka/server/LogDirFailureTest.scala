@@ -26,6 +26,7 @@ import kafka.utils.{CoreUtils, Exit, TestInfoUtils, TestUtils}
 import org.apache.kafka.clients.consumer.Consumer
 import org.apache.kafka.clients.producer.{ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.server.config.KafkaConfig.{INTER_BROKER_PROTOCOL_VERSION_PROP, REPLICA_HIGH_WATERMARK_CHECKPOINT_INTERVAL_MS_PROP, NUM_REPLICA_FETCHERS_PROP, LOG_MESSAGE_FORMAT_VERSION_PROP}
 import org.apache.kafka.common.errors.{KafkaStorageException, NotLeaderOrFollowerException}
 import org.apache.kafka.common.utils.Utils
 import org.junit.jupiter.api.Assertions._
@@ -49,8 +50,8 @@ class LogDirFailureTest extends IntegrationTestHarness {
   private val partitionNum = 12
   override val logDirCount = 3
 
-  this.serverConfig.setProperty(KafkaConfig.ReplicaHighWatermarkCheckpointIntervalMsProp, "60000")
-  this.serverConfig.setProperty(KafkaConfig.NumReplicaFetchersProp, "1")
+  this.serverConfig.setProperty(REPLICA_HIGH_WATERMARK_CHECKPOINT_INTERVAL_MS_PROP, "60000")
+  this.serverConfig.setProperty(NUM_REPLICA_FETCHERS_PROP, "1")
 
   @BeforeEach
   override def setUp(testInfo: TestInfo): Unit = {
@@ -84,8 +85,8 @@ class LogDirFailureTest extends IntegrationTestHarness {
     var server: KafkaServer = null
     try {
       val props = TestUtils.createBrokerConfig(brokerCount, zkConnect, logDirCount = 3)
-      props.put(KafkaConfig.InterBrokerProtocolVersionProp, "0.11.0")
-      props.put(KafkaConfig.LogMessageFormatVersionProp, "0.11.0")
+      props.put(INTER_BROKER_PROTOCOL_VERSION_PROP, "0.11.0")
+      props.put(LOG_MESSAGE_FORMAT_VERSION_PROP, "0.11.0")
       val kafkaConfig = KafkaConfig.fromProps(props)
       val logDir = new File(kafkaConfig.logDirs.head)
       // Make log directory of the partition on the leader broker inaccessible by replacing it with a file

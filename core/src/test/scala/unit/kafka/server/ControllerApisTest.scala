@@ -53,6 +53,7 @@ import org.apache.kafka.controller.ControllerRequestContextUtil.ANONYMOUS_CONTEX
 import org.apache.kafka.controller.{Controller, ControllerRequestContext, ResultOrError}
 import org.apache.kafka.image.publisher.ControllerRegistrationsPublisher
 import org.apache.kafka.server.authorizer.{Action, AuthorizableRequestContext, AuthorizationResult, Authorizer}
+import org.apache.kafka.server.config.KafkaConfig.{NODE_ID_PROP, PROCESS_ROLES_PROP, CONTROLLER_LISTENER_NAMES_PROP, QUORUM_VOTERS_PROP, DELETE_TOPIC_ENABLE_PROP}
 import org.apache.kafka.server.common.{ApiMessageAndVersion, Features, MetadataVersion, ProducerIdsBlock}
 import org.apache.kafka.server.util.FutureUtils
 import org.apache.kafka.storage.internals.log.CleanerConfig
@@ -151,10 +152,10 @@ class ControllerApisTest {
                                    controller: Controller,
                                    props: Properties = new Properties(),
                                    throttle: Boolean = false): ControllerApis = {
-    props.put(KafkaConfig.NodeIdProp, nodeId: java.lang.Integer)
-    props.put(KafkaConfig.ProcessRolesProp, "controller")
-    props.put(KafkaConfig.ControllerListenerNamesProp, "PLAINTEXT")
-    props.put(KafkaConfig.QuorumVotersProp, s"$nodeId@localhost:9092")
+    props.put(NODE_ID_PROP, nodeId: java.lang.Integer)
+    props.put(PROCESS_ROLES_PROP, "controller")
+    props.put(CONTROLLER_LISTENER_NAMES_PROP, "PLAINTEXT")
+    props.put(QUORUM_VOTERS_PROP, s"$nodeId@localhost:9092")
     new ControllerApis(
       requestChannel,
       authorizer,
@@ -890,7 +891,7 @@ class ControllerApisTest {
     val controller = new MockController.Builder().
       newInitialTopic("foo", fooId).build()
     val props = new Properties()
-    props.put(KafkaConfig.DeleteTopicEnableProp, "false")
+    props.put(DELETE_TOPIC_ENABLE_PROP, "false")
     controllerApis = createControllerApis(None, controller, props)
     val request = new DeleteTopicsRequestData()
     request.topics().add(new DeleteTopicState().setName("foo").setTopicId(ZERO_UUID))
