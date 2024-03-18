@@ -24,7 +24,6 @@ import org.apache.kafka.coordinator.group.generated.ConsumerGroupMemberMetadataV
 import org.apache.kafka.image.MetadataImage;
 import org.junit.jupiter.api.Test;
 
-import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -40,6 +39,7 @@ import java.util.stream.Collectors;
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkAssignment;
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkTopicAssignment;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+
 public class ConsumerGroupMemberTest {
 
     @Test
@@ -59,15 +59,6 @@ public class ConsumerGroupMemberTest {
             .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
             .setSubscribedTopicRegex("regex")
             .setServerAssignorName("range")
-            .setClientAssignors(Collections.singletonList(
-                new ClientAssignor(
-                    "assignor",
-                    (byte) 0,
-                    (byte) 0,
-                    (byte) 1,
-                    new VersionedMetadata(
-                        (byte) 1,
-                        ByteBuffer.allocate(0)))))
             .setAssignedPartitions(mkAssignment(
                 mkTopicAssignment(topicId1, 1, 2, 3)))
             .setPartitionsPendingRevocation(mkAssignment(
@@ -85,17 +76,6 @@ public class ConsumerGroupMemberTest {
         assertEquals(Arrays.asList("bar", "foo"), member.subscribedTopicNames());
         assertEquals("regex", member.subscribedTopicRegex());
         assertEquals("range", member.serverAssignorName().get());
-        assertEquals(
-            Collections.singletonList(
-                new ClientAssignor(
-                    "assignor",
-                    (byte) 0,
-                    (byte) 0,
-                    (byte) 1,
-                    new VersionedMetadata(
-                        (byte) 1,
-                        ByteBuffer.allocate(0)))),
-            member.clientAssignors());
         assertEquals(mkAssignment(mkTopicAssignment(topicId1, 1, 2, 3)), member.assignedPartitions());
         assertEquals(mkAssignment(mkTopicAssignment(topicId2, 4, 5, 6)), member.partitionsPendingRevocation());
     }
@@ -117,15 +97,6 @@ public class ConsumerGroupMemberTest {
             .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
             .setSubscribedTopicRegex("regex")
             .setServerAssignorName("range")
-            .setClientAssignors(Collections.singletonList(
-                new ClientAssignor(
-                    "assignor",
-                    (byte) 0,
-                    (byte) 0,
-                    (byte) 1,
-                    new VersionedMetadata(
-                        (byte) 1,
-                        ByteBuffer.allocate(0)))))
             .setAssignedPartitions(mkAssignment(
                 mkTopicAssignment(topicId1, 1, 2, 3)))
             .setPartitionsPendingRevocation(mkAssignment(
@@ -143,15 +114,6 @@ public class ConsumerGroupMemberTest {
             .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
             .setSubscribedTopicRegex("regex")
             .setServerAssignorName("range")
-            .setClientAssignors(Collections.singletonList(
-                new ClientAssignor(
-                    "assignor",
-                    (byte) 0,
-                    (byte) 0,
-                    (byte) 1,
-                    new VersionedMetadata(
-                        (byte) 1,
-                        ByteBuffer.allocate(0)))))
             .setAssignedPartitions(mkAssignment(
                 mkTopicAssignment(topicId1, 1, 2, 3)))
             .setPartitionsPendingRevocation(mkAssignment(
@@ -178,15 +140,6 @@ public class ConsumerGroupMemberTest {
             .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
             .setSubscribedTopicRegex("regex")
             .setServerAssignorName("range")
-            .setClientAssignors(Collections.singletonList(
-                new ClientAssignor(
-                    "assignor",
-                    (byte) 0,
-                    (byte) 0,
-                    (byte) 1,
-                    new VersionedMetadata(
-                        (byte) 1,
-                        ByteBuffer.allocate(0)))))
             .setAssignedPartitions(mkAssignment(
                 mkTopicAssignment(topicId1, 1, 2, 3)))
             .setPartitionsPendingRevocation(mkAssignment(
@@ -201,7 +154,6 @@ public class ConsumerGroupMemberTest {
             .maybeUpdateSubscribedTopicNames(Optional.empty())
             .maybeUpdateSubscribedTopicRegex(Optional.empty())
             .maybeUpdateRebalanceTimeoutMs(OptionalInt.empty())
-            .maybeUpdateClientAssignors(Optional.empty())
             .build();
 
         assertEquals(member, updatedMember);
@@ -213,7 +165,6 @@ public class ConsumerGroupMemberTest {
             .maybeUpdateSubscribedTopicNames(Optional.of(Arrays.asList("zar")))
             .maybeUpdateSubscribedTopicRegex(Optional.of("new-regex"))
             .maybeUpdateRebalanceTimeoutMs(OptionalInt.of(6000))
-            .maybeUpdateClientAssignors(Optional.of(Collections.emptyList()))
             .build();
 
         assertEquals("new-instance-id", updatedMember.instanceId());
@@ -222,18 +173,11 @@ public class ConsumerGroupMemberTest {
         assertEquals(Arrays.asList("zar"), updatedMember.subscribedTopicNames());
         assertEquals("new-regex", updatedMember.subscribedTopicRegex());
         assertEquals("new-assignor", updatedMember.serverAssignorName().get());
-        assertEquals(Collections.emptyList(), updatedMember.clientAssignors());
     }
 
     @Test
     public void testUpdateWithConsumerGroupMemberMetadataValue() {
         ConsumerGroupMemberMetadataValue record = new ConsumerGroupMemberMetadataValue()
-            .setAssignors(Collections.singletonList(new ConsumerGroupMemberMetadataValue.Assignor()
-                .setName("client")
-                .setMinimumVersion((short) 0)
-                .setMaximumVersion((short) 2)
-                .setVersion((short) 1)
-                .setMetadata(new byte[0])))
             .setServerAssignor("range")
             .setClientId("client-id")
             .setClientHost("host-id")
@@ -255,17 +199,6 @@ public class ConsumerGroupMemberTest {
         assertEquals(Arrays.asList("bar", "foo"), member.subscribedTopicNames());
         assertEquals("regex", member.subscribedTopicRegex());
         assertEquals("range", member.serverAssignorName().get());
-        assertEquals(
-            Collections.singletonList(
-                new ClientAssignor(
-                    "client",
-                    (byte) 0,
-                    (byte) 0,
-                    (byte) 2,
-                    new VersionedMetadata(
-                        (byte) 1,
-                        ByteBuffer.allocate(0)))),
-            member.clientAssignors());
     }
 
     @Test
