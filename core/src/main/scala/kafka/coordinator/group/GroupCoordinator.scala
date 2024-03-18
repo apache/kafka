@@ -921,7 +921,10 @@ private[group] class GroupCoordinator(
         ): Unit = {
           val (error, verificationGuard) = errorAndGuard
           if (error != Errors.NONE) {
-            val finalError = GroupMetadataManager.maybeConvertOffsetCommitError(error)
+            val finalError = error match {
+              case Errors.NETWORK_EXCEPTION => Errors.COORDINATOR_LOAD_IN_PROGRESS
+              case other => GroupMetadataManager.maybeConvertOffsetCommitError(other)
+            }
             responseCallback(offsetMetadata.map { case (k, _) => k -> finalError })
           } else {
             doTxnCommitOffsets(group, memberId, groupInstanceId, generationId, producerId, producerEpoch,

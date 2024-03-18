@@ -831,6 +831,7 @@ class ReplicaManager(val config: KafkaConfig,
             error match {
               case Errors.INVALID_TXN_STATE => Some(error.exception("Partition was not added to the transaction"))
               case Errors.CONCURRENT_TRANSACTIONS |
+                   Errors.NETWORK_EXCEPTION |
                    Errors.COORDINATOR_LOAD_IN_PROGRESS |
                    Errors.COORDINATOR_NOT_AVAILABLE |
                    Errors.NOT_COORDINATOR => Some(new NotEnoughReplicasException(
