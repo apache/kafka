@@ -53,7 +53,7 @@ class KafkaServerTest extends QuorumTestHarness {
       // start a server with listener on the port already bound
       assertThrows(classOf[RuntimeException],
         () => kafkaServer = Option(createServerWithListenerOnPort(serverSocket.getLocalPort)),
-        "Exepected RuntimeException because of KafkaServer startup failure due do address already in use"
+        "Expected RuntimeException due to address already in use during KafkaServer startup"
       )
     } finally {
       CoreUtils.swallow(serverSocket.close(), this);
