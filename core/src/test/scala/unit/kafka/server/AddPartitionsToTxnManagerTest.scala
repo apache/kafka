@@ -72,8 +72,6 @@ class AddPartitionsToTxnManagerTest {
   private val versionMismatchResponse = clientResponse(null, mismatchException = new UnsupportedVersionException(""))
   private val disconnectedResponse = clientResponse(null, disconnected = true)
 
-  //private val highestProduceVersion = ApiKeys.PRODUCE.oldestVersion
-
   private val config = KafkaConfig.fromProps(TestUtils.createBrokerConfig(1, "localhost:2181"))
 
   @BeforeEach
@@ -247,7 +245,7 @@ class AddPartitionsToTxnManagerTest {
       addPartitionsToTxnManager.verifyTransaction(transactionalId2, producerId2, producerEpoch = 0, topicPartitions, setErrors(transaction2Errors), any())
     }
 
-    def addTransactionsToVerifyRequestVersion(operationExpected: ExpectedPartitionOperation): Unit = {
+    def addTransactionsToVerifyRequestVersion(operationExpected: ApiVersionErrorMapper): Unit = {
       transaction1Errors.clear()
       transaction2Errors.clear()
 
@@ -316,7 +314,7 @@ class AddPartitionsToTxnManagerTest {
     val expectedAbortableTransaction1ErrorsHigherVersion = topicPartitions.map(_ -> Errors.ABORTABLE_TRANSACTION).toMap
     val expectedAbortableTransaction2ErrorsHigherVersion = Map(new TopicPartition("foo", 2) -> Errors.ABORTABLE_TRANSACTION)
 
-    addTransactionsToVerifyRequestVersion(defaultOperation)
+    addTransactionsToVerifyRequestVersion(defaultError)
     receiveResponse(mixedAbortableErrorsResponse)
     assertEquals(expectedAbortableTransaction1ErrorsLowerVersion, transaction1Errors)
     assertEquals(expectedAbortableTransaction2ErrorsLowerVersion, transaction2Errors)

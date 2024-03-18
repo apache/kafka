@@ -929,7 +929,7 @@ private[group] class GroupCoordinator(
               offsetTopicPartition, offsetMetadata, newRequestLocal, responseCallback, Some(verificationGuard))
           }
         }
-        val partitionOperation = if (apiVersion >= 4) genericError else defaultOperation
+        val apiVersionErrorMapper = if (apiVersion >= 4) genericError else defaultError
         groupManager.replicaManager.maybeStartTransactionVerificationForPartition(
           topicPartition = offsetTopicPartition,
           transactionalId,
@@ -943,7 +943,7 @@ private[group] class GroupCoordinator(
             postVerificationCallback,
             requestLocal
           ),
-          partitionOperation
+          apiVersionErrorMapper
         )
     }
   }

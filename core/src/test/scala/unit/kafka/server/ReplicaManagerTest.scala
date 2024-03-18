@@ -3048,7 +3048,7 @@ class ReplicaManagerTest {
       transactionalId = transactionalId,
       entriesPerPartition = entriesToAppend,
       responseCallback = appendCallback,
-      partitionOperation = genericError
+      apiVersionErrorMapper = genericError
     )
 
     result
@@ -3076,7 +3076,7 @@ class ReplicaManagerTest {
       transactionalId = transactionalId,
       entriesPerPartition = entriesPerPartition,
       responseCallback = appendCallback,
-      partitionOperation = genericError
+      apiVersionErrorMapper = genericError
     )
 
     result
@@ -3102,7 +3102,7 @@ class ReplicaManagerTest {
       producerEpoch,
       baseSequence,
       postVerificationCallback,
-      defaultOperation
+      defaultError
     )
     result
   }

@@ -3604,7 +3604,6 @@ public class TransactionManagerTest {
 
     }
 
-
     @Test
     public void testAbortableTransactionExceptionInAddOffsetsToTxn() {
         final TopicPartition tp = new TopicPartition("foo", 0);

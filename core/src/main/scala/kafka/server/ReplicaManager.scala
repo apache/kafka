@@ -795,7 +795,7 @@ class ReplicaManager(val config: KafkaConfig,
    * @param requestLocal                  container for the stateful instances scoped to this request -- this must correspond to the
    *                                      thread calling this method
    * @param actionQueue                   the action queue to use. ReplicaManager#defaultActionQueue is used by default.
-   * @param partitionOperation            the enum value which determines whether the client is ready to handle the new Abortable Txn Errors
+   * @param apiVersionErrorMapper         determines which version of the client sent the request so the addPartitionsToTxnManager handles it appropriately
    *
    * The responseCallback is wrapped so that it is scheduled on a request handler thread. There, it should be called with
    * that request handler thread's thread local and not the one supplied to this method.
@@ -809,7 +809,7 @@ class ReplicaManager(val config: KafkaConfig,
                           recordValidationStatsCallback: Map[TopicPartition, RecordValidationStats] => Unit = _ => (),
                           requestLocal: RequestLocal = RequestLocal.NoCaching,
                           actionQueue: ActionQueue = this.defaultActionQueue,
-                          partitionOperation: ExpectedPartitionOperation): Unit = {
+                          apiVersionErrorMapper: ApiVersionErrorMapper): Unit = {
 
     val transactionalProducerInfo = mutable.HashSet[(Long, Short)]()
     val topicPartitionBatchInfo = mutable.Map[TopicPartition, Int]()
@@ -887,7 +887,7 @@ class ReplicaManager(val config: KafkaConfig,
         postVerificationCallback,
         requestLocal
       ),
-      partitionOperation
+      apiVersionErrorMapper
     )
   }
 
@@ -978,13 +978,13 @@ class ReplicaManager(val config: KafkaConfig,
 
   /**
    *
-   * @param topicPartition      the topic partition to maybe verify
-   * @param transactionalId     the transactional id for the transaction
-   * @param producerId          the producer id for the producer writing to the transaction
-   * @param producerEpoch       the epoch of the producer writing to the transaction
-   * @param baseSequence        the base sequence of the first record in the batch we are trying to append
-   * @param callback            the method to execute once the verification is either completed or returns an error
-   * @param partitionOperation  the enum value which determines whether the client is ready to handle the new Abortable Txn Errors
+   * @param topicPartition        the topic partition to maybe verify
+   * @param transactionalId       the transactional id for the transaction
+   * @param producerId            the producer id for the producer writing to the transaction
+   * @param producerEpoch         the epoch of the producer writing to the transaction
+   * @param baseSequence          the base sequence of the first record in the batch we are trying to append
+   * @param callback              the method to execute once the verification is either completed or returns an error
+   * @param apiVersionErrorMapper determines which version of the client sent the request so the addPartitionsToTxnManager handles it appropriately
    *
    * When the verification returns, the callback will be supplied the error if it exists or Errors.NONE.
    * If the verification guard exists, it will also be supplied. Otherwise the SENTINEL verification guard will be returned.
@@ -997,7 +997,7 @@ class ReplicaManager(val config: KafkaConfig,
     producerEpoch: Short,
     baseSequence: Int,
     callback: ((Errors, VerificationGuard)) => Unit,
-    partitionOperation: ExpectedPartitionOperation
+    apiVersionErrorMapper: ApiVersionErrorMapper
   ): Unit = {
     def generalizedCallback(results: (Map[TopicPartition, Errors], Map[TopicPartition, VerificationGuard])): Unit = {
       val (preAppendErrors, verificationGuards) = results
@@ -1013,7 +1013,7 @@ class ReplicaManager(val config: KafkaConfig,
       producerId,
       producerEpoch,
       generalizedCallback,
-      partitionOperation
+      apiVersionErrorMapper
     )
   }
 
@@ -1024,7 +1024,7 @@ class ReplicaManager(val config: KafkaConfig,
    * @param producerId               the producer id for the producer writing to the transaction
    * @param producerEpoch            the epoch of the producer writing to the transaction
    * @param callback                 the method to execute once the verification is either completed or returns an error
-   * @param partitionOperation       the enum value which determines whether the client is ready to handle the new Abortable Txn Errors
+   * @param apiVersionErrorMapper    determines which version of the client sent the request so the addPartitionsToTxnManager handles it appropriately
    *
    * When the verification returns, the callback will be supplied the errors per topic partition if there were errors.
    * The callback will also be supplied the verification guards per partition if they exist. It is possible to have an
@@ -1037,7 +1037,7 @@ class ReplicaManager(val config: KafkaConfig,
     producerId: Long,
     producerEpoch: Short,
     callback: ((Map[TopicPartition, Errors], Map[TopicPartition, VerificationGuard])) => Unit,
-    partitionOperation: ExpectedPartitionOperation
+    apiVersionErrorMapper: ApiVersionErrorMapper
   ): Unit = {
     // Skip verification if the request is not transactional or transaction verification is disabled.
     if (transactionalId == null ||
@@ -1084,7 +1084,7 @@ class ReplicaManager(val config: KafkaConfig,
       producerEpoch = producerEpoch,
       topicPartitions = verificationGuards.keys.toSeq,
       callback = invokeCallback,
-      expectedPartitionOperation = partitionOperation
+      apiVersionErrorMapper = apiVersionErrorMapper
     ))
 
   }
