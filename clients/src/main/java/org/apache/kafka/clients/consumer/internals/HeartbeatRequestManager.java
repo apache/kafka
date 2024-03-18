@@ -549,7 +549,7 @@ public class HeartbeatRequestManager implements RequestManager {
                 }
             } else {
                 // SubscribedTopicRegex - only sent if has changed since the last heartbeat
-                //                      - not supported yet
+
             }
 
             // ServerAssignor - only sent if has changed since the last heartbeat

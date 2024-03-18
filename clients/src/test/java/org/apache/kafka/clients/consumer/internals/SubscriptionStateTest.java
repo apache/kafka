@@ -22,6 +22,7 @@ import org.apache.kafka.clients.NodeApiVersions;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
+import org.apache.kafka.clients.consumer.SubscriptionPattern;
 import org.apache.kafka.clients.consumer.internals.SubscriptionState.LogTruncation;
 import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.Node;
@@ -142,6 +143,7 @@ public class SubscriptionStateTest {
         // assigned partitions should remain unchanged
         assertTrue(state.assignedPartitions().isEmpty());
         assertEquals(0, state.numAssignedPartitions());
+        assertEquals(state.subscriptionPattern(), null);
 
         state.subscribeFromPattern(Collections.singleton(topic));
         // assigned partitions should remain unchanged
@@ -168,6 +170,7 @@ public class SubscriptionStateTest {
         // assigned partitions should remain unchanged
         assertEquals(singleton(t1p0), state.assignedPartitions());
         assertEquals(1, state.numAssignedPartitions());
+        assertEquals(state.subscriptionPattern(), null);
 
         state.subscribeFromPattern(singleton(topic));
         // assigned partitions should remain unchanged
@@ -186,6 +189,22 @@ public class SubscriptionStateTest {
         // assigned partitions should immediately change
         assertTrue(state.assignedPartitions().isEmpty());
         assertEquals(0, state.numAssignedPartitions());
+        assertEquals(state.subscriptionPattern(), null);
+    }
+    @Test
+    public void testSubscriptionPatternInclusionInSubscriptionState() {
+        SubscriptionPattern pattern = new SubscriptionPattern("*t");
+
+        state.subscribe(pattern, Optional.of(rebalanceListener));
+        assertTrue(state.assignedPartitions().isEmpty());
+        assertEquals(0, state.numAssignedPartitions());
+        assertEquals(state.subscribedPattern(), null);
+        assertTrue(state.subscriptionPattern().equals(pattern));
+
+        state.unsubscribe();
+        assertEquals(state.subscriptionPattern(), null);
+        assertEquals(0, state.numAssignedPartitions());
+        assertEquals(state.subscribedPattern(), null);
     }
 
     @Test

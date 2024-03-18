@@ -30,6 +30,7 @@ import org.apache.kafka.clients.consumer.OffsetCommitCallback;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.clients.consumer.RetriableCommitFailedException;
 import org.apache.kafka.clients.consumer.RoundRobinAssignor;
+import org.apache.kafka.clients.consumer.SubscriptionPattern;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEventHandler;
 import org.apache.kafka.clients.consumer.internals.events.AssignmentChangeEvent;
@@ -690,6 +691,23 @@ public class AsyncKafkaConsumerTest {
         consumer.close(Duration.ZERO);
         assertTrue(subscriptions.assignedPartitions().isEmpty());
         assertEquals(1, listener.revokedCount);
+    }
+    @Test
+    public void testSubscribeUsingSubscriptionPattern() {
+        MockRebalanceListener listener = new MockRebalanceListener();
+        SubscriptionState subscriptions = mock(SubscriptionState.class);
+        consumer = newConsumer(
+                mock(FetchBuffer.class),
+                mock(ConsumerInterceptors.class),
+                mock(ConsumerRebalanceListenerInvoker.class),
+                subscriptions,
+                singletonList(new RoundRobinAssignor()),
+                "group-id",
+                "client-id");
+
+        SubscriptionPattern pattern = new SubscriptionPattern("t*");
+        consumer.subscribe(pattern, listener);
+        verify(subscriptions).subscribe(pattern, Optional.of(listener));
     }
 
     @Test

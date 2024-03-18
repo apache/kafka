@@ -35,6 +35,7 @@ import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetAndTimestamp;
 import org.apache.kafka.clients.consumer.OffsetCommitCallback;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
+import org.apache.kafka.clients.consumer.SubscriptionPattern;
 import org.apache.kafka.clients.consumer.internals.metrics.KafkaConsumerMetrics;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.IsolationLevel;
@@ -493,6 +494,16 @@ public class LegacyKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     @Override
     public void subscribe(Pattern pattern) {
         subscribeInternal(pattern, Optional.empty());
+    }
+
+    @Override
+    public void subscribe(SubscriptionPattern pattern, ConsumerRebalanceListener callback) {
+        throw new IllegalArgumentException("Operation not supported in the classic group protocol");
+    }
+
+    @Override
+    public void subscribe(SubscriptionPattern pattern) {
+        throw new IllegalArgumentException("Operation not supported in the classic group protocol");
     }
 
     /**

@@ -716,9 +716,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * the max metadata age, the consumer will refresh metadata more often and check for matching topics.
      * <p>
      * See {@link #subscribe(Collection, ConsumerRebalanceListener)} for details on the
-     * use of the {@link ConsumerRebalanceListener}. Generally rebalances are triggered when there
-     * is a change to the topics matching the provided pattern and when consumer group membership changes.
-     * Group rebalances only take place during an active call to {@link #poll(Duration)}.
+     * use of the {@link ConsumerRebalanceListener}.
      *
      * @param pattern Pattern to subscribe to
      * @param listener Non-null listener instance to get notifications on partition assignment/revocation for the
@@ -751,6 +749,49 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      */
     @Override
     public void subscribe(Pattern pattern) {
+        delegate.subscribe(pattern);
+    }
+
+    /**
+     * Subscribe to all topics matching specified pattern to get dynamically assigned partitions.
+     * The pattern matching will be done on the broker against topics existing at the time of check
+     * and matching topic(s) will be returned to the client.
+     * <p>
+     * See {@link #subscribe(Collection, ConsumerRebalanceListener)} for details on the
+     * use of the {@link ConsumerRebalanceListener}.
+     *
+     * @param pattern SubscriptionPattern to subscribe to
+     * @param listener Non-null listener instance to get notifications on partition assignment/revocation for the
+     *                 subscribed topics
+     * @throws IllegalArgumentException If pattern or listener is null
+     * @throws IllegalStateException If {@code subscribe()} is called previously with topics, or assign is called
+     *                               previously (without a subsequent call to {@link #unsubscribe()}), or if not
+     *                               configured at-least one partition assignment strategy
+     */
+    @Override
+    public void subscribe(SubscriptionPattern pattern, ConsumerRebalanceListener callback) {
+        delegate.subscribe(pattern, callback);
+    }
+
+    /**
+     * Subscribe to all topics matching specified pattern to get dynamically assigned partitions.
+     * The pattern matching will be done on the broker against topics existing at the time of check
+     * and matching topic(s) will be returned to the client.
+     * <p>
+     * This is a short-hand for {@link #subscribe(SubscriptionPattern, ConsumerRebalanceListener)}, which
+     * uses a no-op listener. If you need the ability to seek to particular offsets, you should prefer
+     * {@link #subscribe(SubscriptionPattern, ConsumerRebalanceListener)}, since group rebalances will cause partition offsets
+     * to be reset. You should also provide your own listener if you are doing your own offset
+     * management since the listener gives you an opportunity to commit offsets before a rebalance finishes.
+     *
+     * @param pattern SubscriptionPattern to subscribe to
+     * @throws IllegalArgumentException If pattern is null
+     * @throws IllegalStateException If {@code subscribe()} is called previously with topics, or assign is called
+     *                               previously (without a subsequent call to {@link #unsubscribe()}), or if not
+     *                               configured at-least one partition assignment strategy
+     */
+    @Override
+    public void subscribe(SubscriptionPattern pattern) {
         delegate.subscribe(pattern);
     }
 

@@ -23,6 +23,7 @@ import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.NoOffsetForPartitionException;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
+import org.apache.kafka.clients.consumer.SubscriptionPattern;
 import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.internals.PartitionStates;
@@ -84,6 +85,9 @@ public class SubscriptionState {
     /* the pattern user has requested */
     private Pattern subscribedPattern;
 
+    /* RE2J compatible regex */
+    private SubscriptionPattern subscriptionPattern;
+
     /* the list of topics the user has requested */
     private Set<String> subscription;
 
@@ -108,6 +112,7 @@ public class SubscriptionState {
         return "SubscriptionState{" +
             "type=" + subscriptionType +
             ", subscribedPattern=" + subscribedPattern +
+            ", subscriptionPattern=" + subscriptionPattern +
             ", subscription=" + String.join(",", subscription) +
             ", groupSubscription=" + String.join(",", groupSubscription) +
             ", defaultResetStrategy=" + defaultResetStrategy +
@@ -136,6 +141,7 @@ public class SubscriptionState {
         this.assignment = new PartitionStates<>();
         this.groupSubscription = new HashSet<>();
         this.subscribedPattern = null;
+        this.subscriptionPattern = null;
         this.subscriptionType = SubscriptionType.NONE;
     }
 
@@ -171,7 +177,15 @@ public class SubscriptionState {
     public synchronized void subscribe(Pattern pattern, Optional<ConsumerRebalanceListener> listener) {
         registerRebalanceListener(listener);
         setSubscriptionType(SubscriptionType.AUTO_PATTERN);
+        this.subscriptionPattern = null;
         this.subscribedPattern = pattern;
+    }
+
+    public synchronized void subscribe(SubscriptionPattern pattern, Optional<ConsumerRebalanceListener> listener) {
+        registerRebalanceListener(listener);
+        setSubscriptionType(SubscriptionType.AUTO_PATTERN);
+        this.subscribedPattern = null;
+        this.subscriptionPattern = pattern;
     }
 
     public synchronized boolean subscribeFromPattern(Set<String> topics) {
@@ -306,6 +320,7 @@ public class SubscriptionState {
         this.groupSubscription = Collections.emptySet();
         this.assignment.clear();
         this.subscribedPattern = null;
+        this.subscriptionPattern = null;
         this.subscriptionType = SubscriptionType.NONE;
         this.assignmentId++;
     }
@@ -326,6 +341,14 @@ public class SubscriptionState {
         if (hasAutoAssignedPartitions())
             return this.subscription;
         return Collections.emptySet();
+    }
+
+    public synchronized SubscriptionPattern subscriptionPattern() {
+        return this.subscriptionPattern;
+    }
+
+    public synchronized Pattern subscribedPattern() {
+        return this.subscribedPattern;
     }
 
     public synchronized Set<TopicPartition> pausedPartitions() {
