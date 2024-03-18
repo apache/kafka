@@ -20,6 +20,7 @@ import org.apache.kafka.connect.runtime.RestartRequest;
 import org.apache.kafka.connect.runtime.SessionKey;
 import org.apache.kafka.connect.runtime.TargetState;
 import org.apache.kafka.connect.runtime.WorkerConfigTransformer;
+import org.apache.kafka.connect.runtime.distributed.DistributedConfig;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 
 import java.util.Collections;
@@ -45,6 +46,10 @@ public class MemoryConfigBackingStore implements ConfigBackingStore {
 
     public MemoryConfigBackingStore(WorkerConfigTransformer configTransformer) {
         this.configTransformer = configTransformer;
+    }
+
+    @Override
+    public void configure(DistributedConfig config) {
     }
 
     @Override

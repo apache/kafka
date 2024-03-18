@@ -97,6 +97,7 @@ public class ConnectDistributed extends AbstractConnectCli<DistributedConfig> {
                 configTransformer,
                 sharedAdmin,
                 clientIdBase);
+        configBackingStore.configure(config);
 
         // Pass the shared admin to the distributed herder as an additional AutoCloseable object that should be closed when the
         // herder is stopped. This is easier than having to track and own the lifecycle ourselves.
