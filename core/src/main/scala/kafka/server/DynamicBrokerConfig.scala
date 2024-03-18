@@ -677,13 +677,18 @@ class DynamicLogConfig(logManager: LogManager, server: KafkaBroker) extends Brok
     val currentLogConfig = logManager.currentDefaultConfig
     val origUncleanLeaderElectionEnable = logManager.currentDefaultConfig.uncleanLeaderElectionEnable
     val newBrokerDefaults = new util.HashMap[String, Object](currentLogConfig.originals)
-    newConfig.valuesFromThisConfig.forEach { (k, v) =>
-      if (DynamicLogConfig.ReconfigurableConfigs.contains(k)) {
-        DynamicLogConfig.KafkaConfigToLogConfigName.get(k).foreach { configName =>
-          if (v == null)
-             newBrokerDefaults.remove(configName)
-          else
-            newBrokerDefaults.put(configName, v.asInstanceOf[AnyRef])
+    // Call extractLogConfigMap to get the new LogConfig because there are some special handling for some configs, e.g.,
+    // RetentionMsProp. This is to ensure that the new LogConfig is consistent with LogManager's LogConfig creation behavior.
+    val newLogConfig = LogConfig.extractLogConfigMap(newConfig)
+    newLogConfig.forEach { (k, v) =>
+      // Only update the config if it is a reconfigurable config. ReconfigurableConfigs is a subset of TopicConfigSynonyms.values.
+      // TopicConfigSynonyms is a map from log config name to kafka config name. Here we get the value of k and
+      // then check whether ReconfigurableConfigs contains it.
+      if (LogConfig.TopicConfigSynonyms.contains(k) && DynamicLogConfig.ReconfigurableConfigs.contains(LogConfig.TopicConfigSynonyms(k))) {
+        if (v == null) {
+          newBrokerDefaults.remove(k)
+        } else {
+          newBrokerDefaults.put(k, v.asInstanceOf[AnyRef])
         }
       }
     }
