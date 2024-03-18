@@ -75,9 +75,7 @@ import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.containsString;
 import static org.hamcrest.CoreMatchers.hasItem;
 import static org.hamcrest.CoreMatchers.instanceOf;
-import static org.hamcrest.CoreMatchers.notNullValue;
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.core.Is.is;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertThrows;
@@ -1123,10 +1121,10 @@ public class GlobalStateManagerImplTest {
 
     @SuppressWarnings("unchecked")
     private void setUpReprocessing() {
-        InternalTopologyBuilder.ReprocessFactory reprocessFactory = mock(InternalTopologyBuilder.ReprocessFactory.class);
-        ProcessorSupplier processorSupplier = mock(ProcessorSupplier.class);
-        Processor processor = mock(Processor.class);
-        Deserializer deserializer = mock(Deserializer.class);
+        final InternalTopologyBuilder.ReprocessFactory reprocessFactory = mock(InternalTopologyBuilder.ReprocessFactory.class);
+        final ProcessorSupplier processorSupplier = mock(ProcessorSupplier.class);
+        final Processor processor = mock(Processor.class);
+        final Deserializer deserializer = mock(Deserializer.class);
 
         when(optionalMockReprocessFactory.isPresent()).thenReturn(true);
         when(optionalMockReprocessFactory.get()).thenReturn(reprocessFactory);
