@@ -25,6 +25,7 @@ import java.time.Duration
 import java.util
 import java.util.stream.Stream
 import scala.jdk.CollectionConverters._
+import scala.collection.mutable.Buffer
 
 /**
  * Integration tests for the consumer that covers the poll logic
@@ -225,6 +226,53 @@ class PlaintextConsumerPollTest extends AbstractConsumerTest {
     assertEquals(numMessages - records.count, lag.metricValue.asInstanceOf[Double], epsilon, s"The lag should be ${numMessages - records.count}")
   }
 
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
+  def testMultiConsumerSessionTimeoutOnStopPolling(quorum: String, groupProtocol: String): Unit = {
+    runMultiConsumerSessionTimeoutTest(false)
+  }
+
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
+  def testMultiConsumerSessionTimeoutOnClose(quorum: String, groupProtocol: String): Unit = {
+    runMultiConsumerSessionTimeoutTest(true)
+  }
+
+  def runMultiConsumerSessionTimeoutTest(closeConsumer: Boolean): Unit = {
+    // use consumers defined in this class plus one additional consumer
+    // Use topic defined in this class + one additional topic
+    val producer = createProducer()
+    sendRecords(producer, numRecords = 100, tp)
+    sendRecords(producer, numRecords = 100, tp2)
+    val topic1 = "topic1"
+    val subscriptions = Set(tp, tp2) ++ createTopicAndSendRecords(producer, topic1, 6, 100)
+
+    // first subscribe consumers that are defined in this class
+    val consumerPollers = Buffer[ConsumerAssignmentPoller]()
+    consumerPollers += subscribeConsumerAndStartPolling(createConsumer(), List(topic, topic1))
+    consumerPollers += subscribeConsumerAndStartPolling(createConsumer(), List(topic, topic1))
+
+    // create one more consumer and add it to the group; we will timeout this consumer
+    val timeoutConsumer = createConsumer()
+    val timeoutPoller = subscribeConsumerAndStartPolling(timeoutConsumer, List(topic, topic1))
+    consumerPollers += timeoutPoller
+
+    // validate the initial assignment
+    validateGroupAssignment(consumerPollers, subscriptions)
+
+    // stop polling and close one of the consumers, should trigger partition re-assignment among alive consumers
+    timeoutPoller.shutdown()
+    consumerPollers -= timeoutPoller
+    if (closeConsumer)
+      timeoutConsumer.close()
+
+    validateGroupAssignment(consumerPollers, subscriptions,
+      Some(s"Did not get valid assignment for partitions ${subscriptions.asJava} after one consumer left"), 3 * groupMaxSessionTimeoutMs)
+
+    // done with pollers and consumers
+    for (poller <- consumerPollers)
+      poller.shutdown()
+  }
 }
 
 object PlaintextConsumerPollTest {

@@ -35,7 +35,6 @@ import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{CsvSource, MethodSource}
 
 import scala.collection.mutable
-import scala.collection.mutable.Buffer
 import scala.jdk.CollectionConverters._
 
 @Timeout(600)
@@ -574,18 +573,6 @@ class PlaintextConsumerTest extends BaseConsumerTest {
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
   @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
-  def testMultiConsumerSessionTimeoutOnStopPolling(quorum: String, groupProtocol: String): Unit = {
-    runMultiConsumerSessionTimeoutTest(false)
-  }
-
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
-  def testMultiConsumerSessionTimeoutOnClose(quorum: String, groupProtocol: String): Unit = {
-    runMultiConsumerSessionTimeoutTest(true)
-  }
-
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
   def testInterceptors(quorum: String, groupProtocol: String): Unit = {
     val appendStr = "mock"
     MockConsumerInterceptor.resetCounters()
@@ -1102,42 +1089,6 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     brokers.foreach(assertNoMetric(_, "throttle-time", QuotaType.Request, producerClientId))
     brokers.foreach(assertNoMetric(_, "request-time", QuotaType.Request, consumerClientId))
     brokers.foreach(assertNoMetric(_, "throttle-time", QuotaType.Request, consumerClientId))
-  }
-
-  def runMultiConsumerSessionTimeoutTest(closeConsumer: Boolean): Unit = {
-    // use consumers defined in this class plus one additional consumer
-    // Use topic defined in this class + one additional topic
-    val producer = createProducer()
-    sendRecords(producer, numRecords = 100, tp)
-    sendRecords(producer, numRecords = 100, tp2)
-    val topic1 = "topic1"
-    val subscriptions = Set(tp, tp2) ++ createTopicAndSendRecords(producer, topic1, 6, 100)
-
-    // first subscribe consumers that are defined in this class
-    val consumerPollers = Buffer[ConsumerAssignmentPoller]()
-    consumerPollers += subscribeConsumerAndStartPolling(createConsumer(), List(topic, topic1))
-    consumerPollers += subscribeConsumerAndStartPolling(createConsumer(), List(topic, topic1))
-
-    // create one more consumer and add it to the group; we will timeout this consumer
-    val timeoutConsumer = createConsumer()
-    val timeoutPoller = subscribeConsumerAndStartPolling(timeoutConsumer, List(topic, topic1))
-    consumerPollers += timeoutPoller
-
-    // validate the initial assignment
-    validateGroupAssignment(consumerPollers, subscriptions)
-
-    // stop polling and close one of the consumers, should trigger partition re-assignment among alive consumers
-    timeoutPoller.shutdown()
-    consumerPollers -= timeoutPoller
-    if (closeConsumer)
-      timeoutConsumer.close()
-
-    validateGroupAssignment(consumerPollers, subscriptions,
-      Some(s"Did not get valid assignment for partitions ${subscriptions.asJava} after one consumer left"), 3 * groupMaxSessionTimeoutMs)
-
-    // done with pollers and consumers
-    for (poller <- consumerPollers)
-      poller.shutdown()
   }
 
   def changeConsumerSubscriptionAndValidateAssignment[K, V](consumer: Consumer[K, V],
