@@ -130,9 +130,11 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.inOrder;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 public class SenderTest {
     private static final int MAX_REQUEST_SIZE = 1024 * 1024;
@@ -3236,6 +3238,28 @@ public class SenderTest {
             assertEquals(offset, futureIsProduced.get().offset());
         } finally {
             m.close();
+        }
+    }
+
+    // This test is expected to run fast. If timeout, the sender is not able to close properly.
+    @Timeout(5)
+    @Test
+    public void testSenderShouldCloseWhenTransactionManagerInErrorState() throws Exception {
+        metrics.close();
+        Map<String, String> clientTags = Collections.singletonMap("client-id", "clientA");
+        metrics = new Metrics(new MetricConfig().tags(clientTags));
+        TransactionManager transactionManager = mock(TransactionManager.class);
+        SenderMetricsRegistry metricsRegistry = new SenderMetricsRegistry(metrics);
+        Sender sender = new Sender(logContext, client, metadata, this.accumulator, false, MAX_REQUEST_SIZE, ACKS_ALL,
+                1, metricsRegistry, time, REQUEST_TIMEOUT, RETRY_BACKOFF_MS, transactionManager, apiVersions);
+        when(transactionManager.hasOngoingTransaction()).thenReturn(true);
+        when(transactionManager.beginAbort()).thenThrow(new IllegalStateException());
+        sender.initiateClose();
+        try {
+            // The sender should directly get closed.
+            sender.run();
+        } catch (Exception e) {
+            assertTrue(e instanceof IllegalStateException);
         }
     }
 
