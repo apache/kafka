@@ -9112,43 +9112,43 @@ public class GroupMetadataManagerTest {
 
     @Test
     public void testConsumerGroupDelete() {
+        String groupId = "group-id";
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withConsumerGroup(new ConsumerGroupBuilder(groupId, 10))
             .build();
-        context.groupMetadataManager.getOrMaybeCreateConsumerGroup("group-id", true);
 
         List<Record> expectedRecords = Arrays.asList(
-            RecordHelpers.newTargetAssignmentEpochTombstoneRecord("group-id"),
-            RecordHelpers.newGroupSubscriptionMetadataTombstoneRecord("group-id"),
-            RecordHelpers.newGroupEpochTombstoneRecord("group-id")
+            RecordHelpers.newTargetAssignmentEpochTombstoneRecord(groupId),
+            RecordHelpers.newGroupSubscriptionMetadataTombstoneRecord(groupId),
+            RecordHelpers.newGroupEpochTombstoneRecord(groupId)
         );
         List<Record> records = new ArrayList<>();
-        context.groupMetadataManager.deleteGroup("group-id", records);
+        context.groupMetadataManager.deleteGroup(groupId, records);
         assertEquals(expectedRecords, records);
     }
 
     @Test
     public void testConsumerGroupMaybeDelete() {
+        String groupId = "group-id";
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withConsumerGroup(new ConsumerGroupBuilder(groupId, 10))
             .build();
-        ConsumerGroup group = context.groupMetadataManager.getOrMaybeCreateConsumerGroup("group-id", true);
 
         List<Record> expectedRecords = Arrays.asList(
-            RecordHelpers.newTargetAssignmentEpochTombstoneRecord("group-id"),
-            RecordHelpers.newGroupSubscriptionMetadataTombstoneRecord("group-id"),
-            RecordHelpers.newGroupEpochTombstoneRecord("group-id")
+            RecordHelpers.newTargetAssignmentEpochTombstoneRecord(groupId),
+            RecordHelpers.newGroupSubscriptionMetadataTombstoneRecord(groupId),
+            RecordHelpers.newGroupEpochTombstoneRecord(groupId)
         );
         List<Record> records = new ArrayList<>();
-        context.groupMetadataManager.maybeDeleteGroup("group-id", records);
+        context.groupMetadataManager.maybeDeleteGroup(groupId, records);
         assertEquals(expectedRecords, records);
 
         records = new ArrayList<>();
-        group.updateMember(new ConsumerGroupMember.Builder("member")
-            .setState(MemberState.STABLE)
+        context.replay(RecordHelpers.newMemberSubscriptionRecord(groupId, new ConsumerGroupMember.Builder("member")
             .setMemberEpoch(10)
             .setPreviousMemberEpoch(10)
-            .build()
-        );
-        context.groupMetadataManager.maybeDeleteGroup("group-id", records);
+            .build()));
+        context.groupMetadataManager.maybeDeleteGroup(groupId, records);
         assertEquals(Collections.emptyList(), records);
     }
 
@@ -9273,7 +9273,7 @@ public class GroupMetadataManagerTest {
         verify(context.metrics, times(1)).onConsumerGroupStateTransition(ConsumerGroup.ConsumerGroupState.EMPTY, null);
 
         // Replaying a tombstone for a group that has already been removed should not decrement metric.
-        tombstones.forEach(tombstone -> assertThrows(GroupIdNotFoundException.class, () -> context.replay(tombstone)));
+        tombstones.forEach(tombstone -> assertThrows(IllegalStateException.class, () -> context.replay(tombstone)));
         verify(context.metrics, times(1)).onConsumerGroupStateTransition(ConsumerGroup.ConsumerGroupState.EMPTY, null);
     }
 
@@ -9290,8 +9290,8 @@ public class GroupMetadataManagerTest {
         context.replay(RecordHelpers.newTargetAssignmentEpochTombstoneRecord("group-id"));
         context.replay(RecordHelpers.newGroupEpochTombstoneRecord("group-id"));
         IntStream.range(0, 3).forEach(__ -> {
-            assertThrows(GroupIdNotFoundException.class, () -> context.replay(RecordHelpers.newTargetAssignmentEpochTombstoneRecord("group-id")));
-            assertThrows(GroupIdNotFoundException.class, () -> context.replay(RecordHelpers.newGroupEpochTombstoneRecord("group-id")));
+            assertThrows(IllegalStateException.class, () -> context.replay(RecordHelpers.newTargetAssignmentEpochTombstoneRecord("group-id")));
+            assertThrows(IllegalStateException.class, () -> context.replay(RecordHelpers.newGroupEpochTombstoneRecord("group-id")));
         });
 
         verify(context.metrics, times(1)).onConsumerGroupStateTransition(null, ConsumerGroup.ConsumerGroupState.EMPTY);

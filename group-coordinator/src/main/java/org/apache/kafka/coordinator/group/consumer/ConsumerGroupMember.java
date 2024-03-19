@@ -62,7 +62,6 @@ public class ConsumerGroupMember {
         private List<String> subscribedTopicNames = Collections.emptyList();
         private String subscribedTopicRegex = "";
         private String serverAssignorName = null;
-        private List<ClientAssignor> clientAssignors = Collections.emptyList();
         private Map<Uuid, Set<Integer>> assignedPartitions = Collections.emptyMap();
         private Map<Uuid, Set<Integer>> partitionsPendingRevocation = Collections.emptyMap();
 
@@ -84,7 +83,6 @@ public class ConsumerGroupMember {
             this.subscribedTopicNames = member.subscribedTopicNames;
             this.subscribedTopicRegex = member.subscribedTopicRegex;
             this.serverAssignorName = member.serverAssignorName;
-            this.clientAssignors = member.clientAssignors;
             this.state = member.state;
             this.assignedPartitions = member.assignedPartitions;
             this.partitionsPendingRevocation = member.partitionsPendingRevocation;
@@ -179,16 +177,6 @@ public class ConsumerGroupMember {
             return this;
         }
 
-        public Builder setClientAssignors(List<ClientAssignor> clientAssignors) {
-            this.clientAssignors = clientAssignors;
-            return this;
-        }
-
-        public Builder maybeUpdateClientAssignors(Optional<List<ClientAssignor>> clientAssignors) {
-            this.clientAssignors = clientAssignors.orElse(this.clientAssignors);
-            return this;
-        }
-
         public Builder setState(MemberState state) {
             this.state = state;
             return this;
@@ -213,9 +201,6 @@ public class ConsumerGroupMember {
             setSubscribedTopicRegex(record.subscribedTopicRegex());
             setRebalanceTimeoutMs(record.rebalanceTimeoutMs());
             setServerAssignorName(record.serverAssignor());
-            setClientAssignors(record.assignors().stream()
-                .map(ClientAssignor::fromRecord)
-                .collect(Collectors.toList()));
             return this;
         }
 
@@ -249,7 +234,6 @@ public class ConsumerGroupMember {
                 subscribedTopicNames,
                 subscribedTopicRegex,
                 serverAssignorName,
-                clientAssignors,
                 state,
                 assignedPartitions,
                 partitionsPendingRevocation
@@ -318,11 +302,6 @@ public class ConsumerGroupMember {
     private final String serverAssignorName;
 
     /**
-     * The states of the client side assignors of the member.
-     */
-    private final List<ClientAssignor> clientAssignors;
-
-    /**
      * The partitions assigned to this member.
      */
     private final Map<Uuid, Set<Integer>> assignedPartitions;
@@ -344,7 +323,6 @@ public class ConsumerGroupMember {
         List<String> subscribedTopicNames,
         String subscribedTopicRegex,
         String serverAssignorName,
-        List<ClientAssignor> clientAssignors,
         MemberState state,
         Map<Uuid, Set<Integer>> assignedPartitions,
         Map<Uuid, Set<Integer>> partitionsPendingRevocation
@@ -361,7 +339,6 @@ public class ConsumerGroupMember {
         this.subscribedTopicNames = subscribedTopicNames;
         this.subscribedTopicRegex = subscribedTopicRegex;
         this.serverAssignorName = serverAssignorName;
-        this.clientAssignors = clientAssignors;
         this.assignedPartitions = assignedPartitions;
         this.partitionsPendingRevocation = partitionsPendingRevocation;
     }
@@ -441,13 +418,6 @@ public class ConsumerGroupMember {
      */
     public Optional<String> serverAssignorName() {
         return Optional.ofNullable(serverAssignorName);
-    }
-
-    /**
-     * @return The list of client side assignors.
-     */
-    public List<ClientAssignor> clientAssignors() {
-        return clientAssignors;
     }
 
     /**
@@ -551,7 +521,6 @@ public class ConsumerGroupMember {
             && Objects.equals(subscribedTopicNames, that.subscribedTopicNames)
             && Objects.equals(subscribedTopicRegex, that.subscribedTopicRegex)
             && Objects.equals(serverAssignorName, that.serverAssignorName)
-            && Objects.equals(clientAssignors, that.clientAssignors)
             && Objects.equals(assignedPartitions, that.assignedPartitions)
             && Objects.equals(partitionsPendingRevocation, that.partitionsPendingRevocation);
     }
@@ -570,7 +539,6 @@ public class ConsumerGroupMember {
         result = 31 * result + Objects.hashCode(subscribedTopicNames);
         result = 31 * result + Objects.hashCode(subscribedTopicRegex);
         result = 31 * result + Objects.hashCode(serverAssignorName);
-        result = 31 * result + Objects.hashCode(clientAssignors);
         result = 31 * result + Objects.hashCode(assignedPartitions);
         result = 31 * result + Objects.hashCode(partitionsPendingRevocation);
         return result;
@@ -591,7 +559,6 @@ public class ConsumerGroupMember {
             ", subscribedTopicNames=" + subscribedTopicNames +
             ", subscribedTopicRegex='" + subscribedTopicRegex + '\'' +
             ", serverAssignorName='" + serverAssignorName + '\'' +
-            ", clientAssignors=" + clientAssignors +
             ", assignedPartitions=" + assignedPartitions +
             ", partitionsPendingRevocation=" + partitionsPendingRevocation +
             ')';
