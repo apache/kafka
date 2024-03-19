@@ -58,4 +58,7 @@
 
     <subpackage name="cache">
     </subpackage>
+    <subpackage name="metadata">
+        <allow class="org.apache.zookeeper.client.ZKClientConfig" />
+    </subpackage>
 </import-control>

@@ -598,6 +598,7 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
         <Or>
             <Class name="org.apache.kafka.tools.ClientCompatibilityTest"/>
             <Class name="org.apache.kafka.tools.StreamsResetter"/>
+            <Class name="org.apache.kafka.tools.config.ConfigCommand"/>
         </Or>
         <Bug pattern="RV_RETURN_VALUE_IGNORED_NO_SIDE_EFFECT"/>
     </Match>
