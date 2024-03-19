@@ -833,10 +833,9 @@ public class ConsumerGroupCommand {
                 Map<TopicPartition, LogOffsetResult> successfulLogTimestampOffsets = successfulOffsetsForTimes.entrySet().stream()
                     .collect(Collectors.toMap(Map.Entry::getKey, e -> new LogOffset(e.getValue().offset())));
 
-                unsuccessfulOffsetsForTimes.forEach((tp, offsetResultInfo) -> {
+                unsuccessfulOffsetsForTimes.forEach((tp, offsetResultInfo) ->
                     System.out.println("\nWarn: Partition " + tp.partition() + " from topic " + tp.topic() +
-                        " is empty. Falling back to latest known offset.");
-                });
+                    " is empty. Falling back to latest known offset."));
 
                 successfulLogTimestampOffsets.putAll(getLogEndOffsets(unsuccessfulOffsetsForTimes.keySet()));
 
@@ -939,15 +938,6 @@ public class ConsumerGroupCommand {
             } catch (InterruptedException | ExecutionException e) {
                 throw new RuntimeException(e);
             }
-        }
-
-        private Map<String, Map<TopicPartition, OffsetAndMetadata>> updateGroupMetadata(String group, String topic, int partition, long offset, Map<String, Map<TopicPartition, OffsetAndMetadata>> acc) {
-            TopicPartition topicPartition = new TopicPartition(topic, partition);
-            OffsetAndMetadata offsetAndMetadata = new OffsetAndMetadata(offset);
-            Map<TopicPartition, OffsetAndMetadata> dataMap = acc.getOrDefault(group, new HashMap<>());
-            dataMap.put(topicPartition, offsetAndMetadata);
-            acc.put(group, dataMap);
-            return acc;
         }
 
         private Map<String, Map<TopicPartition, OffsetAndMetadata>> parseResetPlan(String resetPlanCsv) {
