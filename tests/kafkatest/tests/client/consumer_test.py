@@ -18,7 +18,7 @@ from ducktape.utils.util import wait_until
 from ducktape.mark.resource import cluster
 
 from kafkatest.tests.verifiable_consumer_test import VerifiableConsumerTest
-from kafkatest.services.kafka import TopicPartition, quorum
+from kafkatest.services.kafka import TopicPartition, quorum, consumer_group
 
 import signal
 
@@ -76,14 +76,15 @@ class OffsetValidationTest(VerifiableConsumerTest):
 
     @cluster(num_nodes=7)
     @matrix(
-        metadata_quorum=[quorum.zk],
+        metadata_quorum=[quorum.zk, quorum.isolated_kraft],
         use_new_coordinator=[False]
     )
     @matrix(
         metadata_quorum=[quorum.isolated_kraft],
-        use_new_coordinator=[True, False]
+        use_new_coordinator=[True],
+        group_protocol=consumer_group.all_group_protocols
     )
-    def test_broker_rolling_bounce(self, metadata_quorum=quorum.zk, use_new_coordinator=False):
+    def test_broker_rolling_bounce(self, metadata_quorum=quorum.zk, use_new_coordinator=False, group_protocol=None):
         """
         Verify correct consumer behavior when the brokers are consecutively restarted.
 
@@ -108,7 +109,7 @@ class OffsetValidationTest(VerifiableConsumerTest):
         # broker, and that coordinator will fail the consumer and trigger a group rebalance if its session times out.
         # This test is asserting that no rebalances occur, so we increase the session timeout for this to be the case.
         self.session_timeout_sec = 30
-        consumer = self.setup_consumer(self.TOPIC)
+        consumer = self.setup_consumer(self.TOPIC, group_protocol=group_protocol)
 
         producer.start()
         self.await_produced_messages(producer)
@@ -136,16 +137,17 @@ class OffsetValidationTest(VerifiableConsumerTest):
     @matrix(
         clean_shutdown=[True],
         bounce_mode=["all", "rolling"],
-        metadata_quorum=[quorum.zk],
+        metadata_quorum=[quorum.zk, quorum.isolated_kraft],
         use_new_coordinator=[False]
     )
     @matrix(
         clean_shutdown=[True],
         bounce_mode=["all", "rolling"],
         metadata_quorum=[quorum.isolated_kraft],
-        use_new_coordinator=[True, False]   
+        use_new_coordinator=[True],
+        group_protocol=consumer_group.all_group_protocols
     )
-    def test_consumer_bounce(self, clean_shutdown, bounce_mode, metadata_quorum=quorum.zk, use_new_coordinator=False):
+    def test_consumer_bounce(self, clean_shutdown, bounce_mode, metadata_quorum=quorum.zk, use_new_coordinator=False, group_protocol=None):
         """
         Verify correct consumer behavior when the consumers in the group are consecutively restarted.
 
@@ -160,7 +162,7 @@ class OffsetValidationTest(VerifiableConsumerTest):
         partition = TopicPartition(self.TOPIC, 0)
 
         producer = self.setup_producer(self.TOPIC)
-        consumer = self.setup_consumer(self.TOPIC)
+        consumer = self.setup_consumer(self.TOPIC, group_protocol=group_protocol)
 
         producer.start()
         self.await_produced_messages(producer)
@@ -371,19 +373,20 @@ class OffsetValidationTest(VerifiableConsumerTest):
     @matrix(
         clean_shutdown=[True],
         enable_autocommit=[True, False],
-        metadata_quorum=[quorum.zk],
+        metadata_quorum=[quorum.zk, quorum.isolated_kraft],
         use_new_coordinator=[False]
     )
     @matrix(
         clean_shutdown=[True],
         enable_autocommit=[True, False],
         metadata_quorum=[quorum.isolated_kraft],
-        use_new_coordinator=[True, False]
+        use_new_coordinator=[True],
+        group_protocol=consumer_group.all_group_protocols
     )
-    def test_consumer_failure(self, clean_shutdown, enable_autocommit, metadata_quorum=quorum.zk, use_new_coordinator=False):
+    def test_consumer_failure(self, clean_shutdown, enable_autocommit, metadata_quorum=quorum.zk, use_new_coordinator=False, group_protocol=None):
         partition = TopicPartition(self.TOPIC, 0)
 
-        consumer = self.setup_consumer(self.TOPIC, enable_autocommit=enable_autocommit)
+        consumer = self.setup_consumer(self.TOPIC, enable_autocommit=enable_autocommit, group_protocol=group_protocol)
         producer = self.setup_producer(self.TOPIC)
 
         consumer.start()
@@ -436,12 +439,19 @@ class OffsetValidationTest(VerifiableConsumerTest):
         clean_shutdown=[True, False],
         enable_autocommit=[True, False],
         metadata_quorum=[quorum.isolated_kraft],
-        use_new_coordinator=[True, False]
+        use_new_coordinator=[False]
     )
-    def test_broker_failure(self, clean_shutdown, enable_autocommit, metadata_quorum=quorum.zk, use_new_coordinator=False):
+    @matrix(
+        clean_shutdown=[True, False],
+        enable_autocommit=[True, False],
+        metadata_quorum=[quorum.isolated_kraft],
+        use_new_coordinator=[True],
+        group_protocol=consumer_group.all_group_protocols
+    )
+    def test_broker_failure(self, clean_shutdown, enable_autocommit, metadata_quorum=quorum.zk, use_new_coordinator=False, group_protocol=None):
         partition = TopicPartition(self.TOPIC, 0)
 
-        consumer = self.setup_consumer(self.TOPIC, enable_autocommit=enable_autocommit)
+        consumer = self.setup_consumer(self.TOPIC, enable_autocommit=enable_autocommit, group_protocol=group_protocol)
         producer = self.setup_producer(self.TOPIC)
 
         producer.start()
@@ -475,14 +485,15 @@ class OffsetValidationTest(VerifiableConsumerTest):
 
     @cluster(num_nodes=7)
     @matrix(
-        metadata_quorum=[quorum.zk],
+        metadata_quorum=[quorum.zk, quorum.isolated_kraft],
         use_new_coordinator=[False]
     )
     @matrix(
         metadata_quorum=[quorum.isolated_kraft],
-        use_new_coordinator=[True, False]
+        use_new_coordinator=[True],
+        group_protocol=consumer_group.all_group_protocols
     )
-    def test_group_consumption(self, metadata_quorum=quorum.zk, use_new_coordinator=False):
+    def test_group_consumption(self, metadata_quorum=quorum.zk, use_new_coordinator=False, group_protocol=None):
         """
         Verifies correct group rebalance behavior as consumers are started and stopped.
         In particular, this test verifies that the partition is readable after every
@@ -494,7 +505,7 @@ class OffsetValidationTest(VerifiableConsumerTest):
         - Start the consumers one by one, verifying consumption after each rebalance
         - Shutdown the consumers one by one, verifying consumption after each rebalance
         """
-        consumer = self.setup_consumer(self.TOPIC)
+        consumer = self.setup_consumer(self.TOPIC, group_protocol=group_protocol)
         producer = self.setup_producer(self.TOPIC)
 
         partition = TopicPartition(self.TOPIC, 0)
@@ -535,18 +546,25 @@ class AssignmentValidationTest(VerifiableConsumerTest):
     @matrix(
         assignment_strategy=["org.apache.kafka.clients.consumer.RangeAssignor",
                              "org.apache.kafka.clients.consumer.RoundRobinAssignor",
-                             "org.apache.kafka.clients.consumer.StickyAssignor"], 
-        metadata_quorum=[quorum.zk],
+                             "org.apache.kafka.clients.consumer.StickyAssignor"],
+        metadata_quorum=[quorum.zk, quorum.isolated_kraft],
         use_new_coordinator=[False]
     )
     @matrix(
         assignment_strategy=["org.apache.kafka.clients.consumer.RangeAssignor",
                              "org.apache.kafka.clients.consumer.RoundRobinAssignor",
-                             "org.apache.kafka.clients.consumer.StickyAssignor"], 
+                             "org.apache.kafka.clients.consumer.StickyAssignor"],
         metadata_quorum=[quorum.isolated_kraft],
-        use_new_coordinator=[True, False]
+        use_new_coordinator=[True],
+        group_protocol=[consumer_group.classic_group_protocol],
     )
-    def test_valid_assignment(self, assignment_strategy, metadata_quorum=quorum.zk, use_new_coordinator=False):
+    @matrix(
+        metadata_quorum=[quorum.isolated_kraft],
+        use_new_coordinator=[True],
+        group_protocol=[consumer_group.consumer_group_protocol],
+        group_remote_assignor=consumer_group.all_remote_assignors
+    )
+    def test_valid_assignment(self, assignment_strategy=None, metadata_quorum=quorum.zk, use_new_coordinator=False, group_protocol=None, group_remote_assignor=None):
         """
         Verify assignment strategy correctness: each partition is assigned to exactly
         one consumer instance.
@@ -556,7 +574,10 @@ class AssignmentValidationTest(VerifiableConsumerTest):
         - Start the consumers one by one
         - Validate assignment after every expected rebalance
         """
-        consumer = self.setup_consumer(self.TOPIC, assignment_strategy=assignment_strategy)
+        consumer = self.setup_consumer(self.TOPIC,
+                                       assignment_strategy=assignment_strategy,
+                                       group_protocol=group_protocol,
+                                       group_remote_assignor=group_remote_assignor)
         for num_started, node in enumerate(consumer.nodes, 1):
             consumer.start_node(node)
             self.await_members(consumer, num_started)
