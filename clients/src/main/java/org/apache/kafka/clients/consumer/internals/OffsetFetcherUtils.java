@@ -249,7 +249,7 @@ class OffsetFetcherUtils {
         return offsetResetTimestamps;
     }
 
-    static <T> Map<TopicPartition, T> buildOffsetsResult(
+    static <T> Map<TopicPartition, T> buildListOffsetsResult(
         final Map<TopicPartition, Long> timestampsToSearch,
         final Map<TopicPartition, ListOffsetData> fetchedOffsets,
         BiFunction<TopicPartition, ListOffsetData, T> resultMapper) {
@@ -270,7 +270,7 @@ class OffsetFetcherUtils {
         final Map<TopicPartition, Long> timestampsToSearch,
         final Map<TopicPartition, ListOffsetData> fetchedOffsets) {
 
-        return buildOffsetsResult(timestampsToSearch, fetchedOffsets,
+        return buildListOffsetsResult(timestampsToSearch, fetchedOffsets,
             (topicPartition, offsetData) -> offsetData.offset);
     }
 
@@ -278,7 +278,7 @@ class OffsetFetcherUtils {
         final Map<TopicPartition, Long> timestampsToSearch,
         final Map<TopicPartition, ListOffsetData> fetchedOffsets) {
 
-        return buildOffsetsResult(timestampsToSearch, fetchedOffsets,
+        return buildListOffsetsResult(timestampsToSearch, fetchedOffsets,
             (topicPartition, offsetData) -> new OffsetAndTimestamp(
                 offsetData.offset,
                 offsetData.timestamp,

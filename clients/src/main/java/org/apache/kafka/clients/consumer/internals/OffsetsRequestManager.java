@@ -169,8 +169,8 @@ public class OffsetsRequestManager implements RequestManager, ClusterResourceLis
             result -> OffsetFetcherUtils.buildEndOffsetsResult(timestampsToSearch, result.fetchedOffsets));
     }
 
-    private ListOffsetsRequestState fetchOffsets(Map<TopicPartition, Long> timestampsToSearch,
-                                                 boolean requireTimestamps) {
+    private ListOffsetsRequestState fetchOffsets(
+        Map<TopicPartition, Long> timestampsToSearch, boolean requireTimestamps) {
         metadata.addTransientTopics(OffsetFetcherUtils.topicsForPartitions(timestampsToSearch.keySet()));
         ListOffsetsRequestState listOffsetsRequestState = new ListOffsetsRequestState(
             timestampsToSearch,
@@ -191,7 +191,6 @@ public class OffsetsRequestManager implements RequestManager, ClusterResourceLis
         prepareFetchOffsetsRequests(timestampsToSearch, requireTimestamps, listOffsetsRequestState);
         return listOffsetsRequestState;
     }
-
 
     /**
      * Reset offsets for all assigned partitions that require it. Offsets will be reset
@@ -335,7 +334,6 @@ public class OffsetsRequestManager implements RequestManager, ClusterResourceLis
                 }
             });
         }
-
         return unsentRequests;
     }
 
@@ -424,7 +422,6 @@ public class OffsetsRequestManager implements RequestManager, ClusterResourceLis
                     offsetFetcherUtils.onFailedResponseForResettingPositions(resetTimestamps, e);
                 }
                 if (expectedResponses.decrementAndGet() == 0) {
-                    System.out.println("decrement and get = 0");
                     globalResult.complete(null);
                 }
             });
@@ -505,7 +502,6 @@ public class OffsetsRequestManager implements RequestManager, ClusterResourceLis
                     offsetFetcherUtils.onFailedResponseForValidatingPositions(fetchPositions, e);
                 }
                 if (expectedResponses.decrementAndGet() == 0) {
-                    System.out.println("decrement and get = 0");
                     globalResult.complete(null);
                 }
             });
@@ -515,7 +511,6 @@ public class OffsetsRequestManager implements RequestManager, ClusterResourceLis
             expectedResponses.set(unsentRequests.size());
             requestsToSend.addAll(unsentRequests);
         } else {
-            System.out.println("sendOffsetsForLeaderEpochRequestsAndValidatePositions: unsentRequests.size = 0");
             globalResult.complete(null);
         }
 
