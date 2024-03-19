@@ -47,7 +47,8 @@ public class ControllerMetadataMetricsTest {
                         "kafka.controller:type=KafkaController,name=MetadataErrorCount",
                         "kafka.controller:type=KafkaController,name=OfflinePartitionsCount",
                         "kafka.controller:type=KafkaController,name=PreferredReplicaImbalanceCount",
-                        "kafka.controller:type=KafkaController,name=ZkMigrationState"
+                        "kafka.controller:type=KafkaController,name=ZkMigrationState",
+                        "kafka.controller:type=KafkaController,name=MetadataType"
                     )));
             }
             ControllerMetricsTestUtils.assertMetricsForTypeEqual(registry, "KafkaController",
