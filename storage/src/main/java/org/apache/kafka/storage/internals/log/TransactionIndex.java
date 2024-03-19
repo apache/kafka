@@ -115,6 +115,11 @@ public class TransactionIndex implements Closeable {
         maybeChannel = Optional.empty();
     }
 
+    public boolean isClosed() {
+        final boolean isOpen = maybeChannel.map(FileChannel::isOpen).orElse(false);
+        return !isOpen;
+    }
+
     /**
      * Delete this index.
      *

@@ -35,11 +35,13 @@ class TransactionIndexTest {
   def setup(): Unit = {
     file = TestUtils.tempFile()
     index = new TransactionIndex(offset, file)
+    assertFalse(index.isClosed)
   }
 
   @AfterEach
   def teardown(): Unit = {
     index.close()
+    assertTrue(index.isClosed)
   }
 
   @Test
@@ -178,5 +180,21 @@ class TransactionIndexTest {
     assertNotEquals(tmpParentDir, index.file.getParentFile)
     index.updateParentDir(tmpParentDir)
     assertEquals(tmpParentDir, index.file.getParentFile)
+  }
+
+  @Test
+  def testClosedTxnIndexChannel(): Unit = {
+    val abortedTxns = List(
+      new AbortedTxn(0L, 0, 10, 11),
+      new AbortedTxn(1L, 5, 15, 13),
+      new AbortedTxn(2L, 18, 35, 25),
+      new AbortedTxn(3L, 32, 50, 40))
+    abortedTxns.foreach(index.append)
+    index.close()
+    assertTrue(index.isClosed)
+
+    val reopenedIndex = new TransactionIndex(0L, file)
+    assertEquals(abortedTxns.asJava, reopenedIndex.allAbortedTxns)
+    reopenedIndex.close()
   }
 }
