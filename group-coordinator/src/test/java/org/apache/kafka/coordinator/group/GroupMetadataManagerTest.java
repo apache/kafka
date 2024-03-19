@@ -434,7 +434,7 @@ public class GroupMetadataManagerTest {
         ));
 
         assertThrows(GroupIdNotFoundException.class, () ->
-            context.groupMetadataManager.getOrMaybeCreateConsumerGroup(groupId, false));
+            context.groupMetadataManager.getConsumerGroup(groupId));
 
         CoordinatorResult<ConsumerGroupHeartbeatResponseData, Record> result = context.consumerGroupHeartbeat(
             new ConsumerGroupHeartbeatRequestData()
@@ -2295,7 +2295,7 @@ public class GroupMetadataManagerTest {
 
         // The metadata refresh flag should be true.
         ConsumerGroup consumerGroup = context.groupMetadataManager
-            .getOrMaybeCreateConsumerGroup(groupId, false);
+            .getConsumerGroup(groupId);
         assertTrue(consumerGroup.hasMetadataExpired(context.time.milliseconds()));
 
         // Prepare the assignment result.
@@ -2406,7 +2406,7 @@ public class GroupMetadataManagerTest {
 
         // The metadata refresh flag should be true.
         ConsumerGroup consumerGroup = context.groupMetadataManager
-            .getOrMaybeCreateConsumerGroup(groupId, false);
+            .getConsumerGroup(groupId);
         assertTrue(consumerGroup.hasMetadataExpired(context.time.milliseconds()));
 
         // Prepare the assignment result.
@@ -2644,7 +2644,7 @@ public class GroupMetadataManagerTest {
 
         // Ensures that all refresh flags are set to the future.
         Arrays.asList("group1", "group2", "group3", "group4", "group5").forEach(groupId -> {
-            ConsumerGroup group = context.groupMetadataManager.getOrMaybeCreateConsumerGroup(groupId, false);
+            ConsumerGroup group = context.groupMetadataManager.getConsumerGroup(groupId);
             group.setMetadataRefreshDeadline(context.time.milliseconds() + 5000L, 0);
             assertFalse(group.hasMetadataExpired(context.time.milliseconds()));
         });
@@ -2681,12 +2681,12 @@ public class GroupMetadataManagerTest {
 
         // Verify the groups.
         Arrays.asList("group1", "group2", "group3", "group4").forEach(groupId -> {
-            ConsumerGroup group = context.groupMetadataManager.getOrMaybeCreateConsumerGroup(groupId, false);
+            ConsumerGroup group = context.groupMetadataManager.getConsumerGroup(groupId);
             assertTrue(group.hasMetadataExpired(context.time.milliseconds()));
         });
 
         Collections.singletonList("group5").forEach(groupId -> {
-            ConsumerGroup group = context.groupMetadataManager.getOrMaybeCreateConsumerGroup(groupId, false);
+            ConsumerGroup group = context.groupMetadataManager.getConsumerGroup(groupId);
             assertFalse(group.hasMetadataExpired(context.time.milliseconds()));
         });
 
@@ -9383,7 +9383,7 @@ public class GroupMetadataManagerTest {
         );
         assertEquals(
             Group.GroupType.CONSUMER,
-            context.groupMetadataManager.getOrMaybeCreateConsumerGroup(classicGroupId, false).type()
+            context.groupMetadataManager.getConsumerGroup(classicGroupId).type()
         );
     }
 

@@ -609,7 +609,7 @@ public class GroupMetadataManager {
             throw new GroupIdNotFoundException(String.format("Consumer group %s not found.", groupId));
         }
 
-        if (group == null || maybeDeleteEmptyClassicGroup(group, records)) {
+        if (group == null || (createIfNotExists && maybeDeleteEmptyClassicGroup(group, records))) {
             return new ConsumerGroup(snapshotRegistry, groupId, metrics);
         } else {
             if (group.type() == CONSUMER) {
@@ -623,13 +623,19 @@ public class GroupMetadataManager {
     }
 
     /**
-     * An overloaded method of {@link GroupMetadataManager#getOrMaybeCreateConsumerGroup(String, boolean, List<Record>)}
+     * Gets a consumer group.
+     *
+     * @param groupId           The group id.
+     *
+     * @return A ConsumerGroup.
+     * @throws GroupIdNotFoundException if the group does not exist or the group is not a consumer group.
+     *
+     * Package private for testing.
      */
-    ConsumerGroup getOrMaybeCreateConsumerGroup(
-        String groupId,
-        boolean createIfNotExists
+    ConsumerGroup getConsumerGroup(
+        String groupId
     ) throws GroupIdNotFoundException {
-        return getOrMaybeCreateConsumerGroup(groupId, createIfNotExists, Collections.emptyList());
+        return getOrMaybeCreateConsumerGroup(groupId, false, null);
     }
 
     /**
@@ -1334,7 +1340,7 @@ public class GroupMetadataManager {
         String memberId,
         int memberEpoch
     ) throws ApiException {
-        ConsumerGroup group = getOrMaybeCreateConsumerGroup(groupId, false);
+        ConsumerGroup group = getConsumerGroup(groupId);
         List<Record> records;
         if (instanceId == null) {
             ConsumerGroupMember member = group.getOrMaybeCreateMember(memberId, false);
@@ -1459,7 +1465,7 @@ public class GroupMetadataManager {
         String key = consumerGroupSessionTimeoutKey(groupId, memberId);
         timer.schedule(key, consumerGroupSessionTimeoutMs, TimeUnit.MILLISECONDS, true, () -> {
             try {
-                ConsumerGroup group = getOrMaybeCreateConsumerGroup(groupId, false);
+                ConsumerGroup group = getConsumerGroup(groupId);
                 ConsumerGroupMember member = group.getOrMaybeCreateMember(memberId, false);
                 log.info("[GroupId {}] Member {} fenced from the group because its session expired.",
                     groupId, memberId);
@@ -1506,7 +1512,7 @@ public class GroupMetadataManager {
         String key = consumerGroupRebalanceTimeoutKey(groupId, memberId);
         timer.schedule(key, rebalanceTimeoutMs, TimeUnit.MILLISECONDS, true, () -> {
             try {
-                ConsumerGroup group = getOrMaybeCreateConsumerGroup(groupId, false);
+                ConsumerGroup group = getConsumerGroup(groupId);
                 ConsumerGroupMember member = group.getOrMaybeCreateMember(memberId, false);
 
                 if (member.memberEpoch() == memberEpoch) {
