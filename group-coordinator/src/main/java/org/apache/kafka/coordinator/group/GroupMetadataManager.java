@@ -623,19 +623,37 @@ public class GroupMetadataManager {
     }
 
     /**
-     * Gets a consumer group.
+     * Gets a consumer group by committed offset.
      *
      * @param groupId           The group id.
+     * @param committedOffset   A specified committed offset corresponding to this shard.
      *
      * @return A ConsumerGroup.
-     * @throws GroupIdNotFoundException if the group does not exist or the group is not a consumer group.
-     *
-     * Package private for testing.
+     * @throws GroupIdNotFoundException if the group does not exist or is not a consumer group.
      */
-    ConsumerGroup getConsumerGroup(
+    public ConsumerGroup consumerGroup(
+        String groupId,
+        long committedOffset
+    ) throws GroupIdNotFoundException {
+        Group group = group(groupId, committedOffset);
+
+        if (group.type() == CONSUMER) {
+            return (ConsumerGroup) group;
+        } else {
+            // We don't support upgrading/downgrading between protocols at the moment so
+            // we throw an exception if a group exists with the wrong type.
+            throw new GroupIdNotFoundException(String.format("Group %s is not a consumer group.",
+                groupId));
+        }
+    }
+
+    /**
+     * An overloaded method of {@link GroupMetadataManager#consumerGroup(String, long)}
+     */
+    ConsumerGroup consumerGroup(
         String groupId
     ) throws GroupIdNotFoundException {
-        return getOrMaybeCreateConsumerGroup(groupId, false, null);
+        return consumerGroup(groupId, Long.MAX_VALUE);
     }
 
     /**
@@ -738,31 +756,6 @@ public class GroupMetadataManager {
             // We don't support upgrading/downgrading between protocols at the moment so
             // we throw an exception if a group exists with the wrong type.
             throw new GroupIdNotFoundException(String.format("Group %s is not a classic group.",
-                groupId));
-        }
-    }
-
-    /**
-     * Gets a consumer group by committed offset.
-     *
-     * @param groupId           The group id.
-     * @param committedOffset   A specified committed offset corresponding to this shard.
-     *
-     * @return A ConsumerGroup.
-     * @throws GroupIdNotFoundException if the group does not exist or is not a consumer group.
-     */
-    public ConsumerGroup consumerGroup(
-        String groupId,
-        long committedOffset
-    ) throws GroupIdNotFoundException {
-        Group group = group(groupId, committedOffset);
-
-        if (group.type() == CONSUMER) {
-            return (ConsumerGroup) group;
-        } else {
-            // We don't support upgrading/downgrading between protocols at the moment so
-            // we throw an exception if a group exists with the wrong type.
-            throw new GroupIdNotFoundException(String.format("Group %s is not a consumer group.",
                 groupId));
         }
     }
@@ -1340,7 +1333,7 @@ public class GroupMetadataManager {
         String memberId,
         int memberEpoch
     ) throws ApiException {
-        ConsumerGroup group = getConsumerGroup(groupId);
+        ConsumerGroup group = consumerGroup(groupId);
         List<Record> records;
         if (instanceId == null) {
             ConsumerGroupMember member = group.getOrMaybeCreateMember(memberId, false);
@@ -1465,7 +1458,7 @@ public class GroupMetadataManager {
         String key = consumerGroupSessionTimeoutKey(groupId, memberId);
         timer.schedule(key, consumerGroupSessionTimeoutMs, TimeUnit.MILLISECONDS, true, () -> {
             try {
-                ConsumerGroup group = getConsumerGroup(groupId);
+                ConsumerGroup group = consumerGroup(groupId);
                 ConsumerGroupMember member = group.getOrMaybeCreateMember(memberId, false);
                 log.info("[GroupId {}] Member {} fenced from the group because its session expired.",
                     groupId, memberId);
@@ -1512,7 +1505,7 @@ public class GroupMetadataManager {
         String key = consumerGroupRebalanceTimeoutKey(groupId, memberId);
         timer.schedule(key, rebalanceTimeoutMs, TimeUnit.MILLISECONDS, true, () -> {
             try {
-                ConsumerGroup group = getConsumerGroup(groupId);
+                ConsumerGroup group = consumerGroup(groupId);
                 ConsumerGroupMember member = group.getOrMaybeCreateMember(memberId, false);
 
                 if (member.memberEpoch() == memberEpoch) {

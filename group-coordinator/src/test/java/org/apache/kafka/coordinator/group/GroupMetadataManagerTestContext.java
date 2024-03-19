@@ -483,7 +483,7 @@ public class GroupMetadataManagerTestContext {
         String groupId
     ) {
         return groupMetadataManager
-            .getConsumerGroup(groupId)
+            .consumerGroup(groupId)
             .state();
     }
 
@@ -492,7 +492,7 @@ public class GroupMetadataManagerTestContext {
         String memberId
     ) {
         return groupMetadataManager
-            .getConsumerGroup(groupId)
+            .consumerGroup(groupId)
             .getOrMaybeCreateMember(memberId, false)
             .state();
     }
