@@ -2169,14 +2169,9 @@ public class KafkaAdminClientTest {
             KafkaFuture<Void> myTopicResult = values.get("my_topic");
             myTopicResult.get();
             KafkaFuture<Void> otherTopicResult = values.get("other_topic");
-            try {
-                otherTopicResult.get();
-                fail("get() should throw ExecutionException");
-            } catch (ExecutionException e0) {
-                assertInstanceOf(InvalidTopicException.class, e0.getCause());
-                InvalidTopicException e = (InvalidTopicException) e0.getCause();
-                assertEquals("some detailed reason", e.getMessage());
-            }
+            assertEquals("some detailed reason",
+                assertInstanceOf(InvalidTopicException.class,
+                    assertThrows(ExecutionException.class, otherTopicResult::get).getCause()).getMessage());
         }
     }
 
@@ -2435,30 +2430,18 @@ public class KafkaAdminClientTest {
 
             // "offset out of range" failure on records deletion for partition 1
             KafkaFuture<DeletedRecords> myTopicPartition1Result = values.get(myTopicPartition1);
-            try {
-                myTopicPartition1Result.get();
-                fail("get() should throw ExecutionException");
-            } catch (ExecutionException e0) {
-                assertInstanceOf(OffsetOutOfRangeException.class, e0.getCause());
-            }
+            assertInstanceOf(OffsetOutOfRangeException.class,
+                assertThrows(ExecutionException.class, myTopicPartition1Result::get).getCause());
 
             // not authorized to delete records for partition 2
             KafkaFuture<DeletedRecords> myTopicPartition2Result = values.get(myTopicPartition2);
-            try {
-                myTopicPartition2Result.get();
-                fail("get() should throw ExecutionException");
-            } catch (ExecutionException e1) {
-                assertInstanceOf(TopicAuthorizationException.class, e1.getCause());
-            }
+            assertInstanceOf(TopicAuthorizationException.class,
+                assertThrows(ExecutionException.class, myTopicPartition2Result::get).getCause());
 
             // the response does not contain a result for partition 3
             KafkaFuture<DeletedRecords> myTopicPartition3Result = values.get(myTopicPartition3);
-            try {
-                myTopicPartition3Result.get();
-                fail("get() should throw ExecutionException");
-            } catch (ExecutionException e1) {
-                assertInstanceOf(ApiException.class, e1.getCause());
-            }
+            assertInstanceOf(ApiException.class,
+                assertThrows(ExecutionException.class, myTopicPartition3Result::get).getCause());
         }
     }
 

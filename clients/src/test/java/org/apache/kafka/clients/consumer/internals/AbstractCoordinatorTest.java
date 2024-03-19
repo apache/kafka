@@ -1028,18 +1028,17 @@ public class AbstractCoordinatorTest {
         mockClient.prepareResponse(syncGroupResponse(Errors.NONE));
         mockClient.prepareResponse(heartbeatResponse(Errors.FENCED_INSTANCE_ID));
 
-        try {
-            coordinator.ensureActiveGroup();
-            mockTime.sleep(HEARTBEAT_INTERVAL_MS);
-            long startMs = System.currentTimeMillis();
-            while (System.currentTimeMillis() - startMs < 1000) {
-                Thread.sleep(10);
-                coordinator.pollHeartbeat(mockTime.milliseconds());
-            }
-            fail("Expected pollHeartbeat to raise fenced instance id exception in 1 second");
-        } catch (RuntimeException exception) {
-            assertInstanceOf(FencedInstanceIdException.class, exception);
-        }
+        assertThrows(FencedInstanceIdException.class,
+            () -> {
+                coordinator.ensureActiveGroup();
+                mockTime.sleep(HEARTBEAT_INTERVAL_MS);
+                long startMs = System.currentTimeMillis();
+                while (System.currentTimeMillis() - startMs < 1000) {
+                    Thread.sleep(10);
+                    coordinator.pollHeartbeat(mockTime.milliseconds());
+                }
+            },
+            "Expected pollHeartbeat to raise fenced instance id exception in 1 second");
     }
 
     @Test
