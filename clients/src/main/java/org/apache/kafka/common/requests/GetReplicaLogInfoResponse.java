@@ -40,6 +40,28 @@ public class GetReplicaLogInfoResponse extends AbstractResponse {
         return data;
     }
 
+    @Override
+    public int throttleTimeMs() {
+        return data.throttleTimeMs();
+    }
+
+    @Override
+    public void maybeSetThrottleTimeMs(int throttleTimeMs) {
+        data.setThrottleTimeMs(throttleTimeMs);
+    }
+
+    @Override
+    public Map<Errors, Integer> errorCounts() {
+        Map<Errors, Integer> errorCounts = new HashMap<>();
+        data.topicPartitionLogInfoList().forEach(topicPartitionLogInfo -> {
+            topicPartitionLogInfo.partitionLogInfo().forEach(partitionLogInfo -> {
+                updateErrorCounts(errorCounts, Errors.forCode(partitionLogInfo.errorCode()));
+            });
+        });
+        return errorCounts;
+    }
+
+
     public static GetReplicaLogInfoResponse prepareResponse(List<GetReplicaLogInfoResponseData.TopicPartitionLogInfo> topicPartitionLogInfoList) {
         GetReplicaLogInfoResponseData responseData = new GetReplicaLogInfoResponseData();
         topicPartitionLogInfoList.forEach(topicPartitionLogInfo -> {
