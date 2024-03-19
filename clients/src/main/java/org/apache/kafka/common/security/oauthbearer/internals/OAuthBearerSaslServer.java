@@ -42,6 +42,8 @@ import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import static org.apache.kafka.common.utils.Utils.USERNAME_MAX_LEN;
+
 /**
  * {@code SaslServer} implementation for SASL/OAUTHBEARER in Kafka. An instance
  * of {@link OAuthBearerToken} is available upon successful authentication via
@@ -159,10 +161,15 @@ public class OAuthBearerSaslServer implements SaslServer {
         }
         OAuthBearerToken token = callback.token();
         if (token == null) {
-            errorMessage = jsonErrorResponse(callback.errorStatus(), callback.errorScope(),
+            String returnedMessage = jsonErrorResponse(callback.errorStatus(), callback.errorScope(),
                     callback.errorOpenIDConfiguration());
+            if (!authorizationId.isEmpty()) {
+                errorMessage = String.format("The authorizationId {%s}: %s", Utils.sanitizeString(authorizationId, USERNAME_MAX_LEN), returnedMessage);
+            } else {
+                errorMessage = returnedMessage;
+            }
             log.debug(errorMessage);
-            return errorMessage.getBytes(StandardCharsets.UTF_8);
+            return returnedMessage.getBytes(StandardCharsets.UTF_8);
         }
         /*
          * We support the client specifying an authorization ID as per the SASL
@@ -171,7 +178,7 @@ public class OAuthBearerSaslServer implements SaslServer {
         if (!authorizationId.isEmpty() && !authorizationId.equals(token.principalName()))
             throw new SaslAuthenticationException(String.format(
                     "Authentication failed: Client requested an authorization id (%s) that is different from the token's principal name (%s)",
-                    authorizationId, token.principalName()));
+                    Utils.sanitizeString(authorizationId, USERNAME_MAX_LEN), Utils.sanitizeString(token.principalName(), USERNAME_MAX_LEN)));
 
         Map<String, String> validExtensions = processExtensions(token, extensions);
 

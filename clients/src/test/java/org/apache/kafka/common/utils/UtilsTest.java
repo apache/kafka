@@ -995,6 +995,19 @@ public class UtilsTest {
         assertEquals(expected, recorded);
     }
 
+    @Test
+    public void testSanitizeString() {
+        String a = "a\tb\nc\rd\r\n";
+        assertEquals("abcd", Utils.sanitizeString(a, 10));
+
+        a = "aaaaaaaaaa";
+        assertEquals("aaaaa...", Utils.sanitizeString(a, 5));
+
+        // The space and \t will be counted as length 5 and then get trimmed
+        a = "a a\taaaaaaaa\r\n";
+        assertEquals("aaa...", Utils.sanitizeString(a, 5));
+    }
+
     private Callable<Void> recordingCallable(Map<String, Object> recordingMap, String success, TestException failure) {
         return () -> {
             if (success == null)

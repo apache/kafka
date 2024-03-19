@@ -189,8 +189,9 @@ public class OAuthBearerSaslServerTest {
 
     @Test
     public void authorizationIdNotEqualsAuthenticationId() {
-        assertThrows(SaslAuthenticationException.class,
-            () -> saslServer.evaluateResponse(clientInitialResponse(USER + "x")));
+        Throwable t = assertThrows(SaslAuthenticationException.class,
+            () -> saslServer.evaluateResponse(clientInitialResponse(USER + "xxxxxxxxxxxxxxxxxx")));
+        assertEquals("Authentication failed: Client requested an authorization id (userxxxxxxxxxxxxxxxx...) that is different from the token's principal name (user)", t.getMessage());
     }
 
     @Test

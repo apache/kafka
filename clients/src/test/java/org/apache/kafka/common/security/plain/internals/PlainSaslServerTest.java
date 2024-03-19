@@ -36,6 +36,7 @@ public class PlainSaslServerTest {
     private static final String USER_A = "userA";
     private static final String PASSWORD_A = "passwordA";
     private static final String USER_B = "userB";
+    private static final String LONG_USER_C = "userCcccccccccccccccccccccc";
     private static final String PASSWORD_B = "passwordB";
 
     private PlainSaslServer saslServer;
@@ -67,7 +68,8 @@ public class PlainSaslServerTest {
 
     @Test
     public void authorizationIdNotEqualsAuthenticationId() {
-        assertThrows(SaslAuthenticationException.class, () -> saslServer.evaluateResponse(saslMessage(USER_B, USER_A, PASSWORD_A)));
+        Throwable t = assertThrows(SaslAuthenticationException.class, () -> saslServer.evaluateResponse(saslMessage(LONG_USER_C, USER_A, PASSWORD_A)));
+        assertEquals("Authentication failed: Client requested an authorization id {userCccccccccccccccc...} that is different from username {userA}", t.getMessage());
     }
 
     @Test
