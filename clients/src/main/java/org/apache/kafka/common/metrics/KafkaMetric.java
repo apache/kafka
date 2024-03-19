@@ -49,7 +49,8 @@ public final class KafkaMetric implements Metric {
     }
 
     /**
-     * Get the configuration of this metric
+     * Get the configuration of this metric.
+     * This is supposed to be used by server only.
      * @return Return the config of this metric
      */
     public MetricConfig config() {
