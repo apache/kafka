@@ -60,6 +60,9 @@ public class CsvUtils {
         @JsonProperty
         private long offset;
 
+        /**
+         * Required for jackson.
+         */
         public CsvRecordWithGroup() {
         }
 
@@ -115,6 +118,9 @@ public class CsvUtils {
         @JsonProperty
         private long offset;
 
+        /**
+         * Required for jackson.
+         */
         public CsvRecordNoGroup() {
         }
 

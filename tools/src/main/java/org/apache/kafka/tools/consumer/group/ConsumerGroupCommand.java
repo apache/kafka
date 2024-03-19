@@ -321,20 +321,7 @@ public class ConsumerGroupCommand {
                 Optional<Collection<PartitionAssignmentState>> assignments = tuple.v2;
 
                 if (shouldPrintMemberState(groupId, state, size(assignments))) {
-                    // find proper columns width
-                    int maxGroupLen = 15, maxTopicLen = 15, maxConsumerIdLen = 15, maxHostLen = 15;
-                    if (assignments.isPresent()) {
-                        Collection<PartitionAssignmentState> consumerAssignments = assignments.get();
-                        for (PartitionAssignmentState consumerAssignment : consumerAssignments) {
-                            maxGroupLen = Math.max(maxGroupLen, consumerAssignment.group.length());
-                            maxTopicLen = Math.max(maxTopicLen, consumerAssignment.topic.orElse(MISSING_COLUMN_VALUE).length());
-                            maxConsumerIdLen = Math.max(maxConsumerIdLen, consumerAssignment.consumerId.orElse(MISSING_COLUMN_VALUE).length());
-                            maxHostLen = Math.max(maxHostLen, consumerAssignment.host.orElse(MISSING_COLUMN_VALUE).length());
-
-                        }
-                    }
-
-                    String format = "\n%" + (-maxGroupLen) + "s %" + (-maxTopicLen) + "s %-10s %-15s %-15s %-15s %" + (-maxConsumerIdLen) + "s %" + (-maxHostLen) + "s %s";
+                    String format = printOffsetFormat(assignments);
 
                     System.out.printf(format, "GROUP", "TOPIC", "PARTITION", "CURRENT-OFFSET", "LOG-END-OFFSET", "LAG", "CONSUMER-ID", "HOST", "CLIENT-ID");
 
@@ -352,6 +339,24 @@ public class ConsumerGroupCommand {
                     }
                 }
             });
+        }
+
+        private static String printOffsetFormat(Optional<Collection<PartitionAssignmentState>> assignments) {
+            // find proper columns width
+            int maxGroupLen = 15, maxTopicLen = 15, maxConsumerIdLen = 15, maxHostLen = 15;
+            if (assignments.isPresent()) {
+                Collection<PartitionAssignmentState> consumerAssignments = assignments.get();
+                for (PartitionAssignmentState consumerAssignment : consumerAssignments) {
+                    maxGroupLen = Math.max(maxGroupLen, consumerAssignment.group.length());
+                    maxTopicLen = Math.max(maxTopicLen, consumerAssignment.topic.orElse(MISSING_COLUMN_VALUE).length());
+                    maxConsumerIdLen = Math.max(maxConsumerIdLen, consumerAssignment.consumerId.orElse(MISSING_COLUMN_VALUE).length());
+                    maxHostLen = Math.max(maxHostLen, consumerAssignment.host.orElse(MISSING_COLUMN_VALUE).length());
+
+                }
+            }
+
+            String format = "\n%" + (-maxGroupLen) + "s %" + (-maxTopicLen) + "s %-10s %-15s %-15s %-15s %" + (-maxConsumerIdLen) + "s %" + (-maxHostLen) + "s %s";
+            return format;
         }
 
         private void printMembers(Map<String, Tuple2<Optional<String>, Optional<Collection<MemberAssignmentState>>>> members, boolean verbose) {
