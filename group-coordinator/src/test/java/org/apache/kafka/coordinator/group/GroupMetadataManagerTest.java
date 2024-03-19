@@ -1658,7 +1658,7 @@ public class GroupMetadataManagerTest {
         Uuid fooTopicId = Uuid.randomUuid();
         String fooTopicName = "foo";
 
-        // Create a context with one consumer group containing two members.
+        // Create a context with an empty consumer group.
         MockPartitionAssignor assignor = new MockPartitionAssignor("range");
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
             .withAssignors(Collections.singletonList(assignor))

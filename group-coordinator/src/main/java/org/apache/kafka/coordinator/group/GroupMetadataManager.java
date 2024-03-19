@@ -1190,8 +1190,10 @@ public class GroupMetadataManager {
             .setHeartbeatIntervalMs(consumerGroupHeartbeatIntervalMs);
 
         // The assignment is only provided in the following cases:
-        // 1. The member sent a full request. It does so when joining or rejoining the group; or
-        //    on any errors (e.g. timeout).
+        // 1. The member sent a full request. It does so when joining or rejoining the group with zero
+        //    as the member epoch; or on any errors (e.g. timeout). We use all the non-optional fields
+        //    (rebalanceTimeoutMs, subscribedTopicNames and ownedTopicPartitions) to detect a full request
+        //    as those must be set in a full request.
         // 2. The member's assignment has been updated.
         boolean isFullRequest = memberEpoch == 0 || (rebalanceTimeoutMs != -1 && subscribedTopicNames != null && ownedTopicPartitions != null);
         if (isFullRequest || hasAssignedPartitionsChanged(member, updatedMember)) {
