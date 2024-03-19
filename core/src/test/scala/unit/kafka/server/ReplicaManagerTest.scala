@@ -112,6 +112,7 @@ class ReplicaManagerTest {
   private var mockRemoteLogManager: RemoteLogManager = _
   private var addPartitionsToTxnManager: AddPartitionsToTxnManager = _
   private var brokerTopicStats: BrokerTopicStats = _
+  private val supportedOperation = genericError
 
   // Constants defined for readability
   private val zkVersion = 0
@@ -3048,7 +3049,7 @@ class ReplicaManagerTest {
       transactionalId = transactionalId,
       entriesPerPartition = entriesToAppend,
       responseCallback = appendCallback,
-      apiVersionErrorMapper = genericError
+      supportedOperation = supportedOperation
     )
 
     result
@@ -3076,7 +3077,7 @@ class ReplicaManagerTest {
       transactionalId = transactionalId,
       entriesPerPartition = entriesPerPartition,
       responseCallback = appendCallback,
-      apiVersionErrorMapper = genericError
+      supportedOperation = supportedOperation
     )
 
     result
@@ -3102,7 +3103,7 @@ class ReplicaManagerTest {
       producerEpoch,
       baseSequence,
       postVerificationCallback,
-      defaultError
+      supportedOperation
     )
     result
   }

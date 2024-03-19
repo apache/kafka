@@ -3600,8 +3600,6 @@ public class TransactionManagerTest {
         assertTrue(commitResult.isAcked());
 
         assertAbortableError(AbortableTransactionException.class);
-        // make sure the exception was thrown directly from the follow-up calls.
-
     }
 
     @Test

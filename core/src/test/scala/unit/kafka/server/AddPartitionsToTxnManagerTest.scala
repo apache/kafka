@@ -245,7 +245,7 @@ class AddPartitionsToTxnManagerTest {
       addPartitionsToTxnManager.verifyTransaction(transactionalId2, producerId2, producerEpoch = 0, topicPartitions, setErrors(transaction2Errors), any())
     }
 
-    def addTransactionsToVerifyRequestVersion(operationExpected: ApiVersionErrorMapper): Unit = {
+    def addTransactionsToVerifyRequestVersion(operationExpected: SupportedOperation): Unit = {
       transaction1Errors.clear()
       transaction2Errors.clear()
 
