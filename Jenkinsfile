@@ -174,6 +174,26 @@ pipeline {
             echo 'Skipping Kafka Streams archetype test for Java 21'
           }
         }
+
+        stage('s390x') {
+          agent { label 's390x' }
+          tools {
+            jdk 'jdk_21_latest'
+          }
+          options {
+            timeout(time: 8, unit: 'HOURS')
+            timestamps()
+          }
+          environment {
+            SCALA_VERSION=2.13
+          }
+          steps {
+            doValidation()
+            doTest(env)
+            echo 'Skipping Kafka Streams archetype test for s390x'
+          }
+        }
+
       }
     }
   }
