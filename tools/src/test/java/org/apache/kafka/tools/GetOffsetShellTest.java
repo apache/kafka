@@ -30,6 +30,7 @@ import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Exit;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.extension.ExtendWith;
 
@@ -46,27 +47,31 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @ExtendWith(value = ClusterTestExtensions.class)
-@ClusterTestDefaults(clusterType = Type.ALL)
+@ClusterTestDefaults(clusterType = Type.ZK)
 @Tag("integration")
 public class GetOffsetShellTest {
     private final int topicCount = 4;
     private final int offsetTopicPartitionCount = 4;
     private final ClusterInstance cluster;
+    private final String topicName = "topic";
 
     public GetOffsetShellTest(ClusterInstance cluster) {
         this.cluster = cluster;
     }
 
     private String getTopicName(int i) {
-        return "topic" + i;
+        return topicName + i;
     }
 
-    public void setUp() {
+    @BeforeEach
+    public void before() {
         cluster.config().serverProperties().put("auto.create.topics.enable", false);
         cluster.config().serverProperties().put("offsets.topic.replication.factor", "1");
         cluster.config().serverProperties().put("offsets.topic.num.partitions", String.valueOf(offsetTopicPartitionCount));
+    }
 
-        try (Admin admin = cluster.createAdminClient()) {
+    private void setUp() {
+        try (Admin admin = Admin.create(cluster.config().adminClientProperties())) {
             List<NewTopic> topics = new ArrayList<>();
 
             IntStream.range(0, topicCount + 1).forEach(i -> topics.add(new NewTopic(getTopicName(i), i, (short) 1)));
@@ -75,7 +80,7 @@ public class GetOffsetShellTest {
         }
 
         Properties props = new Properties();
-        props.put(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, cluster.bootstrapServers());
+        props.put(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, cluster.config().producerProperties().get("bootstrap.servers"));
         props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
         props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
 
@@ -111,11 +116,6 @@ public class GetOffsetShellTest {
         }
 
         @Override
-        public String toString() {
-            return "Row[name:" + name + ",partition:" + partition + ",timestamp:" + timestamp;
-        }
-
-        @Override
         public int hashCode() {
             return Objects.hash(name, partition, timestamp);
         }
@@ -126,6 +126,7 @@ public class GetOffsetShellTest {
         setUp();
 
         List<Row> output = executeAndParse();
+
         assertEquals(expectedOffsetsWithInternal(), output);
     }
 
@@ -181,17 +182,13 @@ public class GetOffsetShellTest {
         setUp();
 
         List<Row> offsets = executeAndParse("--topic-partitions", "topic1:0,topic2:1,topic(3|4):2,__.*:3");
-        ArrayList<Row> expected = new ArrayList<>(
-                Arrays.asList(
-                    new Row("topic1", 0, 1L),
-                    new Row("topic2", 1, 2L),
-                    new Row("topic3", 2, 3L),
-                    new Row("topic4", 2, 4L)
-                )
+        List<Row> expected = Arrays.asList(
+                new Row("__consumer_offsets", 3, 0L),
+                new Row("topic1", 0, 1L),
+                new Row("topic2", 1, 2L),
+                new Row("topic3", 2, 3L),
+                new Row("topic4", 2, 4L)
         );
-        if (!cluster.isKRaftTest()) {
-            expected.add(0, new Row("__consumer_offsets", 3, 0L));
-        }
 
         assertEquals(expected, offsets);
     }
@@ -286,7 +283,7 @@ public class GetOffsetShellTest {
         assertEquals(expected, offsets);
     }
 
-    @ClusterTest(clusterType = Type.ZK)
+    @ClusterTest
     public void testTopicPartitionsArgWithInternalIncluded() {
         setUp();
 
@@ -341,11 +338,7 @@ public class GetOffsetShellTest {
     }
 
     private List<Row> expectedOffsetsWithInternal() {
-        if (cluster.isKRaftTest()) {
-            return expectedTestTopicOffsets();
-        }
-
-        List<Row> consOffsets = IntStream.range(0, offsetTopicPartitionCount + 1)
+        List<Row> consOffsets = IntStream.range(0, offsetTopicPartitionCount)
                 .mapToObj(i -> new Row("__consumer_offsets", i, 0L))
                 .collect(Collectors.toList());
 

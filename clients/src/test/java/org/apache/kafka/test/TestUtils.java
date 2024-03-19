@@ -236,6 +236,22 @@ public class TestUtils {
     }
 
     /**
+     * Create a temporary directory under the given root directory.
+     * The root directory is removed on JVM exit if it doesn't already exist
+     * when this function is invoked.
+     *
+     * @param root path to create temporary directory under
+     * @return the temporary directory created within {@code root}
+     */
+    public static File tempRelativeDir(String root) {
+        File rootFile = new File(root);
+        if (rootFile.mkdir()) {
+            rootFile.deleteOnExit();
+        }
+        return tempDirectory(rootFile.toPath(), null);
+    }
+
+    /**
      * Create a temporary relative directory in the specified parent directory with the given prefix.
      *
      * @param parent The parent folder path name, if null using the default temporary-file directory
