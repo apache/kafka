@@ -58,6 +58,7 @@ import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.ConsumerGroupState;
+import org.apache.kafka.common.GroupType;
 import org.apache.kafka.common.ElectionType;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.KafkaFuture;
@@ -3382,7 +3383,14 @@ public class KafkaAdminClient extends AdminClient {
                                     .stream()
                                     .map(ConsumerGroupState::toString)
                                     .collect(Collectors.toList());
-                            return new ListGroupsRequest.Builder(new ListGroupsRequestData().setStatesFilter(states));
+                            List<String> groupTypes = options.types()
+                                    .stream()
+                                    .map(GroupType::toString)
+                                    .collect(Collectors.toList());
+                            return new ListGroupsRequest.Builder(new ListGroupsRequestData()
+                                .setStatesFilter(states)
+                                .setTypesFilter(groupTypes)
+                            );
                         }
 
                         private void maybeAddConsumerGroup(ListGroupsResponseData.ListedGroup group) {
@@ -3392,7 +3400,15 @@ public class KafkaAdminClient extends AdminClient {
                                 final Optional<ConsumerGroupState> state = group.groupState().equals("")
                                         ? Optional.empty()
                                         : Optional.of(ConsumerGroupState.parse(group.groupState()));
-                                final ConsumerGroupListing groupListing = new ConsumerGroupListing(groupId, protocolType.isEmpty(), state);
+                                final Optional<GroupType> type = group.groupType().equals("")
+                                        ? Optional.empty()
+                                        : Optional.of(GroupType.parse(group.groupType()));
+                                final ConsumerGroupListing groupListing = new ConsumerGroupListing(
+                                        groupId,
+                                        protocolType.isEmpty(),
+                                        state,
+                                        type
+                                    );
                                 results.addListing(groupListing);
                             }
                         }

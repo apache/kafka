@@ -89,7 +89,7 @@ public class RestForwardingIntegrationTest {
     @Mock
     private Herder leaderHerder;
 
-    private SslContextFactory factory;
+    private SslContextFactory.Client factory;
     private CloseableHttpClient httpClient;
     private Collection<CloseableHttpResponse> responses;
 

@@ -58,6 +58,7 @@ import java.util.stream.Stream;
 public class ConsumerGroupCommandTest extends kafka.integration.KafkaServerTestHarness {
     public static final String TOPIC = "foo";
     public static final String GROUP = "test.group";
+    public static final String PROTOCOL_GROUP = "protocol-group";
 
     List<ConsumerGroupCommand.ConsumerGroupService> consumerGroupService = new ArrayList<>();
     List<AbstractConsumerGroupExecutor> consumerGroupExecutors = new ArrayList<>();
@@ -86,10 +87,7 @@ public class ConsumerGroupCommandTest extends kafka.integration.KafkaServerTestH
             0,
             false
         ).foreach(props -> {
-            if (isNewGroupCoordinatorEnabled()) {
-                props.setProperty(KafkaConfig.NewGroupCoordinatorEnableProp(), "true");
-            }
-
+            props.setProperty(KafkaConfig.NewGroupCoordinatorEnableProp(), isNewGroupCoordinatorEnabled() + "");
             cfgs.add(KafkaConfig.fromProps(props));
             return null;
         });
@@ -154,8 +152,8 @@ public class ConsumerGroupCommandTest extends kafka.integration.KafkaServerTestH
         return addConsumerGroupExecutor(numConsumers, TOPIC, GROUP, RangeAssignor.class.getName(), remoteAssignor, Optional.empty(), false, groupProtocol);
     }
 
-    ConsumerGroupExecutor addConsumerGroupExecutor(int numConsumers, String topic, String group) {
-        return addConsumerGroupExecutor(numConsumers, topic, group, RangeAssignor.class.getName(), Optional.empty(), Optional.empty(), false, GroupProtocol.CLASSIC.name);
+    ConsumerGroupExecutor addConsumerGroupExecutor(int numConsumers, String group, String groupProtocol) {
+        return addConsumerGroupExecutor(numConsumers, TOPIC, group, RangeAssignor.class.getName(), Optional.empty(), Optional.empty(), false, groupProtocol);
     }
 
     ConsumerGroupExecutor addConsumerGroupExecutor(int numConsumers, String topic, String group, String groupProtocol) {
@@ -340,6 +338,14 @@ public class ConsumerGroupCommandTest extends kafka.integration.KafkaServerTestH
 
     public static Stream<Arguments> getTestQuorumAndGroupProtocolParametersAll() {
         return BaseConsumerTest.getTestQuorumAndGroupProtocolParametersAll();
+    }
+
+    public static Stream<Arguments> getTestQuorumAndGroupProtocolParametersClassicGroupProtocolOnly() {
+        return BaseConsumerTest.getTestQuorumAndGroupProtocolParametersClassicGroupProtocolOnly();
+    }
+
+    public static Stream<Arguments> getTestQuorumAndGroupProtocolParametersConsumerGroupProtocolOnly() {
+        return BaseConsumerTest.getTestQuorumAndGroupProtocolParametersConsumerGroupProtocolOnly();
     }
 
     @SuppressWarnings({"deprecation"})

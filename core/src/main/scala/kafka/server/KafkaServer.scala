@@ -617,13 +617,20 @@ class KafkaServer(
             }
           }
         }
-        socketServer.enableRequestProcessing(authorizerFutures)
+        val enableRequestProcessingFuture = socketServer.enableRequestProcessing(authorizerFutures)
         // Block here until all the authorizer futures are complete
         try {
           CompletableFuture.allOf(authorizerFutures.values.toSeq: _*).join()
         } catch {
           case t: Throwable => throw new RuntimeException("Received a fatal error while " +
             "waiting for all of the authorizer futures to be completed.", t)
+        }
+        // Wait for all the SocketServer ports to be open, and the Acceptors to be started.
+        try {
+          enableRequestProcessingFuture.join()
+        } catch {
+          case t: Throwable => throw new RuntimeException("Received a fatal error while " +
+            "waiting for the SocketServer Acceptors to be started.", t)
         }
 
         _brokerState = BrokerState.RUNNING

@@ -254,7 +254,7 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
     expectedProps.setProperty(KafkaConfig.LogRetentionTimeMillisProp, "1680000000")
     expectedProps.setProperty(KafkaConfig.LogRetentionTimeHoursProp, "168")
     expectedProps.setProperty(KafkaConfig.LogRollTimeHoursProp, "168")
-    expectedProps.setProperty(KafkaConfig.LogCleanerThreadsProp, "1")
+    expectedProps.setProperty(CleanerConfig.LOG_CLEANER_THREADS_PROP, "1")
     val logRetentionMs = configEntry(configDesc, KafkaConfig.LogRetentionTimeMillisProp)
     verifyConfig(KafkaConfig.LogRetentionTimeMillisProp, logRetentionMs,
       isSensitive = false, isReadOnly = false, expectedProps)
@@ -264,8 +264,8 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
     val logRollHours = configEntry(configDesc, KafkaConfig.LogRollTimeHoursProp)
     verifyConfig(KafkaConfig.LogRollTimeHoursProp, logRollHours,
       isSensitive = false, isReadOnly = true, expectedProps)
-    val logCleanerThreads = configEntry(configDesc, KafkaConfig.LogCleanerThreadsProp)
-    verifyConfig(KafkaConfig.LogCleanerThreadsProp, logCleanerThreads,
+    val logCleanerThreads = configEntry(configDesc, CleanerConfig.LOG_CLEANER_THREADS_PROP)
+    verifyConfig(CleanerConfig.LOG_CLEANER_THREADS_PROP, logCleanerThreads,
       isSensitive = false, isReadOnly = false, expectedProps)
 
     def synonymsList(configEntry: ConfigEntry): List[(String, ConfigSource)] =
@@ -278,7 +278,7 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
       (KafkaConfig.LogRetentionTimeHoursProp, ConfigSource.DEFAULT_CONFIG)),
       synonymsList(logRetentionHours))
     assertEquals(List((KafkaConfig.LogRollTimeHoursProp, ConfigSource.DEFAULT_CONFIG)), synonymsList(logRollHours))
-    assertEquals(List((KafkaConfig.LogCleanerThreadsProp, ConfigSource.DEFAULT_CONFIG)), synonymsList(logCleanerThreads))
+    assertEquals(List((CleanerConfig.LOG_CLEANER_THREADS_PROP, ConfigSource.DEFAULT_CONFIG)), synonymsList(logCleanerThreads))
   }
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
@@ -536,19 +536,19 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
     verifyThreads("kafka-log-cleaner-thread-", countPerBroker = 1)
 
     val props = new Properties
-    props.put(KafkaConfig.LogCleanerThreadsProp, "2")
-    props.put(KafkaConfig.LogCleanerDedupeBufferSizeProp, "20000000")
-    props.put(KafkaConfig.LogCleanerDedupeBufferLoadFactorProp, "0.8")
-    props.put(KafkaConfig.LogCleanerIoBufferSizeProp, "300000")
+    props.put(CleanerConfig.LOG_CLEANER_THREADS_PROP, "2")
+    props.put(CleanerConfig.LOG_CLEANER_DEDUPE_BUFFER_SIZE_PROP, "20000000")
+    props.put(CleanerConfig.LOG_CLEANER_DEDUPE_BUFFER_LOAD_FACTOR_PROP, "0.8")
+    props.put(CleanerConfig.LOG_CLEANER_IO_BUFFER_SIZE_PROP, "300000")
     props.put(KafkaConfig.MessageMaxBytesProp, "40000")
-    props.put(KafkaConfig.LogCleanerIoMaxBytesPerSecondProp, "50000000")
-    props.put(KafkaConfig.LogCleanerBackoffMsProp, "6000")
+    props.put(CleanerConfig.LOG_CLEANER_IO_MAX_BYTES_PER_SECOND_PROP, "50000000")
+    props.put(CleanerConfig.LOG_CLEANER_BACKOFF_MS_PROP, "6000")
 
     // Verify cleaner config was updated. Wait for one of the configs to be updated and verify
     // that all other others were updated at the same time since they are reconfigured together
     var newCleanerConfig: CleanerConfig = null
     TestUtils.waitUntilTrue(() => {
-      reconfigureServers(props, perBrokerConfig = false, (KafkaConfig.LogCleanerThreadsProp, "2"))
+      reconfigureServers(props, perBrokerConfig = false, (CleanerConfig.LOG_CLEANER_THREADS_PROP, "2"))
       newCleanerConfig = servers.head.logManager.cleaner.currentConfig
       newCleanerConfig.numThreads == 2
     }, "Log cleaner not reconfigured", 60000)
@@ -566,8 +566,8 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
     def cleanerThreads = Thread.getAllStackTraces.keySet.asScala.filter(_.getName.startsWith("kafka-log-cleaner-thread-"))
     cleanerThreads.take(2).foreach(_.interrupt())
     TestUtils.waitUntilTrue(() => cleanerThreads.size == (2 * numServers) - 2, "Threads did not exit")
-    props.put(KafkaConfig.LogCleanerBackoffMsProp, "8000")
-    reconfigureServers(props, perBrokerConfig = false, (KafkaConfig.LogCleanerBackoffMsProp, "8000"))
+    props.put(CleanerConfig.LOG_CLEANER_BACKOFF_MS_PROP, "8000")
+    reconfigureServers(props, perBrokerConfig = false, (CleanerConfig.LOG_CLEANER_BACKOFF_MS_PROP, "8000"))
     verifyThreads("kafka-log-cleaner-thread-", countPerBroker = 2)
 
     // Verify that produce/consume worked throughout this test without any retries in producer
@@ -635,10 +635,10 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
     props.put(KafkaConfig.LogRetentionTimeMillisProp, TimeUnit.DAYS.toMillis(1).toString)
     props.put(KafkaConfig.MessageMaxBytesProp, "100000")
     props.put(KafkaConfig.LogIndexIntervalBytesProp, "10000")
-    props.put(KafkaConfig.LogCleanerDeleteRetentionMsProp, TimeUnit.DAYS.toMillis(1).toString)
-    props.put(KafkaConfig.LogCleanerMinCompactionLagMsProp, "60000")
+    props.put(CleanerConfig.LOG_CLEANER_DELETE_RETENTION_MS_PROP, TimeUnit.DAYS.toMillis(1).toString)
+    props.put(CleanerConfig.LOG_CLEANER_MIN_COMPACTION_LAG_MS_PROP, "60000")
     props.put(KafkaConfig.LogDeleteDelayMsProp, "60000")
-    props.put(KafkaConfig.LogCleanerMinCleanRatioProp, "0.3")
+    props.put(CleanerConfig.LOG_CLEANER_MIN_CLEAN_RATIO_PROP, "0.3")
     props.put(KafkaConfig.LogCleanupPolicyProp, "delete")
     props.put(KafkaConfig.UncleanLeaderElectionEnableProp, "false")
     props.put(KafkaConfig.MinInSyncReplicasProp, "2")

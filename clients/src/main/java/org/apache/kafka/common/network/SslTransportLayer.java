@@ -498,13 +498,14 @@ public class SslTransportLayer implements TransportLayer {
     }
 
     /**
-     * Perform handshake unwrap
+     * Perform handshake unwrap.
+     * Visible for testing.
      * @param doRead boolean If true, read more from the socket channel
      * @param ignoreHandshakeStatus If true, continue to unwrap if data available regardless of handshake status
      * @return SSLEngineResult
      * @throws IOException
      */
-    private SSLEngineResult handshakeUnwrap(boolean doRead, boolean ignoreHandshakeStatus) throws IOException {
+    SSLEngineResult handshakeUnwrap(boolean doRead, boolean ignoreHandshakeStatus) throws IOException {
         log.trace("SSLHandshake handshakeUnwrap {}", channelId);
         SSLEngineResult result;
         int read = 0;
@@ -526,7 +527,7 @@ public class SslTransportLayer implements TransportLayer {
                     handshakeStatus == HandshakeStatus.NEED_UNWRAP) ||
                     (ignoreHandshakeStatus && netReadBuffer.position() != position);
             log.trace("SSLHandshake handshakeUnwrap: handshakeStatus {} status {}", handshakeStatus, result.getStatus());
-        } while (netReadBuffer.position() != 0 && cont);
+        } while (cont);
 
         // Throw EOF exception for failed read after processing already received data
         // so that handshake failures are reported correctly
