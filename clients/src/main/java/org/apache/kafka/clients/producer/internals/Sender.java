@@ -270,7 +270,15 @@ public class Sender implements Runnable {
         while (!forceClose && transactionManager != null && transactionManager.hasOngoingTransaction()) {
             if (!transactionManager.isCompleting()) {
                 log.info("Aborting incomplete transaction due to shutdown");
-                transactionManager.beginAbort();
+                try {
+                    // It is possible for the transaction manager to throw errors when aborting. Catch these
+                    // so as not to interfere with the rest of the shutdown logic.
+                    transactionManager.beginAbort();
+                } catch (Exception e) {
+                    log.error("Error in kafka producer I/O thread while aborting transaction when during closing: ", e);
+                    // Force close in case the transactionManager is in error states.
+                    forceClose = true;
+                }
             }
             try {
                 runOnce();

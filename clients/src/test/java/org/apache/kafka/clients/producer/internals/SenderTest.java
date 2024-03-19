@@ -3255,12 +3255,9 @@ public class SenderTest {
         when(transactionManager.hasOngoingTransaction()).thenReturn(true);
         when(transactionManager.beginAbort()).thenThrow(new IllegalStateException());
         sender.initiateClose();
-        try {
-            // The sender should directly get closed.
-            sender.run();
-        } catch (Exception e) {
-            assertTrue(e instanceof IllegalStateException);
-        }
+
+        // The sender should directly get closed.
+        sender.run();
     }
 
     /**
