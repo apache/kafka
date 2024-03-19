@@ -28,11 +28,13 @@ import org.apache.kafka.storage.internals.log.{AbortedTxn, FetchDataInfo, LogCon
 
 import java.io.{File, IOException}
 import java.nio.file.Files
+import java.util
 import java.util.concurrent.atomic.AtomicLong
 import java.util.regex.Pattern
 import java.util.{Collections, Optional}
 import scala.collection.mutable.{ArrayBuffer, ListBuffer}
 import scala.collection.{Seq, immutable}
+import scala.compat.java8.OptionConverters._
 import scala.jdk.CollectionConverters._
 
 /**
@@ -434,9 +436,8 @@ class LocalLog(@volatile private var _dir: File,
     }
   }
 
-  private[log] def append(lastOffset: Long, largestTimestamp: Long, shallowOffsetOfMaxTimestamp: Long, records: MemoryRecords): Unit = {
-    segments.activeSegment.append(largestOffset = lastOffset, largestTimestamp = largestTimestamp,
-      shallowOffsetOfMaxTimestamp = shallowOffsetOfMaxTimestamp, records = records)
+  private[log] def append(lastOffset: Long, largestTimestamp: Long, offsetOfMaxTimestamp: Long, records: MemoryRecords): Unit = {
+    segments.activeSegment.append(lastOffset, largestTimestamp, offsetOfMaxTimestamp, records)
     updateLogEndOffset(lastOffset + 1)
   }
 
