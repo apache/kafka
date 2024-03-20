@@ -54,7 +54,8 @@ public class VoteResponse extends AbstractResponse {
                                                      Errors partitionLevelError,
                                                      int leaderEpoch,
                                                      int leaderId,
-                                                     boolean voteGranted) {
+                                                     boolean voteGranted,
+                                                     boolean preVote) {
         return new VoteResponseData()
             .setErrorCode(topLevelError.code())
             .setTopics(Collections.singletonList(
@@ -65,7 +66,8 @@ public class VoteResponse extends AbstractResponse {
                             .setErrorCode(partitionLevelError.code())
                             .setLeaderId(leaderId)
                             .setLeaderEpoch(leaderEpoch)
-                            .setVoteGranted(voteGranted)))));
+                            .setVoteGranted(voteGranted)
+                            .setPreVote(preVote)))));
     }
 
     @Override

@@ -686,7 +686,7 @@ public class KafkaRaftClientTest {
         context.assertVotedCandidate(1, localId);
 
         int correlationId = context.assertSentVoteRequest(1, 0, 0L, 1);
-        context.deliverResponse(correlationId, otherNodeId, context.voteResponse(true, Optional.empty(), 1));
+        context.deliverResponse(correlationId, otherNodeId, context.standardVoteResponse(true, Optional.empty(), 1));
 
         // Become leader after receiving the vote
         context.pollUntil(() -> context.log.endOffset().offset == 1L);
@@ -726,7 +726,7 @@ public class KafkaRaftClientTest {
         context.assertVotedCandidate(1, localId);
 
         int correlationId = context.assertSentVoteRequest(1, 0, 0L, 2);
-        context.deliverResponse(correlationId, firstNodeId, context.voteResponse(true, Optional.empty(), 1));
+        context.deliverResponse(correlationId, firstNodeId, context.standardVoteResponse(true, Optional.empty(), 1));
 
         // Become leader after receiving the vote
         context.pollUntil(() -> context.log.endOffset().offset == 1L);
@@ -1115,12 +1115,12 @@ public class KafkaRaftClientTest {
         int retryCorrelationId = context.assertSentVoteRequest(epoch, 0, 0L, 1);
 
         // We will ignore the timed out response if it arrives late
-        context.deliverResponse(correlationId, otherNodeId, context.voteResponse(true, Optional.empty(), 1));
+        context.deliverResponse(correlationId, otherNodeId, context.standardVoteResponse(true, Optional.empty(), 1));
         context.client.poll();
         context.assertVotedCandidate(epoch, localId);
 
         // Become leader after receiving the retry response
-        context.deliverResponse(retryCorrelationId, otherNodeId, context.voteResponse(true, Optional.empty(), 1));
+        context.deliverResponse(retryCorrelationId, otherNodeId, context.standardVoteResponse(true, Optional.empty(), 1));
         context.client.poll();
         context.assertElectedLeader(epoch, localId);
     }
@@ -1345,7 +1345,7 @@ public class KafkaRaftClientTest {
 
         // Quorum size is two. If the other member rejects, then we need to schedule a revote.
         int correlationId = context.assertSentVoteRequest(epoch, 0, 0L, 1);
-        context.deliverResponse(correlationId, otherNodeId, context.voteResponse(false, Optional.empty(), 1));
+        context.deliverResponse(correlationId, otherNodeId, context.standardVoteResponse(false, Optional.empty(), 1));
 
         context.client.poll();
 
@@ -1920,10 +1920,10 @@ public class KafkaRaftClientTest {
         context.assertElectedLeader(epoch, voter3);
 
         // The vote requests now return and should be ignored
-        VoteResponseData voteResponse1 = context.voteResponse(false, Optional.empty(), epoch);
+        VoteResponseData voteResponse1 = context.standardVoteResponse(false, Optional.empty(), epoch);
         context.deliverResponse(voteRequests.get(0).correlationId, voter2, voteResponse1);
 
-        VoteResponseData voteResponse2 = context.voteResponse(false, Optional.of(voter3), epoch);
+        VoteResponseData voteResponse2 = context.standardVoteResponse(false, Optional.of(voter3), epoch);
         context.deliverResponse(voteRequests.get(1).correlationId, voter3, voteResponse2);
 
         context.client.poll();

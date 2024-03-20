@@ -20,6 +20,7 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.ClusterAuthorizationException;
 import org.apache.kafka.common.errors.NotLeaderOrFollowerException;
+import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.memory.MemoryPool;
 import org.apache.kafka.common.message.BeginQuorumEpochRequestData;
 import org.apache.kafka.common.message.BeginQuorumEpochResponseData;
@@ -493,8 +494,8 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         resetConnections();
     }
 
-    private void transitionToVoted(int candidateId, int epoch) {
-        quorum.transitionToVoted(epoch, candidateId);
+    private void transitionToVoted(int replicaId, int epoch) {
+        quorum.transitionToVoted(epoch, replicaId);
         maybeFireLeaderChange();
         resetConnections();
     }
@@ -524,14 +525,19 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         onBecomeFollower(currentTimeMs);
     }
 
-    private VoteResponseData buildVoteResponse(Errors partitionLevelError, boolean voteGranted) {
+    private VoteResponseData buildVoteResponse(
+        Errors partitionLevelError,
+        boolean voteGranted,
+        boolean preVote
+    ) {
         return VoteResponse.singletonResponse(
             Errors.NONE,
             log.topicPartition(),
             partitionLevelError,
             quorum.epoch(),
             quorum.leaderIdOrSentinel(),
-            voteGranted);
+            voteGranted,
+            preVote);
     }
 
     /**
@@ -562,33 +568,37 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         VoteRequestData.PartitionData partitionRequest =
             request.topics().get(0).partitions().get(0);
 
-        int candidateId = partitionRequest.candidateId();
-        int candidateEpoch = partitionRequest.candidateEpoch();
+        if (partitionRequest.preVote()) {
+            throw new IllegalArgumentException("PreVote is not supported yet");
+        }
+
+        int replicaId = partitionRequest.replicaId();
+        int replicaEpoch = partitionRequest.replicaEpoch();
 
         int lastEpoch = partitionRequest.lastOffsetEpoch();
         long lastEpochEndOffset = partitionRequest.lastOffset();
-        if (lastEpochEndOffset < 0 || lastEpoch < 0 || lastEpoch >= candidateEpoch) {
-            return buildVoteResponse(Errors.INVALID_REQUEST, false);
+        if (lastEpochEndOffset < 0 || lastEpoch < 0 || lastEpoch >= replicaEpoch) {
+            return buildVoteResponse(Errors.INVALID_REQUEST, false, false);
         }
 
-        Optional<Errors> errorOpt = validateVoterOnlyRequest(candidateId, candidateEpoch);
+        Optional<Errors> errorOpt = validateVoterOnlyRequest(replicaId, replicaEpoch);
         if (errorOpt.isPresent()) {
-            return buildVoteResponse(errorOpt.get(), false);
+            return buildVoteResponse(errorOpt.get(), false, false);
         }
 
-        if (candidateEpoch > quorum.epoch()) {
-            transitionToUnattached(candidateEpoch);
+        if (replicaEpoch > quorum.epoch()) {
+            transitionToUnattached(replicaEpoch);
         }
 
         OffsetAndEpoch lastEpochEndOffsetAndEpoch = new OffsetAndEpoch(lastEpochEndOffset, lastEpoch);
-        boolean voteGranted = quorum.canGrantVote(candidateId, lastEpochEndOffsetAndEpoch.compareTo(endOffset()) >= 0);
+        boolean voteGranted = quorum.canGrantVote(replicaId, lastEpochEndOffsetAndEpoch.compareTo(endOffset()) >= 0);
 
         if (voteGranted && quorum.isUnattached()) {
-            transitionToVoted(candidateId, candidateEpoch);
+            transitionToVoted(replicaId, replicaEpoch);
         }
 
-        logger.info("Vote request {} with epoch {} is {}", request, candidateEpoch, voteGranted ? "granted" : "rejected");
-        return buildVoteResponse(Errors.NONE, voteGranted);
+        logger.info("Vote request {} with epoch {} is {}", request, replicaEpoch, voteGranted ? "granted" : "rejected");
+        return buildVoteResponse(Errors.NONE, voteGranted, false);
     }
 
     private boolean handleVoteResponse(
@@ -608,6 +618,10 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
 
         VoteResponseData.PartitionData partitionResponse =
             response.topics().get(0).partitions().get(0);
+
+        if (partitionResponse.preVote()) {
+            throw new IllegalArgumentException("PreVote is not supported yet");
+        }
 
         Errors error = Errors.forCode(partitionResponse.errorCode());
         OptionalInt responseLeaderId = optionalLeaderId(partitionResponse.leaderId());

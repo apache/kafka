@@ -286,7 +286,7 @@ public class KafkaNetworkChannelTest {
             case END_QUORUM_EPOCH:
                 return new EndQuorumEpochResponseData().setErrorCode(error.code());
             case VOTE:
-                return VoteResponse.singletonResponse(error, topicPartition, Errors.NONE, 1, 5, false);
+                return VoteResponse.singletonResponse(error, topicPartition, Errors.NONE, 1, 5, false, false);
             case FETCH:
                 return new FetchResponseData().setErrorCode(error.code());
             default:

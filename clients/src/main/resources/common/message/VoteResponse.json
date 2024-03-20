@@ -17,7 +17,8 @@
   "apiKey": 52,
   "type": "response",
   "name": "VoteResponse",
-  "validVersions": "0",
+  // Version 1 adds the PreVote field
+  "validVersions": "0-1",
   "flexibleVersions": "0+",
   "fields": [
     { "name": "ErrorCode", "type": "int16", "versions": "0+",
@@ -36,7 +37,9 @@
         { "name": "LeaderEpoch", "type": "int32", "versions": "0+",
           "about": "The latest known leader epoch"},
         { "name": "VoteGranted", "type": "bool", "versions": "0+",
-          "about": "True if the vote was granted and false otherwise"}
+          "about": "True if the vote was granted and false otherwise"},
+        { "name": "PreVote", "type": "bool", "versions": "1+",
+          "about": "Whether the response is a PreVote response or not."}
       ]
       }
     ]

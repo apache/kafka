@@ -18,7 +18,8 @@
   "type": "request",
   "listeners": ["controller"],
   "name": "VoteRequest",
-  "validVersions": "0",
+  // Version 1 adds the PreVote field and renames CandidateEpoch and CandidateId to ReplicaEpoch and ReplicaId
+  "validVersions": "0-1",
   "flexibleVersions": "0+",
   "fields": [
     { "name": "ClusterId", "type": "string", "versions": "0+",
@@ -31,14 +32,16 @@
         "versions": "0+", "fields": [
         { "name": "PartitionIndex", "type": "int32", "versions": "0+",
           "about": "The partition index." },
-        { "name": "CandidateEpoch", "type": "int32", "versions": "0+",
-          "about": "The bumped epoch of the candidate sending the request"},
-        { "name": "CandidateId", "type": "int32", "versions": "0+", "entityType": "brokerId",
-          "about": "The ID of the voter sending the request"},
+        { "name": "ReplicaEpoch", "type": "int32", "versions": "0+",
+          "about": "The bumped epoch of the replica sending the request"},
+        { "name": "ReplicaId", "type": "int32", "versions": "0+", "entityType": "brokerId",
+          "about": "The ID of the replica sending the request"},
         { "name": "LastOffsetEpoch", "type": "int32", "versions": "0+",
           "about": "The epoch of the last record written to the metadata log"},
         { "name": "LastOffset", "type": "int64", "versions": "0+",
-          "about": "The offset of the last record written to the metadata log"}
+          "about": "The offset of the last record written to the metadata log"},
+        { "name": "PreVote", "type": "bool", "versions": "1+",
+          "about": "Whether the request is a PreVote request (no epoch increase) or not."}
       ]
       }
     ]
