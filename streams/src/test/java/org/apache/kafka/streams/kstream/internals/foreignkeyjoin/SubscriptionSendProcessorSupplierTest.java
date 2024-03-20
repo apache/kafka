@@ -40,11 +40,9 @@ import static org.hamcrest.Matchers.empty;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotEquals;
 
-
 public class SubscriptionSendProcessorSupplierTest {
 
-    // Left join tests
-    final Processor<String, Change<LeftValue>, String, SubscriptionWrapper<String>> leftJoinProcessor =
+    private final Processor<String, Change<LeftValue>, String, SubscriptionWrapper<String>> leftJoinProcessor =
         new SubscriptionSendProcessorSupplier<String, String, LeftValue>(
             LeftValue::getForeignKey,
             () -> "subscription-topic-fk",
@@ -54,7 +52,7 @@ public class SubscriptionSendProcessorSupplierTest {
             true
         ).get();
 
-    final Processor<String, Change<LeftValue>, String, SubscriptionWrapper<String>> innerJoinProcessor =
+    private final Processor<String, Change<LeftValue>, String, SubscriptionWrapper<String>> innerJoinProcessor =
         new SubscriptionSendProcessorSupplier<String, String, LeftValue>(
             LeftValue::getForeignKey,
             () -> "subscription-topic-fk",
@@ -64,21 +62,25 @@ public class SubscriptionSendProcessorSupplierTest {
             false
         ).get();
 
+    private final String pk = "pk";
+    private final String fk1 = "fk1";
+    private final String fk2 = "fk2";
 
+    // Left join tests
     @Test
     public void leftJoinShouldPropagateNewPrimaryKeyWithNonNullFK() {
         final MockInternalNewProcessorContext<String, SubscriptionWrapper<String>> context = new MockInternalNewProcessorContext<>();
         leftJoinProcessor.init(context);
         context.setRecordMetadata("topic", 0, 0);
 
-        final LeftValue leftRecordValue = new LeftValue("merchant1");
+        final LeftValue leftRecordValue = new LeftValue(fk1);
 
-        leftJoinProcessor.process(new Record<>("product1", new Change<>(leftRecordValue, null), 0));
+        leftJoinProcessor.process(new Record<>(pk, new Change<>(leftRecordValue, null), 0));
 
         assertThat(context.forwarded().size(), is(1));
         assertThat(
             context.forwarded().get(0).record(),
-            is(new Record<>("merchant1", new SubscriptionWrapper<>(hash(leftRecordValue), PROPAGATE_NULL_IF_NO_FK_VAL_AVAILABLE, "product1", 0), 0))
+            is(new Record<>(fk1, new SubscriptionWrapper<>(hash(leftRecordValue), PROPAGATE_NULL_IF_NO_FK_VAL_AVAILABLE, pk, 0), 0))
         );
     }
 
@@ -90,12 +92,12 @@ public class SubscriptionSendProcessorSupplierTest {
 
         final LeftValue leftRecordValue = new LeftValue(null);
 
-        leftJoinProcessor.process(new Record<>("product1", new Change<>(leftRecordValue, null), 0));
+        leftJoinProcessor.process(new Record<>(pk, new Change<>(leftRecordValue, null), 0));
 
         assertThat(context.forwarded().size(), is(1));
         assertThat(
             context.forwarded().get(0).record(),
-            is(new Record<>(null, new SubscriptionWrapper<>(hash(leftRecordValue), PROPAGATE_NULL_IF_NO_FK_VAL_AVAILABLE, "product1", 0), 0))
+            is(new Record<>(null, new SubscriptionWrapper<>(hash(leftRecordValue), PROPAGATE_NULL_IF_NO_FK_VAL_AVAILABLE, pk, 0), 0))
         );
     }
 
@@ -105,14 +107,31 @@ public class SubscriptionSendProcessorSupplierTest {
         leftJoinProcessor.init(context);
         context.setRecordMetadata("topic", 0, 0);
 
-        final LeftValue leftRecordValue = new LeftValue("merchant2");
+        final LeftValue leftRecordValue = new LeftValue(fk2);
 
-        leftJoinProcessor.process(new Record<>("product1", new Change<>(leftRecordValue, new LeftValue("merchant1")), 0));
+        leftJoinProcessor.process(new Record<>(pk, new Change<>(leftRecordValue, new LeftValue(fk1)), 0));
 
         assertThat(context.forwarded().size(), is(2));
         assertThat(
             context.forwarded().get(1).record(),
-            is(new Record<>("merchant2", new SubscriptionWrapper<>(hash(leftRecordValue), PROPAGATE_NULL_IF_NO_FK_VAL_AVAILABLE, "product1", 0), 0))
+            is(new Record<>(fk2, new SubscriptionWrapper<>(hash(leftRecordValue), PROPAGATE_NULL_IF_NO_FK_VAL_AVAILABLE, pk, 0), 0))
+        );
+    }
+
+    @Test
+    public void leftJoinShouldPropagateNewRecordOfUnchangedFK() {
+        final MockInternalNewProcessorContext<String, SubscriptionWrapper<String>> context = new MockInternalNewProcessorContext<>();
+        leftJoinProcessor.init(context);
+        context.setRecordMetadata("topic", 0, 0);
+
+        final LeftValue leftRecordValue = new LeftValue(fk1);
+
+        leftJoinProcessor.process(new Record<>(pk, new Change<>(leftRecordValue, leftRecordValue), 0));
+
+        assertThat(context.forwarded().size(), is(1));
+        assertThat(
+            context.forwarded().get(0).record(),
+            is(new Record<>(fk1, new SubscriptionWrapper<>(hash(leftRecordValue), PROPAGATE_NULL_IF_NO_FK_VAL_AVAILABLE, pk, 0), 0))
         );
     }
 
@@ -124,12 +143,29 @@ public class SubscriptionSendProcessorSupplierTest {
 
         final LeftValue leftRecordValue = new LeftValue(null);
 
-        leftJoinProcessor.process(new Record<>("product1", new Change<>(leftRecordValue, new LeftValue("merchant1")), 0));
+        leftJoinProcessor.process(new Record<>(pk, new Change<>(leftRecordValue, new LeftValue(fk1)), 0));
 
         assertThat(context.forwarded().size(), greaterThan(0));
         assertThat(
             context.forwarded().get(0).record(),
-            is(new Record<>("merchant1", new SubscriptionWrapper<>(hash(leftRecordValue), DELETE_KEY_AND_PROPAGATE, "product1", 0), 0))
+            is(new Record<>(fk1, new SubscriptionWrapper<>(hash(leftRecordValue), DELETE_KEY_AND_PROPAGATE, pk, 0), 0))
+        );
+    }
+
+    @Test
+    public void leftJoinShouldPropagateChangeFromNullFKToNonNullFKValue() {
+        final MockInternalNewProcessorContext<String, SubscriptionWrapper<String>> context = new MockInternalNewProcessorContext<>();
+        leftJoinProcessor.init(context);
+        context.setRecordMetadata("topic", 0, 0);
+
+        final LeftValue leftRecordValue = new LeftValue(fk1);
+
+        leftJoinProcessor.process(new Record<>(pk, new Change<>(leftRecordValue, new LeftValue(null)), 0));
+
+        assertThat(context.forwarded().size(), is(1));
+        assertThat(
+            context.forwarded().get(0).record(),
+            is(new Record<>(fk1, new SubscriptionWrapper<>(hash(leftRecordValue), PROPAGATE_NULL_IF_NO_FK_VAL_AVAILABLE, pk, 0), 0))
         );
     }
 
@@ -141,12 +177,12 @@ public class SubscriptionSendProcessorSupplierTest {
 
         final LeftValue leftRecordValue = new LeftValue(null);
 
-        leftJoinProcessor.process(new Record<>("product1", new Change<>(leftRecordValue, leftRecordValue), 0));
+        leftJoinProcessor.process(new Record<>(pk, new Change<>(leftRecordValue, leftRecordValue), 0));
 
         assertThat(context.forwarded().size(), is(1));
         assertThat(
             context.forwarded().get(0).record(),
-            is(new Record<>(null, new SubscriptionWrapper<>(hash(leftRecordValue), PROPAGATE_NULL_IF_NO_FK_VAL_AVAILABLE, "product1", 0), 0))
+            is(new Record<>(null, new SubscriptionWrapper<>(hash(leftRecordValue), PROPAGATE_NULL_IF_NO_FK_VAL_AVAILABLE, pk, 0), 0))
         );
     }
 
@@ -156,12 +192,27 @@ public class SubscriptionSendProcessorSupplierTest {
         leftJoinProcessor.init(context);
         context.setRecordMetadata("topic", 0, 0);
 
-        leftJoinProcessor.process(new Record<>("product1", new Change<>(null, new LeftValue("merchant1")), 0));
+        leftJoinProcessor.process(new Record<>(pk, new Change<>(null, new LeftValue(fk1)), 0));
 
         assertThat(context.forwarded().size(), greaterThan(0));
         assertThat(
             context.forwarded().get(0).record(),
-            is(new Record<>("merchant1", new SubscriptionWrapper<>(null, DELETE_KEY_AND_PROPAGATE, "product1", 0), 0))
+            is(new Record<>(fk1, new SubscriptionWrapper<>(null, DELETE_KEY_AND_PROPAGATE, pk, 0), 0))
+        );
+    }
+
+    @Test
+    public void leftJoinShouldPropagateDeletionOfAPrimaryKeyThatHadNullFK() {
+        final MockInternalNewProcessorContext<String, SubscriptionWrapper<String>> context = new MockInternalNewProcessorContext<>();
+        leftJoinProcessor.init(context);
+        context.setRecordMetadata("topic", 0, 0);
+
+        leftJoinProcessor.process(new Record<>(pk, new Change<>(null, new LeftValue(null)), 0));
+
+        assertThat(context.forwarded().size(), is(1));
+        assertThat(
+            context.forwarded().get(0).record(),
+            is(new Record<>(null, new SubscriptionWrapper<>(null, PROPAGATE_NULL_IF_NO_FK_VAL_AVAILABLE, pk, 0), 0))
         );
     }
 
@@ -171,7 +222,7 @@ public class SubscriptionSendProcessorSupplierTest {
         leftJoinProcessor.init(context);
         context.setRecordMetadata("topic", 0, 0);
 
-        leftJoinProcessor.process(new Record<>("product1", new Change<>(null, null), 0));
+        leftJoinProcessor.process(new Record<>(pk, new Change<>(null, null), 0));
 
         assertThat(context.forwarded(), empty());
     }
@@ -183,14 +234,14 @@ public class SubscriptionSendProcessorSupplierTest {
         innerJoinProcessor.init(context);
         context.setRecordMetadata("topic", 0, 0);
 
-        final LeftValue leftRecordValue = new LeftValue("merchant1");
+        final LeftValue leftRecordValue = new LeftValue(fk1);
 
-        innerJoinProcessor.process(new Record<>("product1", new Change<>(leftRecordValue, null), 0));
+        innerJoinProcessor.process(new Record<>(pk, new Change<>(leftRecordValue, null), 0));
 
         assertThat(context.forwarded().size(), is(1));
         assertThat(
             context.forwarded().get(0).record(),
-            is(new Record<>("merchant1", new SubscriptionWrapper<>(hash(leftRecordValue), PROPAGATE_ONLY_IF_FK_VAL_AVAILABLE, "product1", 0), 0))
+            is(new Record<>(fk1, new SubscriptionWrapper<>(hash(leftRecordValue), PROPAGATE_ONLY_IF_FK_VAL_AVAILABLE, pk, 0), 0))
         );
     }
 
@@ -202,7 +253,7 @@ public class SubscriptionSendProcessorSupplierTest {
 
         final LeftValue leftRecordValue = new LeftValue(null);
 
-        innerJoinProcessor.process(new Record<>("product1", new Change<>(leftRecordValue, null), 0));
+        innerJoinProcessor.process(new Record<>(pk, new Change<>(leftRecordValue, null), 0));
 
         assertThat(context.forwarded(), empty());
 
@@ -217,18 +268,18 @@ public class SubscriptionSendProcessorSupplierTest {
         innerJoinProcessor.init(context);
         context.setRecordMetadata("topic", 0, 0);
 
-        final LeftValue leftRecordValue = new LeftValue("merchant2");
+        final LeftValue leftRecordValue = new LeftValue(fk2);
 
-        innerJoinProcessor.process(new Record<>("product1", new Change<>(leftRecordValue, new LeftValue("merchant1")), 0));
+        innerJoinProcessor.process(new Record<>(pk, new Change<>(leftRecordValue, new LeftValue(fk1)), 0));
 
         assertThat(context.forwarded().size(), is(2));
         assertThat(
             context.forwarded().get(0).record(),
-            is(new Record<>("merchant1", new SubscriptionWrapper<>(hash(leftRecordValue), DELETE_KEY_NO_PROPAGATE, "product1", 0), 0))
+            is(new Record<>(fk1, new SubscriptionWrapper<>(hash(leftRecordValue), DELETE_KEY_NO_PROPAGATE, pk, 0), 0))
         );
         assertThat(
             context.forwarded().get(1).record(),
-            is(new Record<>("merchant2", new SubscriptionWrapper<>(hash(leftRecordValue), PROPAGATE_NULL_IF_NO_FK_VAL_AVAILABLE, "product1", 0), 0))
+            is(new Record<>(fk2, new SubscriptionWrapper<>(hash(leftRecordValue), PROPAGATE_NULL_IF_NO_FK_VAL_AVAILABLE, pk, 0), 0))
         );
     }
 
@@ -240,7 +291,7 @@ public class SubscriptionSendProcessorSupplierTest {
 
         final LeftValue leftRecordValue = new LeftValue(null);
 
-        innerJoinProcessor.process(new Record<>("product1", new Change<>(leftRecordValue, leftRecordValue), 0));
+        innerJoinProcessor.process(new Record<>(pk, new Change<>(leftRecordValue, leftRecordValue), 0));
 
         assertThat(context.forwarded(), empty());
 
@@ -255,12 +306,12 @@ public class SubscriptionSendProcessorSupplierTest {
         innerJoinProcessor.init(context);
         context.setRecordMetadata("topic", 0, 0);
 
-        innerJoinProcessor.process(new Record<>("product1", new Change<>(null, new LeftValue("merchant1")), 0));
+        innerJoinProcessor.process(new Record<>(pk, new Change<>(null, new LeftValue(fk1)), 0));
 
         assertThat(context.forwarded().size(), is(1));
         assertThat(
             context.forwarded().get(0).record(),
-            is(new Record<>("merchant1", new SubscriptionWrapper<>(null, DELETE_KEY_AND_PROPAGATE, "product1", 0), 0))
+            is(new Record<>(fk1, new SubscriptionWrapper<>(null, DELETE_KEY_AND_PROPAGATE, pk, 0), 0))
         );
     }
 
@@ -270,7 +321,7 @@ public class SubscriptionSendProcessorSupplierTest {
         innerJoinProcessor.init(context);
         context.setRecordMetadata("topic", 0, 0);
 
-        innerJoinProcessor.process(new Record<>("product1", new Change<>(null, null), 0));
+        innerJoinProcessor.process(new Record<>(pk, new Change<>(null, null), 0));
 
         assertThat(context.forwarded(), empty());
     }
