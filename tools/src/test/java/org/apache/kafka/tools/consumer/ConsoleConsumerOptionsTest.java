@@ -32,6 +32,7 @@ import java.util.Properties;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -392,11 +393,11 @@ public class ConsoleConsumerOptionsTest {
 
         ConsoleConsumerOptions config = new ConsoleConsumerOptions(args);
 
-        assertTrue(config.formatter() instanceof DefaultMessageFormatter);
+        assertInstanceOf(DefaultMessageFormatter.class, config.formatter());
         assertTrue(config.formatterArgs().containsKey("key.deserializer.my-props"));
         DefaultMessageFormatter formatter = (DefaultMessageFormatter) config.formatter();
         assertTrue(formatter.keyDeserializer().isPresent());
-        assertTrue(formatter.keyDeserializer().get() instanceof MockDeserializer);
+        assertInstanceOf(MockDeserializer.class, formatter.keyDeserializer().get());
         MockDeserializer keyDeserializer = (MockDeserializer) formatter.keyDeserializer().get();
         assertEquals(1, keyDeserializer.configs.size());
         assertEquals("abc", keyDeserializer.configs.get("my-props"));
@@ -419,11 +420,11 @@ public class ConsoleConsumerOptionsTest {
 
         ConsoleConsumerOptions config = new ConsoleConsumerOptions(args);
 
-        assertTrue(config.formatter() instanceof DefaultMessageFormatter);
+        assertInstanceOf(DefaultMessageFormatter.class, config.formatter());
         assertTrue(config.formatterArgs().containsKey("key.deserializer.my-props"));
         DefaultMessageFormatter formatter = (DefaultMessageFormatter) config.formatter();
         assertTrue(formatter.keyDeserializer().isPresent());
-        assertTrue(formatter.keyDeserializer().get() instanceof MockDeserializer);
+        assertInstanceOf(MockDeserializer.class, formatter.keyDeserializer().get());
         MockDeserializer keyDeserializer = (MockDeserializer) formatter.keyDeserializer().get();
         assertEquals(1, keyDeserializer.configs.size());
         assertEquals("abc", keyDeserializer.configs.get("my-props"));
