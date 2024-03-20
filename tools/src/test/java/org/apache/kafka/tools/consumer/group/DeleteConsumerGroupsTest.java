@@ -17,17 +17,18 @@
 package org.apache.kafka.tools.consumer.group;
 
 import joptsimple.OptionException;
-import kafka.admin.ConsumerGroupCommand;
 import org.apache.kafka.clients.consumer.GroupProtocol;
 import org.apache.kafka.clients.consumer.RangeAssignor;
 import org.apache.kafka.common.errors.GroupIdNotFoundException;
 import org.apache.kafka.common.errors.GroupNotEmptyException;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.test.TestUtils;
+import org.apache.kafka.tools.ToolsTestUtils;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.Arrays;
+import java.util.HashSet;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -60,10 +61,7 @@ public class DeleteConsumerGroupsTest extends ConsumerGroupCommandTest {
         String[] cgcArgs = new String[]{"--bootstrap-server", bootstrapServers(listenerName()), "--delete", "--group", missingGroup};
         ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(cgcArgs);
 
-        String output = kafka.utils.TestUtils.grabConsoleOutput(() -> {
-            service.deleteGroups();
-            return null;
-        });
+        String output = ToolsTestUtils.grabConsoleOutput(service::deleteGroups);
         assertTrue(output.contains("Group '" + missingGroup + "' could not be deleted due to:") && output.contains(Errors.GROUP_ID_NOT_FOUND.message()),
             "The expected error (" + Errors.GROUP_ID_NOT_FOUND + ") was not detected while deleting consumer group");
     }
@@ -78,8 +76,8 @@ public class DeleteConsumerGroupsTest extends ConsumerGroupCommandTest {
         String[] cgcArgs = new String[]{"--bootstrap-server", bootstrapServers(listenerName()), "--delete", "--group", missingGroup};
         ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(cgcArgs);
 
-        scala.collection.Map<String, Throwable> result = service.deleteGroups();
-        assertTrue(result.size() == 1 && result.contains(missingGroup) && result.get(missingGroup).get().getCause() instanceof GroupIdNotFoundException,
+        Map<String, Throwable> result = service.deleteGroups();
+        assertTrue(result.size() == 1 && result.containsKey(missingGroup) && result.get(missingGroup).getCause() instanceof GroupIdNotFoundException,
             "The expected error (" + Errors.GROUP_ID_NOT_FOUND + ") was not detected while deleting consumer group");
     }
 
@@ -94,14 +92,11 @@ public class DeleteConsumerGroupsTest extends ConsumerGroupCommandTest {
         ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(cgcArgs);
 
         TestUtils.waitForCondition(
-            () -> service.collectGroupMembers(GROUP, false)._2.get().size() == 1,
+            () -> service.collectGroupMembers(GROUP, false).v2.get().size() == 1,
             "The group did not initialize as expected."
         );
 
-        String output = kafka.utils.TestUtils.grabConsoleOutput(() -> {
-            service.deleteGroups();
-            return null;
-        });
+        String output = ToolsTestUtils.grabConsoleOutput(service::deleteGroups);
         assertTrue(output.contains("Group '" + GROUP + "' could not be deleted due to:") && output.contains(Errors.NON_EMPTY_GROUP.message()),
             "The expected error (" + Errors.NON_EMPTY_GROUP + ") was not detected while deleting consumer group. Output was: (" + output + ")");
     }
@@ -117,14 +112,14 @@ public class DeleteConsumerGroupsTest extends ConsumerGroupCommandTest {
         ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(cgcArgs);
 
         TestUtils.waitForCondition(
-            () -> service.collectGroupMembers(GROUP, false)._2.get().size() == 1,
+            () -> service.collectGroupMembers(GROUP, false).v2.get().size() == 1,
             "The group did not initialize as expected."
         );
 
-        scala.collection.Map<String, Throwable> result = service.deleteGroups();
-        assertNotNull(result.get(GROUP).get(),
+        Map<String, Throwable> result = service.deleteGroups();
+        assertNotNull(result.get(GROUP),
             "Group was deleted successfully, but it shouldn't have been. Result was:(" + result + ")");
-        assertTrue(result.size() == 1 && result.contains(GROUP) && result.get(GROUP).get().getCause() instanceof GroupNotEmptyException,
+        assertTrue(result.size() == 1 && result.containsKey(GROUP) && result.get(GROUP).getCause() instanceof GroupNotEmptyException,
             "The expected error (" + Errors.NON_EMPTY_GROUP + ") was not detected while deleting consumer group. Result was:(" + result + ")");
     }
 
@@ -139,21 +134,18 @@ public class DeleteConsumerGroupsTest extends ConsumerGroupCommandTest {
         ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(cgcArgs);
 
         TestUtils.waitForCondition(
-            () -> service.listConsumerGroups().contains(GROUP) && Objects.equals(service.collectGroupState(GROUP).state(), "Stable"),
+            () -> service.listConsumerGroups().contains(GROUP) && Objects.equals(service.collectGroupState(GROUP).state, "Stable"),
             "The group did not initialize as expected."
         );
 
         executor.shutdown();
 
         TestUtils.waitForCondition(
-            () -> Objects.equals(service.collectGroupState(GROUP).state(), "Empty"),
+            () -> Objects.equals(service.collectGroupState(GROUP).state, "Empty"),
             "The group did not become empty as expected."
         );
 
-        String output = kafka.utils.TestUtils.grabConsoleOutput(() -> {
-            service.deleteGroups();
-            return null;
-        });
+        String output = ToolsTestUtils.grabConsoleOutput(service::deleteGroups);
         assertTrue(output.contains("Deletion of requested consumer groups ('" + GROUP + "') was successful."),
             "The consumer group could not be deleted as expected");
     }
@@ -173,10 +165,10 @@ public class DeleteConsumerGroupsTest extends ConsumerGroupCommandTest {
         ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(cgcArgs);
 
         TestUtils.waitForCondition(() ->
-            Objects.equals(service.listConsumerGroups().toSet(), set(groups.keySet())) &&
+            new HashSet<>(service.listConsumerGroups()).equals(groups.keySet()) &&
                 groups.keySet().stream().allMatch(groupId -> {
                     try {
-                        return Objects.equals(service.collectGroupState(groupId).state(), "Stable");
+                        return Objects.equals(service.collectGroupState(groupId).state, "Stable");
                     } catch (Exception e) {
                         throw new RuntimeException(e);
                     }
@@ -189,17 +181,14 @@ public class DeleteConsumerGroupsTest extends ConsumerGroupCommandTest {
         TestUtils.waitForCondition(() ->
             groups.keySet().stream().allMatch(groupId -> {
                 try {
-                    return Objects.equals(service.collectGroupState(groupId).state(), "Empty");
+                    return Objects.equals(service.collectGroupState(groupId).state, "Empty");
                 } catch (Exception e) {
                     throw new RuntimeException(e);
                 }
             }),
             "The group did not become empty as expected.");
 
-        String output = kafka.utils.TestUtils.grabConsoleOutput(() -> {
-            service.deleteGroups();
-            return null;
-        }).trim();
+        String output = ToolsTestUtils.grabConsoleOutput(service::deleteGroups).trim();
         Set<String> expectedGroupsForDeletion = groups.keySet();
         Set<String> deletedGroupsGrepped = Arrays.stream(output.substring(output.indexOf('(') + 1, output.indexOf(')')).split(","))
             .map(str -> str.replaceAll("'", "").trim()).collect(Collectors.toSet());
@@ -220,17 +209,17 @@ public class DeleteConsumerGroupsTest extends ConsumerGroupCommandTest {
         ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(cgcArgs);
 
         TestUtils.waitForCondition(
-            () -> service.listConsumerGroups().contains(GROUP) && Objects.equals(service.collectGroupState(GROUP).state(), "Stable"),
+            () -> service.listConsumerGroups().contains(GROUP) && Objects.equals(service.collectGroupState(GROUP).state, "Stable"),
             "The group did not initialize as expected.");
 
         executor.shutdown();
 
         TestUtils.waitForCondition(
-            () -> Objects.equals(service.collectGroupState(GROUP).state(), "Empty"),
+            () -> Objects.equals(service.collectGroupState(GROUP).state, "Empty"),
             "The group did not become empty as expected.");
 
-        scala.collection.Map<String, Throwable> result = service.deleteGroups();
-        assertTrue(result.size() == 1 && result.contains(GROUP) && result.get(GROUP).get() == null,
+        Map<String, Throwable> result = service.deleteGroups();
+        assertTrue(result.size() == 1 && result.containsKey(GROUP) && result.get(GROUP) == null,
             "The consumer group could not be deleted as expected");
     }
 
@@ -246,23 +235,20 @@ public class DeleteConsumerGroupsTest extends ConsumerGroupCommandTest {
         ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(cgcArgs);
 
         TestUtils.waitForCondition(
-            () -> service.listConsumerGroups().contains(GROUP) && Objects.equals(service.collectGroupState(GROUP).state(), "Stable"),
+            () -> service.listConsumerGroups().contains(GROUP) && Objects.equals(service.collectGroupState(GROUP).state, "Stable"),
             "The group did not initialize as expected.");
 
         executor.shutdown();
 
         TestUtils.waitForCondition(
-            () -> Objects.equals(service.collectGroupState(GROUP).state(), "Empty"),
+            () -> Objects.equals(service.collectGroupState(GROUP).state, "Empty"),
             "The group did not become empty as expected.");
 
         cgcArgs = new String[]{"--bootstrap-server", bootstrapServers(listenerName()), "--delete", "--group", GROUP, "--group", missingGroup};
 
         ConsumerGroupCommand.ConsumerGroupService service2 = getConsumerGroupService(cgcArgs);
 
-        String output = kafka.utils.TestUtils.grabConsoleOutput(() -> {
-            service2.deleteGroups();
-            return null;
-        });
+        String output = ToolsTestUtils.grabConsoleOutput(service2::deleteGroups);
         assertTrue(output.contains("Group '" + missingGroup + "' could not be deleted due to:")
             && output.contains(Errors.GROUP_ID_NOT_FOUND.message())
             && output.contains("These consumer groups were deleted successfully: '" + GROUP + "'"),
@@ -281,23 +267,23 @@ public class DeleteConsumerGroupsTest extends ConsumerGroupCommandTest {
         ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(cgcArgs);
 
         TestUtils.waitForCondition(
-            () -> service.listConsumerGroups().contains(GROUP) && Objects.equals(service.collectGroupState(GROUP).state(), "Stable"),
+            () -> service.listConsumerGroups().contains(GROUP) && Objects.equals(service.collectGroupState(GROUP).state, "Stable"),
             "The group did not initialize as expected.");
 
         executor.shutdown();
 
         TestUtils.waitForCondition(
-            () -> Objects.equals(service.collectGroupState(GROUP).state(), "Empty"),
+            () -> Objects.equals(service.collectGroupState(GROUP).state, "Empty"),
             "The group did not become empty as expected.");
 
         cgcArgs = new String[]{"--bootstrap-server", bootstrapServers(listenerName()), "--delete", "--group", GROUP, "--group", missingGroup};
 
         ConsumerGroupCommand.ConsumerGroupService service2 = getConsumerGroupService(cgcArgs);
-        scala.collection.Map<String, Throwable> result = service2.deleteGroups();
+        Map<String, Throwable> result = service2.deleteGroups();
         assertTrue(result.size() == 2 &&
-                result.contains(GROUP) && result.get(GROUP).get() == null &&
-                result.contains(missingGroup) &&
-                result.get(missingGroup).get().getMessage().contains(Errors.GROUP_ID_NOT_FOUND.message()),
+                result.containsKey(GROUP) && result.get(GROUP) == null &&
+                result.containsKey(missingGroup) &&
+                result.get(missingGroup).getMessage().contains(Errors.GROUP_ID_NOT_FOUND.message()),
             "The consumer group deletion did not work as expected");
     }
 
