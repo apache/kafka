@@ -328,7 +328,8 @@ public final class MirrorUtils {
         try {
             return callable.call();
         } catch (ExecutionException | InterruptedException e) {
-            if (e.getCause() instanceof TopicAuthorizationException) {
+            if (e.getCause() instanceof TopicAuthorizationException ||
+                    e.getCause() instanceof ClusterAuthorizationException) {
                 log.error("Authorization error occurred while trying to " + errMsg.get());
             }
             throw e;
