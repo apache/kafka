@@ -17,9 +17,9 @@
 package org.apache.kafka.common.serialization;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.common.KafkaException;
@@ -43,7 +43,7 @@ public class ListSerializerTest {
         listSerializer.configure(props, true);
         final Serializer<?> inner = listSerializer.getInnerSerializer();
         assertNotNull(inner, "Inner serializer should be not null");
-        assertTrue(inner instanceof StringSerializer, "Inner serializer type should be StringSerializer");
+        assertInstanceOf(StringSerializer.class, inner, "Inner serializer type should be StringSerializer");
     }
 
     @Test
@@ -52,7 +52,7 @@ public class ListSerializerTest {
         listSerializer.configure(props, false);
         final Serializer<?> inner = listSerializer.getInnerSerializer();
         assertNotNull(inner, "Inner serializer should be not null");
-        assertTrue(inner instanceof StringSerializer, "Inner serializer type should be StringSerializer");
+        assertInstanceOf(StringSerializer.class, inner, "Inner serializer type should be StringSerializer");
     }
 
     @Test
@@ -61,7 +61,7 @@ public class ListSerializerTest {
         listSerializer.configure(props, true);
         final Serializer<?> inner = listSerializer.getInnerSerializer();
         assertNotNull(inner, "Inner serializer should be not null");
-        assertTrue(inner instanceof StringSerializer, "Inner serializer type should be StringSerializer");
+        assertInstanceOf(StringSerializer.class, inner, "Inner serializer type should be StringSerializer");
     }
 
     @Test
@@ -70,7 +70,7 @@ public class ListSerializerTest {
         listSerializer.configure(props, false);
         final Serializer<?> inner = listSerializer.getInnerSerializer();
         assertNotNull(inner, "Inner serializer should be not null");
-        assertTrue(inner instanceof StringSerializer, "Inner serializer type should be StringSerializer");
+        assertInstanceOf(StringSerializer.class, inner, "Inner serializer type should be StringSerializer");
     }
 
     @Test

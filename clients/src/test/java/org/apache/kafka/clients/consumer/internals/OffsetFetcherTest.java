@@ -87,6 +87,7 @@ import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.apache.kafka.test.TestUtils.assertOptional;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -462,7 +463,7 @@ public class OffsetFetcherTest {
         OffsetResetStrategy strategy,
         AbstractRequest request
     ) {
-        assertTrue(request instanceof ListOffsetsRequest);
+        assertInstanceOf(ListOffsetsRequest.class, request);
 
         ListOffsetsRequest req = (ListOffsetsRequest) request;
         assertEquals(singleton(tp.topic()), req.data().topics().stream()
