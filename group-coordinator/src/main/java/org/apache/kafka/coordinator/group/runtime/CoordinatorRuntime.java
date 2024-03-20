@@ -41,12 +41,11 @@ import org.slf4j.Logger;
 
 import java.time.Duration;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
 import java.util.OptionalInt;
 import java.util.OptionalLong;
-import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.RejectedExecutionException;
@@ -54,6 +53,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Consumer;
+import java.util.stream.Collectors;
 
 /**
  * The CoordinatorRuntime provides a framework to implement coordinators such as the group coordinator
@@ -1447,6 +1447,32 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
     }
 
     /**
+     * Schedule a write operation for each coordinator.
+     *
+     * @param name      The name of the write operation.
+     * @param timeout   The write operation timeout.
+     * @param op        The write operation.
+     *
+     * @return A list of futures where each future will be completed with the result of the write operation
+     * when the operation is completed or an exception if the write operation failed.
+     *
+     * @param <T> The type of the result.
+     */
+    public <T> List<CompletableFuture<T>> scheduleWriteAllOperation(
+        String name,
+        Duration timeout,
+        CoordinatorWriteOperation<S, T, U> op
+    ) {
+        throwIfNotRunning();
+        log.debug("Scheduled execution of write all operation {}.", name);
+        return coordinators
+            .keySet()
+            .stream()
+            .map(tp -> scheduleWriteOperation(name, tp, timeout, op))
+            .collect(Collectors.toList());
+    }
+
+    /**
      * Schedules a transactional write operation.
      *
      * @param name              The name of the write operation.
@@ -1535,12 +1561,12 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
     /**
      * Schedules a read operation.
      *
-     * @param name  The name of the write operation.
+     * @param name  The name of the read operation.
      * @param tp    The address of the coordinator (aka its topic-partitions).
      * @param op    The read operation.
      *
      * @return A future that will be completed with the result of the read operation
-     * when the operation is completed or an exception if the write operation failed.
+     * when the operation is completed or an exception if the read operation failed.
      *
      * @param <T> The type of the result.
      */
@@ -1557,6 +1583,30 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
     }
 
     /**
+     * Schedules a read operation for each coordinator.
+     *
+     * @param name  The name of the read operation.
+     * @param op    The read operation.
+     *
+     * @return A list of futures where each future will be completed with the result of the read operation
+     * when the operation is completed or an exception if the read operation failed.
+     *
+     * @param <T> The type of the result.
+     */
+    public <T> List<CompletableFuture<T>> scheduleReadAllOperation(
+        String name,
+        CoordinatorReadOperation<S, T> op
+    ) {
+        throwIfNotRunning();
+        log.debug("Scheduled execution of read all operation {}.", name);
+        return coordinators
+            .keySet()
+            .stream()
+            .map(tp -> scheduleReadOperation(name, tp, op))
+            .collect(Collectors.toList());
+    }
+
+    /**
      * Schedules an internal event.
      *
      * @param name  The name of the write operation.
@@ -1570,15 +1620,6 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
     ) {
         log.debug("Scheduled execution of internal operation {}.", name);
         enqueue(new CoordinatorInternalEvent(name, tp, op));
-    }
-
-    /**
-     * @return The topic partitions of the coordinators currently registered in the
-     * runtime.
-     */
-    public Set<TopicPartition> partitions() {
-        throwIfNotRunning();
-        return new HashSet<>(coordinators.keySet());
     }
 
     /**

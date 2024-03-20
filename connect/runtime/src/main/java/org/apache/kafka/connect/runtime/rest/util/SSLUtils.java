@@ -40,7 +40,7 @@ public class SSLUtils {
     /**
      * Configures SSL/TLS for HTTPS Jetty Server using configs with the given prefix
      */
-    public static SslContextFactory createServerSideSslContextFactory(AbstractConfig config, String prefix) {
+    public static SslContextFactory.Server createServerSideSslContextFactory(AbstractConfig config, String prefix) {
         Map<String, Object> sslConfigValues = config.valuesWithPrefixAllOrNothing(prefix);
 
         final SslContextFactory.Server ssl = new SslContextFactory.Server();
@@ -56,14 +56,14 @@ public class SSLUtils {
     /**
      * Configures SSL/TLS for HTTPS Jetty Server
      */
-    public static SslContextFactory createServerSideSslContextFactory(AbstractConfig config) {
+    public static SslContextFactory.Server createServerSideSslContextFactory(AbstractConfig config) {
         return createServerSideSslContextFactory(config, "listeners.https.");
     }
 
     /**
      * Configures SSL/TLS for HTTPS Jetty Client
      */
-    public static SslContextFactory createClientSideSslContextFactory(AbstractConfig config) {
+    public static SslContextFactory.Client createClientSideSslContextFactory(AbstractConfig config) {
         Map<String, Object> sslConfigValues = config.valuesWithPrefixAllOrNothing("listeners.https.");
 
         final SslContextFactory.Client ssl = new SslContextFactory.Client();
@@ -147,7 +147,7 @@ public class SSLUtils {
     /**
      * Configures hostname verification related settings in SslContextFactory
      */
-    protected static void configureSslContextFactoryEndpointIdentification(SslContextFactory ssl, Map<String, Object> sslConfigValues) {
+    protected static void configureSslContextFactoryEndpointIdentification(SslContextFactory.Client ssl, Map<String, Object> sslConfigValues) {
         String sslEndpointIdentificationAlg = (String) sslConfigValues.get(SslConfigs.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG);
         if (sslEndpointIdentificationAlg != null)
             ssl.setEndpointIdentificationAlgorithm(sslEndpointIdentificationAlg);
