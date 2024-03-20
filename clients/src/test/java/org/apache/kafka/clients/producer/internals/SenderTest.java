@@ -428,7 +428,7 @@ public class SenderTest {
         try {
             Sender sender = new Sender(logContext, client, metadata, this.accumulator, false, MAX_REQUEST_SIZE, ACKS_ALL,
                 5, senderMetrics, time, REQUEST_TIMEOUT, RETRY_BACKOFF_MS, null, apiVersions);
-            Future<RecordMetadata> future = appendToAccumulator(tp0, 0L, "key", "value");
+            appendToAccumulator(tp0, 0L, "key", "value");
             sender.runOnce(); // connect
             sender.runOnce(); // send produce request
             assertFalse(metadata.updateRequested());

@@ -586,7 +586,7 @@ public class Sender implements Runnable {
             log.trace("Cancelled request with header {} due to the last request to node {} timed out",
                 requestHeader, response.destination());
             for (ProducerBatch batch : batches.values())
-                completeBatch(batch, new ProduceResponse.PartitionResponse(Errors.REQUEST_TIMED_OUT, String.format("Disconnected from node %s due to timeout", response.destination())),
+                completeBatch(batch, new ProduceResponse.PartitionResponse(Errors.NETWORK_EXCEPTION, String.format("Disconnected from node %s due to request timeout", response.destination())),
                         correlationId, now, null);
         } else if (response.wasDisconnected()) {
             log.trace("Cancelled request with header {} due to node {} being disconnected",
