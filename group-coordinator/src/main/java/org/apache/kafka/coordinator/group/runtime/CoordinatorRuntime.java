@@ -1216,7 +1216,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
                 // An event to apply the new high watermark is pushed to the front of the
                 // queue only if the previous value was -1L. If it was not, it means that
                 // there is already an event waiting to process the last value.
-                processor.enqueueFirst(new CoordinatorInternalEvent("HighWatermarkUpdate", tp, () -> {
+                enqueueFirst(new CoordinatorInternalEvent("HighWatermarkUpdate", tp, () -> {
                     long newHighWatermark = lastHighWatermark.getAndSet(NO_OFFSET);
 
                     CoordinatorContext context = coordinators.get(tp);
