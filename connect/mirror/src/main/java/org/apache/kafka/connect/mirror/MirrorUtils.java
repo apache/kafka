@@ -42,7 +42,9 @@ import java.util.List;
 import java.util.HashMap;
 import java.util.Collections;
 import java.util.Objects;
+import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
+import java.util.function.Supplier;
 import java.util.regex.Pattern;
 
 import static java.util.Collections.singleton;
@@ -319,5 +321,19 @@ public final class MirrorUtils {
 
     static void createSinglePartitionCompactedTopic(String topicName, short replicationFactor, Admin admin) {
         createCompactedTopic(topicName, (short) 1, replicationFactor, admin);
+    }
+
+    static <T> T adminCall(Callable<T> callable, Supplier<String> errMsg)
+            throws ExecutionException, InterruptedException {
+        try {
+            return callable.call();
+        } catch (ExecutionException | InterruptedException e) {
+            if (e.getCause() instanceof TopicAuthorizationException) {
+                log.error("Authorization error occurred while trying to " + errMsg.get());
+            }
+            throw e;
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
     }
 }

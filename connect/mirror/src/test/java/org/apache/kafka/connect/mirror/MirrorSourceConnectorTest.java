@@ -75,7 +75,6 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
-import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -188,7 +187,8 @@ public class MirrorSourceConnectorTest {
     public void testNoBrokerAclAuthorizer() throws Exception {
         Admin sourceAdmin = mock(Admin.class);
         Admin targetAdmin = mock(Admin.class);
-        MirrorSourceConnector connector = new MirrorSourceConnector(sourceAdmin, targetAdmin);
+        MirrorSourceConnector connector = new MirrorSourceConnector(sourceAdmin, targetAdmin,
+                new MirrorSourceConfig(makeProps()));
 
         ExecutionException describeAclsFailure = new ExecutionException(
                 "Failed to describe ACLs",
@@ -232,11 +232,11 @@ public class MirrorSourceConnectorTest {
     @Test
     public void testMissingDescribeConfigsAcl() throws Exception {
         Admin sourceAdmin = mock(Admin.class);
-        Admin targetAdmin = mock(Admin.class);
-        MirrorSourceConnector connector = new MirrorSourceConnector(sourceAdmin, targetAdmin);
-        Field configField = connector.getClass().getDeclaredField("config");
-        configField.setAccessible(true);
-        configField.set(connector, new MirrorSourceConfig(makeProps()));
+        MirrorSourceConnector connector = new MirrorSourceConnector(
+                sourceAdmin,
+                mock(Admin.class),
+                new MirrorSourceConfig(makeProps())
+        );
 
         ExecutionException describeConfigsFailure = new ExecutionException(
                 "Failed to describe topic configs",
@@ -249,8 +249,8 @@ public class MirrorSourceConnectorTest {
         when(describeConfigsResult.all()).thenReturn(describeConfigsFuture);
         when(sourceAdmin.describeConfigs(any())).thenReturn(describeConfigsResult);
 
-        try (LogCaptureAppender connectorLogs = LogCaptureAppender.createAndRegister(MirrorSourceConnector.class)) {
-            connectorLogs.setClassLoggerToTrace(MirrorSourceConnector.class);
+        try (LogCaptureAppender connectorLogs = LogCaptureAppender.createAndRegister(MirrorUtils.class)) {
+            connectorLogs.setClassLoggerToTrace(MirrorUtils.class);
             Set<String> topics = new HashSet<>();
             topics.add("topic1");
             topics.add("topic2");
