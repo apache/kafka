@@ -21,8 +21,7 @@ import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.internals.NetworkClientDelegate.PollResult;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEventProcessor;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEventHandler;
-import org.apache.kafka.clients.consumer.internals.events.ErrorBackgroundEvent;
-import org.apache.kafka.clients.consumer.internals.events.GroupMetadataUpdateEvent;
+import org.apache.kafka.clients.consumer.internals.events.ErrorEvent;
 import org.apache.kafka.clients.consumer.internals.metrics.HeartbeatMetricsManager;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
@@ -110,7 +109,6 @@ public class HeartbeatRequestManager implements RequestManager {
      * sending heartbeat until the next poll.
      */
     private final Timer pollTimer;
-    private GroupMetadataUpdateEvent previousGroupMetadataUpdateEvent = null;
 
     /**
      * Holding the heartbeat sensor to measure heartbeat timing and response latency
@@ -328,25 +326,9 @@ public class HeartbeatRequestManager implements RequestManager {
             heartbeatRequestState.onSuccessfulAttempt(currentTimeMs);
             heartbeatRequestState.resetTimer();
             membershipManager.onHeartbeatSuccess(response.data());
-            maybeSendGroupMetadataUpdateEvent();
             return;
         }
         onErrorResponse(response, currentTimeMs);
-    }
-
-    private void maybeSendGroupMetadataUpdateEvent() {
-        if (previousGroupMetadataUpdateEvent == null ||
-            !previousGroupMetadataUpdateEvent.memberId().equals(membershipManager.memberId()) ||
-            previousGroupMetadataUpdateEvent.memberEpoch() != membershipManager.memberEpoch()) {
-
-            final GroupMetadataUpdateEvent currentGroupMetadataUpdateEvent = new GroupMetadataUpdateEvent(
-                membershipManager.memberEpoch(),
-                previousGroupMetadataUpdateEvent != null && membershipManager.memberId() == null ?
-                    previousGroupMetadataUpdateEvent.memberId() : membershipManager.memberId()
-            );
-            this.backgroundEventHandler.add(currentGroupMetadataUpdateEvent);
-            previousGroupMetadataUpdateEvent = currentGroupMetadataUpdateEvent;
-        }
     }
 
     private void onErrorResponse(final ConsumerGroupHeartbeatResponse response,
@@ -446,7 +428,7 @@ public class HeartbeatRequestManager implements RequestManager {
     }
 
     private void handleFatalFailure(Throwable error) {
-        backgroundEventHandler.add(new ErrorBackgroundEvent(error));
+        backgroundEventHandler.add(new ErrorEvent(error));
         membershipManager.transitionToFatal();
     }
 
@@ -547,14 +529,8 @@ public class HeartbeatRequestManager implements RequestManager {
             // MemberEpoch - always sent
             data.setMemberEpoch(membershipManager.memberEpoch());
 
-            // InstanceId - only sent if has changed since the last heartbeat
-            // Always send when leaving the group as a static member
-            membershipManager.groupInstanceId().ifPresent(groupInstanceId -> {
-                if (!groupInstanceId.equals(sentFields.instanceId) || membershipManager.memberEpoch() == ConsumerGroupHeartbeatRequest.LEAVE_GROUP_STATIC_MEMBER_EPOCH) {
-                    data.setInstanceId(groupInstanceId);
-                    sentFields.instanceId = groupInstanceId;
-                }
-            });
+            // InstanceId - set if present
+            membershipManager.groupInstanceId().ifPresent(data::setInstanceId);
 
             // RebalanceTimeoutMs - only sent if has changed since the last heartbeat
             if (sentFields.rebalanceTimeoutMs != rebalanceTimeoutMs) {
@@ -611,7 +587,6 @@ public class HeartbeatRequestManager implements RequestManager {
 
         // Fields of ConsumerHeartbeatRequest sent in the most recent request
         static class SentFields {
-            private String instanceId = null;
             private int rebalanceTimeoutMs = -1;
             private TreeSet<String> subscribedTopicNames = null;
             private String serverAssignor = null;
@@ -620,7 +595,6 @@ public class HeartbeatRequestManager implements RequestManager {
             SentFields() {}
 
             void reset() {
-                instanceId = null;
                 rebalanceTimeoutMs = -1;
                 subscribedTopicNames = null;
                 serverAssignor = null;

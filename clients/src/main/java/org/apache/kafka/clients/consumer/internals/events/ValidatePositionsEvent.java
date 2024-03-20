@@ -14,18 +14,19 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.clients.consumer.internals.events;
 
-public class CommitOnCloseApplicationEvent extends ApplicationEvent {
+import org.apache.kafka.common.utils.Timer;
 
-    public CommitOnCloseApplicationEvent() {
-        super(Type.COMMIT_ON_CLOSE);
-    }
+/**
+ * Event for validating offsets for all assigned partitions for which a leader change has been
+ * detected. This is an asynchronous event that generates OffsetForLeaderEpoch requests, and
+ * completes by validating in-memory positions against the offsets received in the responses.
+ */
+public class ValidatePositionsEvent extends CompletableApplicationEvent<Void> {
 
-    @Override
-    public String toString() {
-        return "CommitOnCloseApplicationEvent{" +
-                toStringBase() +
-                '}';
+    public ValidatePositionsEvent(final Timer timer) {
+        super(Type.VALIDATE_POSITIONS, timer);
     }
 }
