@@ -585,6 +585,8 @@ public class Sender implements Runnable {
         if (response.wasTimedOut()) {
             log.trace("Cancelled request with header {} due to the last request to node {} timed out",
                 requestHeader, response.destination());
+            // we must use an exception that extends InvalidMetadataException to trigger a metadata refresh
+            // this is to handle the case where the current leader is unavailable and leadership has been moved away
             for (ProducerBatch batch : batches.values())
                 completeBatch(batch, new ProduceResponse.PartitionResponse(Errors.NETWORK_EXCEPTION, String.format("Disconnected from node %s due to request timeout", response.destination())),
                         correlationId, now, null);
