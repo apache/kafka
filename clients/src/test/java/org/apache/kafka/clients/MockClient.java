@@ -189,10 +189,10 @@ public class MockClient implements KafkaClient {
 
     @Override
     public void disconnect(String node) {
-        disconnect(node, false);
+        disconnect(node, false, false);
     }
 
-    public void disconnect(String node, boolean allowLateResponses) {
+    public void disconnect(String node, boolean allowLateResponses, boolean isTimedOut) {
         long now = time.milliseconds();
         Iterator<ClientRequest> iter = requests.iterator();
         while (iter.hasNext()) {
@@ -200,7 +200,7 @@ public class MockClient implements KafkaClient {
             if (request.destination().equals(node)) {
                 short version = request.requestBuilder().latestAllowedVersion();
                 responses.add(new ClientResponse(request.makeHeader(version), request.callback(), request.destination(),
-                        request.createdTimeMs(), now, true, null, null, null));
+                        request.createdTimeMs(), now, true, isTimedOut, null, null, null));
                 if (!allowLateResponses)
                     iter.remove();
             }
@@ -345,7 +345,7 @@ public class MockClient implements KafkaClient {
     private void checkTimeoutOfPendingRequests(long nowMs) {
         ClientRequest request = requests.peek();
         while (request != null && elapsedTimeMs(nowMs, request.createdTimeMs()) >= request.requestTimeoutMs()) {
-            disconnect(request.destination());
+            disconnect(request.destination(), false, true);
             requests.poll();
             request = requests.peek();
         }

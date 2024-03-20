@@ -422,6 +422,31 @@ public class SenderTest {
     }
 
     @Test
+    public void testRefreshMetadataOnClientRequestTimeout() throws Exception {
+        Metrics m = new Metrics();
+        SenderMetricsRegistry senderMetrics = new SenderMetricsRegistry(m);
+        try {
+            Sender sender = new Sender(logContext, client, metadata, this.accumulator, false, MAX_REQUEST_SIZE, ACKS_ALL,
+                5, senderMetrics, time, REQUEST_TIMEOUT, RETRY_BACKOFF_MS, null, apiVersions);
+            Future<RecordMetadata> future = appendToAccumulator(tp0, 0L, "key", "value");
+            sender.runOnce(); // connect
+            sender.runOnce(); // send produce request
+            assertFalse(metadata.updateRequested());
+            String id = client.requests().peek().destination();
+            Node node = new Node(Integer.parseInt(id), "localhost", 0);
+            assertEquals(1, client.inFlightRequestCount());
+            assertTrue(client.hasInFlightRequests());
+            assertEquals(1, sender.inFlightBatches(tp0).size());
+            assertTrue(client.isReady(node, time.milliseconds()), "Client ready status should be true");
+            time.sleep(REQUEST_TIMEOUT + 1);
+            sender.runOnce();
+            assertTrue(metadata.updateRequested());
+        } finally {
+            m.close();
+        }
+    }
+
+    @Test
     public void testSendInOrder() throws Exception {
         int maxRetries = 1;
         Metrics m = new Metrics();
@@ -3078,7 +3103,7 @@ public class SenderTest {
 
         Node node = metadata.fetch().nodes().get(0);
         time.sleep(2000L);
-        client.disconnect(node.idString(), true);
+        client.disconnect(node.idString(), true, false);
         client.backoff(node, 10);
 
         sender.runOnce(); // now expire the batch.
