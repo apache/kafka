@@ -71,6 +71,7 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 
 public class PluginsTest {
 
@@ -151,7 +152,7 @@ public class PluginsTest {
                                                                      WorkerConfig.HEADER_CONVERTER_CLASS_CONFIG,
                                                                      ClassLoaderUsage.CURRENT_CLASSLOADER);
         assertNotNull(headerConverter);
-        assertTrue(headerConverter instanceof TestHeaderConverter);
+        assertInstanceOf(TestHeaderConverter.class, headerConverter);
         this.headerConverter = (TestHeaderConverter) headerConverter;
 
         // Validate extra configs got passed through to overridden converters
@@ -162,7 +163,7 @@ public class PluginsTest {
                                                      WorkerConfig.HEADER_CONVERTER_CLASS_CONFIG,
                                                      ClassLoaderUsage.PLUGINS);
         assertNotNull(headerConverter);
-        assertTrue(headerConverter instanceof TestHeaderConverter);
+        assertInstanceOf(TestHeaderConverter.class, headerConverter);
         this.headerConverter = (TestHeaderConverter) headerConverter;
 
         // Validate extra configs got passed through to overridden converters
@@ -207,7 +208,7 @@ public class PluginsTest {
                                                      WorkerConfig.HEADER_CONVERTER_CLASS_CONFIG,
                                                      ClassLoaderUsage.PLUGINS);
         assertNotNull(headerConverter);
-        assertTrue(headerConverter instanceof SimpleHeaderConverter);
+        assertInstanceOf(SimpleHeaderConverter.class, headerConverter);
     }
 
     @Test
@@ -655,13 +656,6 @@ public class PluginsTest {
                 );
             }
         }
-    }
-
-    public static void assertInstanceOf(Class<?> expected, Object actual, String message) {
-        assertTrue(
-            "Expected an instance of " + expected.getSimpleName() + ", found " + actual + " instead: " + message,
-            expected.isInstance(actual)
-        );
     }
 
     protected void instantiateAndConfigureConverter(String configPropName, ClassLoaderUsage classLoaderUsage) {

@@ -53,6 +53,7 @@ import java.util.Properties;
 import java.util.concurrent.ExecutionException;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -250,7 +251,7 @@ public class LeaderElectionCommandTest {
             "--topic", "unknown-topic-name",
             "--partition", "0"
         ));
-        assertTrue(e.getSuppressed()[0] instanceof UnknownTopicOrPartitionException);
+        assertInstanceOf(UnknownTopicOrPartitionException.class, e.getSuppressed()[0]);
     }
 
     @ClusterTest

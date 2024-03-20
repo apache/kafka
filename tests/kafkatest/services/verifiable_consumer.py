@@ -177,6 +177,8 @@ class VerifiableConsumer(KafkaPathResolverMixin, VerifiableClientMixin, Backgrou
         self.log_level = log_level
         self.kafka = kafka
         self.topic = topic
+        self.group_protocol = group_protocol
+        self.group_remote_assignor = group_remote_assignor
         self.group_id = group_id
         self.reset_policy = reset_policy
         self.static_membership = static_membership

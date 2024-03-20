@@ -22,6 +22,7 @@ import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
 
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -84,6 +85,6 @@ public class LeaderElectionCommandErrorTest {
             "--election-type", "unclean",
             "--all-topic-partitions"
         ));
-        assertTrue(e.getCause() instanceof TimeoutException);
+        assertInstanceOf(TimeoutException.class, e.getCause());
     }
 }

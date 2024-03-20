@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.tools.consumer.group;
 
-import kafka.admin.ConsumerGroupCommand;
 import kafka.utils.TestUtils;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
@@ -30,10 +29,12 @@ import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.server.config.Defaults;
+import org.apache.kafka.tools.Tuple2;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.Collections;
+import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.ExecutionException;
 
@@ -59,8 +60,8 @@ public class DeleteOffsetsConsumerGroupCommandIntegrationTest extends ConsumerGr
         String topic = "foo:1";
         ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(getArgs(group, topic));
 
-        scala.Tuple2<Errors, scala.collection.Map<TopicPartition, Throwable>> res = service.deleteOffsets(group, seq(Collections.singleton(topic)).toList());
-        assertEquals(Errors.GROUP_ID_NOT_FOUND, res._1);
+        Tuple2<Errors, Map<TopicPartition, Throwable>> res = service.deleteOffsets(group, Collections.singletonList(topic));
+        assertEquals(Errors.GROUP_ID_NOT_FOUND, res.v1);
     }
 
     @ParameterizedTest(name = TEST_WITH_PARAMETERIZED_QUORUM_NAME)
@@ -144,18 +145,18 @@ public class DeleteOffsetsConsumerGroupCommandIntegrationTest extends ConsumerGr
         withConsumerGroup.accept(() -> {
             String topic = inputPartition >= 0 ? inputTopic + ":" + inputPartition : inputTopic;
             ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(getArgs(GROUP, topic));
-            scala.Tuple2<Errors, scala.collection.Map<TopicPartition, Throwable>> res = service.deleteOffsets(GROUP, seq(Collections.singletonList(topic)).toList());
-            Errors topLevelError = res._1;
-            scala.collection.Map<TopicPartition, Throwable> partitions = res._2;
+            Tuple2<Errors, Map<TopicPartition, Throwable>> res = service.deleteOffsets(GROUP, Collections.singletonList(topic));
+            Errors topLevelError = res.v1;
+            Map<TopicPartition, Throwable> partitions = res.v2;
             TopicPartition tp = new TopicPartition(inputTopic, expectedPartition);
             // Partition level error should propagate to top level, unless this is due to a missed partition attempt.
             if (inputPartition >= 0) {
                 assertEquals(expectedError, topLevelError);
             }
             if (expectedError == Errors.NONE)
-                assertNull(partitions.get(tp).get());
+                assertNull(partitions.get(tp));
             else
-                assertEquals(expectedError.exception(), partitions.get(tp).get().getCause());
+                assertEquals(expectedError.exception(), partitions.get(tp).getCause());
         });
     }
 
